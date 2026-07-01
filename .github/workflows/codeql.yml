@@ -56,17 +56,19 @@ jobs:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
 
-      # Drive the Swift build explicitly (build-mode: manual). Mirrors the
-      # health-check build in scripts/check.sh: generate the project first, then
-      # build the app + engine with codesigning off (the Developer ID cert only
-      # lives on the maintainer's machine, and the "Install to /Applications"
-      # postBuildScript bails out when CODE_SIGNING_ALLOWED=NO).
+      # Drive the Swift build explicitly (build-mode: manual) so the CodeQL
+      # tracer sees the compiler invocations for the app + engine. We build the
+      # committed Blurt.xcodeproj directly — no xcodegen step: the project is
+      # checked in and drift-checked by the `check` workflow, so it's already in
+      # sync with project.yml. (This also sidesteps CodeQL's Swift tracer running
+      # the build under an x86_64/Rosetta process, which makes Homebrew reject
+      # `brew install` in the arm64 /opt/homebrew prefix.) Codesigning is off: the
+      # Developer ID cert only lives on the maintainer's machine, and the
+      # "Install to /Applications" postBuildScript bails when signing is off.
       - name: Build Swift
         if: matrix.language == 'swift'
         working-directory: App/Blurt
         run: |
-          brew install xcodegen
-          xcodegen generate --quiet
           xcodebuild \
             -project Blurt.xcodeproj \
             -scheme Blurt \
