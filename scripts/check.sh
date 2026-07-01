@@ -25,11 +25,6 @@ else
   echo "note: xcbeautify not installed; using raw output (brew install xcbeautify)"
 fi
 
-run_xcodebuild() {
-  set -o pipefail
-  xcodebuild "$@" | "${PRETTY[@]}"
-}
-
 echo "==> swift test (BlurtEngine)"
 cd "$REPO_ROOT"
 # -warnings-as-errors: a warning fails the build, so deprecations / unused code
@@ -44,12 +39,13 @@ XCTEST_BIN="$XCTEST_BUNDLE/Contents/MacOS/$(basename "$XCTEST_BUNDLE" .xctest)"
 if command -v python3 >/dev/null 2>&1 && [ -f "$PROFDATA" ] && [ -f "$XCTEST_BIN" ]; then
   # Exclusions (so the figure reflects deterministically-testable engine code):
   #  - Tests/            : test files themselves, not shipping code.
-  #  - MicCapture.swift  : the AVAudioEngine capture actor. It needs a real audio
-  #                        device, so it can't run in CI (its integration test,
-  #                        MicCaptureLevelsTests, is env-gated for the same
-  #                        reason). Its pure DSP lives in AudioDSP.swift, which IS
-  #                        covered. Keep this list tight — exclude only code that
-  #                        genuinely cannot be exercised without hardware.
+  #  - MicCapture.swift  : the AVAudioRecorder capture actor. It needs a real
+  #                        audio device, so it can't run in CI (its integration
+  #                        test, MicCaptureLevelsTests, is env-gated for the same
+  #                        reason). Its pure meter math lives in
+  #                        MicCapture+Meter.swift, which IS covered. Keep this
+  #                        list tight — exclude only code that genuinely cannot
+  #                        be exercised without hardware.
   COVERAGE="$(xcrun llvm-cov export -summary-only -instr-profile "$PROFDATA" "$XCTEST_BIN" \
     -ignore-filename-regex='Tests/|Audio/MicCapture\.swift' \
     | python3 -c 'import sys,json; print(round(json.load(sys.stdin)["data"][0]["totals"]["lines"]["percent"],2))')"

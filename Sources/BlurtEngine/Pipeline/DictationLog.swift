@@ -44,7 +44,7 @@ enum DictationLog {
     // public entry point is invoked from the `DictationSession` actor mid-
     // pipeline; doing the synchronous FileHandle I/O inline would briefly block
     // the actor. The queue is serial so entries stay append-ordered.
-    private static let queue = DispatchQueue(label: "dev.alex.blurt.DictationLog")
+    private static let queue = DispatchQueue(label: "\(BlurtIdentity.subsystem).DictationLog")
   #endif
 
   /// Append a (raw, polished) entry to the JSONL log. **Debug-only:** the

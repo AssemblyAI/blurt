@@ -30,7 +30,7 @@ final class DictationPerformanceTests: XCTestCase {
   private func makeSession() -> DictationSession {
     DictationSession(
       mic: StubMicCapture(),
-      transcriber: StubTranscriber(mode: .yieldChunks(["hello world"])),
+      transcriber: StubTranscriber(mode: .transcript("hello world")),
       injector: StubInjector())
   }
 

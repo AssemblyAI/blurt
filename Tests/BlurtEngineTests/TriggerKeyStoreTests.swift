@@ -5,14 +5,6 @@ import Testing
 
 @Suite("TriggerKeyStore")
 struct TriggerKeyStoreTests {
-  private func freshDefaults() -> UserDefaults {
-    // A throwaway suite keeps the test from touching the real app domain.
-    let name = "TriggerKeyStoreTests-\(UUID().uuidString)"
-    let d = UserDefaults(suiteName: name)!
-    d.removePersistentDomain(forName: name)
-    return d
-  }
-
   @Test("defaults to right command when unset")
   func defaultsToRightCommand() {
     let store = TriggerKeyStore(defaults: freshDefaults())

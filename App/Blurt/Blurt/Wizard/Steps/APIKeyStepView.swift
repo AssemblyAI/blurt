@@ -30,16 +30,15 @@ struct APIKeyStepView: View {
   /// the AppKit `presentError:` convention for genuine `NSError`-class faults.
   @State private var showSaveFault = false
 
-  private var trimmed: String {
-    draft.trimmingCharacters(in: .whitespacesAndNewlines)
-  }
+  /// The draft trimmed to usable text (the engine's shared rule), nil when blank.
+  private var trimmedKey: String? { draft.trimmedNonEmpty() }
 
   /// Enabled for any non-empty key while no validation is in flight. We don't
   /// gate on "differs from the saved key" — a disabled-until-changed button
   /// renders as dimmed caption text on the common return visit (field pre-filled
   /// with the saved key), so people don't see it at all. Re-submitting an
   /// unchanged key is a harmless re-validate against AssemblyAI.
-  private var canSubmit: Bool { !trimmed.isEmpty && !isValidating }
+  private var canSubmit: Bool { trimmedKey != nil && !isValidating }
 
   /// "Save" for the first key, "Update" once one exists.
   private var actionTitle: String { savedKey.isEmpty ? "Save" : "Update" }
@@ -190,8 +189,7 @@ struct APIKeyStepView: View {
   }
 
   private func submit() {
-    guard canSubmit else { return }
-    let key = trimmed
+    guard canSubmit, let key = trimmedKey else { return }
     isValidating = true
     errorMessage = nil
     Task {

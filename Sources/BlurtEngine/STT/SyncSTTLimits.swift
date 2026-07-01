@@ -2,6 +2,12 @@
 /// a held hotkey just before the cap so a long press never records audio the
 /// endpoint would reject.
 public enum SyncSTTLimits {
+  /// Sample rate of the 16 kHz / mono / 16-bit PCM geometry the Sync API
+  /// expects. The single definition shared by `MicCapture` (which records at
+  /// this rate) and `DictationSession` (which declares it on the request), so
+  /// the recorded and declared rates can't drift apart.
+  public static let sampleRate = 16_000
+
   /// Maximum audio duration the Sync model accepts per request (seconds).
   public static let maxAudioSeconds: Double = 120
 
@@ -11,11 +17,12 @@ public enum SyncSTTLimits {
   /// Set a hair above the model's documented ~80 ms floor for margin.
   public static let minAudioSeconds: Double = 0.1
 
-  /// The fewest samples worth sending at `sampleRate`; a buffer shorter than
-  /// this is below `minAudioSeconds` and would only earn a 400.
-  public static func minSamples(sampleRate: Int) -> Int {
-    Int(minAudioSeconds * Double(sampleRate))
-  }
+  /// The fewest samples worth sending; a buffer shorter than this is below
+  /// `minAudioSeconds` and would only earn a 400. A stored constant (not a
+  /// function taking a rate) because the pipeline records at exactly
+  /// `sampleRate` — a parameter would just re-ask a question this type already
+  /// answers, and invite a floor inconsistent with what's actually recorded.
+  public static let minSamples = Int(minAudioSeconds * Double(sampleRate))
 
   /// Safety margin subtracted from the cap for the auto-release timeout, so the
   /// session stops recording before it hits the hard limit.

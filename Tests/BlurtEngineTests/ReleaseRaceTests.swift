@@ -16,7 +16,7 @@ struct ReleaseRaceTests {
   @Test("a second release during mic.stop is dropped, not run twice")
   func reentrantReleaseRunsPipelineOnce() async throws {
     let mic = GatedStopMic()
-    let stt = StubTranscriber(mode: .yieldChunks(["hi"]))
+    let stt = StubTranscriber(mode: .transcript("hi"))
     let injector = StubInjector()
     let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
 
@@ -68,9 +68,9 @@ private actor GatedStopMic: MicCaptureProtocol {
         finishWaiters.append(c)
       }
     }
-    // Above SyncSTTLimits.minSamples (1600) so the transcript isn't dropped by
-    // the too-short guard — this suite exercises the release race, not it.
-    return Array(repeating: 0, count: 1600)
+    // Above SyncSTTLimits.minSamples so the transcript isn't dropped by the
+    // too-short guard — this suite exercises the release race, not it.
+    return Array(repeating: 0, count: SyncSTTLimits.minSamples * 2)
   }
 
   func waitUntilStopEntered() async {

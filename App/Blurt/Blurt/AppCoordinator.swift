@@ -90,23 +90,13 @@ final class AppCoordinator {
     // auto-repeat key events into the focused app while held.
     let tap = DictationKeyTap(
       onStart: { [weak self] in
-        Task { @MainActor in
-          guard let self else { return }
-          guard self.hasAPIKey else {
-            // No key yet — take the user straight to the fix instead of a
-            // transient message. The overlay pill isn't even visible in this
-            // state (it's only revealed once setup is complete).
-            self.onMissingAPIKey()
-            return
-          }
-          await self.session.press()
-        }
+        Task { @MainActor in await self?.beginDictation() }
       },
       onStop: { [weak self] in
-        Task { @MainActor in await self?.session.release() }
+        Task { @MainActor in await self?.endDictation() }
       },
       onCancel: { [weak self] in
-        Task { @MainActor in await self?.session.cancel() }
+        Task { @MainActor in await self?.cancelDictation() }
       }
     )
     self.keyTap = tap
@@ -152,13 +142,42 @@ final class AppCoordinator {
     if overlay == nil { overlay = OverlayWindowController() }
     // Pre-roll the start/stop cues now that the app is ready, so the first
     // chime's audio-queue setup never stalls the recording pill.
-    primeSounds()
+    cues.prime()
   }
 
   /// Hides the overlay pill. Called by the wizard when the app stops being fully
   /// configured, so the pill is never on screen while dictation can't work.
   func hideOverlay() {
     overlay?.hide()
+  }
+
+  // MARK: - Dictation drivers
+  //
+  // The single begin/end/cancel path shared by the key tap's closures and the
+  // UI-test harness (`UITestSupport`), so the harness always exercises the same
+  // gate the hotkey does.
+
+  /// Begins a dictation as the hotkey would: the missing-key gate first, then
+  /// `session.press()`.
+  func beginDictation() async {
+    guard hasAPIKey else {
+      // No key yet — take the user straight to the fix instead of a
+      // transient message. The overlay pill isn't even visible in this
+      // state (it's only revealed once setup is complete).
+      onMissingAPIKey()
+      return
+    }
+    await session.press()
+  }
+
+  /// Stops recording and runs transcribe→inject.
+  func endDictation() async {
+    await session.release()
+  }
+
+  /// Abandons the in-flight dictation.
+  func cancelDictation() async {
+    await session.cancel()
   }
 
   /// Called when the user rebinds (or clears) the dictation shortcut in the
@@ -238,94 +257,26 @@ final class AppCoordinator {
 
   // MARK: - Dictation render
 
-  private var wasRecording = false
-  private var recordStartSound: AVAudioPlayer?
-  private var recordStopSound: AVAudioPlayer?
-
-  /// The cues are deliberate UI accents, not music — they are normalized to a
-  /// hot peak, so play them well below full scale so they read as a soft chime
-  /// rather than blasting at the system output level.
-  private static let cueVolume: Float = 0.35
-
-  /// (Re)loads the start/stop cue players for the currently selected sound pack.
-  /// `.none` (or a missing file) leaves a player nil, which `play(_:)` skips, so
-  /// "no sound" needs no extra branching on the hot path.
-  private func loadSounds() {
-    let pack = SoundPackStore().soundPack
-    recordStartSound = pack.startFileName.flatMap(Self.bundledSound(named:))
-    recordStopSound = pack.stopFileName.flatMap(Self.bundledSound(named:))
-    recordStartSound?.volume = Self.cueVolume
-    recordStopSound?.volume = Self.cueVolume
-  }
-
-  /// Loads a bundled chime (`Resources/Sounds/<name>.m4a`) fully into memory.
-  /// `AVAudioPlayer(contentsOf:)` decodes the AAC up front — unlike
-  /// `NSSound(…byReference: true)`, which deferred the disk read to the first
-  /// `play()` and so stalled the recording pill the first time you dictated. The
-  /// players are then pre-rolled in `primeSounds()` (called from the ready
-  /// transition) so even the audio-queue setup is paid before the hot path.
-  private static func bundledSound(named name: String) -> AVAudioPlayer? {
-    guard let url = Bundle.main.url(forResource: name, withExtension: "m4a") else { return nil }
-    return try? AVAudioPlayer(contentsOf: url)
-  }
-
-  /// Pre-rolls the cue players so the first start/stop chime adds no latency to
-  /// the pill. Called from `showOverlay()` — the "app is ready" transition — so
-  /// the audio queue is allocated and the buffers are filled well before the
-  /// first dictation. Idempotent: re-priming an already-prepared player is cheap.
-  private func primeSounds() {
-    loadSounds()
-    recordStartSound?.prepareToPlay()
-    recordStopSound?.prepareToPlay()
-  }
+  /// The record start/stop chimes (see `CueSoundPlayer` below).
+  private let cues = CueSoundPlayer()
 
   /// Called when the user changes the sound pack in Settings: reload the cue
-  /// players (and re-prime them) so the next start/stop uses the new voice, then
-  /// preview the new voice so the choice is audible immediately.
+  /// players and preview the new voice so the choice is audible immediately.
   func soundPackChanged() {
-    primeSounds()
-    previewCues()
-  }
-
-  /// Plays the selected pack's start, then stop cues a beat apart, as a preview
-  /// when switching voices in Settings. Silent for the `.none` pack (all players
-  /// are nil, which `play(_:)` skips).
-  private func previewCues() {
-    play(recordStartSound)
-    Task { @MainActor in
-      try? await Task.sleep(for: .milliseconds(380))
-      play(recordStopSound)
-    }
-  }
-
-  /// Plays a cue from the start, without ever blocking the caller. Rewinding
-  /// first means a cue replays cleanly even if the previous play hasn't been
-  /// reset, and keeping this off the visual path (callers `show` the pill first)
-  /// guarantees the sound never delays the overlay.
-  private func play(_ sound: AVAudioPlayer?) {
-    guard let sound else { return }
-    sound.currentTime = 0
-    sound.play()
+    cues.packChanged()
   }
 
   private func render(_ phase: PipelinePhase) {
-    let isRecording = phase == .recording
-
-    // Reveal the pill first, then fire the cue: `play()` must never sit in front
-    // of the visual state change. Pure phase→pill mapping lives in the engine
-    // (unit-tested there); .failed resolves to .error, which the pill flashes red
-    // then auto-reverts to idle.
+    // Reveal the pill first, then fire the cue: the sound must never sit in
+    // front of the visual state change. Pure phase→pill mapping lives in the
+    // engine (unit-tested there); .failed resolves to .error, which the pill
+    // flashes red then auto-reverts to idle.
     overlay?.show(state: phase.overlayState)
     // Mirror the phase onto the menu bar indicator (mapping lives in the engine,
     // unit-tested alongside `overlayState`).
     menuBarStatus = phase.menuBarStatus
 
-    if isRecording && !wasRecording {
-      play(recordStartSound)
-    } else if !isRecording && wasRecording {
-      play(recordStopSound)
-    }
-    wasRecording = isRecording
+    cues.transition(isRecording: phase == .recording)
 
     // A .failed phase is a handled error (it doesn't crash the app), so the
     // crash reporter never sees it — report the genuine faults here.
@@ -369,5 +320,78 @@ final class AppCoordinator {
     default:
       return false
     }
+  }
+}
+
+/// Owns the record start/stop cue chimes: loading the selected pack, pre-rolling
+/// so the first chime never stalls the recording pill, previewing on a pack
+/// change, and firing on the recording edge. Kept out of `AppCoordinator`'s body
+/// so chime behavior can change without churning the session↔UI wiring.
+@MainActor
+final class CueSoundPlayer {
+  private var startSound: AVAudioPlayer?
+  private var stopSound: AVAudioPlayer?
+  private var wasRecording = false
+
+  /// The cues are deliberate UI accents, not music — they are normalized to a
+  /// hot peak, so play them well below full scale so they read as a soft chime
+  /// rather than blasting at the system output level.
+  private static let cueVolume: Float = 0.35
+
+  /// (Re)loads and pre-rolls the cue players for the selected sound pack so
+  /// the first start/stop chime adds no latency to the pill; called from the
+  /// "app is ready" transition, well before the hot path. `.none` (or a
+  /// missing file) leaves a player nil, which `play(_:)` skips. Idempotent:
+  /// re-priming an already-prepared player is cheap.
+  func prime() {
+    let pack = SoundPackStore().soundPack
+    startSound = pack.startFileName.flatMap(Self.bundledSound(named:))
+    stopSound = pack.stopFileName.flatMap(Self.bundledSound(named:))
+    startSound?.volume = Self.cueVolume
+    stopSound?.volume = Self.cueVolume
+    startSound?.prepareToPlay()
+    stopSound?.prepareToPlay()
+  }
+
+  /// Reloads the players for a newly selected pack and previews the new voice
+  /// (start, then stop a beat apart) so the choice is audible immediately.
+  /// Silent for the `.none` pack (all players are nil, which `play(_:)` skips).
+  func packChanged() {
+    prime()
+    play(startSound)
+    Task { @MainActor in
+      try? await Task.sleep(for: .milliseconds(380))
+      play(stopSound)
+    }
+  }
+
+  /// Fires the start/stop cue on the recording edge. Call once per rendered
+  /// phase; only the idle↔recording transitions make a sound.
+  func transition(isRecording: Bool) {
+    if isRecording && !wasRecording {
+      play(startSound)
+    } else if !isRecording && wasRecording {
+      play(stopSound)
+    }
+    wasRecording = isRecording
+  }
+
+  /// Loads a bundled chime (`Resources/Sounds/<name>.m4a`) fully into memory:
+  /// `AVAudioPlayer(contentsOf:)` decodes the AAC up front, unlike
+  /// `NSSound(…byReference: true)`, whose deferred disk read stalled the pill
+  /// on the first dictation. `prime()` then pre-rolls the audio queue too.
+  private static func bundledSound(named name: String) -> AVAudioPlayer? {
+    guard let url = Bundle.main.url(forResource: name, withExtension: "m4a") else { return nil }
+    return try? AVAudioPlayer(contentsOf: url)
+  }
+
+  /// Plays a cue from the start, without ever blocking the caller. Rewinding
+  /// first means a cue replays cleanly even if the previous play hasn't been
+  /// reset, and keeping this off the visual path (callers reveal the pill
+  /// first) guarantees the sound never delays the overlay.
+  private func play(_ sound: AVAudioPlayer?) {
+    guard let sound else { return }
+    sound.currentTime = 0
+    sound.play()
   }
 }

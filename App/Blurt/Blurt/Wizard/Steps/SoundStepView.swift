@@ -42,16 +42,6 @@ struct SoundStepView: View {
 
   private func displayLabel(for pack: SoundPack) -> String {
     guard let synth = pack.synth else { return pack.label }
-
-    let source: String
-    if synth.contains("DX-7") {
-      source = "Yamaha DX-7"
-    } else if synth.contains("Juno-106") {
-      source = "Roland Juno-106"
-    } else {
-      source = synth
-    }
-
-    return "\(pack.label) · \(source)"
+    return "\(pack.label) · \(synth)"
   }
 }

@@ -5,12 +5,12 @@ public actor DictationSession {
   public private(set) var phase: PipelinePhase = .idle
 
   /// Signposter for the latency-sensitive segments of a dictation. Emitted as
-  /// os_signpost intervals so Instruments can time them live and, more
-  /// importantly, so `XCTOSSignpostMetric` can assert them in the performance
-  /// suite — a regression guard on the hand-tuned hot paths (mic/connection
-  /// warm-up on press, the transcribe→paste round trip on release). The subsystem
-  /// and category are matched verbatim by `DictationPerformanceTests`.
-  static let signposter = OSSignposter(subsystem: "dev.alex.blurt", category: "DictationPipeline")
+  /// os_signpost intervals so Instruments can time the hand-tuned hot paths
+  /// live (mic/connection warm-up on press, the transcribe→paste round trip on
+  /// release). `DictationPerformanceTests` guards the same paths with
+  /// wall-clock budgets; these intervals are for interactive profiling.
+  static let signposter = OSSignposter(
+    subsystem: BlurtIdentity.subsystem, category: "DictationPipeline")
   /// Signpost interval name for the press → `.recording` startup path.
   static let pressSignpostName: StaticString = "PressStart"
   /// Signpost interval name for the release → transcribe → inject hot path.
@@ -39,8 +39,9 @@ public actor DictationSession {
   /// endpoint rejects, so we stop early and transcribe what we have.
   private let maxRecordingSeconds: Double
 
-  /// Sample rate the mic capture delivers and the Sync STT request declares.
-  private static let captureSampleRate = 16_000
+  /// Sample rate the mic capture delivers and the Sync STT request declares —
+  /// the Sync API's geometry, defined once in `SyncSTTLimits`.
+  private static let captureSampleRate = SyncSTTLimits.sampleRate
 
   /// Context captured at `press()` (focused app + text before the cursor),
   /// passed to the transcriber so the Sync STT model has priming. Captured at
@@ -253,8 +254,10 @@ public actor DictationSession {
     // A clip too short for the Sync model (an accidental brief tap) would only
     // earn a 400 — drop it as a silent no-op, like an empty transcript, rather
     // than calling the API and surfacing an error.
-    guard samples.count >= SyncSTTLimits.minSamples(sampleRate: Self.captureSampleRate) else {
-      setPhase(.idle)
+    guard samples.count >= SyncSTTLimits.minSamples else {
+      // A cancel() racing the freshly spawned pipeline task already claimed the
+      // phase — don't overwrite .cancelled with .idle.
+      if !Task.isCancelled { setPhase(.idle) }
       return
     }
 
@@ -282,13 +285,19 @@ public actor DictationSession {
     do {
       return try await transcriber.transcribe(
         samples: samples, sampleRate: Self.captureSampleRate, context: capturedContext)
-    } catch let err as BlurtError {
-      // e.g. `.apiKeyMissing` — surface it directly rather than burying it
-      // inside `.sttFailed`.
-      setPhase(.failed(err))
-      return nil
     } catch {
-      setPhase(.failed(.sttFailed(underlying: error)))
+      // A cancel() that landed mid-request already tore this task down and set
+      // .cancelled; the transport then surfaces a cancellation-shaped error
+      // (URLError(.cancelled) / CancellationError). Leave the claimed phase
+      // alone rather than repainting the user's cancel as a red failure.
+      if Task.isCancelled || error is CancellationError { return nil }
+      if let err = error as? BlurtError {
+        // e.g. `.apiKeyMissing` — surface it directly rather than burying it
+        // inside `.sttFailed`.
+        setPhase(.failed(err))
+      } else {
+        setPhase(.failed(.sttFailed(underlying: error)))
+      }
       return nil
     }
   }
@@ -297,25 +306,32 @@ public actor DictationSession {
     setPhase(.injecting)
     do {
       try await injector.insert(text, after: capturedContext?.priorText)
+      // A cancel() that landed in insert's final, non-cancellable stretch
+      // (after its last checkCancellation) already set .cancelled — leave the
+      // claimed phase alone rather than repainting it as .pasted.
+      if Task.isCancelled { return }
       // The paste landed — show the quiet "pasted" notice (the mirror of the
       // "copied" notice below) rather than snapping straight back to idle.
       setPhase(.pasted)
-    } catch is CancellationError {
-      // A cancel() landed mid-paste: it already set .cancelled and the injector
-      // bailed before typing. Leave the phase alone rather than relabeling this
-      // as a failure.
-      return
-    } catch BlurtError.noEditableTarget {
-      // Not a failure: transcription worked, there was just nowhere to type. The
-      // injector left the text on the clipboard — show the quiet "copied" notice
-      // rather than the red error flash (and don't report it).
-      setPhase(.noTarget)
-    } catch let err as BlurtError {
-      // Surface the injector's real error (e.g. `.targetAppLost`) rather than
-      // relabeling every failure as a lost target.
-      setPhase(.failed(err))
     } catch {
-      setPhase(.failed(.targetAppLost))
+      // A cancel() landed mid-paste: it already set .cancelled (the injector
+      // bails via its checkCancellation). Leave the claimed phase alone —
+      // including on a late non-cancellation error — rather than relabeling
+      // the user's cancel as a failure.
+      if error is CancellationError || Task.isCancelled { return }
+      switch error {
+      case BlurtError.noEditableTarget:
+        // Not a failure: transcription worked, there was just nowhere to type.
+        // The injector left the text on the clipboard — show the quiet "copied"
+        // notice rather than the red error flash (and don't report it).
+        setPhase(.noTarget)
+      case let err as BlurtError:
+        // Surface the injector's real error (e.g. `.targetAppLost`) rather than
+        // relabeling every failure as a lost target.
+        setPhase(.failed(err))
+      default:
+        setPhase(.failed(.targetAppLost))
+      }
     }
   }
 

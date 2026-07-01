@@ -122,7 +122,7 @@ struct OverlayView: View {
       // `doc.on.clipboard`, so the two notices stay distinct.
       noticePill(
         symbol: "doc.on.clipboard.fill", tint: OverlayBrandPalette.magenta, label: "Pasted",
-        help: "Your dictation was pasted into the focused field.",
+        help: state.accessibilityLabel,
         labelTint: OverlayBrandPalette.cyan)
     case .noTarget:
       // Quiet, informational notice: there was no text field to type into, so the
@@ -130,7 +130,7 @@ struct OverlayView: View {
       // "Transcribing…") so it reads as info, not the red error flash.
       noticePill(
         symbol: "doc.on.clipboard", tint: OverlayBrandPalette.cyan, label: "Copied",
-        help: "No text field was focused, so your dictation was copied to the clipboard.")
+        help: state.accessibilityLabel)
     }
   }
 
@@ -139,8 +139,9 @@ struct OverlayView: View {
   /// color, label, and hover text. `tint` colors the glyph; `labelTint` colors
   /// the label and defaults to `tint` (so the error/copied notices stay one
   /// color, while "Pasted" can pair a magenta glyph with a cyan label). `help`
-  /// is the hover tooltip (the same string the window controller announces to
-  /// VoiceOver).
+  /// is the hover tooltip — pass `state.accessibilityLabel` so it stays the
+  /// same string the window controller announces to VoiceOver (the wording
+  /// lives in one place, `OverlayUIState`).
   private func noticePill(
     symbol: String, tint: Color, label: String, help: String, labelTint: Color? = nil
   ) -> some View {

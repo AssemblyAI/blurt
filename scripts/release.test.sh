@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Unit tests for the pure helpers in release.sh. Plain bash; no Mac/network
-# dependencies. Run directly (scripts/release.test.sh) or via scripts/check.sh.
+# Unit tests for the pure helpers in release.sh and release-lib.sh (pulled in
+# transitively). Plain bash; no Mac/network dependencies. Run directly
+# (scripts/release.test.sh) or via scripts/check.sh.
 set -uo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -47,6 +48,10 @@ check "parses version" "0.1.5" \
   "$(printf '        CFBundleVersion: "6"\n        CFBundleShortVersionString: "0.1.5"\n' | parse_short_version)"
 check "takes first match only" "0.1.5" \
   "$(printf '        CFBundleShortVersionString: "0.1.5"\n        CFBundleShortVersionString: "9.9.9"\n' | parse_short_version)"
+
+echo "== parse_bundle_version =="
+check "parses build number" "6" \
+  "$(printf '        CFBundleShortVersionString: "0.1.5"\n        CFBundleVersion: "6"\n' | parse_bundle_version)"
 
 echo "== parse_build_info_git_sha =="
 check "parses build provenance sha" "0123456789abcdef0123456789abcdef01234567" \

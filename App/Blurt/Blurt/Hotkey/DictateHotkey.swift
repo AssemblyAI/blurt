@@ -1,8 +1,9 @@
 import BlurtEngine
 
 /// Display strings for the current dictation trigger key, read from the
-/// persisted `TriggerKeyStore`. Used by the overlay pill, the ready-screen
-/// keycaps, and onboarding footers.
+/// persisted `TriggerKeyStore`. For one-shot reads only (e.g. the permissions
+/// step's description); views that must re-render live on a Settings change
+/// read the raw keycode via `@AppStorage` + `TriggerKey.fromPersisted` instead.
 @MainActor
 enum DictateHotkey {
   static var triggerKey: TriggerKey { TriggerKeyStore().triggerKey }

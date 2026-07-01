@@ -75,10 +75,11 @@ struct MainWindowRoot: View {
       }
       .onAppear {
         // Permission polling runs for the app's whole life (started in the
-        // controller's init), so the window only needs to capture the opener and
-        // refresh once on appear to reflect any change made while it was closed.
+        // controller's init), so the window only needs to refresh once on
+        // appear to reflect any change made while it was closed. (The
+        // `openWindowByID` opener is captured once, by `SettingsMenuButton` —
+        // the launch-evaluated command view — not re-assigned here.)
         controller.refreshPermissions()
-        appDelegate.openWindowByID = { openWindow(id: $0) }
         // Now that the window is actually on screen, pull the app frontmost —
         // see `activateAtLaunchIfNeeded`. Done here rather than at launch-finish
         // because the window doesn't exist yet then.
@@ -137,22 +138,15 @@ struct ReadyView: View {
 
   /// "Tap or hold ⌘ to blurt and paste", with the key drawn as a rounded keycap.
   private var shortcutReadout: some View {
-    gestureLine(prefix: "Tap or hold", suffix: "to blurt and paste")
-  }
-
-  /// One gesture readout, e.g. "Tap or hold [⌘] to blurt and paste", with the trigger
-  /// key drawn as a rounded keycap between the prefix and suffix.
-  private func gestureLine(prefix: String, suffix: String) -> some View {
     HStack(spacing: 6) {
-      Text(prefix)
+      Text("Tap or hold")
         .foregroundStyle(.secondary)
       KeyCap(label: TriggerKey.fromPersisted(triggerKeyCode).label)
-      Text(suffix)
+      Text("to blurt and paste")
         .foregroundStyle(.secondary)
     }
     .font(.title3)
   }
-
 }
 
 private struct ReadyBrandingView: View {
@@ -251,7 +245,6 @@ private struct ReadySettingsButton: View {
 /// uses, so the two stay in sync.
 struct SettingsWindowRoot: View {
   var appDelegate: AppDelegate
-  @Environment(\.openWindow) private var openWindow
 
   var body: some View {
     if let coordinator = appDelegate.coordinator {
@@ -265,7 +258,6 @@ struct SettingsWindowRoot: View {
       .scrollDisabled(true)
       .frame(width: 480)
       .fixedSize(horizontal: false, vertical: true)
-      .onAppear { appDelegate.openWindowByID = { openWindow(id: $0) } }
     } else {
       Color.clear.frame(width: 480, height: 240)
     }
@@ -305,7 +297,9 @@ private struct SettingsMenuButton: View {
     // Capture the open action at launch so a Dock click can reopen a window
     // even on a configured launch where one is never shown. Command views are
     // evaluated at launch (that's how ⌘, registers before any menu is opened),
-    // so this is a reliable, idempotent capture point.
+    // so this is a reliable, idempotent capture point — and the ONLY one:
+    // `openWindow(id:)` opens any Window scene regardless of which scene's
+    // environment supplied the action, so the window roots don't re-capture it.
     appDelegate.openWindowByID = { openWindow(id: $0) }
     return Button("Settings…") {
       openWindow(id: SettingsWindow.id)

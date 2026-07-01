@@ -1,5 +1,6 @@
 import AppKit
 import AppUpdater
+import BlurtEngine
 import OSLog
 
 /// Drives Blurt's self-update via mxcl/AppUpdater.
@@ -17,17 +18,17 @@ import OSLog
 @MainActor
 final class AutoUpdater {
   private let updater = AppUpdater(owner: "AssemblyAI", repo: "blurt")
-  private let log = Logger(subsystem: "dev.alex.blurt", category: "update")
+  private let log = Logger(subsystem: BlurtIdentity.subsystem, category: "update")
 
   /// Supplies the window to host the update prompt as a sheet (see `runAlert`).
   /// Injected by `AppDelegate`, which surfaces the main window before returning
-  /// it so the prompt isn't stranded behind whatever the user was in. The main
-  /// window always exists by the time an update check completes, so this is
-  /// non-optional — the prompt is always a sheet, never a main-thread-blocking
-  /// app-modal alert (which the app-hang watchdog reports as a hang).
-  private let presentingWindow: @MainActor () -> NSWindow
+  /// it so the prompt isn't stranded behind whatever the user was in. Nil when
+  /// the user closed the main window and its recreated scene hasn't
+  /// materialized an NSWindow yet — `runAlert` retries a beat later, then falls
+  /// back to an app-modal alert rather than crashing.
+  private let presentingWindow: @MainActor () -> NSWindow?
 
-  init(presentingWindow: @escaping @MainActor () -> NSWindow) {
+  init(presentingWindow: @escaping @MainActor () -> NSWindow?) {
     self.presentingWindow = presentingWindow
   }
 
@@ -76,8 +77,19 @@ final class AutoUpdater {
   /// `NSAlert.runModal()` — whose nested modal loop blocks the main thread for
   /// as long as the prompt is up and is reported as an app hang. Surfaces the
   /// window first so the sheet (and the app) come forward.
+  ///
+  /// When no host window exists (the user closed the main window; asking the
+  /// scene to recreate it only lands on a later run-loop pass), wait one beat
+  /// for that window to materialize, then — in the still-windowless worst case —
+  /// fall back to the app-modal `runModal()`: a rare spurious hang report beats
+  /// dropping the prompt or crashing.
   private func runAlert(_ alert: NSAlert) async -> NSApplication.ModalResponse {
-    let window = presentingWindow()
+    var window = presentingWindow()
+    if window == nil {
+      try? await Task.sleep(for: .milliseconds(100))
+      window = presentingWindow()
+    }
+    guard let window else { return alert.runModal() }
     return await withCheckedContinuation { continuation in
       alert.beginSheetModal(for: window) { response in
         continuation.resume(returning: response)

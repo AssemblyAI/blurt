@@ -8,21 +8,6 @@ import Testing
 /// Accessibility trust, so they're exercised by running the app, not here.
 @Suite("FocusCapture helpers")
 struct FocusCaptureTests {
-  // MARK: normalized
-
-  @Test("normalized trims surrounding whitespace")
-  func normalizedTrims() {
-    #expect(FocusCapture.normalized("  hello  ") == "hello")
-    #expect(FocusCapture.normalized("line\n") == "line")
-  }
-
-  @Test("normalized maps nil/empty/blank to nil")
-  func normalizedBlank() {
-    #expect(FocusCapture.normalized(nil) == nil)
-    #expect(FocusCapture.normalized("") == nil)
-    #expect(FocusCapture.normalized("   \n\t ") == nil)
-  }
-
   // MARK: selectLabel
 
   @Test("selectLabel prefers placeholder when present")
@@ -85,6 +70,21 @@ struct FocusCaptureTests {
     #expect(FocusCapture.priorSlice(full: "", caret: 0, maxChars: 320) == nil)
     // caret at 0 → empty prefix → nil (nothing precedes the cursor).
     #expect(FocusCapture.priorSlice(full: "hello", caret: 0, maxChars: 320) == nil)
+  }
+
+  @Test("priorSlice treats the caret as a UTF-16 offset, not a Character count")
+  func priorCaretIsUTF16() {
+    // AX selected-text ranges are UTF-16: each emoji below is 2 UTF-16 units but
+    // 1 Character, so a Character-counted prefix would over-reach past the caret.
+    // Caret after the two emoji = offset 4.
+    #expect(FocusCapture.priorSlice(full: "😀😀ab", caret: 4, maxChars: 320) == "😀😀")
+    // Caret between the emoji = offset 2.
+    #expect(FocusCapture.priorSlice(full: "😀😀ab", caret: 2, maxChars: 320) == "😀")
+    // A caret that splits a surrogate pair isn't a character boundary — fall
+    // back to the whole value's tail rather than slicing mid-character.
+    #expect(FocusCapture.priorSlice(full: "😀b", caret: 1, maxChars: 320) == "😀b")
+    // Offsets past the UTF-16 length keep the existing tail fallback.
+    #expect(FocusCapture.priorSlice(full: "😀b", caret: 99, maxChars: 320) == "😀b")
   }
 
   // MARK: clip

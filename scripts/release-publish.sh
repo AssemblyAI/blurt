@@ -18,17 +18,15 @@ for arg in "$@"; do
   esac
 done
 
-info()  { printf '\033[34m▸\033[0m %s\n' "$*"; }
-step()  { printf '\n\033[1;36m== %s ==\033[0m\n' "$*"; }
-die()   { printf '\033[31m✗\033[0m %s\n' "$*" >&2; exit 1; }
+# shellcheck source=scripts/release-lib.sh
+source "$REPO_ROOT/scripts/release-lib.sh"
 
 step "Preflight"
 for cmd in gh git xcrun awk; do
   command -v "$cmd" >/dev/null 2>&1 || die "missing required tool: $cmd"
 done
 
-VERSION="$(awk '/CFBundleShortVersionString:/ {gsub(/"/,"",$2); print $2; exit}' "$APP_DIR/project.yml")"
-[ -n "$VERSION" ] || die "could not parse version"
+VERSION="$(require_project_version "$APP_DIR/project.yml")"
 DMG="$BUILD_ROOT/Blurt-$VERSION.dmg"
 DSYM_ZIP="$BUILD_ROOT/Blurt-$VERSION.app.dSYM.zip"
 CHECKSUMS="$BUILD_ROOT/SHA256SUMS"
@@ -46,8 +44,8 @@ step "Tag preflight"
 TAG="v$VERSION"
 LOCAL_TAG_EXISTS=0
 REMOTE_TAG_EXISTS=0
-git -C "$REPO_ROOT" rev-parse "$TAG" >/dev/null 2>&1 && LOCAL_TAG_EXISTS=1
-git -C "$REPO_ROOT" ls-remote --tags origin "refs/tags/$TAG" | grep -q . && REMOTE_TAG_EXISTS=1
+tag_exists_locally "$TAG" && LOCAL_TAG_EXISTS=1
+tag_exists_on_origin "$TAG" && REMOTE_TAG_EXISTS=1
 if [ "$REPUBLISH" -eq 0 ]; then
   [ "$LOCAL_TAG_EXISTS" -eq 0 ] || die "tag $TAG already exists locally (pass --republish to overwrite)"
   [ "$REMOTE_TAG_EXISTS" -eq 0 ] || die "tag $TAG already exists on origin (pass --republish to overwrite)"
@@ -58,9 +56,7 @@ else
 fi
 
 step "Working tree"
-if [ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]; then
-  die "working tree dirty — commit or stash before publishing"
-fi
+require_clean_tree "publishing"
 
 step "Confirm"
 SHORT_SHA="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"

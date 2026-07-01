@@ -46,7 +46,7 @@ final class DictationPipelineUITests: BlurtUITestCase {
   }
 
   /// The same happy path driven through the harness's Start/Stop buttons, which
-  /// call the session directly (`uiTestBeginDictation`/`…End`) rather than the
+  /// call the session directly (`beginDictation`/`endDictation`) rather than the
   /// key tap. Complements the hotkey test above: it covers the direct-session
   /// seam the overlay/menu-bar affordances use, independent of the tap wiring.
   func testStartStopButtonsDriveRecordTranscribePaste() {

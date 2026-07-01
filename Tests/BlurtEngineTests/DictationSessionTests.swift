@@ -9,7 +9,7 @@ struct DictationSessionTests {
   @Test("press from idle transitions to recording")
   func pressIdleToRecording() async throws {
     let mic = StubMicCapture()
-    let stt = StubTranscriber(mode: .yieldChunks(["hello"]))
+    let stt = StubTranscriber(mode: .transcript("hello"))
     let injector = StubInjector()
     let session = DictationSession(
       mic: mic, transcriber: stt, injector: injector
@@ -27,7 +27,7 @@ extension DictationSessionTests {
   func happyPath() async throws {
     let mic = StubMicCapture()
     // The Sync API returns the already-cleaned transcript in one response.
-    let stt = StubTranscriber(mode: .yieldChunks(["Hello world."]))
+    let stt = StubTranscriber(mode: .transcript("Hello world."))
     let injector = StubInjector()
     let session = DictationSession(
       mic: mic, transcriber: stt, injector: injector
@@ -47,7 +47,7 @@ extension DictationSessionTests {
     // Below SyncSTTLimits.minSamples (1600 at 16 kHz) — an accidental brief tap
     // the Sync endpoint would reject with a 400.
     await mic.setSamples([0.0, 0.1, 0.2])
-    let stt = StubTranscriber(mode: .yieldChunks(["should not be used"]))
+    let stt = StubTranscriber(mode: .transcript("should not be used"))
     let injector = StubInjector()
     let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
 
@@ -134,7 +134,7 @@ extension DictationSessionTests {
     struct Boom: Error {}
     let mic = StubMicCapture()
     await mic.setStartError(Boom())
-    let stt = StubTranscriber(mode: .yieldChunks(["never"]))
+    let stt = StubTranscriber(mode: .transcript("never"))
     let injector = StubInjector()
     let session = DictationSession(
       mic: mic, transcriber: stt, injector: injector
@@ -153,7 +153,7 @@ extension DictationSessionTests {
   func emptyTranscriptReturnsToIdle() async throws {
     let mic = StubMicCapture()
     // Sync API yielded only whitespace (e.g. silence) — nothing to inject.
-    let stt = StubTranscriber(mode: .yieldChunks(["   "]))
+    let stt = StubTranscriber(mode: .transcript("   "))
     let injector = StubInjector()
     let session = DictationSession(
       mic: mic, transcriber: stt, injector: injector
@@ -171,7 +171,7 @@ extension DictationSessionTests {
   func injectorFailureSurfaces() async throws {
     struct Boom: Error {}
     let mic = StubMicCapture()
-    let stt = StubTranscriber(mode: .yieldChunks(["Hello world."]))
+    let stt = StubTranscriber(mode: .transcript("Hello world."))
     let injector = StubInjector()
     await injector.setError(Boom())
     let session = DictationSession(
@@ -188,7 +188,7 @@ extension DictationSessionTests {
   @Test("injector BlurtError surfaces verbatim, not relabeled as targetAppLost")
   func injectorBlurtErrorPassesThrough() async throws {
     let mic = StubMicCapture()
-    let stt = StubTranscriber(mode: .yieldChunks(["Hello world."]))
+    let stt = StubTranscriber(mode: .transcript("Hello world."))
     let injector = StubInjector()
     // A typed BlurtError from the injector must reach the UI as-is rather
     // than being flattened to .targetAppLost.
@@ -207,7 +207,7 @@ extension DictationSessionTests {
   @Test("no editable target surfaces the quiet .noTarget phase, not a failure")
   func noEditableTargetIsQuiet() async throws {
     let mic = StubMicCapture()
-    let stt = StubTranscriber(mode: .yieldChunks(["Hello world."]))
+    let stt = StubTranscriber(mode: .transcript("Hello world."))
     let injector = StubInjector()
     // The injector left the transcript on the clipboard and signalled there was
     // nowhere to type — the session should treat that as the quiet .noTarget
@@ -227,7 +227,7 @@ extension DictationSessionTests {
     struct Boom: Error {}
     let mic = StubMicCapture()
     await mic.setStopError(Boom())
-    let stt = StubTranscriber(mode: .yieldChunks(["never"]))
+    let stt = StubTranscriber(mode: .transcript("never"))
     let injector = StubInjector()
     let session = DictationSession(
       mic: mic, transcriber: stt, injector: injector
@@ -248,7 +248,7 @@ extension DictationSessionTests {
   @Test("auto-release after maxRecordingSeconds")
   func autoRelease() async throws {
     let mic = StubMicCapture()
-    let stt = StubTranscriber(mode: .yieldChunks(["Timed out text."]))
+    let stt = StubTranscriber(mode: .transcript("Timed out text."))
     let injector = StubInjector()
     let session = DictationSession(
       mic: mic, transcriber: stt, injector: injector,
@@ -264,7 +264,7 @@ extension DictationSessionTests {
   @Test("phaseStream yields the current phase then transitions through to terminal")
   func phaseStreamObservesTransitions() async throws {
     let mic = StubMicCapture()
-    let stt = StubTranscriber(mode: .yieldChunks(["Hi."]))
+    let stt = StubTranscriber(mode: .transcript("Hi."))
     let injector = StubInjector()
     let session = DictationSession(
       mic: mic, transcriber: stt, injector: injector
@@ -289,7 +289,7 @@ extension DictationSessionTests {
   @Test("cancel during active recording stops mic, discards audio, and transitions to .cancelled")
   func cancelDuringRecording() async throws {
     let mic = StubMicCapture()
-    let stt = StubTranscriber(mode: .yieldChunks(["Hello"]))
+    let stt = StubTranscriber(mode: .transcript("Hello"))
     let injector = StubInjector()
     let session = DictationSession(
       mic: mic, transcriber: stt, injector: injector

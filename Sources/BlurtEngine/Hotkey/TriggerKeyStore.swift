@@ -15,8 +15,9 @@ public struct TriggerKeyStore {
 
   public var triggerKey: TriggerKey {
     get {
-      let code = defaults.object(forKey: Self.defaultsKey) as? Int
-      return code.map(TriggerKey.fromPersisted) ?? .rightCommand
+      // Unset reads as 0, which isn't a curated keycode, so `fromPersisted`'s
+      // right-⌘ fallback covers both "never set" and "unknown code".
+      TriggerKey.fromPersisted(defaults.integer(forKey: Self.defaultsKey))
     }
     nonmutating set {
       defaults.set(newValue.rawValue, forKey: Self.defaultsKey)

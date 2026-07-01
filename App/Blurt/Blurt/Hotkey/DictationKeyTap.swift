@@ -13,7 +13,8 @@ import os
 /// types nothing into the focused app, and combos must pass through so normal
 /// shortcuts keep working.
 final class DictationKeyTap {
-  private static let logger = Logger(subsystem: "dev.alex.blurt", category: "DictationKeyTap")
+  private static let logger = Logger(
+    subsystem: BlurtIdentity.subsystem, category: "DictationKeyTap")
 
   private let onStart: @Sendable () -> Void
   private let onStop: @Sendable () -> Void

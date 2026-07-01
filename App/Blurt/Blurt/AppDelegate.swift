@@ -38,25 +38,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// possibly minimized to the Dock), raise it directly: `openWindow(id:)` focuses
   /// the scene but won't deminiaturize a window the user sent to the Dock or
   /// reliably re-front an existing one. Only when no main window exists (the user
-  /// closed it) do we recreate it via the scene.
-  @MainActor func surfaceMainWindow() {
+  /// closed it) do we recreate it via the scene. Returns the window it raised,
+  /// or nil when it had to ask the scene to recreate one — the new NSWindow only
+  /// materializes on a later run-loop pass.
+  @MainActor @discardableResult func surfaceMainWindow() -> NSWindow? {
     NSApp.activate()
     if let main = NSApp.windows.first(where: { $0.identifier?.rawValue == MainWindow.id }) {
       main.deminiaturize(nil)
       main.makeKeyAndOrderFront(nil)
-    } else {
-      openMainWindow()
+      return main
     }
+    openMainWindow()
+    return nil
   }
 
   /// Surfaces the main window and returns it to host the update prompt's sheet
-  /// (see `AutoUpdater.runAlert`). The main window scene always exists by the
-  /// time an update check completes, so this resolves to it (with the generic
-  /// `canBecomeMain` window as a belt-and-suspenders fallback).
-  @MainActor func updatePromptHostWindow() -> NSWindow {
-    surfaceMainWindow()
-    return NSApp.windows.first { $0.identifier?.rawValue == MainWindow.id }
-      ?? NSApp.windows.first { $0.canBecomeMain }!
+  /// (see `AutoUpdater.runAlert`). Nil when the user closed the main window
+  /// before the update check finished: the recreated scene's NSWindow doesn't
+  /// exist yet on this run-loop pass, and no other window qualifies (the overlay
+  /// is a borderless panel, so `canBecomeMain` is false). The caller retries or
+  /// falls back rather than this force-unwrapping into a crash.
+  @MainActor func updatePromptHostWindow() -> NSWindow? {
+    surfaceMainWindow() ?? NSApp.windows.first { $0.canBecomeMain }
   }
 
   /// True once the launch-time activation has run.
@@ -124,13 +127,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       if UITestMode.isActive {
         // Reset to a clean, preinstall state so every UI-test launch is
         // deterministic regardless of prior runs: clear the persisted settings
-        // (trigger key, sound pack, key terms) back to their defaults. The API
+        // (the engine-owned `PersistedSettings` roster) back to their defaults. The API
         // key already uses an in-memory store, and window state is handled test-
         // side. Guarded by UITestMode (only the runner passes -BlurtUITest), so a
         // normal launch is untouched — running the UI tests locally does reset
         // these, by design.
         let defaults = UserDefaults.standard
-        for key in [TriggerKeyStore.defaultsKey, SoundPackStore.defaultsKey, KeyTermsStore.defaultsKey] {
+        for key in PersistedSettings.allDefaultsKeys {
           defaults.removeObject(forKey: key)
         }
         coord = AppCoordinator(
@@ -207,7 +210,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// the call site in `applicationDidFinishLaunching` and `scripts/leaks.sh`.
     @MainActor
     private func runLeakExercise(_ coord: AppCoordinator) async {
-      coord.saveAPIKey("uitest-valid-key")  // clear the missing-key gate
+      coord.saveAPIKey(UITestKeys.validAPIKey)  // clear the missing-key gate
       // Build/enable the key tap's object graph, then drive cycles *through the
       // tap* (gate + callbacks), so the leak run covers the real dictation-key
       // path — not just the session. (The tap can't create its CGEventTap without

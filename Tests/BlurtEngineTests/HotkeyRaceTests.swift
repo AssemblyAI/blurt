@@ -17,7 +17,7 @@ struct HotkeyRaceTests {
   @Test("release during mic.start is honored, not dropped")
   func releaseDuringStartIsHonored() async throws {
     let mic = GatedMicCapture()
-    let stt = StubTranscriber(mode: .yieldChunks(["hi"]))
+    let stt = StubTranscriber(mode: .transcript("hi"))
     let injector = StubInjector()
     let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
 
@@ -40,7 +40,7 @@ struct HotkeyRaceTests {
   @Test("cancel during mic.start is honored, not dropped")
   func cancelDuringStartIsHonored() async throws {
     let mic = GatedMicCapture()
-    let stt = StubTranscriber(mode: .yieldChunks(["hi"]))
+    let stt = StubTranscriber(mode: .transcript("hi"))
     let injector = StubInjector()
     let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
 
@@ -95,9 +95,9 @@ private actor GatedMicCapture: MicCaptureProtocol {
 
   nonisolated func stop() async throws -> [Float] {
     await incStop()
-    // Above SyncSTTLimits.minSamples (1600) so the transcript isn't dropped by
-    // the too-short guard — this suite exercises the press/release race, not it.
-    return Array(repeating: 0, count: 1600)
+    // Above SyncSTTLimits.minSamples so the transcript isn't dropped by the
+    // too-short guard — this suite exercises the press/release race, not it.
+    return Array(repeating: 0, count: SyncSTTLimits.minSamples * 2)
   }
 
   private func incStop() { stopCalls += 1 }

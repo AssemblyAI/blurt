@@ -5,13 +5,6 @@ import Testing
 
 @Suite("SoundPackStore")
 struct SoundPackStoreTests {
-  private func freshDefaults() -> UserDefaults {
-    let name = "SoundPackStoreTests-\(UUID().uuidString)"
-    let d = UserDefaults(suiteName: name)!
-    d.removePersistentDomain(forName: name)
-    return d
-  }
-
   @Test("defaults to ORCHESTRA when unset")
   func defaultsToOrchestra() {
     let store = SoundPackStore(defaults: freshDefaults())
