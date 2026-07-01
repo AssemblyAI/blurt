@@ -1,0 +1,319 @@
+{
+  "title": "Blurt — App Health",
+  "description": "Errors, crashes, adoption, and device breakdown for the Blurt macOS app.\nFed by Datadog Logs + Crash Reporting (service:blurt). Managed as code —\nsee datadog/blurt-dashboard.json.\n",
+  "layout_type": "ordered",
+  "reflow_type": "auto",
+  "template_variables": [
+    {
+      "name": "env",
+      "prefix": "env",
+      "available_values": [],
+      "default": "production"
+    }
+  ],
+  "widgets": [
+    {
+      "definition": {
+        "type": "note",
+        "content": "**Blurt health.** Source: Datadog Logs + Crash Reporting (`service:blurt`).\nAdoption is proxied by telemetry volume per `version`; true adoption % and\n\"Unique users\" need an anonymous `@usr.id` install id + an app-launch log\n(see PR notes) and stay empty until then.\n",
+        "background_color": "blue",
+        "font_size": "14",
+        "text_align": "left",
+        "show_tick": false
+      }
+    },
+    {
+      "definition": {
+        "title": "Total errors",
+        "type": "query_value",
+        "autoscale": true,
+        "precision": 0,
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "name": "errors",
+                "data_source": "logs",
+                "search": {
+                  "query": "service:blurt status:error $env"
+                },
+                "indexes": ["*"],
+                "compute": {
+                  "aggregation": "count"
+                }
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "errors"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Crashes",
+        "type": "query_value",
+        "autoscale": true,
+        "precision": 0,
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "name": "crashes",
+                "data_source": "logs",
+                "search": {
+                  "query": "service:blurt status:error @error.is_crash:true $env"
+                },
+                "indexes": ["*"],
+                "compute": {
+                  "aggregation": "count"
+                }
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "crashes"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Unique users (needs anonymous @usr.id install id)",
+        "type": "query_value",
+        "autoscale": true,
+        "precision": 0,
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "name": "users",
+                "data_source": "logs",
+                "search": {
+                  "query": "service:blurt $env"
+                },
+                "indexes": ["*"],
+                "compute": {
+                  "aggregation": "cardinality",
+                  "metric": "@usr.id"
+                }
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "users"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Errors over time (by version)",
+        "type": "timeseries",
+        "show_legend": true,
+        "requests": [
+          {
+            "display_type": "bars",
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "errors",
+                "data_source": "logs",
+                "search": {
+                  "query": "service:blurt status:error $env"
+                },
+                "indexes": ["*"],
+                "compute": {
+                  "aggregation": "count"
+                },
+                "group_by": [
+                  {
+                    "facet": "version",
+                    "limit": 10,
+                    "sort": {
+                      "aggregation": "count",
+                      "order": "desc"
+                    }
+                  }
+                ]
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "errors"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Adoption — telemetry volume by version",
+        "type": "timeseries",
+        "show_legend": true,
+        "requests": [
+          {
+            "display_type": "area",
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "events",
+                "data_source": "logs",
+                "search": {
+                  "query": "service:blurt $env"
+                },
+                "indexes": ["*"],
+                "compute": {
+                  "aggregation": "count"
+                },
+                "group_by": [
+                  {
+                    "facet": "version",
+                    "limit": 10,
+                    "sort": {
+                      "aggregation": "count",
+                      "order": "desc"
+                    }
+                  }
+                ]
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "events"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Top handled faults",
+        "type": "toplist",
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "name": "faults",
+                "data_source": "logs",
+                "search": {
+                  "query": "service:blurt status:error $env"
+                },
+                "indexes": ["*"],
+                "compute": {
+                  "aggregation": "count"
+                },
+                "group_by": [
+                  {
+                    "facet": "@underlying_error",
+                    "limit": 10,
+                    "sort": {
+                      "aggregation": "count",
+                      "order": "desc"
+                    }
+                  }
+                ]
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "faults"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Errors by OS version",
+        "type": "toplist",
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "name": "os",
+                "data_source": "logs",
+                "search": {
+                  "query": "service:blurt status:error $env"
+                },
+                "indexes": ["*"],
+                "compute": {
+                  "aggregation": "count"
+                },
+                "group_by": [
+                  {
+                    "facet": "@os.version",
+                    "limit": 10,
+                    "sort": {
+                      "aggregation": "count",
+                      "order": "desc"
+                    }
+                  }
+                ]
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "os"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Errors by device model",
+        "type": "toplist",
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "name": "device",
+                "data_source": "logs",
+                "search": {
+                  "query": "service:blurt status:error $env"
+                },
+                "indexes": ["*"],
+                "compute": {
+                  "aggregation": "count"
+                },
+                "group_by": [
+                  {
+                    "facet": "@device.model",
+                    "limit": 10,
+                    "sort": {
+                      "aggregation": "count",
+                      "order": "desc"
+                    }
+                  }
+                ]
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "device"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
