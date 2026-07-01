@@ -10,7 +10,7 @@
 [![Platform](https://img.shields.io/badge/platform-macOS%2015%2B-00e0ff?style=flat-square)](https://github.com/alexkroman/blurt/releases/latest)
 [![Powered by AssemblyAI](https://img.shields.io/badge/powered%20by-AssemblyAI-00e0ff?style=flat-square)](https://www.assemblyai.com)
 
-  <img src=".github/images/blurt.png" alt="Blurt's ready screen: tap or hold the hotkey, speak, and cleaned-up text is typed into the focused app" width="760" height="460" />
+  <img src=".github/images/blurt.png" alt="Blurt's ready screen: tap or hold the hotkey, speak, and cleaned-up text is typed into the focused app" width="760" height="435" />
 </div>
 
 Blurt is a small, open-source macOS dictation app — native, private, and cued by real Yamaha DX7 and Roland Juno-106 synths. Hold a key, speak, and clean text lands where your cursor already is. Bring your own [AssemblyAI API key](https://www.assemblyai.com/dashboard/api-keys) — that's the whole setup.
