@@ -1,6 +1,6 @@
 {
   "title": "Blurt — App Health",
-  "description": "Errors, crashes, adoption, and device breakdown for the Blurt macOS app.\nFed by Datadog Logs + Crash Reporting (service:blurt). Managed as code —\nsee datadog/blurt-dashboard.yml.\n",
+  "description": "Errors, crashes, adoption, and device breakdown for the Blurt macOS app.\nFed by Datadog Logs + Crash Reporting (service:blurt). Managed as code —\nsee datadog/blurt-dashboard.json.\n",
   "layout_type": "ordered",
   "reflow_type": "auto",
   "template_variables": [
