@@ -223,8 +223,8 @@ fi
 if command -v shellcheck >/dev/null 2>&1; then
   echo "==> shellcheck"
   cd "$REPO_ROOT"
-  # Static analysis for the project's shell scripts (release-*, install-hooks,
-  # check.sh itself) — catches quoting bugs, unset vars, and unsafe patterns.
+  # Static analysis for the project's shell scripts (release-*, check.sh
+  # itself) — catches quoting bugs, unset vars, and unsafe patterns.
   shellcheck scripts/*.sh
 else
   echo "note: shellcheck not installed; skipping (brew install shellcheck)"

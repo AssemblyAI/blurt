@@ -20,7 +20,6 @@ swift test --filter DictationSessionTests   # single suite
 swift test --filter happyPath               # single test case by name
 
 scripts/check.sh                            # full health check (see below) — same script CI runs
-scripts/install-hooks.sh                    # one-time: point core.hooksPath at .githooks/ (pre-commit runs check.sh)
 scripts/dev-build.sh                        # signed Debug build + install to /Applications (local dev)
 ```
 
