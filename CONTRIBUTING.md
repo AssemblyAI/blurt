@@ -19,7 +19,6 @@ you don't reintroduce something that was deliberately removed.
 
 ```bash
 scripts/bootstrap.sh        # install the local toolchain on a fresh Mac
-scripts/install-hooks.sh    # one-time: point core.hooksPath at .githooks/ (pre-commit runs check.sh)
 scripts/dev-build.sh        # signed Debug build + install to /Applications
 swift test                  # engine unit tests (Swift Testing)
 scripts/check.sh            # full health check — the same script CI runs
