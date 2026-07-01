@@ -83,8 +83,8 @@ Release builds send crash reports and a few handled errors to
 [Sentry](https://sentry.io). Those reports are diagnostic only: stack traces and
 error details, never your audio, transcripts, or API key.
 
-Because transcription is processed by AssemblyAI, their policies apply to that
-audio:
+Transcription is processed by AssemblyAI, and the following policies apply to
+that audio:
 
 - [AssemblyAI Privacy Policy](https://www.assemblyai.com/legal/privacy-policy)
 - [AssemblyAI Terms of Service](https://www.assemblyai.com/legal/terms-of-service)
