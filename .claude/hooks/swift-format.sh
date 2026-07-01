@@ -15,11 +15,21 @@ file="$(printf '%s' "$payload" \
 case "$file" in
   *.swift)
     config="${CLAUDE_PROJECT_DIR:-.}/.swift-format"
-    if command -v xcrun >/dev/null 2>&1 && [ -f "$file" ]; then
+    # Prefer xcrun (macOS); fall back to a bare swift-format on PATH so a Linux
+    # build (e.g. in a web sandbox) formats too. Absent both, silently skip —
+    # CI's `swift-format lint --strict` remains the authority.
+    if command -v xcrun >/dev/null 2>&1; then
+      swift_format=(xcrun swift-format)
+    elif command -v swift-format >/dev/null 2>&1; then
+      swift_format=(swift-format)
+    else
+      exit 0
+    fi
+    if [ -f "$file" ]; then
       if [ -f "$config" ]; then
-        xcrun swift-format format -i --configuration "$config" "$file" >/dev/null 2>&1 || true
+        "${swift_format[@]}" format -i --configuration "$config" "$file" >/dev/null 2>&1 || true
       else
-        xcrun swift-format format -i "$file" >/dev/null 2>&1 || true
+        "${swift_format[@]}" format -i "$file" >/dev/null 2>&1 || true
       fi
     fi
     ;;

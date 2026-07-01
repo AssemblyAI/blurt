@@ -54,8 +54,22 @@ package won't compile.
 
 What you CAN still do there: read and edit Swift source, reason about the pipeline, update the
 cleanup prompt and docs, and write tests for later verification. What NOT to do: run (or claim to
-have run) `scripts/check.sh`, or assert a build/test passed. Flag clearly that verification must
-happen on a Mac — CI runs the full `check.sh` on `macos-26` and is the authority on green.
+have run) the full `scripts/check.sh`, or assert a build/test passed. Flag clearly that verification
+must happen on a Mac — CI runs the full `check.sh` on `macos-26` and is the authority on green.
+
+**The portable gate.** `scripts/check.sh --portable` runs the platform-independent subset:
+actionlint, prettier, xmllint, markdownlint, shellcheck, and `release.test.sh` (plus
+`swift-format lint` / `swiftlint lint` if Linux builds of those happen to be on `PATH`). Use it to
+verify docs, site, scripts, and workflow changes in-sandbox. A green `--portable` run is **not**
+"green" in the CI sense — it skips the entire Swift side — and the script's closing line says so.
+In Claude Code on the web, a `SessionStart` hook (`.claude/hooks/session-start.sh`) installs the
+portable linters automatically (npm/apt/Go module proxy; GitHub release downloads are blocked by
+the default network policy, which is also why SwiftLint and swift-format are not installed there).
+
+**The verification loop for Swift changes.** Since only CI can run the full gate, the efficient
+remote workflow is: commit, push, open or update the PR, then watch `check.yml` (subscribe to PR
+activity where available) and fix failures as CI reports them — rather than stopping at
+"verify on a Mac".
 
 ## Architecture
 
