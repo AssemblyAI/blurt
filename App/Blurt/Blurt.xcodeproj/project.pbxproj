@@ -1938,7 +1938,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\n# Debug-only: installs a re-signed copy at a stable path so TCC will\n# register Blurt in the Accessibility / Input Monitoring lists.\n# Release builds skip this — the release-build.sh script handles\n# staging, secure-timestamp signing, DMG creation, and notarization\n# separately.\nif [ \"$CONFIGURATION\" != \"Debug\" ]; then\n  echo \"Skipping Install to /Applications for $CONFIGURATION builds.\"\n  exit 0\nfi\nif [ \"${CODE_SIGNING_ALLOWED:-YES}\" = \"NO\" ]; then\n  echo \"Skipping Install to /Applications: codesigning disabled (CI / health check).\"\n  exit 0\nfi\nif [ \"${CODE_SIGN_IDENTITY:-}\" = \"-\" ]; then\n  # Ad-hoc identity — the UI-test / CI build (scripts/uitest.sh and\n  # check.sh sign ad-hoc so the XCUITest runner satisfies library\n  # validation). The Developer ID re-sign below can't run without the\n  # maintainer's cert, and the tests launch the app straight from\n  # DerivedData, so there's nothing to install.\n  echo \"Skipping Install to /Applications: ad-hoc signing (UI test / CI).\"\n  exit 0\nfi\n# Copy + re-sign into /Applications so TCC sees a permanent path.\n# (Xcode/CLI builds otherwise live in DerivedData / /tmp — paths\n# macOS treats as transient and refuses to add to the Privacy\n# & Security toggle list.) Falls back to ~/Applications if the\n# system folder isn't writable on this machine.\nif [ -w /Applications ]; then\n  DEST=\"/Applications/${PRODUCT_NAME}.app\"\nelse\n  DEST=\"$HOME/Applications/${PRODUCT_NAME}.app\"\n  mkdir -p \"$HOME/Applications\"\nfi\nrm -rf \"$DEST\"\ncp -R \"$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app\" \"$DEST\"\n\n# SHA-1 of the Developer ID Application: Alexander Kroman cert.\n# Errors are NOT swallowed.\nIDENTITY=\"640A7F5A9754400D4A0491E7A6FB30542D907806\"\nENTS=\"${SRCROOT}/Blurt/Blurt.entitlements\"\n# Inside-out signing: Debug builds emit unsigned dylibs\n# (__preview.dylib, Blurt.debug.dylib). Signing the bundle\n# alone doesn't recurse, so verify fails. Sign nested code first.\nfind \"$DEST\" -type f \\( -name \"*.dylib\" -o -name \"*.so\" \\) \\\n  -print0 | while IFS= read -r -d '' f; do\n  codesign --force --sign \"$IDENTITY\" --options runtime \"$f\"\ndone\ncodesign --force --sign \"$IDENTITY\" \\\n  --entitlements \"$ENTS\" \\\n  --options runtime \\\n  \"$DEST\"\ncodesign --verify --strict --verbose=1 \"$DEST\"\necho \"Installed: $DEST\"\n\n# Keep LaunchServices pointing only at the stable install. This build\n# also leaves a copy in DerivedData ($BUILT_PRODUCTS_DIR) registered\n# under the same bundle id; if it lingers, macOS can resolve the id to\n# that transient path and Blurt disappears from the Accessibility\n# list. Drop the DerivedData copy and (re)register the install.\nLSREGISTER=\"/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister\"\n\"$LSREGISTER\" -u \"$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app\" >/dev/null 2>&1 || true\n\"$LSREGISTER\" -f \"$DEST\" >/dev/null 2>&1 || true\n";
+			shellScript = "set -e\n# Debug-only: installs a re-signed copy at a stable path so TCC will\n# register Blurt in the Accessibility / Input Monitoring lists.\n# Release builds skip this — the release-build.sh script handles\n# staging, secure-timestamp signing, DMG creation, and notarization\n# separately.\ncase \"$CONFIGURATION\" in\n  Debug | Debug-Local) ;; # local dev + test builds install\n  *)\n    echo \"Skipping Install to /Applications for $CONFIGURATION builds.\"\n    exit 0\n    ;;\nesac\nif [ \"${CODE_SIGNING_ALLOWED:-YES}\" = \"NO\" ]; then\n  echo \"Skipping Install to /Applications: codesigning disabled (CI / health check).\"\n  exit 0\nfi\nif [ \"${CODE_SIGN_IDENTITY:-}\" = \"-\" ]; then\n  # Ad-hoc identity — the UI-test / CI build (scripts/uitest.sh and\n  # check.sh sign ad-hoc so the XCUITest runner satisfies library\n  # validation). The Developer ID re-sign below can't run without the\n  # maintainer's cert, and the tests launch the app straight from\n  # DerivedData, so there's nothing to install.\n  echo \"Skipping Install to /Applications: ad-hoc signing (UI test / CI).\"\n  exit 0\nfi\n# Copy + re-sign into /Applications so TCC sees a permanent path.\n# (Xcode/CLI builds otherwise live in DerivedData / /tmp — paths\n# macOS treats as transient and refuses to add to the Privacy\n# & Security toggle list.) Falls back to ~/Applications if the\n# system folder isn't writable on this machine.\nif [ -w /Applications ]; then\n  DEST=\"/Applications/${PRODUCT_NAME}.app\"\nelse\n  DEST=\"$HOME/Applications/${PRODUCT_NAME}.app\"\n  mkdir -p \"$HOME/Applications\"\nfi\nrm -rf \"$DEST\"\ncp -R \"$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app\" \"$DEST\"\n\n# SHA-1 of the Developer ID Application: Alexander Kroman cert.\n# Errors are NOT swallowed.\nIDENTITY=\"640A7F5A9754400D4A0491E7A6FB30542D907806\"\nENTS=\"${SRCROOT}/Blurt/Blurt.entitlements\"\n# Inside-out signing: Debug builds emit unsigned dylibs\n# (__preview.dylib, Blurt.debug.dylib). Signing the bundle\n# alone doesn't recurse, so verify fails. Sign nested code first.\nfind \"$DEST\" -type f \\( -name \"*.dylib\" -o -name \"*.so\" \\) \\\n  -print0 | while IFS= read -r -d '' f; do\n  codesign --force --sign \"$IDENTITY\" --options runtime \"$f\"\ndone\ncodesign --force --sign \"$IDENTITY\" \\\n  --entitlements \"$ENTS\" \\\n  --options runtime \\\n  \"$DEST\"\ncodesign --verify --strict --verbose=1 \"$DEST\"\necho \"Installed: $DEST\"\n\n# Keep LaunchServices pointing only at the stable install. This build\n# also leaves a copy in DerivedData ($BUILT_PRODUCTS_DIR) registered\n# under the same bundle id; if it lingers, macOS can resolve the id to\n# that transient path and Blurt disappears from the Accessibility\n# list. Drop the DerivedData copy and (re)register the install.\nLSREGISTER=\"/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister\"\n\"$LSREGISTER\" -u \"$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app\" >/dev/null 2>&1 || true\n\"$LSREGISTER\" -f \"$DEST\" >/dev/null 2>&1 || true\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -2017,6 +2017,76 @@
 				TEST_TARGET_NAME = Blurt;
 			};
 			name = Release;
+		};
+		70C6D35C1D35EA5CC302A82E /* Debug-Local */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = 640A7F5A9754400D4A0491E7A6FB30542D907806;
+				CODE_SIGN_STYLE = Manual;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = Y54ZB9JF63;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = "Debug-Local";
 		};
 		7BF370DEA8BAC47F4179EAF8 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -2098,6 +2168,28 @@
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 			};
 			name = Release;
+		};
+		C60B093D72F218B45EA77736 /* Debug-Local */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.alex.blurt.uitests;
+				SDKROOT = macosx;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = Blurt;
+			};
+			name = "Debug-Local";
 		};
 		CB84BDE2D077AE22C9E21497 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -2187,6 +2279,24 @@
 			};
 			name = Debug;
 		};
+		DEC447B087F81B0E6C3138D2 /* Debug-Local */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Blurt/Blurt.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Blurt/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.alex.blurt;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+			};
+			name = "Debug-Local";
+		};
 		EBC0249237E96EB2C98596F0 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -2216,6 +2326,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				CB84BDE2D077AE22C9E21497 /* Debug */,
+				70C6D35C1D35EA5CC302A82E /* Debug-Local */,
 				7BF370DEA8BAC47F4179EAF8 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
@@ -2225,6 +2336,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				EBC0249237E96EB2C98596F0 /* Debug */,
+				C60B093D72F218B45EA77736 /* Debug-Local */,
 				37878A1B7ED928C9C260F43F /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
@@ -2234,6 +2346,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				CD58E0085469061FEE527931 /* Debug */,
+				DEC447B087F81B0E6C3138D2 /* Debug-Local */,
 				81D8585ABD7DDD16BFC4DE0D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;

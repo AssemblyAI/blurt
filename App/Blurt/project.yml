@@ -4,6 +4,21 @@ options:
   deploymentTarget:
     macOS: "15.0"
   developmentLanguage: en
+# Build configurations. Debug and Release are the usual pair; Debug-Local is a
+# debug variant used only by scripts/dev-build.sh for a clean local install
+# build. It exists so dev-build.sh can drop UITEST_HOOKS by selecting a
+# configuration (-configuration Debug-Local) instead of passing a global
+# SWIFT_ACTIVE_COMPILATION_CONDITIONS override on the xcodebuild command line.
+# That override is applied to EVERY target in the graph — including SwiftPM
+# dependencies — and replaces (not appends to) their value, which silently
+# stripped the SPM_BUILD flag dd-sdk-ios's package targets rely on and broke
+# their Datadog{Core,CrashReporting} compiles. A per-config setting only touches
+# this app target, so the dependencies keep their own flags. Any custom `configs`
+# map must list every configuration, so Debug/Release are repeated here.
+configs:
+  Debug: debug
+  Debug-Local: debug
+  Release: release
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -49,11 +64,14 @@ targets:
         # The XCUITest harness + leak/hotkey test seams compile only when
         # UITEST_HOOKS is set (see the `#if UITEST_HOOKS` blocks). It's on for the
         # Debug config — so Xcode, check.sh, uitest.sh, and leaks.sh all get the
-        # scaffolding — and scripts/dev-build.sh overrides it off for a clean
-        # local build. (DEBUG is listed explicitly since setting this key
-        # overrides the value XcodeGen would otherwise derive for a debug config.)
+        # scaffolding — and off for Debug-Local, which scripts/dev-build.sh selects
+        # for a clean local install build with the test scaffolding excluded.
+        # (DEBUG is listed explicitly since setting this key overrides the value
+        # XcodeGen would otherwise derive for a debug config.)
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG UITEST_HOOKS
+        Debug-Local:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
     sources:
       - path: Blurt
     info:
@@ -93,10 +111,13 @@ targets:
           # Release builds skip this — the release-build.sh script handles
           # staging, secure-timestamp signing, DMG creation, and notarization
           # separately.
-          if [ "$CONFIGURATION" != "Debug" ]; then
-            echo "Skipping Install to /Applications for $CONFIGURATION builds."
-            exit 0
-          fi
+          case "$CONFIGURATION" in
+            Debug | Debug-Local) ;; # local dev + test builds install
+            *)
+              echo "Skipping Install to /Applications for $CONFIGURATION builds."
+              exit 0
+              ;;
+          esac
           if [ "${CODE_SIGNING_ALLOWED:-YES}" = "NO" ]; then
             echo "Skipping Install to /Applications: codesigning disabled (CI / health check)."
             exit 0
