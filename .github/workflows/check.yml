@@ -5,6 +5,10 @@ on:
     branches: [main]
   push:
     branches: [main]
+  # Required for the merge queue: GitHub builds each queued PR as a temporary
+  # gh-readonly-queue/ candidate and fires merge_group; the required `check`
+  # status must run there or queued PRs never merge.
+  merge_group:
 
 concurrency:
   group: check-${{ github.ref }}
