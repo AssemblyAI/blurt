@@ -1,0 +1,89 @@
+name: check
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+# Minimal token scope: this workflow only checks out and builds/tests the repo.
+permissions:
+  contents: read
+
+jobs:
+  # Cheap gate: decide whether anything outside docs/ changed. docs/ is prose
+  # (excluded from the lint checks) and can't affect the build or tests, so a
+  # docs-only change skips the expensive macOS job below.
+  #
+  # Why a skipped job rather than `paths-ignore`: `check` is a required status
+  # check on main. `paths-ignore` filters the whole workflow, so the required
+  # context is never reported and the PR stays stuck "Expected". A job skipped
+  # via `if:` still reports — branch protection treats a skipped required check
+  # as passing — so docs-only PRs stay mergeable.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@v6
+        with:
+          path: blurt
+          fetch-depth: 0
+      - name: Detect non-docs changes
+        id: filter
+        working-directory: blurt
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            range="$BASE_SHA...$HEAD_SHA"
+          elif [ -n "${BEFORE:-}" ] && git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            range="$BEFORE..$HEAD_SHA"
+          else
+            range="" # first push / unknown base: run the full check to be safe
+          fi
+          if [ -z "$range" ]; then
+            echo "code=true" >>"$GITHUB_OUTPUT"; exit 0
+          fi
+          changed="$(git diff --name-only "$range")"
+          echo "Changed files in $range:"; echo "$changed"
+          # Capture non-docs lines and test emptiness (robust across grep impls).
+          nondocs="$(printf '%s\n' "$changed" | grep -vE '^docs/' || true)"
+          if [ -z "$changed" ] || [ -n "$nondocs" ]; then
+            echo "code=true" >>"$GITHUB_OUTPUT"  # something outside docs/ changed
+          else
+            echo "code=false" >>"$GITHUB_OUTPUT" # docs-only — skip the heavy job
+          fi
+
+  check:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: macos-26
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@v6
+        with:
+          path: blurt
+
+      - name: Install build tools
+        working-directory: blurt
+        run: brew bundle --file=Brewfile
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Run check.sh
+        working-directory: blurt
+        run: scripts/check.sh

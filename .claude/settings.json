@@ -1,0 +1,54 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(swift test *)",
+      "Bash(swift build *)",
+      "Bash(xcodegen generate *)",
+      "Bash(xcodebuild -project App/Blurt/Blurt.xcodeproj -scheme Blurt -configuration Debug -derivedDataPath /tmp/blurt-build build)",
+      "Bash(xcrun swift-format *)",
+      "Bash(swift-format lint *)",
+      "Bash(swiftlint lint *)",
+      "Bash(periphery scan *)",
+      "Bash(shellcheck scripts/*.sh)",
+      "Bash(shellcheck .claude/hooks/*.sh)",
+      "Bash(markdownlint *)",
+      "Bash(prettier --check *)",
+      "Bash(scripts/check.sh)",
+      "Bash(./scripts/check.sh)",
+      "Bash(scripts/dev-build.sh)",
+      "Bash(gh repo *)",
+      "mcp__assemblyai-docs__search_docs",
+      "mcp__assemblyai-docs__list_sections",
+      "mcp__assemblyai-docs__get_pages",
+      "mcp__assemblyai-docs__get_api_reference"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/protect-pbxproj.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/swift-format.sh"
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/swiftlint.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

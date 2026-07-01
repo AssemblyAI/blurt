@@ -1,0 +1,8 @@
+# Generated Xcode project — edit App/Blurt/project.yml and run xcodegen generate.
+App/Blurt/Blurt.xcodeproj/
+
+# README/marketing screenshots (not source).
+.github/images/
+
+# App icon asset bundle (not Swift).
+App/Blurt/Blurt/AppIcon.icon/

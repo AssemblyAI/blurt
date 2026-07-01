@@ -1,0 +1,297 @@
+import AppKit
+import ApplicationServices
+
+struct CapturedFocus: Sendable {
+  let pid: pid_t
+  let processName: String?
+}
+
+enum FocusCapture {
+  @MainActor
+  static func captureFrontmost() -> CapturedFocus? {
+    guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
+    return CapturedFocus(
+      pid: app.processIdentifier,
+      processName: app.localizedName
+    )
+  }
+
+  static func runningApp(for captured: CapturedFocus) -> NSRunningApplication? {
+    NSRunningApplication(processIdentifier: captured.pid)
+  }
+
+  /// Accessibility-derived priming read from the system-wide focused UI element
+  /// at dictation start (see `TranscriptionContext`). Every field is
+  /// best-effort: any signal that can't be read is `nil`, and a fully-empty
+  /// result simply means less context, never an error.
+  struct FocusedFieldContext: Sendable {
+    /// Text immediately preceding the insertion point ("prior chunk context").
+    let priorText: String?
+    /// The text currently selected in the focused field — the dictation will
+    /// replace it, so it primes the model on what the utterance is about.
+    let selectedText: String?
+    /// The focused window's title — a dense topic hint.
+    let windowTitle: String?
+    /// A short label for the focused field ("To", "Search", "Message").
+    let fieldLabel: String?
+
+    static let empty = FocusedFieldContext(
+      priorText: nil, selectedText: nil, windowTitle: nil, fieldLabel: nil)
+  }
+
+  /// Reads window title, field label, and up to `maxPriorChars` of text before
+  /// the cursor from the focused UI element in a single Accessibility traversal.
+  ///
+  /// Returns `.empty` whenever nothing can be read — the process lacks
+  /// Accessibility trust or no element is focused. Each field is independently
+  /// best-effort. Requires the same Accessibility permission the app already
+  /// holds for paste injection, so it adds no new prompt.
+  ///
+  /// Secure text fields (password inputs) are detected by role and never have
+  /// their contents read, so a typed password — selected or not — can't leak
+  /// into the STT prompt.
+  @MainActor
+  static func captureFieldContext(maxPriorChars: Int = 320, maxSelectedChars: Int = 320)
+    -> FocusedFieldContext
+  {
+    guard AXIsProcessTrusted() else { return .empty }
+
+    let system = AXUIElementCreateSystemWide()
+    var focusedRef: CFTypeRef?
+    guard
+      AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedRef)
+        == .success,
+      let focusedRef
+    else { return .empty }
+    // CFTypeRef → AXUIElement is a guaranteed CF downcast; `as?` warns
+    // "always succeeds" (an error under -warnings-as-errors), so force-cast.
+    // swiftlint:disable:next force_cast
+    let element = focusedRef as! AXUIElement
+
+    // Don't read the value of a password field into the prompt.
+    let isSecure = (stringValue(element, kAXRoleAttribute) == "AXSecureTextField")
+    let prior = isSecure ? nil : priorText(of: element, maxChars: maxPriorChars)
+    // The selected range's text (empty when there's no selection). Capped like
+    // prior text so a huge highlight can't dominate the prompt budget.
+    let selected = isSecure ? nil : clip(stringValue(element, kAXSelectedTextAttribute), to: maxSelectedChars)
+    return FocusedFieldContext(
+      priorText: prior,
+      selectedText: selected,
+      windowTitle: clip(windowTitle(of: element), to: 120),
+      fieldLabel: clip(fieldLabel(of: element), to: 80))
+  }
+
+  /// The insertion point (UTF-16 location of the selected range) of `element`,
+  /// or `nil` when it exposes no readable selection.
+  @MainActor
+  private static func caretLocation(of element: AXUIElement) -> Int? {
+    var rangeRef: CFTypeRef?
+    guard
+      AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeRef)
+        == .success,
+      let rangeRef
+    else { return nil }
+    var cfRange = CFRange()
+    // swiftlint:disable:next force_cast
+    guard AXValueGetValue(rangeRef as! AXValue, .cfRange, &cfRange) else { return nil }
+    return cfRange.location
+  }
+
+  /// Up to `maxChars` of text immediately preceding the insertion point, or
+  /// `nil` when the element exposes no readable text before the cursor.
+  @MainActor
+  private static func priorText(of element: AXUIElement, maxChars: Int) -> String? {
+    // Insertion point = the location of the (possibly empty) selected range.
+    let caret = caretLocation(of: element) ?? -1
+
+    // Prefer the parameterized "string for range" so we read only the slice we
+    // need (cheap even in huge documents) rather than the whole field value.
+    if caret > 0 {
+      let start = max(0, caret - maxChars)
+      var sliceRange = CFRange(location: start, length: caret - start)
+      if let axRange = AXValueCreate(.cfRange, &sliceRange) {
+        var sliceRef: CFTypeRef?
+        if AXUIElementCopyParameterizedAttributeValue(
+          element, kAXStringForRangeParameterizedAttribute as CFString, axRange, &sliceRef)
+          == .success, let slice = sliceRef as? String, !slice.isEmpty
+        {
+          return slice
+        }
+      }
+    }
+
+    // Fallback: read the full value and clip to the caret (or the tail).
+    return priorSlice(full: stringValue(element, kAXValueAttribute) ?? "", caret: caret, maxChars: maxChars)
+  }
+
+  /// The title of the window containing the focused element, if exposed.
+  @MainActor
+  private static func windowTitle(of element: AXUIElement) -> String? {
+    guard let window = elementValue(element, kAXWindowAttribute) else { return nil }
+    return stringValue(window, kAXTitleAttribute)
+  }
+
+  /// A short, human-meaningful label for the field, chosen by priority from the
+  /// attributes the focused element exposes.
+  @MainActor
+  private static func fieldLabel(of element: AXUIElement) -> String? {
+    selectLabel(
+      placeholder: stringValue(element, kAXPlaceholderValueAttribute),
+      description: stringValue(element, kAXDescriptionAttribute),
+      title: stringValue(element, kAXTitleAttribute),
+      roleDescription: stringValue(element, kAXRoleDescriptionAttribute))
+  }
+
+  /// Reads a `String`-valued AX attribute, returning `nil` for missing,
+  /// non-string, or blank values.
+  @MainActor
+  private static func stringValue(_ element: AXUIElement, _ attribute: String) -> String? {
+    var ref: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(element, attribute as CFString, &ref) == .success,
+      let value = ref as? String
+    else { return nil }
+    return normalized(value)
+  }
+
+  /// Reads an `AXUIElement`-valued AX attribute (e.g. the containing window).
+  @MainActor
+  private static func elementValue(_ element: AXUIElement, _ attribute: String) -> AXUIElement? {
+    var ref: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(element, attribute as CFString, &ref) == .success,
+      let ref
+    else { return nil }
+    // swiftlint:disable:next force_cast
+    return (ref as! AXUIElement)
+  }
+
+  // MARK: - Editable-target detection (for the injector's "no beep" guard)
+
+  /// AX roles a focused element reports when it accepts typed/pasted text.
+  private static let editableRoles: Set<String> = [
+    "AXTextField", "AXTextArea", "AXComboBox", "AXSecureTextField", "AXSearchField",
+  ]
+
+  /// Pure decision: does a focused element with these signals accept pasted text?
+  /// The injector calls this just before a synthesized ⌘V — if it returns false the
+  /// paste is skipped (so macOS doesn't beep into a non-editable target) and the
+  /// transcript is left on the clipboard with a quiet "Copied" notice.
+  ///
+  /// Requires a *positive* editability signal: a known text role, a settable value,
+  /// or an insertion point. Anything else — a non-text control, an unknown role, or
+  /// no readable role — is treated as not editable, so we copy rather than beep a
+  /// ⌘V into a target that can't take it.
+  ///
+  /// AX-opaque Electron editors (VS Code, Slack) expose *none* of these signals
+  /// even for a genuine text field, so this returns false for them too — but the
+  /// injector still pastes into those via a separate Electron-app check (see
+  /// `isElectronApp` / `KeyInjector.insert`), so the user's words aren't dropped
+  /// to copy-only there.
+  static func isEditableTarget(
+    hasFocusedElement: Bool, role: String?, valueSettable: Bool, hasInsertionPoint: Bool
+  ) -> Bool {
+    guard hasFocusedElement else { return false }
+    if let role, editableRoles.contains(role) { return true }
+    return valueSettable || hasInsertionPoint
+  }
+
+  /// Whether `app` is an Electron/Chromium-based app, detected by the bundled
+  /// Electron framework. Such apps ship with their accessibility tree off, so even
+  /// a focused text field exposes no editable AX signal and
+  /// `hasEditableFocusedElement` reads them as non-editable. They're the one case
+  /// the injector still pastes into on no signal (dropping the user's words into a
+  /// copy-only fallback would be the worse mistake). A native app with genuinely no
+  /// editable focus bundles no such framework and correctly falls back to copy.
+  static func isElectronApp(_ app: NSRunningApplication?) -> Bool {
+    guard let bundleURL = app?.bundleURL else { return false }
+    let electronFramework = bundleURL.appendingPathComponent(
+      "Contents/Frameworks/Electron Framework.framework")
+    return FileManager.default.fileExists(atPath: electronFramework.path)
+  }
+
+  /// Whether the system-wide focused element can accept pasted text right now.
+  /// Read by `KeyInjector` (off the main actor, after it has activated the target
+  /// app) just before pasting — the Accessibility *client* read APIs are
+  /// thread-safe. Returns `true` whenever AX can't be consulted (process not
+  /// trusted) or can't resolve a focused element, so an unknowable state still
+  /// attempts the paste — the injector's own trust check then handles the
+  /// missing-permission case.
+  nonisolated static func hasEditableFocusedElement() -> Bool {
+    guard AXIsProcessTrusted() else { return true }
+
+    let system = AXUIElementCreateSystemWide()
+    var focusedRef: CFTypeRef?
+    guard
+      AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedRef)
+        == .success,
+      let focusedRef
+    else {
+      // AX is trusted but reports no focused element — e.g. a native app frontmost
+      // with nothing editable focused (Finder, the desktop, a button-only window).
+      // Posting ⌘V there only beeps, so treat it as non-editable and copy instead.
+      // AX-opaque Electron apps (VS Code, Slack) also expose no focused element
+      // here, but the injector's Electron-app check still pastes into those (see
+      // `KeyInjector.insert` / `isElectronApp`).
+      return false
+    }
+    // swiftlint:disable:next force_cast
+    let element = focusedRef as! AXUIElement
+
+    var roleRef: CFTypeRef?
+    let role =
+      AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleRef) == .success
+      ? roleRef as? String : nil
+
+    var settable = DarwinBoolean(false)
+    let valueSettable =
+      AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &settable) == .success
+      && settable.boolValue
+
+    // A readable selected-text *range* means the element has an insertion point —
+    // the hallmark of a text input even when its value isn't reported settable.
+    var rangeRef: CFTypeRef?
+    let hasInsertionPoint =
+      AXUIElementCopyAttributeValue(
+        element, kAXSelectedTextRangeAttribute as CFString, &rangeRef) == .success
+
+    return isEditableTarget(
+      hasFocusedElement: true, role: role, valueSettable: valueSettable,
+      hasInsertionPoint: hasInsertionPoint)
+  }
+
+  // MARK: - Pure helpers (no Accessibility I/O — unit-testable in isolation)
+
+  /// Trims surrounding whitespace; returns `nil` for empty/blank input.
+  static func normalized(_ text: String?) -> String? {
+    text.trimmedNonEmpty()
+  }
+
+  /// Picks the most descriptive field label in priority order
+  /// (placeholder → description → title → role description), skipping blanks.
+  /// Placeholder/description tend to be the most meaningful; role description
+  /// ("text entry area") is the generic last resort.
+  static func selectLabel(
+    placeholder: String?, description: String?, title: String?, roleDescription: String?
+  ) -> String? {
+    for candidate in [placeholder, description, title, roleDescription] {
+      if let value = normalized(candidate) { return value }
+    }
+    return nil
+  }
+
+  /// The up-to-`maxChars` slice of `full` ending at `caret`. A caret outside
+  /// `0...full.count` (e.g. unreadable selection) falls back to the tail of the
+  /// whole value. Returns `nil` when the resulting slice is empty.
+  static func priorSlice(full: String, caret: Int, maxChars: Int) -> String? {
+    guard !full.isEmpty else { return nil }
+    let upto = (caret >= 0 && caret <= full.count) ? full.prefix(caret) : full[...]
+    let clipped = String(upto.suffix(maxChars))
+    return clipped.isEmpty ? nil : clipped
+  }
+
+  /// Caps `text` at `maxChars` characters (used to bound window titles / labels
+  /// so an oddly long one can't dominate the prompt budget).
+  static func clip(_ text: String?, to maxChars: Int) -> String? {
+    guard let text, text.count > maxChars else { return text }
+    return String(text.prefix(maxChars))
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Bootstrap: Install Toolchain",
+      "type": "shell",
+      "command": "./scripts/bootstrap.sh",
+      "group": "none",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Swift: Build",
+      "type": "shell",
+      "command": "swift build",
+      "group": "build",
+      "problemMatcher": ["$msCompile"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Swift: Test",
+      "type": "shell",
+      "command": "swift test",
+      "group": "test",
+      "problemMatcher": ["$msCompile"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Swift: Test with Coverage",
+      "type": "shell",
+      "command": "swift test --enable-code-coverage -Xswiftc -warnings-as-errors",
+      "group": "test",
+      "problemMatcher": ["$msCompile"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "XcodeGen: Generate App Project",
+      "type": "shell",
+      "command": "cd App/Blurt && xcodegen generate --quiet",
+      "group": "none",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Xcode: Build App",
+      "type": "shell",
+      "command": "xcodebuild -project App/Blurt/Blurt.xcodeproj -scheme Blurt -configuration Debug -derivedDataPath /tmp/blurt-build build",
+      "group": "build",
+      "problemMatcher": ["$msCompile"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Run check.sh",
+      "type": "shell",
+      "command": "./scripts/check.sh",
+      "group": "test",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    }
+  ]
+}

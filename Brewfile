@@ -1,0 +1,8 @@
+brew "actionlint"
+brew "markdownlint-cli"
+brew "periphery"
+brew "prettier"
+brew "shellcheck"
+brew "swiftlint"
+brew "xcbeautify"
+brew "xcodegen"

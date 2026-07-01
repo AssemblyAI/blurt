@@ -1,0 +1,7 @@
+{
+  "recommendations": [
+    "swift-lang.swift",
+    "davidanson.vscode-markdownlint",
+    "esbenp.prettier-vscode"
+  ]
+}

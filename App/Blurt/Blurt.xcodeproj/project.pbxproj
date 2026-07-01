@@ -1,0 +1,2270 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		00A485EC5E147DCCF0B8B275 /* juno-85-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3BCCE1D8752C6A3A2AEF9009 /* juno-85-start.m4a */; };
+		00E120625DDB12DDC4043C9F /* rom1a-9-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4B9209100F5A6E8514AF6FA7 /* rom1a-9-stop.m4a */; };
+		0132B51969D4F1FF318C01E0 /* juno-125-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 286A4475154226AC60716712 /* juno-125-start.m4a */; };
+		0148EF067F8AF351D2B7F2C0 /* rom1b-16-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E617272806BFEB303D94F315 /* rom1b-16-stop.m4a */; };
+		01A96FAF2732876CBC4F5E30 /* rom1b-0-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 0618C6EE1B8864C57F02CC1E /* rom1b-0-stop.m4a */; };
+		01E732538557C370B11A56BC /* juno-95-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DFE28F9A35722B67815654DC /* juno-95-stop.m4a */; };
+		02A88DD7DA0165811436B8C3 /* juno-80-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 9536A4A4611280C6237C9D95 /* juno-80-start.m4a */; };
+		03AC3DBE3755E3B7D66B8CF4 /* juno-120-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = A640F1C2A7EBAF3B0F8FFB83 /* juno-120-start.m4a */; };
+		08956A83272E2ADC9B821894 /* juno-17-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = EC0CF2AE01C6EE41101CBB74 /* juno-17-stop.m4a */; };
+		08DC3CC8F65C73612D9543F7 /* juno-35-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 093A44A6DB129960326C1796 /* juno-35-stop.m4a */; };
+		0933F6F9CD7294843A63E09C /* rom1b-15-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = B401FA111CA49F5A535366AC /* rom1b-15-stop.m4a */; };
+		0946D58B6886B74ED2A5DA18 /* rom1b-13-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 429B975FA7FFA777106D0A49 /* rom1b-13-stop.m4a */; };
+		0A259385C40D25FC87E377D6 /* APIKeyStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DA3A304528FD1C7FE6C2B94 /* APIKeyStepView.swift */; };
+		0A7FB8A90BB7E7A5110A4F4D /* BlurtEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 371215E93A9C2CE60C6347BB /* BlurtEngine */; };
+		0BAB613C778CDF7691FAE6E6 /* rom1b-11-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4052A873788D31A33BE80FCB /* rom1b-11-stop.m4a */; };
+		0CB2E6C02E57374806139E68 /* juno-60-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 24B8138546D9CD21F6D55F54 /* juno-60-start.m4a */; };
+		0D4AE0F936EAA5E3F0CE96AD /* rom1b-5-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F2B1262C9AB83ED251421D03 /* rom1b-5-start.m4a */; };
+		0F06FD2F6DB2831867C8B681 /* juno-52-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = ED1535C5BDC865063C5DA3A3 /* juno-52-stop.m4a */; };
+		0F1317CCFA2A3245DAA96141 /* DictationComposition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08A7417835D8538AC4A7E2FB /* DictationComposition.swift */; };
+		0F6D746DF48BB048827A358F /* rom1b-29-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 786672855B44AB80CAF4D782 /* rom1b-29-stop.m4a */; };
+		1088FECB82D84AD0951CA1E2 /* juno-83-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 920F5A55960A00E2AECF1362 /* juno-83-stop.m4a */; };
+		10EA68562CE70506895CB2FE /* rom1b-31-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1D5C52A673686FB041595227 /* rom1b-31-stop.m4a */; };
+		1275CFCDBF1D593B545C8A84 /* rom1b-15-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6D89280137DAC07403FB60FC /* rom1b-15-start.m4a */; };
+		15210F6BE968D3E2EF771DE0 /* rom1a-5-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2CA6F4E6A10AE93F169DF19B /* rom1a-5-stop.m4a */; };
+		152452FE264E453808327885 /* juno-122-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 9FE15281EA6DE5C2C1978C44 /* juno-122-stop.m4a */; };
+		1678C191033752690B8D54B7 /* juno-27-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 5F23A12A7A73E12FAB6DBD14 /* juno-27-start.m4a */; };
+		1698718150B4CE4C42101647 /* rom1a-2-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4E25792AC8E46820FF270D64 /* rom1a-2-start.m4a */; };
+		175154674D668762CDAF08E1 /* rom1a-25-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = A01872064CB7D739DE6F9952 /* rom1a-25-stop.m4a */; };
+		176BD86642BD36D05365B269 /* juno-62-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 32B41B7B40DE78AB987C237E /* juno-62-stop.m4a */; };
+		17955931A6FB9BDB8900BFFF /* juno-6-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 8C9E137C2B11E6EF6A82E51A /* juno-6-start.m4a */; };
+		17D0D9229307BBDBEF8AC51E /* juno-10-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = C38C73970E1D1978494F7BAE /* juno-10-start.m4a */; };
+		18A5F723E5BE6FADAE4015EA /* rom1a-0-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 573212CC5EC3393A990E10A1 /* rom1a-0-start.m4a */; };
+		18B1D945F55B4D7C505BADFB /* rom1a-26-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 7F9F20FAD5D61C4D1C44473C /* rom1a-26-stop.m4a */; };
+		18C56FD1A7E6AC5F4843C311 /* rom1a-11-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1625CA15DBCA7F1FA24991EA /* rom1a-11-stop.m4a */; };
+		18ECBCEA932A30743C7A6837 /* juno-119-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = FB6A990540604C4EE8DC425E /* juno-119-stop.m4a */; };
+		18F5E33D681D44E60FD74277 /* juno-102-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 40797D76FF5644C56408B12D /* juno-102-start.m4a */; };
+		192FD90EE88EB42596DF6AD2 /* juno-121-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2C2D4EB9527DACDDFC5D47A0 /* juno-121-stop.m4a */; };
+		19A470448F7B22B3DCC66B80 /* rom1b-8-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = FBC56D4B9D0ABF6D4541EDAC /* rom1b-8-start.m4a */; };
+		1A41CBCC3C2F561F41CD1589 /* juno-57-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D848AB9AC79E40A76CFA7123 /* juno-57-stop.m4a */; };
+		1AA267C68388794394E6652C /* juno-7-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = FE25AF745B85611516B16FDA /* juno-7-start.m4a */; };
+		1BA6EB5B7B96489923E9FEDF /* juno-124-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2187024BF79E6953ECEFD04C /* juno-124-stop.m4a */; };
+		1BAF2D90C8E3CFCF70C6DC2E /* juno-54-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E90698CCD83D2CDAF043877A /* juno-54-stop.m4a */; };
+		1BC2EB8B211378DD842647EC /* rom1a-6-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = BBF8A81BBD03B233A8C2B845 /* rom1a-6-stop.m4a */; };
+		1BEC33EC0C95E9A52CC14F2B /* juno-65-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E5F9E5E96FA7EC31380F6669 /* juno-65-stop.m4a */; };
+		1C40B5DB92262E05808ECCEA /* DictationKeyTap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3258A84E37C372993B1572EE /* DictationKeyTap.swift */; };
+		1C92A0295860131BCF95AF1C /* rom1b-3-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 5B5B261F4D195B5E6E3B5567 /* rom1b-3-stop.m4a */; };
+		1CCDD063B29F52F4681EA371 /* rom1b-6-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3996A11A62CD49D6CB89CB8E /* rom1b-6-start.m4a */; };
+		1E76D800DC431B55E6C132F6 /* juno-98-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 8304744FE228FA9B2CEBEA16 /* juno-98-start.m4a */; };
+		1F764B2251BBD48C1B4716EF /* juno-27-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6D915D3DC8930DBC79CACDDC /* juno-27-stop.m4a */; };
+		20526B7308927EE014F18865 /* juno-31-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DEF4922B82FD3934F5EC71C9 /* juno-31-stop.m4a */; };
+		206A7DA30F04C0726FC3EA12 /* juno-86-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E358C3B6655AFEA39440EF00 /* juno-86-start.m4a */; };
+		2076F1A16BDC48A367F396D2 /* rom1a-21-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 664331059A3068CA5074CEA4 /* rom1a-21-start.m4a */; };
+		20D76F42C93BA19D97C3AF65 /* rom1a-8-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 10A0336924600313EE5243AE /* rom1a-8-stop.m4a */; };
+		20EF88890F9D05CC4381F626 /* juno-15-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 71BEAB59A7A2280EB1EDC80E /* juno-15-stop.m4a */; };
+		20FCCD07969B601231884018 /* juno-67-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 06A8F7161C5917AADFF6AC77 /* juno-67-stop.m4a */; };
+		2103C3F415E9C102664CA13C /* rom1a-20-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F7307E06A286147462426313 /* rom1a-20-stop.m4a */; };
+		234AFC3335EE59A5CF61E79C /* juno-78-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2A97148549AA99C8CDD7C316 /* juno-78-start.m4a */; };
+		24CD4A998CA258D89140D418 /* juno-12-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = A0C78659208520BB93EAB372 /* juno-12-start.m4a */; };
+		2747AA6669B2406D4436E2A3 /* juno-53-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 56F69B42F0D495142B17FF83 /* juno-53-start.m4a */; };
+		27CD78DC27ACE6A0E2EDFD15 /* juno-41-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 8E71DBB3C21D616DDFA77D0B /* juno-41-stop.m4a */; };
+		282E843FAECCBCA0CDB04E48 /* juno-93-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D85C603DADD81B58F7D390F7 /* juno-93-stop.m4a */; };
+		2836B2C93B93114A056AF5D9 /* juno-97-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 763E3951E68EBB37F89C7F84 /* juno-97-start.m4a */; };
+		286523D07CE6F05381799EDB /* juno-96-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D06381A69EEEC336CB847783 /* juno-96-stop.m4a */; };
+		2A078AE336A8297310D41DEE /* juno-80-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E8BB482E825AD5C65B170E18 /* juno-80-stop.m4a */; };
+		2A83AE5BD416B1FD22E6AFC9 /* juno-104-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2D862CB0D203330C1F8F58B0 /* juno-104-stop.m4a */; };
+		2BF2181C1FB5401C449F61DA /* rom1b-30-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 45E6CF05E1334B3D2901E516 /* rom1b-30-stop.m4a */; };
+		2C571102475213058CD88538 /* juno-64-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 8CB3A2CFA15A525E43F451BD /* juno-64-stop.m4a */; };
+		2D167BC70445D3DF4CCA2478 /* juno-72-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 541EE5FFF00A40A486501EDF /* juno-72-start.m4a */; };
+		2D381E847A79CD251CD0A130 /* juno-10-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F8A0A285719AC6179D039DD9 /* juno-10-stop.m4a */; };
+		2D411458C7D649F8A8C16557 /* rom1a-16-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 33AE2EBBF7FA36E1E0AEBC3A /* rom1a-16-start.m4a */; };
+		2DDA08ADF2FD66CC599A6AD1 /* juno-18-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D99A49205DCC057DE3A393B6 /* juno-18-stop.m4a */; };
+		2DE25BA91A56C3F8F7F2327B /* rom1a-4-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2ACBC70E59C46EDF3186DF16 /* rom1a-4-stop.m4a */; };
+		2E3390B30563C0479D94EB02 /* juno-99-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = ACFD76434CCFED8E1B6FB977 /* juno-99-start.m4a */; };
+		2F0A09DF17E6E8497AE0651A /* rom1a-25-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4B9A2A460519088D70893121 /* rom1a-25-start.m4a */; };
+		2F0D37104421F8601AF502C2 /* juno-91-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = A8AB9F55940B496EF7A8B633 /* juno-91-start.m4a */; };
+		2F42560EDE7C8F097889A32D /* juno-33-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F7FE2B1E0DFA593ACFCEDA76 /* juno-33-start.m4a */; };
+		2F5526E7BF0E08FE4E74F2B2 /* juno-69-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DED921D522FA87E2970C2EFF /* juno-69-stop.m4a */; };
+		3015C1E46AE0ECA3A96F819C /* juno-69-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6A29FFB86C18EA299EAFFCFD /* juno-69-start.m4a */; };
+		3246BF1C37C7A027817D9458 /* juno-110-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E552326770AD5967B8128420 /* juno-110-stop.m4a */; };
+		336F75E5060815018D79ACEB /* rom1b-21-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 01B663528C4E1AFEF24675E1 /* rom1b-21-start.m4a */; };
+		33C581B5DE3847C05F540701 /* juno-81-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3FCE941C19A3FF0DC61462B7 /* juno-81-stop.m4a */; };
+		33D65780CD716925076F28E2 /* rom1a-1-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 12450A6BC64E455E03366B13 /* rom1a-1-stop.m4a */; };
+		3407E8759D61D569A998EE78 /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 240939D503F3CE03A0697A5F /* AppCoordinator.swift */; };
+		342F0435944628D5A79DEC07 /* juno-75-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E22688A49EC9BD63DABF2A7B /* juno-75-stop.m4a */; };
+		351E74AD4AF61AC397D0E29F /* juno-0-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 812039ECEDABDEEE2EFA8BD5 /* juno-0-start.m4a */; };
+		36500919A31FD54D0CBB6879 /* juno-4-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 7D97F15BC06507369522BB59 /* juno-4-stop.m4a */; };
+		3666B25BA68E77CE928E9AAC /* rom1a-17-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 5FBD6C327FE4EC154AF786C4 /* rom1a-17-start.m4a */; };
+		366F3493E15ABD4CEB8B204F /* juno-23-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2DB41AE5C69904E278F5C6E6 /* juno-23-start.m4a */; };
+		3735745240EF8622D05E461D /* juno-114-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = B67F392ADB8F0C2D4BB6827F /* juno-114-start.m4a */; };
+		380CC88E7ECB0B7990035E9D /* juno-58-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 31986D541F06DA91827C18A0 /* juno-58-start.m4a */; };
+		3847BD1D6E43DA784E9818E7 /* juno-114-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E41AE56820CF756BC7D69F67 /* juno-114-stop.m4a */; };
+		391196D599D26A8B4B019282 /* juno-46-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D19740AC9AF44D8E172CFD37 /* juno-46-stop.m4a */; };
+		39AF2EDCCE995469F501FC4B /* juno-41-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2AD93734B15E59A81C42B6D9 /* juno-41-start.m4a */; };
+		39B615077840455855E5CFDA /* juno-106-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3751D3C923F3614E866B947C /* juno-106-start.m4a */; };
+		39EFDF0BEFBFD8FF9F26DF91 /* juno-127-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 41587FEDA3BE5310D3FA6CDA /* juno-127-stop.m4a */; };
+		3A11FB623C174D65BA24C3DE /* juno-121-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 54AD858A08D1923B5220D76E /* juno-121-start.m4a */; };
+		3A71CA4DA8E6527201C75186 /* juno-117-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 68B48515B1E03226F9EB2EBE /* juno-117-start.m4a */; };
+		3AC07D96BDFC908799B88EA2 /* rom1a-29-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4AE2B597126C95C118FF9FDD /* rom1a-29-start.m4a */; };
+		3B341A8507FB5FD175D9F31E /* juno-59-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E1106A4955BF212EBF1B38CE /* juno-59-stop.m4a */; };
+		3BDB74F711B4E4CE65BE1C3B /* juno-26-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 32944757FD2C1F6E8AF73873 /* juno-26-start.m4a */; };
+		3BEA1249CB0D5B8583C85C33 /* juno-6-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 49F7AD1193F18CCDF17B9EBA /* juno-6-stop.m4a */; };
+		3C1C9F5BE822A6D177369042 /* rom1b-10-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 77C74C74945D0A990578D911 /* rom1b-10-start.m4a */; };
+		3CEAFC28F861460AFC573257 /* juno-74-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D3681457B0FB13FF3FD6BAF6 /* juno-74-stop.m4a */; };
+		3F85F8F73725C2DE7C315D34 /* rom1a-3-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F2D66E4734A5DC086904E421 /* rom1a-3-stop.m4a */; };
+		3F954DB8B4BF0BFB867F6467 /* rom1a-0-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 555254497CA693DF00B3B924 /* rom1a-0-stop.m4a */; };
+		3FB9E592DE0C331A7F7A5891 /* rom1a-3-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F96D128F79D585621827FF6A /* rom1a-3-start.m4a */; };
+		405C18BB1B8E28EB53873026 /* juno-20-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 731519E33F2E9EAB57F6ABF6 /* juno-20-start.m4a */; };
+		409F9B76AE0CB9FD2D78EA3D /* rom1b-22-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DAA2E01D418EA3ABA8A9DD5F /* rom1b-22-start.m4a */; };
+		40CFC003124E4E9E13CFDB76 /* rom1a-11-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = CDCD486F98020360173EBEFA /* rom1a-11-start.m4a */; };
+		418B5EABF6FB429CB94F6B0C /* juno-66-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4E414413BCDA4C613782919D /* juno-66-stop.m4a */; };
+		43223BEF5DB80A497D743186 /* juno-102-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 9308FFA344AB1B73A960BD15 /* juno-102-stop.m4a */; };
+		4372C0AD932309335C25FF8D /* juno-123-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 96D2FE2DE3A2177A80764E1B /* juno-123-start.m4a */; };
+		438A2882ACACB5153CCA1D21 /* juno-127-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 88CC243509230D21563FDF89 /* juno-127-start.m4a */; };
+		44A8D4A3DD256E9D02A79C27 /* rom1a-15-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3BA1B8BBEEC6B5A2960688C3 /* rom1a-15-start.m4a */; };
+		44ECD071FA8B324584F31F23 /* rom1b-28-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 562C5F709DE00A5F38F045A5 /* rom1b-28-start.m4a */; };
+		454ADE9A9137F4E0A0AF4C24 /* juno-2-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 40A711B3442D9CBE0189BEF3 /* juno-2-stop.m4a */; };
+		45BB291D75223AC958B137BF /* juno-36-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E6A271DA085CFB136745066C /* juno-36-stop.m4a */; };
+		468547FA48D3745D73230860 /* rom1b-26-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6A9A4B58A6524D4F954DFE65 /* rom1b-26-stop.m4a */; };
+		46D3EBAEB518E57ADDC45A40 /* juno-63-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 0DBB595A2AB7221F408B4775 /* juno-63-start.m4a */; };
+		478EC7B3CE921BA253078C6C /* rom1a-8-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DE8C20239561AA02A1D34FF3 /* rom1a-8-start.m4a */; };
+		47A2A8ADC5CA93EDD43FFC9A /* juno-81-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = C7714523A92F4753092CA67C /* juno-81-start.m4a */; };
+		49C7D35CE5F945A440E32C49 /* rom1b-12-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 258681056CA44359083EDC9B /* rom1b-12-stop.m4a */; };
+		4A4DF04FC848BE3D6FE7C621 /* juno-32-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 49A71146BDFEA07D74A6A67C /* juno-32-stop.m4a */; };
+		4B048C608AB3B201BC4DCB67 /* juno-28-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 713974B393D43087E1F51493 /* juno-28-start.m4a */; };
+		4B3BA1626DE3D22AA0CB3E45 /* juno-31-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2C7B119035D271E56434FB51 /* juno-31-start.m4a */; };
+		4C2F89013028E3D7829D0CBD /* juno-100-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1C72B7BEF6CFEC52928C6CED /* juno-100-stop.m4a */; };
+		4D33337B6794A265D46FCE6C /* juno-5-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4DB6065E9D1F64F3AF0FD03B /* juno-5-start.m4a */; };
+		4D94F20832B9828A5642B1B8 /* juno-91-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 0C17FEE505740AA5BCBB0E21 /* juno-91-stop.m4a */; };
+		4E8F1A9F7F78845ADF7A3F01 /* rom1a-22-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F1340BFA7AF0D9D50EAA4A24 /* rom1a-22-stop.m4a */; };
+		4EE19BF49EB60AB0B48B0575 /* juno-8-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1CF1F098A8DC41DD8508480E /* juno-8-start.m4a */; };
+		4F1848A5287B80210D71BB9B /* juno-105-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 207F58335FAAD1E0D1311D10 /* juno-105-stop.m4a */; };
+		4F23A201AD40B38A2E94BBD9 /* juno-126-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = A58B6E01B13C27D1DA52EAFE /* juno-126-start.m4a */; };
+		500A15D5374847D847555931 /* juno-55-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2978FCBEE1BC015D9CFC8646 /* juno-55-stop.m4a */; };
+		5025717A1723EEEFF385533B /* juno-12-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2D51B930706AF22BF9BA0CEF /* juno-12-stop.m4a */; };
+		5120B387A51EF21F65CEA342 /* juno-51-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = FFCE00A121F0A2EA669DE42B /* juno-51-stop.m4a */; };
+		53CD236A3C9985EF336637DA /* juno-115-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 35048A9866E106410CDCED81 /* juno-115-stop.m4a */; };
+		54887F064F7C9D737A503EB3 /* juno-44-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F5A287AB11C9314F4AF37A61 /* juno-44-start.m4a */; };
+		550697861DEEF702CBBFA8FA /* juno-94-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4FB6BF9F449D954A52952C6B /* juno-94-stop.m4a */; };
+		550F30201148FAC5EACA2315 /* juno-70-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 92753DF24C8BB9D740CC7B6C /* juno-70-stop.m4a */; };
+		55A02BEEBE538AE0048CC2B9 /* juno-73-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F4512C06E3020F0F2D518A3E /* juno-73-stop.m4a */; };
+		572211105316DB06C2AC9134 /* juno-30-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 41736827B0D4E7E1D024DCF1 /* juno-30-start.m4a */; };
+		59C168C1D913BE352C83FFD5 /* juno-45-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D733CCA5061A2B7B74A23A65 /* juno-45-stop.m4a */; };
+		5B0EDCD855E9676BCE76E1A2 /* rom1a-7-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4873421ACF290B88FA257D6A /* rom1a-7-start.m4a */; };
+		5B117EB54F223A9960EC23B6 /* juno-88-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 19A708C2C2C7CDF52E47A8C4 /* juno-88-start.m4a */; };
+		5B563C349C59145DC1A9590A /* juno-94-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 886848A89BE3512619263E54 /* juno-94-start.m4a */; };
+		5B8CAB5AF6C6ACD4EC9C0008 /* rom1b-9-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 48168B2DA1698C02D7360B01 /* rom1b-9-start.m4a */; };
+		5BC9751151CDD2ACCF45ED81 /* juno-49-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3D7637960DAA5355CDCA8A6A /* juno-49-stop.m4a */; };
+		5C16FDD6B5C2AC858D55CA0D /* juno-5-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 8FE85CA9802FE6C1E82B88C8 /* juno-5-stop.m4a */; };
+		5CE5A475027B155F060AA69D /* rom1b-2-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 16D2045BC5C2B6D89E137B7B /* rom1b-2-start.m4a */; };
+		5D61A9DF2A5C2EFC31F8758C /* juno-101-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 179049468873B9F5C6F0F77C /* juno-101-stop.m4a */; };
+		5E4064CF164D7FF40280ABC6 /* juno-126-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DCC1BF26927D57122A59A4C1 /* juno-126-stop.m4a */; };
+		5E42262A8153912B13356293 /* juno-96-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 63AA5C73111EA1F4E03A8C24 /* juno-96-start.m4a */; };
+		5EF49E6114C9C7BF79F857D9 /* juno-8-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2FFA326076660C91492A6CE1 /* juno-8-stop.m4a */; };
+		60CE1FFB2833C564F335DFF3 /* juno-47-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 11F215137F50A2D4AC61E414 /* juno-47-stop.m4a */; };
+		623F42C6E50E5B9EBF9F207A /* juno-22-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = AD303A24D4133CE3F1F1DE23 /* juno-22-start.m4a */; };
+		643FE1E9922319122B1C087D /* rom1a-17-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = ED3C851EF55F6BBEBFDAE53A /* rom1a-17-stop.m4a */; };
+		645A40A3B0E75729A0E3D1AC /* juno-66-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 0CDBED88D2D7CE84776B7574 /* juno-66-start.m4a */; };
+		65B01C04BC66F1F633EEA966 /* juno-124-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 143E94106D9A6342EFD4F909 /* juno-124-start.m4a */; };
+		65B7C6E1A9A118B0245E76AE /* rom1a-19-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 792258F8AAF3AF35104EE0CF /* rom1a-19-start.m4a */; };
+		661B457D5EAE88E9349B04EF /* juno-108-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 66E090797FE75C600EDE541F /* juno-108-stop.m4a */; };
+		6842E896710203CD7D71773B /* rom1a-24-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 875545CFDFCFF4288AAC7D09 /* rom1a-24-start.m4a */; };
+		687C4250670C94DF21351CEC /* rom1b-2-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = B67F817AD357801080D26FFF /* rom1b-2-stop.m4a */; };
+		6887F2B14A0602B28F316AD7 /* juno-106-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 35EA12CB630AC702CBAC175A /* juno-106-stop.m4a */; };
+		690F181B950CB4F0693013B1 /* rom1a-10-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 767217AE992554FDF6D67A4D /* rom1a-10-stop.m4a */; };
+		691207BE65B615EF4C9B77C1 /* rom1b-14-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DB1715E594E1F2A1A3F152E0 /* rom1b-14-stop.m4a */; };
+		697C21589BFDE5A66DD168A1 /* juno-67-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 5D1E0161AF60ADB6D903535E /* juno-67-start.m4a */; };
+		69C396E4080D37117F2AEB01 /* juno-87-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 9D02AECDAE6B146F11B7A721 /* juno-87-stop.m4a */; };
+		69E27229D8C64D7119918B7A /* SoundStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27E18FF6880EADB94F98C7C4 /* SoundStepView.swift */; };
+		6A498D9EE4EDDA7B47837FB6 /* juno-73-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D6CA551786B56B10B45B9BF3 /* juno-73-start.m4a */; };
+		6B3FF5991DA85C563D97B83C /* juno-109-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 47B0B08D890A1A7CB4577410 /* juno-109-start.m4a */; };
+		6B5EAA66BF23484BBB1F5640 /* rom1b-7-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = EA933A670288BEAFD43D468E /* rom1b-7-start.m4a */; };
+		6BB34E30A1556FBBF53C0870 /* juno-59-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 09C4E97A7D9EE493D5EC54BB /* juno-59-start.m4a */; };
+		6C38C28996EFD32C35BFD344 /* rom1a-1-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 68463DAAB8E203467B8676BF /* rom1a-1-start.m4a */; };
+		6CE41ED2FE69E9745B4026E5 /* rom1b-4-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 823731A25D339A9F93096500 /* rom1b-4-stop.m4a */; };
+		6D5CE0B54CB0E0055467B489 /* AccessibilityAuditUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D88509B0396487E159AA6FDD /* AccessibilityAuditUITests.swift */; };
+		6D998C88CDD099F91DA8D679 /* rom1a-15-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1F71C1C8D870D024746CED69 /* rom1a-15-stop.m4a */; };
+		6E5DCBB7404565E9A2A6D445 /* rom1b-14-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E6D106BBE0E8586827C14E59 /* rom1b-14-start.m4a */; };
+		71E2AD5E17B0D9D6BEBBAA65 /* juno-105-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D69E5F1E1FCFF486BE8CF377 /* juno-105-start.m4a */; };
+		72CEA16F646173CB13DC5698 /* juno-3-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 54806E2653DD90175A220994 /* juno-3-stop.m4a */; };
+		737949A55AE1AC12E141151F /* rom1a-4-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = A82A191B20F222EBC479143E /* rom1a-4-start.m4a */; };
+		738A8EF4AB672CD2B7F13319 /* juno-86-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 40703D977839CB4F625C0284 /* juno-86-stop.m4a */; };
+		73E75F74DC2F7984F50E184A /* juno-110-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 09CD5D88E1A2BE5D0095F167 /* juno-110-start.m4a */; };
+		73FA46BD466212E9AE09C847 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C151FD5B49E5D7E61BDDEF0 /* App.swift */; };
+		750BE46A52E2E794D4FD3366 /* rom1b-26-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DD0650160548287F62C1FA77 /* rom1b-26-start.m4a */; };
+		7661BD55883B6F3B03AA3905 /* juno-40-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = BCE9C2C9715E2C1C96683AE0 /* juno-40-stop.m4a */; };
+		771F23875EE95C160EF71EC9 /* juno-62-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 86140F16972A9661816EC786 /* juno-62-start.m4a */; };
+		7758E9474687A859AF4F65B3 /* juno-14-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 9EB4EF55A9B57C93926D433F /* juno-14-stop.m4a */; };
+		776B57FD593356ED09E879F2 /* rom1b-25-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 7FB45A274F0CC28BD0923634 /* rom1b-25-stop.m4a */; };
+		77ADF5811E27F7E0BE4AC895 /* rom1a-22-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = BC17D9B01FDBC9667A7CD78A /* rom1a-22-start.m4a */; };
+		787D291747E3FB4814EA7CC5 /* rom1a-13-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 482422C7CC15583570E3E869 /* rom1a-13-stop.m4a */; };
+		7CB462ED1AF7569FFA464439 /* rom1b-7-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = C2CB5D2E464BFD7F8BABE760 /* rom1b-7-stop.m4a */; };
+		7EECAF13B83D447177BB90C9 /* juno-42-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 79FDAA58085D83CB336E9578 /* juno-42-start.m4a */; };
+		7EF091D67076CE014C6AF679 /* juno-123-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1467EAF745A940434A8AF18F /* juno-123-stop.m4a */; };
+		7F2B8E5F75F6A9E0243130A4 /* rom1b-24-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F5A156982A018BF53A0B2ADD /* rom1b-24-start.m4a */; };
+		80175F1FE217F6FAE58A2018 /* juno-65-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6AC4B1737ED4ED895F9729FF /* juno-65-start.m4a */; };
+		8061E52E8A874E1BA584A2E7 /* juno-48-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = ED5D54496B6973C9F7AE05F3 /* juno-48-stop.m4a */; };
+		80D5E7A6D72094E9FC31CF7C /* juno-92-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3C54A0D394CE71150BB0DBA8 /* juno-92-stop.m4a */; };
+		82B97735B1714774843153EF /* juno-90-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 79F8F36D7C5D074BC5135FEA /* juno-90-start.m4a */; };
+		84958721E6DEB4D06E1A01B6 /* juno-42-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F77424E89C3E4B5B787BDFA4 /* juno-42-stop.m4a */; };
+		8736CF7025B1EE7C295218D7 /* juno-9-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 8887DCE124B065F8313AC59F /* juno-9-start.m4a */; };
+		87B7038A5385E149C978908B /* juno-15-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 0386BF281886EDBFE9EC8C61 /* juno-15-start.m4a */; };
+		87F937969B18876084CF0B7D /* rom1a-13-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 605E69165B4D2A9B8530606A /* rom1a-13-start.m4a */; };
+		88E50D191E0D56142A774676 /* rom1a-31-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = AFCA36ECEFBA3D7C7B1AB1B7 /* rom1a-31-start.m4a */; };
+		8910F795DFD84D1FFF6E2E3F /* juno-54-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 144C0E5F9D620C408EE783AE /* juno-54-start.m4a */; };
+		89278B24217DD0498DF95FE6 /* rom1a-30-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DA7EDD1B32FB9542B785607F /* rom1a-30-stop.m4a */; };
+		8953D6BA3CB973A240F0E4E4 /* juno-22-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = FDCC1B8A6F0D06424CA35688 /* juno-22-stop.m4a */; };
+		8970AC4B9C8ABBF0BE1E3650 /* rom1b-19-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 023384D61BE724D06740E08B /* rom1b-19-start.m4a */; };
+		8A6E427B2113243B8BB0805A /* juno-19-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 04253733D542188A7E5645AD /* juno-19-stop.m4a */; };
+		8B904B64628686564ADFFC26 /* rom1b-19-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 0150E727307295CE46981426 /* rom1b-19-stop.m4a */; };
+		8BDD0F91D3FFC2E74C93CA62 /* juno-112-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D912D56A38016C394FF89315 /* juno-112-start.m4a */; };
+		8CB4C1B2D97B53C1B767C429 /* rom1b-21-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = AB770632673FD0DC0F84C976 /* rom1b-21-stop.m4a */; };
+		8CF49C443FB72F340CCE59F6 /* juno-76-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6492130BD7CA7CBF22725D6C /* juno-76-stop.m4a */; };
+		8D0F6510E64C706D2C3FE252 /* juno-16-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 5041BF8B32BEB59D5539E48A /* juno-16-stop.m4a */; };
+		8D12ECEF1E1DD1403F3DF8B8 /* juno-9-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6055F68880BD81037EE1FE18 /* juno-9-stop.m4a */; };
+		8D2BA6E9FAC605D678A73164 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9542F903D789DDAA55639374 /* AppDelegate.swift */; };
+		8D47B853FC196D99527FC7C1 /* juno-48-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 71A6E85CCA47ECE3FA90E776 /* juno-48-start.m4a */; };
+		8D5CDFEF378BA41D7EB07CDF /* juno-97-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 791EFC0EE82C0E91F316B51E /* juno-97-stop.m4a */; };
+		8D81DE1C806A0EE6E219D343 /* juno-0-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F0B1CD9D40D126CD251FDD46 /* juno-0-stop.m4a */; };
+		8DEF999DFD616C2FD17923DE /* juno-119-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 114E0EA1827EA005CF188FC8 /* juno-119-start.m4a */; };
+		8E70ED1163B872F8D691CDC5 /* juno-118-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E084A62CF8F167165466AE30 /* juno-118-start.m4a */; };
+		8E89114ADA5FCE4AF9DFB3C0 /* juno-116-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 486F5FE65FF8C13A35C28271 /* juno-116-start.m4a */; };
+		8FE4B9B139BB9557FBC5589B /* OverlayWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A27D7F43295DE2A81EFFDDBC /* OverlayWindowController.swift */; };
+		91C1257866F6E2D4EE65BD09 /* WindowAccessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B2312DE4BC0F4F070830AD7 /* WindowAccessor.swift */; };
+		91D775ACB2351468D47731FF /* rom1a-12-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E2BCA8E305B596F960CEE1AE /* rom1a-12-start.m4a */; };
+		9266EA4F50B9D46E9181FBAF /* rom1a-5-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2E64BCDB280FD0A27D965AA9 /* rom1a-5-start.m4a */; };
+		92DFEC2C8E639E4658C7E8C0 /* rom1a-10-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 45D65D0519A0D2FC47EF7DAD /* rom1a-10-start.m4a */; };
+		936E20D5FF993C8FCF0E5575 /* juno-44-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6B85C5A7CB0E82C4777D2430 /* juno-44-stop.m4a */; };
+		9437C292A6D7FE533338073D /* OverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E79CB809D285C0C27E8D43D /* OverlayView.swift */; };
+		94BDD62801619DD2FBD369F1 /* rom1a-18-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 69549AF933A7E546A11A67BE /* rom1a-18-start.m4a */; };
+		9519B17FF953DAD0B8147EBF /* rom1b-5-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D679085098210876A65E88BD /* rom1b-5-stop.m4a */; };
+		9545093DF53A4AEF03DA26D1 /* rom1b-0-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 5EE551246F92A5923CDF2F59 /* rom1b-0-start.m4a */; };
+		9549DA14B4FC5091F052B5B6 /* SettingsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6EFB0086ED63DB182AFFC8F /* SettingsUITests.swift */; };
+		9572AF1291768F2608423D4E /* juno-34-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 8AA7158BB27D2F927C2ED12F /* juno-34-start.m4a */; };
+		95735D080C5F48949A4F4C05 /* juno-122-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 335E98CEAC5AE30CB90AFB21 /* juno-122-start.m4a */; };
+		95AEDB3AAE446744C4B3F4EB /* juno-108-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 45CDD6CFFA8DEF4DFFC65B5A /* juno-108-start.m4a */; };
+		95BCDA4901A609434CDE8CB2 /* juno-120-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = EBB8641EF9B0108DC0B103B7 /* juno-120-stop.m4a */; };
+		96140E08E3F0FABF734CC1CE /* juno-68-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = B460358B22184090D1CCD18E /* juno-68-stop.m4a */; };
+		9889A23A2521EBE5624F5357 /* juno-85-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F8A43C600FA98A4316D02150 /* juno-85-stop.m4a */; };
+		98B085D6C5E6FE21919D173C /* rom1a-23-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = AA1892B0DE69A5B9E8983A5D /* rom1a-23-start.m4a */; };
+		99701037DF07F88D19F5E4AE /* juno-107-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 89F61F7352130DAAA530D836 /* juno-107-stop.m4a */; };
+		99D86F2ECD16B622695875B1 /* juno-84-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 17B42F16029FF1625EEAD58D /* juno-84-start.m4a */; };
+		9AA5B4FC1FC9B4FE7B48E973 /* juno-35-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 870CA5DD6808F87584E3FA9E /* juno-35-start.m4a */; };
+		9AB0058318597E562D2262D5 /* DictateHotkey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FA34796733AB87C0280470D /* DictateHotkey.swift */; };
+		9B2B57779590C7CFA932F361 /* juno-13-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3E628046B76633200813B0E4 /* juno-13-start.m4a */; };
+		9C0DBA7FF976A85D9E936301 /* rom1b-4-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = AB7B48AFEE1005B27B11883F /* rom1b-4-start.m4a */; };
+		9C26DB7FF2C5CEF0D5B272E9 /* juno-32-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1A3D5DAAD31F8C7F67CAD5BB /* juno-32-start.m4a */; };
+		9C7ED24582A60A6FF0DECCB8 /* rom1b-28-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 60BA34457167C3D50C7A0C48 /* rom1b-28-stop.m4a */; };
+		9D043C0BA51901AE105E7FA5 /* rom1b-23-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1118A82ED3D1CD5CF429099E /* rom1b-23-stop.m4a */; };
+		9DCA528AC9D76B058DD24169 /* juno-38-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = CF851DB4CC78B8F16D2E7565 /* juno-38-stop.m4a */; };
+		9DEC95F32675D71E6A8BD0A6 /* juno-52-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 899D9AD955B936F6BFC4E293 /* juno-52-start.m4a */; };
+		9E42F54BAD1D070139E8C8D3 /* juno-19-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = ED1C7F2E22562A18197FED64 /* juno-19-start.m4a */; };
+		9EA37EC69F4A959575CB948A /* juno-30-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 5070E437DB5D188D16BBAACB /* juno-30-stop.m4a */; };
+		9F1F8F4B0FC8FE7C92F16DF5 /* rom1b-1-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 16400ECCAE93FF9ECD50E01F /* rom1b-1-stop.m4a */; };
+		9FABCFBCA205ED8CF8074338 /* juno-88-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 92E13646830DFEDBA2AB13AF /* juno-88-stop.m4a */; };
+		A00CB7F3BDD537A218BF3109 /* juno-25-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 281E6ED71E7F613E6E6689D0 /* juno-25-start.m4a */; };
+		A08A8DB1B5691EB7FD0BC565 /* rom1a-29-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3A96FC2E4AD7DB1BA0F6B178 /* rom1a-29-stop.m4a */; };
+		A0A8B9CD64C3EA1EEE0A1F7A /* rom1b-18-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D220A3AC36DCE278804F81A1 /* rom1b-18-start.m4a */; };
+		A0DEFAB5DF5E5C7A6146A559 /* juno-90-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DA27B927EB6616D017D910CD /* juno-90-stop.m4a */; };
+		A1C101543CA3972691DF5367 /* rom1a-30-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 7FC3A25550C39659E3E00A11 /* rom1a-30-start.m4a */; };
+		A34A51EDE26BC24EB08A3900 /* AppUpdater in Frameworks */ = {isa = PBXBuildFile; productRef = B7FF7A7170C36BAABD1ECC90 /* AppUpdater */; };
+		A3D012E25BD52949E2452B7B /* juno-17-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F37D9EAC78D140EE0CD438F2 /* juno-17-start.m4a */; };
+		A487D7B801A44C51807E0DCB /* rom1a-28-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = AC2E79FB5ACE247FF90F50E4 /* rom1a-28-stop.m4a */; };
+		A60FCD36D2D7F97336303F6B /* juno-101-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = C7DAE8C9E70F6D2232F409DE /* juno-101-start.m4a */; };
+		A87586B9C3C24375069E6554 /* juno-29-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2A1E168CEEFFE705B38463D3 /* juno-29-start.m4a */; };
+		A90DDAEC97C9648C8F7E8FB9 /* juno-37-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3CC6911B92F8B5D8C0997AA4 /* juno-37-stop.m4a */; };
+		A98B1591750D1E45F35356F5 /* juno-75-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 92CAA331F57FCD20583AF8CB /* juno-75-start.m4a */; };
+		AA418A6C485538A314B95258 /* rom1b-10-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 7A6872FE0B51D0EC9C4B397B /* rom1b-10-stop.m4a */; };
+		AA61D851350DECC5A7045594 /* rom1a-27-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = A8FCDA16949B9CE1323E24F8 /* rom1a-27-start.m4a */; };
+		AAD6D2EADCA8C241332764AD /* blurt-ready-logo.png in Resources */ = {isa = PBXBuildFile; fileRef = 350F18C964DCA2DDCA296ED4 /* blurt-ready-logo.png */; };
+		AB1C0077FA26EEDEA3542A07 /* juno-89-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 00768AE8171902B439F0602F /* juno-89-start.m4a */; };
+		AC402D2E4BC71A0F8324DCFD /* juno-109-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = EB08EC40A267C71B185EC782 /* juno-109-stop.m4a */; };
+		AD32046355138298E7FC40D0 /* MenuBarScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBA9C9322D0AF3D9C529F06F /* MenuBarScene.swift */; };
+		AD6EA7A1932A9946A2EAE2E3 /* juno-55-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 0FB812876EC4870E9A74BB50 /* juno-55-start.m4a */; };
+		AD8559A0545D5060D6E90BBA /* rom1b-1-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = BD38CC94DC42A35A4174316A /* rom1b-1-start.m4a */; };
+		ADCBA7CD79DA7B51EE57FCC4 /* juno-56-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 8E61A52A7896A36118B603B3 /* juno-56-start.m4a */; };
+		ADD4C343904D56C8948B9609 /* juno-33-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E454BCB116B2238A47700AB3 /* juno-33-stop.m4a */; };
+		ADE2784E2C702F3A126A2DF6 /* rom1b-30-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 8D369A708E176C12114384AD /* rom1b-30-start.m4a */; };
+		ADF5353D6E27FDBB61557DFE /* juno-99-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = B432346450961555004A2BDE /* juno-99-stop.m4a */; };
+		AE2ED5CDCD04D04FD69DE501 /* rom1a-28-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1610DB028EBE814A3A163301 /* rom1a-28-start.m4a */; };
+		B13A61E6F639E2543D4B6804 /* juno-51-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 36CF30F1384D606BE74362C8 /* juno-51-start.m4a */; };
+		B13F272AB1FF6533B5636595 /* juno-40-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = CFA57E6B7B3A81E2531990B5 /* juno-40-start.m4a */; };
+		B2DD0930AA5C7250B6FB127C /* juno-117-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = CB487BE3C821FF18E414CF4B /* juno-117-stop.m4a */; };
+		B391EA5F093506B3DF318F10 /* AppCoordinator+UITesting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3611A8FA0547B780D0804F52 /* AppCoordinator+UITesting.swift */; };
+		B3D0BB7BB889FA8C8E0D2B56 /* juno-14-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 32AAFF585AF1A77D0D872F11 /* juno-14-start.m4a */; };
+		B3FC1877229B7510E656EEFC /* rom1a-7-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D79CA18872ADF342DE5426CA /* rom1a-7-stop.m4a */; };
+		B56AB7FEAEC9E9ECE36B400E /* juno-28-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 8A319EF914358A938C87389D /* juno-28-stop.m4a */; };
+		B5A7CEA6517E5A1E4D77623F /* FloatingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE2598E3B8BA1D650EEEEF4B /* FloatingPanel.swift */; };
+		B6ACE56CCFCAE22FC67833AF /* juno-76-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 94546743017BF75E0DC24ACC /* juno-76-start.m4a */; };
+		B6B9598209C21737FC80D9FC /* MenuBarUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63869ED0BF971F732668349B /* MenuBarUITests.swift */; };
+		B844779F8427A1225C45A9FB /* WizardController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30E57A9C9B934A2120381005 /* WizardController.swift */; };
+		BA31A2D639A9EBEAFA22DF5D /* juno-63-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E97DEAE3F8FD9ADD7DB41B02 /* juno-63-stop.m4a */; };
+		BAC7996520BFCAA7BE0F929F /* juno-125-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 72144FD6362B731D322BA316 /* juno-125-stop.m4a */; };
+		BB6AD6072811807783AF6526 /* juno-87-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = A72EE584A3704166E932D950 /* juno-87-start.m4a */; };
+		BBFE6E3BBB854163861E1450 /* juno-26-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = CE3BEBDADD5DD54629837F34 /* juno-26-stop.m4a */; };
+		BC3195AFF07AA2FA98486A3F /* rom1a-14-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1DE1622660807FF440D18D34 /* rom1a-14-stop.m4a */; };
+		BC5D17A158C17F6D5450FFC4 /* rom1a-9-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F17631D5583E0070A4DFCF3F /* rom1a-9-start.m4a */; };
+		BDC3E7A0E9E6A349E340459D /* juno-115-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 338537DEC8694C87839545CC /* juno-115-start.m4a */; };
+		BE6EA55FEF13362210107437 /* juno-7-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 627207A211954DBC35179466 /* juno-7-stop.m4a */; };
+		BF1A9E4424DCFC45D3EC9376 /* juno-112-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F40AB81C66FD9183F49BF644 /* juno-112-stop.m4a */; };
+		BF6D4D09C97777C6A792D6A5 /* juno-24-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E53A15B7450BFE6143B4306D /* juno-24-stop.m4a */; };
+		BF73DA6BFC2C267E1D0B4510 /* rom1a-20-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D58930841AD9EB26714E8385 /* rom1a-20-start.m4a */; };
+		C138D17460660BF867DFBACD /* juno-38-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 22FF5E0C4681C483B4828FB2 /* juno-38-start.m4a */; };
+		C289DEA536A2C64BC5818739 /* juno-1-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 54244D8B2EFFCBDC803F49E2 /* juno-1-stop.m4a */; };
+		C30A635488E406D5F54C85C0 /* rom1a-16-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = AA55EF35D8FFB4A5EF7A8557 /* rom1a-16-stop.m4a */; };
+		C329F69A93CA68979E5D75B6 /* juno-113-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = B5F2D2902DFABF0A7F65E712 /* juno-113-stop.m4a */; };
+		C42D2F4BE03EFA2BF83A9130 /* juno-58-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 55BE4FC7F7897886A17FCCF2 /* juno-58-stop.m4a */; };
+		C45515FF9FFDC469D99C1116 /* juno-50-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 97254F3945FC10FBA8E4BEDA /* juno-50-stop.m4a */; };
+		C4F5423A495DC062A96AFC24 /* rom1a-18-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 90035FF502F2684829A63751 /* rom1a-18-stop.m4a */; };
+		C5C4F2A31D863B9FF2D8C654 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 44DD60B425DF100431946DAB /* README.md */; };
+		C61A5E17472356F2195A652D /* juno-82-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 8B98DFCF66F92839EF4D89F7 /* juno-82-start.m4a */; };
+		C63E309E16BF9A7DA8B4A490 /* rom1b-27-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = BEEF91CD94662F4344ECFDE9 /* rom1b-27-start.m4a */; };
+		C6B7247CDEDD05167C48FBE1 /* juno-23-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 544446F59AB1FBC8D83CCC4F /* juno-23-stop.m4a */; };
+		C6C6E8FA9A36439C3385B857 /* juno-78-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 29255F02F19C6924690373AA /* juno-78-stop.m4a */; };
+		C831C550A18E5A7CD8A0F1B7 /* juno-25-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E77ECDD66C1549039CB276A6 /* juno-25-stop.m4a */; };
+		C950FF226BF5BF25E510698E /* rom1a-19-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = EC6584FE7C94EF604CA33BE3 /* rom1a-19-stop.m4a */; };
+		C9A5AA146A43866E5E8DB559 /* rom1b-11-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 937D031560676ABE35A38538 /* rom1b-11-start.m4a */; };
+		C9FD62F1B6BF13119924F453 /* juno-43-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = C50DFA42CE97C3AF322B12FA /* juno-43-start.m4a */; };
+		CA026D0884BC73540A4773EC /* juno-77-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 55B3AAE0BC8349507F6482A1 /* juno-77-start.m4a */; };
+		CA87FC6F5E9B872162D870E5 /* rom1a-14-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1D88DB176EEA1B7058433DE6 /* rom1a-14-start.m4a */; };
+		CAB4E0D438C755332B17BC86 /* rom1b-25-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = B293D9F11DB3C3D268E82E4A /* rom1b-25-start.m4a */; };
+		CAD4C0514801599CDFEAF163 /* juno-49-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = CC40ECD64CC632EF7C26115F /* juno-49-start.m4a */; };
+		CB21595A20A62031DED02A6D /* juno-79-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 5F06797402F73A862C8DFA12 /* juno-79-start.m4a */; };
+		CB3039BB58F6A5681971FD72 /* juno-20-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 5B56D4D2910BBB44EEB4690A /* juno-20-stop.m4a */; };
+		CBA0D3727CA1C62D0665F51B /* LaunchPerformanceUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 850AFD4ECA01A669BDD91959 /* LaunchPerformanceUITests.swift */; };
+		CC08E344F8558B7489F5DE06 /* rom1b-17-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2A90E48A68218F156F84F968 /* rom1b-17-start.m4a */; };
+		CC1722BF93360A2F8627C468 /* juno-18-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 9A9BA87A72AFB3829A388E95 /* juno-18-start.m4a */; };
+		CCB264F7996BE4BC0ECB2C70 /* juno-24-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 87E45061EDF49C769A6B292D /* juno-24-start.m4a */; };
+		CD56C6A601A5AC854617E172 /* juno-50-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 69015209E1728A39C7189925 /* juno-50-start.m4a */; };
+		CD5741A3E363BC743A15DCAB /* juno-61-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 002FB9F5FD28A66C04993007 /* juno-61-start.m4a */; };
+		CDCB0D52276EE24B86BDF4BF /* juno-92-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 9340A2B70F834204FE6C6C68 /* juno-92-start.m4a */; };
+		CE0C9F1CDF923D899AAE7464 /* rom1b-6-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 99B45E82D3DF744DF2031238 /* rom1b-6-stop.m4a */; };
+		CE59A466CBD2C2D93BEA15D3 /* rom1b-18-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 989E9BBEA9AFED21774E0230 /* rom1b-18-stop.m4a */; };
+		CE73DE20498B04ED1DDE6BAE /* DictationPipelineUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0A58F1CA999E6DF7742A87 /* DictationPipelineUITests.swift */; };
+		CFD810EE32E689113D026B0B /* rom1b-27-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4FEFFC17F6198DB4F43A71F1 /* rom1b-27-stop.m4a */; };
+		D0B06B3AA29BF6F377CADD4E /* juno-113-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F935C3E491692470C97EAA48 /* juno-113-start.m4a */; };
+		D0B9C5F217B039E9E8CFD1A1 /* juno-95-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1EA259C10192DFF7D7431FD4 /* juno-95-start.m4a */; };
+		D193B50F85B5AF1AC55B4877 /* juno-57-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = AAE4557FD2700BDA0EA11D6E /* juno-57-start.m4a */; };
+		D19FCA9C846D9376DB5432CB /* juno-104-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6508D5EDCCC53BD0900A1D4F /* juno-104-start.m4a */; };
+		D1F51E38C8C72FBC0FB44E53 /* juno-56-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DEE36EB129D6CABBBD3CD9F4 /* juno-56-stop.m4a */; };
+		D22C0906051BF4AEE5E0BB46 /* rom1b-22-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 5F1932BB67CB0F9BD6105EE1 /* rom1b-22-stop.m4a */; };
+		D2F28A85689C67B360E7448D /* juno-72-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 7ED9A00CD960B3A33AC83C08 /* juno-72-stop.m4a */; };
+		D3361EFF06A0AF6D2887FF4B /* rom1b-13-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 212CC97E91334633B66C8FAC /* rom1b-13-start.m4a */; };
+		D3695589CB693DCDB7DFE324 /* juno-77-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2B0DAD072642B1E71BD6E0FC /* juno-77-stop.m4a */; };
+		D3E4BAEFF91B635E197B39C2 /* rom1a-26-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = EB504AAB7330EE4D4C1E4948 /* rom1a-26-start.m4a */; };
+		D4782F83F43693371724011D /* rom1b-23-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = EAB0871FD8CB94A4DCF837CC /* rom1b-23-start.m4a */; };
+		D5927A391D26CAB212D6FBB4 /* rom1b-3-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 49CD6A6815EDDB16BBBCCCB2 /* rom1b-3-start.m4a */; };
+		D5A84975628548A076CEB3D7 /* juno-118-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 92387F60666853C0AA1BF0B5 /* juno-118-stop.m4a */; };
+		D6DFF322638007525EBA02B2 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 39EB6BB06E04EA9CD2CDC3BA /* Sentry */; };
+		D750C1BF16502EEC92182ECD /* PermissionsStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8DE60178ABA2CC7F4EB6401 /* PermissionsStepView.swift */; };
+		D779D9FD904DA9DDC241DA5F /* juno-70-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = AD5F1BDEB1DB3658DDB96247 /* juno-70-start.m4a */; };
+		D7CCAEAF551027586E39A032 /* juno-4-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 63189CC345106B1D56960B1E /* juno-4-start.m4a */; };
+		D8156DB52C2BDCE9875E7462 /* rom1b-16-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = B24D0EACA5DCC94CFCAD9753 /* rom1b-16-start.m4a */; };
+		D88B8E1DE2F71D0A3BD39516 /* juno-83-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 724B039E044BE4B2E3EAA3C5 /* juno-83-start.m4a */; };
+		D8B18E0C6E3D62D8A0031226 /* juno-71-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D1D56A6899994805C9F0DBBD /* juno-71-stop.m4a */; };
+		DAC7039274C55389324A07B2 /* juno-82-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E84C190EF80F6B36F8241BFC /* juno-82-stop.m4a */; };
+		DAD3C772A4DCE75359126F27 /* juno-37-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1EA8B0FCDE5A026C5E8B5EFA /* juno-37-start.m4a */; };
+		DB035E176FF9589F745696B9 /* juno-60-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2B964C67C7B0BA077F649FDA /* juno-60-stop.m4a */; };
+		DBCB55EFCB626E8019E41DCF /* juno-98-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 116DBF12743FC77F336A7820 /* juno-98-stop.m4a */; };
+		DCA5DFE1633292340DDCDDFB /* juno-11-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = B75ED921A405BB7A0B0564A1 /* juno-11-stop.m4a */; };
+		DCC3074155A615A81B77DEB6 /* rom1b-12-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = B63CC1EF220EB3463D5A4BDF /* rom1b-12-start.m4a */; };
+		DCF53FA960D33C203F3FA65C /* juno-84-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 64A66B39BC8E13D32472709A /* juno-84-stop.m4a */; };
+		DD800E4A2657C87DD45E4AF8 /* WizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F646CD07DBBA47F44CE0AD1 /* WizardView.swift */; };
+		DD95F1D83A6C7B062146EC7B /* juno-103-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 41CCE59FAFC731DAAFB8B09A /* juno-103-start.m4a */; };
+		DE8290335412ADADA4DF3AA2 /* juno-45-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E3BCEBB787912BA2EDCAE5A4 /* juno-45-start.m4a */; };
+		DE8445B5A28C96CDC432ACDD /* juno-100-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = A4AFAD52CAC3825D7A603DC5 /* juno-100-start.m4a */; };
+		DE881C40E8DB29D5E4EF1D90 /* juno-79-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 188246F4FF4893274601C886 /* juno-79-stop.m4a */; };
+		DF94396D822220BE8603C671 /* juno-116-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 03D380F88F26C7A6AAECF328 /* juno-116-stop.m4a */; };
+		E0F93DBF622F4DA5E2A12E2F /* rom1a-6-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = FB6BE1E262916105029D7FAB /* rom1a-6-start.m4a */; };
+		E1297D0C4E271A457892538A /* rom1b-8-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3E8941F2B88E3C584AFF86A5 /* rom1b-8-stop.m4a */; };
+		E1653832E278F456A0C5AFAB /* juno-29-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2864D45C20A932F54C83C62D /* juno-29-stop.m4a */; };
+		E1CA5C692CB2A7E1BF231928 /* UITestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6072A6B0AC8219B5484326B3 /* UITestSupport.swift */; };
+		E2ADDBC168EB77075B8E0786 /* rom1b-31-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = C1BD23E2476F46A7BD75BAB9 /* rom1b-31-start.m4a */; };
+		E3EEF6125E64ED52772CFAF0 /* rom1b-9-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 54413652F4E11979F996C0CE /* rom1b-9-stop.m4a */; };
+		E45A9C61C6ED37FDA393E696 /* juno-39-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 637BCF34197490B86303FAB9 /* juno-39-stop.m4a */; };
+		E4D1DD2B77B55E203C19A0B7 /* juno-16-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 64D4C708432B8CCB2C07A059 /* juno-16-start.m4a */; };
+		E574EFB814524DE48CBDECB6 /* rom1a-27-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4692ADBDD6B40BDE2DAA806C /* rom1a-27-stop.m4a */; };
+		E5EF915C72D858A2CC4A5E3A /* juno-11-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 20C7896DEBBFFBBD8AA6337B /* juno-11-start.m4a */; };
+		E63783585EABBF8789B2039A /* rom1a-23-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3FE6BC0E30D43E2035BDED59 /* rom1a-23-stop.m4a */; };
+		E6667E7BA5114B6A77DDF870 /* juno-21-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 0FB3FBD7C42F949C52B09F0C /* juno-21-start.m4a */; };
+		E671758418903491998092D0 /* juno-13-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4830CF6168A7511FE3720746 /* juno-13-stop.m4a */; };
+		E7C5EE7C3C80E6CC19F21603 /* juno-47-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D27DAF2436D272EEF031303B /* juno-47-start.m4a */; };
+		E8B98438B85C71B0F09EA134 /* rom1b-20-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = B0CB1B169A47290B83AD44C0 /* rom1b-20-stop.m4a */; };
+		E9ED55F4CC9563A006A70173 /* juno-93-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3BE2AAC76DB0FCE662C63EB6 /* juno-93-start.m4a */; };
+		EA4007570210EBA18CA47D59 /* juno-74-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E83BDAC7AB4479E8A12A5613 /* juno-74-start.m4a */; };
+		EA50EC15CDECF534464D9208 /* BlurtUITestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A0683C1BE5AD05E4C724956 /* BlurtUITestSupport.swift */; };
+		EA9FBD50906FBE8ECC2DCB43 /* rom1a-2-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DDD514790151F484A68127BB /* rom1a-2-stop.m4a */; };
+		EB1E111038C87156F2CF11B4 /* rom1b-24-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 87570A5DC1428AC2DE812BBE /* rom1b-24-stop.m4a */; };
+		EC3DAE9036AA1D57607157F8 /* juno-111-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 0088DE3FD3980CA727EB02FE /* juno-111-start.m4a */; };
+		EC49246782EDC2BE84223723 /* juno-2-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 958C5FDCD430D87BD61D048C /* juno-2-start.m4a */; };
+		EC6A4B9B4DB3A8DAF2388004 /* juno-71-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 156C3E8FF4B96A45913A97F0 /* juno-71-start.m4a */; };
+		ED352F3F80643B12514258DF /* juno-111-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4A89CB4834FF9ABE02C969F7 /* juno-111-stop.m4a */; };
+		EE02055DCB67CB0762B47E03 /* rom1b-29-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E2D39C392213CD7471C8A26E /* rom1b-29-start.m4a */; };
+		EFC8FB1EEFF2AC823CA345D1 /* rom1a-12-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1A1C4446E1D3FAB9F662E61D /* rom1a-12-stop.m4a */; };
+		F0ABE7C8E87C7B955DB89601 /* juno-34-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3012F22300681F3DD71AD51B /* juno-34-stop.m4a */; };
+		F164F3AA161629499C07A5F2 /* rom1b-17-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DE43545891BB9D4ED7B55D7B /* rom1b-17-stop.m4a */; };
+		F22CA13B8F0DB10BE6D84696 /* rom1a-21-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 5DB9D5866E9743B12589DFF4 /* rom1a-21-stop.m4a */; };
+		F245B1D54675872118567839 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 1BE0AC6DFA2DC39D6D557BA3 /* AppIcon.icon */; };
+		F2C37DB124D3CD134315F6AD /* rom1b-20-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 662773E86D58C62C6A41801F /* rom1b-20-start.m4a */; };
+		F3D87A72BED81C8532FCB503 /* juno-3-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = A2C5021E8F72182F331DA397 /* juno-3-start.m4a */; };
+		F3E79C6326A2CBF8CE0CF091 /* rom1a-31-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1E6C29571118FA5B039C4FC1 /* rom1a-31-stop.m4a */; };
+		F42E6D4E62345772C5A49A08 /* HotkeyStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50FFCDBD1FB2CF0A81A68D18 /* HotkeyStepView.swift */; };
+		F4FC8BE4A0593197C1375EC1 /* juno-43-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 47F6D91FC89A0214F121991C /* juno-43-stop.m4a */; };
+		F515E1D5C8254ACE1BDADD63 /* juno-64-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6A56F68E7D3228E23904A005 /* juno-64-start.m4a */; };
+		F53E257FC86648D7A4E9311E /* AutoUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43C6D985A8A6030A7FE6FEEB /* AutoUpdater.swift */; };
+		F5D3911E0D8207F1967C6B3A /* juno-107-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 35059AC7D847666F9D7FFF07 /* juno-107-start.m4a */; };
+		F648F912EEC5A44F5930AE37 /* juno-61-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 9C3B044CD20456A76EBB99FB /* juno-61-stop.m4a */; };
+		F681156BFD979F56CB5B407A /* juno-103-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6AFFA1AFC4F88A35BA39CECF /* juno-103-stop.m4a */; };
+		F6900A7D424119F0F178E7BE /* WizardWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C17B76B973AD008CEA57A048 /* WizardWindowController.swift */; };
+		F7BC4D95BD8D5BBE31C6F911 /* juno-21-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 51193F08C115C6AB13BECC07 /* juno-21-stop.m4a */; };
+		F86C329D9E43393542252891 /* juno-39-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3B0E95E0D720A1D8EC05EA6F /* juno-39-start.m4a */; };
+		F884F1BBD3F59D7BB9EBA0FA /* juno-89-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2D96219CD4991D4D13B56CC9 /* juno-89-stop.m4a */; };
+		F93BED9E4A1F648A429A3F66 /* juno-46-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = CBBA2376BDBD82E7474C9D84 /* juno-46-start.m4a */; };
+		FACF8BEBF744A47219B402F3 /* juno-1-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 0F3D1DBFA369BAF807DBB55F /* juno-1-start.m4a */; };
+		FAF5920B220D64D1FE70F97A /* juno-68-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 8C1C165264B92ADAEC751EB6 /* juno-68-start.m4a */; };
+		FB319EF1852E4D8D4D065CE7 /* rom1a-24-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F967C98CF7C0A6A736B91627 /* rom1a-24-stop.m4a */; };
+		FDF8F74B738B5BDE64AE0630 /* juno-53-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 83A2074384DFDEFCF0175D6C /* juno-53-stop.m4a */; };
+		FF7198BC7B01B9700855E0C2 /* juno-36-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = A95FFA1F1C07E8FAF8FEC0B8 /* juno-36-start.m4a */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		1285B45C19A688F3937D0A25 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6CDA5FC4501C4BEA6B4517DA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 530DC1E75D312BEE7D89630E;
+			remoteInfo = Blurt;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		002FB9F5FD28A66C04993007 /* juno-61-start.m4a */ = {isa = PBXFileReference; path = "juno-61-start.m4a"; sourceTree = "<group>"; };
+		00768AE8171902B439F0602F /* juno-89-start.m4a */ = {isa = PBXFileReference; path = "juno-89-start.m4a"; sourceTree = "<group>"; };
+		0088DE3FD3980CA727EB02FE /* juno-111-start.m4a */ = {isa = PBXFileReference; path = "juno-111-start.m4a"; sourceTree = "<group>"; };
+		0150E727307295CE46981426 /* rom1b-19-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-19-stop.m4a"; sourceTree = "<group>"; };
+		01B663528C4E1AFEF24675E1 /* rom1b-21-start.m4a */ = {isa = PBXFileReference; path = "rom1b-21-start.m4a"; sourceTree = "<group>"; };
+		023384D61BE724D06740E08B /* rom1b-19-start.m4a */ = {isa = PBXFileReference; path = "rom1b-19-start.m4a"; sourceTree = "<group>"; };
+		0386BF281886EDBFE9EC8C61 /* juno-15-start.m4a */ = {isa = PBXFileReference; path = "juno-15-start.m4a"; sourceTree = "<group>"; };
+		03D380F88F26C7A6AAECF328 /* juno-116-stop.m4a */ = {isa = PBXFileReference; path = "juno-116-stop.m4a"; sourceTree = "<group>"; };
+		04253733D542188A7E5645AD /* juno-19-stop.m4a */ = {isa = PBXFileReference; path = "juno-19-stop.m4a"; sourceTree = "<group>"; };
+		0566F4FC45C72A6DA586126E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		0618C6EE1B8864C57F02CC1E /* rom1b-0-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-0-stop.m4a"; sourceTree = "<group>"; };
+		06A8F7161C5917AADFF6AC77 /* juno-67-stop.m4a */ = {isa = PBXFileReference; path = "juno-67-stop.m4a"; sourceTree = "<group>"; };
+		08A7417835D8538AC4A7E2FB /* DictationComposition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationComposition.swift; sourceTree = "<group>"; };
+		093A44A6DB129960326C1796 /* juno-35-stop.m4a */ = {isa = PBXFileReference; path = "juno-35-stop.m4a"; sourceTree = "<group>"; };
+		09C4E97A7D9EE493D5EC54BB /* juno-59-start.m4a */ = {isa = PBXFileReference; path = "juno-59-start.m4a"; sourceTree = "<group>"; };
+		09CD5D88E1A2BE5D0095F167 /* juno-110-start.m4a */ = {isa = PBXFileReference; path = "juno-110-start.m4a"; sourceTree = "<group>"; };
+		0C17FEE505740AA5BCBB0E21 /* juno-91-stop.m4a */ = {isa = PBXFileReference; path = "juno-91-stop.m4a"; sourceTree = "<group>"; };
+		0CDBED88D2D7CE84776B7574 /* juno-66-start.m4a */ = {isa = PBXFileReference; path = "juno-66-start.m4a"; sourceTree = "<group>"; };
+		0DBB595A2AB7221F408B4775 /* juno-63-start.m4a */ = {isa = PBXFileReference; path = "juno-63-start.m4a"; sourceTree = "<group>"; };
+		0F3D1DBFA369BAF807DBB55F /* juno-1-start.m4a */ = {isa = PBXFileReference; path = "juno-1-start.m4a"; sourceTree = "<group>"; };
+		0FA34796733AB87C0280470D /* DictateHotkey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictateHotkey.swift; sourceTree = "<group>"; };
+		0FB3FBD7C42F949C52B09F0C /* juno-21-start.m4a */ = {isa = PBXFileReference; path = "juno-21-start.m4a"; sourceTree = "<group>"; };
+		0FB812876EC4870E9A74BB50 /* juno-55-start.m4a */ = {isa = PBXFileReference; path = "juno-55-start.m4a"; sourceTree = "<group>"; };
+		10A0336924600313EE5243AE /* rom1a-8-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-8-stop.m4a"; sourceTree = "<group>"; };
+		1118A82ED3D1CD5CF429099E /* rom1b-23-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-23-stop.m4a"; sourceTree = "<group>"; };
+		114E0EA1827EA005CF188FC8 /* juno-119-start.m4a */ = {isa = PBXFileReference; path = "juno-119-start.m4a"; sourceTree = "<group>"; };
+		116DBF12743FC77F336A7820 /* juno-98-stop.m4a */ = {isa = PBXFileReference; path = "juno-98-stop.m4a"; sourceTree = "<group>"; };
+		11F215137F50A2D4AC61E414 /* juno-47-stop.m4a */ = {isa = PBXFileReference; path = "juno-47-stop.m4a"; sourceTree = "<group>"; };
+		12450A6BC64E455E03366B13 /* rom1a-1-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-1-stop.m4a"; sourceTree = "<group>"; };
+		143E94106D9A6342EFD4F909 /* juno-124-start.m4a */ = {isa = PBXFileReference; path = "juno-124-start.m4a"; sourceTree = "<group>"; };
+		144C0E5F9D620C408EE783AE /* juno-54-start.m4a */ = {isa = PBXFileReference; path = "juno-54-start.m4a"; sourceTree = "<group>"; };
+		1467EAF745A940434A8AF18F /* juno-123-stop.m4a */ = {isa = PBXFileReference; path = "juno-123-stop.m4a"; sourceTree = "<group>"; };
+		156C3E8FF4B96A45913A97F0 /* juno-71-start.m4a */ = {isa = PBXFileReference; path = "juno-71-start.m4a"; sourceTree = "<group>"; };
+		1610DB028EBE814A3A163301 /* rom1a-28-start.m4a */ = {isa = PBXFileReference; path = "rom1a-28-start.m4a"; sourceTree = "<group>"; };
+		1625CA15DBCA7F1FA24991EA /* rom1a-11-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-11-stop.m4a"; sourceTree = "<group>"; };
+		16400ECCAE93FF9ECD50E01F /* rom1b-1-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-1-stop.m4a"; sourceTree = "<group>"; };
+		16D2045BC5C2B6D89E137B7B /* rom1b-2-start.m4a */ = {isa = PBXFileReference; path = "rom1b-2-start.m4a"; sourceTree = "<group>"; };
+		179049468873B9F5C6F0F77C /* juno-101-stop.m4a */ = {isa = PBXFileReference; path = "juno-101-stop.m4a"; sourceTree = "<group>"; };
+		17B42F16029FF1625EEAD58D /* juno-84-start.m4a */ = {isa = PBXFileReference; path = "juno-84-start.m4a"; sourceTree = "<group>"; };
+		188246F4FF4893274601C886 /* juno-79-stop.m4a */ = {isa = PBXFileReference; path = "juno-79-stop.m4a"; sourceTree = "<group>"; };
+		19A708C2C2C7CDF52E47A8C4 /* juno-88-start.m4a */ = {isa = PBXFileReference; path = "juno-88-start.m4a"; sourceTree = "<group>"; };
+		1A1C4446E1D3FAB9F662E61D /* rom1a-12-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-12-stop.m4a"; sourceTree = "<group>"; };
+		1A3D5DAAD31F8C7F67CAD5BB /* juno-32-start.m4a */ = {isa = PBXFileReference; path = "juno-32-start.m4a"; sourceTree = "<group>"; };
+		1BE0AC6DFA2DC39D6D557BA3 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
+		1C72B7BEF6CFEC52928C6CED /* juno-100-stop.m4a */ = {isa = PBXFileReference; path = "juno-100-stop.m4a"; sourceTree = "<group>"; };
+		1CF1F098A8DC41DD8508480E /* juno-8-start.m4a */ = {isa = PBXFileReference; path = "juno-8-start.m4a"; sourceTree = "<group>"; };
+		1D5C52A673686FB041595227 /* rom1b-31-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-31-stop.m4a"; sourceTree = "<group>"; };
+		1D88DB176EEA1B7058433DE6 /* rom1a-14-start.m4a */ = {isa = PBXFileReference; path = "rom1a-14-start.m4a"; sourceTree = "<group>"; };
+		1DE1622660807FF440D18D34 /* rom1a-14-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-14-stop.m4a"; sourceTree = "<group>"; };
+		1E6C29571118FA5B039C4FC1 /* rom1a-31-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-31-stop.m4a"; sourceTree = "<group>"; };
+		1EA259C10192DFF7D7431FD4 /* juno-95-start.m4a */ = {isa = PBXFileReference; path = "juno-95-start.m4a"; sourceTree = "<group>"; };
+		1EA8B0FCDE5A026C5E8B5EFA /* juno-37-start.m4a */ = {isa = PBXFileReference; path = "juno-37-start.m4a"; sourceTree = "<group>"; };
+		1F71C1C8D870D024746CED69 /* rom1a-15-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-15-stop.m4a"; sourceTree = "<group>"; };
+		207F58335FAAD1E0D1311D10 /* juno-105-stop.m4a */ = {isa = PBXFileReference; path = "juno-105-stop.m4a"; sourceTree = "<group>"; };
+		20C7896DEBBFFBBD8AA6337B /* juno-11-start.m4a */ = {isa = PBXFileReference; path = "juno-11-start.m4a"; sourceTree = "<group>"; };
+		212CC97E91334633B66C8FAC /* rom1b-13-start.m4a */ = {isa = PBXFileReference; path = "rom1b-13-start.m4a"; sourceTree = "<group>"; };
+		2187024BF79E6953ECEFD04C /* juno-124-stop.m4a */ = {isa = PBXFileReference; path = "juno-124-stop.m4a"; sourceTree = "<group>"; };
+		22FF5E0C4681C483B4828FB2 /* juno-38-start.m4a */ = {isa = PBXFileReference; path = "juno-38-start.m4a"; sourceTree = "<group>"; };
+		240939D503F3CE03A0697A5F /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
+		24B8138546D9CD21F6D55F54 /* juno-60-start.m4a */ = {isa = PBXFileReference; path = "juno-60-start.m4a"; sourceTree = "<group>"; };
+		258681056CA44359083EDC9B /* rom1b-12-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-12-stop.m4a"; sourceTree = "<group>"; };
+		27E18FF6880EADB94F98C7C4 /* SoundStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundStepView.swift; sourceTree = "<group>"; };
+		281E6ED71E7F613E6E6689D0 /* juno-25-start.m4a */ = {isa = PBXFileReference; path = "juno-25-start.m4a"; sourceTree = "<group>"; };
+		2864D45C20A932F54C83C62D /* juno-29-stop.m4a */ = {isa = PBXFileReference; path = "juno-29-stop.m4a"; sourceTree = "<group>"; };
+		286A4475154226AC60716712 /* juno-125-start.m4a */ = {isa = PBXFileReference; path = "juno-125-start.m4a"; sourceTree = "<group>"; };
+		29255F02F19C6924690373AA /* juno-78-stop.m4a */ = {isa = PBXFileReference; path = "juno-78-stop.m4a"; sourceTree = "<group>"; };
+		2978FCBEE1BC015D9CFC8646 /* juno-55-stop.m4a */ = {isa = PBXFileReference; path = "juno-55-stop.m4a"; sourceTree = "<group>"; };
+		2A1E168CEEFFE705B38463D3 /* juno-29-start.m4a */ = {isa = PBXFileReference; path = "juno-29-start.m4a"; sourceTree = "<group>"; };
+		2A90E48A68218F156F84F968 /* rom1b-17-start.m4a */ = {isa = PBXFileReference; path = "rom1b-17-start.m4a"; sourceTree = "<group>"; };
+		2A97148549AA99C8CDD7C316 /* juno-78-start.m4a */ = {isa = PBXFileReference; path = "juno-78-start.m4a"; sourceTree = "<group>"; };
+		2ACBC70E59C46EDF3186DF16 /* rom1a-4-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-4-stop.m4a"; sourceTree = "<group>"; };
+		2AD93734B15E59A81C42B6D9 /* juno-41-start.m4a */ = {isa = PBXFileReference; path = "juno-41-start.m4a"; sourceTree = "<group>"; };
+		2B0DAD072642B1E71BD6E0FC /* juno-77-stop.m4a */ = {isa = PBXFileReference; path = "juno-77-stop.m4a"; sourceTree = "<group>"; };
+		2B964C67C7B0BA077F649FDA /* juno-60-stop.m4a */ = {isa = PBXFileReference; path = "juno-60-stop.m4a"; sourceTree = "<group>"; };
+		2C0A58F1CA999E6DF7742A87 /* DictationPipelineUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationPipelineUITests.swift; sourceTree = "<group>"; };
+		2C2D4EB9527DACDDFC5D47A0 /* juno-121-stop.m4a */ = {isa = PBXFileReference; path = "juno-121-stop.m4a"; sourceTree = "<group>"; };
+		2C7B119035D271E56434FB51 /* juno-31-start.m4a */ = {isa = PBXFileReference; path = "juno-31-start.m4a"; sourceTree = "<group>"; };
+		2C9148633CEE5C373AFBE65F /* BlurtUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BlurtUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		2CA6F4E6A10AE93F169DF19B /* rom1a-5-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-5-stop.m4a"; sourceTree = "<group>"; };
+		2D51B930706AF22BF9BA0CEF /* juno-12-stop.m4a */ = {isa = PBXFileReference; path = "juno-12-stop.m4a"; sourceTree = "<group>"; };
+		2D862CB0D203330C1F8F58B0 /* juno-104-stop.m4a */ = {isa = PBXFileReference; path = "juno-104-stop.m4a"; sourceTree = "<group>"; };
+		2D96219CD4991D4D13B56CC9 /* juno-89-stop.m4a */ = {isa = PBXFileReference; path = "juno-89-stop.m4a"; sourceTree = "<group>"; };
+		2DB41AE5C69904E278F5C6E6 /* juno-23-start.m4a */ = {isa = PBXFileReference; path = "juno-23-start.m4a"; sourceTree = "<group>"; };
+		2E64BCDB280FD0A27D965AA9 /* rom1a-5-start.m4a */ = {isa = PBXFileReference; path = "rom1a-5-start.m4a"; sourceTree = "<group>"; };
+		2E79CB809D285C0C27E8D43D /* OverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayView.swift; sourceTree = "<group>"; };
+		2FFA326076660C91492A6CE1 /* juno-8-stop.m4a */ = {isa = PBXFileReference; path = "juno-8-stop.m4a"; sourceTree = "<group>"; };
+		3012F22300681F3DD71AD51B /* juno-34-stop.m4a */ = {isa = PBXFileReference; path = "juno-34-stop.m4a"; sourceTree = "<group>"; };
+		30E57A9C9B934A2120381005 /* WizardController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardController.swift; sourceTree = "<group>"; };
+		31986D541F06DA91827C18A0 /* juno-58-start.m4a */ = {isa = PBXFileReference; path = "juno-58-start.m4a"; sourceTree = "<group>"; };
+		3258A84E37C372993B1572EE /* DictationKeyTap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationKeyTap.swift; sourceTree = "<group>"; };
+		32944757FD2C1F6E8AF73873 /* juno-26-start.m4a */ = {isa = PBXFileReference; path = "juno-26-start.m4a"; sourceTree = "<group>"; };
+		32AAFF585AF1A77D0D872F11 /* juno-14-start.m4a */ = {isa = PBXFileReference; path = "juno-14-start.m4a"; sourceTree = "<group>"; };
+		32B41B7B40DE78AB987C237E /* juno-62-stop.m4a */ = {isa = PBXFileReference; path = "juno-62-stop.m4a"; sourceTree = "<group>"; };
+		335E98CEAC5AE30CB90AFB21 /* juno-122-start.m4a */ = {isa = PBXFileReference; path = "juno-122-start.m4a"; sourceTree = "<group>"; };
+		338537DEC8694C87839545CC /* juno-115-start.m4a */ = {isa = PBXFileReference; path = "juno-115-start.m4a"; sourceTree = "<group>"; };
+		33AE2EBBF7FA36E1E0AEBC3A /* rom1a-16-start.m4a */ = {isa = PBXFileReference; path = "rom1a-16-start.m4a"; sourceTree = "<group>"; };
+		35048A9866E106410CDCED81 /* juno-115-stop.m4a */ = {isa = PBXFileReference; path = "juno-115-stop.m4a"; sourceTree = "<group>"; };
+		35059AC7D847666F9D7FFF07 /* juno-107-start.m4a */ = {isa = PBXFileReference; path = "juno-107-start.m4a"; sourceTree = "<group>"; };
+		350F18C964DCA2DDCA296ED4 /* blurt-ready-logo.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "blurt-ready-logo.png"; sourceTree = "<group>"; };
+		35EA12CB630AC702CBAC175A /* juno-106-stop.m4a */ = {isa = PBXFileReference; path = "juno-106-stop.m4a"; sourceTree = "<group>"; };
+		3611A8FA0547B780D0804F52 /* AppCoordinator+UITesting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppCoordinator+UITesting.swift"; sourceTree = "<group>"; };
+		36CF30F1384D606BE74362C8 /* juno-51-start.m4a */ = {isa = PBXFileReference; path = "juno-51-start.m4a"; sourceTree = "<group>"; };
+		3751D3C923F3614E866B947C /* juno-106-start.m4a */ = {isa = PBXFileReference; path = "juno-106-start.m4a"; sourceTree = "<group>"; };
+		38CAFC7A39E679F1CA3A9692 /* blurt */ = {isa = PBXFileReference; lastKnownFileType = folder; name = blurt; path = ../..; sourceTree = SOURCE_ROOT; };
+		3996A11A62CD49D6CB89CB8E /* rom1b-6-start.m4a */ = {isa = PBXFileReference; path = "rom1b-6-start.m4a"; sourceTree = "<group>"; };
+		3A0683C1BE5AD05E4C724956 /* BlurtUITestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlurtUITestSupport.swift; sourceTree = "<group>"; };
+		3A96FC2E4AD7DB1BA0F6B178 /* rom1a-29-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-29-stop.m4a"; sourceTree = "<group>"; };
+		3B0E95E0D720A1D8EC05EA6F /* juno-39-start.m4a */ = {isa = PBXFileReference; path = "juno-39-start.m4a"; sourceTree = "<group>"; };
+		3BA1B8BBEEC6B5A2960688C3 /* rom1a-15-start.m4a */ = {isa = PBXFileReference; path = "rom1a-15-start.m4a"; sourceTree = "<group>"; };
+		3BCCE1D8752C6A3A2AEF9009 /* juno-85-start.m4a */ = {isa = PBXFileReference; path = "juno-85-start.m4a"; sourceTree = "<group>"; };
+		3BE2AAC76DB0FCE662C63EB6 /* juno-93-start.m4a */ = {isa = PBXFileReference; path = "juno-93-start.m4a"; sourceTree = "<group>"; };
+		3C54A0D394CE71150BB0DBA8 /* juno-92-stop.m4a */ = {isa = PBXFileReference; path = "juno-92-stop.m4a"; sourceTree = "<group>"; };
+		3CC6911B92F8B5D8C0997AA4 /* juno-37-stop.m4a */ = {isa = PBXFileReference; path = "juno-37-stop.m4a"; sourceTree = "<group>"; };
+		3D7637960DAA5355CDCA8A6A /* juno-49-stop.m4a */ = {isa = PBXFileReference; path = "juno-49-stop.m4a"; sourceTree = "<group>"; };
+		3DA3A304528FD1C7FE6C2B94 /* APIKeyStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyStepView.swift; sourceTree = "<group>"; };
+		3E628046B76633200813B0E4 /* juno-13-start.m4a */ = {isa = PBXFileReference; path = "juno-13-start.m4a"; sourceTree = "<group>"; };
+		3E8941F2B88E3C584AFF86A5 /* rom1b-8-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-8-stop.m4a"; sourceTree = "<group>"; };
+		3FCE941C19A3FF0DC61462B7 /* juno-81-stop.m4a */ = {isa = PBXFileReference; path = "juno-81-stop.m4a"; sourceTree = "<group>"; };
+		3FE6BC0E30D43E2035BDED59 /* rom1a-23-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-23-stop.m4a"; sourceTree = "<group>"; };
+		4052A873788D31A33BE80FCB /* rom1b-11-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-11-stop.m4a"; sourceTree = "<group>"; };
+		40703D977839CB4F625C0284 /* juno-86-stop.m4a */ = {isa = PBXFileReference; path = "juno-86-stop.m4a"; sourceTree = "<group>"; };
+		40797D76FF5644C56408B12D /* juno-102-start.m4a */ = {isa = PBXFileReference; path = "juno-102-start.m4a"; sourceTree = "<group>"; };
+		40A711B3442D9CBE0189BEF3 /* juno-2-stop.m4a */ = {isa = PBXFileReference; path = "juno-2-stop.m4a"; sourceTree = "<group>"; };
+		41587FEDA3BE5310D3FA6CDA /* juno-127-stop.m4a */ = {isa = PBXFileReference; path = "juno-127-stop.m4a"; sourceTree = "<group>"; };
+		41736827B0D4E7E1D024DCF1 /* juno-30-start.m4a */ = {isa = PBXFileReference; path = "juno-30-start.m4a"; sourceTree = "<group>"; };
+		41CCE59FAFC731DAAFB8B09A /* juno-103-start.m4a */ = {isa = PBXFileReference; path = "juno-103-start.m4a"; sourceTree = "<group>"; };
+		429B975FA7FFA777106D0A49 /* rom1b-13-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-13-stop.m4a"; sourceTree = "<group>"; };
+		43C6D985A8A6030A7FE6FEEB /* AutoUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoUpdater.swift; sourceTree = "<group>"; };
+		44DD60B425DF100431946DAB /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		45CDD6CFFA8DEF4DFFC65B5A /* juno-108-start.m4a */ = {isa = PBXFileReference; path = "juno-108-start.m4a"; sourceTree = "<group>"; };
+		45D65D0519A0D2FC47EF7DAD /* rom1a-10-start.m4a */ = {isa = PBXFileReference; path = "rom1a-10-start.m4a"; sourceTree = "<group>"; };
+		45E6CF05E1334B3D2901E516 /* rom1b-30-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-30-stop.m4a"; sourceTree = "<group>"; };
+		4692ADBDD6B40BDE2DAA806C /* rom1a-27-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-27-stop.m4a"; sourceTree = "<group>"; };
+		47B0B08D890A1A7CB4577410 /* juno-109-start.m4a */ = {isa = PBXFileReference; path = "juno-109-start.m4a"; sourceTree = "<group>"; };
+		47F6D91FC89A0214F121991C /* juno-43-stop.m4a */ = {isa = PBXFileReference; path = "juno-43-stop.m4a"; sourceTree = "<group>"; };
+		48168B2DA1698C02D7360B01 /* rom1b-9-start.m4a */ = {isa = PBXFileReference; path = "rom1b-9-start.m4a"; sourceTree = "<group>"; };
+		482422C7CC15583570E3E869 /* rom1a-13-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-13-stop.m4a"; sourceTree = "<group>"; };
+		4830CF6168A7511FE3720746 /* juno-13-stop.m4a */ = {isa = PBXFileReference; path = "juno-13-stop.m4a"; sourceTree = "<group>"; };
+		486F5FE65FF8C13A35C28271 /* juno-116-start.m4a */ = {isa = PBXFileReference; path = "juno-116-start.m4a"; sourceTree = "<group>"; };
+		4873421ACF290B88FA257D6A /* rom1a-7-start.m4a */ = {isa = PBXFileReference; path = "rom1a-7-start.m4a"; sourceTree = "<group>"; };
+		49A71146BDFEA07D74A6A67C /* juno-32-stop.m4a */ = {isa = PBXFileReference; path = "juno-32-stop.m4a"; sourceTree = "<group>"; };
+		49CD6A6815EDDB16BBBCCCB2 /* rom1b-3-start.m4a */ = {isa = PBXFileReference; path = "rom1b-3-start.m4a"; sourceTree = "<group>"; };
+		49F7AD1193F18CCDF17B9EBA /* juno-6-stop.m4a */ = {isa = PBXFileReference; path = "juno-6-stop.m4a"; sourceTree = "<group>"; };
+		4A89CB4834FF9ABE02C969F7 /* juno-111-stop.m4a */ = {isa = PBXFileReference; path = "juno-111-stop.m4a"; sourceTree = "<group>"; };
+		4AE2B597126C95C118FF9FDD /* rom1a-29-start.m4a */ = {isa = PBXFileReference; path = "rom1a-29-start.m4a"; sourceTree = "<group>"; };
+		4B9209100F5A6E8514AF6FA7 /* rom1a-9-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-9-stop.m4a"; sourceTree = "<group>"; };
+		4B9A2A460519088D70893121 /* rom1a-25-start.m4a */ = {isa = PBXFileReference; path = "rom1a-25-start.m4a"; sourceTree = "<group>"; };
+		4DB6065E9D1F64F3AF0FD03B /* juno-5-start.m4a */ = {isa = PBXFileReference; path = "juno-5-start.m4a"; sourceTree = "<group>"; };
+		4E25792AC8E46820FF270D64 /* rom1a-2-start.m4a */ = {isa = PBXFileReference; path = "rom1a-2-start.m4a"; sourceTree = "<group>"; };
+		4E414413BCDA4C613782919D /* juno-66-stop.m4a */ = {isa = PBXFileReference; path = "juno-66-stop.m4a"; sourceTree = "<group>"; };
+		4FB6BF9F449D954A52952C6B /* juno-94-stop.m4a */ = {isa = PBXFileReference; path = "juno-94-stop.m4a"; sourceTree = "<group>"; };
+		4FEFFC17F6198DB4F43A71F1 /* rom1b-27-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-27-stop.m4a"; sourceTree = "<group>"; };
+		5041BF8B32BEB59D5539E48A /* juno-16-stop.m4a */ = {isa = PBXFileReference; path = "juno-16-stop.m4a"; sourceTree = "<group>"; };
+		5070E437DB5D188D16BBAACB /* juno-30-stop.m4a */ = {isa = PBXFileReference; path = "juno-30-stop.m4a"; sourceTree = "<group>"; };
+		50FFCDBD1FB2CF0A81A68D18 /* HotkeyStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyStepView.swift; sourceTree = "<group>"; };
+		51193F08C115C6AB13BECC07 /* juno-21-stop.m4a */ = {isa = PBXFileReference; path = "juno-21-stop.m4a"; sourceTree = "<group>"; };
+		541EE5FFF00A40A486501EDF /* juno-72-start.m4a */ = {isa = PBXFileReference; path = "juno-72-start.m4a"; sourceTree = "<group>"; };
+		54244D8B2EFFCBDC803F49E2 /* juno-1-stop.m4a */ = {isa = PBXFileReference; path = "juno-1-stop.m4a"; sourceTree = "<group>"; };
+		54413652F4E11979F996C0CE /* rom1b-9-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-9-stop.m4a"; sourceTree = "<group>"; };
+		544446F59AB1FBC8D83CCC4F /* juno-23-stop.m4a */ = {isa = PBXFileReference; path = "juno-23-stop.m4a"; sourceTree = "<group>"; };
+		54806E2653DD90175A220994 /* juno-3-stop.m4a */ = {isa = PBXFileReference; path = "juno-3-stop.m4a"; sourceTree = "<group>"; };
+		54AD858A08D1923B5220D76E /* juno-121-start.m4a */ = {isa = PBXFileReference; path = "juno-121-start.m4a"; sourceTree = "<group>"; };
+		555254497CA693DF00B3B924 /* rom1a-0-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-0-stop.m4a"; sourceTree = "<group>"; };
+		55B3AAE0BC8349507F6482A1 /* juno-77-start.m4a */ = {isa = PBXFileReference; path = "juno-77-start.m4a"; sourceTree = "<group>"; };
+		55BE4FC7F7897886A17FCCF2 /* juno-58-stop.m4a */ = {isa = PBXFileReference; path = "juno-58-stop.m4a"; sourceTree = "<group>"; };
+		562C5F709DE00A5F38F045A5 /* rom1b-28-start.m4a */ = {isa = PBXFileReference; path = "rom1b-28-start.m4a"; sourceTree = "<group>"; };
+		56F69B42F0D495142B17FF83 /* juno-53-start.m4a */ = {isa = PBXFileReference; path = "juno-53-start.m4a"; sourceTree = "<group>"; };
+		573212CC5EC3393A990E10A1 /* rom1a-0-start.m4a */ = {isa = PBXFileReference; path = "rom1a-0-start.m4a"; sourceTree = "<group>"; };
+		5B56D4D2910BBB44EEB4690A /* juno-20-stop.m4a */ = {isa = PBXFileReference; path = "juno-20-stop.m4a"; sourceTree = "<group>"; };
+		5B5B261F4D195B5E6E3B5567 /* rom1b-3-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-3-stop.m4a"; sourceTree = "<group>"; };
+		5D1E0161AF60ADB6D903535E /* juno-67-start.m4a */ = {isa = PBXFileReference; path = "juno-67-start.m4a"; sourceTree = "<group>"; };
+		5DB9D5866E9743B12589DFF4 /* rom1a-21-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-21-stop.m4a"; sourceTree = "<group>"; };
+		5E2309BDEF30ED9EFED5B849 /* Blurt.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Blurt.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5EE551246F92A5923CDF2F59 /* rom1b-0-start.m4a */ = {isa = PBXFileReference; path = "rom1b-0-start.m4a"; sourceTree = "<group>"; };
+		5F06797402F73A862C8DFA12 /* juno-79-start.m4a */ = {isa = PBXFileReference; path = "juno-79-start.m4a"; sourceTree = "<group>"; };
+		5F1932BB67CB0F9BD6105EE1 /* rom1b-22-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-22-stop.m4a"; sourceTree = "<group>"; };
+		5F23A12A7A73E12FAB6DBD14 /* juno-27-start.m4a */ = {isa = PBXFileReference; path = "juno-27-start.m4a"; sourceTree = "<group>"; };
+		5FBD6C327FE4EC154AF786C4 /* rom1a-17-start.m4a */ = {isa = PBXFileReference; path = "rom1a-17-start.m4a"; sourceTree = "<group>"; };
+		6055F68880BD81037EE1FE18 /* juno-9-stop.m4a */ = {isa = PBXFileReference; path = "juno-9-stop.m4a"; sourceTree = "<group>"; };
+		605E69165B4D2A9B8530606A /* rom1a-13-start.m4a */ = {isa = PBXFileReference; path = "rom1a-13-start.m4a"; sourceTree = "<group>"; };
+		6072A6B0AC8219B5484326B3 /* UITestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestSupport.swift; sourceTree = "<group>"; };
+		60BA34457167C3D50C7A0C48 /* rom1b-28-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-28-stop.m4a"; sourceTree = "<group>"; };
+		627207A211954DBC35179466 /* juno-7-stop.m4a */ = {isa = PBXFileReference; path = "juno-7-stop.m4a"; sourceTree = "<group>"; };
+		63189CC345106B1D56960B1E /* juno-4-start.m4a */ = {isa = PBXFileReference; path = "juno-4-start.m4a"; sourceTree = "<group>"; };
+		637BCF34197490B86303FAB9 /* juno-39-stop.m4a */ = {isa = PBXFileReference; path = "juno-39-stop.m4a"; sourceTree = "<group>"; };
+		63869ED0BF971F732668349B /* MenuBarUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarUITests.swift; sourceTree = "<group>"; };
+		63AA5C73111EA1F4E03A8C24 /* juno-96-start.m4a */ = {isa = PBXFileReference; path = "juno-96-start.m4a"; sourceTree = "<group>"; };
+		6492130BD7CA7CBF22725D6C /* juno-76-stop.m4a */ = {isa = PBXFileReference; path = "juno-76-stop.m4a"; sourceTree = "<group>"; };
+		64A66B39BC8E13D32472709A /* juno-84-stop.m4a */ = {isa = PBXFileReference; path = "juno-84-stop.m4a"; sourceTree = "<group>"; };
+		64D4C708432B8CCB2C07A059 /* juno-16-start.m4a */ = {isa = PBXFileReference; path = "juno-16-start.m4a"; sourceTree = "<group>"; };
+		6508D5EDCCC53BD0900A1D4F /* juno-104-start.m4a */ = {isa = PBXFileReference; path = "juno-104-start.m4a"; sourceTree = "<group>"; };
+		662773E86D58C62C6A41801F /* rom1b-20-start.m4a */ = {isa = PBXFileReference; path = "rom1b-20-start.m4a"; sourceTree = "<group>"; };
+		664331059A3068CA5074CEA4 /* rom1a-21-start.m4a */ = {isa = PBXFileReference; path = "rom1a-21-start.m4a"; sourceTree = "<group>"; };
+		66E090797FE75C600EDE541F /* juno-108-stop.m4a */ = {isa = PBXFileReference; path = "juno-108-stop.m4a"; sourceTree = "<group>"; };
+		68463DAAB8E203467B8676BF /* rom1a-1-start.m4a */ = {isa = PBXFileReference; path = "rom1a-1-start.m4a"; sourceTree = "<group>"; };
+		68B48515B1E03226F9EB2EBE /* juno-117-start.m4a */ = {isa = PBXFileReference; path = "juno-117-start.m4a"; sourceTree = "<group>"; };
+		69015209E1728A39C7189925 /* juno-50-start.m4a */ = {isa = PBXFileReference; path = "juno-50-start.m4a"; sourceTree = "<group>"; };
+		69549AF933A7E546A11A67BE /* rom1a-18-start.m4a */ = {isa = PBXFileReference; path = "rom1a-18-start.m4a"; sourceTree = "<group>"; };
+		6A29FFB86C18EA299EAFFCFD /* juno-69-start.m4a */ = {isa = PBXFileReference; path = "juno-69-start.m4a"; sourceTree = "<group>"; };
+		6A56F68E7D3228E23904A005 /* juno-64-start.m4a */ = {isa = PBXFileReference; path = "juno-64-start.m4a"; sourceTree = "<group>"; };
+		6A9A4B58A6524D4F954DFE65 /* rom1b-26-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-26-stop.m4a"; sourceTree = "<group>"; };
+		6AC4B1737ED4ED895F9729FF /* juno-65-start.m4a */ = {isa = PBXFileReference; path = "juno-65-start.m4a"; sourceTree = "<group>"; };
+		6AFFA1AFC4F88A35BA39CECF /* juno-103-stop.m4a */ = {isa = PBXFileReference; path = "juno-103-stop.m4a"; sourceTree = "<group>"; };
+		6B2312DE4BC0F4F070830AD7 /* WindowAccessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowAccessor.swift; sourceTree = "<group>"; };
+		6B85C5A7CB0E82C4777D2430 /* juno-44-stop.m4a */ = {isa = PBXFileReference; path = "juno-44-stop.m4a"; sourceTree = "<group>"; };
+		6D89280137DAC07403FB60FC /* rom1b-15-start.m4a */ = {isa = PBXFileReference; path = "rom1b-15-start.m4a"; sourceTree = "<group>"; };
+		6D915D3DC8930DBC79CACDDC /* juno-27-stop.m4a */ = {isa = PBXFileReference; path = "juno-27-stop.m4a"; sourceTree = "<group>"; };
+		713974B393D43087E1F51493 /* juno-28-start.m4a */ = {isa = PBXFileReference; path = "juno-28-start.m4a"; sourceTree = "<group>"; };
+		71A6E85CCA47ECE3FA90E776 /* juno-48-start.m4a */ = {isa = PBXFileReference; path = "juno-48-start.m4a"; sourceTree = "<group>"; };
+		71BEAB59A7A2280EB1EDC80E /* juno-15-stop.m4a */ = {isa = PBXFileReference; path = "juno-15-stop.m4a"; sourceTree = "<group>"; };
+		72144FD6362B731D322BA316 /* juno-125-stop.m4a */ = {isa = PBXFileReference; path = "juno-125-stop.m4a"; sourceTree = "<group>"; };
+		724B039E044BE4B2E3EAA3C5 /* juno-83-start.m4a */ = {isa = PBXFileReference; path = "juno-83-start.m4a"; sourceTree = "<group>"; };
+		731519E33F2E9EAB57F6ABF6 /* juno-20-start.m4a */ = {isa = PBXFileReference; path = "juno-20-start.m4a"; sourceTree = "<group>"; };
+		763E3951E68EBB37F89C7F84 /* juno-97-start.m4a */ = {isa = PBXFileReference; path = "juno-97-start.m4a"; sourceTree = "<group>"; };
+		767217AE992554FDF6D67A4D /* rom1a-10-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-10-stop.m4a"; sourceTree = "<group>"; };
+		77C74C74945D0A990578D911 /* rom1b-10-start.m4a */ = {isa = PBXFileReference; path = "rom1b-10-start.m4a"; sourceTree = "<group>"; };
+		77E9E7F17972483F6FBF1CCD /* Blurt.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Blurt.entitlements; sourceTree = "<group>"; };
+		786672855B44AB80CAF4D782 /* rom1b-29-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-29-stop.m4a"; sourceTree = "<group>"; };
+		791EFC0EE82C0E91F316B51E /* juno-97-stop.m4a */ = {isa = PBXFileReference; path = "juno-97-stop.m4a"; sourceTree = "<group>"; };
+		792258F8AAF3AF35104EE0CF /* rom1a-19-start.m4a */ = {isa = PBXFileReference; path = "rom1a-19-start.m4a"; sourceTree = "<group>"; };
+		79F8F36D7C5D074BC5135FEA /* juno-90-start.m4a */ = {isa = PBXFileReference; path = "juno-90-start.m4a"; sourceTree = "<group>"; };
+		79FDAA58085D83CB336E9578 /* juno-42-start.m4a */ = {isa = PBXFileReference; path = "juno-42-start.m4a"; sourceTree = "<group>"; };
+		7A6872FE0B51D0EC9C4B397B /* rom1b-10-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-10-stop.m4a"; sourceTree = "<group>"; };
+		7C151FD5B49E5D7E61BDDEF0 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
+		7D97F15BC06507369522BB59 /* juno-4-stop.m4a */ = {isa = PBXFileReference; path = "juno-4-stop.m4a"; sourceTree = "<group>"; };
+		7ED9A00CD960B3A33AC83C08 /* juno-72-stop.m4a */ = {isa = PBXFileReference; path = "juno-72-stop.m4a"; sourceTree = "<group>"; };
+		7F646CD07DBBA47F44CE0AD1 /* WizardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardView.swift; sourceTree = "<group>"; };
+		7F9F20FAD5D61C4D1C44473C /* rom1a-26-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-26-stop.m4a"; sourceTree = "<group>"; };
+		7FB45A274F0CC28BD0923634 /* rom1b-25-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-25-stop.m4a"; sourceTree = "<group>"; };
+		7FC3A25550C39659E3E00A11 /* rom1a-30-start.m4a */ = {isa = PBXFileReference; path = "rom1a-30-start.m4a"; sourceTree = "<group>"; };
+		812039ECEDABDEEE2EFA8BD5 /* juno-0-start.m4a */ = {isa = PBXFileReference; path = "juno-0-start.m4a"; sourceTree = "<group>"; };
+		823731A25D339A9F93096500 /* rom1b-4-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-4-stop.m4a"; sourceTree = "<group>"; };
+		8304744FE228FA9B2CEBEA16 /* juno-98-start.m4a */ = {isa = PBXFileReference; path = "juno-98-start.m4a"; sourceTree = "<group>"; };
+		83A2074384DFDEFCF0175D6C /* juno-53-stop.m4a */ = {isa = PBXFileReference; path = "juno-53-stop.m4a"; sourceTree = "<group>"; };
+		850AFD4ECA01A669BDD91959 /* LaunchPerformanceUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchPerformanceUITests.swift; sourceTree = "<group>"; };
+		86140F16972A9661816EC786 /* juno-62-start.m4a */ = {isa = PBXFileReference; path = "juno-62-start.m4a"; sourceTree = "<group>"; };
+		870CA5DD6808F87584E3FA9E /* juno-35-start.m4a */ = {isa = PBXFileReference; path = "juno-35-start.m4a"; sourceTree = "<group>"; };
+		875545CFDFCFF4288AAC7D09 /* rom1a-24-start.m4a */ = {isa = PBXFileReference; path = "rom1a-24-start.m4a"; sourceTree = "<group>"; };
+		87570A5DC1428AC2DE812BBE /* rom1b-24-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-24-stop.m4a"; sourceTree = "<group>"; };
+		87E45061EDF49C769A6B292D /* juno-24-start.m4a */ = {isa = PBXFileReference; path = "juno-24-start.m4a"; sourceTree = "<group>"; };
+		886848A89BE3512619263E54 /* juno-94-start.m4a */ = {isa = PBXFileReference; path = "juno-94-start.m4a"; sourceTree = "<group>"; };
+		8887DCE124B065F8313AC59F /* juno-9-start.m4a */ = {isa = PBXFileReference; path = "juno-9-start.m4a"; sourceTree = "<group>"; };
+		88CC243509230D21563FDF89 /* juno-127-start.m4a */ = {isa = PBXFileReference; path = "juno-127-start.m4a"; sourceTree = "<group>"; };
+		899D9AD955B936F6BFC4E293 /* juno-52-start.m4a */ = {isa = PBXFileReference; path = "juno-52-start.m4a"; sourceTree = "<group>"; };
+		89F61F7352130DAAA530D836 /* juno-107-stop.m4a */ = {isa = PBXFileReference; path = "juno-107-stop.m4a"; sourceTree = "<group>"; };
+		8A319EF914358A938C87389D /* juno-28-stop.m4a */ = {isa = PBXFileReference; path = "juno-28-stop.m4a"; sourceTree = "<group>"; };
+		8AA7158BB27D2F927C2ED12F /* juno-34-start.m4a */ = {isa = PBXFileReference; path = "juno-34-start.m4a"; sourceTree = "<group>"; };
+		8B98DFCF66F92839EF4D89F7 /* juno-82-start.m4a */ = {isa = PBXFileReference; path = "juno-82-start.m4a"; sourceTree = "<group>"; };
+		8C1C165264B92ADAEC751EB6 /* juno-68-start.m4a */ = {isa = PBXFileReference; path = "juno-68-start.m4a"; sourceTree = "<group>"; };
+		8C9E137C2B11E6EF6A82E51A /* juno-6-start.m4a */ = {isa = PBXFileReference; path = "juno-6-start.m4a"; sourceTree = "<group>"; };
+		8CB3A2CFA15A525E43F451BD /* juno-64-stop.m4a */ = {isa = PBXFileReference; path = "juno-64-stop.m4a"; sourceTree = "<group>"; };
+		8D369A708E176C12114384AD /* rom1b-30-start.m4a */ = {isa = PBXFileReference; path = "rom1b-30-start.m4a"; sourceTree = "<group>"; };
+		8E61A52A7896A36118B603B3 /* juno-56-start.m4a */ = {isa = PBXFileReference; path = "juno-56-start.m4a"; sourceTree = "<group>"; };
+		8E71DBB3C21D616DDFA77D0B /* juno-41-stop.m4a */ = {isa = PBXFileReference; path = "juno-41-stop.m4a"; sourceTree = "<group>"; };
+		8FE85CA9802FE6C1E82B88C8 /* juno-5-stop.m4a */ = {isa = PBXFileReference; path = "juno-5-stop.m4a"; sourceTree = "<group>"; };
+		90035FF502F2684829A63751 /* rom1a-18-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-18-stop.m4a"; sourceTree = "<group>"; };
+		920F5A55960A00E2AECF1362 /* juno-83-stop.m4a */ = {isa = PBXFileReference; path = "juno-83-stop.m4a"; sourceTree = "<group>"; };
+		92387F60666853C0AA1BF0B5 /* juno-118-stop.m4a */ = {isa = PBXFileReference; path = "juno-118-stop.m4a"; sourceTree = "<group>"; };
+		92753DF24C8BB9D740CC7B6C /* juno-70-stop.m4a */ = {isa = PBXFileReference; path = "juno-70-stop.m4a"; sourceTree = "<group>"; };
+		92CAA331F57FCD20583AF8CB /* juno-75-start.m4a */ = {isa = PBXFileReference; path = "juno-75-start.m4a"; sourceTree = "<group>"; };
+		92E13646830DFEDBA2AB13AF /* juno-88-stop.m4a */ = {isa = PBXFileReference; path = "juno-88-stop.m4a"; sourceTree = "<group>"; };
+		9308FFA344AB1B73A960BD15 /* juno-102-stop.m4a */ = {isa = PBXFileReference; path = "juno-102-stop.m4a"; sourceTree = "<group>"; };
+		9340A2B70F834204FE6C6C68 /* juno-92-start.m4a */ = {isa = PBXFileReference; path = "juno-92-start.m4a"; sourceTree = "<group>"; };
+		937D031560676ABE35A38538 /* rom1b-11-start.m4a */ = {isa = PBXFileReference; path = "rom1b-11-start.m4a"; sourceTree = "<group>"; };
+		94546743017BF75E0DC24ACC /* juno-76-start.m4a */ = {isa = PBXFileReference; path = "juno-76-start.m4a"; sourceTree = "<group>"; };
+		9536A4A4611280C6237C9D95 /* juno-80-start.m4a */ = {isa = PBXFileReference; path = "juno-80-start.m4a"; sourceTree = "<group>"; };
+		9542F903D789DDAA55639374 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		958C5FDCD430D87BD61D048C /* juno-2-start.m4a */ = {isa = PBXFileReference; path = "juno-2-start.m4a"; sourceTree = "<group>"; };
+		96D2FE2DE3A2177A80764E1B /* juno-123-start.m4a */ = {isa = PBXFileReference; path = "juno-123-start.m4a"; sourceTree = "<group>"; };
+		97254F3945FC10FBA8E4BEDA /* juno-50-stop.m4a */ = {isa = PBXFileReference; path = "juno-50-stop.m4a"; sourceTree = "<group>"; };
+		989E9BBEA9AFED21774E0230 /* rom1b-18-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-18-stop.m4a"; sourceTree = "<group>"; };
+		99B45E82D3DF744DF2031238 /* rom1b-6-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-6-stop.m4a"; sourceTree = "<group>"; };
+		9A9BA87A72AFB3829A388E95 /* juno-18-start.m4a */ = {isa = PBXFileReference; path = "juno-18-start.m4a"; sourceTree = "<group>"; };
+		9C3B044CD20456A76EBB99FB /* juno-61-stop.m4a */ = {isa = PBXFileReference; path = "juno-61-stop.m4a"; sourceTree = "<group>"; };
+		9D02AECDAE6B146F11B7A721 /* juno-87-stop.m4a */ = {isa = PBXFileReference; path = "juno-87-stop.m4a"; sourceTree = "<group>"; };
+		9EB4EF55A9B57C93926D433F /* juno-14-stop.m4a */ = {isa = PBXFileReference; path = "juno-14-stop.m4a"; sourceTree = "<group>"; };
+		9FE15281EA6DE5C2C1978C44 /* juno-122-stop.m4a */ = {isa = PBXFileReference; path = "juno-122-stop.m4a"; sourceTree = "<group>"; };
+		A01872064CB7D739DE6F9952 /* rom1a-25-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-25-stop.m4a"; sourceTree = "<group>"; };
+		A0C78659208520BB93EAB372 /* juno-12-start.m4a */ = {isa = PBXFileReference; path = "juno-12-start.m4a"; sourceTree = "<group>"; };
+		A27D7F43295DE2A81EFFDDBC /* OverlayWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayWindowController.swift; sourceTree = "<group>"; };
+		A2C5021E8F72182F331DA397 /* juno-3-start.m4a */ = {isa = PBXFileReference; path = "juno-3-start.m4a"; sourceTree = "<group>"; };
+		A4AFAD52CAC3825D7A603DC5 /* juno-100-start.m4a */ = {isa = PBXFileReference; path = "juno-100-start.m4a"; sourceTree = "<group>"; };
+		A58B6E01B13C27D1DA52EAFE /* juno-126-start.m4a */ = {isa = PBXFileReference; path = "juno-126-start.m4a"; sourceTree = "<group>"; };
+		A640F1C2A7EBAF3B0F8FFB83 /* juno-120-start.m4a */ = {isa = PBXFileReference; path = "juno-120-start.m4a"; sourceTree = "<group>"; };
+		A72EE584A3704166E932D950 /* juno-87-start.m4a */ = {isa = PBXFileReference; path = "juno-87-start.m4a"; sourceTree = "<group>"; };
+		A82A191B20F222EBC479143E /* rom1a-4-start.m4a */ = {isa = PBXFileReference; path = "rom1a-4-start.m4a"; sourceTree = "<group>"; };
+		A8AB9F55940B496EF7A8B633 /* juno-91-start.m4a */ = {isa = PBXFileReference; path = "juno-91-start.m4a"; sourceTree = "<group>"; };
+		A8FCDA16949B9CE1323E24F8 /* rom1a-27-start.m4a */ = {isa = PBXFileReference; path = "rom1a-27-start.m4a"; sourceTree = "<group>"; };
+		A95FFA1F1C07E8FAF8FEC0B8 /* juno-36-start.m4a */ = {isa = PBXFileReference; path = "juno-36-start.m4a"; sourceTree = "<group>"; };
+		AA1892B0DE69A5B9E8983A5D /* rom1a-23-start.m4a */ = {isa = PBXFileReference; path = "rom1a-23-start.m4a"; sourceTree = "<group>"; };
+		AA55EF35D8FFB4A5EF7A8557 /* rom1a-16-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-16-stop.m4a"; sourceTree = "<group>"; };
+		AAE4557FD2700BDA0EA11D6E /* juno-57-start.m4a */ = {isa = PBXFileReference; path = "juno-57-start.m4a"; sourceTree = "<group>"; };
+		AB770632673FD0DC0F84C976 /* rom1b-21-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-21-stop.m4a"; sourceTree = "<group>"; };
+		AB7B48AFEE1005B27B11883F /* rom1b-4-start.m4a */ = {isa = PBXFileReference; path = "rom1b-4-start.m4a"; sourceTree = "<group>"; };
+		AC2E79FB5ACE247FF90F50E4 /* rom1a-28-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-28-stop.m4a"; sourceTree = "<group>"; };
+		ACFD76434CCFED8E1B6FB977 /* juno-99-start.m4a */ = {isa = PBXFileReference; path = "juno-99-start.m4a"; sourceTree = "<group>"; };
+		AD303A24D4133CE3F1F1DE23 /* juno-22-start.m4a */ = {isa = PBXFileReference; path = "juno-22-start.m4a"; sourceTree = "<group>"; };
+		AD5F1BDEB1DB3658DDB96247 /* juno-70-start.m4a */ = {isa = PBXFileReference; path = "juno-70-start.m4a"; sourceTree = "<group>"; };
+		AFCA36ECEFBA3D7C7B1AB1B7 /* rom1a-31-start.m4a */ = {isa = PBXFileReference; path = "rom1a-31-start.m4a"; sourceTree = "<group>"; };
+		B0CB1B169A47290B83AD44C0 /* rom1b-20-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-20-stop.m4a"; sourceTree = "<group>"; };
+		B24D0EACA5DCC94CFCAD9753 /* rom1b-16-start.m4a */ = {isa = PBXFileReference; path = "rom1b-16-start.m4a"; sourceTree = "<group>"; };
+		B293D9F11DB3C3D268E82E4A /* rom1b-25-start.m4a */ = {isa = PBXFileReference; path = "rom1b-25-start.m4a"; sourceTree = "<group>"; };
+		B401FA111CA49F5A535366AC /* rom1b-15-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-15-stop.m4a"; sourceTree = "<group>"; };
+		B432346450961555004A2BDE /* juno-99-stop.m4a */ = {isa = PBXFileReference; path = "juno-99-stop.m4a"; sourceTree = "<group>"; };
+		B460358B22184090D1CCD18E /* juno-68-stop.m4a */ = {isa = PBXFileReference; path = "juno-68-stop.m4a"; sourceTree = "<group>"; };
+		B5F2D2902DFABF0A7F65E712 /* juno-113-stop.m4a */ = {isa = PBXFileReference; path = "juno-113-stop.m4a"; sourceTree = "<group>"; };
+		B63CC1EF220EB3463D5A4BDF /* rom1b-12-start.m4a */ = {isa = PBXFileReference; path = "rom1b-12-start.m4a"; sourceTree = "<group>"; };
+		B67F392ADB8F0C2D4BB6827F /* juno-114-start.m4a */ = {isa = PBXFileReference; path = "juno-114-start.m4a"; sourceTree = "<group>"; };
+		B67F817AD357801080D26FFF /* rom1b-2-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-2-stop.m4a"; sourceTree = "<group>"; };
+		B75ED921A405BB7A0B0564A1 /* juno-11-stop.m4a */ = {isa = PBXFileReference; path = "juno-11-stop.m4a"; sourceTree = "<group>"; };
+		BBA9C9322D0AF3D9C529F06F /* MenuBarScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarScene.swift; sourceTree = "<group>"; };
+		BBF8A81BBD03B233A8C2B845 /* rom1a-6-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-6-stop.m4a"; sourceTree = "<group>"; };
+		BC17D9B01FDBC9667A7CD78A /* rom1a-22-start.m4a */ = {isa = PBXFileReference; path = "rom1a-22-start.m4a"; sourceTree = "<group>"; };
+		BCE9C2C9715E2C1C96683AE0 /* juno-40-stop.m4a */ = {isa = PBXFileReference; path = "juno-40-stop.m4a"; sourceTree = "<group>"; };
+		BD38CC94DC42A35A4174316A /* rom1b-1-start.m4a */ = {isa = PBXFileReference; path = "rom1b-1-start.m4a"; sourceTree = "<group>"; };
+		BEEF91CD94662F4344ECFDE9 /* rom1b-27-start.m4a */ = {isa = PBXFileReference; path = "rom1b-27-start.m4a"; sourceTree = "<group>"; };
+		C17B76B973AD008CEA57A048 /* WizardWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardWindowController.swift; sourceTree = "<group>"; };
+		C1BD23E2476F46A7BD75BAB9 /* rom1b-31-start.m4a */ = {isa = PBXFileReference; path = "rom1b-31-start.m4a"; sourceTree = "<group>"; };
+		C2CB5D2E464BFD7F8BABE760 /* rom1b-7-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-7-stop.m4a"; sourceTree = "<group>"; };
+		C38C73970E1D1978494F7BAE /* juno-10-start.m4a */ = {isa = PBXFileReference; path = "juno-10-start.m4a"; sourceTree = "<group>"; };
+		C50DFA42CE97C3AF322B12FA /* juno-43-start.m4a */ = {isa = PBXFileReference; path = "juno-43-start.m4a"; sourceTree = "<group>"; };
+		C6EFB0086ED63DB182AFFC8F /* SettingsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsUITests.swift; sourceTree = "<group>"; };
+		C7714523A92F4753092CA67C /* juno-81-start.m4a */ = {isa = PBXFileReference; path = "juno-81-start.m4a"; sourceTree = "<group>"; };
+		C7DAE8C9E70F6D2232F409DE /* juno-101-start.m4a */ = {isa = PBXFileReference; path = "juno-101-start.m4a"; sourceTree = "<group>"; };
+		CB487BE3C821FF18E414CF4B /* juno-117-stop.m4a */ = {isa = PBXFileReference; path = "juno-117-stop.m4a"; sourceTree = "<group>"; };
+		CBBA2376BDBD82E7474C9D84 /* juno-46-start.m4a */ = {isa = PBXFileReference; path = "juno-46-start.m4a"; sourceTree = "<group>"; };
+		CC40ECD64CC632EF7C26115F /* juno-49-start.m4a */ = {isa = PBXFileReference; path = "juno-49-start.m4a"; sourceTree = "<group>"; };
+		CDCD486F98020360173EBEFA /* rom1a-11-start.m4a */ = {isa = PBXFileReference; path = "rom1a-11-start.m4a"; sourceTree = "<group>"; };
+		CE3BEBDADD5DD54629837F34 /* juno-26-stop.m4a */ = {isa = PBXFileReference; path = "juno-26-stop.m4a"; sourceTree = "<group>"; };
+		CF851DB4CC78B8F16D2E7565 /* juno-38-stop.m4a */ = {isa = PBXFileReference; path = "juno-38-stop.m4a"; sourceTree = "<group>"; };
+		CFA57E6B7B3A81E2531990B5 /* juno-40-start.m4a */ = {isa = PBXFileReference; path = "juno-40-start.m4a"; sourceTree = "<group>"; };
+		D06381A69EEEC336CB847783 /* juno-96-stop.m4a */ = {isa = PBXFileReference; path = "juno-96-stop.m4a"; sourceTree = "<group>"; };
+		D19740AC9AF44D8E172CFD37 /* juno-46-stop.m4a */ = {isa = PBXFileReference; path = "juno-46-stop.m4a"; sourceTree = "<group>"; };
+		D1D56A6899994805C9F0DBBD /* juno-71-stop.m4a */ = {isa = PBXFileReference; path = "juno-71-stop.m4a"; sourceTree = "<group>"; };
+		D220A3AC36DCE278804F81A1 /* rom1b-18-start.m4a */ = {isa = PBXFileReference; path = "rom1b-18-start.m4a"; sourceTree = "<group>"; };
+		D27DAF2436D272EEF031303B /* juno-47-start.m4a */ = {isa = PBXFileReference; path = "juno-47-start.m4a"; sourceTree = "<group>"; };
+		D3681457B0FB13FF3FD6BAF6 /* juno-74-stop.m4a */ = {isa = PBXFileReference; path = "juno-74-stop.m4a"; sourceTree = "<group>"; };
+		D58930841AD9EB26714E8385 /* rom1a-20-start.m4a */ = {isa = PBXFileReference; path = "rom1a-20-start.m4a"; sourceTree = "<group>"; };
+		D679085098210876A65E88BD /* rom1b-5-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-5-stop.m4a"; sourceTree = "<group>"; };
+		D69E5F1E1FCFF486BE8CF377 /* juno-105-start.m4a */ = {isa = PBXFileReference; path = "juno-105-start.m4a"; sourceTree = "<group>"; };
+		D6CA551786B56B10B45B9BF3 /* juno-73-start.m4a */ = {isa = PBXFileReference; path = "juno-73-start.m4a"; sourceTree = "<group>"; };
+		D733CCA5061A2B7B74A23A65 /* juno-45-stop.m4a */ = {isa = PBXFileReference; path = "juno-45-stop.m4a"; sourceTree = "<group>"; };
+		D79CA18872ADF342DE5426CA /* rom1a-7-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-7-stop.m4a"; sourceTree = "<group>"; };
+		D848AB9AC79E40A76CFA7123 /* juno-57-stop.m4a */ = {isa = PBXFileReference; path = "juno-57-stop.m4a"; sourceTree = "<group>"; };
+		D85C603DADD81B58F7D390F7 /* juno-93-stop.m4a */ = {isa = PBXFileReference; path = "juno-93-stop.m4a"; sourceTree = "<group>"; };
+		D88509B0396487E159AA6FDD /* AccessibilityAuditUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityAuditUITests.swift; sourceTree = "<group>"; };
+		D912D56A38016C394FF89315 /* juno-112-start.m4a */ = {isa = PBXFileReference; path = "juno-112-start.m4a"; sourceTree = "<group>"; };
+		D99A49205DCC057DE3A393B6 /* juno-18-stop.m4a */ = {isa = PBXFileReference; path = "juno-18-stop.m4a"; sourceTree = "<group>"; };
+		DA27B927EB6616D017D910CD /* juno-90-stop.m4a */ = {isa = PBXFileReference; path = "juno-90-stop.m4a"; sourceTree = "<group>"; };
+		DA7EDD1B32FB9542B785607F /* rom1a-30-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-30-stop.m4a"; sourceTree = "<group>"; };
+		DAA2E01D418EA3ABA8A9DD5F /* rom1b-22-start.m4a */ = {isa = PBXFileReference; path = "rom1b-22-start.m4a"; sourceTree = "<group>"; };
+		DB1715E594E1F2A1A3F152E0 /* rom1b-14-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-14-stop.m4a"; sourceTree = "<group>"; };
+		DCC1BF26927D57122A59A4C1 /* juno-126-stop.m4a */ = {isa = PBXFileReference; path = "juno-126-stop.m4a"; sourceTree = "<group>"; };
+		DD0650160548287F62C1FA77 /* rom1b-26-start.m4a */ = {isa = PBXFileReference; path = "rom1b-26-start.m4a"; sourceTree = "<group>"; };
+		DDD514790151F484A68127BB /* rom1a-2-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-2-stop.m4a"; sourceTree = "<group>"; };
+		DE43545891BB9D4ED7B55D7B /* rom1b-17-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-17-stop.m4a"; sourceTree = "<group>"; };
+		DE8C20239561AA02A1D34FF3 /* rom1a-8-start.m4a */ = {isa = PBXFileReference; path = "rom1a-8-start.m4a"; sourceTree = "<group>"; };
+		DED921D522FA87E2970C2EFF /* juno-69-stop.m4a */ = {isa = PBXFileReference; path = "juno-69-stop.m4a"; sourceTree = "<group>"; };
+		DEE36EB129D6CABBBD3CD9F4 /* juno-56-stop.m4a */ = {isa = PBXFileReference; path = "juno-56-stop.m4a"; sourceTree = "<group>"; };
+		DEF4922B82FD3934F5EC71C9 /* juno-31-stop.m4a */ = {isa = PBXFileReference; path = "juno-31-stop.m4a"; sourceTree = "<group>"; };
+		DFE28F9A35722B67815654DC /* juno-95-stop.m4a */ = {isa = PBXFileReference; path = "juno-95-stop.m4a"; sourceTree = "<group>"; };
+		E084A62CF8F167165466AE30 /* juno-118-start.m4a */ = {isa = PBXFileReference; path = "juno-118-start.m4a"; sourceTree = "<group>"; };
+		E1106A4955BF212EBF1B38CE /* juno-59-stop.m4a */ = {isa = PBXFileReference; path = "juno-59-stop.m4a"; sourceTree = "<group>"; };
+		E22688A49EC9BD63DABF2A7B /* juno-75-stop.m4a */ = {isa = PBXFileReference; path = "juno-75-stop.m4a"; sourceTree = "<group>"; };
+		E2BCA8E305B596F960CEE1AE /* rom1a-12-start.m4a */ = {isa = PBXFileReference; path = "rom1a-12-start.m4a"; sourceTree = "<group>"; };
+		E2D39C392213CD7471C8A26E /* rom1b-29-start.m4a */ = {isa = PBXFileReference; path = "rom1b-29-start.m4a"; sourceTree = "<group>"; };
+		E358C3B6655AFEA39440EF00 /* juno-86-start.m4a */ = {isa = PBXFileReference; path = "juno-86-start.m4a"; sourceTree = "<group>"; };
+		E3BCEBB787912BA2EDCAE5A4 /* juno-45-start.m4a */ = {isa = PBXFileReference; path = "juno-45-start.m4a"; sourceTree = "<group>"; };
+		E41AE56820CF756BC7D69F67 /* juno-114-stop.m4a */ = {isa = PBXFileReference; path = "juno-114-stop.m4a"; sourceTree = "<group>"; };
+		E454BCB116B2238A47700AB3 /* juno-33-stop.m4a */ = {isa = PBXFileReference; path = "juno-33-stop.m4a"; sourceTree = "<group>"; };
+		E53A15B7450BFE6143B4306D /* juno-24-stop.m4a */ = {isa = PBXFileReference; path = "juno-24-stop.m4a"; sourceTree = "<group>"; };
+		E552326770AD5967B8128420 /* juno-110-stop.m4a */ = {isa = PBXFileReference; path = "juno-110-stop.m4a"; sourceTree = "<group>"; };
+		E5F9E5E96FA7EC31380F6669 /* juno-65-stop.m4a */ = {isa = PBXFileReference; path = "juno-65-stop.m4a"; sourceTree = "<group>"; };
+		E617272806BFEB303D94F315 /* rom1b-16-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-16-stop.m4a"; sourceTree = "<group>"; };
+		E6A271DA085CFB136745066C /* juno-36-stop.m4a */ = {isa = PBXFileReference; path = "juno-36-stop.m4a"; sourceTree = "<group>"; };
+		E6D106BBE0E8586827C14E59 /* rom1b-14-start.m4a */ = {isa = PBXFileReference; path = "rom1b-14-start.m4a"; sourceTree = "<group>"; };
+		E77ECDD66C1549039CB276A6 /* juno-25-stop.m4a */ = {isa = PBXFileReference; path = "juno-25-stop.m4a"; sourceTree = "<group>"; };
+		E83BDAC7AB4479E8A12A5613 /* juno-74-start.m4a */ = {isa = PBXFileReference; path = "juno-74-start.m4a"; sourceTree = "<group>"; };
+		E84C190EF80F6B36F8241BFC /* juno-82-stop.m4a */ = {isa = PBXFileReference; path = "juno-82-stop.m4a"; sourceTree = "<group>"; };
+		E8BB482E825AD5C65B170E18 /* juno-80-stop.m4a */ = {isa = PBXFileReference; path = "juno-80-stop.m4a"; sourceTree = "<group>"; };
+		E8DE60178ABA2CC7F4EB6401 /* PermissionsStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsStepView.swift; sourceTree = "<group>"; };
+		E90698CCD83D2CDAF043877A /* juno-54-stop.m4a */ = {isa = PBXFileReference; path = "juno-54-stop.m4a"; sourceTree = "<group>"; };
+		E97DEAE3F8FD9ADD7DB41B02 /* juno-63-stop.m4a */ = {isa = PBXFileReference; path = "juno-63-stop.m4a"; sourceTree = "<group>"; };
+		EA933A670288BEAFD43D468E /* rom1b-7-start.m4a */ = {isa = PBXFileReference; path = "rom1b-7-start.m4a"; sourceTree = "<group>"; };
+		EAB0871FD8CB94A4DCF837CC /* rom1b-23-start.m4a */ = {isa = PBXFileReference; path = "rom1b-23-start.m4a"; sourceTree = "<group>"; };
+		EB08EC40A267C71B185EC782 /* juno-109-stop.m4a */ = {isa = PBXFileReference; path = "juno-109-stop.m4a"; sourceTree = "<group>"; };
+		EB504AAB7330EE4D4C1E4948 /* rom1a-26-start.m4a */ = {isa = PBXFileReference; path = "rom1a-26-start.m4a"; sourceTree = "<group>"; };
+		EBB8641EF9B0108DC0B103B7 /* juno-120-stop.m4a */ = {isa = PBXFileReference; path = "juno-120-stop.m4a"; sourceTree = "<group>"; };
+		EC0CF2AE01C6EE41101CBB74 /* juno-17-stop.m4a */ = {isa = PBXFileReference; path = "juno-17-stop.m4a"; sourceTree = "<group>"; };
+		EC6584FE7C94EF604CA33BE3 /* rom1a-19-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-19-stop.m4a"; sourceTree = "<group>"; };
+		ED1535C5BDC865063C5DA3A3 /* juno-52-stop.m4a */ = {isa = PBXFileReference; path = "juno-52-stop.m4a"; sourceTree = "<group>"; };
+		ED1C7F2E22562A18197FED64 /* juno-19-start.m4a */ = {isa = PBXFileReference; path = "juno-19-start.m4a"; sourceTree = "<group>"; };
+		ED3C851EF55F6BBEBFDAE53A /* rom1a-17-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-17-stop.m4a"; sourceTree = "<group>"; };
+		ED5D54496B6973C9F7AE05F3 /* juno-48-stop.m4a */ = {isa = PBXFileReference; path = "juno-48-stop.m4a"; sourceTree = "<group>"; };
+		F0B1CD9D40D126CD251FDD46 /* juno-0-stop.m4a */ = {isa = PBXFileReference; path = "juno-0-stop.m4a"; sourceTree = "<group>"; };
+		F1340BFA7AF0D9D50EAA4A24 /* rom1a-22-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-22-stop.m4a"; sourceTree = "<group>"; };
+		F17631D5583E0070A4DFCF3F /* rom1a-9-start.m4a */ = {isa = PBXFileReference; path = "rom1a-9-start.m4a"; sourceTree = "<group>"; };
+		F2B1262C9AB83ED251421D03 /* rom1b-5-start.m4a */ = {isa = PBXFileReference; path = "rom1b-5-start.m4a"; sourceTree = "<group>"; };
+		F2D66E4734A5DC086904E421 /* rom1a-3-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-3-stop.m4a"; sourceTree = "<group>"; };
+		F37D9EAC78D140EE0CD438F2 /* juno-17-start.m4a */ = {isa = PBXFileReference; path = "juno-17-start.m4a"; sourceTree = "<group>"; };
+		F40AB81C66FD9183F49BF644 /* juno-112-stop.m4a */ = {isa = PBXFileReference; path = "juno-112-stop.m4a"; sourceTree = "<group>"; };
+		F4512C06E3020F0F2D518A3E /* juno-73-stop.m4a */ = {isa = PBXFileReference; path = "juno-73-stop.m4a"; sourceTree = "<group>"; };
+		F5A156982A018BF53A0B2ADD /* rom1b-24-start.m4a */ = {isa = PBXFileReference; path = "rom1b-24-start.m4a"; sourceTree = "<group>"; };
+		F5A287AB11C9314F4AF37A61 /* juno-44-start.m4a */ = {isa = PBXFileReference; path = "juno-44-start.m4a"; sourceTree = "<group>"; };
+		F7307E06A286147462426313 /* rom1a-20-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-20-stop.m4a"; sourceTree = "<group>"; };
+		F77424E89C3E4B5B787BDFA4 /* juno-42-stop.m4a */ = {isa = PBXFileReference; path = "juno-42-stop.m4a"; sourceTree = "<group>"; };
+		F7FE2B1E0DFA593ACFCEDA76 /* juno-33-start.m4a */ = {isa = PBXFileReference; path = "juno-33-start.m4a"; sourceTree = "<group>"; };
+		F8A0A285719AC6179D039DD9 /* juno-10-stop.m4a */ = {isa = PBXFileReference; path = "juno-10-stop.m4a"; sourceTree = "<group>"; };
+		F8A43C600FA98A4316D02150 /* juno-85-stop.m4a */ = {isa = PBXFileReference; path = "juno-85-stop.m4a"; sourceTree = "<group>"; };
+		F935C3E491692470C97EAA48 /* juno-113-start.m4a */ = {isa = PBXFileReference; path = "juno-113-start.m4a"; sourceTree = "<group>"; };
+		F967C98CF7C0A6A736B91627 /* rom1a-24-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-24-stop.m4a"; sourceTree = "<group>"; };
+		F96D128F79D585621827FF6A /* rom1a-3-start.m4a */ = {isa = PBXFileReference; path = "rom1a-3-start.m4a"; sourceTree = "<group>"; };
+		FB6A990540604C4EE8DC425E /* juno-119-stop.m4a */ = {isa = PBXFileReference; path = "juno-119-stop.m4a"; sourceTree = "<group>"; };
+		FB6BE1E262916105029D7FAB /* rom1a-6-start.m4a */ = {isa = PBXFileReference; path = "rom1a-6-start.m4a"; sourceTree = "<group>"; };
+		FBC56D4B9D0ABF6D4541EDAC /* rom1b-8-start.m4a */ = {isa = PBXFileReference; path = "rom1b-8-start.m4a"; sourceTree = "<group>"; };
+		FDCC1B8A6F0D06424CA35688 /* juno-22-stop.m4a */ = {isa = PBXFileReference; path = "juno-22-stop.m4a"; sourceTree = "<group>"; };
+		FE2598E3B8BA1D650EEEEF4B /* FloatingPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingPanel.swift; sourceTree = "<group>"; };
+		FE25AF745B85611516B16FDA /* juno-7-start.m4a */ = {isa = PBXFileReference; path = "juno-7-start.m4a"; sourceTree = "<group>"; };
+		FFCE00A121F0A2EA669DE42B /* juno-51-stop.m4a */ = {isa = PBXFileReference; path = "juno-51-stop.m4a"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		5438DE37A9D7E9E5EEC56272 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0A7FB8A90BB7E7A5110A4F4D /* BlurtEngine in Frameworks */,
+				A34A51EDE26BC24EB08A3900 /* AppUpdater in Frameworks */,
+				D6DFF322638007525EBA02B2 /* Sentry in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		10E2E11380C974390308C1D2 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				5E2309BDEF30ED9EFED5B849 /* Blurt.app */,
+				2C9148633CEE5C373AFBE65F /* BlurtUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		1560402FBA5911463036085F /* Blurt */ = {
+			isa = PBXGroup;
+			children = (
+				7C151FD5B49E5D7E61BDDEF0 /* App.swift */,
+				240939D503F3CE03A0697A5F /* AppCoordinator.swift */,
+				3611A8FA0547B780D0804F52 /* AppCoordinator+UITesting.swift */,
+				9542F903D789DDAA55639374 /* AppDelegate.swift */,
+				1BE0AC6DFA2DC39D6D557BA3 /* AppIcon.icon */,
+				77E9E7F17972483F6FBF1CCD /* Blurt.entitlements */,
+				08A7417835D8538AC4A7E2FB /* DictationComposition.swift */,
+				0566F4FC45C72A6DA586126E /* Info.plist */,
+				6072A6B0AC8219B5484326B3 /* UITestSupport.swift */,
+				7D6DE85EA50E7CD4CC977211 /* Branding */,
+				DF92BBDB4B9C15FAE100B783 /* Hotkey */,
+				8C67CBF637D85C0F642E53B5 /* MenuBar */,
+				912505E1D0FBD5D5CA591BA2 /* Overlay */,
+				DB755555AE4E89FE376399BF /* Resources */,
+				C9A477A17B95181CF6FCCB13 /* Shared */,
+				E7D37943B6B2CE3C0692AA48 /* Update */,
+				77C72856311952343339E7BE /* Wizard */,
+			);
+			path = Blurt;
+			sourceTree = "<group>";
+		};
+		37EA71F5138E2E63171AFFBD = {
+			isa = PBXGroup;
+			children = (
+				1560402FBA5911463036085F /* Blurt */,
+				73649A7C02EB13B17D81A412 /* BlurtUITests */,
+				4B1375E36CD42DBEFF08BC7E /* Packages */,
+				10E2E11380C974390308C1D2 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		4B1375E36CD42DBEFF08BC7E /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				38CAFC7A39E679F1CA3A9692 /* blurt */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		5A3BF2CE3EB4D2D14A3780F9 /* Sounds */ = {
+			isa = PBXGroup;
+			children = (
+				812039ECEDABDEEE2EFA8BD5 /* juno-0-start.m4a */,
+				F0B1CD9D40D126CD251FDD46 /* juno-0-stop.m4a */,
+				0F3D1DBFA369BAF807DBB55F /* juno-1-start.m4a */,
+				54244D8B2EFFCBDC803F49E2 /* juno-1-stop.m4a */,
+				958C5FDCD430D87BD61D048C /* juno-2-start.m4a */,
+				40A711B3442D9CBE0189BEF3 /* juno-2-stop.m4a */,
+				A2C5021E8F72182F331DA397 /* juno-3-start.m4a */,
+				54806E2653DD90175A220994 /* juno-3-stop.m4a */,
+				63189CC345106B1D56960B1E /* juno-4-start.m4a */,
+				7D97F15BC06507369522BB59 /* juno-4-stop.m4a */,
+				4DB6065E9D1F64F3AF0FD03B /* juno-5-start.m4a */,
+				8FE85CA9802FE6C1E82B88C8 /* juno-5-stop.m4a */,
+				8C9E137C2B11E6EF6A82E51A /* juno-6-start.m4a */,
+				49F7AD1193F18CCDF17B9EBA /* juno-6-stop.m4a */,
+				FE25AF745B85611516B16FDA /* juno-7-start.m4a */,
+				627207A211954DBC35179466 /* juno-7-stop.m4a */,
+				1CF1F098A8DC41DD8508480E /* juno-8-start.m4a */,
+				2FFA326076660C91492A6CE1 /* juno-8-stop.m4a */,
+				8887DCE124B065F8313AC59F /* juno-9-start.m4a */,
+				6055F68880BD81037EE1FE18 /* juno-9-stop.m4a */,
+				C38C73970E1D1978494F7BAE /* juno-10-start.m4a */,
+				F8A0A285719AC6179D039DD9 /* juno-10-stop.m4a */,
+				20C7896DEBBFFBBD8AA6337B /* juno-11-start.m4a */,
+				B75ED921A405BB7A0B0564A1 /* juno-11-stop.m4a */,
+				A0C78659208520BB93EAB372 /* juno-12-start.m4a */,
+				2D51B930706AF22BF9BA0CEF /* juno-12-stop.m4a */,
+				3E628046B76633200813B0E4 /* juno-13-start.m4a */,
+				4830CF6168A7511FE3720746 /* juno-13-stop.m4a */,
+				32AAFF585AF1A77D0D872F11 /* juno-14-start.m4a */,
+				9EB4EF55A9B57C93926D433F /* juno-14-stop.m4a */,
+				0386BF281886EDBFE9EC8C61 /* juno-15-start.m4a */,
+				71BEAB59A7A2280EB1EDC80E /* juno-15-stop.m4a */,
+				64D4C708432B8CCB2C07A059 /* juno-16-start.m4a */,
+				5041BF8B32BEB59D5539E48A /* juno-16-stop.m4a */,
+				F37D9EAC78D140EE0CD438F2 /* juno-17-start.m4a */,
+				EC0CF2AE01C6EE41101CBB74 /* juno-17-stop.m4a */,
+				9A9BA87A72AFB3829A388E95 /* juno-18-start.m4a */,
+				D99A49205DCC057DE3A393B6 /* juno-18-stop.m4a */,
+				ED1C7F2E22562A18197FED64 /* juno-19-start.m4a */,
+				04253733D542188A7E5645AD /* juno-19-stop.m4a */,
+				731519E33F2E9EAB57F6ABF6 /* juno-20-start.m4a */,
+				5B56D4D2910BBB44EEB4690A /* juno-20-stop.m4a */,
+				0FB3FBD7C42F949C52B09F0C /* juno-21-start.m4a */,
+				51193F08C115C6AB13BECC07 /* juno-21-stop.m4a */,
+				AD303A24D4133CE3F1F1DE23 /* juno-22-start.m4a */,
+				FDCC1B8A6F0D06424CA35688 /* juno-22-stop.m4a */,
+				2DB41AE5C69904E278F5C6E6 /* juno-23-start.m4a */,
+				544446F59AB1FBC8D83CCC4F /* juno-23-stop.m4a */,
+				87E45061EDF49C769A6B292D /* juno-24-start.m4a */,
+				E53A15B7450BFE6143B4306D /* juno-24-stop.m4a */,
+				281E6ED71E7F613E6E6689D0 /* juno-25-start.m4a */,
+				E77ECDD66C1549039CB276A6 /* juno-25-stop.m4a */,
+				32944757FD2C1F6E8AF73873 /* juno-26-start.m4a */,
+				CE3BEBDADD5DD54629837F34 /* juno-26-stop.m4a */,
+				5F23A12A7A73E12FAB6DBD14 /* juno-27-start.m4a */,
+				6D915D3DC8930DBC79CACDDC /* juno-27-stop.m4a */,
+				713974B393D43087E1F51493 /* juno-28-start.m4a */,
+				8A319EF914358A938C87389D /* juno-28-stop.m4a */,
+				2A1E168CEEFFE705B38463D3 /* juno-29-start.m4a */,
+				2864D45C20A932F54C83C62D /* juno-29-stop.m4a */,
+				41736827B0D4E7E1D024DCF1 /* juno-30-start.m4a */,
+				5070E437DB5D188D16BBAACB /* juno-30-stop.m4a */,
+				2C7B119035D271E56434FB51 /* juno-31-start.m4a */,
+				DEF4922B82FD3934F5EC71C9 /* juno-31-stop.m4a */,
+				1A3D5DAAD31F8C7F67CAD5BB /* juno-32-start.m4a */,
+				49A71146BDFEA07D74A6A67C /* juno-32-stop.m4a */,
+				F7FE2B1E0DFA593ACFCEDA76 /* juno-33-start.m4a */,
+				E454BCB116B2238A47700AB3 /* juno-33-stop.m4a */,
+				8AA7158BB27D2F927C2ED12F /* juno-34-start.m4a */,
+				3012F22300681F3DD71AD51B /* juno-34-stop.m4a */,
+				870CA5DD6808F87584E3FA9E /* juno-35-start.m4a */,
+				093A44A6DB129960326C1796 /* juno-35-stop.m4a */,
+				A95FFA1F1C07E8FAF8FEC0B8 /* juno-36-start.m4a */,
+				E6A271DA085CFB136745066C /* juno-36-stop.m4a */,
+				1EA8B0FCDE5A026C5E8B5EFA /* juno-37-start.m4a */,
+				3CC6911B92F8B5D8C0997AA4 /* juno-37-stop.m4a */,
+				22FF5E0C4681C483B4828FB2 /* juno-38-start.m4a */,
+				CF851DB4CC78B8F16D2E7565 /* juno-38-stop.m4a */,
+				3B0E95E0D720A1D8EC05EA6F /* juno-39-start.m4a */,
+				637BCF34197490B86303FAB9 /* juno-39-stop.m4a */,
+				CFA57E6B7B3A81E2531990B5 /* juno-40-start.m4a */,
+				BCE9C2C9715E2C1C96683AE0 /* juno-40-stop.m4a */,
+				2AD93734B15E59A81C42B6D9 /* juno-41-start.m4a */,
+				8E71DBB3C21D616DDFA77D0B /* juno-41-stop.m4a */,
+				79FDAA58085D83CB336E9578 /* juno-42-start.m4a */,
+				F77424E89C3E4B5B787BDFA4 /* juno-42-stop.m4a */,
+				C50DFA42CE97C3AF322B12FA /* juno-43-start.m4a */,
+				47F6D91FC89A0214F121991C /* juno-43-stop.m4a */,
+				F5A287AB11C9314F4AF37A61 /* juno-44-start.m4a */,
+				6B85C5A7CB0E82C4777D2430 /* juno-44-stop.m4a */,
+				E3BCEBB787912BA2EDCAE5A4 /* juno-45-start.m4a */,
+				D733CCA5061A2B7B74A23A65 /* juno-45-stop.m4a */,
+				CBBA2376BDBD82E7474C9D84 /* juno-46-start.m4a */,
+				D19740AC9AF44D8E172CFD37 /* juno-46-stop.m4a */,
+				D27DAF2436D272EEF031303B /* juno-47-start.m4a */,
+				11F215137F50A2D4AC61E414 /* juno-47-stop.m4a */,
+				71A6E85CCA47ECE3FA90E776 /* juno-48-start.m4a */,
+				ED5D54496B6973C9F7AE05F3 /* juno-48-stop.m4a */,
+				CC40ECD64CC632EF7C26115F /* juno-49-start.m4a */,
+				3D7637960DAA5355CDCA8A6A /* juno-49-stop.m4a */,
+				69015209E1728A39C7189925 /* juno-50-start.m4a */,
+				97254F3945FC10FBA8E4BEDA /* juno-50-stop.m4a */,
+				36CF30F1384D606BE74362C8 /* juno-51-start.m4a */,
+				FFCE00A121F0A2EA669DE42B /* juno-51-stop.m4a */,
+				899D9AD955B936F6BFC4E293 /* juno-52-start.m4a */,
+				ED1535C5BDC865063C5DA3A3 /* juno-52-stop.m4a */,
+				56F69B42F0D495142B17FF83 /* juno-53-start.m4a */,
+				83A2074384DFDEFCF0175D6C /* juno-53-stop.m4a */,
+				144C0E5F9D620C408EE783AE /* juno-54-start.m4a */,
+				E90698CCD83D2CDAF043877A /* juno-54-stop.m4a */,
+				0FB812876EC4870E9A74BB50 /* juno-55-start.m4a */,
+				2978FCBEE1BC015D9CFC8646 /* juno-55-stop.m4a */,
+				8E61A52A7896A36118B603B3 /* juno-56-start.m4a */,
+				DEE36EB129D6CABBBD3CD9F4 /* juno-56-stop.m4a */,
+				AAE4557FD2700BDA0EA11D6E /* juno-57-start.m4a */,
+				D848AB9AC79E40A76CFA7123 /* juno-57-stop.m4a */,
+				31986D541F06DA91827C18A0 /* juno-58-start.m4a */,
+				55BE4FC7F7897886A17FCCF2 /* juno-58-stop.m4a */,
+				09C4E97A7D9EE493D5EC54BB /* juno-59-start.m4a */,
+				E1106A4955BF212EBF1B38CE /* juno-59-stop.m4a */,
+				24B8138546D9CD21F6D55F54 /* juno-60-start.m4a */,
+				2B964C67C7B0BA077F649FDA /* juno-60-stop.m4a */,
+				002FB9F5FD28A66C04993007 /* juno-61-start.m4a */,
+				9C3B044CD20456A76EBB99FB /* juno-61-stop.m4a */,
+				86140F16972A9661816EC786 /* juno-62-start.m4a */,
+				32B41B7B40DE78AB987C237E /* juno-62-stop.m4a */,
+				0DBB595A2AB7221F408B4775 /* juno-63-start.m4a */,
+				E97DEAE3F8FD9ADD7DB41B02 /* juno-63-stop.m4a */,
+				6A56F68E7D3228E23904A005 /* juno-64-start.m4a */,
+				8CB3A2CFA15A525E43F451BD /* juno-64-stop.m4a */,
+				6AC4B1737ED4ED895F9729FF /* juno-65-start.m4a */,
+				E5F9E5E96FA7EC31380F6669 /* juno-65-stop.m4a */,
+				0CDBED88D2D7CE84776B7574 /* juno-66-start.m4a */,
+				4E414413BCDA4C613782919D /* juno-66-stop.m4a */,
+				5D1E0161AF60ADB6D903535E /* juno-67-start.m4a */,
+				06A8F7161C5917AADFF6AC77 /* juno-67-stop.m4a */,
+				8C1C165264B92ADAEC751EB6 /* juno-68-start.m4a */,
+				B460358B22184090D1CCD18E /* juno-68-stop.m4a */,
+				6A29FFB86C18EA299EAFFCFD /* juno-69-start.m4a */,
+				DED921D522FA87E2970C2EFF /* juno-69-stop.m4a */,
+				AD5F1BDEB1DB3658DDB96247 /* juno-70-start.m4a */,
+				92753DF24C8BB9D740CC7B6C /* juno-70-stop.m4a */,
+				156C3E8FF4B96A45913A97F0 /* juno-71-start.m4a */,
+				D1D56A6899994805C9F0DBBD /* juno-71-stop.m4a */,
+				541EE5FFF00A40A486501EDF /* juno-72-start.m4a */,
+				7ED9A00CD960B3A33AC83C08 /* juno-72-stop.m4a */,
+				D6CA551786B56B10B45B9BF3 /* juno-73-start.m4a */,
+				F4512C06E3020F0F2D518A3E /* juno-73-stop.m4a */,
+				E83BDAC7AB4479E8A12A5613 /* juno-74-start.m4a */,
+				D3681457B0FB13FF3FD6BAF6 /* juno-74-stop.m4a */,
+				92CAA331F57FCD20583AF8CB /* juno-75-start.m4a */,
+				E22688A49EC9BD63DABF2A7B /* juno-75-stop.m4a */,
+				94546743017BF75E0DC24ACC /* juno-76-start.m4a */,
+				6492130BD7CA7CBF22725D6C /* juno-76-stop.m4a */,
+				55B3AAE0BC8349507F6482A1 /* juno-77-start.m4a */,
+				2B0DAD072642B1E71BD6E0FC /* juno-77-stop.m4a */,
+				2A97148549AA99C8CDD7C316 /* juno-78-start.m4a */,
+				29255F02F19C6924690373AA /* juno-78-stop.m4a */,
+				5F06797402F73A862C8DFA12 /* juno-79-start.m4a */,
+				188246F4FF4893274601C886 /* juno-79-stop.m4a */,
+				9536A4A4611280C6237C9D95 /* juno-80-start.m4a */,
+				E8BB482E825AD5C65B170E18 /* juno-80-stop.m4a */,
+				C7714523A92F4753092CA67C /* juno-81-start.m4a */,
+				3FCE941C19A3FF0DC61462B7 /* juno-81-stop.m4a */,
+				8B98DFCF66F92839EF4D89F7 /* juno-82-start.m4a */,
+				E84C190EF80F6B36F8241BFC /* juno-82-stop.m4a */,
+				724B039E044BE4B2E3EAA3C5 /* juno-83-start.m4a */,
+				920F5A55960A00E2AECF1362 /* juno-83-stop.m4a */,
+				17B42F16029FF1625EEAD58D /* juno-84-start.m4a */,
+				64A66B39BC8E13D32472709A /* juno-84-stop.m4a */,
+				3BCCE1D8752C6A3A2AEF9009 /* juno-85-start.m4a */,
+				F8A43C600FA98A4316D02150 /* juno-85-stop.m4a */,
+				E358C3B6655AFEA39440EF00 /* juno-86-start.m4a */,
+				40703D977839CB4F625C0284 /* juno-86-stop.m4a */,
+				A72EE584A3704166E932D950 /* juno-87-start.m4a */,
+				9D02AECDAE6B146F11B7A721 /* juno-87-stop.m4a */,
+				19A708C2C2C7CDF52E47A8C4 /* juno-88-start.m4a */,
+				92E13646830DFEDBA2AB13AF /* juno-88-stop.m4a */,
+				00768AE8171902B439F0602F /* juno-89-start.m4a */,
+				2D96219CD4991D4D13B56CC9 /* juno-89-stop.m4a */,
+				79F8F36D7C5D074BC5135FEA /* juno-90-start.m4a */,
+				DA27B927EB6616D017D910CD /* juno-90-stop.m4a */,
+				A8AB9F55940B496EF7A8B633 /* juno-91-start.m4a */,
+				0C17FEE505740AA5BCBB0E21 /* juno-91-stop.m4a */,
+				9340A2B70F834204FE6C6C68 /* juno-92-start.m4a */,
+				3C54A0D394CE71150BB0DBA8 /* juno-92-stop.m4a */,
+				3BE2AAC76DB0FCE662C63EB6 /* juno-93-start.m4a */,
+				D85C603DADD81B58F7D390F7 /* juno-93-stop.m4a */,
+				886848A89BE3512619263E54 /* juno-94-start.m4a */,
+				4FB6BF9F449D954A52952C6B /* juno-94-stop.m4a */,
+				1EA259C10192DFF7D7431FD4 /* juno-95-start.m4a */,
+				DFE28F9A35722B67815654DC /* juno-95-stop.m4a */,
+				63AA5C73111EA1F4E03A8C24 /* juno-96-start.m4a */,
+				D06381A69EEEC336CB847783 /* juno-96-stop.m4a */,
+				763E3951E68EBB37F89C7F84 /* juno-97-start.m4a */,
+				791EFC0EE82C0E91F316B51E /* juno-97-stop.m4a */,
+				8304744FE228FA9B2CEBEA16 /* juno-98-start.m4a */,
+				116DBF12743FC77F336A7820 /* juno-98-stop.m4a */,
+				ACFD76434CCFED8E1B6FB977 /* juno-99-start.m4a */,
+				B432346450961555004A2BDE /* juno-99-stop.m4a */,
+				A4AFAD52CAC3825D7A603DC5 /* juno-100-start.m4a */,
+				1C72B7BEF6CFEC52928C6CED /* juno-100-stop.m4a */,
+				C7DAE8C9E70F6D2232F409DE /* juno-101-start.m4a */,
+				179049468873B9F5C6F0F77C /* juno-101-stop.m4a */,
+				40797D76FF5644C56408B12D /* juno-102-start.m4a */,
+				9308FFA344AB1B73A960BD15 /* juno-102-stop.m4a */,
+				41CCE59FAFC731DAAFB8B09A /* juno-103-start.m4a */,
+				6AFFA1AFC4F88A35BA39CECF /* juno-103-stop.m4a */,
+				6508D5EDCCC53BD0900A1D4F /* juno-104-start.m4a */,
+				2D862CB0D203330C1F8F58B0 /* juno-104-stop.m4a */,
+				D69E5F1E1FCFF486BE8CF377 /* juno-105-start.m4a */,
+				207F58335FAAD1E0D1311D10 /* juno-105-stop.m4a */,
+				3751D3C923F3614E866B947C /* juno-106-start.m4a */,
+				35EA12CB630AC702CBAC175A /* juno-106-stop.m4a */,
+				35059AC7D847666F9D7FFF07 /* juno-107-start.m4a */,
+				89F61F7352130DAAA530D836 /* juno-107-stop.m4a */,
+				45CDD6CFFA8DEF4DFFC65B5A /* juno-108-start.m4a */,
+				66E090797FE75C600EDE541F /* juno-108-stop.m4a */,
+				47B0B08D890A1A7CB4577410 /* juno-109-start.m4a */,
+				EB08EC40A267C71B185EC782 /* juno-109-stop.m4a */,
+				09CD5D88E1A2BE5D0095F167 /* juno-110-start.m4a */,
+				E552326770AD5967B8128420 /* juno-110-stop.m4a */,
+				0088DE3FD3980CA727EB02FE /* juno-111-start.m4a */,
+				4A89CB4834FF9ABE02C969F7 /* juno-111-stop.m4a */,
+				D912D56A38016C394FF89315 /* juno-112-start.m4a */,
+				F40AB81C66FD9183F49BF644 /* juno-112-stop.m4a */,
+				F935C3E491692470C97EAA48 /* juno-113-start.m4a */,
+				B5F2D2902DFABF0A7F65E712 /* juno-113-stop.m4a */,
+				B67F392ADB8F0C2D4BB6827F /* juno-114-start.m4a */,
+				E41AE56820CF756BC7D69F67 /* juno-114-stop.m4a */,
+				338537DEC8694C87839545CC /* juno-115-start.m4a */,
+				35048A9866E106410CDCED81 /* juno-115-stop.m4a */,
+				486F5FE65FF8C13A35C28271 /* juno-116-start.m4a */,
+				03D380F88F26C7A6AAECF328 /* juno-116-stop.m4a */,
+				68B48515B1E03226F9EB2EBE /* juno-117-start.m4a */,
+				CB487BE3C821FF18E414CF4B /* juno-117-stop.m4a */,
+				E084A62CF8F167165466AE30 /* juno-118-start.m4a */,
+				92387F60666853C0AA1BF0B5 /* juno-118-stop.m4a */,
+				114E0EA1827EA005CF188FC8 /* juno-119-start.m4a */,
+				FB6A990540604C4EE8DC425E /* juno-119-stop.m4a */,
+				A640F1C2A7EBAF3B0F8FFB83 /* juno-120-start.m4a */,
+				EBB8641EF9B0108DC0B103B7 /* juno-120-stop.m4a */,
+				54AD858A08D1923B5220D76E /* juno-121-start.m4a */,
+				2C2D4EB9527DACDDFC5D47A0 /* juno-121-stop.m4a */,
+				335E98CEAC5AE30CB90AFB21 /* juno-122-start.m4a */,
+				9FE15281EA6DE5C2C1978C44 /* juno-122-stop.m4a */,
+				96D2FE2DE3A2177A80764E1B /* juno-123-start.m4a */,
+				1467EAF745A940434A8AF18F /* juno-123-stop.m4a */,
+				143E94106D9A6342EFD4F909 /* juno-124-start.m4a */,
+				2187024BF79E6953ECEFD04C /* juno-124-stop.m4a */,
+				286A4475154226AC60716712 /* juno-125-start.m4a */,
+				72144FD6362B731D322BA316 /* juno-125-stop.m4a */,
+				A58B6E01B13C27D1DA52EAFE /* juno-126-start.m4a */,
+				DCC1BF26927D57122A59A4C1 /* juno-126-stop.m4a */,
+				88CC243509230D21563FDF89 /* juno-127-start.m4a */,
+				41587FEDA3BE5310D3FA6CDA /* juno-127-stop.m4a */,
+				573212CC5EC3393A990E10A1 /* rom1a-0-start.m4a */,
+				555254497CA693DF00B3B924 /* rom1a-0-stop.m4a */,
+				68463DAAB8E203467B8676BF /* rom1a-1-start.m4a */,
+				12450A6BC64E455E03366B13 /* rom1a-1-stop.m4a */,
+				4E25792AC8E46820FF270D64 /* rom1a-2-start.m4a */,
+				DDD514790151F484A68127BB /* rom1a-2-stop.m4a */,
+				F96D128F79D585621827FF6A /* rom1a-3-start.m4a */,
+				F2D66E4734A5DC086904E421 /* rom1a-3-stop.m4a */,
+				A82A191B20F222EBC479143E /* rom1a-4-start.m4a */,
+				2ACBC70E59C46EDF3186DF16 /* rom1a-4-stop.m4a */,
+				2E64BCDB280FD0A27D965AA9 /* rom1a-5-start.m4a */,
+				2CA6F4E6A10AE93F169DF19B /* rom1a-5-stop.m4a */,
+				FB6BE1E262916105029D7FAB /* rom1a-6-start.m4a */,
+				BBF8A81BBD03B233A8C2B845 /* rom1a-6-stop.m4a */,
+				4873421ACF290B88FA257D6A /* rom1a-7-start.m4a */,
+				D79CA18872ADF342DE5426CA /* rom1a-7-stop.m4a */,
+				DE8C20239561AA02A1D34FF3 /* rom1a-8-start.m4a */,
+				10A0336924600313EE5243AE /* rom1a-8-stop.m4a */,
+				F17631D5583E0070A4DFCF3F /* rom1a-9-start.m4a */,
+				4B9209100F5A6E8514AF6FA7 /* rom1a-9-stop.m4a */,
+				45D65D0519A0D2FC47EF7DAD /* rom1a-10-start.m4a */,
+				767217AE992554FDF6D67A4D /* rom1a-10-stop.m4a */,
+				CDCD486F98020360173EBEFA /* rom1a-11-start.m4a */,
+				1625CA15DBCA7F1FA24991EA /* rom1a-11-stop.m4a */,
+				E2BCA8E305B596F960CEE1AE /* rom1a-12-start.m4a */,
+				1A1C4446E1D3FAB9F662E61D /* rom1a-12-stop.m4a */,
+				605E69165B4D2A9B8530606A /* rom1a-13-start.m4a */,
+				482422C7CC15583570E3E869 /* rom1a-13-stop.m4a */,
+				1D88DB176EEA1B7058433DE6 /* rom1a-14-start.m4a */,
+				1DE1622660807FF440D18D34 /* rom1a-14-stop.m4a */,
+				3BA1B8BBEEC6B5A2960688C3 /* rom1a-15-start.m4a */,
+				1F71C1C8D870D024746CED69 /* rom1a-15-stop.m4a */,
+				33AE2EBBF7FA36E1E0AEBC3A /* rom1a-16-start.m4a */,
+				AA55EF35D8FFB4A5EF7A8557 /* rom1a-16-stop.m4a */,
+				5FBD6C327FE4EC154AF786C4 /* rom1a-17-start.m4a */,
+				ED3C851EF55F6BBEBFDAE53A /* rom1a-17-stop.m4a */,
+				69549AF933A7E546A11A67BE /* rom1a-18-start.m4a */,
+				90035FF502F2684829A63751 /* rom1a-18-stop.m4a */,
+				792258F8AAF3AF35104EE0CF /* rom1a-19-start.m4a */,
+				EC6584FE7C94EF604CA33BE3 /* rom1a-19-stop.m4a */,
+				D58930841AD9EB26714E8385 /* rom1a-20-start.m4a */,
+				F7307E06A286147462426313 /* rom1a-20-stop.m4a */,
+				664331059A3068CA5074CEA4 /* rom1a-21-start.m4a */,
+				5DB9D5866E9743B12589DFF4 /* rom1a-21-stop.m4a */,
+				BC17D9B01FDBC9667A7CD78A /* rom1a-22-start.m4a */,
+				F1340BFA7AF0D9D50EAA4A24 /* rom1a-22-stop.m4a */,
+				AA1892B0DE69A5B9E8983A5D /* rom1a-23-start.m4a */,
+				3FE6BC0E30D43E2035BDED59 /* rom1a-23-stop.m4a */,
+				875545CFDFCFF4288AAC7D09 /* rom1a-24-start.m4a */,
+				F967C98CF7C0A6A736B91627 /* rom1a-24-stop.m4a */,
+				4B9A2A460519088D70893121 /* rom1a-25-start.m4a */,
+				A01872064CB7D739DE6F9952 /* rom1a-25-stop.m4a */,
+				EB504AAB7330EE4D4C1E4948 /* rom1a-26-start.m4a */,
+				7F9F20FAD5D61C4D1C44473C /* rom1a-26-stop.m4a */,
+				A8FCDA16949B9CE1323E24F8 /* rom1a-27-start.m4a */,
+				4692ADBDD6B40BDE2DAA806C /* rom1a-27-stop.m4a */,
+				1610DB028EBE814A3A163301 /* rom1a-28-start.m4a */,
+				AC2E79FB5ACE247FF90F50E4 /* rom1a-28-stop.m4a */,
+				4AE2B597126C95C118FF9FDD /* rom1a-29-start.m4a */,
+				3A96FC2E4AD7DB1BA0F6B178 /* rom1a-29-stop.m4a */,
+				7FC3A25550C39659E3E00A11 /* rom1a-30-start.m4a */,
+				DA7EDD1B32FB9542B785607F /* rom1a-30-stop.m4a */,
+				AFCA36ECEFBA3D7C7B1AB1B7 /* rom1a-31-start.m4a */,
+				1E6C29571118FA5B039C4FC1 /* rom1a-31-stop.m4a */,
+				5EE551246F92A5923CDF2F59 /* rom1b-0-start.m4a */,
+				0618C6EE1B8864C57F02CC1E /* rom1b-0-stop.m4a */,
+				BD38CC94DC42A35A4174316A /* rom1b-1-start.m4a */,
+				16400ECCAE93FF9ECD50E01F /* rom1b-1-stop.m4a */,
+				16D2045BC5C2B6D89E137B7B /* rom1b-2-start.m4a */,
+				B67F817AD357801080D26FFF /* rom1b-2-stop.m4a */,
+				49CD6A6815EDDB16BBBCCCB2 /* rom1b-3-start.m4a */,
+				5B5B261F4D195B5E6E3B5567 /* rom1b-3-stop.m4a */,
+				AB7B48AFEE1005B27B11883F /* rom1b-4-start.m4a */,
+				823731A25D339A9F93096500 /* rom1b-4-stop.m4a */,
+				F2B1262C9AB83ED251421D03 /* rom1b-5-start.m4a */,
+				D679085098210876A65E88BD /* rom1b-5-stop.m4a */,
+				3996A11A62CD49D6CB89CB8E /* rom1b-6-start.m4a */,
+				99B45E82D3DF744DF2031238 /* rom1b-6-stop.m4a */,
+				EA933A670288BEAFD43D468E /* rom1b-7-start.m4a */,
+				C2CB5D2E464BFD7F8BABE760 /* rom1b-7-stop.m4a */,
+				FBC56D4B9D0ABF6D4541EDAC /* rom1b-8-start.m4a */,
+				3E8941F2B88E3C584AFF86A5 /* rom1b-8-stop.m4a */,
+				48168B2DA1698C02D7360B01 /* rom1b-9-start.m4a */,
+				54413652F4E11979F996C0CE /* rom1b-9-stop.m4a */,
+				77C74C74945D0A990578D911 /* rom1b-10-start.m4a */,
+				7A6872FE0B51D0EC9C4B397B /* rom1b-10-stop.m4a */,
+				937D031560676ABE35A38538 /* rom1b-11-start.m4a */,
+				4052A873788D31A33BE80FCB /* rom1b-11-stop.m4a */,
+				B63CC1EF220EB3463D5A4BDF /* rom1b-12-start.m4a */,
+				258681056CA44359083EDC9B /* rom1b-12-stop.m4a */,
+				212CC97E91334633B66C8FAC /* rom1b-13-start.m4a */,
+				429B975FA7FFA777106D0A49 /* rom1b-13-stop.m4a */,
+				E6D106BBE0E8586827C14E59 /* rom1b-14-start.m4a */,
+				DB1715E594E1F2A1A3F152E0 /* rom1b-14-stop.m4a */,
+				6D89280137DAC07403FB60FC /* rom1b-15-start.m4a */,
+				B401FA111CA49F5A535366AC /* rom1b-15-stop.m4a */,
+				B24D0EACA5DCC94CFCAD9753 /* rom1b-16-start.m4a */,
+				E617272806BFEB303D94F315 /* rom1b-16-stop.m4a */,
+				2A90E48A68218F156F84F968 /* rom1b-17-start.m4a */,
+				DE43545891BB9D4ED7B55D7B /* rom1b-17-stop.m4a */,
+				D220A3AC36DCE278804F81A1 /* rom1b-18-start.m4a */,
+				989E9BBEA9AFED21774E0230 /* rom1b-18-stop.m4a */,
+				023384D61BE724D06740E08B /* rom1b-19-start.m4a */,
+				0150E727307295CE46981426 /* rom1b-19-stop.m4a */,
+				662773E86D58C62C6A41801F /* rom1b-20-start.m4a */,
+				B0CB1B169A47290B83AD44C0 /* rom1b-20-stop.m4a */,
+				01B663528C4E1AFEF24675E1 /* rom1b-21-start.m4a */,
+				AB770632673FD0DC0F84C976 /* rom1b-21-stop.m4a */,
+				DAA2E01D418EA3ABA8A9DD5F /* rom1b-22-start.m4a */,
+				5F1932BB67CB0F9BD6105EE1 /* rom1b-22-stop.m4a */,
+				EAB0871FD8CB94A4DCF837CC /* rom1b-23-start.m4a */,
+				1118A82ED3D1CD5CF429099E /* rom1b-23-stop.m4a */,
+				F5A156982A018BF53A0B2ADD /* rom1b-24-start.m4a */,
+				87570A5DC1428AC2DE812BBE /* rom1b-24-stop.m4a */,
+				B293D9F11DB3C3D268E82E4A /* rom1b-25-start.m4a */,
+				7FB45A274F0CC28BD0923634 /* rom1b-25-stop.m4a */,
+				DD0650160548287F62C1FA77 /* rom1b-26-start.m4a */,
+				6A9A4B58A6524D4F954DFE65 /* rom1b-26-stop.m4a */,
+				BEEF91CD94662F4344ECFDE9 /* rom1b-27-start.m4a */,
+				4FEFFC17F6198DB4F43A71F1 /* rom1b-27-stop.m4a */,
+				562C5F709DE00A5F38F045A5 /* rom1b-28-start.m4a */,
+				60BA34457167C3D50C7A0C48 /* rom1b-28-stop.m4a */,
+				E2D39C392213CD7471C8A26E /* rom1b-29-start.m4a */,
+				786672855B44AB80CAF4D782 /* rom1b-29-stop.m4a */,
+				8D369A708E176C12114384AD /* rom1b-30-start.m4a */,
+				45E6CF05E1334B3D2901E516 /* rom1b-30-stop.m4a */,
+				C1BD23E2476F46A7BD75BAB9 /* rom1b-31-start.m4a */,
+				1D5C52A673686FB041595227 /* rom1b-31-stop.m4a */,
+			);
+			path = Sounds;
+			sourceTree = "<group>";
+		};
+		73649A7C02EB13B17D81A412 /* BlurtUITests */ = {
+			isa = PBXGroup;
+			children = (
+				D88509B0396487E159AA6FDD /* AccessibilityAuditUITests.swift */,
+				3A0683C1BE5AD05E4C724956 /* BlurtUITestSupport.swift */,
+				2C0A58F1CA999E6DF7742A87 /* DictationPipelineUITests.swift */,
+				850AFD4ECA01A669BDD91959 /* LaunchPerformanceUITests.swift */,
+				63869ED0BF971F732668349B /* MenuBarUITests.swift */,
+				44DD60B425DF100431946DAB /* README.md */,
+				C6EFB0086ED63DB182AFFC8F /* SettingsUITests.swift */,
+			);
+			path = BlurtUITests;
+			sourceTree = "<group>";
+		};
+		77C72856311952343339E7BE /* Wizard */ = {
+			isa = PBXGroup;
+			children = (
+				30E57A9C9B934A2120381005 /* WizardController.swift */,
+				7F646CD07DBBA47F44CE0AD1 /* WizardView.swift */,
+				C17B76B973AD008CEA57A048 /* WizardWindowController.swift */,
+				F61744A7BF2B24E0C8078DE6 /* Steps */,
+			);
+			path = Wizard;
+			sourceTree = "<group>";
+		};
+		7D6DE85EA50E7CD4CC977211 /* Branding */ = {
+			isa = PBXGroup;
+			children = (
+				350F18C964DCA2DDCA296ED4 /* blurt-ready-logo.png */,
+			);
+			path = Branding;
+			sourceTree = "<group>";
+		};
+		8C67CBF637D85C0F642E53B5 /* MenuBar */ = {
+			isa = PBXGroup;
+			children = (
+				BBA9C9322D0AF3D9C529F06F /* MenuBarScene.swift */,
+			);
+			path = MenuBar;
+			sourceTree = "<group>";
+		};
+		912505E1D0FBD5D5CA591BA2 /* Overlay */ = {
+			isa = PBXGroup;
+			children = (
+				2E79CB809D285C0C27E8D43D /* OverlayView.swift */,
+				A27D7F43295DE2A81EFFDDBC /* OverlayWindowController.swift */,
+			);
+			path = Overlay;
+			sourceTree = "<group>";
+		};
+		C9A477A17B95181CF6FCCB13 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				FE2598E3B8BA1D650EEEEF4B /* FloatingPanel.swift */,
+				6B2312DE4BC0F4F070830AD7 /* WindowAccessor.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		DB755555AE4E89FE376399BF /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				5A3BF2CE3EB4D2D14A3780F9 /* Sounds */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		DF92BBDB4B9C15FAE100B783 /* Hotkey */ = {
+			isa = PBXGroup;
+			children = (
+				0FA34796733AB87C0280470D /* DictateHotkey.swift */,
+				3258A84E37C372993B1572EE /* DictationKeyTap.swift */,
+			);
+			path = Hotkey;
+			sourceTree = "<group>";
+		};
+		E7D37943B6B2CE3C0692AA48 /* Update */ = {
+			isa = PBXGroup;
+			children = (
+				43C6D985A8A6030A7FE6FEEB /* AutoUpdater.swift */,
+			);
+			path = Update;
+			sourceTree = "<group>";
+		};
+		F61744A7BF2B24E0C8078DE6 /* Steps */ = {
+			isa = PBXGroup;
+			children = (
+				3DA3A304528FD1C7FE6C2B94 /* APIKeyStepView.swift */,
+				50FFCDBD1FB2CF0A81A68D18 /* HotkeyStepView.swift */,
+				E8DE60178ABA2CC7F4EB6401 /* PermissionsStepView.swift */,
+				27E18FF6880EADB94F98C7C4 /* SoundStepView.swift */,
+			);
+			path = Steps;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		25112F9CCF0A14972D0AB3B9 /* BlurtUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BA6DD82B119336E348F095BB /* Build configuration list for PBXNativeTarget "BlurtUITests" */;
+			buildPhases = (
+				8F207BB5B77D504F0B06FBF0 /* Sources */,
+				DF6848CDBF6C1D888C3EC352 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8861FDB57B23A4A75FFBEB13 /* PBXTargetDependency */,
+			);
+			name = BlurtUITests;
+			packageProductDependencies = (
+			);
+			productName = BlurtUITests;
+			productReference = 2C9148633CEE5C373AFBE65F /* BlurtUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		530DC1E75D312BEE7D89630E /* Blurt */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DD65B6019D3D8212517A7206 /* Build configuration list for PBXNativeTarget "Blurt" */;
+			buildPhases = (
+				D3EE99FB1BF094322A1363EF /* Sources */,
+				97591D6CB8B701814C3DD210 /* Resources */,
+				5438DE37A9D7E9E5EEC56272 /* Frameworks */,
+				B7E6843D4868DDAA607ADE70 /* Install to /Applications */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Blurt;
+			packageProductDependencies = (
+				371215E93A9C2CE60C6347BB /* BlurtEngine */,
+				B7FF7A7170C36BAABD1ECC90 /* AppUpdater */,
+				39EB6BB06E04EA9CD2CDC3BA /* Sentry */,
+			);
+			productName = Blurt;
+			productReference = 5E2309BDEF30ED9EFED5B849 /* Blurt.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		6CDA5FC4501C4BEA6B4517DA /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					25112F9CCF0A14972D0AB3B9 = {
+						DevelopmentTeam = Y54ZB9JF63;
+						ProvisioningStyle = Automatic;
+						TestTargetID = 530DC1E75D312BEE7D89630E;
+					};
+					530DC1E75D312BEE7D89630E = {
+						DevelopmentTeam = Y54ZB9JF63;
+						ProvisioningStyle = Manual;
+					};
+				};
+			};
+			buildConfigurationList = 4C8C36550FFFBE9D940D3A62 /* Build configuration list for PBXProject "Blurt" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 37EA71F5138E2E63171AFFBD;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				1B0B6EAFD1174B4B9140D250 /* XCRemoteSwiftPackageReference "AppUpdater" */,
+				A70C65ACE504420011952EBA /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
+				BFFF3588F0D8C2D0EEF7BC75 /* XCLocalSwiftPackageReference "../.." */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 10E2E11380C974390308C1D2 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				530DC1E75D312BEE7D89630E /* Blurt */,
+				25112F9CCF0A14972D0AB3B9 /* BlurtUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		97591D6CB8B701814C3DD210 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F245B1D54675872118567839 /* AppIcon.icon in Resources */,
+				AAD6D2EADCA8C241332764AD /* blurt-ready-logo.png in Resources */,
+				351E74AD4AF61AC397D0E29F /* juno-0-start.m4a in Resources */,
+				8D81DE1C806A0EE6E219D343 /* juno-0-stop.m4a in Resources */,
+				FACF8BEBF744A47219B402F3 /* juno-1-start.m4a in Resources */,
+				C289DEA536A2C64BC5818739 /* juno-1-stop.m4a in Resources */,
+				17D0D9229307BBDBEF8AC51E /* juno-10-start.m4a in Resources */,
+				2D381E847A79CD251CD0A130 /* juno-10-stop.m4a in Resources */,
+				DE8445B5A28C96CDC432ACDD /* juno-100-start.m4a in Resources */,
+				4C2F89013028E3D7829D0CBD /* juno-100-stop.m4a in Resources */,
+				A60FCD36D2D7F97336303F6B /* juno-101-start.m4a in Resources */,
+				5D61A9DF2A5C2EFC31F8758C /* juno-101-stop.m4a in Resources */,
+				18F5E33D681D44E60FD74277 /* juno-102-start.m4a in Resources */,
+				43223BEF5DB80A497D743186 /* juno-102-stop.m4a in Resources */,
+				DD95F1D83A6C7B062146EC7B /* juno-103-start.m4a in Resources */,
+				F681156BFD979F56CB5B407A /* juno-103-stop.m4a in Resources */,
+				D19FCA9C846D9376DB5432CB /* juno-104-start.m4a in Resources */,
+				2A83AE5BD416B1FD22E6AFC9 /* juno-104-stop.m4a in Resources */,
+				71E2AD5E17B0D9D6BEBBAA65 /* juno-105-start.m4a in Resources */,
+				4F1848A5287B80210D71BB9B /* juno-105-stop.m4a in Resources */,
+				39B615077840455855E5CFDA /* juno-106-start.m4a in Resources */,
+				6887F2B14A0602B28F316AD7 /* juno-106-stop.m4a in Resources */,
+				F5D3911E0D8207F1967C6B3A /* juno-107-start.m4a in Resources */,
+				99701037DF07F88D19F5E4AE /* juno-107-stop.m4a in Resources */,
+				95AEDB3AAE446744C4B3F4EB /* juno-108-start.m4a in Resources */,
+				661B457D5EAE88E9349B04EF /* juno-108-stop.m4a in Resources */,
+				6B3FF5991DA85C563D97B83C /* juno-109-start.m4a in Resources */,
+				AC402D2E4BC71A0F8324DCFD /* juno-109-stop.m4a in Resources */,
+				E5EF915C72D858A2CC4A5E3A /* juno-11-start.m4a in Resources */,
+				DCA5DFE1633292340DDCDDFB /* juno-11-stop.m4a in Resources */,
+				73E75F74DC2F7984F50E184A /* juno-110-start.m4a in Resources */,
+				3246BF1C37C7A027817D9458 /* juno-110-stop.m4a in Resources */,
+				EC3DAE9036AA1D57607157F8 /* juno-111-start.m4a in Resources */,
+				ED352F3F80643B12514258DF /* juno-111-stop.m4a in Resources */,
+				8BDD0F91D3FFC2E74C93CA62 /* juno-112-start.m4a in Resources */,
+				BF1A9E4424DCFC45D3EC9376 /* juno-112-stop.m4a in Resources */,
+				D0B06B3AA29BF6F377CADD4E /* juno-113-start.m4a in Resources */,
+				C329F69A93CA68979E5D75B6 /* juno-113-stop.m4a in Resources */,
+				3735745240EF8622D05E461D /* juno-114-start.m4a in Resources */,
+				3847BD1D6E43DA784E9818E7 /* juno-114-stop.m4a in Resources */,
+				BDC3E7A0E9E6A349E340459D /* juno-115-start.m4a in Resources */,
+				53CD236A3C9985EF336637DA /* juno-115-stop.m4a in Resources */,
+				8E89114ADA5FCE4AF9DFB3C0 /* juno-116-start.m4a in Resources */,
+				DF94396D822220BE8603C671 /* juno-116-stop.m4a in Resources */,
+				3A71CA4DA8E6527201C75186 /* juno-117-start.m4a in Resources */,
+				B2DD0930AA5C7250B6FB127C /* juno-117-stop.m4a in Resources */,
+				8E70ED1163B872F8D691CDC5 /* juno-118-start.m4a in Resources */,
+				D5A84975628548A076CEB3D7 /* juno-118-stop.m4a in Resources */,
+				8DEF999DFD616C2FD17923DE /* juno-119-start.m4a in Resources */,
+				18ECBCEA932A30743C7A6837 /* juno-119-stop.m4a in Resources */,
+				24CD4A998CA258D89140D418 /* juno-12-start.m4a in Resources */,
+				5025717A1723EEEFF385533B /* juno-12-stop.m4a in Resources */,
+				03AC3DBE3755E3B7D66B8CF4 /* juno-120-start.m4a in Resources */,
+				95BCDA4901A609434CDE8CB2 /* juno-120-stop.m4a in Resources */,
+				3A11FB623C174D65BA24C3DE /* juno-121-start.m4a in Resources */,
+				192FD90EE88EB42596DF6AD2 /* juno-121-stop.m4a in Resources */,
+				95735D080C5F48949A4F4C05 /* juno-122-start.m4a in Resources */,
+				152452FE264E453808327885 /* juno-122-stop.m4a in Resources */,
+				4372C0AD932309335C25FF8D /* juno-123-start.m4a in Resources */,
+				7EF091D67076CE014C6AF679 /* juno-123-stop.m4a in Resources */,
+				65B01C04BC66F1F633EEA966 /* juno-124-start.m4a in Resources */,
+				1BA6EB5B7B96489923E9FEDF /* juno-124-stop.m4a in Resources */,
+				0132B51969D4F1FF318C01E0 /* juno-125-start.m4a in Resources */,
+				BAC7996520BFCAA7BE0F929F /* juno-125-stop.m4a in Resources */,
+				4F23A201AD40B38A2E94BBD9 /* juno-126-start.m4a in Resources */,
+				5E4064CF164D7FF40280ABC6 /* juno-126-stop.m4a in Resources */,
+				438A2882ACACB5153CCA1D21 /* juno-127-start.m4a in Resources */,
+				39EFDF0BEFBFD8FF9F26DF91 /* juno-127-stop.m4a in Resources */,
+				9B2B57779590C7CFA932F361 /* juno-13-start.m4a in Resources */,
+				E671758418903491998092D0 /* juno-13-stop.m4a in Resources */,
+				B3D0BB7BB889FA8C8E0D2B56 /* juno-14-start.m4a in Resources */,
+				7758E9474687A859AF4F65B3 /* juno-14-stop.m4a in Resources */,
+				87B7038A5385E149C978908B /* juno-15-start.m4a in Resources */,
+				20EF88890F9D05CC4381F626 /* juno-15-stop.m4a in Resources */,
+				E4D1DD2B77B55E203C19A0B7 /* juno-16-start.m4a in Resources */,
+				8D0F6510E64C706D2C3FE252 /* juno-16-stop.m4a in Resources */,
+				A3D012E25BD52949E2452B7B /* juno-17-start.m4a in Resources */,
+				08956A83272E2ADC9B821894 /* juno-17-stop.m4a in Resources */,
+				CC1722BF93360A2F8627C468 /* juno-18-start.m4a in Resources */,
+				2DDA08ADF2FD66CC599A6AD1 /* juno-18-stop.m4a in Resources */,
+				9E42F54BAD1D070139E8C8D3 /* juno-19-start.m4a in Resources */,
+				8A6E427B2113243B8BB0805A /* juno-19-stop.m4a in Resources */,
+				EC49246782EDC2BE84223723 /* juno-2-start.m4a in Resources */,
+				454ADE9A9137F4E0A0AF4C24 /* juno-2-stop.m4a in Resources */,
+				405C18BB1B8E28EB53873026 /* juno-20-start.m4a in Resources */,
+				CB3039BB58F6A5681971FD72 /* juno-20-stop.m4a in Resources */,
+				E6667E7BA5114B6A77DDF870 /* juno-21-start.m4a in Resources */,
+				F7BC4D95BD8D5BBE31C6F911 /* juno-21-stop.m4a in Resources */,
+				623F42C6E50E5B9EBF9F207A /* juno-22-start.m4a in Resources */,
+				8953D6BA3CB973A240F0E4E4 /* juno-22-stop.m4a in Resources */,
+				366F3493E15ABD4CEB8B204F /* juno-23-start.m4a in Resources */,
+				C6B7247CDEDD05167C48FBE1 /* juno-23-stop.m4a in Resources */,
+				CCB264F7996BE4BC0ECB2C70 /* juno-24-start.m4a in Resources */,
+				BF6D4D09C97777C6A792D6A5 /* juno-24-stop.m4a in Resources */,
+				A00CB7F3BDD537A218BF3109 /* juno-25-start.m4a in Resources */,
+				C831C550A18E5A7CD8A0F1B7 /* juno-25-stop.m4a in Resources */,
+				3BDB74F711B4E4CE65BE1C3B /* juno-26-start.m4a in Resources */,
+				BBFE6E3BBB854163861E1450 /* juno-26-stop.m4a in Resources */,
+				1678C191033752690B8D54B7 /* juno-27-start.m4a in Resources */,
+				1F764B2251BBD48C1B4716EF /* juno-27-stop.m4a in Resources */,
+				4B048C608AB3B201BC4DCB67 /* juno-28-start.m4a in Resources */,
+				B56AB7FEAEC9E9ECE36B400E /* juno-28-stop.m4a in Resources */,
+				A87586B9C3C24375069E6554 /* juno-29-start.m4a in Resources */,
+				E1653832E278F456A0C5AFAB /* juno-29-stop.m4a in Resources */,
+				F3D87A72BED81C8532FCB503 /* juno-3-start.m4a in Resources */,
+				72CEA16F646173CB13DC5698 /* juno-3-stop.m4a in Resources */,
+				572211105316DB06C2AC9134 /* juno-30-start.m4a in Resources */,
+				9EA37EC69F4A959575CB948A /* juno-30-stop.m4a in Resources */,
+				4B3BA1626DE3D22AA0CB3E45 /* juno-31-start.m4a in Resources */,
+				20526B7308927EE014F18865 /* juno-31-stop.m4a in Resources */,
+				9C26DB7FF2C5CEF0D5B272E9 /* juno-32-start.m4a in Resources */,
+				4A4DF04FC848BE3D6FE7C621 /* juno-32-stop.m4a in Resources */,
+				2F42560EDE7C8F097889A32D /* juno-33-start.m4a in Resources */,
+				ADD4C343904D56C8948B9609 /* juno-33-stop.m4a in Resources */,
+				9572AF1291768F2608423D4E /* juno-34-start.m4a in Resources */,
+				F0ABE7C8E87C7B955DB89601 /* juno-34-stop.m4a in Resources */,
+				9AA5B4FC1FC9B4FE7B48E973 /* juno-35-start.m4a in Resources */,
+				08DC3CC8F65C73612D9543F7 /* juno-35-stop.m4a in Resources */,
+				FF7198BC7B01B9700855E0C2 /* juno-36-start.m4a in Resources */,
+				45BB291D75223AC958B137BF /* juno-36-stop.m4a in Resources */,
+				DAD3C772A4DCE75359126F27 /* juno-37-start.m4a in Resources */,
+				A90DDAEC97C9648C8F7E8FB9 /* juno-37-stop.m4a in Resources */,
+				C138D17460660BF867DFBACD /* juno-38-start.m4a in Resources */,
+				9DCA528AC9D76B058DD24169 /* juno-38-stop.m4a in Resources */,
+				F86C329D9E43393542252891 /* juno-39-start.m4a in Resources */,
+				E45A9C61C6ED37FDA393E696 /* juno-39-stop.m4a in Resources */,
+				D7CCAEAF551027586E39A032 /* juno-4-start.m4a in Resources */,
+				36500919A31FD54D0CBB6879 /* juno-4-stop.m4a in Resources */,
+				B13F272AB1FF6533B5636595 /* juno-40-start.m4a in Resources */,
+				7661BD55883B6F3B03AA3905 /* juno-40-stop.m4a in Resources */,
+				39AF2EDCCE995469F501FC4B /* juno-41-start.m4a in Resources */,
+				27CD78DC27ACE6A0E2EDFD15 /* juno-41-stop.m4a in Resources */,
+				7EECAF13B83D447177BB90C9 /* juno-42-start.m4a in Resources */,
+				84958721E6DEB4D06E1A01B6 /* juno-42-stop.m4a in Resources */,
+				C9FD62F1B6BF13119924F453 /* juno-43-start.m4a in Resources */,
+				F4FC8BE4A0593197C1375EC1 /* juno-43-stop.m4a in Resources */,
+				54887F064F7C9D737A503EB3 /* juno-44-start.m4a in Resources */,
+				936E20D5FF993C8FCF0E5575 /* juno-44-stop.m4a in Resources */,
+				DE8290335412ADADA4DF3AA2 /* juno-45-start.m4a in Resources */,
+				59C168C1D913BE352C83FFD5 /* juno-45-stop.m4a in Resources */,
+				F93BED9E4A1F648A429A3F66 /* juno-46-start.m4a in Resources */,
+				391196D599D26A8B4B019282 /* juno-46-stop.m4a in Resources */,
+				E7C5EE7C3C80E6CC19F21603 /* juno-47-start.m4a in Resources */,
+				60CE1FFB2833C564F335DFF3 /* juno-47-stop.m4a in Resources */,
+				8D47B853FC196D99527FC7C1 /* juno-48-start.m4a in Resources */,
+				8061E52E8A874E1BA584A2E7 /* juno-48-stop.m4a in Resources */,
+				CAD4C0514801599CDFEAF163 /* juno-49-start.m4a in Resources */,
+				5BC9751151CDD2ACCF45ED81 /* juno-49-stop.m4a in Resources */,
+				4D33337B6794A265D46FCE6C /* juno-5-start.m4a in Resources */,
+				5C16FDD6B5C2AC858D55CA0D /* juno-5-stop.m4a in Resources */,
+				CD56C6A601A5AC854617E172 /* juno-50-start.m4a in Resources */,
+				C45515FF9FFDC469D99C1116 /* juno-50-stop.m4a in Resources */,
+				B13A61E6F639E2543D4B6804 /* juno-51-start.m4a in Resources */,
+				5120B387A51EF21F65CEA342 /* juno-51-stop.m4a in Resources */,
+				9DEC95F32675D71E6A8BD0A6 /* juno-52-start.m4a in Resources */,
+				0F06FD2F6DB2831867C8B681 /* juno-52-stop.m4a in Resources */,
+				2747AA6669B2406D4436E2A3 /* juno-53-start.m4a in Resources */,
+				FDF8F74B738B5BDE64AE0630 /* juno-53-stop.m4a in Resources */,
+				8910F795DFD84D1FFF6E2E3F /* juno-54-start.m4a in Resources */,
+				1BAF2D90C8E3CFCF70C6DC2E /* juno-54-stop.m4a in Resources */,
+				AD6EA7A1932A9946A2EAE2E3 /* juno-55-start.m4a in Resources */,
+				500A15D5374847D847555931 /* juno-55-stop.m4a in Resources */,
+				ADCBA7CD79DA7B51EE57FCC4 /* juno-56-start.m4a in Resources */,
+				D1F51E38C8C72FBC0FB44E53 /* juno-56-stop.m4a in Resources */,
+				D193B50F85B5AF1AC55B4877 /* juno-57-start.m4a in Resources */,
+				1A41CBCC3C2F561F41CD1589 /* juno-57-stop.m4a in Resources */,
+				380CC88E7ECB0B7990035E9D /* juno-58-start.m4a in Resources */,
+				C42D2F4BE03EFA2BF83A9130 /* juno-58-stop.m4a in Resources */,
+				6BB34E30A1556FBBF53C0870 /* juno-59-start.m4a in Resources */,
+				3B341A8507FB5FD175D9F31E /* juno-59-stop.m4a in Resources */,
+				17955931A6FB9BDB8900BFFF /* juno-6-start.m4a in Resources */,
+				3BEA1249CB0D5B8583C85C33 /* juno-6-stop.m4a in Resources */,
+				0CB2E6C02E57374806139E68 /* juno-60-start.m4a in Resources */,
+				DB035E176FF9589F745696B9 /* juno-60-stop.m4a in Resources */,
+				CD5741A3E363BC743A15DCAB /* juno-61-start.m4a in Resources */,
+				F648F912EEC5A44F5930AE37 /* juno-61-stop.m4a in Resources */,
+				771F23875EE95C160EF71EC9 /* juno-62-start.m4a in Resources */,
+				176BD86642BD36D05365B269 /* juno-62-stop.m4a in Resources */,
+				46D3EBAEB518E57ADDC45A40 /* juno-63-start.m4a in Resources */,
+				BA31A2D639A9EBEAFA22DF5D /* juno-63-stop.m4a in Resources */,
+				F515E1D5C8254ACE1BDADD63 /* juno-64-start.m4a in Resources */,
+				2C571102475213058CD88538 /* juno-64-stop.m4a in Resources */,
+				80175F1FE217F6FAE58A2018 /* juno-65-start.m4a in Resources */,
+				1BEC33EC0C95E9A52CC14F2B /* juno-65-stop.m4a in Resources */,
+				645A40A3B0E75729A0E3D1AC /* juno-66-start.m4a in Resources */,
+				418B5EABF6FB429CB94F6B0C /* juno-66-stop.m4a in Resources */,
+				697C21589BFDE5A66DD168A1 /* juno-67-start.m4a in Resources */,
+				20FCCD07969B601231884018 /* juno-67-stop.m4a in Resources */,
+				FAF5920B220D64D1FE70F97A /* juno-68-start.m4a in Resources */,
+				96140E08E3F0FABF734CC1CE /* juno-68-stop.m4a in Resources */,
+				3015C1E46AE0ECA3A96F819C /* juno-69-start.m4a in Resources */,
+				2F5526E7BF0E08FE4E74F2B2 /* juno-69-stop.m4a in Resources */,
+				1AA267C68388794394E6652C /* juno-7-start.m4a in Resources */,
+				BE6EA55FEF13362210107437 /* juno-7-stop.m4a in Resources */,
+				D779D9FD904DA9DDC241DA5F /* juno-70-start.m4a in Resources */,
+				550F30201148FAC5EACA2315 /* juno-70-stop.m4a in Resources */,
+				EC6A4B9B4DB3A8DAF2388004 /* juno-71-start.m4a in Resources */,
+				D8B18E0C6E3D62D8A0031226 /* juno-71-stop.m4a in Resources */,
+				2D167BC70445D3DF4CCA2478 /* juno-72-start.m4a in Resources */,
+				D2F28A85689C67B360E7448D /* juno-72-stop.m4a in Resources */,
+				6A498D9EE4EDDA7B47837FB6 /* juno-73-start.m4a in Resources */,
+				55A02BEEBE538AE0048CC2B9 /* juno-73-stop.m4a in Resources */,
+				EA4007570210EBA18CA47D59 /* juno-74-start.m4a in Resources */,
+				3CEAFC28F861460AFC573257 /* juno-74-stop.m4a in Resources */,
+				A98B1591750D1E45F35356F5 /* juno-75-start.m4a in Resources */,
+				342F0435944628D5A79DEC07 /* juno-75-stop.m4a in Resources */,
+				B6ACE56CCFCAE22FC67833AF /* juno-76-start.m4a in Resources */,
+				8CF49C443FB72F340CCE59F6 /* juno-76-stop.m4a in Resources */,
+				CA026D0884BC73540A4773EC /* juno-77-start.m4a in Resources */,
+				D3695589CB693DCDB7DFE324 /* juno-77-stop.m4a in Resources */,
+				234AFC3335EE59A5CF61E79C /* juno-78-start.m4a in Resources */,
+				C6C6E8FA9A36439C3385B857 /* juno-78-stop.m4a in Resources */,
+				CB21595A20A62031DED02A6D /* juno-79-start.m4a in Resources */,
+				DE881C40E8DB29D5E4EF1D90 /* juno-79-stop.m4a in Resources */,
+				4EE19BF49EB60AB0B48B0575 /* juno-8-start.m4a in Resources */,
+				5EF49E6114C9C7BF79F857D9 /* juno-8-stop.m4a in Resources */,
+				02A88DD7DA0165811436B8C3 /* juno-80-start.m4a in Resources */,
+				2A078AE336A8297310D41DEE /* juno-80-stop.m4a in Resources */,
+				47A2A8ADC5CA93EDD43FFC9A /* juno-81-start.m4a in Resources */,
+				33C581B5DE3847C05F540701 /* juno-81-stop.m4a in Resources */,
+				C61A5E17472356F2195A652D /* juno-82-start.m4a in Resources */,
+				DAC7039274C55389324A07B2 /* juno-82-stop.m4a in Resources */,
+				D88B8E1DE2F71D0A3BD39516 /* juno-83-start.m4a in Resources */,
+				1088FECB82D84AD0951CA1E2 /* juno-83-stop.m4a in Resources */,
+				99D86F2ECD16B622695875B1 /* juno-84-start.m4a in Resources */,
+				DCF53FA960D33C203F3FA65C /* juno-84-stop.m4a in Resources */,
+				00A485EC5E147DCCF0B8B275 /* juno-85-start.m4a in Resources */,
+				9889A23A2521EBE5624F5357 /* juno-85-stop.m4a in Resources */,
+				206A7DA30F04C0726FC3EA12 /* juno-86-start.m4a in Resources */,
+				738A8EF4AB672CD2B7F13319 /* juno-86-stop.m4a in Resources */,
+				BB6AD6072811807783AF6526 /* juno-87-start.m4a in Resources */,
+				69C396E4080D37117F2AEB01 /* juno-87-stop.m4a in Resources */,
+				5B117EB54F223A9960EC23B6 /* juno-88-start.m4a in Resources */,
+				9FABCFBCA205ED8CF8074338 /* juno-88-stop.m4a in Resources */,
+				AB1C0077FA26EEDEA3542A07 /* juno-89-start.m4a in Resources */,
+				F884F1BBD3F59D7BB9EBA0FA /* juno-89-stop.m4a in Resources */,
+				8736CF7025B1EE7C295218D7 /* juno-9-start.m4a in Resources */,
+				8D12ECEF1E1DD1403F3DF8B8 /* juno-9-stop.m4a in Resources */,
+				82B97735B1714774843153EF /* juno-90-start.m4a in Resources */,
+				A0DEFAB5DF5E5C7A6146A559 /* juno-90-stop.m4a in Resources */,
+				2F0D37104421F8601AF502C2 /* juno-91-start.m4a in Resources */,
+				4D94F20832B9828A5642B1B8 /* juno-91-stop.m4a in Resources */,
+				CDCB0D52276EE24B86BDF4BF /* juno-92-start.m4a in Resources */,
+				80D5E7A6D72094E9FC31CF7C /* juno-92-stop.m4a in Resources */,
+				E9ED55F4CC9563A006A70173 /* juno-93-start.m4a in Resources */,
+				282E843FAECCBCA0CDB04E48 /* juno-93-stop.m4a in Resources */,
+				5B563C349C59145DC1A9590A /* juno-94-start.m4a in Resources */,
+				550697861DEEF702CBBFA8FA /* juno-94-stop.m4a in Resources */,
+				D0B9C5F217B039E9E8CFD1A1 /* juno-95-start.m4a in Resources */,
+				01E732538557C370B11A56BC /* juno-95-stop.m4a in Resources */,
+				5E42262A8153912B13356293 /* juno-96-start.m4a in Resources */,
+				286523D07CE6F05381799EDB /* juno-96-stop.m4a in Resources */,
+				2836B2C93B93114A056AF5D9 /* juno-97-start.m4a in Resources */,
+				8D5CDFEF378BA41D7EB07CDF /* juno-97-stop.m4a in Resources */,
+				1E76D800DC431B55E6C132F6 /* juno-98-start.m4a in Resources */,
+				DBCB55EFCB626E8019E41DCF /* juno-98-stop.m4a in Resources */,
+				2E3390B30563C0479D94EB02 /* juno-99-start.m4a in Resources */,
+				ADF5353D6E27FDBB61557DFE /* juno-99-stop.m4a in Resources */,
+				18A5F723E5BE6FADAE4015EA /* rom1a-0-start.m4a in Resources */,
+				3F954DB8B4BF0BFB867F6467 /* rom1a-0-stop.m4a in Resources */,
+				6C38C28996EFD32C35BFD344 /* rom1a-1-start.m4a in Resources */,
+				33D65780CD716925076F28E2 /* rom1a-1-stop.m4a in Resources */,
+				92DFEC2C8E639E4658C7E8C0 /* rom1a-10-start.m4a in Resources */,
+				690F181B950CB4F0693013B1 /* rom1a-10-stop.m4a in Resources */,
+				40CFC003124E4E9E13CFDB76 /* rom1a-11-start.m4a in Resources */,
+				18C56FD1A7E6AC5F4843C311 /* rom1a-11-stop.m4a in Resources */,
+				91D775ACB2351468D47731FF /* rom1a-12-start.m4a in Resources */,
+				EFC8FB1EEFF2AC823CA345D1 /* rom1a-12-stop.m4a in Resources */,
+				87F937969B18876084CF0B7D /* rom1a-13-start.m4a in Resources */,
+				787D291747E3FB4814EA7CC5 /* rom1a-13-stop.m4a in Resources */,
+				CA87FC6F5E9B872162D870E5 /* rom1a-14-start.m4a in Resources */,
+				BC3195AFF07AA2FA98486A3F /* rom1a-14-stop.m4a in Resources */,
+				44A8D4A3DD256E9D02A79C27 /* rom1a-15-start.m4a in Resources */,
+				6D998C88CDD099F91DA8D679 /* rom1a-15-stop.m4a in Resources */,
+				2D411458C7D649F8A8C16557 /* rom1a-16-start.m4a in Resources */,
+				C30A635488E406D5F54C85C0 /* rom1a-16-stop.m4a in Resources */,
+				3666B25BA68E77CE928E9AAC /* rom1a-17-start.m4a in Resources */,
+				643FE1E9922319122B1C087D /* rom1a-17-stop.m4a in Resources */,
+				94BDD62801619DD2FBD369F1 /* rom1a-18-start.m4a in Resources */,
+				C4F5423A495DC062A96AFC24 /* rom1a-18-stop.m4a in Resources */,
+				65B7C6E1A9A118B0245E76AE /* rom1a-19-start.m4a in Resources */,
+				C950FF226BF5BF25E510698E /* rom1a-19-stop.m4a in Resources */,
+				1698718150B4CE4C42101647 /* rom1a-2-start.m4a in Resources */,
+				EA9FBD50906FBE8ECC2DCB43 /* rom1a-2-stop.m4a in Resources */,
+				BF73DA6BFC2C267E1D0B4510 /* rom1a-20-start.m4a in Resources */,
+				2103C3F415E9C102664CA13C /* rom1a-20-stop.m4a in Resources */,
+				2076F1A16BDC48A367F396D2 /* rom1a-21-start.m4a in Resources */,
+				F22CA13B8F0DB10BE6D84696 /* rom1a-21-stop.m4a in Resources */,
+				77ADF5811E27F7E0BE4AC895 /* rom1a-22-start.m4a in Resources */,
+				4E8F1A9F7F78845ADF7A3F01 /* rom1a-22-stop.m4a in Resources */,
+				98B085D6C5E6FE21919D173C /* rom1a-23-start.m4a in Resources */,
+				E63783585EABBF8789B2039A /* rom1a-23-stop.m4a in Resources */,
+				6842E896710203CD7D71773B /* rom1a-24-start.m4a in Resources */,
+				FB319EF1852E4D8D4D065CE7 /* rom1a-24-stop.m4a in Resources */,
+				2F0A09DF17E6E8497AE0651A /* rom1a-25-start.m4a in Resources */,
+				175154674D668762CDAF08E1 /* rom1a-25-stop.m4a in Resources */,
+				D3E4BAEFF91B635E197B39C2 /* rom1a-26-start.m4a in Resources */,
+				18B1D945F55B4D7C505BADFB /* rom1a-26-stop.m4a in Resources */,
+				AA61D851350DECC5A7045594 /* rom1a-27-start.m4a in Resources */,
+				E574EFB814524DE48CBDECB6 /* rom1a-27-stop.m4a in Resources */,
+				AE2ED5CDCD04D04FD69DE501 /* rom1a-28-start.m4a in Resources */,
+				A487D7B801A44C51807E0DCB /* rom1a-28-stop.m4a in Resources */,
+				3AC07D96BDFC908799B88EA2 /* rom1a-29-start.m4a in Resources */,
+				A08A8DB1B5691EB7FD0BC565 /* rom1a-29-stop.m4a in Resources */,
+				3FB9E592DE0C331A7F7A5891 /* rom1a-3-start.m4a in Resources */,
+				3F85F8F73725C2DE7C315D34 /* rom1a-3-stop.m4a in Resources */,
+				A1C101543CA3972691DF5367 /* rom1a-30-start.m4a in Resources */,
+				89278B24217DD0498DF95FE6 /* rom1a-30-stop.m4a in Resources */,
+				88E50D191E0D56142A774676 /* rom1a-31-start.m4a in Resources */,
+				F3E79C6326A2CBF8CE0CF091 /* rom1a-31-stop.m4a in Resources */,
+				737949A55AE1AC12E141151F /* rom1a-4-start.m4a in Resources */,
+				2DE25BA91A56C3F8F7F2327B /* rom1a-4-stop.m4a in Resources */,
+				9266EA4F50B9D46E9181FBAF /* rom1a-5-start.m4a in Resources */,
+				15210F6BE968D3E2EF771DE0 /* rom1a-5-stop.m4a in Resources */,
+				E0F93DBF622F4DA5E2A12E2F /* rom1a-6-start.m4a in Resources */,
+				1BC2EB8B211378DD842647EC /* rom1a-6-stop.m4a in Resources */,
+				5B0EDCD855E9676BCE76E1A2 /* rom1a-7-start.m4a in Resources */,
+				B3FC1877229B7510E656EEFC /* rom1a-7-stop.m4a in Resources */,
+				478EC7B3CE921BA253078C6C /* rom1a-8-start.m4a in Resources */,
+				20D76F42C93BA19D97C3AF65 /* rom1a-8-stop.m4a in Resources */,
+				BC5D17A158C17F6D5450FFC4 /* rom1a-9-start.m4a in Resources */,
+				00E120625DDB12DDC4043C9F /* rom1a-9-stop.m4a in Resources */,
+				9545093DF53A4AEF03DA26D1 /* rom1b-0-start.m4a in Resources */,
+				01A96FAF2732876CBC4F5E30 /* rom1b-0-stop.m4a in Resources */,
+				AD8559A0545D5060D6E90BBA /* rom1b-1-start.m4a in Resources */,
+				9F1F8F4B0FC8FE7C92F16DF5 /* rom1b-1-stop.m4a in Resources */,
+				3C1C9F5BE822A6D177369042 /* rom1b-10-start.m4a in Resources */,
+				AA418A6C485538A314B95258 /* rom1b-10-stop.m4a in Resources */,
+				C9A5AA146A43866E5E8DB559 /* rom1b-11-start.m4a in Resources */,
+				0BAB613C778CDF7691FAE6E6 /* rom1b-11-stop.m4a in Resources */,
+				DCC3074155A615A81B77DEB6 /* rom1b-12-start.m4a in Resources */,
+				49C7D35CE5F945A440E32C49 /* rom1b-12-stop.m4a in Resources */,
+				D3361EFF06A0AF6D2887FF4B /* rom1b-13-start.m4a in Resources */,
+				0946D58B6886B74ED2A5DA18 /* rom1b-13-stop.m4a in Resources */,
+				6E5DCBB7404565E9A2A6D445 /* rom1b-14-start.m4a in Resources */,
+				691207BE65B615EF4C9B77C1 /* rom1b-14-stop.m4a in Resources */,
+				1275CFCDBF1D593B545C8A84 /* rom1b-15-start.m4a in Resources */,
+				0933F6F9CD7294843A63E09C /* rom1b-15-stop.m4a in Resources */,
+				D8156DB52C2BDCE9875E7462 /* rom1b-16-start.m4a in Resources */,
+				0148EF067F8AF351D2B7F2C0 /* rom1b-16-stop.m4a in Resources */,
+				CC08E344F8558B7489F5DE06 /* rom1b-17-start.m4a in Resources */,
+				F164F3AA161629499C07A5F2 /* rom1b-17-stop.m4a in Resources */,
+				A0A8B9CD64C3EA1EEE0A1F7A /* rom1b-18-start.m4a in Resources */,
+				CE59A466CBD2C2D93BEA15D3 /* rom1b-18-stop.m4a in Resources */,
+				8970AC4B9C8ABBF0BE1E3650 /* rom1b-19-start.m4a in Resources */,
+				8B904B64628686564ADFFC26 /* rom1b-19-stop.m4a in Resources */,
+				5CE5A475027B155F060AA69D /* rom1b-2-start.m4a in Resources */,
+				687C4250670C94DF21351CEC /* rom1b-2-stop.m4a in Resources */,
+				F2C37DB124D3CD134315F6AD /* rom1b-20-start.m4a in Resources */,
+				E8B98438B85C71B0F09EA134 /* rom1b-20-stop.m4a in Resources */,
+				336F75E5060815018D79ACEB /* rom1b-21-start.m4a in Resources */,
+				8CB4C1B2D97B53C1B767C429 /* rom1b-21-stop.m4a in Resources */,
+				409F9B76AE0CB9FD2D78EA3D /* rom1b-22-start.m4a in Resources */,
+				D22C0906051BF4AEE5E0BB46 /* rom1b-22-stop.m4a in Resources */,
+				D4782F83F43693371724011D /* rom1b-23-start.m4a in Resources */,
+				9D043C0BA51901AE105E7FA5 /* rom1b-23-stop.m4a in Resources */,
+				7F2B8E5F75F6A9E0243130A4 /* rom1b-24-start.m4a in Resources */,
+				EB1E111038C87156F2CF11B4 /* rom1b-24-stop.m4a in Resources */,
+				CAB4E0D438C755332B17BC86 /* rom1b-25-start.m4a in Resources */,
+				776B57FD593356ED09E879F2 /* rom1b-25-stop.m4a in Resources */,
+				750BE46A52E2E794D4FD3366 /* rom1b-26-start.m4a in Resources */,
+				468547FA48D3745D73230860 /* rom1b-26-stop.m4a in Resources */,
+				C63E309E16BF9A7DA8B4A490 /* rom1b-27-start.m4a in Resources */,
+				CFD810EE32E689113D026B0B /* rom1b-27-stop.m4a in Resources */,
+				44ECD071FA8B324584F31F23 /* rom1b-28-start.m4a in Resources */,
+				9C7ED24582A60A6FF0DECCB8 /* rom1b-28-stop.m4a in Resources */,
+				EE02055DCB67CB0762B47E03 /* rom1b-29-start.m4a in Resources */,
+				0F6D746DF48BB048827A358F /* rom1b-29-stop.m4a in Resources */,
+				D5927A391D26CAB212D6FBB4 /* rom1b-3-start.m4a in Resources */,
+				1C92A0295860131BCF95AF1C /* rom1b-3-stop.m4a in Resources */,
+				ADE2784E2C702F3A126A2DF6 /* rom1b-30-start.m4a in Resources */,
+				2BF2181C1FB5401C449F61DA /* rom1b-30-stop.m4a in Resources */,
+				E2ADDBC168EB77075B8E0786 /* rom1b-31-start.m4a in Resources */,
+				10EA68562CE70506895CB2FE /* rom1b-31-stop.m4a in Resources */,
+				9C0DBA7FF976A85D9E936301 /* rom1b-4-start.m4a in Resources */,
+				6CE41ED2FE69E9745B4026E5 /* rom1b-4-stop.m4a in Resources */,
+				0D4AE0F936EAA5E3F0CE96AD /* rom1b-5-start.m4a in Resources */,
+				9519B17FF953DAD0B8147EBF /* rom1b-5-stop.m4a in Resources */,
+				1CCDD063B29F52F4681EA371 /* rom1b-6-start.m4a in Resources */,
+				CE0C9F1CDF923D899AAE7464 /* rom1b-6-stop.m4a in Resources */,
+				6B5EAA66BF23484BBB1F5640 /* rom1b-7-start.m4a in Resources */,
+				7CB462ED1AF7569FFA464439 /* rom1b-7-stop.m4a in Resources */,
+				19A470448F7B22B3DCC66B80 /* rom1b-8-start.m4a in Resources */,
+				E1297D0C4E271A457892538A /* rom1b-8-stop.m4a in Resources */,
+				5B8CAB5AF6C6ACD4EC9C0008 /* rom1b-9-start.m4a in Resources */,
+				E3EEF6125E64ED52772CFAF0 /* rom1b-9-stop.m4a in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DF6848CDBF6C1D888C3EC352 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C5C4F2A31D863B9FF2D8C654 /* README.md in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		B7E6843D4868DDAA607ADE70 /* Install to /Applications */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Install to /Applications";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\n# Debug-only: installs a re-signed copy at a stable path so TCC will\n# register Blurt in the Accessibility / Input Monitoring lists.\n# Release builds skip this — the release-build.sh script handles\n# staging, secure-timestamp signing, DMG creation, and notarization\n# separately.\nif [ \"$CONFIGURATION\" != \"Debug\" ]; then\n  echo \"Skipping Install to /Applications for $CONFIGURATION builds.\"\n  exit 0\nfi\nif [ \"${CODE_SIGNING_ALLOWED:-YES}\" = \"NO\" ]; then\n  echo \"Skipping Install to /Applications: codesigning disabled (CI / health check).\"\n  exit 0\nfi\nif [ \"${CODE_SIGN_IDENTITY:-}\" = \"-\" ]; then\n  # Ad-hoc identity — the UI-test / CI build (scripts/uitest.sh and\n  # check.sh sign ad-hoc so the XCUITest runner satisfies library\n  # validation). The Developer ID re-sign below can't run without the\n  # maintainer's cert, and the tests launch the app straight from\n  # DerivedData, so there's nothing to install.\n  echo \"Skipping Install to /Applications: ad-hoc signing (UI test / CI).\"\n  exit 0\nfi\n# Copy + re-sign into /Applications so TCC sees a permanent path.\n# (Xcode/CLI builds otherwise live in DerivedData / /tmp — paths\n# macOS treats as transient and refuses to add to the Privacy\n# & Security toggle list.) Falls back to ~/Applications if the\n# system folder isn't writable on this machine.\nif [ -w /Applications ]; then\n  DEST=\"/Applications/${PRODUCT_NAME}.app\"\nelse\n  DEST=\"$HOME/Applications/${PRODUCT_NAME}.app\"\n  mkdir -p \"$HOME/Applications\"\nfi\nrm -rf \"$DEST\"\ncp -R \"$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app\" \"$DEST\"\n\n# SHA-1 of the Developer ID Application: Alexander Kroman cert.\n# Errors are NOT swallowed.\nIDENTITY=\"640A7F5A9754400D4A0491E7A6FB30542D907806\"\nENTS=\"${SRCROOT}/Blurt/Blurt.entitlements\"\n# Inside-out signing: Debug builds emit unsigned dylibs\n# (__preview.dylib, Blurt.debug.dylib). Signing the bundle\n# alone doesn't recurse, so verify fails. Sign nested code first.\nfind \"$DEST\" -type f \\( -name \"*.dylib\" -o -name \"*.so\" \\) \\\n  -print0 | while IFS= read -r -d '' f; do\n  codesign --force --sign \"$IDENTITY\" --options runtime \"$f\"\ndone\ncodesign --force --sign \"$IDENTITY\" \\\n  --entitlements \"$ENTS\" \\\n  --options runtime \\\n  \"$DEST\"\ncodesign --verify --strict --verbose=1 \"$DEST\"\necho \"Installed: $DEST\"\n\n# Keep LaunchServices pointing only at the stable install. This build\n# also leaves a copy in DerivedData ($BUILT_PRODUCTS_DIR) registered\n# under the same bundle id; if it lingers, macOS can resolve the id to\n# that transient path and Blurt disappears from the Accessibility\n# list. Drop the DerivedData copy and (re)register the install.\nLSREGISTER=\"/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister\"\n\"$LSREGISTER\" -u \"$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app\" >/dev/null 2>&1 || true\n\"$LSREGISTER\" -f \"$DEST\" >/dev/null 2>&1 || true\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		8F207BB5B77D504F0B06FBF0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6D5CE0B54CB0E0055467B489 /* AccessibilityAuditUITests.swift in Sources */,
+				EA50EC15CDECF534464D9208 /* BlurtUITestSupport.swift in Sources */,
+				CE73DE20498B04ED1DDE6BAE /* DictationPipelineUITests.swift in Sources */,
+				CBA0D3727CA1C62D0665F51B /* LaunchPerformanceUITests.swift in Sources */,
+				B6B9598209C21737FC80D9FC /* MenuBarUITests.swift in Sources */,
+				9549DA14B4FC5091F052B5B6 /* SettingsUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D3EE99FB1BF094322A1363EF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0A259385C40D25FC87E377D6 /* APIKeyStepView.swift in Sources */,
+				73FA46BD466212E9AE09C847 /* App.swift in Sources */,
+				B391EA5F093506B3DF318F10 /* AppCoordinator+UITesting.swift in Sources */,
+				3407E8759D61D569A998EE78 /* AppCoordinator.swift in Sources */,
+				8D2BA6E9FAC605D678A73164 /* AppDelegate.swift in Sources */,
+				F53E257FC86648D7A4E9311E /* AutoUpdater.swift in Sources */,
+				9AB0058318597E562D2262D5 /* DictateHotkey.swift in Sources */,
+				0F1317CCFA2A3245DAA96141 /* DictationComposition.swift in Sources */,
+				1C40B5DB92262E05808ECCEA /* DictationKeyTap.swift in Sources */,
+				B5A7CEA6517E5A1E4D77623F /* FloatingPanel.swift in Sources */,
+				F42E6D4E62345772C5A49A08 /* HotkeyStepView.swift in Sources */,
+				AD32046355138298E7FC40D0 /* MenuBarScene.swift in Sources */,
+				9437C292A6D7FE533338073D /* OverlayView.swift in Sources */,
+				8FE4B9B139BB9557FBC5589B /* OverlayWindowController.swift in Sources */,
+				D750C1BF16502EEC92182ECD /* PermissionsStepView.swift in Sources */,
+				69E27229D8C64D7119918B7A /* SoundStepView.swift in Sources */,
+				E1CA5C692CB2A7E1BF231928 /* UITestSupport.swift in Sources */,
+				91C1257866F6E2D4EE65BD09 /* WindowAccessor.swift in Sources */,
+				B844779F8427A1225C45A9FB /* WizardController.swift in Sources */,
+				DD800E4A2657C87DD45E4AF8 /* WizardView.swift in Sources */,
+				F6900A7D424119F0F178E7BE /* WizardWindowController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		8861FDB57B23A4A75FFBEB13 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 530DC1E75D312BEE7D89630E /* Blurt */;
+			targetProxy = 1285B45C19A688F3937D0A25 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		37878A1B7ED928C9C260F43F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.alex.blurt.uitests;
+				SDKROOT = macosx;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = Blurt;
+			};
+			name = Release;
+		};
+		7BF370DEA8BAC47F4179EAF8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = 640A7F5A9754400D4A0491E7A6FB30542D907806;
+				CODE_SIGN_STYLE = Manual;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = Y54ZB9JF63;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		81D8585ABD7DDD16BFC4DE0D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Blurt/Blurt.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Blurt/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.alex.blurt;
+				SDKROOT = macosx;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+			};
+			name = Release;
+		};
+		CB84BDE2D077AE22C9E21497 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = 640A7F5A9754400D4A0491E7A6FB30542D907806;
+				CODE_SIGN_STYLE = Manual;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = Y54ZB9JF63;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		CD58E0085469061FEE527931 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Blurt/Blurt.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Blurt/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.alex.blurt;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG UITEST_HOOKS";
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+			};
+			name = Debug;
+		};
+		EBC0249237E96EB2C98596F0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.alex.blurt.uitests;
+				SDKROOT = macosx;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = Blurt;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4C8C36550FFFBE9D940D3A62 /* Build configuration list for PBXProject "Blurt" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CB84BDE2D077AE22C9E21497 /* Debug */,
+				7BF370DEA8BAC47F4179EAF8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		BA6DD82B119336E348F095BB /* Build configuration list for PBXNativeTarget "BlurtUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EBC0249237E96EB2C98596F0 /* Debug */,
+				37878A1B7ED928C9C260F43F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		DD65B6019D3D8212517A7206 /* Build configuration list for PBXNativeTarget "Blurt" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CD58E0085469061FEE527931 /* Debug */,
+				81D8585ABD7DDD16BFC4DE0D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		BFFF3588F0D8C2D0EEF7BC75 /* XCLocalSwiftPackageReference "../.." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../..;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		1B0B6EAFD1174B4B9140D250 /* XCRemoteSwiftPackageReference "AppUpdater" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/mxcl/AppUpdater";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.1.1;
+			};
+		};
+		A70C65ACE504420011952EBA /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.19.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		371215E93A9C2CE60C6347BB /* BlurtEngine */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = BlurtEngine;
+		};
+		39EB6BB06E04EA9CD2CDC3BA /* Sentry */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A70C65ACE504420011952EBA /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			productName = Sentry;
+		};
+		B7FF7A7170C36BAABD1ECC90 /* AppUpdater */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1B0B6EAFD1174B4B9140D250 /* XCRemoteSwiftPackageReference "AppUpdater" */;
+			productName = AppUpdater;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 6CDA5FC4501C4BEA6B4517DA /* Project object */;
+}

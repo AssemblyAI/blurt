@@ -1,0 +1,15 @@
+{
+  // Prettier owns markdown wrapping; Blurt's docs use long prose lines on purpose.
+  "MD013": false,
+  // README.md centers its logo/badges with <div>/<img>/<a> blocks.
+  "MD033": false,
+  // Agent/skill files under .claude/ open with YAML frontmatter + prose, not an H1.
+  "MD041": false,
+  // Launch marketing copy (docs/marketing/launch-copy/) is paste-ready: it carries
+  // bare URLs meant to be copied into HN/Reddit/LinkedIn (which auto-linkify on
+  // paste), so we don't rewrite them as autolinks or named links.
+  "MD034": false,
+  // Same copy uses plain ``` fences for verbatim title/tagline/release blocks; a
+  // language label would be noise on prose-not-code.
+  "MD040": false
+}

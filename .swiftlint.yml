@@ -1,0 +1,58 @@
+# SwiftLint config for Blurt.
+#
+# swift-format (.swift-format) remains the FORMATTING authority — 120-col lines,
+# 2-space indent, brace placement, commas. SwiftLint covers what swift-format
+# does NOT: correctness smells and structural/complexity limits.
+#
+# check.sh runs this with --strict: any violation (warning OR error) fails the
+# build, so the tree must stay lint-clean. Fix violations in code, or — when a
+# rule genuinely doesn't apply — disable it here with a comment explaining why.
+
+included:
+  - Sources
+  - Tests
+  - App/Blurt/Blurt
+  - App/Blurt/BlurtUITests
+
+excluded:
+  - .build
+  - App/Blurt/Blurt.xcodeproj
+
+disabled_rules:
+  # Owned by swift-format — don't let the two tools fight over formatting.
+  - line_length
+  - trailing_comma
+  - trailing_whitespace
+  - opening_brace
+  - statement_position
+  # False positive: fires on `override class func` (e.g. URLProtocol overrides in
+  # MockURLProtocol), which CANNOT be rewritten as `static` — a superclass
+  # `class func` is overridable, `static` is not. Rule can't see the `override`.
+  - static_over_final_class
+
+# The codebase deliberately uses short, idiomatic names (`p`, `e`, comparator
+# `a`/`b`, `pb` for pasteboard). Don't gate on identifier length.
+identifier_name:
+  min_length: 1
+
+# Codable response trees mirror the wire JSON and nest naturally
+# (ChatResponse → Choice → Message). Allow that depth.
+nesting:
+  type_level: 3
+
+# `try!` stays banned (default force_try rule). Under --strict even a warning
+# fails, so prefer `try?` with a fallback even in test fixtures.
+
+# Analyzer rules need a compiler log (see check.sh's `swiftlint analyze` step);
+# they don't run under plain `swiftlint lint`.
+analyzer_rules:
+  - unused_import
+
+unused_import:
+  # unused_import can't see usage of these from the compiler log and reports them
+  # as unused even where they're heavily used (AVAudioRecorder/Player, os.Logger),
+  # so never flag them. Everything else (stray `import Foundation`, AppKit, etc.)
+  # is still checked.
+  always_keep_imports:
+    - AVFoundation
+    - OSLog
