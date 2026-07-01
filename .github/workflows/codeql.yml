@@ -1,0 +1,83 @@
+name: codeql
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly re-scan so newly-published CodeQL queries run against main even
+    # during quiet periods. Monday 07:00 UTC.
+    - cron: "0 7 * * 1"
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+
+    permissions:
+      security-events: write # upload SARIF results to code scanning
+      actions: read # required to read workflow runs on private repos
+      contents: read # checkout
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Scans the workflow files themselves for injection and other
+          # GitHub Actions security issues. No build; runs on cheap Linux.
+          - language: actions
+            build-mode: none
+            runner: ubuntu-latest
+          # The Swift engine + app. build-mode: manual mirrors check.sh so the
+          # CodeQL tracer sees the same compiler invocations; autobuild can't
+          # cope with the xcodegen step + disabled signing.
+          - language: swift
+            build-mode: manual
+            runner: macos-26
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      # Drive the Swift build explicitly (build-mode: manual). Mirrors the
+      # health-check build in scripts/check.sh: generate the project first, then
+      # build the app + engine with codesigning off (the Developer ID cert only
+      # lives on the maintainer's machine, and the "Install to /Applications"
+      # postBuildScript bails out when CODE_SIGNING_ALLOWED=NO).
+      - name: Build Swift
+        if: matrix.language == 'swift'
+        working-directory: App/Blurt
+        run: |
+          brew install xcodegen
+          xcodegen generate --quiet
+          xcodebuild \
+            -project Blurt.xcodeproj \
+            -scheme Blurt \
+            -configuration Debug \
+            -destination 'platform=macOS,arch=arm64' \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"
