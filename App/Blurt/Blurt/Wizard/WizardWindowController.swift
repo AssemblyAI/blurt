@@ -135,12 +135,12 @@ struct ReadyView: View {
     .fixedSize(horizontal: false, vertical: true)
   }
 
-  /// "Tap or hold ⌘ to dictate and paste", with the key drawn as a rounded keycap.
+  /// "Tap or hold ⌘ to blurt and paste", with the key drawn as a rounded keycap.
   private var shortcutReadout: some View {
-    gestureLine(prefix: "Tap or hold", suffix: "to dictate and paste")
+    gestureLine(prefix: "Tap or hold", suffix: "to blurt and paste")
   }
 
-  /// One gesture readout, e.g. "Tap or hold [⌘] to dictate and paste", with the trigger
+  /// One gesture readout, e.g. "Tap or hold [⌘] to blurt and paste", with the trigger
   /// key drawn as a rounded keycap between the prefix and suffix.
   private func gestureLine(prefix: String, suffix: String) -> some View {
     HStack(spacing: 6) {

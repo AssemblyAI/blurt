@@ -6,7 +6,7 @@
     <title>Blurt — native macOS dictation</title>
     <meta
       name="description"
-      content="Blurt is a small, open-source macOS dictation app. Hold a key, speak, and cleaned-up text lands in the app you're already using."
+      content="Blurt is a small, open-source macOS dictation app for turning speech into a first draft in the app you're already using."
     />
     <link rel="canonical" href="https://blurtblurt.com/" />
     <meta name="theme-color" content="#0a0a0f" />
@@ -16,7 +16,7 @@
     <meta property="og:title" content="Blurt — native macOS dictation" />
     <meta
       property="og:description"
-      content="Hold a key, speak, and cleaned-up text lands in the app you're already using."
+      content="Blurt your first draft in any Mac app."
     />
     <meta property="og:url" content="https://blurtblurt.com/" />
     <meta
@@ -28,14 +28,14 @@
     <meta property="og:image:type" content="image/png" />
     <meta
       property="og:image:alt"
-      content="Blurt — hold a key, speak, get clean text. Open-source macOS dictation."
+      content="Blurt your first draft. Open-source macOS dictation."
     />
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Blurt — native macOS dictation" />
     <meta
       name="twitter:description"
-      content="Hold a key, speak, and cleaned-up text lands in the app you're already using."
+      content="Blurt your first draft in any Mac app."
     />
     <meta
       name="twitter:image"
@@ -43,10 +43,10 @@
     />
     <meta
       name="twitter:image:alt"
-      content="Blurt — hold a key, speak, get clean text. Open-source macOS dictation."
+      content="Blurt your first draft. Open-source macOS dictation."
     />
 
-    <link rel="icon" type="image/png" href="assets/icon.png" />
+    <link rel="icon" type="image/png" href="assets/blurt-b-icon.png" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -61,9 +61,9 @@
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "Blurt",
-        "description": "Blurt is a small, open-source macOS dictation app. Hold a key, speak, and cleaned-up text lands in the app you're already using.",
+        "description": "Blurt is a small, open-source macOS dictation app for turning speech into a first draft in the app you're already using.",
         "url": "https://blurtblurt.com/",
-        "image": "https://blurtblurt.com/assets/icon.png",
+        "image": "https://blurtblurt.com/assets/blurt-b-icon.png",
         "applicationCategory": "UtilitiesApplication",
         "operatingSystem": "macOS 15.0 or later",
         "downloadUrl": "https://github.com/alexkroman/blurt/releases/latest/download/Blurt.dmg",
@@ -84,81 +84,64 @@
     <main class="page">
       <header class="site-header">
         <a class="brand" href="/">
-          <img src="assets/icon.png" alt="" width="256" height="256" />
+          <img
+            class="brand-icon"
+            src="assets/blurt-b-icon.png"
+            alt=""
+            width="256"
+            height="256"
+          />
           <span>Blurt</span>
         </a>
         <nav class="site-nav" aria-label="Primary">
-          <a
-            href="https://github.com/alexkroman/blurt/releases/latest/download/Blurt.dmg"
-            >Download</a
-          >
           <a href="https://github.com/alexkroman/blurt">GitHub</a>
         </nav>
       </header>
 
       <section class="hero">
-        <picture>
-          <source srcset="assets/blurt-logo-ansi.webp" type="image/webp" />
-          <img
-            class="wordmark"
-            src="assets/blurt-logo-ansi.png"
-            alt="Blurt"
-            width="1873"
-            height="517"
-            fetchpriority="high"
-          />
-        </picture>
-        <h1>Hold a key. Speak. Get clean text.</h1>
-        <p class="lede">
-          A small, open-source Mac app &mdash; native, private, and cued by real
-          Yamaha DX7 and Roland Juno-106 synths.
-        </p>
+        <div class="hero-copy">
+          <picture class="hero-wordmark">
+            <source srcset="assets/blurt-logo-ansi.webp" type="image/webp" />
+            <img
+              class="wordmark"
+              src="assets/blurt-logo-ansi.png"
+              alt="Blurt"
+              width="1873"
+              height="517"
+              fetchpriority="high"
+            />
+          </picture>
+          <p class="eyebrow">Native macOS dictation</p>
+          <h1>Blurt your first draft.</h1>
+          <p class="lede">
+            A small, open-source Mac dictation app cued by real Yamaha DXY and
+            Roland Juno-106 synths.
+          </p>
+
+          <div class="actions">
+            <a
+              class="button button-primary"
+              href="https://github.com/alexkroman/blurt/releases/latest/download/Blurt.dmg"
+              aria-label="Download Blurt.dmg for macOS"
+            >
+              Download Blurt.dmg
+            </a>
+          </div>
+          <p class="fine-print">
+            Free for macOS 15+ on Apple Silicon. BYO AssemblyAI key.
+          </p>
+        </div>
 
         <figure class="demo demo-hero">
-          <div
-            class="cast"
-            role="img"
-            aria-label="Blurt in action: hold the key and speak, and the cleaned-up sentence is typed into the focused app — &ldquo;Let&rsquo;s ship the beta this Friday.&rdquo;"
-          >
-            <div class="cast-window">
-              <div class="cast-bar" aria-hidden="true">
-                <span class="cast-light"></span>
-                <span class="cast-light"></span>
-                <span class="cast-light"></span>
-                <span class="cast-name">Messages — Team</span>
-              </div>
-              <div class="cast-body" aria-hidden="true">
-                <span class="cast-typed">Let's ship the beta this Friday.</span>
-              </div>
-              <div class="cast-overlay" aria-hidden="true">
-                <div class="cast-rec">
-                  <span class="cast-rec-tag">&#9679; REC</span>
-                  <div class="cast-bars">
-                    <span></span><span></span><span></span><span></span
-                    ><span></span> <span></span><span></span><span></span
-                    ><span></span><span></span> <span></span><span></span
-                    ><span></span><span></span><span></span> <span></span
-                    ><span></span><span></span>
-                  </div>
-                </div>
-                <span class="cast-thinking">Transcribing&hellip;</span>
-              </div>
-            </div>
-          </div>
+          <img
+            class="shot"
+            src="assets/blurt.png"
+            alt="Blurt's ready screen: tap or hold the hotkey, speak, and cleaned-up text is typed into the focused app"
+            width="1096"
+            height="628"
+            fetchpriority="high"
+          />
         </figure>
-
-        <div class="actions">
-          <a
-            class="button button-primary"
-            href="https://github.com/alexkroman/blurt/releases/latest/download/Blurt.dmg"
-          >
-            Download Blurt.dmg
-          </a>
-        </div>
-        <p class="fine-print">
-          Free app · macOS 15+ · Apple Silicon · Needs an AssemblyAI key (free
-          to start)
-        </p>
       </section>
 
       <footer class="site-footer">

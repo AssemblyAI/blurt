@@ -4,49 +4,95 @@
     <img src=".github/images/blurt-logo-ansi.png" alt="Blurt logo" width="720" />
   </picture>
 
-  <h3>Hold a key. Speak. Get clean text.</h3>
+  <h2>Blurt your first draft.</h2>
 
-[![Download](https://img.shields.io/badge/download-Blurt.dmg-ff2d8e?style=flat-square)](https://github.com/alexkroman/blurt/releases/latest/download/Blurt.dmg)
-[![Platform](https://img.shields.io/badge/platform-macOS%2015%2B-00e0ff?style=flat-square)](https://github.com/alexkroman/blurt/releases/latest)
-[![Powered by AssemblyAI](https://img.shields.io/badge/powered%20by-AssemblyAI-00e0ff?style=flat-square)](https://www.assemblyai.com)
+  <p>
+    <strong>
+      Open-source Mac dictation that turns speech into polished text in the app
+      you're already using.
+    </strong>
+  </p>
 
-  <img src=".github/images/blurt.png" alt="Blurt's ready screen: hold the hotkey, speak, and cleaned-up text lands in the focused app" width="760" height="544" />
+  <p>
+    <a href="https://github.com/alexkroman/blurt/releases/latest/download/Blurt.dmg">
+      <img
+        src="https://img.shields.io/badge/Download-Blurt.dmg-f32a91?style=for-the-badge"
+        alt="Download Blurt.dmg"
+      />
+    </a>
+  </p>
+
+  <p>
+    <a href="https://github.com/alexkroman/blurt/releases/latest">
+      <img
+        src="https://img.shields.io/badge/macOS-15%2B-00d8ef?style=flat-square"
+        alt="macOS 15 or later"
+      />
+    </a>
+    <a href="https://www.assemblyai.com">
+      <img
+        src="https://img.shields.io/badge/powered%20by-AssemblyAI-00d8ef?style=flat-square"
+        alt="Powered by AssemblyAI"
+      />
+    </a>
+  </p>
+
+  <p>
+    <sub>Free app · Apple Silicon · Bring your own AssemblyAI API key</sub>
+  </p>
+
+<img
+    src=".github/images/blurt.png"
+    alt="Blurt's ready screen: tap or hold the hotkey, speak, and transcribed text is pasted into the focused app"
+    width="760"
+    height="435"
+  />
+
 </div>
 
-Blurt is a small, open-source macOS dictation app — native, private, and cued by real Yamaha DX7 and Roland Juno-106 synths. Hold a key, speak, and clean text lands where your cursor already is. Bring your own [AssemblyAI API key](https://www.assemblyai.com/dashboard/api-keys) — that's the whole setup.
+## Download and install
 
-<div align="center">
+1. [Download **Blurt.dmg**](https://github.com/alexkroman/blurt/releases/latest/download/Blurt.dmg).
+2. Open the disk image and drag **Blurt.app** into `Applications`.
+3. Launch Blurt and follow setup: Microphone, Accessibility, and your [AssemblyAI API key](https://www.assemblyai.com/dashboard/api-keys).
+4. Start dictating with **right command** by default. Tap to toggle, or hold for push-to-talk.
 
-[**⬇ &nbsp;Download Blurt.dmg**](https://github.com/alexkroman/blurt/releases/latest/download/Blurt.dmg)
+## Why Blurt
 
-</div>
+- **Works anywhere you can type.** Blurt pastes the transcript into the focused Mac app.
+- **No model downloads.** Audio goes to AssemblyAI's Sync STT API and comes back as text.
+- **No extra cleanup step.** The polishing instruction rides with the transcription request.
+- **Small native app.** The setup window, overlay, hotkey, and paste flow are built for macOS.
+- **Actual synth cues.** Start and stop can be cued by real Yamaha DX7 or Roland Juno-106 sounds, or turned off.
 
-## Install
+## Requirements
 
-Download **Blurt.dmg** from the [releases page](https://github.com/alexkroman/blurt/releases/latest), open it, and drag **Blurt.app** into `Applications`.
-
-**Requirements:** macOS 15 (Sequoia)+ · Apple Silicon · an [AssemblyAI API key](https://www.assemblyai.com/dashboard/api-keys) (free tier to start).
-
-On first launch the wizard walks you through it: grant Microphone + Accessibility, paste your key (it goes into the macOS Keychain), and pick a hotkey — default is **right ⌘**, tap to toggle or hold to dictate. Change anything later from Settings (⌘,).
-
-## The sound
-
-Start and stop are cued by a real **Yamaha DX7** or **Roland Juno-106** — the synths behind Prince, Depeche Mode, and Tame Impala, not a generic beep. Every factory voice from both ships as a selectable cue; pick one in Settings, or choose **None** for silence.
+| What           | Requirement                             |
+| -------------- | --------------------------------------- |
+| macOS          | macOS 15 Sequoia or later               |
+| Mac            | Apple Silicon                           |
+| Speech-to-text | AssemblyAI API key, free tier available |
 
 ## Privacy
 
-Almost everything stays on your Mac — the app and your API key (kept in the macOS Keychain). Audio is captured only while you're dictating — held to talk, or after a tap until you tap again — then sent over HTTPS to **AssemblyAI** to be turned into text and handed back. The cleanup rides along in that same request, so there's no extra service in the loop, and Blurt stores no audio or transcripts of its own.
+Blurt stores your API key in the macOS Keychain. Audio is captured only while
+you are dictating, then sent over HTTPS to AssemblyAI for transcription. Blurt
+stores no audio and no transcripts.
 
-For stability, release builds report crashes and a few handled errors to [Sentry](https://sentry.io). These reports are diagnostic only — stack traces and error details, never your audio, transcripts, or API key — and Blurt doesn't attach your IP address or other identifying data. Debug builds report nothing.
+Release builds send crash reports and a few handled errors to
+[Sentry](https://sentry.io). Those reports are diagnostic only: stack traces and
+error details, never your audio, transcripts, or API key.
 
-Because your speech is processed by AssemblyAI, their policies govern that data — worth a read if you're weighing it up:
+Because transcription is processed by AssemblyAI, their policies apply to that
+audio:
 
 - [AssemblyAI Privacy Policy](https://www.assemblyai.com/legal/privacy-policy)
 - [AssemblyAI Terms of Service](https://www.assemblyai.com/legal/terms-of-service)
 
-## Build
+## Build from source
 
-MIT-licensed — read it, fork it, file an issue. [`AGENTS.md`](./AGENTS.md) has the architecture notes and build workflow.
+Blurt is MIT-licensed. [`AGENTS.md`](./AGENTS.md) has the architecture notes and
+build workflow.
 
 ```bash
 scripts/bootstrap.sh   # install the local toolchain
