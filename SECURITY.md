@@ -8,7 +8,7 @@ Please report security issues **privately** — don't open a public issue, PR, o
 discussion for anything exploitable.
 
 Use GitHub's private reporting: go to the
-[Security tab](https://github.com/alexkroman/blurt/security) and click
+[Security tab](https://github.com/AssemblyAI/blurt/security) and click
 **Report a vulnerability**. That opens a private advisory visible only to the
 maintainer and you.
 
@@ -41,5 +41,5 @@ nothing.
 ## Supported versions
 
 Blurt ships as a rolling release — fixes land in the latest
-[release](https://github.com/alexkroman/blurt/releases/latest). Please make sure
+[release](https://github.com/AssemblyAI/blurt/releases/latest). Please make sure
 you're on the newest build before reporting.

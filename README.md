@@ -14,7 +14,7 @@
   </p>
 
   <p>
-    <a href="https://github.com/alexkroman/blurt/releases/latest/download/Blurt.dmg">
+    <a href="https://github.com/AssemblyAI/blurt/releases/latest/download/Blurt.dmg">
       <img
         src="https://img.shields.io/badge/Download-Blurt.dmg-f32a91?style=for-the-badge"
         alt="Download Blurt.dmg"
@@ -23,7 +23,7 @@
   </p>
 
   <p>
-    <a href="https://github.com/alexkroman/blurt/releases/latest">
+    <a href="https://github.com/AssemblyAI/blurt/releases/latest">
       <img
         src="https://img.shields.io/badge/macOS-15%2B-00d8ef?style=flat-square"
         alt="macOS 15 or later"
@@ -52,7 +52,7 @@
 
 ## Download and install
 
-1. [Download **Blurt.dmg**](https://github.com/alexkroman/blurt/releases/latest/download/Blurt.dmg).
+1. [Download **Blurt.dmg**](https://github.com/AssemblyAI/blurt/releases/latest/download/Blurt.dmg).
 2. Open the disk image and drag **Blurt.app** into `Applications`.
 3. Launch Blurt and follow setup: Microphone, Accessibility, and your [AssemblyAI API key](https://www.assemblyai.com/dashboard/api-keys).
 4. Start dictating with **right command** by default. Tap to toggle, or hold for push-to-talk.

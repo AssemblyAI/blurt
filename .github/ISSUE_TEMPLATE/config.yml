@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Question or discussion
-    url: https://github.com/alexkroman/blurt/discussions
+    url: https://github.com/AssemblyAI/blurt/discussions
     about: Ask a question or share an idea that isn't a bug or feature request.
   - name: Security vulnerability
-    url: https://github.com/alexkroman/blurt/security/advisories/new
+    url: https://github.com/AssemblyAI/blurt/security/advisories/new
     about: Report a security issue privately — please don't open a public issue.
