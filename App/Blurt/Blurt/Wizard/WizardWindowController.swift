@@ -245,7 +245,6 @@ private struct ReadySettingsButton: View {
 /// uses, so the two stay in sync.
 struct SettingsWindowRoot: View {
   var appDelegate: AppDelegate
-  @Environment(\.openWindow) private var openWindow
 
   var body: some View {
     if let coordinator = appDelegate.coordinator {
