@@ -2,7 +2,9 @@
 set -euo pipefail
 
 # Lowercase to match how macOS records the Accessibility TCC client (see the
-# PRODUCT_BUNDLE_IDENTIFIER note in App/Blurt/project.yml).
+# PRODUCT_BUNDLE_IDENTIFIER note in App/Blurt/project.yml). Must match
+# `BlurtIdentity.subsystem` (Sources/BlurtEngine/BlurtIdentity.swift) — the
+# code's single definition of this string.
 BUNDLE_ID="dev.alex.blurt"
 
 # Quit Blurt first, or every step below is unreliable: a running instance
@@ -44,9 +46,9 @@ echo "==> Clearing UserDefaults for $BUNDLE_ID"
 defaults delete "$BUNDLE_ID" 2>/dev/null || true
 
 # AssemblyAI API key lives in the login keychain as a generic password. The
-# keychain service is a fixed string in APIKeyStore
-# (Sources/BlurtEngine/Config/APIKeyStore.swift), the lowercase bundle id to
-# match macOS convention.
+# keychain service is `BlurtIdentity.subsystem` (used by APIKeyStore,
+# Sources/BlurtEngine/Config/APIKeyStore.swift) — the lowercase bundle id to
+# match macOS convention. Must match that constant.
 KEYCHAIN_SERVICE="dev.alex.blurt"
 KEYCHAIN_ACCOUNT="AssemblyAIAPIKey"
 echo "==> Deleting AssemblyAI API key from Keychain ($KEYCHAIN_SERVICE / $KEYCHAIN_ACCOUNT)"

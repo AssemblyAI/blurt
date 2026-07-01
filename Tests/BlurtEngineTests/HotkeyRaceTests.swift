@@ -97,7 +97,7 @@ private actor GatedMicCapture: MicCaptureProtocol {
     await incStop()
     // Above SyncSTTLimits.minSamples so the transcript isn't dropped by the
     // too-short guard — this suite exercises the press/release race, not it.
-    return Array(repeating: 0, count: SyncSTTLimits.minSamples(sampleRate: SyncSTTLimits.sampleRate) * 2)
+    return Array(repeating: 0, count: SyncSTTLimits.minSamples * 2)
   }
 
   private func incStop() { stopCalls += 1 }

@@ -25,8 +25,7 @@ for cmd in xcrun hdiutil codesign ditto awk; do
   command -v "$cmd" >/dev/null 2>&1 || die "missing required tool: $cmd"
 done
 
-VERSION="$(parse_short_version <"$APP_DIR/project.yml")"
-[ -n "$VERSION" ] || die "could not parse CFBundleShortVersionString from $APP_DIR/project.yml"
+VERSION="$(require_project_version "$APP_DIR/project.yml")"
 info "version: $VERSION"
 
 DMG="$BUILD_ROOT/Blurt-$VERSION.dmg"

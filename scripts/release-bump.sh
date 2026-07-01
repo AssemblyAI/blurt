@@ -22,9 +22,7 @@ step "Preflight"
 command -v xcodegen >/dev/null 2>&1 || die "missing required tool: xcodegen"
 [ -f "$PROJECT_YML" ] || die "not found: $PROJECT_YML"
 
-if [ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]; then
-  die "working tree dirty — commit or stash before bumping"
-fi
+require_clean_tree "bumping"
 
 CURRENT_VERSION="$(parse_short_version <"$PROJECT_YML")"
 CURRENT_BUILD="$(parse_bundle_version <"$PROJECT_YML")"
@@ -35,10 +33,10 @@ CURRENT_BUILD="$(parse_bundle_version <"$PROJECT_YML")"
 [ "$NEW_VERSION" != "$CURRENT_VERSION" ] || die "version $NEW_VERSION is already current"
 version_gt "$NEW_VERSION" "$CURRENT_VERSION" || die "$NEW_VERSION is not greater than current $CURRENT_VERSION"
 
-if git -C "$REPO_ROOT" rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
+if tag_exists_locally "v$NEW_VERSION"; then
   die "tag v$NEW_VERSION already exists locally"
 fi
-if git -C "$REPO_ROOT" ls-remote --tags origin "refs/tags/v$NEW_VERSION" 2>/dev/null | grep -q .; then
+if tag_exists_on_origin "v$NEW_VERSION"; then
   die "tag v$NEW_VERSION already exists on origin"
 fi
 

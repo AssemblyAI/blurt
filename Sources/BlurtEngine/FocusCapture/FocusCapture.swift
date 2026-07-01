@@ -272,12 +272,25 @@ enum FocusCapture {
     return nil
   }
 
-  /// The up-to-`maxChars` slice of `full` ending at `caret`. A caret outside
-  /// `0...full.count` (e.g. unreadable selection) falls back to the tail of the
-  /// whole value. Returns `nil` when the resulting slice is empty.
+  /// The up-to-`maxChars` slice of `full` ending at `caret`. `caret` is a
+  /// **UTF-16 offset** (the domain AX selected-text ranges use — see
+  /// `caretLocation`), so it is resolved through the UTF-16 view rather than
+  /// counted in `Character`s, which diverge as soon as the text holds emoji or
+  /// other surrogate pairs. A caret outside the string — or one that doesn't
+  /// land on a character boundary — falls back to the tail of the whole value.
+  /// Returns `nil` when the resulting slice is empty.
   static func priorSlice(full: String, caret: Int, maxChars: Int) -> String? {
     guard !full.isEmpty else { return nil }
-    let upto = (caret >= 0 && caret <= full.count) ? full.prefix(caret) : full[...]
+    let upto: Substring
+    if caret >= 0, caret <= full.utf16.count,
+      let index = full.utf16.index(
+        full.utf16.startIndex, offsetBy: caret, limitedBy: full.utf16.endIndex)?
+        .samePosition(in: full)
+    {
+      upto = full[..<index]
+    } else {
+      upto = full[...]
+    }
     let clipped = String(upto.suffix(maxChars))
     return clipped.isEmpty ? nil : clipped
   }

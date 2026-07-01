@@ -13,7 +13,7 @@ public enum APIKeyStore {
   /// The production keychain item. The service is the (lowercase) bundle id, to
   /// match the macOS convention. Tests exercise `KeychainStore` directly with an
   /// isolated service/account so they never touch this real key.
-  static let store = KeychainStore(service: "dev.alex.blurt", account: "AssemblyAIAPIKey")
+  static let store = KeychainStore(service: BlurtIdentity.subsystem, account: "AssemblyAIAPIKey")
 
   /// The stored key, or `nil` if none has been saved (or it's empty).
   public static func get() -> String? { store.get() }

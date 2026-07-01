@@ -1,3 +1,4 @@
+import BlurtEngine
 import DatadogCore
 import DatadogCrashReporting
 import DatadogLogs
@@ -35,7 +36,7 @@ enum Monitoring {
   private static let environment = "production"
 
   // UserDefaults key holding the anonymous, per-install id set as `@usr.id`.
-  private static let installIDKey = "dev.alex.blurt.anonymous-install-id"
+  private static let installIDKey = "\(BlurtIdentity.subsystem).anonymous-install-id"
 
   // Release-only gate. A runtime flag (not `#if` at the call site) so `start()`
   // and its config stay reachable for the dead-code scan while execution is still

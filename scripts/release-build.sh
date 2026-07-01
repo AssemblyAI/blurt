@@ -80,12 +80,10 @@ fi
 xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
   || die "notarytool profile '$NOTARY_PROFILE' not found. Run: xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <you@example.com> --team-id $TEAM_ID --password <app-specific-password>"
 
-[ -z "$(git -C "$REPO_ROOT" status --porcelain)" ] \
-  || die "working tree dirty — commit or stash before building a release artifact"
+require_clean_tree "building a release artifact"
 
 step "Read version"
-VERSION="$(parse_short_version <"$APP_DIR/project.yml")"
-[ -n "$VERSION" ] || die "could not parse CFBundleShortVersionString from $APP_DIR/project.yml"
+VERSION="$(require_project_version "$APP_DIR/project.yml")"
 info "version: $VERSION"
 
 step "Initial summary"

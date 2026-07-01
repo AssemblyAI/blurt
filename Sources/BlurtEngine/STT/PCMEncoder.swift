@@ -6,7 +6,7 @@ import Foundation
 /// AssemblyAI's Sync STT API (`POST sync.assemblyai.com/transcribe`) takes the
 /// audio as a headerless PCM blob plus a JSON `config` describing its geometry
 /// (`sample_rate`, `channels`), so no WAV/RIFF container is needed. Samples are
-/// expected in the range [-1, 1] (the mic capture peak-normalizes to 0.95).
+/// expected in the range [-1, 1]; anything outside is clipped below.
 enum PCMEncoder {
   static func encodeS16LE(samples: [Float]) -> Data {
     guard !samples.isEmpty else { return Data() }

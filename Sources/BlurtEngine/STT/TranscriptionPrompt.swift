@@ -28,8 +28,9 @@
 /// prior-chunk context, the topic hint, and the destination sentence precede it
 /// as the `{context}. {baseInstruction}` shape, and keyword boosting trails it
 /// inline as `Keywords: a, b, c.` (per the mid-training instruction-type
-/// reference). It stays under the API's 4096-character cap (prior text is capped
-/// upstream in `FocusCapture`). Exercised by
+/// reference). It stays under the API's cap (`characterCap`): the contextual
+/// blocks are clipped upstream in `FocusCapture`, and the key-terms clause is
+/// fitted to the remaining budget here. Exercised by
 /// `Tests/BlurtEngineTests/TranscriptionPromptTests.swift`.
 enum TranscriptionPrompt {
   /// The standing dictation instruction prepended to the model's system prompt
@@ -40,6 +41,12 @@ enum TranscriptionPrompt {
   /// spoken language itself.
   static let baseInstruction =
     "Transcribe without speaker labels, audio event descriptions, or emotion markers."
+
+  /// Hard cap the Sync API places on `config.prompt`; a longer prompt fails
+  /// the whole request, so `build` must never exceed it. The contextual blocks
+  /// are all clipped upstream in `FocusCapture`; the user's key terms are the
+  /// one unbounded input, so `build` fits them to whatever budget remains.
+  static let characterCap = 4096
 
   /// Renders `context` into a Sync STT prompt, or `nil` when there is no usable
   /// context (the server then applies its own default prompt).
@@ -73,15 +80,30 @@ enum TranscriptionPrompt {
     let location = locationClause(app: app, window: window, field: field)
     // The topic hint and `baseInstruction` share one line as the trained
     // `{context}. {baseInstruction}` shape; with no topic it's the bare base.
-    var instruction = location.isEmpty ? baseInstruction : "\(location) \(baseInstruction)"
+    let instruction = location.isEmpty ? baseInstruction : "\(location) \(baseInstruction)"
+    blocks.append(instruction)
+    var prompt = blocks.joined(separator: "\n\n")
     if !keyTerms.isEmpty {
       // Spelling priming: the user's domain vocabulary, boosted via the trained
       // inline `Keywords: a, b, c.` form (Section 2.3) trailing the marker so the
       // model favors these exact spellings for names/jargon it would guess at.
-      instruction += " Keywords: \(keyTerms.joined(separator: ", "))."
+      // The terms list is the one input with no upstream length cap, so include
+      // only as many whole terms as `characterCap` leaves room for — a huge
+      // Settings list must not push the prompt over the cap and fail every
+      // dictation with a 400.
+      var included: [String] = []
+      var remaining = characterCap - prompt.count - " Keywords: .".count
+      for term in keyTerms {
+        let cost = term.count + (included.isEmpty ? 0 : ", ".count)
+        guard cost <= remaining else { break }
+        included.append(term)
+        remaining -= cost
+      }
+      if !included.isEmpty {
+        prompt += " Keywords: \(included.joined(separator: ", "))."
+      }
     }
-    blocks.append(instruction)
-    return blocks.joined(separator: "\n\n")
+    return prompt
   }
 
   /// The "where am I typing" priming clause, assembled from whichever of the

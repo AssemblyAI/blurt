@@ -25,11 +25,6 @@ else
   echo "note: xcbeautify not installed; using raw output (brew install xcbeautify)"
 fi
 
-run_xcodebuild() {
-  set -o pipefail
-  xcodebuild "$@" | "${PRETTY[@]}"
-}
-
 echo "==> swift test (BlurtEngine)"
 cd "$REPO_ROOT"
 # -warnings-as-errors: a warning fails the build, so deprecations / unused code

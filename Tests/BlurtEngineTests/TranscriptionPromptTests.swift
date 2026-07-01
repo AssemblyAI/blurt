@@ -114,6 +114,19 @@ struct TranscriptionPromptTests {
     let longPrior = String(repeating: "word ", count: 200)
     let prompt = TranscriptionPrompt.build(
       context: TranscriptionContext(appName: "Xcode", priorText: longPrior))
-    #expect((prompt?.count ?? 0) <= 4096)
+    #expect((prompt?.count ?? 0) <= TranscriptionPrompt.characterCap)
+  }
+
+  @Test("an oversized key-terms list is fitted to the cap, keeping whole leading terms")
+  func keyTermsFittedToCap() throws {
+    // Key terms are the one input with no upstream length cap; a huge Settings
+    // list must not push the prompt over the API cap (which fails the request).
+    let terms = (0..<2000).map { "term\($0)" }
+    let prompt = TranscriptionPrompt.build(
+      context: TranscriptionContext(appName: "Xcode", priorText: nil, keyTerms: terms))
+    let built = try #require(prompt)
+    #expect(built.count <= TranscriptionPrompt.characterCap)
+    #expect(built.contains(" Keywords: term0, term1"))
+    #expect(built.hasSuffix("."))
   }
 }

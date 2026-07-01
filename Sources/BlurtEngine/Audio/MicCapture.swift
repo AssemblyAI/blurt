@@ -15,7 +15,7 @@ public actor MicCapture: MicCaptureProtocol {
   //   log show --predicate 'subsystem == "dev.alex.blurt"' --last 1h
   // Stderr is unreachable for .app bundles launched via Finder/LaunchServices,
   // so go through the unified logging system instead.
-  private static let logger = Logger(subsystem: "dev.alex.blurt", category: "MicCapture")
+  private static let logger = Logger(subsystem: BlurtIdentity.subsystem, category: "MicCapture")
 
   public nonisolated let levels: AsyncStream<Float>
   private nonisolated let levelsContinuation: AsyncStream<Float>.Continuation

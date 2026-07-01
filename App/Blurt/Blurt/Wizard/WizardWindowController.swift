@@ -75,10 +75,11 @@ struct MainWindowRoot: View {
       }
       .onAppear {
         // Permission polling runs for the app's whole life (started in the
-        // controller's init), so the window only needs to capture the opener and
-        // refresh once on appear to reflect any change made while it was closed.
+        // controller's init), so the window only needs to refresh once on
+        // appear to reflect any change made while it was closed. (The
+        // `openWindowByID` opener is captured once, by `SettingsMenuButton` —
+        // the launch-evaluated command view — not re-assigned here.)
         controller.refreshPermissions()
-        appDelegate.openWindowByID = { openWindow(id: $0) }
         // Now that the window is actually on screen, pull the app frontmost —
         // see `activateAtLaunchIfNeeded`. Done here rather than at launch-finish
         // because the window doesn't exist yet then.
@@ -258,7 +259,6 @@ struct SettingsWindowRoot: View {
       .scrollDisabled(true)
       .frame(width: 480)
       .fixedSize(horizontal: false, vertical: true)
-      .onAppear { appDelegate.openWindowByID = { openWindow(id: $0) } }
     } else {
       Color.clear.frame(width: 480, height: 240)
     }
@@ -298,7 +298,9 @@ private struct SettingsMenuButton: View {
     // Capture the open action at launch so a Dock click can reopen a window
     // even on a configured launch where one is never shown. Command views are
     // evaluated at launch (that's how ⌘, registers before any menu is opened),
-    // so this is a reliable, idempotent capture point.
+    // so this is a reliable, idempotent capture point — and the ONLY one:
+    // `openWindow(id:)` opens any Window scene regardless of which scene's
+    // environment supplied the action, so the window roots don't re-capture it.
     appDelegate.openWindowByID = { openWindow(id: $0) }
     return Button("Settings…") {
       openWindow(id: SettingsWindow.id)

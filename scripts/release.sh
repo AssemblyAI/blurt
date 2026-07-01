@@ -202,8 +202,7 @@ main() {
     command -v "$cmd" >/dev/null 2>&1 || die "missing required tool: $cmd"
   done
 
-  [ -z "$(git -C "$REPO_ROOT" status --porcelain)" ] \
-    || die "working tree dirty — commit or stash first"
+  require_clean_tree "releasing"
 
   step "Fetch origin"
   git -C "$REPO_ROOT" fetch origin --tags --quiet

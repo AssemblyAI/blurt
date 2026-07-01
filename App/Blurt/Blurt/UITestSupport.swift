@@ -74,7 +74,7 @@
   struct UITestMic: MicCaptureProtocol {
     func start() async throws {}
     func stop() async throws -> [Float] {
-      Array(repeating: 0, count: SyncSTTLimits.minSamples(sampleRate: SyncSTTLimits.sampleRate) * 2)
+      Array(repeating: 0, count: SyncSTTLimits.minSamples * 2)
     }
   }
 

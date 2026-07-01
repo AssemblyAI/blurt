@@ -31,9 +31,10 @@ final class OverlayWindowController {
   private static let customOriginXKey = "BlurtOverlayCustomOriginX"
   private static let customOriginYKey = "BlurtOverlayCustomOriginY"
   // The panel is sized larger than the visible pill so SwiftUI's drop shadow
-  // (radius 12, y-offset 4) has room to render without being clipped by the
-  // window's contentRect — especially around the capsule's rounded ends, where
-  // the shadow extends furthest from the pill body.
+  // (see `OverlayView`'s `.shadow`, which documents staying within
+  // `shadowMargin`) has room to render without being clipped by the window's
+  // contentRect — especially around the capsule's rounded ends, where the
+  // shadow extends furthest from the pill body.
   static let pillSize = CGSize(width: 168, height: 28)
   static let shadowMargin: CGFloat = 16
   private static let panelSize = CGSize(
@@ -135,10 +136,19 @@ final class OverlayWindowController {
   func hide() {
     errorRevertTask?.cancel()
     errorRevertTask = nil
+    // Settle the content even when the panel is already off screen (the pill
+    // may have been hidden mid-notice).
     bridge.state = .idle
     guard panel.isVisible else { return }
+    dismissPanel()
+  }
+
+  /// Shared final step of every dismiss path: order the panel out, restore full
+  /// alpha for the next show, and settle the pill content back to idle.
+  private func dismissPanel() {
     panel.orderOut(nil)
     panel.alphaValue = 1
+    bridge.state = .idle
   }
 
   /// Drives the pill on/off screen, fading unless Reduce Motion is on. Idempotent
@@ -164,9 +174,7 @@ final class OverlayWindowController {
     } else {
       guard panel.isVisible else { return }
       if reduceMotion {
-        panel.orderOut(nil)
-        panel.alphaValue = 1
-        bridge.state = .idle
+        dismissPanel()
         return
       }
       NSAnimationContext.runAnimationGroup(
@@ -178,9 +186,7 @@ final class OverlayWindowController {
           // NSAnimationContext completion handlers run on the main thread.
           MainActor.assumeIsolated {
             guard let self, self.panel.alphaValue < 0.01 else { return }
-            self.panel.orderOut(nil)
-            self.panel.alphaValue = 1
-            self.bridge.state = .idle
+            self.dismissPanel()
           }
         })
     }
