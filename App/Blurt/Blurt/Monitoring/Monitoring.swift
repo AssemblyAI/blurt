@@ -5,8 +5,9 @@ import Foundation
 
 /// Datadog crash + error monitoring. Replaces the former Sentry integration.
 ///
-/// Started Release-only from `AppDelegate` (local dev runs the Debug config, and
-/// we don't want developer crashes/usage polluting production data). Blurt never
+/// Started from `AppDelegate` at launch; `start()` no-ops in Debug via the
+/// `isReleaseBuild` runtime guard (local dev runs the Debug config, and we don't
+/// want developer crashes/usage polluting production data). Blurt never
 /// sends dictation text or transcripts. The only identifier attached is a random,
 /// locally-generated install id (`@usr.id`) used to count unique installs — it
 /// carries no personal information and isn't tied to the user's identity. The
@@ -36,6 +37,17 @@ enum Monitoring {
   // UserDefaults key holding the anonymous, per-install id set as `@usr.id`.
   private static let installIDKey = "dev.alex.blurt.anonymous-install-id"
 
+  // Release-only gate. A runtime flag (not `#if` at the call site) so `start()`
+  // and its config stay reachable for the dead-code scan while execution is still
+  // limited to Release builds — dev crashes/usage must never hit production.
+  private static var isReleaseBuild: Bool {
+    #if DEBUG
+      false
+    #else
+      true
+    #endif
+  }
+
   /// Set by `start()`. `reportError` is a no-op until then, so it self-disables
   /// in Debug (where the SDK is never started), just like the old Sentry calls.
   private static var logger: (any LoggerProtocol)?
@@ -43,6 +55,7 @@ enum Monitoring {
   /// Initializes the SDK, enables crash reporting + logging, tags telemetry with
   /// the anonymous install id, and logs one launch event. Call once, at launch.
   static func start() {
+    guard isReleaseBuild else { return }
     Datadog.initialize(
       with: Datadog.Configuration(
         clientToken: clientToken,

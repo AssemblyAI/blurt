@@ -94,7 +94,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   @MainActor
   func applicationDidFinishLaunching(_ notification: Notification) {
     // Crash/error reporting. Started as early as possible so launch-time failures
-    // are captured. Release-only: local dev runs the Debug configuration, and we
+    // are captured. `start()` is release-only — it no-ops in Debug via a runtime
+    // guard (called unconditionally, rather than wrapped in `#if !DEBUG`, so the
+    // config stays reachable for the dead-code scan). Local dev runs Debug, and we
     // don't want developer crashes/usage polluting production data. (The
     // `Monitoring.reportError` calls in `AppCoordinator` are safe no-ops when the
     // SDK was never started, so they self-disable in Debug too.) Blurt never sends
@@ -102,9 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // grouping doesn't need it, and a dictation app shouldn't ship identifying
     // data it doesn't use. The diagnostics this does send (env "production") are
     // disclosed in README.md and SECURITY.md.
-    #if !DEBUG
-      Monitoring.start()
-    #endif
+    Monitoring.start()
 
     // No permission prompts fire at launch. Accessibility (and Microphone) are
     // requested only when the user taps the matching button in the setup
