@@ -7,13 +7,17 @@ import Foundation
 ///
 /// Started Release-only from `AppDelegate` (local dev runs the Debug config, and
 /// we don't want developer crashes/usage polluting production data). Blurt never
-/// sends dictation text or transcripts, and no PII is attached — the diagnostics
-/// this ships are disclosed in README.md and SECURITY.md.
+/// sends dictation text or transcripts. The only identifier attached is a random,
+/// locally-generated install id (`@usr.id`) used to count unique installs — it
+/// carries no personal information and isn't tied to the user's identity. The
+/// diagnostics this ships are disclosed in README.md and SECURITY.md.
 ///
 /// - `CrashReporting` captures crashes — the Sentry crash-reporting equivalent.
 /// - A `Logs` logger records handled faults via ``reportError(_:attributes:)`` —
 ///   the Sentry `capture(error:)` equivalent. Both crashes and error logs feed
 ///   Datadog Error Tracking.
+/// - `start()` also emits one "app launched" log per run so adoption / unique-
+///   install counts have baseline volume (not just installs that hit an error).
 ///
 /// Datadog RUM is intentionally not used: it links UIKit and does not build for
 /// native (AppKit) macOS, only Mac Catalyst. Logs + Crash Reporting are the
@@ -29,11 +33,15 @@ enum Monitoring {
   private static let service = "blurt"
   private static let environment = "production"
 
+  // UserDefaults key holding the anonymous, per-install id set as `@usr.id`.
+  private static let installIDKey = "dev.alex.blurt.anonymous-install-id"
+
   /// Set by `start()`. `reportError` is a no-op until then, so it self-disables
   /// in Debug (where the SDK is never started), just like the old Sentry calls.
   private static var logger: (any LoggerProtocol)?
 
-  /// Initializes the SDK and enables crash reporting + logging. Call once, at launch.
+  /// Initializes the SDK, enables crash reporting + logging, tags telemetry with
+  /// the anonymous install id, and logs one launch event. Call once, at launch.
   static func start() {
     Datadog.initialize(
       with: Datadog.Configuration(
@@ -44,16 +52,33 @@ enum Monitoring {
       ),
       trackingConsent: .granted
     )
+    // Anonymous install id only — no name/email/PII — so unique-install and
+    // version-adoption counts work without identifying anyone.
+    Datadog.setUserInfo(id: installID)
     CrashReporting.enable()
     Logs.enable()
-    logger = Logger.create(
+    let logger = Logger.create(
       with: Logger.Configuration(name: service, networkInfoEnabled: true)
     )
+    Self.logger = logger
+    // Baseline telemetry: one launch event per run, so adoption / unique-install
+    // metrics see every install, not only the ones that hit an error.
+    logger.info("app launched")
   }
 
   /// Reports a handled fault (the app didn't crash) as an error log, with optional
   /// context attributes. A no-op when the SDK was never started (Debug).
   static func reportError(_ error: Error, attributes: [String: any Encodable] = [:]) {
     logger?.error("dictation pipeline fault", error: error, attributes: attributes)
+  }
+
+  /// A random UUID minted once per install and persisted, used as the anonymous
+  /// `@usr.id`. Not tied to the user's identity; regenerates on a fresh install.
+  private static var installID: String {
+    let defaults = UserDefaults.standard
+    if let existing = defaults.string(forKey: installIDKey) { return existing }
+    let generated = UUID().uuidString
+    defaults.set(generated, forKey: installIDKey)
+    return generated
   }
 }

@@ -81,7 +81,9 @@ stores no audio and no transcripts.
 
 Release builds send crash reports and a few handled errors to
 [Datadog](https://www.datadoghq.com). Those reports are diagnostic only: stack
-traces and error details, never your audio, transcripts, or API key.
+traces and error details, never your audio, transcripts, or API key. Blurt also
+sends an anonymous, random install identifier and app-launch events so we can
+measure unique installs and version adoption — neither is tied to your identity.
 
 Because transcription is processed by AssemblyAI, their policies apply to that
 audio:
