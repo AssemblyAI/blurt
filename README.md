@@ -50,28 +50,22 @@
 
 </div>
 
-## Download and install
+## Install
 
 1. [Download **Blurt.dmg**](https://github.com/AssemblyAI/blurt/releases/latest/download/Blurt.dmg).
 2. Open the disk image and drag **Blurt.app** into `Applications`.
 3. Launch Blurt and follow setup: Microphone, Accessibility, and your [AssemblyAI API key](https://www.assemblyai.com/dashboard/api-keys).
-4. Start dictating with **right command** by default. Tap to toggle, or hold for push-to-talk.
+4. Dictate with **right command** by default. Tap to toggle, or hold for push-to-talk.
+
+Blurt needs macOS 15 or later on Apple Silicon, plus an AssemblyAI API key
+(free tier available).
 
 ## Why Blurt
 
 - **Works anywhere you can type.** Blurt pastes the transcript into the focused Mac app.
-- **No model downloads.** Audio goes to AssemblyAI's Sync STT API and comes back as text.
-- **No extra cleanup step.** The polishing instruction rides with the transcription request.
+- **Polished in one step.** Audio goes to AssemblyAI's Sync STT API and comes back as clean text — no model downloads, no separate cleanup pass.
 - **Small native app.** The setup window, overlay, hotkey, and paste flow are built for macOS.
 - **Actual synth cues.** Start and stop can be cued by real Yamaha DX7 or Roland Juno-106 sounds, or turned off.
-
-## Requirements
-
-| What           | Requirement                             |
-| -------------- | --------------------------------------- |
-| macOS          | macOS 15 Sequoia or later               |
-| Mac            | Apple Silicon                           |
-| Speech-to-text | AssemblyAI API key, free tier available |
 
 ## Privacy
 
@@ -79,17 +73,14 @@ Blurt stores your API key in the macOS Keychain. Audio is captured only while
 you are dictating, then sent over HTTPS to AssemblyAI for transcription. Blurt
 stores no audio and no transcripts.
 
-Release builds send crash reports and a few handled errors to
-[Datadog](https://www.datadoghq.com). Those reports are diagnostic only: stack
-traces and error details, never your audio, transcripts, or API key. Blurt also
-sends an anonymous, random install identifier and app-launch events so we can
-measure unique installs and version adoption — neither is tied to your identity.
+Release builds send crash reports, handled errors, and anonymous install and
+app-launch events to [Datadog](https://www.datadoghq.com) — diagnostics only,
+never your audio, transcripts, or API key, and nothing tied to your identity.
 
-Because transcription is processed by AssemblyAI, their policies apply to that
-audio:
-
-- [AssemblyAI Privacy Policy](https://www.assemblyai.com/legal/privacy-policy)
-- [AssemblyAI Terms of Service](https://www.assemblyai.com/legal/terms-of-service)
+Because transcription is processed by AssemblyAI, their
+[Privacy Policy](https://www.assemblyai.com/legal/privacy-policy) and
+[Terms of Service](https://www.assemblyai.com/legal/terms-of-service) apply to
+that audio.
 
 ## Build from source
 
