@@ -39,8 +39,8 @@ swift test --enable-code-coverage -Xswiftc -warnings-as-errors
 echo "==> coverage gate (>= ${MIN_COVERAGE}% engine lines)"
 BIN="$(swift build --show-bin-path)"
 PROFDATA="$BIN/codecov/default.profdata"
-XCTEST_BIN="$(find "$BIN" -maxdepth 1 -name '*PackageTests.xctest' -print -quit)/Contents/MacOS/$(
-  find "$BIN" -maxdepth 1 -name '*PackageTests.xctest' -exec basename {} .xctest \; -quit)"
+XCTEST_BUNDLE="$(find "$BIN" -maxdepth 1 -name '*PackageTests.xctest' -print -quit)"
+XCTEST_BIN="$XCTEST_BUNDLE/Contents/MacOS/$(basename "$XCTEST_BUNDLE" .xctest)"
 if command -v python3 >/dev/null 2>&1 && [ -f "$PROFDATA" ] && [ -f "$XCTEST_BIN" ]; then
   # Exclusions (so the figure reflects deterministically-testable engine code):
   #  - Tests/            : test files themselves, not shipping code.
@@ -136,7 +136,9 @@ cd "$REPO_ROOT"
 # Apple's swift-format (bundled with Xcode 16+) is the project's FORMATTING
 # authority. --strict makes any pending formatting a non-zero exit so this
 # check fails if someone forgot to run swift-format on their diff.
-find Sources Tests App/Blurt/Blurt App/Blurt/BlurtUITests scripts -name '*.swift' -print0 \
+# Lint every tracked .swift file (git ls-files) so a new source directory is
+# picked up automatically rather than silently skipped by a stale path list.
+git ls-files -z -- '*.swift' \
   | xargs -0 xcrun swift-format lint --strict
 
 if command -v swiftlint >/dev/null 2>&1; then
