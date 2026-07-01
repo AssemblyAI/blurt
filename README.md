@@ -80,8 +80,8 @@ you are dictating, then sent over HTTPS to AssemblyAI for transcription. Blurt
 stores no audio and no transcripts.
 
 Release builds send crash reports and a few handled errors to
-[Sentry](https://sentry.io). Those reports are diagnostic only: stack traces and
-error details, never your audio, transcripts, or API key.
+[Datadog](https://www.datadoghq.com). Those reports are diagnostic only: stack
+traces and error details, never your audio, transcripts, or API key.
 
 Because transcription is processed by AssemblyAI, their policies apply to that
 audio:

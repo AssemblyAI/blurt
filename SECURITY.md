@@ -33,7 +33,7 @@ how Blurt handles audio, the API key, the clipboard, or the accessibility
 permissions it uses are in scope here.
 
 Release builds also send crash reports and a few handled errors to
-[Sentry](https://sentry.io) for stability monitoring. These are diagnostic only
+[Datadog](https://www.datadoghq.com) for stability monitoring. These are diagnostic only
 (stack traces and error details) — they never include your audio, transcripts,
 or API key, and Blurt does not attach your IP address. Debug builds send
 nothing.
