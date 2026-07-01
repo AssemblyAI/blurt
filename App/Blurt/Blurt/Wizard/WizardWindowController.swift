@@ -136,13 +136,13 @@ struct ReadyView: View {
     .fixedSize(horizontal: false, vertical: true)
   }
 
-  /// "Tap or hold ⌘ to blurt and paste", with the key drawn as a rounded keycap.
+  /// "Tap or hold ⌘ to blurt", with the key drawn as a rounded keycap.
   private var shortcutReadout: some View {
     HStack(spacing: 6) {
       Text("Tap or hold")
         .foregroundStyle(.secondary)
       KeyCap(label: TriggerKey.fromPersisted(triggerKeyCode).label)
-      Text("to blurt and paste")
+      Text("to blurt")
         .foregroundStyle(.secondary)
     }
     .font(.title3)
