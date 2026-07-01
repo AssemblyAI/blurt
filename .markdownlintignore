@@ -1,0 +1,15 @@
+# The entries above the "lint-only" divider mirror .cursorignore — keep those in sync.
+
+# Generated Xcode project — edit App/Blurt/project.yml and run xcodegen generate.
+App/Blurt/Blurt.xcodeproj/
+
+# README/marketing screenshots (not source).
+.github/images/
+
+# App icon asset bundle (not Swift).
+App/Blurt/Blurt/AppIcon.icon/
+
+# --- lint-only (NOT mirrored to .cursorignore — Cursor still indexes these) ---
+
+# Working docs / plans / marketing drafts — prose, not shipped source. Not linted.
+docs/

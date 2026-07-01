@@ -1,0 +1,26 @@
+.build/
+.swiftpm/
+DerivedData/
+*.xcuserdatad/
+xcuserdata/
+.DS_Store
+.claude/*
+!.claude/settings.json
+# Shared, project-specific Claude Code automations (kept under version control).
+# Personal config (.claude/settings.local.json) stays ignored by .claude/* above.
+!.claude/hooks/
+!.claude/agents/
+!.claude/skills/
+.superpowers/
+build/
+
+# Code-coverage profiles dropped in the working dir by coverage-instrumented
+# test runs (the Blurt.xctestplan enables coverage; the real data lands in the
+# .xcresult / .build, these stray zero-byte profiles don't belong in git).
+*.profraw
+*.profdata
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/

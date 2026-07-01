@@ -1,0 +1,205 @@
+name: Blurt
+options:
+  bundleIdPrefix: dev.alex
+  deploymentTarget:
+    macOS: "15.0"
+  developmentLanguage: en
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
+    ARCHS: arm64
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "640A7F5A9754400D4A0491E7A6FB30542D907806"
+    DEVELOPMENT_TEAM: "Y54ZB9JF63"
+    ENABLE_HARDENED_RUNTIME: YES
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    DEAD_CODE_STRIPPING: YES
+  configs:
+    Release:
+      VALIDATE_PRODUCT: YES
+packages:
+  BlurtEngine:
+    path: ../..
+  AppUpdater:
+    url: https://github.com/mxcl/AppUpdater
+    from: "2.1.1"
+  Sentry:
+    url: https://github.com/getsentry/sentry-cocoa
+    from: "9.19.0"
+targets:
+  Blurt:
+    type: application
+    platform: macOS
+    settings:
+      base:
+        # All-lowercase bundle id. macOS records the Accessibility TCC client in
+        # lowercase, but LaunchServices resolves the Privacy list against the
+        # app's declared (case-preserving) id. A mixed-case id therefore never
+        # matches its own TCC record, so Blurt stays invisible in the
+        # Accessibility list. Keeping the canonical id lowercase makes tccd and
+        # LaunchServices agree. Set explicitly to override XcodeGen's derived
+        # `dev.alex.Blurt` (from `bundleIdPrefix` + target name).
+        PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt
+        # Treat warnings as errors for our own app code. Scoped to this target
+        # (not project base) so it doesn't collide with the -suppress-warnings
+        # Xcode applies to SPM dependency packages (the engine package).
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+      configs:
+        # The XCUITest harness + leak/hotkey test seams compile only when
+        # UITEST_HOOKS is set (see the `#if UITEST_HOOKS` blocks). It's on for the
+        # Debug config — so Xcode, check.sh, uitest.sh, and leaks.sh all get the
+        # scaffolding — and scripts/dev-build.sh overrides it off for a clean
+        # local build. (DEBUG is listed explicitly since setting this key
+        # overrides the value XcodeGen would otherwise derive for a debug config.)
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG UITEST_HOOKS
+    sources:
+      - path: Blurt
+    info:
+      path: Blurt/Info.plist
+      properties:
+        CFBundleName: Blurt
+        CFBundleDisplayName: Blurt
+        CFBundleVersion: "23"
+        CFBundleShortVersionString: "0.1.22"
+        LSMinimumSystemVersion: "15.0"
+        LSApplicationCategoryType: public.app-category.productivity
+        NSMicrophoneUsageDescription: Blurt uses your microphone to transcribe your dictation with AssemblyAI.
+        NSAppleEventsUsageDescription: Blurt inserts text into the app you're using.
+    entitlements:
+      path: Blurt/Blurt.entitlements
+      properties:
+        com.apple.security.app-sandbox: false
+        com.apple.security.device.audio-input: true
+        com.apple.security.network.client: true
+    dependencies:
+      - package: BlurtEngine
+        product: BlurtEngine
+      - package: AppUpdater
+        product: AppUpdater
+      - package: Sentry
+        product: Sentry
+    postBuildScripts:
+      - name: Install to /Applications
+        script: |
+          set -e
+          # Debug-only: installs a re-signed copy at a stable path so TCC will
+          # register Blurt in the Accessibility / Input Monitoring lists.
+          # Release builds skip this — the release-build.sh script handles
+          # staging, secure-timestamp signing, DMG creation, and notarization
+          # separately.
+          if [ "$CONFIGURATION" != "Debug" ]; then
+            echo "Skipping Install to /Applications for $CONFIGURATION builds."
+            exit 0
+          fi
+          if [ "${CODE_SIGNING_ALLOWED:-YES}" = "NO" ]; then
+            echo "Skipping Install to /Applications: codesigning disabled (CI / health check)."
+            exit 0
+          fi
+          if [ "${CODE_SIGN_IDENTITY:-}" = "-" ]; then
+            # Ad-hoc identity — the UI-test / CI build (scripts/uitest.sh and
+            # check.sh sign ad-hoc so the XCUITest runner satisfies library
+            # validation). The Developer ID re-sign below can't run without the
+            # maintainer's cert, and the tests launch the app straight from
+            # DerivedData, so there's nothing to install.
+            echo "Skipping Install to /Applications: ad-hoc signing (UI test / CI)."
+            exit 0
+          fi
+          # Copy + re-sign into /Applications so TCC sees a permanent path.
+          # (Xcode/CLI builds otherwise live in DerivedData / /tmp — paths
+          # macOS treats as transient and refuses to add to the Privacy
+          # & Security toggle list.) Falls back to ~/Applications if the
+          # system folder isn't writable on this machine.
+          if [ -w /Applications ]; then
+            DEST="/Applications/${PRODUCT_NAME}.app"
+          else
+            DEST="$HOME/Applications/${PRODUCT_NAME}.app"
+            mkdir -p "$HOME/Applications"
+          fi
+          rm -rf "$DEST"
+          cp -R "$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app" "$DEST"
+
+          # SHA-1 of the Developer ID Application: Alexander Kroman cert.
+          # Errors are NOT swallowed.
+          IDENTITY="640A7F5A9754400D4A0491E7A6FB30542D907806"
+          ENTS="${SRCROOT}/Blurt/Blurt.entitlements"
+          # Inside-out signing: Debug builds emit unsigned dylibs
+          # (__preview.dylib, Blurt.debug.dylib). Signing the bundle
+          # alone doesn't recurse, so verify fails. Sign nested code first.
+          find "$DEST" -type f \( -name "*.dylib" -o -name "*.so" \) \
+            -print0 | while IFS= read -r -d '' f; do
+            codesign --force --sign "$IDENTITY" --options runtime "$f"
+          done
+          codesign --force --sign "$IDENTITY" \
+            --entitlements "$ENTS" \
+            --options runtime \
+            "$DEST"
+          codesign --verify --strict --verbose=1 "$DEST"
+          echo "Installed: $DEST"
+
+          # Keep LaunchServices pointing only at the stable install. This build
+          # also leaves a copy in DerivedData ($BUILT_PRODUCTS_DIR) registered
+          # under the same bundle id; if it lingers, macOS can resolve the id to
+          # that transient path and Blurt disappears from the Accessibility
+          # list. Drop the DerivedData copy and (re)register the install.
+          LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+          "$LSREGISTER" -u "$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app" >/dev/null 2>&1 || true
+          "$LSREGISTER" -f "$DEST" >/dev/null 2>&1 || true
+        basedOnDependencyAnalysis: false
+    scheme:
+      testPlans:
+        # Blurt.xctestplan runs the BlurtUITests suite with retry-on-failure (a
+        # flaky UI test gets up to 3 attempts before it's a real failure) and
+        # keeps screenshots/attachments even on success, so a CI failure has the
+        # UI state attached to the .xcresult. Engine coverage + the sanitizer
+        # passes stay on the SPM `swift test` path in check.sh (SPM tests aren't
+        # xcodebuild targets, so a test plan can't run them).
+        - path: Blurt.xctestplan
+          defaultPlan: true
+      testTargets:
+        - BlurtUITests
+      gatherCoverageData: false
+      commandLineArguments: {}
+      environmentVariables: {}
+      # Keep both runtime diagnostics on (their scheme default): the Main Thread
+      # Checker catches UI/AppKit work off the main thread, and the Thread
+      # Performance Checker flags priority inversions and long main-thread stalls
+      # — both directly relevant to a low-latency audio app.
+      disableMainThreadChecker: false
+      disableThreadPerformanceChecker: false
+  # XCUITest integration suite. A UI-testing bundle that launches the real Blurt
+  # app (built Debug, where the `-BlurtUITest` harness in UITestSupport.swift is
+  # compiled in) and drives the settings window, the menu bar item, and the
+  # record → transcribe → paste pipeline against the app's offline test doubles.
+  # Runs from the `Blurt` scheme's test action (`xcodebuild test`).
+  BlurtUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: BlurtUITests
+    dependencies:
+      - target: Blurt
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt.uitests
+        # The app target this bundle drives — XcodeGen wires it as the UI-test
+        # target application, so `XCUIApplication()` launches Blurt.
+        TEST_TARGET_NAME: Blurt
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        # Warnings are failures for the test sources too, matching the app target.
+        # Scoped here (not project base) to avoid colliding with the
+        # -suppress-warnings Xcode applies to the SPM dependency packages.
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        # The test bundle is never notarized; keep it out of the hardened-runtime
+        # / signing requirements the app target carries.
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGNING_REQUIRED: NO
+        # Must override the project-base ENABLE_HARDENED_RUNTIME: YES. With the
+        # ad-hoc signing the check/uitest scripts use, the hardened runtime turns
+        # on library validation, which refuses to map the (teamless) ad-hoc
+        # .xctest into the (teamless) ad-hoc XCTRunner — dyld fails the load with
+        # "different Team IDs" and the runner exits before any test runs. The
+        # bundle never ships, so it has no need for the hardened runtime.
+        ENABLE_HARDENED_RUNTIME: NO

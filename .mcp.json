@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "sentry": {
+      "type": "http",
+      "url": "https://mcp.sentry.dev/mcp"
+    },
+    "assemblyai-docs": {
+      "type": "http",
+      "url": "https://mcp.assemblyai.com/docs"
+    }
+  }
+}
