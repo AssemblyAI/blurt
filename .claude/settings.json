@@ -15,7 +15,14 @@
       "Bash(prettier --check *)",
       "Bash(scripts/check.sh)",
       "Bash(./scripts/check.sh)",
+      "Bash(scripts/check.sh --portable)",
+      "Bash(./scripts/check.sh --portable)",
       "Bash(scripts/dev-build.sh)",
+      "Bash(prettier *)",
+      "Bash(actionlint)",
+      "Bash(actionlint *)",
+      "Bash(xmllint --noout *)",
+      "Bash(bash scripts/release.test.sh)",
       "Bash(gh repo *)",
       "mcp__assemblyai-docs__search_docs",
       "mcp__assemblyai-docs__list_sections",
@@ -24,6 +31,16 @@
     ]
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.sh"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Edit|Write|MultiEdit",

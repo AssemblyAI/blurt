@@ -4,11 +4,36 @@
 # Runs swiftlint / periphery / actionlint / prettier / xmllint /
 # markdownlint / shellcheck when available.
 # Swift warnings are treated as errors everywhere; engine line coverage is gated.
+# `check.sh --portable` runs only the platform-independent subset (for Linux /
+# web sandboxes with no macOS toolchain) — see the flag parsing below.
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_DIR="$REPO_ROOT/App/Blurt"
+
+# --portable: run only the platform-independent checks (actionlint / prettier /
+# xmllint / markdownlint / shellcheck / release.test.sh, plus swift-format and
+# swiftlint lint when their Linux builds happen to be present). For Linux / web
+# sandboxes where the macOS toolchain is absent. A green --portable run is NOT
+# "green" in the CI sense — the Swift build, tests, sanitizers, coverage gate,
+# xcodegen drift check, and app build are all SKIPPED; CI on macos-26 stays the
+# authority. Without the flag, a missing toolchain fails fast here instead of
+# exploding at `swift test`.
+PORTABLE=0
+if [ "${1:-}" = "--portable" ]; then
+  PORTABLE=1
+elif [ -n "${1:-}" ]; then
+  echo "error: unknown argument '$1' (the only flag is --portable)" >&2
+  exit 2
+fi
+
+if [ "$PORTABLE" -eq 0 ] && ! command -v swift >/dev/null 2>&1; then
+  echo "error: no Swift toolchain found (Linux or web sandbox?)." >&2
+  echo "       Run 'scripts/check.sh --portable' for the platform-independent subset;" >&2
+  echo "       full verification happens on a Mac / CI (macos-26)." >&2
+  exit 1
+fi
 
 # Engine line-coverage floor (percent). Raise as coverage grows.
 # Set to 80 to accommodate untestable syscall seams (e.g. the CGEvent paste
@@ -18,124 +43,144 @@ MIN_COVERAGE=80
 
 export OS_ACTIVITY_MODE=disable
 
-if command -v xcbeautify >/dev/null 2>&1; then
-  PRETTY=(xcbeautify --quiet)
+if [ "$PORTABLE" -eq 1 ]; then
+  echo "==> portable mode: skipping swift test, coverage gate, sanitizers, xcodegen"
+  echo "    drift check, app build, UI tests, leaks, swiftlint analyze, periphery"
 else
-  PRETTY=(cat)
-  echo "note: xcbeautify not installed; using raw output (brew install xcbeautify)"
-fi
-
-echo "==> swift test (BlurtEngine)"
-cd "$REPO_ROOT"
-# -warnings-as-errors: a warning fails the build, so deprecations / unused code
-# can't accumulate. --enable-code-coverage feeds the coverage gate below.
-swift test --enable-code-coverage -Xswiftc -warnings-as-errors
-
-echo "==> coverage gate (>= ${MIN_COVERAGE}% engine lines)"
-BIN="$(swift build --show-bin-path)"
-PROFDATA="$BIN/codecov/default.profdata"
-XCTEST_BUNDLE="$(find "$BIN" -maxdepth 1 -name '*PackageTests.xctest' -print -quit)"
-XCTEST_BIN="$XCTEST_BUNDLE/Contents/MacOS/$(basename "$XCTEST_BUNDLE" .xctest)"
-if command -v python3 >/dev/null 2>&1 && [ -f "$PROFDATA" ] && [ -f "$XCTEST_BIN" ]; then
-  # Exclusions (so the figure reflects deterministically-testable engine code):
-  #  - Tests/            : test files themselves, not shipping code.
-  #  - MicCapture.swift  : the AVAudioRecorder capture actor. It needs a real
-  #                        audio device, so it can't run in CI (its integration
-  #                        test, MicCaptureLevelsTests, is env-gated for the same
-  #                        reason). Its pure meter math lives in
-  #                        MicCapture+Meter.swift, which IS covered. Keep this
-  #                        list tight — exclude only code that genuinely cannot
-  #                        be exercised without hardware.
-  COVERAGE="$(xcrun llvm-cov export -summary-only -instr-profile "$PROFDATA" "$XCTEST_BIN" \
-    -ignore-filename-regex='Tests/|Audio/MicCapture\.swift' \
-    | python3 -c 'import sys,json; print(round(json.load(sys.stdin)["data"][0]["totals"]["lines"]["percent"],2))')"
-  echo "engine line coverage: ${COVERAGE}%"
-  if ! awk -v c="$COVERAGE" -v min="$MIN_COVERAGE" 'BEGIN{ exit (c+0 < min+0) }'; then
-    echo "error: coverage ${COVERAGE}% is below the ${MIN_COVERAGE}% floor"
-    exit 1
+  if command -v xcbeautify >/dev/null 2>&1; then
+    PRETTY=(xcbeautify --quiet)
+  else
+    PRETTY=(cat)
+    echo "note: xcbeautify not installed; using raw output (brew install xcbeautify)"
   fi
-else
-  echo "note: skipping coverage gate (need python3 + a coverage build)"
-fi
 
-echo "==> swift test --sanitize=thread (data-race detection)"
-# ThreadSanitizer instruments the build and flags unsynchronized access to
-# shared mutable state at runtime — catching data races regardless of test
-# ordering (e.g. an unguarded global touched by parallel tests). Runs the
-# suite a second time against a TSan-instrumented build.
-swift test --sanitize=thread -Xswiftc -warnings-as-errors
+  echo "==> swift test (BlurtEngine)"
+  cd "$REPO_ROOT"
+  # -warnings-as-errors: a warning fails the build, so deprecations / unused code
+  # can't accumulate. --enable-code-coverage feeds the coverage gate below.
+  swift test --enable-code-coverage -Xswiftc -warnings-as-errors
 
-echo "==> swift test --sanitize=address (memory-safety detection)"
-# AddressSanitizer catches use-after-free, buffer overflows, and other memory
-# corruption at runtime. (LeakSanitizer is unsupported on Darwin, so this does
-# NOT find retain-cycle leaks — those are covered by the weak-reference
-# assertions in MemoryLeakTests.swift.)
-swift test --sanitize=address -Xswiftc -warnings-as-errors
-
-echo "==> xcodegen (App/Blurt)"
-cd "$APP_DIR"
-PBXPROJ="Blurt.xcodeproj/project.pbxproj"
-if command -v xcodegen >/dev/null 2>&1; then
-  # Drift check: regenerating must not change the on-disk project. If it does,
-  # the committed .pbxproj is stale vs project.yml — fail and ask for a commit.
-  BEFORE="$(shasum "$PBXPROJ" 2>/dev/null || true)"
-  xcodegen generate --quiet
-  AFTER="$(shasum "$PBXPROJ" 2>/dev/null || true)"
-  if [ -n "$BEFORE" ] && [ "$BEFORE" != "$AFTER" ]; then
-    echo "error: $PBXPROJ is out of sync with project.yml; run 'xcodegen generate' and commit it"
-    exit 1
+  echo "==> coverage gate (>= ${MIN_COVERAGE}% engine lines)"
+  BIN="$(swift build --show-bin-path)"
+  PROFDATA="$BIN/codecov/default.profdata"
+  XCTEST_BUNDLE="$(find "$BIN" -maxdepth 1 -name '*PackageTests.xctest' -print -quit)"
+  XCTEST_BIN="$XCTEST_BUNDLE/Contents/MacOS/$(basename "$XCTEST_BUNDLE" .xctest)"
+  if command -v python3 >/dev/null 2>&1 && [ -f "$PROFDATA" ] && [ -f "$XCTEST_BIN" ]; then
+    # Exclusions (so the figure reflects deterministically-testable engine code):
+    #  - Tests/            : test files themselves, not shipping code.
+    #  - MicCapture.swift  : the AVAudioRecorder capture actor. It needs a real
+    #                        audio device, so it can't run in CI (its integration
+    #                        test, MicCaptureLevelsTests, is env-gated for the same
+    #                        reason). Its pure meter math lives in
+    #                        MicCapture+Meter.swift, which IS covered. Keep this
+    #                        list tight — exclude only code that genuinely cannot
+    #                        be exercised without hardware.
+    COVERAGE="$(xcrun llvm-cov export -summary-only -instr-profile "$PROFDATA" "$XCTEST_BIN" \
+      -ignore-filename-regex='Tests/|Audio/MicCapture\.swift' \
+      | python3 -c 'import sys,json; print(round(json.load(sys.stdin)["data"][0]["totals"]["lines"]["percent"],2))')"
+    echo "engine line coverage: ${COVERAGE}%"
+    if ! awk -v c="$COVERAGE" -v min="$MIN_COVERAGE" 'BEGIN{ exit (c+0 < min+0) }'; then
+      echo "error: coverage ${COVERAGE}% is below the ${MIN_COVERAGE}% floor"
+      exit 1
+    fi
+  else
+    echo "note: skipping coverage gate (need python3 + a coverage build)"
   fi
-else
-  echo "note: xcodegen not installed; skipping project regeneration"
+
+  echo "==> swift test --sanitize=thread (data-race detection)"
+  # ThreadSanitizer instruments the build and flags unsynchronized access to
+  # shared mutable state at runtime — catching data races regardless of test
+  # ordering (e.g. an unguarded global touched by parallel tests). Runs the
+  # suite a second time against a TSan-instrumented build.
+  swift test --sanitize=thread -Xswiftc -warnings-as-errors
+
+  echo "==> swift test --sanitize=address (memory-safety detection)"
+  # AddressSanitizer catches use-after-free, buffer overflows, and other memory
+  # corruption at runtime. (LeakSanitizer is unsupported on Darwin, so this does
+  # NOT find retain-cycle leaks — those are covered by the weak-reference
+  # assertions in MemoryLeakTests.swift.)
+  swift test --sanitize=address -Xswiftc -warnings-as-errors
+
+  echo "==> xcodegen (App/Blurt)"
+  cd "$APP_DIR"
+  PBXPROJ="Blurt.xcodeproj/project.pbxproj"
+  if command -v xcodegen >/dev/null 2>&1; then
+    # Drift check: regenerating must not change the on-disk project. If it does,
+    # the committed .pbxproj is stale vs project.yml — fail and ask for a commit.
+    BEFORE="$(shasum "$PBXPROJ" 2>/dev/null || true)"
+    xcodegen generate --quiet
+    AFTER="$(shasum "$PBXPROJ" 2>/dev/null || true)"
+    if [ -n "$BEFORE" ] && [ "$BEFORE" != "$AFTER" ]; then
+      echo "error: $PBXPROJ is out of sync with project.yml; run 'xcodegen generate' and commit it"
+      exit 1
+    fi
+  else
+    echo "note: xcodegen not installed; skipping project regeneration"
+  fi
+
+  echo "==> xcodebuild build (Blurt)"
+  # Skip codesigning for the health-check build: the Developer ID cert only
+  # lives on the maintainer's machine. The postBuildScripts "Install to
+  # /Applications" step also bails out when CODE_SIGNING_ALLOWED=NO.
+  # Warnings-as-errors for the app target is set in project.yml
+  # (SWIFT_TREAT_WARNINGS_AS_ERRORS), scoped there to avoid colliding with the
+  # -suppress-warnings Xcode applies to SPM dependency packages.
+  # The raw build log is tee'd to $APP_BUILD_LOG so `swiftlint analyze` (below) can
+  # read the compiler invocations for its analyzer rules. This build compiles both
+  # the app and the engine package, so the log covers both.
+  APP_BUILD_LOG="$(mktemp -t blurt-build)"
+  trap 'rm -f "$APP_BUILD_LOG"' EXIT
+  set -o pipefail
+  xcodebuild \
+    -project Blurt.xcodeproj \
+    -scheme Blurt \
+    -configuration Debug \
+    -destination 'platform=macOS,arch=arm64' \
+    CODE_SIGN_IDENTITY="-" \
+    CODE_SIGNING_REQUIRED=NO \
+    CODE_SIGNING_ALLOWED=NO \
+    build 2>&1 | tee "$APP_BUILD_LOG" | "${PRETTY[@]}"
+
+  # XCUITest integration suite (BlurtUITests). Part of the required gate: it drives
+  # the real app (settings flows, the menu bar item, and the record → transcribe →
+  # paste pipeline against offline stubs). Delegated to scripts/uitest.sh so the
+  # ad-hoc signing the runner needs is defined in exactly one place. It needs a GUI
+  # session (a windowserver), which the macos-26 CI runner provides.
+  cd "$REPO_ROOT"
+  bash scripts/uitest.sh
+
+  # Whole-app leak check (scripts/leaks.sh). Drives the app under the Darwin leak
+  # detector and fails only on leaks attributable to Blurt's own code (the fixed
+  # set of system-framework XPC leaks is filtered out). Like the UI suite it needs
+  # the GUI session the macos-26 runner provides.
+  cd "$REPO_ROOT"
+  bash scripts/leaks.sh
 fi
 
-echo "==> xcodebuild build (Blurt)"
-# Skip codesigning for the health-check build: the Developer ID cert only
-# lives on the maintainer's machine. The postBuildScripts "Install to
-# /Applications" step also bails out when CODE_SIGNING_ALLOWED=NO.
-# Warnings-as-errors for the app target is set in project.yml
-# (SWIFT_TREAT_WARNINGS_AS_ERRORS), scoped there to avoid colliding with the
-# -suppress-warnings Xcode applies to SPM dependency packages.
-# The raw build log is tee'd to $APP_BUILD_LOG so `swiftlint analyze` (below) can
-# read the compiler invocations for its analyzer rules. This build compiles both
-# the app and the engine package, so the log covers both.
-APP_BUILD_LOG="$(mktemp -t blurt-build)"
-trap 'rm -f "$APP_BUILD_LOG"' EXIT
-set -o pipefail
-xcodebuild \
-  -project Blurt.xcodeproj \
-  -scheme Blurt \
-  -configuration Debug \
-  -destination 'platform=macOS,arch=arm64' \
-  CODE_SIGN_IDENTITY="-" \
-  CODE_SIGNING_REQUIRED=NO \
-  CODE_SIGNING_ALLOWED=NO \
-  build 2>&1 | tee "$APP_BUILD_LOG" | "${PRETTY[@]}"
-
-# XCUITest integration suite (BlurtUITests). Part of the required gate: it drives
-# the real app (settings flows, the menu bar item, and the record → transcribe →
-# paste pipeline against offline stubs). Delegated to scripts/uitest.sh so the
-# ad-hoc signing the runner needs is defined in exactly one place. It needs a GUI
-# session (a windowserver), which the macos-26 CI runner provides.
-cd "$REPO_ROOT"
-bash scripts/uitest.sh
-
-# Whole-app leak check (scripts/leaks.sh). Drives the app under the Darwin leak
-# detector and fails only on leaks attributable to Blurt's own code (the fixed
-# set of system-framework XPC leaks is filtered out). Like the UI suite it needs
-# the GUI session the macos-26 runner provides.
-cd "$REPO_ROOT"
-bash scripts/leaks.sh
-
-echo "==> swift-format"
-cd "$REPO_ROOT"
 # Apple's swift-format (bundled with Xcode 16+) is the project's FORMATTING
 # authority. --strict makes any pending formatting a non-zero exit so this
 # check fails if someone forgot to run swift-format on their diff.
 # Lint every tracked .swift file (git ls-files) so a new source directory is
 # picked up automatically rather than silently skipped by a stale path list.
-git ls-files -z -- '*.swift' \
-  | xargs -0 xcrun swift-format lint --strict
+# On a Mac it runs via xcrun; a bare swift-format on PATH (e.g. a Linux build)
+# works too. In portable mode a missing swift-format is a skip-note, matching
+# the other optional tools; on a Mac xcrun is always present so it still runs
+# unconditionally.
+cd "$REPO_ROOT"
+if command -v xcrun >/dev/null 2>&1; then
+  SWIFT_FORMAT=(xcrun swift-format)
+elif command -v swift-format >/dev/null 2>&1; then
+  SWIFT_FORMAT=(swift-format)
+else
+  SWIFT_FORMAT=()
+fi
+if [ "${#SWIFT_FORMAT[@]}" -gt 0 ]; then
+  echo "==> swift-format"
+  git ls-files -z -- '*.swift' \
+    | xargs -0 "${SWIFT_FORMAT[@]}" lint --strict
+else
+  echo "note: swift-format not installed; skipping (Swift formatting is checked on CI)"
+fi
 
 if command -v swiftlint >/dev/null 2>&1; then
   echo "==> swiftlint"
@@ -145,25 +190,29 @@ if command -v swiftlint >/dev/null 2>&1; then
   # failures, so any lint violation fails the build — keep the tree lint-clean.
   swiftlint lint --strict --quiet
 
-  echo "==> swiftlint analyze (unused imports)"
-  # Analyzer rules need the compiler invocations, so feed them the build log
-  # captured above. Catches unused imports — the one dead-code gap periphery
-  # (which covers unused declarations) doesn't. False positives on AVFoundation/
-  # OSLog are suppressed via always_keep_imports in .swiftlint.yml.
-  swiftlint analyze --strict --quiet --compiler-log-path "$APP_BUILD_LOG"
+  if [ "$PORTABLE" -eq 0 ]; then
+    echo "==> swiftlint analyze (unused imports)"
+    # Analyzer rules need the compiler invocations, so feed them the build log
+    # captured above. Catches unused imports — the one dead-code gap periphery
+    # (which covers unused declarations) doesn't. False positives on AVFoundation/
+    # OSLog are suppressed via always_keep_imports in .swiftlint.yml.
+    swiftlint analyze --strict --quiet --compiler-log-path "$APP_BUILD_LOG"
+  fi
 else
   echo "note: swiftlint not installed; skipping (brew install swiftlint)"
 fi
 
-if command -v periphery >/dev/null 2>&1; then
-  echo "==> periphery"
-  cd "$REPO_ROOT"
-  # --strict promotes any unused-code finding to a non-zero exit.
-  # Periphery does its own xcodebuild + index — separate from the build above
-  # because reusing DerivedData reliably across machines is fragile.
-  periphery scan --strict --quiet
-else
-  echo "note: periphery not installed; skipping (brew install periphery)"
+if [ "$PORTABLE" -eq 0 ]; then
+  if command -v periphery >/dev/null 2>&1; then
+    echo "==> periphery"
+    cd "$REPO_ROOT"
+    # --strict promotes any unused-code finding to a non-zero exit.
+    # Periphery does its own xcodebuild + index — separate from the build above
+    # because reusing DerivedData reliably across machines is fragile.
+    periphery scan --strict --quiet
+  else
+    echo "note: periphery not installed; skipping (brew install periphery)"
+  fi
 fi
 
 if command -v actionlint >/dev/null 2>&1; then
@@ -234,4 +283,8 @@ cd "$REPO_ROOT"
 # or network dependencies, so they run everywhere check.sh runs.
 bash scripts/release.test.sh
 
-echo "==> ok"
+if [ "$PORTABLE" -eq 1 ]; then
+  echo "==> ok (portable subset only — Swift build/tests NOT run; CI on macos-26 is the authority on green)"
+else
+  echo "==> ok"
+fi
