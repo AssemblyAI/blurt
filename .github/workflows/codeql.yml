@@ -3,12 +3,15 @@ name: codeql
 on:
   push:
     branches: [main]
+    paths-ignore: ["docs/**"]
   pull_request:
     branches: [main]
+    paths-ignore: ["docs/**"]
   schedule:
     # Weekly re-scan so newly-published CodeQL queries run against main even
     # during quiet periods. Monday 07:00 UTC.
     - cron: "0 7 * * 1"
+  workflow_dispatch: # manual run (e.g. to validate the swift scan on a branch)
 
 concurrency:
   group: codeql-${{ github.ref }}
@@ -18,32 +21,15 @@ permissions:
   contents: read
 
 jobs:
-  analyze:
-    name: Analyze (${{ matrix.language }})
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
-
+  # GitHub Actions workflow analysis — cheap (Linux, no build). Runs on every
+  # trigger, PRs included, so workflow-injection issues are caught pre-merge.
+  actions:
+    name: Analyze (actions)
+    runs-on: ubuntu-latest
     permissions:
       security-events: write # upload SARIF results to code scanning
       actions: read # required to read workflow runs on private repos
       contents: read # checkout
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Scans the workflow files themselves for injection and other
-          # GitHub Actions security issues. No build; runs on cheap Linux.
-          - language: actions
-            build-mode: none
-            runner: ubuntu-latest
-          # The Swift engine + app. build-mode: manual mirrors check.sh so the
-          # CodeQL tracer sees the same compiler invocations; autobuild can't
-          # cope with the xcodegen step + disabled signing.
-          - language: swift
-            build-mode: manual
-            runner: macos-26
-
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -53,32 +39,83 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
-          languages: ${{ matrix.language }}
-          build-mode: ${{ matrix.build-mode }}
+          languages: actions
+          build-mode: none
 
-      # Drive the Swift build explicitly (build-mode: manual) so the CodeQL
-      # tracer sees the compiler invocations for the app + engine. We build the
-      # committed Blurt.xcodeproj directly — no xcodegen step: the project is
-      # checked in and drift-checked by the `check` workflow, so it's already in
-      # sync with project.yml. (This also sidesteps CodeQL's Swift tracer running
-      # the build under an x86_64/Rosetta process, which makes Homebrew reject
-      # `brew install` in the arm64 /opt/homebrew prefix.) Codesigning is off: the
-      # Developer ID cert only lives on the maintainer's machine, and the
-      # "Install to /Applications" postBuildScript bails when signing is off.
-      - name: Build Swift
-        if: matrix.language == 'swift'
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:actions"
+
+  # Swift analysis — expensive (a full macOS build). Skipped on PRs: check.yml
+  # already gates every PR with a macOS build, so running a second one here just
+  # to trace it doubles the per-PR cost. Instead it runs on push to main, the
+  # weekly schedule, and manual dispatch — so main + the schedule still scan all
+  # the Swift code, just off the PR critical path.
+  swift:
+    name: Analyze (swift)
+    if: github.event_name != 'pull_request'
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      DERIVED: ${{ github.workspace }}/DerivedData-codeql
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # Cache the resolved SwiftPM checkouts so we don't re-clone sentry-cocoa's
+      # full git history on every run. Keyed on the pinned Package.resolved, so a
+      # dependency bump busts the cache. restore-keys lets an older cache seed a
+      # partial hit when the pins change.
+      - name: Cache SwiftPM checkouts
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.DERIVED }}/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('App/Blurt/Blurt.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
+
+      # Resolve dependencies BEFORE codeql init, so the git clones run natively
+      # (arm64) and untraced. CodeQL's Swift tracer runs the build as an x86_64
+      # (Rosetta) process, which makes dependency resolution — the slow part —
+      # crawl. CodeQL only needs to trace the compile, not the resolve, so we do
+      # the resolve here into the shared DerivedData path the build reuses.
+      - name: Resolve packages (native, untraced)
         working-directory: App/Blurt
         run: |
-          # Generic destination ("Any Mac"), not arch=arm64: CodeQL's tracer runs
-          # this build as an x86_64/Rosetta process, so xcodebuild sees the host
-          # as x86_64 and can't match an arm64 device for our arm64-only project.
-          # The generic destination cross-compiles per the project's ARCHS (arm64)
-          # regardless of the host arch.
+          xcodebuild \
+            -project Blurt.xcodeproj \
+            -scheme Blurt \
+            -derivedDataPath "$DERIVED" \
+            -resolvePackageDependencies
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: swift
+          build-mode: manual
+
+      # build-mode: manual — build the committed Blurt.xcodeproj directly (no
+      # xcodegen: it's checked in and drift-checked by the `check` workflow).
+      # Generic "Any Mac" destination, not arch=arm64: under CodeQL's x86_64
+      # tracer, xcodebuild can't match an arm64 device for our arm64-only project.
+      # -derivedDataPath reuses the packages resolved above. Codesigning is off:
+      # the Developer ID cert only lives on the maintainer's machine.
+      - name: Build Swift
+        working-directory: App/Blurt
+        run: |
           xcodebuild \
             -project Blurt.xcodeproj \
             -scheme Blurt \
             -configuration Debug \
             -destination 'generic/platform=macOS' \
+            -derivedDataPath "$DERIVED" \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
@@ -87,4 +124,4 @@ jobs:
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
         with:
-          category: "/language:${{ matrix.language }}"
+          category: "/language:swift"
