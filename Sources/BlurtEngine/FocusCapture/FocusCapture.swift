@@ -55,18 +55,7 @@ enum FocusCapture {
     -> FocusedFieldContext
   {
     guard AXIsProcessTrusted() else { return .empty }
-
-    let system = AXUIElementCreateSystemWide()
-    var focusedRef: CFTypeRef?
-    guard
-      AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedRef)
-        == .success,
-      let focusedRef
-    else { return .empty }
-    // CFTypeRef → AXUIElement is a guaranteed CF downcast; `as?` warns
-    // "always succeeds" (an error under -warnings-as-errors), so force-cast.
-    // swiftlint:disable:next force_cast
-    let element = focusedRef as! AXUIElement
+    guard let element = systemFocusedElement() else { return .empty }
 
     // Don't read the value of a password field into the prompt.
     let isSecure = (stringValue(element, kAXRoleAttribute) == "AXSecureTextField")
@@ -79,6 +68,24 @@ enum FocusCapture {
       selectedText: selected,
       windowTitle: clip(windowTitle(of: element), to: 120),
       fieldLabel: clip(fieldLabel(of: element), to: 80))
+  }
+
+  /// The system-wide focused UI element, or `nil` when none is resolvable
+  /// (process not trusted, or nothing focused). The Accessibility *client* read
+  /// APIs are thread-safe, so this serves both the `@MainActor` context capture
+  /// and the injector's off-main editability check.
+  private nonisolated static func systemFocusedElement() -> AXUIElement? {
+    let system = AXUIElementCreateSystemWide()
+    var focusedRef: CFTypeRef?
+    guard
+      AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedRef)
+        == .success,
+      let focusedRef
+    else { return nil }
+    // CFTypeRef → AXUIElement is a guaranteed CF downcast; `as?` warns
+    // "always succeeds" (an error under -warnings-as-errors), so force-cast.
+    // swiftlint:disable:next force_cast
+    return (focusedRef as! AXUIElement)
   }
 
   /// The insertion point (UTF-16 location of the selected range) of `element`,
@@ -150,7 +157,7 @@ enum FocusCapture {
     guard AXUIElementCopyAttributeValue(element, attribute as CFString, &ref) == .success,
       let value = ref as? String
     else { return nil }
-    return normalized(value)
+    return value.trimmedNonEmpty()
   }
 
   /// Reads an `AXUIElement`-valued AX attribute (e.g. the containing window).
@@ -218,13 +225,7 @@ enum FocusCapture {
   nonisolated static func hasEditableFocusedElement() -> Bool {
     guard AXIsProcessTrusted() else { return true }
 
-    let system = AXUIElementCreateSystemWide()
-    var focusedRef: CFTypeRef?
-    guard
-      AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedRef)
-        == .success,
-      let focusedRef
-    else {
+    guard let element = systemFocusedElement() else {
       // AX is trusted but reports no focused element — e.g. a native app frontmost
       // with nothing editable focused (Finder, the desktop, a button-only window).
       // Posting ⌘V there only beeps, so treat it as non-editable and copy instead.
@@ -233,8 +234,6 @@ enum FocusCapture {
       // `KeyInjector.insert` / `isElectronApp`).
       return false
     }
-    // swiftlint:disable:next force_cast
-    let element = focusedRef as! AXUIElement
 
     var roleRef: CFTypeRef?
     let role =
@@ -260,11 +259,6 @@ enum FocusCapture {
 
   // MARK: - Pure helpers (no Accessibility I/O — unit-testable in isolation)
 
-  /// Trims surrounding whitespace; returns `nil` for empty/blank input.
-  static func normalized(_ text: String?) -> String? {
-    text.trimmedNonEmpty()
-  }
-
   /// Picks the most descriptive field label in priority order
   /// (placeholder → description → title → role description), skipping blanks.
   /// Placeholder/description tend to be the most meaningful; role description
@@ -273,7 +267,7 @@ enum FocusCapture {
     placeholder: String?, description: String?, title: String?, roleDescription: String?
   ) -> String? {
     for candidate in [placeholder, description, title, roleDescription] {
-      if let value = normalized(candidate) { return value }
+      if let value = candidate.trimmedNonEmpty() { return value }
     }
     return nil
   }

@@ -18,16 +18,15 @@ for arg in "$@"; do
   esac
 done
 
-info()  { printf '\033[34m▸\033[0m %s\n' "$*"; }
-step()  { printf '\n\033[1;36m== %s ==\033[0m\n' "$*"; }
-die()   { printf '\033[31m✗\033[0m %s\n' "$*" >&2; exit 1; }
+# shellcheck source=scripts/release-lib.sh
+source "$REPO_ROOT/scripts/release-lib.sh"
 
 step "Preflight"
 for cmd in gh git xcrun awk; do
   command -v "$cmd" >/dev/null 2>&1 || die "missing required tool: $cmd"
 done
 
-VERSION="$(awk '/CFBundleShortVersionString:/ {gsub(/"/,"",$2); print $2; exit}' "$APP_DIR/project.yml")"
+VERSION="$(parse_short_version <"$APP_DIR/project.yml")"
 [ -n "$VERSION" ] || die "could not parse version"
 DMG="$BUILD_ROOT/Blurt-$VERSION.dmg"
 DSYM_ZIP="$BUILD_ROOT/Blurt-$VERSION.app.dSYM.zip"

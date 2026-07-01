@@ -207,7 +207,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// the call site in `applicationDidFinishLaunching` and `scripts/leaks.sh`.
     @MainActor
     private func runLeakExercise(_ coord: AppCoordinator) async {
-      coord.saveAPIKey("uitest-valid-key")  // clear the missing-key gate
+      coord.saveAPIKey(UITestKeys.validAPIKey)  // clear the missing-key gate
       // Build/enable the key tap's object graph, then drive cycles *through the
       // tap* (gate + callbacks), so the leak run covers the real dictation-key
       // path — not just the session. (The tap can't create its CGEventTap without

@@ -8,21 +8,6 @@ import Testing
 /// Accessibility trust, so they're exercised by running the app, not here.
 @Suite("FocusCapture helpers")
 struct FocusCaptureTests {
-  // MARK: normalized
-
-  @Test("normalized trims surrounding whitespace")
-  func normalizedTrims() {
-    #expect(FocusCapture.normalized("  hello  ") == "hello")
-    #expect(FocusCapture.normalized("line\n") == "line")
-  }
-
-  @Test("normalized maps nil/empty/blank to nil")
-  func normalizedBlank() {
-    #expect(FocusCapture.normalized(nil) == nil)
-    #expect(FocusCapture.normalized("") == nil)
-    #expect(FocusCapture.normalized("   \n\t ") == nil)
-  }
-
   // MARK: selectLabel
 
   @Test("selectLabel prefers placeholder when present")

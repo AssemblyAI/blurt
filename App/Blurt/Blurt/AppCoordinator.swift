@@ -90,23 +90,13 @@ final class AppCoordinator {
     // auto-repeat key events into the focused app while held.
     let tap = DictationKeyTap(
       onStart: { [weak self] in
-        Task { @MainActor in
-          guard let self else { return }
-          guard self.hasAPIKey else {
-            // No key yet — take the user straight to the fix instead of a
-            // transient message. The overlay pill isn't even visible in this
-            // state (it's only revealed once setup is complete).
-            self.onMissingAPIKey()
-            return
-          }
-          await self.session.press()
-        }
+        Task { @MainActor in await self?.beginDictation() }
       },
       onStop: { [weak self] in
-        Task { @MainActor in await self?.session.release() }
+        Task { @MainActor in await self?.endDictation() }
       },
       onCancel: { [weak self] in
-        Task { @MainActor in await self?.session.cancel() }
+        Task { @MainActor in await self?.cancelDictation() }
       }
     )
     self.keyTap = tap
@@ -159,6 +149,35 @@ final class AppCoordinator {
   /// configured, so the pill is never on screen while dictation can't work.
   func hideOverlay() {
     overlay?.hide()
+  }
+
+  // MARK: - Dictation drivers
+  //
+  // The single begin/end/cancel path shared by the key tap's closures and the
+  // UI-test harness (`UITestSupport`), so the harness always exercises the same
+  // gate the hotkey does.
+
+  /// Begins a dictation as the hotkey would: the missing-key gate first, then
+  /// `session.press()`.
+  func beginDictation() async {
+    guard hasAPIKey else {
+      // No key yet — take the user straight to the fix instead of a
+      // transient message. The overlay pill isn't even visible in this
+      // state (it's only revealed once setup is complete).
+      onMissingAPIKey()
+      return
+    }
+    await session.press()
+  }
+
+  /// Stops recording and runs transcribe→inject.
+  func endDictation() async {
+    await session.release()
+  }
+
+  /// Abandons the in-flight dictation.
+  func cancelDictation() async {
+    await session.cancel()
   }
 
   /// Called when the user rebinds (or clears) the dictation shortcut in the

@@ -5,9 +5,11 @@ import Foundation
 actor StubMicCapture: MicCaptureProtocol {
   var startCalls = 0
   var stopCalls = 0
-  // Above `SyncSTTLimits.minSamples` (16 kHz × 0.1 s = 1600) so the default
-  // press→release flow clears the too-short guard and reaches transcribe.
-  var samplesToReturn: [Float] = Array(repeating: 0, count: 1600)
+  // Comfortably above `SyncSTTLimits.minSamples` so the default press→release
+  // flow clears the too-short guard and reaches transcribe, tracking the engine
+  // rule so a raised floor can't silently start dropping the canned audio.
+  var samplesToReturn: [Float] = Array(
+    repeating: 0, count: SyncSTTLimits.minSamples(sampleRate: SyncSTTLimits.sampleRate) * 2)
   var startError: (any Error & Sendable)?
   var stopError: (any Error & Sendable)?
 

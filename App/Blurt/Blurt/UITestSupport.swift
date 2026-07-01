@@ -73,7 +73,9 @@
   /// and proceeds to transcribe.
   struct UITestMic: MicCaptureProtocol {
     func start() async throws {}
-    func stop() async throws -> [Float] { Array(repeating: 0, count: 2_000) }
+    func stop() async throws -> [Float] {
+      Array(repeating: 0, count: SyncSTTLimits.minSamples(sampleRate: SyncSTTLimits.sampleRate) * 2)
+    }
   }
 
   /// Stub transcriber: returns the harness's canned transcript, so the "spoken"
@@ -130,8 +132,9 @@
 
   // MARK: - Harness window
 
-  /// The test harness window. It exposes buttons that drive the same pipeline the
-  /// hotkey would (via `AppCoordinator.uiTest*`), a field to set the canned
+  /// The test harness window. It exposes buttons that drive the same pipeline
+  /// the hotkey would (`AppCoordinator.beginDictation`/`…end`/`…cancel`), a
+  /// field to set the canned
   /// transcript, and read-outs for the live pipeline status and the last
   /// "pasted" text — everything the XCUITest suite needs to observe the
   /// record → transcribe → paste flow deterministically.
@@ -154,13 +157,13 @@
           .accessibilityIdentifier(UITestID.transcriptField)
 
         HStack(spacing: 8) {
-          Button("Set API Key") { coordinator?.saveAPIKey("uitest-valid-key") }
+          Button("Set API Key") { coordinator?.saveAPIKey(UITestKeys.validAPIKey) }
             .accessibilityIdentifier(UITestID.setKeyButton)
-          Button("Start") { Task { await coordinator?.uiTestBeginDictation() } }
+          Button("Start") { Task { await coordinator?.beginDictation() } }
             .accessibilityIdentifier(UITestID.startButton)
-          Button("Stop") { Task { await coordinator?.uiTestEndDictation() } }
+          Button("Stop") { Task { await coordinator?.endDictation() } }
             .accessibilityIdentifier(UITestID.stopButton)
-          Button("Cancel") { Task { await coordinator?.uiTestCancelDictation() } }
+          Button("Cancel") { Task { await coordinator?.cancelDictation() } }
             .accessibilityIdentifier(UITestID.cancelButton)
         }
 

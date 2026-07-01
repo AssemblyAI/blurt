@@ -29,8 +29,9 @@ the real Keychain. Launching with `-BlurtUITest` (set by
   `UITestInjector`) and an `InMemoryAPIKeyStore` via the `DictationComponents` /
   `APIKeyGateway` seams on `AppCoordinator`, and
 - presents a harness window with buttons that call the same pipeline entry points
-  the hotkey uses (`AppCoordinator.uiTestBeginDictation` / `…End` / `…Cancel`),
-  plus read-outs for the live pipeline phase and the injector's last "paste".
+  the hotkey uses (`AppCoordinator.beginDictation` / `endDictation` /
+  `cancelDictation`), plus read-outs for the live pipeline phase and the
+  injector's last "paste".
 
 The lone-modifier `CGEventTap` trigger can't be synthesized by XCUITest (and
 needs an Accessibility-trusted process), so the harness drives the pipeline

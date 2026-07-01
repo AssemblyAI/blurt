@@ -137,22 +137,15 @@ struct ReadyView: View {
 
   /// "Tap or hold ⌘ to blurt and paste", with the key drawn as a rounded keycap.
   private var shortcutReadout: some View {
-    gestureLine(prefix: "Tap or hold", suffix: "to blurt and paste")
-  }
-
-  /// One gesture readout, e.g. "Tap or hold [⌘] to blurt and paste", with the trigger
-  /// key drawn as a rounded keycap between the prefix and suffix.
-  private func gestureLine(prefix: String, suffix: String) -> some View {
     HStack(spacing: 6) {
-      Text(prefix)
+      Text("Tap or hold")
         .foregroundStyle(.secondary)
       KeyCap(label: TriggerKey.fromPersisted(triggerKeyCode).label)
-      Text(suffix)
+      Text("to blurt and paste")
         .foregroundStyle(.secondary)
     }
     .font(.title3)
   }
-
 }
 
 private struct ReadyBrandingView: View {

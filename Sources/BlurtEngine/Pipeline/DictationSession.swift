@@ -39,8 +39,9 @@ public actor DictationSession {
   /// endpoint rejects, so we stop early and transcribe what we have.
   private let maxRecordingSeconds: Double
 
-  /// Sample rate the mic capture delivers and the Sync STT request declares.
-  private static let captureSampleRate = 16_000
+  /// Sample rate the mic capture delivers and the Sync STT request declares —
+  /// the Sync API's geometry, defined once in `SyncSTTLimits`.
+  private static let captureSampleRate = SyncSTTLimits.sampleRate
 
   /// Context captured at `press()` (focused app + text before the cursor),
   /// passed to the transcriber so the Sync STT model has priming. Captured at

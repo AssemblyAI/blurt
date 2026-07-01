@@ -30,9 +30,8 @@ for arg in "$@"; do
   esac
 done
 
-info()  { printf '\033[34m▸\033[0m %s\n' "$*"; }
-step()  { printf '\n\033[1;36m== %s ==\033[0m\n' "$*"; }
-die()   { printf '\033[31m✗\033[0m %s\n' "$*" >&2; exit 1; }
+# shellcheck source=scripts/release-lib.sh
+source "$REPO_ROOT/scripts/release-lib.sh"
 
 # Submit an artifact (app zip or DMG) to Apple's notary service, wait for the
 # result, and die on anything but Accepted. Writes per-artifact result + log
@@ -85,7 +84,7 @@ xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
   || die "working tree dirty — commit or stash before building a release artifact"
 
 step "Read version"
-VERSION="$(awk '/CFBundleShortVersionString:/ {gsub(/"/,"",$2); print $2; exit}' "$APP_DIR/project.yml")"
+VERSION="$(parse_short_version <"$APP_DIR/project.yml")"
 [ -n "$VERSION" ] || die "could not parse CFBundleShortVersionString from $APP_DIR/project.yml"
 info "version: $VERSION"
 

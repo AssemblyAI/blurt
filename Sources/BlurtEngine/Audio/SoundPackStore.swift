@@ -1,8 +1,8 @@
 import Foundation
 
 /// Persists the chosen `SoundPack` (by its `id`) in `UserDefaults`. Defaults to
-/// `SoundPack.defaultPack` (HARP 1) when unset or when the stored id isn't a
-/// known pack. Same shape as `TriggerKeyStore`.
+/// `SoundPack.defaultPack` when unset or when the stored id isn't a known pack.
+/// Same shape as `TriggerKeyStore`.
 public struct SoundPackStore {
   /// UserDefaults key holding the selected pack id. Public so SwiftUI views can
   /// observe it directly (e.g. `@AppStorage`) and re-render on change.

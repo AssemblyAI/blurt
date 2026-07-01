@@ -4,7 +4,7 @@ import Foundation
 
 actor StubTranscriber: TranscriberProtocol {
   enum Mode {
-    case yieldChunks([String])
+    case transcript(String)
     case throwError(any Error & Sendable)
   }
   private var mode: Mode
@@ -13,8 +13,8 @@ actor StubTranscriber: TranscriberProtocol {
 
   func transcribe(samples: [Float], sampleRate: Int, context: TranscriptionContext?) async throws -> String {
     switch mode {
-    case .yieldChunks(let chunks):
-      return chunks.joined()
+    case .transcript(let transcript):
+      return transcript
     case .throwError(let err):
       throw err
     }

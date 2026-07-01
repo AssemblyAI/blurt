@@ -20,10 +20,11 @@ public actor MicCapture: MicCaptureProtocol {
   public nonisolated let levels: AsyncStream<Float>
   private nonisolated let levelsContinuation: AsyncStream<Float>.Continuation
 
-  /// The geometry the recorder converts hardware audio to on the fly. Matches the
-  /// `sampleRate: 16_000` the pipeline hands the transcriber, so `stop()` returns
-  /// samples ready to encode with no resampling pass.
-  private static let targetSampleRate = 16_000.0
+  /// The geometry the recorder converts hardware audio to on the fly. The Sync
+  /// API's rate (`SyncSTTLimits.sampleRate`) — the same one the pipeline hands
+  /// the transcriber — so `stop()` returns samples ready to encode with no
+  /// resampling pass.
+  private static let targetSampleRate = Double(SyncSTTLimits.sampleRate)
 
   /// Pre-prepared in `warmUp()` so the *first* dictation doesn't pay hardware
   /// route discovery on the hot path; consumed by the first `start()`. Every
@@ -144,20 +145,8 @@ public actor MicCapture: MicCaptureProtocol {
     levelsContinuation.yield(Self.linearLevel(fromPowerDB: recorder.averagePower(forChannel: 0)))
   }
 
-  /// Lowest dBFS meter reading treated as audible; anything quieter (room
-  /// ambient) maps to 0. Deliberately set above typical built-in-mic noise: the
-  /// overlay's auto-gain stretches *any* steady nonzero level back to a full bar,
-  /// so silence must floor to exactly 0 or the meter reads full at rest.
-  static let meterFloorDB: Float = -50
-
-  /// Convert `AVAudioRecorder`'s dBFS meter power into the `0...1` the overlay
-  /// expects, mapped linearly across `[meterFloorDB, 0]`. (A raw `pow(10, db/20)`
-  /// amplitude leaves ambient noise well above zero, which the auto-gain then
-  /// inflates into a full bar at rest — the meter looked inverted.)
-  static func linearLevel(fromPowerDB db: Float) -> Float {
-    guard db.isFinite, db > meterFloorDB else { return 0 }
-    return min(1, (db - meterFloorDB) / -meterFloorDB)
-  }
+  // The dB→0...1 conversion `emitLevel` uses lives in `MicCapture+Meter.swift`
+  // — pure math the coverage gate counts, unlike this hardware-bound actor.
 
   // MARK: - File helpers
 

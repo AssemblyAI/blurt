@@ -11,13 +11,12 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_DIR="$REPO_ROOT/App/Blurt"
 PROJECT_YML="$APP_DIR/project.yml"
 
-info()  { printf '\033[34m▸\033[0m %s\n' "$*"; }
-step()  { printf '\n\033[1;36m== %s ==\033[0m\n' "$*"; }
-die()   { printf '\033[31m✗\033[0m %s\n' "$*" >&2; exit 1; }
+# shellcheck source=scripts/release-lib.sh
+source "$REPO_ROOT/scripts/release-lib.sh"
 
 [ $# -eq 1 ] || die "usage: $(basename "$0") X.Y.Z"
 NEW_VERSION="$1"
-[[ "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "version must be X.Y.Z (got: $NEW_VERSION)"
+is_semver "$NEW_VERSION" || die "version must be X.Y.Z (got: $NEW_VERSION)"
 
 step "Preflight"
 command -v xcodegen >/dev/null 2>&1 || die "missing required tool: xcodegen"
@@ -27,16 +26,14 @@ if [ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]; then
   die "working tree dirty — commit or stash before bumping"
 fi
 
-CURRENT_VERSION="$(awk '/CFBundleShortVersionString:/ {gsub(/"/,"",$2); print $2; exit}' "$PROJECT_YML")"
-CURRENT_BUILD="$(awk '/CFBundleVersion:/ {gsub(/"/,"",$2); print $2; exit}' "$PROJECT_YML")"
+CURRENT_VERSION="$(parse_short_version <"$PROJECT_YML")"
+CURRENT_BUILD="$(parse_bundle_version <"$PROJECT_YML")"
 [ -n "$CURRENT_VERSION" ] || die "could not parse CFBundleShortVersionString from $PROJECT_YML"
 [ -n "$CURRENT_BUILD" ] || die "could not parse CFBundleVersion from $PROJECT_YML"
 [[ "$CURRENT_BUILD" =~ ^[0-9]+$ ]] || die "CFBundleVersion is not an integer: $CURRENT_BUILD"
 
 [ "$NEW_VERSION" != "$CURRENT_VERSION" ] || die "version $NEW_VERSION is already current"
-
-LOWER="$(printf '%s\n%s\n' "$CURRENT_VERSION" "$NEW_VERSION" | sort -V | head -n1)"
-[ "$LOWER" = "$CURRENT_VERSION" ] || die "$NEW_VERSION is not greater than current $CURRENT_VERSION"
+version_gt "$NEW_VERSION" "$CURRENT_VERSION" || die "$NEW_VERSION is not greater than current $CURRENT_VERSION"
 
 if git -C "$REPO_ROOT" rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
   die "tag v$NEW_VERSION already exists locally"
@@ -56,8 +53,8 @@ sed -i.bak -E \
   "$PROJECT_YML"
 rm -f "$PROJECT_YML.bak"
 
-VERIFY_VERSION="$(awk '/CFBundleShortVersionString:/ {gsub(/"/,"",$2); print $2; exit}' "$PROJECT_YML")"
-VERIFY_BUILD="$(awk '/CFBundleVersion:/ {gsub(/"/,"",$2); print $2; exit}' "$PROJECT_YML")"
+VERIFY_VERSION="$(parse_short_version <"$PROJECT_YML")"
+VERIFY_BUILD="$(parse_bundle_version <"$PROJECT_YML")"
 [ "$VERIFY_VERSION" = "$NEW_VERSION" ] || die "edit failed: short version is $VERIFY_VERSION, expected $NEW_VERSION"
 [ "$VERIFY_BUILD" = "$NEW_BUILD" ] || die "edit failed: build is $VERIFY_BUILD, expected $NEW_BUILD"
 

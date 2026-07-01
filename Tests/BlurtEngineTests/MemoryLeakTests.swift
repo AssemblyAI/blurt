@@ -30,7 +30,7 @@ struct MemoryLeakTests {
     await expectNoLeak("DictationSession") {
       let session = DictationSession(
         mic: StubMicCapture(),
-        transcriber: StubTranscriber(mode: .yieldChunks(["Hello."])),
+        transcriber: StubTranscriber(mode: .transcript("Hello.")),
         injector: StubInjector()
       )
       await session.press()

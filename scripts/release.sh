@@ -15,26 +15,13 @@
 #
 # Re-run the same command after merging the PR to resume.
 
+# Shared logging + pure version helpers (is_semver, version_gt,
+# parse_short_version, parse_build_info_git_sha) live in release-lib.sh so all
+# the release scripts share one definition.
+# shellcheck source=scripts/release-lib.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/release-lib.sh"
+
 # --- pure helpers (sourced by scripts/release.test.sh; keep side-effect-free) ---
-
-# True if $1 looks like X.Y.Z (digits only).
-is_semver() { [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; }
-
-# True if version $1 is strictly greater than version $2 (semver-ordered).
-version_gt() {
-  [ "$1" != "$2" ] || return 1
-  [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n1)" = "$1" ]
-}
-
-# Read CFBundleShortVersionString from project.yml content on stdin.
-parse_short_version() {
-  awk '/CFBundleShortVersionString:/ {gsub(/"/, "", $2); print $2; exit}'
-}
-
-# Read the full commit SHA from build-info.txt content on stdin.
-parse_build_info_git_sha() {
-  awk '/^git:[[:space:]]+/ {print $2; exit}'
-}
 
 # Decide the run given main's current version ($1) and the target ($2).
 # Echoes "publish" (target already on main) or "bump" (target is ahead).
@@ -75,14 +62,6 @@ default_target() {
   else
     next_patch "$main_v"
   fi
-}
-
-# --- logging (matches the sibling scripts) ---
-info() { printf '\033[34m▸\033[0m %s\n' "$*"; }
-step() { printf '\n\033[1;36m== %s ==\033[0m\n' "$*"; }
-die() {
-  printf '\033[31m✗\033[0m %s\n' "$*" >&2
-  exit 1
 }
 
 # --- IO helpers (side-effecting; verified by a real release, not unit tests) ---

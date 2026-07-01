@@ -58,6 +58,7 @@ struct ProductionAPIKeyStore: APIKeyGateway {
 /// behind `#if DEBUG`) because the submit path that reads them is compiled in
 /// every configuration; the XCUITest target hard-codes the same string values.
 enum UITestKeys {
+  static let validAPIKey = "uitest-valid-key"
   static let invalidAPIKey = "uitest-invalid-key"
   static let unreachableAPIKey = "uitest-unreachable-key"
 }

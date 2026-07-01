@@ -50,7 +50,7 @@ struct CancelRaceTests {
     // than inferred from an empty array after the fact.
     await confirmation("cancelled injection records no paste", expectedCount: 0) { pasted in
       let mic = StubMicCapture()
-      let stt = StubTranscriber(mode: .yieldChunks(["Hello world."]))
+      let stt = StubTranscriber(mode: .transcript("Hello world."))
       let injector = GatedInjector(onRecord: { pasted() })
       let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
 
@@ -74,7 +74,7 @@ struct CancelRaceTests {
   func cancelTearsDownAutoRelease() async throws {
     let mic = StubMicCapture()
     // Would inject "Timed out text." if the auto-release timer ever fired release().
-    let stt = StubTranscriber(mode: .yieldChunks(["Timed out text."]))
+    let stt = StubTranscriber(mode: .transcript("Timed out text."))
     let injector = StubInjector()
     // A short cap so a *live* timer would fire well within the wait below — the
     // test proves cancel cancelled it, not that the timer simply hasn't elapsed.

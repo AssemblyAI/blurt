@@ -2,6 +2,12 @@
 /// a held hotkey just before the cap so a long press never records audio the
 /// endpoint would reject.
 public enum SyncSTTLimits {
+  /// Sample rate of the 16 kHz / mono / 16-bit PCM geometry the Sync API
+  /// expects. The single definition shared by `MicCapture` (which records at
+  /// this rate) and `DictationSession` (which declares it on the request), so
+  /// the recorded and declared rates can't drift apart.
+  public static let sampleRate = 16_000
+
   /// Maximum audio duration the Sync model accepts per request (seconds).
   public static let maxAudioSeconds: Double = 120
 

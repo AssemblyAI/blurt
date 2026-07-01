@@ -15,12 +15,8 @@ APP_DIR="$REPO_ROOT/App/Blurt"
 BUILD_ROOT="$REPO_ROOT/build/release"
 DERIVED="$BUILD_ROOT/derived"
 
-info() { printf '\033[34m▸\033[0m %s\n' "$*"; }
-step() { printf '\n\033[1;36m== %s ==\033[0m\n' "$*"; }
-die() {
-  printf '\033[31m✗\033[0m %s\n' "$*" >&2
-  exit 1
-}
+# shellcheck source=scripts/release-lib.sh
+source "$REPO_ROOT/scripts/release-lib.sh"
 
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 
@@ -29,7 +25,7 @@ for cmd in xcrun hdiutil codesign ditto awk; do
   command -v "$cmd" >/dev/null 2>&1 || die "missing required tool: $cmd"
 done
 
-VERSION="$(awk '/CFBundleShortVersionString:/ {gsub(/"/, "", $2); print $2; exit}' "$APP_DIR/project.yml")"
+VERSION="$(parse_short_version <"$APP_DIR/project.yml")"
 [ -n "$VERSION" ] || die "could not parse CFBundleShortVersionString from $APP_DIR/project.yml"
 info "version: $VERSION"
 
