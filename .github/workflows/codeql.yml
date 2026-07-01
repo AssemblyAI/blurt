@@ -69,7 +69,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # Cache the resolved SwiftPM checkouts so we don't re-clone sentry-cocoa's
+      # Cache the resolved SwiftPM checkouts so we don't re-clone the SDKs'
       # full git history on every run. Keyed on the pinned Package.resolved, so a
       # dependency bump busts the cache. restore-keys lets an older cache seed a
       # partial hit when the pins change.

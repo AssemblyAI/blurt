@@ -2,7 +2,6 @@ import AVFoundation
 import BlurtEngine
 import Foundation
 import Observation
-import Sentry
 
 @MainActor
 @Observable
@@ -328,18 +327,18 @@ final class AppCoordinator {
     }
     wasRecording = isRecording
 
-    // A .failed phase is a handled error (it doesn't crash the app), so Sentry's
-    // automatic crash reporting never sees it — report the genuine faults here.
+    // A .failed phase is a handled error (it doesn't crash the app), so the
+    // crash reporter never sees it — report the genuine faults here.
     if case .failed(let error) = phase {
-      reportFaultToSentry(error)
+      reportFault(error)
     }
   }
 
-  /// Reports a pipeline failure to Sentry, but only the genuine faults. The
+  /// Reports a pipeline failure to Datadog, but only the genuine faults. The
   /// permission- and key-missing cases are expected setup states the wizard
   /// already guides the user through, so reporting them would just be noise. The
   /// underlying error rides along as context for the wrapped cases.
-  private func reportFaultToSentry(_ error: BlurtError) {
+  private func reportFault(_ error: BlurtError) {
     switch error {
     case .microphonePermissionDenied, .accessibilityPermissionMissing, .apiKeyMissing:
       return
@@ -348,15 +347,13 @@ final class AppCoordinator {
       // but it's not a fault to report regardless — there was simply nowhere to type.
       return
     case .targetAppLost:
-      SentrySDK.capture(error: error)
+      Monitoring.reportError(error)
     case .sttFailed(let underlying), .audioCaptureFailed(let underlying):
       // A dropped/absent network connection isn't a Blurt fault — it's the
       // user being offline mid-dictation. The pipeline still surfaces a .failed
-      // phase to them; we just don't page Sentry about it.
+      // phase to them; we just don't report it.
       if Self.isConnectivityError(underlying) { return }
-      SentrySDK.capture(error: error) { scope in
-        scope.setExtra(value: String(describing: underlying), key: "underlying_error")
-      }
+      Monitoring.reportError(error, attributes: ["underlying_error": String(describing: underlying)])
     }
   }
 

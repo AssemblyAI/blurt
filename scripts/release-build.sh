@@ -2,16 +2,12 @@
 # Build, sign, notarize, and staple a release DMG into build/release/.
 # Reproducible; safe to re-run. The publish step is a separate script.
 #
-# Sentry (required): `sentry-cli` must be installed and authenticated — either a
-# `sentry-cli login` session or a SENTRY_AUTH_TOKEN in the environment. The auth
-# token is the ONLY secret and is never stored in this repo. The org slug +
-# project ID below are NOT secrets (the project ID is the same one in the public
-# DSN committed in AppDelegate.swift — a DSN ships inside the app binary by
-# design), so they're hard-coded here. The build uploads the dSYM (so Release
-# crashes symbolicate)
-# and creates + finalizes the matching Sentry release (so release-health adoption
-# / crash-free-by-release charts populate). Unauthenticated or no sentry-cli →
-# preflight fails before building.
+# Datadog (optional): if DATADOG_API_KEY is set, the build uploads the dSYM via
+# datadog-ci (run through npx, so Node/npm is needed) so Release crashes
+# symbolicate in Datadog. The API key is the only secret and is never stored in
+# this repo; DATADOG_SITE defaults to datadoghq.com (US1). With no key the upload
+# is skipped with a warning — crashes still report, just unsymbolicated — so a
+# release never fails on telemetry.
 
 set -euo pipefail
 
@@ -25,15 +21,6 @@ ENTITLEMENTS="$APP_DIR/Blurt/Blurt.entitlements"
 readonly IDENTITY="640A7F5A9754400D4A0491E7A6FB30542D907806"
 readonly TEAM_ID="Y54ZB9JF63"
 readonly NOTARY_PROFILE="blurt-notary"
-
-# Sentry org slug + project ID (not secrets — see the header note). Exported so
-# sentry-cli picks them up without per-command --org/--project flags. The org
-# must be the *slug*, not the numeric ID from the DSN: sentry-cli matches the
-# slug embedded in the auth token, and a numeric org ID makes it warn and fall
-# back to the token's org. (The org is inferable from the token, but pinning it
-# keeps the target explicit.)
-export SENTRY_ORG="alex-kroman"
-export SENTRY_PROJECT="4511634026004480"
 
 SKIP_CHECKS=0
 for arg in "$@"; do
@@ -80,16 +67,15 @@ else
 fi
 
 step "Preflight"
-for cmd in xcodegen xcodebuild xcrun hdiutil codesign spctl create-dmg awk shasum sentry-cli; do
-  command -v "$cmd" >/dev/null 2>&1 || die "missing required tool: $cmd (brew install create-dmg / getsentry/tools/sentry-cli if needed)"
+for cmd in xcodegen xcodebuild xcrun hdiutil codesign spctl create-dmg awk shasum; do
+  command -v "$cmd" >/dev/null 2>&1 || die "missing required tool: $cmd (brew install create-dmg if needed)"
 done
 
-# Sentry auth must be present — the dSYM upload + release creation later depend
-# on it, so fail now rather than after the expensive build/notarization. We don't
-# dictate *how* it's supplied (a `sentry-cli login` session or a SENTRY_AUTH_TOKEN
-# in the environment both work), only that sentry-cli is authenticated.
-if sentry-cli info 2>&1 | grep -q "Method: Unauthorized"; then
-  die "sentry-cli not authenticated — run 'sentry-cli login' (or export SENTRY_AUTH_TOKEN)"
+# Datadog dSYM upload is best-effort: warn now if DATADOG_API_KEY is unset so the
+# maintainer knows this build's crashes won't symbolicate, but don't block the
+# release on it (unlike the Apple signing/notarization steps, which are required).
+if [ -z "${DATADOG_API_KEY:-}" ]; then
+  info "note: DATADOG_API_KEY unset — dSYM upload will be skipped (crashes unsymbolicated)"
 fi
 
 xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
@@ -167,7 +153,7 @@ while IFS= read -r -d '' f; do
   codesign --force --sign "$IDENTITY" --options runtime --timestamp "$f"
   NESTED_COUNT=$((NESTED_COUNT + 1))
 done < <(find "$APP_STAGED" -type f \( -name "*.dylib" -o -name "*.so" \) -print0)
-# 2. Embedded framework bundles (e.g. Sentry.framework). Their mach-o binary has
+# 2. Embedded framework bundles, if any. Their mach-o binary has
 # no dylib/so suffix, so step 1 misses it — sign the bundle so its signature is
 # refreshed. `-depth` yields the deepest frameworks first, so a nested framework
 # is signed before any framework that contains it.
@@ -261,29 +247,19 @@ rmdir "$MOUNT_POINT" >/dev/null 2>&1 || true
 trap - EXIT
 info "dmg contents verified (Blurt.app $MOUNTED_VERSION, signed + stapled)"
 
-step "Sentry (dSYM + release)"
-# Runs after all the Apple steps so a Sentry hiccup never wastes notarization.
-# Auth + sentry-cli are validated in preflight and org/project are exported
-# above, so the commands here need no credentials or --org/--project flags.
-# The Sentry release name must match what the in-app SDK auto-tags events with:
-# {CFBundleIdentifier}@{CFBundleShortVersionString}+{CFBundleVersion}.
-BUILD_NUM="$(awk '/CFBundleVersion:/ {gsub(/"/,"",$2); print $2; exit}' "$APP_DIR/project.yml")"
-[ -n "$BUILD_NUM" ] || die "could not parse CFBundleVersion from $APP_DIR/project.yml"
-SENTRY_RELEASE="dev.alex.blurt@${VERSION}+${BUILD_NUM}"
-info "sentry release: $SENTRY_RELEASE"
-
-# Symbolicates crashes from the optimized/stripped Release build.
-sentry-cli debug-files upload "$DSYM_DST"
-
-# Create + finalize so adoption / crash-free-by-release / regression charts
-# light up. Commit association is best-effort — it needs either a Sentry repo
-# integration (--auto) or local git history (--local).
-sentry-cli releases new "$SENTRY_RELEASE"
-sentry-cli releases set-commits "$SENTRY_RELEASE" --auto \
-  || sentry-cli releases set-commits "$SENTRY_RELEASE" --local \
-  || info "commit association skipped (no repo integration / git history)"
-sentry-cli releases finalize "$SENTRY_RELEASE"
-info "sentry: dSYM uploaded + release $SENTRY_RELEASE finalized"
+step "Datadog (dSYM upload)"
+# Runs after all the Apple steps so a Datadog hiccup never wastes notarization.
+# Uploads the Release build's dSYM so optimized/stripped crashes symbolicate in
+# Datadog. Best-effort: skipped (with a note) when DATADOG_API_KEY is unset, so a
+# release never fails on telemetry. datadog-ci reads DATADOG_API_KEY and
+# DATADOG_SITE from the environment; DATADOG_SITE defaults to datadoghq.com (US1).
+if [ -n "${DATADOG_API_KEY:-}" ]; then
+  DATADOG_SITE="${DATADOG_SITE:-datadoghq.com}" \
+    npx --yes @datadog/datadog-ci dsyms upload "$DSYM_DST"
+  info "datadog: dSYM uploaded from $DSYM_DST"
+else
+  info "datadog: DATADOG_API_KEY unset — skipped dSYM upload"
+fi
 
 step "Provenance"
 PROVENANCE="$BUILD_ROOT/build-info.txt"

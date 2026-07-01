@@ -161,6 +161,7 @@
 		5E42262A8153912B13356293 /* juno-96-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 63AA5C73111EA1F4E03A8C24 /* juno-96-start.m4a */; };
 		5EF49E6114C9C7BF79F857D9 /* juno-8-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2FFA326076660C91492A6CE1 /* juno-8-stop.m4a */; };
 		60CE1FFB2833C564F335DFF3 /* juno-47-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 11F215137F50A2D4AC61E414 /* juno-47-stop.m4a */; };
+		6179B457E48877787CE028DA /* DatadogCrashReporting in Frameworks */ = {isa = PBXBuildFile; productRef = 45CD7152E18BFEE0F598216D /* DatadogCrashReporting */; };
 		623F42C6E50E5B9EBF9F207A /* juno-22-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = AD303A24D4133CE3F1F1DE23 /* juno-22-start.m4a */; };
 		643FE1E9922319122B1C087D /* rom1a-17-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = ED3C851EF55F6BBEBFDAE53A /* rom1a-17-stop.m4a */; };
 		645A40A3B0E75729A0E3D1AC /* juno-66-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 0CDBED88D2D7CE84776B7574 /* juno-66-start.m4a */; };
@@ -205,6 +206,7 @@
 		8061E52E8A874E1BA584A2E7 /* juno-48-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = ED5D54496B6973C9F7AE05F3 /* juno-48-stop.m4a */; };
 		80D5E7A6D72094E9FC31CF7C /* juno-92-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3C54A0D394CE71150BB0DBA8 /* juno-92-stop.m4a */; };
 		82B97735B1714774843153EF /* juno-90-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 79F8F36D7C5D074BC5135FEA /* juno-90-start.m4a */; };
+		82FCEE1383634F9B88976992 /* DatadogLogs in Frameworks */ = {isa = PBXBuildFile; productRef = 056BF2B5954A44C3AEEC6DD2 /* DatadogLogs */; };
 		84958721E6DEB4D06E1A01B6 /* juno-42-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F77424E89C3E4B5B787BDFA4 /* juno-42-stop.m4a */; };
 		8736CF7025B1EE7C295218D7 /* juno-9-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 8887DCE124B065F8313AC59F /* juno-9-start.m4a */; };
 		87B7038A5385E149C978908B /* juno-15-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 0386BF281886EDBFE9EC8C61 /* juno-15-start.m4a */; };
@@ -229,6 +231,7 @@
 		8E70ED1163B872F8D691CDC5 /* juno-118-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E084A62CF8F167165466AE30 /* juno-118-start.m4a */; };
 		8E89114ADA5FCE4AF9DFB3C0 /* juno-116-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 486F5FE65FF8C13A35C28271 /* juno-116-start.m4a */; };
 		8FE4B9B139BB9557FBC5589B /* OverlayWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A27D7F43295DE2A81EFFDDBC /* OverlayWindowController.swift */; };
+		9108B9B80FE4395A4D6D4F2C /* Monitoring.swift in Sources */ = {isa = PBXBuildFile; fileRef = B48B1FA4FF13F4A4B56BD27D /* Monitoring.swift */; };
 		91C1257866F6E2D4EE65BD09 /* WindowAccessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B2312DE4BC0F4F070830AD7 /* WindowAccessor.swift */; };
 		91D775ACB2351468D47731FF /* rom1a-12-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E2BCA8E305B596F960CEE1AE /* rom1a-12-start.m4a */; };
 		9266EA4F50B9D46E9181FBAF /* rom1a-5-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2E64BCDB280FD0A27D965AA9 /* rom1a-5-start.m4a */; };
@@ -354,7 +357,7 @@
 		D4782F83F43693371724011D /* rom1b-23-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = EAB0871FD8CB94A4DCF837CC /* rom1b-23-start.m4a */; };
 		D5927A391D26CAB212D6FBB4 /* rom1b-3-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 49CD6A6815EDDB16BBBCCCB2 /* rom1b-3-start.m4a */; };
 		D5A84975628548A076CEB3D7 /* juno-118-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 92387F60666853C0AA1BF0B5 /* juno-118-stop.m4a */; };
-		D6DFF322638007525EBA02B2 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 39EB6BB06E04EA9CD2CDC3BA /* Sentry */; };
+		D6DFF322638007525EBA02B2 /* DatadogCore in Frameworks */ = {isa = PBXBuildFile; productRef = A0E6571699034CB1C08CB0C9 /* DatadogCore */; };
 		D750C1BF16502EEC92182ECD /* PermissionsStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8DE60178ABA2CC7F4EB6401 /* PermissionsStepView.swift */; };
 		D779D9FD904DA9DDC241DA5F /* juno-70-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = AD5F1BDEB1DB3658DDB96247 /* juno-70-start.m4a */; };
 		D7CCAEAF551027586E39A032 /* juno-4-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 63189CC345106B1D56960B1E /* juno-4-start.m4a */; };
@@ -742,6 +745,7 @@
 		B401FA111CA49F5A535366AC /* rom1b-15-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-15-stop.m4a"; sourceTree = "<group>"; };
 		B432346450961555004A2BDE /* juno-99-stop.m4a */ = {isa = PBXFileReference; path = "juno-99-stop.m4a"; sourceTree = "<group>"; };
 		B460358B22184090D1CCD18E /* juno-68-stop.m4a */ = {isa = PBXFileReference; path = "juno-68-stop.m4a"; sourceTree = "<group>"; };
+		B48B1FA4FF13F4A4B56BD27D /* Monitoring.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monitoring.swift; sourceTree = "<group>"; };
 		B5F2D2902DFABF0A7F65E712 /* juno-113-stop.m4a */ = {isa = PBXFileReference; path = "juno-113-stop.m4a"; sourceTree = "<group>"; };
 		B63CC1EF220EB3463D5A4BDF /* rom1b-12-start.m4a */ = {isa = PBXFileReference; path = "rom1b-12-start.m4a"; sourceTree = "<group>"; };
 		B67F392ADB8F0C2D4BB6827F /* juno-114-start.m4a */ = {isa = PBXFileReference; path = "juno-114-start.m4a"; sourceTree = "<group>"; };
@@ -865,13 +869,23 @@
 			files = (
 				0A7FB8A90BB7E7A5110A4F4D /* BlurtEngine in Frameworks */,
 				A34A51EDE26BC24EB08A3900 /* AppUpdater in Frameworks */,
-				D6DFF322638007525EBA02B2 /* Sentry in Frameworks */,
+				D6DFF322638007525EBA02B2 /* DatadogCore in Frameworks */,
+				82FCEE1383634F9B88976992 /* DatadogLogs in Frameworks */,
+				6179B457E48877787CE028DA /* DatadogCrashReporting in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0093069C3061D45801274652 /* Monitoring */ = {
+			isa = PBXGroup;
+			children = (
+				B48B1FA4FF13F4A4B56BD27D /* Monitoring.swift */,
+			);
+			path = Monitoring;
+			sourceTree = "<group>";
+		};
 		10E2E11380C974390308C1D2 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -896,6 +910,7 @@
 				7D6DE85EA50E7CD4CC977211 /* Branding */,
 				DF92BBDB4B9C15FAE100B783 /* Hotkey */,
 				8C67CBF637D85C0F642E53B5 /* MenuBar */,
+				0093069C3061D45801274652 /* Monitoring */,
 				912505E1D0FBD5D5CA591BA2 /* Overlay */,
 				DB755555AE4E89FE376399BF /* Resources */,
 				C9A477A17B95181CF6FCCB13 /* Shared */,
@@ -1448,7 +1463,9 @@
 			packageProductDependencies = (
 				371215E93A9C2CE60C6347BB /* BlurtEngine */,
 				B7FF7A7170C36BAABD1ECC90 /* AppUpdater */,
-				39EB6BB06E04EA9CD2CDC3BA /* Sentry */,
+				A0E6571699034CB1C08CB0C9 /* DatadogCore */,
+				056BF2B5954A44C3AEEC6DD2 /* DatadogLogs */,
+				45CD7152E18BFEE0F598216D /* DatadogCrashReporting */,
 			);
 			productName = Blurt;
 			productReference = 5E2309BDEF30ED9EFED5B849 /* Blurt.app */;
@@ -1485,7 +1502,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				1B0B6EAFD1174B4B9140D250 /* XCRemoteSwiftPackageReference "AppUpdater" */,
-				A70C65ACE504420011952EBA /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
+				0F8ABF4083EB1DDD289350B7 /* XCRemoteSwiftPackageReference "dd-sdk-ios" */,
 				BFFF3588F0D8C2D0EEF7BC75 /* XCLocalSwiftPackageReference "../.." */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -1955,6 +1972,7 @@
 				B5A7CEA6517E5A1E4D77623F /* FloatingPanel.swift in Sources */,
 				F42E6D4E62345772C5A49A08 /* HotkeyStepView.swift in Sources */,
 				AD32046355138298E7FC40D0 /* MenuBarScene.swift in Sources */,
+				9108B9B80FE4395A4D6D4F2C /* Monitoring.swift in Sources */,
 				9437C292A6D7FE533338073D /* OverlayView.swift in Sources */,
 				8FE4B9B139BB9557FBC5589B /* OverlayWindowController.swift in Sources */,
 				D750C1BF16502EEC92182ECD /* PermissionsStepView.swift in Sources */,
@@ -2231,6 +2249,14 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		0F8ABF4083EB1DDD289350B7 /* XCRemoteSwiftPackageReference "dd-sdk-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/DataDog/dd-sdk-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.13.0;
+			};
+		};
 		1B0B6EAFD1174B4B9140D250 /* XCRemoteSwiftPackageReference "AppUpdater" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/mxcl/AppUpdater";
@@ -2239,25 +2265,27 @@
 				minimumVersion = 2.1.1;
 			};
 		};
-		A70C65ACE504420011952EBA /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/getsentry/sentry-cocoa";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 9.19.0;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		056BF2B5954A44C3AEEC6DD2 /* DatadogLogs */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0F8ABF4083EB1DDD289350B7 /* XCRemoteSwiftPackageReference "dd-sdk-ios" */;
+			productName = DatadogLogs;
+		};
 		371215E93A9C2CE60C6347BB /* BlurtEngine */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = BlurtEngine;
 		};
-		39EB6BB06E04EA9CD2CDC3BA /* Sentry */ = {
+		45CD7152E18BFEE0F598216D /* DatadogCrashReporting */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = A70C65ACE504420011952EBA /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
-			productName = Sentry;
+			package = 0F8ABF4083EB1DDD289350B7 /* XCRemoteSwiftPackageReference "dd-sdk-ios" */;
+			productName = DatadogCrashReporting;
+		};
+		A0E6571699034CB1C08CB0C9 /* DatadogCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0F8ABF4083EB1DDD289350B7 /* XCRemoteSwiftPackageReference "dd-sdk-ios" */;
+			productName = DatadogCore;
 		};
 		B7FF7A7170C36BAABD1ECC90 /* AppUpdater */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -2,7 +2,6 @@ import AppKit
 import BlurtEngine
 import Foundation
 import Observation
-import Sentry
 
 /// Owns the long-lived models and runs launch-time setup. The setup wizard and
 /// settings UI are SwiftUI `Window` scenes (see `BlurtApp` / `MainWindowRoot`
@@ -95,24 +94,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   @MainActor
   func applicationDidFinishLaunching(_ notification: Notification) {
     // Crash/error reporting. Started as early as possible so launch-time failures
-    // are captured. Release-only: local dev runs the Debug configuration, and we
-    // don't want developer crashes/usage polluting production Sentry data. (The
-    // `SentrySDK.capture` calls in `AppCoordinator` are safe no-ops when the SDK
-    // was never started, so they self-disable in Debug too.) Blurt never sends
-    // dictation text or transcripts to Sentry; `sendDefaultPii` is left off so we
-    // don't attach the reporter's IP either — crash grouping doesn't need it, and
-    // a dictation app shouldn't ship identifying data it doesn't use. The
-    // diagnostics this does send are disclosed in README.md and SECURITY.md.
-    #if !DEBUG
-      SentrySDK.start { options in
-        options.dsn = "https://8191e48535bcc3fd861f912ae8735e18@o4509792651902976.ingest.us.sentry.io/4511634026004480"
-        // Pinned rather than left to the SDK's auto-detection: we only start
-        // Sentry in Release builds (see the `#if !DEBUG`), so every reporting
-        // session is production, and release-health charts filter on this.
-        options.environment = "production"
-        options.sendDefaultPii = false
-      }
-    #endif
+    // are captured. `start()` is release-only — it no-ops in Debug via a runtime
+    // guard (called unconditionally, rather than wrapped in `#if !DEBUG`, so the
+    // config stays reachable for the dead-code scan). Local dev runs Debug, and we
+    // don't want developer crashes/usage polluting production data. (The
+    // `Monitoring.reportError` calls in `AppCoordinator` are safe no-ops when the
+    // SDK was never started, so they self-disable in Debug too.) Blurt never sends
+    // dictation text or transcripts to Datadog, and no PII is attached — crash
+    // grouping doesn't need it, and a dictation app shouldn't ship identifying
+    // data it doesn't use. The diagnostics this does send (env "production") are
+    // disclosed in README.md and SECURITY.md.
+    Monitoring.start()
 
     // No permission prompts fire at launch. Accessibility (and Microphone) are
     // requested only when the user taps the matching button in the setup

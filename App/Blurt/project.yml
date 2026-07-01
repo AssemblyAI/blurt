@@ -24,9 +24,9 @@ packages:
   AppUpdater:
     url: https://github.com/mxcl/AppUpdater
     from: "2.1.1"
-  Sentry:
-    url: https://github.com/getsentry/sentry-cocoa
-    from: "9.19.0"
+  Datadog:
+    url: https://github.com/DataDog/dd-sdk-ios
+    from: "3.13.0"
 targets:
   Blurt:
     type: application
@@ -78,8 +78,12 @@ targets:
         product: BlurtEngine
       - package: AppUpdater
         product: AppUpdater
-      - package: Sentry
-        product: Sentry
+      - package: Datadog
+        product: DatadogCore
+      - package: Datadog
+        product: DatadogLogs
+      - package: Datadog
+        product: DatadogCrashReporting
     postBuildScripts:
       - name: Install to /Applications
         script: |

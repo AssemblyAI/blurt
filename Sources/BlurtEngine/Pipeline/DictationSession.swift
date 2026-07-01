@@ -308,7 +308,7 @@ public actor DictationSession {
     } catch BlurtError.noEditableTarget {
       // Not a failure: transcription worked, there was just nowhere to type. The
       // injector left the text on the clipboard — show the quiet "copied" notice
-      // rather than the red error flash (and don't page Sentry).
+      // rather than the red error flash (and don't report it).
       setPhase(.noTarget)
     } catch let err as BlurtError {
       // Surface the injector's real error (e.g. `.targetAppLost`) rather than
