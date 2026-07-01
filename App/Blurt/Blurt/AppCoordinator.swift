@@ -257,13 +257,11 @@ final class AppCoordinator {
 
   // MARK: - Dictation render
 
-  /// The record start/stop chimes. Owned by a dedicated player (not inlined
-  /// here) so the audio concern stays out of the session↔UI wiring.
+  /// The record start/stop chimes (see `CueSoundPlayer` below).
   private let cues = CueSoundPlayer()
 
   /// Called when the user changes the sound pack in Settings: reload the cue
-  /// players so the next start/stop uses the new voice, and preview it so the
-  /// choice is audible immediately.
+  /// players and preview the new voice so the choice is audible immediately.
   func soundPackChanged() {
     cues.packChanged()
   }
@@ -340,12 +338,11 @@ final class CueSoundPlayer {
   /// rather than blasting at the system output level.
   private static let cueVolume: Float = 0.35
 
-  /// (Re)loads and pre-rolls the cue players for the currently selected sound
-  /// pack, so the first start/stop chime adds no latency to the pill. Called
-  /// from the "app is ready" transition — the audio queue is allocated and the
-  /// buffers filled well before the hot path. `.none` (or a missing file)
-  /// leaves a player nil, which `play(_:)` skips, so "no sound" needs no extra
-  /// branching. Idempotent: re-priming an already-prepared player is cheap.
+  /// (Re)loads and pre-rolls the cue players for the selected sound pack so
+  /// the first start/stop chime adds no latency to the pill; called from the
+  /// "app is ready" transition, well before the hot path. `.none` (or a
+  /// missing file) leaves a player nil, which `play(_:)` skips. Idempotent:
+  /// re-priming an already-prepared player is cheap.
   func prime() {
     let pack = SoundPackStore().soundPack
     startSound = pack.startFileName.flatMap(Self.bundledSound(named:))
@@ -379,12 +376,10 @@ final class CueSoundPlayer {
     wasRecording = isRecording
   }
 
-  /// Loads a bundled chime (`Resources/Sounds/<name>.m4a`) fully into memory.
-  /// `AVAudioPlayer(contentsOf:)` decodes the AAC up front — unlike
-  /// `NSSound(…byReference: true)`, which deferred the disk read to the first
-  /// `play()` and so stalled the recording pill the first time you dictated.
-  /// The players are then pre-rolled in `prime()` so even the audio-queue setup
-  /// is paid before the hot path.
+  /// Loads a bundled chime (`Resources/Sounds/<name>.m4a`) fully into memory:
+  /// `AVAudioPlayer(contentsOf:)` decodes the AAC up front, unlike
+  /// `NSSound(…byReference: true)`, whose deferred disk read stalled the pill
+  /// on the first dictation. `prime()` then pre-rolls the audio queue too.
   private static func bundledSound(named name: String) -> AVAudioPlayer? {
     guard let url = Bundle.main.url(forResource: name, withExtension: "m4a") else { return nil }
     return try? AVAudioPlayer(contentsOf: url)
