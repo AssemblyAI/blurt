@@ -7,7 +7,7 @@ import OSLog
 /// AppUpdater ships no UI of its own — it just fetches GitHub Releases, verifies
 /// the download was signed by the same Developer ID as the running app, and (on
 /// request) swaps the bundle in place and relaunches. So this type supplies the
-/// UI: on launch it checks for a newer release of `alexkroman/blurt` and, when
+/// UI: on launch it checks for a newer release of `AssemblyAI/blurt` and, when
 /// one exists, presents a Sparkle-style modal offering **Install and Relaunch**
 /// or **Later** (mirroring `SPUStandardUserDriver`'s update-available alert).
 ///
@@ -16,7 +16,7 @@ import OSLog
 /// which matches `blurt-<version>`. See `scripts/release-publish.sh`.
 @MainActor
 final class AutoUpdater {
-  private let updater = AppUpdater(owner: "alexkroman", repo: "blurt")
+  private let updater = AppUpdater(owner: "AssemblyAI", repo: "blurt")
   private let log = Logger(subsystem: "dev.alex.blurt", category: "update")
 
   /// Supplies the window to host the update prompt as a sheet (see `runAlert`).

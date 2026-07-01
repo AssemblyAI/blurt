@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Blurt aims to stay small and focused — see ["Things deliberately not here"](https://github.com/alexkroman/blurt/blob/main/AGENTS.md) for what's intentionally out of scope.
+        Blurt aims to stay small and focused — see ["Things deliberately not here"](https://github.com/AssemblyAI/blurt/blob/main/AGENTS.md) for what's intentionally out of scope.
   - type: textarea
     id: idea
     attributes:

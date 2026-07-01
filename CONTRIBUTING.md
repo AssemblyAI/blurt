@@ -43,7 +43,7 @@ If you install the git hooks, `check.sh` runs automatically on every commit.
 
 ## Reporting bugs and ideas
 
-Open an [issue](https://github.com/alexkroman/blurt/issues) using one of the
+Open an [issue](https://github.com/AssemblyAI/blurt/issues) using one of the
 templates. For bugs, include your macOS version and steps to reproduce. For a
 security issue, don't open a public issue — see [`SECURITY.md`](./SECURITY.md).
 

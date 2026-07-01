@@ -7,7 +7,7 @@
 # shellcheck disable=SC2016
 set -euo pipefail
 
-REPO="${BLURT_REPO:-alexkroman/blurt}"
+REPO="${BLURT_REPO:-AssemblyAI/blurt}"
 
 if ! command -v gh >/dev/null 2>&1; then
   echo "gh CLI not found — install it and run 'gh auth login'." >&2
