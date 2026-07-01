@@ -43,19 +43,22 @@ if [ -d "$DERIVED" ]; then
   fi
 fi
 
-info "Building Blurt (Debug) from clean and installing to /Applications"
+info "Building Blurt (Debug-Local) from clean and installing to /Applications"
 set -o pipefail
-# SWIFT_ACTIVE_COMPILATION_CONDITIONS=DEBUG strips UITEST_HOOKS (which the Debug
-# config otherwise sets), so this local build excludes the XCUITest harness and
-# the leak/hotkey test seams — it's the real app, nothing test-runner-related.
+# The Debug-Local configuration is a debug build with UITEST_HOOKS off (defined
+# in project.yml), so this local build excludes the XCUITest harness and the
+# leak/hotkey test seams — it's the real app, nothing test-runner-related.
+# Selecting it by name (rather than overriding SWIFT_ACTIVE_COMPILATION_CONDITIONS
+# on the command line) keeps the override off SwiftPM dependency targets: a
+# command-line build-setting override applies to every target and replaces its
+# value, which stripped the SPM_BUILD flag dd-sdk-ios needs and broke its build.
 # The build action already builds only Blurt.app, not the BlurtUITests bundle.
 xcodebuild \
   -project Blurt.xcodeproj \
   -scheme Blurt \
-  -configuration Debug \
+  -configuration Debug-Local \
   -destination 'platform=macOS,arch=arm64' \
   -derivedDataPath "$DERIVED" \
-  SWIFT_ACTIVE_COMPILATION_CONDITIONS=DEBUG \
   clean build | "${PRETTY[@]}"
 
 info "Done. Launch with: open -a Blurt"
