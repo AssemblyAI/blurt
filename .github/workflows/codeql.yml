@@ -69,11 +69,16 @@ jobs:
         if: matrix.language == 'swift'
         working-directory: App/Blurt
         run: |
+          # Generic destination ("Any Mac"), not arch=arm64: CodeQL's tracer runs
+          # this build as an x86_64/Rosetta process, so xcodebuild sees the host
+          # as x86_64 and can't match an arm64 device for our arm64-only project.
+          # The generic destination cross-compiles per the project's ARCHS (arm64)
+          # regardless of the host arch.
           xcodebuild \
             -project Blurt.xcodeproj \
             -scheme Blurt \
             -configuration Debug \
-            -destination 'platform=macOS,arch=arm64' \
+            -destination 'generic/platform=macOS' \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
