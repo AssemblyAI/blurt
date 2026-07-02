@@ -3,18 +3,16 @@ import Testing
 
 @testable import BlurtEngine
 
-/// Races in the hold-to-dictate hotkey path. `AppCoordinator` serializes the
-/// tap's actions through one stream, but `DictationSession` is public API with
-/// other drivers (the auto-release timer, the UI-test harness), and `press()`
-/// only reaches `.recording` *after* awaiting `mic.start()`. A `release()` or
-/// `cancel()` can therefore still land while `press()` is inside `mic.start()`
-/// — these tests pin down that window.
+/// Fast-tap sequencing in the hold-to-dictate hotkey path. `press()` only
+/// reaches `.recording` after awaiting `mic.start()`, and a fast tap lands its
+/// `release()`/`cancel()` while the press is still inside that call. The
+/// session's serial command queue must run the follow-up *after* the press —
+/// honoring it against the freshly started recording — rather than dropping it
+/// (which would strand the session in `.recording` until the ~115 s
+/// auto-release fires).
 @Suite("Hotkey press/release races", .timeLimit(.minutes(1)))
 struct HotkeyRaceTests {
 
-  /// A release that arrives while `press()` is still starting the mic must not be
-  /// dropped: doing so strands the session in `.recording` (blocking every later
-  /// press until the ~115 s auto-release fires).
   @Test("release during mic.start is honored, not dropped")
   func releaseDuringStartIsHonored() async throws {
     let mic = GatedMicCapture()
@@ -24,9 +22,12 @@ struct HotkeyRaceTests {
 
     let pressed = Task { await session.press() }
     await mic.waitUntilStartEntered()  // press() is now suspended inside mic.start()
-    await session.release()  // fast tap: release before .recording is set
+    // Fast tap: the release arrives before .recording is set. It queues behind
+    // the in-flight press (awaiting it inline would deadlock against the gate).
+    let released = Task { await session.release() }
     await mic.allowStartToFinish()
     await pressed.value
+    await released.value
 
     #expect(await mic.stopCalls == 1)  // release honored, not silently dropped
 
@@ -36,8 +37,6 @@ struct HotkeyRaceTests {
     #expect(await injector.inserted == ["hi"])
   }
 
-  /// A cancel that arrives while `press()` is still starting the mic must not be
-  /// dropped: doing so strands the session in `.recording`.
   @Test("cancel during mic.start is honored, not dropped")
   func cancelDuringStartIsHonored() async throws {
     let mic = GatedMicCapture()
@@ -47,9 +46,12 @@ struct HotkeyRaceTests {
 
     let pressed = Task { await session.press() }
     await mic.waitUntilStartEntered()  // press() is now suspended inside mic.start()
-    await session.cancel()  // fast tap: cancel before .recording is set
+    // Fast tap: the cancel arrives before .recording is set. It queues behind
+    // the in-flight press and ends the freshly started recording.
+    let cancelled = Task { await session.cancel() }
     await mic.allowStartToFinish()
     await pressed.value
+    await cancelled.value
 
     #expect(await mic.stopCalls == 1)  // cancel honored and stops mic
 

@@ -15,6 +15,13 @@ import os
 /// active (`.defaultTap`) tap would make macOS synchronously wait on this
 /// process before delivering every keystroke system-wide, so any main-thread
 /// stall in Blurt would add typing latency in *other* apps.
+///
+/// `@MainActor` because everything here already runs on the main thread: the
+/// tap's run-loop source is added to the main run loop (`ensureRunning`), so
+/// the C callback fires there, and the coordinator/UITest entry points are
+/// main-actor. Isolation lets the compiler prove single-threaded access to the
+/// gate state instead of guarding it with a hand-held lock.
+@MainActor
 final class DictationKeyTap {
   private static let logger = Logger(
     subsystem: BlurtIdentity.subsystem, category: "DictationKeyTap")
@@ -31,23 +38,20 @@ final class DictationKeyTap {
   /// a transcript already in flight — see `DictationSession.cancelRecording`.
   private let onRecordingDiscarded: @Sendable () -> Void
 
-  /// Mutable state touched from the tap's run-loop thread, so guarded by a lock.
-  private struct GateState {
-    var gate = DictationKeyGate()
-    var triggerKeyCode = TriggerKey.rightCommand.keyCode
-    var triggerFlag = DictationKeyTap.flag(for: .rightCommand)
-    /// Tracks the bound modifier's current physical state so repeated
-    /// `flagsChanged` events (from *other* modifiers changing) don't double-fire.
-    var modifierIsDown = false
-  }
-  private let state = OSAllocatedUnfairLock(initialState: GateState())
+  private var gate = DictationKeyGate()
+  private var triggerKeyCode = TriggerKey.rightCommand.keyCode
+  private var triggerFlag = DictationKeyTap.flag(for: .rightCommand)
+  /// Tracks the bound modifier's current physical state so repeated
+  /// `flagsChanged` events (from *other* modifiers changing) don't double-fire.
+  private var modifierIsDown = false
 
   /// Monotonic reference; per-event timestamps are `reference.duration(to: now)`.
   private let reference = ContinuousClock.now
 
-  /// `nonisolated(unsafe)` so the nonisolated `deinit` and the tap-thread
-  /// `handle` can read it: written once on the main actor in `ensureRunning()`
-  /// (whose run loop also services the tap), read afterwards without overlap.
+  /// `nonisolated(unsafe)` so the nonisolated `deinit` can read it: written only
+  /// in `ensureRunning()` on the main actor, and the last release of an
+  /// `AppCoordinator`-owned object happens on the main actor too, so the deinit
+  /// read never overlaps a write.
   nonisolated(unsafe) private var tap: CFMachPort?
 
   init(
@@ -78,7 +82,6 @@ final class DictationKeyTap {
   /// Idempotent. Creates and enables the tap if needed and syncs the binding.
   /// Returns false when the tap can't be created yet (process not Accessibility
   /// trusted) so the caller can retry once permissions land.
-  @MainActor
   @discardableResult
   func ensureRunning() -> Bool {
     refreshBinding()
@@ -102,6 +105,8 @@ final class DictationKeyTap {
     }
     tap = created
     let src = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, created, 0)
+    // The main run loop, deliberately: it makes this whole class single-threaded
+    // (see the @MainActor note above) — the callback below relies on it.
     CFRunLoopAddSource(CFRunLoopGetMain(), src, .commonModes)
     CGEvent.tapEnable(tap: created, enable: true)
     Self.logger.info("dictation key tap installed")
@@ -112,14 +117,10 @@ final class DictationKeyTap {
   /// The reset reports a discarded live recording (see `resetGate`): rebinding
   /// mid-dictation means the old key's up-event will never match, so the capture
   /// must be cancelled, not left to run out the auto-release cap.
-  @MainActor
   func refreshBinding() {
     let key = TriggerKeyStore().triggerKey
-    let flag = Self.flag(for: key)
-    state.withLock {
-      $0.triggerKeyCode = key.keyCode
-      $0.triggerFlag = flag
-    }
+    triggerKeyCode = key.keyCode
+    triggerFlag = Self.flag(for: key)
     resetGate()
   }
 
@@ -129,17 +130,15 @@ final class DictationKeyTap {
   /// (armed or latched), no future key event can end that dictation, so report
   /// it upstream to cancel the recording.
   private func resetGate() {
-    let discardedRecording = state.withLock { s in
-      let wasActive = !s.gate.isIdle
-      s.gate.reset()
-      s.modifierIsDown = false
-      return wasActive
-    }
+    let discardedRecording = !gate.isIdle
+    gate.reset()
+    modifierIsDown = false
     if discardedRecording { onRecordingDiscarded() }
   }
 
-  /// Tap-thread entry point. Swallows nothing — the tap is listen-only, so
-  /// events are delivered regardless of what happens here.
+  /// Callback entry point (always on the main thread — the tap's source lives on
+  /// the main run loop). Swallows nothing: the tap is listen-only, so events are
+  /// delivered regardless of what happens here.
   fileprivate func handle(type: CGEventType, event: CGEvent) {
     if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
       if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
@@ -150,7 +149,6 @@ final class DictationKeyTap {
       // trigger's key-up may have been missed; reset, and cancel a recording
       // the reset discards rather than leaving the session in .recording until
       // the auto-release cap fires and pastes an unprompted transcript.
-      let triggerFlag = state.withLock { $0.triggerFlag }
       if CGEventSource.flagsState(.combinedSessionState).contains(triggerFlag) { return }
       resetGate()
       return
@@ -162,29 +160,27 @@ final class DictationKeyTap {
     dispatch(decideAction(type: type, keyCode: keyCode, eventFlags: eventFlags, now: now))
   }
 
-  /// Feeds one event into the gate (under the lock) and returns its decision.
+  /// Feeds one event into the gate and returns its decision.
   private func decideAction(
     type: CGEventType, keyCode: Int, eventFlags: CGEventFlags, now: Duration
   ) -> DictationKeyGate.Action {
-    state.withLock { s in
-      switch type {
-      case .flagsChanged:
-        guard keyCode == s.triggerKeyCode else { return .none }
-        let isDown = eventFlags.contains(s.triggerFlag)
-        if isDown, !s.modifierIsDown {
-          s.modifierIsDown = true
-          return s.gate.modifierDown(at: now)
-        }
-        if !isDown, s.modifierIsDown {
-          s.modifierIsDown = false
-          return s.gate.modifierUp(at: now)
-        }
-        return .none
-      case .keyDown:
-        return keyCode == s.triggerKeyCode ? .none : s.gate.otherKeyDown()
-      default:
-        return .none
+    switch type {
+    case .flagsChanged:
+      guard keyCode == triggerKeyCode else { return .none }
+      let isDown = eventFlags.contains(triggerFlag)
+      if isDown, !modifierIsDown {
+        modifierIsDown = true
+        return gate.modifierDown(at: now)
       }
+      if !isDown, modifierIsDown {
+        modifierIsDown = false
+        return gate.modifierUp(at: now)
+      }
+      return .none
+    case .keyDown:
+      return keyCode == triggerKeyCode ? .none : gate.otherKeyDown()
+    default:
+      return .none
     }
   }
 
@@ -202,7 +198,7 @@ final class DictationKeyTap {
   /// per-side bit (e.g. right ⌘ only), not the generic `.maskCommand` shared by
   /// both ⌘ keys — see `TriggerKey.deviceModifierMask` for why that distinction
   /// keeps the down/up tracking from desyncing on keyboards with both keys held.
-  static func flag(for key: TriggerKey) -> CGEventFlags {
+  nonisolated static func flag(for key: TriggerKey) -> CGEventFlags {
     CGEventFlags(rawValue: key.deviceModifierMask)
   }
 
@@ -215,19 +211,18 @@ final class DictationKeyTap {
     /// DictationKeyTap → DictationKeyGate → onStart/onStop object graph is
     /// covered, not just the session the coordinator drives directly.
     func simulatePressForTesting() {
-      let (code, flag) = state.withLock { s -> (Int, CGEventFlags) in
-        s.gate.reset()
-        s.modifierIsDown = false
-        return (s.triggerKeyCode, s.triggerFlag)
-      }
-      dispatch(decideAction(type: .flagsChanged, keyCode: code, eventFlags: flag, now: .seconds(0)))
+      gate.reset()
+      modifierIsDown = false
+      dispatch(
+        decideAction(
+          type: .flagsChanged, keyCode: triggerKeyCode, eventFlags: triggerFlag, now: .seconds(0)))
     }
 
     /// Completes the synthetic cycle as a hold (past the threshold), so the gate
     /// emits `.stop` and `onStop` fires.
     func simulateReleaseForTesting() {
-      let code = state.withLock { $0.triggerKeyCode }
-      dispatch(decideAction(type: .flagsChanged, keyCode: code, eventFlags: [], now: .seconds(2)))
+      dispatch(
+        decideAction(type: .flagsChanged, keyCode: triggerKeyCode, eventFlags: [], now: .seconds(2)))
     }
   #endif
 }
@@ -243,7 +238,12 @@ private func dictationTapCallback(
   userInfo: UnsafeMutableRawPointer?
 ) -> Unmanaged<CGEvent>? {
   guard let userInfo else { return Unmanaged.passUnretained(event) }
-  let monitor = Unmanaged<DictationKeyTap>.fromOpaque(userInfo).takeUnretainedValue()
-  monitor.handle(type: type, event: event)
+  // The tap's run-loop source is on the main run loop (see ensureRunning), so
+  // this always fires on the main thread; assumeIsolated turns that load-bearing
+  // assumption into a checked precondition instead of a silent data race.
+  MainActor.assumeIsolated {
+    let monitor = Unmanaged<DictationKeyTap>.fromOpaque(userInfo).takeUnretainedValue()
+    monitor.handle(type: type, event: event)
+  }
   return Unmanaged.passUnretained(event)
 }

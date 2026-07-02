@@ -105,12 +105,17 @@ struct CancelRaceTests {
     let releaseTask = Task { await session.release() }
     await mic.waitUntilStopEntered()  // release is now suspended inside mic.stop()
 
-    // Phase is still .recording here but `isStopping` bars the direct path —
-    // this cancel must be deferred and honored, not silently dropped (a drop
-    // would paste the transcript the user just cancelled).
-    await session.cancel()
+    // cancel() records its request the moment it enters the session (the actor
+    // is free — the release is parked inside the gated mic.stop), then queues
+    // its turn behind the release; awaiting it inline here would deadlock
+    // against the gate. The drain gives cancel() that entry deterministically.
+    let cancelTask = Task { await session.cancel() }
+    for _ in 0..<1000 { await Task.yield() }
     await mic.allowStopToFinish()
+    // The release must consume the cancel request after mic.stop() returns and
+    // spawn no pipeline — the transcript the user cancelled is never pasted.
     await releaseTask.value
+    await cancelTask.value
     for _ in 0..<1000 { await Task.yield() }
 
     #expect(await session.phase == .cancelled)
@@ -128,9 +133,12 @@ struct CancelRaceTests {
     let releaseTask = Task { await session.release() }
     await mic.waitUntilStopEntered()
 
-    await session.cancel()
+    // See cancelDuringMicStopDiscards for the Task + drain choreography.
+    let cancelTask = Task { await session.cancel() }
+    for _ in 0..<1000 { await Task.yield() }
     await mic.allowStopToFinish()
     await releaseTask.value
+    await cancelTask.value
 
     // The user asked for nothing to happen — the cancel claims the phase
     // rather than the stop failure repainting it as a red .failed.
@@ -195,7 +203,7 @@ struct CancelRaceTests {
     #expect(await session.phase == .cancelled)
 
     // Wait past the auto-release deadline. A timer that survived the cancel would
-    // fire releaseIfRecording → release → transcribe → inject and flip the phase.
+    // enqueue a release → transcribe → inject and flip the phase.
     try await Task.sleep(for: .milliseconds(150))
     for _ in 0..<1000 { await Task.yield() }
 

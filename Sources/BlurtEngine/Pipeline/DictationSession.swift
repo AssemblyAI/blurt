@@ -56,32 +56,21 @@ public actor DictationSession {
   /// (which needs the context), never the recording indicator (which doesn't).
   private var contextTask: Task<TranscriptionContext?, Never>?
 
-  /// Guards `press()` across its `await mic.start()` suspension. Actors are
-  /// reentrant, so the `phase.isTerminal` check alone can't stop a second
-  /// `press()` arriving mid-`start()` (`.recording` isn't set until start
-  /// returns) from starting the mic twice.
-  private var isStarting = false
+  /// Tail of the serial command queue. `press()`/`release()`/`cancel()`/
+  /// `cancelRecording()` chain behind it (see `enqueue`), so commands run
+  /// strictly one at a time in arrival order: no command ever observes another
+  /// suspended mid-`mic.start()`/`mic.stop()`. That single property replaces the
+  /// `isStarting`/`isStopping` reentrancy guards and the pending-release/-cancel
+  /// deferral flags this actor used to need — the interleavings they defended
+  /// against can no longer occur.
+  private var commandQueue: Task<Void, Never>?
 
-  /// Guards `release()` across its `await mic.stop()` suspension. `release()` has
-  /// two triggers (manual key-up and the auto-release timer); without this, a
-  /// second release arriving during `mic.stop()` would re-pass the
-  /// `phase == .recording` guard (phase isn't `.transcribing` until stop returns)
-  /// and run the pipeline a second time — double-stopping the mic and injecting
-  /// the transcript twice.
-  private var isStopping = false
-
-  /// Set when `release()` arrives while `press()` is still inside `mic.start()` —
-  /// i.e. before `phase` flips to `.recording`. `press()` consumes it the moment
-  /// recording begins, so a fast tap can't strand the session in `.recording` by
-  /// having its release silently dropped.
-  private var pendingRelease = false
-
-  /// Set when `cancel()` arrives while `press()` is still inside `mic.start()`
-  /// (consumed by `press()` the moment recording begins) or while `release()` is
-  /// suspended inside `mic.stop()` (consumed by `release()` before it spawns the
-  /// transcribe→inject pipeline). Without the second window a cancel racing the
-  /// stop would be silently dropped and the transcript pasted anyway.
-  private var pendingCancel = false
+  /// Set synchronously by `cancel()` before it takes its queue turn, so a cancel
+  /// requested while a release is mid-`mic.stop()` deterministically wins:
+  /// `performRelease` consumes the request after the stop (before any pipeline is
+  /// spawned) instead of racing the cancel's own turn against the transcription.
+  /// `performCancel` clears it when it runs, whether or not it was consumed early.
+  private var cancelRequested = false
 
   /// Handle to the auto-release timer started in `press()`. Stored so that
   /// `release()` can cancel it — otherwise a fire-and-forget timer from a prior
@@ -132,12 +121,29 @@ public actor DictationSession {
     if id == currentID { continuation = nil }
   }
 
+  /// Appends `op` to the serial command queue and waits for it to run. The
+  /// synchronous read-then-write of `commandQueue` makes the chain order match
+  /// the order the public methods executed their first actor turn.
+  private func enqueue(_ op: @escaping @Sendable () async -> Void) async {
+    let previous = commandQueue
+    let task = Task {
+      await previous?.value
+      await op()
+    }
+    commandQueue = task
+    await task.value
+  }
+
   public func press() async {
-    guard phase.isTerminal, !isStarting else { return }
-    isStarting = true
-    pendingRelease = false
-    pendingCancel = false
-    defer { isStarting = false }
+    await enqueue { await self.performPress() }
+  }
+
+  public func release() async {
+    await enqueue { await self.performRelease() }
+  }
+
+  private func performPress() async {
+    guard phase.isTerminal else { return }
     // Times the startup path — the concurrent focus capture + mic.start (and the
     // detached connection warm-up kicked off below) — up to the moment recording
     // actually begins. Ended on both the success and failure exits (mic.start is
@@ -185,17 +191,9 @@ public actor DictationSession {
       autoReleaseTask = Task { [weak self] in
         try? await Task.sleep(for: .seconds(timeout))
         guard let self, !Task.isCancelled else { return }
-        await self.releaseIfRecording()
-      }
-      // A release or cancel that raced in while mic.start() was still in flight was
-      // deferred (phase wasn't .recording yet) — honor it now so the press doesn't
-      // strand the session in .recording.
-      if pendingCancel {
-        pendingCancel = false
-        await cancel()
-      } else if pendingRelease {
-        pendingRelease = false
-        await release()
+        // Enqueues like a manual key-up. If a real release already ran, the
+        // queued performRelease sees a non-.recording phase and drops out.
+        await self.release()
       }
     } catch {
       Self.signposter.endInterval(Self.pressSignpostName, pressInterval)
@@ -203,45 +201,35 @@ public actor DictationSession {
     }
   }
 
-  public func release() async {
-    guard phase == .recording, !isStopping else {
-      // press() hasn't reached .recording yet (still inside mic.start()). Defer
-      // the release so press() honors it once recording begins, rather than
-      // dropping it — see `pendingRelease`. (A release that races in while an
-      // earlier one is already stopping is simply dropped.)
-      if isStarting { pendingRelease = true }
-      return
-    }
-    isStopping = true
-    defer { isStopping = false }
+  private func performRelease() async {
+    guard phase == .recording else { return }
     cancelAutoRelease()
     let samples: [Float]
     do {
       samples = try await mic.stop()
     } catch {
-      // A cancel that raced in during mic.stop() wins over surfacing the audio
-      // error — the user asked for nothing to happen.
-      if consumePendingCancel() { return }
+      // A cancel requested while mic.stop() was in flight wins over surfacing
+      // the audio error — the user asked for nothing to happen.
+      if consumeCancelRequest() { return }
       // Audio capture/conversion failed (e.g. sample-rate conversion couldn't
       // run). Surface it instead of silently transcribing an empty buffer.
       setPhase(.failed(.audioCaptureFailed(underlying: error)))
       return
     }
-    // A cancel() that arrived while mic.stop() was in flight was deferred
-    // (phase was still .recording but `isStopping` barred it) — honor it now,
-    // before the recording can be transcribed and pasted.
-    if consumePendingCancel() { return }
+    // A cancel() requested while mic.stop() was in flight is honored here,
+    // before any pipeline exists — deterministically no transcription, no paste.
+    if consumeCancelRequest() { return }
     setPhase(.transcribing)
     pipelineTask = Task { [weak self] in
       await self?.runTranscribeInject(samples: samples)
     }
   }
 
-  /// Consumes a `pendingCancel` deferred while this call held `isStopping`,
-  /// claiming the phase for the user's cancel. Returns whether it fired.
-  private func consumePendingCancel() -> Bool {
-    guard pendingCancel else { return false }
-    pendingCancel = false
+  /// Consumes a cancel requested while this release held the queue, claiming the
+  /// phase for the user's cancel. Returns whether it fired.
+  private func consumeCancelRequest() -> Bool {
+    guard cancelRequested else { return false }
+    cancelRequested = false
     setPhase(.cancelled)
     return true
   }
@@ -250,27 +238,28 @@ public actor DictationSession {
     // A cancel that lands after recording has already stopped — while the
     // transcribe→inject task is in flight — tears that task down so the
     // transcript is never injected, and claims the phase so the cancelled
-    // pipeline can't overwrite it back to .idle.
+    // pipeline can't overwrite it back to .idle. Synchronous (no suspension), so
+    // it acts immediately rather than queueing behind the pipeline's progress.
     if phase == .transcribing || phase == .injecting {
       pipelineTask?.cancel()
       pipelineTask = nil
       setPhase(.cancelled)
       return
     }
-    guard phase == .recording, !isStopping else {
-      // Either press() hasn't reached .recording yet (still inside mic.start())
-      // or a release() is suspended inside mic.stop(). Defer the cancel so the
-      // in-flight call honors it — press() the moment recording begins,
-      // release() before it spawns the pipeline — rather than dropping it and
-      // pasting a transcript the user cancelled. Cancel overrides a pending
-      // release. (A cancel racing an earlier *cancel*'s mic.stop() sets the
-      // flag too; that stop clears it below, since its intent is already met.)
-      if isStarting || isStopping {
-        pendingCancel = true
-        pendingRelease = false
-      }
-      return
-    }
+    // Record the intent before taking a queue turn: a release currently mid-
+    // `mic.stop()` consumes it the moment the stop returns (no pipeline is ever
+    // spawned), and a press ahead in the queue is followed by our own turn,
+    // which ends the freshly started recording. Either way the cancel is
+    // honored in arrival order, never dropped.
+    cancelRequested = true
+    await enqueue { await self.performCancel() }
+  }
+
+  private func performCancel() async {
+    // Our turn is the cancel — clear the request whether or not an earlier
+    // release already consumed it.
+    cancelRequested = false
+    guard phase == .recording else { return }
     await stopAndCancel()
   }
 
@@ -278,44 +267,25 @@ public actor DictationSession {
   /// state-recovery callers (the event tap's disabled-tap recovery and trigger
   /// rebinding), whose intent is "the key events ending this capture may be
   /// lost". Unlike `cancel()`, it never tears down a `.transcribing`/`.injecting`
-  /// pipeline: reaching those phases means a release already ended the capture
+  /// pipeline and never preempts a queued release: reaching this op's turn with
+  /// the capture already ended (or ending) means a release happened
   /// legitimately (e.g. the auto-release cap fired while the gate was still
-  /// latched), and discarding that transcript would lose the user's words. It
-  /// also skips the `isStopping` deferral for the same reason — a release in
-  /// flight means the key-up was *not* lost.
+  /// latched), and discarding that transcript would lose the user's words.
   public func cancelRecording() async {
-    guard phase == .recording, !isStopping else {
-      if isStarting {
-        pendingCancel = true
-        pendingRelease = false
-      }
-      return
-    }
+    await enqueue { await self.performCancelRecording() }
+  }
+
+  private func performCancelRecording() async {
+    guard phase == .recording else { return }
     await stopAndCancel()
   }
 
-  /// Shared tail of `cancel()`/`cancelRecording()` once the guards agree there is
-  /// a live recording to tear down.
+  /// Shared tail of the cancel ops once the guards agree there is a live
+  /// recording to tear down.
   private func stopAndCancel() async {
-    isStopping = true
-    defer { isStopping = false }
     cancelAutoRelease()
     _ = try? await mic.stop()
-    // Pending flags deferred during our own mic.stop() are already satisfied by
-    // the .cancelled below — don't leave either armed to leak past this call
-    // (a stale pendingRelease would otherwise survive a completed press in the
-    // press-deferred-cancel interleaving).
-    pendingCancel = false
-    pendingRelease = false
     setPhase(.cancelled)
-  }
-
-  /// Body of the auto-release timer: only release if we're still recording the
-  /// same session that armed the timer (the timer is cancelled on an earlier
-  /// release, so reaching here means this session is genuinely overrun).
-  private func releaseIfRecording() async {
-    guard phase == .recording else { return }
-    await release()
   }
 
   private func cancelAutoRelease() {
