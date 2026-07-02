@@ -57,6 +57,53 @@ struct HotkeyRaceTests {
     #expect(await session.phase == .cancelled)
     #expect(await injector.inserted.isEmpty)
   }
+
+  /// The race the `isStarting` flag exists for: actors are reentrant, so without
+  /// it a second `press()` arriving while the first is suspended in `mic.start()`
+  /// would re-pass the terminal-phase guard and start the mic twice.
+  @Test("a second press during mic.start is dropped, not double-started")
+  func secondPressDuringStartIsDropped() async throws {
+    let mic = GatedMicCapture()
+    let stt = StubTranscriber(mode: .transcript("hi"))
+    let injector = StubInjector()
+    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+
+    let pressed = Task { await session.press() }
+    await mic.waitUntilStartEntered()  // first press() is suspended inside mic.start()
+    await session.press()  // key repeat / double event: must be dropped
+    await mic.allowStartToFinish()
+    await pressed.value
+
+    #expect(await mic.startCalls == 1)
+    #expect(await session.phase == .recording)
+
+    // End the live recording so its auto-release timer doesn't outlive the test.
+    await session.cancel()
+  }
+
+  /// Release and cancel both racing in during `mic.start()`: the documented
+  /// precedence is that cancel overrides the pending release, so the tap ends
+  /// `.cancelled` with nothing transcribed — not a full transcribe→inject run.
+  @Test("cancel overrides a pending release during mic.start")
+  func cancelOverridesPendingReleaseDuringStart() async throws {
+    let mic = GatedMicCapture()
+    let stt = StubTranscriber(mode: .transcript("hi"))
+    let injector = StubInjector()
+    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+
+    let pressed = Task { await session.press() }
+    await mic.waitUntilStartEntered()
+    await session.release()  // deferred (phase isn't .recording yet)
+    await session.cancel()  // also deferred — and overrides the pending release
+    await mic.allowStartToFinish()
+    await pressed.value
+
+    // Bounded drain (a regression must fail, never hang the suite).
+    for _ in 0..<1000 where await session.phase != .cancelled { await Task.yield() }
+    #expect(await session.phase == .cancelled)
+    #expect(await mic.stopCalls == 1)
+    #expect(await injector.inserted.isEmpty)
+  }
 }
 
 /// Mic stub whose `start()` blocks until the test releases it, so `release()` can

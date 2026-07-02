@@ -85,6 +85,10 @@ struct OverlayUIStateAccessibilityLabelTests {
     #expect(OverlayUIState.error(message: "AssemblyAI error 401.").accessibilityLabel == "AssemblyAI error 401.")
   }
 
+  @Test func pastedLabel() {
+    #expect(OverlayUIState.pasted.accessibilityLabel == "Your dictation was pasted.")
+  }
+
   @Test func noTargetLabel() {
     #expect(
       OverlayUIState.noTarget.accessibilityLabel

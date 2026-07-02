@@ -93,6 +93,31 @@ struct CancelRaceTests {
     }
   }
 
+  @Test("cancel landing in insert's non-cancellable tail stays .cancelled, not .pasted")
+  func cancelDuringInjectingTailStaysCancelled() async throws {
+    let mic = StubMicCapture()
+    let stt = StubTranscriber(mode: .transcript("Hello world."))
+    // Models the real injector's final stretch (after its last cancellation
+    // check, once the paste has landed): insert returns *normally* even though
+    // the task was cancelled mid-flight.
+    let injector = GatedInjector(honorsCancellation: false)
+    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+
+    await session.press()
+    await session.release()
+    await injector.waitUntilInsertEntered()
+    #expect(await session.phase == .injecting)
+
+    await session.cancel()
+    #expect(await session.phase == .cancelled)
+
+    // The paste completed anyway (it was already irreversible), but the session
+    // must not repaint the user's cancel as a successful .pasted.
+    await injector.allowInsertToFinish()
+    for _ in 0..<1000 { await Task.yield() }
+    #expect(await session.phase == .cancelled)
+  }
+
   @Test("cancel tears down the armed auto-release timer; the session stays .cancelled")
   func cancelTearsDownAutoRelease() async throws {
     let mic = StubMicCapture()
@@ -185,13 +210,21 @@ private actor GatedInjector: InjectorProtocol {
   /// `confirmation(expectedCount: 0)`, that a cancelled injection records nothing.
   private let onRecord: @Sendable () -> Void
 
-  init(onRecord: @escaping @Sendable () -> Void = {}) { self.onRecord = onRecord }
+  /// When false, `insert` skips its cancellation check and returns normally on a
+  /// cancelled task — modeling the real injector's final, non-cancellable
+  /// stretch after its last `checkCancellation` (the paste already landed).
+  private let honorsCancellation: Bool
+
+  init(honorsCancellation: Bool = true, onRecord: @escaping @Sendable () -> Void = {}) {
+    self.honorsCancellation = honorsCancellation
+    self.onRecord = onRecord
+  }
 
   nonisolated func setTargetApp(_ app: NSRunningApplication?) async {}
 
   nonisolated func insert(_ text: String, after priorText: String?) async throws {
     try await enter()
-    try Task.checkCancellation()
+    if honorsCancellation { try Task.checkCancellation() }
     await recordPaste()
   }
 

@@ -38,6 +38,18 @@ struct KeyInjectorLeadingSeparatorTests {
   func emptyText() {
     #expect(KeyInjector.withLeadingSeparator("", after: "First.") == "")
   }
+
+  @Test("every whitespace class counts, not just space and newline")
+  func otherWhitespaceClasses() {
+    // The rules key on Character.isWhitespace: a trailing tab, carriage return,
+    // or non-breaking space suppresses the separator like a plain space does…
+    #expect(KeyInjector.withLeadingSeparator("Second.", after: "First.\t") == "Second.")
+    #expect(KeyInjector.withLeadingSeparator("Second.", after: "First.\r") == "Second.")
+    #expect(KeyInjector.withLeadingSeparator("Second.", after: "First.\u{00A0}") == "Second.")
+    // …and text already leading with a tab or non-breaking space isn't doubled.
+    #expect(KeyInjector.withLeadingSeparator("\tSecond.", after: "First.") == "\tSecond.")
+    #expect(KeyInjector.withLeadingSeparator("\u{00A0}Second.", after: "First.") == "\u{00A0}Second.")
+  }
 }
 
 @Suite("KeyInjector.separatorBasis")

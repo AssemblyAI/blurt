@@ -22,6 +22,12 @@ struct MicCaptureFormatTests {
     #expect(MicCapture.linearLevel(fromPowerDB: powerDB) == 0)
   }
 
+  @Test func aboveFullScaleClampsToOne() {
+    // dBFS can momentarily read above 0 on clipping input; the meter must pin
+    // at full bars, not overshoot past the 0…1 range the overlay expects.
+    #expect(MicCapture.linearLevel(fromPowerDB: 3) == 1)
+  }
+
   @Test func midScaleMapsLinearlyInDecibels() {
     // Linear across [-50 dB, 0 dB]: halfway (-25 dB) ≈ 0.5, and louder reads higher.
     #expect(abs(MicCapture.linearLevel(fromPowerDB: -25) - 0.5) < 0.01)

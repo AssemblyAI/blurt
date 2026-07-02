@@ -46,4 +46,13 @@ struct StringNormalizationTests {
     #expect(("  a b c  " as String?).trimmedNonEmpty() == "a b c")
     #expect(("line one\nline two" as String?).trimmedNonEmpty() == "line one\nline two")
   }
+
+  @Test("the non-optional String companion applies the same rule")
+  func nonOptionalCompanion() {
+    // Used directly on plain Strings (API key, transcript); every case above
+    // goes through the Optional overload, so pin this entry point too.
+    #expect("  hello  ".trimmedNonEmpty() == "hello")
+    #expect("".trimmedNonEmpty() == nil)
+    #expect("  \n ".trimmedNonEmpty() == nil)
+  }
 }
