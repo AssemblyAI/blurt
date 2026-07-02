@@ -40,6 +40,13 @@ struct OverlayUIStateTests {
     #expect(phase.overlayState == .error(message: "Audio capture failed: No microphone is available."))
   }
 
+  @Test func missingKeyFailureMapsToIdle() {
+    // A missing API key is an expected setup state the shell routes to the
+    // settings window — the pill stays calm idle rather than flashing red on
+    // the way there. Every other failure keeps the error presentation.
+    #expect(PipelinePhase.failed(.apiKeyMissing).overlayState == .idle)
+  }
+
   @Test func failedFallsBackWhenNoDescription() {
     // Defensive: every BlurtError supplies an errorDescription today, but the
     // mapping must still produce a non-empty message if one ever returns nil.

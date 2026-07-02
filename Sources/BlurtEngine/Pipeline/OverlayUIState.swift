@@ -54,6 +54,10 @@ extension PipelinePhase {
     case .idle, .injecting, .cancelled: .idle
     case .recording: .recording
     case .transcribing: .processing
+    // A missing API key is an expected setup state, not a fault: the shell
+    // routes it to the settings window (the actionable fix), so the pill stays
+    // calm idle rather than flashing red on the way there.
+    case .failed(.apiKeyMissing): .idle
     case .failed(let error): .error(message: error.errorDescription ?? "Dictation failed.")
     case .pasted: .pasted
     case .noTarget: .noTarget

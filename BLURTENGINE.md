@@ -42,7 +42,7 @@ session.submit(.press)
 
 Before the first dictation can succeed the host must have:
 
-1. **An AssemblyAI API key** saved via `APIKeyStore.set(_:)` (Keychain-backed; users create keys at `APIKeyStore.dashboardURL`) or through an injected `APIKeyGateway` (see below). Without one, transcription fails with `BlurtError.apiKeyMissing` — and if you pass a `readinessCheck` at init (e.g. `{ APIKeyStore.hasKey ? nil : .apiKeyMissing }`), the press is refused _before any capture begins_ instead, so the user never records an utterance that can't be transcribed. Blurt passes exactly that check.
+1. **An AssemblyAI API key** saved via `APIKeyStore.set(_:)` (Keychain-backed; users create keys at `APIKeyStore.dashboardURL`) or through an injected `APIKeyGateway` (see below). Without one, transcription fails with `BlurtError.apiKeyMissing` — and if you pass a `readinessCheck` at init (e.g. `{ keyStore.hasKey ? nil : .apiKeyMissing }` over your `APIKeyGateway`), the press is refused _before any capture begins_ instead, so the user never records an utterance that can't be transcribed. Blurt passes exactly that check, and the engine's `OverlayUIState` projection renders the refusal as calm idle (not an error flash) so the host can route straight to its key-entry UI.
 2. **Microphone permission** — check and request with `PermissionsChecker`.
 3. **Accessibility trust** — required for the paste (`KeyInjector` posts a synthesized ⌘V) and for the focused-field context reads. `PermissionsChecker.check()` reports both; `SetupStatus.isReady` combines permissions + key into a single "ready to dictate" answer.
 

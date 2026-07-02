@@ -6,21 +6,21 @@ public actor DictationSession {
   // Split for the lint file-length budget: `phaseStream()` and the os_signpost
   // instrumentation live in `DictationSession+Observation.swift`; the
   // `submit(_:)` command surface lives in `DictationSession+Commands.swift`.
+  // Members those files reach are internal rather than private (Swift's
+  // file-scoped access can't cross the split).
 
   /// Live feed of phase changes for the single observer (the production app's
   /// AppCoordinator drives the overlay from it). Each `phaseStream()` call
   /// supersedes any prior one,
   /// yielding the current phase plus every subsequent transition. `currentID`
   /// tags the active continuation so a stream that's torn down after a newer one
-  /// supersedes it doesn't clear the live continuation. Internal (not private)
-  /// because `phaseStream()` lives in the `+Observation` extension file.
+  /// supersedes it doesn't clear the live continuation.
   var continuation: AsyncStream<PipelinePhase>.Continuation?
   var currentID = 0
 
   /// Feed behind the nonisolated `submit(_:)` (see `+Commands`): commands are
   /// yielded synchronously — preserving the caller's emit order — and consumed
-  /// one at a time by the task spawned in `init`. Internal (not private) because
-  /// `submit(_:)` lives in the `+Commands` extension file.
+  /// one at a time by the task spawned in `init`.
   nonisolated let commandFeed: AsyncStream<Command>.Continuation
 
   private let mic: MicCaptureProtocol
@@ -120,8 +120,7 @@ public actor DictationSession {
 
   /// Appends `op` to the serial command queue and waits for it to run. The
   /// synchronous read-then-write of `commandQueue` makes the chain order match
-  /// the order the public methods executed their first actor turn. Internal
-  /// (not private) because `cancelRecording()` lives in the `+Commands` file.
+  /// the order the public methods executed their first actor turn.
   func enqueue(_ op: @escaping @Sendable () async -> Void) async {
     let previous = commandQueue
     let task = Task {
@@ -274,8 +273,7 @@ public actor DictationSession {
   // rest of the command surface in `DictationSession+Commands.swift`.
 
   /// Shared tail of the cancel ops once the guards agree there is a live
-  /// recording to tear down. Internal (not private) because
-  /// `performCancelRecording` lives in the `+Commands` extension file.
+  /// recording to tear down.
   func stopAndCancel() async {
     cancelAutoRelease()
     _ = try? await mic.stop()

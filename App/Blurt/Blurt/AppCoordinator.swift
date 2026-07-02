@@ -91,22 +91,18 @@ final class AppCoordinator {
   }
 
   /// Builds the key tap, wired straight into the session's synchronous
-  /// `submit(_:)` command feed — which preserves the tap thread's emit order
-  /// (spawning a `Task {}` per callback would not: a recovery cancel could
-  /// overtake the press it was meant to cancel). Drives the hold-to-dictate
-  /// hotkey from a CGEventTap (see `DictationKeyTap`) rather than a Carbon
-  /// global hotkey: the latter leaks the chord's auto-repeat key events into
-  /// the focused app while held.
+  /// `submit(_:)` command feed (see its doc for the FIFO-ordering guarantee
+  /// that rules out spawning a `Task {}` per callback). Drives the
+  /// hold-to-dictate hotkey from a CGEventTap (see `DictationKeyTap`) rather
+  /// than a Carbon global hotkey: the latter leaks the chord's auto-repeat key
+  /// events into the focused app while held.
   private func startDictationDriver() {
     let session = session
     keyTap = DictationKeyTap(
       onStart: { session.submit(.press) },
       onStop: { session.submit(.release) },
       onCancel: { session.submit(.cancel) },
-      // A recovery cancel (tap disabled / trigger rebound mid-dictation) must
-      // only end a live recording — a pipeline already transcribing means the
-      // capture ended legitimately (e.g. auto-release) and its transcript
-      // must not be discarded.
+      // Recovery-only teardown; `cancelRecording()`'s doc owns the rationale.
       onRecordingDiscarded: { session.submit(.cancelRecording) }
     )
     // Deliberately *not* installed here: `CGEvent.tapCreate` for keystrokes is
@@ -171,9 +167,8 @@ final class AppCoordinator {
   // its synchronous `submit(_:)` feed, so both paths hit the same engine
   // guards and race rules.
 
-  /// Begins a dictation as the hotkey would. The missing-key gate lives in the
-  /// engine now (the session's `readinessCheck`), so a keyless press comes back
-  /// as `.failed(.apiKeyMissing)` and `render(_:)` routes it to the fix.
+  /// Begins a dictation as the hotkey would (the missing-key gate is the
+  /// session's `readinessCheck`; `render(_:)` routes the refusal to Settings).
   func beginDictation() async {
     await session.press()
   }
@@ -275,17 +270,12 @@ final class AppCoordinator {
   }
 
   private func render(_ phase: PipelinePhase) {
-    // A missing key gets the user taken straight to the fix instead of a
-    // transient error flash (Monitoring already treats it as an expected setup
-    // state, not a fault). Usually this is a press-time refusal (the session's
-    // readinessCheck) with nothing on screen — but it can also arrive from the
-    // transcribe path (key deleted mid-utterance), where the pill is showing
-    // "Transcribing…" and the menu bar is active, so reset the visuals first.
+    // A missing key is a setup state, not a fault: the engine projections
+    // below render it as calm idle (no red flash) and Monitoring ignores it —
+    // the only app-level part is the navigation side effect, bringing the
+    // settings window forward so the user lands on the fix.
     if case .failed(.apiKeyMissing) = phase {
-      overlay?.show(state: .idle)
-      menuBarStatus = .idle
       onMissingAPIKey()
-      return
     }
     // Reveal the pill first, then fire the cue: the sound must never sit in
     // front of the visual state change. Pure phase→pill mapping lives in the
