@@ -48,6 +48,16 @@ struct BlurtApp: App {
       MenuBarLabel(appDelegate: appDelegate)
     }
 
+    // Undocumented Prompt Inspector: shows the fully-assembled prompt sent to
+    // AssemblyAI on the last dictation. Never appears on its own (.suppressed);
+    // opened by the ⌃⌥⌘P chord (see DictationKeyTap / AppDelegate). Ships in all
+    // configurations — it is intentionally present but undocumented.
+    Window("Prompt Inspector", id: PromptInspectorWindow.id) {
+      PromptInspectorView()
+    }
+    .windowResizability(.contentSize)
+    .defaultLaunchBehavior(.suppressed)
+
     #if UITEST_HOOKS
       // XCUITest harness window. Compiled when the `UITEST_HOOKS` condition is on
       // (the Debug default; stripped by scripts/dev-build.sh) but only presented
