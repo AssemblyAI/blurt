@@ -183,7 +183,9 @@ public actor KeyInjector: InjectorProtocol {
     pendingSettle = Task {
       guard let job = try? await paste.value else { return }
       try? await Task.sleep(for: timeout)
-      await self.finishSettle(savedItems: job.savedItems, ourChangeCount: job.ourChangeCount)
+      // No `await`: the task captures the actor's `self`, so it inherits this
+      // actor's isolation and the call is synchronous.
+      self.finishSettle(savedItems: job.savedItems, ourChangeCount: job.ourChangeCount)
     }
     // Forward the caller's cancellation into the chain link: the paste task is
     // unstructured, so `pipelineTask.cancel()` in the session wouldn't otherwise
