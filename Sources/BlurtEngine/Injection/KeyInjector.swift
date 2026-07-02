@@ -140,9 +140,11 @@ public actor KeyInjector: InjectorProtocol {
   /// waits a beat for the activation to settle. No-op when no target was
   /// captured. Throws `.targetAppLost` if the app quit between capture and now,
   /// or if activation fails — pasting/deleting into whatever currently has focus
-  /// would land the keystrokes in the wrong place.
-  private func activateTargetApp() async throws(BlurtError) {
-    guard let target = targetApp else { return }
+  /// would land the keystrokes in the wrong place. Takes the target as a
+  /// parameter (the caller's snapshot) rather than re-reading `targetApp`, so a
+  /// `setTargetApp` racing in across the settle sleep can't swap it mid-paste.
+  private func activateTargetApp(_ target: NSRunningApplication?) async throws(BlurtError) {
+    guard let target else { return }
     guard !target.isTerminated else { throw BlurtError.targetAppLost }
     guard activateTarget(target) else { throw BlurtError.targetAppLost }
     try? await Task.sleep(for: .milliseconds(30))
@@ -186,14 +188,20 @@ public actor KeyInjector: InjectorProtocol {
     var lockHandedOff = false
     defer { if !lockHandedOff { releasePasteLock() } }
     try Task.checkCancellation()
+    // Snapshot the target under the lock and use only the local below: this
+    // method suspends (activation settle), the actor is reentrant, and a
+    // setTargetApp() interleaving mid-insert must not make us activate one app
+    // while judging editability and recording `lastInsertedTargetPID` for
+    // another.
+    let target = targetApp
     // In Accessibility-opaque editors `priorText` is nil even mid-run; fall back
     // to what we last pasted when this dictation targets the same app, so
     // consecutive dictations there still get a separating space.
-    let sameTarget = lastInsertedTargetPID != nil && targetApp?.processIdentifier == lastInsertedTargetPID
+    let sameTarget = lastInsertedTargetPID != nil && target?.processIdentifier == lastInsertedTargetPID
     let basis = KeyInjector.separatorBasis(
       priorText: priorText, lastInserted: lastInsertedText, sameTarget: sameTarget)
     let finalText = KeyInjector.withLeadingSeparator(text, after: basis)
-    try await activateTargetApp()
+    try await activateTargetApp(target)
     // Final cancellation gate before the irreversible paste: a cancel() that
     // landed during activation must not type into the focused app.
     try Task.checkCancellation()
@@ -203,7 +211,7 @@ public actor KeyInjector: InjectorProtocol {
     // a quiet "copied" notice instead of typing. The exception is an AX-opaque
     // Electron editor (VS Code, Slack), which reports no editable signal even for
     // a real text field — there we still paste rather than drop the user's words.
-    guard hasEditableTarget() || isAXOpaqueEditor(targetApp) else {
+    guard hasEditableTarget() || isAXOpaqueEditor(target) else {
       clipboard.setString(finalText)
       throw BlurtError.noEditableTarget
     }
@@ -233,12 +241,17 @@ public actor KeyInjector: InjectorProtocol {
     // — while the settle task keeps the paste lock until it finishes, so the next
     // paste still serializes behind it.
     lastInsertedText = finalText
-    lastInsertedTargetPID = targetApp?.processIdentifier
+    lastInsertedTargetPID = target?.processIdentifier
     lockHandedOff = true
     let timeout = pasteSettleDuration
-    pendingSettle = Task { [weak self] in
+    // Strong capture, deliberately: the settle window is bounded (no cycle —
+    // the task ends after one sleep), and a weak capture would let an injector
+    // torn down mid-window skip finishSettle, leaving the transcript on the
+    // clipboard instead of the user's saved contents and the handed-off paste
+    // lock unreleased.
+    pendingSettle = Task {
       try? await Task.sleep(for: timeout)
-      await self?.finishSettle(savedItems: savedItems, ourChangeCount: ourChangeCount)
+      await self.finishSettle(savedItems: savedItems, ourChangeCount: ourChangeCount)
     }
   }
 

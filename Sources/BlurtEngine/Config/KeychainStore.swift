@@ -44,7 +44,18 @@ struct KeychainStore: Sendable {
     if updateStatus == errSecItemNotFound {
       var addQuery = baseQuery()
       addQuery[kSecValueData as String] = data
-      return SecItemAdd(addQuery as CFDictionary, nil) == errSecSuccess
+      let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+      if addStatus == errSecSuccess { return true }
+      // Update-then-add is not atomic: a concurrent writer can insert the item
+      // between our two calls. The item exists now, so store our value with a
+      // second update instead of reporting a failed save for a key that's there.
+      if addStatus == errSecDuplicateItem {
+        return SecItemUpdate(
+          baseQuery() as CFDictionary,
+          [kSecValueData as String: data] as CFDictionary
+        ) == errSecSuccess
+      }
+      return false
     }
     return false
   }

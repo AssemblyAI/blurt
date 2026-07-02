@@ -115,4 +115,22 @@ struct DictationKeyGateTests {
       }
     }
   }
+
+  /// `isIdle` is what the event tap's disabled-tap recovery reads to decide
+  /// whether its reset just discarded a live recording it must cancel upstream,
+  /// so it has to be true exactly when no dictation is in flight.
+  @Test("isIdle tracks armed and latched recordings")
+  func isIdleTracksLiveRecordings() {
+    var g = DictationKeyGate(holdThreshold: .seconds(1))
+    #expect(g.isIdle)
+    _ = g.modifierDown(at: .seconds(0))  // armed (push-to-talk in progress)
+    #expect(!g.isIdle)
+    _ = g.modifierUp(at: .milliseconds(200))  // quick tap → latched
+    #expect(!g.isIdle)
+    g.reset()
+    #expect(g.isIdle)
+    _ = g.modifierDown(at: .seconds(2))
+    _ = g.modifierUp(at: .milliseconds(3500))  // hold → stop
+    #expect(g.isIdle)
+  }
 }

@@ -68,9 +68,11 @@ public actor DictationSession {
   /// having its release silently dropped.
   private var pendingRelease = false
 
-  /// Set when `cancel()` arrives while `press()` is still inside `mic.start()`.
-  /// `press()` consumes it the moment recording begins, so a fast cancel can't
-  /// strand the session in `.recording` by having its cancel silently dropped.
+  /// Set when `cancel()` arrives while `press()` is still inside `mic.start()`
+  /// (consumed by `press()` the moment recording begins) or while `release()` is
+  /// suspended inside `mic.stop()` (consumed by `release()` before it spawns the
+  /// transcribe→inject pipeline). Without the second window a cancel racing the
+  /// stop would be silently dropped and the transcript pasted anyway.
   private var pendingCancel = false
 
   /// Handle to the auto-release timer started in `press()`. Stored so that
@@ -191,15 +193,31 @@ public actor DictationSession {
     do {
       samples = try await mic.stop()
     } catch {
+      // A cancel that raced in during mic.stop() wins over surfacing the audio
+      // error — the user asked for nothing to happen.
+      if consumePendingCancel() { return }
       // Audio capture/conversion failed (e.g. sample-rate conversion couldn't
       // run). Surface it instead of silently transcribing an empty buffer.
       setPhase(.failed(.audioCaptureFailed(underlying: error)))
       return
     }
+    // A cancel() that arrived while mic.stop() was in flight was deferred
+    // (phase was still .recording but `isStopping` barred it) — honor it now,
+    // before the recording can be transcribed and pasted.
+    if consumePendingCancel() { return }
     setPhase(.transcribing)
     pipelineTask = Task { [weak self] in
       await self?.runTranscribeInject(samples: samples)
     }
+  }
+
+  /// Consumes a `pendingCancel` deferred while this call held `isStopping`,
+  /// claiming the phase for the user's cancel. Returns whether it fired.
+  private func consumePendingCancel() -> Bool {
+    guard pendingCancel else { return false }
+    pendingCancel = false
+    setPhase(.cancelled)
+    return true
   }
 
   public func cancel() async {
@@ -214,12 +232,14 @@ public actor DictationSession {
       return
     }
     guard phase == .recording, !isStopping else {
-      // press() hasn't reached .recording yet (still inside mic.start()). Defer
-      // the cancel so press() honors it once recording begins, rather than
-      // dropping it — see `pendingCancel`. (A cancel that races in while an
-      // earlier release or cancel is already stopping is simply dropped, and
-      // cancel overrides release).
-      if isStarting {
+      // Either press() hasn't reached .recording yet (still inside mic.start())
+      // or a release() is suspended inside mic.stop(). Defer the cancel so the
+      // in-flight call honors it — press() the moment recording begins,
+      // release() before it spawns the pipeline — rather than dropping it and
+      // pasting a transcript the user cancelled. Cancel overrides a pending
+      // release. (A cancel racing an earlier *cancel*'s mic.stop() sets the
+      // flag too; that stop clears it below, since its intent is already met.)
+      if isStarting || isStopping {
         pendingCancel = true
         pendingRelease = false
       }
@@ -229,6 +249,9 @@ public actor DictationSession {
     defer { isStopping = false }
     cancelAutoRelease()
     _ = try? await mic.stop()
+    // A second cancel deferred during our own mic.stop() is already satisfied
+    // by the .cancelled below — don't leave it armed for a later release.
+    pendingCancel = false
     setPhase(.cancelled)
   }
 
@@ -336,17 +359,21 @@ public actor DictationSession {
   }
 
   /// The frontmost app (for paste targeting) plus the STT priming context,
-  /// gathered together in a single MainActor hop at press time.
+  /// gathered at press time.
   private struct FocusSnapshot: Sendable {
     let app: NSRunningApplication?
     let context: TranscriptionContext?
   }
 
   private func captureFocus() async -> FocusSnapshot {
-    let (captured, field) = await MainActor.run {
-      () -> (CapturedFocus?, FocusCapture.FocusedFieldContext) in
-      (FocusCapture.captureFrontmost(), FocusCapture.captureFieldContext())
-    }
+    // The frontmost-app read is a cheap in-process AppKit call that wants the
+    // main actor. The field-context read is cross-process AX IPC into the
+    // frontmost app and deliberately runs detached — off the main actor (an
+    // unresponsive app would freeze the overlay and menu bar for up to the AX
+    // messaging timeout per attribute) and off this actor (it would wedge
+    // press()/release()/cancel() for the same window).
+    let captured = await MainActor.run { FocusCapture.captureFrontmost() }
+    let field = await Task.detached { FocusCapture.captureFieldContext() }.value
     let app = captured.flatMap { FocusCapture.runningApp(for: $0) }
     let context = TranscriptionContext(
       appName: captured?.processName,

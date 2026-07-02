@@ -11,7 +11,10 @@ import os
 ///
 /// Unlike the old chord trigger, this **swallows nothing**: a lone modifier
 /// types nothing into the focused app, and combos must pass through so normal
-/// shortcuts keep working.
+/// shortcuts keep working. The tap is therefore created `.listenOnly` — an
+/// active (`.defaultTap`) tap would make macOS synchronously wait on this
+/// process before delivering every keystroke system-wide, so any main-thread
+/// stall in Blurt would add typing latency in *other* apps.
 final class DictationKeyTap {
   private static let logger = Logger(
     subsystem: BlurtIdentity.subsystem, category: "DictationKeyTap")
@@ -34,6 +37,9 @@ final class DictationKeyTap {
   /// Monotonic reference; per-event timestamps are `reference.duration(to: now)`.
   private let reference = ContinuousClock.now
 
+  /// `nonisolated(unsafe)` so the nonisolated `deinit` and the tap-thread
+  /// `handle` can read it: written once on the main actor in `ensureRunning()`
+  /// (whose run loop also services the tap), read afterwards without overlap.
   nonisolated(unsafe) private var tap: CFMachPort?
 
   init(
@@ -44,6 +50,19 @@ final class DictationKeyTap {
     self.onStart = onStart
     self.onStop = onStop
     self.onCancel = onCancel
+  }
+
+  deinit {
+    // The callback holds `self` unretained (`Unmanaged.passUnretained` in
+    // `userInfo`), so the tap must not outlive this object: disable it and
+    // invalidate the mach port (which also tears down its run-loop source)
+    // before the pointer dangles. AppCoordinator keeps the tap app-lifetime
+    // today, so this is a guard against a future re-composition, not a path
+    // that runs in production.
+    if let tap {
+      CGEvent.tapEnable(tap: tap, enable: false)
+      CFMachPortInvalidate(tap)
+    }
   }
 
   /// Idempotent. Creates and enables the tap if needed and syncs the binding.
@@ -62,7 +81,7 @@ final class DictationKeyTap {
       let created = CGEvent.tapCreate(
         tap: .cgSessionEventTap,
         place: .headInsertEventTap,
-        options: .defaultTap,
+        options: .listenOnly,
         eventsOfInterest: CGEventMask(mask),
         callback: dictationTapCallback,
         userInfo: Unmanaged.passUnretained(self).toOpaque()
@@ -92,22 +111,29 @@ final class DictationKeyTap {
     }
   }
 
-  /// Tap-thread entry point. Always returns false — this mode swallows nothing.
-  fileprivate func handle(type: CGEventType, event: CGEvent) -> Bool {
+  /// Tap-thread entry point. Swallows nothing — the tap is listen-only, so
+  /// events are delivered regardless of what happens here.
+  fileprivate func handle(type: CGEventType, event: CGEvent) {
     if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
       if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
-      state.withLock {
-        $0.gate.reset()
-        $0.modifierIsDown = false
+      let discardedRecording = state.withLock { s in
+        let wasActive = !s.gate.isIdle
+        s.gate.reset()
+        s.modifierIsDown = false
+        return wasActive
       }
-      return false
+      // Events — including the trigger's key-up — were dropped while the tap
+      // was disabled, so a recording that was in flight can no longer be ended
+      // by the user. Cancel it rather than leaving the session in .recording
+      // until the auto-release cap fires and pastes an unprompted transcript.
+      if discardedRecording { onCancel() }
+      return
     }
 
     let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
     let eventFlags = event.flags
     let now = reference.duration(to: ContinuousClock.now)
     dispatch(decideAction(type: type, keyCode: keyCode, eventFlags: eventFlags, now: now))
-    return false
   }
 
   /// Feeds one event into the gate (under the lock) and returns its decision.
@@ -181,7 +207,9 @@ final class DictationKeyTap {
 }
 
 /// Top-level (non-capturing) C callback. The tap object is passed unretained via
-/// `userInfo`; AppCoordinator owns it for the app's lifetime.
+/// `userInfo`; AppCoordinator owns it for the app's lifetime (and `deinit`
+/// invalidates the tap before the pointer could dangle). The tap is listen-only,
+/// so the returned event is ignored by the system — pass it back unchanged.
 private func dictationTapCallback(
   _: CGEventTapProxy,
   type: CGEventType,
@@ -190,5 +218,6 @@ private func dictationTapCallback(
 ) -> Unmanaged<CGEvent>? {
   guard let userInfo else { return Unmanaged.passUnretained(event) }
   let monitor = Unmanaged<DictationKeyTap>.fromOpaque(userInfo).takeUnretainedValue()
-  return monitor.handle(type: type, event: event) ? nil : Unmanaged.passUnretained(event)
+  monitor.handle(type: type, event: event)
+  return Unmanaged.passUnretained(event)
 }

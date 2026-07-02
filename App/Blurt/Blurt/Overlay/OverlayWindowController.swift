@@ -70,10 +70,16 @@ final class OverlayWindowController {
     panel.isMovable = true
     panel.isMovableByWindowBackground = true
 
+    // `queue: nil` so the block runs synchronously on the posting thread —
+    // always main for window moves, hence the `assumeIsolated`. `queue: .main`
+    // would bounce delivery through an OperationQueue hop, running the block a
+    // run-loop pass *after* `reposition()` has already cleared
+    // `suppressOriginPersist`, so the programmatic placement would be persisted
+    // as if the user had dragged the pill there.
     self.didMoveObserver = NotificationCenter.default.addObserver(
       forName: NSWindow.didMoveNotification,
       object: panel,
-      queue: .main
+      queue: nil
     ) { [weak self] _ in
       MainActor.assumeIsolated {
         self?.handleDidMove()
