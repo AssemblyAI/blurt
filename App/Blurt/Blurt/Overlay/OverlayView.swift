@@ -115,15 +115,18 @@ struct OverlayView: View {
       noticePill(symbol: "arrow.clockwise", tint: .white, label: "Try again", help: message)
     case .pasted:
       // Quiet, informational notice confirming the transcript was typed into the
-      // focused field. The paste glyph is magenta (the brand --hot, matching the
-      // "● REC" recording indicator) while the "Pasted" label stays cyan (--ice),
-      // so it reads as info, not the red error flash. The filled clipboard is the
-      // paste action — the solid counterpart to "Copied"'s outlined
-      // `doc.on.clipboard`, so the two notices stay distinct.
-      noticePill(
-        symbol: "doc.on.clipboard.fill", tint: OverlayBrandPalette.magenta, label: "Pasted",
-        help: state.accessibilityLabel,
-        labelTint: OverlayBrandPalette.cyan)
+      // focused field. Styled exactly like "Transcribing…" (same type, tracking,
+      // and cyan --ice) so the processing → pasted hand-off reads as one
+      // continuous status line rather than a new kind of alert. No glyph — the
+      // word alone carries it. Hover still exposes the full announcement text.
+      Text("Pasted")
+        .font(.system(size: 10, weight: .semibold))
+        .tracking(0.8)
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+        .foregroundStyle(OverlayBrandPalette.cyan)
+        .transition(.opacity)
+        .help(state.accessibilityLabel)
     case .noTarget:
       // Quiet, informational notice: there was no text field to type into, so the
       // transcript went to the clipboard. Cyan (the brand --ice, same as
@@ -135,15 +138,13 @@ struct OverlayView: View {
   }
 
   /// A brief notice pill — an SF Symbol + short label — for the transient
-  /// `.error` / `.pasted` / `.noTarget` states, which differ only in glyph,
-  /// color, label, and hover text. `tint` colors the glyph; `labelTint` colors
-  /// the label and defaults to `tint` (so the error/copied notices stay one
-  /// color, while "Pasted" can pair a magenta glyph with a cyan label). `help`
-  /// is the hover tooltip — pass `state.accessibilityLabel` so it stays the
-  /// same string the window controller announces to VoiceOver (the wording
-  /// lives in one place, `OverlayUIState`).
+  /// `.error` / `.noTarget` states, which differ only in glyph, color, label,
+  /// and hover text. `tint` colors both the glyph and the label. `help` is the
+  /// hover tooltip — pass `state.accessibilityLabel` so it stays the same
+  /// string the window controller announces to VoiceOver (the wording lives in
+  /// one place, `OverlayUIState`).
   private func noticePill(
-    symbol: String, tint: Color, label: String, help: String, labelTint: Color? = nil
+    symbol: String, tint: Color, label: String, help: String
   ) -> some View {
     HStack(spacing: 6) {
       Image(systemName: symbol)
@@ -153,7 +154,7 @@ struct OverlayView: View {
         .font(.callout.weight(.semibold))
         .lineLimit(1)
         .minimumScaleFactor(0.6)
-        .foregroundStyle(labelTint ?? tint)
+        .foregroundStyle(tint)
     }
     .padding(.horizontal, 4)
     .transition(.opacity)
