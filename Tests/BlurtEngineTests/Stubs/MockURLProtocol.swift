@@ -13,6 +13,7 @@ final class MockURLProtocol: URLProtocol {
   // relationship — without it ThreadSanitizer (intermittently) flags a data race.
   private static let lock = NSLock()
   nonisolated(unsafe) private static var _responder: (@Sendable (URLRequest) -> (Int, Data))?
+  nonisolated(unsafe) private static var _transportError: (any Error & Sendable)?
 
   static var responder: (@Sendable (URLRequest) -> (Int, Data))? {
     get {
@@ -27,10 +28,31 @@ final class MockURLProtocol: URLProtocol {
     }
   }
 
+  /// When set, every request fails with this error instead of receiving a
+  /// response — simulating a transport failure (offline, DNS, timeout) so
+  /// clients' `catch` paths can be exercised. Takes precedence over `responder`;
+  /// same cross-thread locking rationale as above.
+  static var transportError: (any Error & Sendable)? {
+    get {
+      lock.lock()
+      defer { lock.unlock() }
+      return _transportError
+    }
+    set {
+      lock.lock()
+      defer { lock.unlock() }
+      _transportError = newValue
+    }
+  }
+
   override class func canInit(with request: URLRequest) -> Bool { true }
   override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
   override func startLoading() {
+    if let error = MockURLProtocol.transportError {
+      client?.urlProtocol(self, didFailWithError: error)
+      return
+    }
     let (status, body) = MockURLProtocol.responder?(request) ?? (500, Data())
     let response = HTTPURLResponse(
       url: request.url!,

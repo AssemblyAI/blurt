@@ -95,4 +95,26 @@ struct FocusCaptureTests {
     #expect(FocusCapture.clip("abc", to: 4) == "abc")
     #expect(FocusCapture.clip(nil, to: 4) == nil)
   }
+
+  // MARK: isSecureFieldRole
+
+  @Test("only the password-field role triggers the prompt redaction")
+  func secureFieldRoleDetection() {
+    // The guard that keeps a typed password out of the STT prompt keys on this
+    // exact role string — a rename or typo here would silently stop redacting.
+    #expect(FocusCapture.isSecureFieldRole("AXSecureTextField"))
+    #expect(!FocusCapture.isSecureFieldRole("AXTextField"))
+    #expect(!FocusCapture.isSecureFieldRole("AXTextArea"))
+    #expect(!FocusCapture.isSecureFieldRole(nil))
+  }
+
+  // MARK: isElectronApp
+
+  @Test("isElectronApp is false for a missing app")
+  func electronNilApp() {
+    // The positive branch probes the app bundle on disk and is host-dependent;
+    // the nil guard (no captured target → never the Electron paste exception)
+    // is the deterministic half.
+    #expect(!FocusCapture.isElectronApp(nil))
+  }
 }

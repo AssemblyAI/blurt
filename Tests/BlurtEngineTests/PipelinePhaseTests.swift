@@ -20,6 +20,13 @@ struct PipelinePhaseTests {
     #expect(PipelinePhase.pasted.isTerminal)
   }
 
+  @Test("cancelled is terminal")
+  func cancelledIsTerminal() {
+    // `waitForIdle` and the press guard both key off terminality — a
+    // non-terminal .cancelled would block every press after a cancel.
+    #expect(PipelinePhase.cancelled.isTerminal)
+  }
+
   @Test("active phases are not terminal")
   func activePhasesAreNotTerminal() {
     #expect(!PipelinePhase.recording.isTerminal)

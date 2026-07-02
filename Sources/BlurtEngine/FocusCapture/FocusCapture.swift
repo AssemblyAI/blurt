@@ -58,7 +58,7 @@ enum FocusCapture {
     guard let element = systemFocusedElement() else { return .empty }
 
     // Don't read the value of a password field into the prompt.
-    let isSecure = (stringValue(element, kAXRoleAttribute) == "AXSecureTextField")
+    let isSecure = isSecureFieldRole(stringValue(element, kAXRoleAttribute))
     let prior = isSecure ? nil : priorText(of: element, maxChars: maxPriorChars)
     // The selected range's text (empty when there's no selection). Capped like
     // prior text so a huge highlight can't dominate the prompt budget.
@@ -174,8 +174,10 @@ enum FocusCapture {
   // MARK: - Editable-target detection (for the injector's "no beep" guard)
 
   /// AX roles a focused element reports when it accepts typed/pasted text.
+  /// Includes `secureFieldRole`: a password field is a valid *paste* target even
+  /// though its contents are never read (see `isSecureFieldRole`).
   private static let editableRoles: Set<String> = [
-    "AXTextField", "AXTextArea", "AXComboBox", "AXSecureTextField", "AXSearchField",
+    "AXTextField", "AXTextArea", "AXComboBox", secureFieldRole, "AXSearchField",
   ]
 
   /// Pure decision: does a focused element with these signals accept pasted text?
@@ -258,6 +260,18 @@ enum FocusCapture {
   }
 
   // MARK: - Pure helpers (no Accessibility I/O — unit-testable in isolation)
+
+  /// The AX role password inputs report. `captureFieldContext` never reads the
+  /// prior/selected text of a field with this role into the STT prompt, so a
+  /// typed password can't leak. Independent of editability: the same role is in
+  /// `editableRoles`, so a password field still *receives* the paste.
+  static let secureFieldRole = "AXSecureTextField"
+
+  /// Pure decision behind the password-redaction guard in `captureFieldContext`:
+  /// does this focused-element role mean its contents must never be read?
+  static func isSecureFieldRole(_ role: String?) -> Bool {
+    role == secureFieldRole
+  }
 
   /// Picks the most descriptive field label in priority order
   /// (placeholder → description → title → role description), skipping blanks.

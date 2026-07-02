@@ -49,6 +49,10 @@ struct TranscriptionPromptTests {
       context: TranscriptionContext(appName: nil, fieldLabel: "Search", priorText: nil),
       expected: "Dictated in the \"Search\" field. \(base)"),
     Case(
+      name: "app + field without window → destination names both",
+      context: TranscriptionContext(appName: "Slack", fieldLabel: "Message", priorText: nil),
+      expected: "Dictated into Slack, in the \"Message\" field. \(base)"),
+    Case(
       name: "all four signals combine",
       context: TranscriptionContext(
         appName: "Slack", windowTitle: "#eng-backend", fieldLabel: "Message", priorText: "thanks for"),
@@ -115,6 +119,17 @@ struct TranscriptionPromptTests {
     let prompt = TranscriptionPrompt.build(
       context: TranscriptionContext(appName: "Xcode", priorText: longPrior))
     #expect((prompt?.count ?? 0) <= TranscriptionPrompt.characterCap)
+  }
+
+  @Test("the keyword clause is omitted entirely when not even the first term fits")
+  func keyTermsOmittedWhenNoneFit() {
+    // A single term longer than the whole cap leaves no budget for even one
+    // keyword: the clause (and its "Keywords:" scaffolding) must be dropped
+    // whole, not emitted empty or dangling.
+    let huge = String(repeating: "k", count: TranscriptionPrompt.characterCap)
+    let prompt = TranscriptionPrompt.build(
+      context: TranscriptionContext(appName: "Xcode", priorText: nil, keyTerms: [huge]))
+    #expect(prompt == "Dictated into Xcode. \(Self.base)")
   }
 
   @Test("an oversized key-terms list is fitted to the cap, keeping whole leading terms")

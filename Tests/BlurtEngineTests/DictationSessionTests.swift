@@ -39,6 +39,9 @@ extension DictationSessionTests {
 
     #expect(await session.phase == .pasted)
     #expect(await injector.inserted == ["Hello world."])
+    // The captured caret context rides along with the insert (its value is
+    // host-dependent in a test run, but the argument must be forwarded).
+    #expect(await injector.insertedPrior.count == 1)
   }
 
   @Test("a too-short clip is dropped as a silent no-op, not sent to STT")
@@ -322,3 +325,7 @@ extension DictationSessionTests {
     #expect(await injector.inserted.isEmpty)
   }
 }
+
+// Guard/no-op behaviors and phase-stream supersession live in
+// `DictationSessionGuardTests.swift` (same collaborators and stubs), split out
+// to stay within the lint file-length budget.

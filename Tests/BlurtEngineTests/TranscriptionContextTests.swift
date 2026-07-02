@@ -66,7 +66,7 @@ struct TranscriptionContextTests {
     }
   }
 
-  @Test("Equatable compares both fields")
+  @Test("Equatable compares every field")
   func equatable() {
     #expect(
       TranscriptionContext(appName: "Notes", priorText: "x")
@@ -80,5 +80,14 @@ struct TranscriptionContextTests {
     #expect(
       TranscriptionContext(appName: "Notes", priorText: "x", selectedText: "a")
         != TranscriptionContext(appName: "Notes", priorText: "x", selectedText: "b"))
+    #expect(
+      TranscriptionContext(appName: "Notes", windowTitle: "a", priorText: "x")
+        != TranscriptionContext(appName: "Notes", windowTitle: "b", priorText: "x"))
+    #expect(
+      TranscriptionContext(appName: "Notes", fieldLabel: "To", priorText: "x")
+        != TranscriptionContext(appName: "Notes", fieldLabel: "Subject", priorText: "x"))
+    #expect(
+      TranscriptionContext(appName: "Notes", priorText: "x", keyTerms: ["a"])
+        != TranscriptionContext(appName: "Notes", priorText: "x", keyTerms: ["b"]))
   }
 }

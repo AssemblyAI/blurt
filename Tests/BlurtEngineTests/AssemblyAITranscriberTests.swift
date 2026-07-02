@@ -51,13 +51,35 @@ struct HTTPClientTests {
     #expect(result == "hello world")
   }
 
+  @Test("transcribe sends the raw key and the sync model selector as headers")
+  func transcribeSendsAuthAndModelHeaders() async throws {
+    MockURLProtocol.responder = { request in
+      // The wire contract: the raw key in Authorization (no "Bearer" prefix),
+      // the sync model selector, and a boundary-tagged multipart body. Anything
+      // else gets a 400 so a header regression fails loudly here.
+      guard request.value(forHTTPHeaderField: "Authorization") == "test-key",
+        request.value(forHTTPHeaderField: "X-AAI-Model") == "u3-sync-pro",
+        request.value(forHTTPHeaderField: "Content-Type")?.hasPrefix("multipart/form-data; boundary=") == true
+      else { return (400, Data()) }
+      return (200, json(["text": "ok"]))
+    }
+    defer { MockURLProtocol.responder = nil }
+
+    #expect(try await collectTranscript(makeTranscriber(apiKey: "test-key")) == "ok")
+  }
+
   @Test("warmUp issues a single GET to the host so the connection is pre-opened")
   func warmUpPreOpensConnection() async throws {
     let hits = Counter()
     let getHits = Counter()
     MockURLProtocol.responder = { request in
       _ = hits.next()
-      if request.httpMethod == "GET", request.url?.path.hasSuffix("/transcribe") == false {
+      // The warm-up must be a bare, auth-less GET off the /transcribe path —
+      // carrying the key or model header would make it count as a transcription.
+      if request.httpMethod == "GET", request.url?.path.hasSuffix("/transcribe") == false,
+        request.value(forHTTPHeaderField: "Authorization") == nil,
+        request.value(forHTTPHeaderField: "X-AAI-Model") == nil
+      {
         _ = getHits.next()
       }
       return (404, Data())
@@ -77,6 +99,23 @@ struct HTTPClientTests {
     await #expect(throws: BlurtError.apiKeyMissing) {
       _ = try await collectTranscript(makeTranscriber(apiKey: nil))
     }
+  }
+
+  @Test("transcriber treats an empty-string key as missing, without a request")
+  func transcribeEmptyKeyIsMissing() async throws {
+    let hits = Counter()
+    MockURLProtocol.responder = { _ in
+      _ = hits.next()
+      return (200, json(["text": "never"]))
+    }
+    defer { MockURLProtocol.responder = nil }
+
+    // A cleared Keychain item can come back as "" rather than nil — that must
+    // fail fast as a missing key, not go to the wire with a blank Authorization.
+    await #expect(throws: BlurtError.apiKeyMissing) {
+      _ = try await collectTranscript(makeTranscriber(apiKey: ""))
+    }
+    #expect(hits.value == 0)
   }
 
   @Test("transcriber throws when the response omits transcript text")
@@ -106,6 +145,8 @@ struct HTTPClientTests {
     let object = try JSONSerialization.jsonObject(with: config) as? [String: Any]
     #expect(object?["prompt"] as? String == "CONTEXT. Transcribe.")
     #expect(object?["sample_rate"] as? Int == 16_000)
+    // The capture path is mono by construction; the declared geometry must agree.
+    #expect(object?["channels"] as? Int == 1)
   }
 
   @Test("config part omits the prompt field when there is no context")
@@ -162,6 +203,36 @@ struct HTTPClientTests {
   func errorMessageFallsBackToRawBody() {
     let body = Data(#"{"unexpected":"shape"}"#.utf8)
     #expect(AssemblyAITranscriber.errorMessage(from: body) == #"{"unexpected":"shape"}"#)
+  }
+
+  @Test("HTTP error message is read from the `detail` field too")
+  func errorMessageFromDetailField() {
+    #expect(AssemblyAITranscriber.errorMessage(from: json(["detail": "audio required"])) == "audio required")
+  }
+
+  @Test("HTTP error message field precedence is error > message > detail")
+  func errorMessageFieldPrecedence() {
+    // The API labels its explanation inconsistently; when several fields
+    // co-exist the documented priority must hold, so a reorder can't silently
+    // change which message reaches the user.
+    #expect(
+      AssemblyAITranscriber.errorMessage(from: json(["error": "a", "message": "b", "detail": "c"])) == "a")
+    #expect(AssemblyAITranscriber.errorMessage(from: json(["message": "b", "detail": "c"])) == "b")
+  }
+
+  @Test("a non-string `detail` (validation array) falls back to the raw body")
+  func errorMessageNonStringDetailFallsBack() {
+    // FastAPI-style validation errors carry `detail` as an array; that must not
+    // decode as the message — the raw body is still more useful than nothing.
+    let body = #"{"detail":[{"loc":["config"],"msg":"field required"}]}"#
+    #expect(AssemblyAITranscriber.errorMessage(from: Data(body.utf8)) == body)
+  }
+
+  @Test("a raw-body error message is capped at 500 characters")
+  func errorMessageRawBodyCapped() {
+    // An HTML error page must not flood the overlay/error description.
+    let long = String(repeating: "x", count: 600)
+    #expect(AssemblyAITranscriber.errorMessage(from: Data(long.utf8))?.count == 500)
   }
 
   @Test("HTTP error message is nil only for an empty body")
