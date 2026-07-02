@@ -310,13 +310,6 @@ final class AppCoordinator {
     menuBarStatus = phase.menuBarStatus
 
     cues.transition(isRecording: phase == .recording)
-
-    // A .failed phase is a handled error (it doesn't crash the app), so the
-    // crash reporter never sees it — report the genuine faults (the triage
-    // lives in `Monitoring.reportPipelineFault`).
-    if case .failed(let error) = phase {
-      Monitoring.reportPipelineFault(error)
-    }
   }
 }
 

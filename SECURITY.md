@@ -32,13 +32,9 @@ AssemblyAI's service belong to
 how Blurt handles audio, the API key, the clipboard, or the accessibility
 permissions it uses are in scope here.
 
-Release builds also send crash reports and a few handled errors to
-[Datadog](https://www.datadoghq.com) for stability monitoring. These are diagnostic only
-(stack traces and error details) — they never include your audio, transcripts,
-or API key, and Blurt does not attach your IP address. To count unique installs
-and version adoption, Blurt also attaches a random, anonymous install identifier
-(not tied to your identity) and logs an app-launch event. Debug builds send
-nothing.
+Blurt sends no telemetry — no crash reporting, no analytics, and no usage
+tracking. The only network traffic the app produces is the dictation audio it
+sends to AssemblyAI and the GitHub Releases check for self-updates.
 
 ## Supported versions
 
