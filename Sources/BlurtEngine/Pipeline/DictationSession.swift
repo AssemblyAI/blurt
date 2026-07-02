@@ -1,4 +1,3 @@
-import AppKit
 import os
 
 public actor DictationSession {
@@ -44,34 +43,30 @@ public actor DictationSession {
   private static let captureSampleRate = SyncSTTLimits.sampleRate
 
   /// Context captured at `press()` (focused app + text before the cursor),
-  /// passed to the transcriber so the Sync STT model has priming. Captured at
-  /// press time because that's when the target field still holds focus.
+  /// passed to the transcriber so the Sync STT model has priming. Resolved from
+  /// `contextTask` when the pipeline runs; stored so `inject`'s separator
+  /// decision and the dictation log see the same snapshot.
   private var capturedContext: TranscriptionContext?
 
-  /// Guards `press()` across its `await mic.start()` suspension. Actors are
-  /// reentrant, so the `phase.isTerminal` check alone can't stop a second
-  /// `press()` arriving mid-`start()` (`.recording` isn't set until start
-  /// returns) from starting the mic twice.
-  private var isStarting = false
+  /// The in-flight AX field-context read, started by `press()` — that's when the
+  /// target field still holds focus — but awaited only in `runTranscribeInject`.
+  /// Deliberately not awaited before `.recording`: the read is cross-process IPC
+  /// into the frontmost app, and an unresponsive app must delay transcription
+  /// (which needs the context), never the recording indicator (which doesn't).
+  private var contextTask: Task<TranscriptionContext?, Never>?
 
-  /// Guards `release()` across its `await mic.stop()` suspension. `release()` has
-  /// two triggers (manual key-up and the auto-release timer); without this, a
-  /// second release arriving during `mic.stop()` would re-pass the
-  /// `phase == .recording` guard (phase isn't `.transcribing` until stop returns)
-  /// and run the pipeline a second time — double-stopping the mic and injecting
-  /// the transcript twice.
-  private var isStopping = false
+  /// Tail of the serial command queue. `press()`/`release()`/`cancel()`/
+  /// `cancelRecording()` chain behind it (see `enqueue`), so commands run one at
+  /// a time in arrival order: no command ever observes another suspended
+  /// mid-`mic.start()`/`mic.stop()`. This replaces the old `isStarting`/
+  /// `isStopping` guards and pending-release/-cancel deferral flags outright.
+  private var commandQueue: Task<Void, Never>?
 
-  /// Set when `release()` arrives while `press()` is still inside `mic.start()` —
-  /// i.e. before `phase` flips to `.recording`. `press()` consumes it the moment
-  /// recording begins, so a fast tap can't strand the session in `.recording` by
-  /// having its release silently dropped.
-  private var pendingRelease = false
-
-  /// Set when `cancel()` arrives while `press()` is still inside `mic.start()`.
-  /// `press()` consumes it the moment recording begins, so a fast cancel can't
-  /// strand the session in `.recording` by having its cancel silently dropped.
-  private var pendingCancel = false
+  /// Set synchronously by `cancel()` before it takes its queue turn, so a cancel
+  /// requested while a release is mid-`mic.stop()` deterministically wins:
+  /// `performRelease` consumes the request after the stop, before any pipeline
+  /// is spawned. `performCancel` clears it whether or not it was consumed early.
+  private var cancelRequested = false
 
   /// Handle to the auto-release timer started in `press()`. Stored so that
   /// `release()` can cancel it — otherwise a fire-and-forget timer from a prior
@@ -122,12 +117,29 @@ public actor DictationSession {
     if id == currentID { continuation = nil }
   }
 
+  /// Appends `op` to the serial command queue and waits for it to run. The
+  /// synchronous read-then-write of `commandQueue` makes the chain order match
+  /// the order the public methods executed their first actor turn.
+  private func enqueue(_ op: @escaping @Sendable () async -> Void) async {
+    let previous = commandQueue
+    let task = Task {
+      await previous?.value
+      await op()
+    }
+    commandQueue = task
+    await task.value
+  }
+
   public func press() async {
-    guard phase.isTerminal, !isStarting else { return }
-    isStarting = true
-    pendingRelease = false
-    pendingCancel = false
-    defer { isStarting = false }
+    await enqueue { await self.performPress() }
+  }
+
+  public func release() async {
+    await enqueue { await self.performRelease() }
+  }
+
+  private func performPress() async {
+    guard phase.isTerminal else { return }
     // Times the startup path — the concurrent focus capture + mic.start (and the
     // detached connection warm-up kicked off below) — up to the moment recording
     // actually begins. Ended on both the success and failure exits (mic.start is
@@ -143,31 +155,43 @@ public actor DictationSession {
       // throwaway request reuses it rather than handshaking again.
       let transcriber = transcriber
       Task.detached { await transcriber.warmUp() }
-      // Capture the focused app + prior text concurrently with mic startup. The
-      // phase still flips to .recording only after mic.start succeeds, so the UI
-      // never lies about whether audio is being captured.
-      async let captured = captureFocus()
+      // Capture the frontmost app (paste target) concurrently with mic startup —
+      // a cheap in-process AppKit read on the main actor. The phase still flips
+      // to .recording only after mic.start succeeds, so the UI never lies about
+      // whether audio is being captured.
+      async let frontmost = MainActor.run { FocusCapture.captureFrontmost() }
       try await mic.start()
-      let focus = await captured
-      await injector.setTargetApp(focus.app)
-      capturedContext = focus.context
+      let captured = await frontmost
+      await injector.setTargetApp(captured.flatMap { FocusCapture.runningApp(for: $0) })
+      // Key terms are read synchronously at press (cheap UserDefaults read), so
+      // each dictation observably re-reads Settings edits at press time.
+      let keyTerms = keyTermsProvider()
+      // Kick off the AX field-context read now, while the target field still
+      // holds focus, but don't await it here: it's cross-process IPC into the
+      // frontmost app (detached — off the main actor, where it froze the
+      // overlay, and off this actor, where it would wedge release()/cancel()),
+      // and runTranscribeInject awaits it right before transcription. A slow AX
+      // target therefore delays the transcript, never the recording indicator.
+      contextTask = Task.detached {
+        let field = FocusCapture.captureFieldContext()
+        let context = TranscriptionContext(
+          appName: captured?.processName,
+          windowTitle: field.windowTitle,
+          fieldLabel: field.fieldLabel,
+          priorText: field.priorText,
+          selectedText: field.selectedText,
+          keyTerms: keyTerms)
+        return context.isEmpty ? nil : context
+      }
       setPhase(.recording)
       Self.signposter.endInterval(Self.pressSignpostName, pressInterval)
       let timeout = maxRecordingSeconds
       autoReleaseTask = Task { [weak self] in
         try? await Task.sleep(for: .seconds(timeout))
         guard let self, !Task.isCancelled else { return }
-        await self.releaseIfRecording()
-      }
-      // A release or cancel that raced in while mic.start() was still in flight was
-      // deferred (phase wasn't .recording yet) — honor it now so the press doesn't
-      // strand the session in .recording.
-      if pendingCancel {
-        pendingCancel = false
-        await cancel()
-      } else if pendingRelease {
-        pendingRelease = false
-        await release()
+        // Enqueues like a manual key-up. If a real release already ran, the
+        // queued performRelease sees a non-.recording phase and drops out.
+        await self.release()
       }
     } catch {
       Self.signposter.endInterval(Self.pressSignpostName, pressInterval)
@@ -175,69 +199,91 @@ public actor DictationSession {
     }
   }
 
-  public func release() async {
-    guard phase == .recording, !isStopping else {
-      // press() hasn't reached .recording yet (still inside mic.start()). Defer
-      // the release so press() honors it once recording begins, rather than
-      // dropping it — see `pendingRelease`. (A release that races in while an
-      // earlier one is already stopping is simply dropped.)
-      if isStarting { pendingRelease = true }
-      return
-    }
-    isStopping = true
-    defer { isStopping = false }
+  private func performRelease() async {
+    guard phase == .recording else { return }
     cancelAutoRelease()
     let samples: [Float]
     do {
       samples = try await mic.stop()
     } catch {
+      // A cancel requested while mic.stop() was in flight wins over surfacing
+      // the audio error — the user asked for nothing to happen.
+      if consumeCancelRequest() { return }
       // Audio capture/conversion failed (e.g. sample-rate conversion couldn't
       // run). Surface it instead of silently transcribing an empty buffer.
       setPhase(.failed(.audioCaptureFailed(underlying: error)))
       return
     }
+    // A cancel() requested while mic.stop() was in flight is honored here,
+    // before any pipeline exists — deterministically no transcription, no paste.
+    if consumeCancelRequest() { return }
     setPhase(.transcribing)
     pipelineTask = Task { [weak self] in
       await self?.runTranscribeInject(samples: samples)
     }
   }
 
+  /// Consumes a cancel requested while this release held the queue, claiming the
+  /// phase for the user's cancel. Returns whether it fired.
+  private func consumeCancelRequest() -> Bool {
+    guard cancelRequested else { return false }
+    cancelRequested = false
+    setPhase(.cancelled)
+    return true
+  }
+
   public func cancel() async {
     // A cancel that lands after recording has already stopped — while the
     // transcribe→inject task is in flight — tears that task down so the
     // transcript is never injected, and claims the phase so the cancelled
-    // pipeline can't overwrite it back to .idle.
+    // pipeline can't overwrite it back to .idle. Synchronous (no suspension), so
+    // it acts immediately rather than queueing behind the pipeline's progress.
     if phase == .transcribing || phase == .injecting {
       pipelineTask?.cancel()
       pipelineTask = nil
       setPhase(.cancelled)
       return
     }
-    guard phase == .recording, !isStopping else {
-      // press() hasn't reached .recording yet (still inside mic.start()). Defer
-      // the cancel so press() honors it once recording begins, rather than
-      // dropping it — see `pendingCancel`. (A cancel that races in while an
-      // earlier release or cancel is already stopping is simply dropped, and
-      // cancel overrides release).
-      if isStarting {
-        pendingCancel = true
-        pendingRelease = false
-      }
-      return
-    }
-    isStopping = true
-    defer { isStopping = false }
+    // Record the intent before taking a queue turn: a release currently mid-
+    // `mic.stop()` consumes it the moment the stop returns (no pipeline is ever
+    // spawned), and a press ahead in the queue is followed by our own turn,
+    // which ends the freshly started recording. Either way the cancel is
+    // honored in arrival order, never dropped.
+    cancelRequested = true
+    await enqueue { await self.performCancel() }
+  }
+
+  private func performCancel() async {
+    // Our turn is the cancel — clear the request whether or not an earlier
+    // release already consumed it.
+    cancelRequested = false
+    guard phase == .recording else { return }
+    await stopAndCancel()
+  }
+
+  /// Cancels only a live *recording* — the narrow cancel for synthetic,
+  /// state-recovery callers (the event tap's disabled-tap recovery and trigger
+  /// rebinding), whose intent is "the key events ending this capture may be
+  /// lost". Unlike `cancel()`, it never tears down a `.transcribing`/`.injecting`
+  /// pipeline and never preempts a queued release: reaching this op's turn with
+  /// the capture already ended (or ending) means a release happened
+  /// legitimately (e.g. the auto-release cap fired while the gate was still
+  /// latched), and discarding that transcript would lose the user's words.
+  public func cancelRecording() async {
+    await enqueue { await self.performCancelRecording() }
+  }
+
+  private func performCancelRecording() async {
+    guard phase == .recording else { return }
+    await stopAndCancel()
+  }
+
+  /// Shared tail of the cancel ops once the guards agree there is a live
+  /// recording to tear down.
+  private func stopAndCancel() async {
     cancelAutoRelease()
     _ = try? await mic.stop()
     setPhase(.cancelled)
-  }
-
-  /// Body of the auto-release timer: only release if we're still recording the
-  /// same session that armed the timer (the timer is cancelled on an earlier
-  /// release, so reaching here means this session is genuinely overrun).
-  private func releaseIfRecording() async {
-    guard phase == .recording else { return }
-    await release()
   }
 
   private func cancelAutoRelease() {
@@ -260,6 +306,12 @@ public actor DictationSession {
       if !Task.isCancelled { setPhase(.idle) }
       return
     }
+
+    // Resolve the press-time AX field read now that it's actually needed. In the
+    // common case it finished long ago (the user spoke for a while); against an
+    // unresponsive app it's bounded by the AX messaging timeout.
+    capturedContext = await contextTask?.value
+    contextTask = nil
 
     // The Sync STT API applies the cleanup prompt server-side, so the transcript
     // it returns is already the final, polished text — there is no separate
@@ -337,29 +389,6 @@ public actor DictationSession {
         setPhase(.failed(.targetAppLost))
       }
     }
-  }
-
-  /// The frontmost app (for paste targeting) plus the STT priming context,
-  /// gathered together in a single MainActor hop at press time.
-  private struct FocusSnapshot: Sendable {
-    let app: NSRunningApplication?
-    let context: TranscriptionContext?
-  }
-
-  private func captureFocus() async -> FocusSnapshot {
-    let (captured, field) = await MainActor.run {
-      () -> (CapturedFocus?, FocusCapture.FocusedFieldContext) in
-      (FocusCapture.captureFrontmost(), FocusCapture.captureFieldContext())
-    }
-    let app = captured.flatMap { FocusCapture.runningApp(for: $0) }
-    let context = TranscriptionContext(
-      appName: captured?.processName,
-      windowTitle: field.windowTitle,
-      fieldLabel: field.fieldLabel,
-      priorText: field.priorText,
-      selectedText: field.selectedText,
-      keyTerms: keyTermsProvider())
-    return FocusSnapshot(app: app, context: context.isEmpty ? nil : context)
   }
 
   private func setPhase(_ newPhase: PipelinePhase) {

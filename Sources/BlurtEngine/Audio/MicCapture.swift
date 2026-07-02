@@ -133,7 +133,12 @@ public actor MicCapture: MicCaptureProtocol {
   private func startMeterTimer() {
     meterTask = Task { [weak self] in
       while !Task.isCancelled {
-        await self?.emitLevel()
+        // Rebound per iteration so the actor stays releasable across the sleep.
+        // Bail when it's gone: deinit doesn't cancel this task, so the weak
+        // capture is what stops an orphaned meter from spinning at ~30 Hz for
+        // the rest of the process if a capture is dropped without stop().
+        guard let self else { return }
+        await self.emitLevel()
         try? await Task.sleep(for: Self.meterInterval)
       }
     }

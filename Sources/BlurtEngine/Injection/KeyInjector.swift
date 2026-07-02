@@ -30,13 +30,23 @@ public actor KeyInjector: InjectorProtocol {
   /// drives the separator decision (see `separatorBasis`).
   private var lastInsertedTargetPID: pid_t?
 
-  /// The in-flight settle task spawned by the most recent successful paste: it
-  /// waits out `pasteSettleDuration` and then restores the user's clipboard,
-  /// holding the paste lock until it finishes. `insert` returns *before* this
-  /// completes so the pipeline re-arms immediately, with the restore trailing in
-  /// the background. Exposed (internal get) so tests can await the deferred
-  /// restore before asserting clipboard state; production never reads it.
+  /// Tail of the paste chain: each insert links behind the previous insert's
+  /// ENTIRE critical section — paste *plus* its backgrounded settle/restore — so
+  /// two pastes can never interleave on the global `NSPasteboard`. `insert`
+  /// itself returns as soon as its paste is posted (the settle trails inside the
+  /// chain link), so the pipeline re-arms immediately while the next paste still
+  /// waits out the restore window. Chaining replaces a hand-rolled continuation
+  /// mutex whose lock had to be handed off to the settle task. Exposed
+  /// (internal get) so tests can await the deferred restore before asserting
+  /// clipboard state; production never reads it.
   private(set) var pendingSettle: Task<Void, Never>?
+
+  /// What a successful paste hands to its deferred settle: the pre-paste
+  /// clipboard snapshot to restore and the change count our own write produced.
+  private struct SettleJob: Sendable {
+    let savedItems: [SendablePasteboardItem]
+    let ourChangeCount: Int
+  }
 
   /// Brings the captured target app back to the foreground before pasting.
   /// Injectable so tests can cover activation failure without depending on
@@ -140,62 +150,73 @@ public actor KeyInjector: InjectorProtocol {
   /// for the activation to settle. No-op when no target was captured. Throws
   /// `.targetAppLost` if the app quit between capture and now, or if activation
   /// fails — pasting into whatever currently has focus would land the
-  /// keystrokes in the wrong place. (`insert` puts the transcript on the
+  /// keystrokes in the wrong place. (`performInsert` puts the transcript on the
   /// clipboard before letting this error propagate, so the words survive.)
-  private func activateTargetApp() async throws(BlurtError) {
-    guard let target = targetApp else { return }
+  /// Takes the target as a parameter (the caller's snapshot) rather than
+  /// re-reading `targetApp`, so a `setTargetApp` racing in across the settle
+  /// sleep can't swap it mid-paste.
+  private func activateTargetApp(_ target: NSRunningApplication?) async throws(BlurtError) {
+    guard let target else { return }
     guard !target.isTerminated else { throw BlurtError.targetAppLost }
     guard activateTarget(target) else { throw BlurtError.targetAppLost }
     try? await Task.sleep(for: .milliseconds(30))
   }
 
-  /// FIFO async mutex guarding the paste critical section (see `insert`). Held
-  /// across `insert`'s suspension points so reentrant calls serialize instead
-  /// of interleaving on the global `NSPasteboard`.
-  private var pasteLocked = false
-  private var pasteWaiters: [CheckedContinuation<Void, Never>] = []
-
-  private func acquirePasteLock() async {
-    guard pasteLocked else {
-      pasteLocked = true
-      return
-    }
-    await withCheckedContinuation { pasteWaiters.append($0) }
-    // Resumed by `releasePasteLock` handing the lock directly to us, so it
-    // stays held — no re-check needed.
-  }
-
-  private func releasePasteLock() {
-    if pasteWaiters.isEmpty {
-      pasteLocked = false
-    } else {
-      pasteWaiters.removeFirst().resume()
-    }
-  }
-
   public func insert(_ text: String, after priorText: String? = nil) async throws {
     guard !text.isEmpty else { return }
-    // Serialize the whole paste critical section — including the backgrounded
-    // settle/restore. The actor is reentrant across the `await`s below, so a
-    // second insert arriving mid-paste would otherwise interleave: it would
-    // snapshot the pasteboard while it still holds *this* insert's transcript and
-    // later restore that instead of the user's original clipboard. The lock is
-    // released on every exit path here EXCEPT a successful paste, where it is
-    // handed to the background settle task (`finishSettle`) so the restore stays
-    // serialized while `insert` returns early and the pipeline re-arms.
-    await acquirePasteLock()
-    var lockHandedOff = false
-    defer { if !lockHandedOff { releasePasteLock() } }
+    // Serialize the whole paste critical section by chaining behind the previous
+    // insert's link (which includes its settle/restore — see `pendingSettle`).
+    // The actor is reentrant across the `await`s in `performInsert`, so an
+    // unserialized second insert would snapshot the pasteboard while it still
+    // holds this insert's transcript and later restore that instead of the
+    // user's original clipboard.
+    let previous = pendingSettle
+    let timeout = pasteSettleDuration
+    let paste = Task<SettleJob?, any Error> {
+      await previous?.value
+      return try await self.performInsert(text, after: priorText)
+    }
+    // Strong `self` captures, deliberately: each link is bounded (one paste, one
+    // settle sleep — no cycle), and a weak capture would let an injector torn
+    // down mid-window skip the restore, leaving the transcript on the clipboard
+    // instead of the user's saved contents.
+    pendingSettle = Task {
+      guard let job = try? await paste.value else { return }
+      try? await Task.sleep(for: timeout)
+      // No `await`: the task captures the actor's `self`, so it inherits this
+      // actor's isolation and the call is synchronous.
+      self.finishSettle(savedItems: job.savedItems, ourChangeCount: job.ourChangeCount)
+    }
+    // Forward the caller's cancellation into the chain link: the paste task is
+    // unstructured, so `pipelineTask.cancel()` in the session wouldn't otherwise
+    // reach `performInsert`'s cancellation gates.
+    try await withTaskCancellationHandler {
+      _ = try await paste.value
+    } onCancel: {
+      paste.cancel()
+    }
+  }
+
+  /// The paste critical section: runs with the chain's guarantee that no other
+  /// insert (or its settle) is mid-flight. Returns the settle job for the
+  /// deferred clipboard restore.
+  private func performInsert(_ text: String, after priorText: String?) async throws -> SettleJob {
     try Task.checkCancellation()
+    // Snapshot the target at entry and use only the local below: this method
+    // suspends (activation settle), the actor is reentrant, and a
+    // setTargetApp() interleaving mid-insert must not make us activate one app
+    // while judging editability and recording `lastInsertedTargetPID` for
+    // another.
+    let target = targetApp
     // In Accessibility-opaque editors `priorText` is nil even mid-run; fall back
     // to what we last pasted when this dictation targets the same app, so
     // consecutive dictations there still get a separating space.
-    let sameTarget = lastInsertedTargetPID != nil && targetApp?.processIdentifier == lastInsertedTargetPID
+    let sameTarget = lastInsertedTargetPID != nil && target?.processIdentifier == lastInsertedTargetPID
     let basis = KeyInjector.separatorBasis(
       priorText: priorText, lastInserted: lastInsertedText, sameTarget: sameTarget)
     let finalText = KeyInjector.withLeadingSeparator(text, after: basis)
     do {
-      try await activateTargetApp()
+      try await activateTargetApp(target)
     } catch {
       // The target app quit or refused activation between capture and paste.
       // Transcription already succeeded, so leave the words on the clipboard —
@@ -213,7 +234,7 @@ public actor KeyInjector: InjectorProtocol {
     // a quiet "copied" notice instead of typing. The exception is an AX-opaque
     // Electron editor (VS Code, Slack), which reports no editable signal even for
     // a real text field — there we still paste rather than drop the user's words.
-    guard hasEditableTarget() || isAXOpaqueEditor(targetApp) else {
+    guard hasEditableTarget() || isAXOpaqueEditor(target) else {
       clipboard.setString(finalText)
       throw BlurtError.noEditableTarget
     }
@@ -236,29 +257,22 @@ public actor KeyInjector: InjectorProtocol {
     guard postPaste() else { throw BlurtError.targetAppLost }
     // The paste is posted and the text is visible. Record what landed (including
     // any leading separator) and which app it landed in so a following dictation
-    // into the same opaque editor can recover its spacing, then defer the settle +
-    // clipboard restore to a background task. `insert` returns now — so the
-    // pipeline reaches `.idle` and re-arms without waiting out the restore window
-    // — while the settle task keeps the paste lock until it finishes, so the next
-    // paste still serializes behind it.
+    // into the same opaque editor can recover its spacing, then hand the settle +
+    // clipboard restore back to the chain link (see `insert`). `insert` returns
+    // now — so the pipeline reaches `.idle` and re-arms without waiting out the
+    // restore window — while the next paste still serializes behind the settle.
     lastInsertedText = finalText
-    lastInsertedTargetPID = targetApp?.processIdentifier
-    lockHandedOff = true
-    let timeout = pasteSettleDuration
-    pendingSettle = Task { [weak self] in
-      try? await Task.sleep(for: timeout)
-      await self?.finishSettle(savedItems: savedItems, ourChangeCount: ourChangeCount)
-    }
+    lastInsertedTargetPID = target?.processIdentifier
+    return SettleJob(savedItems: savedItems, ourChangeCount: ourChangeCount)
   }
 
   /// Background tail of a successful `insert`: restore the user's clipboard
   /// (unless another writer changed it during the settle window — then leave the
-  /// newer contents alone) and release the paste lock that `insert` handed off.
+  /// newer contents alone).
   private func finishSettle(savedItems: [SendablePasteboardItem], ourChangeCount: Int) {
     if clipboard.changeCount == ourChangeCount {
       clipboard.restore(savedItems)
     }
-    releasePasteLock()
   }
 
   private static func activate(_ app: NSRunningApplication) -> Bool {

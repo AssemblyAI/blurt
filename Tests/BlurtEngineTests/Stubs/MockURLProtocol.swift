@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// A `URLProtocol` that intercepts every request and replies with whatever
 /// `responder` returns, so HTTP-backed clients (`AssemblyAITranscriber`,
@@ -9,23 +10,14 @@ final class MockURLProtocol: URLProtocol {
   // `responder` is read on URLSession's background loading thread (in
   // `startLoading`) while tests write it on their own thread (assignment and the
   // `defer` reset). `.serialized` orders the tests but not those cross-thread
-  // accesses, so the storage is guarded by a lock to give them a happens-before
+  // accesses, so the storage lives in a `Mutex` to give them a happens-before
   // relationship — without it ThreadSanitizer (intermittently) flags a data race.
-  private static let lock = NSLock()
-  nonisolated(unsafe) private static var _responder: (@Sendable (URLRequest) -> (Int, Data))?
-  nonisolated(unsafe) private static var _transportError: (any Error & Sendable)?
+  private static let _responder = Mutex<(@Sendable (URLRequest) -> (Int, Data))?>(nil)
+  private static let _transportError = Mutex<(any Error & Sendable)?>(nil)
 
   static var responder: (@Sendable (URLRequest) -> (Int, Data))? {
-    get {
-      lock.lock()
-      defer { lock.unlock() }
-      return _responder
-    }
-    set {
-      lock.lock()
-      defer { lock.unlock() }
-      _responder = newValue
-    }
+    get { _responder.withLock { $0 } }
+    set { _responder.withLock { $0 = newValue } }
   }
 
   /// When set, every request fails with this error instead of receiving a
@@ -33,16 +25,8 @@ final class MockURLProtocol: URLProtocol {
   /// clients' `catch` paths can be exercised. Takes precedence over `responder`;
   /// same cross-thread locking rationale as above.
   static var transportError: (any Error & Sendable)? {
-    get {
-      lock.lock()
-      defer { lock.unlock() }
-      return _transportError
-    }
-    set {
-      lock.lock()
-      defer { lock.unlock() }
-      _transportError = newValue
-    }
+    get { _transportError.withLock { $0 } }
+    set { _transportError.withLock { $0 = newValue } }
   }
 
   override class func canInit(with request: URLRequest) -> Bool { true }
@@ -82,18 +66,15 @@ func json(_ object: [String: String]) -> Data {
 }
 
 /// Thread-safe call counter for asserting how many requests a client issued.
-final class Counter: @unchecked Sendable {
-  private let lock = NSLock()
-  private var _value = 0
+final class Counter: Sendable {
+  private let count = Mutex(0)
   func next() -> Int {
-    lock.lock()
-    defer { lock.unlock() }
-    _value += 1
-    return _value
+    count.withLock {
+      $0 += 1
+      return $0
+    }
   }
   var value: Int {
-    lock.lock()
-    defer { lock.unlock() }
-    return _value
+    count.withLock { $0 }
   }
 }

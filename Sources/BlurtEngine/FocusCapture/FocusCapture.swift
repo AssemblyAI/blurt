@@ -50,8 +50,13 @@ enum FocusCapture {
   /// Secure text fields (password inputs) are detected by role and never have
   /// their contents read, so a typed password — selected or not — can't leak
   /// into the STT prompt.
-  @MainActor
-  static func captureFieldContext(maxPriorChars: Int = 320, maxSelectedChars: Int = 320)
+  ///
+  /// Deliberately `nonisolated`: each read below is a synchronous cross-process
+  /// IPC round trip into the frontmost app, and an unresponsive app blocks the
+  /// calling thread until the AX messaging timeout. On the main actor that froze
+  /// the overlay and menu bar right at hotkey press; callers run this off-main
+  /// (the AX *client* read APIs are thread-safe — see `systemFocusedElement`).
+  nonisolated static func captureFieldContext(maxPriorChars: Int = 320, maxSelectedChars: Int = 320)
     -> FocusedFieldContext
   {
     guard AXIsProcessTrusted() else { return .empty }
@@ -70,12 +75,22 @@ enum FocusCapture {
       fieldLabel: clip(fieldLabel(of: element), to: 80))
   }
 
+  /// Cap on each cross-process AX round trip this process makes. An unresponsive
+  /// frontmost app costs a read this long, not the ~6 s system default; the
+  /// context capture is best-effort priming, so partial answers beat waiting.
+  private static let axMessagingTimeoutSeconds: Float = 1
+
   /// The system-wide focused UI element, or `nil` when none is resolvable
   /// (process not trusted, or nothing focused). The Accessibility *client* read
-  /// APIs are thread-safe, so this serves both the `@MainActor` context capture
+  /// APIs are thread-safe, so this serves both the off-main context capture
   /// and the injector's off-main editability check.
   private nonisolated static func systemFocusedElement() -> AXUIElement? {
     let system = AXUIElementCreateSystemWide()
+    // Setting the timeout on the system-wide element applies it process-wide
+    // (per AXUIElement.h), bounding this focused-element lookup AND every later
+    // read — including ones on *other* element refs a per-element timeout would
+    // miss (the window element behind `windowTitle`, the editability probes).
+    AXUIElementSetMessagingTimeout(system, axMessagingTimeoutSeconds)
     var focusedRef: CFTypeRef?
     guard
       AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedRef)
@@ -90,8 +105,7 @@ enum FocusCapture {
 
   /// The insertion point (UTF-16 location of the selected range) of `element`,
   /// or `nil` when it exposes no readable selection.
-  @MainActor
-  private static func caretLocation(of element: AXUIElement) -> Int? {
+  private nonisolated static func caretLocation(of element: AXUIElement) -> Int? {
     var rangeRef: CFTypeRef?
     guard
       AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeRef)
@@ -106,8 +120,7 @@ enum FocusCapture {
 
   /// Up to `maxChars` of text immediately preceding the insertion point, or
   /// `nil` when the element exposes no readable text before the cursor.
-  @MainActor
-  private static func priorText(of element: AXUIElement, maxChars: Int) -> String? {
+  private nonisolated static func priorText(of element: AXUIElement, maxChars: Int) -> String? {
     // Insertion point = the location of the (possibly empty) selected range.
     let caret = caretLocation(of: element) ?? -1
 
@@ -132,16 +145,14 @@ enum FocusCapture {
   }
 
   /// The title of the window containing the focused element, if exposed.
-  @MainActor
-  private static func windowTitle(of element: AXUIElement) -> String? {
+  private nonisolated static func windowTitle(of element: AXUIElement) -> String? {
     guard let window = elementValue(element, kAXWindowAttribute) else { return nil }
     return stringValue(window, kAXTitleAttribute)
   }
 
   /// A short, human-meaningful label for the field, chosen by priority from the
   /// attributes the focused element exposes.
-  @MainActor
-  private static func fieldLabel(of element: AXUIElement) -> String? {
+  private nonisolated static func fieldLabel(of element: AXUIElement) -> String? {
     selectLabel(
       placeholder: stringValue(element, kAXPlaceholderValueAttribute),
       description: stringValue(element, kAXDescriptionAttribute),
@@ -151,8 +162,7 @@ enum FocusCapture {
 
   /// Reads a `String`-valued AX attribute, returning `nil` for missing,
   /// non-string, or blank values.
-  @MainActor
-  private static func stringValue(_ element: AXUIElement, _ attribute: String) -> String? {
+  private nonisolated static func stringValue(_ element: AXUIElement, _ attribute: String) -> String? {
     var ref: CFTypeRef?
     guard AXUIElementCopyAttributeValue(element, attribute as CFString, &ref) == .success,
       let value = ref as? String
@@ -161,8 +171,7 @@ enum FocusCapture {
   }
 
   /// Reads an `AXUIElement`-valued AX attribute (e.g. the containing window).
-  @MainActor
-  private static func elementValue(_ element: AXUIElement, _ attribute: String) -> AXUIElement? {
+  private nonisolated static func elementValue(_ element: AXUIElement, _ attribute: String) -> AXUIElement? {
     var ref: CFTypeRef?
     guard AXUIElementCopyAttributeValue(element, attribute as CFString, &ref) == .success,
       let ref

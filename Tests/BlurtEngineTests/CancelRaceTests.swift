@@ -93,6 +93,99 @@ struct CancelRaceTests {
     }
   }
 
+  @Test("cancel while release is stopping the mic discards the recording")
+  func cancelDuringMicStopDiscards() async throws {
+    let mic = GatedStopMic()
+    let stt = StubTranscriber(mode: .transcript("Hello world."))
+    let injector = StubInjector()
+    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+
+    await session.press()
+    #expect(await session.phase == .recording)
+    let releaseTask = Task { await session.release() }
+    await mic.waitUntilStopEntered()  // release is now suspended inside mic.stop()
+
+    // cancel() records its request the moment it enters the session (the actor
+    // is free — the release is parked inside the gated mic.stop), then queues
+    // its turn behind the release; awaiting it inline here would deadlock
+    // against the gate. The drain gives cancel() that entry deterministically.
+    let cancelTask = Task { await session.cancel() }
+    for _ in 0..<1000 { await Task.yield() }
+    await mic.allowStopToFinish()
+    // The release must consume the cancel request after mic.stop() returns and
+    // spawn no pipeline — the transcript the user cancelled is never pasted.
+    await releaseTask.value
+    await cancelTask.value
+    for _ in 0..<1000 { await Task.yield() }
+
+    #expect(await session.phase == .cancelled)
+    #expect(await injector.inserted.isEmpty)
+  }
+
+  @Test("cancel while release's mic.stop fails still wins over the audio error")
+  func cancelDuringFailingMicStopWinsOverError() async throws {
+    let mic = GatedStopMic(stopError: URLError(.unknown))
+    let stt = StubTranscriber(mode: .transcript("Hello world."))
+    let injector = StubInjector()
+    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+
+    await session.press()
+    let releaseTask = Task { await session.release() }
+    await mic.waitUntilStopEntered()
+
+    // See cancelDuringMicStopDiscards for the Task + drain choreography.
+    let cancelTask = Task { await session.cancel() }
+    for _ in 0..<1000 { await Task.yield() }
+    await mic.allowStopToFinish()
+    await releaseTask.value
+    await cancelTask.value
+
+    // The user asked for nothing to happen — the cancel claims the phase
+    // rather than the stop failure repainting it as a red .failed.
+    #expect(await session.phase == .cancelled)
+    #expect(await injector.inserted.isEmpty)
+  }
+
+  @Test("cancelRecording during transcribing leaves the pipeline alone")
+  func cancelRecordingDoesNotTearDownTranscribing() async throws {
+    let mic = StubMicCapture()
+    let stt = GatedTranscriber(text: "Hello world.")
+    let injector = StubInjector()
+    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+
+    await session.press()
+    await session.release()  // -> .transcribing, spawns the pipeline task
+    await stt.waitUntilStarted()
+    #expect(await session.phase == .transcribing)
+
+    // The narrow recovery cancel (tap disabled / trigger rebound): the capture
+    // already ended legitimately, so the in-flight transcript must survive —
+    // unlike a user-intent cancel(), which tears it down.
+    await session.cancelRecording()
+    #expect(await session.phase == .transcribing)
+
+    await stt.allowToFinish()
+    for _ in 0..<1000 where await session.phase != .pasted { await Task.yield() }
+
+    #expect(await session.phase == .pasted)
+    #expect(await injector.inserted == ["Hello world."])
+  }
+
+  @Test("cancelRecording during recording cancels like cancel()")
+  func cancelRecordingCancelsLiveRecording() async throws {
+    let mic = StubMicCapture()
+    let stt = StubTranscriber(mode: .transcript("Hello world."))
+    let injector = StubInjector()
+    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+
+    await session.press()
+    #expect(await session.phase == .recording)
+    await session.cancelRecording()
+    #expect(await session.phase == .cancelled)
+    #expect(await mic.stopCalls == 1)
+    #expect(await injector.inserted.isEmpty)
+  }
+
   @Test("cancel landing in insert's non-cancellable tail stays .cancelled, not .pasted")
   func cancelDuringInjectingTailStaysCancelled() async throws {
     let mic = StubMicCapture()
@@ -135,7 +228,7 @@ struct CancelRaceTests {
     #expect(await session.phase == .cancelled)
 
     // Wait past the auto-release deadline. A timer that survived the cancel would
-    // fire releaseIfRecording → release → transcribe → inject and flip the phase.
+    // enqueue a release → transcribe → inject and flip the phase.
     try await Task.sleep(for: .milliseconds(150))
     for _ in 0..<1000 { await Task.yield() }
 

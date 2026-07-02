@@ -36,17 +36,31 @@ struct KeychainStore: Sendable {
     }
 
     let data = Data(trimmed.utf8)
-    let updateStatus = SecItemUpdate(
+    switch update(data) {
+    case errSecSuccess: return true
+    case errSecItemNotFound: break
+    default: return false
+    }
+
+    var addQuery = baseQuery()
+    addQuery[kSecValueData as String] = data
+    switch SecItemAdd(addQuery as CFDictionary, nil) {
+    case errSecSuccess: return true
+    // Update-then-add is not atomic: a concurrent writer can insert the item
+    // between our two calls. The item exists now, so store our value with a
+    // second update instead of reporting a failed save for a key that's there.
+    case errSecDuplicateItem: return update(data) == errSecSuccess
+    default: return false
+    }
+  }
+
+  /// The single definition of the value-update write, shared by the first-try
+  /// update and the lost-the-add-race retry so their attributes can't drift.
+  private func update(_ data: Data) -> OSStatus {
+    SecItemUpdate(
       baseQuery() as CFDictionary,
       [kSecValueData as String: data] as CFDictionary
     )
-    if updateStatus == errSecSuccess { return true }
-    if updateStatus == errSecItemNotFound {
-      var addQuery = baseQuery()
-      addQuery[kSecValueData as String] = data
-      return SecItemAdd(addQuery as CFDictionary, nil) == errSecSuccess
-    }
-    return false
   }
 
   private func baseQuery() -> [String: Any] {

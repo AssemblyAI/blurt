@@ -1,10 +1,14 @@
 import AppKit
-import Foundation
+import Synchronization
 import Testing
 
 /// Shared fixtures for the `KeyInjector.insert` suites (the main insert suite
 /// and the fallback/cancel suite live in separate files to stay within the
 /// lint file-length budget, but drive the injector the same way).
+///
+/// The boxes are classes over `Mutex` (not actors) because they're poked from
+/// synchronous `@Sendable` seams like `postPaste`; the `Mutex` makes each
+/// `Sendable` conformance compiler-checked instead of `@unchecked`-asserted.
 
 /// Some live application to stand in as the captured paste target.
 func liveTargetApp() throws -> NSRunningApplication {
@@ -16,99 +20,80 @@ func liveTargetApp() throws -> NSRunningApplication {
 
 /// One-shot async gate: `wait()` suspends until `open()` is called. Tolerates
 /// `open()` racing ahead of `wait()` (the waiter then returns immediately).
-final class AsyncGate: @unchecked Sendable {
-  private let lock = NSLock()
-  private var continuation: CheckedContinuation<Void, Never>?
-  private var opened = false
+final class AsyncGate: Sendable {
+  private struct State {
+    var continuation: CheckedContinuation<Void, Never>?
+    var opened = false
+  }
+  private let state = Mutex(State())
 
   func wait() async {
     await withCheckedContinuation { cont in
-      lock.lock()
-      if opened {
-        lock.unlock()
-        cont.resume()
-      } else {
-        continuation = cont
-        lock.unlock()
+      let openedAlready = state.withLock { s -> Bool in
+        if s.opened { return true }
+        s.continuation = cont
+        return false
       }
+      if openedAlready { cont.resume() }
     }
   }
 
   func open() {
-    lock.lock()
-    opened = true
-    let cont = continuation
-    continuation = nil
-    lock.unlock()
+    let cont = state.withLock { s -> CheckedContinuation<Void, Never>? in
+      s.opened = true
+      let waiter = s.continuation
+      s.continuation = nil
+      return waiter
+    }
     cont?.resume()
   }
 }
 
 /// Thread-safe ordered list of strings recorded inside a `@Sendable` closure,
 /// for asserting the sequence of texts a test observed being pasted.
-final class StringListBox: @unchecked Sendable {
-  private let lock = NSLock()
-  private var items: [String] = []
+final class StringListBox: Sendable {
+  private let items = Mutex<[String]>([])
   func append(_ value: String?) {
-    lock.lock()
-    items.append(value ?? "")
-    lock.unlock()
+    items.withLock { $0.append(value ?? "") }
   }
   var values: [String] {
-    lock.lock()
-    defer { lock.unlock() }
-    return items
+    items.withLock { $0 }
   }
 }
 
 /// Thread-safe boolean flag for assertions inside a `@Sendable` closure.
-final class BoolBox: @unchecked Sendable {
-  private let lock = NSLock()
-  private var flag = false
+final class BoolBox: Sendable {
+  private let flag = Mutex(false)
   func set() {
-    lock.lock()
-    flag = true
-    lock.unlock()
+    flag.withLock { $0 = true }
   }
   var value: Bool {
-    lock.lock()
-    defer { lock.unlock() }
-    return flag
+    flag.withLock { $0 }
   }
 }
 
 /// Thread-safe mutable boolean for injected closures whose answer must change
 /// mid-test (e.g. "nothing editable" on the first insert, editable on the next).
-final class MutableBoolBox: @unchecked Sendable {
-  private let lock = NSLock()
-  private var flag: Bool
-  init(_ initial: Bool) { flag = initial }
+final class MutableBoolBox: Sendable {
+  private let flag: Mutex<Bool>
+  init(_ initial: Bool) { flag = Mutex(initial) }
   func set(_ value: Bool) {
-    lock.lock()
-    flag = value
-    lock.unlock()
+    flag.withLock { $0 = value }
   }
   var value: Bool {
-    lock.lock()
-    defer { lock.unlock() }
-    return flag
+    flag.withLock { $0 }
   }
 }
 
 /// Thread-safe holder for a task handle, so a `@Sendable` closure can cancel
 /// the very task that is executing it.
-final class TaskBox: @unchecked Sendable {
-  private let lock = NSLock()
-  private var task: Task<Void, any Error>?
-  func set(_ task: Task<Void, any Error>) {
-    lock.lock()
-    self.task = task
-    lock.unlock()
+final class TaskBox: Sendable {
+  private let task = Mutex<Task<Void, any Error>?>(nil)
+  func set(_ newTask: Task<Void, any Error>) {
+    task.withLock { $0 = newTask }
   }
   func cancel() {
-    lock.lock()
-    let held = task
-    lock.unlock()
+    let held = task.withLock { $0 }
     held?.cancel()
   }
 }
