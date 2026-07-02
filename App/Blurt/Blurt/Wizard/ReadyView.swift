@@ -33,76 +33,6 @@ private enum ReadyBrandPalette {
   }
 }
 
-// Scene support for Blurt's two windows.
-//
-// Neither window is a hand-rolled `NSWindow` (that's why this file no longer
-// defines a window *controller*): both are SwiftUI scenes declared in
-// `BlurtApp`. These types are the glue between those scenes and the long-lived
-// models the app delegate owns.
-//
-// - Main window (`MainWindow`): the primary window, a `Window` scene opened via
-//   `openWindow(id:)`. While the app isn't fully configured it shows the setup
-//   wizard; once it is, it shows `ReadyView` (the shortcut readout).
-// - Settings: change the API key or dictation shortcut. A `Settings` scene, so
-//   ⌘, comes wired for free; opened programmatically via the `openSettings`
-//   environment action (the ready screen's link and the menu bar item).
-
-// MARK: - Main window (wizard / ready)
-
-enum MainWindow {
-  /// Scene identifier for `openWindow(id:)` / the `Window(id:)` scene.
-  static let id = "main"
-}
-
-/// Root view of the main `Window` scene. It pulls the long-lived models off the
-/// app delegate (created at launch, before any window appears) and routes between
-/// the setup wizard (when the app isn't ready) and the ready screen (when it is).
-struct MainWindowRoot: View {
-  var appDelegate: AppDelegate
-  @Environment(\.openWindow) private var openWindow
-  @Environment(\.openSettings) private var openSettings
-
-  var body: some View {
-    if let controller = appDelegate.wizardController, let coordinator = appDelegate.coordinator {
-      Group {
-        if controller.isReady {
-          ReadyView(openSettings: { openSettings() })
-        } else {
-          WizardView(controller: controller, coordinator: coordinator)
-        }
-      }
-      .onAppear {
-        // Capture the open action so AppKit entry points (a Dock click with no
-        // open windows, the missing-key hotkey nudge) can reopen the main
-        // window. The main window is always presented at launch
-        // (`.defaultLaunchBehavior(.presented)`), so this runs before any of
-        // those paths can fire, and `openWindow(id:)` opens any Window scene
-        // regardless of which scene's environment supplied the action.
-        appDelegate.openWindowByID = { openWindow(id: $0) }
-        // Permission polling runs for the app's whole life (started in the
-        // controller's init), so the window only needs to refresh once on
-        // appear to reflect any change made while it was closed.
-        controller.refreshPermissions()
-        // Now that the window is actually on screen, pull the app frontmost —
-        // see `activateAtLaunchIfNeeded`. Done here rather than at launch-finish
-        // because the window doesn't exist yet then.
-        appDelegate.activateAtLaunchIfNeeded()
-      }
-      // The splash-style titlebar treatment lives on the scene — see
-      // `.windowStyle(.hiddenTitleBar)` / `.windowBackgroundDragBehavior` in
-      // `BlurtApp`.
-      // Tag the window so `surfaceMainWindow()` can find and raise this exact
-      // window (the menu bar's "Open Blurt" needs to deminiaturize/front it when
-      // the app is already running).
-      .windowIdentifier(MainWindow.id)
-    } else {
-      // Defensive only: `applicationDidFinishLaunching` creates the models
-      // before the run loop presents any scene, so this branch shouldn't show.
-      Color.clear.frame(width: 480, height: 320)
-    }
-  }
-}
-
 /// The "you're all set" screen shown in the main window once setup is complete.
 /// It just states the dictation shortcut and offers a native-feeling link to the
 /// Settings window — there's nothing to configure here.
@@ -237,46 +167,5 @@ private struct ReadySettingsButton: View {
       .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
       .animation(.easeOut(duration: 0.12), value: isHovered)
       .onHover { isHovered = $0 }
-  }
-}
-
-// MARK: - Settings window
-
-/// Root view of the `Settings` scene: change the AssemblyAI API key or the
-/// dictation shortcut. Reuses the same section views the wizard's setup step
-/// uses, so the two stay in sync.
-struct SettingsWindowRoot: View {
-  var appDelegate: AppDelegate
-
-  var body: some View {
-    if let coordinator = appDelegate.coordinator {
-      Form {
-        APIKeyStepView(coordinator: coordinator)
-        HotkeyStepView(coordinator: coordinator)
-        SoundStepView(coordinator: coordinator)
-        KeyTermsStepView()
-      }
-      .formStyle(.grouped)
-      .scrollDisabled(true)
-      .frame(width: 480)
-      .fixedSize(horizontal: false, vertical: true)
-    } else {
-      Color.clear.frame(width: 480, height: 240)
-    }
-  }
-}
-
-// MARK: - App-menu commands
-
-/// App-menu commands. The standard ⌘, "Settings…" item is supplied by the
-/// `Settings` scene itself (see `BlurtApp`), so nothing to add here.
-struct BlurtCommands: Commands {
-  var body: some Commands {
-    // Updates are silent and automatic (checked at launch, installed without a
-    // prompt — see `AutoUpdater`), so there is no "Check for Updates…" command.
-    // Blurt ships no help book, so SwiftUI's default Help menu would show a
-    // dead "Blurt Help" item that opens nothing. Remove it rather than leave
-    // a control that does nothing.
-    CommandGroup(replacing: .help) {}
   }
 }
