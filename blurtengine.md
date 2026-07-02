@@ -34,11 +34,15 @@ Task {
 await session.press()    // start recording
 await session.release()  // stop → transcribe → paste
 await session.cancel()   // abort, whatever the pipeline is doing
+
+// Or, from a callback that can't await (an event tap, a UI action),
+// use the synchronous fire-and-forget feed — same commands, same order:
+session.submit(.press)
 ```
 
 Before the first dictation can succeed the host must have:
 
-1. **An AssemblyAI API key** saved via `APIKeyStore.set(_:)` (Keychain-backed; users create keys at `APIKeyStore.dashboardURL`). Without one, transcription fails with `BlurtError.apiKeyMissing`.
+1. **An AssemblyAI API key** saved via `APIKeyStore.set(_:)` (Keychain-backed; users create keys at `APIKeyStore.dashboardURL`) or through an injected `APIKeyGateway` (see below). Without one, transcription fails with `BlurtError.apiKeyMissing` — and if you pass a `readinessCheck` at init (e.g. `{ APIKeyStore.hasKey ? nil : .apiKeyMissing }`), the press is refused _before any capture begins_ instead, so the user never records an utterance that can't be transcribed. Blurt passes exactly that check.
 2. **Microphone permission** — check and request with `PermissionsChecker`.
 3. **Accessibility trust** — required for the paste (`KeyInjector` posts a synthesized ⌘V) and for the focused-field context reads. `PermissionsChecker.check()` reports both; `SetupStatus.isReady` combines permissions + key into a single "ready to dictate" answer.
 
@@ -65,12 +69,14 @@ Key properties of the design, which your integration can rely on:
 
 ### Commands
 
-- `press()` — start recording. Ignored unless the current phase is terminal (so a double-press is harmless).
+- `press()` — start recording. Ignored unless the current phase is terminal (so a double-press is harmless). Refused up front — as `.failed(blocker)`, before the mic starts — when the host's `readinessCheck` returns a blocker.
 - `release()` — stop recording and run transcribe → inject. Ignored unless recording.
 - `cancel()` — the user's escape hatch. Works at every stage: over a recording it stops the mic and discards the audio; over an in-flight transcription or paste it tears the pipeline task down so nothing is injected. Cancels are honored deterministically even when they race a release mid-`mic.stop()` — the engine's serial command queue guarantees no transcript is pasted after a cancel.
 - `cancelRecording()` — a narrower cancel for state-recovery callers (e.g. an event tap that got disabled mid-capture, or a trigger rebind): it only tears down a live _recording_ and never preempts a queued release or an in-flight pipeline, so a legitimately released transcript is never lost. Use `cancel()` for user intent; use `cancelRecording()` when _your plumbing_ lost track of the key state.
 
 All four are `async` and queue internally; call them from any context without external locking.
+
+For callback-shaped hosts that can't `await` — an event tap, a button action — there's also the synchronous, fire-and-forget **`submit(_: Command)`** (`.press` / `.release` / `.cancel` / `.cancelRecording`), which feeds a serial consumer inside the session. Commands submitted from one thread run in exactly the order they were submitted. This matters: spawning a `Task { await session.press() }` per callback carries **no** FIFO guarantee, so a recovery cancel could overtake the press it was meant to cancel and strand the recording. Blurt's `CGEventTap` wires its four callbacks straight into `submit`.
 
 ### Observing state
 
@@ -92,7 +98,7 @@ Failures surface as `PipelinePhase.failed(BlurtError)`:
 
 | Case                                                              | Meaning                                                                                                                                                           |
 | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.apiKeyMissing`                                                  | No AssemblyAI key stored — point the user at your key-entry UI.                                                                                                   |
+| `.apiKeyMissing`                                                  | No AssemblyAI key stored — point the user at your key-entry UI. With a key-presence `readinessCheck`, this surfaces at press time, before any recording.          |
 | `.microphonePermissionDenied` / `.accessibilityPermissionMissing` | Permission gaps; `PermissionsChecker` has openers for the right Settings panes.                                                                                   |
 | `.audioCaptureFailed(underlying:)`                                | The mic couldn't start, or captured audio couldn't be processed.                                                                                                  |
 | `.sttFailed(underlying:)`                                         | The Sync request failed; the underlying error carries the HTTP status and the server's message when available.                                                    |
@@ -108,12 +114,16 @@ All cases are `LocalizedError` with user-ready `errorDescription` strings, and `
 
 ```swift
 func start() async throws
-func stop() async throws -> [Float]   // mono Float32, 16 kHz, in order
+func stop() async throws -> [Float]     // mono Float32, 16 kHz, in order
+var levels: AsyncStream<Float> { get }  // 0…1 meter; default: empty stream
+func warmUp() async                     // pre-open the device; default: no-op
 ```
+
+Only `start()`/`stop()` must be implemented — `levels` and `warmUp()` have defaults, so a stub or headless capture conforms for free while hosts still read the meter and warm the device through the same seam they inject.
 
 `MicCapture` records with `AVAudioRecorder` straight to a temp 16 kHz / mono / 16-bit PCM WAV — exactly the geometry the Sync API wants — and reads it back as `[Float]` on `stop()`. A **fresh recorder per session** resolves the current default input device at `record()` time, which is why device switches (headset ↔ built-in) just work. Do **not** replace this with a long-lived `AVAudioEngine`/`installTap` graph: that design was tried, bound itself to one device, and failed with `-10868` or all-zero buffers on device switches.
 
-`MicCapture` also exposes `levels: AsyncStream<Float>` — a ~30 Hz meter of the recorder's dBFS power mapped to `0…1` (floored at −50 dBFS so room ambient reads as silence). Feed it to a voice-bars view; it costs nothing when unobserved.
+`MicCapture`'s `levels` is a ~30 Hz meter of the recorder's dBFS power mapped to `0…1` (floored at −50 dBFS so room ambient reads as silence) — feed it to a voice-bars view; it costs nothing when unobserved. Its `warmUp()` pre-creates and prepares a recorder so the first `start()` skips hardware route discovery (Blurt calls it at launch, once mic permission is granted, so warming never triggers the permission prompt).
 
 ### `TranscriberProtocol` → `AssemblyAITranscriber`
 
@@ -145,6 +155,8 @@ Recognition quality comes from per-utterance priming, assembled automatically in
 - **`TranscriptionPrompt.build(context:)`** renders that into the Sync request's `config.prompt`, opening with the fixed `baseInstruction` ("Transcribe without speaker labels, audio event descriptions, or emotion markers.") and staying under the API's 4096-character cap. An empty context yields `nil`, which omits the field so the server applies its own default. Two deliberate omissions, both regression-tested: no language directive (pinning to English hurt non-English speech) and no "remove filler words" clause (not in the model's trained instruction set — a no-op). Don't reintroduce either.
 - **`KeyTermsStore`** persists the user's domain vocabulary (names, jargon) in `UserDefaults`; `DictationSession` re-reads it at every press via its `keyTermsProvider` closure, so Settings edits apply to the next utterance without rebuilding the session. Pass your own provider to source terms from elsewhere.
 
+For key storage, compose against **`APIKeyGateway`** — the injectable get/set/`hasKey` seam over the key store. `ProductionAPIKeyStore` forwards to the Keychain-backed `APIKeyStore`; `InMemoryAPIKeyStore` is a ready-made in-memory conformance for tests and harnesses (Blurt's XCUITest runs use it so the real Keychain item is never touched, and its `hasKey` backs the session's `readinessCheck`).
+
 Each completed dictation is appended to **`DictationLog`** (a local JSONL history) with its context snapshot.
 
 ## Hotkey building blocks
@@ -155,7 +167,7 @@ The engine ships the _decision logic_ for a lone-modifier trigger; the host supp
 - **`TriggerKeyStore`** — persists the chosen key in `UserDefaults` (`BlurtTriggerKeyCode`), defaulting to right ⌘.
 - **`DictationKeyGate`** — a pure, clock-free state machine that turns `modifierDown(at:)` / `modifierUp(at:)` / `otherKeyDown()` into `.start` / `.stop` / `.cancel` / `.none`. Recording starts the instant the modifier goes down; on key-up, a release held ≥ `holdThreshold` (default 1 s) is push-to-talk (stop), a shorter release latches tap-to-toggle (next tap stops). A modifier+key combo from idle cancels the fresh capture; over a latched recording it passes through as a normal shortcut. Callers pass monotonic timestamps, so every decision is deterministic and unit-tested (`DictationKeyGateTests`, `HotkeyRaceTests`).
 
-Map the gate's actions onto the session: `.start` → `press()`, `.stop` → `release()`, `.cancel` → `cancel()`. If your event source can lose key-ups (a disabled tap, a rebind), recover with `cancelRecording()`.
+Map the gate's actions onto the session with `submit`: `.start` → `submit(.press)`, `.stop` → `submit(.release)`, `.cancel` → `submit(.cancel)` — event-tap callbacks can't `await`, and `submit` preserves their emit order where per-callback `Task` spawning wouldn't. If your event source can lose key-ups (a disabled tap, a rebind), recover with `submit(.cancelRecording)`.
 
 ## Testing your integration
 
@@ -163,7 +175,7 @@ The engine's own tests are the template. They use **Swift Testing** (`@Suite`/`@
 
 ```swift
 let session = DictationSession(
-  mic: StubMicCapture(samples: someSamples),
+  mic: StubMicCapture(),  // returns a canned buffer above the too-short floor
   transcriber: StubTranscriber(mode: .transcript("hello world")),
   injector: injector,  // records what was "pasted"
   keyTermsProvider: { [] }

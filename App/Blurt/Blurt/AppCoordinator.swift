@@ -17,11 +17,11 @@ final class AppCoordinator {
   let onMissingAPIKey: @MainActor () -> Void
 
   let session: DictationSession
-  /// The mic's loudness feed, observed in `start()` to drive the overlay meter.
-  @ObservationIgnored private let levels: AsyncStream<Float>
-  /// Pre-opens the mic on the first grant so the first dictation skips hardware
-  /// route discovery. Supplied by `DictationComponents` (a no-op for stubs).
-  @ObservationIgnored private let warmUpMic: @Sendable () async -> Void
+  /// The mic seam, kept beyond session construction for its two side features —
+  /// the loudness `levels` feed that drives the overlay meter and the `warmUp()`
+  /// pre-open — both carried by `MicCaptureProtocol` itself (with no-op
+  /// defaults), so stubs need supply neither.
+  @ObservationIgnored private let mic: any MicCaptureProtocol
   /// Storage for the API key. Production hits the Keychain via `APIKeyStore`;
   /// UI tests inject an in-memory store so the real key is never touched.
   @ObservationIgnored private let keyStore: any APIKeyGateway
@@ -32,18 +32,6 @@ final class AppCoordinator {
   @ObservationIgnored private var phaseObserver: Task<Void, Never>?
   @ObservationIgnored private var levelsObserver: Task<Void, Never>?
   @ObservationIgnored var keyTap: DictationKeyTap?
-
-  /// One gate action from the key tap (see `actionConsumer`).
-  private enum DictationAction: Sendable {
-    case start, stop, cancel, discardRecording
-  }
-  /// Consumes the tap's action stream and drives the session, one action at a
-  /// time. The tap's callbacks yield into a single AsyncStream instead of each
-  /// spawning an independent `Task {}`: separately created tasks carry no FIFO
-  /// guarantee, so a recovery cancel could overtake the press it was meant to
-  /// cancel and no-op on a still-idle session — stranding the eventual recording
-  /// with no key-up coming. The stream preserves the tap thread's emit order.
-  @ObservationIgnored private var actionConsumer: Task<Void, Never>?
 
   /// Whether an AssemblyAI API key is currently saved. Drives the wizard
   /// (which gates dictation on having a key) and the Settings UI.
@@ -64,12 +52,14 @@ final class AppCoordinator {
     self.onMissingAPIKey = onMissingAPIKey
     self.keyStore = keyStore
     self.isUITesting = isUITesting
-    self.levels = components.levels
-    self.warmUpMic = components.warmUpMic
+    self.mic = components.mic
     self.session = DictationSession(
       mic: components.mic,
       transcriber: components.transcriber,
-      injector: components.injector
+      injector: components.injector,
+      // A press with no key saved fails fast as .failed(.apiKeyMissing) —
+      // before any capture — and render(_:) routes it to the settings window.
+      readinessCheck: { keyStore.hasKey ? nil : .apiKeyMissing }
     )
     self.hasAPIKey = keyStore.hasKey
   }
@@ -81,7 +71,6 @@ final class AppCoordinator {
   deinit {
     phaseObserver?.cancel()
     levelsObserver?.cancel()
-    actionConsumer?.cancel()
   }
 
   func start() {
@@ -91,8 +80,8 @@ final class AppCoordinator {
     // the user opts in via the setup screen's "Allow Microphone Access" button;
     // the first dictation after that just prepares a recorder lazily.
     if PermissionsChecker.check().microphone {
-      let warmUp = warmUpMic
-      Task { await warmUp() }
+      let mic = mic
+      Task { await mic.warmUp() }
     }
     // Note: no initial overlay render. The overlay pill stays hidden until the
     // app is fully configured — `WizardController` calls `showOverlay()` on the
@@ -101,33 +90,24 @@ final class AppCoordinator {
     startPipelineObservers()
   }
 
-  /// Builds the key tap and the serialized action pipeline between it and the
-  /// session. Drives the hold-to-dictate hotkey from a CGEventTap (see
-  /// `DictationKeyTap`) rather than a Carbon global hotkey: the latter leaks the
-  /// chord's auto-repeat key events into the focused app while held.
+  /// Builds the key tap, wired straight into the session's synchronous
+  /// `submit(_:)` command feed — which preserves the tap thread's emit order
+  /// (spawning a `Task {}` per callback would not: a recovery cancel could
+  /// overtake the press it was meant to cancel). Drives the hold-to-dictate
+  /// hotkey from a CGEventTap (see `DictationKeyTap`) rather than a Carbon
+  /// global hotkey: the latter leaks the chord's auto-repeat key events into
+  /// the focused app while held.
   private func startDictationDriver() {
-    let (actions, actionFeed) = AsyncStream.makeStream(of: DictationAction.self)
-    actionConsumer = Task { @MainActor [weak self] in
-      for await action in actions {
-        guard let self else { return }
-        if Task.isCancelled { return }
-        switch action {
-        case .start: await self.beginDictation()
-        case .stop: await self.endDictation()
-        case .cancel: await self.cancelDictation()
-        // A recovery cancel (tap disabled / trigger rebound mid-dictation) must
-        // only end a live recording — a pipeline already transcribing means the
-        // capture ended legitimately (e.g. auto-release) and its transcript
-        // must not be discarded.
-        case .discardRecording: await self.session.cancelRecording()
-        }
-      }
-    }
+    let session = session
     keyTap = DictationKeyTap(
-      onStart: { actionFeed.yield(.start) },
-      onStop: { actionFeed.yield(.stop) },
-      onCancel: { actionFeed.yield(.cancel) },
-      onRecordingDiscarded: { actionFeed.yield(.discardRecording) }
+      onStart: { session.submit(.press) },
+      onStop: { session.submit(.release) },
+      onCancel: { session.submit(.cancel) },
+      // A recovery cancel (tap disabled / trigger rebound mid-dictation) must
+      // only end a live recording — a pipeline already transcribing means the
+      // capture ended legitimately (e.g. auto-release) and its transcript
+      // must not be discarded.
+      onRecordingDiscarded: { session.submit(.cancelRecording) }
     )
     // Deliberately *not* installed here: `CGEvent.tapCreate` for keystrokes is
     // itself what surfaces the system permission prompt, so creating the tap at
@@ -150,7 +130,7 @@ final class AppCoordinator {
       }
     }
 
-    let levels = self.levels
+    let levels = mic.levels
     levelsObserver = Task { @MainActor [weak self] in
       for await level in levels {
         guard let self else { return }
@@ -186,20 +166,15 @@ final class AppCoordinator {
 
   // MARK: - Dictation drivers
   //
-  // The single begin/end/cancel path shared by the key tap's closures and the
-  // UI-test harness (`UITestSupport`), so the harness always exercises the same
-  // gate the hotkey does.
+  // The await-able begin/end/cancel path used by the UI-test harness
+  // (`UITestSupport`). The key tap drives the same `DictationSession` through
+  // its synchronous `submit(_:)` feed, so both paths hit the same engine
+  // guards and race rules.
 
-  /// Begins a dictation as the hotkey would: the missing-key gate first, then
-  /// `session.press()`.
+  /// Begins a dictation as the hotkey would. The missing-key gate lives in the
+  /// engine now (the session's `readinessCheck`), so a keyless press comes back
+  /// as `.failed(.apiKeyMissing)` and `render(_:)` routes it to the fix.
   func beginDictation() async {
-    guard hasAPIKey else {
-      // No key yet — take the user straight to the fix instead of a
-      // transient message. The overlay pill isn't even visible in this
-      // state (it's only revealed once setup is complete).
-      onMissingAPIKey()
-      return
-    }
     await session.press()
   }
 
@@ -300,6 +275,15 @@ final class AppCoordinator {
   }
 
   private func render(_ phase: PipelinePhase) {
+    // A press refused for a missing key (the session's readinessCheck) never
+    // started any capture — take the user straight to the fix instead of a
+    // transient error flash. The overlay pill isn't even visible in this state
+    // (it's only revealed once setup is complete), and Monitoring already
+    // treats a missing key as an expected setup state, not a fault.
+    if case .failed(.apiKeyMissing) = phase {
+      onMissingAPIKey()
+      return
+    }
     // Reveal the pill first, then fire the cue: the sound must never sit in
     // front of the visual state change. Pure phase→pill mapping lives in the
     // engine (unit-tested there); .failed resolves to .error, which the pill

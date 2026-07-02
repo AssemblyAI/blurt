@@ -3,26 +3,25 @@ import os
 public actor DictationSession {
   public private(set) var phase: PipelinePhase = .idle
 
-  /// Signposter for the latency-sensitive segments of a dictation. Emitted as
-  /// os_signpost intervals so Instruments can time the hand-tuned hot paths
-  /// live (mic/connection warm-up on press, the transcribe→paste round trip on
-  /// release). `DictationPerformanceTests` guards the same paths with
-  /// wall-clock budgets; these intervals are for interactive profiling.
-  static let signposter = OSSignposter(
-    subsystem: BlurtIdentity.subsystem, category: "DictationPipeline")
-  /// Signpost interval name for the press → `.recording` startup path.
-  static let pressSignpostName: StaticString = "PressStart"
-  /// Signpost interval name for the release → transcribe → inject hot path.
-  static let pipelineSignpostName: StaticString = "TranscribeInject"
+  // Split for the lint file-length budget: `phaseStream()` and the os_signpost
+  // instrumentation live in `DictationSession+Observation.swift`; the
+  // `submit(_:)` command surface lives in `DictationSession+Commands.swift`.
 
   /// Live feed of phase changes for the single observer (the production app's
   /// AppCoordinator drives the overlay from it). Each `phaseStream()` call
   /// supersedes any prior one,
   /// yielding the current phase plus every subsequent transition. `currentID`
   /// tags the active continuation so a stream that's torn down after a newer one
-  /// supersedes it doesn't clear the live continuation.
-  private var continuation: AsyncStream<PipelinePhase>.Continuation?
-  private var currentID = 0
+  /// supersedes it doesn't clear the live continuation. Internal (not private)
+  /// because `phaseStream()` lives in the `+Observation` extension file.
+  var continuation: AsyncStream<PipelinePhase>.Continuation?
+  var currentID = 0
+
+  /// Feed behind the nonisolated `submit(_:)` (see `+Commands`): commands are
+  /// yielded synchronously — preserving the caller's emit order — and consumed
+  /// one at a time by the task spawned in `init`. Internal (not private) because
+  /// `submit(_:)` lives in the `+Commands` extension file.
+  nonisolated let commandFeed: AsyncStream<Command>.Continuation
 
   private let mic: MicCaptureProtocol
   private let transcriber: TranscriberProtocol
@@ -37,6 +36,14 @@ public actor DictationSession {
   /// `SyncSTTLimits`) — recording past it would only produce audio the sync
   /// endpoint rejects, so we stop early and transcribe what we have.
   private let maxRecordingSeconds: Double
+
+  /// Consulted at the top of `press()`: a non-nil blocker refuses the press
+  /// before any capture begins, surfacing as `.failed(blocker)`. Keeps "never
+  /// record audio you can't transcribe" an engine invariant — the app passes a
+  /// key-presence check so a missing API key fails at press time, not after the
+  /// user has spoken a whole utterance. Defaults to always-ready (no Keychain
+  /// read), so tests and keyless hosts are unaffected unless they opt in.
+  private let readinessCheck: @Sendable () -> BlurtError?
 
   /// Sample rate the mic capture delivers and the Sync STT request declares —
   /// the Sync API's geometry, defined once in `SyncSTTLimits`.
@@ -85,42 +92,37 @@ public actor DictationSession {
     transcriber: TranscriberProtocol,
     injector: InjectorProtocol,
     maxRecordingSeconds: Double = SyncSTTLimits.autoReleaseSeconds,
-    keyTermsProvider: @escaping @Sendable () -> [String] = { KeyTermsStore.terms() }
+    keyTermsProvider: @escaping @Sendable () -> [String] = { KeyTermsStore.terms() },
+    readinessCheck: @escaping @Sendable () -> BlurtError? = { nil }
   ) {
     self.mic = mic
     self.transcriber = transcriber
     self.injector = injector
     self.maxRecordingSeconds = maxRecordingSeconds
     self.keyTermsProvider = keyTermsProvider
-  }
-
-  /// Returns the live subscription to phase changes. The stream yields the
-  /// current phase immediately, then every subsequent transition. A later call
-  /// supersedes this one (finishing the prior stream), so there is a single
-  /// active observer at a time — which is all the app needs (one renderer).
-  public func phaseStream() -> AsyncStream<PipelinePhase> {
-    let (stream, continuation) = AsyncStream.makeStream(of: PipelinePhase.self)
-    currentID += 1
-    let id = currentID
-    self.continuation?.finish()
-    self.continuation = continuation
-    continuation.yield(phase)
-    continuation.onTermination = { [weak self] _ in
-      Task { await self?.clearContinuation(id) }
+    self.readinessCheck = readinessCheck
+    let (commands, feed) = AsyncStream.makeStream(of: Command.self)
+    self.commandFeed = feed
+    // Consumes `submit(_:)`'s feed one command at a time, in emit order. Weakly
+    // held so the consumer never keeps the session alive; `deinit` finishes the
+    // feed so the loop (and its task) winds down with the session.
+    Task { [weak self] in
+      for await command in commands {
+        guard let self else { return }
+        await self.run(command)
+      }
     }
-    return stream
   }
 
-  /// Clears the continuation only if it's still the active one — a stream torn
-  /// down after a newer `phaseStream()` superseded it must not unset the live one.
-  private func clearContinuation(_ id: Int) {
-    if id == currentID { continuation = nil }
+  deinit {
+    commandFeed.finish()
   }
 
   /// Appends `op` to the serial command queue and waits for it to run. The
   /// synchronous read-then-write of `commandQueue` makes the chain order match
-  /// the order the public methods executed their first actor turn.
-  private func enqueue(_ op: @escaping @Sendable () async -> Void) async {
+  /// the order the public methods executed their first actor turn. Internal
+  /// (not private) because `cancelRecording()` lives in the `+Commands` file.
+  func enqueue(_ op: @escaping @Sendable () async -> Void) async {
     let previous = commandQueue
     let task = Task {
       await previous?.value
@@ -140,6 +142,13 @@ public actor DictationSession {
 
   private func performPress() async {
     guard phase.isTerminal else { return }
+    // Refuse the press before any capture begins when the host reports a
+    // blocker (e.g. no API key saved): recording an utterance that can only
+    // fail at transcribe time would discard the user's words after the fact.
+    if let blocker = readinessCheck() {
+      setPhase(.failed(blocker))
+      return
+    }
     // Times the startup path — the concurrent focus capture + mic.start (and the
     // detached connection warm-up kicked off below) — up to the moment recording
     // actually begins. Ended on both the success and failure exits (mic.start is
@@ -261,26 +270,13 @@ public actor DictationSession {
     await stopAndCancel()
   }
 
-  /// Cancels only a live *recording* — the narrow cancel for synthetic,
-  /// state-recovery callers (the event tap's disabled-tap recovery and trigger
-  /// rebinding), whose intent is "the key events ending this capture may be
-  /// lost". Unlike `cancel()`, it never tears down a `.transcribing`/`.injecting`
-  /// pipeline and never preempts a queued release: reaching this op's turn with
-  /// the capture already ended (or ending) means a release happened
-  /// legitimately (e.g. the auto-release cap fired while the gate was still
-  /// latched), and discarding that transcript would lose the user's words.
-  public func cancelRecording() async {
-    await enqueue { await self.performCancelRecording() }
-  }
-
-  private func performCancelRecording() async {
-    guard phase == .recording else { return }
-    await stopAndCancel()
-  }
+  // `cancelRecording()` — the narrow, state-recovery cancel — lives with the
+  // rest of the command surface in `DictationSession+Commands.swift`.
 
   /// Shared tail of the cancel ops once the guards agree there is a live
-  /// recording to tear down.
-  private func stopAndCancel() async {
+  /// recording to tear down. Internal (not private) because
+  /// `performCancelRecording` lives in the `+Commands` extension file.
+  func stopAndCancel() async {
     cancelAutoRelease()
     _ = try? await mic.stop()
     setPhase(.cancelled)

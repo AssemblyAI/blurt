@@ -92,3 +92,8 @@ scripts/bootstrap.sh   # install the local toolchain
 scripts/dev-build.sh   # build + install Blurt to /Applications
 scripts/check.sh       # full repo health check
 ```
+
+Want to build your own Swift dictation app from scratch? The pipeline —
+mic capture, AssemblyAI Sync transcription, and paste-into-the-focused-app —
+is a standalone, dependency-free Swift package you can embed:
+[`blurtengine.md`](./blurtengine.md) is the developer guide.
