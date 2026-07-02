@@ -1,5 +1,3 @@
-import Foundation
-
 @testable import BlurtEngine
 
 /// Mic stub whose `stop()` signals entry and then blocks until the test releases
