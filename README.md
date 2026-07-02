@@ -45,7 +45,7 @@
     src=".github/images/blurt.png"
     alt="Blurt's ready screen: tap or hold the hotkey, speak, and transcribed text is pasted into the focused app"
     width="760"
-    height="435"
+    height="460"
   />
 
 </div>
