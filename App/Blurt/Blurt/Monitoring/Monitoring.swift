@@ -86,6 +86,46 @@ enum Monitoring {
     logger?.error("dictation pipeline fault", error: error, attributes: attributes)
   }
 
+  /// Triage for a `.failed` pipeline phase: reports only the genuine faults. The
+  /// permission- and key-missing cases are expected setup states the wizard
+  /// already guides the user through, so reporting them would just be noise. The
+  /// underlying error rides along as context for the wrapped cases.
+  static func reportPipelineFault(_ error: BlurtError) {
+    switch error {
+    case .microphonePermissionDenied, .accessibilityPermissionMissing, .apiKeyMissing:
+      return
+    case .noEditableTarget:
+      // Never reaches here (it resolves to the quiet .noTarget phase, not .failed),
+      // but it's not a fault to report regardless — there was simply nowhere to type.
+      return
+    case .targetAppLost:
+      // A genuine lost target degrades to the quiet .noTarget phase and never
+      // reaches .failed; this fires only for the session's untyped-error
+      // relabel — an unknown fault, so still worth reporting.
+      reportError(error)
+    case .sttFailed(let underlying), .audioCaptureFailed(let underlying):
+      // A dropped/absent network connection isn't a Blurt fault — it's the
+      // user being offline mid-dictation. The pipeline still surfaces a .failed
+      // phase to them; we just don't report it.
+      if isConnectivityError(underlying) { return }
+      reportError(error, attributes: ["underlying_error": String(describing: underlying)])
+    }
+  }
+
+  /// Whether `error` is an environmental loss of connectivity (offline, dropped
+  /// connection, host unreachable) rather than a server- or client-side fault.
+  private static func isConnectivityError(_ error: Error) -> Bool {
+    guard let urlError = error as? URLError else { return false }
+    switch urlError.code {
+    case .notConnectedToInternet, .networkConnectionLost, .cannotConnectToHost,
+      .cannotFindHost, .dnsLookupFailed, .timedOut, .dataNotAllowed,
+      .internationalRoamingOff:
+      return true
+    default:
+      return false
+    }
+  }
+
   /// A random UUID minted once per install and persisted, used as the anonymous
   /// `@usr.id`. Not tied to the user's identity; regenerates on a fresh install.
   private static var installID: String {

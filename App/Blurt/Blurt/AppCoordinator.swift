@@ -94,13 +94,18 @@ final class AppCoordinator {
       let warmUp = warmUpMic
       Task { await warmUp() }
     }
-
     // Note: no initial overlay render. The overlay pill stays hidden until the
     // app is fully configured — `WizardController` calls `showOverlay()` on the
     // transition into "ready" (and `hideOverlay()` if it later breaks).
-    // Drive the hold-to-dictate hotkey from a CGEventTap (see `DictationKeyTap`)
-    // rather than a Carbon global hotkey: the latter leaks the chord's
-    // auto-repeat key events into the focused app while held.
+    startDictationDriver()
+    startPipelineObservers()
+  }
+
+  /// Builds the key tap and the serialized action pipeline between it and the
+  /// session. Drives the hold-to-dictate hotkey from a CGEventTap (see
+  /// `DictationKeyTap`) rather than a Carbon global hotkey: the latter leaks the
+  /// chord's auto-repeat key events into the focused app while held.
+  private func startDictationDriver() {
     let (actions, actionFeed) = AsyncStream.makeStream(of: DictationAction.self)
     actionConsumer = Task { @MainActor [weak self] in
       for await action in actions {
@@ -118,13 +123,12 @@ final class AppCoordinator {
         }
       }
     }
-    let tap = DictationKeyTap(
+    keyTap = DictationKeyTap(
       onStart: { actionFeed.yield(.start) },
       onStop: { actionFeed.yield(.stop) },
       onCancel: { actionFeed.yield(.cancel) },
       onRecordingDiscarded: { actionFeed.yield(.discardRecording) }
     )
-    self.keyTap = tap
     // Deliberately *not* installed here: `CGEvent.tapCreate` for keystrokes is
     // itself what surfaces the system permission prompt, so creating the tap at
     // launch pops that prompt before the user ever reaches the "Grant
@@ -132,7 +136,11 @@ final class AppCoordinator {
     // `showOverlay()`, which the wizard calls on the transition into "ready" —
     // by then the process is trusted. On an already-configured launch that
     // transition fires from `WizardController.init`, so the tap still comes up.
+  }
 
+  /// Observes the session's phase stream (drives the pill + menu bar) and the
+  /// mic's level stream (drives the pill's meter).
+  private func startPipelineObservers() {
     phaseObserver = Task { @MainActor [weak self] in
       guard let phases = await self?.session.phaseStream() else { return }
       for await phase in phases {
@@ -304,49 +312,10 @@ final class AppCoordinator {
     cues.transition(isRecording: phase == .recording)
 
     // A .failed phase is a handled error (it doesn't crash the app), so the
-    // crash reporter never sees it — report the genuine faults here.
+    // crash reporter never sees it — report the genuine faults (the triage
+    // lives in `Monitoring.reportPipelineFault`).
     if case .failed(let error) = phase {
-      reportFault(error)
-    }
-  }
-
-  /// Reports a pipeline failure to Datadog, but only the genuine faults. The
-  /// permission- and key-missing cases are expected setup states the wizard
-  /// already guides the user through, so reporting them would just be noise. The
-  /// underlying error rides along as context for the wrapped cases.
-  private func reportFault(_ error: BlurtError) {
-    switch error {
-    case .microphonePermissionDenied, .accessibilityPermissionMissing, .apiKeyMissing:
-      return
-    case .noEditableTarget:
-      // Never reaches here (it resolves to the quiet .noTarget phase, not .failed),
-      // but it's not a fault to report regardless — there was simply nowhere to type.
-      return
-    case .targetAppLost:
-      // A genuine lost target degrades to the quiet .noTarget phase and never
-      // reaches .failed; this fires only for the session's untyped-error
-      // relabel — an unknown fault, so still worth reporting.
-      Monitoring.reportError(error)
-    case .sttFailed(let underlying), .audioCaptureFailed(let underlying):
-      // A dropped/absent network connection isn't a Blurt fault — it's the
-      // user being offline mid-dictation. The pipeline still surfaces a .failed
-      // phase to them; we just don't report it.
-      if Self.isConnectivityError(underlying) { return }
-      Monitoring.reportError(error, attributes: ["underlying_error": String(describing: underlying)])
-    }
-  }
-
-  /// Whether `error` is an environmental loss of connectivity (offline, dropped
-  /// connection, host unreachable) rather than a server- or client-side fault.
-  private static func isConnectivityError(_ error: Error) -> Bool {
-    guard let urlError = error as? URLError else { return false }
-    switch urlError.code {
-    case .notConnectedToInternet, .networkConnectionLost, .cannotConnectToHost,
-      .cannotFindHost, .dnsLookupFailed, .timedOut, .dataNotAllowed,
-      .internationalRoamingOff:
-      return true
-    default:
-      return false
+      Monitoring.reportPipelineFault(error)
     }
   }
 }

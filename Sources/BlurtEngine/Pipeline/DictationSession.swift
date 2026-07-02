@@ -57,19 +57,16 @@ public actor DictationSession {
   private var contextTask: Task<TranscriptionContext?, Never>?
 
   /// Tail of the serial command queue. `press()`/`release()`/`cancel()`/
-  /// `cancelRecording()` chain behind it (see `enqueue`), so commands run
-  /// strictly one at a time in arrival order: no command ever observes another
-  /// suspended mid-`mic.start()`/`mic.stop()`. That single property replaces the
-  /// `isStarting`/`isStopping` reentrancy guards and the pending-release/-cancel
-  /// deferral flags this actor used to need — the interleavings they defended
-  /// against can no longer occur.
+  /// `cancelRecording()` chain behind it (see `enqueue`), so commands run one at
+  /// a time in arrival order: no command ever observes another suspended
+  /// mid-`mic.start()`/`mic.stop()`. This replaces the old `isStarting`/
+  /// `isStopping` guards and pending-release/-cancel deferral flags outright.
   private var commandQueue: Task<Void, Never>?
 
   /// Set synchronously by `cancel()` before it takes its queue turn, so a cancel
   /// requested while a release is mid-`mic.stop()` deterministically wins:
-  /// `performRelease` consumes the request after the stop (before any pipeline is
-  /// spawned) instead of racing the cancel's own turn against the transcription.
-  /// `performCancel` clears it when it runs, whether or not it was consumed early.
+  /// `performRelease` consumes the request after the stop, before any pipeline
+  /// is spawned. `performCancel` clears it whether or not it was consumed early.
   private var cancelRequested = false
 
   /// Handle to the auto-release timer started in `press()`. Stored so that
