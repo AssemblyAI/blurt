@@ -218,8 +218,11 @@ private struct WaveformBars: View {
       Group {
         if animated {
           // Continuous clock so the idle breathing is smooth and never depends
-          // on a one-shot state toggle.
-          TimelineView(.animation) { timeline in
+          // on a one-shot state toggle. Capped at ~30 Hz to match the mic meter
+          // (MicCapture.meterInterval) — the level feed and the slow breathing
+          // sine can't show anything faster, so rendering at the display's full
+          // refresh rate (up to 120 Hz on ProMotion) would only burn energy.
+          TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
             row(count: count, maxBarHeight: maxBarHeight, time: timeline.date.timeIntervalSinceReferenceDate)
           }
         } else {
