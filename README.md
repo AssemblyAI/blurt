@@ -4,7 +4,7 @@
     <img src=".github/images/blurt-logo-ansi.png" alt="Blurt logo" width="720" />
   </picture>
 
-  <h2>Blurt your first draft.</h2>
+  <h2>Incredibly fast, accurate voice dictation by AssemblyAI</h2>
 
   <p>
     <strong>
@@ -62,6 +62,9 @@ Blurt needs macOS 15 or later on Apple Silicon, plus an AssemblyAI API key
 
 ## Why Blurt
 
+- **Accurate.** Transcription runs on AssemblyAI's most accurate speech-to-text model.
+- **Fast.** The model responds in under 100 ms, so text lands about as soon as you stop speaking.
+- **Multilingual.** Works in 18 languages.
 - **Works anywhere you can type.** Blurt pastes the transcript into the focused Mac app.
 - **Polished in one step.** Audio goes to AssemblyAI's Sync STT API and comes back as clean text — no model downloads, no separate cleanup pass.
 - **Small native app.** The setup window, overlay, hotkey, and paste flow are built for macOS.

@@ -161,11 +161,11 @@ a {
 
 h1 {
   margin: 0;
-  max-width: 12ch;
+  max-width: 18ch;
   font-family: var(--display);
   font-weight: 800;
-  font-size: clamp(3rem, 4.9vw, 4.6rem);
-  line-height: 0.96;
+  font-size: clamp(2.3rem, 3.6vw, 3.3rem);
+  line-height: 1.04;
   letter-spacing: 0;
   text-wrap: balance;
 }
@@ -177,6 +177,32 @@ h1 {
   font-size: 1.02rem;
   line-height: 1.6;
   text-wrap: pretty;
+}
+
+.hero-points {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--dim);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.hero-points li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  text-align: left;
+}
+
+.hero-points li::before {
+  content: "▸";
+  color: var(--hot);
+  font-family: var(--pixel);
+  font-size: 0.78rem;
 }
 
 .actions {
@@ -314,13 +340,17 @@ h1 {
   }
 
   h1 {
-    max-width: 10ch;
-    font-size: clamp(3rem, 14vw, 4.6rem);
+    max-width: 16ch;
+    font-size: clamp(2rem, 9vw, 3rem);
   }
 
   .lede {
     max-width: 42ch;
     font-size: 0.98rem;
+  }
+
+  .hero-points {
+    align-items: center;
   }
 
   .actions {
@@ -374,7 +404,7 @@ h1 {
   }
 
   h1 {
-    font-size: clamp(2.8rem, 4.4vw, 4.1rem);
+    font-size: clamp(2.1rem, 3.3vw, 3rem);
   }
 
   .lede {
