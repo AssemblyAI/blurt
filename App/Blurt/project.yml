@@ -10,11 +10,11 @@ options:
 # configuration (-configuration Debug-Local) instead of passing a global
 # SWIFT_ACTIVE_COMPILATION_CONDITIONS override on the xcodebuild command line.
 # That override is applied to EVERY target in the graph — including SwiftPM
-# dependencies — and replaces (not appends to) their value, which silently
-# stripped the SPM_BUILD flag dd-sdk-ios's package targets rely on and broke
-# their Datadog{Core,CrashReporting} compiles. A per-config setting only touches
-# this app target, so the dependencies keep their own flags. Any custom `configs`
-# map must list every configuration, so Debug/Release are repeated here.
+# dependencies — and replaces (not appends to) their value, silently stripping
+# any compilation conditions the dependency packages set for themselves. A
+# per-config setting only touches this app target, so the dependencies keep
+# their own flags. Any custom `configs` map must list every configuration, so
+# Debug/Release are repeated here.
 configs:
   Debug: debug
   Debug-Local: debug
@@ -39,9 +39,6 @@ packages:
   AppUpdater:
     url: https://github.com/mxcl/AppUpdater
     from: "2.1.1"
-  Datadog:
-    url: https://github.com/DataDog/dd-sdk-ios
-    from: "3.13.0"
 targets:
   Blurt:
     type: application
@@ -96,12 +93,6 @@ targets:
         product: BlurtEngine
       - package: AppUpdater
         product: AppUpdater
-      - package: Datadog
-        product: DatadogCore
-      - package: Datadog
-        product: DatadogLogs
-      - package: Datadog
-        product: DatadogCrashReporting
     postBuildScripts:
       - name: Install to /Applications
         script: |

@@ -51,7 +51,8 @@ set -o pipefail
 # Selecting it by name (rather than overriding SWIFT_ACTIVE_COMPILATION_CONDITIONS
 # on the command line) keeps the override off SwiftPM dependency targets: a
 # command-line build-setting override applies to every target and replaces its
-# value, which stripped the SPM_BUILD flag dd-sdk-ios needs and broke its build.
+# value, silently stripping any compilation conditions the dependency packages
+# set for themselves.
 # The build action already builds only Blurt.app, not the BlurtUITests bundle.
 xcodebuild \
   -project Blurt.xcodeproj \

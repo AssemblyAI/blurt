@@ -1,13 +1,6 @@
 #!/usr/bin/env bash
 # Build, sign, notarize, and staple a release DMG into build/release/.
 # Reproducible; safe to re-run. The publish step is a separate script.
-#
-# Datadog (optional): if DATADOG_API_KEY is set, the build uploads the dSYM via
-# datadog-ci (run through npx, so Node/npm is needed) so Release crashes
-# symbolicate in Datadog. The API key is the only secret and is never stored in
-# this repo; DATADOG_SITE defaults to datadoghq.com (US1). With no key the upload
-# is skipped with a warning — crashes still report, just unsymbolicated — so a
-# release never fails on telemetry.
 
 set -euo pipefail
 
@@ -21,10 +14,6 @@ ENTITLEMENTS="$APP_DIR/Blurt/Blurt.entitlements"
 readonly IDENTITY="640A7F5A9754400D4A0491E7A6FB30542D907806"
 readonly TEAM_ID="Y54ZB9JF63"
 readonly NOTARY_PROFILE="blurt-notary"
-# Exact datadog-ci version npx runs for the dSYM upload, so the release machine
-# (which holds the signing identity and notary profile) never executes an
-# unvetted "latest" from the npm registry. Bump deliberately.
-readonly DATADOG_CI_VERSION="5.20.1"
 
 SKIP_CHECKS=0
 for arg in "$@"; do
@@ -73,13 +62,6 @@ step "Preflight"
 for cmd in xcodegen xcodebuild xcrun hdiutil codesign spctl create-dmg awk shasum; do
   command -v "$cmd" >/dev/null 2>&1 || die "missing required tool: $cmd (brew install create-dmg if needed)"
 done
-
-# Datadog dSYM upload is best-effort: warn now if DATADOG_API_KEY is unset so the
-# maintainer knows this build's crashes won't symbolicate, but don't block the
-# release on it (unlike the Apple signing/notarization steps, which are required).
-if [ -z "${DATADOG_API_KEY:-}" ]; then
-  info "note: DATADOG_API_KEY unset — dSYM upload will be skipped (crashes unsymbolicated)"
-fi
 
 xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
   || die "notarytool profile '$NOTARY_PROFILE' not found. Run: xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <you@example.com> --team-id $TEAM_ID --password <app-specific-password>"
@@ -247,21 +229,6 @@ hdiutil detach "$MOUNT_POINT" >/dev/null
 rmdir "$MOUNT_POINT" >/dev/null 2>&1 || true
 trap - EXIT
 info "dmg contents verified (Blurt.app $MOUNTED_VERSION, signed + stapled)"
-
-step "Datadog (dSYM upload)"
-# Runs after all the Apple steps so a Datadog hiccup never wastes notarization.
-# Uploads the Release build's dSYM so optimized/stripped crashes symbolicate in
-# Datadog. Best-effort: skipped (with a note) when DATADOG_API_KEY is unset, so a
-# release never fails on telemetry. datadog-ci reads DATADOG_API_KEY and
-# DATADOG_SITE from the environment; DATADOG_SITE defaults to datadoghq.com (US1).
-# Pinned so a release never runs whatever npm's latest tag serves that day.
-if [ -n "${DATADOG_API_KEY:-}" ]; then
-  DATADOG_SITE="${DATADOG_SITE:-datadoghq.com}" \
-    npx --yes "@datadog/datadog-ci@$DATADOG_CI_VERSION" dsyms upload "$DSYM_DST"
-  info "datadog: dSYM uploaded from $DSYM_DST"
-else
-  info "datadog: DATADOG_API_KEY unset — skipped dSYM upload"
-fi
 
 step "Provenance"
 PROVENANCE="$BUILD_ROOT/build-info.txt"

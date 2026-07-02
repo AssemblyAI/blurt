@@ -71,11 +71,8 @@ Blurt needs macOS 15 or later on Apple Silicon, plus an AssemblyAI API key
 
 Blurt stores your API key in the macOS Keychain. Audio is captured only while
 you are dictating, then sent over HTTPS to AssemblyAI for transcription. Blurt
-stores no audio and no transcripts.
-
-Release builds send crash reports, handled errors, and anonymous install and
-app-launch events to [Datadog](https://www.datadoghq.com) — diagnostics only,
-never your audio, transcripts, or API key, and nothing tied to your identity.
+stores no audio and no transcripts, and sends no telemetry — no crash
+reporting, no analytics, no usage tracking.
 
 Because transcription is processed by AssemblyAI, their
 [Privacy Policy](https://www.assemblyai.com/legal/privacy-policy) and
