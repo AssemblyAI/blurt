@@ -101,12 +101,9 @@ struct OverlayView: View {
     case .processing:
       // Matches the site demo's "Transcribing…" label (the demo cross-fades REC →
       // Transcribing); cyan echoes the demo's --ice. Cross-fades like the bars.
-      Text("Transcribing…")
-        .font(.system(size: 10, weight: .semibold))
-        .tracking(0.8)
-        .lineLimit(1)
-        .minimumScaleFactor(0.7)
-        .foregroundStyle(OverlayBrandPalette.cyan)
+      // The label breathes (slow opacity pulse) so the wait for the Sync API +
+      // paste reads as active work rather than a frozen pill.
+      TranscribingLabel(animated: !reduceMotion)
         .transition(.opacity)
     case .error(let message):
       // "Try again" tells the user what to do; the full failure reason is too
@@ -159,6 +156,56 @@ struct OverlayView: View {
     .padding(.horizontal, 4)
     .transition(.opacity)
     .help(help)
+  }
+}
+
+/// The "Transcribing…" status line with a slow breathing pulse — the processing
+/// counterpart of the recording bars' idle shimmer, so the pill keeps visibly
+/// working while the app waits on the Sync API and pastes the result. Driven by
+/// the same continuous-clock `TimelineView` pattern as `WaveformBars` (never a
+/// one-shot state toggle). Under Reduce Motion the label holds steady at full
+/// opacity — exactly the pre-animation rendering.
+private struct TranscribingLabel: View {
+  /// Whether to run the breathing motion (off under Reduce Motion).
+  let animated: Bool
+
+  // One breath every ~1.8 s, dimming to ~55% and back: slow and shallow enough
+  // to read as a calm heartbeat rather than an alert blink. The floor keeps the
+  // 10 pt cyan legible against the dark tint at the trough, and limits the
+  // brightness pop if the cross-fade to "Pasted" (rendered at full opacity)
+  // starts mid-breath.
+  private let breathPeriod: Double = 1.8
+  private let minOpacity: Double = 0.55
+
+  var body: some View {
+    if animated {
+      // ~20 Hz is plenty for a 1.8 s opacity ramp — rendering at the display's
+      // full refresh rate would only burn energy (same reasoning as the 30 Hz
+      // cap on WaveformBars).
+      TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { timeline in
+        label.opacity(breathOpacity(at: timeline.date.timeIntervalSinceReferenceDate))
+      }
+    } else {
+      label
+    }
+  }
+
+  // Type, tracking, and cyan are shared with the "Pasted" notice (OverlayView's
+  // `.pasted` case) so the processing → pasted hand-off reads as one status line.
+  private var label: some View {
+    Text("Transcribing…")
+      .font(.system(size: 10, weight: .semibold))
+      .tracking(0.8)
+      .lineLimit(1)
+      .minimumScaleFactor(0.7)
+      .foregroundStyle(OverlayBrandPalette.cyan)
+  }
+
+  /// Raised cosine over `breathPeriod`: 1 → `minOpacity` → 1, so the label
+  /// eases through the dim point instead of bouncing off it.
+  private func breathOpacity(at time: TimeInterval) -> Double {
+    let osc = (cos(time / breathPeriod * 2 * .pi) + 1) / 2  // 0...1
+    return minOpacity + (1 - minOpacity) * osc
   }
 }
 
