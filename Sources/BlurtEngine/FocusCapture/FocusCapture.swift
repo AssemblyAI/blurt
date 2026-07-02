@@ -61,9 +61,6 @@ enum FocusCapture {
   {
     guard AXIsProcessTrusted() else { return .empty }
     guard let element = systemFocusedElement() else { return .empty }
-    // Bound each per-attribute round trip: a beachballing app should cost this
-    // best-effort priming at most ~1 s per read, not the ~6 s system default.
-    AXUIElementSetMessagingTimeout(element, 1)
 
     // Don't read the value of a password field into the prompt.
     let isSecure = (stringValue(element, kAXRoleAttribute) == "AXSecureTextField")
@@ -78,12 +75,22 @@ enum FocusCapture {
       fieldLabel: clip(fieldLabel(of: element), to: 80))
   }
 
+  /// Cap on each cross-process AX round trip this process makes. An unresponsive
+  /// frontmost app costs a read this long, not the ~6 s system default; the
+  /// context capture is best-effort priming, so partial answers beat waiting.
+  private static let axMessagingTimeoutSeconds: Float = 1
+
   /// The system-wide focused UI element, or `nil` when none is resolvable
   /// (process not trusted, or nothing focused). The Accessibility *client* read
   /// APIs are thread-safe, so this serves both the off-main context capture
   /// and the injector's off-main editability check.
   private nonisolated static func systemFocusedElement() -> AXUIElement? {
     let system = AXUIElementCreateSystemWide()
+    // Setting the timeout on the system-wide element applies it process-wide
+    // (per AXUIElement.h), bounding this focused-element lookup AND every later
+    // read — including ones on *other* element refs a per-element timeout would
+    // miss (the window element behind `windowTitle`, the editability probes).
+    AXUIElementSetMessagingTimeout(system, axMessagingTimeoutSeconds)
     var focusedRef: CFTypeRef?
     guard
       AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedRef)

@@ -22,6 +22,14 @@ final class DictationKeyTap {
   private let onStart: @Sendable () -> Void
   private let onStop: @Sendable () -> Void
   private let onCancel: @Sendable () -> Void
+  /// Fired when a *state-recovery* reset (disabled-tap recovery, trigger
+  /// rebinding) discards a live gate state: the key events that would have ended
+  /// that dictation can no longer arrive, so the owner must end the capture —
+  /// otherwise the session sits in `.recording` until the auto-release cap
+  /// pastes an unprompted transcript. Distinct from `onCancel` (a user-intent
+  /// cancel from the gate): recovery must only cancel a live *recording*, never
+  /// a transcript already in flight — see `DictationSession.cancelRecording`.
+  private let onRecordingDiscarded: @Sendable () -> Void
 
   /// Mutable state touched from the tap's run-loop thread, so guarded by a lock.
   private struct GateState {
@@ -45,11 +53,13 @@ final class DictationKeyTap {
   init(
     onStart: @escaping @Sendable () -> Void,
     onStop: @escaping @Sendable () -> Void,
-    onCancel: @escaping @Sendable () -> Void
+    onCancel: @escaping @Sendable () -> Void,
+    onRecordingDiscarded: @escaping @Sendable () -> Void
   ) {
     self.onStart = onStart
     self.onStop = onStop
     self.onCancel = onCancel
+    self.onRecordingDiscarded = onRecordingDiscarded
   }
 
   deinit {
@@ -99,6 +109,9 @@ final class DictationKeyTap {
   }
 
   /// Re-read the bound trigger key into the gate. Call after the user rebinds.
+  /// The reset reports a discarded live recording (see `resetGate`): rebinding
+  /// mid-dictation means the old key's up-event will never match, so the capture
+  /// must be cancelled, not left to run out the auto-release cap.
   @MainActor
   func refreshBinding() {
     let key = TriggerKeyStore().triggerKey
@@ -106,9 +119,23 @@ final class DictationKeyTap {
     state.withLock {
       $0.triggerKeyCode = key.keyCode
       $0.triggerFlag = flag
-      $0.gate.reset()
-      $0.modifierIsDown = false
     }
+    resetGate()
+  }
+
+  /// Clears the gate (and the modifier-down tracker) because the events it was
+  /// tracking can no longer be trusted — the binding changed, or the tap was
+  /// disabled and events were dropped. If the reset discards a live gate state
+  /// (armed or latched), no future key event can end that dictation, so report
+  /// it upstream to cancel the recording.
+  private func resetGate() {
+    let discardedRecording = state.withLock { s in
+      let wasActive = !s.gate.isIdle
+      s.gate.reset()
+      s.modifierIsDown = false
+      return wasActive
+    }
+    if discardedRecording { onRecordingDiscarded() }
   }
 
   /// Tap-thread entry point. Swallows nothing — the tap is listen-only, so
@@ -116,17 +143,16 @@ final class DictationKeyTap {
   fileprivate func handle(type: CGEventType, event: CGEvent) {
     if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
       if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
-      let discardedRecording = state.withLock { s in
-        let wasActive = !s.gate.isIdle
-        s.gate.reset()
-        s.modifierIsDown = false
-        return wasActive
-      }
-      // Events — including the trigger's key-up — were dropped while the tap
-      // was disabled, so a recording that was in flight can no longer be ended
-      // by the user. Cancel it rather than leaving the session in .recording
-      // until the auto-release cap fires and pastes an unprompted transcript.
-      if discardedRecording { onCancel() }
+      // Events may have been dropped while the tap was down. If the trigger is
+      // still physically held, nothing that matters was lost: the key-up is
+      // still coming and the gate state is coherent, so keep both — resetting
+      // here would discard speech the user is mid-sentence on. Otherwise the
+      // trigger's key-up may have been missed; reset, and cancel a recording
+      // the reset discards rather than leaving the session in .recording until
+      // the auto-release cap fires and pastes an unprompted transcript.
+      let triggerFlag = state.withLock { $0.triggerFlag }
+      if CGEventSource.flagsState(.combinedSessionState).contains(triggerFlag) { return }
+      resetGate()
       return
     }
 

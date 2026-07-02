@@ -33,6 +33,18 @@ final class AppCoordinator {
   @ObservationIgnored private var levelsObserver: Task<Void, Never>?
   @ObservationIgnored var keyTap: DictationKeyTap?
 
+  /// One gate action from the key tap (see `actionConsumer`).
+  private enum DictationAction: Sendable {
+    case start, stop, cancel, discardRecording
+  }
+  /// Consumes the tap's action stream and drives the session, one action at a
+  /// time. The tap's callbacks yield into a single AsyncStream instead of each
+  /// spawning an independent `Task {}`: separately created tasks carry no FIFO
+  /// guarantee, so a recovery cancel could overtake the press it was meant to
+  /// cancel and no-op on a still-idle session — stranding the eventual recording
+  /// with no key-up coming. The stream preserves the tap thread's emit order.
+  @ObservationIgnored private var actionConsumer: Task<Void, Never>?
+
   /// Whether an AssemblyAI API key is currently saved. Drives the wizard
   /// (which gates dictation on having a key) and the Settings UI.
   private(set) var hasAPIKey: Bool
@@ -69,6 +81,7 @@ final class AppCoordinator {
   deinit {
     phaseObserver?.cancel()
     levelsObserver?.cancel()
+    actionConsumer?.cancel()
   }
 
   func start() {
@@ -88,16 +101,28 @@ final class AppCoordinator {
     // Drive the hold-to-dictate hotkey from a CGEventTap (see `DictationKeyTap`)
     // rather than a Carbon global hotkey: the latter leaks the chord's
     // auto-repeat key events into the focused app while held.
-    let tap = DictationKeyTap(
-      onStart: { [weak self] in
-        Task { @MainActor in await self?.beginDictation() }
-      },
-      onStop: { [weak self] in
-        Task { @MainActor in await self?.endDictation() }
-      },
-      onCancel: { [weak self] in
-        Task { @MainActor in await self?.cancelDictation() }
+    let (actions, actionFeed) = AsyncStream.makeStream(of: DictationAction.self)
+    actionConsumer = Task { @MainActor [weak self] in
+      for await action in actions {
+        guard let self else { return }
+        if Task.isCancelled { return }
+        switch action {
+        case .start: await self.beginDictation()
+        case .stop: await self.endDictation()
+        case .cancel: await self.cancelDictation()
+        // A recovery cancel (tap disabled / trigger rebound mid-dictation) must
+        // only end a live recording — a pipeline already transcribing means the
+        // capture ended legitimately (e.g. auto-release) and its transcript
+        // must not be discarded.
+        case .discardRecording: await self.session.cancelRecording()
+        }
       }
+    }
+    let tap = DictationKeyTap(
+      onStart: { actionFeed.yield(.start) },
+      onStop: { actionFeed.yield(.stop) },
+      onCancel: { actionFeed.yield(.cancel) },
+      onRecordingDiscarded: { actionFeed.yield(.discardRecording) }
     )
     self.keyTap = tap
     // Deliberately *not* installed here: `CGEvent.tapCreate` for keystrokes is

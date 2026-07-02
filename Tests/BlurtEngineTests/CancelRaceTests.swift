@@ -138,6 +138,46 @@ struct CancelRaceTests {
     #expect(await injector.inserted.isEmpty)
   }
 
+  @Test("cancelRecording during transcribing leaves the pipeline alone")
+  func cancelRecordingDoesNotTearDownTranscribing() async throws {
+    let mic = StubMicCapture()
+    let stt = GatedTranscriber(text: "Hello world.")
+    let injector = StubInjector()
+    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+
+    await session.press()
+    await session.release()  // -> .transcribing, spawns the pipeline task
+    await stt.waitUntilStarted()
+    #expect(await session.phase == .transcribing)
+
+    // The narrow recovery cancel (tap disabled / trigger rebound): the capture
+    // already ended legitimately, so the in-flight transcript must survive —
+    // unlike a user-intent cancel(), which tears it down.
+    await session.cancelRecording()
+    #expect(await session.phase == .transcribing)
+
+    await stt.allowToFinish()
+    for _ in 0..<1000 where await session.phase != .pasted { await Task.yield() }
+
+    #expect(await session.phase == .pasted)
+    #expect(await injector.inserted == ["Hello world."])
+  }
+
+  @Test("cancelRecording during recording cancels like cancel()")
+  func cancelRecordingCancelsLiveRecording() async throws {
+    let mic = StubMicCapture()
+    let stt = StubTranscriber(mode: .transcript("Hello world."))
+    let injector = StubInjector()
+    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+
+    await session.press()
+    #expect(await session.phase == .recording)
+    await session.cancelRecording()
+    #expect(await session.phase == .cancelled)
+    #expect(await mic.stopCalls == 1)
+    #expect(await injector.inserted.isEmpty)
+  }
+
   @Test("cancel tears down the armed auto-release timer; the session stays .cancelled")
   func cancelTearsDownAutoRelease() async throws {
     let mic = StubMicCapture()
@@ -163,48 +203,6 @@ struct CancelRaceTests {
     #expect(await injector.inserted.isEmpty)
     // Only the cancel's own stop ran — the auto-release never stopped the mic again.
     #expect(await mic.stopCalls == 1)
-  }
-}
-
-/// Mic stub that signals when `stop()` is entered and then blocks until
-/// released, so a `cancel()` can be landed deterministically while `release()`
-/// is suspended inside `mic.stop()` — the window where the phase is still
-/// `.recording` but `isStopping` bars the direct cancel path.
-private actor GatedStopMic: MicCaptureProtocol {
-  private let stopError: (any Error & Sendable)?
-  private var entered = false
-  private var enteredWaiters: [CheckedContinuation<Void, Never>] = []
-  private var finished = false
-  private var finishWaiters: [CheckedContinuation<Void, Never>] = []
-
-  init(stopError: (any Error & Sendable)? = nil) { self.stopError = stopError }
-
-  func start() async throws {}
-
-  func stop() async throws -> [Float] {
-    entered = true
-    for waiter in enteredWaiters { waiter.resume() }
-    enteredWaiters.removeAll()
-    if !finished {
-      await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
-        finishWaiters.append(c)
-      }
-    }
-    if let stopError { throw stopError }
-    return Array(repeating: 0, count: SyncSTTLimits.minSamples * 2)
-  }
-
-  func waitUntilStopEntered() async {
-    if entered { return }
-    await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
-      enteredWaiters.append(c)
-    }
-  }
-
-  func allowStopToFinish() {
-    finished = true
-    for waiter in finishWaiters { waiter.resume() }
-    finishWaiters.removeAll()
   }
 }
 

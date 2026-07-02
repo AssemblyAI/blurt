@@ -3,11 +3,12 @@ import Testing
 
 @testable import BlurtEngine
 
-/// Races in the hold-to-dictate hotkey path. The tap fires `press()` and
-/// `release()` as independent, unordered Tasks (see `AppCoordinator`), and
-/// `DictationSession.press()` only reaches `.recording` *after* awaiting
-/// `mic.start()`. A fast tap can therefore land `release()` while `press()` is
-/// still inside `mic.start()` — these tests pin down that window.
+/// Races in the hold-to-dictate hotkey path. `AppCoordinator` serializes the
+/// tap's actions through one stream, but `DictationSession` is public API with
+/// other drivers (the auto-release timer, the UI-test harness), and `press()`
+/// only reaches `.recording` *after* awaiting `mic.start()`. A `release()` or
+/// `cancel()` can therefore still land while `press()` is inside `mic.start()`
+/// — these tests pin down that window.
 @Suite("Hotkey press/release races", .timeLimit(.minutes(1)))
 struct HotkeyRaceTests {
 
