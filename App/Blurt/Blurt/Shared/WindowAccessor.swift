@@ -1,9 +1,9 @@
 import SwiftUI
 
 /// Bridges a SwiftUI scene to its hosting `NSWindow` so we can apply AppKit-only
-/// window configuration that SwiftUI doesn't surface (e.g. a transparent
-/// titlebar). Drop it in a `.background(...)`; `configure` runs once the view is
-/// installed in a window, and again if the hosting window changes.
+/// window configuration that SwiftUI doesn't surface (e.g. a stable
+/// `NSWindow.identifier`). Drop it in a `.background(...)`; `configure` runs once
+/// the view is installed in a window, and again if the hosting window changes.
 struct WindowAccessor: NSViewRepresentable {
   /// Called with the hosting window on the main actor, once `view.window` is
   /// non-nil. Re-invoked if the view later moves to a different window.
@@ -52,21 +52,6 @@ extension View {
     background(
       WindowAccessor { window in
         window.identifier = NSUserInterfaceItemIdentifier(id)
-      }
-    )
-  }
-
-  /// Hide the titlebar chrome while keeping the traffic-light controls and the
-  /// ability to close/reopen the window (Blurt is a Dock app). The titlebar goes
-  /// transparent and the title text is hidden, so the window background flows up
-  /// behind the controls — the "welcome window" look. The window stays draggable
-  /// from its body since there's no longer a visible bar to grab.
-  func chromeLightWindow() -> some View {
-    background(
-      WindowAccessor { window in
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        window.isMovableByWindowBackground = true
       }
     )
   }

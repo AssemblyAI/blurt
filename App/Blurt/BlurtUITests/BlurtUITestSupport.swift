@@ -11,7 +11,11 @@ enum UITestIDs {
   /// (offline stub pipeline + harness window). Matches `UITestMode.launchArgument`.
   static let launchArgument = "-BlurtUITest"
 
-  // Window titles (the first argument of each SwiftUI `Window(_:id:)`).
+  // Window titles. Main and harness come from the first argument of their
+  // SwiftUI `Window(_:id:)` declarations; the settings title is supplied by
+  // the framework for the `Settings` scene — "<bundle name> Settings" — so it
+  // tracks `CFBundleName`/`CFBundleDisplayName` (project.yml), not any string
+  // in the app source.
   static let mainWindowTitle = "Blurt"
   static let settingsWindowTitle = "Blurt Settings"
   static let harnessWindowTitle = "Blurt UI Test Harness"

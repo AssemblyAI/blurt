@@ -49,7 +49,7 @@ struct MenuBarLabel: View {
 /// the window.
 struct MenuBarContent: View {
   var appDelegate: AppDelegate
-  @Environment(\.openWindow) private var openWindow
+  @Environment(\.openSettings) private var openSettings
 
   // Read the persisted trigger keycode directly (as the ready screen does) so
   // the reminder line updates live when the dictation key is rebound in
@@ -75,7 +75,7 @@ struct MenuBarContent: View {
     }
     Button("Settings…") {
       NSApp.activate()
-      openWindow(id: SettingsWindow.id)
+      openSettings()
     }
 
     Divider()

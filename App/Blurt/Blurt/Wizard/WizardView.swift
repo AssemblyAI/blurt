@@ -56,8 +56,9 @@ struct WizardView: View {
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.horizontal, 20)
-    // The window's titlebar is hidden (`.chromeLightWindow()`), so content now
-    // extends up behind the traffic-light controls. This leading-aligned header
+    // The window's titlebar is hidden (`.windowStyle(.hiddenTitleBar)` on the
+    // main scene), so content extends up behind the traffic-light controls.
+    // This leading-aligned header
     // sits exactly under them — inset the top so "Set Up Blurt" clears the
     // controls rather than colliding with them. (ReadyView is centered, so it
     // doesn't need this.)

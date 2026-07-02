@@ -55,6 +55,11 @@ public enum PermissionsChecker {
   @MainActor
   public static func openAccessibilitySettings() {
     forceAccessibilityActivity()
+    // The literal spells out `kAXTrustedCheckOptionPrompt`'s value: the SDK
+    // header declares the constant as a non-const `extern CFStringRef`, so it
+    // imports into Swift as a global `var` that strict concurrency refuses to
+    // reference ("shared mutable state") — the framework constant cannot be
+    // used here.
     let prompt: NSDictionary = ["AXTrustedCheckOptionPrompt": true]
     _ = AXIsProcessTrustedWithOptions(prompt)
   }
