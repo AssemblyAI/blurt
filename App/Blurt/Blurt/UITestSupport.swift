@@ -4,7 +4,6 @@
   import BlurtEngine
   import Foundation
   import Observation
-  import Synchronization
   import SwiftUI
 
   // Test scaffolding that lets the XCUITest suite drive the real app against
@@ -97,35 +96,20 @@
     }
   }
 
-  /// In-memory `APIKeyGateway` so UI tests never read or write the real Keychain
-  /// item. Backed by a `Mutex`, which is itself `Sendable` — so the type is
-  /// safely `Sendable` without an `@unchecked` escape hatch.
-  final class InMemoryAPIKeyStore: APIKeyGateway {
-    private let key = Mutex<String?>(nil)
-
-    func get() -> String? {
-      key.withLock { $0 }
-    }
-
-    @discardableResult func set(_ newKey: String?) -> Bool {
-      key.withLock { $0 = newKey.trimmedNonEmpty() }
-      return true
-    }
-
-    var hasKey: Bool { self.get() != nil }
-  }
+  // The real Keychain stays untouched under UI testing via the engine's
+  // `InMemoryAPIKeyStore` (`Sources/BlurtEngine/Config/APIKeyGateway.swift`),
+  // injected as the coordinator's key store in `AppDelegate`.
 
   extension DictationComponents {
     /// The all-stub pipeline used under UI testing: no mic, no network, no
-    /// Accessibility paste. `levels` is an empty stream (the overlay meter isn't
-    /// asserted) and `warmUpMic` is a no-op.
+    /// Accessibility paste. `UITestMic` inherits `MicCaptureProtocol`'s default
+    /// empty `levels` stream (the overlay meter isn't asserted) and no-op
+    /// `warmUp()`.
     static func uiTest() -> DictationComponents {
       DictationComponents(
         mic: UITestMic(),
         transcriber: UITestTranscriber(),
-        injector: UITestInjector(),
-        levels: AsyncStream { $0.finish() },
-        warmUpMic: {}
+        injector: UITestInjector()
       )
     }
   }

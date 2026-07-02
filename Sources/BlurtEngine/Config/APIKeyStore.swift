@@ -23,6 +23,6 @@ public enum APIKeyStore {
   @discardableResult
   public static func set(_ key: String?) -> Bool { store.set(key) }
 
-  /// Whether a non-empty key is currently stored.
-  public static var hasKey: Bool { Self.get() != nil }
+  // "Has a key?" lives on the injectable seam: `APIKeyGateway.hasKey`
+  // (`ProductionAPIKeyStore` wraps this store), so the derivation exists once.
 }
