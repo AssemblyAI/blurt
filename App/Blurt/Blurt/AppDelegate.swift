@@ -30,6 +30,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// Brings the main window forward (showing the wizard or the ready screen).
   @MainActor func openMainWindow() { openWindowByID?(MainWindow.id) }
 
+  /// Opens the undocumented Prompt Inspector window and brings Blurt frontmost
+  /// (the user is typically in another app when they press ⌃⌥⌘P). The window is
+  /// `.suppressed` at launch, so `openWindow(id:)` creates it on first use and
+  /// focuses it thereafter. `openWindowByID` is captured by the main window's
+  /// launch-time `onAppear`, so it is set well before any chord can fire.
+  @MainActor func openInspectorWindow() {
+    NSApp.activate()
+    openWindowByID?(PromptInspectorWindow.id)
+  }
+
   /// Surfaces the main window *and* makes the app frontmost. Shared by the menu
   /// bar's "Open Blurt", the missing-key hotkey nudge, and the permission-revoked
   /// kick-back: all need the app pulled in front of whatever the user was in.
@@ -107,6 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // The overlay pill isn't built here — `AppCoordinator` creates it lazily in
     // `showOverlay()` once the app is fully configured.
     let onMissingAPIKey: @MainActor () -> Void = { [weak self] in self?.surfaceMainWindow() }
+    let onInspector: @MainActor () -> Void = { [weak self] in self?.openInspectorWindow() }
     let coord: AppCoordinator
     #if UITEST_HOOKS
       // Under UI testing, compose the app with offline stub collaborators and an
@@ -128,12 +139,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
           onMissingAPIKey: onMissingAPIKey,
           components: .uiTest(),
           keyStore: InMemoryAPIKeyStore(),
-          isUITesting: true)
+          isUITesting: true,
+          onInspector: onInspector)
       } else {
-        coord = AppCoordinator(onMissingAPIKey: onMissingAPIKey)
+        coord = AppCoordinator(onMissingAPIKey: onMissingAPIKey, onInspector: onInspector)
       }
     #else
-      coord = AppCoordinator(onMissingAPIKey: onMissingAPIKey)
+      coord = AppCoordinator(onMissingAPIKey: onMissingAPIKey, onInspector: onInspector)
     #endif
     self.coordinator = coord
 

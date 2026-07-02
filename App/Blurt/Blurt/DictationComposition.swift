@@ -18,7 +18,12 @@ struct DictationComponents {
   static func production() -> DictationComponents {
     DictationComponents(
       mic: MicCapture(),
-      transcriber: AssemblyAITranscriber(),
+      transcriber: AssemblyAITranscriber(
+        onPromptAssembled: { prompt in
+          // Hop to the main actor: PromptInspector is @MainActor UI state.
+          Task { @MainActor in PromptInspector.shared.record(prompt) }
+        }
+      ),
       injector: KeyInjector()
     )
   }
