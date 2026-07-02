@@ -1,4 +1,3 @@
-import AppKit
 import os
 
 public actor DictationSession {
