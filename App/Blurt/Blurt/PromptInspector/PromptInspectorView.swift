@@ -6,8 +6,9 @@ enum PromptInspectorWindow {
   static let id = "prompt-inspector"
 }
 
-/// Read-only view of the most recent assembled prompt. Opened via ⌃⌥⌘P; closed
-/// with ⌘W. Selectable + copyable so the text can be pasted elsewhere.
+/// Read-only view of the most recent assembled prompt. Opened from the Window
+/// menu; closed with ⌘W. Selectable + copyable so the text can be pasted
+/// elsewhere.
 struct PromptInspectorView: View {
   @State private var inspector = PromptInspector.shared
 

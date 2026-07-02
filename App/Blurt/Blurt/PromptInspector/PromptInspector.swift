@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 /// Holds the fully-assembled prompt from the most recent dictation for the
-/// undocumented Prompt Inspector window (opened with ⌃⌥⌘P). In-memory only — the
+/// Prompt Inspector window (opened from the Window menu). In-memory only — the
 /// prompt can contain the user's prior transcript and on-screen selected text, so
 /// it is never written to disk. Only the single most-recent prompt is retained.
 @MainActor

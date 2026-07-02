@@ -13,9 +13,6 @@ final class AppCoordinator {
   /// add a key — the actionable fix — rather than flashing a message that
   /// disappears.
   let onMissingAPIKey: @MainActor () -> Void
-  /// Opens the undocumented Prompt Inspector window. Supplied by the app shell;
-  /// fired by the key tap on the ⌃⌥⌘P chord.
-  let onInspector: @MainActor () -> Void
 
   let session: DictationSession
   /// The mic seam, kept beyond session construction for its two side features —
@@ -48,11 +45,9 @@ final class AppCoordinator {
     onMissingAPIKey: @escaping @MainActor () -> Void,
     components: DictationComponents = .production(),
     keyStore: any APIKeyGateway = ProductionAPIKeyStore(),
-    isUITesting: Bool = false,
-    onInspector: @escaping @MainActor () -> Void = {}
+    isUITesting: Bool = false
   ) {
     self.onMissingAPIKey = onMissingAPIKey
-    self.onInspector = onInspector
     self.keyStore = keyStore
     self.isUITesting = isUITesting
     self.mic = components.mic
@@ -106,8 +101,7 @@ final class AppCoordinator {
       onStop: { session.submit(.release) },
       onCancel: { session.submit(.cancel) },
       // Recovery-only teardown; `cancelRecording()`'s doc owns the rationale.
-      onRecordingDiscarded: { session.submit(.cancelRecording) },
-      onInspector: onInspector
+      onRecordingDiscarded: { session.submit(.cancelRecording) }
     )
     // Deliberately *not* installed here: `CGEvent.tapCreate` for keystrokes is
     // itself what surfaces the system permission prompt, so creating the tap at

@@ -37,10 +37,6 @@ final class DictationKeyTap {
   /// cancel from the gate): recovery must only cancel a live *recording*, never
   /// a transcript already in flight — see `DictationSession.cancelRecording`.
   private let onRecordingDiscarded: @Sendable () -> Void
-  /// Fired when the undocumented Prompt Inspector chord (⌃⌥⌘P) is pressed. Opens
-  /// the inspector window; the tap is listen-only so the chord also passes through
-  /// to the focused app (harmless). See `InspectorHotkey`.
-  private let onInspector: @MainActor () -> Void
 
   private var gate = DictationKeyGate()
   private var triggerKeyCode = TriggerKey.rightCommand.keyCode
@@ -62,14 +58,12 @@ final class DictationKeyTap {
     onStart: @escaping @Sendable () -> Void,
     onStop: @escaping @Sendable () -> Void,
     onCancel: @escaping @Sendable () -> Void,
-    onRecordingDiscarded: @escaping @Sendable () -> Void,
-    onInspector: @escaping @MainActor () -> Void
+    onRecordingDiscarded: @escaping @Sendable () -> Void
   ) {
     self.onStart = onStart
     self.onStop = onStop
     self.onCancel = onCancel
     self.onRecordingDiscarded = onRecordingDiscarded
-    self.onInspector = onInspector
   }
 
   deinit {
@@ -162,17 +156,6 @@ final class DictationKeyTap {
 
     let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
     let eventFlags = event.flags
-    // Undocumented Prompt Inspector chord. Checked here (not in the gate) so the
-    // gate's dictation decision is untouched — the event still flows through it
-    // normally below. Listen-only tap swallows nothing, so this never blocks the
-    // keystroke reaching the focused app.
-    // Ignore key autorepeat so holding the chord opens the window once, not
-    // repeatedly. `.keyboardEventAutorepeat` is non-zero on synthesized repeats.
-    if type == .keyDown, event.getIntegerValueField(.keyboardEventAutorepeat) == 0,
-      InspectorHotkey.matches(keyCode: keyCode, flags: eventFlags.rawValue)
-    {
-      onInspector()
-    }
     let now = reference.duration(to: ContinuousClock.now)
     dispatch(decideAction(type: type, keyCode: keyCode, eventFlags: eventFlags, now: now))
   }
