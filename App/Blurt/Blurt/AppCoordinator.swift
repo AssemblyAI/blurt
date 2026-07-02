@@ -298,6 +298,9 @@ final class AppCoordinator {
       // but it's not a fault to report regardless — there was simply nowhere to type.
       return
     case .targetAppLost:
+      // A genuine lost target degrades to the quiet .noTarget phase and never
+      // reaches .failed; this fires only for the session's untyped-error
+      // relabel — an unknown fault, so still worth reporting.
       Monitoring.reportError(error)
     case .sttFailed(let underlying), .audioCaptureFailed(let underlying):
       // A dropped/absent network connection isn't a Blurt fault — it's the

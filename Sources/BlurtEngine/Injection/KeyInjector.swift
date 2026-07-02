@@ -136,11 +136,12 @@ public actor KeyInjector: InjectorProtocol {
     targetApp = app
   }
 
-  /// Brings the captured target app frontmost before a paste or delete, then
-  /// waits a beat for the activation to settle. No-op when no target was
-  /// captured. Throws `.targetAppLost` if the app quit between capture and now,
-  /// or if activation fails — pasting/deleting into whatever currently has focus
-  /// would land the keystrokes in the wrong place.
+  /// Brings the captured target app frontmost before a paste, then waits a beat
+  /// for the activation to settle. No-op when no target was captured. Throws
+  /// `.targetAppLost` if the app quit between capture and now, or if activation
+  /// fails — pasting into whatever currently has focus would land the
+  /// keystrokes in the wrong place. (`insert` puts the transcript on the
+  /// clipboard before letting this error propagate, so the words survive.)
   private func activateTargetApp() async throws(BlurtError) {
     guard let target = targetApp else { return }
     guard !target.isTerminated else { throw BlurtError.targetAppLost }
@@ -193,7 +194,16 @@ public actor KeyInjector: InjectorProtocol {
     let basis = KeyInjector.separatorBasis(
       priorText: priorText, lastInserted: lastInsertedText, sameTarget: sameTarget)
     let finalText = KeyInjector.withLeadingSeparator(text, after: basis)
-    try await activateTargetApp()
+    do {
+      try await activateTargetApp()
+    } catch {
+      // The target app quit or refused activation between capture and paste.
+      // Transcription already succeeded, so leave the words on the clipboard —
+      // the pipeline degrades this to the quiet "copied" notice instead of a
+      // hard failure that would lose the dictation.
+      clipboard.setString(finalText)
+      throw error
+    }
     // Final cancellation gate before the irreversible paste: a cancel() that
     // landed during activation must not type into the focused app.
     try Task.checkCancellation()
@@ -220,11 +230,10 @@ public actor KeyInjector: InjectorProtocol {
     // contents alone rather than clobbering them with the stale pre-paste snapshot.
     let ourChangeCount = clipboard.changeCount
     // If the event subsystem won't synthesize the keystroke, the paste can't
-    // happen — restore immediately and fail loudly rather than reporting success.
-    guard postPaste() else {
-      if clipboard.changeCount == ourChangeCount { clipboard.restore(savedItems) }
-      throw BlurtError.targetAppLost
-    }
+    // happen. The transcript is already on the pasteboard — leave it there (the
+    // user's words beat the stale pre-paste snapshot) so the failure degrades
+    // to the "copied" notice, matching the lost-target path above.
+    guard postPaste() else { throw BlurtError.targetAppLost }
     // The paste is posted and the text is visible. Record what landed (including
     // any leading separator) and which app it landed in so a following dictation
     // into the same opaque editor can recover its spacing, then defer the settle +
