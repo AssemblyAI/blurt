@@ -45,7 +45,10 @@ struct PickerSettingRow<Value: Hashable, Options: View>: View {
 
   var body: some View {
     LabeledContent {
-      Picker("", selection: $selection, content: options)
+      // The picker carries its real title (hidden from layout — the visible
+      // label is the `LabeledContent` one) so VoiceOver reads a meaningful
+      // name for the pop-up button rather than an empty string.
+      Picker(title, selection: $selection, content: options)
         .labelsHidden()
         .pickerStyle(.menu)
         .fixedSize()
