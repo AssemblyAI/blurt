@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import Synchronization
 import Testing
 
 @testable import BlurtEngine
@@ -314,63 +315,57 @@ private func liveTargetApp() throws -> NSRunningApplication {
 
 /// One-shot async gate: `wait()` suspends until `open()` is called. Tolerates
 /// `open()` racing ahead of `wait()` (the waiter then returns immediately).
-private final class AsyncGate: @unchecked Sendable {
-  private let lock = NSLock()
-  private var continuation: CheckedContinuation<Void, Never>?
-  private var opened = false
+/// A class over a `Mutex` (not an actor) because it's poked from synchronous
+/// `@Sendable` seams like `postPaste`; the `Mutex` makes the `Sendable`
+/// conformance compiler-checked.
+private final class AsyncGate: Sendable {
+  private struct State {
+    var continuation: CheckedContinuation<Void, Never>?
+    var opened = false
+  }
+  private let state = Mutex(State())
 
   func wait() async {
     await withCheckedContinuation { cont in
-      lock.lock()
-      if opened {
-        lock.unlock()
-        cont.resume()
-      } else {
-        continuation = cont
-        lock.unlock()
+      let openedAlready = state.withLock { s -> Bool in
+        if s.opened { return true }
+        s.continuation = cont
+        return false
       }
+      if openedAlready { cont.resume() }
     }
   }
 
   func open() {
-    lock.lock()
-    opened = true
-    let cont = continuation
-    continuation = nil
-    lock.unlock()
+    let cont = state.withLock { s -> CheckedContinuation<Void, Never>? in
+      s.opened = true
+      let waiter = s.continuation
+      s.continuation = nil
+      return waiter
+    }
     cont?.resume()
   }
 }
 
 /// Thread-safe ordered list of strings recorded inside a `@Sendable` closure,
 /// for asserting the sequence of texts a test observed being pasted.
-private final class StringListBox: @unchecked Sendable {
-  private let lock = NSLock()
-  private var items: [String] = []
+private final class StringListBox: Sendable {
+  private let items = Mutex<[String]>([])
   func append(_ value: String?) {
-    lock.lock()
-    items.append(value ?? "")
-    lock.unlock()
+    items.withLock { $0.append(value ?? "") }
   }
   var values: [String] {
-    lock.lock()
-    defer { lock.unlock() }
-    return items
+    items.withLock { $0 }
   }
 }
 
 /// Thread-safe boolean flag for assertions inside a `@Sendable` closure.
-private final class BoolBox: @unchecked Sendable {
-  private let lock = NSLock()
-  private var flag = false
+private final class BoolBox: Sendable {
+  private let flag = Mutex(false)
   func set() {
-    lock.lock()
-    flag = true
-    lock.unlock()
+    flag.withLock { $0 = true }
   }
   var value: Bool {
-    lock.lock()
-    defer { lock.unlock() }
-    return flag
+    flag.withLock { $0 }
   }
 }
