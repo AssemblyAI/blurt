@@ -21,6 +21,11 @@ ENTITLEMENTS="$APP_DIR/Blurt/Blurt.entitlements"
 readonly IDENTITY="640A7F5A9754400D4A0491E7A6FB30542D907806"
 readonly TEAM_ID="Y54ZB9JF63"
 readonly NOTARY_PROFILE="blurt-notary"
+# Exact-pinned: this runs via npx on the machine holding the signing key and
+# notary credentials, so "latest" would hand any compromised datadog-ci release
+# arbitrary code execution mid-release. Published npm versions are immutable;
+# bump this pin deliberately after reviewing the datadog-ci changelog.
+readonly DATADOG_CI_VERSION="5.20.1"
 
 SKIP_CHECKS=0
 for arg in "$@"; do
@@ -252,7 +257,7 @@ step "Datadog (dSYM upload)"
 # DATADOG_SITE from the environment; DATADOG_SITE defaults to datadoghq.com (US1).
 if [ -n "${DATADOG_API_KEY:-}" ]; then
   DATADOG_SITE="${DATADOG_SITE:-datadoghq.com}" \
-    npx --yes @datadog/datadog-ci dsyms upload "$DSYM_DST"
+    npx --yes "@datadog/datadog-ci@$DATADOG_CI_VERSION" dsyms upload "$DSYM_DST"
   info "datadog: dSYM uploaded from $DSYM_DST"
 else
   info "datadog: DATADOG_API_KEY unset — skipped dSYM upload"
