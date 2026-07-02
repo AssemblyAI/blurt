@@ -11,22 +11,29 @@ struct BlurtApp: App {
       MainWindowRoot(appDelegate: appDelegate)
     }
     .windowResizability(.contentSize)
+    // Welcome-window chrome: the wizard and ready screen are splash-style
+    // surfaces, not document/preferences windows — hide the titlebar (keeping
+    // the traffic lights) and let the window drag from its body, since there's
+    // no longer a visible bar to grab.
+    .windowStyle(.hiddenTitleBar)
+    .windowBackgroundDragBehavior(.enabled)
     // Always present the main window at launch — both first-run onboarding and a
     // configured launch (the "ready" screen) come up front, rather than the app
     // launching silently to just the overlay pill. (`AppDelegate` activates the
     // app so it's frontmost; the Dock/⌘, reopen it once closed.)
     .defaultLaunchBehavior(.presented)
     .commands {
-      BlurtCommands(appDelegate: appDelegate)
+      BlurtCommands()
     }
 
-    // Settings window: change the API key or dictation shortcut. Opened on
-    // demand (⌘, / the ready screen's link), never at launch.
-    Window("Blurt Settings", id: SettingsWindow.id) {
+    // Settings scene: change the API key or dictation shortcut. SwiftUI wires
+    // the standard ⌘, "Settings…" menu item to this scene automatically; it's
+    // opened on demand (⌘, / the ready screen's link / the menu bar item, via
+    // `openSettings`), never at launch. Keeps standard window chrome.
+    Settings {
       SettingsWindowRoot(appDelegate: appDelegate)
     }
     .windowResizability(.contentSize)
-    .defaultLaunchBehavior(.suppressed)
 
     // Menu bar status item: a live dictation indicator (idle / recording /
     // transcribing) plus a discoverability menu for the otherwise-invisible

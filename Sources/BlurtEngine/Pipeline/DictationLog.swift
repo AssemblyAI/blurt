@@ -22,10 +22,9 @@ enum DictationLog {
   }
 
   static let defaultURL: URL = {
-    let dir = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
-      .appendingPathComponent("Logs/Blurt", isDirectory: true)
+    let dir = URL.libraryDirectory.appending(path: "Logs/Blurt", directoryHint: .isDirectory)
     try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    return dir.appendingPathComponent("dictations.jsonl")
+    return dir.appending(path: "dictations.jsonl")
   }()
 
   // .sortedKeys keeps the on-disk JSONL deterministic (stable diff for tests
@@ -71,8 +70,9 @@ enum DictationLog {
     guard var line = try? encoder.encode(entry) else { return }
     line.append(0x0A)  // '\n'
 
-    if !FileManager.default.fileExists(atPath: url.path) {
-      FileManager.default.createFile(atPath: url.path, contents: nil)
+    let path = url.path(percentEncoded: false)
+    if !FileManager.default.fileExists(atPath: path) {
+      FileManager.default.createFile(atPath: path, contents: nil)
     }
     guard let handle = try? FileHandle(forWritingTo: url) else { return }
     defer { try? handle.close() }

@@ -55,8 +55,8 @@ public enum PermissionsChecker {
   @MainActor
   public static func openAccessibilitySettings() {
     forceAccessibilityActivity()
-    let prompt: NSDictionary = ["AXTrustedCheckOptionPrompt": true]
-    _ = AXIsProcessTrustedWithOptions(prompt)
+    let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+    _ = AXIsProcessTrustedWithOptions([promptKey: true] as CFDictionary)
   }
 
   /// Makes a *real* AX-protected call against another app's UI tree — what

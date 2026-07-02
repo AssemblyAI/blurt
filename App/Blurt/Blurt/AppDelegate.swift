@@ -21,10 +21,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     presentingWindow: { [unowned self] in updatePromptHostWindow() }
   )
 
-  /// Opens a window scene by id. The `openWindow` action lives in SwiftUI, so the
-  /// scenes capture it here (see `BlurtApp`) to give AppKit entry points —
-  /// notably a Dock click with no open windows — a way to reopen a window even on
-  /// a configured launch where none was shown.
+  /// Opens a window scene by id. The `openWindow` action lives in SwiftUI, so
+  /// `MainWindowRoot` captures it here (in its launch-time `onAppear`) to give
+  /// AppKit entry points — notably a Dock click with no open windows — a way to
+  /// reopen a window once the user has closed them all.
   @ObservationIgnored @MainActor var openWindowByID: (@MainActor (String) -> Void)?
 
   /// Brings the main window forward (showing the wizard or the ready screen).
@@ -115,7 +115,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // Pressing the hotkey with no key saved brings the main window forward (and
     // activates the app, since the user is in another app when they press it) so
     // they can add a key via the wizard. `openWindowByID` is captured by the
-    // scene's command views at launch, so it's set by the time the hotkey fires.
+    // main window's launch-time `onAppear` (the window is always presented at
+    // launch), so it's set by the time the hotkey fires.
     // The overlay pill isn't built here — `AppCoordinator` creates it lazily in
     // `showOverlay()` once the app is fully configured.
     let onMissingAPIKey: @MainActor () -> Void = { [weak self] in self?.surfaceMainWindow() }

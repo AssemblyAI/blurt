@@ -36,15 +36,16 @@ private enum ReadyBrandPalette {
 // Scene support for Blurt's two windows.
 //
 // Neither window is a hand-rolled `NSWindow` (that's why this file no longer
-// defines a window *controller*): both are SwiftUI `Window` scenes declared in
-// `BlurtApp`, opened with the public `openWindow` action. These types are the
-// glue between those scenes and the long-lived models the app delegate owns.
+// defines a window *controller*): both are SwiftUI scenes declared in
+// `BlurtApp`. These types are the glue between those scenes and the long-lived
+// models the app delegate owns.
 //
-// - Main window (`MainWindow`): the primary window. While the app isn't fully
-//   configured it shows the setup wizard; once it is, it shows `ReadyView` (the
-//   shortcut readout). Auto-presented at launch only on first run.
-// - Settings window (`SettingsWindow`): change the API key or dictation
-//   shortcut. Opened via ⌘, and the ready screen's "Settings…" link.
+// - Main window (`MainWindow`): the primary window, a `Window` scene opened via
+//   `openWindow(id:)`. While the app isn't fully configured it shows the setup
+//   wizard; once it is, it shows `ReadyView` (the shortcut readout).
+// - Settings: change the API key or dictation shortcut. A `Settings` scene, so
+//   ⌘, comes wired for free; opened programmatically via the `openSettings`
+//   environment action (the ready screen's link and the menu bar item).
 
 // MARK: - Main window (wizard / ready)
 
@@ -53,42 +54,43 @@ enum MainWindow {
   static let id = "main"
 }
 
-enum SettingsWindow {
-  static let id = "settings"
-}
-
 /// Root view of the main `Window` scene. It pulls the long-lived models off the
 /// app delegate (created at launch, before any window appears) and routes between
 /// the setup wizard (when the app isn't ready) and the ready screen (when it is).
 struct MainWindowRoot: View {
   var appDelegate: AppDelegate
   @Environment(\.openWindow) private var openWindow
+  @Environment(\.openSettings) private var openSettings
 
   var body: some View {
     if let controller = appDelegate.wizardController, let coordinator = appDelegate.coordinator {
       Group {
         if controller.isReady {
-          ReadyView(openSettings: { openWindow(id: SettingsWindow.id) })
+          ReadyView(openSettings: { openSettings() })
         } else {
           WizardView(controller: controller, coordinator: coordinator)
         }
       }
       .onAppear {
+        // Capture the open action so AppKit entry points (a Dock click with no
+        // open windows, the missing-key hotkey nudge) can reopen the main
+        // window. The main window is always presented at launch
+        // (`.defaultLaunchBehavior(.presented)`), so this runs before any of
+        // those paths can fire, and `openWindow(id:)` opens any Window scene
+        // regardless of which scene's environment supplied the action.
+        appDelegate.openWindowByID = { openWindow(id: $0) }
         // Permission polling runs for the app's whole life (started in the
         // controller's init), so the window only needs to refresh once on
-        // appear to reflect any change made while it was closed. (The
-        // `openWindowByID` opener is captured once, by `SettingsMenuButton` —
-        // the launch-evaluated command view — not re-assigned here.)
+        // appear to reflect any change made while it was closed.
         controller.refreshPermissions()
         // Now that the window is actually on screen, pull the app frontmost —
         // see `activateAtLaunchIfNeeded`. Done here rather than at launch-finish
         // because the window doesn't exist yet then.
         appDelegate.activateAtLaunchIfNeeded()
       }
-      // Welcome-window chrome: the wizard and ready screen are splash-style
-      // surfaces, not document/preferences windows, so hide the titlebar while
-      // keeping the traffic lights. The Settings window keeps standard chrome.
-      .chromeLightWindow()
+      // The splash-style titlebar treatment lives on the scene — see
+      // `.windowStyle(.hiddenTitleBar)` / `.windowBackgroundDragBehavior` in
+      // `BlurtApp`.
       // Tag the window so `surfaceMainWindow()` can find and raise this exact
       // window (the menu bar's "Open Blurt" needs to deminiaturize/front it when
       // the app is already running).
@@ -240,8 +242,8 @@ private struct ReadySettingsButton: View {
 
 // MARK: - Settings window
 
-/// Root view of the Settings `Window` scene: change the AssemblyAI API key or
-/// the dictation shortcut. Reuses the same section views the wizard's setup step
+/// Root view of the `Settings` scene: change the AssemblyAI API key or the
+/// dictation shortcut. Reuses the same section views the wizard's setup step
 /// uses, so the two stay in sync.
 struct SettingsWindowRoot: View {
   var appDelegate: AppDelegate
@@ -266,44 +268,15 @@ struct SettingsWindowRoot: View {
 
 // MARK: - App-menu commands
 
-/// App-menu commands. ⌘, opens the Settings window via the public `openWindow`
-/// action — no custom window plumbing to manage. `CommandGroup` content is a
-/// `@ViewBuilder`, so the `openWindow` action is read by a small menu *view*
-/// (which receives the scene environment) rather than the `Commands` type itself.
+/// App-menu commands. The standard ⌘, "Settings…" item is supplied by the
+/// `Settings` scene itself (see `BlurtApp`), so nothing to add here.
 struct BlurtCommands: Commands {
-  var appDelegate: AppDelegate
-
   var body: some Commands {
-    // Standard ⌘, entry point. Replaces the default Settings… item (there's no
-    // SwiftUI `Settings` scene — that scene can't be opened with `openWindow`,
-    // and we need the same opener for the ready screen's link).
-    CommandGroup(replacing: .appSettings) {
-      SettingsMenuButton(appDelegate: appDelegate)
-    }
     // Updates are silent and automatic (checked at launch, installed without a
     // prompt — see `AutoUpdater`), so there is no "Check for Updates…" command.
     // Blurt ships no help book, so SwiftUI's default Help menu would show a
     // dead "Blurt Help" item that opens nothing. Remove it rather than leave
     // a control that does nothing.
     CommandGroup(replacing: .help) {}
-  }
-}
-
-private struct SettingsMenuButton: View {
-  var appDelegate: AppDelegate
-  @Environment(\.openWindow) private var openWindow
-
-  var body: some View {
-    // Capture the open action at launch so a Dock click can reopen a window
-    // even on a configured launch where one is never shown. Command views are
-    // evaluated at launch (that's how ⌘, registers before any menu is opened),
-    // so this is a reliable, idempotent capture point — and the ONLY one:
-    // `openWindow(id:)` opens any Window scene regardless of which scene's
-    // environment supplied the action, so the window roots don't re-capture it.
-    appDelegate.openWindowByID = { openWindow(id: $0) }
-    return Button("Settings…") {
-      openWindow(id: SettingsWindow.id)
-    }
-    .keyboardShortcut(",", modifiers: .command)
   }
 }
