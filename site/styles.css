@@ -123,7 +123,7 @@ a {
 .hero {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(360px, 540px) minmax(0, 1fr);
+  grid-template-columns: minmax(360px, 620px) minmax(0, 1fr);
   align-items: center;
   gap: clamp(32px, 5vw, 64px);
   padding: clamp(24px, 5vh, 54px) 0 22px;
@@ -239,7 +239,7 @@ h1 {
 
 .demo {
   margin: 0;
-  width: min(100%, 655px);
+  width: min(100%, 520px);
   justify-self: end;
 }
 
