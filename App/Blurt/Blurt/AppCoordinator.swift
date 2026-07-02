@@ -275,12 +275,15 @@ final class AppCoordinator {
   }
 
   private func render(_ phase: PipelinePhase) {
-    // A press refused for a missing key (the session's readinessCheck) never
-    // started any capture — take the user straight to the fix instead of a
-    // transient error flash. The overlay pill isn't even visible in this state
-    // (it's only revealed once setup is complete), and Monitoring already
-    // treats a missing key as an expected setup state, not a fault.
+    // A missing key gets the user taken straight to the fix instead of a
+    // transient error flash (Monitoring already treats it as an expected setup
+    // state, not a fault). Usually this is a press-time refusal (the session's
+    // readinessCheck) with nothing on screen — but it can also arrive from the
+    // transcribe path (key deleted mid-utterance), where the pill is showing
+    // "Transcribing…" and the menu bar is active, so reset the visuals first.
     if case .failed(.apiKeyMissing) = phase {
+      overlay?.show(state: .idle)
+      menuBarStatus = .idle
       onMissingAPIKey()
       return
     }

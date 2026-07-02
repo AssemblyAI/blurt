@@ -4,7 +4,7 @@ BlurtEngine is the Swift package that powers [Blurt](README.md)'s dictation pipe
 
 ## What you get
 
-- **`Sources/BlurtEngine/`** — a Swift package (`swift-tools-version:6.2`, macOS 15+, Swift 6 strict concurrency) with **no external dependencies**: just Foundation, Security, AVFoundation, and AppKit types at the seams. That dependency-free rule is deliberate and enforced — don't add SPM dependencies to the engine.
+- **`Sources/BlurtEngine/`** — a Swift package (`swift-tools-version:6.2`, macOS 15+, Swift 6 strict concurrency) with **no external dependencies**: just Foundation, Security, AVFoundation, toolchain modules like Synchronization, and AppKit types at the seams. That dependency-free rule is deliberate and enforced — don't add SPM dependencies to the engine.
 - Pure logic behind three protocol seams (`MicCaptureProtocol`, `TranscriberProtocol`, `InjectorProtocol`), so every collaborator can be stubbed in tests and replaced in a host app.
 - Production implementations of all three seams (`MicCapture`, `AssemblyAITranscriber`, `KeyInjector`), plus the supporting pieces a dictation product needs: Keychain-backed API-key storage, per-utterance contextual prompting, a hotkey state machine, permission checks, and UI-state projections.
 

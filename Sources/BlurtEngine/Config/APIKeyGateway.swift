@@ -16,8 +16,10 @@ public protocol APIKeyGateway: Sendable {
 
 extension APIKeyGateway {
   /// Whether a non-empty key is currently stored. Derived from `get()` so every
-  /// conformance shares the one definition of "has a key".
-  public var hasKey: Bool { get() != nil }
+  /// conformance shares the one definition of "has a key". (`self.` is
+  /// load-bearing: a bare `get()` opening the accessor block parses as the
+  /// `get` accessor keyword, not a call.)
+  public var hasKey: Bool { self.get() != nil }
 }
 
 /// The production `APIKeyGateway`: a thin, stateless forwarder to the
