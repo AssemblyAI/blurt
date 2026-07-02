@@ -2,6 +2,12 @@
 # Single-command release orchestrator. Resumable; wraps the three release
 # scripts and bridges the protected-main bump PR.
 #
+# Releases normally run in CI: the `release` workflow
+# (.github/workflows/release.yml) drives these same stages on a macos-26
+# runner — dispatch it to open the bump PR, and merging that PR builds and
+# publishes automatically. This script is the local path: CI reuses its bump
+# stage and decision helpers, and running it on a Mac remains a full fallback.
+#
 # Usage: scripts/release.sh [X.Y.Z]
 #
 #   With no version, targets the next step of releasing automatically: if a
@@ -12,8 +18,8 @@
 #   Run 1 (bump not yet on main): opens a release/vX.Y.Z bump PR, then stops.
 #   Run 2 (bump merged):          builds + notarizes the DMG, then tags,
 #                                 pushes, and publishes the GitHub Release.
-#
-# Re-run the same command after merging the PR to resume.
+#                                 (When run locally — in CI the publish job
+#                                 fires on the bump PR's merge to main.)
 
 # Shared logging + pure version helpers (is_semver, version_gt,
 # parse_short_version, parse_build_info_git_sha) live in release-lib.sh so all
@@ -111,7 +117,8 @@ run_bump_pr() {
     && gh pr list --head "$branch" --state open --json url -q '.[0].url' 2>/dev/null || true)"
   if [ -n "$existing_pr" ]; then
     info "PR already open: $existing_pr"
-    info "Merge it, then re-run: scripts/release.sh $version"
+    info "Merge it — the release workflow builds + publishes v$version on merge"
+    info "(local fallback: scripts/release.sh $version)"
     git -C "$REPO_ROOT" checkout main >/dev/null 2>&1 || true
     exit 0
   fi
@@ -145,7 +152,7 @@ run_bump_pr() {
   (cd "$REPO_ROOT" && gh pr create \
     --head "$branch" --base main \
     --title "chore: release v$version" \
-    --body "Version bump for v$version. Merge, then re-run \`scripts/release.sh $version\` to build and publish.")
+    --body "Version bump for v$version. Merging triggers the \`release\` workflow, which builds, notarizes, and publishes the GitHub Release automatically (local fallback: \`scripts/release.sh $version\`).")
 
   trap - ERR
   # Return to main so the operator is never left sitting on the release branch
@@ -153,7 +160,8 @@ run_bump_pr() {
   git -C "$REPO_ROOT" checkout main >/dev/null 2>&1 \
     || info "note: could not switch back to main — you're on $branch"
   step "Next"
-  info "PR opened. Merge it, then re-run: scripts/release.sh $version"
+  info "PR opened. Merge it — the release workflow builds + publishes v$version on merge"
+  info "(local fallback: scripts/release.sh $version)"
 }
 
 # Run 2: build (skip if already built) + publish.

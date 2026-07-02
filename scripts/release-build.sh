@@ -33,6 +33,19 @@ done
 # shellcheck source=scripts/release-lib.sh
 source "$REPO_ROOT/scripts/release-lib.sh"
 
+# notarytool wrapper: CI (.github/workflows/release.yml) stores the
+# blurt-notary profile in a throwaway keychain (path in NOTARY_KEYCHAIN) rather
+# than the login keychain, and notarytool only finds it when told which
+# keychain to search. Locally NOTARY_KEYCHAIN stays unset and the login
+# keychain is used as before.
+notarytool_cmd() {
+  if [ -n "${NOTARY_KEYCHAIN:-}" ]; then
+    xcrun notarytool "$@" --keychain "$NOTARY_KEYCHAIN"
+  else
+    xcrun notarytool "$@"
+  fi
+}
+
 # Submit an artifact (app zip or DMG) to Apple's notary service, wait for the
 # result, and die on anything but Accepted. Writes per-artifact result + log
 # plists into BUILD_ROOT (keyed by $2) so failures stay inspectable. Sets the
@@ -41,7 +54,7 @@ notarize() {
   local artifact="$1" tag="$2"
   local result_plist="$BUILD_ROOT/notary-$tag-result.plist"
   local log_json="$BUILD_ROOT/notary-$tag-log.json"
-  xcrun notarytool submit "$artifact" \
+  notarytool_cmd submit "$artifact" \
     --keychain-profile "$NOTARY_PROFILE" \
     --wait \
     --output-format plist > "$result_plist"
@@ -49,7 +62,7 @@ notarize() {
   status="$(/usr/libexec/PlistBuddy -c 'Print :status' "$result_plist" 2>/dev/null || echo unknown)"
   id="$(/usr/libexec/PlistBuddy -c 'Print :id' "$result_plist" 2>/dev/null || echo unknown)"
   info "notary status ($tag): $status (id $id)"
-  xcrun notarytool log "$id" --keychain-profile "$NOTARY_PROFILE" > "$log_json" 2>&1 || true
+  notarytool_cmd log "$id" --keychain-profile "$NOTARY_PROFILE" > "$log_json" 2>&1 || true
   if [ "$status" != "Accepted" ]; then
     step "Notary log ($tag)"
     cat "$log_json" 2>/dev/null || true
@@ -77,7 +90,7 @@ if [ -z "${DATADOG_API_KEY:-}" ]; then
   info "note: DATADOG_API_KEY unset — dSYM upload will be skipped (crashes unsymbolicated)"
 fi
 
-xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
+notarytool_cmd history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
   || die "notarytool profile '$NOTARY_PROFILE' not found. Run: xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <you@example.com> --team-id $TEAM_ID --password <app-specific-password>"
 
 require_clean_tree "building a release artifact"

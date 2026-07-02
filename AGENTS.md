@@ -71,6 +71,17 @@ remote workflow is: commit, push, open or update the PR, then watch `check.yml` 
 activity where available) and fix failures as CI reports them — rather than stopping at
 "verify on a Mac".
 
+## Releasing
+
+Releases ship from CI: the `release` workflow (`.github/workflows/release.yml`) runs the
+`scripts/release-*.sh` pipeline on `macos-26`. Dispatch it (`gh workflow run release`, optional
+`version` input, default = next patch) to open the `release/vX.Y.Z` bump PR; **merging that PR is
+the ship-it gate** — the workflow re-fires on the push to `main` and builds, signs, notarizes,
+staples, publishes the GitHub Release, and uploads the dSYM to Datadog (when `DATADOG_API_KEY` is
+set). Signing/notary credentials come from repo secrets listed in the workflow header.
+`scripts/release.sh` remains the local orchestrator/fallback, and the stage scripts run
+individually for debugging — see `.claude/skills/release/SKILL.md`.
+
 ## Architecture
 
 ```text

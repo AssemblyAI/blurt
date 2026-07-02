@@ -1,0 +1,219 @@
+name: release
+
+# The CI home of the release process: drives the same scripts/release*.sh
+# pipeline that used to run on a maintainer's Mac, on a macos-26 runner.
+#
+# Entry points:
+#   workflow_dispatch — decides the next step exactly like scripts/release.sh:
+#     opens the release/vX.Y.Z bump PR (next patch by default; pass `version`
+#     for a minor/major), or publishes a merged-but-unpublished bump.
+#   push to main touching App/Blurt/project.yml — i.e. the bump PR merging:
+#     builds, signs, notarizes, staples, and publishes the GitHub Release.
+#     Merging the bump PR is the human "ship it" gate.
+#
+# Bootstrap (no vX.Y.Z tags published yet): with no tag baseline the default
+# target is the next patch, so to publish the version already on main,
+# dispatch with `version` set to main's current version (see default_target
+# in scripts/release.sh).
+#
+# Secrets (Settings → Secrets and variables → Actions):
+#   APPLE_DEVELOPER_ID_P12           base64 of the Developer ID Application
+#                                    cert + private key (.p12), exported WITH
+#                                    the intermediate chain (base64 -i cert.p12)
+#   APPLE_DEVELOPER_ID_P12_PASSWORD  password protecting that .p12
+#   NOTARY_APPLE_ID                  Apple ID owning the notary password
+#   NOTARY_PASSWORD                  app-specific password for notarytool
+#   DATADOG_API_KEY                  optional — dSYM upload so crashes
+#                                    symbolicate (skipped when unset)
+#   RELEASE_TOKEN                    optional — token used to push the bump
+#                                    branch and open the PR. Without it,
+#                                    GITHUB_TOKEN is used, whose pushes don't
+#                                    trigger the required `check` workflow —
+#                                    close/reopen the bump PR to kick CI.
+#
+# The publish job runs in the `release` environment; add required reviewers to
+# that environment for a manual approval gate before anything is published.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Target version X.Y.Z (empty = next patch, or resume a merged bump)"
+        required: false
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - App/Blurt/project.yml
+
+# One release at a time; never cancel a notarization mid-flight.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Decide what this run should do. Reuses the pure decision helpers from
+  # scripts/release.sh (decide_run / default_target / next_patch) so CI and
+  # the local fallback can't drift.
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.plan.outputs.mode }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # the decision needs the full tag list
+          persist-credentials: false
+      - name: Decide bump vs publish
+        id: plan
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          # Sourcing release.sh defines its helpers without running main().
+          # shellcheck disable=SC1091
+          source scripts/release.sh
+          REPO_ROOT="$PWD"
+
+          main_v="$(parse_short_version <App/Blurt/project.yml)"
+          [ -n "$main_v" ] || die "could not parse version from App/Blurt/project.yml"
+          latest="$(latest_release_tag)"
+
+          target="$INPUT_VERSION"
+          if [ -n "$target" ]; then
+            is_semver "$target" || die "version must be X.Y.Z (got: $target)"
+          else
+            target="$(default_target "$main_v" "$latest")" \
+              || die "could not derive a target from main's version ($main_v)"
+          fi
+
+          mode="$(decide_run "$main_v" "$target" || true)"
+          [ -n "$mode" ] || die "target $target is behind main ($main_v)"
+
+          # A push to main only ever publishes an already-merged bump; opening
+          # bump PRs is reserved for workflow_dispatch. This keeps unrelated
+          # project.yml edits from spawning surprise release PRs.
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$mode" != "publish" ]; then
+            mode="none"
+          fi
+          # Already published (tag exists) -> nothing to do.
+          if [ "$mode" = "publish" ] && tag_exists_locally "v$target"; then
+            mode="none"
+          fi
+
+          info "main=$main_v latest-tag=${latest:-<none>} target=$target mode=$mode"
+          {
+            echo "mode=$mode"
+            echo "version=$target"
+          } >>"$GITHUB_OUTPUT"
+
+  # Run 1: open the release/vX.Y.Z version-bump PR (versions land on main via
+  # PR — main is branch-protected).
+  bump:
+    needs: plan
+    if: needs.plan.outputs.mode == 'bump'
+    runs-on: macos-26
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          # RELEASE_TOKEN (when configured) pushes as a real actor so the bump
+          # PR triggers the required `check` workflow; GITHUB_TOKEN pushes
+          # don't (GitHub suppresses workflows for events it causes itself).
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+      - name: Install xcodegen
+        run: brew install xcodegen
+      - name: Git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Open bump PR
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: scripts/release.sh "$VERSION"
+
+  # Run 2: build + sign + notarize + staple the DMG, then tag vX.Y.Z and
+  # publish the GitHub Release (release-build.sh + release-publish.sh).
+  publish:
+    needs: plan
+    if: needs.plan.outputs.mode == 'publish'
+    runs-on: macos-26
+    timeout-minutes: 90 # notarization wait times vary
+    environment: release
+    permissions:
+      contents: write # push the vX.Y.Z tag + create the release
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # release-publish.sh checks existing tags
+      - name: Install build tools
+        run: brew install xcodegen create-dmg xcbeautify
+      - name: Import signing + notary credentials
+        env:
+          APPLE_DEVELOPER_ID_P12: ${{ secrets.APPLE_DEVELOPER_ID_P12 }}
+          APPLE_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          TEAM_ID: Y54ZB9JF63 # matches TEAM_ID in scripts/release-build.sh
+        run: |
+          [ -n "$APPLE_DEVELOPER_ID_P12" ] || { echo "missing secret: APPLE_DEVELOPER_ID_P12" >&2; exit 1; }
+          [ -n "$NOTARY_APPLE_ID" ] || { echo "missing secret: NOTARY_APPLE_ID" >&2; exit 1; }
+          KEYCHAIN="$RUNNER_TEMP/blurt-release.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          printf '%s' "$APPLE_DEVELOPER_ID_P12" | base64 --decode >"$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" \
+            -P "$APPLE_DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/cert.p12"
+          # Let codesign use the imported key non-interactively (no UI here).
+          security set-key-partition-list -S "apple-tool:,apple:,codesign:" \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+          # The notary profile lives in the same throwaway keychain;
+          # release-build.sh reads NOTARY_KEYCHAIN to find it there.
+          xcrun notarytool store-credentials blurt-notary \
+            --apple-id "$NOTARY_APPLE_ID" \
+            --team-id "$TEAM_ID" \
+            --password "$NOTARY_PASSWORD" \
+            --keychain "$KEYCHAIN"
+          echo "NOTARY_KEYCHAIN=$KEYCHAIN" >>"$GITHUB_ENV"
+      - name: Git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Build, sign, notarize, staple
+        env:
+          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+        # --skip-checks: the merge commit already passed the required `check`
+        # workflow (branch protection + merge queue), so don't re-run ~20 min
+        # of tests/linters before every release build.
+        run: scripts/release-build.sh --skip-checks
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/release-publish.sh --yes
+      - name: Upload notary logs (debugging)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: notary-logs
+          path: |
+            build/release/notary-*
+            build/release/build-info.txt
+          if-no-files-found: ignore
+      - name: Delete throwaway keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/blurt-release.keychain-db" || true
