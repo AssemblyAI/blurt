@@ -238,11 +238,17 @@ private func dictationTapCallback(
   userInfo: UnsafeMutableRawPointer?
 ) -> Unmanaged<CGEvent>? {
   guard let userInfo else { return Unmanaged.passUnretained(event) }
+  // Resolve the unretained pointer out here: DictationKeyTap is @MainActor and
+  // therefore Sendable, so the reference crosses into the closure cleanly.
+  let monitor = Unmanaged<DictationKeyTap>.fromOpaque(userInfo).takeUnretainedValue()
   // The tap's run-loop source is on the main run loop (see ensureRunning), so
   // this always fires on the main thread; assumeIsolated turns that load-bearing
-  // assumption into a checked precondition instead of a silent data race.
+  // assumption into a checked precondition instead of a silent data race. The
+  // closure runs synchronously right here, so handing it the non-Sendable event
+  // is safe — spelled `nonisolated(unsafe)` because region-isolation analysis
+  // can't see that the call never leaves this thread.
+  nonisolated(unsafe) let event = event
   MainActor.assumeIsolated {
-    let monitor = Unmanaged<DictationKeyTap>.fromOpaque(userInfo).takeUnretainedValue()
     monitor.handle(type: type, event: event)
   }
   return Unmanaged.passUnretained(event)
