@@ -55,7 +55,7 @@ struct BlurtApp: App {
     Window("Prompt Inspector", id: PromptInspectorWindow.id) {
       PromptInspectorView()
     }
-    .windowResizability(.contentSize)
+    .windowResizability(.contentMinSize)
     .defaultLaunchBehavior(.suppressed)
 
     #if UITEST_HOOKS

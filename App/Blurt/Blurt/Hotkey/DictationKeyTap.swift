@@ -166,7 +166,11 @@ final class DictationKeyTap {
     // gate's dictation decision is untouched — the event still flows through it
     // normally below. Listen-only tap swallows nothing, so this never blocks the
     // keystroke reaching the focused app.
-    if type == .keyDown, InspectorHotkey.matches(keyCode: keyCode, flags: eventFlags.rawValue) {
+    // Ignore key autorepeat so holding the chord opens the window once, not
+    // repeatedly. `.keyboardEventAutorepeat` is non-zero on synthesized repeats.
+    if type == .keyDown, event.getIntegerValueField(.keyboardEventAutorepeat) == 0,
+      InspectorHotkey.matches(keyCode: keyCode, flags: eventFlags.rawValue)
+    {
       onInspector()
     }
     let now = reference.duration(to: ContinuousClock.now)
