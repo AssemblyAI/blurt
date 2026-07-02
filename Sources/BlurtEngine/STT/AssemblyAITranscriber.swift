@@ -106,6 +106,10 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// API expects, matching the field names `assembly dictate` sends.
   private func multipartBody(pcm: Data, config: Data, boundary: String) -> Data {
     var body = Data()
+    // Reserve up front (payload + a generous allowance for the boundary/header
+    // framing) so appending the multi-MB PCM blob never grows the buffer through
+    // reallocation copies.
+    body.reserveCapacity(pcm.count + config.count + 512)
     func append(_ string: String) { body.append(Data(string.utf8)) }
 
     append("--\(boundary)\r\n")
