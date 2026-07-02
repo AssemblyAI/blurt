@@ -89,6 +89,12 @@ struct DictationKeyGateTests {
       name: "reset clears state so the next press starts fresh",
       steps: [.init(.down(.seconds(0))), .init(.reset), .init(.down(.seconds(2)), .start)]),
     Scenario(
+      name: "a repeated modifier down while armed is ignored (no double start)",
+      steps: [
+        .init(.down(.seconds(0)), .start), .init(.down(.milliseconds(100)), DictationKeyGate.Action.none),
+        .init(.up(.milliseconds(1200)), .stop),
+      ]),
+    Scenario(
       name: "a rapid second tap while latched still stops (no multi-tap gesture)",
       steps: [
         .init(.down(.milliseconds(0)), .start), .init(.up(.milliseconds(80))),

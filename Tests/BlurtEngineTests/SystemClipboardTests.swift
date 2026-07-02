@@ -55,6 +55,36 @@ struct SystemClipboardTests {
     }
   }
 
+  @Test("snapshot/restore preserves every representation of multi-type, multi-item contents")
+  func multiTypeSnapshotRoundTrips() {
+    // The reason `SendablePasteboardItem` keys data by pasteboard *type*: a copy
+    // of styled text carries several representations (plain string + RTF), and
+    // the restore must bring all of them back — a string-only round trip would
+    // silently downgrade the user's clipboard to plain text.
+    withClipboardRestored {
+      let pb = NSPasteboard.general
+      let clip = SystemClipboard()
+
+      let styled = NSPasteboardItem()
+      styled.setString("styled", forType: .string)
+      styled.setData(Data("{\\rtf1 styled}".utf8), forType: .rtf)
+      let plain = NSPasteboardItem()
+      plain.setString("second item", forType: .string)
+      pb.clearContents()
+      pb.writeObjects([styled, plain])
+      let snapshot = clip.currentItems()
+
+      clip.setString("overwritten")
+      clip.restore(snapshot)
+
+      let restored = pb.pasteboardItems ?? []
+      #expect(restored.count == 2)
+      #expect(restored.first?.string(forType: .string) == "styled")
+      #expect(restored.first?.data(forType: .rtf) == Data("{\\rtf1 styled}".utf8))
+      #expect(restored.last?.string(forType: .string) == "second item")
+    }
+  }
+
   @Test("restore of an empty snapshot leaves the cleared pasteboard empty")
   func restoreEmptyIsNoOp() {
     withClipboardRestored {

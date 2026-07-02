@@ -57,6 +57,33 @@ extension HTTPClientTests {
     #expect(await makeValidator().validate("good-key") == .unreachable)
   }
 
+  @Test("validator treats a 408 timeout as unreachable, not invalid")
+  func validateTimeoutIsUnreachable() async {
+    MockURLProtocol.responder = { _ in (408, json(["error": "request timeout"])) }
+    defer { MockURLProtocol.responder = nil }
+
+    // The other transient 4xx: like 429, it says nothing about the key itself.
+    #expect(await makeValidator().validate("good-key") == .unreachable)
+  }
+
+  @Test("validator treats an unexpected non-4xx status (e.g. a redirect) as unreachable")
+  func validateUnexpectedStatusIsUnreachable() async {
+    MockURLProtocol.responder = { _ in (301, Data()) }
+    defer { MockURLProtocol.responder = nil }
+
+    #expect(await makeValidator().validate("good-key") == .unreachable)
+  }
+
+  @Test("validator returns .unreachable when the request fails in transport (offline)")
+  func validateTransportFailureIsUnreachable() async {
+    // The reason .unreachable exists: no HTTP response at all (offline, DNS
+    // failure) must read as "retry when online", never as a rejected key.
+    MockURLProtocol.transportError = URLError(.notConnectedToInternet)
+    defer { MockURLProtocol.transportError = nil }
+
+    #expect(await makeValidator().validate("good-key") == .unreachable)
+  }
+
   @Test("validator treats blank input as invalid without making a request")
   func validateBlank() async {
     let hits = Counter()

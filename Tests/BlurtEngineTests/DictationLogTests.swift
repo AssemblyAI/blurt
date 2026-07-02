@@ -13,6 +13,8 @@ private struct DecodedEntry: Decodable, Equatable {
 /// threaded from the `TranscriptionContext` onto disk.
 private struct DecodedContext: Decodable {
   let app: String?
+  let window: String?
+  let field: String?
   let prior: String?
   let selected: String?
 }
@@ -94,11 +96,14 @@ struct DictationLogTests {
   func logsContext() {
     let url = makeURL()
     let context = TranscriptionContext(
-      appName: "Mail", priorText: "Hi Sam,", selectedText: "the old plan")
+      appName: "Mail", windowTitle: "Re: Q3 pricing", fieldLabel: "Body",
+      priorText: "Hi Sam,", selectedText: "the old plan")
     DictationLog.append(raw: "r", polished: "p", context: context, to: url, now: Date())
     let line = read(url).split(separator: "\n").first.map(String.init) ?? ""
     let decoded = try? JSONDecoder().decode(DecodedContext.self, from: Data(line.utf8))
     #expect(decoded?.app == "Mail")
+    #expect(decoded?.window == "Re: Q3 pricing")
+    #expect(decoded?.field == "Body")
     #expect(decoded?.prior == "Hi Sam,")
     #expect(decoded?.selected == "the old plan")
   }

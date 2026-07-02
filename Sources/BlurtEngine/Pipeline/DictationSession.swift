@@ -167,13 +167,15 @@ public actor DictationSession {
       try await mic.start()
       let captured = await frontmost
       await injector.setTargetApp(captured.flatMap { FocusCapture.runningApp(for: $0) })
+      // Key terms are read synchronously at press (cheap UserDefaults read), so
+      // each dictation observably re-reads Settings edits at press time.
+      let keyTerms = keyTermsProvider()
       // Kick off the AX field-context read now, while the target field still
       // holds focus, but don't await it here: it's cross-process IPC into the
       // frontmost app (detached — off the main actor, where it froze the
       // overlay, and off this actor, where it would wedge release()/cancel()),
       // and runTranscribeInject awaits it right before transcription. A slow AX
       // target therefore delays the transcript, never the recording indicator.
-      let keyTerms = keyTermsProvider
       contextTask = Task.detached {
         let field = FocusCapture.captureFieldContext()
         let context = TranscriptionContext(
@@ -182,7 +184,7 @@ public actor DictationSession {
           fieldLabel: field.fieldLabel,
           priorText: field.priorText,
           selectedText: field.selectedText,
-          keyTerms: keyTerms())
+          keyTerms: keyTerms)
         return context.isEmpty ? nil : context
       }
       setPhase(.recording)
@@ -374,16 +376,20 @@ public actor DictationSession {
       // the user's cancel as a failure.
       if error is CancellationError || Task.isCancelled { return }
       switch error {
-      case BlurtError.noEditableTarget:
-        // Not a failure: transcription worked, there was just nowhere to type.
-        // The injector left the text on the clipboard — show the quiet "copied"
-        // notice rather than the red error flash (and don't report it).
+      case BlurtError.noEditableTarget, BlurtError.targetAppLost:
+        // Not failures: transcription worked, the words just couldn't be pasted
+        // — nothing editable was focused, or the target app quit/refused
+        // activation. Either way the injector left the text on the clipboard —
+        // show the quiet "copied" notice rather than the red error flash (and
+        // don't report it).
         setPhase(.noTarget)
       case let err as BlurtError:
-        // Surface the injector's real error (e.g. `.targetAppLost`) rather than
-        // relabeling every failure as a lost target.
+        // Surface the injector's real error (e.g. `.accessibilityPermissionMissing`)
+        // rather than relabeling every failure as a lost target.
         setPhase(.failed(err))
       default:
+        // An untyped injection error: nothing was left on the clipboard, so this
+        // stays a genuine (reported) failure under the generic lost-target label.
         setPhase(.failed(.targetAppLost))
       }
     }

@@ -1,6 +1,5 @@
 import AppKit
 import Foundation
-import Synchronization
 import Testing
 
 @testable import BlurtEngine
@@ -63,8 +62,9 @@ struct KeyInjectorInsertTests {
     #expect(activated.value)
   }
 
-  @Test("does not paste when the captured target app can't be activated")
+  @Test("activation failure: skips the paste but leaves the transcript on the clipboard")
   func activationFailureSkipsPaste() async throws {
+    let clip = FakeClipboard(string: "user-clipboard")
     let posted = BoolBox()
     let injector = KeyInjector(
       pasteSettleDuration: .zero,
@@ -72,13 +72,17 @@ struct KeyInjectorInsertTests {
         posted.set()
         return true
       },
-      activateTarget: { _ in false })
+      activateTarget: { _ in false },
+      clipboard: clip)
     await injector.setTargetApp(try liveTargetApp())
 
     await #expect(throws: BlurtError.targetAppLost) {
       try await injector.insert("text")
     }
+    // No ⌘V was posted into whatever now has focus, but the transcript survives
+    // on the clipboard so the failure degrades to a "copied" notice.
     #expect(posted.value == false)
+    #expect(clip.string == "text")
   }
 
   @Test("empty text is a no-op (no paste posted)")
@@ -94,14 +98,16 @@ struct KeyInjectorInsertTests {
     #expect(posted.value == false)
   }
 
-  @Test("throws .targetAppLost when the paste can't be synthesized")
+  @Test("paste synthesis failure: throws .targetAppLost, transcript stays on the clipboard")
   func pasteSynthesisFailureThrows() async {
     let clip = FakeClipboard(string: "user-clipboard")
     let injector = KeyInjector(pasteSettleDuration: .zero, postPaste: { false }, clipboard: clip)
     await #expect(throws: BlurtError.targetAppLost) {
       try await injector.insert("text")
     }
-    #expect(clip.string == "user-clipboard")
+    // The paste never happened, so the transcript is deliberately left on the
+    // clipboard (not restored away) — the user's words beat the stale snapshot.
+    #expect(clip.string == "text")
   }
 
   @Test("throws .accessibilityPermissionMissing and leaves the clipboard untouched")
@@ -306,66 +312,6 @@ struct KeyInjectorInsertTests {
   }
 }
 
-private func liveTargetApp() throws -> NSRunningApplication {
-  try #require(
-    NSWorkspace.shared.runningApplications.first {
-      $0.processIdentifier > 0 && !$0.isTerminated
-    })
-}
-
-/// One-shot async gate: `wait()` suspends until `open()` is called. Tolerates
-/// `open()` racing ahead of `wait()` (the waiter then returns immediately).
-/// A class over a `Mutex` (not an actor) because it's poked from synchronous
-/// `@Sendable` seams like `postPaste`; the `Mutex` makes the `Sendable`
-/// conformance compiler-checked.
-private final class AsyncGate: Sendable {
-  private struct State {
-    var continuation: CheckedContinuation<Void, Never>?
-    var opened = false
-  }
-  private let state = Mutex(State())
-
-  func wait() async {
-    await withCheckedContinuation { cont in
-      let openedAlready = state.withLock { s -> Bool in
-        if s.opened { return true }
-        s.continuation = cont
-        return false
-      }
-      if openedAlready { cont.resume() }
-    }
-  }
-
-  func open() {
-    let cont = state.withLock { s -> CheckedContinuation<Void, Never>? in
-      s.opened = true
-      let waiter = s.continuation
-      s.continuation = nil
-      return waiter
-    }
-    cont?.resume()
-  }
-}
-
-/// Thread-safe ordered list of strings recorded inside a `@Sendable` closure,
-/// for asserting the sequence of texts a test observed being pasted.
-private final class StringListBox: Sendable {
-  private let items = Mutex<[String]>([])
-  func append(_ value: String?) {
-    items.withLock { $0.append(value ?? "") }
-  }
-  var values: [String] {
-    items.withLock { $0 }
-  }
-}
-
-/// Thread-safe boolean flag for assertions inside a `@Sendable` closure.
-private final class BoolBox: Sendable {
-  private let flag = Mutex(false)
-  func set() {
-    flag.withLock { $0 = true }
-  }
-  var value: Bool {
-    flag.withLock { $0 }
-  }
-}
+// The shared fixtures these tests drive the injector with — `liveTargetApp`,
+// `AsyncGate`, `StringListBox`, `BoolBox` — live in `Stubs/InjectorTestSupport.swift`
+// so the fallback/cancel suite (a separate file) can reuse them.

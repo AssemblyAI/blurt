@@ -18,6 +18,17 @@ struct EditableTargetTests {
         hasFocusedElement: true, role: "AXTextArea", valueSettable: false, hasInsertionPoint: false))
   }
 
+  @Test("a secure (password) field is still a paste target despite prompt redaction")
+  func secureFieldIsEditable() {
+    // Redaction (never read a password into the STT prompt) and editability
+    // (the paste may land there) are independent: dictating into a password
+    // field must type, even though its contents are never captured.
+    #expect(
+      FocusCapture.isEditableTarget(
+        hasFocusedElement: true, role: FocusCapture.secureFieldRole, valueSettable: false,
+        hasInsertionPoint: false))
+  }
+
   @Test("a settable value is editable even with an unknown role")
   func settableValue() {
     #expect(

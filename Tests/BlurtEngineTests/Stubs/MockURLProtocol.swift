@@ -13,16 +13,30 @@ final class MockURLProtocol: URLProtocol {
   // accesses, so the storage lives in a `Mutex` to give them a happens-before
   // relationship — without it ThreadSanitizer (intermittently) flags a data race.
   private static let _responder = Mutex<(@Sendable (URLRequest) -> (Int, Data))?>(nil)
+  private static let _transportError = Mutex<(any Error & Sendable)?>(nil)
 
   static var responder: (@Sendable (URLRequest) -> (Int, Data))? {
     get { _responder.withLock { $0 } }
     set { _responder.withLock { $0 = newValue } }
   }
 
+  /// When set, every request fails with this error instead of receiving a
+  /// response — simulating a transport failure (offline, DNS, timeout) so
+  /// clients' `catch` paths can be exercised. Takes precedence over `responder`;
+  /// same cross-thread locking rationale as above.
+  static var transportError: (any Error & Sendable)? {
+    get { _transportError.withLock { $0 } }
+    set { _transportError.withLock { $0 = newValue } }
+  }
+
   override class func canInit(with request: URLRequest) -> Bool { true }
   override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
   override func startLoading() {
+    if let error = MockURLProtocol.transportError {
+      client?.urlProtocol(self, didFailWithError: error)
+      return
+    }
     let (status, body) = MockURLProtocol.responder?(request) ?? (500, Data())
     let response = HTTPURLResponse(
       url: request.url!,

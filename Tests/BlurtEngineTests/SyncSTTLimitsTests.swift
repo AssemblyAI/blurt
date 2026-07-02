@@ -22,6 +22,28 @@ struct SyncSTTLimitsTests {
     #expect(SyncSTTLimits.autoReleaseSeconds < SyncSTTLimits.maxAudioSeconds)
   }
 
+  @Test("minSamples is the minimum duration expressed at the capture sample rate")
+  func minSamplesDerivation() {
+    // DictationSession's too-short-clip guard counts samples; if this product
+    // drifted from the duration floor, ultra-brief taps would reach the API and
+    // earn a 400 (or real clips would silently be dropped).
+    #expect(SyncSTTLimits.minSamples == Int(SyncSTTLimits.minAudioSeconds * Double(SyncSTTLimits.sampleRate)))
+    #expect(SyncSTTLimits.minSamples == 1600)
+  }
+
+  @Test("the capture geometry is the Sync API's 16 kHz")
+  func sampleRatePinned() {
+    // Shared by MicCapture (recording) and the request's declared rate — a
+    // change here alters both, so pin the agreed value.
+    #expect(SyncSTTLimits.sampleRate == 16_000)
+  }
+
+  @Test("the minimum audio floor sits strictly inside the accepted range")
+  func minFloorInsideRange() {
+    #expect(SyncSTTLimits.minAudioSeconds > 0)
+    #expect(SyncSTTLimits.minAudioSeconds < SyncSTTLimits.maxAudioSeconds)
+  }
+
   @Test(
     "limits are positive durations",
     arguments: [

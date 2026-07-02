@@ -21,6 +21,10 @@ ENTITLEMENTS="$APP_DIR/Blurt/Blurt.entitlements"
 readonly IDENTITY="640A7F5A9754400D4A0491E7A6FB30542D907806"
 readonly TEAM_ID="Y54ZB9JF63"
 readonly NOTARY_PROFILE="blurt-notary"
+# Exact datadog-ci version npx runs for the dSYM upload, so the release machine
+# (which holds the signing identity and notary profile) never executes an
+# unvetted "latest" from the npm registry. Bump deliberately.
+readonly DATADOG_CI_VERSION="5.20.1"
 
 SKIP_CHECKS=0
 for arg in "$@"; do
@@ -250,9 +254,10 @@ step "Datadog (dSYM upload)"
 # Datadog. Best-effort: skipped (with a note) when DATADOG_API_KEY is unset, so a
 # release never fails on telemetry. datadog-ci reads DATADOG_API_KEY and
 # DATADOG_SITE from the environment; DATADOG_SITE defaults to datadoghq.com (US1).
+# Pinned so a release never runs whatever npm's latest tag serves that day.
 if [ -n "${DATADOG_API_KEY:-}" ]; then
   DATADOG_SITE="${DATADOG_SITE:-datadoghq.com}" \
-    npx --yes @datadog/datadog-ci dsyms upload "$DSYM_DST"
+    npx --yes "@datadog/datadog-ci@$DATADOG_CI_VERSION" dsyms upload "$DSYM_DST"
   info "datadog: dSYM uploaded from $DSYM_DST"
 else
   info "datadog: DATADOG_API_KEY unset — skipped dSYM upload"

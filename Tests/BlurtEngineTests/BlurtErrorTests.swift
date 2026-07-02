@@ -12,6 +12,7 @@ struct BlurtErrorTests {
       .accessibilityPermissionMissing,
       .apiKeyMissing,
       .targetAppLost,
+      .noEditableTarget,
     ]
     for c in cases {
       #expect(!(c.errorDescription ?? "").isEmpty)
@@ -40,12 +41,15 @@ struct BlurtErrorTests {
     #expect(BlurtError.targetAppLost == .targetAppLost)
     #expect(BlurtError.microphonePermissionDenied == .microphonePermissionDenied)
     #expect(BlurtError.accessibilityPermissionMissing == .accessibilityPermissionMissing)
+    #expect(BlurtError.noEditableTarget == .noEditableTarget)
   }
 
   @Test("different singleton cases compare unequal")
   func unequalSingletons() {
     #expect(BlurtError.apiKeyMissing != .targetAppLost)
     #expect(BlurtError.microphonePermissionDenied != .accessibilityPermissionMissing)
+    // The two quiet copy-fallback errors are distinct cases, not aliases.
+    #expect(BlurtError.noEditableTarget != .targetAppLost)
   }
 
   @Test("wrapping cases compare by underlying NSError domain and code, not description")
