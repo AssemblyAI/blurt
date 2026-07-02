@@ -11,9 +11,10 @@ public enum PipelinePhase: Equatable, Sendable {
   /// terminal, non-error outcome — the overlay shows a quiet "pasted" notice as
   /// the mirror of `.noTarget`'s "copied" notice before settling back to idle.
   case pasted
-  /// Transcription succeeded but there was no editable field to paste into, so
-  /// the text was left on the clipboard. A terminal, non-error outcome — the
-  /// overlay shows a quiet "copied" notice rather than the red failure flash.
+  /// Transcription succeeded but the paste had nowhere to land — no editable
+  /// field was focused, or the target app quit/refused activation — so the text
+  /// was left on the clipboard. A terminal, non-error outcome — the overlay
+  /// shows a quiet "copied" notice rather than the red failure flash.
   case noTarget
 
   public var isTerminal: Bool {

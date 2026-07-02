@@ -298,6 +298,10 @@ final class AppCoordinator {
       // but it's not a fault to report regardless — there was simply nowhere to type.
       return
     case .targetAppLost:
+      // A genuine lost target degrades to the quiet .noTarget phase (transcript
+      // left on the clipboard) and never reaches .failed; this case fires only
+      // when the session relabels an untyped injection error — an unknown
+      // fault, so still worth reporting.
       Monitoring.reportError(error)
     case .sttFailed(let underlying), .audioCaptureFailed(let underlying):
       // A dropped/absent network connection isn't a Blurt fault — it's the

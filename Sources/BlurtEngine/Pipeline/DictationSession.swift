@@ -320,16 +320,20 @@ public actor DictationSession {
       // the user's cancel as a failure.
       if error is CancellationError || Task.isCancelled { return }
       switch error {
-      case BlurtError.noEditableTarget:
-        // Not a failure: transcription worked, there was just nowhere to type.
-        // The injector left the text on the clipboard — show the quiet "copied"
-        // notice rather than the red error flash (and don't report it).
+      case BlurtError.noEditableTarget, BlurtError.targetAppLost:
+        // Not failures: transcription worked, the words just couldn't be pasted
+        // — nothing editable was focused, or the target app quit/refused
+        // activation. Either way the injector left the text on the clipboard —
+        // show the quiet "copied" notice rather than the red error flash (and
+        // don't report it).
         setPhase(.noTarget)
       case let err as BlurtError:
-        // Surface the injector's real error (e.g. `.targetAppLost`) rather than
-        // relabeling every failure as a lost target.
+        // Surface the injector's real error (e.g. `.accessibilityPermissionMissing`)
+        // rather than relabeling every failure as a lost target.
         setPhase(.failed(err))
       default:
+        // An untyped injection error: nothing was left on the clipboard, so this
+        // stays a genuine (reported) failure under the generic lost-target label.
         setPhase(.failed(.targetAppLost))
       }
     }

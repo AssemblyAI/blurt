@@ -5,6 +5,12 @@ public enum BlurtError: Error, Sendable {
   case accessibilityPermissionMissing
   case apiKeyMissing
   case sttFailed(underlying: Error)
+  /// The app captured as the paste target quit or refused activation, or the
+  /// ⌘V couldn't be synthesized. When `KeyInjector.insert` throws this it has
+  /// already left the transcript on the clipboard, so the pipeline degrades it
+  /// to the quiet "copied" notice (`.noTarget`) — the red flash carrying this
+  /// description only appears when the session relabels an untyped injection
+  /// error, where nothing was copied.
   case targetAppLost
   case audioCaptureFailed(underlying: Error)
   /// Nothing editable was focused at paste time, so the transcript was left on

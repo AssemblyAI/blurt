@@ -62,8 +62,9 @@ struct KeyInjectorInsertTests {
     #expect(activated.value)
   }
 
-  @Test("does not paste when the captured target app can't be activated")
+  @Test("activation failure: skips the paste but leaves the transcript on the clipboard")
   func activationFailureSkipsPaste() async throws {
+    let clip = FakeClipboard(string: "user-clipboard")
     let posted = BoolBox()
     let injector = KeyInjector(
       pasteSettleDuration: .zero,
@@ -71,13 +72,17 @@ struct KeyInjectorInsertTests {
         posted.set()
         return true
       },
-      activateTarget: { _ in false })
+      activateTarget: { _ in false },
+      clipboard: clip)
     await injector.setTargetApp(try liveTargetApp())
 
     await #expect(throws: BlurtError.targetAppLost) {
       try await injector.insert("text")
     }
+    // No ⌘V was posted into whatever now has focus, but the transcript survives
+    // on the clipboard so the failure degrades to a "copied" notice.
     #expect(posted.value == false)
+    #expect(clip.string == "text")
   }
 
   @Test("empty text is a no-op (no paste posted)")
@@ -93,14 +98,16 @@ struct KeyInjectorInsertTests {
     #expect(posted.value == false)
   }
 
-  @Test("throws .targetAppLost when the paste can't be synthesized")
+  @Test("paste synthesis failure: throws .targetAppLost, transcript stays on the clipboard")
   func pasteSynthesisFailureThrows() async {
     let clip = FakeClipboard(string: "user-clipboard")
     let injector = KeyInjector(pasteSettleDuration: .zero, postPaste: { false }, clipboard: clip)
     await #expect(throws: BlurtError.targetAppLost) {
       try await injector.insert("text")
     }
-    #expect(clip.string == "user-clipboard")
+    // The paste never happened, so the transcript is deliberately left on the
+    // clipboard (not restored away) — the user's words beat the stale snapshot.
+    #expect(clip.string == "text")
   }
 
   @Test("throws .accessibilityPermissionMissing and leaves the clipboard untouched")

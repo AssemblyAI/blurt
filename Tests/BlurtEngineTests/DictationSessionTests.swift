@@ -167,7 +167,7 @@ extension DictationSessionTests {
     #expect(await injector.inserted.isEmpty)
   }
 
-  @Test("injector failure surfaces .failed(.targetAppLost)")
+  @Test("untyped injector failure surfaces .failed(.targetAppLost)")
   func injectorFailureSurfaces() async throws {
     struct Boom: Error {}
     let mic = StubMicCapture()
@@ -213,6 +213,24 @@ extension DictationSessionTests {
     // nowhere to type — the session should treat that as the quiet .noTarget
     // outcome, not a red .failed error.
     await injector.setError(BlurtError.noEditableTarget)
+    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+
+    await session.press()
+    await session.release()
+    await session.waitForIdle()
+
+    #expect(await session.phase == .noTarget)
+  }
+
+  @Test("lost target surfaces the quiet .noTarget phase, not a failure")
+  func targetAppLostIsQuiet() async throws {
+    let mic = StubMicCapture()
+    let stt = StubTranscriber(mode: .transcript("Hello world."))
+    let injector = StubInjector()
+    // The target app quit (or refused activation) before the paste; the
+    // injector left the transcript on the clipboard, so the session degrades
+    // this to the quiet "copied" outcome rather than a red .failed error.
+    await injector.setError(BlurtError.targetAppLost)
     let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
 
     await session.press()
