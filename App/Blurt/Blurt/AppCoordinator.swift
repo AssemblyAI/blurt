@@ -1,5 +1,4 @@
 import BlurtEngine
-import Foundation
 import Observation
 
 @MainActor
@@ -40,12 +39,9 @@ final class AppCoordinator {
   @ObservationIgnored var keyTap: DictationKeyTap?
 
   /// The fully-assembled prompt sent to AssemblyAI on the most recent dictation,
-  /// surfaced by the Prompt Inspector window (`nil` when that dictation had no
-  /// context to build one). In-memory only — never persisted.
+  /// surfaced by the Prompt Inspector window (`nil` when none has been sent yet,
+  /// or that dictation had no context to build one). In-memory only.
   private(set) var lastPrompt: String?
-  /// When `lastPrompt` was last recorded. Distinguishes "never dictated" (nil)
-  /// from "dictated, but no prompt" (set, with `lastPrompt == nil`).
-  private(set) var lastPromptSentAt: Date?
 
   /// Whether an AssemblyAI API key is currently saved. Drives the wizard
   /// (which gates dictation on having a key) and the Settings UI.
@@ -169,7 +165,6 @@ final class AppCoordinator {
         guard let self else { return }
         if Task.isCancelled { return }
         self.lastPrompt = prompt
-        self.lastPromptSentAt = Date()
       }
     }
   }
