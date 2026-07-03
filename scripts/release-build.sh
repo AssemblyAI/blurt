@@ -59,7 +59,9 @@ notarize() {
 # launch. The human release-install.sh step remains the real functional gate.
 # NOTE: pkill below also terminates any Blurt the maintainer had running.
 crash_list() {
-  find "$HOME/Library/Logs/DiagnosticReports" -maxdepth 1 -name 'Blurt*' -print 2>/dev/null | sort
+  local dir="$HOME/Library/Logs/DiagnosticReports"
+  [ -d "$dir" ] || return 0
+  find "$dir" -maxdepth 1 -name 'Blurt*' -print 2>/dev/null | sort || true
 }
 smoke_launch() {
   local app="$1" before after new
