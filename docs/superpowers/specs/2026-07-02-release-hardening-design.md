@@ -16,7 +16,7 @@ does **not** cover.
 
 ## Scope (locked)
 
-In scope — the non-redundant protections plus two near-free hygiene wins:
+In scope — the non-redundant protections plus one near-free hygiene win:
 
 1. **Signing-key custody** — protect/verify the Developer ID private key (the root
    of trust) and document revoke-and-rotate.
@@ -25,8 +25,6 @@ In scope — the non-redundant protections plus two near-free hygiene wins:
 3. **Broken-build protection** — launch smoke test, post-publish asset
    verification, and a scripted rollback/yank.
 4. **SHA-pin GitHub Actions** + Dependabot (cheap source-integrity hygiene).
-5. **1Password notary credentials** — fetch the Apple notary app-specific password
-   live via the `op` CLI instead of a local keychain profile.
 
 Out of scope (explicitly rejected as redundant on macOS or as an architecture
 change we don't want):
@@ -35,6 +33,10 @@ change we don't want):
 - **No** detached minisign/cosign signature — redundant with the notarized
   Developer ID signature that macOS verifies automatically.
 - **No** signed git tags — provenance for auditors, not consumed by end users.
+- **No** 1Password / notary-credential change — the `blurt-notary` keychain profile
+  stays as-is. The notary app-specific password is a low-impact, *submit-only*
+  credential (it can't sign), and moving it to 1Password is operational hygiene,
+  not a meaningful reduction in compromise risk; not worth the added dependency.
 - No changes to the app/engine runtime, the transcription pipeline, or `check.sh`
   beyond what the items above require.
 
@@ -47,7 +49,7 @@ change we don't want):
 | Build == reviewed source | No — notary scans for known malware, not provenance | **In** |
 | Broken-build (crash/corrupt) protection | No — "notarized" ≠ "works" | **In** |
 | SHA-pin Actions | No — keeps poisoned code out of the source we sign | **In** (cheap) |
-| Notary credential hygiene | Partially (keychain profile) — centralize + audit | **In** (cheap) |
+| Notary credential in 1Password | Partially (keychain profile) — marginal gain | Out (not worth it) |
 | Detached artifact signature | Yes — Developer ID sig already binds identity | Out (redundant) |
 | Signed git tags | N/A to end users | Out |
 
@@ -55,41 +57,10 @@ change we don't want):
 
 ## Component designs
 
-### 1. Notary credentials via 1Password (`release-build.sh`, `release-lib.sh`)
-
-Today `notarize()` and the preflight/`log` calls use `--keychain-profile blurt-notary`.
-Replace that with live-fetched credentials so the secret has a single, rotatable,
-audited home in 1Password and does not persist in a second store.
-
-- **`release-lib.sh`**: add a side-effect-free-at-source-time helper
-  `op_read <secret-ref>` that shells `op read` and dies with a clear message on
-  failure. (Defining a function is not a source-time side effect, so this keeps
-  `release.test.sh` sourcing safe.)
-- **`release-build.sh` preflight**: require `op` on `PATH` and an authenticated
-  session (`op whoami`); die with setup guidance otherwise.
-- Read two secrets once into locals:
-  - Apple ID email — ref from `BLURT_OP_APPLE_ID_REF`
-    (default `op://Private/Blurt Apple Developer/username`)
-  - App-specific password — ref from `BLURT_OP_NOTARY_PW_REF`
-    (default `op://Private/Blurt Apple Developer/password`)
-
-  Refs are env-overridable so the real vault/item path isn't baked into the repo.
-- Export the password only as `NOTARY_PW` and pass it to `notarytool` as
-  `--password "@env:NOTARY_PW"` — notarytool's `@env:` form keeps the secret **out
-  of the process table** (`ps`), unlike a literal `--password <value>`.
-- Build a shared `NOTARY_AUTH=(--apple-id "$APPLE_ID" --team-id "$TEAM_ID"
-  --password "@env:NOTARY_PW")` array used by every `notarytool submit/log/history`
-  call. `TEAM_ID` stays hardcoded (`Y54ZB9JF63`) — it is not secret.
-- Never `echo`/`info` the secret values.
-
-**User benefit:** maintainer hygiene (the app-specific password can only *submit*
-to notary, not sign) — low direct user impact, but near-free and removes a
-duplicated secret store.
-
-### 2. Signing-key custody (`release-build.sh` preflight + `docs/RELEASE.md`)
+### 1. Signing-key custody (`release-build.sh` preflight + `docs/RELEASE.md`)
 
 The Developer ID private key is the one credential whose theft lets an attacker
-ship Gatekeeper-passing malware. We cannot stream it from 1Password (`codesign`
+ship Gatekeeper-passing malware. We cannot stream it from elsewhere (`codesign`
 needs it keychain-resident), so we verify posture and document custody.
 
 - **Preflight check**: verify the codesigning identity exists and matches the
@@ -104,13 +75,14 @@ needs it keychain-resident), so we verify posture and document custody.
     `IDENTITY` SHA-1 in `release-build.sh`, and cut a fresh notarized release.
     Note the blast radius (a leaked key can sign malware until revoked; revocation
     invalidates future Gatekeeper acceptance of anything freshly signed with it).
-  - Where the notary app-specific password lives (1Password) and how to rotate it
-    (revoke at appleid.apple.com, mint a new one, update the 1Password item).
+  - The notary app-specific password lives in the `blurt-notary` keychain profile;
+    note how to rotate it (revoke at appleid.apple.com, mint a new one, re-run
+    `xcrun notarytool store-credentials blurt-notary …`).
 
 **User benefit:** highest of the set — protects the root of trust Gatekeeper
 relies on.
 
-### 3. Stricter preflight / build integrity (`release.sh`, `release-build.sh`)
+### 2. Stricter preflight / build integrity (`release.sh`, `release-build.sh`)
 
 Guarantee the bytes we sign are exactly the reviewed `origin/main` commit.
 
@@ -128,7 +100,7 @@ Guarantee the bytes we sign are exactly the reviewed `origin/main` commit.
 **User benefit:** high — closes the "notary happily signs a backdoored/tampered
 build" gap.
 
-### 4. Launch smoke test (`release-build.sh`, after staple)
+### 3. Launch smoke test (`release-build.sh`, after staple)
 
 A basic "the artifact actually runs" gate — notarization proves *not-known-malware*,
 not *works*.
@@ -146,7 +118,7 @@ not *works*.
 
 **User benefit:** moderate — cheap catch for a build that crashes on launch.
 
-### 5. Post-publish verification (`release-publish.sh`, after release create/edit)
+### 4. Post-publish verification (`release-publish.sh`, after release create/edit)
 
 Confirm the asset users will download is byte-identical to what we built and
 notarized (catches a truncated/corrupted/interrupted upload before you announce).
@@ -161,7 +133,7 @@ notarized (catches a truncated/corrupted/interrupted upload before you announce)
 **User benefit:** moderate — ensures the download channel serves exactly the
 verified artifact.
 
-### 6. Rollback / yank (`scripts/release-yank.sh` + runbook)
+### 5. Rollback / yank (`scripts/release-yank.sh` + runbook)
 
 A scripted way to pull a bad release from the update channel.
 
@@ -184,7 +156,7 @@ A scripted way to pull a bad release from the update channel.
 **User benefit:** moderate/high — the only lever to stop a broken build from
 propagating through auto-update.
 
-### 7. SHA-pin Actions + Dependabot (`.github/workflows/*`, `.github/dependabot.yml`)
+### 6. SHA-pin Actions + Dependabot (`.github/workflows/*`, `.github/dependabot.yml`)
 
 Keep third-party Actions from being repointed under us (mutable-tag risk),
 protecting the source that becomes a signed release.
@@ -210,26 +182,25 @@ sign.
 
 ## Testing & verification
 
-- **Pure helpers** (new `op_read`, any yank decision logic): unit-tested in
+- **Pure helpers** (any yank decision logic): unit-tested in
   `scripts/release.test.sh` (sourced, side-effect-free — must not inherit `set -e`
   side effects at source time).
 - **New/edited scripts**: pass `shellcheck`; workflows pass `actionlint` — both run
   by `scripts/check.sh --portable`.
-- **IO-heavy steps** (notary fetch, smoke test, post-publish verify, yank): verified
-  by an actual release, consistent with how the existing build/publish steps are
-  validated. There are no unit tests for `notarytool`/`gh` calls.
+- **IO-heavy steps** (smoke test, post-publish verify, yank): verified by an actual
+  release, consistent with how the existing build/publish steps are validated.
+  There are no unit tests for `gh`/`notarytool` calls.
 - A dry run of the yank against a throwaway test release is recommended before
   relying on it in anger.
 
 ## Files touched
 
-- `scripts/release-lib.sh` — `op_read` helper.
-- `scripts/release-build.sh` — 1Password notary fetch, `@env:` password, signing
-  identity preflight, launch smoke test, `--skip-smoke`.
+- `scripts/release-build.sh` — signing identity preflight, launch smoke test,
+  `--skip-smoke`.
 - `scripts/release.sh` — HEAD == origin/main preflight, `Package.resolved` guard.
 - `scripts/release-publish.sh` — post-publish asset download + verify.
 - `scripts/release-yank.sh` — new rollback script.
-- `scripts/release.test.sh` — tests for new pure helpers.
+- `scripts/release.test.sh` — tests for any new pure helpers.
 - `.github/workflows/check.yml`, `codeql.yml`, `pages.yml` — SHA pins.
 - `.github/dependabot.yml` — new (github-actions).
 - `docs/RELEASE.md` — new runbook (signing-key custody, rotation, yank vs.
