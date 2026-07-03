@@ -71,6 +71,13 @@ security find-identity -v -p codesigning | identity_listed "$IDENTITY" \
 
 require_clean_tree "building a release artifact"
 
+step "Verify pinned dependencies"
+RESOLVED="$APP_DIR/Blurt.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+[ -f "$RESOLVED" ] || die "Package.resolved not found at $RESOLVED"
+git -C "$REPO_ROOT" ls-files --error-unmatch "$RESOLVED" >/dev/null 2>&1 \
+  || die "Package.resolved is not tracked by git — dependency pins would be unreviewed"
+info "dependency pins tracked: $RESOLVED"
+
 step "Read version"
 VERSION="$(require_project_version "$APP_DIR/project.yml")"
 info "version: $VERSION"
