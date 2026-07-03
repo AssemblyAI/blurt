@@ -72,6 +72,19 @@ final class BoolBox: Sendable {
   }
 }
 
+/// Thread-safe single-value cell for capturing an arbitrary value written inside
+/// a `@Sendable` closure and reading it back after the awaited call returns.
+final class ValueBox<T: Sendable>: Sendable {
+  private let stored: Mutex<T>
+  init(_ initial: T) { stored = Mutex(initial) }
+  func set(_ value: T) {
+    stored.withLock { $0 = value }
+  }
+  var value: T {
+    stored.withLock { $0 }
+  }
+}
+
 /// Thread-safe mutable boolean for injected closures whose answer must change
 /// mid-test (e.g. "nothing editable" on the first insert, editable on the next).
 final class MutableBoolBox: Sendable {

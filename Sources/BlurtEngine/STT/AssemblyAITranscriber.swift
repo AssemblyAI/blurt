@@ -19,6 +19,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   private let apiKeyProvider: @Sendable () -> String?
   private let baseURL: URL
   private let urlSession: URLSession
+  private let onPromptAssembled: (@Sendable (String?) -> Void)?
 
   /// Required on every Sync API request — selects the synchronous STT model.
   private static let syncModel = "u3-sync-pro"
@@ -33,11 +34,13 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   public init(
     apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.get() },
     baseURL: URL = URL(string: "https://sync.assemblyai.com")!,
-    urlSession: URLSession = .shared
+    urlSession: URLSession = .shared,
+    onPromptAssembled: (@Sendable (String?) -> Void)? = nil
   ) {
     self.apiKeyProvider = apiKeyProvider
     self.baseURL = baseURL
     self.urlSession = urlSession
+    self.onPromptAssembled = onPromptAssembled
   }
 
   // MARK: - Sync request
@@ -49,7 +52,11 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
       throw BlurtError.apiKeyMissing
     }
     let pcm = PCMEncoder.encodeS16LE(samples: samples)
-    let config = try makeConfigData(sampleRate: sampleRate, prompt: TranscriptionPrompt.build(context: context))
+    let prompt = TranscriptionPrompt.build(context: context)
+    // Report the fully-assembled prompt (or nil when no context produced one)
+    // before sending, so a failed request still surfaces what it tried to send.
+    onPromptAssembled?(prompt)
+    let config = try makeConfigData(sampleRate: sampleRate, prompt: prompt)
     let boundary = "blurt-\(UUID().uuidString)"
 
     var request = URLRequest(url: baseURL.appendingPathComponent("transcribe"))
