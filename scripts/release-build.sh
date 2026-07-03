@@ -65,8 +65,17 @@ crash_list() {
 }
 smoke_launch() {
   local app="$1" before after new
+  # Quit any Blurt the maintainer already has running so the checks below
+  # reflect the freshly-built staged instance — `open` would otherwise just
+  # reactivate the existing one, and `pgrep -x Blurt` can't tell them apart.
+  if pgrep -x Blurt >/dev/null; then
+    info "smoke test: quitting an already-running Blurt first"
+    osascript -e 'tell application "Blurt" to quit' >/dev/null 2>&1 || true
+    pkill -x Blurt >/dev/null 2>&1 || true
+    sleep 1
+  fi
   before="$(crash_list)"
-  open -g "$app" || die "smoke test: could not launch $app"
+  open -gn "$app" || die "smoke test: could not launch $app"
   sleep 2
   if ! pgrep -x Blurt >/dev/null; then
     after="$(crash_list)"
@@ -97,7 +106,7 @@ done
 xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
   || die "notarytool profile '$NOTARY_PROFILE' not found. Run: xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <you@example.com> --team-id $TEAM_ID --password <app-specific-password>"
 
-security find-identity -v -p codesigning | identity_listed "$IDENTITY" \
+identity_listed "$IDENTITY" <<<"$(security find-identity -v -p codesigning)" \
   || die "Developer ID identity $IDENTITY not in keychain (check: security find-identity -v -p codesigning). Wrong Mac, or the signing key is missing."
 
 require_clean_tree "building a release artifact"
