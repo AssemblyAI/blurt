@@ -1,4 +1,5 @@
 import BlurtEngine
+import Foundation
 import Observation
 
 @MainActor
@@ -29,7 +30,22 @@ final class AppCoordinator {
   private let keyValidator = APIKeyValidator()
   @ObservationIgnored private var phaseObserver: Task<Void, Never>?
   @ObservationIgnored private var levelsObserver: Task<Void, Never>?
+  @ObservationIgnored private var promptObserver: Task<Void, Never>?
+  /// Bridges the transcriber's per-utterance `onPromptAssembled` callback (fired
+  /// off the main actor) into a stream `startPipelineObservers` consumes, so the
+  /// Prompt Inspector's state is owned here alongside the other pipeline-derived
+  /// state rather than in a global. `bufferingNewest(1)` because only the latest
+  /// prompt matters.
+  @ObservationIgnored private let promptStream: AsyncStream<String?>
   @ObservationIgnored var keyTap: DictationKeyTap?
+
+  /// The fully-assembled prompt sent to AssemblyAI on the most recent dictation,
+  /// surfaced by the Prompt Inspector window (`nil` when that dictation had no
+  /// context to build one). In-memory only — never persisted.
+  private(set) var lastPrompt: String?
+  /// When `lastPrompt` was last recorded. Distinguishes "never dictated" (nil)
+  /// from "dictated, but no prompt" (set, with `lastPrompt == nil`).
+  private(set) var lastPromptSentAt: Date?
 
   /// Whether an AssemblyAI API key is currently saved. Drives the wizard
   /// (which gates dictation on having a key) and the Settings UI.
@@ -41,15 +57,27 @@ final class AppCoordinator {
   /// crowded menu bar, so nothing here is relied on for correctness.
   private(set) var menuBarStatus: MenuBarStatus = .idle
 
+  /// `components` is nil in production so this can wire the transcriber's prompt
+  /// callback into `promptStream`; tests/UI-tests inject their own `components`
+  /// (whose stub transcriber emits nothing, so the stream simply stays quiet).
   init(
     onMissingAPIKey: @escaping @MainActor () -> Void,
-    components: DictationComponents = .production(),
+    components: DictationComponents? = nil,
     keyStore: any APIKeyGateway = ProductionAPIKeyStore(),
     isUITesting: Bool = false
   ) {
     self.onMissingAPIKey = onMissingAPIKey
     self.keyStore = keyStore
     self.isUITesting = isUITesting
+
+    let (promptStream, promptContinuation) = AsyncStream.makeStream(
+      of: String?.self, bufferingPolicy: .bufferingNewest(1))
+    self.promptStream = promptStream
+    let components =
+      components
+      ?? .production(
+        onPromptAssembled: { promptContinuation.yield($0) })
+
     self.mic = components.mic
     self.session = DictationSession(
       mic: components.mic,
@@ -69,6 +97,7 @@ final class AppCoordinator {
   deinit {
     phaseObserver?.cancel()
     levelsObserver?.cancel()
+    promptObserver?.cancel()
   }
 
   func start() {
@@ -112,8 +141,9 @@ final class AppCoordinator {
     // transition fires from `WizardController.init`, so the tap still comes up.
   }
 
-  /// Observes the session's phase stream (drives the pill + menu bar) and the
-  /// mic's level stream (drives the pill's meter).
+  /// Observes the session's phase stream (drives the pill + menu bar), the mic's
+  /// level stream (drives the pill's meter), and the assembled-prompt stream
+  /// (feeds the Prompt Inspector).
   private func startPipelineObservers() {
     phaseObserver = Task { @MainActor [weak self] in
       guard let phases = await self?.session.phaseStream() else { return }
@@ -130,6 +160,16 @@ final class AppCoordinator {
         guard let self else { return }
         if Task.isCancelled { return }
         self.overlay?.pushLevel(level)
+      }
+    }
+
+    let prompts = promptStream
+    promptObserver = Task { @MainActor [weak self] in
+      for await prompt in prompts {
+        guard let self else { return }
+        if Task.isCancelled { return }
+        self.lastPrompt = prompt
+        self.lastPromptSentAt = Date()
       }
     }
   }

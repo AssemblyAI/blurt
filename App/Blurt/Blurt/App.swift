@@ -53,9 +53,10 @@ struct BlurtApp: App {
     // Window menu ("Prompt Inspector", see BlurtCommands). Ships in all
     // configurations as a developer aid.
     Window("Prompt Inspector", id: PromptInspectorWindow.id) {
-      PromptInspectorView()
+      PromptInspectorView(appDelegate: appDelegate)
     }
     .windowResizability(.contentMinSize)
+    .defaultSize(width: 560, height: 420)
     .defaultLaunchBehavior(.suppressed)
 
     #if UITEST_HOOKS

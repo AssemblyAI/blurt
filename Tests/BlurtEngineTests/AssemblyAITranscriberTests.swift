@@ -263,7 +263,7 @@ struct HTTPClientTests {
     }
     defer { MockURLProtocol.responder = nil }
 
-    let captured = Box<String?>(nil)
+    let captured = ValueBox<String?>(nil)
     let seen = Counter()
     let transcriber = AssemblyAITranscriber(
       apiKeyProvider: { "test-key" },
@@ -271,7 +271,7 @@ struct HTTPClientTests {
       urlSession: mockURLSession(),
       onPromptAssembled: { prompt in
         _ = seen.next()
-        captured.value = prompt
+        captured.set(prompt)
       }
     )
 
@@ -284,7 +284,7 @@ struct HTTPClientTests {
     #expect(captured.value?.contains("Dear Sam,") == true)
 
     // A nil context builds no prompt: the closure still fires, with nil.
-    captured.value = "unset"
+    captured.set("unset")
     _ = try await transcriber.transcribe(samples: [0, 0.1, -0.1], sampleRate: 16_000, context: nil)
     #expect(seen.value == 2)
     #expect(captured.value == nil)
@@ -302,18 +302,5 @@ struct HTTPClientTests {
 
   private func collectTranscript(_ transcriber: AssemblyAITranscriber) async throws -> String {
     try await transcriber.transcribe(samples: [0, 0.1, -0.1], sampleRate: 16_000, context: nil)
-  }
-
-  /// Minimal Sendable mutable cell for capturing a value out of a @Sendable
-  /// callback in a test. Serialized by a lock; the test reads it after the awaited
-  /// call returns, so contention is nil in practice.
-  private final class Box<T>: @unchecked Sendable {
-    private let lock = NSLock()
-    private var stored: T
-    init(_ initial: T) { stored = initial }
-    var value: T {
-      get { lock.withLock { stored } }
-      set { lock.withLock { stored = newValue } }
-    }
   }
 }

@@ -360,7 +360,6 @@
 		D4782F83F43693371724011D /* rom1b-23-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = EAB0871FD8CB94A4DCF837CC /* rom1b-23-start.m4a */; };
 		D5927A391D26CAB212D6FBB4 /* rom1b-3-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 49CD6A6815EDDB16BBBCCCB2 /* rom1b-3-start.m4a */; };
 		D5A84975628548A076CEB3D7 /* juno-118-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 92387F60666853C0AA1BF0B5 /* juno-118-stop.m4a */; };
-		D74567A1140C77B9F93892AD /* PromptInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEBBFB91B95F40C14C9F9C93 /* PromptInspector.swift */; };
 		D750C1BF16502EEC92182ECD /* PermissionsStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8DE60178ABA2CC7F4EB6401 /* PermissionsStepView.swift */; };
 		D779D9FD904DA9DDC241DA5F /* juno-70-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = AD5F1BDEB1DB3658DDB96247 /* juno-70-start.m4a */; };
 		D7CCAEAF551027586E39A032 /* juno-4-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 63189CC345106B1D56960B1E /* juno-4-start.m4a */; };
@@ -843,7 +842,6 @@
 		ED1C7F2E22562A18197FED64 /* juno-19-start.m4a */ = {isa = PBXFileReference; path = "juno-19-start.m4a"; sourceTree = "<group>"; };
 		ED3C851EF55F6BBEBFDAE53A /* rom1a-17-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-17-stop.m4a"; sourceTree = "<group>"; };
 		ED5D54496B6973C9F7AE05F3 /* juno-48-stop.m4a */ = {isa = PBXFileReference; path = "juno-48-stop.m4a"; sourceTree = "<group>"; };
-		EEBBFB91B95F40C14C9F9C93 /* PromptInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptInspector.swift; sourceTree = "<group>"; };
 		F0B1CD9D40D126CD251FDD46 /* juno-0-stop.m4a */ = {isa = PBXFileReference; path = "juno-0-stop.m4a"; sourceTree = "<group>"; };
 		F1340BFA7AF0D9D50EAA4A24 /* rom1a-22-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-22-stop.m4a"; sourceTree = "<group>"; };
 		F17631D5583E0070A4DFCF3F /* rom1a-9-start.m4a */ = {isa = PBXFileReference; path = "rom1a-9-start.m4a"; sourceTree = "<group>"; };
@@ -932,7 +930,6 @@
 		3D362BD9283C8A1238D97E62 /* PromptInspector */ = {
 			isa = PBXGroup;
 			children = (
-				EEBBFB91B95F40C14C9F9C93 /* PromptInspector.swift */,
 				6A4D1A2124400E344D2E982A /* PromptInspectorView.swift */,
 			);
 			path = PromptInspector;
@@ -1987,7 +1984,6 @@
 				9437C292A6D7FE533338073D /* OverlayView.swift in Sources */,
 				8FE4B9B139BB9557FBC5589B /* OverlayWindowController.swift in Sources */,
 				D750C1BF16502EEC92182ECD /* PermissionsStepView.swift in Sources */,
-				D74567A1140C77B9F93892AD /* PromptInspector.swift in Sources */,
 				EB6B317D225E2B1F62229C01 /* PromptInspectorView.swift in Sources */,
 				A13335FE97FA2E60A4F5CABC /* ReadyView.swift in Sources */,
 				1D1100AB3D47EFC80D47B04B /* SettingsWindowRoot.swift in Sources */,
