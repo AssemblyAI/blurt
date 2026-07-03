@@ -75,3 +75,10 @@ parse_bundle_version() {
 parse_build_info_git_sha() {
   awk '/^git:[[:space:]]+/ {print $2; exit}'
 }
+
+# Echo the SHA-256 hex for filename $1 from SHA256SUMS content on stdin (shasum's
+# "<hash>  <name>" format; a leading "*" binary marker on the name is tolerated).
+# Empty output if the name isn't listed.
+sha_from_sums() {
+  awk -v name="$1" '{ f = $2; sub(/^\*/, "", f); if (f == name) { print $1; exit } }'
+}

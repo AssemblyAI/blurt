@@ -132,5 +132,33 @@ CHECKSUMS_BODY="$(cat "$CHECKSUMS")"
 NOTES="$(printf '%s\n\n## Checksums\n\n```\n%s\n```\n' "$GENERATED_NOTES" "$CHECKSUMS_BODY")"
 gh release edit "$TAG" --notes "$NOTES"
 
+step "Verify published assets"
+# Re-download what users will get and confirm it's byte-identical to what we
+# built + notarized. Catches a truncated/corrupted upload before you announce.
+VERIFY_DIR="$(mktemp -d /tmp/blurt-verify.XXXXXX)"
+trap 'rm -rf "$VERIFY_DIR"' EXIT
+gh release download "$TAG" --dir "$VERIFY_DIR" \
+  --pattern "Blurt-$VERSION.dmg" --pattern "Blurt.dmg"
+
+WANT_SHA="$(sha_from_sums "Blurt-$VERSION.dmg" <"$CHECKSUMS")"
+[ -n "$WANT_SHA" ] || die "no checksum for Blurt-$VERSION.dmg in $CHECKSUMS"
+GOT_SHA="$(shasum -a 256 "$VERIFY_DIR/Blurt-$VERSION.dmg" | awk '{print $1}')"
+[ "$WANT_SHA" = "$GOT_SHA" ] \
+  || die "published Blurt-$VERSION.dmg sha mismatch (want $WANT_SHA got $GOT_SHA) — re-run with --republish"
+
+LOCAL_STABLE_SHA="$(shasum -a 256 "$DMG" | awk '{print $1}')"
+GOT_STABLE_SHA="$(shasum -a 256 "$VERIFY_DIR/Blurt.dmg" | awk '{print $1}')"
+[ "$LOCAL_STABLE_SHA" = "$GOT_STABLE_SHA" ] \
+  || die "published Blurt.dmg differs from local build — re-run with --republish"
+
+xcrun stapler validate "$VERIFY_DIR/Blurt-$VERSION.dmg" >/dev/null \
+  || die "published Blurt-$VERSION.dmg is not stapled"
+xcrun stapler validate "$VERIFY_DIR/Blurt.dmg" >/dev/null \
+  || die "published Blurt.dmg is not stapled"
+
+rm -rf "$VERIFY_DIR"
+trap - EXIT
+info "published assets verified (sha + staple match the local build)"
+
 URL="$(gh release view "$TAG" --json url -q .url)"
 info "published: $URL"

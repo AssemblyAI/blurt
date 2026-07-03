@@ -86,6 +86,14 @@ printf '  1) 0000000000000000000000000000000000000000 "Some Other Identity"\n' \
   | identity_listed 640A7F5A9754400D4A0491E7A6FB30542D907806
 check "absent -> rc 1" "1" "$?"
 
+echo "== sha_from_sums =="
+check "finds hash by name" "abc123" \
+  "$(printf 'abc123  Blurt-0.1.5.dmg\ndef456  Blurt-0.1.5.app.dSYM.zip\n' | sha_from_sums Blurt-0.1.5.dmg)"
+check "handles binary-mode star" "abc123" \
+  "$(printf 'abc123 *Blurt-0.1.5.dmg\n' | sha_from_sums Blurt-0.1.5.dmg)"
+check "missing name -> empty" "" \
+  "$(printf 'abc123  Blurt-0.1.5.dmg\n' | sha_from_sums nope.dmg)"
+
 echo "== CLI preflight (subprocess) =="
 # These run main() in a child process. Arg validation happens before any git /
 # network call, so invalid input dies cleanly with no side effects. (A bare
