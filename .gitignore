@@ -13,6 +13,7 @@ xcuserdata/
 !.claude/skills/
 .superpowers/
 build/
+docs/
 
 # Code-coverage profiles dropped in the working dir by coverage-instrumented
 # test runs (the Blurt.xctestplan enables coverage; the real data lands in the

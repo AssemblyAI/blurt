@@ -43,6 +43,12 @@ tag_exists_on_origin() {
   git -C "$REPO_ROOT" ls-remote --tags origin "refs/tags/$1" 2>/dev/null | grep -q .
 }
 
+# True if codesigning identity $1 (a SHA-1 hash) appears in the
+# `security find-identity -v -p codesigning` output piped on stdin.
+identity_listed() {
+  grep -qF -- "$1"
+}
+
 # --- pure version helpers (unit-tested by scripts/release.test.sh) ---
 
 # True if $1 looks like X.Y.Z (digits only).
@@ -68,4 +74,11 @@ parse_bundle_version() {
 # Read the full commit SHA from build-info.txt content on stdin.
 parse_build_info_git_sha() {
   awk '/^git:[[:space:]]+/ {print $2; exit}'
+}
+
+# Echo the SHA-256 hex for filename $1 from SHA256SUMS content on stdin (shasum's
+# "<hash>  <name>" format; a leading "*" binary marker on the name is tolerated).
+# Empty output if the name isn't listed.
+sha_from_sums() {
+  awk -v name="$1" '{ f = $2; sub(/^\*/, "", f); if (f == name) { print $1; exit } }'
 }

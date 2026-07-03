@@ -169,6 +169,12 @@ run_build_publish() {
   [ "$main_v" = "$version" ] \
     || die "main is at $main_v, expected $version after merge — pull main and retry"
 
+  local head_sha origin_sha
+  head_sha="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+  origin_sha="$(git -C "$REPO_ROOT" rev-parse origin/main)"
+  [ "$head_sha" = "$origin_sha" ] \
+    || die "HEAD ($head_sha) is not origin/main ($origin_sha) — a release must be the exact reviewed main commit; push/pull and retry"
+
   step "Build"
   if dmg_already_built "$version"; then
     info "DMG for $version already built + stapled — skipping build"

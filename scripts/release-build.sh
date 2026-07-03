@@ -16,9 +16,11 @@ readonly TEAM_ID="Y54ZB9JF63"
 readonly NOTARY_PROFILE="blurt-notary"
 
 SKIP_CHECKS=0
+SKIP_SMOKE=0
 for arg in "$@"; do
   case "$arg" in
     --skip-checks) SKIP_CHECKS=1 ;;
+    --skip-smoke) SKIP_SMOKE=1 ;;
     *) echo "unknown arg: $arg" >&2; exit 2 ;;
   esac
 done
@@ -52,6 +54,44 @@ notarize() {
   LAST_NOTARY_LOG="$log_json"
 }
 
+# Best-effort launch check: Blurt is a GUI app (wants Accessibility/mic, shows
+# an overlay) so it can't run headless — this only catches a build that dies on
+# launch. The human release-install.sh step remains the real functional gate.
+# NOTE: pkill below also terminates any Blurt the maintainer had running.
+crash_list() {
+  local dir="$HOME/Library/Logs/DiagnosticReports"
+  [ -d "$dir" ] || return 0
+  find "$dir" -maxdepth 1 -name 'Blurt*' -print 2>/dev/null | sort || true
+}
+smoke_launch() {
+  local app="$1" before after new
+  # Quit any Blurt the maintainer already has running so the checks below
+  # reflect the freshly-built staged instance — `open` would otherwise just
+  # reactivate the existing one, and `pgrep -x Blurt` can't tell them apart.
+  if pgrep -x Blurt >/dev/null; then
+    info "smoke test: quitting an already-running Blurt first"
+    osascript -e 'tell application "Blurt" to quit' >/dev/null 2>&1 || true
+    pkill -x Blurt >/dev/null 2>&1 || true
+    sleep 1
+  fi
+  before="$(crash_list)"
+  open -gn "$app" || die "smoke test: could not launch $app"
+  sleep 2
+  if ! pgrep -x Blurt >/dev/null; then
+    after="$(crash_list)"
+    new="$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after"))"
+    die "smoke test: Blurt exited within 2s of launch${new:+ (new crash report: $new)}"
+  fi
+  sleep 3
+  after="$(crash_list)"
+  new="$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after"))"
+  osascript -e 'tell application "Blurt" to quit' >/dev/null 2>&1 || true
+  sleep 1
+  pkill -x Blurt >/dev/null 2>&1 || true
+  [ -z "$new" ] || die "smoke test: new crash report(s) after launch: $new"
+  info "smoke test: launched, stayed up 5s, no crash report"
+}
+
 if command -v xcbeautify >/dev/null 2>&1; then
   PRETTY=(xcbeautify --quiet)
 else
@@ -66,7 +106,17 @@ done
 xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
   || die "notarytool profile '$NOTARY_PROFILE' not found. Run: xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <you@example.com> --team-id $TEAM_ID --password <app-specific-password>"
 
+identity_listed "$IDENTITY" <<<"$(security find-identity -v -p codesigning)" \
+  || die "Developer ID identity $IDENTITY not in keychain (check: security find-identity -v -p codesigning). Wrong Mac, or the signing key is missing."
+
 require_clean_tree "building a release artifact"
+
+step "Verify pinned dependencies"
+RESOLVED="$APP_DIR/Blurt.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+[ -f "$RESOLVED" ] || die "Package.resolved not found at $RESOLVED"
+git -C "$REPO_ROOT" ls-files --error-unmatch "$RESOLVED" >/dev/null 2>&1 \
+  || die "Package.resolved is not tracked by git — dependency pins would be unreviewed"
+info "dependency pins tracked: $RESOLVED"
 
 step "Read version"
 VERSION="$(require_project_version "$APP_DIR/project.yml")"
@@ -173,6 +223,13 @@ step "Staple app"
 xcrun stapler staple "$APP_STAGED"
 xcrun stapler validate "$APP_STAGED"
 info "app stapled + validated"
+
+if [ "$SKIP_SMOKE" -eq 0 ]; then
+  step "Launch smoke test"
+  smoke_launch "$APP_STAGED"
+else
+  info "smoke test skipped (--skip-smoke)"
+fi
 
 step "Create DMG"
 DMG="$BUILD_ROOT/Blurt-$VERSION.dmg"
