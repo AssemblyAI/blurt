@@ -53,6 +53,12 @@ public actor KeyInjector: InjectorProtocol {
   /// another live application.
   private let activateTarget: @Sendable (NSRunningApplication) -> Bool
 
+  /// Waits until the app activation has actually become visible to
+  /// `NSWorkspace` before editability is checked and Cmd-V is posted. Kept
+  /// injectable so tests that stub activation don't depend on the host's live
+  /// foreground app.
+  private let waitForTargetActivation: @Sendable (NSRunningApplication) async -> Bool
+
   /// Whether the process is trusted for Accessibility. Posting the synthesized
   /// Cmd-V requires it (macOS 10.14+); without it `CGEvent.post` is silently
   /// dropped, so we check first and fail loudly instead of reporting a paste that
@@ -87,6 +93,7 @@ public actor KeyInjector: InjectorProtocol {
       pasteSettleDuration: pasteSettleDuration,
       postPaste: KeyInjector.postCmdV,
       activateTarget: KeyInjector.activate,
+      waitForTargetActivation: KeyInjector.waitUntilFrontmost,
       isAccessibilityTrusted: KeyInjector.accessibilityTrusted,
       hasEditableTarget: FocusCapture.hasEditableFocusedElement,
       isAXOpaqueEditor: FocusCapture.isElectronApp)
@@ -96,6 +103,7 @@ public actor KeyInjector: InjectorProtocol {
     pasteSettleDuration: Duration,
     postPaste: @escaping @Sendable () -> Bool,
     activateTarget: @escaping @Sendable (NSRunningApplication) -> Bool = KeyInjector.activate,
+    waitForTargetActivation: @escaping @Sendable (NSRunningApplication) async -> Bool = { _ in true },
     isAccessibilityTrusted: @escaping @Sendable () -> Bool = { true },
     hasEditableTarget: @escaping @Sendable () -> Bool = { true },
     isAXOpaqueEditor: @escaping @Sendable (NSRunningApplication?) -> Bool = { _ in false },
@@ -104,6 +112,7 @@ public actor KeyInjector: InjectorProtocol {
     self.pasteSettleDuration = pasteSettleDuration
     self.postPaste = postPaste
     self.activateTarget = activateTarget
+    self.waitForTargetActivation = waitForTargetActivation
     self.isAccessibilityTrusted = isAccessibilityTrusted
     self.hasEditableTarget = hasEditableTarget
     self.isAXOpaqueEditor = isAXOpaqueEditor
@@ -159,7 +168,7 @@ public actor KeyInjector: InjectorProtocol {
     guard let target else { return }
     guard !target.isTerminated else { throw BlurtError.targetAppLost }
     guard activateTarget(target) else { throw BlurtError.targetAppLost }
-    try? await Task.sleep(for: .milliseconds(30))
+    guard await waitForTargetActivation(target) else { throw BlurtError.targetAppLost }
   }
 
   public func insert(_ text: String, after priorText: String? = nil) async throws {
@@ -277,6 +286,21 @@ public actor KeyInjector: InjectorProtocol {
 
   private static func activate(_ app: NSRunningApplication) -> Bool {
     app.activate()
+  }
+
+  private static func waitUntilFrontmost(_ app: NSRunningApplication) async -> Bool {
+    let pid = app.processIdentifier
+    let clock = ContinuousClock()
+    let deadline = clock.now.advanced(by: .milliseconds(350))
+    while clock.now < deadline {
+      if await MainActor.run(body: { NSWorkspace.shared.frontmostApplication?.processIdentifier == pid }) {
+        return true
+      }
+      try? await Task.sleep(for: .milliseconds(10))
+    }
+    return await MainActor.run {
+      NSWorkspace.shared.frontmostApplication?.processIdentifier == pid
+    }
   }
 
   private static func accessibilityTrusted() -> Bool {

@@ -3,9 +3,9 @@ import Testing
 
 @testable import BlurtEngine
 
-/// `DictationSession`'s reentrancy/no-op guards and the phase-stream
-/// supersession contract. Split from `DictationSessionTests` (same stubs) to
-/// stay within the lint file-length budget.
+/// `DictationSession`'s reentrancy/no-op guards and phase-stream broadcast
+/// contract. Split from `DictationSessionTests` (same stubs) to stay within the
+/// lint file-length budget.
 @Suite("DictationSession guards & phase stream", .timeLimit(.minutes(1)))
 struct DictationSessionGuardTests {
 
@@ -73,8 +73,8 @@ struct DictationSessionGuardTests {
     #expect(reads.value == 2)
   }
 
-  @Test("a new phaseStream supersedes the prior one without severing delivery")
-  func phaseStreamSupersession() async throws {
+  @Test("multiple phaseStream subscribers all receive later transitions")
+  func phaseStreamBroadcastsToMultipleSubscribers() async throws {
     let mic = StubMicCapture()
     let stt = StubTranscriber(mode: .transcript("hi"))
     let injector = StubInjector()
@@ -82,26 +82,17 @@ struct DictationSessionGuardTests {
 
     // Subscribe while recording so each stream's initial yield is non-terminal.
     await session.press()
-    let superseded = await session.phaseStream()
-    let live = await session.phaseStream()
-
-    // The superseded stream was finished by the newer subscription: it delivers
-    // the phase it saw at subscription time and then ends.
-    var seen: [PipelinePhase] = []
-    for await phase in superseded { seen.append(phase) }
-    #expect(seen == [.recording])
-
-    // Draining the superseded stream fires its onTermination cleanup — give it
-    // a chance to run so the identity guard (not timing) is what protects the
-    // live continuation from being cleared by the stale teardown.
-    for _ in 0..<1000 { await Task.yield() }
+    let firstStream = await session.phaseStream()
+    let secondStream = await session.phaseStream()
 
     func firstTerminal(_ stream: AsyncStream<PipelinePhase>) async -> PipelinePhase? {
       for await phase in stream where phase.isTerminal { return phase }
       return nil
     }
-    async let terminal = firstTerminal(live)
+    async let firstTerminalPhase = firstTerminal(firstStream)
+    async let secondTerminalPhase = firstTerminal(secondStream)
     await session.release()
-    #expect(await terminal == .pasted)
+    #expect(await firstTerminalPhase == .pasted)
+    #expect(await secondTerminalPhase == .pasted)
   }
 }

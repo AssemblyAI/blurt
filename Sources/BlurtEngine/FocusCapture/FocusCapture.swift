@@ -67,7 +67,7 @@ enum FocusCapture {
     let prior = isSecure ? nil : priorText(of: element, maxChars: maxPriorChars)
     // The selected range's text (empty when there's no selection). Capped like
     // prior text so a huge highlight can't dominate the prompt budget.
-    let selected = isSecure ? nil : clip(stringValue(element, kAXSelectedTextAttribute), to: maxSelectedChars)
+    let selected = isSecure ? nil : selectedText(of: element, maxChars: maxSelectedChars)
     return FocusedFieldContext(
       priorText: prior,
       selectedText: selected,
@@ -142,6 +142,36 @@ enum FocusCapture {
 
     // Fallback: read the full value and clip to the caret (or the tail).
     return priorSlice(full: stringValue(element, kAXValueAttribute) ?? "", caret: caret, maxChars: maxChars)
+  }
+
+  /// Up to `maxChars` of selected text, or `nil` when the element exposes no
+  /// readable selection. Uses the selected range plus the parameterized
+  /// string-for-range attribute first so a huge highlight does not copy the full
+  /// selection across Accessibility IPC before being clipped locally.
+  private nonisolated static func selectedText(of element: AXUIElement, maxChars: Int) -> String? {
+    var rangeRef: CFTypeRef?
+    if AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeRef)
+      == .success, let rangeRef
+    {
+      var selectedRange = CFRange()
+      // swiftlint:disable:next force_cast
+      if AXValueGetValue(rangeRef as! AXValue, .cfRange, &selectedRange),
+        selectedRange.length > 0
+      {
+        selectedRange.length = min(selectedRange.length, maxChars)
+        if let axRange = AXValueCreate(.cfRange, &selectedRange) {
+          var sliceRef: CFTypeRef?
+          if AXUIElementCopyParameterizedAttributeValue(
+            element, kAXStringForRangeParameterizedAttribute as CFString, axRange, &sliceRef)
+            == .success, let slice = sliceRef as? String
+          {
+            return clip(slice.trimmedNonEmpty(), to: maxChars)
+          }
+        }
+      }
+    }
+
+    return clip(stringValue(element, kAXSelectedTextAttribute), to: maxChars)
   }
 
   /// The title of the window containing the focused element, if exposed.

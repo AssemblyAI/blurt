@@ -28,13 +28,12 @@ enum DictationLog {
   }()
 
   // .sortedKeys keeps the on-disk JSONL deterministic (stable diff for tests
-  // and post-hoc grep). The encoder is reused across appends for cheaper
-  // hot-path encoding.
-  static let encoder: JSONEncoder = {
+  // and post-hoc grep).
+  static func makeEncoder() -> JSONEncoder {
     let e = JSONEncoder()
     e.outputFormatting = [.sortedKeys]
     return e
-  }()
+  }
 
   static let timestampFormat = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
 
@@ -67,7 +66,7 @@ enum DictationLog {
       polished: polished, raw: raw, ts: now.formatted(timestampFormat),
       app: context?.appName, window: context?.windowTitle, field: context?.fieldLabel,
       prior: context?.priorText, selected: context?.selectedText)
-    guard var line = try? encoder.encode(entry) else { return }
+    guard var line = try? makeEncoder().encode(entry) else { return }
     line.append(0x0A)  // '\n'
 
     let path = url.path(percentEncoded: false)

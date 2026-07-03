@@ -16,16 +16,15 @@ extension DictationSession {
   /// Signpost interval name for the release → transcribe → inject hot path.
   static let pipelineSignpostName: StaticString = "TranscribeInject"
 
-  /// Returns the live subscription to phase changes. The stream yields the
-  /// current phase immediately, then every subsequent transition. A later call
-  /// supersedes this one (finishing the prior stream), so there is a single
-  /// active observer at a time — which is all the app needs (one renderer).
+  /// Returns a live subscription to phase changes. The stream yields the current
+  /// phase immediately, then every subsequent transition. Multiple streams can be
+  /// active at once, so a debug view or test observer cannot disconnect the app's
+  /// renderer.
   public func phaseStream() -> AsyncStream<PipelinePhase> {
     let (stream, continuation) = AsyncStream.makeStream(of: PipelinePhase.self)
     currentID += 1
     let id = currentID
-    self.continuation?.finish()
-    self.continuation = continuation
+    continuations[id] = continuation
     continuation.yield(phase)
     continuation.onTermination = { [weak self] _ in
       Task { await self?.clearContinuation(id) }
@@ -33,9 +32,8 @@ extension DictationSession {
     return stream
   }
 
-  /// Clears the continuation only if it's still the active one — a stream torn
-  /// down after a newer `phaseStream()` superseded it must not unset the live one.
+  /// Clears the continuation for a stream that ended.
   private func clearContinuation(_ id: Int) {
-    if id == currentID { continuation = nil }
+    continuations[id] = nil
   }
 }

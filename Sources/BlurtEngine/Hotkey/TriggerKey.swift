@@ -1,12 +1,11 @@
-/// A lone modifier key usable as the single dictation trigger. The raw value is
-/// the macOS virtual key code, so `TriggerKey(rawValue:)` decodes a persisted
-/// keycode directly. Curated to the right-side modifiers (rarely used in app
-/// shortcuts, so a solo press maps cleanly to "dictate"), `fn`, and Caps Lock.
+/// A lone momentary modifier key usable as the single dictation trigger. The raw
+/// value is the macOS virtual key code, so `TriggerKey(rawValue:)` decodes a
+/// persisted keycode directly. Curated to right-side modifiers (rarely used in
+/// app shortcuts, so a solo press maps cleanly to "dictate") and `fn`.
 public enum TriggerKey: Int, CaseIterable, Sendable, Hashable {
   case rightCommand = 54
   case rightOption = 61
   case function = 63
-  case capsLock = 57
 
   public var keyCode: Int { rawValue }
 
@@ -34,11 +33,6 @@ public enum TriggerKey: Int, CaseIterable, Sendable, Hashable {
     case .rightCommand: return 0x10  // NX_DEVICERCMDKEYMASK
     case .rightOption: return 0x40  // NX_DEVICERALTKEYMASK
     case .function: return 0x80_0000  // kCGEventFlagMaskSecondaryFn
-    // Caps Lock has no left/right split, so it uses the (non-device) alpha-shift
-    // bit. Unlike the modifiers this bit reflects the *toggle* state: turning
-    // Caps Lock on reads as "down", off as "up" — which the gate treats as a
-    // press/release, so tap-on/tap-off works as a start/stop just like the rest.
-    case .capsLock: return 0x1_0000  // kCGEventFlagMaskAlphaShift / NX_ALPHASHIFTMASK
     }
   }
 
@@ -48,7 +42,6 @@ public enum TriggerKey: Int, CaseIterable, Sendable, Hashable {
     case .rightCommand: return "right ⌘"
     case .rightOption: return "right ⌥"
     case .function: return "fn"
-    case .capsLock: return "caps lock"
     }
   }
 }

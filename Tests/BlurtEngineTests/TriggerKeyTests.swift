@@ -9,7 +9,6 @@ struct TriggerKeyTests {
     #expect(TriggerKey.rightCommand.keyCode == 54)
     #expect(TriggerKey.rightOption.keyCode == 61)
     #expect(TriggerKey.function.keyCode == 63)
-    #expect(TriggerKey.capsLock.keyCode == 57)
   }
 
   @Test("every case has a non-empty label")
@@ -34,6 +33,12 @@ struct TriggerKeyTests {
     #expect(TriggerKey.fromPersisted(62) == .rightCommand)
   }
 
+  @Test("a persisted Caps Lock keycode (a removed option) falls back to right ⌘")
+  func removedCapsLockFallsBack() {
+    #expect(TriggerKey(rawValue: 57) == nil)
+    #expect(TriggerKey.fromPersisted(57) == .rightCommand)
+  }
+
   // The hotkey tap reads the *device-dependent* modifier bit (which physical
   // side toggled) rather than the generic command/option/control mask, which is
   // shared by both the left and right keys. Reading the shared mask can't tell a
@@ -44,7 +49,6 @@ struct TriggerKeyTests {
     #expect(TriggerKey.rightCommand.deviceModifierMask == 0x10)  // NX_DEVICERCMDKEYMASK
     #expect(TriggerKey.rightOption.deviceModifierMask == 0x40)  // NX_DEVICERALTKEYMASK
     #expect(TriggerKey.function.deviceModifierMask == 0x80_0000)  // kCGEventFlagMaskSecondaryFn
-    #expect(TriggerKey.capsLock.deviceModifierMask == 0x1_0000)  // kCGEventFlagMaskAlphaShift
   }
 
   @Test("right-⌘ mask does not collide with the left-⌘ or generic ⌘ bit")
