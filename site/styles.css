@@ -161,10 +161,10 @@ a {
 
 h1 {
   margin: 0;
-  max-width: 18ch;
+  max-width: 22ch;
   font-family: var(--display);
   font-weight: 800;
-  font-size: clamp(2.3rem, 3.6vw, 3.3rem);
+  font-size: clamp(1.9rem, 3vw, 2.7rem);
   line-height: 1.04;
   letter-spacing: 0;
   text-wrap: balance;
@@ -341,7 +341,7 @@ h1 {
 
   h1 {
     max-width: 16ch;
-    font-size: clamp(2rem, 9vw, 3rem);
+    font-size: clamp(1.7rem, 7.5vw, 2.5rem);
   }
 
   .lede {
@@ -404,7 +404,7 @@ h1 {
   }
 
   h1 {
-    font-size: clamp(2.1rem, 3.3vw, 3rem);
+    font-size: clamp(1.8rem, 2.8vw, 2.5rem);
   }
 
   .lede {
