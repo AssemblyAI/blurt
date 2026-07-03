@@ -61,17 +61,6 @@ final class StringListBox: Sendable {
   }
 }
 
-/// Thread-safe boolean flag for assertions inside a `@Sendable` closure.
-final class BoolBox: Sendable {
-  private let flag = Mutex(false)
-  func set() {
-    flag.withLock { $0 = true }
-  }
-  var value: Bool {
-    flag.withLock { $0 }
-  }
-}
-
 /// Thread-safe single-value cell for capturing an arbitrary value written inside
 /// a `@Sendable` closure and reading it back after the awaited call returns.
 final class ValueBox<T: Sendable>: Sendable {
@@ -82,19 +71,6 @@ final class ValueBox<T: Sendable>: Sendable {
   }
   var value: T {
     stored.withLock { $0 }
-  }
-}
-
-/// Thread-safe mutable boolean for injected closures whose answer must change
-/// mid-test (e.g. "nothing editable" on the first insert, editable on the next).
-final class MutableBoolBox: Sendable {
-  private let flag: Mutex<Bool>
-  init(_ initial: Bool) { flag = Mutex(initial) }
-  func set(_ value: Bool) {
-    flag.withLock { $0 = value }
-  }
-  var value: Bool {
-    flag.withLock { $0 }
   }
 }
 

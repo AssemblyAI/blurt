@@ -116,12 +116,7 @@ struct OverlayView: View {
       // and cyan --ice) so the processing → pasted hand-off reads as one
       // continuous status line rather than a new kind of alert. No glyph — the
       // word alone carries it. Hover still exposes the full announcement text.
-      Text("Pasted")
-        .font(.system(size: 10, weight: .semibold))
-        .tracking(0.8)
-        .lineLimit(1)
-        .minimumScaleFactor(0.7)
-        .foregroundStyle(OverlayBrandPalette.cyan)
+      StatusLineText("Pasted")
         .transition(.opacity)
         .help(state.accessibilityLabel)
     case .noTarget:
@@ -159,6 +154,25 @@ struct OverlayView: View {
   }
 }
 
+/// The shared type, tracking, and cyan color for the overlay's status-line
+/// text ("Transcribing…" and "Pasted") so the two can't drift out of sync.
+private struct StatusLineText: View {
+  let text: String
+
+  init(_ text: String) {
+    self.text = text
+  }
+
+  var body: some View {
+    Text(text)
+      .font(.system(size: 10, weight: .semibold))
+      .tracking(0.8)
+      .lineLimit(1)
+      .minimumScaleFactor(0.7)
+      .foregroundStyle(OverlayBrandPalette.cyan)
+  }
+}
+
 /// The "Transcribing…" status line with a slow breathing pulse — the processing
 /// counterpart of the recording bars' idle shimmer, so the pill keeps visibly
 /// working while the app waits on the Sync API and pastes the result. Driven by
@@ -190,15 +204,10 @@ private struct TranscribingLabel: View {
     }
   }
 
-  // Type, tracking, and cyan are shared with the "Pasted" notice (OverlayView's
-  // `.pasted` case) so the processing → pasted hand-off reads as one status line.
+  // Shared with the "Pasted" notice (OverlayView's `.pasted` case) so the
+  // processing → pasted hand-off reads as one status line.
   private var label: some View {
-    Text("Transcribing…")
-      .font(.system(size: 10, weight: .semibold))
-      .tracking(0.8)
-      .lineLimit(1)
-      .minimumScaleFactor(0.7)
-      .foregroundStyle(OverlayBrandPalette.cyan)
+    StatusLineText("Transcribing…")
   }
 
   /// Raised cosine over `breathPeriod`: 1 → `minOpacity` → 1, so the label

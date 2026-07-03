@@ -48,12 +48,12 @@ struct KeyInjectorInsertTests {
 
   @Test("activates a live target app before pasting")
   func activatesTargetApp() async throws {
-    let activated = BoolBox()
+    let activated = ValueBox<Bool>(false)
     let injector = KeyInjector(
       pasteSettleDuration: .zero,
       postPaste: { true },
       activateTarget: { _ in
-        activated.set()
+        activated.set(true)
         return true
       },
       clipboard: FakeClipboard(string: nil))
@@ -65,11 +65,11 @@ struct KeyInjectorInsertTests {
   @Test("activation failure: skips the paste but leaves the transcript on the clipboard")
   func activationFailureSkipsPaste() async throws {
     let clip = FakeClipboard(string: "user-clipboard")
-    let posted = BoolBox()
+    let posted = ValueBox<Bool>(false)
     let injector = KeyInjector(
       pasteSettleDuration: .zero,
       postPaste: {
-        posted.set()
+        posted.set(true)
         return true
       },
       activateTarget: { _ in false },
@@ -87,11 +87,11 @@ struct KeyInjectorInsertTests {
 
   @Test("empty text is a no-op (no paste posted)")
   func emptyTextNoOp() async throws {
-    let posted = BoolBox()
+    let posted = ValueBox<Bool>(false)
     let injector = KeyInjector(
       pasteSettleDuration: .zero,
       postPaste: {
-        posted.set()
+        posted.set(true)
         return true
       })
     try await injector.insert("")
@@ -113,11 +113,11 @@ struct KeyInjectorInsertTests {
   @Test("throws .accessibilityPermissionMissing and leaves the clipboard untouched")
   func notAccessibilityTrustedThrows() async throws {
     let clip = FakeClipboard(string: "user-clipboard")
-    let posted = BoolBox()
+    let posted = ValueBox<Bool>(false)
     let injector = KeyInjector(
       pasteSettleDuration: .zero,
       postPaste: {
-        posted.set()
+        posted.set(true)
         return true
       },
       isAccessibilityTrusted: { false },
@@ -134,11 +134,11 @@ struct KeyInjectorInsertTests {
   @Test("no editable target: skips the paste and leaves the transcript on the clipboard")
   func noEditableTargetKeepsClipboard() async throws {
     let clip = FakeClipboard(string: "user-clipboard")
-    let posted = BoolBox()
+    let posted = ValueBox<Bool>(false)
     let injector = KeyInjector(
       pasteSettleDuration: .zero,
       postPaste: {
-        posted.set()
+        posted.set(true)
         return true
       },
       hasEditableTarget: { false },
@@ -156,11 +156,11 @@ struct KeyInjectorInsertTests {
   @Test("AX-opaque Electron editor still pastes despite no editable signal")
   func electronEditorPastesWithoutSignal() async throws {
     let clip = FakeClipboard(string: "user-clipboard")
-    let posted = BoolBox()
+    let posted = ValueBox<Bool>(false)
     let injector = KeyInjector(
       pasteSettleDuration: .zero,
       postPaste: {
-        posted.set()
+        posted.set(true)
         return true
       },
       hasEditableTarget: { false },  // Electron/Chromium exposes no editable AX signal
@@ -287,11 +287,11 @@ struct KeyInjectorInsertTests {
 
   @Test("a cancelled task throws before posting any paste")
   func cancelledBeforePaste() async throws {
-    let posted = BoolBox()
+    let posted = ValueBox<Bool>(false)
     let injector = KeyInjector(
       pasteSettleDuration: .zero,
       postPaste: {
-        posted.set()
+        posted.set(true)
         return true
       })
     // Gate the body so `cancel()` is guaranteed to land before `insert` reaches
@@ -313,5 +313,5 @@ struct KeyInjectorInsertTests {
 }
 
 // The shared fixtures these tests drive the injector with — `liveTargetApp`,
-// `AsyncGate`, `StringListBox`, `BoolBox` — live in `Stubs/InjectorTestSupport.swift`
+// `AsyncGate`, `StringListBox`, `ValueBox` — live in `Stubs/InjectorTestSupport.swift`
 // so the fallback/cancel suite (a separate file) can reuse them.

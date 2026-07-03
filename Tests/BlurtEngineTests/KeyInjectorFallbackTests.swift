@@ -14,12 +14,12 @@ struct KeyInjectorFallbackTests {
   @Test("a cancel landing during target activation aborts before the paste")
   func cancelDuringActivationSkipsPaste() async throws {
     let clip = FakeClipboard(string: "user-clipboard")
-    let posted = BoolBox()
+    let posted = ValueBox<Bool>(false)
     let insertTask = TaskBox()
     let injector = KeyInjector(
       pasteSettleDuration: .zero,
       postPaste: {
-        posted.set()
+        posted.set(true)
         return true
       },
       activateTarget: { _ in
@@ -72,7 +72,7 @@ struct KeyInjectorFallbackTests {
   @Test("a thrown insert releases the paste lock for the next dictation", .timeLimit(.minutes(1)))
   func failedInsertReleasesLock() async throws {
     let clip = FakeClipboard(string: "user-clipboard")
-    let editable = MutableBoolBox(false)
+    let editable = ValueBox<Bool>(false)
     let injector = KeyInjector(
       pasteSettleDuration: .zero,
       postPaste: { true },
