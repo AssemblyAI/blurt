@@ -78,6 +78,14 @@ check "main == tag -> next patch" "0.1.6" "$(default_target 0.1.5 0.1.5)"
 # no tags yet -> start the next patch from main.
 check "no tags -> next patch" "0.1.6" "$(default_target 0.1.5 '')"
 
+echo "== identity_listed =="
+printf '  1) 640A7F5A9754400D4A0491E7A6FB30542D907806 "Developer ID Application: Alexander Kroman (Y54ZB9JF63)"\n' \
+  | identity_listed 640A7F5A9754400D4A0491E7A6FB30542D907806
+check "present -> rc 0" "0" "$?"
+printf '  1) 0000000000000000000000000000000000000000 "Some Other Identity"\n' \
+  | identity_listed 640A7F5A9754400D4A0491E7A6FB30542D907806
+check "absent -> rc 1" "1" "$?"
+
 echo "== CLI preflight (subprocess) =="
 # These run main() in a child process. Arg validation happens before any git /
 # network call, so invalid input dies cleanly with no side effects. (A bare

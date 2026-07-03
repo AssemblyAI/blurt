@@ -43,6 +43,12 @@ tag_exists_on_origin() {
   git -C "$REPO_ROOT" ls-remote --tags origin "refs/tags/$1" 2>/dev/null | grep -q .
 }
 
+# True if codesigning identity $1 (a SHA-1 hash) appears in the
+# `security find-identity -v -p codesigning` output piped on stdin.
+identity_listed() {
+  grep -qF -- "$1"
+}
+
 # --- pure version helpers (unit-tested by scripts/release.test.sh) ---
 
 # True if $1 looks like X.Y.Z (digits only).

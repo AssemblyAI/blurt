@@ -66,6 +66,9 @@ done
 xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
   || die "notarytool profile '$NOTARY_PROFILE' not found. Run: xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <you@example.com> --team-id $TEAM_ID --password <app-specific-password>"
 
+security find-identity -v -p codesigning | identity_listed "$IDENTITY" \
+  || die "Developer ID identity $IDENTITY not in keychain (check: security find-identity -v -p codesigning). Wrong Mac, or the signing key is missing."
+
 require_clean_tree "building a release artifact"
 
 step "Read version"
