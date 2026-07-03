@@ -16,9 +16,11 @@ readonly TEAM_ID="Y54ZB9JF63"
 readonly NOTARY_PROFILE="blurt-notary"
 
 SKIP_CHECKS=0
+SKIP_SMOKE=0
 for arg in "$@"; do
   case "$arg" in
     --skip-checks) SKIP_CHECKS=1 ;;
+    --skip-smoke) SKIP_SMOKE=1 ;;
     *) echo "unknown arg: $arg" >&2; exit 2 ;;
   esac
 done
@@ -50,6 +52,33 @@ notarize() {
   fi
   info "notary log ($tag): $log_json"
   LAST_NOTARY_LOG="$log_json"
+}
+
+# Best-effort launch check: Blurt is a GUI app (wants Accessibility/mic, shows
+# an overlay) so it can't run headless — this only catches a build that dies on
+# launch. The human release-install.sh step remains the real functional gate.
+# NOTE: pkill below also terminates any Blurt the maintainer had running.
+crash_list() {
+  find "$HOME/Library/Logs/DiagnosticReports" -maxdepth 1 -name 'Blurt*' -print 2>/dev/null | sort
+}
+smoke_launch() {
+  local app="$1" before after new
+  before="$(crash_list)"
+  open -g "$app" || die "smoke test: could not launch $app"
+  sleep 2
+  if ! pgrep -x Blurt >/dev/null; then
+    after="$(crash_list)"
+    new="$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after"))"
+    die "smoke test: Blurt exited within 2s of launch${new:+ (new crash report: $new)}"
+  fi
+  sleep 3
+  after="$(crash_list)"
+  new="$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after"))"
+  osascript -e 'tell application "Blurt" to quit' >/dev/null 2>&1 || true
+  sleep 1
+  pkill -x Blurt >/dev/null 2>&1 || true
+  [ -z "$new" ] || die "smoke test: new crash report(s) after launch: $new"
+  info "smoke test: launched, stayed up 5s, no crash report"
 }
 
 if command -v xcbeautify >/dev/null 2>&1; then
@@ -183,6 +212,13 @@ step "Staple app"
 xcrun stapler staple "$APP_STAGED"
 xcrun stapler validate "$APP_STAGED"
 info "app stapled + validated"
+
+if [ "$SKIP_SMOKE" -eq 0 ]; then
+  step "Launch smoke test"
+  smoke_launch "$APP_STAGED"
+else
+  info "smoke test skipped (--skip-smoke)"
+fi
 
 step "Create DMG"
 DMG="$BUILD_ROOT/Blurt-$VERSION.dmg"
