@@ -9,13 +9,11 @@ public actor DictationSession {
   // Members those files reach are internal rather than private (Swift's
   // file-scoped access can't cross the split).
 
-  /// Live feed of phase changes for the single observer (the production app's
-  /// AppCoordinator drives the overlay from it). Each `phaseStream()` call
-  /// supersedes any prior one,
-  /// yielding the current phase plus every subsequent transition. `currentID`
-  /// tags the active continuation so a stream that's torn down after a newer one
-  /// supersedes it doesn't clear the live continuation.
-  var continuation: AsyncStream<PipelinePhase>.Continuation?
+  /// Live feeds of phase changes. Each `phaseStream()` call yields the current
+  /// phase plus every subsequent transition, so the production renderer and
+  /// auxiliary/debug views can observe the same session without disconnecting
+  /// each other.
+  var continuations: [Int: AsyncStream<PipelinePhase>.Continuation] = [:]
   var currentID = 0
 
   /// Feed behind the nonisolated `submit(_:)` (see `+Commands`): commands are
@@ -116,6 +114,9 @@ public actor DictationSession {
 
   deinit {
     commandFeed.finish()
+    for continuation in continuations.values {
+      continuation.finish()
+    }
   }
 
   /// Appends `op` to the serial command queue and waits for it to run. The
@@ -387,6 +388,8 @@ public actor DictationSession {
 
   private func setPhase(_ newPhase: PipelinePhase) {
     phase = newPhase
-    continuation?.yield(newPhase)
+    for continuation in continuations.values {
+      continuation.yield(newPhase)
+    }
   }
 }

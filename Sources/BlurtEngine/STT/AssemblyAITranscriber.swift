@@ -24,13 +24,6 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// Required on every Sync API request — selects the synchronous STT model.
   private static let syncModel = "u3-sync-pro"
 
-  /// Reused across responses — `JSONDecoder` is stateless, so allocating a fresh
-  /// one per decode is pure waste (mirrors `DictationLog.encoder`).
-  private static let decoder = JSONDecoder()
-
-  /// Reused across requests, same rationale as `decoder`.
-  private static let encoder = JSONEncoder()
-
   public init(
     apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.get() },
     baseURL: URL = URL(string: "https://sync.assemblyai.com")!,
@@ -69,7 +62,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     let body = multipartBody(pcm: pcm, config: config, boundary: boundary)
     let audioDurationMs = Int((Double(samples.count) / Double(sampleRate)) * 1000)
     let data = try await send(request, body: body, audioDurationMs: audioDurationMs)
-    guard let response = try? Self.decoder.decode(SyncTranscriptResponse.self, from: data) else {
+    guard let response = try? JSONDecoder().decode(SyncTranscriptResponse.self, from: data) else {
       throw AssemblyAIError.malformedResponse
     }
     return response.text
@@ -100,7 +93,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// assert the prompt wiring without inspecting the multipart upload body
   /// (which `URLProtocol` mocks can't observe reliably for `upload(from:)`).
   func makeConfigData(sampleRate: Int, prompt: String?) throws -> Data {
-    try Self.encoder.encode(
+    try JSONEncoder().encode(
       SyncConfig(
         sampleRate: sampleRate,
         channels: 1,
@@ -163,7 +156,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// the raw body text (trimmed and capped) so a failure never reaches the user
   /// as a bare status code with no context. Returns nil only for an empty body.
   static func errorMessage(from data: Data) -> String? {
-    if let parsed = try? decoder.decode(ErrorResponse.self, from: data),
+    if let parsed = try? JSONDecoder().decode(ErrorResponse.self, from: data),
       let message = parsed.message
     {
       return message

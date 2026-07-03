@@ -7,13 +7,24 @@ import SwiftUI
 struct SoundStepView: View {
   var coordinator: AppCoordinator
 
-  @State private var selection: SoundPack = SoundPackStore().soundPack
+  @AppStorage(SoundPackStore.defaultsKey) private var soundPackID = SoundPack.defaultPack.id
+
+  private var selection: Binding<SoundPack> {
+    Binding(
+      get: {
+        SoundPack.find(id: soundPackID) ?? .defaultPack
+      },
+      set: { newValue in
+        soundPackID = newValue.id
+        coordinator.soundPackChanged()
+      })
+  }
 
   var body: some View {
     Section {
       PickerSettingRow(
         title: "Cue sound", systemImage: "speaker.wave.2",
-        accessibilityID: "settings.sound.picker", selection: $selection
+        accessibilityID: "settings.sound.picker", selection: selection
       ) {
         Text(SoundPack.none.label).tag(SoundPack.none)
         ForEach(SoundPack.groups, id: \.self) { group in
@@ -23,10 +34,6 @@ struct SoundStepView: View {
             }
           }
         }
-      }
-      .onChange(of: selection) { _, newValue in
-        SoundPackStore().soundPack = newValue
-        coordinator.soundPackChanged()
       }
     } header: {
       Text("Sound")

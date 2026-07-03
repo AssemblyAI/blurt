@@ -7,21 +7,28 @@ import SwiftUI
 struct HotkeyStepView: View {
   var coordinator: AppCoordinator
 
-  @State private var selection: TriggerKey = TriggerKeyStore().triggerKey
+  @AppStorage(TriggerKeyStore.defaultsKey) private var triggerKeyCode = TriggerKey.rightCommand.rawValue
+
+  private var selection: Binding<TriggerKey> {
+    Binding(
+      get: {
+        TriggerKey.fromPersisted(triggerKeyCode)
+      },
+      set: { newValue in
+        triggerKeyCode = newValue.rawValue
+        coordinator.dictationBindingChanged()
+      })
+  }
 
   var body: some View {
     Section {
       PickerSettingRow(
         title: "Dictation key", systemImage: "keyboard",
-        accessibilityID: "settings.hotkey.picker", selection: $selection
+        accessibilityID: "settings.hotkey.picker", selection: selection
       ) {
         ForEach(TriggerKey.allCases, id: \.self) { key in
           Text(key.label).tag(key)
         }
-      }
-      .onChange(of: selection) { _, newValue in
-        TriggerKeyStore().triggerKey = newValue
-        coordinator.dictationBindingChanged()
       }
     } header: {
       Text("Shortcut")

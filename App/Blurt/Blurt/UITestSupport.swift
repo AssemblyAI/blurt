@@ -124,6 +124,7 @@
   /// record → transcribe → paste flow deterministically.
   struct UITestHarnessView: View {
     var appDelegate: AppDelegate
+    @Environment(\.openWindow) private var openWindow
 
     private var coordinator: AppCoordinator? { appDelegate.coordinator }
 
@@ -180,6 +181,14 @@
       }
       .padding(20)
       .frame(width: 360)
+      .onAppear {
+        // UI tests need the main Window scene to be present even when SwiftUI's
+        // restoration state remembers it as closed from a prior test. The harness
+        // scene is always presented in UI-test mode, so capture its openWindow
+        // action and use it to deterministically restore the main window.
+        appDelegate.openWindowByID = { openWindow(id: $0) }
+        appDelegate.openMainWindow()
+      }
     }
 
     private var statusText: String {

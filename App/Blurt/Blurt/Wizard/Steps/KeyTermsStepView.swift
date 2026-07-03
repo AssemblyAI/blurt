@@ -7,8 +7,8 @@ import SwiftUI
 /// (see `KeyTermsStore` / `TranscriptionPrompt.build`), so the model favors those
 /// spellings. Optional — it never gates setup; an empty list just sends no terms.
 struct KeyTermsStepView: View {
-  /// Seeded from the store on first render; written back as the user edits.
-  @State private var text = KeyTermsStore.get() ?? ""
+  /// Stored in UserDefaults so multiple settings windows/readers see edits live.
+  @AppStorage(KeyTermsStore.defaultsKey) private var text = ""
 
   var body: some View {
     Section {
@@ -28,7 +28,7 @@ struct KeyTermsStepView: View {
       .font(.body)
       .disableAutocorrection(true)
       .accessibilityIdentifier("settings.keyTerms.field")
-      .onChange(of: text) { KeyTermsStore.set(text) }
+      .onChange(of: text) { _, newValue in KeyTermsStore.set(newValue) }
     } header: {
       Text("Key Terms")
     } footer: {
