@@ -46,10 +46,17 @@ final class OverlayWindowController {
   private let bridge = OverlayBridge()
   private var suppressOriginPersist = false
 
-  // How long a transient notice (error flash / "copied" notice) lingers before
-  // settling back to idle.
+  // How long a transient notice lingers before settling back to idle. A failed or
+  // "copied" notice holds long enough to read; a successful "Pasted" needs far
+  // less, so it clears faster and the interaction feels snappier.
   private static let errorFlashSeconds: Double = 1.6
+  private static let pastedNoticeSeconds: Double = 0.8
   private var errorRevertTask: Task<Void, Never>?
+
+  // The pill fades in fast — the appear is tied to the user's keypress, so a snappy
+  // ramp reads as instant response — but fades out gently. Asymmetric on purpose.
+  private static let appearFadeDuration: Double = 0.08
+  private static let dismissFadeDuration: Double = 0.2
 
   // Token for the block-based didMove observer so `deinit` can deregister it.
   // `nonisolated(unsafe)` because the nonisolated deinit reads it: it's written
@@ -126,8 +133,9 @@ final class OverlayWindowController {
           .announcement: state.accessibilityLabel,
           .priority: NSAccessibilityPriorityLevel.high.rawValue,
         ])
+      let dwell = state == .pasted ? Self.pastedNoticeSeconds : Self.errorFlashSeconds
       errorRevertTask = Task { [weak self] in
-        try? await Task.sleep(for: .seconds(Self.errorFlashSeconds))
+        try? await Task.sleep(for: .seconds(dwell))
         guard let self, !Task.isCancelled else { return }
         self.show(state: .idle)
       }
@@ -173,7 +181,7 @@ final class OverlayWindowController {
         panel.alphaValue = 1
       } else {
         NSAnimationContext.runAnimationGroup { ctx in
-          ctx.duration = 0.2
+          ctx.duration = Self.appearFadeDuration
           panel.animator().alphaValue = 1
         }
       }
@@ -185,7 +193,7 @@ final class OverlayWindowController {
       }
       NSAnimationContext.runAnimationGroup(
         { ctx in
-          ctx.duration = 0.2
+          ctx.duration = Self.dismissFadeDuration
           panel.animator().alphaValue = 0
         },
         completionHandler: { [weak self] in
