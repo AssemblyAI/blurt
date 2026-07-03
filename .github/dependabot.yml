@@ -1,0 +1,10 @@
+version: 2
+updates:
+  # Keep the SHA-pinned GitHub Actions from rotting: Dependabot opens a PR
+  # (with a new SHA + version comment) when a pinned action publishes a release.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci"
