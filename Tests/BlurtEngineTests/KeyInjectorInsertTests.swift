@@ -189,6 +189,7 @@ struct KeyInjectorInsertTests {
         pasted.append(clip.string)
         return true
       },
+      isAXOpaqueEditor: { _ in true },  // the VS Code / Electron case
       clipboard: clip)
     // Same target app for both dictations (the VS Code case). Prior text is nil
     // because Electron/Monaco surfaces are Accessibility-opaque.
@@ -200,6 +201,30 @@ struct KeyInjectorInsertTests {
     // First paste lands as-is; the second is separated from it even though AX
     // gave us no prior text — the injector remembers what it just pasted.
     #expect(pasted.values == ["First.", " Second."])
+  }
+
+  @Test("browser tab sharing one PID: no phantom space carried from an unrelated field")
+  func nonOpaqueEditorSameAppNoSeparator() async throws {
+    let clip = FakeClipboard(string: nil)
+    let pasted = StringListBox()
+    let injector = KeyInjector(
+      pasteSettleDuration: .zero,
+      postPaste: {
+        pasted.append(clip.string)
+        return true
+      },
+      clipboard: clip)
+    // Same target PID for both dictations, but `isAXOpaqueEditor` defaults to
+    // false (not an Electron-style app) — e.g. Chrome hosting an unrelated tab
+    // between the two dictations, or Google Docs, whose canvas-rendered body
+    // reads as AX-opaque without being a genuinely continuous editor. The
+    // fallback must not fire just because the PID matches.
+    await injector.setTargetApp(try liveTargetApp())
+
+    try await injector.insert("First.", after: nil)
+    try await injector.insert("Second.", after: nil)
+
+    #expect(pasted.values == ["First.", "Second."])
   }
 
   @Test("opaque editor: no phantom space after the target app changes")

@@ -142,13 +142,19 @@ public actor KeyInjector: InjectorProtocol {
   /// caret. AX-read `priorText` is authoritative whenever we have it. When it's
   /// nil — the field is empty *or* Accessibility-opaque (Electron/Monaco, e.g. VS
   /// Code) — we can't tell those apart from AX alone, so we fall back to the text
-  /// we last pasted, but only when this dictation targets the *same* app: that's
-  /// the in-progress-run case where our own paste is what now sits before the
-  /// caret. Across a different target app (or with nothing pasted yet) we return
-  /// nil rather than risk a stray leading space into a genuinely fresh field.
-  static func separatorBasis(priorText: String?, lastInserted: String?, sameTarget: Bool) -> String? {
+  /// we last pasted, but only when this dictation targets the *same continuous
+  /// editor*: that's the in-progress-run case where our own paste is what now
+  /// sits before the caret. A shared PID alone doesn't establish that — a
+  /// browser hosts many independent tabs/documents under one process, so
+  /// `sameApp` must be paired with `isKnownOpaqueEditor` (true only for the
+  /// Electron-style apps this fallback was built for). Otherwise (a different
+  /// target app, a browser tab, or nothing pasted yet) we return nil rather than
+  /// risk a stray leading space into what may be a genuinely fresh field.
+  static func separatorBasis(
+    priorText: String?, lastInserted: String?, sameApp: Bool, isKnownOpaqueEditor: Bool
+  ) -> String? {
     if priorText != nil { return priorText }
-    return sameTarget ? lastInserted : nil
+    return sameApp && isKnownOpaqueEditor ? lastInserted : nil
   }
 
   public func setTargetApp(_ app: NSRunningApplication?) async {
@@ -218,11 +224,16 @@ public actor KeyInjector: InjectorProtocol {
     // another.
     let target = targetApp
     // In Accessibility-opaque editors `priorText` is nil even mid-run; fall back
-    // to what we last pasted when this dictation targets the same app, so
-    // consecutive dictations there still get a separating space.
-    let sameTarget = lastInsertedTargetPID != nil && target?.processIdentifier == lastInsertedTargetPID
+    // to what we last pasted when this dictation targets the same app *and*
+    // that app is a known single-continuous-editor case (Electron), so
+    // consecutive dictations there still get a separating space. A browser
+    // sharing one PID across unrelated tabs/documents (e.g. Google Docs, whose
+    // canvas-rendered body also reads as AX-opaque) must not take this
+    // fallback — it would carry spacing from a completely unrelated field.
+    let sameApp = lastInsertedTargetPID != nil && target?.processIdentifier == lastInsertedTargetPID
     let basis = KeyInjector.separatorBasis(
-      priorText: priorText, lastInserted: lastInsertedText, sameTarget: sameTarget)
+      priorText: priorText, lastInserted: lastInsertedText, sameApp: sameApp,
+      isKnownOpaqueEditor: isAXOpaqueEditor(target))
     let finalText = KeyInjector.withLeadingSeparator(text, after: basis)
     do {
       try await activateTargetApp(target)
