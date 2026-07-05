@@ -179,17 +179,7 @@ struct KeyInjectorInsertTests {
 
   @Test("opaque editor: a second dictation into the same window gets a separating space")
   func opaqueEditorSameWindowInsertsSeparated() async throws {
-    let clip = FakeClipboard(string: nil)
-    // Record the text that actually lands on the pasteboard at each ⌘V (captured
-    // inside `postPaste`, after `setString` and before the restore).
-    let pasted = StringListBox()
-    let injector = KeyInjector(
-      pasteSettleDuration: .zero,
-      postPaste: {
-        pasted.append(clip.string)
-        return true
-      },
-      clipboard: clip)
+    let (injector, pasted) = makeRecordingInjector()
     // Same target app AND window title for both dictations — e.g. two
     // back-to-back dictations into the same VS Code file, or the same Google
     // Docs tab. Prior text is nil because both surfaces are Accessibility-opaque.
@@ -206,15 +196,7 @@ struct KeyInjectorInsertTests {
 
   @Test("opaque editor: no phantom space when the window title changes (a tab/file switch)")
   func opaqueEditorDifferentWindowTitleNoSeparator() async throws {
-    let clip = FakeClipboard(string: nil)
-    let pasted = StringListBox()
-    let injector = KeyInjector(
-      pasteSettleDuration: .zero,
-      postPaste: {
-        pasted.append(clip.string)
-        return true
-      },
-      clipboard: clip)
+    let (injector, pasted) = makeRecordingInjector()
     // Same target PID for both dictations (one browser process, or one Electron
     // window), but the window title changes between them — a different browser
     // tab (e.g. switching from Gmail to a fresh Google Docs tab) or a different
@@ -230,15 +212,7 @@ struct KeyInjectorInsertTests {
 
   @Test("opaque editor: no phantom space when no window title is available")
   func opaqueEditorNoWindowTitleNoSeparator() async throws {
-    let clip = FakeClipboard(string: nil)
-    let pasted = StringListBox()
-    let injector = KeyInjector(
-      pasteSettleDuration: .zero,
-      postPaste: {
-        pasted.append(clip.string)
-        return true
-      },
-      clipboard: clip)
+    let (injector, pasted) = makeRecordingInjector()
     // Same target PID, but neither dictation could read a window title — can't
     // confirm it's really the same window, so the fallback stays off rather
     // than guessing.
@@ -252,15 +226,7 @@ struct KeyInjectorInsertTests {
 
   @Test("opaque editor: no phantom space after the target app changes")
   func opaqueEditorDifferentTargetNoSeparator() async throws {
-    let clip = FakeClipboard(string: nil)
-    let pasted = StringListBox()
-    let injector = KeyInjector(
-      pasteSettleDuration: .zero,
-      postPaste: {
-        pasted.append(clip.string)
-        return true
-      },
-      clipboard: clip)
+    let (injector, pasted) = makeRecordingInjector()
     let apps = NSWorkspace.shared.runningApplications.filter {
       $0.processIdentifier > 0 && !$0.isTerminated
     }
