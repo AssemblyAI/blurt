@@ -34,6 +34,14 @@ public actor KeyInjector: InjectorProtocol {
   private struct WindowIdentity: Equatable {
     let pid: pid_t
     let title: String
+
+    // Hand-written rather than synthesized: Periphery's static analysis can't
+    // see through a compiler-synthesized `==`, so it flags `pid`/`title` as
+    // assigned-but-unused. Spelling out the comparison gives it a real usage
+    // site to index.
+    static func == (lhs: WindowIdentity, rhs: WindowIdentity) -> Bool {
+      lhs.pid == rhs.pid && lhs.title == rhs.title
+    }
   }
 
   /// The window `lastInsertedText` was pasted into. Lets `insert` recover
