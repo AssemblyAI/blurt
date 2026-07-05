@@ -177,8 +177,8 @@ struct KeyInjectorInsertTests {
     #expect(clip.string == "user-clipboard")
   }
 
-  @Test("opaque editor: a second dictation into the same app gets a separating space")
-  func opaqueEditorConsecutiveInsertsSeparated() async throws {
+  @Test("opaque editor: a second dictation into the same window gets a separating space")
+  func opaqueEditorSameWindowInsertsSeparated() async throws {
     let clip = FakeClipboard(string: nil)
     // Record the text that actually lands on the pasteboard at each ⌘V (captured
     // inside `postPaste`, after `setString` and before the restore).
@@ -189,22 +189,23 @@ struct KeyInjectorInsertTests {
         pasted.append(clip.string)
         return true
       },
-      isAXOpaqueEditor: { _ in true },  // the VS Code / Electron case
       clipboard: clip)
-    // Same target app for both dictations (the VS Code case). Prior text is nil
-    // because Electron/Monaco surfaces are Accessibility-opaque.
+    // Same target app AND window title for both dictations — e.g. two
+    // back-to-back dictations into the same VS Code file, or the same Google
+    // Docs tab. Prior text is nil because both surfaces are Accessibility-opaque.
     await injector.setTargetApp(try liveTargetApp())
 
-    try await injector.insert("First.", after: nil)
-    try await injector.insert("Second.", after: nil)
+    try await injector.insert("First.", after: nil, windowTitle: "notes.txt — Editor")
+    try await injector.insert("Second.", after: nil, windowTitle: "notes.txt — Editor")
 
     // First paste lands as-is; the second is separated from it even though AX
-    // gave us no prior text — the injector remembers what it just pasted.
+    // gave us no prior text — the injector remembers what it just pasted into
+    // this same window.
     #expect(pasted.values == ["First.", " Second."])
   }
 
-  @Test("browser tab sharing one PID: no phantom space carried from an unrelated field")
-  func nonOpaqueEditorSameAppNoSeparator() async throws {
+  @Test("opaque editor: no phantom space when the window title changes (a tab/file switch)")
+  func opaqueEditorDifferentWindowTitleNoSeparator() async throws {
     let clip = FakeClipboard(string: nil)
     let pasted = StringListBox()
     let injector = KeyInjector(
@@ -214,11 +215,33 @@ struct KeyInjectorInsertTests {
         return true
       },
       clipboard: clip)
-    // Same target PID for both dictations, but `isAXOpaqueEditor` defaults to
-    // false (not an Electron-style app) — e.g. Chrome hosting an unrelated tab
-    // between the two dictations, or Google Docs, whose canvas-rendered body
-    // reads as AX-opaque without being a genuinely continuous editor. The
-    // fallback must not fire just because the PID matches.
+    // Same target PID for both dictations (one browser process, or one Electron
+    // window), but the window title changes between them — a different browser
+    // tab (e.g. switching from Gmail to a fresh Google Docs tab) or a different
+    // file in the same editor. A shared PID alone must not be enough to carry a
+    // leading space into what is really a different field.
+    await injector.setTargetApp(try liveTargetApp())
+
+    try await injector.insert("First.", after: nil, windowTitle: "Inbox — Gmail")
+    try await injector.insert("Second.", after: nil, windowTitle: "Untitled document — Google Docs")
+
+    #expect(pasted.values == ["First.", "Second."])
+  }
+
+  @Test("opaque editor: no phantom space when no window title is available")
+  func opaqueEditorNoWindowTitleNoSeparator() async throws {
+    let clip = FakeClipboard(string: nil)
+    let pasted = StringListBox()
+    let injector = KeyInjector(
+      pasteSettleDuration: .zero,
+      postPaste: {
+        pasted.append(clip.string)
+        return true
+      },
+      clipboard: clip)
+    // Same target PID, but neither dictation could read a window title — can't
+    // confirm it's really the same window, so the fallback stays off rather
+    // than guessing.
     await injector.setTargetApp(try liveTargetApp())
 
     try await injector.insert("First.", after: nil)

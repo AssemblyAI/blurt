@@ -140,10 +140,10 @@ The model's limits live in `SyncSTTLimits` (16 kHz sample rate, ~0.1 s–120 s a
 
 ```swift
 func setTargetApp(_ app: NSRunningApplication?) async
-func insert(_ text: String, after priorText: String?) async throws
+func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws
 ```
 
-`KeyInjector.insert` **always** pastes: it saves the current pasteboard, writes the transcript, activates the captured target app, posts a synthesized ⌘V, waits for the target to read the clipboard (`pasteSettleDuration`, default 400 ms, tunable in the initializer), then restores the prior pasteboard contents. There is no keystroke-by-keystroke typing path and no length threshold. If the target app is gone or nothing editable is focused it leaves the text on the clipboard and throws `.targetAppLost` / `.noEditableTarget` — which the session turns into the quiet `.noTarget` outcome. `priorText` (the text before the caret, captured at press time) drives `withLeadingSeparator`, which joins consecutive dictations with a space so they don't run together.
+`KeyInjector.insert` **always** pastes: it saves the current pasteboard, writes the transcript, activates the captured target app, posts a synthesized ⌘V, waits for the target to read the clipboard (`pasteSettleDuration`, default 400 ms, tunable in the initializer), then restores the prior pasteboard contents. There is no keystroke-by-keystroke typing path and no length threshold. If the target app is gone or nothing editable is focused it leaves the text on the clipboard and throws `.targetAppLost` / `.noEditableTarget` — which the session turns into the quiet `.noTarget` outcome. `priorText` (the text before the caret, captured at press time) drives `withLeadingSeparator`, which joins consecutive dictations with a space so they don't run together. When `priorText` is unreadable (an Accessibility-opaque editor, or a browser tab like Google Docs whose canvas-rendered body exposes no AX text), `separatorBasis` falls back to what was last pasted — but only when both the target app **and** `windowTitle` match the last successful insert, so the fallback tracks "the same window," not just "the same process" (a browser hosts many unrelated tabs/documents under one PID).
 
 The session calls `setTargetApp` at press time with the app that was frontmost when recording started — so the paste lands where the user was, even if focus moved during transcription.
 

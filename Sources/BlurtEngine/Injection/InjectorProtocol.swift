@@ -6,5 +6,9 @@ public protocol InjectorProtocol: Sendable {
   /// `priorText` is the text immediately before the caret (captured at press time),
   /// used to decide whether a separating space is needed so consecutive dictations
   /// don't run together; nil when the field is empty or its contents are opaque.
-  func insert(_ text: String, after priorText: String?) async throws
+  /// `windowTitle` is the focused window's title at that same press-time capture —
+  /// used to recognize a *continuing* dictation into the same window when
+  /// `priorText` is unreadable (see `KeyInjector.separatorBasis`); nil when the
+  /// window exposes no title.
+  func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws
 }

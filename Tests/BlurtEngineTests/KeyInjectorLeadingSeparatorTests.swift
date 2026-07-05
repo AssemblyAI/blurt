@@ -57,36 +57,24 @@ struct KeyInjectorSeparatorBasisTests {
   @Test("AX-read prior text wins even when a prior paste is on record")
   func priorTextWins() {
     #expect(
-      KeyInjector.separatorBasis(
-        priorText: "AX.", lastInserted: "Old.", sameApp: true, isKnownOpaqueEditor: false) == "AX.")
+      KeyInjector.separatorBasis(priorText: "AX.", lastInserted: "Old.", sameWindow: false) == "AX.")
   }
 
-  @Test("falls back to the last paste when AX is opaque, the target is unchanged, and it's a known opaque editor")
-  func opaqueSameTargetFallsBack() {
+  @Test("falls back to the last paste when AX is opaque and the window is unchanged")
+  func opaqueSameWindowFallsBack() {
     #expect(
-      KeyInjector.separatorBasis(
-        priorText: nil, lastInserted: "First.", sameApp: true, isKnownOpaqueEditor: true)
+      KeyInjector.separatorBasis(priorText: nil, lastInserted: "First.", sameWindow: true)
         == "First.")
   }
 
-  @Test("does not carry a prior paste across a different target app")
-  func opaqueDifferentTargetNoFallback() {
+  @Test("does not carry a prior paste across a different window")
+  func opaqueDifferentWindowNoFallback() {
     #expect(
-      KeyInjector.separatorBasis(
-        priorText: nil, lastInserted: "First.", sameApp: false, isKnownOpaqueEditor: true) == nil)
+      KeyInjector.separatorBasis(priorText: nil, lastInserted: "First.", sameWindow: false) == nil)
   }
 
   @Test("no basis when AX is opaque and nothing was pasted yet")
   func opaqueNoPriorPaste() {
-    #expect(
-      KeyInjector.separatorBasis(
-        priorText: nil, lastInserted: nil, sameApp: true, isKnownOpaqueEditor: true) == nil)
-  }
-
-  @Test("does not fall back for a same-PID app that isn't a known opaque editor (e.g. a browser tab)")
-  func sameAppButNotOpaqueEditorNoFallback() {
-    #expect(
-      KeyInjector.separatorBasis(
-        priorText: nil, lastInserted: "First.", sameApp: true, isKnownOpaqueEditor: false) == nil)
+    #expect(KeyInjector.separatorBasis(priorText: nil, lastInserted: nil, sameWindow: true) == nil)
   }
 }

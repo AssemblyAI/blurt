@@ -91,7 +91,7 @@
   /// into", surfacing the recorded text for the test to assert on.
   struct UITestInjector: InjectorProtocol {
     func setTargetApp(_ app: NSRunningApplication?) async {}
-    func insert(_ text: String, after priorText: String?) async throws {
+    func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws {
       await MainActor.run { UITestState.shared.recordPaste(text) }
     }
   }

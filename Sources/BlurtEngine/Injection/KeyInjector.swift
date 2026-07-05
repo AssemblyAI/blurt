@@ -19,16 +19,24 @@ public actor KeyInjector: InjectorProtocol {
   private let postPaste: @Sendable () -> Bool
 
   /// The exact text most recently pasted by `insert` (including any leading
-  /// separator space it added), so a following dictation into the same
-  /// Accessibility-opaque editor can recover its spacing (see `separatorBasis`).
+  /// separator space it added), so a following dictation into the same window
+  /// can recover its spacing (see `separatorBasis`).
   private var lastInsertedText: String?
 
-  /// The pid of the target app `lastInsertedText` was pasted into. Lets `insert`
-  /// recover spacing in Accessibility-opaque editors (Electron/Monaco, e.g. VS
-  /// Code) where no prior text can be read: if the next dictation targets the
-  /// same app, the text we just pasted is what now precedes the caret, so it
-  /// drives the separator decision (see `separatorBasis`).
+  /// The pid of the target app `lastInsertedText` was pasted into. Paired with
+  /// `lastInsertedWindowTitle` to recognize "the same window as last time" (see
+  /// `separatorBasis`) — a PID alone isn't enough: one browser process hosts many
+  /// unrelated tabs/documents under the same pid.
   private var lastInsertedTargetPID: pid_t?
+
+  /// The focused window's title at the last successful `insert`. Lets `insert`
+  /// recover spacing in Accessibility-opaque editors (Electron/Monaco, e.g. VS
+  /// Code — and, just as opaque, a browser tab like Google Docs) where no prior
+  /// text can be read: if the next dictation's target app *and* window title
+  /// both match, the text we just pasted is what now precedes the caret, so it
+  /// drives the separator decision. A title mismatch (a different tab, a
+  /// different file) means a different field, so the fallback doesn't fire.
+  private var lastInsertedWindowTitle: String?
 
   /// Tail of the paste chain: each insert links behind the previous insert's
   /// ENTIRE critical section — paste *plus* its backgrounded settle/restore — so
@@ -141,20 +149,21 @@ public actor KeyInjector: InjectorProtocol {
   /// Chooses what text the separator decision should treat as preceding the
   /// caret. AX-read `priorText` is authoritative whenever we have it. When it's
   /// nil — the field is empty *or* Accessibility-opaque (Electron/Monaco, e.g. VS
-  /// Code) — we can't tell those apart from AX alone, so we fall back to the text
-  /// we last pasted, but only when this dictation targets the *same continuous
-  /// editor*: that's the in-progress-run case where our own paste is what now
-  /// sits before the caret. A shared PID alone doesn't establish that — a
-  /// browser hosts many independent tabs/documents under one process, so
-  /// `sameApp` must be paired with `isKnownOpaqueEditor` (true only for the
-  /// Electron-style apps this fallback was built for). Otherwise (a different
-  /// target app, a browser tab, or nothing pasted yet) we return nil rather than
-  /// risk a stray leading space into what may be a genuinely fresh field.
-  static func separatorBasis(
-    priorText: String?, lastInserted: String?, sameApp: Bool, isKnownOpaqueEditor: Bool
-  ) -> String? {
+  /// Code — or a browser tab like Google Docs, whose canvas-rendered body is just
+  /// as opaque) — we can't tell those apart from AX alone, so we fall back to the
+  /// text we last pasted, but only when this dictation targets the *same window*
+  /// as last time (`sameWindow`, true only when both the target app and its
+  /// window title match the last successful paste): that's the in-progress-run
+  /// case where our own paste is what now sits before the caret. This is deliberately
+  /// app-agnostic rather than an allowlist of "known opaque editors" — a shared
+  /// process id alone doesn't mean the same field (one browser process hosts many
+  /// unrelated tabs/documents), but a shared window title is a reasonable proxy
+  /// for "still the same document" across *any* app, opaque or not. Otherwise (a
+  /// different window, a different app, or nothing pasted yet) we return nil
+  /// rather than risk a stray leading space into what may be a genuinely fresh field.
+  static func separatorBasis(priorText: String?, lastInserted: String?, sameWindow: Bool) -> String? {
     if priorText != nil { return priorText }
-    return sameApp && isKnownOpaqueEditor ? lastInserted : nil
+    return sameWindow ? lastInserted : nil
   }
 
   public func setTargetApp(_ app: NSRunningApplication?) async {
@@ -177,7 +186,7 @@ public actor KeyInjector: InjectorProtocol {
     guard await waitForTargetActivation(target) else { throw BlurtError.targetAppLost }
   }
 
-  public func insert(_ text: String, after priorText: String? = nil) async throws {
+  public func insert(_ text: String, after priorText: String? = nil, windowTitle: String? = nil) async throws {
     guard !text.isEmpty else { return }
     // Serialize the whole paste critical section by chaining behind the previous
     // insert's link (which includes its settle/restore — see `pendingSettle`).
@@ -189,7 +198,7 @@ public actor KeyInjector: InjectorProtocol {
     let timeout = pasteSettleDuration
     let paste = Task<SettleJob?, any Error> {
       await previous?.value
-      return try await self.performInsert(text, after: priorText)
+      return try await self.performInsert(text, after: priorText, windowTitle: windowTitle)
     }
     // Strong `self` captures, deliberately: each link is bounded (one paste, one
     // settle sleep — no cycle), and a weak capture would let an injector torn
@@ -215,7 +224,9 @@ public actor KeyInjector: InjectorProtocol {
   /// The paste critical section: runs with the chain's guarantee that no other
   /// insert (or its settle) is mid-flight. Returns the settle job for the
   /// deferred clipboard restore.
-  private func performInsert(_ text: String, after priorText: String?) async throws -> SettleJob {
+  private func performInsert(
+    _ text: String, after priorText: String?, windowTitle: String?
+  ) async throws -> SettleJob {
     try Task.checkCancellation()
     // Snapshot the target at entry and use only the local below: this method
     // suspends (activation settle), the actor is reentrant, and a
@@ -224,16 +235,20 @@ public actor KeyInjector: InjectorProtocol {
     // another.
     let target = targetApp
     // In Accessibility-opaque editors `priorText` is nil even mid-run; fall back
-    // to what we last pasted when this dictation targets the same app *and*
-    // that app is a known single-continuous-editor case (Electron), so
-    // consecutive dictations there still get a separating space. A browser
-    // sharing one PID across unrelated tabs/documents (e.g. Google Docs, whose
-    // canvas-rendered body also reads as AX-opaque) must not take this
-    // fallback — it would carry spacing from a completely unrelated field.
-    let sameApp = lastInsertedTargetPID != nil && target?.processIdentifier == lastInsertedTargetPID
+    // to what we last pasted when this dictation targets the same window as last
+    // time, so consecutive dictations there still get a separating space. A
+    // title match is required, not just a PID match: a browser shares one PID
+    // across unrelated tabs/documents (e.g. Google Docs, whose canvas-rendered
+    // body also reads as AX-opaque), and that fallback must not carry spacing
+    // across a tab switch — or, symmetrically, across switching files within a
+    // single Electron editor window.
+    let sameWindow =
+      lastInsertedTargetPID != nil
+      && target?.processIdentifier == lastInsertedTargetPID
+      && windowTitle != nil
+      && windowTitle == lastInsertedWindowTitle
     let basis = KeyInjector.separatorBasis(
-      priorText: priorText, lastInserted: lastInsertedText, sameApp: sameApp,
-      isKnownOpaqueEditor: isAXOpaqueEditor(target))
+      priorText: priorText, lastInserted: lastInsertedText, sameWindow: sameWindow)
     let finalText = KeyInjector.withLeadingSeparator(text, after: basis)
     do {
       try await activateTargetApp(target)
@@ -276,13 +291,15 @@ public actor KeyInjector: InjectorProtocol {
     // to the "copied" notice, matching the lost-target path above.
     guard postPaste() else { throw BlurtError.targetAppLost }
     // The paste is posted and the text is visible. Record what landed (including
-    // any leading separator) and which app it landed in so a following dictation
-    // into the same opaque editor can recover its spacing, then hand the settle +
-    // clipboard restore back to the chain link (see `insert`). `insert` returns
-    // now — so the pipeline reaches `.idle` and re-arms without waiting out the
-    // restore window — while the next paste still serializes behind the settle.
+    // any leading separator), which app it landed in, and that window's title so
+    // a following dictation into the same window can recover its spacing, then
+    // hand the settle + clipboard restore back to the chain link (see `insert`).
+    // `insert` returns now — so the pipeline reaches `.idle` and re-arms without
+    // waiting out the restore window — while the next paste still serializes
+    // behind the settle.
     lastInsertedText = finalText
     lastInsertedTargetPID = target?.processIdentifier
+    lastInsertedWindowTitle = windowTitle
     return SettleJob(savedItems: savedItems, ourChangeCount: ourChangeCount)
   }
 

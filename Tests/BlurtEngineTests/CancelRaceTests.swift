@@ -315,7 +315,7 @@ private actor GatedInjector: InjectorProtocol {
 
   nonisolated func setTargetApp(_ app: NSRunningApplication?) async {}
 
-  nonisolated func insert(_ text: String, after priorText: String?) async throws {
+  nonisolated func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws {
     try await enter()
     if honorsCancellation { try Task.checkCancellation() }
     await recordPaste()
