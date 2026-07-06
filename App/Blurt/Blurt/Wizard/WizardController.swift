@@ -17,6 +17,7 @@ final class WizardController {
 
   @ObservationIgnored private weak var coordinator: AppCoordinator?
   @ObservationIgnored private var pollTask: Task<Void, Never>?
+  @ObservationIgnored private var keyObservationTask: Task<Void, Never>?
   /// Brings the setup window forward and activates the app. Invoked when a
   /// previously-configured app loses a requirement (e.g. a revoked permission) so
   /// the user is taken back to onboarding instead of left with a dead overlay.
@@ -53,20 +54,19 @@ final class WizardController {
     )
   }
 
-  /// Observes the coordinator's readiness input (`hasAPIKey`) via the Observation
-  /// framework. `withObservationTracking` fires its `onChange` exactly once,
-  /// *before* the mutation commits, so we react on the next main-actor tick and
-  /// then re-arm for the following change. This reveals the overlay the moment a
-  /// verified key is saved rather than waiting for the next permission poll.
+  /// Streams the coordinator's readiness input (`hasAPIKey`) via `Observations`,
+  /// which emits after each change commits — no one-shot re-arming (the
+  /// pre-macOS-26 `withObservationTracking` fired once, *before* the mutation
+  /// committed, and had to re-register after every change). This reveals the
+  /// overlay the moment a verified key is saved rather than waiting for the
+  /// next permission poll. Idempotent, like `startPolling`.
   private func observeCoordinatorReadiness() {
     guard let coordinator else { return }
-    withObservationTracking {
-      _ = coordinator.hasAPIKey
-    } onChange: { [weak self] in
-      Task { @MainActor in
-        guard let self else { return }
-        self.syncOverlay()
-        self.observeCoordinatorReadiness()
+    keyObservationTask?.cancel()
+    let hasAPIKey = Observations { coordinator.hasAPIKey }
+    keyObservationTask = Task { @MainActor [weak self] in
+      for await _ in hasAPIKey {
+        self?.syncOverlay()
       }
     }
   }
@@ -123,5 +123,6 @@ final class WizardController {
 
   deinit {
     pollTask?.cancel()
+    keyObservationTask?.cancel()
   }
 }

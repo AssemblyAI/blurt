@@ -78,9 +78,13 @@ struct OverlayView: View {
   private var content: some View {
     switch state {
     case .idle:
-      // The pill is hidden at idle; this branch only renders during the brief
-      // fade-out, where the capsule is on its way off screen.
-      EmptyView()
+      // Never actually on screen: dismissal keeps the last real state through
+      // the fade-out and only settles to idle once the panel is ordered out
+      // (OverlayWindowController.dismissPanel). `Color.clear` (not `EmptyView`,
+      // which renders nothing — modifiers on it produce no view, so the glass
+      // capsule would collapse with it) keeps the pill's shape intact for
+      // `hide()`'s pre-hide reset.
+      Color.clear
     case .recording:
       // "● REC" tag beside the live waveform, mirroring the site demo's recording
       // pill (magenta tag + bars). The bars fill the width left of the tag.
