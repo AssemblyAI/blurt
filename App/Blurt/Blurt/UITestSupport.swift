@@ -180,12 +180,12 @@
             .accessibilityIdentifier(UITestID.pastedLabel)
         }
 
-        // Mirrors `AppCoordinator.lastTranscript` (the ready-window echo state) so
-        // a test can watch it populate on a completed dictation and revert after
-        // the dwell. Placeholder "—" stands in for nil so the read-out is a stable
-        // element to assert an empty state against.
+        // Mirrors the newest entry of `AppCoordinator.recentDictations` (the
+        // ready-window "Recent" list) so a test can watch it populate on a
+        // completed dictation. Placeholder "—" stands in for the empty list so
+        // the read-out is a stable element to assert against.
         LabeledContent("Echo") {
-          Text(coordinator?.lastTranscript ?? "—")
+          Text(coordinator?.recentDictations.entries.first?.text ?? "—")
             .accessibilityIdentifier(UITestID.transcriptEchoLabel)
         }
       }

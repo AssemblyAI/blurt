@@ -39,7 +39,6 @@ private enum ReadyBrandPalette {
 struct ReadyView: View {
   var coordinator: AppCoordinator
   var openSettings: () -> Void
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   // Observe the persisted trigger keycode directly so changing the dictation key
   // in the (separate) Settings window re-renders this window's keycap live.
   // `@AppStorage` reflects writes to the same default across windows; reading
@@ -55,11 +54,9 @@ struct ReadyView: View {
         // bottom one so the gap to the text is the VStack spacing, not ~2x it.
         .padding(.bottom, -16)
 
-      if let transcript = coordinator.lastTranscript {
-        transcriptReadout(transcript)
-      } else {
-        shortcutReadout
-      }
+      shortcutReadout
+
+      RecentDictationsSection(entries: coordinator.recentDictations.entries)
 
       Button(action: openSettings) {
         Label("Settings", systemImage: "gearshape")
@@ -72,7 +69,6 @@ struct ReadyView: View {
     .padding(.bottom, 26)
     .frame(width: 480)
     .fixedSize(horizontal: false, vertical: true)
-    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: coordinator.lastTranscript)
   }
 
   /// "Tap or hold ⌘ to blurt", with the key drawn as a rounded keycap.
@@ -86,20 +82,122 @@ struct ReadyView: View {
     }
     .font(.title3)
   }
+}
 
-  /// The just-dictated text, shown in place of the shortcut readout for a few
-  /// seconds after a dictation completes (see `AppCoordinator.lastTranscript`).
-  /// Capped at a few lines with tail truncation so a long dictation can't grow
-  /// the fixed-width window unboundedly.
-  private func transcriptReadout(_ text: String) -> some View {
-    Text(text)
-      .font(.title3)
-      .foregroundStyle(.primary)
-      .multilineTextAlignment(.center)
-      .lineLimit(4)
-      .truncationMode(.tail)
-      .transition(.opacity)
-      .accessibilityLabel("You dictated: \(text)")
+/// The "Recent" list under the shortcut readout: the last few dictations, newest
+/// first, each a single truncated line with a live relative timestamp. The list
+/// area reserves a fixed height for `RecentDictations.capacity` rows so the
+/// window never resizes and nothing above it moves as dictations arrive; unused
+/// slots are held open (empty → a muted placeholder fills the whole area).
+private struct RecentDictationsSection: View {
+  let entries: [RecentDictations.Entry]
+
+  private static let rowHeight: CGFloat = 30
+  /// The macOS list separator is inset to the leading edge of the row content,
+  /// which begins at this same inset (see `RecentDictationRow`).
+  private static let separatorInset: CGFloat = 12
+  private static let separatorThickness: CGFloat = 1
+  /// Height of a full `capacity`-row list (rows + the separators between them);
+  /// the container is pinned to this whether it holds 0, 1, or `capacity` rows.
+  private var reservedHeight: CGFloat {
+    let rows = CGFloat(RecentDictations.capacity) * Self.rowHeight
+    let separators = CGFloat(RecentDictations.capacity - 1) * Self.separatorThickness
+    return rows + separators
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Recent")
+        .font(.subheadline.weight(.semibold))
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityAddTraits(.isHeader)
+
+      listBody
+        .frame(height: reservedHeight, alignment: .top)
+        .frame(maxWidth: .infinity)
+        .background(
+          RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(.quinary)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+  }
+
+  @ViewBuilder
+  private var listBody: some View {
+    if entries.isEmpty {
+      Text("Your recent dictations will appear here")
+        .font(.callout)
+        .foregroundStyle(.secondary)
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    } else {
+      // Live relative timestamps ("2 minutes ago") without a stored clock: the
+      // TimelineView re-renders on a coarse cadence and each row formats against
+      // its current date. 30 s is fine — the smallest unit shown is minutes.
+      TimelineView(.periodic(from: .now, by: 30)) { timeline in
+        VStack(spacing: 0) {
+          ForEach(entries) { entry in
+            RecentDictationRow(entry: entry, now: timeline.date)
+              .frame(height: Self.rowHeight)
+            if entry.id != entries.last?.id {
+              // Semantic separator (adapts to light/dark + Increase Contrast),
+              // inset to the row's leading content per the macOS list idiom.
+              Divider().padding(.leading, Self.separatorInset)
+            }
+          }
+          // Hold unused slots open so the rows that exist stay put at the top
+          // and the container keeps its full reserved height.
+          Spacer(minLength: 0)
+        }
+      }
+    }
+  }
+}
+
+/// A single recent-dictation row: the transcript (one truncated line) with a
+/// relative timestamp trailing it, formatted against `now` (supplied by the
+/// enclosing `TimelineView` so it advances over time).
+private struct RecentDictationRow: View {
+  let entry: RecentDictations.Entry
+  let now: Date
+
+  var body: some View {
+    HStack(spacing: 10) {
+      Text(entry.text)
+        .font(.callout)
+        .foregroundStyle(.primary)
+        .lineLimit(1)
+        .truncationMode(.tail)
+        .frame(maxWidth: .infinity, alignment: .leading)
+      Text(relativeTimestamp)
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .fixedSize()
+    }
+    .padding(.horizontal, 12)
+    .frame(maxHeight: .infinity)
+    // One VoiceOver element per row; the explicit label controls the phrasing
+    // (transcript then relative time), so ignore the children rather than merge.
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("\(entry.text), \(relativeTimestamp)")
+  }
+
+  private static let relativeFormatter: RelativeDateTimeFormatter = {
+    let formatter = RelativeDateTimeFormatter()
+    formatter.unitsStyle = .full  // e.g. "2 minutes ago"
+    return formatter
+  }()
+
+  /// "just now" for the first minute (the formatter's bare "in 0 seconds" reads
+  /// oddly for a dictation that just landed), then the relative phrasing.
+  private var relativeTimestamp: String {
+    if now.timeIntervalSince(entry.timestamp) < 60 {
+      return "just now"
+    }
+    return Self.relativeFormatter.localizedString(for: entry.timestamp, relativeTo: now)
   }
 }
 

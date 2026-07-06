@@ -141,11 +141,12 @@ final class DictationPipelineUITests: BlurtUITestCase {
     XCTAssertEqual(pastedValue, "", "Cancelled dictation must not paste any text")
   }
 
-  /// The completed transcript is echoed into the app's ready-window state
-  /// (`AppCoordinator.lastTranscript`, surfaced by the harness's echo read-out),
-  /// then reverts to the empty placeholder after the dwell — the data path the
-  /// ready window's readout renders.
-  func testTranscriptEchoesThenReverts() {
+  /// A completed dictation lands in the app's recent-dictations list
+  /// (`AppCoordinator.recentDictations`, its newest entry surfaced by the
+  /// harness's echo read-out) — the data path the ready window's "Recent"
+  /// section renders. The list persists (no revert), so we only assert it
+  /// populates.
+  func testTranscriptLandsInRecentDictations() {
     let harness = harnessWindow()
     harness.buttons[UITestIDs.setKeyButton].click()
 
@@ -156,9 +157,6 @@ final class DictationPipelineUITests: BlurtUITestCase {
 
     waitForLabel(
       echo, equals: Self.cannedTranscript, timeout: 15,
-      "Completed dictation should echo the transcript into ready-window state")
-    waitForLabel(
-      echo, equals: "—", timeout: 15,
-      "Echo should revert to the empty placeholder after the dwell")
+      "Completed dictation should appear as the newest recent-dictations entry")
   }
 }

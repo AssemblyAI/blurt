@@ -1,4 +1,5 @@
 import BlurtEngine
+import Foundation
 import Observation
 
 @MainActor
@@ -40,24 +41,17 @@ final class AppCoordinator {
 
   @ObservationIgnored private let transcriptStream: AsyncStream<String>
   @ObservationIgnored private var transcriptObserver: Task<Void, Never>?
-  /// Clears `lastTranscript` after the dwell; re-created on each new transcript so
-  /// only the latest schedules the revert.
-  @ObservationIgnored private var echoRevertTask: Task<Void, Never>?
-
-  /// How long a completed dictation's transcript stays in the ready window before
-  /// reverting to the shortcut readout.
-  private static let echoDwellSeconds: Double = 5
 
   /// The fully-assembled prompt sent to AssemblyAI on the most recent dictation,
   /// surfaced by the Prompt Inspector window (`nil` when none has been sent yet,
   /// or that dictation had no context to build one). In-memory only.
   private(set) var lastPrompt: String?
 
-  /// The most recent completed dictation's transcript, shown in the ready window
-  /// in place of the shortcut readout, or `nil` when the readout should show. Set
-  /// on the `.pasted`/`.noTarget` outcomes, cleared when a new recording starts or
-  /// after `echoDwellSeconds`. In-memory only.
-  private(set) var lastTranscript: String?
+  /// The last few completed dictations (`.pasted`/`.noTarget` outcomes), newest
+  /// first, listed in the ready window's "Recent" section beneath the shortcut
+  /// readout. Appended on each delivered transcript. In-memory only — starts
+  /// empty each launch and is never written to disk.
+  private(set) var recentDictations = RecentDictations()
 
   /// Whether an AssemblyAI API key is currently saved. Drives the wizard
   /// (which gates dictation on having a key) and the Settings UI.
@@ -115,7 +109,6 @@ final class AppCoordinator {
     levelsObserver?.cancel()
     promptObserver?.cancel()
     transcriptObserver?.cancel()
-    echoRevertTask?.cancel()
   }
 
   func start() {
@@ -211,7 +204,7 @@ final class AppCoordinator {
       for await transcript in transcripts {
         guard let self else { return }
         if Task.isCancelled { return }
-        self.showTranscriptEcho(transcript)
+        self.recentDictations.record(transcript, at: Date())
       }
     }
   }
@@ -349,18 +342,6 @@ final class AppCoordinator {
     cues.packChanged()
   }
 
-  /// Shows `text` in the ready window and schedules its revert. A new transcript
-  /// cancels and reschedules the pending revert so the latest wins.
-  private func showTranscriptEcho(_ text: String) {
-    lastTranscript = text
-    echoRevertTask?.cancel()
-    echoRevertTask = Task { @MainActor [weak self] in
-      try? await Task.sleep(for: .seconds(AppCoordinator.echoDwellSeconds))
-      guard let self, !Task.isCancelled else { return }
-      self.lastTranscript = nil
-    }
-  }
-
   private func render(_ phase: PipelinePhase) {
     // A missing key is a setup state, not a fault: the engine projections
     // below render it as calm idle (no red flash) and Monitoring ignores it —
@@ -368,18 +349,6 @@ final class AppCoordinator {
     // settings window forward so the user lands on the fix.
     if case .failed(.apiKeyMissing) = phase {
       onMissingAPIKey()
-    }
-    // A new recording resets the ready window to the plain readout — the previous
-    // result shouldn't linger while the user dictates the next one. This relies
-    // on the transcript stream (a separate AsyncStream from the phase stream)
-    // having already been drained on the MainActor: a full press→release→press
-    // cycle separates the transcript yield (synchronous, right before .pasted)
-    // from this next .recording, so by the time it arrives here the MainActor
-    // has long since observed the transcript. Not a formal cross-stream
-    // guarantee — just how the user-driven ordering plays out.
-    if phase == .recording {
-      echoRevertTask?.cancel()
-      lastTranscript = nil
     }
     // Reveal the pill first, then fire the cue: the sound must never sit in
     // front of the visual state change. Pure phase→pill mapping lives in the
