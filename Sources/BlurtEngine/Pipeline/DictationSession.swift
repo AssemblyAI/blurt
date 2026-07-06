@@ -40,9 +40,8 @@ public actor DictationSession {
   /// user has spoken a whole utterance. Defaults to always-ready (no Keychain
   /// read), so tests and keyless hosts are unaffected unless they opt in.
   private let readinessCheck: @Sendable () -> BlurtError?
-  /// Fired with the final transcript on a text-producing outcome (`.pasted` or
-  /// `.noTarget`) so the app can echo it — mirrors the transcriber's
-  /// `onPromptAssembled` seam rather than adding text to `PipelinePhase`.
+  /// Fired once with the final transcript as soon as it's produced — before
+  /// injection, so pasted, copied, and failed-to-paste dictations all count.
   private let onTranscriptDelivered: (@Sendable (String) -> Void)?
 
   /// Sample rate the mic capture delivers and the Sync STT request declares —
@@ -325,6 +324,9 @@ public actor DictationSession {
     }
 
     DictationLog.append(raw: text, polished: text, context: capturedContext)
+    // Record every produced transcript for the "Recent" list before injection, so
+    // a dictation shows up whether it pasted, was copied, or failed to paste.
+    onTranscriptDelivered?(text)
     await inject(text)
   }
 
@@ -362,7 +364,6 @@ public actor DictationSession {
       if Task.isCancelled { return }
       // The paste landed — show the quiet "pasted" notice (the mirror of the
       // "copied" notice below) rather than snapping straight back to idle.
-      onTranscriptDelivered?(text)
       setPhase(.pasted)
     } catch {
       // A cancel() landed mid-paste: it already set .cancelled (the injector
@@ -377,7 +378,6 @@ public actor DictationSession {
         // activation. Either way the injector left the text on the clipboard —
         // show the quiet "copied" notice rather than the red error flash (and
         // don't report it).
-        onTranscriptDelivered?(text)
         setPhase(.noTarget)
       case let err as BlurtError:
         // Surface the injector's real error (e.g. `.accessibilityPermissionMissing`)

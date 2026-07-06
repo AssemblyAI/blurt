@@ -64,6 +64,29 @@ struct DictationSessionTranscriptTests {
     #expect(spy.values == ["Copied text."])
   }
 
+  @Test("onTranscriptDelivered fires even when the paste hard-fails")
+  func transcriptDeliveredWhenPasteFails() async throws {
+    let spy = TranscriptSpy()
+    let injector = StubInjector()
+    // A real injection failure (not the quiet .noTarget degrade): the phase ends
+    // .failed, but the transcript was still produced, so it must be delivered —
+    // every dictation that yields text lands in the "Recent" list.
+    await injector.setError(BlurtError.accessibilityPermissionMissing)
+    let session = DictationSession(
+      mic: StubMicCapture(),
+      transcriber: StubTranscriber(mode: .transcript("Spoken but unpasted.")),
+      injector: injector,
+      onTranscriptDelivered: { spy.record($0) }
+    )
+
+    await session.press()
+    await session.release()
+    await session.waitForIdle()
+
+    #expect(await session.phase == .failed(.accessibilityPermissionMissing))
+    #expect(spy.values == ["Spoken but unpasted."])
+  }
+
   @Test("onTranscriptDelivered does not fire when STT fails")
   func transcriptNotDeliveredOnFailure() async throws {
     struct Boom: Error {}
