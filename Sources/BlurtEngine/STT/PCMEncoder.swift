@@ -26,7 +26,9 @@ enum PCMEncoder {
     // Data goes span→span: bounds-checked, no unsafe pointers escaping.
     var data = Data(count: out.count * MemoryLayout<Int16>.stride)
     var destination = data.mutableBytes
-    destination.update(fromContentsOf: out.span.bytes)
+    // `update` returns the offset past the last byte written; the counts match
+    // by construction, so discard it.
+    _ = destination.update(fromContentsOf: out.span.bytes)
     return data
   }
 }
