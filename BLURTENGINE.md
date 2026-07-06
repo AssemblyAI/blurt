@@ -157,7 +157,7 @@ Recognition quality comes from per-utterance priming, assembled automatically in
 
 For key storage, compose against **`APIKeyGateway`** — the injectable get/set/`hasKey` seam over the key store. `ProductionAPIKeyStore` forwards to the Keychain-backed `APIKeyStore`; `InMemoryAPIKeyStore` is a ready-made in-memory conformance for tests and harnesses (Blurt's XCUITest runs use it so the real Keychain item is never touched, and its `hasKey` backs the session's `readinessCheck`).
 
-Each completed dictation is appended to **`DictationLog`** (a local JSONL history) with its context snapshot.
+Each completed dictation is appended to **`DictationLog`** (a local JSONL history at `~/Library/Logs/Blurt/dictations.jsonl`, the path `DictationLog.defaultURL` exposes) with its context snapshot — but only while developer mode is switched on. **`DeveloperModeStore`** persists that opt-in in `UserDefaults` (`BlurtDeveloperMode`, off by default); with it off, nothing is written to disk. Blurt surfaces the switch (and the log path) in the Settings window's Developer section.
 
 ## Hotkey building blocks
 

@@ -119,7 +119,7 @@ struct DictationLogTests {
     #expect(!line.contains("selected"))
   }
 
-  @Test("logs the same assembled prompt the transcriber sends and the Prompt Inspector shows")
+  @Test("logs the same assembled prompt the transcriber sends")
   func logsAssembledPrompt() {
     let url = makeURL()
     let context = TranscriptionContext(
