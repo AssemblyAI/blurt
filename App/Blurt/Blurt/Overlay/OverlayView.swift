@@ -116,21 +116,22 @@ struct OverlayView: View {
         .transition(.opacity)
         .help(state.accessibilityLabel)
     case .noTarget:
-      // Quiet, informational notice: there was no text field to type into, so the
-      // transcript went to the clipboard. Cyan (the brand --ice, same as
-      // "Transcribing…") so it reads as info, not the red error flash.
-      noticePill(
-        symbol: "doc.on.clipboard", tint: OverlayBrandPalette.cyan, label: "Copied",
-        help: state.accessibilityLabel)
+      // Quiet, informational notice: there was no text field to type into, so
+      // the transcript went to the clipboard. Styled exactly like "Pasted"
+      // (same status-line type and cyan --ice) so it reads as info, not the red
+      // error flash. No glyph — the word alone carries it. Hover still exposes
+      // the full announcement text.
+      StatusLineText("Copied")
+        .transition(.opacity)
+        .help(state.accessibilityLabel)
     }
   }
 
   /// A brief notice pill — an SF Symbol + short label — for the transient
-  /// `.error` / `.noTarget` states, which differ only in glyph, color, label,
-  /// and hover text. `tint` colors both the glyph and the label. `help` is the
-  /// hover tooltip — pass `state.accessibilityLabel` so it stays the same
-  /// string the window controller announces to VoiceOver (the wording lives in
-  /// one place, `OverlayUIState`).
+  /// `.error` state. `tint` colors both the glyph and the label. `help` is the
+  /// hover tooltip — pass the state's message so it stays the same string the
+  /// window controller announces to VoiceOver (the wording lives in one place,
+  /// `OverlayUIState`).
   private func noticePill(
     symbol: String, tint: Color, label: String, help: String
   ) -> some View {
@@ -151,7 +152,8 @@ struct OverlayView: View {
 }
 
 /// The shared type, tracking, and cyan color for the overlay's status-line
-/// text ("Transcribing…" and "Pasted") so the two can't drift out of sync.
+/// text ("Transcribing…", "Pasted", and "Copied") so they can't drift out of
+/// sync.
 private struct StatusLineText: View {
   let text: String
 
