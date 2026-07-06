@@ -318,15 +318,15 @@ public actor DictationSession {
     // .cancelled and detached this task — don't inject or touch the phase.
     if Task.isCancelled { return }
 
-    if text.trimmedNonEmpty() == nil {
+    guard let trimmed = text.trimmedNonEmpty() else {
       setPhase(.idle)
       return
     }
 
     DictationLog.append(raw: text, polished: text, context: capturedContext)
-    // Record every produced transcript for the "Recent" list before injection, so
-    // a dictation shows up whether it pasted, was copied, or failed to paste.
-    onTranscriptDelivered?(text)
+    // Record every produced transcript (trimmed for display) in "Recent" before
+    // injection — pasted, copied, and failed-to-paste all count; inject gets raw.
+    onTranscriptDelivered?(trimmed)
     await inject(text)
   }
 
