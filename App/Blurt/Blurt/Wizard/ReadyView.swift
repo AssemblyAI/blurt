@@ -48,7 +48,7 @@ struct ReadyView: View {
     TriggerKey.rightCommand.rawValue
 
   var body: some View {
-    VStack(spacing: 18) {
+    VStack(spacing: 14) {
       ReadyBrandingView()
         // The logo PNG carries ~16% transparent margin top & bottom. The top
         // margin gives welcome clearance from the traffic lights; cancel the
@@ -59,7 +59,7 @@ struct ReadyView: View {
 
       // The logo and shortcut readout are one idea; the Recent list and the
       // Settings button are separate sections. Give the section boundaries
-      // extra air (18 + 6 = 24 pt) so the grouping reads visually instead of
+      // extra air (14 + 6 = 20 pt) so the grouping reads visually instead of
       // everything sitting equidistant.
       RecentDictationsSection(entries: coordinator.recentDictations.entries)
         .padding(.top, 6)
@@ -73,7 +73,7 @@ struct ReadyView: View {
     .frame(maxWidth: .infinity)
     .padding(.horizontal, 32)
     .padding(.top, 4)
-    .padding(.bottom, 26)
+    .padding(.bottom, 20)
     .frame(width: 480)
     .fixedSize(horizontal: false, vertical: true)
   }
@@ -99,7 +99,7 @@ struct ReadyView: View {
 private struct RecentDictationsSection: View {
   let entries: [RecentDictations.Entry]
 
-  private static let rowHeight: CGFloat = 34
+  private static let rowHeight: CGFloat = 28
   private static let separatorThickness: CGFloat = 1
   /// Height of a full `capacity`-row list (rows + the separators between them);
   /// the container is pinned to this whether it holds 0, 1, or `capacity` rows.
@@ -110,7 +110,7 @@ private struct RecentDictationsSection: View {
   }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
+    VStack(alignment: .leading, spacing: 6) {
       Text("Recent")
         .font(.subheadline.weight(.semibold))
         .foregroundStyle(.secondary)
