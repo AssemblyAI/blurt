@@ -177,6 +177,10 @@ private struct RecentDictationRow: View {
     }
     .padding(.horizontal, 12)
     .frame(maxHeight: .infinity)
+    // Hover tooltip with the full transcript, so a pointer user can read what
+    // the single truncated line cuts off (VoiceOver already gets it via the
+    // label below).
+    .help(entry.text)
     // One VoiceOver element per row; the explicit label controls the phrasing
     // (transcript then relative time), so ignore the children rather than merge.
     .accessibilityElement(children: .ignore)
