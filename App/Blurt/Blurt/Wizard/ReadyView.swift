@@ -146,9 +146,6 @@ private struct RecentDictationsSection: View {
               Divider()
             }
           }
-          // Hold unused slots open so the rows that exist stay put at the top
-          // and the container keeps its full reserved height.
-          Spacer(minLength: 0)
         }
       }
     }

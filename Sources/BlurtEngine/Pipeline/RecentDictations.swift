@@ -9,10 +9,9 @@ import Foundation
 public struct RecentDictations: Equatable, Sendable {
   /// One recorded dictation: the transcript plus when it landed.
   public struct Entry: Identifiable, Equatable, Sendable {
-    /// Stable identity for SwiftUI list diffing — a per-`RecentDictations`
-    /// sequence number assigned at record time, so an entry keeps its id as
-    /// newer dictations push in ahead of it.
-    public let id: Int
+    /// Stable identity for SwiftUI list diffing — assigned once at creation, so
+    /// an entry keeps its id as newer dictations push in ahead of it.
+    public let id = UUID()
     public let text: String
     public let timestamp: Date
   }
@@ -24,18 +23,13 @@ public struct RecentDictations: Equatable, Sendable {
   /// Most-recent-first, capped at `capacity`.
   public private(set) var entries: [Entry] = []
 
-  /// Monotonic id source, so every entry across this value's lifetime gets a
-  /// distinct, stable identity even after older ones are dropped.
-  private var nextID = 0
-
   public init() {}
 
   /// Records a dictation made at `time`, pushing it to the front and dropping
   /// the oldest entries beyond `capacity`. `time` is injected (not read from the
   /// clock) so tests are deterministic.
   public mutating func record(_ text: String, at time: Date) {
-    entries.insert(Entry(id: nextID, text: text, timestamp: time), at: 0)
-    nextID += 1
+    entries.insert(Entry(text: text, timestamp: time), at: 0)
     if entries.count > Self.capacity {
       entries.removeLast(entries.count - Self.capacity)
     }
