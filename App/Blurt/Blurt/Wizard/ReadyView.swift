@@ -1,35 +1,21 @@
+import Accessibility
 import BlurtEngine
 import SwiftUI
 
 private enum ReadyBrandPalette {
   static func keycapFill(for colorScheme: ColorScheme) -> Color {
-    switch colorScheme {
-    case .dark:
-      return Color(red: 0.12, green: 0.16, blue: 0.2)
-    default:
-      return Color(red: 0.965, green: 0.985, blue: 1.0)
-    }
+    colorScheme == .dark ? Color(red: 0.12, green: 0.16, blue: 0.2) : Color(red: 0.965, green: 0.985, blue: 1.0)
   }
 
   static func keycapStroke(for colorScheme: ColorScheme) -> Color {
-    switch colorScheme {
-    case .dark:
-      return Color(red: 0.38, green: 0.82, blue: 0.96).opacity(0.85)
-    default:
-      return Color(red: 0.42, green: 0.82, blue: 0.95).opacity(0.4)
-    }
+    colorScheme == .dark
+      ? Color(red: 0.38, green: 0.82, blue: 0.96).opacity(0.85)
+      : Color(red: 0.42, green: 0.82, blue: 0.95).opacity(0.4)
   }
 
   static func settingsButtonFill(for colorScheme: ColorScheme, isHovered: Bool, isPressed: Bool) -> Color {
     guard isHovered || isPressed else { return .clear }
-
-    let opacity = isPressed ? 0.11 : 0.06
-    switch colorScheme {
-    case .dark:
-      return Color.white.opacity(opacity)
-    default:
-      return Color.black.opacity(opacity)
-    }
+    return (colorScheme == .dark ? Color.white : Color.black).opacity(isPressed ? 0.11 : 0.06)
   }
 }
 
@@ -47,14 +33,18 @@ struct ReadyView: View {
     TriggerKey.rightCommand.rawValue
 
   var body: some View {
-    VStack(spacing: 18) {
-      ReadyBrandingView()
-        // The logo PNG carries ~16% transparent margin top & bottom. The top
-        // margin gives welcome clearance from the traffic lights; cancel the
-        // bottom one so the gap to the text is the VStack spacing, not ~2x it.
-        .padding(.bottom, -16)
+    // Sections sit 20 pt apart; the logo and shortcut readout are one idea,
+    // so they nest in a tighter 14 pt group rather than spreading to match.
+    VStack(spacing: 20) {
+      VStack(spacing: 14) {
+        ReadyBrandingView()
+          // The logo PNG carries ~16% transparent margin top & bottom. The top
+          // margin gives welcome clearance from the traffic lights; cancel the
+          // bottom one so the gap to the text is the VStack spacing, not ~2x it.
+          .padding(.bottom, -16)
 
-      shortcutReadout
+        shortcutReadout
+      }
 
       RecentDictationsSection(entries: coordinator.recentDictations.entries)
 
@@ -66,7 +56,7 @@ struct ReadyView: View {
     .frame(maxWidth: .infinity)
     .padding(.horizontal, 32)
     .padding(.top, 4)
-    .padding(.bottom, 26)
+    .padding(.bottom, 20)
     .frame(width: 480)
     .fixedSize(horizontal: false, vertical: true)
   }
@@ -92,7 +82,7 @@ struct ReadyView: View {
 private struct RecentDictationsSection: View {
   let entries: [RecentDictations.Entry]
 
-  private static let rowHeight: CGFloat = 30
+  private static let rowHeight: CGFloat = 28
   private static let separatorThickness: CGFloat = 1
   /// Height of a full `capacity`-row list (rows + the separators between them);
   /// the container is pinned to this whether it holds 0, 1, or `capacity` rows.
@@ -103,7 +93,7 @@ private struct RecentDictationsSection: View {
   }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
+    VStack(alignment: .leading, spacing: 6) {
       Text("Recent")
         .font(.subheadline.weight(.semibold))
         .foregroundStyle(.secondary)
@@ -154,12 +144,41 @@ private struct RecentDictationsSection: View {
 
 /// A single recent-dictation row: the transcript (one truncated line) with a
 /// relative timestamp trailing it, formatted against `now` (supplied by the
-/// enclosing `TimelineView` so it advances over time).
+/// enclosing `TimelineView` so it advances over time), and a copy affordance.
+///
+/// Copy follows the standard macOS list-row shape: on hover (or keyboard focus,
+/// for Full Keyboard Access) a "Copy" button takes the timestamp's place; the
+/// same command is in the row's contextual menu and a VoiceOver custom action,
+/// so it's never reachable through hover alone. Copying briefly shows "Copied"
+/// (and announces it), since a pasteboard write has no visible effect.
 private struct RecentDictationRow: View {
   let entry: RecentDictations.Entry
   let now: Date
 
+  @State private var isHovered = false
+  @State private var showsCopyConfirmation = false
+  /// Counts copies of this row; the confirmation-reset `.task(id:)` keys off
+  /// it, so each copy cancels the running timer and starts a fresh one.
+  @State private var copyCount = 0
+  @FocusState private var copyButtonFocused: Bool
+
+  /// The three things the trailing slot can show. Deriving the visible one
+  /// from a single value keeps the exclusivity structural rather than spread
+  /// across per-layer boolean conditions.
+  private enum TrailingSlot { case timestamp, copyButton, copiedConfirmation }
+
+  /// Keyboard focus counts as well as hover for revealing the copy button, so
+  /// Full Keyboard Access users tabbing to the (otherwise invisible) button
+  /// can see what they're on.
+  private var trailingSlot: TrailingSlot {
+    if showsCopyConfirmation { return .copiedConfirmation }
+    if isHovered || copyButtonFocused { return .copyButton }
+    return .timestamp
+  }
+
   var body: some View {
+    // Formatted once per render; feeds the trailing text and VoiceOver label.
+    let timestamp = relativeTimestamp
     HStack(spacing: 10) {
       Text(entry.text)
         .font(.callout)
@@ -167,10 +186,7 @@ private struct RecentDictationRow: View {
         .lineLimit(1)
         .truncationMode(.tail)
         .frame(maxWidth: .infinity, alignment: .leading)
-      Text(relativeTimestamp)
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .fixedSize()
+      trailingAccessory(timestamp: timestamp)
     }
     .padding(.horizontal, 12)
     .frame(maxHeight: .infinity)
@@ -178,10 +194,70 @@ private struct RecentDictationRow: View {
     // the single truncated line cuts off (VoiceOver already gets it via the
     // label below).
     .help(entry.text)
-    // One VoiceOver element per row; the explicit label controls the phrasing
-    // (transcript then relative time), so ignore the children rather than merge.
+    .contentShape(Rectangle())
+    .onHover { isHovered = $0 }
+    .contextMenu {
+      Button("Copy") { copyTranscript() }
+    }
+    // One VoiceOver element per row; the explicit label controls the phrasing,
+    // so ignore the children rather than merge. Copy is re-exposed as a custom
+    // action since the hover button is ignored with the rest of the children.
     .accessibilityElement(children: .ignore)
-    .accessibilityLabel("\(entry.text), \(relativeTimestamp)")
+    .accessibilityLabel("\(entry.text), \(timestamp)")
+    .accessibilityAction(named: "Copy") { copyTranscript() }
+    // Reverts the "Copied" confirmation after a beat. The cancelled-sleep guard
+    // keeps a superseded timer from clearing the newer copy's confirmation.
+    .task(id: copyCount) {
+      guard copyCount > 0 else { return }
+      guard (try? await Task.sleep(for: .seconds(1.5))) != nil else { return }
+      showsCopyConfirmation = false
+    }
+  }
+
+  /// The row's trailing slot: the relative timestamp, swapped for the "Copy"
+  /// button on hover/focus and a transient "Copied" confirmation after a copy.
+  /// All three are layered (faded, not swapped out of the hierarchy) so the
+  /// button never loses keyboard focus mid-confirmation, and the slot sizes to
+  /// the widest so nothing shifts as they trade places.
+  private func trailingAccessory(timestamp: String) -> some View {
+    ZStack(alignment: .trailing) {
+      Text(timestamp)
+        .opacity(trailingSlot == .timestamp ? 1 : 0)
+      Button(action: copyTranscript) {
+        // Hand-rolled label: `Label`'s default icon–title gap reads as two
+        // separate items at this size; pull the glyph in tight.
+        HStack(spacing: 3) {
+          Image(systemName: "doc.on.doc")
+          Text("Copy")
+        }
+      }
+      .buttonStyle(RecentCopyButtonStyle())
+      .focused($copyButtonFocused)
+      .opacity(trailingSlot == .copyButton ? 1 : 0)
+      // Opacity-0 views still hit-test; only take clicks while visible (this
+      // gates pointer input without breaking keyboard focus/activation).
+      .allowsHitTesting(trailingSlot == .copyButton)
+      Label("Copied", systemImage: "checkmark")
+        .opacity(trailingSlot == .copiedConfirmation ? 1 : 0)
+        // Let clicks fall through rather than swallowing them while the
+        // confirmation sits above the (hidden) copy button.
+        .allowsHitTesting(false)
+    }
+    .font(.caption)
+    .foregroundStyle(.secondary)
+    .fixedSize()
+    .animation(.easeOut(duration: 0.12), value: trailingSlot)
+  }
+
+  private func copyTranscript() {
+    let pasteboard = NSPasteboard.general
+    pasteboard.clearContents()
+    pasteboard.setString(entry.text, forType: .string)
+
+    // The invisible pasteboard write gets audible + visible confirmation:
+    AccessibilityNotification.Announcement("Copied").post()
+    showsCopyConfirmation = true
+    copyCount += 1
   }
 
   private static let relativeFormatter: RelativeDateTimeFormatter = {
@@ -250,6 +326,38 @@ private struct KeyCap: View {
         RoundedRectangle(cornerRadius: 8, style: .continuous)
           .strokeBorder(ReadyBrandPalette.keycapStroke(for: colorScheme), lineWidth: 1)
       )
+  }
+}
+
+/// The Recent row's Copy control: accent-tinted (marking it clickable, vs. the
+/// secondary timestamp it replaces) with an accent highlight on hover/press,
+/// painted outside the layout bounds so the trailing alignment doesn't shift.
+private struct RecentCopyButtonStyle: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    RecentCopyButton(configuration: configuration)
+  }
+}
+
+private struct RecentCopyButton: View {
+  let configuration: ButtonStyleConfiguration
+  @State private var isHovered = false
+
+  var body: some View {
+    configuration.label
+      .foregroundStyle(Color.accentColor)
+      .background {
+        RoundedRectangle(cornerRadius: 5, style: .continuous)
+          .fill(Color.accentColor.opacity(highlightOpacity))
+          .padding(.horizontal, -5)
+          .padding(.vertical, -3)
+      }
+      .animation(.easeOut(duration: 0.12), value: isHovered)
+      .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+      .onHover { isHovered = $0 }
+  }
+
+  private var highlightOpacity: Double {
+    configuration.isPressed ? 0.2 : isHovered ? 0.12 : 0
   }
 }
 
