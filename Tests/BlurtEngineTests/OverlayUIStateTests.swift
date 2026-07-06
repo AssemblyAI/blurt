@@ -123,3 +123,26 @@ struct OverlayUIStateTransientNoticeTests {
     #expect(!OverlayUIState.processing.isTransientNotice)
   }
 }
+
+/// How long the shell holds each transient notice before reverting to `.idle`.
+/// The policy lives on the state (not in the AppKit controller) so a new notice
+/// can't ship without a dwell, and the asymmetry — errors linger to be read, a
+/// successful "Pasted" clears fast — is pinned here.
+@Suite("OverlayUIState.noticeDwellSeconds")
+struct OverlayUIStateNoticeDwellTests {
+  @Test func pastedClearsFastest() {
+    #expect(OverlayUIState.pasted.noticeDwellSeconds == 0.8)
+  }
+
+  @Test func errorAndCopiedLingerLongEnoughToRead() {
+    #expect(OverlayUIState.error(message: "boom").noticeDwellSeconds == 1.6)
+    #expect(OverlayUIState.noTarget.noticeDwellSeconds == 1.6)
+  }
+
+  @Test func steadyStatesHaveNoDwell() {
+    // Held for as long as the pipeline is in them — no auto-revert.
+    #expect(OverlayUIState.idle.noticeDwellSeconds == nil)
+    #expect(OverlayUIState.recording.noticeDwellSeconds == nil)
+    #expect(OverlayUIState.processing.noticeDwellSeconds == nil)
+  }
+}

@@ -2,35 +2,13 @@ import AppKit
 import BlurtEngine
 import SwiftUI
 
-/// Menu bar presentation of the engine's `MenuBarStatus`. The enum and its pure
-/// phase→status mapping live in BlurtEngine (so `swift test` covers them); these
-/// are the shell's render of it — the glyph and its label — mirroring how
-/// `OverlayView` renders `OverlayUIState`.
-extension MenuBarStatus {
-  /// Template SF Symbol drawn in the menu bar. A stylized "B" (Blurt) at rest,
-  /// filling in while recording — the same idle→fill idiom the mic glyphs used —
-  /// and the waveform while transcribing.
-  var symbolName: String {
-    switch self {
-    case .idle: "b.circle"
-    case .recording: "b.circle.fill"
-    case .transcribing: "waveform"
-    }
-  }
-
-  /// Spoken by VoiceOver, since the menu bar glyph is otherwise unlabelled.
-  var accessibilityLabel: String {
-    switch self {
-    case .idle: "Blurt — idle"
-    case .recording: "Blurt — recording"
-    case .transcribing: "Blurt — transcribing"
-    }
-  }
-}
-
 /// The menu bar status item's icon. Reads the live dictation status off the
 /// coordinator (created after launch, so nil early on — idle until then) and
 /// re-renders as the pipeline moves, since `AppCoordinator` is `@Observable`.
+/// The status enum, its phase mapping, and the glyph/VoiceOver strings all live
+/// in BlurtEngine (`MenuBarStatus`), where `swift test` covers them — this view
+/// just draws what the engine resolves, mirroring how `OverlayView` renders
+/// `OverlayUIState`.
 struct MenuBarLabel: View {
   var appDelegate: AppDelegate
 

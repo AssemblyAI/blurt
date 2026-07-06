@@ -6,8 +6,10 @@ import os
 ///
 /// Watches `flagsChanged` for the bound modifier (e.g. right ⌘, keycode 54) to
 /// detect down/up, and `keyDown` for any *other* key to spot a modifier combo
-/// (⌘C, ⌘V…). The per-event decision lives in the engine's `DictationKeyGate`;
-/// this type only bridges `CGEvent`s to that gate and owns the tap lifecycle.
+/// (⌘C, ⌘V…). The per-event decision lives in the engine — `DictationKeyRouter`
+/// (keycode relevance + down/up edge dedup) over `DictationKeyGate` (tap/hold
+/// semantics) — so this type only reduces each `CGEvent` to a router event and
+/// owns the tap lifecycle.
 ///
 /// Unlike the old chord trigger, this **swallows nothing**: a lone modifier
 /// types nothing into the focused app, and combos must pass through so normal
@@ -20,8 +22,8 @@ import os
 /// already runs on the main thread: the tap's run-loop source is added to the
 /// main run loop (`ensureRunning`), so the C callback fires there, and the
 /// coordinator/UITest entry points are main-actor. Isolation lets the compiler
-/// prove single-threaded access to the gate state instead of guarding it with a
-/// hand-held lock.
+/// prove single-threaded access to the router state instead of guarding it with
+/// a hand-held lock.
 final class DictationKeyTap {
   private static let logger = Logger(
     subsystem: BlurtIdentity.subsystem, category: "DictationKeyTap")
@@ -38,12 +40,12 @@ final class DictationKeyTap {
   /// a transcript already in flight — see `DictationSession.cancelRecording`.
   private let onRecordingDiscarded: @Sendable () -> Void
 
-  private var gate = DictationKeyGate()
-  private var triggerKeyCode = TriggerKey.rightCommand.keyCode
+  /// The engine-side event router (keycode relevance, down/up edge dedup, and
+  /// the gate's tap/hold state machine — all unit-tested in BlurtEngine).
+  private var router = DictationKeyRouter(triggerKeyCode: TriggerKey.rightCommand.keyCode)
+  /// The bound key's device-dependent `CGEventFlags` bit — the one CoreGraphics-
+  /// typed piece of the binding, so it stays here rather than in the router.
   private var triggerFlag = DictationKeyTap.flag(for: .rightCommand)
-  /// Tracks the bound modifier's current physical state so repeated
-  /// `flagsChanged` events (from *other* modifiers changing) don't double-fire.
-  private var modifierIsDown = false
 
   /// Monotonic reference; per-event timestamps are `reference.duration(to: now)`.
   private let reference = ContinuousClock.now
@@ -113,27 +115,14 @@ final class DictationKeyTap {
     return true
   }
 
-  /// Re-read the bound trigger key into the gate. Call after the user rebinds.
-  /// The reset reports a discarded live recording (see `resetGate`): rebinding
+  /// Re-read the bound trigger key into the router. Call after the user
+  /// rebinds. The router's reset reports a discarded live recording: rebinding
   /// mid-dictation means the old key's up-event will never match, so the capture
   /// must be cancelled, not left to run out the auto-release cap.
   func refreshBinding() {
     let key = TriggerKeyStore().triggerKey
-    triggerKeyCode = key.keyCode
     triggerFlag = Self.flag(for: key)
-    resetGate()
-  }
-
-  /// Clears the gate (and the modifier-down tracker) because the events it was
-  /// tracking can no longer be trusted — the binding changed, or the tap was
-  /// disabled and events were dropped. If the reset discards a live gate state
-  /// (armed or latched), no future key event can end that dictation, so report
-  /// it upstream to cancel the recording.
-  private func resetGate() {
-    let discardedRecording = !gate.isIdle
-    gate.reset()
-    modifierIsDown = false
-    if discardedRecording { onRecordingDiscarded() }
+    if router.rebind(triggerKeyCode: key.keyCode) { onRecordingDiscarded() }
   }
 
   /// Callback entry point (always on the main thread — the tap's source lives on
@@ -150,37 +139,26 @@ final class DictationKeyTap {
       // the reset discards rather than leaving the session in .recording until
       // the auto-release cap fires and pastes an unprompted transcript.
       if CGEventSource.flagsState(.combinedSessionState).contains(triggerFlag) { return }
-      resetGate()
+      if router.reset() { onRecordingDiscarded() }
       return
     }
 
-    let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
-    let eventFlags = event.flags
+    guard let routed = routerEvent(type: type, event: event) else { return }
     let now = reference.duration(to: ContinuousClock.now)
-    dispatch(decideAction(type: type, keyCode: keyCode, eventFlags: eventFlags, now: now))
+    dispatch(router.handle(routed, at: now))
   }
 
-  /// Feeds one event into the gate and returns its decision.
-  private func decideAction(
-    type: CGEventType, keyCode: Int, eventFlags: CGEventFlags, now: Duration
-  ) -> DictationKeyGate.Action {
+  /// Reduces a `CGEvent` to the router's CoreGraphics-free event shape, or nil
+  /// for event types the trigger doesn't care about.
+  private func routerEvent(type: CGEventType, event: CGEvent) -> DictationKeyRouter.Event? {
+    let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
     switch type {
     case .flagsChanged:
-      guard keyCode == triggerKeyCode else { return .none }
-      let isDown = eventFlags.contains(triggerFlag)
-      if isDown, !modifierIsDown {
-        modifierIsDown = true
-        return gate.modifierDown(at: now)
-      }
-      if !isDown, modifierIsDown {
-        modifierIsDown = false
-        return gate.modifierUp(at: now)
-      }
-      return .none
+      return .flagsChanged(keyCode: keyCode, triggerFlagIsOn: event.flags.contains(triggerFlag))
     case .keyDown:
-      return keyCode == triggerKeyCode ? .none : gate.otherKeyDown()
+      return .keyDown(keyCode: keyCode)
     default:
-      return .none
+      return nil
     }
   }
 
@@ -211,18 +189,18 @@ final class DictationKeyTap {
     /// DictationKeyTap → DictationKeyGate → onStart/onStop object graph is
     /// covered, not just the session the coordinator drives directly.
     func simulatePressForTesting() {
-      gate.reset()
-      modifierIsDown = false
+      _ = router.reset()
       dispatch(
-        decideAction(
-          type: .flagsChanged, keyCode: triggerKeyCode, eventFlags: triggerFlag, now: .seconds(0)))
+        router.handle(
+          .flagsChanged(keyCode: router.triggerKeyCode, triggerFlagIsOn: true), at: .seconds(0)))
     }
 
     /// Completes the synthetic cycle as a hold (past the threshold), so the gate
     /// emits `.stop` and `onStop` fires.
     func simulateReleaseForTesting() {
       dispatch(
-        decideAction(type: .flagsChanged, keyCode: triggerKeyCode, eventFlags: [], now: .seconds(2)))
+        router.handle(
+          .flagsChanged(keyCode: router.triggerKeyCode, triggerFlagIsOn: false), at: .seconds(2)))
     }
   #endif
 }

@@ -44,11 +44,8 @@ final class OverlayWindowController {
   private let bridge = OverlayBridge()
   private var suppressOriginPersist = false
 
-  // How long a transient notice lingers before settling back to idle. A failed or
-  // "copied" notice holds long enough to read; a successful "Pasted" needs far
-  // less, so it clears faster and the interaction feels snappier.
-  private static let errorFlashSeconds: Double = 1.6
-  private static let pastedNoticeSeconds: Double = 0.8
+  // The revert timer for a transient notice; its dwell comes from the engine
+  // (`OverlayUIState.noticeDwellSeconds`, unit-tested there).
   private var errorRevertTask: Task<Void, Never>?
 
   // The pill fades in fast — the appear is tied to the user's keypress, so a snappy
@@ -123,7 +120,7 @@ final class OverlayWindowController {
     // pill is otherwise only up during active dictation, so they linger briefly to
     // be read, then settle back to idle. Announce them for VoiceOver since this
     // non-activating panel never gets focus (HIG: Accessibility / Feedback).
-    if state.isTransientNotice {
+    if let dwell = state.noticeDwellSeconds {
       NSAccessibility.post(
         element: NSApp as Any,
         notification: .announcementRequested,
@@ -131,7 +128,6 @@ final class OverlayWindowController {
           .announcement: state.accessibilityLabel,
           .priority: NSAccessibilityPriorityLevel.high.rawValue,
         ])
-      let dwell = state == .pasted ? Self.pastedNoticeSeconds : Self.errorFlashSeconds
       errorRevertTask = Task { [weak self] in
         try? await Task.sleep(for: .seconds(dwell))
         guard let self, !Task.isCancelled else { return }
@@ -210,15 +206,15 @@ final class OverlayWindowController {
 
   private func reposition() {
     guard let screen = NSScreen.main else { return }
-    let frame = panel.frame
-    let origin: NSPoint
-    if let custom = storedCustomOrigin() {
-      origin = clamp(point: custom, size: frame.size, into: screen.visibleFrame)
-    } else {
-      origin = NSPoint(
-        x: screen.visibleFrame.midX - frame.width / 2,
-        y: screen.visibleFrame.minY + 80 - Self.shadowMargin)
-    }
+    // The placement rules (default bottom-center, clamping a stale dragged
+    // origin back on screen) are the engine's `OverlayPlacement`, unit-tested
+    // there. The 80 pt clearance is measured to the visible *pill*, so the
+    // panel origin backs off by the transparent shadow margin.
+    let origin = OverlayPlacement.origin(
+      panelSize: panel.frame.size,
+      visibleFrame: screen.visibleFrame,
+      customOrigin: storedCustomOrigin(),
+      bottomOffset: 80 - Self.shadowMargin)
     suppressOriginPersist = true
     panel.setFrameOrigin(origin)
     suppressOriginPersist = false
@@ -238,13 +234,5 @@ final class OverlayWindowController {
       let y = defaults.object(forKey: Self.customOriginYKey) as? Double
     else { return nil }
     return NSPoint(x: x, y: y)
-  }
-
-  private func clamp(point: NSPoint, size: CGSize, into rect: NSRect) -> NSPoint {
-    let maxX = rect.maxX - size.width
-    let maxY = rect.maxY - size.height
-    return NSPoint(
-      x: min(max(point.x, rect.minX), maxX),
-      y: min(max(point.y, rect.minY), maxY))
   }
 }

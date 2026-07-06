@@ -35,16 +35,26 @@ public enum OverlayUIState: Equatable, Sendable {
     }
   }
 
+  /// How long the shell should hold this transient notice on the pill before
+  /// reverting to `.idle`, or `nil` for a steady state held for as long as the
+  /// pipeline is in it. A failed or "copied" notice lingers long enough to
+  /// read; a successful "Pasted" needs far less, so it clears faster and the
+  /// interaction feels snappier. Owned here so the dwell policy is unit-tested
+  /// and a new notice can't ship without one.
+  public var noticeDwellSeconds: Double? {
+    switch self {
+    case .pasted: 0.8
+    case .error, .noTarget: 1.6
+    case .idle, .recording, .processing: nil
+    }
+  }
+
   /// Whether this is a brief notice the shell shows and then auto-reverts to
   /// `.idle` (error flash / "copied"), as opposed to a steady state held for as
   /// long as the pipeline is in it. The shell announces these for VoiceOver
-  /// since the non-activating pill never takes focus.
-  public var isTransientNotice: Bool {
-    switch self {
-    case .error, .pasted, .noTarget: true
-    case .idle, .recording, .processing: false
-    }
-  }
+  /// since the non-activating pill never takes focus. Derived from
+  /// `noticeDwellSeconds` so the two can't disagree.
+  public var isTransientNotice: Bool { noticeDwellSeconds != nil }
 }
 
 extension PipelinePhase {
