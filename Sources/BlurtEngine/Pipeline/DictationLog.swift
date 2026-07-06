@@ -19,6 +19,13 @@ enum DictationLog {
     let prior: String?
     /// Selected text sent as context (the dictation replaced it), when any.
     let selected: String?
+    /// The fully-assembled `config.prompt` sent to AssemblyAI for this
+    /// utterance — the same string `AssemblyAITranscriber` reports via
+    /// `onPromptAssembled` and the Prompt Inspector displays. Built here from
+    /// `context` (rather than threaded through from the transcriber) so the
+    /// log always reflects what was actually sent, even for calls that
+    /// construct an entry directly from a context.
+    let prompt: String?
   }
 
   static let defaultURL: URL = {
@@ -65,7 +72,8 @@ enum DictationLog {
     let entry = Entry(
       polished: polished, raw: raw, ts: now.formatted(timestampFormat),
       app: context?.appName, window: context?.windowTitle, field: context?.fieldLabel,
-      prior: context?.priorText, selected: context?.selectedText)
+      prior: context?.priorText, selected: context?.selectedText,
+      prompt: TranscriptionPrompt.build(context: context))
     guard var line = try? makeEncoder().encode(entry) else { return }
     line.append(0x0A)  // '\n'
 
