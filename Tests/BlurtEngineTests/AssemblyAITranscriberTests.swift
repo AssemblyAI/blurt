@@ -255,41 +255,6 @@ struct HTTPClientTests {
     #expect(AssemblyAIError.malformedResponse.errorDescription?.isEmpty == false)
   }
 
-  @Test("transcribe hands the assembled prompt to onPromptAssembled before sending")
-  func transcribeReportsAssembledPrompt() async throws {
-    MockURLProtocol.responder = { request in
-      guard request.url?.path.hasSuffix("/transcribe") == true else { return (404, Data()) }
-      return (200, json(["text": "ok"]))
-    }
-    defer { MockURLProtocol.responder = nil }
-
-    let captured = ValueBox<String?>(nil)
-    let seen = Counter()
-    let transcriber = AssemblyAITranscriber(
-      apiKeyProvider: { "test-key" },
-      baseURL: URL(string: "https://sync.assemblyai.com")!,
-      urlSession: mockURLSession(),
-      onPromptAssembled: { prompt in
-        _ = seen.next()
-        captured.set(prompt)
-      }
-    )
-
-    // A real context builds a non-nil prompt that echoes the prior text.
-    _ = try await transcriber.transcribe(
-      samples: [0, 0.1, -0.1],
-      sampleRate: 16_000,
-      context: TranscriptionContext(appName: "Slack", priorText: "Dear Sam,"))
-    #expect(seen.value == 1)
-    #expect(captured.value?.contains("Dear Sam,") == true)
-
-    // A nil context builds no prompt: the closure still fires, with nil.
-    captured.set("unset")
-    _ = try await transcriber.transcribe(samples: [0, 0.1, -0.1], sampleRate: 16_000, context: nil)
-    #expect(seen.value == 2)
-    #expect(captured.value == nil)
-  }
-
   // MARK: - helpers
 
   private func makeTranscriber(apiKey: String?) -> AssemblyAITranscriber {

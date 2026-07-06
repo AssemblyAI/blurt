@@ -12,13 +12,14 @@ struct PersistedSettingsTests {
     #expect(PersistedSettings.allDefaultsKeys.contains(TriggerKeyStore.defaultsKey))
     #expect(PersistedSettings.allDefaultsKeys.contains(SoundPackStore.defaultsKey))
     #expect(PersistedSettings.allDefaultsKeys.contains(KeyTermsStore.defaultsKey))
+    #expect(PersistedSettings.allDefaultsKeys.contains(DeveloperModeStore.defaultsKey))
   }
 
   @Test("the roster carries no stale or duplicate keys")
   func rosterHasNoStrays() {
-    // Exactly the three known stores: a removed store must leave the roster in
+    // Exactly the four known stores: a removed store must leave the roster in
     // the same change, and a key listed twice would hint at a copy-paste slip.
-    #expect(PersistedSettings.allDefaultsKeys.count == 3)
+    #expect(PersistedSettings.allDefaultsKeys.count == 4)
     #expect(Set(PersistedSettings.allDefaultsKeys).count == PersistedSettings.allDefaultsKeys.count)
   }
 }

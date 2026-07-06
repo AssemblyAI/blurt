@@ -83,6 +83,23 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertEqual(picker.value as? String, "None", "Choosing None should stick as the selection")
   }
 
+  /// Developer mode starts off (the UI-test launch resets persisted settings)
+  /// and a click switches it on. Matched by identifier rather than element type
+  /// so the test doesn't care whether AppKit exposes the SwiftUI switch as a
+  /// switch or a checkbox.
+  func testDeveloperModeTogglesOn() {
+    let settings = openSettingsWindow()
+
+    let toggle = settings.descendants(matching: .any)
+      .matching(identifier: UITestIDs.developerToggle).firstMatch
+    XCTAssertTrue(toggle.waitForExistence(timeout: 10), "Developer mode toggle not found")
+    XCTAssertEqual("\(toggle.value ?? "")", "0", "Developer mode should start switched off")
+
+    toggle.click()
+
+    XCTAssertEqual("\(toggle.value ?? "")", "1", "Clicking should switch developer mode on")
+  }
+
   /// After a key is saved, "Change" re-opens the editable field so the key can
   /// be rotated.
   func testChangeReopensEditableFieldAfterSaving() {
