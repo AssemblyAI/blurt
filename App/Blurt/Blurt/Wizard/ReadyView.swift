@@ -93,9 +93,6 @@ private struct RecentDictationsSection: View {
   let entries: [RecentDictations.Entry]
 
   private static let rowHeight: CGFloat = 30
-  /// The macOS list separator is inset to the leading edge of the row content,
-  /// which begins at this same inset (see `RecentDictationRow`).
-  private static let separatorInset: CGFloat = 12
   private static let separatorThickness: CGFloat = 1
   /// Height of a full `capacity`-row list (rows + the separators between them);
   /// the container is pinned to this whether it holds 0, 1, or `capacity` rows.
@@ -144,8 +141,9 @@ private struct RecentDictationsSection: View {
               .frame(height: Self.rowHeight)
             if entry.id != entries.last?.id {
               // Semantic separator (adapts to light/dark + Increase Contrast),
-              // inset to the row's leading content per the macOS list idiom.
-              Divider().padding(.leading, Self.separatorInset)
+              // full-bleed across the grouped container — the rows carry no
+              // leading icon to inset past, so an edge-to-edge rule reads cleaner.
+              Divider()
             }
           }
           // Hold unused slots open so the rows that exist stay put at the top
