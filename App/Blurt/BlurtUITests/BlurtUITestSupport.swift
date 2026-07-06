@@ -30,6 +30,7 @@ enum UITestIDs {
   static let apiKeyError = "settings.apiKey.error"
   static let hotkeyPicker = "settings.hotkey.picker"
   static let soundPicker = "settings.sound.picker"
+  static let developerToggle = "settings.developer.toggle"
 
   // Test-harness controls (`UITestID` in UITestSupport.swift).
   static let setKeyButton = "uitest.setKey"

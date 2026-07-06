@@ -17,6 +17,7 @@ private struct DecodedContext: Decodable {
   let field: String?
   let prior: String?
   let selected: String?
+  let prompt: String?
 }
 
 @Suite("DictationLog.append")
@@ -116,6 +117,26 @@ struct DictationLogTests {
     // `Encodable` synthesis uses `encodeIfPresent`, so a nil field is absent
     // rather than `"selected":null`.
     #expect(!line.contains("selected"))
+  }
+
+  @Test("logs the same assembled prompt the transcriber sends")
+  func logsAssembledPrompt() {
+    let url = makeURL()
+    let context = TranscriptionContext(
+      appName: "Mail", windowTitle: "Re: Q3 pricing", fieldLabel: "Body",
+      priorText: "Hi Sam,", selectedText: "the old plan")
+    DictationLog.append(raw: "r", polished: "p", context: context, to: url, now: Date())
+    let line = read(url).split(separator: "\n").first.map(String.init) ?? ""
+    let decoded = try? JSONDecoder().decode(DecodedContext.self, from: Data(line.utf8))
+    #expect(decoded?.prompt == TranscriptionPrompt.build(context: context))
+  }
+
+  @Test("omits the prompt field when there is no context to build one")
+  func omitsPromptWhenNoContext() {
+    let url = makeURL()
+    DictationLog.append(raw: "r", polished: "p", context: nil, to: url, now: Date())
+    let line = read(url).split(separator: "\n").first.map(String.init) ?? ""
+    #expect(!line.contains("\"prompt\""))
   }
 
   @Test("survives unicode in raw and polished fields")

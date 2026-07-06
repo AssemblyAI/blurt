@@ -30,22 +30,10 @@ final class AppCoordinator {
   private let keyValidator = APIKeyValidator()
   @ObservationIgnored private var phaseObserver: Task<Void, Never>?
   @ObservationIgnored private var levelsObserver: Task<Void, Never>?
-  @ObservationIgnored private var promptObserver: Task<Void, Never>?
-  /// Bridges the transcriber's per-utterance `onPromptAssembled` callback (fired
-  /// off the main actor) into a stream `startPipelineObservers` consumes, so the
-  /// Prompt Inspector's state is owned here alongside the other pipeline-derived
-  /// state rather than in a global. `bufferingNewest(1)` because only the latest
-  /// prompt matters.
-  @ObservationIgnored private let promptStream: AsyncStream<String?>
   @ObservationIgnored var keyTap: DictationKeyTap?
 
   @ObservationIgnored private let transcriptStream: AsyncStream<String>
   @ObservationIgnored private var transcriptObserver: Task<Void, Never>?
-
-  /// The fully-assembled prompt sent to AssemblyAI on the most recent dictation,
-  /// surfaced by the Prompt Inspector window (`nil` when none has been sent yet,
-  /// or that dictation had no context to build one). In-memory only.
-  private(set) var lastPrompt: String?
 
   /// The last few dictations that produced a transcript — pasted, copied, or
   /// even failed-to-paste (the seam fires before injection) — newest first,
@@ -63,12 +51,11 @@ final class AppCoordinator {
   /// crowded menu bar, so nothing here is relied on for correctness.
   private(set) var menuBarStatus: MenuBarStatus = .idle
 
-  /// `components` is nil in production so this can wire the transcriber's prompt
-  /// callback into `promptStream`; tests/UI-tests inject their own `components`
-  /// (whose stub transcriber emits nothing, so the stream simply stays quiet).
+  /// `components` defaults to the production pipeline; tests/UI-tests inject
+  /// their own deterministic doubles (see `DictationComponents`).
   init(
     onMissingAPIKey: @escaping @MainActor () -> Void,
-    components: DictationComponents? = nil,
+    components: DictationComponents = .production(),
     keyStore: any APIKeyGateway = ProductionAPIKeyStore(),
     isUITesting: Bool = false
   ) {
@@ -76,19 +63,12 @@ final class AppCoordinator {
     self.keyStore = keyStore
     self.isUITesting = isUITesting
 
-    let (promptStream, promptContinuation) = AsyncStream.makeStream(
-      of: String?.self, bufferingPolicy: .bufferingNewest(1))
-    self.promptStream = promptStream
-    // Unbounded (unlike promptStream's newest-1): the Recent list is append-only,
-    // so every transcript must survive until the MainActor observer drains it —
-    // dropping the oldest under contention would silently lose a dictation.
+    // Unbounded: the Recent list is append-only, so every transcript must survive
+    // until the MainActor observer drains it — dropping the oldest under
+    // contention would silently lose a dictation.
     let (transcriptStream, transcriptContinuation) = AsyncStream.makeStream(
       of: String.self, bufferingPolicy: .unbounded)
     self.transcriptStream = transcriptStream
-    let components =
-      components
-      ?? .production(
-        onPromptAssembled: { promptContinuation.yield($0) })
 
     self.mic = components.mic
     self.session = DictationSession(
@@ -110,7 +90,6 @@ final class AppCoordinator {
   deinit {
     phaseObserver?.cancel()
     levelsObserver?.cancel()
-    promptObserver?.cancel()
     transcriptObserver?.cancel()
   }
 
@@ -156,15 +135,12 @@ final class AppCoordinator {
   }
 
   /// Observes the session's phase stream (drives the pill + menu bar), the mic's
-  /// level stream (drives the pill's meter), the assembled-prompt stream (feeds
-  /// the Prompt Inspector), and the delivered-transcript stream (feeds the
-  /// ready-window echo). Split into one helper per stream — rather than one
-  /// `for await` loop per stream inline here — to keep this method's cyclomatic
-  /// complexity under SwiftLint's threshold.
+  /// level stream (drives the pill's meter), and the delivered-transcript stream
+  /// (feeds the ready window's "Recent" list). One helper per stream keeps this
+  /// method's cyclomatic complexity under SwiftLint's threshold.
   private func startPipelineObservers() {
     phaseObserver = observePhases()
     levelsObserver = observe(mic.levels) { $0.overlay?.pushLevel($1) }
-    promptObserver = observe(promptStream) { $0.lastPrompt = $1 }
     transcriptObserver = observe(transcriptStream) { $0.recentDictations.record($1, at: Date()) }
   }
 

@@ -54,8 +54,8 @@ KEYCHAIN_ACCOUNT="AssemblyAIAPIKey"
 echo "==> Deleting AssemblyAI API key from Keychain ($KEYCHAIN_SERVICE / $KEYCHAIN_ACCOUNT)"
 security delete-generic-password -s "$KEYCHAIN_SERVICE" -a "$KEYCHAIN_ACCOUNT" >/dev/null 2>&1 || true
 
-# Debug builds append a (raw, polished) corpus here (see DictationLog); a fresh
-# install has none, so clear it too.
+# Developer mode appends a (raw, polished) corpus here (see DictationLog); a
+# fresh install has none, so clear it too.
 DICTATION_LOG_DIR="$HOME/Library/Logs/Blurt"
 echo "==> Removing dictation log ($DICTATION_LOG_DIR/dictations.jsonl)"
 rm -f "$DICTATION_LOG_DIR/dictations.jsonl"

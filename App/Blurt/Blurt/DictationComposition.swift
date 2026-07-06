@@ -15,16 +15,10 @@ struct DictationComponents {
   /// The real pipeline: a fresh `MicCapture`, the AssemblyAI Sync transcriber,
   /// and the clipboard-paste injector. This is what `AppCoordinator` builds, so
   /// production behavior is unchanged by the test seam existing.
-  ///
-  /// `onPromptAssembled` is forwarded to the transcriber, which fires it with the
-  /// fully-assembled prompt on each dictation; `AppCoordinator` supplies it to
-  /// feed the Prompt Inspector (see `AppCoordinator.startPipelineObservers`).
-  static func production(
-    onPromptAssembled: (@Sendable (String?) -> Void)? = nil
-  ) -> DictationComponents {
+  static func production() -> DictationComponents {
     DictationComponents(
       mic: MicCapture(),
-      transcriber: AssemblyAITranscriber(onPromptAssembled: onPromptAssembled),
+      transcriber: AssemblyAITranscriber(),
       injector: KeyInjector()
     )
   }
