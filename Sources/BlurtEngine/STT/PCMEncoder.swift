@@ -22,13 +22,8 @@ enum PCMEncoder {
     // vDSP_vfixr16 rounds to nearest; vDSP_vfix16 would truncate toward zero.
     vDSP_vfixr16(scaled, 1, &out, 1, vDSP_Length(out.count))
     // Int16 stores host-endian; Apple platforms (arm64/x86_64) are little-endian,
-    // so this buffer is already the S16LE the Sync API expects. The copy into
-    // Data goes span→span: bounds-checked, no unsafe pointers escaping.
-    var data = Data(count: out.count * MemoryLayout<Int16>.stride)
-    var destination = data.mutableBytes
-    // `update` returns the offset past the last byte written; the counts match
-    // by construction, so discard it.
-    _ = destination.update(fromContentsOf: out.span.bytes)
-    return data
+    // so this buffer is already the S16LE the Sync API expects. The pointer stays
+    // inside the closure, so nothing unsafe escapes.
+    return out.withUnsafeBytes { Data($0) }
   }
 }
