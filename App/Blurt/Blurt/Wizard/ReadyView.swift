@@ -1,3 +1,4 @@
+import Accessibility
 import BlurtEngine
 import SwiftUI
 
@@ -154,10 +155,23 @@ private struct RecentDictationsSection: View {
 
 /// A single recent-dictation row: the transcript (one truncated line) with a
 /// relative timestamp trailing it, formatted against `now` (supplied by the
-/// enclosing `TimelineView` so it advances over time).
+/// enclosing `TimelineView` so it advances over time), and a copy affordance.
+///
+/// Copy follows the standard macOS list-row shape: on hover (or keyboard
+/// focus, for Full Keyboard Access) a borderless "Copy" button takes the
+/// timestamp's place at the trailing edge; the same command is in the row's
+/// contextual menu and a VoiceOver custom action, so it's never reachable
+/// through hover alone. Copying briefly swaps the button for a "Copied"
+/// confirmation — and posts it as an accessibility announcement — since
+/// putting text on the pasteboard has no visible effect of its own.
 private struct RecentDictationRow: View {
   let entry: RecentDictations.Entry
   let now: Date
+
+  @State private var isHovered = false
+  @State private var showsCopyConfirmation = false
+  @State private var copyConfirmationReset: Task<Void, Never>?
+  @FocusState private var copyButtonFocused: Bool
 
   var body: some View {
     HStack(spacing: 10) {
@@ -167,10 +181,7 @@ private struct RecentDictationRow: View {
         .lineLimit(1)
         .truncationMode(.tail)
         .frame(maxWidth: .infinity, alignment: .leading)
-      Text(relativeTimestamp)
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .fixedSize()
+      trailingAccessory
     }
     .padding(.horizontal, 12)
     .frame(maxHeight: .infinity)
@@ -178,10 +189,70 @@ private struct RecentDictationRow: View {
     // the single truncated line cuts off (VoiceOver already gets it via the
     // label below).
     .help(entry.text)
+    .contentShape(Rectangle())
+    .onHover { isHovered = $0 }
+    .contextMenu {
+      Button("Copy") { copyTranscript() }
+    }
     // One VoiceOver element per row; the explicit label controls the phrasing
     // (transcript then relative time), so ignore the children rather than merge.
+    // Copy is re-exposed as a custom action since the hover button is ignored
+    // with the rest of the children.
     .accessibilityElement(children: .ignore)
     .accessibilityLabel("\(entry.text), \(relativeTimestamp)")
+    .accessibilityAction(named: "Copy") { copyTranscript() }
+  }
+
+  /// Whether the trailing slot currently shows the copy button instead of the
+  /// timestamp. Keyboard focus counts as well as hover, so Full Keyboard Access
+  /// users tabbing to the (otherwise invisible) button can see what they're on.
+  private var showsCopyButton: Bool {
+    (isHovered || copyButtonFocused) && !showsCopyConfirmation
+  }
+
+  /// The row's trailing slot: normally the relative timestamp, swapped for the
+  /// "Copy" button on hover/focus, and for a transient "Copied" confirmation
+  /// right after a copy. All three are layered (faded, not swapped out of the
+  /// hierarchy) so the button never loses keyboard focus mid-confirmation, and
+  /// the slot sizes to the widest so nothing shifts as they trade places.
+  private var trailingAccessory: some View {
+    ZStack(alignment: .trailing) {
+      Text(relativeTimestamp)
+        .opacity(showsCopyButton || showsCopyConfirmation ? 0 : 1)
+      Button(action: copyTranscript) {
+        Label("Copy", systemImage: "doc.on.doc")
+      }
+      .buttonStyle(.borderless)
+      .focused($copyButtonFocused)
+      .opacity(showsCopyButton ? 1 : 0)
+      .help("Copy")
+      Label("Copied", systemImage: "checkmark")
+        .opacity(showsCopyConfirmation ? 1 : 0)
+    }
+    .font(.caption)
+    .foregroundStyle(.secondary)
+    .fixedSize()
+    .animation(.easeOut(duration: 0.12), value: showsCopyButton)
+    .animation(.easeOut(duration: 0.12), value: showsCopyConfirmation)
+  }
+
+  private func copyTranscript() {
+    let pasteboard = NSPasteboard.general
+    pasteboard.clearContents()
+    pasteboard.setString(entry.text, forType: .string)
+
+    // The pasteboard write is invisible, so confirm it: VoiceOver hears it...
+    AccessibilityNotification.Announcement("Copied").post()
+
+    // ...and sighted users see "Copied" for a beat before the slot reverts.
+    // Rapid re-copies restart the clock instead of racing the earlier reset.
+    copyConfirmationReset?.cancel()
+    showsCopyConfirmation = true
+    copyConfirmationReset = Task {
+      try? await Task.sleep(for: .seconds(1.5))
+      guard !Task.isCancelled else { return }
+      showsCopyConfirmation = false
+    }
   }
 
   private static let relativeFormatter: RelativeDateTimeFormatter = {
