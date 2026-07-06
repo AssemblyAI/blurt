@@ -99,7 +99,6 @@ struct ReadyView: View {
       .lineLimit(4)
       .truncationMode(.tail)
       .transition(.opacity)
-      .accessibilityIdentifier("ready.transcript")
       .accessibilityLabel("You dictated: \(text)")
   }
 }

@@ -370,7 +370,13 @@ final class AppCoordinator {
       onMissingAPIKey()
     }
     // A new recording resets the ready window to the plain readout — the previous
-    // result shouldn't linger while the user dictates the next one.
+    // result shouldn't linger while the user dictates the next one. This relies
+    // on the transcript stream (a separate AsyncStream from the phase stream)
+    // having already been drained on the MainActor: a full press→release→press
+    // cycle separates the transcript yield (synchronous, right before .pasted)
+    // from this next .recording, so by the time it arrives here the MainActor
+    // has long since observed the transcript. Not a formal cross-stream
+    // guarantee — just how the user-driven ordering plays out.
     if phase == .recording {
       echoRevertTask?.cancel()
       lastTranscript = nil

@@ -81,4 +81,45 @@ struct DictationSessionTranscriptTests {
 
     #expect(spy.values.isEmpty)
   }
+
+  @Test("onTranscriptDelivered does not fire when the transcript is empty/whitespace")
+  func transcriptNotDeliveredOnEmpty() async throws {
+    let spy = TranscriptSpy()
+    let session = DictationSession(
+      // A normally-sized clip (StubMicCapture's default) so the too-short-clip
+      // guard doesn't short-circuit before the transcribe step is reached.
+      mic: StubMicCapture(),
+      transcriber: StubTranscriber(mode: .transcript("   ")),
+      injector: StubInjector(),
+      onTranscriptDelivered: { spy.record($0) }
+    )
+
+    await session.press()
+    await session.release()
+    await session.waitForIdle()
+
+    #expect(await session.phase == .idle)
+    #expect(spy.values.isEmpty)
+  }
+
+  @Test("onTranscriptDelivered does not fire when the dictation is cancelled")
+  func transcriptNotDeliveredOnCancel() async throws {
+    let spy = TranscriptSpy()
+    let session = DictationSession(
+      mic: StubMicCapture(),
+      transcriber: StubTranscriber(mode: .transcript("Hello world.")),
+      injector: StubInjector(),
+      onTranscriptDelivered: { spy.record($0) }
+    )
+
+    // Cancel while still recording, before release() can hand off to
+    // transcribe/inject — mirrors `cancelDuringRecording` in
+    // `DictationSessionTests.swift`, the deterministic way to drive `.cancelled`
+    // without racing the transcribe step.
+    await session.press()
+    await session.cancel()
+
+    #expect(await session.phase == .cancelled)
+    #expect(spy.values.isEmpty)
+  }
 }
