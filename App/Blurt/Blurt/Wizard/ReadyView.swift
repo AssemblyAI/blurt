@@ -4,33 +4,18 @@ import SwiftUI
 
 private enum ReadyBrandPalette {
   static func keycapFill(for colorScheme: ColorScheme) -> Color {
-    switch colorScheme {
-    case .dark:
-      return Color(red: 0.12, green: 0.16, blue: 0.2)
-    default:
-      return Color(red: 0.965, green: 0.985, blue: 1.0)
-    }
+    colorScheme == .dark ? Color(red: 0.12, green: 0.16, blue: 0.2) : Color(red: 0.965, green: 0.985, blue: 1.0)
   }
 
   static func keycapStroke(for colorScheme: ColorScheme) -> Color {
-    switch colorScheme {
-    case .dark:
-      return Color(red: 0.38, green: 0.82, blue: 0.96).opacity(0.85)
-    default:
-      return Color(red: 0.42, green: 0.82, blue: 0.95).opacity(0.4)
-    }
+    colorScheme == .dark
+      ? Color(red: 0.38, green: 0.82, blue: 0.96).opacity(0.85)
+      : Color(red: 0.42, green: 0.82, blue: 0.95).opacity(0.4)
   }
 
   static func settingsButtonFill(for colorScheme: ColorScheme, isHovered: Bool, isPressed: Bool) -> Color {
     guard isHovered || isPressed else { return .clear }
-
-    let opacity = isPressed ? 0.11 : 0.06
-    switch colorScheme {
-    case .dark:
-      return Color.white.opacity(opacity)
-    default:
-      return Color.black.opacity(opacity)
-    }
+    return (colorScheme == .dark ? Color.white : Color.black).opacity(isPressed ? 0.11 : 0.06)
   }
 }
 
@@ -161,13 +146,11 @@ private struct RecentDictationsSection: View {
 /// relative timestamp trailing it, formatted against `now` (supplied by the
 /// enclosing `TimelineView` so it advances over time), and a copy affordance.
 ///
-/// Copy follows the standard macOS list-row shape: on hover (or keyboard
-/// focus, for Full Keyboard Access) a borderless "Copy" button takes the
-/// timestamp's place at the trailing edge; the same command is in the row's
-/// contextual menu and a VoiceOver custom action, so it's never reachable
-/// through hover alone. Copying briefly swaps the button for a "Copied"
-/// confirmation — and posts it as an accessibility announcement — since
-/// putting text on the pasteboard has no visible effect of its own.
+/// Copy follows the standard macOS list-row shape: on hover (or keyboard focus,
+/// for Full Keyboard Access) a "Copy" button takes the timestamp's place; the
+/// same command is in the row's contextual menu and a VoiceOver custom action,
+/// so it's never reachable through hover alone. Copying briefly shows "Copied"
+/// (and announces it), since a pasteboard write has no visible effect.
 private struct RecentDictationRow: View {
   let entry: RecentDictations.Entry
   let now: Date
@@ -179,14 +162,10 @@ private struct RecentDictationRow: View {
   @State private var copyCount = 0
   @FocusState private var copyButtonFocused: Bool
 
-  /// The three things the trailing slot can show. Exactly one layer is visible
-  /// at a time; deriving that from one value keeps the exclusivity structural
-  /// instead of spread across per-layer boolean conditions.
-  private enum TrailingSlot {
-    case timestamp
-    case copyButton
-    case copiedConfirmation
-  }
+  /// The three things the trailing slot can show. Deriving the visible one
+  /// from a single value keeps the exclusivity structural rather than spread
+  /// across per-layer boolean conditions.
+  private enum TrailingSlot { case timestamp, copyButton, copiedConfirmation }
 
   /// Keyboard focus counts as well as hover for revealing the copy button, so
   /// Full Keyboard Access users tabbing to the (otherwise invisible) button
@@ -198,8 +177,7 @@ private struct RecentDictationRow: View {
   }
 
   var body: some View {
-    // Computed once per render: the ICU-backed formatter feeds both the
-    // trailing text and the VoiceOver label below.
+    // Formatted once per render; feeds the trailing text and VoiceOver label.
     let timestamp = relativeTimestamp
     HStack(spacing: 10) {
       Text(entry.text)
@@ -221,16 +199,14 @@ private struct RecentDictationRow: View {
     .contextMenu {
       Button("Copy") { copyTranscript() }
     }
-    // One VoiceOver element per row; the explicit label controls the phrasing
-    // (transcript then relative time), so ignore the children rather than merge.
-    // Copy is re-exposed as a custom action since the hover button is ignored
-    // with the rest of the children.
+    // One VoiceOver element per row; the explicit label controls the phrasing,
+    // so ignore the children rather than merge. Copy is re-exposed as a custom
+    // action since the hover button is ignored with the rest of the children.
     .accessibilityElement(children: .ignore)
     .accessibilityLabel("\(entry.text), \(timestamp)")
     .accessibilityAction(named: "Copy") { copyTranscript() }
-    // Reverts the "Copied" confirmation after a beat. The cancelled-sleep
-    // guard keeps a superseded timer from clearing the confirmation the newer
-    // copy just showed; SwiftUI cancels the task itself if the row goes away.
+    // Reverts the "Copied" confirmation after a beat. The cancelled-sleep guard
+    // keeps a superseded timer from clearing the newer copy's confirmation.
     .task(id: copyCount) {
       guard copyCount > 0 else { return }
       guard (try? await Task.sleep(for: .seconds(1.5))) != nil else { return }
@@ -238,18 +214,18 @@ private struct RecentDictationRow: View {
     }
   }
 
-  /// The row's trailing slot: normally the relative timestamp, swapped for the
-  /// "Copy" button on hover/focus, and for a transient "Copied" confirmation
-  /// right after a copy. All three are layered (faded, not swapped out of the
-  /// hierarchy) so the button never loses keyboard focus mid-confirmation, and
-  /// the slot sizes to the widest so nothing shifts as they trade places.
+  /// The row's trailing slot: the relative timestamp, swapped for the "Copy"
+  /// button on hover/focus and a transient "Copied" confirmation after a copy.
+  /// All three are layered (faded, not swapped out of the hierarchy) so the
+  /// button never loses keyboard focus mid-confirmation, and the slot sizes to
+  /// the widest so nothing shifts as they trade places.
   private func trailingAccessory(timestamp: String) -> some View {
     ZStack(alignment: .trailing) {
       Text(timestamp)
         .opacity(trailingSlot == .timestamp ? 1 : 0)
       Button(action: copyTranscript) {
-        // A hand-rolled label: `Label`'s default icon–title gap reads as two
-        // separate items at this size, so pull the glyph in tight.
+        // Hand-rolled label: `Label`'s default icon–title gap reads as two
+        // separate items at this size; pull the glyph in tight.
         HStack(spacing: 3) {
           Image(systemName: "doc.on.doc")
           Text("Copy")
@@ -258,14 +234,13 @@ private struct RecentDictationRow: View {
       .buttonStyle(RecentCopyButtonStyle())
       .focused($copyButtonFocused)
       .opacity(trailingSlot == .copyButton ? 1 : 0)
-      // Opacity-0 views still hit-test, and an invisible control that reacts
-      // to clicks isn't evident as actionable — only take clicks when shown
-      // (this gates pointer input without breaking keyboard focus/activation).
+      // Opacity-0 views still hit-test; only take clicks while visible (this
+      // gates pointer input without breaking keyboard focus/activation).
       .allowsHitTesting(trailingSlot == .copyButton)
       Label("Copied", systemImage: "checkmark")
         .opacity(trailingSlot == .copiedConfirmation ? 1 : 0)
-        // Non-interactive layer: let clicks fall through rather than swallowing
-        // them while the confirmation sits above the (hidden) copy button.
+        // Let clicks fall through rather than swallowing them while the
+        // confirmation sits above the (hidden) copy button.
         .allowsHitTesting(false)
     }
     .font(.caption)
@@ -279,8 +254,7 @@ private struct RecentDictationRow: View {
     pasteboard.clearContents()
     pasteboard.setString(entry.text, forType: .string)
 
-    // The pasteboard write is invisible, so confirm it: VoiceOver hears it,
-    // and sighted users see "Copied" until the timer in `body` reverts it.
+    // The invisible pasteboard write gets audible + visible confirmation:
     AccessibilityNotification.Announcement("Copied").post()
     showsCopyConfirmation = true
     copyCount += 1
@@ -356,9 +330,8 @@ private struct KeyCap: View {
 }
 
 /// The Recent row's Copy control: accent-tinted (marking it clickable, vs. the
-/// secondary timestamp it replaces) with a soft accent highlight on hover and
-/// a stronger one while pressed. The highlight is painted outside the layout
-/// bounds so the slot's trailing alignment with the timestamp doesn't shift.
+/// secondary timestamp it replaces) with an accent highlight on hover/press,
+/// painted outside the layout bounds so the trailing alignment doesn't shift.
 private struct RecentCopyButtonStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
     RecentCopyButton(configuration: configuration)
@@ -384,8 +357,7 @@ private struct RecentCopyButton: View {
   }
 
   private var highlightOpacity: Double {
-    if configuration.isPressed { return 0.2 }
-    return isHovered ? 0.12 : 0
+    configuration.isPressed ? 0.2 : isHovered ? 0.12 : 0
   }
 }
 
