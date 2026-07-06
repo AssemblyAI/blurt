@@ -20,52 +20,58 @@ struct OverlayView: View {
   private var pillWidth: CGFloat { OverlayWindowController.pillSize.width }
   private var pillHeight: CGFloat { OverlayWindowController.pillSize.height }
 
-  // A dark tint infused into the Liquid Glass capsule: the glass refracts the
-  // desktop colors behind the pill, while the tint keeps it dark enough for the
-  // white bars/text to stay legible.
-  private let tintStrength: Double = 0.5
-
+  // A dark tint infused into the Liquid Glass capsule. `.regular` glass passes
+  // more of the backdrop through than the old frosted-material-plus-fill stack,
+  // so these run deeper than the material-era values (0.5–0.58) to keep the
+  // white bars and 10 pt status text legible over a bright desktop — tune
+  // on-device if the pill reads too heavy over dark wallpapers.
   private var tintColor: Color {
     switch state {
     case .error:
-      return .red.opacity(tintStrength)
+      return .red.opacity(0.6)
     case .recording, .pasted, .noTarget:
       // "Pasted"/"Copied" share recording's cyan-tinted frame: same brand --ice
       // language, reading as an informational notice rather than the red error flash.
-      return Color(red: 0.08, green: 0.2, blue: 0.24).opacity(0.56)
+      return Color(red: 0.08, green: 0.2, blue: 0.24).opacity(0.68)
     case .processing:
-      return Color(red: 0.18, green: 0.12, blue: 0.24).opacity(0.58)
+      return Color(red: 0.18, green: 0.12, blue: 0.24).opacity(0.7)
     case .idle:
-      return .black.opacity(tintStrength)
+      return .black.opacity(0.6)
     }
   }
 
-  /// Identity for the pill's glass across state changes, so the effect morphs
-  /// (via `GlassEffectContainer` + `glassEffectID`) instead of dissolving and
-  /// re-forming if the glass shape or presence ever changes between states.
-  @Namespace private var glassNamespace
-
   var body: some View {
-    GlassEffectContainer {
-      content
-        .frame(width: pillWidth, height: pillHeight)
-        // Real Liquid Glass, not the pre-Tahoe material-imitation stack (frosted
-        // material + tint overlay + stroke + manual drop shadow): the system draws
-        // the refractive edge highlights and shadow itself, so the per-state story
-        // is carried by the tint alone. `.interactive()` lets the glass react to
-        // the pointer — the pill is draggable, so it should feel like a control.
-        .glassEffect(.regular.tint(tintColor).interactive(), in: .capsule)
-        .glassEffectID("pill", in: glassNamespace)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: state)
-        .contentShape(Rectangle())
-        // Transparent margin so the glass's soft shadow has room to render without
-        // being clipped by the panel's contentRect (most visible at the rounded
-        // ends). Matches OverlayWindowController.shadowMargin.
-        .padding(OverlayWindowController.shadowMargin)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(state.accessibilityLabel)
-        .accessibilityIdentifier("overlay.pill")
-    }
+    content
+      .frame(width: pillWidth, height: pillHeight)
+      // Real Liquid Glass, not the pre-Tahoe imitation stack (frosted material +
+      // tint overlay + stroke): the system draws the refractive edge highlights,
+      // so the per-state story is carried by the tint alone. Deliberately not
+      // `.interactive()` — the pill is a passive status surface, and interactive
+      // glass hit-testing could swallow the mouse-down that starts the panel's
+      // `isMovableByWindowBackground` drag, the only way to reposition the pill.
+      // No `GlassEffectContainer`/`glassEffectID` either: there is exactly one
+      // glass element and its capsule never changes shape or presence, so the
+      // morph machinery would be inert scaffolding.
+      .glassEffect(.regular.tint(tintColor), in: .capsule)
+      // Flatten the glass into one layer before shadowing so the drop shadow
+      // takes the capsule's rounded alpha, not the rectangular layer bounds
+      // (which renders as a boxy halo, most visible on a white backdrop). The
+      // explicit shadow keeps the dark pill separated from light content —
+      // whatever ambient shadow the system gives glass is subtle and outside
+      // our control. Radius + offset stay within
+      // OverlayWindowController.shadowMargin (16) so the soft falloff completes
+      // before the panel edge rather than clipping.
+      .compositingGroup()
+      .shadow(color: .black.opacity(0.25), radius: 10, y: 3)
+      .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: state)
+      .contentShape(Rectangle())
+      // Transparent margin so the shadow has room to render without being
+      // clipped by the panel's contentRect (most visible at the rounded ends).
+      // Matches OverlayWindowController.shadowMargin.
+      .padding(OverlayWindowController.shadowMargin)
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel(state.accessibilityLabel)
+      .accessibilityIdentifier("overlay.pill")
   }
 
   @ViewBuilder

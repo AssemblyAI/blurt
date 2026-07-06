@@ -294,9 +294,12 @@ private struct ReadyBrandingView: View {
   }
 }
 
-/// A single rounded key-cap, e.g. "⌃" or "D" — a Liquid Glass chip, so the cap
-/// reads as the same physical material as the rest of the Tahoe UI (the glass
-/// supplies its own fill, edge highlight, and light/dark adaptation).
+/// A single rounded key-cap, e.g. "⌃" or "D". A quiet semantic chip, not
+/// Liquid Glass: over the ready window's flat background a glass chip has
+/// nothing to refract and reads as bare floating text, and the HIG reserves
+/// glass for the floating control layer rather than in-window content.
+/// `.quinary` + `.separator` adapt to light/dark and Increase Contrast for
+/// free, and match the Recent card's container fill above.
 private struct KeyCap: View {
   var label: String
 
@@ -306,7 +309,14 @@ private struct KeyCap: View {
       .foregroundStyle(.primary)
       .padding(.horizontal, 10)
       .padding(.vertical, 6)
-      .glassEffect(.regular, in: .rect(cornerRadius: 8))
+      .background(
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+          .fill(.quinary)
+      )
+      .overlay(
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+          .strokeBorder(.separator, lineWidth: 1)
+      )
   }
 }
 
