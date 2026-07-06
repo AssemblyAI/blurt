@@ -64,10 +64,12 @@ enum FocusCapture {
 
     // Don't read the value of a password field into the prompt.
     let isSecure = isSecureFieldRole(stringValue(element, kAXRoleAttribute))
-    let prior = isSecure ? nil : priorText(of: element, maxChars: maxPriorChars)
+    // `visibleTextOrNil` collapses an all-invisible read (e.g. Google Docs' lone
+    // U+200B before the caret) to nil so it can't masquerade as real prior text.
+    let prior = isSecure ? nil : visibleTextOrNil(priorText(of: element, maxChars: maxPriorChars))
     // The selected range's text (empty when there's no selection). Capped like
     // prior text so a huge highlight can't dominate the prompt budget.
-    let selected = isSecure ? nil : selectedText(of: element, maxChars: maxSelectedChars)
+    let selected = isSecure ? nil : visibleTextOrNil(selectedText(of: element, maxChars: maxSelectedChars))
     return FocusedFieldContext(
       priorText: prior,
       selectedText: selected,
@@ -310,6 +312,29 @@ enum FocusCapture {
   /// does this focused-element role mean its contents must never be read?
   static func isSecureFieldRole(_ role: String?) -> Bool {
     role == secureFieldRole
+  }
+
+  /// Collapses an AX text read that carries no *visible* content to `nil`.
+  ///
+  /// Google Docs (and some other web editors) expose the text before the caret as
+  /// a lone U+200B ZERO WIDTH SPACE — invisible, not real content, yet crucially
+  /// *not* `Character.isWhitespace`. Left as-is, `KeyInjector.withLeadingSeparator`
+  /// reads it as substantive preceding text that doesn't end in whitespace and
+  /// prepends a stray separator space on every dictation. Treating an
+  /// entirely-invisible read as "nothing readable here" (`nil`) instead routes the
+  /// field into the same-window separator fallback like any other
+  /// Accessibility-opaque editor (see `KeyInjector.separatorBasis`).
+  ///
+  /// "Invisible" means every scalar is a default-ignorable code point (zero-width
+  /// spaces, joiners, bidi marks, BOM, …). Regular whitespace (space/tab/newline)
+  /// is deliberately preserved: a caret that already follows real whitespace must
+  /// stay non-`nil` so the separator logic adds no extra space.
+  static func visibleTextOrNil(_ text: String?) -> String? {
+    guard let text else { return nil }
+    let hasVisible = text.contains { character in
+      !character.unicodeScalars.allSatisfy { $0.properties.isDefaultIgnorableCodePoint }
+    }
+    return hasVisible ? text : nil
   }
 
   /// Picks the most descriptive field label in priority order
