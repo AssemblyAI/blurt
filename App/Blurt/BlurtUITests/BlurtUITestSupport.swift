@@ -41,6 +41,7 @@ enum UITestIDs {
   static let hotkeyReleaseButton = "uitest.hotkeyRelease"
   static let statusLabel = "uitest.status"
   static let pastedLabel = "uitest.pasted"
+  static let transcriptEchoLabel = "uitest.transcriptEcho"
 
   // The dictation overlay pill (`OverlayView`), a floating panel driven by the
   // live pipeline. Its accessibility label is `OverlayUIState.accessibilityLabel`.

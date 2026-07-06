@@ -3,11 +3,9 @@ import os
 public actor DictationSession {
   public private(set) var phase: PipelinePhase = .idle
 
-  // Split for the lint file-length budget: `phaseStream()` and the os_signpost
-  // instrumentation live in `DictationSession+Observation.swift`; the
-  // `submit(_:)` command surface lives in `DictationSession+Commands.swift`.
-  // Members those files reach are internal rather than private (Swift's
-  // file-scoped access can't cross the split).
+  // Split for the lint file-length budget: `phaseStream()`/os_signpost live in
+  // `+Observation`; `submit(_:)` lives in `+Commands`. Members those files
+  // reach are internal, not private (file-scoped access can't cross the split).
 
   /// Live feeds of phase changes. Each `phaseStream()` call yields the current
   /// phase plus every subsequent transition, so the production renderer and
@@ -42,6 +40,9 @@ public actor DictationSession {
   /// user has spoken a whole utterance. Defaults to always-ready (no Keychain
   /// read), so tests and keyless hosts are unaffected unless they opt in.
   private let readinessCheck: @Sendable () -> BlurtError?
+  /// Fired once with the final transcript as soon as it's produced — before
+  /// injection, so pasted, copied, and failed-to-paste dictations all count.
+  private let onTranscriptDelivered: (@Sendable (String) -> Void)?
 
   /// Sample rate the mic capture delivers and the Sync STT request declares —
   /// the Sync API's geometry, defined once in `SyncSTTLimits`.
@@ -91,7 +92,8 @@ public actor DictationSession {
     injector: InjectorProtocol,
     maxRecordingSeconds: Double = SyncSTTLimits.autoReleaseSeconds,
     keyTermsProvider: @escaping @Sendable () -> [String] = { KeyTermsStore.terms() },
-    readinessCheck: @escaping @Sendable () -> BlurtError? = { nil }
+    readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
+    onTranscriptDelivered: (@Sendable (String) -> Void)? = nil
   ) {
     self.mic = mic
     self.transcriber = transcriber
@@ -99,6 +101,7 @@ public actor DictationSession {
     self.maxRecordingSeconds = maxRecordingSeconds
     self.keyTermsProvider = keyTermsProvider
     self.readinessCheck = readinessCheck
+    self.onTranscriptDelivered = onTranscriptDelivered
     let (commands, feed) = AsyncStream.makeStream(of: Command.self)
     self.commandFeed = feed
     // Consumes `submit(_:)`'s feed one command at a time, in emit order. Weakly
@@ -156,12 +159,10 @@ public actor DictationSession {
     // mutually exclusive).
     let pressInterval = Self.signposter.beginInterval(Self.pressSignpostName)
     do {
-      // Pre-open the Sync connection while the user speaks, so the first dictation
-      // after an idle gap doesn't pay DNS+TCP+TLS on the transcribe hot path
-      // (~170 ms cold, measured). Detached + fire-and-forget: it must never delay
-      // recording, and a failure is harmless (the request just pays setup as
-      // before). Warming every press is cheap — when the pool is already hot the
-      // throwaway request reuses it rather than handshaking again.
+      // Pre-open the Sync connection while the user speaks, so the first dictation after an idle
+      // gap doesn't pay DNS+TCP+TLS on the transcribe hot path (~170 ms cold, measured). Detached
+      // + fire-and-forget: it must never delay recording, and a failure is harmless (the request
+      // just pays setup as before); warming every press is cheap since a hot pool just reuses it.
       let transcriber = transcriber
       Task.detached { await transcriber.warmUp() }
       // Capture the frontmost app (paste target) concurrently with mic startup —
@@ -317,12 +318,15 @@ public actor DictationSession {
     // .cancelled and detached this task — don't inject or touch the phase.
     if Task.isCancelled { return }
 
-    if text.trimmedNonEmpty() == nil {
+    guard let trimmed = text.trimmedNonEmpty() else {
       setPhase(.idle)
       return
     }
 
     DictationLog.append(raw: text, polished: text, context: capturedContext)
+    // Record every produced transcript (trimmed for display) in "Recent" before
+    // injection — pasted, copied, and failed-to-paste all count; inject gets raw.
+    onTranscriptDelivered?(trimmed)
     await inject(text)
   }
 

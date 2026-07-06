@@ -1,4 +1,5 @@
 import BlurtEngine
+import Foundation
 import Observation
 
 @MainActor
@@ -31,6 +32,15 @@ final class AppCoordinator {
   @ObservationIgnored private var levelsObserver: Task<Void, Never>?
   @ObservationIgnored var keyTap: DictationKeyTap?
 
+  @ObservationIgnored private let transcriptStream: AsyncStream<String>
+  @ObservationIgnored private var transcriptObserver: Task<Void, Never>?
+
+  /// The last few dictations that produced a transcript — pasted, copied, or
+  /// even failed-to-paste (the seam fires before injection) — newest first,
+  /// listed in the ready window's "Recent" section beneath the shortcut readout.
+  /// In-memory only — starts empty each launch and is never written to disk.
+  private(set) var recentDictations = RecentDictations()
+
   /// Whether an AssemblyAI API key is currently saved. Drives the wizard
   /// (which gates dictation on having a key) and the Settings UI.
   private(set) var hasAPIKey: Bool
@@ -53,6 +63,13 @@ final class AppCoordinator {
     self.keyStore = keyStore
     self.isUITesting = isUITesting
 
+    // Unbounded: the Recent list is append-only, so every transcript must survive
+    // until the MainActor observer drains it — dropping the oldest under
+    // contention would silently lose a dictation.
+    let (transcriptStream, transcriptContinuation) = AsyncStream.makeStream(
+      of: String.self, bufferingPolicy: .unbounded)
+    self.transcriptStream = transcriptStream
+
     self.mic = components.mic
     self.session = DictationSession(
       mic: components.mic,
@@ -60,7 +77,8 @@ final class AppCoordinator {
       injector: components.injector,
       // A press with no key saved fails fast as .failed(.apiKeyMissing) —
       // before any capture — and render(_:) routes it to the settings window.
-      readinessCheck: { keyStore.hasKey ? nil : .apiKeyMissing }
+      readinessCheck: { keyStore.hasKey ? nil : .apiKeyMissing },
+      onTranscriptDelivered: { transcriptContinuation.yield($0) }
     )
     self.hasAPIKey = keyStore.hasKey
   }
@@ -72,6 +90,7 @@ final class AppCoordinator {
   deinit {
     phaseObserver?.cancel()
     levelsObserver?.cancel()
+    transcriptObserver?.cancel()
   }
 
   func start() {
@@ -115,10 +134,18 @@ final class AppCoordinator {
     // transition fires from `WizardController.init`, so the tap still comes up.
   }
 
-  /// Observes the session's phase stream (drives the pill + menu bar) and the
-  /// mic's level stream (drives the pill's meter).
+  /// Observes the session's phase stream (drives the pill + menu bar), the mic's
+  /// level stream (drives the pill's meter), and the delivered-transcript stream
+  /// (feeds the ready window's "Recent" list). One helper per stream keeps this
+  /// method's cyclomatic complexity under SwiftLint's threshold.
   private func startPipelineObservers() {
-    phaseObserver = Task { @MainActor [weak self] in
+    phaseObserver = observePhases()
+    levelsObserver = observe(mic.levels) { $0.overlay?.pushLevel($1) }
+    transcriptObserver = observe(transcriptStream) { $0.recentDictations.record($1, at: Date()) }
+  }
+
+  private func observePhases() -> Task<Void, Never> {
+    Task { @MainActor [weak self] in
       guard let phases = await self?.session.phaseStream() else { return }
       for await phase in phases {
         guard let self else { return }
@@ -126,13 +153,21 @@ final class AppCoordinator {
         self.render(phase)
       }
     }
+  }
 
-    let levels = mic.levels
-    levelsObserver = Task { @MainActor [weak self] in
-      for await level in levels {
+  /// Spawns a MainActor observer that runs `action` for each value of `stream`
+  /// until cancelled — the shared shape behind the level/prompt/transcript
+  /// observers. (`observePhases` stays separate: it must `await` the session for
+  /// its stream before it can loop.)
+  private func observe<Value>(
+    _ stream: AsyncStream<Value>,
+    _ action: @escaping @MainActor (AppCoordinator, Value) -> Void
+  ) -> Task<Void, Never> {
+    Task { @MainActor [weak self] in
+      for await value in stream {
         guard let self else { return }
         if Task.isCancelled { return }
-        self.overlay?.pushLevel(level)
+        action(self, value)
       }
     }
   }

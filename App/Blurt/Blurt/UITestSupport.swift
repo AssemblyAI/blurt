@@ -43,6 +43,7 @@
     static let hotkeyReleaseButton = "uitest.hotkeyRelease"
     static let statusLabel = "uitest.status"
     static let pastedLabel = "uitest.pasted"
+    static let transcriptEchoLabel = "uitest.transcriptEcho"
   }
 
   /// Shared, observable state the harness window renders and the stub injector /
@@ -177,6 +178,15 @@
         LabeledContent("Pasted") {
           Text(state.pastedText)
             .accessibilityIdentifier(UITestID.pastedLabel)
+        }
+
+        // Mirrors the newest entry of `AppCoordinator.recentDictations` (the
+        // ready-window "Recent" list) so a test can watch it populate on a
+        // completed dictation. Placeholder "—" stands in for the empty list so
+        // the read-out is a stable element to assert against.
+        LabeledContent("Echo") {
+          Text(coordinator?.recentDictations.entries.first?.text ?? "—")
+            .accessibilityIdentifier(UITestID.transcriptEchoLabel)
         }
       }
       .padding(20)
