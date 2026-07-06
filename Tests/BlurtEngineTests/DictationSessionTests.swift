@@ -328,4 +328,6 @@ extension DictationSessionTests {
 
 // Guard/no-op behaviors and phase-stream supersession live in
 // `DictationSessionGuardTests.swift` (same collaborators and stubs), split out
-// to stay within the lint file-length budget.
+// to stay within the lint file-length budget. The `onTranscriptDelivered`
+// side-channel tests live in `DictationSessionTranscriptTests.swift` for the
+// same reason.
