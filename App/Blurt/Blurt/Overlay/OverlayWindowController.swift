@@ -21,7 +21,10 @@ final class OverlayBridge {
 private struct OverlayHost: View {
   var bridge: OverlayBridge
   var body: some View {
-    OverlayView(state: bridge.state, level: bridge.level)
+    // Reads `bridge.state` only — the live `level` is pulled reactively deeper in
+    // the tree (WaveformBarsLevel) so a ~30 Hz meter tick doesn't re-render the
+    // whole host/pill, just the bars.
+    OverlayView(state: bridge.state, bridge: bridge)
   }
 }
 
