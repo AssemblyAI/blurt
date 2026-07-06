@@ -225,9 +225,16 @@ private struct RecentDictationRow: View {
       .buttonStyle(.borderless)
       .focused($copyButtonFocused)
       .opacity(showsCopyButton ? 1 : 0)
+      // Opacity-0 views still hit-test, and an invisible control that reacts
+      // to clicks isn't evident as actionable — only take clicks when shown
+      // (this gates pointer input without breaking keyboard focus/activation).
+      .allowsHitTesting(showsCopyButton)
       .help("Copy")
       Label("Copied", systemImage: "checkmark")
         .opacity(showsCopyConfirmation ? 1 : 0)
+        // Non-interactive layer: let clicks fall through rather than swallowing
+        // them while the confirmation sits above the (hidden) copy button.
+        .allowsHitTesting(false)
     }
     .font(.caption)
     .foregroundStyle(.secondary)
