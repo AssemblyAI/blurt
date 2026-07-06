@@ -26,7 +26,11 @@ final class AppCoordinator {
   /// True only under UI testing — short-circuits `submitAPIKey` past the network
   /// validation so the settings flow is deterministic and offline.
   @ObservationIgnored private let isUITesting: Bool
-  private let keyValidator = APIKeyValidator()
+  /// The validate-then-save flow over `keyStore`. The logic (and its
+  /// never-persist-an-unverified-key invariant) lives in the engine, where
+  /// `swift test` covers it; this coordinator just forwards and mirrors the
+  /// result into `hasAPIKey` for the UI.
+  @ObservationIgnored private let keySubmission: APIKeySubmission
   @ObservationIgnored private var phaseObserver: Task<Void, Never>?
   @ObservationIgnored private var levelsObserver: Task<Void, Never>?
   @ObservationIgnored var keyTap: DictationKeyTap?
@@ -61,6 +65,7 @@ final class AppCoordinator {
     self.onMissingAPIKey = onMissingAPIKey
     self.keyStore = keyStore
     self.isUITesting = isUITesting
+    self.keySubmission = APIKeySubmission(keyStore: keyStore)
 
     // Unbounded: the Recent list is append-only, so every transcript must survive
     // until the MainActor observer drains it — dropping the oldest under
@@ -228,21 +233,15 @@ final class AppCoordinator {
 
   // MARK: - API key
 
-  enum APIKeySubmissionResult: Equatable {
-    case valid
-    case invalid
-    case unreachable
-    case saveFailed
-  }
-
   /// Saves the AssemblyAI API key and refreshes `hasAPIKey` so observers —
   /// including the wizard — react. Returns true only when a non-empty key is
-  /// actually readable from Keychain after the write.
+  /// actually readable from Keychain after the write (the engine's
+  /// `APIKeySubmission.save` owns that read-back rule).
   @discardableResult
   func saveAPIKey(_ key: String) -> Bool {
-    let saved = keyStore.set(key)
+    let saved = keySubmission.save(key)
     hasAPIKey = keyStore.hasKey
-    return saved && hasAPIKey
+    return saved
   }
 
   /// The key currently stored, read through the gateway. The setup/settings
@@ -264,28 +263,22 @@ final class AppCoordinator {
   }
 
   /// Verifies `key` against AssemblyAI and saves it only when AssemblyAI
-  /// actively accepts it (`.valid`). A rejected key (`.invalid`) or an
-  /// unreachable server (`.unreachable`) is never saved — the wizard surfaces an
-  /// inline error and the user retries — so an unverified key never persists.
-  func submitAPIKey(_ key: String) async -> APIKeySubmissionResult {
+  /// actively accepts it (`.valid`) — the engine's `APIKeySubmission` owns
+  /// (and unit-tests) that never-persist-an-unverified-key rule. This wrapper
+  /// mirrors the outcome into `hasAPIKey` so the wizard/Settings UI reacts.
+  func submitAPIKey(_ key: String) async -> APIKeySubmission.Outcome {
     // UI tests must not reach AssemblyAI (no network in CI) or the real
     // Keychain, so resolve the result locally and deterministically instead.
     if isUITesting { return uiTestSubmit(key) }
-    let result = await keyValidator.validate(key)
-    switch result {
-    case .valid:
-      return saveAPIKey(key) ? .valid : .saveFailed
-    case .invalid:
-      return .invalid
-    case .unreachable:
-      return .unreachable
-    }
+    let outcome = await keySubmission.submit(key)
+    refreshAPIKeyStatus()
+    return outcome
   }
 
   /// Offline stand-in for `submitAPIKey` under UI testing. Sentinel keys drive
   /// the failure branches so a test can exercise the inline-error paths; any
   /// other non-empty key is accepted and saved to the in-memory store.
-  private func uiTestSubmit(_ key: String) -> APIKeySubmissionResult {
+  private func uiTestSubmit(_ key: String) -> APIKeySubmission.Outcome {
     switch key {
     case UITestKeys.invalidAPIKey: return .invalid
     case UITestKeys.unreachableAPIKey: return .unreachable

@@ -96,26 +96,14 @@ final class AutoUpdater {
     }
   }
 
-  /// "Blurt X is now available—you have Y." Drops the version line if the new
-  /// version can't be read from the asset name.
+  /// "Blurt X is now available—you have Y." The wording and the asset-name
+  /// version parse are the engine's `UpdatePrompt` (unit-tested, pinning the
+  /// release pipeline's `Blurt-<version>.dmg` naming convention).
   private func updateDescription(for update: Update) -> String {
     let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-    let new = newVersion(fromAssetNamed: update.assetName)
-    let lead: String
-    switch (new, current) {
-    case let (new?, current?): lead = "Blurt \(new) is now available—you have \(current). "
-    case let (new?, nil): lead = "Blurt \(new) is now available. "
-    default: lead = ""
-    }
-    return lead + "Would you like to install it now? Blurt will quit and reopen to finish."
-  }
-
-  /// Parses the version out of a `Blurt-<version>.dmg` asset name (the part
-  /// after the last hyphen, sans extension), or `nil` if it doesn't fit.
-  private func newVersion(fromAssetNamed name: String) -> String? {
-    let stem = (name as NSString).deletingPathExtension
-    guard let version = stem.split(separator: "-").last, !version.isEmpty else { return nil }
-    return String(version)
+    return UpdatePrompt.message(
+      newVersion: UpdatePrompt.version(fromAssetNamed: update.assetName),
+      currentVersion: current)
   }
 
   /// Surfaces a failed install (e.g. the install path wasn't writable) rather

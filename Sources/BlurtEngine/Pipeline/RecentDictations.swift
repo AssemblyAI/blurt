@@ -35,3 +35,22 @@ public struct RecentDictations: Equatable, Sendable {
     }
   }
 }
+
+extension RecentDictations.Entry {
+  /// The row's relative timestamp: "just now" for the first minute (the system
+  /// formatter's bare "in 0 seconds" reads oddly for a dictation that just
+  /// landed), then the full relative phrasing ("2 minutes ago"). `now` is
+  /// injected so tests are deterministic; `locale` so they can pin the wording.
+  public func relativeLabel(now: Date, locale: Locale = .autoupdatingCurrent) -> String {
+    if now.timeIntervalSince(timestamp) < 60 {
+      return "just now"
+    }
+    // Built per call rather than cached: a stored formatter would be shared
+    // mutable state (RelativeDateTimeFormatter isn't Sendable), and this runs
+    // for a handful of rows on a half-minute render cadence at most.
+    let formatter = RelativeDateTimeFormatter()
+    formatter.unitsStyle = .full  // e.g. "2 minutes ago"
+    formatter.locale = locale
+    return formatter.localizedString(for: timestamp, relativeTo: now)
+  }
+}

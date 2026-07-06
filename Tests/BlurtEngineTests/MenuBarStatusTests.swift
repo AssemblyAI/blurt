@@ -42,3 +42,24 @@ struct MenuBarStatusTests {
     #expect(PipelinePhase.failed(.targetAppLost).menuBarStatus == .idle)
   }
 }
+
+/// The status item's glyph and VoiceOver label per state. Owned in the engine
+/// (mirroring `OverlayUIState.accessibilityLabel`) so the wording lives in one
+/// unit-tested place; the SwiftUI shell reads these verbatim, so a silent edit
+/// would otherwise ship an unannounced regression.
+@Suite("MenuBarStatus presentation")
+struct MenuBarStatusPresentationTests {
+  @Test func symbolNames() {
+    // A stylized "B" at rest, filling in while recording — the same idle→fill
+    // idiom the mic glyphs used — and the waveform while transcribing.
+    #expect(MenuBarStatus.idle.symbolName == "b.circle")
+    #expect(MenuBarStatus.recording.symbolName == "b.circle.fill")
+    #expect(MenuBarStatus.transcribing.symbolName == "waveform")
+  }
+
+  @Test func accessibilityLabels() {
+    #expect(MenuBarStatus.idle.accessibilityLabel == "Blurt — idle")
+    #expect(MenuBarStatus.recording.accessibilityLabel == "Blurt — recording")
+    #expect(MenuBarStatus.transcribing.accessibilityLabel == "Blurt — transcribing")
+  }
+}

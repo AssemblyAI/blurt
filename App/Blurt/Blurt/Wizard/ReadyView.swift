@@ -165,7 +165,8 @@ private struct RecentDictationRow: View {
 
   var body: some View {
     // Formatted once per render; feeds the trailing text and VoiceOver label.
-    let timestamp = relativeTimestamp
+    // The "just now"/relative-phrasing rule is the engine's (unit-tested there).
+    let timestamp = entry.relativeLabel(now: now)
     HStack(spacing: 10) {
       Text(entry.text)
         .font(.callout)
@@ -247,20 +248,6 @@ private struct RecentDictationRow: View {
     copyCount += 1
   }
 
-  private static let relativeFormatter: RelativeDateTimeFormatter = {
-    let formatter = RelativeDateTimeFormatter()
-    formatter.unitsStyle = .full  // e.g. "2 minutes ago"
-    return formatter
-  }()
-
-  /// "just now" for the first minute (the formatter's bare "in 0 seconds" reads
-  /// oddly for a dictation that just landed), then the relative phrasing.
-  private var relativeTimestamp: String {
-    if now.timeIntervalSince(entry.timestamp) < 60 {
-      return "just now"
-    }
-    return Self.relativeFormatter.localizedString(for: entry.timestamp, relativeTo: now)
-  }
 }
 
 private struct ReadyBrandingView: View {

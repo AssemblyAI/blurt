@@ -29,7 +29,7 @@ struct OverlayUIStateTests {
     // A completed paste surfaces the quiet "Pasted" notice — the mirror of
     // `.noTarget`'s "Copied" — as a transient notice before settling to idle.
     #expect(PipelinePhase.pasted.overlayState == .pasted)
-    #expect(OverlayUIState.pasted.isTransientNotice)
+    #expect(OverlayUIState.pasted.noticeDwellSeconds != nil)
   }
 
   @Test func failedMapsToErrorCarryingTheReason() {
@@ -104,22 +104,28 @@ struct OverlayUIStateAccessibilityLabelTests {
   }
 }
 
-/// `isTransientNotice` decides whether the shell holds a state or flashes it and
-/// reverts to `.idle`. Getting this wrong would either pin a "copied" notice on
-/// the pill forever or drop the recording indicator, so pin every case.
-@Suite("OverlayUIState.isTransientNotice")
-struct OverlayUIStateTransientNoticeTests {
-  @Test func errorIsTransient() {
-    #expect(OverlayUIState.error(message: "boom").isTransientNotice)
+/// `noticeDwellSeconds` decides whether the shell holds a state or flashes it
+/// and reverts to `.idle` (nil = held), and for how long. Getting this wrong
+/// would either pin a "copied" notice on the pill forever or drop the recording
+/// indicator, so pin every case. The policy lives on the state (not in the
+/// AppKit controller) so a new notice can't ship without a dwell, and the
+/// asymmetry — errors linger to be read, a successful "Pasted" clears fast —
+/// is pinned here.
+@Suite("OverlayUIState.noticeDwellSeconds")
+struct OverlayUIStateNoticeDwellTests {
+  @Test func pastedClearsFastest() {
+    #expect(OverlayUIState.pasted.noticeDwellSeconds == 0.8)
   }
 
-  @Test func noTargetIsTransient() {
-    #expect(OverlayUIState.noTarget.isTransientNotice)
+  @Test func errorAndCopiedLingerLongEnoughToRead() {
+    #expect(OverlayUIState.error(message: "boom").noticeDwellSeconds == 1.6)
+    #expect(OverlayUIState.noTarget.noticeDwellSeconds == 1.6)
   }
 
-  @Test func steadyStatesAreNotTransient() {
-    #expect(!OverlayUIState.idle.isTransientNotice)
-    #expect(!OverlayUIState.recording.isTransientNotice)
-    #expect(!OverlayUIState.processing.isTransientNotice)
+  @Test func steadyStatesHaveNoDwell() {
+    // Held for as long as the pipeline is in them — no auto-revert.
+    #expect(OverlayUIState.idle.noticeDwellSeconds == nil)
+    #expect(OverlayUIState.recording.noticeDwellSeconds == nil)
+    #expect(OverlayUIState.processing.noticeDwellSeconds == nil)
   }
 }

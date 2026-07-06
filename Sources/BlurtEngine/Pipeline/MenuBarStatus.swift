@@ -10,6 +10,28 @@ public enum MenuBarStatus: Equatable, Sendable {
   case idle
   case recording
   case transcribing
+
+  /// Template SF Symbol drawn in the menu bar. A stylized "B" (Blurt) at rest,
+  /// filling in while recording — the same idle→fill idiom the mic glyphs used —
+  /// and the waveform while transcribing. Owned here (not in the SwiftUI shell)
+  /// for the same reason as the phase mapping below: the wording/glyph choices
+  /// live in one unit-tested place, mirroring `OverlayUIState.accessibilityLabel`.
+  public var symbolName: String {
+    switch self {
+    case .idle: "b.circle"
+    case .recording: "b.circle.fill"
+    case .transcribing: "waveform"
+    }
+  }
+
+  /// Spoken by VoiceOver, since the menu bar glyph is otherwise unlabelled.
+  public var accessibilityLabel: String {
+    switch self {
+    case .idle: "Blurt — idle"
+    case .recording: "Blurt — recording"
+    case .transcribing: "Blurt — transcribing"
+    }
+  }
 }
 
 extension PipelinePhase {
