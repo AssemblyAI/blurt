@@ -37,7 +37,9 @@ private enum ReadyBrandPalette {
 /// It just states the dictation shortcut and offers a native-feeling link to the
 /// Settings window — there's nothing to configure here.
 struct ReadyView: View {
+  var coordinator: AppCoordinator
   var openSettings: () -> Void
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   // Observe the persisted trigger keycode directly so changing the dictation key
   // in the (separate) Settings window re-renders this window's keycap live.
   // `@AppStorage` reflects writes to the same default across windows; reading
@@ -53,7 +55,11 @@ struct ReadyView: View {
         // bottom one so the gap to the text is the VStack spacing, not ~2x it.
         .padding(.bottom, -16)
 
-      shortcutReadout
+      if let transcript = coordinator.lastTranscript {
+        transcriptReadout(transcript)
+      } else {
+        shortcutReadout
+      }
 
       Button(action: openSettings) {
         Label("Settings", systemImage: "gearshape")
@@ -66,6 +72,7 @@ struct ReadyView: View {
     .padding(.bottom, 26)
     .frame(width: 480)
     .fixedSize(horizontal: false, vertical: true)
+    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: coordinator.lastTranscript)
   }
 
   /// "Tap or hold ⌘ to blurt", with the key drawn as a rounded keycap.
@@ -78,6 +85,22 @@ struct ReadyView: View {
         .foregroundStyle(.secondary)
     }
     .font(.title3)
+  }
+
+  /// The just-dictated text, shown in place of the shortcut readout for a few
+  /// seconds after a dictation completes (see `AppCoordinator.lastTranscript`).
+  /// Capped at a few lines with tail truncation so a long dictation can't grow
+  /// the fixed-width window unboundedly.
+  private func transcriptReadout(_ text: String) -> some View {
+    Text(text)
+      .font(.title3)
+      .foregroundStyle(.primary)
+      .multilineTextAlignment(.center)
+      .lineLimit(4)
+      .truncationMode(.tail)
+      .transition(.opacity)
+      .accessibilityIdentifier("ready.transcript")
+      .accessibilityLabel("You dictated: \(text)")
   }
 }
 

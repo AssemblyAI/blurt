@@ -30,7 +30,7 @@ struct MainWindowRoot: View {
     if let controller = appDelegate.wizardController, let coordinator = appDelegate.coordinator {
       Group {
         if controller.isReady {
-          ReadyView(openSettings: { openSettings() })
+          ReadyView(coordinator: coordinator, openSettings: { openSettings() })
         } else {
           WizardView(controller: controller, coordinator: coordinator)
         }
