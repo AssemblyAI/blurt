@@ -352,7 +352,8 @@ public actor DictationSession {
   private func inject(_ text: String) async {
     setPhase(.injecting)
     do {
-      try await injector.insert(text, after: capturedContext?.priorText)
+      try await injector.insert(
+        text, after: capturedContext?.priorText, windowTitle: capturedContext?.windowTitle)
       // A cancel() that landed in insert's final, non-cancellable stretch
       // (after its last checkCancellation) already set .cancelled — leave the
       // claimed phase alone rather than repainting it as .pasted.

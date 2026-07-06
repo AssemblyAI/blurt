@@ -2,6 +2,8 @@ import AppKit
 import Synchronization
 import Testing
 
+@testable import BlurtEngine
+
 /// Shared fixtures for the `KeyInjector.insert` suites (the main insert suite
 /// and the fallback/cancel suite live in separate files to stay within the
 /// lint file-length budget, but drive the injector the same way).
@@ -16,6 +18,23 @@ func liveTargetApp() throws -> NSRunningApplication {
     NSWorkspace.shared.runningApplications.first {
       $0.processIdentifier > 0 && !$0.isTerminated
     })
+}
+
+/// A `KeyInjector` wired to an in-memory clipboard, with `postPaste` recording
+/// each pasted string (captured after `setString`, before the deferred
+/// restore) into the returned box. Shared by the separator-fallback tests,
+/// which differ only in the target app(s)/`windowTitle`(s) they drive it with.
+func makeRecordingInjector() -> (injector: KeyInjector, pasted: StringListBox) {
+  let clip = FakeClipboard(string: nil)
+  let pasted = StringListBox()
+  let injector = KeyInjector(
+    pasteSettleDuration: .zero,
+    postPaste: {
+      pasted.append(clip.string)
+      return true
+    },
+    clipboard: clip)
+  return (injector, pasted)
 }
 
 /// One-shot async gate: `wait()` suspends until `open()` is called. Tolerates

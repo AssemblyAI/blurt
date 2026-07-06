@@ -96,6 +96,40 @@ struct FocusCaptureTests {
     #expect(FocusCapture.clip(nil, to: 4) == nil)
   }
 
+  // MARK: visibleTextOrNil
+
+  @Test("visibleTextOrNil collapses an all-invisible AX read to nil")
+  func visibleTextZeroWidthIsNil() {
+    // Google Docs exposes its pre-caret text as a lone U+200B ZERO WIDTH SPACE —
+    // invisible, not real content, and (crucially) NOT Character.isWhitespace, so
+    // left as-is it drives a stray leading separator on every dictation. It must
+    // read as "nothing here" so the field routes into the same-window fallback.
+    #expect(FocusCapture.visibleTextOrNil("\u{200B}") == nil)
+    #expect(FocusCapture.visibleTextOrNil("\u{200B}\u{200B}") == nil)
+    // Other zero-width / format controls collapse too (BOM, bidi marks).
+    #expect(FocusCapture.visibleTextOrNil("\u{FEFF}\u{200E}") == nil)
+    #expect(FocusCapture.visibleTextOrNil("") == nil)
+    #expect(FocusCapture.visibleTextOrNil(nil) == nil)
+  }
+
+  @Test("visibleTextOrNil keeps text with any visible content unchanged")
+  func visibleTextKeepsRealContent() {
+    #expect(FocusCapture.visibleTextOrNil("Hello") == "Hello")
+    // A trailing zero-width alongside real text is preserved verbatim — there IS
+    // visible content, so the read is real; only all-invisible reads collapse.
+    #expect(FocusCapture.visibleTextOrNil("Hello\u{200B}") == "Hello\u{200B}")
+  }
+
+  @Test("visibleTextOrNil preserves plain whitespace")
+  func visibleTextKeepsWhitespace() {
+    // Regular spaces are NOT invisible-format: a caret that follows real
+    // whitespace must stay non-nil so the separator logic sees the trailing space
+    // and correctly adds no extra one (collapsing this to nil would wrongly route
+    // into the fallback and prepend a space).
+    #expect(FocusCapture.visibleTextOrNil("   ") == "   ")
+    #expect(FocusCapture.visibleTextOrNil("hello ") == "hello ")
+  }
+
   // MARK: isSecureFieldRole
 
   @Test("only the password-field role triggers the prompt redaction")
