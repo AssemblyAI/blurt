@@ -34,7 +34,13 @@ final class OverlayWindowController {
   // contentRect — especially around the capsule's rounded ends, where the
   // shadow extends furthest from the pill body.
   static let pillSize = CGSize(width: 168, height: 28)
-  static let shadowMargin: CGFloat = 16
+  // Transparent breathing room around the pill so the drop shadow's *full*
+  // Gaussian falloff renders before the panel's contentRect clips it. A SwiftUI
+  // `.shadow(radius:)` spreads visibly to roughly 2× the radius (not `radius`
+  // itself) plus the y offset, so this must comfortably exceed the pill's
+  // `radius: 10, y: 3` shadow — otherwise the falloff is cut off mid-gradient and
+  // reads as a hard line around the pill rather than a soft shadow.
+  static let shadowMargin: CGFloat = 28
   private static let panelSize = CGSize(
     width: pillSize.width + shadowMargin * 2,
     height: pillSize.height + shadowMargin * 2)

@@ -58,9 +58,9 @@ struct OverlayView: View {
       // (which renders as a boxy halo, most visible on a white backdrop). The
       // explicit shadow keeps the dark pill separated from light content —
       // whatever ambient shadow the system gives glass is subtle and outside
-      // our control. Radius + offset stay within
-      // OverlayWindowController.shadowMargin (16) so the soft falloff completes
-      // before the panel edge rather than clipping.
+      // our control. The soft falloff spreads to ~2x the radius plus the offset;
+      // OverlayWindowController.shadowMargin is sized to contain that so it fades
+      // fully to nothing before the panel edge rather than clipping into a line.
       .compositingGroup()
       .shadow(color: .black.opacity(0.25), radius: 10, y: 3)
       .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: state)
