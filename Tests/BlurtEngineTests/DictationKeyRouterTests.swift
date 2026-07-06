@@ -77,17 +77,23 @@ struct DictationKeyRouterTests {
     #expect(router.handle(upEvent(trigger), at: .seconds(5) + .milliseconds(200)) == .stop)
   }
 
+  // Note: `reset()`/`rebind(_:)` results are hoisted into locals below because
+  // #expect can't invoke a mutating method directly (its expansion captures the
+  // receiver in an immutable closure).
+
   @Test("reset while idle reports nothing discarded")
   func resetWhileIdle() {
     var router = DictationKeyRouter(triggerKeyCode: trigger)
-    #expect(!router.reset())
+    let discarded = router.reset()
+    #expect(!discarded)
   }
 
   @Test("reset mid-recording reports the discarded recording")
   func resetMidRecordingReportsDiscard() {
     var router = DictationKeyRouter(triggerKeyCode: trigger)
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
-    #expect(router.reset())
+    let discarded = router.reset()
+    #expect(discarded)
     // The tracker cleared too: the stale key-up is ignored, a new press starts.
     #expect(router.handle(upEvent(trigger), at: .seconds(2)) == .none)
     #expect(router.handle(downEvent(trigger), at: .seconds(3)) == .start)
@@ -98,7 +104,8 @@ struct DictationKeyRouterTests {
     var router = DictationKeyRouter(triggerKeyCode: trigger)
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
     #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .none)  // latched
-    #expect(router.reset())
+    let discarded = router.reset()
+    #expect(discarded)
   }
 
   @Test("rebind mid-recording discards it and switches keycodes")
@@ -107,7 +114,8 @@ struct DictationKeyRouterTests {
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
     // Rebinding means the old key's up-event can never match — the caller must
     // cancel the capture rather than let the auto-release cap paste it.
-    #expect(router.rebind(triggerKeyCode: otherModifier))
+    let discarded = router.rebind(triggerKeyCode: otherModifier)
+    #expect(discarded)
     #expect(router.triggerKeyCode == otherModifier)
     // The old key is now irrelevant; the new one drives dictation.
     #expect(router.handle(downEvent(trigger), at: .seconds(1)) == .none)
@@ -117,6 +125,7 @@ struct DictationKeyRouterTests {
   @Test("rebind while idle reports nothing discarded")
   func rebindWhileIdle() {
     var router = DictationKeyRouter(triggerKeyCode: trigger)
-    #expect(!router.rebind(triggerKeyCode: otherModifier))
+    let discarded = router.rebind(triggerKeyCode: otherModifier)
+    #expect(!discarded)
   }
 }
