@@ -1,4 +1,4 @@
-import Foundation
+import CoreGraphics
 
 /// Where the overlay pill's panel goes on screen — pure geometry, owned in the
 /// engine so the placement rules are unit-tested. The AppKit controller feeds
