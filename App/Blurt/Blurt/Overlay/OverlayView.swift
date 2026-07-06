@@ -20,9 +20,9 @@ struct OverlayView: View {
   private var pillWidth: CGFloat { OverlayWindowController.pillSize.width }
   private var pillHeight: CGFloat { OverlayWindowController.pillSize.height }
 
-  // A dark tint laid over the frosted `.ultraThinMaterial` base: the blur picks
-  // up the desktop colors behind the pill (the macOS vibrancy look), while the
-  // tint keeps it dark enough for the white bars/text to stay legible.
+  // A dark tint infused into the Liquid Glass capsule: the glass refracts the
+  // desktop colors behind the pill, while the tint keeps it dark enough for the
+  // white bars/text to stay legible.
   private let tintStrength: Double = 0.5
 
   private var tintColor: Color {
@@ -40,46 +40,23 @@ struct OverlayView: View {
     }
   }
 
-  private var borderColor: Color {
-    switch state {
-    case .recording, .pasted, .noTarget:
-      return OverlayBrandPalette.cyan.opacity(0.45)
-    case .processing:
-      return OverlayBrandPalette.magenta.opacity(0.38)
-    case .error, .idle:
-      return Color.white.opacity(0.25)
-    }
-  }
-
   var body: some View {
-    capsule
+    content
       .frame(width: pillWidth, height: pillHeight)
-      .overlay(content)
+      // Real Liquid Glass, not the pre-Tahoe material-imitation stack (frosted
+      // material + tint overlay + stroke + manual drop shadow): the system draws
+      // the refractive edge highlights and shadow itself, so the per-state story
+      // is carried by the tint alone.
+      .glassEffect(.regular.tint(tintColor), in: .capsule)
+      .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: state)
       .contentShape(Rectangle())
-      // Transparent margin so the capsule's drop shadow has room to render
-      // without being clipped by the panel's contentRect (most visible at the
-      // rounded ends). Matches OverlayWindowController.shadowMargin.
+      // Transparent margin so the glass's soft shadow has room to render without
+      // being clipped by the panel's contentRect (most visible at the rounded
+      // ends). Matches OverlayWindowController.shadowMargin.
       .padding(OverlayWindowController.shadowMargin)
       .accessibilityElement(children: .ignore)
       .accessibilityLabel(state.accessibilityLabel)
       .accessibilityIdentifier("overlay.pill")
-  }
-
-  private var capsule: some View {
-    Capsule()
-      .fill(.ultraThinMaterial)
-      .overlay(Capsule().fill(tintColor))
-      .overlay(
-        Capsule().strokeBorder(borderColor, lineWidth: 1)
-      )
-      // Flatten the material + overlays into one layer before shadowing so the
-      // drop shadow takes the capsule's rounded alpha, not the rectangular layer
-      // bounds (which renders as a boxy halo, most visible on a white backdrop).
-      // Radius + offset stay within OverlayWindowController.shadowMargin (16) so
-      // the soft falloff completes before the panel edge rather than clipping.
-      .compositingGroup()
-      .shadow(color: .black.opacity(0.25), radius: 10, y: 3)
-      .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: state)
   }
 
   @ViewBuilder

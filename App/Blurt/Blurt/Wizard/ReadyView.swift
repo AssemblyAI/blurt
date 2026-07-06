@@ -1,38 +1,6 @@
 import BlurtEngine
 import SwiftUI
 
-private enum ReadyBrandPalette {
-  static func keycapFill(for colorScheme: ColorScheme) -> Color {
-    switch colorScheme {
-    case .dark:
-      return Color(red: 0.12, green: 0.16, blue: 0.2)
-    default:
-      return Color(red: 0.965, green: 0.985, blue: 1.0)
-    }
-  }
-
-  static func keycapStroke(for colorScheme: ColorScheme) -> Color {
-    switch colorScheme {
-    case .dark:
-      return Color(red: 0.38, green: 0.82, blue: 0.96).opacity(0.85)
-    default:
-      return Color(red: 0.42, green: 0.82, blue: 0.95).opacity(0.4)
-    }
-  }
-
-  static func settingsButtonFill(for colorScheme: ColorScheme, isHovered: Bool, isPressed: Bool) -> Color {
-    guard isHovered || isPressed else { return .clear }
-
-    let opacity = isPressed ? 0.11 : 0.06
-    switch colorScheme {
-    case .dark:
-      return Color.white.opacity(opacity)
-    default:
-      return Color.black.opacity(opacity)
-    }
-  }
-}
-
 /// The "you're all set" screen shown in the main window once setup is complete.
 /// It just states the dictation shortcut and offers a native-feeling link to the
 /// Settings window — there's nothing to configure here.
@@ -60,8 +28,12 @@ struct ReadyView: View {
 
       Button(action: openSettings) {
         Label("Settings", systemImage: "gearshape")
+          .labelStyle(.titleAndIcon)
+          .symbolRenderingMode(.hierarchical)
       }
-      .buttonStyle(ReadySettingsButtonStyle())
+      // The system Liquid Glass button — hover/press chrome, edge highlights,
+      // and accessibility fallbacks come from the style, not hand-rolled fills.
+      .buttonStyle(.glass)
     }
     .frame(maxWidth: .infinity)
     .padding(.horizontal, 32)
@@ -231,60 +203,18 @@ private struct ReadyBrandingView: View {
   }
 }
 
-/// A single rounded key-cap, e.g. "⌃" or "D".
+/// A single rounded key-cap, e.g. "⌃" or "D" — a Liquid Glass chip, so the cap
+/// reads as the same physical material as the rest of the Tahoe UI (the glass
+/// supplies its own fill, edge highlight, and light/dark adaptation).
 private struct KeyCap: View {
   var label: String
-  @Environment(\.colorScheme) private var colorScheme
 
   var body: some View {
     Text(label)
       .font(.title3.weight(.medium).monospaced())
-      .foregroundStyle(colorScheme == .dark ? Color.white : Color.primary)
+      .foregroundStyle(.primary)
       .padding(.horizontal, 10)
       .padding(.vertical, 6)
-      .background(
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-          .fill(ReadyBrandPalette.keycapFill(for: colorScheme))
-      )
-      .overlay(
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-          .strokeBorder(ReadyBrandPalette.keycapStroke(for: colorScheme), lineWidth: 1)
-      )
-  }
-}
-
-private struct ReadySettingsButtonStyle: ButtonStyle {
-  func makeBody(configuration: Configuration) -> some View {
-    ReadySettingsButton(configuration: configuration)
-  }
-}
-
-private struct ReadySettingsButton: View {
-  let configuration: ButtonStyleConfiguration
-  @Environment(\.colorScheme) private var colorScheme
-  @State private var isHovered = false
-
-  var body: some View {
-    configuration.label
-      .font(.subheadline.weight(.medium))
-      .labelStyle(.titleAndIcon)
-      .symbolRenderingMode(.hierarchical)
-      .padding(.horizontal, 10)
-      .padding(.vertical, 6)
-      .background(
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-          .fill(
-            ReadyBrandPalette.settingsButtonFill(
-              for: colorScheme,
-              isHovered: isHovered,
-              isPressed: configuration.isPressed
-            )
-          )
-      )
-      .foregroundStyle(.secondary)
-      .scaleEffect(configuration.isPressed ? 0.98 : 1)
-      .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-      .animation(.easeOut(duration: 0.12), value: isHovered)
-      .onHover { isHovered = $0 }
+      .glassEffect(.regular, in: .rect(cornerRadius: 8))
   }
 }

@@ -11,7 +11,7 @@ local `check.sh` matches CI by construction.
 
 ## Before you run: the macOS-only guard
 
-Blurt is macOS-only (`platforms: [.macOS(.v15)]`, AppKit + AVFoundation). The
+Blurt is macOS-only (`platforms: [.macOS(.v26)]`, AppKit + AVFoundation). The
 engine imports AVFoundation, so even the SPM package won't compile off-Mac.
 
 **If `swift`/`xcodebuild`/`xcodegen` are unavailable (Linux or web sandbox):**

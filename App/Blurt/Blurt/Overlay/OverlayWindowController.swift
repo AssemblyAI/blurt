@@ -30,8 +30,8 @@ private struct OverlayHost: View {
 final class OverlayWindowController {
   private static let customOriginXKey = "BlurtOverlayCustomOriginX"
   private static let customOriginYKey = "BlurtOverlayCustomOriginY"
-  // The panel is sized larger than the visible pill so SwiftUI's drop shadow
-  // (see `OverlayView`'s `.shadow`, which documents staying within
+  // The panel is sized larger than the visible pill so the Liquid Glass
+  // capsule's soft shadow (see `OverlayView`'s `.glassEffect`, padded by
   // `shadowMargin`) has room to render without being clipped by the window's
   // contentRect — especially around the capsule's rounded ends, where the
   // shadow extends furthest from the pill body.

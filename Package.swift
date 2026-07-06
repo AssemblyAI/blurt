@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
   name: "BlurtEngine",
-  platforms: [.macOS(.v15)],
+  platforms: [.macOS(.v26)],
   products: [
     .library(name: "BlurtEngine", targets: ["BlurtEngine"])
   ],
