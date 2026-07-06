@@ -2,7 +2,6 @@ import BlurtEngine
 import Foundation
 import Observation
 
-@MainActor
 @Observable
 final class AppCoordinator {
   /// The dictation pill. Created lazily by `showOverlay()` — never at launch —

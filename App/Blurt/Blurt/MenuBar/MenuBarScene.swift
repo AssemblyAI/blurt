@@ -9,7 +9,7 @@ import SwiftUI
 extension MenuBarStatus {
   /// Template SF Symbol drawn in the menu bar. A stylized "B" (Blurt) at rest,
   /// filling in while recording — the same idle→fill idiom the mic glyphs used —
-  /// and the waveform while transcribing. All three exist on macOS 15.
+  /// and the waveform while transcribing.
   var symbolName: String {
     switch self {
     case .idle: "b.circle"

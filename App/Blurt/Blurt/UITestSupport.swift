@@ -47,9 +47,9 @@
   }
 
   /// Shared, observable state the harness window renders and the stub injector /
-  /// transcriber read. `@MainActor` because the UI and `AppCoordinator` both live
-  /// there; the stubs hop onto the main actor to touch it.
-  @MainActor
+  /// transcriber read. Main-actor (the app target's default isolation) because
+  /// the UI and `AppCoordinator` both live there; the stubs hop onto the main
+  /// actor to touch it.
   @Observable
   final class UITestState {
     static let shared = UITestState()
@@ -68,10 +68,15 @@
 
   // MARK: - Pipeline doubles
 
+  // The three pipeline doubles are `nonisolated`, opting out of the app target's
+  // MainActor default: they witness the engine's nonisolated protocol seams and
+  // must keep running wherever the session calls them (hopping every stub call
+  // through the main actor would serialize the pipeline behind the UI).
+
   /// Stub mic: captures nothing, returns a fixed buffer comfortably above
   /// `SyncSTTLimits.minSamples` so the pipeline clears the too-short-audio guard
   /// and proceeds to transcribe.
-  struct UITestMic: MicCaptureProtocol {
+  nonisolated struct UITestMic: MicCaptureProtocol {
     func start() async throws {}
     func stop() async throws -> [Float] {
       Array(repeating: 0, count: SyncSTTLimits.minSamples * 2)
@@ -80,7 +85,7 @@
 
   /// Stub transcriber: returns the harness's canned transcript, so the "spoken"
   /// text is whatever the test set — no network, fully deterministic.
-  struct UITestTranscriber: TranscriberProtocol {
+  nonisolated struct UITestTranscriber: TranscriberProtocol {
     func transcribe(samples: [Float], sampleRate: Int, context: TranscriptionContext?) async throws -> String {
       await MainActor.run { UITestState.shared.cannedTranscript }
     }
@@ -90,7 +95,7 @@
   /// rather than posting a Cmd-V `CGEvent` (which needs Accessibility and a real
   /// target app). The harness window plays the role of "the app being pasted
   /// into", surfacing the recorded text for the test to assert on.
-  struct UITestInjector: InjectorProtocol {
+  nonisolated struct UITestInjector: InjectorProtocol {
     func setTargetApp(_ app: NSRunningApplication?) async {}
     func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws {
       await MainActor.run { UITestState.shared.recordPaste(text) }

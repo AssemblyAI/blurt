@@ -2,7 +2,7 @@ name: Blurt
 options:
   bundleIdPrefix: dev.alex
   deploymentTarget:
-    macOS: "15.0"
+    macOS: "26.0"
   developmentLanguage: en
 # Build configurations. Debug and Release are the usual pair; Debug-Local is a
 # debug variant used only by scripts/dev-build.sh for a clean local install
@@ -22,7 +22,7 @@ configs:
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    MACOSX_DEPLOYMENT_TARGET: "15.0"
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
     ARCHS: arm64
     CODE_SIGN_STYLE: Manual
     CODE_SIGN_IDENTITY: "640A7F5A9754400D4A0491E7A6FB30542D907806"
@@ -57,6 +57,12 @@ targets:
         # (not project base) so it doesn't collide with the -suppress-warnings
         # Xcode applies to SPM dependency packages (the engine package).
         SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        # The app shell is main-thread UI code, so default every declaration to
+        # @MainActor (Swift 6.2) instead of annotating each type by hand. Scoped
+        # to this target only: the engine package keeps explicit, deliberate
+        # isolation, and genuinely off-main app code (the CGEventTap C callback,
+        # the UI-test pipeline stubs) opts out with `nonisolated`.
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
       configs:
         # The XCUITest harness + leak/hotkey test seams compile only when
         # UITEST_HOOKS is set (see the `#if UITEST_HOOKS` blocks). It's on for the
@@ -78,7 +84,7 @@ targets:
         CFBundleDisplayName: Blurt
         CFBundleVersion: "30"
         CFBundleShortVersionString: "0.1.29"
-        LSMinimumSystemVersion: "15.0"
+        LSMinimumSystemVersion: "26.0"
         LSApplicationCategoryType: public.app-category.productivity
         NSMicrophoneUsageDescription: Blurt uses your microphone to transcribe your dictation with AssemblyAI.
         NSAppleEventsUsageDescription: Blurt inserts text into the app you're using.

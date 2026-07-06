@@ -15,9 +15,9 @@ import Observation
 /// the scene would keep showing its empty fallback and never refresh.
 @Observable
 final class AppDelegate: NSObject, NSApplicationDelegate {
-  @MainActor private(set) var coordinator: AppCoordinator?
-  @MainActor private(set) var wizardController: WizardController?
-  @ObservationIgnored @MainActor private lazy var autoUpdater = AutoUpdater(
+  private(set) var coordinator: AppCoordinator?
+  private(set) var wizardController: WizardController?
+  @ObservationIgnored private lazy var autoUpdater = AutoUpdater(
     presentingWindow: { [unowned self] in updatePromptHostWindow() }
   )
 
@@ -25,10 +25,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// `MainWindowRoot` captures it here (in its launch-time `onAppear`) to give
   /// AppKit entry points — notably a Dock click with no open windows — a way to
   /// reopen a window once the user has closed them all.
-  @ObservationIgnored @MainActor var openWindowByID: (@MainActor (String) -> Void)?
+  @ObservationIgnored var openWindowByID: (@MainActor (String) -> Void)?
 
   /// Brings the main window forward (showing the wizard or the ready screen).
-  @MainActor func openMainWindow() { openWindowByID?(MainWindow.id) }
+  func openMainWindow() { openWindowByID?(MainWindow.id) }
 
   /// Surfaces the main window *and* makes the app frontmost. Shared by the menu
   /// bar's "Open Blurt", the missing-key hotkey nudge, and the permission-revoked
@@ -41,7 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// closed it) do we recreate it via the scene. Returns the window it raised,
   /// or nil when it had to ask the scene to recreate one — the new NSWindow only
   /// materializes on a later run-loop pass.
-  @MainActor @discardableResult func surfaceMainWindow() -> NSWindow? {
+  @discardableResult func surfaceMainWindow() -> NSWindow? {
     NSApp.activate()
     if let main = NSApp.windows.first(where: { $0.identifier?.rawValue == MainWindow.id }) {
       main.deminiaturize(nil)
@@ -58,12 +58,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// exist yet on this run-loop pass, and no other window qualifies (the overlay
   /// is a borderless panel, so `canBecomeMain` is false). The caller retries or
   /// falls back rather than this force-unwrapping into a crash.
-  @MainActor func updatePromptHostWindow() -> NSWindow? {
+  func updatePromptHostWindow() -> NSWindow? {
     surfaceMainWindow() ?? NSApp.windows.first { $0.canBecomeMain }
   }
 
   /// True once the launch-time activation has run.
-  @ObservationIgnored @MainActor private var didActivateAtLaunch = false
+  @ObservationIgnored private var didActivateAtLaunch = false
 
   /// Pulls Blurt frontmost for its initial window presentation. Called from
   /// the main window's `onAppear` rather than `applicationDidFinishLaunching`:
@@ -84,7 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// while the app is inactive, covering that case (it's the same call the overlay
   /// pill uses to surface without activating). Targets the one `canBecomeMain`
   /// window — the main scene — rather than the non-activating overlay panel.
-  @MainActor func activateAtLaunchIfNeeded() {
+  func activateAtLaunchIfNeeded() {
     guard !didActivateAtLaunch else { return }
     didActivateAtLaunch = true
     NSApp.activate()
@@ -94,7 +94,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
   }
 
-  @MainActor
   func applicationDidFinishLaunching(_ notification: Notification) {
     // No permission prompts fire at launch. Accessibility (and Microphone) are
     // requested only when the user taps the matching button in the setup
@@ -196,7 +195,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Runs several stubbed dictation cycles through the live coordinator so a
     /// Leaks-instrument recording exercises the full app-shell object graph. See
     /// the call site in `applicationDidFinishLaunching` and `scripts/leaks.sh`.
-    @MainActor
     private func runLeakExercise(_ coord: AppCoordinator) async {
       coord.saveAPIKey(UITestKeys.validAPIKey)  // clear the missing-key gate
       // Build/enable the key tap's object graph, then drive cycles *through the
@@ -214,7 +212,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
   #endif
 
-  @MainActor
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
     // Blurt keeps running with the overlay pill after its window is closed;
     // the window reopens via ⌘, / the Dock.
@@ -231,7 +228,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// doesn't make the app frontmost, so without it the window opens *behind*
   /// whatever the user was in. SwiftUI also doesn't reliably reopen a closed
   /// `Window` scene on its own, so we open it explicitly when none is visible.
-  @MainActor
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
     NSApp.activate()
     if !flag { openMainWindow() }

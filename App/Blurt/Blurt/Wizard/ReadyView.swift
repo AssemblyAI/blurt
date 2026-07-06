@@ -2,23 +2,6 @@ import Accessibility
 import BlurtEngine
 import SwiftUI
 
-private enum ReadyBrandPalette {
-  static func keycapFill(for colorScheme: ColorScheme) -> Color {
-    colorScheme == .dark ? Color(red: 0.12, green: 0.16, blue: 0.2) : Color(red: 0.965, green: 0.985, blue: 1.0)
-  }
-
-  static func keycapStroke(for colorScheme: ColorScheme) -> Color {
-    colorScheme == .dark
-      ? Color(red: 0.38, green: 0.82, blue: 0.96).opacity(0.85)
-      : Color(red: 0.42, green: 0.82, blue: 0.95).opacity(0.4)
-  }
-
-  static func settingsButtonFill(for colorScheme: ColorScheme, isHovered: Bool, isPressed: Bool) -> Color {
-    guard isHovered || isPressed else { return .clear }
-    return (colorScheme == .dark ? Color.white : Color.black).opacity(isPressed ? 0.11 : 0.06)
-  }
-}
-
 /// The "you're all set" screen shown in the main window once setup is complete.
 /// It just states the dictation shortcut and offers a native-feeling link to the
 /// Settings window — there's nothing to configure here.
@@ -50,8 +33,12 @@ struct ReadyView: View {
 
       Button(action: openSettings) {
         Label("Settings", systemImage: "gearshape")
+          .labelStyle(.titleAndIcon)
+          .symbolRenderingMode(.hierarchical)
       }
-      .buttonStyle(ReadySettingsButtonStyle())
+      // The system Liquid Glass button — hover/press chrome, edge highlights,
+      // and accessibility fallbacks come from the style, not hand-rolled fills.
+      .buttonStyle(.glass)
     }
     .frame(maxWidth: .infinity)
     .padding(.horizontal, 32)
@@ -307,24 +294,28 @@ private struct ReadyBrandingView: View {
   }
 }
 
-/// A single rounded key-cap, e.g. "⌃" or "D".
+/// A single rounded key-cap, e.g. "⌃" or "D". A quiet semantic chip, not
+/// Liquid Glass: over the ready window's flat background a glass chip has
+/// nothing to refract and reads as bare floating text, and the HIG reserves
+/// glass for the floating control layer rather than in-window content.
+/// `.quinary` + `.separator` adapt to light/dark and Increase Contrast for
+/// free, and match the Recent card's container fill above.
 private struct KeyCap: View {
   var label: String
-  @Environment(\.colorScheme) private var colorScheme
 
   var body: some View {
     Text(label)
       .font(.title3.weight(.medium).monospaced())
-      .foregroundStyle(colorScheme == .dark ? Color.white : Color.primary)
+      .foregroundStyle(.primary)
       .padding(.horizontal, 10)
       .padding(.vertical, 6)
       .background(
         RoundedRectangle(cornerRadius: 8, style: .continuous)
-          .fill(ReadyBrandPalette.keycapFill(for: colorScheme))
+          .fill(.quinary)
       )
       .overlay(
         RoundedRectangle(cornerRadius: 8, style: .continuous)
-          .strokeBorder(ReadyBrandPalette.keycapStroke(for: colorScheme), lineWidth: 1)
+          .strokeBorder(.separator, lineWidth: 1)
       )
   }
 }
@@ -358,41 +349,5 @@ private struct RecentCopyButton: View {
 
   private var highlightOpacity: Double {
     configuration.isPressed ? 0.2 : isHovered ? 0.12 : 0
-  }
-}
-
-private struct ReadySettingsButtonStyle: ButtonStyle {
-  func makeBody(configuration: Configuration) -> some View {
-    ReadySettingsButton(configuration: configuration)
-  }
-}
-
-private struct ReadySettingsButton: View {
-  let configuration: ButtonStyleConfiguration
-  @Environment(\.colorScheme) private var colorScheme
-  @State private var isHovered = false
-
-  var body: some View {
-    configuration.label
-      .font(.subheadline.weight(.medium))
-      .labelStyle(.titleAndIcon)
-      .symbolRenderingMode(.hierarchical)
-      .padding(.horizontal, 10)
-      .padding(.vertical, 6)
-      .background(
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-          .fill(
-            ReadyBrandPalette.settingsButtonFill(
-              for: colorScheme,
-              isHovered: isHovered,
-              isPressed: configuration.isPressed
-            )
-          )
-      )
-      .foregroundStyle(.secondary)
-      .scaleEffect(configuration.isPressed ? 0.98 : 1)
-      .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-      .animation(.easeOut(duration: 0.12), value: isHovered)
-      .onHover { isHovered = $0 }
   }
 }

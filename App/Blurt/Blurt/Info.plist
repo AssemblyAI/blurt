@@ -23,7 +23,7 @@
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
 	<key>LSMinimumSystemVersion</key>
-	<string>15.0</string>
+	<string>26.0</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Blurt inserts text into the app you're using.</string>
 	<key>NSMicrophoneUsageDescription</key>

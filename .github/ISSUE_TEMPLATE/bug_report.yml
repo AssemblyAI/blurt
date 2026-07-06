@@ -20,6 +20,6 @@ body:
     id: versions
     attributes:
       label: macOS and Blurt versions
-      placeholder: "macOS 15.4 · Blurt 1.0.0"
+      placeholder: "macOS 26.1 · Blurt 1.0.0"
     validations:
       required: true

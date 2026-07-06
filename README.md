@@ -25,8 +25,8 @@
   <p>
     <a href="https://github.com/AssemblyAI/blurt/releases/latest">
       <img
-        src="https://img.shields.io/badge/macOS-15%2B-00d8ef?style=flat-square"
-        alt="macOS 15 or later"
+        src="https://img.shields.io/badge/macOS-26%2B-00d8ef?style=flat-square"
+        alt="macOS 26 or later"
       />
     </a>
     <a href="https://www.assemblyai.com">
@@ -57,7 +57,7 @@
 3. Launch Blurt and follow setup: Microphone, Accessibility, and your [AssemblyAI API key](https://www.assemblyai.com/dashboard/api-keys).
 4. Dictate with **right command** by default. Tap to toggle, or hold for push-to-talk.
 
-Blurt needs macOS 15 or later on Apple Silicon, plus an AssemblyAI API key
+Blurt needs macOS 26 or later on Apple Silicon, plus an AssemblyAI API key
 (free tier available).
 
 ## Why Blurt

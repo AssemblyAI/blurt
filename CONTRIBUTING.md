@@ -5,8 +5,8 @@ contributions of all sizes are welcome — bug reports, fixes, docs, or a new id
 
 ## Before you start
 
-Blurt is **macOS-only** (macOS 15+, Apple Silicon, AppKit + AVFoundation). You
-need a Mac with Xcode 16+ to build, test, or run it. On Linux you can still read
+Blurt is **macOS-only** (macOS 26+, Apple Silicon, AppKit + AVFoundation). You
+need a Mac with Xcode 26+ to build, test, or run it. On Linux you can still read
 and edit the Swift source, but you can't build or verify it locally — CI on
 `macos-26` is the authority on green.
 
