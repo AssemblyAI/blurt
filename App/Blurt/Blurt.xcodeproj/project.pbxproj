@@ -2163,6 +2163,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = dev.alex.blurt;
 				SDKROOT = macosx;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 			};
 			name = Release;
@@ -2273,6 +2274,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = dev.alex.blurt;
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG UITEST_HOOKS";
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 			};
 			name = Debug;
@@ -2291,6 +2293,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = dev.alex.blurt;
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 			};
 			name = "Debug-Local";

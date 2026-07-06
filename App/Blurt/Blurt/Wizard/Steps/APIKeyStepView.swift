@@ -148,7 +148,7 @@ struct APIKeyStepView: View {
         .accessibilityIdentifier("settings.apiKey.cancel")
       }
       Button(actionTitle, action: submit)
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.glassProminent)
         .keyboardShortcut(.defaultAction)
         .disabled(!canSubmit)
         .accessibilityIdentifier("settings.apiKey.save")

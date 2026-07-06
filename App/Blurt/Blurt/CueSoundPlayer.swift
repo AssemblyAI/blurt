@@ -5,7 +5,6 @@ import BlurtEngine
 /// so the first chime never stalls the recording pill, previewing on a pack
 /// change, and firing on the recording edge. Kept out of `AppCoordinator`'s body
 /// so chime behavior can change without churning the session↔UI wiring.
-@MainActor
 final class CueSoundPlayer {
   private var startSound: AVAudioPlayer?
   private var stopSound: AVAudioPlayer?

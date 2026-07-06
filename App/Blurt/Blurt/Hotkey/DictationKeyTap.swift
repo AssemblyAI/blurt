@@ -16,12 +16,12 @@ import os
 /// process before delivering every keystroke system-wide, so any main-thread
 /// stall in Blurt would add typing latency in *other* apps.
 ///
-/// `@MainActor` because everything here already runs on the main thread: the
-/// tap's run-loop source is added to the main run loop (`ensureRunning`), so
-/// the C callback fires there, and the coordinator/UITest entry points are
-/// main-actor. Isolation lets the compiler prove single-threaded access to the
-/// gate state instead of guarding it with a hand-held lock.
-@MainActor
+/// Main-actor (via the app target's default isolation) because everything here
+/// already runs on the main thread: the tap's run-loop source is added to the
+/// main run loop (`ensureRunning`), so the C callback fires there, and the
+/// coordinator/UITest entry points are main-actor. Isolation lets the compiler
+/// prove single-threaded access to the gate state instead of guarding it with a
+/// hand-held lock.
 final class DictationKeyTap {
   private static let logger = Logger(
     subsystem: BlurtIdentity.subsystem, category: "DictationKeyTap")
@@ -106,7 +106,7 @@ final class DictationKeyTap {
     tap = created
     let src = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, created, 0)
     // The main run loop, deliberately: it makes this whole class single-threaded
-    // (see the @MainActor note above) — the callback below relies on it.
+    // (see the main-actor note above) — the callback below relies on it.
     CFRunLoopAddSource(CFRunLoopGetMain(), src, .commonModes)
     CGEvent.tapEnable(tap: created, enable: true)
     Self.logger.info("dictation key tap installed")
@@ -231,14 +231,17 @@ final class DictationKeyTap {
 /// `userInfo`; AppCoordinator owns it for the app's lifetime (and `deinit`
 /// invalidates the tap before the pointer could dangle). The tap is listen-only,
 /// so the returned event is ignored by the system — pass it back unchanged.
-private func dictationTapCallback(
+/// `nonisolated` opts out of the module's MainActor default: an isolated
+/// function can't convert to the `CGEventTapCallBack` C function pointer — the
+/// main-thread guarantee is instead asserted inside via `assumeIsolated`.
+private nonisolated func dictationTapCallback(
   _: CGEventTapProxy,
   type: CGEventType,
   event: CGEvent,
   userInfo: UnsafeMutableRawPointer?
 ) -> Unmanaged<CGEvent>? {
   guard let userInfo else { return Unmanaged.passUnretained(event) }
-  // Resolve the unretained pointer out here: DictationKeyTap is @MainActor and
+  // Resolve the unretained pointer out here: DictationKeyTap is MainActor and
   // therefore Sendable, so the reference crosses into the closure cleanly.
   let monitor = Unmanaged<DictationKeyTap>.fromOpaque(userInfo).takeUnretainedValue()
   // The tap's run-loop source is on the main run loop (see ensureRunning), so

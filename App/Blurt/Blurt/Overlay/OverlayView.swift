@@ -40,23 +40,32 @@ struct OverlayView: View {
     }
   }
 
+  /// Identity for the pill's glass across state changes, so the effect morphs
+  /// (via `GlassEffectContainer` + `glassEffectID`) instead of dissolving and
+  /// re-forming if the glass shape or presence ever changes between states.
+  @Namespace private var glassNamespace
+
   var body: some View {
-    content
-      .frame(width: pillWidth, height: pillHeight)
-      // Real Liquid Glass, not the pre-Tahoe material-imitation stack (frosted
-      // material + tint overlay + stroke + manual drop shadow): the system draws
-      // the refractive edge highlights and shadow itself, so the per-state story
-      // is carried by the tint alone.
-      .glassEffect(.regular.tint(tintColor), in: .capsule)
-      .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: state)
-      .contentShape(Rectangle())
-      // Transparent margin so the glass's soft shadow has room to render without
-      // being clipped by the panel's contentRect (most visible at the rounded
-      // ends). Matches OverlayWindowController.shadowMargin.
-      .padding(OverlayWindowController.shadowMargin)
-      .accessibilityElement(children: .ignore)
-      .accessibilityLabel(state.accessibilityLabel)
-      .accessibilityIdentifier("overlay.pill")
+    GlassEffectContainer {
+      content
+        .frame(width: pillWidth, height: pillHeight)
+        // Real Liquid Glass, not the pre-Tahoe material-imitation stack (frosted
+        // material + tint overlay + stroke + manual drop shadow): the system draws
+        // the refractive edge highlights and shadow itself, so the per-state story
+        // is carried by the tint alone. `.interactive()` lets the glass react to
+        // the pointer — the pill is draggable, so it should feel like a control.
+        .glassEffect(.regular.tint(tintColor).interactive(), in: .capsule)
+        .glassEffectID("pill", in: glassNamespace)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: state)
+        .contentShape(Rectangle())
+        // Transparent margin so the glass's soft shadow has room to render without
+        // being clipped by the panel's contentRect (most visible at the rounded
+        // ends). Matches OverlayWindowController.shadowMargin.
+        .padding(OverlayWindowController.shadowMargin)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(state.accessibilityLabel)
+        .accessibilityIdentifier("overlay.pill")
+    }
   }
 
   @ViewBuilder

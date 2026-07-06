@@ -1,6 +1,5 @@
 import AppKit
 
-@MainActor
 enum FloatingPanel {
   static func make(
     size: CGSize,

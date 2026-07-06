@@ -11,7 +11,6 @@ import Observation
 /// a permission is later revoked — even while the app is sitting in the
 /// background with only the overlay pill — the poll catches it and brings the
 /// setup window forward.
-@MainActor
 @Observable
 final class WizardController {
   private(set) var permissions: PermissionStatus

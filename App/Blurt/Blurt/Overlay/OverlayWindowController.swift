@@ -3,7 +3,6 @@ import BlurtEngine
 import Observation
 import SwiftUI
 
-@MainActor
 @Observable
 final class OverlayBridge {
   var state: OverlayUIState = .idle
@@ -26,7 +25,6 @@ private struct OverlayHost: View {
   }
 }
 
-@MainActor
 final class OverlayWindowController {
   private static let customOriginXKey = "BlurtOverlayCustomOriginX"
   private static let customOriginYKey = "BlurtOverlayCustomOriginY"

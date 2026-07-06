@@ -15,7 +15,6 @@ import OSLog
 /// The matching asset comes from AppUpdater's convention (`<repo>-<tag>`,
 /// case-insensitively): the release pipeline publishes `Blurt-<version>.dmg`,
 /// which matches `blurt-<version>`. See `scripts/release-publish.sh`.
-@MainActor
 final class AutoUpdater {
   private let updater = AppUpdater(owner: "AssemblyAI", repo: "blurt")
   private let log = Logger(subsystem: BlurtIdentity.subsystem, category: "update")
