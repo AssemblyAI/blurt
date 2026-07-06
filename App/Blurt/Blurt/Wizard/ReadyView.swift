@@ -124,7 +124,7 @@ private struct RecentDictationsSection: View {
   @ViewBuilder
   private var listBody: some View {
     if entries.isEmpty {
-      Text("Your recent dictations will appear here")
+      Text("Your recent blurts will appear here")
         .font(.callout)
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
