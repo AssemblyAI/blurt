@@ -140,4 +140,25 @@ final class DictationPipelineUITests: BlurtUITestCase {
     let pastedValue = pasted.exists ? (pasted.value as? String ?? "") : ""
     XCTAssertEqual(pastedValue, "", "Cancelled dictation must not paste any text")
   }
+
+  /// The completed transcript is echoed into the app's ready-window state
+  /// (`AppCoordinator.lastTranscript`, surfaced by the harness's echo read-out),
+  /// then reverts to the empty placeholder after the dwell — the data path the
+  /// ready window's readout renders.
+  func testTranscriptEchoesThenReverts() {
+    let harness = harnessWindow()
+    harness.buttons[UITestIDs.setKeyButton].click()
+
+    let echo = harness.staticTexts[UITestIDs.transcriptEchoLabel]
+
+    harness.buttons[UITestIDs.startButton].click()
+    harness.buttons[UITestIDs.stopButton].click()
+
+    waitForLabel(
+      echo, equals: Self.cannedTranscript, timeout: 15,
+      "Completed dictation should echo the transcript into ready-window state")
+    waitForLabel(
+      echo, equals: "—", timeout: 15,
+      "Echo should revert to the empty placeholder after the dwell")
+  }
 }

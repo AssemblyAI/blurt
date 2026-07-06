@@ -38,10 +38,26 @@ final class AppCoordinator {
   @ObservationIgnored private let promptStream: AsyncStream<String?>
   @ObservationIgnored var keyTap: DictationKeyTap?
 
+  @ObservationIgnored private let transcriptStream: AsyncStream<String>
+  @ObservationIgnored private var transcriptObserver: Task<Void, Never>?
+  /// Clears `lastTranscript` after the dwell; re-created on each new transcript so
+  /// only the latest schedules the revert.
+  @ObservationIgnored private var echoRevertTask: Task<Void, Never>?
+
+  /// How long a completed dictation's transcript stays in the ready window before
+  /// reverting to the shortcut readout.
+  private static let echoDwellSeconds: Double = 5
+
   /// The fully-assembled prompt sent to AssemblyAI on the most recent dictation,
   /// surfaced by the Prompt Inspector window (`nil` when none has been sent yet,
   /// or that dictation had no context to build one). In-memory only.
   private(set) var lastPrompt: String?
+
+  /// The most recent completed dictation's transcript, shown in the ready window
+  /// in place of the shortcut readout, or `nil` when the readout should show. Set
+  /// on the `.pasted`/`.noTarget` outcomes, cleared when a new recording starts or
+  /// after `echoDwellSeconds`. In-memory only.
+  private(set) var lastTranscript: String?
 
   /// Whether an AssemblyAI API key is currently saved. Drives the wizard
   /// (which gates dictation on having a key) and the Settings UI.
@@ -69,6 +85,9 @@ final class AppCoordinator {
     let (promptStream, promptContinuation) = AsyncStream.makeStream(
       of: String?.self, bufferingPolicy: .bufferingNewest(1))
     self.promptStream = promptStream
+    let (transcriptStream, transcriptContinuation) = AsyncStream.makeStream(
+      of: String.self, bufferingPolicy: .bufferingNewest(1))
+    self.transcriptStream = transcriptStream
     let components =
       components
       ?? .production(
@@ -81,7 +100,8 @@ final class AppCoordinator {
       injector: components.injector,
       // A press with no key saved fails fast as .failed(.apiKeyMissing) —
       // before any capture — and render(_:) routes it to the settings window.
-      readinessCheck: { keyStore.hasKey ? nil : .apiKeyMissing }
+      readinessCheck: { keyStore.hasKey ? nil : .apiKeyMissing },
+      onTranscriptDelivered: { transcriptContinuation.yield($0) }
     )
     self.hasAPIKey = keyStore.hasKey
   }
@@ -94,6 +114,8 @@ final class AppCoordinator {
     phaseObserver?.cancel()
     levelsObserver?.cancel()
     promptObserver?.cancel()
+    transcriptObserver?.cancel()
+    echoRevertTask?.cancel()
   }
 
   func start() {
@@ -138,10 +160,20 @@ final class AppCoordinator {
   }
 
   /// Observes the session's phase stream (drives the pill + menu bar), the mic's
-  /// level stream (drives the pill's meter), and the assembled-prompt stream
-  /// (feeds the Prompt Inspector).
+  /// level stream (drives the pill's meter), the assembled-prompt stream (feeds
+  /// the Prompt Inspector), and the delivered-transcript stream (feeds the
+  /// ready-window echo). Split into one helper per stream — rather than one
+  /// `for await` loop per stream inline here — to keep this method's cyclomatic
+  /// complexity under SwiftLint's threshold.
   private func startPipelineObservers() {
-    phaseObserver = Task { @MainActor [weak self] in
+    phaseObserver = observePhases()
+    levelsObserver = observeLevels()
+    promptObserver = observePrompts()
+    transcriptObserver = observeTranscripts()
+  }
+
+  private func observePhases() -> Task<Void, Never> {
+    Task { @MainActor [weak self] in
       guard let phases = await self?.session.phaseStream() else { return }
       for await phase in phases {
         guard let self else { return }
@@ -149,22 +181,37 @@ final class AppCoordinator {
         self.render(phase)
       }
     }
+  }
 
+  private func observeLevels() -> Task<Void, Never> {
     let levels = mic.levels
-    levelsObserver = Task { @MainActor [weak self] in
+    return Task { @MainActor [weak self] in
       for await level in levels {
         guard let self else { return }
         if Task.isCancelled { return }
         self.overlay?.pushLevel(level)
       }
     }
+  }
 
+  private func observePrompts() -> Task<Void, Never> {
     let prompts = promptStream
-    promptObserver = Task { @MainActor [weak self] in
+    return Task { @MainActor [weak self] in
       for await prompt in prompts {
         guard let self else { return }
         if Task.isCancelled { return }
         self.lastPrompt = prompt
+      }
+    }
+  }
+
+  private func observeTranscripts() -> Task<Void, Never> {
+    let transcripts = transcriptStream
+    return Task { @MainActor [weak self] in
+      for await transcript in transcripts {
+        guard let self else { return }
+        if Task.isCancelled { return }
+        self.showTranscriptEcho(transcript)
       }
     }
   }
@@ -302,6 +349,18 @@ final class AppCoordinator {
     cues.packChanged()
   }
 
+  /// Shows `text` in the ready window and schedules its revert. A new transcript
+  /// cancels and reschedules the pending revert so the latest wins.
+  private func showTranscriptEcho(_ text: String) {
+    lastTranscript = text
+    echoRevertTask?.cancel()
+    echoRevertTask = Task { @MainActor [weak self] in
+      try? await Task.sleep(for: .seconds(AppCoordinator.echoDwellSeconds))
+      guard let self, !Task.isCancelled else { return }
+      self.lastTranscript = nil
+    }
+  }
+
   private func render(_ phase: PipelinePhase) {
     // A missing key is a setup state, not a fault: the engine projections
     // below render it as calm idle (no red flash) and Monitoring ignores it —
@@ -309,6 +368,12 @@ final class AppCoordinator {
     // settings window forward so the user lands on the fix.
     if case .failed(.apiKeyMissing) = phase {
       onMissingAPIKey()
+    }
+    // A new recording resets the ready window to the plain readout — the previous
+    // result shouldn't linger while the user dictates the next one.
+    if phase == .recording {
+      echoRevertTask?.cancel()
+      lastTranscript = nil
     }
     // Reveal the pill first, then fire the cue: the sound must never sit in
     // front of the visual state change. Pure phase→pill mapping lives in the
