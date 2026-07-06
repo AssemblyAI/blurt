@@ -57,12 +57,18 @@ struct ReadyView: View {
 
       shortcutReadout
 
+      // The logo and shortcut readout are one idea; the Recent list and the
+      // Settings button are separate sections. Give the section boundaries
+      // extra air (18 + 6 = 24 pt) so the grouping reads visually instead of
+      // everything sitting equidistant.
       RecentDictationsSection(entries: coordinator.recentDictations.entries)
+        .padding(.top, 6)
 
       Button(action: openSettings) {
         Label("Settings", systemImage: "gearshape")
       }
       .buttonStyle(ReadySettingsButtonStyle())
+      .padding(.top, 6)
     }
     .frame(maxWidth: .infinity)
     .padding(.horizontal, 32)
@@ -93,7 +99,7 @@ struct ReadyView: View {
 private struct RecentDictationsSection: View {
   let entries: [RecentDictations.Entry]
 
-  private static let rowHeight: CGFloat = 30
+  private static let rowHeight: CGFloat = 34
   private static let separatorThickness: CGFloat = 1
   /// Height of a full `capacity`-row list (rows + the separators between them);
   /// the container is pinned to this whether it holds 0, 1, or `capacity` rows.
