@@ -35,7 +35,11 @@ struct ReleaseRaceTests {
     await first.value
     await second.value
 
-    for _ in 0..<1000 where await session.phase != .pasted { await Task.yield() }
+    // The pipeline (transcribe → inject) runs asynchronously after both releases
+    // return; wait on the phase stream for its terminal phase rather than a
+    // yield-count budget, which drains this task but not the pipeline's
+    // cross-actor/detached hops and so flaked out before `.pasted` under load.
+    await session.waitForIdle()
     #expect(await mic.stopCalls == 1)
     #expect(await injector.inserted == ["hi"])
     #expect(await session.phase == .pasted)
