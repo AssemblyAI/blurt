@@ -169,6 +169,7 @@ private struct RecentDictationRow: View {
   let now: Date
 
   @State private var isHovered = false
+  @State private var copyButtonHovered = false
   @State private var showsCopyConfirmation = false
   @State private var copyConfirmationReset: Task<Void, Never>?
   @FocusState private var copyButtonFocused: Bool
@@ -220,10 +221,28 @@ private struct RecentDictationRow: View {
       Text(relativeTimestamp)
         .opacity(showsCopyButton || showsCopyConfirmation ? 0 : 1)
       Button(action: copyTranscript) {
-        Label("Copy", systemImage: "doc.on.doc")
+        // A hand-rolled label: `Label`'s default icon–title gap reads as two
+        // separate items at this size, so pull the glyph in tight. The accent
+        // tint marks the text as clickable (vs. the secondary timestamp), and
+        // hovering the control itself adds a soft highlight behind it —
+        // painted outside the layout bounds so the slot's trailing alignment
+        // with the timestamp doesn't shift.
+        HStack(spacing: 3) {
+          Image(systemName: "doc.on.doc")
+          Text("Copy")
+        }
+        .foregroundStyle(Color.accentColor)
+        .background {
+          RoundedRectangle(cornerRadius: 5, style: .continuous)
+            .fill(Color.accentColor.opacity(copyButtonHovered ? 0.12 : 0))
+            .padding(.horizontal, -5)
+            .padding(.vertical, -3)
+        }
       }
       .buttonStyle(.borderless)
       .focused($copyButtonFocused)
+      .onHover { copyButtonHovered = $0 }
+      .animation(.easeOut(duration: 0.12), value: copyButtonHovered)
       .opacity(showsCopyButton ? 1 : 0)
       // Opacity-0 views still hit-test, and an invisible control that reacts
       // to clicks isn't evident as actionable — only take clicks when shown
