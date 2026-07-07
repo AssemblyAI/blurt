@@ -38,15 +38,16 @@ source "$REPO_ROOT/scripts/release-lib.sh"
 SIGNING_KEYCHAIN="${BLURT_SIGNING_KEYCHAIN:-$HOME/Library/Keychains/blurt-signing.keychain-db}"
 SIGNING_KEYCHAIN_UNLOCKED=0
 
-# Resolve the keychain password: CI/env first, then a generic-password item in
-# the login keychain, then an interactive prompt for a local release.
+# Resolve the keychain password: env (from 1Password / a CI secret) first, then
+# an interactive prompt. Deliberately NOT read from the login keychain — the
+# whole point of the dedicated keychain is that its unlock secret does not sit in
+# login (where any process running as you can read it while you're logged in).
+# Locally, supply it from 1Password, e.g.:
+#   BLURT_SIGNING_KEYCHAIN_PASSWORD="$(op read 'op://<vault>/Blurt signing keychain/password')" \
+#     scripts/release.sh
 signing_keychain_password() {
   if [ -n "${BLURT_SIGNING_KEYCHAIN_PASSWORD:-}" ]; then
     printf '%s' "$BLURT_SIGNING_KEYCHAIN_PASSWORD"
-    return 0
-  fi
-  if security find-generic-password -w -s blurt-signing-keychain >/dev/null 2>&1; then
-    security find-generic-password -w -s blurt-signing-keychain
     return 0
   fi
   local pw
