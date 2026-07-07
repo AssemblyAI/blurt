@@ -274,7 +274,6 @@
 		A0DEFAB5DF5E5C7A6146A559 /* juno-90-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DA27B927EB6616D017D910CD /* juno-90-stop.m4a */; };
 		A13335FE97FA2E60A4F5CABC /* ReadyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 383E03AB60BA21AAD92655D5 /* ReadyView.swift */; };
 		A1C101543CA3972691DF5367 /* rom1a-30-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 7FC3A25550C39659E3E00A11 /* rom1a-30-start.m4a */; };
-		A34A51EDE26BC24EB08A3900 /* AppUpdater in Frameworks */ = {isa = PBXBuildFile; productRef = B7FF7A7170C36BAABD1ECC90 /* AppUpdater */; };
 		A3D012E25BD52949E2452B7B /* juno-17-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F37D9EAC78D140EE0CD438F2 /* juno-17-start.m4a */; };
 		A487D7B801A44C51807E0DCB /* rom1a-28-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = AC2E79FB5ACE247FF90F50E4 /* rom1a-28-stop.m4a */; };
 		A5D51CD762229A68757463C8 /* CueSoundPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D222ED050CC93DEB330E773 /* CueSoundPlayer.swift */; };
@@ -421,7 +420,6 @@
 		F42E6D4E62345772C5A49A08 /* HotkeyStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50FFCDBD1FB2CF0A81A68D18 /* HotkeyStepView.swift */; };
 		F4FC8BE4A0593197C1375EC1 /* juno-43-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 47F6D91FC89A0214F121991C /* juno-43-stop.m4a */; };
 		F515E1D5C8254ACE1BDADD63 /* juno-64-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6A56F68E7D3228E23904A005 /* juno-64-start.m4a */; };
-		F53E257FC86648D7A4E9311E /* AutoUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43C6D985A8A6030A7FE6FEEB /* AutoUpdater.swift */; };
 		F5D3911E0D8207F1967C6B3A /* juno-107-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 35059AC7D847666F9D7FFF07 /* juno-107-start.m4a */; };
 		F648F912EEC5A44F5930AE37 /* juno-61-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 9C3B044CD20456A76EBB99FB /* juno-61-stop.m4a */; };
 		F681156BFD979F56CB5B407A /* juno-103-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6AFFA1AFC4F88A35BA39CECF /* juno-103-stop.m4a */; };
@@ -577,7 +575,6 @@
 		41736827B0D4E7E1D024DCF1 /* juno-30-start.m4a */ = {isa = PBXFileReference; path = "juno-30-start.m4a"; sourceTree = "<group>"; };
 		41CCE59FAFC731DAAFB8B09A /* juno-103-start.m4a */ = {isa = PBXFileReference; path = "juno-103-start.m4a"; sourceTree = "<group>"; };
 		429B975FA7FFA777106D0A49 /* rom1b-13-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-13-stop.m4a"; sourceTree = "<group>"; };
-		43C6D985A8A6030A7FE6FEEB /* AutoUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoUpdater.swift; sourceTree = "<group>"; };
 		44DD60B425DF100431946DAB /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		45CDD6CFFA8DEF4DFFC65B5A /* juno-108-start.m4a */ = {isa = PBXFileReference; path = "juno-108-start.m4a"; sourceTree = "<group>"; };
 		45D65D0519A0D2FC47EF7DAD /* rom1a-10-start.m4a */ = {isa = PBXFileReference; path = "rom1a-10-start.m4a"; sourceTree = "<group>"; };
@@ -884,7 +881,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				0A7FB8A90BB7E7A5110A4F4D /* BlurtEngine in Frameworks */,
-				A34A51EDE26BC24EB08A3900 /* AppUpdater in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1427,7 +1423,6 @@
 		E7D37943B6B2CE3C0692AA48 /* Update */ = {
 			isa = PBXGroup;
 			children = (
-				43C6D985A8A6030A7FE6FEEB /* AutoUpdater.swift */,
 				A988A975044942D7A9BA19FE /* UpdateCheckModel.swift */,
 				5F5CCA8A12BA59849684CE66 /* UpdateStepView.swift */,
 			);
@@ -1484,7 +1479,6 @@
 			name = Blurt;
 			packageProductDependencies = (
 				371215E93A9C2CE60C6347BB /* BlurtEngine */,
-				B7FF7A7170C36BAABD1ECC90 /* AppUpdater */,
 			);
 			productName = Blurt;
 			productReference = 5E2309BDEF30ED9EFED5B849 /* Blurt.app */;
@@ -1520,7 +1514,6 @@
 			mainGroup = 37EA71F5138E2E63171AFFBD;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				1B0B6EAFD1174B4B9140D250 /* XCRemoteSwiftPackageReference "AppUpdater" */,
 				BFFF3588F0D8C2D0EEF7BC75 /* XCLocalSwiftPackageReference "../.." */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -1986,7 +1979,6 @@
 				B391EA5F093506B3DF318F10 /* AppCoordinator+UITesting.swift in Sources */,
 				3407E8759D61D569A998EE78 /* AppCoordinator.swift in Sources */,
 				8D2BA6E9FAC605D678A73164 /* AppDelegate.swift in Sources */,
-				F53E257FC86648D7A4E9311E /* AutoUpdater.swift in Sources */,
 				76C1876DB538F8E190EB509E /* BlurtCommands.swift in Sources */,
 				A5D51CD762229A68757463C8 /* CueSoundPlayer.swift in Sources */,
 				9AB0058318597E562D2262D5 /* DictateHotkey.swift in Sources */,
@@ -2392,26 +2384,10 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		1B0B6EAFD1174B4B9140D250 /* XCRemoteSwiftPackageReference "AppUpdater" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/mxcl/AppUpdater";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.1.1;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
 /* Begin XCSwiftPackageProductDependency section */
 		371215E93A9C2CE60C6347BB /* BlurtEngine */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = BlurtEngine;
-		};
-		B7FF7A7170C36BAABD1ECC90 /* AppUpdater */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 1B0B6EAFD1174B4B9140D250 /* XCRemoteSwiftPackageReference "AppUpdater" */;
-			productName = AppUpdater;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

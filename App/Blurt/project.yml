@@ -36,9 +36,6 @@ settings:
 packages:
   BlurtEngine:
     path: ../..
-  AppUpdater:
-    url: https://github.com/mxcl/AppUpdater
-    from: "2.1.1"
 targets:
   Blurt:
     type: application
@@ -100,8 +97,6 @@ targets:
     dependencies:
       - package: BlurtEngine
         product: BlurtEngine
-      - package: AppUpdater
-        product: AppUpdater
     postBuildScripts:
       - name: Install to /Applications
         script: |

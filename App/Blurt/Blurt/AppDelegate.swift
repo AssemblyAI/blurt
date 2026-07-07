@@ -17,12 +17,6 @@ import Observation
 final class AppDelegate: NSObject, NSApplicationDelegate {
   private(set) var coordinator: AppCoordinator?
   private(set) var wizardController: WizardController?
-  // `weak` (not `unowned`) breaks the self → autoUpdater → closure retain cycle
-  // without any lifetime bet: a nil self degrades to the nil-window case
-  // `AutoUpdater` already handles (see `updatePromptHostWindow`).
-  @ObservationIgnored private lazy var autoUpdater = AutoUpdater(
-    presentingWindow: { [weak self] in self?.updatePromptHostWindow() }
-  )
 
   /// Opens a window scene by id. The `openWindow` action lives in SwiftUI, so
   /// `MainWindowRoot` captures it here (in its launch-time `onAppear`) to give
@@ -55,16 +49,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     return nil
   }
 
-  /// Surfaces the main window and returns it to host the update prompt's sheet
-  /// (see `AutoUpdater.runAlert`). Nil when the user closed the main window
-  /// before the update check finished: the recreated scene's NSWindow doesn't
-  /// exist yet on this run-loop pass, and no other window qualifies (the overlay
-  /// is a borderless panel, so `canBecomeMain` is false). The caller retries or
-  /// falls back rather than this force-unwrapping into a crash.
-  func updatePromptHostWindow() -> NSWindow? {
-    surfaceMainWindow() ?? NSApp.windows.first { $0.canBecomeMain }
-  }
-
   /// True once the launch-time activation has run.
   @ObservationIgnored private var didActivateAtLaunch = false
 
@@ -79,13 +63,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   ///
   /// `NSApp.activate()` alone is enough for a normal launch (double-click / Dock /
   /// `open`), where LaunchServices grants the new process foreground-activation
-  /// rights. It is *not* enough after a self-update relaunch: AppUpdater's install
-  /// script restarts Blurt by exec'ing the bundle's binary directly (not through
-  /// LaunchServices), so macOS withholds those rights and the cooperative
-  /// `activate()` silently no-ops — the window comes up behind whatever the user was
-  /// in. `orderFrontRegardless()` raises the window to the front of its level even
-  /// while the app is inactive, covering that case (it's the same call the overlay
-  /// pill uses to surface without activating). Targets the one `canBecomeMain`
+  /// rights. `orderFrontRegardless()` additionally raises the window to the front
+  /// of its level even while the app is inactive (it's the same call the overlay
+  /// pill uses to surface without activating), as a defensive fallback for any
+  /// launch path that doesn't grant those rights. Targets the one `canBecomeMain`
   /// window — the main scene — rather than the non-activating overlay panel.
   func activateAtLaunchIfNeeded() {
     guard !didActivateAtLaunch else { return }
@@ -174,11 +155,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // in the window's `onAppear` (via `activateAtLaunchIfNeeded`), not here: at
     // this point the scene's NSWindow isn't on screen yet, so activating now
     // races its creation and the window can open behind whatever the user was in.
-
-    // Self-update: check GitHub Releases at launch and, if a newer signed build
-    // exists, prompt to install + relaunch (Install and Relaunch / Later).
-    // Best-effort — failures are logged and never block launch. See `AutoUpdater`.
-    Task { await autoUpdater.checkAndPrompt() }
 
     #if UITEST_HOOKS
       // Leak-exercise mode (scripts/leaks.sh): drive a few dictation cycles so the

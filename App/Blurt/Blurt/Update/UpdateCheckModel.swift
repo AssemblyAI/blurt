@@ -3,11 +3,10 @@ import BlurtEngine
 import OSLog
 import Observation
 
-/// Drives the Settings "Check for Update" button. Replaces the old launch-time
-/// `AutoUpdater`: no in-place install and no relaunch — a successful check
-/// either reports the app is current or hands back a DMG URL the user opens in
-/// the browser. All failures collapse to `.failed` (one inline caption); the
-/// user just clicks again.
+/// Drives the Settings "Check for Update" button: no in-place install and no
+/// relaunch — a successful check either reports the app is current or hands
+/// back a DMG URL the user opens in the browser. All failures collapse to
+/// `.failed` (one inline caption); the user just clicks again.
 @MainActor
 @Observable
 final class UpdateCheckModel {
