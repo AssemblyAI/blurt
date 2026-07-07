@@ -74,9 +74,9 @@ activity where available) and fix failures as CI reports them — rather than st
 ## Releasing
 
 Releases are built, signed, notarized, and published locally via
-`scripts/release.sh`. Security-critical custody, certificate/notary rotation
-(and its auto-update consequences), and the roll-forward-only policy for a bad
-release are documented in [`RELEASE.md`](./RELEASE.md).
+`scripts/release.sh`. Security-critical custody, certificate/notary rotation,
+and the roll-forward-only policy for a bad release are documented in
+[`RELEASE.md`](./RELEASE.md).
 
 ## Updates
 

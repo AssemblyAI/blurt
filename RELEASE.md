@@ -9,8 +9,7 @@ policy decisions that aren't obvious from the scripts.
 
 The Developer ID Application key (`640A7F5A9754400D4A0491E7A6FB30542D907806`,
 team `Y54ZB9JF63`) is the root of trust: Gatekeeper accepts anything signed with
-it, and the in-app updater only accepts updates from the same signer. Protect it
-accordingly:
+it, so every published DMG must carry this signature. Protect it accordingly:
 
 - Keep the private key **non-exportable** in the login keychain with a tight ACL
   (only `codesign` / the release scripts may use it). Never store a plaintext
@@ -29,18 +28,12 @@ If the key is compromised (or the cert expires):
    (`security find-identity -v -p codesigning`).
 4. Cut a fresh notarized release.
 
-**Auto-update consequence — read before switching teams.** The updater
-(`mxcl/AppUpdater`) validates a downloaded build against the _running_ app's
-designated requirement, which pins the **Team ID** (`subject.OU`) and bundle id,
-**not** the specific certificate. So:
-
-- Rotating to a new cert **within the same team** → the requirement still
-  matches → **auto-update keeps working** for existing users.
-- Switching to a **different Apple Developer team** (new Team ID) → the
-  requirement no longer matches → auto-update fails with
-  `mismatchedCodeSigningInfo`, and **every existing user must manually
-  re-download**. Avoid a team change unless unavoidable, and announce a manual
-  re-download if you must.
+Rotating to a new cert **within the same team** (`Y54ZB9JF63`) is seamless for
+users — Gatekeeper accepts any valid Developer ID from any team, and updates are
+a manual DMG download (see [Updates in AGENTS.md](./AGENTS.md#updates)), so there
+is no signing-requirement pin to break. A **team change** (new Team ID) is still
+worth avoiding on principle and announcing, but it no longer strands existing
+users the way the former in-app updater's team-pinned requirement did.
 
 ## Rotating the notary credential
 
@@ -52,9 +45,10 @@ Y54ZB9JF63 --password <new-app-specific-password>`.
 
 ## A bad release: roll forward, never roll back
 
-Blurt does **not** yank published releases. `mxcl/AppUpdater` only ever moves
-users to a strictly higher version, so the fix for any bad build is to **ship a
-new patch** via `scripts/release.sh`.
+Blurt does **not** yank published releases. The update check only ever offers
+users a strictly higher version (`UpdateChecker` compares `SemanticVersion` and
+reports `.available` only when the latest tag is greater), so the fix for any bad
+build is to **ship a new patch** via `scripts/release.sh`.
 
 The one exception is a fault caught **before announcing**, while the same version
 is still safe to overwrite (e.g. a corrupted upload flagged by the post-publish
