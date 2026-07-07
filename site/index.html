@@ -38,7 +38,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Silkscreen:wght@400;700&family=Space+Mono:wght@400;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Space+Mono:wght@400;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles.css" />
@@ -68,8 +68,8 @@
     </script>
   </head>
   <body>
-    <main class="page">
-      <header class="site-header">
+    <header class="site-header">
+      <div class="header-inner">
         <a class="brand" href="/">
           <img
             class="brand-icon"
@@ -81,52 +81,61 @@
           <span>Blurt</span>
         </a>
         <nav class="site-nav" aria-label="Primary">
+          <a href="#features">Features</a>
+          <a href="#native">Native</a>
+          <a href="#install">Install</a>
           <a href="https://github.com/AssemblyAI/blurt">GitHub</a>
         </nav>
-      </header>
+      </div>
+    </header>
 
+    <main>
       <section class="hero">
-        <div class="hero-copy">
-          <picture class="hero-wordmark">
-            <source srcset="assets/blurt-logo-ansi.webp" type="image/webp" />
-            <img
-              class="wordmark"
-              src="assets/blurt-logo-ansi.png"
-              alt="Blurt"
-              width="1873"
-              height="517"
-              fetchpriority="high"
-            />
-          </picture>
-          <p class="eyebrow">Native macOS dictation</p>
-          <h1>Incredibly fast, accurate voice dictation by AssemblyAI</h1>
-          <p class="lede">
-            A small, open-source Mac dictation app that turns speech into
-            polished text in the app you're already using — cued by real Yamaha
-            DX7 and Roland Juno-106 synths.
-          </p>
+        <picture class="hero-wordmark">
+          <source srcset="assets/blurt-logo-ansi.webp" type="image/webp" />
+          <img
+            class="wordmark"
+            src="assets/blurt-logo-ansi.png"
+            alt="Blurt"
+            width="1873"
+            height="517"
+            fetchpriority="high"
+          />
+        </picture>
 
-          <ul class="hero-points">
-            <li>Built on the world's most accurate transcription model</li>
-            <li>Works in 18 languages</li>
-            <li>Blazing fast at &lt;100ms</li>
-          </ul>
+        <h1>Incredibly fast, accurate voice dictation by AssemblyAI</h1>
+        <p class="lede">
+          Blurt is a small, native Mac app for Apple Silicon. Tap or hold a key,
+          speak, and polished text lands in the app you're already using — no
+          model downloads, no separate cleanup pass.
+        </p>
 
-          <div class="actions">
-            <a
-              class="button button-primary"
-              href="https://github.com/AssemblyAI/blurt/releases/latest/download/Blurt.dmg"
-              aria-label="Download Blurt.dmg for macOS"
-            >
-              Download Blurt.dmg
-            </a>
-          </div>
-          <p class="fine-print">
-            Free for macOS 26+ on Apple Silicon. BYO AssemblyAI key.
-          </p>
+        <ul class="badges" aria-label="Highlights">
+          <li>Free &amp; open source</li>
+          <li>MIT licensed</li>
+          <li>Signed &amp; notarized</li>
+        </ul>
+
+        <div class="actions">
+          <a
+            class="button button-primary"
+            href="https://github.com/AssemblyAI/blurt/releases/latest/download/Blurt.dmg"
+            aria-label="Download Blurt.dmg for macOS"
+          >
+            Download Blurt.dmg
+          </a>
+          <a class="button" href="https://github.com/AssemblyAI/blurt">
+            View on GitHub
+          </a>
         </div>
+        <p class="fine-print">
+          Requires macOS 26 or later on Apple Silicon, plus a free
+          <a href="https://www.assemblyai.com/dashboard/api-keys"
+            >AssemblyAI API key</a
+          >.
+        </p>
 
-        <figure class="demo demo-hero">
+        <figure class="demo">
           <img
             class="shot"
             src="assets/blurt.png"
@@ -138,14 +147,190 @@
         </figure>
       </section>
 
-      <footer class="site-footer">
+      <section class="section" id="features">
+        <p class="eyebrow">Features</p>
+        <h2>Everything you need to stop typing</h2>
+        <div class="feature-grid">
+          <article class="feature">
+            <h3>Under 100&nbsp;ms</h3>
+            <p>
+              AssemblyAI's Sync STT model responds in under 100 milliseconds, so
+              text lands about as soon as you stop speaking.
+            </p>
+          </article>
+          <article class="feature">
+            <h3>Seriously accurate</h3>
+            <p>
+              Transcription runs on the world's most accurate speech-to-text
+              model — trained for real speech, not demo speech.
+            </p>
+          </article>
+          <article class="feature">
+            <h3>18 languages</h3>
+            <p>
+              Dictate in the language you think in. Blurt works in 18 languages
+              out of the box.
+            </p>
+          </article>
+          <article class="feature">
+            <h3>Works anywhere you can type</h3>
+            <p>
+              The transcript is pasted straight into the focused Mac app —
+              email, code, chat, anywhere with a cursor.
+            </p>
+          </article>
+          <article class="feature">
+            <h3>Polished in one step</h3>
+            <p>
+              Audio goes out, clean text comes back. One API call — no model
+              downloads and no second LLM pass over your words.
+            </p>
+          </article>
+          <article class="feature">
+            <h3>Real synth cues</h3>
+            <p>
+              Start and stop are cued by real Yamaha DX7 and Roland Juno-106
+              sounds. Or turn them off and dictate in silence.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="native">
+        <div class="split">
+          <div class="split-copy">
+            <p class="eyebrow">Native</p>
+            <h2>Built for macOS, not ported to it</h2>
+            <p>
+              Blurt is AppKit and SwiftUI all the way down — no Electron, no web
+              views, and zero external dependencies. The dictation engine is a
+              standalone Swift package behind protocol seams.
+            </p>
+            <ul class="checklist">
+              <li>
+                A rebindable hotkey — tap <kbd>right&nbsp;⌘</kbd> to toggle, or
+                hold it for push-to-talk
+              </li>
+              <li>
+                A one-window setup that walks through Microphone, Accessibility,
+                and your API key
+              </li>
+              <li>A tiny overlay that stays out of the way while you speak</li>
+              <li>
+                Your API key lives in the macOS Keychain — never in a config
+                file
+              </li>
+            </ul>
+          </div>
+          <figure class="split-shot">
+            <img
+              class="shot"
+              src="assets/blurt-window.png"
+              alt="Blurt's settings window with hotkey, language, and sound options"
+              width="1680"
+              height="1050"
+              loading="lazy"
+            />
+          </figure>
+        </div>
+      </section>
+
+      <section class="section" id="privacy">
+        <p class="eyebrow">Privacy</p>
+        <h2>Private by design</h2>
+        <p class="section-lede">
+          Audio is captured only while you're dictating, sent over HTTPS to
+          AssemblyAI for transcription, and never touches disk.
+        </p>
+        <div class="feature-grid privacy-grid">
+          <article class="feature">
+            <h3>No audio stored</h3>
+            <p>
+              Blurt keeps no recordings and no transcripts. When the text is
+              pasted, it's gone.
+            </p>
+          </article>
+          <article class="feature">
+            <h3>No telemetry</h3>
+            <p>
+              No crash reporting, no analytics, no usage tracking. The app
+              phones exactly one place: the transcription API.
+            </p>
+          </article>
+          <article class="feature">
+            <h3>Your key, your account</h3>
+            <p>
+              You bring your own AssemblyAI API key, stored in the macOS
+              Keychain, so your usage is yours alone.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="install">
+        <p class="eyebrow">Install</p>
+        <h2>Up and running in a minute</h2>
+        <ol class="steps">
+          <li>
+            <span class="step-num">1</span>
+            <p>
+              <a
+                href="https://github.com/AssemblyAI/blurt/releases/latest/download/Blurt.dmg"
+                >Download <strong>Blurt.dmg</strong></a
+              >
+              and drag <strong>Blurt.app</strong> into Applications.
+            </p>
+          </li>
+          <li>
+            <span class="step-num">2</span>
+            <p>
+              Launch Blurt and follow setup: Microphone, Accessibility, and your
+              <a href="https://www.assemblyai.com/dashboard/api-keys"
+                >AssemblyAI API key</a
+              >
+              (free tier available).
+            </p>
+          </li>
+          <li>
+            <span class="step-num">3</span>
+            <p>
+              Dictate with <kbd>right&nbsp;⌘</kbd> — tap to toggle, hold for
+              push-to-talk.
+            </p>
+          </li>
+        </ol>
+        <div class="actions actions-center">
+          <a
+            class="button button-primary"
+            href="https://github.com/AssemblyAI/blurt/releases/latest/download/Blurt.dmg"
+          >
+            Download Blurt.dmg
+          </a>
+        </div>
+        <p class="fine-print fine-print-center">
+          Prefer to build it yourself? Blurt is MIT licensed —
+          <a href="https://github.com/AssemblyAI/blurt">clone the repo</a> and
+          run <code>scripts/dev-build.sh</code>.
+        </p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
         <p class="footer-note">
-          Powered by <a href="https://www.assemblyai.com">AssemblyAI</a>.
+          Powered by <a href="https://www.assemblyai.com">AssemblyAI</a>. Made
+          with an unreasonable fondness for vintage synths.
         </p>
         <nav class="footer-links" aria-label="Footer">
           <a href="https://github.com/AssemblyAI/blurt">GitHub</a>
+          <a href="https://github.com/AssemblyAI/blurt/blob/main/LICENSE"
+            >MIT License</a
+          >
+          <a href="https://github.com/AssemblyAI/blurt/releases/latest"
+            >Releases</a
+          >
         </nav>
-      </footer>
-    </main>
+      </div>
+    </footer>
   </body>
 </html>
