@@ -54,8 +54,6 @@ private struct DeveloperSection: View {
   /// exposes the real URL so this label can never drift from where the log is
   /// actually written).
   private static var logPath: String {
-    let path = DictationLog.defaultURL.path(percentEncoded: false)
-    let home = NSHomeDirectory()
-    return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
+    (DictationLog.defaultURL.path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath
   }
 }

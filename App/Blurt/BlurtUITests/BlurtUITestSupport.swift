@@ -73,12 +73,10 @@ class BlurtUITestCase: XCTestCase {
   /// the other windows so the harness is frontmost and its buttons are clickable
   /// (see `closeWindows`).
   func harnessWindow(timeout: TimeInterval = 10) -> XCUIElement {
-    let harness = app.windows[UITestIdentifiers.harnessWindowTitle]
-    XCTAssertTrue(
-      harness.waitForExistence(timeout: timeout),
-      "UI test harness window was not presented")
-    closeWindows(except: UITestIdentifiers.harnessWindowTitle)
-    return harness
+    frontmostWindow(
+      titled: UITestIdentifiers.harnessWindowTitle,
+      "UI test harness window was not presented",
+      timeout: timeout)
   }
 
   /// The main window (the setup wizard, or `ReadyView` under the ready-state
@@ -87,12 +85,21 @@ class BlurtUITestCase: XCTestCase {
   /// harness.
   @discardableResult
   func mainWindow(timeout: TimeInterval = 10) -> XCUIElement {
-    let main = app.windows[UITestIdentifiers.mainWindowTitle]
-    XCTAssertTrue(
-      main.waitForExistence(timeout: timeout),
-      "Main window was not presented")
-    closeWindows(except: UITestIdentifiers.mainWindowTitle)
-    return main
+    frontmostWindow(
+      titled: UITestIdentifiers.mainWindowTitle,
+      "Main window was not presented",
+      timeout: timeout)
+  }
+
+  /// Waits for the window titled `title`, then closes its siblings so it is
+  /// frontmost and its controls are hittable (see `closeWindows`).
+  private func frontmostWindow(
+    titled title: String, _ message: String, timeout: TimeInterval
+  ) -> XCUIElement {
+    let window = app.windows[title]
+    XCTAssertTrue(window.waitForExistence(timeout: timeout), message)
+    closeWindows(except: title)
+    return window
   }
 
   /// Closes every app window except the one titled `keepTitle`. The app presents

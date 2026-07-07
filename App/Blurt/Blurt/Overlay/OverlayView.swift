@@ -7,13 +7,15 @@ private enum OverlayBrandPalette {
 }
 
 struct OverlayView: View {
-  let state: OverlayUIState
-  // The live mic level is *not* taken as a value here: reading it in this body
-  // would rebuild the whole pill (glass, shadow, tint, REC tag) on every ~30 Hz
-  // meter tick. Instead the bridge is forwarded untouched and only the leaf bar
-  // view (`WaveformBarsLevel`) reads `bridge.level`, so @Observable confines the
-  // per-tick invalidation to the bars — the rest of the pill stays stable.
+  // The single source of pill state. The live mic level is *not* read in this
+  // body: that would rebuild the whole pill (glass, shadow, tint, REC tag) on
+  // every ~30 Hz meter tick. Only `bridge.state` is read here (via `state`
+  // below); the leaf bar view (`WaveformBarsLevel`) reads `bridge.level`, so
+  // @Observable confines the per-tick invalidation to the bars — the rest of
+  // the pill stays stable.
   let bridge: OverlayBridge
+
+  private var state: OverlayUIState { bridge.state }
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 

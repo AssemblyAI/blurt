@@ -55,6 +55,12 @@ enum UITestIdentifiers {
   /// The dictation overlay pill (`OverlayView`).
   static let overlayPill = "overlay.pill"
 
+  /// The stub transcriber's default canned transcript
+  /// (`UITestState.cannedTranscript`); the suites assert against it rather than
+  /// typing a custom one (a headless runner can't give the harness's text field
+  /// keyboard focus), so both sides must agree on the value.
+  static let defaultCannedTranscript = "hello world"
+
   // Sentinel API keys the offline UI-test validation recognizes
   // (`UITestKeyValidation`); the suite types these to drive the settings paths.
   static let validAPIKey = "uitest-valid-key"

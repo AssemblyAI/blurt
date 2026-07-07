@@ -29,7 +29,7 @@ final class AppCoordinator {
   @ObservationIgnored private var levelsObserver: Task<Void, Never>?
   @ObservationIgnored var keyTap: DictationKeyTap?
 
-  @ObservationIgnored private let transcriptStream: AsyncStream<String>
+  @ObservationIgnored private let transcriptStream: AsyncStream<(text: String, at: Date)>
   @ObservationIgnored private var transcriptObserver: Task<Void, Never>?
 
   /// The last few dictations that produced a transcript — pasted, copied, or
@@ -44,26 +44,24 @@ final class AppCoordinator {
   /// crowded menu bar, so nothing here is relied on for correctness.
   private(set) var menuBarStatus: MenuBarStatus = .idle
 
-  /// `components` defaults to the production pipeline; `validateKey` defaults to
-  /// AssemblyAI's real network check. Tests/UI-tests inject deterministic doubles
-  /// (see `DictationComponents`) and an offline `validateKey` so the settings
-  /// flow needs no network — the engine's `APIKeySubmission` still owns the
-  /// never-persist-an-unverified-key invariant either way.
+  /// `components` defaults to the production pipeline; `apiKey` defaults to the
+  /// production Keychain-backed model. Tests/UI-tests inject deterministic
+  /// doubles (see `DictationComponents`) and an `APIKeyModel` built over an
+  /// in-memory store with an offline validator — the engine's `APIKeySubmission`
+  /// still owns the never-persist-an-unverified-key invariant either way.
   init(
     onMissingAPIKey: @escaping @MainActor () -> Void,
     components: DictationComponents = .production(),
-    keyStore: any APIKeyGateway = ProductionAPIKeyStore(),
-    validateKey: (@Sendable (String) async -> APIKeyValidator.Result)? = nil
+    apiKey: APIKeyModel = APIKeyModel()
   ) {
     self.onMissingAPIKey = onMissingAPIKey
-    let apiKey = APIKeyModel(keyStore: keyStore, validateKey: validateKey)
     self.apiKey = apiKey
 
     // Unbounded: the Recent list is append-only, so every transcript must survive
     // until the MainActor observer drains it — dropping the oldest under
     // contention would silently lose a dictation.
     let (transcriptStream, transcriptContinuation) = AsyncStream.makeStream(
-      of: String.self, bufferingPolicy: .unbounded)
+      of: (text: String, at: Date).self, bufferingPolicy: .unbounded)
     self.transcriptStream = transcriptStream
 
     self.mic = components.mic
@@ -74,7 +72,9 @@ final class AppCoordinator {
       // A press with no key saved fails fast as .failed(.apiKeyMissing) —
       // before any capture — and render(_:) routes it to the settings window.
       readinessCheck: apiKey.readinessCheck(),
-      onTranscriptDelivered: { transcriptContinuation.yield($0) }
+      // Timestamped here, at delivery, so the Recent entry's time can't drift
+      // if the MainActor observer drains the buffer late under contention.
+      onTranscriptDelivered: { transcriptContinuation.yield(($0, Date())) }
     )
   }
 
@@ -98,11 +98,6 @@ final class AppCoordinator {
       let mic = mic
       Task { await mic.warmUp() }
     }
-    // Warm the API-key memo off the main actor now, alongside the mic, so the
-    // first press's readiness check (`hasKey`, at the top of performPress before
-    // mic.start) is served from memory instead of paying a cold Keychain read on
-    // the press→recording latency path. Idempotent: a later save refreshes it.
-    apiKey.warm()
     // Note: no initial overlay render. The overlay pill stays hidden until the
     // app is fully configured — `WizardController` calls `showOverlay()` on the
     // transition into "ready" (and `hideOverlay()` if it later breaks).
@@ -141,7 +136,7 @@ final class AppCoordinator {
   private func startPipelineObservers() {
     phaseObserver = observePhases()
     levelsObserver = observe(mic.levels) { $0.overlay?.pushLevel($1) }
-    transcriptObserver = observe(transcriptStream) { $0.recentDictations.record($1, at: Date()) }
+    transcriptObserver = observe(transcriptStream) { $0.recentDictations.record($1.text, at: $1.at) }
   }
 
   private func observePhases() -> Task<Void, Never> {
@@ -156,9 +151,9 @@ final class AppCoordinator {
   }
 
   /// Spawns a MainActor observer that runs `action` for each value of `stream`
-  /// until cancelled — the shared shape behind the level/prompt/transcript
-  /// observers. (`observePhases` stays separate: it must `await` the session for
-  /// its stream before it can loop.)
+  /// until cancelled — the shared shape behind the level/transcript observers.
+  /// (`observePhases` stays separate: it must `await` the session for its
+  /// stream before it can loop.)
   private func observe<Value>(
     _ stream: AsyncStream<Value>,
     _ action: @escaping @MainActor (AppCoordinator, Value) -> Void

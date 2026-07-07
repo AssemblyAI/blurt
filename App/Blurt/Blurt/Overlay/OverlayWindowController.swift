@@ -18,16 +18,6 @@ final class OverlayBridge {
   }
 }
 
-private struct OverlayHost: View {
-  var bridge: OverlayBridge
-  var body: some View {
-    // Reads `bridge.state` only — the live `level` is pulled reactively deeper in
-    // the tree (WaveformBarsLevel) so a ~30 Hz meter tick doesn't re-render the
-    // whole host/pill, just the bars.
-    OverlayView(state: bridge.state, bridge: bridge)
-  }
-}
-
 final class OverlayWindowController {
   private static let customOriginXKey = "BlurtOverlayCustomOriginX"
   private static let customOriginYKey = "BlurtOverlayCustomOriginY"
@@ -49,7 +39,7 @@ final class OverlayWindowController {
     height: pillSize.height + shadowMargin * 2)
 
   private let panel: NSPanel
-  private let hosting: NSHostingView<OverlayHost>
+  private let hosting: NSHostingView<OverlayView>
   private let bridge = OverlayBridge()
   private var suppressOriginPersist = false
 
@@ -69,8 +59,7 @@ final class OverlayWindowController {
   private nonisolated(unsafe) var didMoveObserver: (any NSObjectProtocol)?
 
   init() {
-    let host = OverlayHost(bridge: bridge)
-    self.hosting = NSHostingView(rootView: host)
+    self.hosting = NSHostingView(rootView: OverlayView(bridge: bridge))
     self.hosting.wantsLayer = true
     self.hosting.layer?.backgroundColor = .clear
     self.panel = FloatingPanel.make(

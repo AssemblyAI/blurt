@@ -26,16 +26,20 @@ final class APIKeyModel {
   /// gates dictation on having a key) and the Settings UI.
   private(set) var hasAPIKey: Bool
 
-  /// `validateKey` defaults to `nil` (the engine's real AssemblyAI check);
-  /// UI tests inject an offline validator so the settings flow needs no network.
+  /// `validateKey` defaults to the engine's real AssemblyAI check; UI tests
+  /// inject an offline validator so the settings flow needs no network.
+  ///
+  /// The `hasKey` read below also loads the Keychain memo (`APIKeyStore.get()`),
+  /// so every later readiness check on the press→recording latency path is
+  /// served from memory instead of paying a cold `SecItemCopyMatching`.
   init(
     keyStore: any APIKeyGateway = ProductionAPIKeyStore(),
-    validateKey: (@Sendable (String) async -> APIKeyValidator.Result)? = nil
+    validateKey: @escaping @Sendable (String) async -> APIKeyValidator.Result = {
+      await APIKeyValidator().validate($0)
+    }
   ) {
     self.keyStore = keyStore
-    self.submission =
-      validateKey.map { APIKeySubmission(keyStore: keyStore, validate: $0) }
-      ?? APIKeySubmission(keyStore: keyStore)
+    self.submission = APIKeySubmission(keyStore: keyStore, validate: validateKey)
     self.hasAPIKey = keyStore.hasKey
   }
 
@@ -53,14 +57,6 @@ final class APIKeyModel {
     return { keyStore.hasKey ? nil : .apiKeyMissing }
   }
 
-  /// Warms the key memo off the main actor so the first press's readiness check
-  /// is served from memory instead of paying a cold Keychain read on the
-  /// press→recording latency path. Idempotent: a later save refreshes it.
-  func warm() {
-    let keyStore = keyStore
-    Task.detached { _ = keyStore.get() }
-  }
-
   /// Saves the AssemblyAI API key and refreshes `hasAPIKey` so observers —
   /// including the wizard — react. Returns true only when a non-empty key is
   /// actually readable from Keychain after the write (the engine's
@@ -68,7 +64,7 @@ final class APIKeyModel {
   @discardableResult
   func save(_ key: String) -> Bool {
     let saved = submission.save(key)
-    hasAPIKey = keyStore.hasKey
+    refreshStatus()
     return saved
   }
 
