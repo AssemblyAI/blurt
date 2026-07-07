@@ -16,9 +16,22 @@ final class UpdateCheckModel {
     case upToDate(String)
     case available(version: String, dmgURL: URL)
     case failed
+
+    /// True only while a check is in flight — the view keeps the button mounted
+    /// but disabled and shows a spinner beside it (so the row height, and the
+    /// window that fixed-sizes to it, stay constant).
+    var isChecking: Bool {
+      if case .checking = self { return true }
+      return false
+    }
   }
 
   private(set) var state: State = .idle
+
+  /// The running app's version (e.g. `0.1.30`), for the row's resting status
+  /// label. Nil only when the bundle version couldn't be parsed — the same
+  /// condition that makes a check fail.
+  var currentVersionText: String? { currentVersion?.description }
 
   private let checker: UpdateChecker
   private let currentVersion: SemanticVersion?
