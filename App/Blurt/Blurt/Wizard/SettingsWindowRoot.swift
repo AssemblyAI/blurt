@@ -27,7 +27,7 @@ struct SettingsWindowRoot: View {
         GeneralSettingsTab(coordinator: coordinator)
           .tabItem { Label("General", systemImage: "gearshape") }
           .tag(Tab.general)
-        AdvancedSettingsTab()
+        AdvancedSettingsTab(updateModel: appDelegate.updateCheckModel)
           .tabItem { Label("Advanced", systemImage: "gearshape.2") }
           .tag(Tab.advanced)
       }
@@ -56,17 +56,46 @@ private struct GeneralSettingsTab: View {
   }
 }
 
-/// The occasional stuff: the developer-mode log toggle. Kept out of General so
-/// the common pane stays short. (Updates are checked from the app menu and the
-/// menu-bar item — see `BlurtCommands` / `MenuBarContent` — not from here.)
+/// The occasional stuff: checking for an update and the developer-mode log
+/// toggle. Kept out of General so the common pane stays short.
 private struct AdvancedSettingsTab: View {
+  let updateModel: UpdateCheckModel
+
   var body: some View {
     Form {
+      UpdateSection(model: updateModel)
       DeveloperSection()
     }
     .formStyle(.grouped)
     .scrollDisabled(true)
     .fixedSize(horizontal: false, vertical: true)
+  }
+}
+
+/// The Updates section of the Settings window: the running version and a
+/// "Check for Updates" button that runs the check and reports the result in a
+/// modal (see `UpdateCheckModel`). The same check is reachable from the
+/// "Check for Updates…" app-menu command and the menu-bar item; all three share
+/// the one `UpdateCheckModel` owned by `AppDelegate`, so a check from any place
+/// runs through the same controller.
+private struct UpdateSection: View {
+  let model: UpdateCheckModel
+
+  var body: some View {
+    Section {
+      SettingRow(title: versionTitle, systemImage: "arrow.triangle.2.circlepath") {
+        Button("Check for Updates") { model.checkForUpdates() }
+          .accessibilityIdentifier(UITestIdentifiers.updateCheck)
+      }
+    } header: {
+      Text("Updates")
+    }
+  }
+
+  /// "Blurt 0.1.31" when the version is known, otherwise a plain "Blurt" (the
+  /// button still works — the check reads the version itself).
+  private var versionTitle: String {
+    model.currentVersionText.map { "Blurt \($0)" } ?? "Blurt"
   }
 }
 

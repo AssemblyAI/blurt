@@ -104,6 +104,29 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertEqual("\(toggle.value ?? "")", "1", "Clicking should switch developer mode on")
   }
 
+  /// The Advanced pane's "Check for Updates" button runs the check and reports
+  /// the result in a modal. Under UI testing the check is stubbed offline to
+  /// always report up-to-date, so clicking it surfaces the "You’re up to date"
+  /// result sheet deterministically (no network).
+  func testCheckForUpdatesShowsResultAlert() {
+    let settings = openSettingsWindow()
+    selectSettingsTab(settings, named: UITestIdentifiers.advancedSettingsTab)
+
+    // Query app-wide: selecting the Advanced tab retitles the window, so a
+    // window-scoped proxy captured beforehand would go stale.
+    let button = app.descendants(matching: .any)
+      .matching(identifier: UITestIdentifiers.updateCheck).firstMatch
+    XCTAssertTrue(button.waitForExistence(timeout: 10), "Check for Updates button not found")
+    button.click()
+
+    let alert = app.sheets.firstMatch
+    XCTAssertTrue(alert.waitForExistence(timeout: 10), "The check should present a result sheet")
+    XCTAssertTrue(
+      alert.staticTexts["You’re up to date"].exists,
+      "The stubbed check should report up to date")
+    alert.buttons["OK"].click()
+  }
+
   /// After a key is saved, "Change" re-opens the editable field so the key can
   /// be rotated.
   func testChangeReopensEditableFieldAfterSaving() {
