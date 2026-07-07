@@ -80,10 +80,7 @@ final class WizardController {
   /// default binding and is rebound in Settings, so a cleared shortcut surfaces as
   /// a hint on the ready screen rather than trapping the user in the wizard.
   private var computedReadiness: Bool {
-    SetupStatus.isReady(
-      permissions: permissions,
-      hasAPIKey: apiKey.hasAPIKey
-    )
+    permissions.allGranted && apiKey.hasAPIKey
   }
 
   /// Streams the API-key model's readiness input (`hasAPIKey`) via `Observations`,

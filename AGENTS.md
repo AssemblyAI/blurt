@@ -116,7 +116,7 @@ The dictation trigger is a **single lone modifier key** (tap-to-toggle or hold-t
 
 The app side, **`DictationKeyTap`** (`App/Blurt/Blurt/Hotkey/DictationKeyTap.swift`), reduces each `CGEventTap` delivery (watching `flagsChanged` for the bound modifier and `keyDown` for any other key) to a `DictationKeyRouter.Event` and owns the tap lifecycle. It **swallows nothing** — a lone modifier types nothing, and combos pass through so normal shortcuts keep working — unlike the old chord trigger.
 
-The trigger is editable in the Shortcut section of the setup/settings window (`HotkeyStepView`), which is a `Picker` over `TriggerKey.allCases` that writes `TriggerKeyStore` (then `AppCoordinator.dictationBindingChanged()` re-reads it into the tap). For display strings, use `DictateHotkey.label` (`App/Blurt/Blurt/Hotkey/DictateHotkey.swift`) for one-shot reads, or `@AppStorage(TriggerKeyStore.defaultsKey)` + `TriggerKey.fromPersisted` in views that must re-render live on a Settings change.
+The trigger is editable in the Shortcut section of the setup/settings window (`HotkeyStepView`), which is a `Picker` over `TriggerKey.allCases` that writes `TriggerKeyStore` (then `AppCoordinator.dictationBindingChanged()` re-reads it into the tap). For display strings, use `TriggerKeyStore().triggerKey.label` for one-shot reads, or `@AppStorage(TriggerKeyStore.defaultsKey)` + `TriggerKey.fromPersisted` in views that must re-render live on a Settings change.
 
 ## Transcription prompt
 

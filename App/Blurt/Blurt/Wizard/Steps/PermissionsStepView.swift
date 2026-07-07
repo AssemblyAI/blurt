@@ -50,7 +50,7 @@ struct PermissionsStepView: View {
         opened: openedMicrophoneSettings,
         granted: controller.permissions.microphone,
         waiting: "Waiting for you to turn on Blurt under Microphone…",
-        description: "Blurt records only after you start dictating with \(DictateHotkey.label)."
+        description: "Blurt records only after you start dictating with \(TriggerKeyStore().triggerKey.label)."
       )
     }
   }

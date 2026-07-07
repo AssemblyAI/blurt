@@ -254,7 +254,6 @@
 		99701037DF07F88D19F5E4AE /* juno-107-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 89F61F7352130DAAA530D836 /* juno-107-stop.m4a */; };
 		99D86F2ECD16B622695875B1 /* juno-84-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 17B42F16029FF1625EEAD58D /* juno-84-start.m4a */; };
 		9AA5B4FC1FC9B4FE7B48E973 /* juno-35-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 870CA5DD6808F87584E3FA9E /* juno-35-start.m4a */; };
-		9AB0058318597E562D2262D5 /* DictateHotkey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FA34796733AB87C0280470D /* DictateHotkey.swift */; };
 		9B2B57779590C7CFA932F361 /* juno-13-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3E628046B76633200813B0E4 /* juno-13-start.m4a */; };
 		9B7CB19D131F1374FCA0A986 /* KeyTermsStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C59092F9220BBE7465068325 /* KeyTermsStepView.swift */; };
 		9C0DBA7FF976A85D9E936301 /* rom1b-4-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = AB7B48AFEE1005B27B11883F /* rom1b-4-start.m4a */; };
@@ -465,7 +464,6 @@
 		0CDBED88D2D7CE84776B7574 /* juno-66-start.m4a */ = {isa = PBXFileReference; path = "juno-66-start.m4a"; sourceTree = "<group>"; };
 		0DBB595A2AB7221F408B4775 /* juno-63-start.m4a */ = {isa = PBXFileReference; path = "juno-63-start.m4a"; sourceTree = "<group>"; };
 		0F3D1DBFA369BAF807DBB55F /* juno-1-start.m4a */ = {isa = PBXFileReference; path = "juno-1-start.m4a"; sourceTree = "<group>"; };
-		0FA34796733AB87C0280470D /* DictateHotkey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictateHotkey.swift; sourceTree = "<group>"; };
 		0FB3FBD7C42F949C52B09F0C /* juno-21-start.m4a */ = {isa = PBXFileReference; path = "juno-21-start.m4a"; sourceTree = "<group>"; };
 		0FB812876EC4870E9A74BB50 /* juno-55-start.m4a */ = {isa = PBXFileReference; path = "juno-55-start.m4a"; sourceTree = "<group>"; };
 		10A0336924600313EE5243AE /* rom1a-8-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-8-stop.m4a"; sourceTree = "<group>"; };
@@ -1412,7 +1410,6 @@
 		DF92BBDB4B9C15FAE100B783 /* Hotkey */ = {
 			isa = PBXGroup;
 			children = (
-				0FA34796733AB87C0280470D /* DictateHotkey.swift */,
 				3258A84E37C372993B1572EE /* DictationKeyTap.swift */,
 			);
 			path = Hotkey;
@@ -1978,7 +1975,6 @@
 				8D2BA6E9FAC605D678A73164 /* AppDelegate.swift in Sources */,
 				76C1876DB538F8E190EB509E /* BlurtCommands.swift in Sources */,
 				A5D51CD762229A68757463C8 /* CueSoundPlayer.swift in Sources */,
-				9AB0058318597E562D2262D5 /* DictateHotkey.swift in Sources */,
 				0F1317CCFA2A3245DAA96141 /* DictationComposition.swift in Sources */,
 				1C40B5DB92262E05808ECCEA /* DictationKeyTap.swift in Sources */,
 				B5A7CEA6517E5A1E4D77623F /* FloatingPanel.swift in Sources */,
