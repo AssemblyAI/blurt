@@ -85,8 +85,8 @@ targets:
       properties:
         CFBundleName: Blurt
         CFBundleDisplayName: Blurt
-        CFBundleVersion: "30"
-        CFBundleShortVersionString: "0.1.29"
+        CFBundleVersion: "31"
+        CFBundleShortVersionString: "0.1.30"
         LSMinimumSystemVersion: "26.0"
         LSApplicationCategoryType: public.app-category.productivity
         NSMicrophoneUsageDescription: Blurt uses your microphone to transcribe your dictation with AssemblyAI.
