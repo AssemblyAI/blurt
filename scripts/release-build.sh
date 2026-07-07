@@ -42,23 +42,36 @@ source "$REPO_ROOT/scripts/release-lib.sh"
 SIGNING_KEYCHAIN="${BLURT_SIGNING_KEYCHAIN:-$HOME/Library/Keychains/blurt-signing.keychain-db}"
 SIGNING_KEYCHAIN_UNLOCKED=0
 
-# Resolve the keychain password: env (from 1Password / a CI secret) first, then
-# an interactive prompt. Deliberately NOT read from the login keychain — the
-# whole point of the dedicated keychain is that its unlock secret does not sit in
-# login (where any process running as you can read it while you're logged in).
-# Locally, supply it from 1Password, e.g.:
-#   BLURT_SIGNING_KEYCHAIN_PASSWORD="$(op read 'op://<vault>/Blurt signing keychain/password')" \
-#     scripts/release.sh
-signing_keychain_password() {
+# Resolve the keychain password, in order:
+#   1. BLURT_SIGNING_KEYCHAIN_PASSWORD — env (a CI secret, or `op read` inline).
+#   2. BLURT_SIGNING_KEYCHAIN_OP — an `op://…` 1Password secret reference; the
+#      script runs `op read` on it (Touch ID fires via the desktop app). Set
+#      OP_ACCOUNT if you're signed into multiple 1Password accounts. Export this
+#      once in your shell so a bare `scripts/release.sh` unlocks via 1Password.
+#   3. Interactive prompt.
+# Deliberately NOT read from the login keychain — the whole point of the
+# dedicated keychain is that its unlock secret does not sit in login (where any
+# process running as you can read it while you're logged in).
+#
+# The password is assigned into the global SIGNING_KEYCHAIN_PW rather than echoed
+# to stdout, so the secret is never emitted where a command substitution, a log,
+# or `set -x` could capture it. The caller reads SIGNING_KEYCHAIN_PW and unsets
+# it immediately after use.
+SIGNING_KEYCHAIN_PW=""
+load_signing_keychain_password() {
   if [ -n "${BLURT_SIGNING_KEYCHAIN_PASSWORD:-}" ]; then
-    printf '%s' "$BLURT_SIGNING_KEYCHAIN_PASSWORD"
+    SIGNING_KEYCHAIN_PW="$BLURT_SIGNING_KEYCHAIN_PASSWORD"
     return 0
   fi
-  local pw
-  read -rsp "Password for signing keychain ($SIGNING_KEYCHAIN): " pw </dev/tty \
+  if [ -n "${BLURT_SIGNING_KEYCHAIN_OP:-}" ] && command -v op >/dev/null 2>&1; then
+    SIGNING_KEYCHAIN_PW="$(op read "$BLURT_SIGNING_KEYCHAIN_OP")" \
+      || die "op read failed for $BLURT_SIGNING_KEYCHAIN_OP (signed in? set OP_ACCOUNT if you have multiple accounts)"
+    [ -n "$SIGNING_KEYCHAIN_PW" ] || die "op read returned empty for $BLURT_SIGNING_KEYCHAIN_OP"
+    return 0
+  fi
+  read -rsp "Password for signing keychain ($SIGNING_KEYCHAIN): " SIGNING_KEYCHAIN_PW </dev/tty \
     || die "no signing keychain password provided (set BLURT_SIGNING_KEYCHAIN_PASSWORD)"
   printf '\n' >&2
-  printf '%s' "$pw"
 }
 
 unlock_signing_keychain() {
@@ -79,10 +92,10 @@ unlock_signing_keychain() {
   for k in "${search[@]}"; do [ "$k" = "$SIGNING_KEYCHAIN" ] && present=1; done
   [ "$present" -eq 1 ] || security list-keychains -d user -s "$SIGNING_KEYCHAIN" "${search[@]}"
 
-  local pw
-  pw="$(signing_keychain_password)"
-  security unlock-keychain -p "$pw" "$SIGNING_KEYCHAIN" \
-    || die "failed to unlock signing keychain $SIGNING_KEYCHAIN"
+  load_signing_keychain_password
+  security unlock-keychain -p "$SIGNING_KEYCHAIN_PW" "$SIGNING_KEYCHAIN" \
+    || { SIGNING_KEYCHAIN_PW=""; die "failed to unlock signing keychain $SIGNING_KEYCHAIN"; }
+  SIGNING_KEYCHAIN_PW=""
   SIGNING_KEYCHAIN_UNLOCKED=1
   info "unlocked dedicated signing keychain: $SIGNING_KEYCHAIN"
 }
