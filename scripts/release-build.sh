@@ -12,6 +12,10 @@ STAGE="$BUILD_ROOT/stage"
 ENTITLEMENTS="$APP_DIR/Blurt/Blurt.entitlements"
 
 readonly IDENTITY="640A7F5A9754400D4A0491E7A6FB30542D907806"
+# SHA-256 fingerprint of the same Developer ID leaf cert as IDENTITY (which is
+# its SHA-1 identity hash, the only format `codesign --sign` accepts). The
+# signer-pin verifies produced artifacts against this stronger digest.
+readonly IDENTITY_SHA256="FB3F95250468655C8329314E104B96E3C75443AEB1A349A43D0C9AABF0B255B5"
 readonly TEAM_ID="Y54ZB9JF63"
 readonly NOTARY_PROFILE="blurt-notary"
 
@@ -281,6 +285,7 @@ step "Verify signature"
 codesign --verify --strict --deep --verbose=2 "$APP_STAGED"
 codesign -dvv "$APP_STAGED" 2>&1 | grep '^Timestamp=' \
   || die "no secure timestamp on bundle signature — notary would reject"
+verify_signer "$APP_STAGED" "$IDENTITY_SHA256" "$TEAM_ID"
 info "signature verified with secure timestamp"
 
 # Notarize and staple the .app *before* packaging it into the DMG. Stapling the
@@ -326,6 +331,7 @@ info "dmg verified"
 step "Sign DMG"
 codesign --force --sign "$IDENTITY" --timestamp "$DMG"
 codesign --verify --verbose=1 "$DMG"
+verify_signer "$DMG" "$IDENTITY_SHA256" "$TEAM_ID"
 info "dmg: $DMG ($(du -sh "$DMG" | cut -f1))"
 
 step "Notarize DMG"
