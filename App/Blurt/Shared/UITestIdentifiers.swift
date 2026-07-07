@@ -51,7 +51,6 @@ enum UITestIdentifiers {
   static let hotkeyPicker = "settings.hotkey.picker"
   static let soundPicker = "settings.sound.picker"
   static let developerToggle = "settings.developer.toggle"
-  static let updateCheck = "settings.update.check"
 
   /// The dictation overlay pill (`OverlayView`).
   static let overlayPill = "overlay.pill"

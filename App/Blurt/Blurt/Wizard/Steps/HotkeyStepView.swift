@@ -38,11 +38,31 @@ struct HotkeyStepView: View {
   }
 }
 
-/// A settings-form row: an icon-and-title label on the left, a compact menu
-/// picker on the right. Shared by the shortcut and sound sections so the two
-/// rows stay visually identical. (Housed here rather than in its own file so
-/// the committed XcodeGen project doesn't need regenerating; move it to its own
-/// file next time `xcodegen generate` runs anyway.)
+/// A settings/setup-form row: an icon-and-title label on the leading edge, with
+/// trailing content pushed to the trailing edge and vertically centered against
+/// the label. A plain `HStack` (default `.center` alignment) rather than
+/// `LabeledContent`, which baseline-aligns the control to the label and leaves
+/// it reading slightly high. Shared so every settings/setup row stays visually
+/// identical (see `APIKeyStepView.savedRow`, `PermissionsStepView`,
+/// `PickerSettingRow`). (Housed here rather than in its own file so the
+/// committed XcodeGen project doesn't need regenerating; move it to its own file
+/// next time `xcodegen generate` runs anyway.)
+struct SettingRow<Trailing: View>: View {
+  var title: String
+  var systemImage: String
+  @ViewBuilder var trailing: () -> Trailing
+
+  var body: some View {
+    HStack {
+      Label(title, systemImage: systemImage)
+      Spacer(minLength: 12)
+      trailing()
+    }
+  }
+}
+
+/// A `SettingRow` whose trailing content is a compact menu picker. Shared by the
+/// shortcut and sound sections so the two rows stay identical.
 struct PickerSettingRow<Value: Hashable, Options: View>: View {
   var title: String
   var systemImage: String
@@ -51,14 +71,9 @@ struct PickerSettingRow<Value: Hashable, Options: View>: View {
   @ViewBuilder var options: () -> Options
 
   var body: some View {
-    // A plain HStack (default `.center` vertical alignment) rather than
-    // `LabeledContent`, which baseline-aligns the label to the control and
-    // leaves the pop-up button reading slightly high. Status/label leads, the
-    // control trails via `Spacer`. The picker keeps its own (hidden) title so
-    // VoiceOver still reads a meaningful name for the pop-up button.
-    HStack {
-      Label(title, systemImage: systemImage)
-      Spacer(minLength: 12)
+    SettingRow(title: title, systemImage: systemImage) {
+      // The picker keeps its own (hidden) title so VoiceOver reads a meaningful
+      // name for the pop-up button rather than an empty string.
       Picker(title, selection: $selection, content: options)
         .labelsHidden()
         .pickerStyle(.menu)

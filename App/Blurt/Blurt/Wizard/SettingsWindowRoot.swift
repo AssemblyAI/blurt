@@ -27,7 +27,7 @@ struct SettingsWindowRoot: View {
         GeneralSettingsTab(coordinator: coordinator)
           .tabItem { Label("General", systemImage: "gearshape") }
           .tag(Tab.general)
-        AdvancedSettingsTab(updateModel: appDelegate.updateCheckModel)
+        AdvancedSettingsTab()
           .tabItem { Label("Advanced", systemImage: "gearshape.2") }
           .tag(Tab.advanced)
       }
@@ -56,14 +56,12 @@ private struct GeneralSettingsTab: View {
   }
 }
 
-/// The occasional stuff: checking for an update and the developer-mode log
-/// toggle. Kept out of General so the common pane stays short.
+/// The occasional stuff: the developer-mode log toggle. Kept out of General so
+/// the common pane stays short. (Updates are checked from the app menu and the
+/// menu-bar item — see `BlurtCommands` / `MenuBarContent` — not from here.)
 private struct AdvancedSettingsTab: View {
-  let updateModel: UpdateCheckModel
-
   var body: some View {
     Form {
-      UpdateStepView(model: updateModel)
       DeveloperSection()
     }
     .formStyle(.grouped)

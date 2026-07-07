@@ -107,13 +107,7 @@ struct PermissionsStepView: View {
     granted: Bool,
     action: @escaping () -> Void
   ) -> some View {
-    // Plain HStack (default `.center` vertical alignment) rather than
-    // `LabeledContent`, which baseline-aligns the label to the control and
-    // leaves the button reading slightly high — matches the other settings/setup
-    // rows (see `PickerSettingRow`, `APIKeyStepView.savedRow`).
-    HStack {
-      Label(info.label, systemImage: info.symbol)
-      Spacer(minLength: 12)
+    SettingRow(title: info.label, systemImage: info.symbol) {
       if granted {
         HStack(spacing: 4) {
           Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)

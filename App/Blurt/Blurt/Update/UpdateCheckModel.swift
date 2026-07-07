@@ -35,12 +35,8 @@ final class UpdateCheckModel {
     self.presentingWindow = presentingWindow
   }
 
-  /// The running app's version (e.g. `0.1.30`), shown beside the Settings
-  /// button. Nil only when the bundle version couldn't be parsed.
-  var currentVersionText: String? { currentVersion?.description }
-
   /// Checks GitHub and reports the result in a modal alert. Safe to call from
-  /// the button and the menu; a check already in flight is ignored.
+  /// the app menu and the menu-bar item; a check already in flight is ignored.
   func checkForUpdates() {
     guard !isChecking else { return }
     guard let currentVersion else {
@@ -56,7 +52,7 @@ final class UpdateCheckModel {
         case .upToDate(let current):
           await presentUpToDate(current: current)
         case .available(let version, let dmgURL):
-          await presentAvailable(version: version, dmgURL: dmgURL)
+          await presentAvailable(current: currentVersion, version: version, dmgURL: dmgURL)
         }
       } catch {
         log.error("update check failed: \(error.localizedDescription, privacy: .public)")
@@ -76,26 +72,17 @@ final class UpdateCheckModel {
   }
 
   /// "A new version is available" — **Download** (default) opens the release DMG
-  /// in the browser; **Later** dismisses.
-  private func presentAvailable(version: SemanticVersion, dmgURL: URL) async {
+  /// in the browser; **Later** dismisses. `current` is the running version the
+  /// check compared against (always known by the time we get here).
+  private func presentAvailable(current: SemanticVersion, version: SemanticVersion, dmgURL: URL) async {
     let alert = NSAlert()
     alert.messageText = "A new version of Blurt is available"
-    alert.informativeText = availableMessage(newVersion: version)
+    alert.informativeText = "Blurt \(version) is available—you have \(current). Download it now?"
     alert.addButton(withTitle: "Download")  // default (first button)
     alert.addButton(withTitle: "Later")
     if await runAlert(alert) == .alertFirstButtonReturn {
       openURL(dmgURL)
     }
-  }
-
-  /// "Blurt Y is available—you have X." Drops the "you have" clause if the
-  /// current version couldn't be determined (it can't be, here, since a check
-  /// requires it — but kept total for safety).
-  private func availableMessage(newVersion: SemanticVersion) -> String {
-    if let current = currentVersion {
-      return "Blurt \(newVersion) is available—you have \(current). Download it now?"
-    }
-    return "Blurt \(newVersion) is available. Download it now?"
   }
 
   /// A recoverable "couldn't check" result (offline, GitHub unreachable, a

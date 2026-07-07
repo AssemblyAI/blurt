@@ -18,10 +18,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private(set) var coordinator: AppCoordinator?
   private(set) var wizardController: WizardController?
 
-  /// Backs both the Settings "Check for Updates" button and the app-menu
-  /// "Check for Updates…" command, so a check from either place runs through the
-  /// same controller and can't stack two result alerts.
-  @ObservationIgnored let updateCheckModel = UpdateCheckModel()
+  /// Backs both the app-menu "Check for Updates…" command and the menu-bar
+  /// item, so a check from either place runs through the same controller and
+  /// can't stack two result alerts. `lazy` so its bundle-version parse stays off
+  /// the launch path — it's built on first check, not at startup.
+  @ObservationIgnored lazy var updateCheckModel = UpdateCheckModel()
 
   /// Opens a window scene by id. The `openWindow` action lives in SwiftUI, so
   /// `MainWindowRoot` captures it here (in its launch-time `onAppear`) to give

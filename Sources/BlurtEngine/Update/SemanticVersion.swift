@@ -27,19 +27,24 @@ public struct SemanticVersion: Sendable, Equatable, Comparable, CustomStringConv
   }
 
   public static func < (lhs: SemanticVersion, rhs: SemanticVersion) -> Bool {
-    let count = max(lhs.components.count, rhs.components.count)
-    for index in 0..<count where lhs.component(at: index) != rhs.component(at: index) {
-      return lhs.component(at: index) < rhs.component(at: index)
-    }
-    return false
+    lhs.ordering(vs: rhs) < 0
   }
 
   public static func == (lhs: SemanticVersion, rhs: SemanticVersion) -> Bool {
-    let count = max(lhs.components.count, rhs.components.count)
-    for index in 0..<count where lhs.component(at: index) != rhs.component(at: index) {
-      return false
+    lhs.ordering(vs: rhs) == 0
+  }
+
+  /// Component-wise comparison to `other`: negative if `self` sorts first, 0 if
+  /// equal, positive otherwise. Missing trailing components count as 0, so
+  /// `1.2` orders equal to `1.2.0`. The single source both `<` and `==` derive
+  /// from.
+  private func ordering(vs other: SemanticVersion) -> Int {
+    let count = max(components.count, other.components.count)
+    for index in 0..<count {
+      let (mine, theirs) = (component(at: index), other.component(at: index))
+      if mine != theirs { return mine < theirs ? -1 : 1 }
     }
-    return true
+    return 0
   }
 
   /// The component at `index`, or 0 past the end — so `1.2` compares as `1.2.0`.

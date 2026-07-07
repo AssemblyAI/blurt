@@ -23,7 +23,7 @@ struct UpdateCheckerTests {
   }
 
   private func checker(returning data: Data) -> UpdateChecker {
-    UpdateChecker(fetch: { _ in data })
+    UpdateChecker(transport: FakeHTTPTransport { _ in (200, data) })
   }
 
   @Test("reports .available with the DMG URL when the release is newer")
@@ -79,9 +79,9 @@ struct UpdateCheckerTests {
     }
   }
 
-  @Test("propagates a network failure from the fetch closure")
+  @Test("propagates a network failure from the transport")
   func propagatesFetchError() async throws {
-    let checker = UpdateChecker(fetch: { _ in throw URLError(.notConnectedToInternet) })
+    let checker = UpdateChecker(transport: FakeHTTPTransport.failing(with: URLError(.notConnectedToInternet)))
     let current = try #require(SemanticVersion("0.1.30"))
     await #expect(throws: (any Error).self) {
       try await checker.check(current: current)

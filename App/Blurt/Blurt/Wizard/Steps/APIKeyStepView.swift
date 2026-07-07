@@ -75,22 +75,18 @@ struct APIKeyStepView: View {
   /// permission rows, with a "Change" button that re-opens the editable field.
   /// Mirrors `PermissionsStepView.permissionRow` so a done step looks done.
   private var savedRow: some View {
-    // A plain HStack (default `.center` vertical alignment) rather than
-    // `LabeledContent`, which baseline-aligns the label to the control and
-    // leaves the "Change" button reading slightly high. Matches the other
-    // settings rows (see `PickerSettingRow`, `UpdateStepView`).
-    HStack(spacing: 12) {
-      Label("API Key", systemImage: "key.fill")
-      Spacer(minLength: 12)
-      HStack(spacing: 4) {
-        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-        Text("Saved").foregroundStyle(.secondary)
-          .accessibilityIdentifier(UITestIdentifiers.apiKeySavedStatus)
+    SettingRow(title: "API Key", systemImage: "key.fill") {
+      HStack(spacing: 12) {
+        HStack(spacing: 4) {
+          Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+          Text("Saved").foregroundStyle(.secondary)
+            .accessibilityIdentifier(UITestIdentifiers.apiKeySavedStatus)
+        }
+        Button("Change") {
+          isEditing = true
+        }
+        .accessibilityIdentifier(UITestIdentifiers.apiKeyChange)
       }
-      Button("Change") {
-        isEditing = true
-      }
-      .accessibilityIdentifier(UITestIdentifiers.apiKeyChange)
     }
   }
 
