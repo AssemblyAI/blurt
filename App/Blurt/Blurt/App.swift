@@ -60,6 +60,12 @@ struct BlurtApp: App {
       }
       .windowResizability(.contentSize)
       .defaultLaunchBehavior(UITestMode.isActive ? .presented : .suppressed)
+      // Pin the harness to the top-leading corner so it never overlaps the
+      // centered main window: the two stay simultaneously interactable, so a test
+      // can drive a dictation on the harness and read the result on the ready
+      // screen without closing/reopening either (XCUITest can't click a control
+      // under another window). Test-only (UITEST_HOOKS).
+      .defaultPosition(.topLeading)
     #endif
   }
 }

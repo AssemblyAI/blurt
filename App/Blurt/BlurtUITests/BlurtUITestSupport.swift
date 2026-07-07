@@ -11,6 +11,14 @@ enum UITestIDs {
   /// (offline stub pipeline + harness window). Matches `UITestMode.launchArgument`.
   static let launchArgument = "-BlurtUITest"
 
+  /// Additional flag that forces the app into its fully-configured "ready" state
+  /// (a saved key + all permissions granted), so the main window shows
+  /// `ReadyView` instead of the setup wizard. The XCUITest host can't grant real
+  /// TCC permissions, so this is the only way to render the ready screen. Matches
+  /// `UITestMode.readyStateArgument`; opt-in per test, so wizard-based tests are
+  /// unaffected.
+  static let readyLaunchArgument = "-BlurtUITestReady"
+
   // Window titles. Main and harness come from the first argument of their
   // SwiftUI `Window(_:id:)` declarations; the settings title is supplied by
   // the framework for the `Settings` scene — "<bundle name> Settings" — so it
@@ -65,6 +73,11 @@ enum UITestIDs {
 class BlurtUITestCase: XCTestCase {
   var app: XCUIApplication!
 
+  /// Launch arguments a subclass wants added on top of the base `-BlurtUITest`
+  /// flag before the app launches in `setUp`. Empty by default; `ReadyViewUITests`
+  /// overrides it to opt into the ready-state flag.
+  var extraLaunchArguments: [String] { [] }
+
   // The async lifecycle overrides (not the sync `setUpWithError`): on a
   // @MainActor subclass, only the async variants can carry the main-actor
   // isolation without clashing with XCTestCase's nonisolated declarations, and
@@ -76,7 +89,7 @@ class BlurtUITestCase: XCTestCase {
     // missing, the follow-on steps just produce noise.
     continueAfterFailure = false
     app = XCUIApplication()
-    app.launchArguments += [UITestIDs.launchArgument]
+    app.launchArguments += [UITestIDs.launchArgument] + extraLaunchArguments
     app.launch()
   }
 
@@ -112,6 +125,20 @@ class BlurtUITestCase: XCTestCase {
       "UI test harness window was not presented")
     closeWindows(except: UITestIDs.harnessWindowTitle)
     return harness
+  }
+
+  /// The main window (the setup wizard, or `ReadyView` under the ready-state
+  /// flag), brought frontmost by closing the sibling harness/Settings windows so
+  /// its controls are hittable — the same treatment `harnessWindow()` gives the
+  /// harness.
+  @discardableResult
+  func mainWindow(timeout: TimeInterval = 10) -> XCUIElement {
+    let main = app.windows[UITestIDs.mainWindowTitle]
+    XCTAssertTrue(
+      main.waitForExistence(timeout: timeout),
+      "Main window was not presented")
+    closeWindows(except: UITestIDs.mainWindowTitle)
+    return main
   }
 
   /// Closes every app window except the one titled `keepTitle`. The app presents
