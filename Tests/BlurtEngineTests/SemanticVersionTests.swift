@@ -18,21 +18,30 @@ struct SemanticVersionTests {
   }
 
   @Test("orders by numeric components, not lexically")
-  func ordersNumerically() {
-    #expect(SemanticVersion("0.1.9")! < SemanticVersion("0.1.10")!)
-    #expect(SemanticVersion("0.1.30")! < SemanticVersion("0.2.0")!)
-    #expect(SemanticVersion("1.0.0")! < SemanticVersion("2.0.0")!)
+  func ordersNumerically() throws {
+    let v1 = try #require(SemanticVersion("0.1.9"))
+    let v2 = try #require(SemanticVersion("0.1.10"))
+    #expect(v1 < v2)
+    let v3 = try #require(SemanticVersion("0.1.30"))
+    let v4 = try #require(SemanticVersion("0.2.0"))
+    #expect(v3 < v4)
+    let v5 = try #require(SemanticVersion("1.0.0"))
+    let v6 = try #require(SemanticVersion("2.0.0"))
+    #expect(v5 < v6)
   }
 
   @Test("treats missing trailing components as zero")
-  func padsMissingComponents() {
-    #expect(SemanticVersion("1.2") == SemanticVersion("1.2.0"))
-    #expect(!(SemanticVersion("1.2")! < SemanticVersion("1.2.0")!))
+  func padsMissingComponents() throws {
+    let a = try #require(SemanticVersion("1.2"))
+    let b = try #require(SemanticVersion("1.2.0"))
+    #expect(a == b)
+    #expect(!(a < b))
   }
 
   @Test("equal versions are not less than each other")
-  func equalNotLess() {
-    #expect(!(SemanticVersion("0.1.30")! < SemanticVersion("0.1.30")!))
+  func equalNotLess() throws {
+    let v = try #require(SemanticVersion("0.1.30"))
+    #expect(!(v < v))
   }
 
   @Test("rejects malformed strings")
