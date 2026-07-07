@@ -1,28 +1,72 @@
 import BlurtEngine
 import SwiftUI
 
-/// Root view of the `Settings` scene: change the AssemblyAI API key or the
-/// dictation shortcut. Reuses the same section views the wizard's setup step
-/// uses, so the two stay in sync.
+/// Root view of the `Settings` scene. A `TabView` at the root of a `Settings`
+/// scene renders as the standard macOS preferences window — a segmented toolbar
+/// of panes (General / Advanced), each sized to its own content. This is the
+/// HIG-native answer to a settings screen that outgrows one pane: keeping every
+/// pane short means the window never has to grow past a small display (a single
+/// stacked `Form` did, stranding the bottom section off-screen). Each pane
+/// reuses the same section views the wizard's setup step uses, so the two stay
+/// in sync.
 struct SettingsWindowRoot: View {
   var appDelegate: AppDelegate
 
+  private enum Tab: Hashable { case general, advanced }
+
+  /// Drives the selected pane from `@State` (not the OS's persisted preference
+  /// tab), so the window always opens on General. Without an explicit binding
+  /// macOS restores the last-used pane across launches, which retitles the
+  /// window ("General" → "Advanced") and made the settings window unfindable in
+  /// UI tests from one run to the next.
+  @State private var tab: Tab = .general
+
   var body: some View {
     if let coordinator = appDelegate.coordinator {
-      Form {
-        APIKeyStepView(apiKey: coordinator.apiKey)
-        HotkeyStepView(coordinator: coordinator)
-        SoundStepView(coordinator: coordinator)
-        KeyTermsStepView()
-        DeveloperSection()
+      TabView(selection: $tab) {
+        GeneralSettingsTab(coordinator: coordinator)
+          .tabItem { Label("General", systemImage: "gearshape") }
+          .tag(Tab.general)
+        AdvancedSettingsTab()
+          .tabItem { Label("Advanced", systemImage: "gearshape.2") }
+          .tag(Tab.advanced)
       }
-      .formStyle(.grouped)
-      .scrollDisabled(true)
       .frame(width: 480)
-      .fixedSize(horizontal: false, vertical: true)
     } else {
       Color.clear.frame(width: 480, height: 240)
     }
+  }
+}
+
+/// The everyday setup a user changes: the AssemblyAI key, the dictation
+/// shortcut, the cue sound, and the transcription key terms.
+private struct GeneralSettingsTab: View {
+  let coordinator: AppCoordinator
+
+  var body: some View {
+    Form {
+      APIKeyStepView(apiKey: coordinator.apiKey)
+      HotkeyStepView(coordinator: coordinator)
+      SoundStepView(coordinator: coordinator)
+      KeyTermsStepView()
+    }
+    .formStyle(.grouped)
+    .scrollDisabled(true)
+    .fixedSize(horizontal: false, vertical: true)
+  }
+}
+
+/// The occasional stuff: the developer-mode log toggle. Kept out of General so
+/// the common pane stays short. (Updates are checked from the app menu and the
+/// menu-bar item — see `BlurtCommands` / `MenuBarContent` — not from here.)
+private struct AdvancedSettingsTab: View {
+  var body: some View {
+    Form {
+      DeveloperSection()
+    }
+    .formStyle(.grouped)
+    .scrollDisabled(true)
+    .fixedSize(horizontal: false, vertical: true)
   }
 }
 
@@ -45,7 +89,7 @@ private struct DeveloperSection: View {
     } header: {
       Text("Developer")
     } footer: {
-      Text("Logs each dictation (raw and polished text, prompt, app context) to \(Self.logPath).")
+      Text("Logs each dictation to \(Self.logPath).")
         .textSelection(.enabled)
     }
   }

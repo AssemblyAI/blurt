@@ -75,7 +75,7 @@ struct APIKeyStepView: View {
   /// permission rows, with a "Change" button that re-opens the editable field.
   /// Mirrors `PermissionsStepView.permissionRow` so a done step looks done.
   private var savedRow: some View {
-    LabeledContent {
+    SettingRow(title: "API Key", systemImage: "key.fill") {
       HStack(spacing: 12) {
         HStack(spacing: 4) {
           Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
@@ -87,8 +87,6 @@ struct APIKeyStepView: View {
         }
         .accessibilityIdentifier(UITestIdentifiers.apiKeyChange)
       }
-    } label: {
-      Label("API Key", systemImage: "key.fill")
     }
   }
 

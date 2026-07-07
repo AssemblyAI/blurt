@@ -107,7 +107,7 @@ struct PermissionsStepView: View {
     granted: Bool,
     action: @escaping () -> Void
   ) -> some View {
-    LabeledContent {
+    SettingRow(title: info.label, systemImage: info.symbol) {
       if granted {
         HStack(spacing: 4) {
           Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
@@ -116,8 +116,6 @@ struct PermissionsStepView: View {
       } else {
         Button(info.buttonLabel, action: action)
       }
-    } label: {
-      Label(info.label, systemImage: info.symbol)
     }
   }
 }

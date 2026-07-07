@@ -43,6 +43,36 @@ MIN_COVERAGE=80
 
 export OS_ACTIVITY_MODE=disable
 
+# No-external-dependencies guard. The engine is dependency-free by rule and the
+# app carries only the local BlurtEngine package (see AGENTS.md). A third-party
+# dependency is the single biggest supply-chain risk, so fail the moment one is
+# declared — in the engine's Package.swift or the app's project.yml. Extend
+# BlurtEngine rather than adding a package. Pure text parsing, so it runs in
+# both full and --portable modes and fails fast before the expensive steps.
+echo "==> no-external-dependencies guard"
+cd "$REPO_ROOT"
+DEP_VIOLATION=0
+
+# Engine: any SPM package dependency (.package(...)) is disallowed outright.
+if grep -nE '\.package\(' Package.swift >/dev/null 2>&1; then
+  echo "error: Package.swift declares an SPM dependency — the engine must stay dependency-free:" >&2
+  grep -nE '\.package\(' Package.swift >&2
+  DEP_VIOLATION=1
+fi
+
+# App: only the local BlurtEngine (path:) package is allowed. A remote package
+# is declared with a url:/github: key inside project.yml's `packages:` block, so
+# extract that block and reject any such key.
+APP_PACKAGES="$(awk '/^packages:/{f=1;next} /^[^[:space:]]/{f=0} f' "$APP_DIR/project.yml")"
+if printf '%s\n' "$APP_PACKAGES" | grep -nE '(^|[[:space:]])(url|github):' >/dev/null 2>&1; then
+  echo "error: App/Blurt/project.yml declares a remote SPM package — the app must carry only the local BlurtEngine:" >&2
+  printf '%s\n' "$APP_PACKAGES" | grep -nE '(^|[[:space:]])(url|github):' >&2
+  DEP_VIOLATION=1
+fi
+
+[ "$DEP_VIOLATION" -eq 0 ] || exit 1
+echo "no external dependencies (engine dependency-free; app carries only local BlurtEngine)"
+
 if [ "$PORTABLE" -eq 1 ]; then
   echo "==> portable mode: skipping swift test, coverage gate, sanitizers, xcodegen"
   echo "    drift check, app build, UI tests, leaks, swiftlint analyze, periphery"

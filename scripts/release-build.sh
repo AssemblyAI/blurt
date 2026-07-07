@@ -28,6 +28,66 @@ done
 # shellcheck source=scripts/release-lib.sh
 source "$REPO_ROOT/scripts/release-lib.sh"
 
+# --- Dedicated signing keychain (normally locked) -----------------------------
+# The Developer ID signing key lives in its own keychain that stays LOCKED at
+# rest instead of in the login keychain. Unlock it for the duration of the build
+# and re-lock on exit (see the EXIT trap wired up after the identity check). If
+# that keychain isn't present — a machine that still keeps the key in login, or
+# mid-migration — fall through to whatever's already on the search list so
+# releases keep working.
+SIGNING_KEYCHAIN="${BLURT_SIGNING_KEYCHAIN:-$HOME/Library/Keychains/blurt-signing.keychain-db}"
+SIGNING_KEYCHAIN_UNLOCKED=0
+
+# Resolve the keychain password: CI/env first, then a generic-password item in
+# the login keychain, then an interactive prompt for a local release.
+signing_keychain_password() {
+  if [ -n "${BLURT_SIGNING_KEYCHAIN_PASSWORD:-}" ]; then
+    printf '%s' "$BLURT_SIGNING_KEYCHAIN_PASSWORD"
+    return 0
+  fi
+  if security find-generic-password -w -s blurt-signing-keychain >/dev/null 2>&1; then
+    security find-generic-password -w -s blurt-signing-keychain
+    return 0
+  fi
+  local pw
+  read -rsp "Password for signing keychain ($SIGNING_KEYCHAIN): " pw </dev/tty \
+    || die "no signing keychain password provided (set BLURT_SIGNING_KEYCHAIN_PASSWORD)"
+  printf '\n' >&2
+  printf '%s' "$pw"
+}
+
+unlock_signing_keychain() {
+  if [ ! -f "$SIGNING_KEYCHAIN" ]; then
+    info "no dedicated signing keychain at $SIGNING_KEYCHAIN — using existing search list"
+    return 0
+  fi
+  # Ensure it's on the user search list without dropping the existing entries
+  # (a bare `list-keychains -s <one>` would replace login + System).
+  local -a search=()
+  local k present=0
+  while IFS= read -r k; do
+    k="${k#"${k%%[![:space:]]*}"}" # ltrim
+    k="${k%\"}"
+    k="${k#\"}" # strip surrounding quotes
+    [ -n "$k" ] && search+=("$k")
+  done < <(security list-keychains -d user)
+  for k in "${search[@]}"; do [ "$k" = "$SIGNING_KEYCHAIN" ] && present=1; done
+  [ "$present" -eq 1 ] || security list-keychains -d user -s "$SIGNING_KEYCHAIN" "${search[@]}"
+
+  local pw
+  pw="$(signing_keychain_password)"
+  security unlock-keychain -p "$pw" "$SIGNING_KEYCHAIN" \
+    || die "failed to unlock signing keychain $SIGNING_KEYCHAIN"
+  SIGNING_KEYCHAIN_UNLOCKED=1
+  info "unlocked dedicated signing keychain: $SIGNING_KEYCHAIN"
+}
+
+lock_signing_keychain() {
+  [ "$SIGNING_KEYCHAIN_UNLOCKED" -eq 1 ] || return 0
+  security lock-keychain "$SIGNING_KEYCHAIN" >/dev/null 2>&1 || true
+  SIGNING_KEYCHAIN_UNLOCKED=0
+}
+
 # Submit an artifact (app zip or DMG) to Apple's notary service, wait for the
 # result, and die on anything but Accepted. Writes per-artifact result + log
 # plists into BUILD_ROOT (keyed by $2) so failures stay inspectable. Sets the
@@ -106,17 +166,30 @@ done
 xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
   || die "notarytool profile '$NOTARY_PROFILE' not found. Run: xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <you@example.com> --team-id $TEAM_ID --password <app-specific-password>"
 
+unlock_signing_keychain
+# Re-lock the dedicated signing keychain no matter how we exit (success, die, or
+# a mid-build failure). Lives here rather than in a dedicated cleanup because the
+# only other EXIT trap (the DMG mount, below) is set up much later.
+trap lock_signing_keychain EXIT
+
 identity_listed "$IDENTITY" <<<"$(security find-identity -v -p codesigning)" \
   || die "Developer ID identity $IDENTITY not in keychain (check: security find-identity -v -p codesigning). Wrong Mac, or the signing key is missing."
 
 require_clean_tree "building a release artifact"
 
 step "Verify pinned dependencies"
+# The app currently carries no external SPM packages (only the local
+# BlurtEngine), so Xcode generates no Package.resolved. If a dependency is ever
+# added, this gate ensures its pins are committed and reviewed rather than
+# floating. Absent a Package.resolved there is nothing to pin, so pass.
 RESOLVED="$APP_DIR/Blurt.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
-[ -f "$RESOLVED" ] || die "Package.resolved not found at $RESOLVED"
-git -C "$REPO_ROOT" ls-files --error-unmatch "$RESOLVED" >/dev/null 2>&1 \
-  || die "Package.resolved is not tracked by git — dependency pins would be unreviewed"
-info "dependency pins tracked: $RESOLVED"
+if [ -f "$RESOLVED" ]; then
+  git -C "$REPO_ROOT" ls-files --error-unmatch "$RESOLVED" >/dev/null 2>&1 \
+    || die "Package.resolved exists but is not tracked by git — dependency pins would be unreviewed"
+  info "dependency pins tracked: $RESOLVED"
+else
+  info "no external SPM dependencies (no Package.resolved) — nothing to pin"
+fi
 
 step "Read version"
 VERSION="$(require_project_version "$APP_DIR/project.yml")"
@@ -274,7 +347,7 @@ step "Mount + verify DMG contents"
 # we don't have to parse hdiutil's output (which reports /private/tmp/...
 # rather than /tmp/... on macOS).
 MOUNT_POINT="$(mktemp -d /tmp/blurt-dmg.XXXXXX)"
-trap 'hdiutil detach "$MOUNT_POINT" >/dev/null 2>&1 || true; rmdir "$MOUNT_POINT" >/dev/null 2>&1 || true' EXIT
+trap 'hdiutil detach "$MOUNT_POINT" >/dev/null 2>&1 || true; rmdir "$MOUNT_POINT" >/dev/null 2>&1 || true; lock_signing_keychain' EXIT
 hdiutil attach -nobrowse -noverify -mountpoint "$MOUNT_POINT" "$DMG" >/dev/null
 MOUNTED_APP="$MOUNT_POINT/Blurt.app"
 [ -d "$MOUNTED_APP" ] || die "mounted DMG missing Blurt.app"
@@ -284,7 +357,7 @@ MOUNTED_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString
 [ "$MOUNTED_VERSION" = "$VERSION" ] || die "version mismatch inside DMG: expected $VERSION, got $MOUNTED_VERSION"
 hdiutil detach "$MOUNT_POINT" >/dev/null
 rmdir "$MOUNT_POINT" >/dev/null 2>&1 || true
-trap - EXIT
+trap lock_signing_keychain EXIT
 info "dmg contents verified (Blurt.app $MOUNTED_VERSION, signed + stapled)"
 
 step "Provenance"
