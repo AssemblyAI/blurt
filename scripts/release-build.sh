@@ -112,11 +112,18 @@ identity_listed "$IDENTITY" <<<"$(security find-identity -v -p codesigning)" \
 require_clean_tree "building a release artifact"
 
 step "Verify pinned dependencies"
+# The app currently carries no external SPM packages (only the local
+# BlurtEngine), so Xcode generates no Package.resolved. If a dependency is ever
+# added, this gate ensures its pins are committed and reviewed rather than
+# floating. Absent a Package.resolved there is nothing to pin, so pass.
 RESOLVED="$APP_DIR/Blurt.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
-[ -f "$RESOLVED" ] || die "Package.resolved not found at $RESOLVED"
-git -C "$REPO_ROOT" ls-files --error-unmatch "$RESOLVED" >/dev/null 2>&1 \
-  || die "Package.resolved is not tracked by git — dependency pins would be unreviewed"
-info "dependency pins tracked: $RESOLVED"
+if [ -f "$RESOLVED" ]; then
+  git -C "$REPO_ROOT" ls-files --error-unmatch "$RESOLVED" >/dev/null 2>&1 \
+    || die "Package.resolved exists but is not tracked by git — dependency pins would be unreviewed"
+  info "dependency pins tracked: $RESOLVED"
+else
+  info "no external SPM dependencies (no Package.resolved) — nothing to pin"
+fi
 
 step "Read version"
 VERSION="$(require_project_version "$APP_DIR/project.yml")"
