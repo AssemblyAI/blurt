@@ -9,7 +9,7 @@ import Synchronization
 /// keychain-access-group entitlement is required.
 public enum APIKeyStore {
   /// Where users go to create / copy their AssemblyAI API key.
-  public static let dashboardURL = URL(string: "https://www.assemblyai.com/dashboard/api-keys")!
+  public static let dashboardURL = URL(staticString: "https://www.assemblyai.com/dashboard/api-keys")
 
   /// The production keychain item. The service is the (lowercase) bundle id, to
   /// match the macOS convention. Tests exercise `KeychainStore` directly with an

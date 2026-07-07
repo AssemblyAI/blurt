@@ -13,10 +13,10 @@ struct SoundPackStoreTests {
   }
 
   @Test("persists and reads back a chosen pack")
-  func roundTrips() {
+  func roundTrips() throws {
     let defaults = freshDefaults()
     let store = SoundPackStore(defaults: defaults)
-    let clav = SoundPack.find(id: "rom1a-19")!
+    let clav = try #require(SoundPack.find(id: "rom1a-19"))
     store.soundPack = clav
     #expect(SoundPackStore(defaults: defaults).soundPack == clav)
   }

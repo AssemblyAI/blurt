@@ -26,7 +26,7 @@ public struct APIKeyValidator: Sendable {
   private let transport: any HTTPTransport
 
   public init(
-    baseURL: URL = URL(string: "https://api.assemblyai.com")!,
+    baseURL: URL = URL(staticString: "https://api.assemblyai.com"),
     transport: any HTTPTransport = URLSession.shared
   ) {
     self.baseURL = baseURL

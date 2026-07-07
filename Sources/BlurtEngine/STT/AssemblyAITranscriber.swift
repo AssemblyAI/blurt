@@ -25,7 +25,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 
   public init(
     apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.get() },
-    baseURL: URL = URL(string: "https://sync.assemblyai.com")!,
+    baseURL: URL = URL(staticString: "https://sync.assemblyai.com"),
     transport: any HTTPTransport = URLSession.shared
   ) {
     self.apiKeyProvider = apiKeyProvider
