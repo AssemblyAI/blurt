@@ -8,7 +8,12 @@ private enum OverlayBrandPalette {
 
 struct OverlayView: View {
   let state: OverlayUIState
-  let level: Float
+  // The live mic level is *not* taken as a value here: reading it in this body
+  // would rebuild the whole pill (glass, shadow, tint, REC tag) on every ~30 Hz
+  // meter tick. Instead the bridge is forwarded untouched and only the leaf bar
+  // view (`WaveformBarsLevel`) reads `bridge.level`, so @Observable confines the
+  // per-tick invalidation to the bars — the rest of the pill stays stable.
+  let bridge: OverlayBridge
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -90,7 +95,7 @@ struct OverlayView: View {
       // pill (magenta tag + bars). The bars fill the width left of the tag.
       HStack(spacing: 8) {
         RecordingTag()
-        WaveformBars(level: level, animated: !reduceMotion, color: OverlayBrandPalette.cyan)
+        WaveformBarsLevel(bridge: bridge, animated: !reduceMotion, color: OverlayBrandPalette.cyan)
       }
       .padding(.horizontal, 12)
       .transition(.opacity)
@@ -235,6 +240,21 @@ private struct RecordingTag: View {
   }
 }
 
+/// The only view that reads `bridge.level`, so @Observable scopes the ~30 Hz
+/// meter invalidation to this leaf (and its `WaveformBars` child) instead of the
+/// enclosing `OverlayView`. `WaveformBars` stays a pure value view — easy to
+/// reason about and drive from a fixed level — with the observation isolated
+/// here. See `OverlayView.bridge` for why the level isn't threaded as a value.
+private struct WaveformBarsLevel: View {
+  let bridge: OverlayBridge
+  let animated: Bool
+  let color: Color
+
+  var body: some View {
+    WaveformBars(level: bridge.level, animated: animated, color: color)
+  }
+}
+
 /// A row of bars filling the whole pill that track the *current* mic level — no
 /// scrolling history. Bars span the full width (count derived from the available
 /// width) and grow from the vertical center; a symmetric envelope keeps the
@@ -272,11 +292,11 @@ private struct WaveformBars: View {
       Group {
         if animated {
           // Continuous clock so the idle breathing is smooth and never depends
-          // on a one-shot state toggle. Capped at ~30 Hz to match the mic meter
+          // on a one-shot state toggle. Capped at ~20 Hz to match the mic meter
           // (MicCapture.meterInterval) — the level feed and the slow breathing
           // sine can't show anything faster, so rendering at the display's full
           // refresh rate (up to 120 Hz on ProMotion) would only burn energy.
-          TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+          TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { timeline in
             row(count: count, maxBarHeight: maxBarHeight, time: timeline.date.timeIntervalSinceReferenceDate)
           }
         } else {

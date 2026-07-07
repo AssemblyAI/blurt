@@ -15,6 +15,24 @@ import Observation
 final class WizardController {
   private(set) var permissions: PermissionStatus
 
+  /// Whether the app is fully configured (all permissions + a saved key). Drives
+  /// the main window's wizard-vs-ready routing and, off its transitions, the
+  /// overlay's show/hide.
+  ///
+  /// Stored (not computed) on purpose. `MainWindowRoot` observes this to route
+  /// between the wizard and ready screens; if it read a value computed live over
+  /// `permissions` + `hasAPIKey`, it would re-run — rebuilding the whole grouped
+  /// setup `Form` — on *every* permission poll tick or key edit, even when
+  /// readiness didn't actually flip (e.g. mic granted while Accessibility is still
+  /// missing). Recomputing into this stored bool only on a genuine change (see
+  /// `syncReadiness`) confines that rebuild to the real wizard→ready transition.
+  /// `PermissionsStepView` still observes `permissions` directly for its live rows.
+  ///
+  /// It doubles as the last-seen readiness edge: overlay visibility is driven by
+  /// *transitions* (shown when the app becomes configured, hidden when it stops),
+  /// so a steady-state poll never stomps the live recording pill back to idle.
+  private(set) var isReady = false
+
   @ObservationIgnored private weak var coordinator: AppCoordinator?
   @ObservationIgnored private var pollTask: Task<Void, Never>?
   @ObservationIgnored private var keyObservationTask: Task<Void, Never>?
@@ -22,17 +40,14 @@ final class WizardController {
   /// previously-configured app loses a requirement (e.g. a revoked permission) so
   /// the user is taken back to onboarding instead of left with a dead overlay.
   @ObservationIgnored private let onNeedsForeground: @MainActor () -> Void
-  /// Last-seen readiness, so overlay visibility is driven by *transitions*: the
-  /// pill is shown when the app becomes configured and hidden when it stops being
-  /// configured. Tracking the edge (rather than calling show on every poll tick)
-  /// keeps a steady-state poll from stomping the live recording pill back to idle.
-  @ObservationIgnored private var wasReady = false
 
   init(coordinator: AppCoordinator, onNeedsForeground: @escaping @MainActor () -> Void) {
     self.coordinator = coordinator
     self.onNeedsForeground = onNeedsForeground
     self.permissions = PermissionsChecker.check()
-    syncOverlay()
+    // Flips `isReady` to its true value (and shows the overlay if the app is
+    // already configured), starting from the `false` default above.
+    syncReadiness()
     // React the moment the API key changes, rather than waiting up to a second
     // for the next permission poll, so the overlay appears as soon as the last
     // missing piece is supplied (or hides the instant one is removed).
@@ -42,12 +57,13 @@ final class WizardController {
     startPolling()
   }
 
-  /// Whether the app is fully configured (all permissions + a saved key). Drives
-  /// the main window's wizard-vs-ready routing. The dictation shortcut is *not*
-  /// part of this gate — it has a default binding and is rebound in Settings, so
-  /// a cleared shortcut surfaces as a hint on the ready screen rather than
-  /// trapping the user in the wizard.
-  var isReady: Bool {
+  /// The live readiness value, computed from the current inputs. Private so only
+  /// `syncReadiness` touches the raw `permissions`/`hasAPIKey` — that keeps their
+  /// observable dependency off view bodies (the whole point of the stored
+  /// `isReady`). The dictation shortcut is *not* part of this gate — it has a
+  /// default binding and is rebound in Settings, so a cleared shortcut surfaces as
+  /// a hint on the ready screen rather than trapping the user in the wizard.
+  private var computedReadiness: Bool {
     SetupStatus.isReady(
       permissions: permissions,
       hasAPIKey: coordinator?.hasAPIKey ?? false
@@ -66,7 +82,7 @@ final class WizardController {
     let hasAPIKey = Observations { coordinator.hasAPIKey }
     keyObservationTask = Task { @MainActor [weak self] in
       for await _ in hasAPIKey {
-        self?.syncOverlay()
+        self?.syncReadiness()
       }
     }
   }
@@ -101,19 +117,21 @@ final class WizardController {
     if perms != permissions {
       permissions = perms
     }
-    syncOverlay()
+    syncReadiness()
     if revoked { onNeedsForeground() }
   }
 
-  /// Drives overlay visibility from readiness transitions: show the pill when the
-  /// app becomes fully configured, hide it when it stops being configured. Acting
-  /// only on the edge keeps a steady-state poll tick from re-showing the idle
-  /// pill over a live recording. (Pulling the user back into onboarding on a
-  /// revocation is handled in `refreshPermissions`, where the cause is known.)
-  private func syncOverlay() {
-    let ready = isReady
-    guard ready != wasReady else { return }
-    wasReady = ready
+  /// Recomputes readiness and, only on a genuine change, updates the observable
+  /// `isReady` and drives overlay visibility off the transition. Acting solely on
+  /// the edge keeps a steady-state poll tick from re-showing the idle pill over a
+  /// live recording — and, because `isReady` is what `MainWindowRoot` observes,
+  /// keeps the setup `Form` from rebuilding on non-boundary permission/key
+  /// changes. (Pulling the user back into onboarding on a revocation is handled in
+  /// `refreshPermissions`, where the cause is known.)
+  private func syncReadiness() {
+    let ready = computedReadiness
+    guard ready != isReady else { return }
+    isReady = ready
     if ready {
       coordinator?.showOverlay()
     } else {

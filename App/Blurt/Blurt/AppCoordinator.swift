@@ -107,6 +107,12 @@ final class AppCoordinator {
       let mic = mic
       Task { await mic.warmUp() }
     }
+    // Warm the API-key memo off the main actor now, alongside the mic, so the
+    // first press's readiness check (`hasKey`, at the top of performPress before
+    // mic.start) is served from memory instead of paying a cold Keychain read on
+    // the press→recording latency path. Idempotent: a later save refreshes it.
+    let keyStore = keyStore
+    Task.detached { _ = keyStore.get() }
     // Note: no initial overlay render. The overlay pill stays hidden until the
     // app is fully configured — `WizardController` calls `showOverlay()` on the
     // transition into "ready" (and `hideOverlay()` if it later breaks).

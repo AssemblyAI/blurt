@@ -37,12 +37,15 @@ public actor MicCapture: MicCaptureProtocol {
   private var activeRecorder: AVAudioRecorder?
   /// Polls the active recorder's meter and feeds `levels` while recording.
   private var meterTask: Task<Void, Never>?
-  /// How often the meter is sampled for the overlay. ~30 Hz is visually smooth
-  /// and far cheaper than the per-buffer tap it replaces.
-  private static let meterInterval = Duration.milliseconds(33)
+  /// How often the meter is sampled for the overlay. 20 Hz reads as smooth for a
+  /// voice-level meter while cutting the per-tick work (recorder poll + stream
+  /// yield, and the SwiftUI bar redraw it drives) by a third versus 30 Hz — the
+  /// bars' `TimelineView` cap is matched to it so it never redraws faster than
+  /// the level actually changes.
+  private static let meterInterval = Duration.milliseconds(50)
 
   public init() {
-    // The continuation is fed from a ~30 Hz meter timer; the levels stream is a
+    // The continuation is fed from a ~20 Hz meter timer; the levels stream is a
     // meter, not the captured signal — the consumer only renders the most recent
     // value — so cap it at the newest single element.
     let (stream, continuation) = AsyncStream<Float>.makeStream(bufferingPolicy: .bufferingNewest(1))
