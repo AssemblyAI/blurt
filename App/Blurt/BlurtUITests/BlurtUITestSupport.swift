@@ -7,11 +7,15 @@ import XCTest
 // production views and these suites can no longer drift out of sync.
 
 extension UITestIdentifiers {
-  /// The Settings window's title, supplied by the framework for the `Settings`
-  /// scene as "<bundle name> Settings" — the app never declares it in source, so
-  /// only this XCUITest bundle references it (hence a test-bundle-only constant
-  /// rather than one in the shared, app-compiled file).
-  static let settingsWindowTitle = "Blurt Settings"
+  /// The Settings window's title. The `Settings` scene hosts a `TabView`
+  /// (General / Advanced), and macOS titles a preference window after its
+  /// selected pane — so the window opens titled "General" (the first tab), not
+  /// "<bundle name> Settings". Test-bundle-only (the app never declares it).
+  static let settingsWindowTitle = "General"
+
+  /// The label of the Advanced settings pane's tab, where the Updates and
+  /// Developer sections live.
+  static let advancedSettingsTab = "Advanced"
 }
 
 /// Base case that launches Blurt in UI-test mode before each test and tears it
@@ -70,6 +74,21 @@ class BlurtUITestCase: XCTestCase {
       settings.waitForExistence(timeout: timeout),
       "Settings window did not open after ⌘,")
     return settings
+  }
+
+  /// Selects a Settings pane (a `TabView` tab in the preferences toolbar) by its
+  /// visible name. macOS exposes a preference tab as a radio button or a plain
+  /// button depending on the OS build, so try the radio group first and fall
+  /// back to a button.
+  func selectSettingsTab(_ window: XCUIElement, named name: String) {
+    let radio = window.radioButtons[name]
+    if radio.waitForExistence(timeout: 5) {
+      radio.click()
+      return
+    }
+    let button = window.buttons[name]
+    XCTAssertTrue(button.waitForExistence(timeout: 3), "Settings tab '\(name)' not found")
+    button.click()
   }
 
   /// The UI-test harness window (auto-presented at launch in test mode). Closes

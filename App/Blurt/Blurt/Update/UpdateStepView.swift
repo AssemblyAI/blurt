@@ -1,70 +1,28 @@
 import SwiftUI
 
-/// The Settings "Updates" section — one stable row modeled on macOS Software
-/// Update: a status label leads, the action button trails. The button is never
-/// removed (a spinner appears beside it while checking), so the row — and the
-/// window that fixed-sizes to it — keeps a constant height across states rather
-/// than collapsing mid-check. The check result reads inline in the row ("Blurt X
-/// is up to date" / "Blurt X is available" / a recoverable error), not in a
-/// footer. When an update exists the button becomes a prominent "Download Blurt
-/// X.Y.Z" that opens the release DMG in the browser. Replaces the old
-/// launch-time self-updater.
+/// The Settings "Updates" section: the running version and a "Check for Updates"
+/// button that runs the check and reports the result in a modal (see
+/// `UpdateCheckModel`). The same check is also available from the
+/// "Check for Updates…" app-menu command; both share one `UpdateCheckModel`.
 struct UpdateStepView: View {
-  @State private var model = UpdateCheckModel()
+  /// Shared with the menu command (owned by `AppDelegate`), so a check triggered
+  /// from either place runs through the same controller.
+  let model: UpdateCheckModel
 
   var body: some View {
     Section {
-      LabeledContent {
-        HStack(spacing: 8) {
-          if model.state.isChecking {
-            ProgressView().controlSize(.small)
-          }
-          actionButton
+      // Plain HStack (default `.center` vertical alignment) so the button sits
+      // centered against the version text — matches the other settings rows.
+      HStack {
+        if let version = model.currentVersionText {
+          Text("Blurt \(version)")
         }
-      } label: {
-        statusLabel
+        Spacer(minLength: 12)
+        Button("Check for Updates") { model.checkForUpdates() }
+          .accessibilityIdentifier(UITestIdentifiers.updateCheck)
       }
     } header: {
       Text("Updates")
-    }
-  }
-
-  /// Trailing control: "Download Blurt X.Y.Z" (prominent) when an update is
-  /// available, otherwise "Check for Updates" — disabled while a check runs so
-  /// the row stays put and the check can't be re-fired mid-flight.
-  @ViewBuilder private var actionButton: some View {
-    switch model.state {
-    case .available(let version, _):
-      Button("Download Blurt \(version)") { model.download() }
-        .buttonStyle(.glassProminent)
-        .accessibilityIdentifier(UITestIdentifiers.updateDownload)
-    default:
-      Button("Check for Updates") {
-        Task { await model.check() }
-      }
-      .disabled(model.state.isChecking)
-      .accessibilityIdentifier(UITestIdentifiers.updateCheck)
-    }
-  }
-
-  /// Leading status text — the resting installed version, the in-flight note,
-  /// or the check outcome. A recoverable failure reads in red (no caution glyph,
-  /// which would signal a critical/destructive state rather than "try again").
-  @ViewBuilder private var statusLabel: some View {
-    switch model.state {
-    case .idle:
-      if let current = model.currentVersionText {
-        Text("Blurt \(current)")
-      }
-    case .checking:
-      Text("Checking for updates…").foregroundStyle(.secondary)
-    case .upToDate(let version):
-      Text("Blurt \(version) is up to date")
-    case .available(let version, _):
-      Text("Blurt \(version) is available")
-    case .failed:
-      Text("Couldn't check for updates. Check your connection and try again.")
-        .foregroundStyle(.red)
     }
   }
 }

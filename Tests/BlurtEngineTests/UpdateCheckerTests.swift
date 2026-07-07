@@ -5,15 +5,17 @@ import Testing
 
 @Suite("UpdateChecker")
 struct UpdateCheckerTests {
-  /// A latest-release payload shaped like GitHub's, pinning the release
-  /// pipeline's `Blurt-<version>.dmg` asset-naming convention.
-  private func releaseJSON(tag: String, assetName: String = "Blurt-9.9.9.dmg") -> Data {
+  /// A latest-release payload shaped like GitHub's. A non-`.dmg` asset (the
+  /// dSYM zip) comes first so the tests pin that `dmgAsset` skips it and finds
+  /// the DMG. The pipeline publishes the image under both `Blurt.dmg` and
+  /// `Blurt-<version>.dmg`; the fixture uses one representative `.dmg`.
+  private func releaseJSON(tag: String, assetName: String = "Blurt.dmg") -> Data {
     Data(
       """
       {
         "tag_name": "\(tag)",
         "assets": [
-          { "name": "SHA256SUMS", "browser_download_url": "https://example.com/SHA256SUMS" },
+          { "name": "Blurt.app.dSYM.zip", "browser_download_url": "https://example.com/Blurt.app.dSYM.zip" },
           { "name": "\(assetName)", "browser_download_url": "https://example.com/\(assetName)" }
         ]
       }
@@ -30,7 +32,7 @@ struct UpdateCheckerTests {
     let current = try #require(SemanticVersion("0.1.30"))
     let result = try await checker.check(current: current)
     let expectedVersion = try #require(SemanticVersion("0.2.0"))
-    let expectedURL = try #require(URL(string: "https://example.com/Blurt-9.9.9.dmg"))
+    let expectedURL = try #require(URL(string: "https://example.com/Blurt.dmg"))
     #expect(result == .available(version: expectedVersion, dmgURL: expectedURL))
   }
 

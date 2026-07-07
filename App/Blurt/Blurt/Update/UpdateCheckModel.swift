@@ -1,82 +1,124 @@
 import AppKit
 import BlurtEngine
 import OSLog
-import Observation
 
-/// Drives the Settings "Check for Update" button: no in-place install and no
-/// relaunch — a successful check either reports the app is current or hands
-/// back a DMG URL the user opens in the browser. All failures collapse to
-/// `.failed` (one inline caption); the user just clicks again.
+/// Runs a user-initiated update check and reports the result in a modal alert
+/// (Sparkle-style). Triggered from either the Settings "Check for Updates"
+/// button or the "Check for Updates…" app-menu command — a single shared
+/// instance backs both (owned by `AppDelegate`). No in-place install: on an
+/// available update the alert offers **Download** (opens the release DMG in the
+/// browser) or **Later**.
 @MainActor
-@Observable
 final class UpdateCheckModel {
-  enum State {
-    case idle
-    case checking
-    case upToDate(String)
-    case available(version: String, dmgURL: URL)
-    case failed
-
-    /// True only while a check is in flight — the view keeps the button mounted
-    /// but disabled and shows a spinner beside it (so the row height, and the
-    /// window that fixed-sizes to it, stay constant).
-    var isChecking: Bool {
-      if case .checking = self { return true }
-      return false
-    }
-  }
-
-  private(set) var state: State = .idle
-
-  /// The running app's version (e.g. `0.1.30`), for the row's resting status
-  /// label. Nil only when the bundle version couldn't be parsed — the same
-  /// condition that makes a check fail.
-  var currentVersionText: String? { currentVersion?.description }
-
   private let checker: UpdateChecker
   private let currentVersion: SemanticVersion?
   private let openURL: (URL) -> Void
+  private let presentingWindow: () -> NSWindow?
   private let log = Logger(subsystem: BlurtIdentity.subsystem, category: "update")
 
-  /// `currentVersion` and `openURL` are injected (defaulting to the bundle's
-  /// version and `NSWorkspace`) so this stays exercisable without a real bundle
-  /// or a live browser.
+  /// Guards against a second check while one is in flight (double-click, or the
+  /// button and menu both fired), so we never stack two result alerts.
+  private var isChecking = false
+
+  /// `currentVersion`, `openURL`, and `presentingWindow` are injected (with
+  /// sensible production defaults) so this stays exercisable without a real
+  /// bundle, a live browser, or an on-screen window.
   init(
     checker: UpdateChecker = UpdateChecker(),
     currentVersion: SemanticVersion? = UpdateCheckModel.bundleVersion(),
-    openURL: @escaping (URL) -> Void = { _ = NSWorkspace.shared.open($0) }
+    openURL: @escaping (URL) -> Void = { _ = NSWorkspace.shared.open($0) },
+    presentingWindow: @escaping () -> NSWindow? = { NSApp.keyWindow }
   ) {
     self.checker = checker
     self.currentVersion = currentVersion
     self.openURL = openURL
+    self.presentingWindow = presentingWindow
   }
 
-  /// Runs a check and publishes the result. A missing/unparseable bundle
-  /// version can't be compared, so it fails the same as a network error.
-  func check() async {
+  /// The running app's version (e.g. `0.1.30`), shown beside the Settings
+  /// button. Nil only when the bundle version couldn't be parsed.
+  var currentVersionText: String? { currentVersion?.description }
+
+  /// Checks GitHub and reports the result in a modal alert. Safe to call from
+  /// the button and the menu; a check already in flight is ignored.
+  func checkForUpdates() {
+    guard !isChecking else { return }
     guard let currentVersion else {
       log.error("no parseable CFBundleShortVersionString; can't check for updates")
-      state = .failed
+      Task { await presentFailure() }
       return
     }
-    state = .checking
-    do {
-      switch try await checker.check(current: currentVersion) {
-      case .upToDate(let current):
-        state = .upToDate(current.description)
-      case .available(let version, let dmgURL):
-        state = .available(version: version.description, dmgURL: dmgURL)
+    isChecking = true
+    Task {
+      defer { isChecking = false }
+      do {
+        switch try await checker.check(current: currentVersion) {
+        case .upToDate(let current):
+          await presentUpToDate(current: current)
+        case .available(let version, let dmgURL):
+          await presentAvailable(version: version, dmgURL: dmgURL)
+        }
+      } catch {
+        log.error("update check failed: \(error.localizedDescription, privacy: .public)")
+        await presentFailure()
       }
-    } catch {
-      log.error("update check failed: \(error.localizedDescription, privacy: .public)")
-      state = .failed
     }
   }
 
-  /// Opens the release DMG in the browser. No-op unless an update is available.
-  func download() {
-    guard case .available(_, let dmgURL) = state else { return }
-    openURL(dmgURL)
+  /// "You're up to date" — the reassuring result the classic updater shows so a
+  /// user-initiated check always visibly confirms it ran.
+  private func presentUpToDate(current: SemanticVersion) async {
+    let alert = NSAlert()
+    alert.messageText = "You’re up to date"
+    alert.informativeText = "Blurt \(current) is the latest version."
+    alert.addButton(withTitle: "OK")
+    _ = await runAlert(alert)
+  }
+
+  /// "A new version is available" — **Download** (default) opens the release DMG
+  /// in the browser; **Later** dismisses.
+  private func presentAvailable(version: SemanticVersion, dmgURL: URL) async {
+    let alert = NSAlert()
+    alert.messageText = "A new version of Blurt is available"
+    alert.informativeText = availableMessage(newVersion: version)
+    alert.addButton(withTitle: "Download")  // default (first button)
+    alert.addButton(withTitle: "Later")
+    if await runAlert(alert) == .alertFirstButtonReturn {
+      openURL(dmgURL)
+    }
+  }
+
+  /// "Blurt Y is available—you have X." Drops the "you have" clause if the
+  /// current version couldn't be determined (it can't be, here, since a check
+  /// requires it — but kept total for safety).
+  private func availableMessage(newVersion: SemanticVersion) -> String {
+    if let current = currentVersion {
+      return "Blurt \(newVersion) is available—you have \(current). Download it now?"
+    }
+    return "Blurt \(newVersion) is available. Download it now?"
+  }
+
+  /// A recoverable "couldn't check" result (offline, GitHub unreachable, a
+  /// malformed response). The user just tries again.
+  private func presentFailure() async {
+    let alert = NSAlert()
+    alert.alertStyle = .warning
+    alert.messageText = "Couldn’t check for updates"
+    alert.informativeText = "Check your internet connection and try again."
+    alert.addButton(withTitle: "OK")
+    _ = await runAlert(alert)
+  }
+
+  /// Presents `alert` as a sheet on the host window and awaits the choice. A
+  /// sheet keeps the main thread on its run loop, unlike `runModal()`'s nested
+  /// modal loop (reported as an app hang). Falls back to `runModal()` only when
+  /// no window can host a sheet (e.g. the menu command fired with every window
+  /// closed) — a rare spurious hang beats dropping the result.
+  private func runAlert(_ alert: NSAlert) async -> NSApplication.ModalResponse {
+    guard let window = presentingWindow() else { return alert.runModal() }
+    return await withCheckedContinuation { continuation in
+      alert.beginSheetModal(for: window) { continuation.resume(returning: $0) }
+    }
   }
 
   private static func bundleVersion() -> SemanticVersion? {

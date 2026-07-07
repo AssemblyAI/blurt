@@ -23,7 +23,7 @@ struct BlurtApp: App {
     // app so it's frontmost; the Dock/⌘, reopen it once closed.)
     .defaultLaunchBehavior(.presented)
     .commands {
-      BlurtCommands()
+      BlurtCommands(appDelegate: appDelegate)
     }
 
     // Settings scene: change the API key or dictation shortcut. SwiftUI wires

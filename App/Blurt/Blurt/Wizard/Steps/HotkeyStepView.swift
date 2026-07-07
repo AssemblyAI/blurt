@@ -51,17 +51,19 @@ struct PickerSettingRow<Value: Hashable, Options: View>: View {
   @ViewBuilder var options: () -> Options
 
   var body: some View {
-    LabeledContent {
-      // The picker carries its real title (hidden from layout — the visible
-      // label is the `LabeledContent` one) so VoiceOver reads a meaningful
-      // name for the pop-up button rather than an empty string.
+    // A plain HStack (default `.center` vertical alignment) rather than
+    // `LabeledContent`, which baseline-aligns the label to the control and
+    // leaves the pop-up button reading slightly high. Status/label leads, the
+    // control trails via `Spacer`. The picker keeps its own (hidden) title so
+    // VoiceOver still reads a meaningful name for the pop-up button.
+    HStack {
+      Label(title, systemImage: systemImage)
+      Spacer(minLength: 12)
       Picker(title, selection: $selection, content: options)
         .labelsHidden()
         .pickerStyle(.menu)
         .fixedSize()
         .accessibilityIdentifier(accessibilityID)
-    } label: {
-      Label(title, systemImage: systemImage)
     }
   }
 }

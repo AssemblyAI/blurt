@@ -18,6 +18,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private(set) var coordinator: AppCoordinator?
   private(set) var wizardController: WizardController?
 
+  /// Backs both the Settings "Check for Updates" button and the app-menu
+  /// "Check for Updates…" command, so a check from either place runs through the
+  /// same controller and can't stack two result alerts.
+  @ObservationIgnored let updateCheckModel = UpdateCheckModel()
+
   /// Opens a window scene by id. The `openWindow` action lives in SwiftUI, so
   /// `MainWindowRoot` captures it here (in its launch-time `onAppear`) to give
   /// AppKit entry points — notably a Dock click with no open windows — a way to

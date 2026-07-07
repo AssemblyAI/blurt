@@ -86,11 +86,15 @@ final class SettingsUITests: BlurtUITestCase {
   /// Developer mode starts off (the UI-test launch resets persisted settings)
   /// and a click switches it on. Matched by identifier rather than element type
   /// so the test doesn't care whether AppKit exposes the SwiftUI switch as a
-  /// switch or a checkbox.
+  /// switch or a checkbox. The toggle lives on the Advanced pane, so switch to
+  /// that tab first.
   func testDeveloperModeTogglesOn() {
     let settings = openSettingsWindow()
+    selectSettingsTab(settings, named: UITestIdentifiers.advancedSettingsTab)
 
-    let toggle = settings.descendants(matching: .any)
+    // Query the toggle app-wide: selecting the Advanced tab retitles the window,
+    // so a window-scoped proxy captured before the switch would go stale.
+    let toggle = app.descendants(matching: .any)
       .matching(identifier: UITestIdentifiers.developerToggle).firstMatch
     XCTAssertTrue(toggle.waitForExistence(timeout: 10), "Developer mode toggle not found")
     XCTAssertEqual("\(toggle.value ?? "")", "0", "Developer mode should start switched off")
