@@ -25,10 +25,31 @@ disabled_rules:
   - trailing_whitespace
   - opening_brace
   - statement_position
-  # False positive: fires on `override class func` (e.g. URLProtocol overrides in
-  # MockURLProtocol), which CANNOT be rewritten as `static` — a superclass
-  # `class func` is overridable, `static` is not. Rule can't see the `override`.
-  - static_over_final_class
+
+# Zero-tolerance correctness opt-ins (off by default in SwiftLint). The tree is
+# clean of every one of these, and --strict keeps it that way. Constant URLs use
+# URL(staticString:) (URL+StaticString.swift) instead of `URL(string:)!`; tests
+# use `try #require(...)` instead of `!`. NOT enabled: weak_delegate (would
+# false-positive on the strong SwiftUI `appDelegate` properties, which are
+# correct — SwiftUI scenes/views are structs, no retain cycle to break).
+opt_in_rules:
+  - discouraged_optional_collection
+  - empty_count
+  - fatal_error_message
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - unowned_variable_capture
+
+implicitly_unwrapped_optional:
+  # The default mode exempts IUO *properties* (an IBOutlet accommodation).
+  # This repo has no outlets — flag every IUO declaration.
+  mode: all
+
+empty_count:
+  # Only flag `.count` member accesses compared to zero (→ use isEmpty). The
+  # bare-identifier form would false-positive on plain integer tallies named
+  # `count` (e.g. the stream-element counter in MicCaptureProtocolDefaultsTests).
+  only_after_dot: true
 
 # The codebase deliberately uses short, idiomatic names (`p`, `e`, comparator
 # `a`/`b`, `pb` for pasteboard). Don't gate on identifier length.

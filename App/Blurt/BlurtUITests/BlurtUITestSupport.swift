@@ -25,7 +25,11 @@ extension UITestIdentifiers {
 /// Subclasses inherit the isolation, so they don't repeat the annotation.
 @MainActor
 class BlurtUITestCase: XCTestCase {
-  var app: XCUIApplication!
+  // `lazy` (not the classic IUO) keeps the property non-optional: `setUp`
+  // replaces it with a fresh proxy before every test, and the lazy initial
+  // value is evaluated in a @MainActor accessor, which the nonisolated
+  // inherited XCTestCase initializers couldn't do for a stored default.
+  lazy var app = XCUIApplication()
 
   /// Launch arguments a subclass wants added on top of the base `-BlurtUITest`
   /// flag before the app launches in `setUp`. Empty by default; `ReadyViewUITests`
@@ -48,8 +52,7 @@ class BlurtUITestCase: XCTestCase {
   }
 
   override func tearDown() async throws {
-    app?.terminate()
-    app = nil
+    app.terminate()
     try await super.tearDown()
   }
 

@@ -42,12 +42,14 @@ final class FakeHTTPTransport: HTTPTransport, Sendable {
   private func respond(to request: URLRequest) throws -> (Data, URLResponse) {
     if let transportError { throw transportError }
     let (status, body) = responder(request)
-    let response = HTTPURLResponse(
-      url: request.url!,
-      statusCode: status,
-      httpVersion: nil,
-      headerFields: ["Content-Type": "application/json"]
-    )!
+    guard let url = request.url,
+      let response = HTTPURLResponse(
+        url: url,
+        statusCode: status,
+        httpVersion: nil,
+        headerFields: ["Content-Type": "application/json"]
+      )
+    else { throw URLError(.badURL) }
     return (body, response)
   }
 }

@@ -99,10 +99,37 @@ enum FocusCapture {
         == .success,
       let focusedRef
     else { return nil }
-    // CFTypeRef → AXUIElement is a guaranteed CF downcast; `as?` warns
-    // "always succeeds" (an error under -warnings-as-errors), so force-cast.
+    return axElement(focusedRef)
+  }
+
+  // MARK: - Checked CF downcasts
+  //
+  // AX attribute values arrive as CFTypeRef from *other apps'* accessibility
+  // implementations, so a misbehaving app returning the wrong CF type must read
+  // as "nothing readable" (nil), never flow onward mistyped. CF bridging makes
+  // `as?` a compile-time "always succeeds" warning (an error under
+  // -warnings-as-errors), so the runtime check is CFGetTypeID; after it the
+  // force-cast below each guard is provably safe — these two helpers are the
+  // only force_cast sites in the repo. Internal (not private) so the unit tests
+  // can exercise both arms without Accessibility trust.
+
+  /// `ref` as an `AXUIElement`, or `nil` when it's some other CF type.
+  nonisolated static func axElement(_ ref: CFTypeRef) -> AXUIElement? {
+    guard CFGetTypeID(ref) == AXUIElementGetTypeID() else { return nil }
     // swiftlint:disable:next force_cast
-    return (focusedRef as! AXUIElement)
+    return (ref as! AXUIElement)
+  }
+
+  /// `ref` decoded as an `AXValue`-wrapped `CFRange` (the selected-text-range
+  /// payload), or `nil` when it's some other CF type or a non-range `AXValue`
+  /// (`AXValueGetValue` checks the payload type and refuses a mismatch).
+  nonisolated static func axRange(_ ref: CFTypeRef) -> CFRange? {
+    guard CFGetTypeID(ref) == AXValueGetTypeID() else { return nil }
+    // swiftlint:disable:next force_cast
+    let value = ref as! AXValue
+    var range = CFRange()
+    guard AXValueGetValue(value, .cfRange, &range) else { return nil }
+    return range
   }
 
   /// The insertion point (UTF-16 location of the selected range) of `element`,
@@ -114,10 +141,7 @@ enum FocusCapture {
         == .success,
       let rangeRef
     else { return nil }
-    var cfRange = CFRange()
-    // swiftlint:disable:next force_cast
-    guard AXValueGetValue(rangeRef as! AXValue, .cfRange, &cfRange) else { return nil }
-    return cfRange.location
+    return axRange(rangeRef)?.location
   }
 
   /// Up to `maxChars` of text immediately preceding the insertion point, or
@@ -153,22 +177,16 @@ enum FocusCapture {
   private nonisolated static func selectedText(of element: AXUIElement, maxChars: Int) -> String? {
     var rangeRef: CFTypeRef?
     if AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeRef)
-      == .success, let rangeRef
+      == .success, let rangeRef, var selectedRange = axRange(rangeRef), selectedRange.length > 0
     {
-      var selectedRange = CFRange()
-      // swiftlint:disable:next force_cast
-      if AXValueGetValue(rangeRef as! AXValue, .cfRange, &selectedRange),
-        selectedRange.length > 0
-      {
-        selectedRange.length = min(selectedRange.length, maxChars)
-        if let axRange = AXValueCreate(.cfRange, &selectedRange) {
-          var sliceRef: CFTypeRef?
-          if AXUIElementCopyParameterizedAttributeValue(
-            element, kAXStringForRangeParameterizedAttribute as CFString, axRange, &sliceRef)
-            == .success, let slice = sliceRef as? String
-          {
-            return clip(slice.trimmedNonEmpty(), to: maxChars)
-          }
+      selectedRange.length = min(selectedRange.length, maxChars)
+      if let axRange = AXValueCreate(.cfRange, &selectedRange) {
+        var sliceRef: CFTypeRef?
+        if AXUIElementCopyParameterizedAttributeValue(
+          element, kAXStringForRangeParameterizedAttribute as CFString, axRange, &sliceRef)
+          == .success, let slice = sliceRef as? String
+        {
+          return clip(slice.trimmedNonEmpty(), to: maxChars)
         }
       }
     }
@@ -208,8 +226,7 @@ enum FocusCapture {
     guard AXUIElementCopyAttributeValue(element, attribute as CFString, &ref) == .success,
       let ref
     else { return nil }
-    // swiftlint:disable:next force_cast
-    return (ref as! AXUIElement)
+    return axElement(ref)
   }
 
   // MARK: - Editable-target detection (for the injector's "no beep" guard)

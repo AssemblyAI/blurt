@@ -17,8 +17,11 @@ import Observation
 final class AppDelegate: NSObject, NSApplicationDelegate {
   private(set) var coordinator: AppCoordinator?
   private(set) var wizardController: WizardController?
+  // `weak` (not `unowned`) breaks the self → autoUpdater → closure retain cycle
+  // without any lifetime bet: a nil self degrades to the nil-window case
+  // `AutoUpdater` already handles (see `updatePromptHostWindow`).
   @ObservationIgnored private lazy var autoUpdater = AutoUpdater(
-    presentingWindow: { [unowned self] in updatePromptHostWindow() }
+    presentingWindow: { [weak self] in self?.updatePromptHostWindow() }
   )
 
   /// Opens a window scene by id. The `openWindow` action lives in SwiftUI, so

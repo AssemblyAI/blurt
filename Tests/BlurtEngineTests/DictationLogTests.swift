@@ -82,14 +82,14 @@ struct DictationLogTests {
   }
 
   @Test("uses sorted JSON keys for deterministic on-disk format")
-  func sortedKeys() {
+  func sortedKeys() throws {
     let url = makeURL()
     DictationLog.append(raw: "r", polished: "p", to: url, now: Date())
     let line = read(url).split(separator: "\n").first.map(String.init) ?? ""
     // Sorted keys → polished < raw < ts alphabetically.
-    let pol = line.range(of: "\"polished\"")!.lowerBound
-    let raw = line.range(of: "\"raw\"")!.lowerBound
-    let ts = line.range(of: "\"ts\"")!.lowerBound
+    let pol = try #require(line.range(of: "\"polished\"")).lowerBound
+    let raw = try #require(line.range(of: "\"raw\"")).lowerBound
+    let ts = try #require(line.range(of: "\"ts\"")).lowerBound
     #expect(pol < raw && raw < ts)
   }
 

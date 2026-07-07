@@ -83,10 +83,12 @@ struct MicCaptureFormatTests {
     try {
       let file = try AVAudioFile(forWriting: url, settings: settings)
       guard !samples.isEmpty else { return }
-      let buffer = AVAudioPCMBuffer(
-        pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(samples.count))!
+      let buffer = try #require(
+        AVAudioPCMBuffer(
+          pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(samples.count)))
       buffer.frameLength = AVAudioFrameCount(samples.count)
-      for (i, sample) in samples.enumerated() { buffer.floatChannelData![0][i] = sample }
+      let channel = try #require(buffer.floatChannelData)
+      for (i, sample) in samples.enumerated() { channel[0][i] = sample }
       try file.write(from: buffer)
     }()
     return url
