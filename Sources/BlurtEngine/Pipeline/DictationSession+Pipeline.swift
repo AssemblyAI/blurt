@@ -59,9 +59,9 @@ extension DictationSession {
       return
     }
 
-    DictationLog.append(raw: text, polished: text, context: capturedContext)
+    DictationLog.append(transcript: text, context: capturedContext)
     // Record every produced transcript (trimmed for display) in "Recent" before
-    // injection — pasted, copied, and failed-to-paste all count; inject gets raw.
+    // injection — pasted, copied, and failed-to-paste all count.
     onTranscriptDelivered?(trimmed)
     await inject(text)
   }
