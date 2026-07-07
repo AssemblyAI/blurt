@@ -59,7 +59,7 @@ struct OverlayView: View {
       // No `GlassEffectContainer`/`glassEffectID` either: there is exactly one
       // glass element and its capsule never changes shape or presence, so the
       // morph machinery would be inert scaffolding.
-      .glassEffect(.regular.tint(tintColor), in: .capsule)
+      .glassCapsuleCompat(tint: tintColor)
       // Flatten the glass into one layer before shadowing so the drop shadow
       // takes the capsule's rounded alpha, not the rectangular layer bounds
       // (which renders as a boxy halo, most visible on a white backdrop). The

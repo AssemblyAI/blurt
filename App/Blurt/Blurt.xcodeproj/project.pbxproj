@@ -397,6 +397,7 @@
 		E6667E7BA5114B6A77DDF870 /* juno-21-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 0FB3FBD7C42F949C52B09F0C /* juno-21-start.m4a */; };
 		E671758418903491998092D0 /* juno-13-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4830CF6168A7511FE3720746 /* juno-13-stop.m4a */; };
 		E7C5EE7C3C80E6CC19F21603 /* juno-47-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D27DAF2436D272EEF031303B /* juno-47-start.m4a */; };
+		E8AE03AA4DCD807D2BB8D660 /* LiquidGlass.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4B6AC536FED090B4D935619 /* LiquidGlass.swift */; };
 		E8B98438B85C71B0F09EA134 /* rom1b-20-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = B0CB1B169A47290B83AD44C0 /* rom1b-20-stop.m4a */; };
 		E9ED55F4CC9563A006A70173 /* juno-93-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3BE2AAC76DB0FCE662C63EB6 /* juno-93-start.m4a */; };
 		EA4007570210EBA18CA47D59 /* juno-74-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E83BDAC7AB4479E8A12A5613 /* juno-74-start.m4a */; };
@@ -769,6 +770,7 @@
 		C1BD23E2476F46A7BD75BAB9 /* rom1b-31-start.m4a */ = {isa = PBXFileReference; path = "rom1b-31-start.m4a"; sourceTree = "<group>"; };
 		C2CB5D2E464BFD7F8BABE760 /* rom1b-7-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-7-stop.m4a"; sourceTree = "<group>"; };
 		C38C73970E1D1978494F7BAE /* juno-10-start.m4a */ = {isa = PBXFileReference; path = "juno-10-start.m4a"; sourceTree = "<group>"; };
+		C4B6AC536FED090B4D935619 /* LiquidGlass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlass.swift; sourceTree = "<group>"; };
 		C50DFA42CE97C3AF322B12FA /* juno-43-start.m4a */ = {isa = PBXFileReference; path = "juno-43-start.m4a"; sourceTree = "<group>"; };
 		C59092F9220BBE7465068325 /* KeyTermsStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyTermsStepView.swift; sourceTree = "<group>"; };
 		C6EFB0086ED63DB182AFFC8F /* SettingsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsUITests.swift; sourceTree = "<group>"; };
@@ -1388,6 +1390,7 @@
 			isa = PBXGroup;
 			children = (
 				FE2598E3B8BA1D650EEEEF4B /* FloatingPanel.swift */,
+				C4B6AC536FED090B4D935619 /* LiquidGlass.swift */,
 				6B2312DE4BC0F4F070830AD7 /* WindowAccessor.swift */,
 			);
 			path = Shared;
@@ -1984,6 +1987,7 @@
 				B5A7CEA6517E5A1E4D77623F /* FloatingPanel.swift in Sources */,
 				F42E6D4E62345772C5A49A08 /* HotkeyStepView.swift in Sources */,
 				9B7CB19D131F1374FCA0A986 /* KeyTermsStepView.swift in Sources */,
+				E8AE03AA4DCD807D2BB8D660 /* LiquidGlass.swift in Sources */,
 				7F838018EA0ACE7170FC32C4 /* MainWindowRoot.swift in Sources */,
 				AD32046355138298E7FC40D0 /* MenuBarScene.swift in Sources */,
 				9437C292A6D7FE533338073D /* OverlayView.swift in Sources */,
@@ -2092,7 +2096,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -2156,7 +2160,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -2266,7 +2270,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;

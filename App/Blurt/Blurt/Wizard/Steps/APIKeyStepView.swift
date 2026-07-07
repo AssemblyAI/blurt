@@ -146,7 +146,7 @@ struct APIKeyStepView: View {
         .accessibilityIdentifier(UITestIdentifiers.apiKeyCancel)
       }
       Button(actionTitle, action: submit)
-        .buttonStyle(.glassProminent)
+        .glassButtonStyleCompat(prominent: true)
         .keyboardShortcut(.defaultAction)
         .disabled(!canSubmit)
         .accessibilityIdentifier(UITestIdentifiers.apiKeySave)
