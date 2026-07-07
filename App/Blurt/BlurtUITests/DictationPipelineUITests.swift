@@ -29,16 +29,16 @@ final class DictationPipelineUITests: BlurtUITestCase {
   func testHotkeyDrivesRecordTranscribePaste() {
     let harness = harnessWindow()
 
-    harness.buttons[UITestIDs.setKeyButton].click()  // the hotkey honors the key gate
+    harness.buttons[UITestIdentifiers.setKeyButton].click()  // the hotkey honors the key gate
 
-    let status = harness.staticTexts[UITestIDs.statusLabel]
+    let status = harness.staticTexts[UITestIdentifiers.statusLabel]
 
-    harness.buttons[UITestIDs.hotkeyPressButton].click()
+    harness.buttons[UITestIdentifiers.hotkeyPressButton].click()
     waitForLabel(status, equals: "recording", "Hotkey press should drive status to recording")
 
-    harness.buttons[UITestIDs.hotkeyReleaseButton].click()
+    harness.buttons[UITestIdentifiers.hotkeyReleaseButton].click()
 
-    let pasted = harness.staticTexts[UITestIDs.pastedLabel]
+    let pasted = harness.staticTexts[UITestIdentifiers.pastedLabel]
     waitForLabel(
       pasted, equals: Self.cannedTranscript, timeout: 15,
       "Hotkey release should paste the transcript")
@@ -52,16 +52,16 @@ final class DictationPipelineUITests: BlurtUITestCase {
   func testStartStopButtonsDriveRecordTranscribePaste() {
     let harness = harnessWindow()
 
-    harness.buttons[UITestIDs.setKeyButton].click()  // begin gates on a saved key
+    harness.buttons[UITestIdentifiers.setKeyButton].click()  // begin gates on a saved key
 
-    let status = harness.staticTexts[UITestIDs.statusLabel]
+    let status = harness.staticTexts[UITestIdentifiers.statusLabel]
 
-    harness.buttons[UITestIDs.startButton].click()
+    harness.buttons[UITestIdentifiers.startButton].click()
     waitForLabel(status, equals: "recording", "Start should drive status to recording")
 
-    harness.buttons[UITestIDs.stopButton].click()
+    harness.buttons[UITestIdentifiers.stopButton].click()
 
-    let pasted = harness.staticTexts[UITestIDs.pastedLabel]
+    let pasted = harness.staticTexts[UITestIdentifiers.pastedLabel]
     waitForLabel(
       pasted, equals: Self.cannedTranscript, timeout: 15,
       "Stop should paste the transcript")
@@ -74,16 +74,16 @@ final class DictationPipelineUITests: BlurtUITestCase {
   func testPipelineRunsTwiceInARow() {
     let harness = harnessWindow()
 
-    harness.buttons[UITestIDs.setKeyButton].click()
+    harness.buttons[UITestIdentifiers.setKeyButton].click()
 
-    let status = harness.staticTexts[UITestIDs.statusLabel]
-    let pasted = harness.staticTexts[UITestIDs.pastedLabel]
+    let status = harness.staticTexts[UITestIdentifiers.statusLabel]
+    let pasted = harness.staticTexts[UITestIdentifiers.pastedLabel]
 
     for pass in 1...2 {
-      harness.buttons[UITestIDs.startButton].click()
+      harness.buttons[UITestIdentifiers.startButton].click()
       waitForLabel(status, equals: "recording", "Pass \(pass): press should record")
 
-      harness.buttons[UITestIDs.stopButton].click()
+      harness.buttons[UITestIdentifiers.stopButton].click()
       waitForLabel(
         pasted, equals: Self.cannedTranscript, timeout: 15,
         "Pass \(pass): release should paste the transcript")
@@ -99,18 +99,18 @@ final class DictationPipelineUITests: BlurtUITestCase {
   /// mirror of `menuBarStatus`) never touches.
   func testOverlayPillTracksDictation() {
     let harness = harnessWindow()
-    harness.buttons[UITestIDs.setKeyButton].click()
+    harness.buttons[UITestIdentifiers.setKeyButton].click()
 
-    let status = harness.staticTexts[UITestIDs.statusLabel]
+    let status = harness.staticTexts[UITestIdentifiers.statusLabel]
     // The pill lives on a separate floating panel, so search the whole app tree
     // (not just the harness window) and match by identifier across element types.
-    let pill = app.descendants(matching: .any).matching(identifier: UITestIDs.overlayPill).firstMatch
+    let pill = app.descendants(matching: .any).matching(identifier: UITestIdentifiers.overlayPill).firstMatch
 
-    harness.buttons[UITestIDs.startButton].click()
+    harness.buttons[UITestIdentifiers.startButton].click()
     waitForLabel(status, equals: "recording", "Start should drive status to recording")
     waitForLabel(pill, equals: "Recording.", "Overlay pill should show the recording state")
 
-    harness.buttons[UITestIDs.stopButton].click()
+    harness.buttons[UITestIdentifiers.stopButton].click()
     waitForLabel(status, equals: "idle", "Pipeline should return to idle after pasting")
     // Once the pipeline settles, the pill fades out and leaves the AX tree — so an
     // absent element is the "no dictation happening" resting state.
@@ -122,21 +122,21 @@ final class DictationPipelineUITests: BlurtUITestCase {
   /// Cancelling an in-flight recording injects nothing and returns to idle.
   func testCancelDiscardsDictation() {
     let harness = harnessWindow()
-    harness.buttons[UITestIDs.setKeyButton].click()
+    harness.buttons[UITestIdentifiers.setKeyButton].click()
 
-    let status = harness.staticTexts[UITestIDs.statusLabel]
+    let status = harness.staticTexts[UITestIdentifiers.statusLabel]
 
-    harness.buttons[UITestIDs.startButton].click()
+    harness.buttons[UITestIdentifiers.startButton].click()
     waitForLabel(status, equals: "recording")
 
-    harness.buttons[UITestIDs.cancelButton].click()
+    harness.buttons[UITestIdentifiers.cancelButton].click()
     waitForLabel(status, equals: "idle", "Cancel should return the pipeline to idle")
 
     // Nothing was pasted. The read-out is a plain `Text` bound to the injector's
     // recorded paste; while it's the empty string SwiftUI emits no accessibility
     // element at all, so an absent element *is* the "nothing pasted" state.
     // (Reading `.value` of a non-existent element would raise instead.)
-    let pasted = harness.staticTexts[UITestIDs.pastedLabel]
+    let pasted = harness.staticTexts[UITestIdentifiers.pastedLabel]
     let pastedValue = pasted.exists ? (pasted.value as? String ?? "") : ""
     XCTAssertEqual(pastedValue, "", "Cancelled dictation must not paste any text")
   }
@@ -148,12 +148,12 @@ final class DictationPipelineUITests: BlurtUITestCase {
   /// populates.
   func testTranscriptLandsInRecentDictations() {
     let harness = harnessWindow()
-    harness.buttons[UITestIDs.setKeyButton].click()
+    harness.buttons[UITestIdentifiers.setKeyButton].click()
 
-    let echo = harness.staticTexts[UITestIDs.transcriptEchoLabel]
+    let echo = harness.staticTexts[UITestIdentifiers.transcriptEchoLabel]
 
-    harness.buttons[UITestIDs.startButton].click()
-    harness.buttons[UITestIDs.stopButton].click()
+    harness.buttons[UITestIdentifiers.startButton].click()
+    harness.buttons[UITestIdentifiers.stopButton].click()
 
     waitForLabel(
       echo, equals: Self.cannedTranscript, timeout: 15,

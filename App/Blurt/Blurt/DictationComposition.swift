@@ -28,13 +28,7 @@ struct DictationComponents {
 // UI tests' `InMemoryAPIKeyStore`) lives in the engine —
 // `Sources/BlurtEngine/Config/APIKeyGateway.swift` — so hosts and tests share
 // one set of conformances.
-
-/// Sentinel API keys the UI-test submit path recognizes to drive the inline
-/// error branches (`AppCoordinator.uiTestSubmit`). Defined unconditionally (not
-/// behind `#if DEBUG`) because the submit path that reads them is compiled in
-/// every configuration; the XCUITest target hard-codes the same string values.
-enum UITestKeys {
-  static let validAPIKey = "uitest-valid-key"
-  static let invalidAPIKey = "uitest-invalid-key"
-  static let unreachableAPIKey = "uitest-unreachable-key"
-}
+//
+// The UI-test sentinel API keys live in the shared `UITestIdentifiers`
+// (Shared/UITestIdentifiers.swift), alongside the other test-facing constants —
+// no longer an unconditionally-compiled enum here.

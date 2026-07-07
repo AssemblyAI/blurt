@@ -23,14 +23,14 @@ public struct APIKeyValidator: Sendable {
   }
 
   private let baseURL: URL
-  private let urlSession: URLSession
+  private let transport: any HTTPTransport
 
   public init(
     baseURL: URL = URL(string: "https://api.assemblyai.com")!,
-    urlSession: URLSession = .shared
+    transport: any HTTPTransport = URLSession.shared
   ) {
     self.baseURL = baseURL
-    self.urlSession = urlSession
+    self.transport = transport
   }
 
   public func validate(_ key: String) async -> Result {
@@ -50,7 +50,7 @@ public struct APIKeyValidator: Sendable {
     request.setValue(trimmed, forHTTPHeaderField: "Authorization")
 
     do {
-      let (_, response) = try await urlSession.data(for: request)
+      let (_, response) = try await transport.data(for: request)
       guard let http = response as? HTTPURLResponse else { return .unreachable }
       switch http.statusCode {
       case 200..<300: return .valid

@@ -1,55 +1,17 @@
 import XCTest
 
-/// Identifiers, window titles, and launch flags shared by the XCUITest suites.
-///
-/// These mirror the values the app declares (`UITestID` / `UITestKeys` in the
-/// Blurt target, and the SwiftUI `Window` titles). The test bundle is a separate
-/// module and can't import the app's internal symbols, so the strings are
-/// duplicated here — keep the two in sync if either side changes.
-enum UITestIDs {
-  /// Passed to `XCUIApplication.launchArguments` to put the app in UI-test mode
-  /// (offline stub pipeline + harness window). Matches `UITestMode.launchArgument`.
-  static let launchArgument = "-BlurtUITest"
+// The UI-test identifiers, window titles, launch argument, and sentinel API keys
+// live in `UITestIdentifiers` (App/Blurt/Shared/UITestIdentifiers.swift), which
+// is compiled into both the Blurt app target and this XCUITest bundle. The
+// values are declared once there and referenced from both sides, so the app's
+// production views and these suites can no longer drift out of sync.
 
-  // Window titles. Main and harness come from the first argument of their
-  // SwiftUI `Window(_:id:)` declarations; the settings title is supplied by
-  // the framework for the `Settings` scene — "<bundle name> Settings" — so it
-  // tracks `CFBundleName`/`CFBundleDisplayName` (project.yml), not any string
-  // in the app source.
-  static let mainWindowTitle = "Blurt"
+extension UITestIdentifiers {
+  /// The Settings window's title, supplied by the framework for the `Settings`
+  /// scene as "<bundle name> Settings" — the app never declares it in source, so
+  /// only this XCUITest bundle references it (hence a test-bundle-only constant
+  /// rather than one in the shared, app-compiled file).
   static let settingsWindowTitle = "Blurt Settings"
-  static let harnessWindowTitle = "Blurt UI Test Harness"
-
-  // Settings controls (`accessibilityIdentifier`s on the step views).
-  static let apiKeyField = "settings.apiKey.field"
-  static let apiKeyReveal = "settings.apiKey.reveal"
-  static let apiKeySave = "settings.apiKey.save"
-  static let apiKeyCancel = "settings.apiKey.cancel"
-  static let apiKeyChange = "settings.apiKey.change"
-  static let apiKeySavedStatus = "settings.apiKey.savedStatus"
-  static let apiKeyError = "settings.apiKey.error"
-  static let hotkeyPicker = "settings.hotkey.picker"
-  static let soundPicker = "settings.sound.picker"
-  static let developerToggle = "settings.developer.toggle"
-
-  // Test-harness controls (`UITestID` in UITestSupport.swift).
-  static let setKeyButton = "uitest.setKey"
-  static let startButton = "uitest.start"
-  static let stopButton = "uitest.stop"
-  static let cancelButton = "uitest.cancel"
-  static let hotkeyPressButton = "uitest.hotkeyPress"
-  static let hotkeyReleaseButton = "uitest.hotkeyRelease"
-  static let statusLabel = "uitest.status"
-  static let pastedLabel = "uitest.pasted"
-  static let transcriptEchoLabel = "uitest.transcriptEcho"
-
-  // The dictation overlay pill (`OverlayView`), a floating panel driven by the
-  // live pipeline. Its accessibility label is `OverlayUIState.accessibilityLabel`.
-  static let overlayPill = "overlay.pill"
-
-  // Sentinel API keys the offline submit path recognizes (`UITestKeys`).
-  static let invalidAPIKey = "uitest-invalid-key"
-  static let unreachableAPIKey = "uitest-unreachable-key"
 }
 
 /// Base case that launches Blurt in UI-test mode before each test and tears it
@@ -76,7 +38,7 @@ class BlurtUITestCase: XCTestCase {
     // missing, the follow-on steps just produce noise.
     continueAfterFailure = false
     app = XCUIApplication()
-    app.launchArguments += [UITestIDs.launchArgument]
+    app.launchArguments += [UITestIdentifiers.launchArgument]
     app.launch()
   }
 
@@ -92,7 +54,7 @@ class BlurtUITestCase: XCTestCase {
   /// hittable without closing the other windows.)
   @discardableResult
   func openSettingsWindow(timeout: TimeInterval = 10) -> XCUIElement {
-    let settings = app.windows[UITestIDs.settingsWindowTitle]
+    let settings = app.windows[UITestIdentifiers.settingsWindowTitle]
     if !settings.exists {
       app.typeKey(",", modifierFlags: .command)
     }
@@ -102,38 +64,16 @@ class BlurtUITestCase: XCTestCase {
     return settings
   }
 
-  /// The UI-test harness window (auto-presented at launch in test mode). Closes
-  /// the other windows so the harness is frontmost and its buttons are clickable
-  /// (see `closeWindows`).
+  /// The UI-test harness window. In UI-test mode it's the only window presented
+  /// at launch (the main window is suppressed — see `App.swift` /
+  /// `mainWindowLaunchBehavior`), so it comes up frontmost and key with its
+  /// controls directly clickable — no sibling windows to close first.
   func harnessWindow(timeout: TimeInterval = 10) -> XCUIElement {
-    let harness = app.windows[UITestIDs.harnessWindowTitle]
+    let harness = app.windows[UITestIdentifiers.harnessWindowTitle]
     XCTAssertTrue(
       harness.waitForExistence(timeout: timeout),
       "UI test harness window was not presented")
-    closeWindows(except: UITestIDs.harnessWindowTitle)
     return harness
-  }
-
-  /// Closes every app window except the one titled `keepTitle`. The app presents
-  /// several windows at launch (wizard/ready, the UI-test harness, and any
-  /// Settings window macOS restored), all centered and overlapping — and XCUITest
-  /// can't hit a control that sits under another window, nor does a click on a
-  /// covered button register. Closing the siblings leaves `keepTitle` frontmost
-  /// and fully interactable. Closes one per pass (front-most first — only its
-  /// close button is un-occluded), re-querying until none remain. The app keeps
-  /// running with its windows closed
-  /// (`applicationShouldTerminateAfterLastWindowClosed` returns false).
-  private func closeWindows(except keepTitle: String) {
-    for _ in 0..<5 {
-      let target = (0..<app.windows.count)
-        .map { app.windows.element(boundBy: $0) }
-        .first {
-          $0.title != keepTitle
-            && $0.buttons[XCUIIdentifierCloseWindow].firstMatch.isHittable
-        }
-      guard let target else { break }
-      target.buttons[XCUIIdentifierCloseWindow].firstMatch.click()
-    }
   }
 
   /// Waits until `element`'s label *or* value equals `expected`, failing the test

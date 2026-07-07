@@ -27,7 +27,7 @@ struct KeyTermsStepView: View {
       .lineLimit(2...6)
       .font(.body)
       .disableAutocorrection(true)
-      .accessibilityIdentifier("settings.keyTerms.field")
+      .accessibilityIdentifier(UITestIdentifiers.keyTermsField)
       .onChange(of: text) { _, newValue in KeyTermsStore.set(newValue) }
     } header: {
       Text("Key Terms")

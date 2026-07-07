@@ -80,12 +80,12 @@ struct APIKeyStepView: View {
         HStack(spacing: 4) {
           Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
           Text("Saved").foregroundStyle(.secondary)
-            .accessibilityIdentifier("settings.apiKey.savedStatus")
+            .accessibilityIdentifier(UITestIdentifiers.apiKeySavedStatus)
         }
         Button("Change") {
           isEditing = true
         }
-        .accessibilityIdentifier("settings.apiKey.change")
+        .accessibilityIdentifier(UITestIdentifiers.apiKeyChange)
       }
     } label: {
       Label("API Key", systemImage: "key.fill")
@@ -105,10 +105,10 @@ struct APIKeyStepView: View {
         // `NSTextField.placeholderString`), shown greyed when the field is empty.
         if isRevealed {
           TextField("Enter your API key", text: $draft)
-            .accessibilityIdentifier("settings.apiKey.field")
+            .accessibilityIdentifier(UITestIdentifiers.apiKeyField)
         } else {
           SecureField("Enter your API key", text: $draft)
-            .accessibilityIdentifier("settings.apiKey.field")
+            .accessibilityIdentifier(UITestIdentifiers.apiKeyField)
         }
       }
       .lineLimit(1)
@@ -124,7 +124,7 @@ struct APIKeyStepView: View {
       }
       .buttonStyle(.borderless)
       .accessibilityLabel(isRevealed ? "Hide API key" : "Show API key")
-      .accessibilityIdentifier("settings.apiKey.reveal")
+      .accessibilityIdentifier(UITestIdentifiers.apiKeyReveal)
 
       // Keep the button mounted across all states (idle / disabled / in-flight)
       // so its footprint and identity stay stable — the spinner sits beside it
@@ -145,13 +145,13 @@ struct APIKeyStepView: View {
           isEditing = false
         }
         .keyboardShortcut(.cancelAction)
-        .accessibilityIdentifier("settings.apiKey.cancel")
+        .accessibilityIdentifier(UITestIdentifiers.apiKeyCancel)
       }
       Button(actionTitle, action: submit)
         .buttonStyle(.glassProminent)
         .keyboardShortcut(.defaultAction)
         .disabled(!canSubmit)
-        .accessibilityIdentifier("settings.apiKey.save")
+        .accessibilityIdentifier(UITestIdentifiers.apiKeySave)
     }
   }
 
@@ -165,7 +165,7 @@ struct APIKeyStepView: View {
       if let errorMessage {
         Text(errorMessage)
           .foregroundStyle(.red)
-          .accessibilityIdentifier("settings.apiKey.error")
+          .accessibilityIdentifier(UITestIdentifiers.apiKeyError)
       } else {
         Text("Your key is stored securely in the macOS Keychain.")
           .foregroundStyle(.secondary)

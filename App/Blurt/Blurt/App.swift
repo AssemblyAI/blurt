@@ -4,10 +4,23 @@ import SwiftUI
 struct BlurtApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
+  /// The main window presents at launch — except under UI testing, where it's
+  /// suppressed so the harness window is the sole one presented and thus becomes
+  /// frontmost + key (the main window is opened on demand by the accessibility
+  /// audit test). Making the harness key is what lets its controls be clicked
+  /// without closing sibling windows and lets its text field take keyboard focus.
+  private var mainWindowLaunchBehavior: SceneLaunchBehavior {
+    #if UITEST_HOOKS
+      return UITestMode.isActive ? .suppressed : .presented
+    #else
+      return .presented
+    #endif
+  }
+
   var body: some Scene {
     // Primary window: the setup wizard until the app is fully configured, then
     // the "ready" screen (see `MainWindowRoot`).
-    Window("Blurt", id: MainWindow.id) {
+    Window(UITestIdentifiers.mainWindowTitle, id: MainWindow.id) {
       MainWindowRoot(appDelegate: appDelegate)
     }
     .windowResizability(.contentSize)
@@ -20,8 +33,10 @@ struct BlurtApp: App {
     // Always present the main window at launch — both first-run onboarding and a
     // configured launch (the "ready" screen) come up front, rather than the app
     // launching silently to just the overlay pill. (`AppDelegate` activates the
-    // app so it's frontmost; the Dock/⌘, reopen it once closed.)
-    .defaultLaunchBehavior(.presented)
+    // app so it's frontmost; the Dock/⌘, reopen it once closed.) Suppressed under
+    // UI testing so the harness window is the sole one presented — see
+    // `mainWindowLaunchBehavior`.
+    .defaultLaunchBehavior(mainWindowLaunchBehavior)
     .commands {
       BlurtCommands()
     }
@@ -53,7 +68,7 @@ struct BlurtApp: App {
       // (the Debug default; stripped by scripts/dev-build.sh) but only presented
       // and populated when launched with `-BlurtUITest`, so a normal run never
       // sees it. See `UITestSupport.swift`.
-      Window("Blurt UI Test Harness", id: UITestID.harnessWindow) {
+      Window(UITestIdentifiers.harnessWindowTitle, id: UITestIdentifiers.harnessWindowID) {
         if UITestMode.isActive {
           UITestHarnessView(appDelegate: appDelegate)
         }

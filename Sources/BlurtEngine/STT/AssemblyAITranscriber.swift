@@ -18,7 +18,7 @@ private let transcriberLog = Logger(subsystem: BlurtIdentity.subsystem, category
 public struct AssemblyAITranscriber: TranscriberProtocol {
   private let apiKeyProvider: @Sendable () -> String?
   private let baseURL: URL
-  private let urlSession: URLSession
+  private let transport: any HTTPTransport
 
   /// Required on every Sync API request — selects the synchronous STT model.
   private static let syncModel = "u3-sync-pro"
@@ -26,11 +26,11 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   public init(
     apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.get() },
     baseURL: URL = URL(string: "https://sync.assemblyai.com")!,
-    urlSession: URLSession = .shared
+    transport: any HTTPTransport = URLSession.shared
   ) {
     self.apiKeyProvider = apiKeyProvider
     self.baseURL = baseURL
-    self.urlSession = urlSession
+    self.transport = transport
   }
 
   // MARK: - Sync request
@@ -76,7 +76,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     request.timeoutInterval = 5
     let clock = ContinuousClock()
     let start = clock.now
-    _ = try? await urlSession.data(for: request)
+    _ = try? await transport.data(for: request)
     let ms = (clock.now - start).milliseconds
     transcriberLog.info("warm-up connect \(ms, format: .fixed(precision: 0), privacy: .public)ms")
   }
@@ -126,13 +126,13 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 
   private func send(_ request: URLRequest, body: Data, audioDurationMs: Int) async throws -> Data {
     // Per-task delegate (not a session delegate) so this rides along on whatever
-    // URLSession was injected — `.shared` in production, the mock session in
+    // transport was injected — `URLSession.shared` in production, a fake in
     // tests — without reconfiguring it. `MetricsLogger` logs the connect-vs-
     // inference split; the wall-clock line below is the always-available total.
     let metrics = MetricsLogger(audioDurationMs: audioDurationMs)
     let clock = ContinuousClock()
     let start = clock.now
-    let (data, response) = try await urlSession.upload(for: request, from: body, delegate: metrics)
+    let (data, response) = try await transport.upload(for: request, from: body, delegate: metrics)
     let wallMs = (clock.now - start).milliseconds
     transcriberLog.info(
       "sync round-trip audioMs=\(audioDurationMs, privacy: .public) wallMs=\(wallMs, format: .fixed(precision: 0), privacy: .public)"

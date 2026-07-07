@@ -32,6 +32,8 @@ public actor DictationSession {
   /// `SyncSTTLimits`) — recording past it would only produce audio the sync
   /// endpoint rejects, so we stop early and transcribe what we have.
   private let maxRecordingSeconds: Double
+  /// Clock the auto-release timer sleeps on; injectable so tests advance it.
+  private let clock: any Clock<Duration>
 
   /// Consulted at the top of `press()`: a non-nil blocker refuses the press
   /// before any capture begins, surfacing as `.failed(blocker)`. Keeps "never
@@ -44,14 +46,11 @@ public actor DictationSession {
   /// injection, so pasted, copied, and failed-to-paste dictations all count.
   private let onTranscriptDelivered: (@Sendable (String) -> Void)?
 
-  /// Sample rate the mic capture delivers and the Sync STT request declares —
-  /// the Sync API's geometry, defined once in `SyncSTTLimits`.
+  /// Sample rate the mic delivers and the Sync request declares (`SyncSTTLimits`).
   private static let captureSampleRate = SyncSTTLimits.sampleRate
 
-  /// Context captured at `press()` (focused app + text before the cursor),
-  /// passed to the transcriber so the Sync STT model has priming. Resolved from
-  /// `contextTask` when the pipeline runs; stored so `inject`'s separator
-  /// decision and the dictation log see the same snapshot.
+  /// Context captured at `press()` (focused app + prior text), stored so the
+  /// transcriber, `inject`'s separator decision, and the log share one snapshot.
   private var capturedContext: TranscriptionContext?
 
   /// The in-flight AX field-context read, started by `press()` — that's when the
@@ -63,9 +62,7 @@ public actor DictationSession {
 
   /// Tail of the serial command queue. `press()`/`release()`/`cancel()`/
   /// `cancelRecording()` chain behind it (see `enqueue`), so commands run one at
-  /// a time in arrival order: no command ever observes another suspended
-  /// mid-`mic.start()`/`mic.stop()`. This replaces the old `isStarting`/
-  /// `isStopping` guards and pending-release/-cancel deferral flags outright.
+  /// a time in arrival order — none observes another suspended mid-`mic` call.
   private var commandQueue: Task<Void, Never>?
 
   /// Set synchronously by `cancel()` before it takes its queue turn, so a cancel
@@ -84,13 +81,14 @@ public actor DictationSession {
   /// `.injecting`) can tear it down — otherwise the transcript would still be
   /// pasted into the focused app despite the user cancelling. The cancellation it
   /// propagates is honored by `runTranscribeInject` and `KeyInjector.insert`.
-  private var pipelineTask: Task<Void, Never>?
+  var pipelineTask: Task<Void, Never>?  // internal: joined by awaitPipeline()
 
   public init(
     mic: MicCaptureProtocol,
     transcriber: TranscriberProtocol,
     injector: InjectorProtocol,
     maxRecordingSeconds: Double = SyncSTTLimits.autoReleaseSeconds,
+    clock: any Clock<Duration> = ContinuousClock(),
     keyTermsProvider: @escaping @Sendable () -> [String] = { KeyTermsStore.terms() },
     readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
     onTranscriptDelivered: (@Sendable (String) -> Void)? = nil
@@ -99,6 +97,7 @@ public actor DictationSession {
     self.transcriber = transcriber
     self.injector = injector
     self.maxRecordingSeconds = maxRecordingSeconds
+    self.clock = clock
     self.keyTermsProvider = keyTermsProvider
     self.readinessCheck = readinessCheck
     self.onTranscriptDelivered = onTranscriptDelivered
@@ -196,8 +195,9 @@ public actor DictationSession {
       setPhase(.recording)
       Self.signposter.endInterval(Self.pressSignpostName, pressInterval)
       let timeout = maxRecordingSeconds
+      let clock = clock
       autoReleaseTask = Task { [weak self] in
-        try? await Task.sleep(for: .seconds(timeout))
+        try? await clock.sleep(for: .seconds(timeout))
         guard let self, !Task.isCancelled else { return }
         // Enqueues like a manual key-up. If a real release already ran, the
         // queued performRelease sees a non-.recording phase and drops out.
@@ -249,8 +249,8 @@ public actor DictationSession {
     // pipeline can't overwrite it back to .idle. Synchronous (no suspension), so
     // it acts immediately rather than queueing behind the pipeline's progress.
     if phase == .transcribing || phase == .injecting {
+      // Cancel but keep the handle so `awaitPipeline()` can join the cancelled task.
       pipelineTask?.cancel()
-      pipelineTask = nil
       setPhase(.cancelled)
       return
     }

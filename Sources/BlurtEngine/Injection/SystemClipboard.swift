@@ -7,22 +7,45 @@ struct SendablePasteboardItem: Sendable {
   let dataMap: [NSPasteboard.PasteboardType: Data]
 }
 
-/// The pasteboard operations `KeyInjector` needs to save, overwrite, and restore
-/// the clipboard around a paste. Seam so tests can substitute an in-memory fake.
+/// The two clipboard operations `KeyInjector` actually performs around a paste —
+/// a plain overwrite, or an overwrite that can later restore what it displaced —
+/// rather than exposing NSPasteboard's raw change-count/multi-item bookkeeping.
+/// A seam so tests substitute a trivial in-memory fake that never has to
+/// re-derive the pasteboard's change-count semantics to stay faithful.
 protocol ClipboardAccess: Sendable {
-  /// Monotonic counter that advances on every write; used to detect a write by
-  /// another writer during the paste settle window.
-  var changeCount: Int { get }
-  /// A detached copy of the current contents, suitable for later `restore`.
-  func currentItems() -> [SendablePasteboardItem]
-  /// Replace the contents with a single plain-string item.
-  func setString(_ text: String)
-  /// Replace the contents with previously snapshotted items (no-op if empty).
-  func restore(_ items: [SendablePasteboardItem])
+  /// Overwrite the clipboard with a single plain-string item, discarding the
+  /// previous contents. The degraded paste paths call this to leave the
+  /// transcript on the clipboard for a manual paste.
+  func write(_ text: String)
+  /// Overwrite the clipboard with `text`, returning an action that restores the
+  /// previous contents — but only if nothing else has written to the clipboard
+  /// in the meantime (so a user copy during the paste-settle window survives).
+  /// Call the returned action once the paste has settled.
+  func writeAndPrepareRestore(_ text: String) -> @Sendable () -> Void
 }
 
-/// `ClipboardAccess` backed by the real `NSPasteboard.general`.
+/// `ClipboardAccess` backed by the real `NSPasteboard.general`. The change-count
+/// comparison that gates the deferred restore lives here, behind the seam, so a
+/// fake never re-implements it.
 struct SystemClipboard: ClipboardAccess {
+  func write(_ text: String) { setString(text) }
+
+  func writeAndPrepareRestore(_ text: String) -> @Sendable () -> Void {
+    let saved = currentItems()
+    setString(text)
+    // Snapshot the change count our own write produced. If anything else writes
+    // to the pasteboard before the restore fires (e.g. the user copies
+    // something), the count moves and the restore leaves their newer contents
+    // alone rather than clobbering them with the stale pre-paste snapshot.
+    let ourChangeCount = changeCount
+    return { [self] in
+      guard changeCount == ourChangeCount else { return }
+      restore(saved)
+    }
+  }
+
+  // MARK: - NSPasteboard building blocks (also exercised directly by SystemClipboardTests)
+
   var changeCount: Int { NSPasteboard.general.changeCount }
 
   func currentItems() -> [SendablePasteboardItem] {

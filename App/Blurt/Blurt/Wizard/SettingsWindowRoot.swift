@@ -41,7 +41,7 @@ private struct DeveloperSection: View {
       Toggle(isOn: $developerMode) {
         Label("Developer mode", systemImage: "hammer")
       }
-      .accessibilityIdentifier("settings.developer.toggle")
+      .accessibilityIdentifier(UITestIdentifiers.developerToggle)
     } header: {
       Text("Developer")
     } footer: {

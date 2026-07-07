@@ -23,9 +23,6 @@ final class AppCoordinator {
   /// Storage for the API key. Production hits the Keychain via `APIKeyStore`;
   /// UI tests inject an in-memory store so the real key is never touched.
   @ObservationIgnored private let keyStore: any APIKeyGateway
-  /// True only under UI testing — short-circuits `submitAPIKey` past the network
-  /// validation so the settings flow is deterministic and offline.
-  @ObservationIgnored private let isUITesting: Bool
   /// The validate-then-save flow over `keyStore`. The logic (and its
   /// never-persist-an-unverified-key invariant) lives in the engine, where
   /// `swift test` covers it; this coordinator just forwards and mirrors the
@@ -54,18 +51,22 @@ final class AppCoordinator {
   /// crowded menu bar, so nothing here is relied on for correctness.
   private(set) var menuBarStatus: MenuBarStatus = .idle
 
-  /// `components` defaults to the production pipeline; tests/UI-tests inject
-  /// their own deterministic doubles (see `DictationComponents`).
+  /// `components` defaults to the production pipeline; `validateKey` defaults to
+  /// AssemblyAI's real network check. Tests/UI-tests inject deterministic doubles
+  /// (see `DictationComponents`) and an offline `validateKey` so the settings
+  /// flow needs no network — the engine's `APIKeySubmission` still owns the
+  /// never-persist-an-unverified-key invariant either way.
   init(
     onMissingAPIKey: @escaping @MainActor () -> Void,
     components: DictationComponents = .production(),
     keyStore: any APIKeyGateway = ProductionAPIKeyStore(),
-    isUITesting: Bool = false
+    validateKey: (@Sendable (String) async -> APIKeyValidator.Result)? = nil
   ) {
     self.onMissingAPIKey = onMissingAPIKey
     self.keyStore = keyStore
-    self.isUITesting = isUITesting
-    self.keySubmission = APIKeySubmission(keyStore: keyStore)
+    self.keySubmission =
+      validateKey.map { APIKeySubmission(keyStore: keyStore, validate: $0) }
+      ?? APIKeySubmission(keyStore: keyStore)
 
     // Unbounded: the Recent list is append-only, so every transcript must survive
     // until the MainActor observer drains it — dropping the oldest under
@@ -273,23 +274,12 @@ final class AppCoordinator {
   /// (and unit-tests) that never-persist-an-unverified-key rule. This wrapper
   /// mirrors the outcome into `hasAPIKey` so the wizard/Settings UI reacts.
   func submitAPIKey(_ key: String) async -> APIKeySubmission.Outcome {
-    // UI tests must not reach AssemblyAI (no network in CI) or the real
-    // Keychain, so resolve the result locally and deterministically instead.
-    if isUITesting { return uiTestSubmit(key) }
+    // `keySubmission` carries the injected validator: AssemblyAI's real network
+    // check in production, an offline sentinel-mapping one under UI testing (see
+    // AppDelegate). Either way the never-save-unverified invariant is the same.
     let outcome = await keySubmission.submit(key)
     refreshAPIKeyStatus()
     return outcome
-  }
-
-  /// Offline stand-in for `submitAPIKey` under UI testing. Sentinel keys drive
-  /// the failure branches so a test can exercise the inline-error paths; any
-  /// other non-empty key is accepted and saved to the in-memory store.
-  private func uiTestSubmit(_ key: String) -> APIKeySubmission.Outcome {
-    switch key {
-    case UITestKeys.invalidAPIKey: return .invalid
-    case UITestKeys.unreachableAPIKey: return .unreachable
-    default: return saveAPIKey(key) ? .valid : .saveFailed
-    }
   }
 
   // MARK: - Dictation render
