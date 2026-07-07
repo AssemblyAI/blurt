@@ -70,20 +70,20 @@
   // must keep running wherever the session calls them (hopping every stub call
   // through the main actor would serialize the pipeline behind the UI).
 
-  /// Stub mic: captures nothing, returns a fixed buffer comfortably above
-  /// `SyncSTTLimits.minSamples` so the pipeline clears the too-short-audio guard
-  /// and proceeds to transcribe.
+  /// Stub mic: captures nothing, returns a fixed blob comfortably above
+  /// `SyncSTTLimits.minPCMBytes` so the pipeline clears the too-short-audio
+  /// guard and proceeds to transcribe.
   nonisolated struct UITestMic: MicCaptureProtocol {
     func start() async throws {}
-    func stop() async throws -> [Float] {
-      Array(repeating: 0, count: SyncSTTLimits.minSamples * 2)
+    func stop() async throws -> Data {
+      Data(count: SyncSTTLimits.minPCMBytes * 2)
     }
   }
 
   /// Stub transcriber: returns the harness's canned transcript, so the "spoken"
   /// text is whatever the test set — no network, fully deterministic.
   nonisolated struct UITestTranscriber: TranscriberProtocol {
-    func transcribe(samples: [Float], sampleRate: Int, context: TranscriptionContext?) async throws -> String {
+    func transcribe(pcm: Data, sampleRate: Int, context: TranscriptionContext?) async throws -> String {
       await MainActor.run { UITestState.shared.cannedTranscript }
     }
   }

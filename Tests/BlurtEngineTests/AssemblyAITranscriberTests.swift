@@ -41,7 +41,7 @@ struct HTTPClientTests {
     // cleanly rather than the wire contents (covered directly by makeConfigData).
     let result = try await makeTranscriber(apiKey: "test-key", transport: transport)
       .transcribe(
-        samples: [0, 0.1, -0.1],
+        pcm: Self.testPCM,
         sampleRate: 16_000,
         context: TranscriptionContext(appName: "Slack", priorText: "Dear Sam,"))
     #expect(result == "hello world")
@@ -260,6 +260,10 @@ struct HTTPClientTests {
   }
 
   private func collectTranscript(_ transcriber: AssemblyAITranscriber) async throws -> String {
-    try await transcriber.transcribe(samples: [0, 0.1, -0.1], sampleRate: 16_000, context: nil)
+    try await transcriber.transcribe(pcm: Self.testPCM, sampleRate: 16_000, context: nil)
   }
+
+  /// Three arbitrary S16LE samples — the raw blob shape `MicCapture.stop()`
+  /// hands the transcriber.
+  private static let testPCM = Data([0x00, 0x00, 0xCD, 0x0C, 0x33, 0xF3])
 }

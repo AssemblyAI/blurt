@@ -12,7 +12,7 @@ struct MicCaptureProtocolDefaultsTests {
   /// resolve to the protocol's defaults.
   struct BareMic: MicCaptureProtocol {
     func start() async throws {}
-    func stop() async throws -> [Float] { [] }
+    func stop() async throws -> Data { Data() }
   }
 
   @Test("default levels stream is empty and finishes immediately; warmUp is a no-op")

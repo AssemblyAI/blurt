@@ -1,3 +1,5 @@
+import Foundation
+
 @testable import BlurtEngine
 
 /// Mic stub whose `stop()` signals entry and then blocks until the test releases
@@ -18,13 +20,13 @@ actor GatedStopMic: MicCaptureProtocol {
 
   func start() async throws { startCalls += 1 }
 
-  func stop() async throws -> [Float] {
+  func stop() async throws -> Data {
     stopCalls += 1
     await gate.enter()
     if let stopError { throw stopError }
-    // Above SyncSTTLimits.minSamples so the transcript isn't dropped by the
+    // Above SyncSTTLimits.minPCMBytes so the transcript isn't dropped by the
     // too-short guard — these suites exercise stop races, not it.
-    return Array(repeating: 0, count: SyncSTTLimits.minSamples * 2)
+    return Data(count: SyncSTTLimits.minPCMBytes * 2)
   }
 
   func waitUntilStopEntered() async { await gate.waitUntilEntered() }

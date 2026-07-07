@@ -22,8 +22,8 @@ public actor MicCapture: MicCaptureProtocol {
 
   /// The geometry the recorder converts hardware audio to on the fly. The Sync
   /// API's rate (`SyncSTTLimits.sampleRate`) — the same one the pipeline hands
-  /// the transcriber — so `stop()` returns samples ready to encode with no
-  /// resampling pass.
+  /// the transcriber — so `stop()` returns bytes ready to upload with no
+  /// resampling or re-encoding pass.
   private static let targetSampleRate = Double(SyncSTTLimits.sampleRate)
 
   /// Pre-prepared in `warmUp()` so the *first* dictation doesn't pay hardware
@@ -93,20 +93,21 @@ public actor MicCapture: MicCaptureProtocol {
     startMeterTimer()
   }
 
-  public func stop() async throws -> [Float] {
+  public func stop() async throws -> Data {
     meterTask?.cancel()
     meterTask = nil
-    guard let recorder = activeRecorder else { return [] }
+    guard let recorder = activeRecorder else { return Data() }
     activeRecorder = nil
     recorder.stop()
 
     let url = recorder.url
     defer { Self.removeFile(at: url) }
-    let samples = try Self.decodeSamples(fromFileAt: url)
+    let pcm = try Self.decodePCM(fromFileAt: url)
 
-    let durationMs = Int((Double(samples.count) / Self.targetSampleRate) * 1000)
-    Self.logger.info("stop samples=\(samples.count) durationMs=\(durationMs)")
-    return samples
+    let sampleCount = pcm.count / SyncSTTLimits.bytesPerSample
+    let durationMs = Int((Double(sampleCount) / Self.targetSampleRate) * 1000)
+    Self.logger.info("stop samples=\(sampleCount) durationMs=\(durationMs)")
+    return pcm
   }
 
   // MARK: - Recorder construction
@@ -158,18 +159,22 @@ public actor MicCapture: MicCaptureProtocol {
 
   // MARK: - File helpers
 
-  /// Read a recorded PCM file back as mono Float32 at its stored sample rate.
-  /// `AVAudioFile.processingFormat` is always Float32, so this also performs the
-  /// on-disk int16 → float conversion the Sync encoder expects.
-  static func decodeSamples(fromFileAt url: URL) throws -> [Float] {
-    let file = try AVAudioFile(forReading: url)
+  /// Read a recorded PCM file back as raw S16LE bytes — the Sync API's upload
+  /// encoding. The on-disk WAV already holds 16-bit int samples, so asking
+  /// `AVAudioFile` for the int16 common format makes this a straight copy-out:
+  /// no detour through Float32 (which the default `processingFormat` would
+  /// impose, and which the transcriber would only convert straight back). Int16
+  /// is host-endian; Apple platforms (arm64/x86_64) are little-endian, so the
+  /// bytes are already the S16LE the Sync API expects.
+  static func decodePCM(fromFileAt url: URL) throws -> Data {
+    let file = try AVAudioFile(forReading: url, commonFormat: .pcmFormatInt16, interleaved: true)
     let frameCount = AVAudioFrameCount(file.length)
     guard frameCount > 0,
       let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: frameCount)
-    else { return [] }
+    else { return Data() }
     try file.read(into: buffer)
-    guard let channel = buffer.floatChannelData?[0] else { return [] }
-    return Array(UnsafeBufferPointer(start: channel, count: Int(buffer.frameLength)))
+    guard let channel = buffer.int16ChannelData?[0] else { return Data() }
+    return Data(bytes: channel, count: Int(buffer.frameLength) * SyncSTTLimits.bytesPerSample)
   }
 
   private static func removeFile(at url: URL) {

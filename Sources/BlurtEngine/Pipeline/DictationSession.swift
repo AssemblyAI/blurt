@@ -1,11 +1,13 @@
+import Foundation
 import os
 
 public actor DictationSession {
   public private(set) var phase: PipelinePhase = .idle
 
   // Split for the lint file-length budget: `phaseStream()`/os_signpost live in
-  // `+Observation`; `submit(_:)` lives in `+Commands`. Members those files
-  // reach are internal, not private (file-scoped access can't cross the split).
+  // `+Observation`; `submit(_:)` lives in `+Commands`; the post-release
+  // transcribe→inject pipeline lives in `+Pipeline`. Members those files reach
+  // are internal, not private (file-scoped access can't cross the split).
 
   /// Live feeds of phase changes. Each `phaseStream()` call yields the current
   /// phase plus every subsequent transition, so the production renderer and
@@ -20,8 +22,8 @@ public actor DictationSession {
   nonisolated let commandFeed: AsyncStream<Command>.Continuation
 
   private let mic: MicCaptureProtocol
-  private let transcriber: TranscriberProtocol
-  private let injector: InjectorProtocol
+  let transcriber: TranscriberProtocol
+  let injector: InjectorProtocol
   /// Supplies the user's key terms (domain vocabulary) at press time so each
   /// utterance's prompt primes those spellings. A closure, rather than a stored
   /// list, so edits in Settings take effect on the next dictation without
@@ -32,8 +34,9 @@ public actor DictationSession {
   /// `SyncSTTLimits`) — recording past it would only produce audio the sync
   /// endpoint rejects, so we stop early and transcribe what we have.
   private let maxRecordingSeconds: Double
-  /// Clock the auto-release timer sleeps on; injectable so tests advance it.
-  private let clock: any Clock<Duration>
+  /// Clock the auto-release timer and the context-wait budget (`+Pipeline`)
+  /// sleep on; injectable so tests advance it.
+  let clock: any Clock<Duration>
 
   /// Consulted at the top of `press()`: a non-nil blocker refuses the press
   /// before any capture begins, surfacing as `.failed(blocker)`. Keeps "never
@@ -44,31 +47,32 @@ public actor DictationSession {
   private let readinessCheck: @Sendable () -> BlurtError?
   /// Fired once with the final transcript as soon as it's produced — before
   /// injection, so pasted, copied, and failed-to-paste dictations all count.
-  private let onTranscriptDelivered: (@Sendable (String) -> Void)?
-
-  /// Sample rate the mic delivers and the Sync request declares (`SyncSTTLimits`).
-  private static let captureSampleRate = SyncSTTLimits.sampleRate
+  let onTranscriptDelivered: (@Sendable (String) -> Void)?
 
   /// Context captured at `press()` (focused app + prior text), stored so the
   /// transcriber, `inject`'s separator decision, and the log share one snapshot.
-  private var capturedContext: TranscriptionContext?
+  var capturedContext: TranscriptionContext?
 
-  /// The in-flight AX field-context read, started by `press()` — that's when the
-  /// target field still holds focus — but awaited only in `runTranscribeInject`.
-  /// Deliberately not awaited before `.recording`: the read is cross-process IPC
-  /// into the frontmost app, and an unresponsive app must delay transcription
-  /// (which needs the context), never the recording indicator (which doesn't).
-  private var contextTask: Task<TranscriptionContext?, Never>?
+  /// The in-flight AX field-context read, started by `press()` — that's when
+  /// the target field still holds focus — but consumed only in
+  /// `runTranscribeInject`, bounded by `contextWaitBudget`. Deliberately not
+  /// awaited before `.recording`: the read is cross-process IPC into the
+  /// frontmost app, and an unresponsive app must never delay the recording
+  /// indicator. A buffered stream rather than a `Task` so the bounded wait can
+  /// abandon a hung read (awaiting a `Task.value` is not cancellable).
+  var contextStream: AsyncStream<TranscriptionContext?>?
 
   /// Tail of the serial command queue. `press()`/`release()`/`cancel()`/
   /// `cancelRecording()` chain behind it (see `enqueue`), so commands run one at
   /// a time in arrival order — none observes another suspended mid-`mic` call.
   private var commandQueue: Task<Void, Never>?
 
-  /// Set synchronously by `cancel()` before it takes its queue turn, so a cancel
-  /// requested while a release is mid-`mic.stop()` deterministically wins:
-  /// `performRelease` consumes the request after the stop, before any pipeline
-  /// is spawned. `performCancel` clears it whether or not it was consumed early.
+  /// Set synchronously by `cancel()` before it takes its queue turn, so a
+  /// cancel arriving while a queued release hasn't yet claimed `.transcribing`
+  /// deterministically wins: `performRelease` consumes the request after its
+  /// `mic.stop()`, before any pipeline is spawned. (A release that already
+  /// claimed `.transcribing` is handled by `cancel()`'s synchronous path
+  /// instead.) `performCancel` clears it whether or not it was consumed early.
   private var cancelRequested = false
 
   /// Handle to the auto-release timer started in `press()`. Stored so that
@@ -178,10 +182,14 @@ public actor DictationSession {
       // Kick off the AX field-context read now, while the target field still
       // holds focus, but don't await it here: it's cross-process IPC into the
       // frontmost app (detached — off the main actor, where it froze the
-      // overlay, and off this actor, where it would wedge release()/cancel()),
-      // and runTranscribeInject awaits it right before transcription. A slow AX
-      // target therefore delays the transcript, never the recording indicator.
-      contextTask = Task.detached {
+      // overlay, and off this actor, where it would wedge release()/cancel()).
+      // runTranscribeInject consumes the result right before transcription,
+      // bounded by `contextWaitBudget` — so a slow AX target delays the
+      // transcript by at most the budget, never the recording indicator.
+      let (stream, contextFeed) = AsyncStream.makeStream(
+        of: TranscriptionContext?.self, bufferingPolicy: .bufferingNewest(1))
+      contextStream = stream
+      Task.detached {
         let field = FocusCapture.captureFieldContext()
         let context = TranscriptionContext(
           appName: captured?.processName,
@@ -190,7 +198,8 @@ public actor DictationSession {
           priorText: field.priorText,
           selectedText: field.selectedText,
           keyTerms: keyTerms)
-        return context.isEmpty ? nil : context
+        contextFeed.yield(context.isEmpty ? nil : context)
+        contextFeed.finish()
       }
       setPhase(.recording)
       Self.signposter.endInterval(Self.pressSignpostName, pressInterval)
@@ -212,24 +221,33 @@ public actor DictationSession {
   private func performRelease() async {
     guard phase == .recording else { return }
     cancelAutoRelease()
-    let samples: [Float]
+    // Flip the phase before stopping the mic, not after: the stop chime and
+    // the pill's "Transcribing…" ride this transition, and mic.stop() reads
+    // the whole recording back from disk — I/O the user's "it heard me" cue
+    // must not wait on. This also closes the double-release window: a second
+    // release arriving during the mic.stop() suspension now fails the
+    // `.recording` guard above instead of running the pipeline twice.
+    setPhase(.transcribing)
+    let pcm: Data
     do {
-      samples = try await mic.stop()
+      pcm = try await mic.stop()
     } catch {
-      // A cancel requested while mic.stop() was in flight wins over surfacing
-      // the audio error — the user asked for nothing to happen.
-      if consumeCancelRequest() { return }
-      // Audio capture/conversion failed (e.g. sample-rate conversion couldn't
-      // run). Surface it instead of silently transcribing an empty buffer.
+      // A cancel that landed while mic.stop() was in flight wins over
+      // surfacing the audio error — the user asked for nothing to happen. It
+      // arrived either synchronously (cancel() saw `.transcribing` and claimed
+      // the phase, moving it off `.transcribing`) or as a recorded request
+      // from before this release's turn, consumed here.
+      if consumeCancelRequest() || phase != .transcribing { return }
+      // Audio capture/conversion failed (e.g. the recorded file couldn't be
+      // read back). Surface it instead of silently transcribing an empty blob.
       setPhase(.failed(.audioCaptureFailed(underlying: error)))
       return
     }
-    // A cancel() requested while mic.stop() was in flight is honored here,
-    // before any pipeline exists — deterministically no transcription, no paste.
-    if consumeCancelRequest() { return }
-    setPhase(.transcribing)
+    // The same two cancel paths, honored here before any pipeline exists —
+    // deterministically no transcription, no paste.
+    if consumeCancelRequest() || phase != .transcribing { return }
     pipelineTask = Task { [weak self] in
-      await self?.runTranscribeInject(samples: samples)
+      await self?.runTranscribeInject(pcm: pcm)
     }
   }
 
@@ -243,21 +261,23 @@ public actor DictationSession {
   }
 
   public func cancel() async {
-    // A cancel that lands after recording has already stopped — while the
-    // transcribe→inject task is in flight — tears that task down so the
-    // transcript is never injected, and claims the phase so the cancelled
-    // pipeline can't overwrite it back to .idle. Synchronous (no suspension), so
-    // it acts immediately rather than queueing behind the pipeline's progress.
+    // A cancel that lands once `.transcribing` is claimed — while the release
+    // is still inside mic.stop(), or later with the transcribe→inject task in
+    // flight — tears the pipeline down (a nil or finished handle is a no-op)
+    // and claims the phase, so neither the release (which re-checks the phase
+    // after mic.stop()) nor the cancelled pipeline can overwrite it back to
+    // .idle. Synchronous (no suspension), so it acts immediately rather than
+    // queueing behind the pipeline's progress.
     if phase == .transcribing || phase == .injecting {
       // Cancel but keep the handle so `awaitPipeline()` can join the cancelled task.
       pipelineTask?.cancel()
       setPhase(.cancelled)
       return
     }
-    // Record the intent before taking a queue turn: a release currently mid-
-    // `mic.stop()` consumes it the moment the stop returns (no pipeline is ever
-    // spawned), and a press ahead in the queue is followed by our own turn,
-    // which ends the freshly started recording. Either way the cancel is
+    // Record the intent before taking a queue turn: a release queued ahead of
+    // our turn consumes it the moment its mic.stop() returns (no pipeline is
+    // ever spawned), and a press ahead in the queue is followed by our own
+    // turn, which ends the freshly started recording. Either way the cancel is
     // honored in arrival order, never dropped.
     cancelRequested = true
     await enqueue { await self.performCancel() }
@@ -287,111 +307,11 @@ public actor DictationSession {
     autoReleaseTask = nil
   }
 
-  private func runTranscribeInject(samples: [Float]) async {
-    // Times the full post-release hot path — Sync STT round trip plus the paste
-    // (including the clipboard settle) — across every exit (short-clip no-op,
-    // empty transcript, failure, cancel, or a completed paste).
-    let pipelineInterval = Self.signposter.beginInterval(Self.pipelineSignpostName)
-    defer { Self.signposter.endInterval(Self.pipelineSignpostName, pipelineInterval) }
-    // A clip too short for the Sync model (an accidental brief tap) would only
-    // earn a 400 — drop it as a silent no-op, like an empty transcript, rather
-    // than calling the API and surfacing an error.
-    guard samples.count >= SyncSTTLimits.minSamples else {
-      // A cancel() racing the freshly spawned pipeline task already claimed the
-      // phase — don't overwrite .cancelled with .idle.
-      if !Task.isCancelled { setPhase(.idle) }
-      return
-    }
+  // The post-release pipeline — `runTranscribeInject` and its transcribe/inject
+  // halves, plus the bounded context wait — lives in
+  // `DictationSession+Pipeline.swift` (see the split note at the top).
 
-    // Resolve the press-time AX field read now that it's actually needed. In the
-    // common case it finished long ago (the user spoke for a while); against an
-    // unresponsive app it's bounded by the AX messaging timeout.
-    capturedContext = await contextTask?.value
-    contextTask = nil
-
-    // The Sync STT API applies the cleanup prompt server-side, so the transcript
-    // it returns is already the final, polished text — there is no separate
-    // styling pass.
-    guard let text = await transcribe(samples: samples) else { return }
-
-    // A cancel() that landed while transcribe was in flight already set
-    // .cancelled and detached this task — don't inject or touch the phase.
-    if Task.isCancelled { return }
-
-    guard let trimmed = text.trimmedNonEmpty() else {
-      setPhase(.idle)
-      return
-    }
-
-    DictationLog.append(raw: text, polished: text, context: capturedContext)
-    // Record every produced transcript (trimmed for display) in "Recent" before
-    // injection — pasted, copied, and failed-to-paste all count; inject gets raw.
-    onTranscriptDelivered?(trimmed)
-    await inject(text)
-  }
-
-  /// Runs the single Sync STT request. Returns the transcript, or nil if it
-  /// failed (phase set to `.failed`).
-  private func transcribe(samples: [Float]) async -> String? {
-    do {
-      return try await transcriber.transcribe(
-        samples: samples, sampleRate: Self.captureSampleRate, context: capturedContext)
-    } catch {
-      // A cancel() that landed mid-request already tore this task down and set
-      // .cancelled; the transport then surfaces a cancellation-shaped error
-      // (URLError(.cancelled) / CancellationError). Leave the claimed phase
-      // alone rather than repainting the user's cancel as a red failure.
-      if Task.isCancelled || error is CancellationError { return nil }
-      if let err = error as? BlurtError {
-        // e.g. `.apiKeyMissing` — surface it directly rather than burying it
-        // inside `.sttFailed`.
-        setPhase(.failed(err))
-      } else {
-        setPhase(.failed(.sttFailed(underlying: error)))
-      }
-      return nil
-    }
-  }
-
-  private func inject(_ text: String) async {
-    setPhase(.injecting)
-    do {
-      try await injector.insert(
-        text, after: capturedContext?.priorText, windowTitle: capturedContext?.windowTitle)
-      // A cancel() that landed in insert's final, non-cancellable stretch
-      // (after its last checkCancellation) already set .cancelled — leave the
-      // claimed phase alone rather than repainting it as .pasted.
-      if Task.isCancelled { return }
-      // The paste landed — show the quiet "pasted" notice (the mirror of the
-      // "copied" notice below) rather than snapping straight back to idle.
-      setPhase(.pasted)
-    } catch {
-      // A cancel() landed mid-paste: it already set .cancelled (the injector
-      // bails via its checkCancellation). Leave the claimed phase alone —
-      // including on a late non-cancellation error — rather than relabeling
-      // the user's cancel as a failure.
-      if error is CancellationError || Task.isCancelled { return }
-      switch error {
-      case BlurtError.noEditableTarget, BlurtError.targetAppLost:
-        // Not failures: transcription worked, the words just couldn't be pasted
-        // — nothing editable was focused, or the target app quit/refused
-        // activation. Either way the injector left the text on the clipboard —
-        // show the quiet "copied" notice rather than the red error flash (and
-        // don't report it).
-        setPhase(.noTarget)
-      case let err as BlurtError:
-        // Surface the injector's real error (e.g. `.accessibilityPermissionMissing`)
-        // rather than relabeling every failure as a lost target.
-        setPhase(.failed(err))
-      default:
-        // An untyped injection error: nothing was left on the clipboard, so this
-        // stays a genuine (reported) failure under the generic lost-target label.
-        setPhase(.failed(.targetAppLost))
-      }
-    }
-  }
-
-  private func setPhase(_ newPhase: PipelinePhase) {
+  func setPhase(_ newPhase: PipelinePhase) {
     phase = newPhase
     for continuation in continuations.values {
       continuation.yield(newPhase)

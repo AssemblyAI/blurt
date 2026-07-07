@@ -105,18 +105,16 @@ struct CancelRaceTests {
     let releaseTask = Task { await session.release() }
     await mic.waitUntilStopEntered()  // release is now suspended inside mic.stop()
 
-    // cancel() records its request the moment it enters the session (the actor
-    // is free — the release is parked inside the gated mic.stop), then queues
-    // its turn behind the release; awaiting it inline here would deadlock
-    // against the gate. The drain gives cancel() that entry deterministically.
-    let cancelTask = Task { await session.cancel() }
-    for _ in 0..<1000 { await Task.yield() }
+    // The release claimed .transcribing before parking inside the gated
+    // mic.stop(), so cancel() takes its synchronous path: it claims the phase
+    // immediately (no queue turn, so awaiting it inline can't deadlock against
+    // the gate), and the release re-checks the phase after mic.stop() returns
+    // and spawns no pipeline — the cancelled transcript is never pasted.
+    await session.cancel()
+    #expect(await session.phase == .cancelled)
+
     await mic.allowStopToFinish()
-    // The release must consume the cancel request after mic.stop() returns and
-    // spawn no pipeline — the transcript the user cancelled is never pasted.
     await releaseTask.value
-    await cancelTask.value
-    for _ in 0..<1000 { await Task.yield() }
 
     #expect(await session.phase == .cancelled)
     #expect(await injector.inserted.isEmpty)
@@ -133,15 +131,15 @@ struct CancelRaceTests {
     let releaseTask = Task { await session.release() }
     await mic.waitUntilStopEntered()
 
-    // See cancelDuringMicStopDiscards for the Task + drain choreography.
-    let cancelTask = Task { await session.cancel() }
-    for _ in 0..<1000 { await Task.yield() }
+    // See cancelDuringMicStopDiscards: the synchronous cancel claims the phase
+    // while the release is parked inside the (failing) mic.stop().
+    await session.cancel()
     await mic.allowStopToFinish()
     await releaseTask.value
-    await cancelTask.value
 
-    // The user asked for nothing to happen — the cancel claims the phase
-    // rather than the stop failure repainting it as a red .failed.
+    // The user asked for nothing to happen — the release's phase re-check
+    // after the failing stop leaves the claimed .cancelled in place rather
+    // than repainting it as a red .failed.
     #expect(await session.phase == .cancelled)
     #expect(await injector.inserted.isEmpty)
   }
@@ -258,7 +256,7 @@ private actor GatedTranscriber: TranscriberProtocol {
     self.throwsWhenCancelled = throwsWhenCancelled
   }
 
-  func transcribe(samples: [Float], sampleRate: Int, context: TranscriptionContext?)
+  func transcribe(pcm: Data, sampleRate: Int, context: TranscriptionContext?)
     async throws -> String
   {
     await gate.enter()

@@ -134,10 +134,10 @@ private actor GatedMicCapture: MicCaptureProtocol {
   func waitUntilStartEntered() async { await gate.waitUntilEntered() }
   func allowStartToFinish() async { await gate.allowToFinish() }
 
-  func stop() async throws -> [Float] {
+  func stop() async throws -> Data {
     stopCalls += 1
-    // Above SyncSTTLimits.minSamples so the transcript isn't dropped by the
+    // Above SyncSTTLimits.minPCMBytes so the transcript isn't dropped by the
     // too-short guard — this suite exercises the press/release race, not it.
-    return Array(repeating: 0, count: SyncSTTLimits.minSamples * 2)
+    return Data(count: SyncSTTLimits.minPCMBytes * 2)
   }
 }

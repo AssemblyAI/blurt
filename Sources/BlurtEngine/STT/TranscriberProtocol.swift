@@ -1,11 +1,14 @@
+import Foundation
+
 public protocol TranscriberProtocol: Sendable {
-  /// Transcribe captured audio samples (mono Float32, 16 kHz) into text.
+  /// Transcribe captured audio (raw S16LE mono PCM at `sampleRate` — the bytes
+  /// `MicCaptureProtocol.stop()` returns, uploaded as-is) into text.
   /// The Sync STT API resolves an utterance to a single final transcript, so
   /// this returns that transcript in one shot (no incremental deltas).
   ///
   /// `context` carries per-utterance priming (focused app + text before the
   /// cursor) rendered into the request prompt; pass `nil` for none.
-  func transcribe(samples: [Float], sampleRate: Int, context: TranscriptionContext?) async throws -> String
+  func transcribe(pcm: Data, sampleRate: Int, context: TranscriptionContext?) async throws -> String
 
   /// Optionally pre-open the transcription connection so the next `transcribe`
   /// doesn't pay connection setup (DNS/TCP/TLS) on the latency-sensitive hot

@@ -5,10 +5,10 @@ import Foundation
 actor StubMicCapture: MicCaptureProtocol {
   var startCalls = 0
   var stopCalls = 0
-  // Comfortably above `SyncSTTLimits.minSamples` so the default press→release
+  // Comfortably above `SyncSTTLimits.minPCMBytes` so the default press→release
   // flow clears the too-short guard and reaches transcribe, tracking the engine
   // rule so a raised floor can't silently start dropping the canned audio.
-  var samplesToReturn: [Float] = Array(repeating: 0, count: SyncSTTLimits.minSamples * 2)
+  var pcmToReturn = Data(count: SyncSTTLimits.minPCMBytes * 2)
   var startError: (any Error & Sendable)?
   var stopError: (any Error & Sendable)?
 
@@ -18,12 +18,12 @@ actor StubMicCapture: MicCaptureProtocol {
     startCalls += 1
     if let startError { throw startError }
   }
-  func stop() async throws -> [Float] {
+  func stop() async throws -> Data {
     stopCalls += 1
     if let stopError { throw stopError }
-    return samplesToReturn
+    return pcmToReturn
   }
-  func setSamples(_ samples: [Float]) { samplesToReturn = samples }
+  func setPCM(_ pcm: Data) { pcmToReturn = pcm }
   func setStartError(_ error: (any Error & Sendable)?) { startError = error }
   func setStopError(_ error: (any Error & Sendable)?) { stopError = error }
 }

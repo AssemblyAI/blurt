@@ -11,7 +11,7 @@ actor StubTranscriber: TranscriberProtocol {
 
   init(mode: Mode) { self.mode = mode }
 
-  func transcribe(samples: [Float], sampleRate: Int, context: TranscriptionContext?) async throws -> String {
+  func transcribe(pcm: Data, sampleRate: Int, context: TranscriptionContext?) async throws -> String {
     switch mode {
     case .transcript(let transcript):
       return transcript

@@ -49,8 +49,8 @@ Before the first dictation can succeed the host must have:
 ## The pipeline
 
 ```text
-press() ──▶ MicCapture.start()            release() ──▶ MicCapture.stop() → [Float]
-            (16 kHz mono Float32)                       AssemblyAITranscriber.transcribe(samples:sampleRate:context:)
+press() ──▶ MicCapture.start()            release() ──▶ MicCapture.stop() → Data (raw S16LE PCM)
+            (16 kHz mono 16-bit PCM)                    AssemblyAITranscriber.transcribe(pcm:sampleRate:context:)
             + focus/context capture                     (one POST sync.assemblyai.com/transcribe, X-AAI-Model: u3-sync-pro)
             + connection warm-up                        KeyInjector.insert(text, after: priorText)
                                                         (clipboard paste via synthesized ⌘V)
@@ -60,8 +60,8 @@ Key properties of the design, which your integration can rely on:
 
 - **One request per utterance, no streaming.** The Sync API returns the complete transcript in the response body — no upload step, no job polling, no incremental deltas. `TranscriberProtocol.transcribe` is a single `async throws -> String`. UIs should show a "transcribing…" state and then the whole result; there is nothing to stream.
 - **Cleanup happens server-side.** The per-utterance `config.prompt` (built by `TranscriptionPrompt` from the captured context) rides along with the request, so the transcript comes back already polished. There is no separate LLM pass, no styling stage, and deliberately no hook for one — adjust the prompt instead.
-- **Latency is pre-paid where possible.** `press()` fires a detached `warmUp()` at the transcriber (pre-opening the HTTPS connection while the user speaks, ~170 ms saved cold) and kicks off the cross-process accessibility read of the focused field without awaiting it — an unresponsive frontmost app can delay the transcript, never the recording indicator.
-- **A held trigger auto-releases.** `DictationSession` stops recording after `maxRecordingSeconds` (default `SyncSTTLimits.autoReleaseSeconds`, 115 s) so audio never exceeds what the Sync endpoint accepts, and transcribes what it has. Clips shorter than `SyncSTTLimits.minSamples` (~100 ms — an accidental tap) are dropped as a silent no-op rather than sent to earn a 400.
+- **Latency is pre-paid where possible.** `press()` fires a detached `warmUp()` at the transcriber (pre-opening the HTTPS connection while the user speaks, ~170 ms saved cold) and kicks off the cross-process accessibility read of the focused field without awaiting it — the read is then consumed at transcribe time with a bounded wait (`DictationSession.contextWaitBudget`, 500 ms), so an unresponsive frontmost app costs the transcript its priming, never a multi-second stall — and never delays the recording indicator. On the way out, `release()` flips the phase to `.transcribing` _before_ reading the recorded audio back, so a host's stop cue fires at key-up rather than after the disk read.
+- **A held trigger auto-releases.** `DictationSession` stops recording after `maxRecordingSeconds` (default `SyncSTTLimits.autoReleaseSeconds`, 115 s) so audio never exceeds what the Sync endpoint accepts, and transcribes what it has. Clips shorter than `SyncSTTLimits.minPCMBytes` (~100 ms of audio — an accidental tap) are dropped as a silent no-op rather than sent to earn a 400.
 
 ## DictationSession
 
@@ -114,25 +114,25 @@ All cases are `LocalizedError` with user-ready `errorDescription` strings, and `
 
 ```swift
 func start() async throws
-func stop() async throws -> [Float]     // mono Float32, 16 kHz, in order
+func stop() async throws -> Data        // raw S16LE mono PCM, 16 kHz, in order
 var levels: AsyncStream<Float> { get }  // 0…1 meter; default: empty stream
 func warmUp() async                     // pre-open the device; default: no-op
 ```
 
 Only `start()`/`stop()` must be implemented — `levels` and `warmUp()` have defaults, so a stub or headless capture conforms for free while hosts still read the meter and warm the device through the same seam they inject.
 
-`MicCapture` records with `AVAudioRecorder` straight to a temp 16 kHz / mono / 16-bit PCM WAV — exactly the geometry the Sync API wants — and reads it back as `[Float]` on `stop()`. A **fresh recorder per session** resolves the current default input device at `record()` time, which is why device switches (headset ↔ built-in) just work. Do **not** replace this with a long-lived `AVAudioEngine`/`installTap` graph: that design was tried, bound itself to one device, and failed with `-10868` or all-zero buffers on device switches.
+`MicCapture` records with `AVAudioRecorder` straight to a temp 16 kHz / mono / 16-bit PCM WAV — exactly the geometry the Sync API wants — and reads it back as raw S16LE bytes on `stop()` (no float detour; the blob uploads as-is). A **fresh recorder per session** resolves the current default input device at `record()` time, which is why device switches (headset ↔ built-in) just work. Do **not** replace this with a long-lived `AVAudioEngine`/`installTap` graph: that design was tried, bound itself to one device, and failed with `-10868` or all-zero buffers on device switches.
 
 `MicCapture`'s `levels` is a ~30 Hz meter of the recorder's dBFS power mapped to `0…1` (floored at −50 dBFS so room ambient reads as silence) — feed it to a voice-bars view; it costs nothing when unobserved. Its `warmUp()` pre-creates and prepares a recorder so the first `start()` skips hardware route discovery (Blurt calls it at launch, once mic permission is granted, so warming never triggers the permission prompt).
 
 ### `TranscriberProtocol` → `AssemblyAITranscriber`
 
 ```swift
-func transcribe(samples: [Float], sampleRate: Int, context: TranscriptionContext?) async throws -> String
+func transcribe(pcm: Data, sampleRate: Int, context: TranscriptionContext?) async throws -> String
 func warmUp() async   // optional; no-op default
 ```
 
-`AssemblyAITranscriber` is a stateless `Sendable` struct. One `POST https://sync.assemblyai.com/transcribe` per utterance: the audio as raw S16LE PCM (`PCMEncoder`) in the `audio` multipart part, plus a JSON `config` part (`sample_rate`, `channels`, and the rendered `prompt`), with `X-AAI-Model: u3-sync-pro` and the API key in `Authorization`. Its initializer takes an `apiKeyProvider` closure (defaults to `APIKeyStore.get`), a `baseURL`, and a `URLSession` — inject a mock session (see `Tests/BlurtEngineTests/Stubs/MockURLProtocol.swift`) to test against canned responses. `warmUp()` fires a throwaway GET at the host root to pre-pool the connection; it never throws and any failure just means the real request pays connection setup as before.
+`AssemblyAITranscriber` is a stateless `Sendable` struct. One `POST https://sync.assemblyai.com/transcribe` per utterance: the audio as raw S16LE PCM (the `pcm` blob, byte-for-byte) in the `audio` multipart part, plus a JSON `config` part (`sample_rate`, `channels`, and the rendered `prompt`), with `X-AAI-Model: u3-sync-pro` and the API key in `Authorization`. Its initializer takes an `apiKeyProvider` closure (defaults to `APIKeyStore.get`), a `baseURL`, and a `URLSession` — inject a mock session (see `Tests/BlurtEngineTests/Stubs/MockURLProtocol.swift`) to test against canned responses. `warmUp()` fires a throwaway GET at the host root to pre-pool the connection; it never throws and any failure just means the real request pays connection setup as before.
 
 The model's limits live in `SyncSTTLimits` (16 kHz sample rate, ~0.1 s–120 s audio, and the auto-release math) — the single source shared by the mic, the session, and the request so recorded and declared geometry can't drift.
 
@@ -151,7 +151,7 @@ The session calls `setTargetApp` at press time with the app that was frontmost w
 
 Recognition quality comes from per-utterance priming, assembled automatically inside `press()` — hosts don't call these APIs directly, but should know what's collected:
 
-- **`TranscriptionContext`** carries the frontmost app name, window title, focused-field label, the text before the caret, the selected text (which a paste will replace), and the user's key terms. It's captured via Accessibility at press time (skipped in secure fields), off the hot path.
+- **`TranscriptionContext`** carries the frontmost app name, window title, focused-field label, the text before the caret, the selected text (which a paste will replace), and the user's key terms. It's captured via Accessibility at press time (skipped in secure fields), off the hot path — and consumed at transcribe time with a bounded wait (`DictationSession.contextWaitBudget`), so a hung read is abandoned rather than stalling the transcript.
 - **`TranscriptionPrompt.build(context:)`** renders that into the Sync request's `config.prompt`, opening with the fixed `baseInstruction` ("Transcribe without speaker labels, audio event descriptions, or emotion markers.") and staying under the API's 4096-character cap. An empty context yields `nil`, which omits the field so the server applies its own default. Two deliberate omissions, both regression-tested: no language directive (pinning to English hurt non-English speech) and no "remove filler words" clause (not in the model's trained instruction set — a no-op). Don't reintroduce either.
 - **`KeyTermsStore`** persists the user's domain vocabulary (names, jargon) in `UserDefaults`; `DictationSession` re-reads it at every press via its `keyTermsProvider` closure, so Settings edits apply to the next utterance without rebuilding the session. Pass your own provider to source terms from elsewhere.
 

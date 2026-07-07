@@ -24,11 +24,19 @@ struct SyncSTTLimitsTests {
 
   @Test("minSamples is the minimum duration expressed at the capture sample rate")
   func minSamplesDerivation() {
-    // DictationSession's too-short-clip guard counts samples; if this product
-    // drifted from the duration floor, ultra-brief taps would reach the API and
-    // earn a 400 (or real clips would silently be dropped).
+    // If this product drifted from the duration floor, ultra-brief taps would
+    // reach the API and earn a 400 (or real clips would silently be dropped).
     #expect(SyncSTTLimits.minSamples == Int(SyncSTTLimits.minAudioSeconds * Double(SyncSTTLimits.sampleRate)))
     #expect(SyncSTTLimits.minSamples == 1600)
+  }
+
+  @Test("minPCMBytes is minSamples in the captured 16-bit encoding")
+  func minPCMBytesDerivation() {
+    // DictationSession's too-short-clip guard measures the raw S16LE blob; the
+    // byte floor must stay exactly the sample floor times the sample width.
+    #expect(SyncSTTLimits.bytesPerSample == 2)
+    #expect(SyncSTTLimits.minPCMBytes == SyncSTTLimits.minSamples * SyncSTTLimits.bytesPerSample)
+    #expect(SyncSTTLimits.minPCMBytes == 3200)
   }
 
   @Test("the capture geometry is the Sync API's 16 kHz")
