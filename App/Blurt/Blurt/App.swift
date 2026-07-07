@@ -4,19 +4,6 @@ import SwiftUI
 struct BlurtApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
-  /// The main window presents at launch — except under UI testing, where it's
-  /// suppressed so the harness window is the sole one presented and thus becomes
-  /// frontmost + key (the main window is opened on demand by the accessibility
-  /// audit test). Making the harness key is what lets its controls be clicked
-  /// without closing sibling windows and lets its text field take keyboard focus.
-  private var mainWindowLaunchBehavior: SceneLaunchBehavior {
-    #if UITEST_HOOKS
-      return UITestMode.isActive ? .suppressed : .presented
-    #else
-      return .presented
-    #endif
-  }
-
   var body: some Scene {
     // Primary window: the setup wizard until the app is fully configured, then
     // the "ready" screen (see `MainWindowRoot`).
@@ -33,10 +20,8 @@ struct BlurtApp: App {
     // Always present the main window at launch — both first-run onboarding and a
     // configured launch (the "ready" screen) come up front, rather than the app
     // launching silently to just the overlay pill. (`AppDelegate` activates the
-    // app so it's frontmost; the Dock/⌘, reopen it once closed.) Suppressed under
-    // UI testing so the harness window is the sole one presented — see
-    // `mainWindowLaunchBehavior`.
-    .defaultLaunchBehavior(mainWindowLaunchBehavior)
+    // app so it's frontmost; the Dock/⌘, reopen it once closed.)
+    .defaultLaunchBehavior(.presented)
     .commands {
       BlurtCommands()
     }
@@ -75,6 +60,12 @@ struct BlurtApp: App {
       }
       .windowResizability(.contentSize)
       .defaultLaunchBehavior(UITestMode.isActive ? .presented : .suppressed)
+      // Pin the harness to the top-leading corner so it never overlaps the
+      // centered main window: the two stay simultaneously interactable, so a test
+      // can drive a dictation on the harness and read the result on the ready
+      // screen without closing/reopening either (XCUITest can't click a control
+      // under another window). Test-only (UITEST_HOOKS).
+      .defaultPosition(.topLeading)
     #endif
   }
 }

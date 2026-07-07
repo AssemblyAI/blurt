@@ -148,9 +148,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // though no window is shown. `onNeedsForeground` fires when a configured app
     // loses a requirement (e.g. a revoked permission) so the user is pulled back
     // into onboarding even if every window was closed.
-    self.wizardController = WizardController(
-      coordinator: coord,
-      onNeedsForeground: { [weak self] in self?.surfaceMainWindow() })
+    #if UITEST_HOOKS
+      // Under the ready-state flag, force the fully-configured state so the main
+      // window renders `ReadyView` instead of the wizard: save a key and inject an
+      // all-granted permissions stub (the test host can't grant real TCC access).
+      // Without the flag the wizard shows as usual, so wizard-based tests are
+      // unaffected.
+      if UITestMode.isReadyStateRequested {
+        coord.saveAPIKey(UITestIdentifiers.validAPIKey)
+        self.wizardController = WizardController(
+          coordinator: coord,
+          onNeedsForeground: { [weak self] in self?.surfaceMainWindow() },
+          checkPermissions: { PermissionStatus(microphone: true, accessibility: true) })
+      } else {
+        self.wizardController = WizardController(
+          coordinator: coord,
+          onNeedsForeground: { [weak self] in self?.surfaceMainWindow() })
+      }
+    #else
+      self.wizardController = WizardController(
+        coordinator: coord,
+        onNeedsForeground: { [weak self] in self?.surfaceMainWindow() })
+    #endif
 
     #if UITEST_HOOKS
       // Build the overlay pill up front under UI testing so the suite can observe

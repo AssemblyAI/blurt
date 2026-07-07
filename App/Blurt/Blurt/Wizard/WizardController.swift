@@ -40,11 +40,20 @@ final class WizardController {
   /// previously-configured app loses a requirement (e.g. a revoked permission) so
   /// the user is taken back to onboarding instead of left with a dead overlay.
   @ObservationIgnored private let onNeedsForeground: @MainActor () -> Void
+  /// How the live permission status is read. Defaults to the real
+  /// `PermissionsChecker`; the UI-test harness injects an all-granted stub so the
+  /// ready screen is reachable without the TCC grants the test host can't make.
+  @ObservationIgnored private let checkPermissions: () -> PermissionStatus
 
-  init(coordinator: AppCoordinator, onNeedsForeground: @escaping @MainActor () -> Void) {
+  init(
+    coordinator: AppCoordinator,
+    onNeedsForeground: @escaping @MainActor () -> Void,
+    checkPermissions: @escaping () -> PermissionStatus = { PermissionsChecker.check() }
+  ) {
     self.coordinator = coordinator
     self.onNeedsForeground = onNeedsForeground
-    self.permissions = PermissionsChecker.check()
+    self.checkPermissions = checkPermissions
+    self.permissions = checkPermissions()
     // Flips `isReady` to its true value (and shows the overlay if the app is
     // already configured), starting from the `false` default above.
     syncReadiness()
@@ -110,7 +119,7 @@ final class WizardController {
   /// so the row flips to "Granted" without waiting for the next poll tick, and by
   /// the lifetime poll to catch a permission revoked outside the app.
   func refreshPermissions() {
-    let perms = PermissionsChecker.check()
+    let perms = checkPermissions()
     // A permission that was granted and is now gone (revoked in System Settings,
     // possibly while no window was open) should pull the user back into onboarding.
     let revoked = permissions.allGranted && !perms.allGranted

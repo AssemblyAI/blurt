@@ -27,6 +27,11 @@ extension UITestIdentifiers {
 class BlurtUITestCase: XCTestCase {
   var app: XCUIApplication!
 
+  /// Launch arguments a subclass wants added on top of the base `-BlurtUITest`
+  /// flag before the app launches in `setUp`. Empty by default; `ReadyViewUITests`
+  /// overrides it to opt into the ready-state flag.
+  var extraLaunchArguments: [String] { [] }
+
   // The async lifecycle overrides (not the sync `setUpWithError`): on a
   // @MainActor subclass, only the async variants can carry the main-actor
   // isolation without clashing with XCTestCase's nonisolated declarations, and
@@ -38,7 +43,7 @@ class BlurtUITestCase: XCTestCase {
     // missing, the follow-on steps just produce noise.
     continueAfterFailure = false
     app = XCUIApplication()
-    app.launchArguments += [UITestIdentifiers.launchArgument]
+    app.launchArguments += [UITestIdentifiers.launchArgument] + extraLaunchArguments
     app.launch()
   }
 
@@ -64,16 +69,52 @@ class BlurtUITestCase: XCTestCase {
     return settings
   }
 
-  /// The UI-test harness window. In UI-test mode it's the only window presented
-  /// at launch (the main window is suppressed — see `App.swift` /
-  /// `mainWindowLaunchBehavior`), so it comes up frontmost and key with its
-  /// controls directly clickable — no sibling windows to close first.
+  /// The UI-test harness window (auto-presented at launch in test mode). Closes
+  /// the other windows so the harness is frontmost and its buttons are clickable
+  /// (see `closeWindows`).
   func harnessWindow(timeout: TimeInterval = 10) -> XCUIElement {
     let harness = app.windows[UITestIdentifiers.harnessWindowTitle]
     XCTAssertTrue(
       harness.waitForExistence(timeout: timeout),
       "UI test harness window was not presented")
+    closeWindows(except: UITestIdentifiers.harnessWindowTitle)
     return harness
+  }
+
+  /// The main window (the setup wizard, or `ReadyView` under the ready-state
+  /// flag), brought frontmost by closing the sibling harness/Settings windows so
+  /// its controls are hittable — the same treatment `harnessWindow()` gives the
+  /// harness.
+  @discardableResult
+  func mainWindow(timeout: TimeInterval = 10) -> XCUIElement {
+    let main = app.windows[UITestIdentifiers.mainWindowTitle]
+    XCTAssertTrue(
+      main.waitForExistence(timeout: timeout),
+      "Main window was not presented")
+    closeWindows(except: UITestIdentifiers.mainWindowTitle)
+    return main
+  }
+
+  /// Closes every app window except the one titled `keepTitle`. The app presents
+  /// several windows at launch (wizard/ready, the UI-test harness, and any
+  /// Settings window macOS restored), all centered and overlapping — and XCUITest
+  /// can't hit a control that sits under another window, nor does a click on a
+  /// covered button register. Closing the siblings leaves `keepTitle` frontmost
+  /// and fully interactable. Closes one per pass (front-most first — only its
+  /// close button is un-occluded), re-querying until none remain. The app keeps
+  /// running with its windows closed
+  /// (`applicationShouldTerminateAfterLastWindowClosed` returns false).
+  private func closeWindows(except keepTitle: String) {
+    for _ in 0..<5 {
+      let target = (0..<app.windows.count)
+        .map { app.windows.element(boundBy: $0) }
+        .first {
+          $0.title != keepTitle
+            && $0.buttons[XCUIIdentifierCloseWindow].firstMatch.isHittable
+        }
+      guard let target else { break }
+      target.buttons[XCUIIdentifierCloseWindow].firstMatch.click()
+    }
   }
 
   /// Waits until `element`'s label *or* value equals `expected`, failing the test

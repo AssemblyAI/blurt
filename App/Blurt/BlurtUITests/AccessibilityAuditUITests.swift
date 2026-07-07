@@ -29,14 +29,9 @@ private let auditedTypes: XCUIAccessibilityAuditType = .all.subtracting([
 ])
 
 final class AccessibilityAuditUITests: BlurtUITestCase {
-  /// The setup wizard / ready screen. Only the harness presents at launch in
-  /// UI-test mode, so open the main window from it before auditing.
+  /// The setup wizard / ready screen shown in the main window.
   func testMainWindowAccessibility() throws {
-    let harness = harnessWindow()
-    harness.buttons[UITestIdentifiers.openMainButton].click()
-    XCTAssertTrue(
-      app.windows[UITestIdentifiers.mainWindowTitle].waitForExistence(timeout: 10),
-      "Main window did not appear")
+    mainWindow()
     try app.performAccessibilityAudit(for: auditedTypes)
   }
 

@@ -13,6 +13,11 @@ enum UITestIdentifiers {
   /// Passed to `XCUIApplication.launchArguments` to put the app in UI-test mode
   /// (offline stub pipeline + harness window); read by `UITestMode`.
   static let launchArgument = "-BlurtUITest"
+  /// Opt-in flag that forces the fully-configured "ready" state (saved key + all
+  /// permissions granted) so the main window renders `ReadyView` instead of the
+  /// setup wizard — the test host can't grant real TCC permissions. Read by
+  /// `UITestMode.isReadyStateRequested`; opted into per test.
+  static let readyLaunchArgument = "-BlurtUITestReady"
 
   // Window titles the XCUITest suite queries, sourced from the `Window(_:id:)`
   // declarations in `App.swift`. (The framework-derived Settings title, which the
@@ -30,7 +35,6 @@ enum UITestIdentifiers {
   static let cancelButton = "uitest.cancel"
   static let hotkeyPressButton = "uitest.hotkeyPress"
   static let hotkeyReleaseButton = "uitest.hotkeyRelease"
-  static let openMainButton = "uitest.openMain"
   static let statusLabel = "uitest.status"
   static let pastedLabel = "uitest.pasted"
   static let transcriptEchoLabel = "uitest.transcriptEcho"

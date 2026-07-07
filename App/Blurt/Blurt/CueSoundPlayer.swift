@@ -11,7 +11,10 @@ final class CueSoundPlayer {
   /// The pack the current `startSound`/`stopSound` were decoded from, so `prime()`
   /// can skip re-decoding when nothing changed. `nil` until the first load.
   private var loadedPack: SoundPack?
-  private var wasRecording = false
+  /// Edge-detector deciding when the start/stop chimes fire. The mapping from a
+  /// pipeline phase to a cue lives in the engine (`RecordingCueGate`), where
+  /// `swift test` covers it; this player just plays whatever it resolves to.
+  private var cueGate = RecordingCueGate()
 
   /// The cues are deliberate UI accents, not music — they are normalized to a
   /// hot peak, so play them well below full scale so they read as a soft chime
@@ -67,14 +70,14 @@ final class CueSoundPlayer {
   }
 
   /// Fires the start/stop cue on the recording edge. Call once per rendered
-  /// phase; only the idle↔recording transitions make a sound.
-  func transition(isRecording: Bool) {
-    if isRecording && !wasRecording {
-      play(startSound)
-    } else if !isRecording && wasRecording {
-      play(stopSound)
+  /// phase; only the idle↔recording transitions make a sound (the edge logic is
+  /// the engine's `RecordingCueGate`).
+  func transition(for phase: PipelinePhase) {
+    switch cueGate.cue(for: phase) {
+    case .start: play(startSound)
+    case .stop: play(stopSound)
+    case nil: break
     }
-    wasRecording = isRecording
   }
 
   /// The decoded, pre-rolled players for a pack. Non-`Sendable` (holds

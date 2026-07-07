@@ -26,6 +26,14 @@
     static var isActive: Bool {
       ProcessInfo.processInfo.arguments.contains(UITestIdentifiers.launchArgument)
     }
+
+    /// Whether the runner asked for the forced-ready state (implies `isActive`) so
+    /// the main window renders `ReadyView` instead of the setup wizard — the only
+    /// way the test host can reach that screen, since it can't grant real TCC
+    /// permissions. See `AppDelegate.applicationDidFinishLaunching`.
+    static var isReadyStateRequested: Bool {
+      ProcessInfo.processInfo.arguments.contains(UITestIdentifiers.readyLaunchArgument)
+    }
   }
 
   // Accessibility identifiers, the launch argument, and the sentinel API keys
@@ -176,11 +184,6 @@
             .accessibilityIdentifier(UITestIdentifiers.hotkeyReleaseButton)
         }
 
-        // Opens the main window (suppressed at launch in UI-test mode) so the
-        // accessibility-audit suite can bring it up and audit it on demand.
-        Button("Open Main Window") { appDelegate.openMainWindow() }
-          .accessibilityIdentifier(UITestIdentifiers.openMainButton)
-
         // The live pipeline status, mirrored off the same `menuBarStatus` the
         // menu bar indicator renders, so the test can watch idle → recording →
         // transcribing → idle transitions.
@@ -207,15 +210,12 @@
       .padding(20)
       .frame(width: 360)
       .onAppear {
-        // The harness is the only window presented in UI-test mode (the main
-        // window is suppressed at launch), so capture its openWindow action for
-        // the on-demand opens (the audit test's "Open Main Window" below, and the
-        // missing-key nudge), then activate the app so the harness comes up
-        // frontmost and key — the deterministic single window. That's what lets
-        // its buttons be clicked without closing siblings and its text field take
-        // keyboard focus, replacing the old close-the-main-window dance.
+        // UI tests need the main Window scene to be present even when SwiftUI's
+        // restoration state remembers it as closed from a prior test. The harness
+        // scene is always presented in UI-test mode, so capture its openWindow
+        // action and use it to deterministically restore the main window.
         appDelegate.openWindowByID = { openWindow(id: $0) }
-        appDelegate.activateAtLaunchIfNeeded()
+        appDelegate.openMainWindow()
       }
     }
 

@@ -310,6 +310,6 @@ final class AppCoordinator {
     // unit-tested alongside `overlayState`).
     menuBarStatus = phase.menuBarStatus
 
-    cues.transition(isRecording: phase == .recording)
+    cues.transition(for: phase)
   }
 }

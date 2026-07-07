@@ -72,4 +72,17 @@ struct APIKeySubmissionTests {
     #expect(!keySubmission.save("   "))
     #expect(keySubmission.save("sk-good"))
   }
+
+  @Test("the public convenience init wires the store through to save")
+  func productionInitWiresTheStore() {
+    // Every other test uses the validate-injecting seam init; the app itself
+    // builds `APIKeySubmission(keyStore:)` with the default `APIKeyValidator`.
+    // Exercise that production initializer via `save` (no network, so the
+    // default validator never fires) to prove it forwards writes to the store
+    // it was handed rather than dropping them.
+    let store = InMemoryAPIKeyStore()
+    let keySubmission = APIKeySubmission(keyStore: store)
+    #expect(keySubmission.save("sk-good"))
+    #expect(store.get() == "sk-good")
+  }
 }
