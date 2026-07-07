@@ -11,10 +11,21 @@ The Developer ID Application key (`640A7F5A9754400D4A0491E7A6FB30542D907806`,
 team `Y54ZB9JF63`) is the root of trust: Gatekeeper accepts anything signed with
 it, so every published DMG must carry this signature. Protect it accordingly:
 
-- Keep the private key **non-exportable** in the login keychain with a tight ACL
-  (only `codesign` / the release scripts may use it). Never store a plaintext
-  `.p12` on disk or in cloud sync.
-- `scripts/release-build.sh` preflights that the identity is present
+- Keep the private key in a **dedicated keychain that stays locked at rest**
+  (`~/Library/Keychains/blurt-signing.keychain-db`), not the login keychain, with
+  a tight partition-list ACL (only `codesign` / `productsign` may use it) and a
+  15-minute auto-lock. Never store a plaintext `.p12` on disk or in cloud sync;
+  keep the encrypted `.p12` backup offline.
+- `scripts/release-build.sh` unlocks that keychain for the duration of the build
+  and re-locks it on exit (even on failure). It resolves the keychain password
+  from, in order: `BLURT_SIGNING_KEYCHAIN_PASSWORD` (use this in CI), a
+  `blurt-signing-keychain` generic-password item in the login keychain (local
+  releases unlock without a prompt), then an interactive prompt. Override the
+  keychain path with `BLURT_SIGNING_KEYCHAIN` if it lives elsewhere.
+- If `blurt-signing.keychain-db` isn't present, the script falls back to whatever
+  identity is on the existing search list (e.g. login) — so a machine that hasn't
+  migrated the key yet still builds.
+- It then preflights that the identity is present
   (`security find-identity -v -p codesigning`) and refuses to build without it.
 
 ## Rotating the signing certificate
