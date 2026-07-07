@@ -22,7 +22,18 @@ public enum SyncSTTLimits {
   /// function taking a rate) because the pipeline records at exactly
   /// `sampleRate` — a parameter would just re-ask a question this type already
   /// answers, and invite a floor inconsistent with what's actually recorded.
-  public static let minSamples = Int(minAudioSeconds * Double(sampleRate))
+  /// Internal: the pipeline's floor is `minPCMBytes` (the byte form of this).
+  static let minSamples = Int(minAudioSeconds * Double(sampleRate))
+
+  /// Bytes per sample of the 16-bit PCM geometry — the factor between a byte
+  /// count of captured audio and its sample count. Internal: hosts size canned
+  /// audio with `minPCMBytes`; only the capture/upload code needs the factor.
+  static let bytesPerSample = 2
+
+  /// The fewest PCM bytes worth sending: `minSamples` expressed in the raw
+  /// S16LE encoding the pipeline captures and uploads — the floor
+  /// `DictationSession` applies to the blob `MicCaptureProtocol.stop()` returns.
+  public static let minPCMBytes = minSamples * bytesPerSample
 
   /// Safety margin subtracted from the cap for the auto-release timeout, so the
   /// session stops recording before it hits the hard limit.

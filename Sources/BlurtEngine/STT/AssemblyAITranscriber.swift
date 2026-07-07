@@ -11,7 +11,8 @@ private let transcriberLog = Logger(subsystem: BlurtIdentity.subsystem, category
 ///
 /// Mirrors the endpoint used by the `assembly dictate` CLI command: a single
 /// `POST sync.assemblyai.com/transcribe` carries the captured audio (raw S16LE
-/// PCM) plus a JSON `config` part, and the finished transcript comes back in the
+/// PCM, exactly the bytes the mic recorded — there is no re-encoding pass)
+/// plus a JSON `config` part, and the finished transcript comes back in the
 /// response body. No upload step, no job submission, no polling — one request
 /// per utterance. The Universal-3 sync model (`u3-sync-pro`) handles audio from
 /// ~80 ms up to 120 s with a server-side inference deadline of ~30 s.
@@ -36,12 +37,11 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   // MARK: - Sync request
 
   public func transcribe(
-    samples: [Float], sampleRate: Int, context: TranscriptionContext?
+    pcm: Data, sampleRate: Int, context: TranscriptionContext?
   ) async throws -> String {
     guard let apiKey = apiKeyProvider(), !apiKey.isEmpty else {
       throw BlurtError.apiKeyMissing
     }
-    let pcm = PCMEncoder.encodeS16LE(samples: samples)
     let prompt = TranscriptionPrompt.build(context: context)
     let config = try makeConfigData(sampleRate: sampleRate, prompt: prompt)
     let boundary = "blurt-\(UUID().uuidString)"
@@ -54,7 +54,8 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
       "multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
     let body = multipartBody(pcm: pcm, config: config, boundary: boundary)
-    let audioDurationMs = Int((Double(samples.count) / Double(sampleRate)) * 1000)
+    let sampleCount = pcm.count / SyncSTTLimits.bytesPerSample
+    let audioDurationMs = Int((Double(sampleCount) / Double(sampleRate)) * 1000)
     let data = try await send(request, body: body, audioDurationMs: audioDurationMs)
     guard let response = try? JSONDecoder().decode(SyncTranscriptResponse.self, from: data) else {
       throw AssemblyAIError.malformedResponse

@@ -36,24 +36,27 @@ struct MicCaptureFormatTests {
 
   // MARK: - PCM file decoding
 
-  @Test func decodeSamplesRoundTripsRecordedPCM() throws {
+  @Test func decodePCMRoundTripsRecordedAudio() throws {
     let known: [Float] = [0, 0.5, -0.5, 1.0, -1.0, 0.25, -0.25, 0]
     let url = try Self.writeWAV(samples: known)
     defer { try? FileManager.default.removeItem(at: url) }
 
-    let decoded = try MicCapture.decodeSamples(fromFileAt: url)
+    let pcm = try MicCapture.decodePCM(fromFileAt: url)
 
-    #expect(decoded.count == known.count)
-    for (got, want) in zip(decoded, known) {
-      // int16 quantization tolerance (full scale is ±32767, ~3e-5 per step).
+    // Two bytes per sample, no RIFF/WAVE header — the blob uploads as-is.
+    #expect(pcm.count == known.count * 2)
+    for (i, want) in known.enumerated() {
+      let got = Float(Self.readInt16LE(pcm, i * 2)) / 32_767
+      // int16 quantization tolerance (full scale is ±32767, ~3e-5 per step;
+      // the write side's ±32768-vs-±32767 scaling convention also fits inside).
       #expect(abs(got - want) < 0.001)
     }
   }
 
-  @Test func decodeSamplesReturnsEmptyForEmptyFile() throws {
+  @Test func decodePCMReturnsEmptyForEmptyFile() throws {
     let url = try Self.writeWAV(samples: [])
     defer { try? FileManager.default.removeItem(at: url) }
-    #expect(try MicCapture.decodeSamples(fromFileAt: url).isEmpty)
+    #expect(try MicCapture.decodePCM(fromFileAt: url).isEmpty)
   }
 
   @Test func noInputDeviceHasHumanReadableMessage() {
@@ -65,9 +68,14 @@ struct MicCaptureFormatTests {
 
   // MARK: - Helpers
 
+  /// Little-endian Int16 at `offset` — decodes the raw S16LE blob under test.
+  private static func readInt16LE(_ data: Data, _ offset: Int) -> Int16 {
+    Int16(bitPattern: UInt16(data[offset]) | (UInt16(data[offset + 1]) << 8))
+  }
+
   /// Write the given mono samples to a temp 16 kHz / 16-bit PCM WAV — the same
   /// on-disk format `MicCapture` records — and return its URL. The file is closed
-  /// (flushed) before returning so `decodeSamples` reads a complete file.
+  /// (flushed) before returning so `decodePCM` reads a complete file.
   private static func writeWAV(samples: [Float]) throws -> URL {
     let url = FileManager.default.temporaryDirectory
       .appendingPathComponent("blurt-test-\(UUID().uuidString).wav")

@@ -4,12 +4,12 @@ import Testing
 @testable import BlurtEngine
 
 /// Races in `DictationSession.release()`. `release()` has two real triggers — the
-/// manual key-up and the auto-release timer — and there is an `await mic.stop()`
-/// between its `phase == .recording` guard and the `setPhase(.transcribing)` that
-/// closes the window. If a second release lands during that suspension (e.g. the
-/// auto-release timer's continuation wins the scheduling race against a manual
-/// key-up), both pass the guard and run the pipeline, double-stopping the mic and
-/// injecting the transcript twice. These tests pin that window.
+/// manual key-up and the auto-release timer — and it suspends inside
+/// `await mic.stop()`. `performRelease` claims `.transcribing` *before* that
+/// suspension (both for the stop cue's sake — see the test below — and so a
+/// second release interleaving during the stop fails the `.recording` guard
+/// instead of double-stopping the mic and injecting the transcript twice).
+/// These tests pin both halves of that ordering.
 @Suite("DictationSession release races", .timeLimit(.minutes(1)))
 struct ReleaseRaceTests {
 
@@ -23,13 +23,14 @@ struct ReleaseRaceTests {
     await session.press()
     #expect(await session.phase == .recording)
 
-    // Release #1 suspends inside mic.stop(); release #2 then interleaves while the
-    // session is still .recording (transcribing hasn't been set yet).
+    // Release #1 suspends inside mic.stop(); release #2 then interleaves while
+    // that stop is parked — it must fail the .recording guard (the phase is
+    // already .transcribing) rather than run the pipeline a second time.
     let first = Task { await session.release() }
     await mic.waitUntilStopEntered()
     let second = Task { await session.release() }
-    // Let release #2 reach its (buggy) second mic.stop() before we let stop finish;
-    // bounded so a regression fails the assertion rather than hanging the suite.
+    // Let a (buggy) release #2 reach a second mic.stop() before we let stop
+    // finish; bounded so a regression fails the assertion, not the suite clock.
     for _ in 0..<1000 where await mic.stopCalls < 2 { await Task.yield() }
     await mic.allowStopToFinish()
     await first.value
@@ -43,5 +44,27 @@ struct ReleaseRaceTests {
     #expect(await mic.stopCalls == 1)
     #expect(await injector.inserted == ["hi"])
     #expect(await session.phase == .pasted)
+  }
+
+  @Test("release claims .transcribing before mic.stop completes")
+  func transcribingClaimedBeforeMicStopReturns() async throws {
+    let mic = GatedStopMic()
+    let stt = StubTranscriber(mode: .transcript("hi"))
+    let injector = StubInjector()
+    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+
+    await session.press()
+    let release = Task { await session.release() }
+    await mic.waitUntilStopEntered()
+
+    // The stop chime and the pill's "Transcribing…" ride this transition — it
+    // must fire at key-up, not after the recorded audio has been read back.
+    #expect(await session.phase == .transcribing)
+
+    await mic.allowStopToFinish()
+    await release.value
+    await session.waitForIdle()
+    #expect(await session.phase == .pasted)
+    #expect(await injector.inserted == ["hi"])
   }
 }
