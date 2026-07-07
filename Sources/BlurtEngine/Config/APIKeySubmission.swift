@@ -19,14 +19,11 @@ public struct APIKeySubmission: Sendable {
   private let keyStore: any APIKeyGateway
   private let validate: @Sendable (String) async -> APIKeyValidator.Result
 
-  public init(keyStore: any APIKeyGateway, validator: APIKeyValidator = APIKeyValidator()) {
-    self.init(keyStore: keyStore, validate: { await validator.validate($0) })
-  }
-
-  /// Seam that injects the validation outcome directly, bypassing HTTP: tests use
-  /// it to cover the outcome mapping and the never-save-unverified invariant, and
-  /// the app injects an offline validator under UI testing (so the settings flow
-  /// runs without a network) — both through the one real submit path.
+  /// The validation outcome is injected as a closure: production passes
+  /// `APIKeyValidator`'s real AssemblyAI check (see `APIKeyModel`'s default),
+  /// UI testing passes an offline stub (so the settings flow runs without a
+  /// network), and tests inject outcomes directly to cover the mapping and the
+  /// never-save-unverified invariant — all through the one real submit path.
   public init(
     keyStore: any APIKeyGateway,
     validate: @escaping @Sendable (String) async -> APIKeyValidator.Result

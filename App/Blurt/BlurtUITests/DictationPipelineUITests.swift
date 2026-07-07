@@ -18,10 +18,6 @@ import XCTest
 /// has keyboard focus"). Button clicks don't need focus, and the default value
 /// exercises the same record → transcribe → paste path.
 final class DictationPipelineUITests: BlurtUITestCase {
-  /// Mirrors `UITestState.shared.cannedTranscript`'s default (the app and the
-  /// test bundle are separate modules, so the value is duplicated).
-  private static let cannedTranscript = "hello world"
-
   /// The happy path — record → transcribe → paste — driven through the real
   /// dictation *hotkey* (DictationKeyTap → DictationKeyGate → the coordinator's
   /// onStart/onStop), so the trigger-key wiring is covered end to end.
@@ -40,7 +36,7 @@ final class DictationPipelineUITests: BlurtUITestCase {
 
     let pasted = harness.staticTexts[UITestIdentifiers.pastedLabel]
     waitForLabel(
-      pasted, equals: Self.cannedTranscript, timeout: 15,
+      pasted, equals: UITestIdentifiers.defaultCannedTranscript, timeout: 15,
       "Hotkey release should paste the transcript")
     waitForLabel(status, equals: "idle", "Pipeline should return to idle after pasting")
   }
@@ -63,7 +59,7 @@ final class DictationPipelineUITests: BlurtUITestCase {
 
     let pasted = harness.staticTexts[UITestIdentifiers.pastedLabel]
     waitForLabel(
-      pasted, equals: Self.cannedTranscript, timeout: 15,
+      pasted, equals: UITestIdentifiers.defaultCannedTranscript, timeout: 15,
       "Stop should paste the transcript")
     waitForLabel(status, equals: "idle", "Pipeline should return to idle after pasting")
   }
@@ -85,7 +81,7 @@ final class DictationPipelineUITests: BlurtUITestCase {
 
       harness.buttons[UITestIdentifiers.stopButton].click()
       waitForLabel(
-        pasted, equals: Self.cannedTranscript, timeout: 15,
+        pasted, equals: UITestIdentifiers.defaultCannedTranscript, timeout: 15,
         "Pass \(pass): release should paste the transcript")
       waitForLabel(status, equals: "idle", "Pass \(pass): pipeline should return to idle")
     }
@@ -156,7 +152,7 @@ final class DictationPipelineUITests: BlurtUITestCase {
     harness.buttons[UITestIdentifiers.stopButton].click()
 
     waitForLabel(
-      echo, equals: Self.cannedTranscript, timeout: 15,
+      echo, equals: UITestIdentifiers.defaultCannedTranscript, timeout: 15,
       "Completed dictation should appear as the newest recent-dictations entry")
   }
 }

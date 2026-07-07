@@ -44,33 +44,17 @@ final class ReadyViewUITests: BlurtUITestCase {
   }
 
   func testCompletedDictationPopulatesRecentList() {
-    // The harness sits in the top-leading corner (see `BlurtApp`) so it never
-    // overlaps the centered ready window: drive a full dictation on the harness,
-    // then read the result on the still-open ready screen — no closing/reopening.
-    let harness = app.windows[UITestIdentifiers.harnessWindowTitle]
-    XCTAssertTrue(harness.waitForExistence(timeout: 10), "Harness window not presented")
-    let main = app.windows[UITestIdentifiers.mainWindowTitle]
-    XCTAssertTrue(main.waitForExistence(timeout: 10), "Ready window not presented")
+    let (harness, main) = readyScreenWindows()
 
     // The Recent list starts empty.
     XCTAssertTrue(
       main.staticTexts["Your recent blurts will appear here"].waitForExistence(timeout: 10),
       "Recent list should start empty")
 
-    // Drive the dictation via the same hotkey path the pipeline tests use.
-    harness.buttons[UITestIdentifiers.hotkeyPressButton].click()
-    harness.buttons[UITestIdentifiers.hotkeyReleaseButton].click()
+    driveDictation(via: harness)
 
-    // The harness echoes `recentDictations.entries.first?.text`; once it shows the
-    // canned transcript, the entry the ready screen renders is in place.
-    let echo = harness.descendants(matching: .any)
-      .matching(identifier: UITestIdentifiers.transcriptEchoLabel).firstMatch
-    waitForLabel(echo, equals: "hello world")
-
-    // The completed dictation appears as a Recent row on the ready screen (the
-    // row's VoiceOver label is "<text>, <relative time>").
-    let rowPredicate = NSPredicate(format: "label CONTAINS %@", "hello world")
-    let row = main.descendants(matching: .any).matching(rowPredicate).firstMatch
+    // The completed dictation appears as a Recent row on the ready screen.
+    let row = recentRow(in: main)
     XCTAssertTrue(
       row.waitForExistence(timeout: 10),
       "A completed dictation should appear in the ready screen's Recent list")
@@ -83,19 +67,11 @@ final class ReadyViewUITests: BlurtUITestCase {
     // Record a dictation, then copy it from the Recent row's context menu — the
     // row's copy affordance (`copyTranscript`: pasteboard write + a transient
     // "Copied" confirmation) that only `ReadyView` exercises.
-    let harness = app.windows[UITestIdentifiers.harnessWindowTitle]
-    XCTAssertTrue(harness.waitForExistence(timeout: 10), "Harness window not presented")
-    let main = app.windows[UITestIdentifiers.mainWindowTitle]
-    XCTAssertTrue(main.waitForExistence(timeout: 10), "Ready window not presented")
+    let (harness, main) = readyScreenWindows()
 
-    harness.buttons[UITestIdentifiers.hotkeyPressButton].click()
-    harness.buttons[UITestIdentifiers.hotkeyReleaseButton].click()
-    let echo = harness.descendants(matching: .any)
-      .matching(identifier: UITestIdentifiers.transcriptEchoLabel).firstMatch
-    waitForLabel(echo, equals: "hello world")
+    driveDictation(via: harness)
 
-    let row = main.descendants(matching: .any)
-      .matching(NSPredicate(format: "label CONTAINS %@", "hello world")).firstMatch
+    let row = recentRow(in: main)
     XCTAssertTrue(row.waitForExistence(timeout: 10), "Recent row not found")
 
     // Seed the pasteboard with a sentinel so the assertion can't pass on stale
@@ -119,11 +95,45 @@ final class ReadyViewUITests: BlurtUITestCase {
     let deadline = Date().addingTimeInterval(5)
     while Date() < deadline {
       copied = pasteboard.string(forType: .string)
-      if copied == "hello world" { break }
+      if copied == UITestIdentifiers.defaultCannedTranscript { break }
       usleep(100_000)
     }
     XCTAssertEqual(
-      copied, "hello world",
+      copied, UITestIdentifiers.defaultCannedTranscript,
       "Copying a recent transcript should put it on the pasteboard")
+  }
+
+  // MARK: - Shared choreography
+
+  /// The two windows a ready-state launch presents. The harness sits in the
+  /// top-leading corner (see `BlurtApp`) so it never overlaps the centered ready
+  /// window: a test can drive a full dictation on the harness, then read the
+  /// result on the still-open ready screen — no closing/reopening.
+  private func readyScreenWindows() -> (harness: XCUIElement, main: XCUIElement) {
+    let harness = app.windows[UITestIdentifiers.harnessWindowTitle]
+    XCTAssertTrue(harness.waitForExistence(timeout: 10), "Harness window not presented")
+    let main = app.windows[UITestIdentifiers.mainWindowTitle]
+    XCTAssertTrue(main.waitForExistence(timeout: 10), "Ready window not presented")
+    return (harness, main)
+  }
+
+  /// Drives one dictation via the same hotkey path the pipeline tests use, then
+  /// waits for the harness echo (`recentDictations.entries.first?.text`) to show
+  /// the canned transcript — at which point the entry the ready screen renders
+  /// is in place.
+  private func driveDictation(via harness: XCUIElement) {
+    harness.buttons[UITestIdentifiers.hotkeyPressButton].click()
+    harness.buttons[UITestIdentifiers.hotkeyReleaseButton].click()
+    let echo = harness.descendants(matching: .any)
+      .matching(identifier: UITestIdentifiers.transcriptEchoLabel).firstMatch
+    waitForLabel(echo, equals: UITestIdentifiers.defaultCannedTranscript)
+  }
+
+  /// The Recent row for the canned transcript (the row's VoiceOver label is
+  /// "<text>, <relative time>", hence CONTAINS).
+  private func recentRow(in main: XCUIElement) -> XCUIElement {
+    let rowPredicate = NSPredicate(
+      format: "label CONTAINS %@", UITestIdentifiers.defaultCannedTranscript)
+    return main.descendants(matching: .any).matching(rowPredicate).firstMatch
   }
 }

@@ -50,8 +50,10 @@
     static let shared = UITestState()
 
     /// The transcript the stub transcriber will "recognize". Bound to a text
-    /// field in the harness so a test can set the expected paste payload.
-    var cannedTranscript = "hello world"
+    /// field in the harness so a test can set the expected paste payload; the
+    /// default lives in the shared `UITestIdentifiers` so the suites' assertions
+    /// can't drift from it.
+    var cannedTranscript = UITestIdentifiers.defaultCannedTranscript
 
     /// What the stub injector last "pasted" — i.e. the text `DictationSession`
     /// handed to `insert`. The harness renders it so a test can read it back and

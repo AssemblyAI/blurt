@@ -53,12 +53,11 @@ final class WizardController {
 
   init(
     coordinator: AppCoordinator,
-    apiKey: APIKeyModel,
     onNeedsForeground: @escaping @MainActor () -> Void,
     checkPermissions: @escaping () -> PermissionStatus = { PermissionsChecker.check() }
   ) {
     self.coordinator = coordinator
-    self.apiKey = apiKey
+    self.apiKey = coordinator.apiKey
     self.onNeedsForeground = onNeedsForeground
     self.checkPermissions = checkPermissions
     self.permissions = checkPermissions()

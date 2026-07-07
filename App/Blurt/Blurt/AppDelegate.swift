@@ -126,8 +126,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         coord = AppCoordinator(
           onMissingAPIKey: onMissingAPIKey,
           components: .uiTest(),
-          keyStore: InMemoryAPIKeyStore(),
-          validateKey: { UITestKeyValidation.result(for: $0) })
+          apiKey: APIKeyModel(
+            keyStore: InMemoryAPIKeyStore(),
+            validateKey: { UITestKeyValidation.result(for: $0) }))
       } else {
         coord = AppCoordinator(onMissingAPIKey: onMissingAPIKey)
       }
@@ -197,6 +198,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// window was closed.
   private func makeWizardController(coord: AppCoordinator) -> WizardController {
     let onNeedsForeground: @MainActor () -> Void = { [weak self] in self?.surfaceMainWindow() }
+    var checkPermissions: () -> PermissionStatus = { PermissionsChecker.check() }
     #if UITEST_HOOKS
       // Under the ready-state flag, force the fully-configured state so the main
       // window renders `ReadyView` instead of the wizard: save a key and inject an
@@ -205,17 +207,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       // unaffected.
       if UITestMode.isReadyStateRequested {
         coord.apiKey.save(UITestIdentifiers.validAPIKey)
-        return WizardController(
-          coordinator: coord,
-          apiKey: coord.apiKey,
-          onNeedsForeground: onNeedsForeground,
-          checkPermissions: { PermissionStatus(microphone: true, accessibility: true) })
+        checkPermissions = { PermissionStatus(microphone: true, accessibility: true) }
       }
     #endif
     return WizardController(
       coordinator: coord,
-      apiKey: coord.apiKey,
-      onNeedsForeground: onNeedsForeground)
+      onNeedsForeground: onNeedsForeground,
+      checkPermissions: checkPermissions)
   }
 
   #if UITEST_HOOKS
