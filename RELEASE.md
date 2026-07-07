@@ -17,14 +17,24 @@ it, so every published DMG must carry this signature. Protect it accordingly:
   15-minute auto-lock. Never store a plaintext `.p12` on disk or in cloud sync;
   keep the encrypted `.p12` backup offline.
 - `scripts/release-build.sh` unlocks that keychain for the duration of the build
-  and re-locks it on exit (even on failure). It reads the keychain password from
-  `BLURT_SIGNING_KEYCHAIN_PASSWORD`, else prompts interactively — it does **not**
-  read the password from the login keychain, so the unlock secret never sits in
-  login. Supply it from 1Password:
+  and re-locks it on exit (even on failure). It resolves the keychain password
+  from, in order: `BLURT_SIGNING_KEYCHAIN_PASSWORD` (a CI secret, or `op read`
+  inline), then `BLURT_SIGNING_KEYCHAIN_OP` (an `op://…` 1Password reference the
+  script runs `op read` on — Touch ID fires), then an interactive prompt. It does
+  **not** read the password from the login keychain, so the unlock secret never
+  sits in login. Two equivalent local options:
 
   ```sh
-  BLURT_SIGNING_KEYCHAIN_PASSWORD="$(op read 'op://<vault>/Blurt signing keychain/password')" \
+  # Inline: read once at invocation
+  BLURT_SIGNING_KEYCHAIN_PASSWORD="$(op read 'op://Employee/Blurt signing keychain/password')" \
     scripts/release.sh
+
+  # Or export the reference once (e.g. in your shell profile) so a bare
+  # `scripts/release.sh` unlocks via 1Password. Set OP_ACCOUNT if you're signed
+  # into more than one 1Password account.
+  export OP_ACCOUNT=assemblyai.1password.com
+  export BLURT_SIGNING_KEYCHAIN_OP='op://Employee/Blurt signing keychain/password'
+  scripts/release.sh
   ```
 
   Override the keychain path with `BLURT_SIGNING_KEYCHAIN` if it lives elsewhere.
