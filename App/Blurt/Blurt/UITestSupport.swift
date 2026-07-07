@@ -161,7 +161,7 @@
           .accessibilityIdentifier(UITestIdentifiers.transcriptField)
 
         HStack(spacing: 8) {
-          Button("Set API Key") { coordinator?.saveAPIKey(UITestIdentifiers.validAPIKey) }
+          Button("Set API Key") { coordinator?.apiKey.save(UITestIdentifiers.validAPIKey) }
             .accessibilityIdentifier(UITestIdentifiers.setKeyButton)
           Button("Start") { Task { await coordinator?.beginDictation() } }
             .accessibilityIdentifier(UITestIdentifiers.startButton)

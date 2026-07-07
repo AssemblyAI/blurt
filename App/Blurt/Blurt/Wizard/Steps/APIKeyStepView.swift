@@ -11,7 +11,7 @@ import SwiftUI
 /// A "Change" button re-opens the editable field (pre-filled, masked) when the
 /// key needs rotating; "Cancel" there discards the edit and restores the row.
 struct APIKeyStepView: View {
-  var coordinator: AppCoordinator
+  var apiKey: APIKeyModel
 
   /// The key currently in the Keychain, loaded on appear (empty when none).
   @State private var savedKey = ""
@@ -56,13 +56,13 @@ struct APIKeyStepView: View {
       statusFooter
     }
     .onAppear {
-      savedKey = coordinator.currentAPIKey ?? ""
+      savedKey = apiKey.current ?? ""
       draft = savedKey
       // Keep the readiness gate in sync with what's actually in the Keychain. If
       // a key is already saved, this flips `hasAPIKey` true so the wizard advances
       // to the ready screen instead of stranding the user here with a pre-filled
       // key and a disabled "Update" (its only control) and no way forward.
-      coordinator.refreshAPIKeyStatus()
+      apiKey.refreshStatus()
     }
     .alert("Couldn’t Save Your Key", isPresented: $showSaveFault) {
       Button("OK", role: .cancel) {}
@@ -193,7 +193,7 @@ struct APIKeyStepView: View {
     isValidating = true
     errorMessage = nil
     Task {
-      let result = await coordinator.submitAPIKey(key)
+      let result = await apiKey.submit(key)
       isValidating = false
       switch result {
       case .valid:

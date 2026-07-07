@@ -10,7 +10,7 @@ struct SettingsWindowRoot: View {
   var body: some View {
     if let coordinator = appDelegate.coordinator {
       Form {
-        APIKeyStepView(coordinator: coordinator)
+        APIKeyStepView(apiKey: coordinator.apiKey)
         HotkeyStepView(coordinator: coordinator)
         SoundStepView(coordinator: coordinator)
         KeyTermsStepView()

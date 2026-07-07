@@ -148,28 +148,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // though no window is shown. `onNeedsForeground` fires when a configured app
     // loses a requirement (e.g. a revoked permission) so the user is pulled back
     // into onboarding even if every window was closed.
-    #if UITEST_HOOKS
-      // Under the ready-state flag, force the fully-configured state so the main
-      // window renders `ReadyView` instead of the wizard: save a key and inject an
-      // all-granted permissions stub (the test host can't grant real TCC access).
-      // Without the flag the wizard shows as usual, so wizard-based tests are
-      // unaffected.
-      if UITestMode.isReadyStateRequested {
-        coord.saveAPIKey(UITestIdentifiers.validAPIKey)
-        self.wizardController = WizardController(
-          coordinator: coord,
-          onNeedsForeground: { [weak self] in self?.surfaceMainWindow() },
-          checkPermissions: { PermissionStatus(microphone: true, accessibility: true) })
-      } else {
-        self.wizardController = WizardController(
-          coordinator: coord,
-          onNeedsForeground: { [weak self] in self?.surfaceMainWindow() })
-      }
-    #else
-      self.wizardController = WizardController(
-        coordinator: coord,
-        onNeedsForeground: { [weak self] in self?.surfaceMainWindow() })
-    #endif
+    self.wizardController = makeWizardController(coord: coord)
 
     #if UITEST_HOOKS
       // Build the overlay pill up front under UI testing so the suite can observe
@@ -210,12 +189,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     #endif
   }
 
+  /// Builds the setup wizard's controller. Created before the run loop presents
+  /// any scene, so `MainWindowRoot` always finds it; on a configured launch its
+  /// init reveals the overlay pill even though no window is shown, and
+  /// `onNeedsForeground` fires when a configured app loses a requirement (e.g. a
+  /// revoked permission) so the user is pulled back into onboarding even if every
+  /// window was closed.
+  private func makeWizardController(coord: AppCoordinator) -> WizardController {
+    let onNeedsForeground: @MainActor () -> Void = { [weak self] in self?.surfaceMainWindow() }
+    #if UITEST_HOOKS
+      // Under the ready-state flag, force the fully-configured state so the main
+      // window renders `ReadyView` instead of the wizard: save a key and inject an
+      // all-granted permissions stub (the test host can't grant real TCC access).
+      // Without the flag the wizard shows as usual, so wizard-based tests are
+      // unaffected.
+      if UITestMode.isReadyStateRequested {
+        coord.apiKey.save(UITestIdentifiers.validAPIKey)
+        return WizardController(
+          coordinator: coord,
+          apiKey: coord.apiKey,
+          onNeedsForeground: onNeedsForeground,
+          checkPermissions: { PermissionStatus(microphone: true, accessibility: true) })
+      }
+    #endif
+    return WizardController(
+      coordinator: coord,
+      apiKey: coord.apiKey,
+      onNeedsForeground: onNeedsForeground)
+  }
+
   #if UITEST_HOOKS
     /// Runs several stubbed dictation cycles through the live coordinator so a
     /// Leaks-instrument recording exercises the full app-shell object graph. See
     /// the call site in `applicationDidFinishLaunching` and `scripts/leaks.sh`.
     private func runLeakExercise(_ coord: AppCoordinator) async {
-      coord.saveAPIKey(UITestIdentifiers.validAPIKey)  // clear the missing-key gate
+      coord.apiKey.save(UITestIdentifiers.validAPIKey)  // clear the missing-key gate
       // Build/enable the key tap's object graph, then drive cycles *through the
       // tap* (gate + callbacks), so the leak run covers the real dictation-key
       // path — not just the session. (The tap can't create its CGEventTap without

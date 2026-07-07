@@ -24,7 +24,7 @@ struct WizardView: View {
       Form {
         // API key first — the reason setup leads with it: a user arriving from
         // the signup page has the key on their clipboard, ready to paste in.
-        APIKeyStepView(coordinator: coordinator)
+        APIKeyStepView(apiKey: coordinator.apiKey)
         PermissionsStepView(controller: controller)
       }
       .formStyle(.grouped)
