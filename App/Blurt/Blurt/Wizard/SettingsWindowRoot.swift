@@ -14,6 +14,7 @@ struct SettingsWindowRoot: View {
         HotkeyStepView(coordinator: coordinator)
         SoundStepView(coordinator: coordinator)
         KeyTermsStepView()
+        UpdateStepView()
         DeveloperSection()
       }
       .formStyle(.grouped)
