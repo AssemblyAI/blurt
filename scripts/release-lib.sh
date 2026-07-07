@@ -49,6 +49,38 @@ identity_listed() {
   grep -qF -- "$1"
 }
 
+# Signer-pin: die unless codesigned artifact $1 is signed by EXACTLY the expected
+# leaf-certificate SHA-256 fingerprint ($2) and Team ID ($3). Signing with an
+# explicit identity hash already selects the cert, but this verifies the
+# *produced* artifact after the fact — so a release built/signed with any other
+# (even otherwise-valid) Developer ID fails closed here instead of being
+# published. SHA-256 (not the SHA-1 identity hash `security` reports) is used for
+# the comparison so the pin doesn't rest on a weakened digest. Needs codesign +
+# openssl.
+verify_signer() {
+  local artifact="$1" want_sha256="$2" want_team="$3"
+
+  local got_team
+  got_team="$(codesign -dvv "$artifact" 2>&1 | sed -n 's/^TeamIdentifier=//p')"
+  [ "$got_team" = "$want_team" ] \
+    || die "signer-pin: $artifact has TeamIdentifier '$got_team', expected '$want_team'"
+
+  local tmp
+  tmp="$(mktemp -d)" || die "signer-pin: mktemp failed"
+  # --extract-certificates writes <prefix>0 (leaf), <prefix>1, … as DER.
+  codesign -d --extract-certificates="$tmp/cert" "$artifact" >/dev/null 2>&1 \
+    || { rm -rf "$tmp"; die "signer-pin: could not extract certificates from $artifact"; }
+  local got_sha
+  got_sha="$(openssl x509 -inform DER -in "$tmp/cert0" -noout -fingerprint -sha256 2>/dev/null \
+    | sed -n 's/.*Fingerprint=//p' | tr -d ': ' | tr '[:lower:]' '[:upper:]')"
+  rm -rf "$tmp"
+  [ -n "$got_sha" ] || die "signer-pin: could not fingerprint leaf cert of $artifact"
+
+  [ "$got_sha" = "$(printf '%s' "$want_sha256" | tr '[:lower:]' '[:upper:]')" ] \
+    || die "signer-pin: $artifact leaf cert SHA-256 $got_sha != expected $want_sha256"
+  info "signer-pin ok: $(basename "$artifact") — leaf sha256 $got_sha, team $got_team"
+}
+
 # --- pure version helpers (unit-tested by scripts/release.test.sh) ---
 
 # True if $1 looks like X.Y.Z (digits only).
