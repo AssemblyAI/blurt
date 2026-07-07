@@ -38,7 +38,8 @@ struct ReadyView: View {
       }
       // The system Liquid Glass button — hover/press chrome, edge highlights,
       // and accessibility fallbacks come from the style, not hand-rolled fills.
-      .buttonStyle(.glass)
+      // Falls back to `.bordered` on macOS 15–25 (see glassButtonStyleCompat).
+      .glassButtonStyleCompat()
     }
     .frame(maxWidth: .infinity)
     .padding(.horizontal, 32)

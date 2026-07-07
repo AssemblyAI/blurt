@@ -94,6 +94,12 @@ final class WizardController {
   /// next permission poll. Idempotent, like `startPolling`.
   private func observeAPIKeyReadiness() {
     keyObservationTask?.cancel()
+    // `Observations` is macOS 26+. On macOS 15–25 there's no instant stream, so
+    // fall back to the setup poll: startPolling() → refreshPermissions() →
+    // syncReadiness() re-derives readiness (including hasAPIKey) each tick, so a
+    // saved key surfaces within a poll interval (≤1s during setup) rather than
+    // instantly — an acceptable degradation on older systems.
+    guard #available(macOS 26.0, *) else { return }
     let apiKey = apiKey
     let hasAPIKey = Observations { apiKey.hasAPIKey }
     keyObservationTask = Task { @MainActor [weak self] in
