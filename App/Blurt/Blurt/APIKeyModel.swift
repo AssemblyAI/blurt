@@ -4,9 +4,7 @@ import Observation
 /// The app shell's API-key surface, extracted from `AppCoordinator` so the
 /// coordinator stays focused on wiring the pipeline to the UI. Owns the storage
 /// seam (`APIKeyGateway`), the validate-then-save flow (`APIKeySubmission`), and
-/// the observable `hasAPIKey` flag the wizard/Settings react to — plus the
-/// offline UI-test shim, which belongs with the key logic rather than diluting
-/// the coordinator.
+/// the observable `hasAPIKey` flag the wizard/Settings react to.
 ///
 /// `@Observable` so views that only care about the key (the API-key step, the
 /// wizard's readiness gate) observe *this* directly instead of reaching through
@@ -18,23 +16,26 @@ final class APIKeyModel {
   /// Storage for the API key. Production hits the Keychain via `APIKeyStore`;
   /// UI tests inject an in-memory store so the real key is never touched.
   @ObservationIgnored private let keyStore: any APIKeyGateway
-  /// True only under UI testing — short-circuits `submit` past the network
-  /// validation so the settings flow is deterministic and offline.
-  @ObservationIgnored private let isUITesting: Bool
   /// The validate-then-save flow over `keyStore` (engine-owned + unit-tested).
+  /// Carries the injected validator: AssemblyAI's real network check in
+  /// production, an offline stub under UI testing — both through the one submit
+  /// path, so there's no test-only branch here.
   @ObservationIgnored private let submission: APIKeySubmission
 
   /// Whether an AssemblyAI API key is currently saved. Drives the wizard (which
   /// gates dictation on having a key) and the Settings UI.
   private(set) var hasAPIKey: Bool
 
+  /// `validateKey` defaults to `nil` (the engine's real AssemblyAI check);
+  /// UI tests inject an offline validator so the settings flow needs no network.
   init(
     keyStore: any APIKeyGateway = ProductionAPIKeyStore(),
-    isUITesting: Bool = false
+    validateKey: (@Sendable (String) async -> APIKeyValidator.Result)? = nil
   ) {
     self.keyStore = keyStore
-    self.isUITesting = isUITesting
-    self.submission = APIKeySubmission(keyStore: keyStore)
+    self.submission =
+      validateKey.map { APIKeySubmission(keyStore: keyStore, validate: $0) }
+      ?? APIKeySubmission(keyStore: keyStore)
     self.hasAPIKey = keyStore.hasKey
   }
 
@@ -89,22 +90,8 @@ final class APIKeyModel {
   /// (and unit-tests) that never-persist-an-unverified-key rule. Mirrors the
   /// outcome into `hasAPIKey` so the wizard/Settings UI reacts.
   func submit(_ key: String) async -> APIKeySubmission.Outcome {
-    // UI tests must not reach AssemblyAI (no network in CI) or the real
-    // Keychain, so resolve the result locally and deterministically instead.
-    if isUITesting { return uiTestSubmit(key) }
     let outcome = await submission.submit(key)
     refreshStatus()
     return outcome
-  }
-
-  /// Offline stand-in for `submit` under UI testing. Sentinel keys drive the
-  /// failure branches so a test can exercise the inline-error paths; any other
-  /// non-empty key is accepted and saved to the in-memory store.
-  private func uiTestSubmit(_ key: String) -> APIKeySubmission.Outcome {
-    switch key {
-    case UITestKeys.invalidAPIKey: return .invalid
-    case UITestKeys.unreachableAPIKey: return .unreachable
-    default: return save(key) ? .valid : .saveFailed
-    }
   }
 }

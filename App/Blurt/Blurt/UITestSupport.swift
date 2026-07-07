@@ -23,39 +23,23 @@
   /// Whether this process was launched for UI testing. Cheap enough to read on
   /// demand; the test runner sets the flag via `XCUIApplication.launchArguments`.
   enum UITestMode {
-    static let launchArgument = "-BlurtUITest"
-    /// Opt-in flag that forces the fully-configured "ready" state so the main
-    /// window renders `ReadyView` instead of the setup wizard — the only way the
-    /// test host can reach that screen, since it can't grant real TCC
-    /// permissions. See `AppDelegate.applicationDidFinishLaunching`.
-    static let readyStateArgument = "-BlurtUITestReady"
-
     static var isActive: Bool {
-      ProcessInfo.processInfo.arguments.contains(launchArgument)
+      ProcessInfo.processInfo.arguments.contains(UITestIdentifiers.launchArgument)
     }
 
-    /// Whether the runner asked for the forced-ready state (implies `isActive`).
+    /// Whether the runner asked for the forced-ready state (implies `isActive`) so
+    /// the main window renders `ReadyView` instead of the setup wizard — the only
+    /// way the test host can reach that screen, since it can't grant real TCC
+    /// permissions. See `AppDelegate.applicationDidFinishLaunching`.
     static var isReadyStateRequested: Bool {
-      ProcessInfo.processInfo.arguments.contains(readyStateArgument)
+      ProcessInfo.processInfo.arguments.contains(UITestIdentifiers.readyLaunchArgument)
     }
   }
 
-  /// Accessibility identifiers and window id for the test harness, kept in one
-  /// place. The XCUITest target re-declares the same string values (it's a
-  /// separate module and can't import these), so keep the two in sync.
-  enum UITestID {
-    static let harnessWindow = "uitest.harness"
-    static let transcriptField = "uitest.transcript"
-    static let setKeyButton = "uitest.setKey"
-    static let startButton = "uitest.start"
-    static let stopButton = "uitest.stop"
-    static let cancelButton = "uitest.cancel"
-    static let hotkeyPressButton = "uitest.hotkeyPress"
-    static let hotkeyReleaseButton = "uitest.hotkeyRelease"
-    static let statusLabel = "uitest.status"
-    static let pastedLabel = "uitest.pasted"
-    static let transcriptEchoLabel = "uitest.transcriptEcho"
-  }
+  // Accessibility identifiers, the launch argument, and the sentinel API keys
+  // live in the shared `UITestIdentifiers` (Shared/UITestIdentifiers.swift),
+  // compiled into both this target and the XCUITest bundle so there's one source
+  // of truth instead of the values duplicated across three places.
 
   /// Shared, observable state the harness window renders and the stub injector /
   /// transcriber read. Main-actor (the app target's default isolation) because
@@ -117,6 +101,24 @@
   // `InMemoryAPIKeyStore` (`Sources/BlurtEngine/Config/APIKeyGateway.swift`),
   // injected as the coordinator's key store in `AppDelegate`.
 
+  /// Offline API-key validation for UI testing, injected as the coordinator's
+  /// `validateKey` in place of AssemblyAI's network check: the sentinel keys map
+  /// to fixed outcomes (so the settings inline-error paths are reachable) and any
+  /// other key validates. `APIKeySubmission` still owns the save-on-`.valid`
+  /// rule, so this drives the whole real submit flow — no special-case branch in
+  /// the coordinator.
+  enum UITestKeyValidation {
+    // nonisolated: called from the coordinator's nonisolated @Sendable
+    // `validateKey` closure, not the main actor (the app's default isolation).
+    nonisolated static func result(for key: String) -> APIKeyValidator.Result {
+      switch key {
+      case UITestIdentifiers.invalidAPIKey: return .invalid
+      case UITestIdentifiers.unreachableAPIKey: return .unreachable
+      default: return .valid
+      }
+    }
+  }
+
   extension DictationComponents {
     /// The all-stub pipeline used under UI testing: no mic, no network, no
     /// Accessibility paste. `UITestMic` inherits `MicCaptureProtocol`'s default
@@ -156,17 +158,17 @@
 
         TextField("Transcript", text: $state.cannedTranscript)
           .textFieldStyle(.roundedBorder)
-          .accessibilityIdentifier(UITestID.transcriptField)
+          .accessibilityIdentifier(UITestIdentifiers.transcriptField)
 
         HStack(spacing: 8) {
-          Button("Set API Key") { coordinator?.apiKey.save(UITestKeys.validAPIKey) }
-            .accessibilityIdentifier(UITestID.setKeyButton)
+          Button("Set API Key") { coordinator?.apiKey.save(UITestIdentifiers.validAPIKey) }
+            .accessibilityIdentifier(UITestIdentifiers.setKeyButton)
           Button("Start") { Task { await coordinator?.beginDictation() } }
-            .accessibilityIdentifier(UITestID.startButton)
+            .accessibilityIdentifier(UITestIdentifiers.startButton)
           Button("Stop") { Task { await coordinator?.endDictation() } }
-            .accessibilityIdentifier(UITestID.stopButton)
+            .accessibilityIdentifier(UITestIdentifiers.stopButton)
           Button("Cancel") { Task { await coordinator?.cancelDictation() } }
-            .accessibilityIdentifier(UITestID.cancelButton)
+            .accessibilityIdentifier(UITestIdentifiers.cancelButton)
         }
 
         // A second row that drives dictation through the *real* key tap
@@ -177,9 +179,9 @@
         // lacks). Press then Release is a hold, so it records then transcribes.
         HStack(spacing: 8) {
           Button("Hotkey Press") { coordinator?.simulateDictationPressForTesting() }
-            .accessibilityIdentifier(UITestID.hotkeyPressButton)
+            .accessibilityIdentifier(UITestIdentifiers.hotkeyPressButton)
           Button("Hotkey Release") { coordinator?.simulateDictationReleaseForTesting() }
-            .accessibilityIdentifier(UITestID.hotkeyReleaseButton)
+            .accessibilityIdentifier(UITestIdentifiers.hotkeyReleaseButton)
         }
 
         // The live pipeline status, mirrored off the same `menuBarStatus` the
@@ -187,13 +189,13 @@
         // transcribing → idle transitions.
         LabeledContent("Status") {
           Text(statusText)
-            .accessibilityIdentifier(UITestID.statusLabel)
+            .accessibilityIdentifier(UITestIdentifiers.statusLabel)
         }
 
         // What the injector last "pasted" — the role the focused app plays.
         LabeledContent("Pasted") {
           Text(state.pastedText)
-            .accessibilityIdentifier(UITestID.pastedLabel)
+            .accessibilityIdentifier(UITestIdentifiers.pastedLabel)
         }
 
         // Mirrors the newest entry of `AppCoordinator.recentDictations` (the
@@ -202,7 +204,7 @@
         // the read-out is a stable element to assert against.
         LabeledContent("Echo") {
           Text(coordinator?.recentDictations.entries.first?.text ?? "—")
-            .accessibilityIdentifier(UITestID.transcriptEchoLabel)
+            .accessibilityIdentifier(UITestIdentifiers.transcriptEchoLabel)
         }
       }
       .padding(20)

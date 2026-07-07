@@ -44,16 +44,19 @@ final class AppCoordinator {
   /// crowded menu bar, so nothing here is relied on for correctness.
   private(set) var menuBarStatus: MenuBarStatus = .idle
 
-  /// `components` defaults to the production pipeline; tests/UI-tests inject
-  /// their own deterministic doubles (see `DictationComponents`).
+  /// `components` defaults to the production pipeline; `validateKey` defaults to
+  /// AssemblyAI's real network check. Tests/UI-tests inject deterministic doubles
+  /// (see `DictationComponents`) and an offline `validateKey` so the settings
+  /// flow needs no network — the engine's `APIKeySubmission` still owns the
+  /// never-persist-an-unverified-key invariant either way.
   init(
     onMissingAPIKey: @escaping @MainActor () -> Void,
     components: DictationComponents = .production(),
     keyStore: any APIKeyGateway = ProductionAPIKeyStore(),
-    isUITesting: Bool = false
+    validateKey: (@Sendable (String) async -> APIKeyValidator.Result)? = nil
   ) {
     self.onMissingAPIKey = onMissingAPIKey
-    let apiKey = APIKeyModel(keyStore: keyStore, isUITesting: isUITesting)
+    let apiKey = APIKeyModel(keyStore: keyStore, validateKey: validateKey)
     self.apiKey = apiKey
 
     // Unbounded: the Recent list is append-only, so every transcript must survive

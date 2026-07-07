@@ -29,11 +29,9 @@ private let auditedTypes: XCUIAccessibilityAuditType = .all.subtracting([
 ])
 
 final class AccessibilityAuditUITests: BlurtUITestCase {
-  /// The setup wizard / ready screen shown at launch.
+  /// The setup wizard / ready screen shown in the main window.
   func testMainWindowAccessibility() throws {
-    XCTAssertTrue(
-      app.windows[UITestIDs.mainWindowTitle].waitForExistence(timeout: 10),
-      "Main window did not appear")
+    mainWindow()
     try app.performAccessibilityAudit(for: auditedTypes)
   }
 

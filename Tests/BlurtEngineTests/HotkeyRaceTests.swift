@@ -31,8 +31,7 @@ struct HotkeyRaceTests {
 
     #expect(await mic.stopCalls == 1)  // release honored, not silently dropped
 
-    // Bounded drain (a regression must fail, never hang the suite).
-    for _ in 0..<1000 where await session.phase != .pasted { await Task.yield() }
+    await session.awaitPipeline()  // the honored release spawned the pipeline; join it
     #expect(await session.phase == .pasted)
     #expect(await injector.inserted == ["hi"])
   }
@@ -55,8 +54,8 @@ struct HotkeyRaceTests {
 
     #expect(await mic.stopCalls == 1)  // cancel honored and stops mic
 
-    // Bounded drain (a regression must fail, never hang the suite).
-    for _ in 0..<1000 where await session.phase != .cancelled { await Task.yield() }
+    // Both the press and the queued cancel have run to completion (awaited via
+    // their `.value` above), so the phase is settled — no drain needed.
     #expect(await session.phase == .cancelled)
     #expect(await injector.inserted.isEmpty)
   }
@@ -111,8 +110,8 @@ struct HotkeyRaceTests {
     await released.value
     await cancelled.value
 
-    // Bounded drain (a regression must fail, never hang the suite).
-    for _ in 0..<1000 where await session.phase != .cancelled { await Task.yield() }
+    // All three commands have run to completion (awaited via `.value`), so the
+    // phase is settled at the cancel's claim — no drain needed.
     #expect(await session.phase == .cancelled)
     #expect(await mic.stopCalls == 1)
     #expect(await injector.inserted.isEmpty)
@@ -121,44 +120,24 @@ struct HotkeyRaceTests {
 
 /// Mic stub whose `start()` blocks until the test releases it, so `release()` can
 /// be landed deterministically while `press()` is suspended inside `mic.start()`.
+/// The entry/finish choreography lives in the shared `Gate`.
 private actor GatedMicCapture: MicCaptureProtocol {
   private(set) var startCalls = 0
   private(set) var stopCalls = 0
-  private var startEntered = false
-  private var enteredWaiters: [CheckedContinuation<Void, Never>] = []
-  private var finishGate: CheckedContinuation<Void, Never>?
-  private var finished = false
+  private let gate = Gate()
 
-  nonisolated func start() async throws { await enter() }
-
-  private func enter() async {
+  func start() async throws {
     startCalls += 1
-    startEntered = true
-    for waiter in enteredWaiters { waiter.resume() }
-    enteredWaiters.removeAll()
-    if finished { return }
-    await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in finishGate = c }
+    await gate.enter()
   }
 
-  func waitUntilStartEntered() async {
-    if startEntered { return }
-    await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
-      enteredWaiters.append(c)
-    }
-  }
+  func waitUntilStartEntered() async { await gate.waitUntilEntered() }
+  func allowStartToFinish() async { await gate.allowToFinish() }
 
-  func allowStartToFinish() {
-    finished = true
-    finishGate?.resume()
-    finishGate = nil
-  }
-
-  nonisolated func stop() async throws -> [Float] {
-    await incStop()
+  func stop() async throws -> [Float] {
+    stopCalls += 1
     // Above SyncSTTLimits.minSamples so the transcript isn't dropped by the
     // too-short guard — this suite exercises the press/release race, not it.
     return Array(repeating: 0, count: SyncSTTLimits.minSamples * 2)
   }
-
-  private func incStop() { stopCalls += 1 }
 }

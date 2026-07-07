@@ -17,10 +17,10 @@ final class LaunchPerformanceUITests: XCTestCase {
     var samples: [Duration] = []
     for i in 0..<3 {
       let app = XCUIApplication()
-      app.launchArguments += [UITestIDs.launchArgument]
+      app.launchArguments += [UITestIdentifiers.launchArgument]
       let elapsed = ContinuousClock().measure { app.launch() }
       XCTAssertTrue(
-        app.windows[UITestIDs.harnessWindowTitle].waitForExistence(timeout: 15),
+        app.windows[UITestIdentifiers.harnessWindowTitle].waitForExistence(timeout: 15),
         "app did not present its window after launch")
       if i > 0 { samples.append(elapsed) }  // drop warm-up
       app.terminate()

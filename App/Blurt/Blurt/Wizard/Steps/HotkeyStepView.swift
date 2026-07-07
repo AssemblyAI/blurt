@@ -24,7 +24,7 @@ struct HotkeyStepView: View {
     Section {
       PickerSettingRow(
         title: "Dictation key", systemImage: "keyboard",
-        accessibilityID: "settings.hotkey.picker", selection: selection
+        accessibilityID: UITestIdentifiers.hotkeyPicker, selection: selection
       ) {
         ForEach(TriggerKey.allCases, id: \.self) { key in
           Text(key.label).tag(key)

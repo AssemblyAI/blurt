@@ -77,6 +77,9 @@ targets:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
     sources:
       - path: Blurt
+      # Shared with BlurtUITests: the single source of truth for UI-test
+      # identifiers/sentinels (see Shared/UITestIdentifiers.swift).
+      - path: Shared
     info:
       path: Blurt/Info.plist
       properties:
@@ -200,6 +203,9 @@ targets:
     platform: macOS
     sources:
       - path: BlurtUITests
+      # The shared UI-test identifiers/sentinels, compiled into this bundle too
+      # (it can't import the app module's symbols) — one source, no duplication.
+      - path: Shared
     dependencies:
       - target: Blurt
     settings:

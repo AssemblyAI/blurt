@@ -35,9 +35,9 @@ struct CancelRaceTests {
     // Let transcribe finish: the cancelled pipeline must NOT inject, and must not
     // overwrite the .cancelled phase.
     await stt.allowToFinish()
-    for _ in 0..<1000 where await injector.inserted.isEmpty == false { break }
-    // Give the pipeline task a chance to (incorrectly) run inject before asserting.
-    for _ in 0..<1000 { await Task.yield() }
+    // Join the cancelled pipeline's teardown: it resumes transcribe, sees the
+    // cancellation, and must return without injecting or repainting the phase.
+    await session.awaitPipeline()
 
     #expect(await injector.inserted.isEmpty)
     #expect(await session.phase == .cancelled)
@@ -60,7 +60,7 @@ struct CancelRaceTests {
     #expect(await session.phase == .cancelled)
 
     await stt.allowToFinish()
-    for _ in 0..<1000 { await Task.yield() }
+    await session.awaitPipeline()
 
     #expect(await session.phase == .cancelled)
     #expect(await injector.inserted.isEmpty)
@@ -86,7 +86,7 @@ struct CancelRaceTests {
       #expect(await session.phase == .cancelled)
 
       await injector.allowInsertToFinish()
-      for _ in 0..<1000 { await Task.yield() }
+      await session.awaitPipeline()
 
       // The phase stays .cancelled rather than being overwritten to .idle.
       #expect(await session.phase == .cancelled)
@@ -165,7 +165,7 @@ struct CancelRaceTests {
     #expect(await session.phase == .transcribing)
 
     await stt.allowToFinish()
-    for _ in 0..<1000 where await session.phase != .pasted { await Task.yield() }
+    await session.awaitPipeline()
 
     #expect(await session.phase == .pasted)
     #expect(await injector.inserted == ["Hello world."])
@@ -207,7 +207,7 @@ struct CancelRaceTests {
     // The paste completed anyway (it was already irreversible), but the session
     // must not repaint the user's cancel as a successful .pasted.
     await injector.allowInsertToFinish()
-    for _ in 0..<1000 { await Task.yield() }
+    await session.awaitPipeline()
     #expect(await session.phase == .cancelled)
   }
 
@@ -217,20 +217,23 @@ struct CancelRaceTests {
     // Would inject "Timed out text." if the auto-release timer ever fired release().
     let stt = StubTranscriber(mode: .transcript("Timed out text."))
     let injector = StubInjector()
-    // A short cap so a *live* timer would fire well within the wait below — the
-    // test proves cancel cancelled it, not that the timer simply hasn't elapsed.
+    // A controllable clock so the auto-release deadline can be crossed
+    // deterministically — the test proves cancel cancelled the timer, not that
+    // the timer simply hasn't elapsed in wall-clock time.
+    let clock = TestClock()
     let session = DictationSession(
-      mic: mic, transcriber: stt, injector: injector, maxRecordingSeconds: 0.05)
+      mic: mic, transcriber: stt, injector: injector, maxRecordingSeconds: 0.05, clock: clock)
 
     await session.press()
     #expect(await session.phase == .recording)
     await session.cancel()
     #expect(await session.phase == .cancelled)
 
-    // Wait past the auto-release deadline. A timer that survived the cancel would
-    // enqueue a release → transcribe → inject and flip the phase.
-    try await Task.sleep(for: .milliseconds(150))
-    for _ in 0..<1000 { await Task.yield() }
+    // Advance well past the auto-release deadline. A timer that survived the
+    // cancel would enqueue a release → transcribe → inject and flip the phase;
+    // the cancelled one has no sleeper left to wake.
+    clock.advance(by: .seconds(1))
+    await session.awaitPipeline()
 
     #expect(await session.phase == .cancelled)
     #expect(await injector.inserted.isEmpty)
@@ -241,64 +244,36 @@ struct CancelRaceTests {
 
 /// Transcriber stub that signals when `transcribe` is entered and then blocks
 /// until released, so a `cancel()` can be landed deterministically while the
-/// session is suspended in `.transcribing`.
+/// session is suspended in `.transcribing`. Gate choreography lives in `Gate`.
 private actor GatedTranscriber: TranscriberProtocol {
   private let text: String
   /// When true, a release that arrives after the task was cancelled throws
   /// `URLError(.cancelled)` — mimicking the real URLSession-backed transcriber,
   /// whose in-flight request is torn down by task cancellation.
   private let throwsWhenCancelled: Bool
-  private var started = false
-  private var startedWaiters: [CheckedContinuation<Void, Never>] = []
-  private var finished = false
-  private var finishWaiters: [CheckedContinuation<Void, Never>] = []
+  private let gate = Gate()
 
   init(text: String, throwsWhenCancelled: Bool = false) {
     self.text = text
     self.throwsWhenCancelled = throwsWhenCancelled
   }
 
-  nonisolated func transcribe(samples: [Float], sampleRate: Int, context: TranscriptionContext?)
+  func transcribe(samples: [Float], sampleRate: Int, context: TranscriptionContext?)
     async throws -> String
   {
-    await enter()
+    await gate.enter()
     if throwsWhenCancelled && Task.isCancelled { throw URLError(.cancelled) }
     return text
   }
 
-  private func enter() async {
-    started = true
-    for waiter in startedWaiters { waiter.resume() }
-    startedWaiters.removeAll()
-    if !finished {
-      await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
-        finishWaiters.append(c)
-      }
-    }
-  }
-
-  func waitUntilStarted() async {
-    if started { return }
-    await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
-      startedWaiters.append(c)
-    }
-  }
-
-  func allowToFinish() {
-    finished = true
-    for waiter in finishWaiters { waiter.resume() }
-    finishWaiters.removeAll()
-  }
+  func waitUntilStarted() async { await gate.waitUntilEntered() }
+  func allowToFinish() async { await gate.allowToFinish() }
 }
 
 /// Injector stub that honors task cancellation (like the real `KeyInjector`) and
 /// blocks inside `insert` until released, so a `cancel()` can be landed while the
-/// session is suspended in `.injecting`.
+/// session is suspended in `.injecting`. Gate choreography lives in `Gate`.
 private actor GatedInjector: InjectorProtocol {
-  private var entered = false
-  private var enteredWaiters: [CheckedContinuation<Void, Never>] = []
-  private var finished = false
-  private var finishWaiters: [CheckedContinuation<Void, Never>] = []
   /// Fired each time a paste is actually recorded — lets a test assert, via
   /// `confirmation(expectedCount: 0)`, that a cancelled injection records nothing.
   private let onRecord: @Sendable () -> Void
@@ -307,43 +282,21 @@ private actor GatedInjector: InjectorProtocol {
   /// cancelled task — modeling the real injector's final, non-cancellable
   /// stretch after its last `checkCancellation` (the paste already landed).
   private let honorsCancellation: Bool
+  private let gate = Gate()
 
   init(honorsCancellation: Bool = true, onRecord: @escaping @Sendable () -> Void = {}) {
     self.honorsCancellation = honorsCancellation
     self.onRecord = onRecord
   }
 
-  nonisolated func setTargetApp(_ app: NSRunningApplication?) async {}
+  func setTargetApp(_ app: NSRunningApplication?) async {}
 
-  nonisolated func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws {
-    try await enter()
+  func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws {
+    await gate.enter()
     if honorsCancellation { try Task.checkCancellation() }
-    await recordPaste()
+    onRecord()
   }
 
-  private func enter() async throws {
-    entered = true
-    for waiter in enteredWaiters { waiter.resume() }
-    enteredWaiters.removeAll()
-    if !finished {
-      await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
-        finishWaiters.append(c)
-      }
-    }
-  }
-
-  private func recordPaste() { onRecord() }
-
-  func waitUntilInsertEntered() async {
-    if entered { return }
-    await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
-      enteredWaiters.append(c)
-    }
-  }
-
-  func allowInsertToFinish() {
-    finished = true
-    for waiter in finishWaiters { waiter.resume() }
-    finishWaiters.removeAll()
-  }
+  func waitUntilInsertEntered() async { await gate.waitUntilEntered() }
+  func allowInsertToFinish() async { await gate.allowToFinish() }
 }

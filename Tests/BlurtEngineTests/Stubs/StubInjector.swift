@@ -10,14 +10,12 @@ actor StubInjector: InjectorProtocol {
   var insertedPrior: [String?] = []
   var error: (any Error & Sendable)?
 
-  nonisolated func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws {
-    if let e = await self.error { throw e }
-    await record(text, priorText)
+  // Actor-isolated methods satisfy these `async` protocol requirements directly.
+  func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws {
+    if let error { throw error }
+    inserted.append(text)
+    insertedPrior.append(priorText)
   }
-  nonisolated func setTargetApp(_ app: NSRunningApplication?) async {}
-  private func record(_ s: String, _ prior: String?) {
-    inserted.append(s)
-    insertedPrior.append(prior)
-  }
+  func setTargetApp(_ app: NSRunningApplication?) async {}
   func setError(_ error: (any Error & Sendable)?) { self.error = error }
 }

@@ -7,7 +7,7 @@ struct BlurtApp: App {
   var body: some Scene {
     // Primary window: the setup wizard until the app is fully configured, then
     // the "ready" screen (see `MainWindowRoot`).
-    Window("Blurt", id: MainWindow.id) {
+    Window(UITestIdentifiers.mainWindowTitle, id: MainWindow.id) {
       MainWindowRoot(appDelegate: appDelegate)
     }
     .windowResizability(.contentSize)
@@ -53,7 +53,7 @@ struct BlurtApp: App {
       // (the Debug default; stripped by scripts/dev-build.sh) but only presented
       // and populated when launched with `-BlurtUITest`, so a normal run never
       // sees it. See `UITestSupport.swift`.
-      Window("Blurt UI Test Harness", id: UITestID.harnessWindow) {
+      Window(UITestIdentifiers.harnessWindowTitle, id: UITestIdentifiers.harnessWindowID) {
         if UITestMode.isActive {
           UITestHarnessView(appDelegate: appDelegate)
         }
