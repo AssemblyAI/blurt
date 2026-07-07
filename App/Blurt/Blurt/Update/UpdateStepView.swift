@@ -12,6 +12,7 @@ struct UpdateStepView: View {
       switch model.state {
       case .available(let version, _):
         Button("Download Blurt \(version)") { model.download() }
+          .accessibilityIdentifier(UITestIdentifiers.updateDownload)
       case .checking:
         HStack(spacing: 8) {
           ProgressView().controlSize(.small)
@@ -21,6 +22,7 @@ struct UpdateStepView: View {
         Button("Check for Update") {
           Task { await model.check() }
         }
+        .accessibilityIdentifier(UITestIdentifiers.updateCheck)
       }
     } header: {
       Text("Updates")
