@@ -24,8 +24,19 @@
   /// demand; the test runner sets the flag via `XCUIApplication.launchArguments`.
   enum UITestMode {
     static let launchArgument = "-BlurtUITest"
+    /// Opt-in flag that forces the fully-configured "ready" state so the main
+    /// window renders `ReadyView` instead of the setup wizard — the only way the
+    /// test host can reach that screen, since it can't grant real TCC
+    /// permissions. See `AppDelegate.applicationDidFinishLaunching`.
+    static let readyStateArgument = "-BlurtUITestReady"
+
     static var isActive: Bool {
       ProcessInfo.processInfo.arguments.contains(launchArgument)
+    }
+
+    /// Whether the runner asked for the forced-ready state (implies `isActive`).
+    static var isReadyStateRequested: Bool {
+      ProcessInfo.processInfo.arguments.contains(readyStateArgument)
     }
   }
 
