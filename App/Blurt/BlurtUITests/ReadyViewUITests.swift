@@ -9,7 +9,7 @@ import XCTest
 /// instead of the setup wizard. The rest of the suite keeps exercising the
 /// wizard under the plain flag.
 final class ReadyViewUITests: BlurtUITestCase {
-  override var extraLaunchArguments: [String] { [UITestIDs.readyLaunchArgument] }
+  override var extraLaunchArguments: [String] { [UITestIdentifiers.readyLaunchArgument] }
 
   func testReadyScreenShowsShortcutRecentAndSettings() {
     mainWindow()
@@ -39,7 +39,7 @@ final class ReadyViewUITests: BlurtUITestCase {
     settingsButton.click()
 
     XCTAssertTrue(
-      app.windows[UITestIDs.settingsWindowTitle].waitForExistence(timeout: 10),
+      app.windows[UITestIdentifiers.settingsWindowTitle].waitForExistence(timeout: 10),
       "Clicking the ready screen's Settings link should open the Settings window")
   }
 
@@ -47,9 +47,9 @@ final class ReadyViewUITests: BlurtUITestCase {
     // The harness sits in the top-leading corner (see `BlurtApp`) so it never
     // overlaps the centered ready window: drive a full dictation on the harness,
     // then read the result on the still-open ready screen — no closing/reopening.
-    let harness = app.windows[UITestIDs.harnessWindowTitle]
+    let harness = app.windows[UITestIdentifiers.harnessWindowTitle]
     XCTAssertTrue(harness.waitForExistence(timeout: 10), "Harness window not presented")
-    let main = app.windows[UITestIDs.mainWindowTitle]
+    let main = app.windows[UITestIdentifiers.mainWindowTitle]
     XCTAssertTrue(main.waitForExistence(timeout: 10), "Ready window not presented")
 
     // The Recent list starts empty.
@@ -58,13 +58,13 @@ final class ReadyViewUITests: BlurtUITestCase {
       "Recent list should start empty")
 
     // Drive the dictation via the same hotkey path the pipeline tests use.
-    harness.buttons[UITestIDs.hotkeyPressButton].click()
-    harness.buttons[UITestIDs.hotkeyReleaseButton].click()
+    harness.buttons[UITestIdentifiers.hotkeyPressButton].click()
+    harness.buttons[UITestIdentifiers.hotkeyReleaseButton].click()
 
     // The harness echoes `recentDictations.entries.first?.text`; once it shows the
     // canned transcript, the entry the ready screen renders is in place.
     let echo = harness.descendants(matching: .any)
-      .matching(identifier: UITestIDs.transcriptEchoLabel).firstMatch
+      .matching(identifier: UITestIdentifiers.transcriptEchoLabel).firstMatch
     waitForLabel(echo, equals: "hello world")
 
     // The completed dictation appears as a Recent row on the ready screen (the
@@ -83,15 +83,15 @@ final class ReadyViewUITests: BlurtUITestCase {
     // Record a dictation, then copy it from the Recent row's context menu — the
     // row's copy affordance (`copyTranscript`: pasteboard write + a transient
     // "Copied" confirmation) that only `ReadyView` exercises.
-    let harness = app.windows[UITestIDs.harnessWindowTitle]
+    let harness = app.windows[UITestIdentifiers.harnessWindowTitle]
     XCTAssertTrue(harness.waitForExistence(timeout: 10), "Harness window not presented")
-    let main = app.windows[UITestIDs.mainWindowTitle]
+    let main = app.windows[UITestIdentifiers.mainWindowTitle]
     XCTAssertTrue(main.waitForExistence(timeout: 10), "Ready window not presented")
 
-    harness.buttons[UITestIDs.hotkeyPressButton].click()
-    harness.buttons[UITestIDs.hotkeyReleaseButton].click()
+    harness.buttons[UITestIdentifiers.hotkeyPressButton].click()
+    harness.buttons[UITestIdentifiers.hotkeyReleaseButton].click()
     let echo = harness.descendants(matching: .any)
-      .matching(identifier: UITestIDs.transcriptEchoLabel).firstMatch
+      .matching(identifier: UITestIdentifiers.transcriptEchoLabel).firstMatch
     waitForLabel(echo, equals: "hello world")
 
     let row = main.descendants(matching: .any)

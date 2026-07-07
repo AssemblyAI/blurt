@@ -23,9 +23,11 @@ public struct APIKeySubmission: Sendable {
     self.init(keyStore: keyStore, validate: { await validator.validate($0) })
   }
 
-  /// Test seam: inject the validation outcome directly so the outcome mapping
-  /// and the never-save-unverified invariant are testable without HTTP.
-  init(
+  /// Seam that injects the validation outcome directly, bypassing HTTP: tests use
+  /// it to cover the outcome mapping and the never-save-unverified invariant, and
+  /// the app injects an offline validator under UI testing (so the settings flow
+  /// runs without a network) — both through the one real submit path.
+  public init(
     keyStore: any APIKeyGateway,
     validate: @escaping @Sendable (String) async -> APIKeyValidator.Result
   ) {

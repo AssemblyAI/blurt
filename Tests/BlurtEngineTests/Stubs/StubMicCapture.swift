@@ -12,17 +12,17 @@ actor StubMicCapture: MicCaptureProtocol {
   var startError: (any Error & Sendable)?
   var stopError: (any Error & Sendable)?
 
-  nonisolated func start() async throws {
-    await incStart()
-    if let e = await self.startError { throw e }
+  // Actor-isolated methods satisfy these `async` protocol requirements directly,
+  // so no `nonisolated` + hop-back-onto-self dance is needed.
+  func start() async throws {
+    startCalls += 1
+    if let startError { throw startError }
   }
-  nonisolated func stop() async throws -> [Float] {
-    await incStop()
-    if let e = await self.stopError { throw e }
-    return await samplesToReturn
+  func stop() async throws -> [Float] {
+    stopCalls += 1
+    if let stopError { throw stopError }
+    return samplesToReturn
   }
-  private func incStart() { startCalls += 1 }
-  private func incStop() { stopCalls += 1 }
   func setSamples(_ samples: [Float]) { samplesToReturn = samples }
   func setStartError(_ error: (any Error & Sendable)?) { startError = error }
   func setStopError(_ error: (any Error & Sendable)?) { stopError = error }

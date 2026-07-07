@@ -65,13 +65,6 @@ public actor KeyInjector: InjectorProtocol {
   /// clipboard state; production never reads it.
   private(set) var pendingSettle: Task<Void, Never>?
 
-  /// What a successful paste hands to its deferred settle: the pre-paste
-  /// clipboard snapshot to restore and the change count our own write produced.
-  private struct SettleJob: Sendable {
-    let savedItems: [SendablePasteboardItem]
-    let ourChangeCount: Int
-  }
-
   /// Brings the captured target app back to the foreground before pasting.
   /// Injectable so tests can cover activation failure without depending on
   /// another live application.
@@ -211,20 +204,19 @@ public actor KeyInjector: InjectorProtocol {
     // user's original clipboard.
     let previous = pendingSettle
     let timeout = pasteSettleDuration
-    let paste = Task<SettleJob?, any Error> {
+    let paste = Task<(@Sendable () -> Void)?, any Error> {
       await previous?.value
       return try await self.performInsert(text, after: priorText, windowTitle: windowTitle)
     }
     // Strong `self` captures, deliberately: each link is bounded (one paste, one
     // settle sleep — no cycle), and a weak capture would let an injector torn
-    // down mid-window skip the restore, leaving the transcript on the clipboard
-    // instead of the user's saved contents.
+    // down mid-window skip the paste. The restore closure captures the clipboard
+    // (not `self`), so the user's contents come back even if the injector is
+    // gone by the time the settle fires.
     pendingSettle = Task {
-      guard let job = try? await paste.value else { return }
+      guard let restore = try? await paste.value else { return }
       try? await Task.sleep(for: timeout)
-      // No `await`: the task captures the actor's `self`, so it inherits this
-      // actor's isolation and the call is synchronous.
-      self.finishSettle(savedItems: job.savedItems, ourChangeCount: job.ourChangeCount)
+      restore()
     }
     // Forward the caller's cancellation into the chain link: the paste task is
     // unstructured, so `pipelineTask.cancel()` in the session wouldn't otherwise
@@ -237,11 +229,11 @@ public actor KeyInjector: InjectorProtocol {
   }
 
   /// The paste critical section: runs with the chain's guarantee that no other
-  /// insert (or its settle) is mid-flight. Returns the settle job for the
-  /// deferred clipboard restore.
+  /// insert (or its settle) is mid-flight. Returns the deferred clipboard-restore
+  /// action for the settle link to run once the paste has landed.
   private func performInsert(
     _ text: String, after priorText: String?, windowTitle: String?
-  ) async throws -> SettleJob {
+  ) async throws -> @Sendable () -> Void {
     try Task.checkCancellation()
     // Snapshot the target at entry and use only the local below: this method
     // suspends (activation settle), the actor is reentrant, and a
@@ -270,7 +262,7 @@ public actor KeyInjector: InjectorProtocol {
       // Transcription already succeeded, so leave the words on the clipboard —
       // the pipeline degrades this to the quiet "copied" notice instead of a
       // hard failure that would lose the dictation.
-      clipboard.setString(finalText)
+      clipboard.write(finalText)
       throw error
     }
     // Final cancellation gate before the irreversible paste: a cancel() that
@@ -283,7 +275,7 @@ public actor KeyInjector: InjectorProtocol {
     // Electron editor (VS Code, Slack), which reports no editable signal even for
     // a real text field — there we still paste rather than drop the user's words.
     guard hasEditableTarget() || isAXOpaqueEditor(target) else {
-      clipboard.setString(finalText)
+      clipboard.write(finalText)
       throw BlurtError.noEditableTarget
     }
     // Bail before touching the pasteboard if we can't actually paste: without
@@ -291,13 +283,9 @@ public actor KeyInjector: InjectorProtocol {
     // otherwise clobber-and-restore the clipboard for a paste that never lands.
     guard isAccessibilityTrusted() else { throw BlurtError.accessibilityPermissionMissing }
 
-    let savedItems = clipboard.currentItems()
-    clipboard.setString(finalText)
-    // Snapshot the change count our own write produced. If anything else writes
-    // to the pasteboard during the settle window (e.g. the user copies
-    // something), the count moves and the deferred restore leaves their newer
-    // contents alone rather than clobbering them with the stale pre-paste snapshot.
-    let ourChangeCount = clipboard.changeCount
+    // Put the transcript on the clipboard and keep the deferred restore that
+    // brings the user's contents back once the paste settles.
+    let restore = clipboard.writeAndPrepareRestore(finalText)
     // If the event subsystem won't synthesize the keystroke, the paste can't
     // happen. The transcript is already on the pasteboard — leave it there (the
     // user's words beat the stale pre-paste snapshot) so the failure degrades
@@ -306,22 +294,12 @@ public actor KeyInjector: InjectorProtocol {
     // The paste is posted and the text is visible. Record what landed (including
     // any leading separator) and which window it landed in so a following
     // dictation into the same window can recover its spacing, then hand the
-    // settle + clipboard restore back to the chain link (see `insert`). `insert`
-    // returns now — so the pipeline reaches `.idle` and re-arms without waiting
-    // out the restore window — while the next paste still serializes behind the
-    // settle.
+    // deferred restore back to the chain link (see `insert`). `insert` returns
+    // now — so the pipeline reaches `.idle` and re-arms without waiting out the
+    // restore window — while the next paste still serializes behind the settle.
     lastInsertedText = finalText
     lastInsertedWindow = currentWindow
-    return SettleJob(savedItems: savedItems, ourChangeCount: ourChangeCount)
-  }
-
-  /// Background tail of a successful `insert`: restore the user's clipboard
-  /// (unless another writer changed it during the settle window — then leave the
-  /// newer contents alone).
-  private func finishSettle(savedItems: [SendablePasteboardItem], ourChangeCount: Int) {
-    if clipboard.changeCount == ourChangeCount {
-      clipboard.restore(savedItems)
-    }
+    return restore
   }
 
   private static func activate(_ app: NSRunningApplication) -> Bool {

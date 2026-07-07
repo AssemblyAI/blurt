@@ -24,7 +24,7 @@ struct SoundStepView: View {
     Section {
       PickerSettingRow(
         title: "Cue sound", systemImage: "speaker.wave.2",
-        accessibilityID: "settings.sound.picker", selection: selection
+        accessibilityID: UITestIdentifiers.soundPicker, selection: selection
       ) {
         Text(SoundPack.none.label).tag(SoundPack.none)
         ForEach(SoundPack.groups, id: \.self) { group in

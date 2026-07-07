@@ -5,27 +5,24 @@ import Testing
 
 /// Tests for the HTTP-backed API clients. The `AssemblyAITranscriber` cases live
 /// here; the `APIKeyValidator` cases live in `APIKeyValidatorTests.swift` as an
-/// extension of this same suite. They are one suite, not two, because they share
-/// the process-global `MockURLProtocol.responder`: two independent suites would
-/// run in parallel and clobber each other's responder (or its `defer` cleanup)
-/// mid-request. `.serialized` keeps the whole group sequential. The mock itself
-/// lives in `Stubs/MockURLProtocol.swift`.
-@Suite("HTTP network clients", .serialized)
+/// extension of this same suite. They share only the `makeTranscriber`/
+/// `makeValidator` helpers and the `FakeHTTPTransport` seam — each test wires its
+/// own per-instance transport, so no process-global state forces `.serialized`.
+@Suite("HTTP network clients")
 struct HTTPClientTests {
 
   @Test("transcriber posts to the sync endpoint and returns the transcript")
   func transcribeHappyPath() async throws {
     let hits = Counter()
-    MockURLProtocol.responder = { request in
+    let transport = FakeHTTPTransport { request in
       _ = hits.next()
       guard request.url?.path.hasSuffix("/transcribe") == true,
         request.httpMethod == "POST"
       else { return (404, Data()) }
       return (200, json(["text": "hello world"]))
     }
-    defer { MockURLProtocol.responder = nil }
 
-    let result = try await collectTranscript(makeTranscriber(apiKey: "test-key"))
+    let result = try await collectTranscript(makeTranscriber(apiKey: "test-key", transport: transport))
     #expect(result == "hello world")
     // Single round-trip: no upload/submit/poll fan-out.
     #expect(hits.value == 1)
@@ -33,17 +30,16 @@ struct HTTPClientTests {
 
   @Test("transcriber succeeds with a real context (builds and sends a prompt)")
   func transcribeWithContext() async throws {
-    MockURLProtocol.responder = { request in
+    let transport = FakeHTTPTransport { request in
       guard request.url?.path.hasSuffix("/transcribe") == true else { return (404, Data()) }
       return (200, json(["text": "hello world"]))
     }
-    defer { MockURLProtocol.responder = nil }
 
     // A non-empty context exercises the TranscriptionPrompt.build path inside
-    // transcribe() that the nil-context happy path skips. The mock can't observe
+    // transcribe() that the nil-context happy path skips. The fake can't observe
     // the multipart upload body, so this asserts the request still round-trips
     // cleanly rather than the wire contents (covered directly by makeConfigData).
-    let result = try await makeTranscriber(apiKey: "test-key")
+    let result = try await makeTranscriber(apiKey: "test-key", transport: transport)
       .transcribe(
         samples: [0, 0.1, -0.1],
         sampleRate: 16_000,
@@ -53,7 +49,7 @@ struct HTTPClientTests {
 
   @Test("transcribe sends the raw key and the sync model selector as headers")
   func transcribeSendsAuthAndModelHeaders() async throws {
-    MockURLProtocol.responder = { request in
+    let transport = FakeHTTPTransport { request in
       // The wire contract: the raw key in Authorization (no "Bearer" prefix),
       // the sync model selector, and a boundary-tagged multipart body. Anything
       // else gets a 400 so a header regression fails loudly here.
@@ -63,16 +59,15 @@ struct HTTPClientTests {
       else { return (400, Data()) }
       return (200, json(["text": "ok"]))
     }
-    defer { MockURLProtocol.responder = nil }
 
-    #expect(try await collectTranscript(makeTranscriber(apiKey: "test-key")) == "ok")
+    #expect(try await collectTranscript(makeTranscriber(apiKey: "test-key", transport: transport)) == "ok")
   }
 
   @Test("warmUp issues a single GET to the host so the connection is pre-opened")
   func warmUpPreOpensConnection() async throws {
     let hits = Counter()
     let getHits = Counter()
-    MockURLProtocol.responder = { request in
+    let transport = FakeHTTPTransport { request in
       _ = hits.next()
       // The warm-up must be a bare, auth-less GET off the /transcribe path —
       // carrying the key or model header would make it count as a transcription.
@@ -84,12 +79,11 @@ struct HTTPClientTests {
       }
       return (404, Data())
     }
-    defer { MockURLProtocol.responder = nil }
 
     // warmUp is fire-and-forget and swallows errors; it should still issue
     // exactly one lightweight GET (no /transcribe POST, no auth) to establish
     // the pooled connection the next transcribe reuses.
-    await makeTranscriber(apiKey: "test-key").warmUp()
+    await makeTranscriber(apiKey: "test-key", transport: transport).warmUp()
     #expect(hits.value == 1)
     #expect(getHits.value == 1)
   }
@@ -104,37 +98,34 @@ struct HTTPClientTests {
   @Test("transcriber treats an empty-string key as missing, without a request")
   func transcribeEmptyKeyIsMissing() async throws {
     let hits = Counter()
-    MockURLProtocol.responder = { _ in
+    let transport = FakeHTTPTransport { _ in
       _ = hits.next()
       return (200, json(["text": "never"]))
     }
-    defer { MockURLProtocol.responder = nil }
 
     // A cleared Keychain item can come back as "" rather than nil — that must
     // fail fast as a missing key, not go to the wire with a blank Authorization.
     await #expect(throws: BlurtError.apiKeyMissing) {
-      _ = try await collectTranscript(makeTranscriber(apiKey: ""))
+      _ = try await collectTranscript(makeTranscriber(apiKey: "", transport: transport))
     }
     #expect(hits.value == 0)
   }
 
   @Test("transcriber throws when the response omits transcript text")
   func transcribeMalformedResponse() async throws {
-    MockURLProtocol.responder = { _ in (200, json(["confidence": "0.9"])) }
-    defer { MockURLProtocol.responder = nil }
+    let transport = FakeHTTPTransport { _ in (200, json(["confidence": "0.9"])) }
 
     await #expect(throws: (any Error).self) {
-      _ = try await collectTranscript(makeTranscriber(apiKey: "test-key"))
+      _ = try await collectTranscript(makeTranscriber(apiKey: "test-key", transport: transport))
     }
   }
 
   @Test("transcriber throws on non-2xx HTTP responses")
   func transcribeHTTPError() async throws {
-    MockURLProtocol.responder = { _ in (401, json(["message": "Invalid API key"])) }
-    defer { MockURLProtocol.responder = nil }
+    let transport = FakeHTTPTransport { _ in (401, json(["message": "Invalid API key"])) }
 
     await #expect(throws: (any Error).self) {
-      _ = try await collectTranscript(makeTranscriber(apiKey: "bad-key"))
+      _ = try await collectTranscript(makeTranscriber(apiKey: "bad-key", transport: transport))
     }
   }
 
@@ -167,13 +158,12 @@ struct HTTPClientTests {
 
   @Test("transcriber HTTP error carries the decoded server message")
   func transcribeHTTPErrorMessage() async throws {
-    MockURLProtocol.responder = { _ in (422, json(["message": "audio too long"])) }
-    defer { MockURLProtocol.responder = nil }
+    let transport = FakeHTTPTransport { _ in (422, json(["message": "audio too long"])) }
 
     // The transcriber surfaces its transport error directly; DictationSession is
     // the layer that wraps it in BlurtError.sttFailed before it reaches the UI.
     do {
-      _ = try await collectTranscript(makeTranscriber(apiKey: "k"))
+      _ = try await collectTranscript(makeTranscriber(apiKey: "k", transport: transport))
       Issue.record("expected a throw")
     } catch let AssemblyAIError.http(status, message) {
       #expect(status == 422)
@@ -185,11 +175,10 @@ struct HTTPClientTests {
 
   @Test("HTTP error message is read from the `error` field too, not just `message`")
   func errorMessageFromErrorField() async throws {
-    MockURLProtocol.responder = { _ in (400, json(["error": "audio too short"])) }
-    defer { MockURLProtocol.responder = nil }
+    let transport = FakeHTTPTransport { _ in (400, json(["error": "audio too short"])) }
 
     do {
-      _ = try await collectTranscript(makeTranscriber(apiKey: "k"))
+      _ = try await collectTranscript(makeTranscriber(apiKey: "k", transport: transport))
       Issue.record("expected a throw")
     } catch let AssemblyAIError.http(status, message) {
       #expect(status == 400)
@@ -243,7 +232,7 @@ struct HTTPClientTests {
 
   @Test("transcriber constructs with production defaults (no overrides)")
   func transcriberDefaultInit() {
-    // Exercises the default baseURL / urlSession parameter values — the path the
+    // Exercises the default baseURL / transport parameter values — the path the
     // real app uses — without issuing any request.
     _ = AssemblyAITranscriber(apiKeyProvider: { nil })
   }
@@ -257,11 +246,16 @@ struct HTTPClientTests {
 
   // MARK: - helpers
 
-  private func makeTranscriber(apiKey: String?) -> AssemblyAITranscriber {
+  /// Builds a transcriber wired to `transport`. The default transport answers
+  /// every request with a 500, for the cases that must never reach the wire.
+  private func makeTranscriber(
+    apiKey: String?,
+    transport: any HTTPTransport = FakeHTTPTransport { _ in (500, Data()) }
+  ) -> AssemblyAITranscriber {
     AssemblyAITranscriber(
       apiKeyProvider: { apiKey },
       baseURL: URL(string: "https://sync.assemblyai.com")!,
-      urlSession: mockURLSession()
+      transport: transport
     )
   }
 

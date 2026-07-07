@@ -76,7 +76,7 @@ struct OverlayView: View {
       .padding(OverlayWindowController.shadowMargin)
       .accessibilityElement(children: .ignore)
       .accessibilityLabel(state.accessibilityLabel)
-      .accessibilityIdentifier("overlay.pill")
+      .accessibilityIdentifier(UITestIdentifiers.overlayPill)
   }
 
   @ViewBuilder

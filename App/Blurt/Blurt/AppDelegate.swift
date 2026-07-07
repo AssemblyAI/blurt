@@ -127,7 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
           onMissingAPIKey: onMissingAPIKey,
           components: .uiTest(),
           keyStore: InMemoryAPIKeyStore(),
-          isUITesting: true)
+          validateKey: { UITestKeyValidation.result(for: $0) })
       } else {
         coord = AppCoordinator(onMissingAPIKey: onMissingAPIKey)
       }
@@ -155,7 +155,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       // Without the flag the wizard shows as usual, so wizard-based tests are
       // unaffected.
       if UITestMode.isReadyStateRequested {
-        coord.saveAPIKey(UITestKeys.validAPIKey)
+        coord.saveAPIKey(UITestIdentifiers.validAPIKey)
         self.wizardController = WizardController(
           coordinator: coord,
           onNeedsForeground: { [weak self] in self?.surfaceMainWindow() },
@@ -215,7 +215,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Leaks-instrument recording exercises the full app-shell object graph. See
     /// the call site in `applicationDidFinishLaunching` and `scripts/leaks.sh`.
     private func runLeakExercise(_ coord: AppCoordinator) async {
-      coord.saveAPIKey(UITestKeys.validAPIKey)  // clear the missing-key gate
+      coord.saveAPIKey(UITestIdentifiers.validAPIKey)  // clear the missing-key gate
       // Build/enable the key tap's object graph, then drive cycles *through the
       // tap* (gate + callbacks), so the leak run covers the real dictation-key
       // path — not just the session. (The tap can't create its CGEventTap without
