@@ -151,10 +151,21 @@ targets:
 
           # Re-sign with the Apple Development cert (login keychain), matching the
           # build above — NOT the Developer ID release key (dedicated locked
-          # keychain, release-only). Same team, so TCC stays stable.
+          # keychain, release-only).
           # Errors are NOT swallowed.
           IDENTITY="Apple Development"
           ENTS="${SRCROOT}/Blurt/Blurt.entitlements"
+          # Pin an explicit, TEAM-based designated requirement. TCC keys the
+          # Accessibility / Input Monitoring grant to the app's designated
+          # requirement, and codesign's DEFAULT DR for an Apple Development cert
+          # pins the specific leaf cert's Common Name ("Apple Development: … (ID)")
+          # — which changes every time that cert rotates (they expire ~yearly and
+          # Xcode reissues them), silently orphaning the grant ("toggle on, still
+          # denied"). A team-based DR stays stable across cert rotation AND is
+          # satisfied by both Apple Development and Developer ID signatures (both
+          # carry OU = the team id), so dev and release builds share one identity
+          # as far as TCC is concerned.
+          REQ='designated => identifier "'"${PRODUCT_BUNDLE_IDENTIFIER}"'" and anchor apple generic and certificate leaf[subject.OU] = "'"${DEVELOPMENT_TEAM}"'"'
           # Inside-out signing: Debug builds emit unsigned dylibs
           # (__preview.dylib, Blurt.debug.dylib). Signing the bundle
           # alone doesn't recurse, so verify fails. Sign nested code first.
@@ -165,6 +176,7 @@ targets:
           codesign --force --sign "$IDENTITY" \
             --entitlements "$ENTS" \
             --options runtime \
+            -r="$REQ" \
             "$DEST"
           codesign --verify --strict --verbose=1 "$DEST"
           echo "Installed: $DEST"
