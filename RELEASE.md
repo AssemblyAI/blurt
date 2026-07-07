@@ -17,16 +17,27 @@ it, so every published DMG must carry this signature. Protect it accordingly:
   15-minute auto-lock. Never store a plaintext `.p12` on disk or in cloud sync;
   keep the encrypted `.p12` backup offline.
 - `scripts/release-build.sh` unlocks that keychain for the duration of the build
-  and re-locks it on exit (even on failure). It resolves the keychain password
-  from, in order: `BLURT_SIGNING_KEYCHAIN_PASSWORD` (use this in CI), a
-  `blurt-signing-keychain` generic-password item in the login keychain (local
-  releases unlock without a prompt), then an interactive prompt. Override the
-  keychain path with `BLURT_SIGNING_KEYCHAIN` if it lives elsewhere.
+  and re-locks it on exit (even on failure). It reads the keychain password from
+  `BLURT_SIGNING_KEYCHAIN_PASSWORD`, else prompts interactively — it does **not**
+  read the password from the login keychain, so the unlock secret never sits in
+  login. Supply it from 1Password:
+
+  ```sh
+  BLURT_SIGNING_KEYCHAIN_PASSWORD="$(op read 'op://<vault>/Blurt signing keychain/password')" \
+    scripts/release.sh
+  ```
+
+  Override the keychain path with `BLURT_SIGNING_KEYCHAIN` if it lives elsewhere.
+
 - If `blurt-signing.keychain-db` isn't present, the script falls back to whatever
   identity is on the existing search list (e.g. login) — so a machine that hasn't
   migrated the key yet still builds.
 - It then preflights that the identity is present
   (`security find-identity -v -p codesigning`) and refuses to build without it.
+- **Everyday dev builds never touch this key.** The `Debug` / `Debug-Local`
+  configs sign with the **Apple Development** cert (login keychain, same team
+  `Y54ZB9JF63`), so `scripts/dev-build.sh` and Xcode builds work with the release
+  keychain locked. Only `release-build.sh` uses the Developer ID key.
 
 ## Rotating the signing certificate
 

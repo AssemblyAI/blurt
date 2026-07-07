@@ -33,6 +33,15 @@ settings:
   configs:
     Release:
       VALIDATE_PRODUCT: YES
+    # Everyday dev builds sign with the Apple Development cert (in the login
+    # keychain), never the Developer ID release key. That key lives in a
+    # dedicated, normally-locked keychain used only by scripts/release-build.sh,
+    # so daily builds must not depend on it being unlocked. Same team
+    # (Y54ZB9JF63), so DEVELOPMENT_TEAM above still applies. See RELEASE.md.
+    Debug:
+      CODE_SIGN_IDENTITY: "Apple Development"
+    Debug-Local:
+      CODE_SIGN_IDENTITY: "Apple Development"
 packages:
   BlurtEngine:
     path: ../..
@@ -140,9 +149,11 @@ targets:
           rm -rf "$DEST"
           cp -R "$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app" "$DEST"
 
-          # SHA-1 of the Developer ID Application: Alexander Kroman cert.
+          # Re-sign with the Apple Development cert (login keychain), matching the
+          # build above — NOT the Developer ID release key (dedicated locked
+          # keychain, release-only). Same team, so TCC stays stable.
           # Errors are NOT swallowed.
-          IDENTITY="640A7F5A9754400D4A0491E7A6FB30542D907806"
+          IDENTITY="Apple Development"
           ENTS="${SRCROOT}/Blurt/Blurt.entitlements"
           # Inside-out signing: Debug builds emit unsigned dylibs
           # (__preview.dylib, Blurt.debug.dylib). Signing the bundle
