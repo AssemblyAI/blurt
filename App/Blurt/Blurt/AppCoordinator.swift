@@ -20,17 +20,11 @@ final class AppCoordinator {
   /// pre-open — both carried by `MicCaptureProtocol` itself (with no-op
   /// defaults), so stubs need supply neither.
   @ObservationIgnored private let mic: any MicCaptureProtocol
-  /// Storage for the API key. Production hits the Keychain via `APIKeyStore`;
-  /// UI tests inject an in-memory store so the real key is never touched.
-  @ObservationIgnored private let keyStore: any APIKeyGateway
-  /// True only under UI testing — short-circuits `submitAPIKey` past the network
-  /// validation so the settings flow is deterministic and offline.
-  @ObservationIgnored private let isUITesting: Bool
-  /// The validate-then-save flow over `keyStore`. The logic (and its
-  /// never-persist-an-unverified-key invariant) lives in the engine, where
-  /// `swift test` covers it; this coordinator just forwards and mirrors the
-  /// result into `hasAPIKey` for the UI.
-  @ObservationIgnored private let keySubmission: APIKeySubmission
+  /// The API-key surface (storage seam, validate-then-save flow, and the
+  /// observable `hasAPIKey` flag), extracted so the coordinator stays focused on
+  /// pipeline↔UI wiring. The wizard and the API-key view observe this directly
+  /// rather than reaching through the coordinator (see `APIKeyModel`).
+  let apiKey: APIKeyModel
   @ObservationIgnored private var phaseObserver: Task<Void, Never>?
   @ObservationIgnored private var levelsObserver: Task<Void, Never>?
   @ObservationIgnored var keyTap: DictationKeyTap?
@@ -43,10 +37,6 @@ final class AppCoordinator {
   /// listed in the ready window's "Recent" section beneath the shortcut readout.
   /// In-memory only — starts empty each launch and is never written to disk.
   private(set) var recentDictations = RecentDictations()
-
-  /// Whether an AssemblyAI API key is currently saved. Drives the wizard
-  /// (which gates dictation on having a key) and the Settings UI.
-  private(set) var hasAPIKey: Bool
 
   /// Live dictation status for the menu bar indicator (see `MenuBarLabel`).
   /// Updated in `render(_:)` alongside the overlay pill. The menu bar item is a
@@ -63,9 +53,8 @@ final class AppCoordinator {
     isUITesting: Bool = false
   ) {
     self.onMissingAPIKey = onMissingAPIKey
-    self.keyStore = keyStore
-    self.isUITesting = isUITesting
-    self.keySubmission = APIKeySubmission(keyStore: keyStore)
+    let apiKey = APIKeyModel(keyStore: keyStore, isUITesting: isUITesting)
+    self.apiKey = apiKey
 
     // Unbounded: the Recent list is append-only, so every transcript must survive
     // until the MainActor observer drains it — dropping the oldest under
@@ -81,10 +70,9 @@ final class AppCoordinator {
       injector: components.injector,
       // A press with no key saved fails fast as .failed(.apiKeyMissing) —
       // before any capture — and render(_:) routes it to the settings window.
-      readinessCheck: { keyStore.hasKey ? nil : .apiKeyMissing },
+      readinessCheck: apiKey.readinessCheck(),
       onTranscriptDelivered: { transcriptContinuation.yield($0) }
     )
-    self.hasAPIKey = keyStore.hasKey
   }
 
   /// AppCoordinator lives for the whole app session, so these observers are
@@ -111,8 +99,7 @@ final class AppCoordinator {
     // first press's readiness check (`hasKey`, at the top of performPress before
     // mic.start) is served from memory instead of paying a cold Keychain read on
     // the press→recording latency path. Idempotent: a later save refreshes it.
-    let keyStore = keyStore
-    Task.detached { _ = keyStore.get() }
+    apiKey.warm()
     // Note: no initial overlay render. The overlay pill stays hidden until the
     // app is fully configured — `WizardController` calls `showOverlay()` on the
     // transition into "ready" (and `hideOverlay()` if it later breaks).
@@ -235,61 +222,6 @@ final class AppCoordinator {
   /// nothing else to re-evaluate here.
   func dictationBindingChanged() {
     keyTap?.refreshBinding()
-  }
-
-  // MARK: - API key
-
-  /// Saves the AssemblyAI API key and refreshes `hasAPIKey` so observers —
-  /// including the wizard — react. Returns true only when a non-empty key is
-  /// actually readable from Keychain after the write (the engine's
-  /// `APIKeySubmission.save` owns that read-back rule).
-  @discardableResult
-  func saveAPIKey(_ key: String) -> Bool {
-    let saved = keySubmission.save(key)
-    hasAPIKey = keyStore.hasKey
-    return saved
-  }
-
-  /// The key currently stored, read through the gateway. The setup/settings
-  /// API-key view reads this (rather than `APIKeyStore` directly) so a UI-test
-  /// run sees the injected in-memory store instead of the real Keychain.
-  var currentAPIKey: String? { keyStore.get() }
-
-  /// Re-reads the Keychain and updates `hasAPIKey`. The flag is otherwise only
-  /// set at `init` and after `saveAPIKey`, so it can drift out of sync with what's
-  /// actually stored — e.g. an early-launch Keychain read fails (the item's ACL
-  /// needs re-approval after a re-sign) before a later read succeeds. Calling this
-  /// when the API-key UI appears keeps the readiness gate honest: a key that's
-  /// already present flips `hasAPIKey` true, so the wizard advances to the ready
-  /// screen instead of stranding the user on a setup step whose only control (a
-  /// *changed*-key "Update") is disabled.
-  func refreshAPIKeyStatus() {
-    let has = keyStore.hasKey
-    if has != hasAPIKey { hasAPIKey = has }
-  }
-
-  /// Verifies `key` against AssemblyAI and saves it only when AssemblyAI
-  /// actively accepts it (`.valid`) — the engine's `APIKeySubmission` owns
-  /// (and unit-tests) that never-persist-an-unverified-key rule. This wrapper
-  /// mirrors the outcome into `hasAPIKey` so the wizard/Settings UI reacts.
-  func submitAPIKey(_ key: String) async -> APIKeySubmission.Outcome {
-    // UI tests must not reach AssemblyAI (no network in CI) or the real
-    // Keychain, so resolve the result locally and deterministically instead.
-    if isUITesting { return uiTestSubmit(key) }
-    let outcome = await keySubmission.submit(key)
-    refreshAPIKeyStatus()
-    return outcome
-  }
-
-  /// Offline stand-in for `submitAPIKey` under UI testing. Sentinel keys drive
-  /// the failure branches so a test can exercise the inline-error paths; any
-  /// other non-empty key is accepted and saved to the in-memory store.
-  private func uiTestSubmit(_ key: String) -> APIKeySubmission.Outcome {
-    switch key {
-    case UITestKeys.invalidAPIKey: return .invalid
-    case UITestKeys.unreachableAPIKey: return .unreachable
-    default: return saveAPIKey(key) ? .valid : .saveFailed
-    }
   }
 
   // MARK: - Dictation render

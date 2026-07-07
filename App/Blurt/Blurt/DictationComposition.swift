@@ -30,7 +30,7 @@ struct DictationComponents {
 // one set of conformances.
 
 /// Sentinel API keys the UI-test submit path recognizes to drive the inline
-/// error branches (`AppCoordinator.uiTestSubmit`). Defined unconditionally (not
+/// error branches (`APIKeyModel.uiTestSubmit`). Defined unconditionally (not
 /// behind `#if DEBUG`) because the submit path that reads them is compiled in
 /// every configuration; the XCUITest target hard-codes the same string values.
 enum UITestKeys {

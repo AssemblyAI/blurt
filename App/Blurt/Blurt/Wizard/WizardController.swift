@@ -34,6 +34,12 @@ final class WizardController {
   private(set) var isReady = false
 
   @ObservationIgnored private weak var coordinator: AppCoordinator?
+  /// The API-key surface, observed directly for its `hasAPIKey` readiness input
+  /// rather than reached through the coordinator (see `APIKeyModel`). Held
+  /// strongly — it's a plain model with no back-reference to this controller, so
+  /// there's no retain cycle, and the coordinator that also owns it lives for the
+  /// whole app session.
+  @ObservationIgnored private let apiKey: APIKeyModel
   @ObservationIgnored private var pollTask: Task<Void, Never>?
   @ObservationIgnored private var keyObservationTask: Task<Void, Never>?
   /// Brings the setup window forward and activates the app. Invoked when a
@@ -47,10 +53,12 @@ final class WizardController {
 
   init(
     coordinator: AppCoordinator,
+    apiKey: APIKeyModel,
     onNeedsForeground: @escaping @MainActor () -> Void,
     checkPermissions: @escaping () -> PermissionStatus = { PermissionsChecker.check() }
   ) {
     self.coordinator = coordinator
+    self.apiKey = apiKey
     self.onNeedsForeground = onNeedsForeground
     self.checkPermissions = checkPermissions
     self.permissions = checkPermissions()
@@ -60,7 +68,7 @@ final class WizardController {
     // React the moment the API key changes, rather than waiting up to a second
     // for the next permission poll, so the overlay appears as soon as the last
     // missing piece is supplied (or hides the instant one is removed).
-    observeCoordinatorReadiness()
+    observeAPIKeyReadiness()
     // Poll for the app's whole life so a permission revoked while no window is
     // open still kicks the user back into onboarding.
     startPolling()
@@ -75,20 +83,20 @@ final class WizardController {
   private var computedReadiness: Bool {
     SetupStatus.isReady(
       permissions: permissions,
-      hasAPIKey: coordinator?.hasAPIKey ?? false
+      hasAPIKey: apiKey.hasAPIKey
     )
   }
 
-  /// Streams the coordinator's readiness input (`hasAPIKey`) via `Observations`,
+  /// Streams the API-key model's readiness input (`hasAPIKey`) via `Observations`,
   /// which emits after each change commits — no one-shot re-arming (the
   /// pre-macOS-26 `withObservationTracking` fired once, *before* the mutation
   /// committed, and had to re-register after every change). This reveals the
   /// overlay the moment a verified key is saved rather than waiting for the
   /// next permission poll. Idempotent, like `startPolling`.
-  private func observeCoordinatorReadiness() {
-    guard let coordinator else { return }
+  private func observeAPIKeyReadiness() {
     keyObservationTask?.cancel()
-    let hasAPIKey = Observations { coordinator.hasAPIKey }
+    let apiKey = apiKey
+    let hasAPIKey = Observations { apiKey.hasAPIKey }
     keyObservationTask = Task { @MainActor [weak self] in
       for await _ in hasAPIKey {
         self?.syncReadiness()

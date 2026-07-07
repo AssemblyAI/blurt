@@ -47,6 +47,7 @@
 		19A470448F7B22B3DCC66B80 /* rom1b-8-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = FBC56D4B9D0ABF6D4541EDAC /* rom1b-8-start.m4a */; };
 		1A41CBCC3C2F561F41CD1589 /* juno-57-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D848AB9AC79E40A76CFA7123 /* juno-57-stop.m4a */; };
 		1AA267C68388794394E6652C /* juno-7-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = FE25AF745B85611516B16FDA /* juno-7-start.m4a */; };
+		1B61DD5EE4CFDA81889A0A6E /* APIKeyModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9610DB6F24068F89C9F49EA /* APIKeyModel.swift */; };
 		1BA6EB5B7B96489923E9FEDF /* juno-124-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2187024BF79E6953ECEFD04C /* juno-124-stop.m4a */; };
 		1BAF2D90C8E3CFCF70C6DC2E /* juno-54-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E90698CCD83D2CDAF043877A /* juno-54-stop.m4a */; };
 		1BC2EB8B211378DD842647EC /* rom1a-6-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = BBF8A81BBD03B233A8C2B845 /* rom1a-6-stop.m4a */; };
@@ -858,6 +859,7 @@
 		F8A0A285719AC6179D039DD9 /* juno-10-stop.m4a */ = {isa = PBXFileReference; path = "juno-10-stop.m4a"; sourceTree = "<group>"; };
 		F8A43C600FA98A4316D02150 /* juno-85-stop.m4a */ = {isa = PBXFileReference; path = "juno-85-stop.m4a"; sourceTree = "<group>"; };
 		F935C3E491692470C97EAA48 /* juno-113-start.m4a */ = {isa = PBXFileReference; path = "juno-113-start.m4a"; sourceTree = "<group>"; };
+		F9610DB6F24068F89C9F49EA /* APIKeyModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyModel.swift; sourceTree = "<group>"; };
 		F967C98CF7C0A6A736B91627 /* rom1a-24-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-24-stop.m4a"; sourceTree = "<group>"; };
 		F96D128F79D585621827FF6A /* rom1a-3-start.m4a */ = {isa = PBXFileReference; path = "rom1a-3-start.m4a"; sourceTree = "<group>"; };
 		FB6A990540604C4EE8DC425E /* juno-119-stop.m4a */ = {isa = PBXFileReference; path = "juno-119-stop.m4a"; sourceTree = "<group>"; };
@@ -894,6 +896,7 @@
 		1560402FBA5911463036085F /* Blurt */ = {
 			isa = PBXGroup;
 			children = (
+				F9610DB6F24068F89C9F49EA /* APIKeyModel.swift */,
 				7C151FD5B49E5D7E61BDDEF0 /* App.swift */,
 				240939D503F3CE03A0697A5F /* AppCoordinator.swift */,
 				3611A8FA0547B780D0804F52 /* AppCoordinator+UITesting.swift */,
@@ -1958,6 +1961,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1B61DD5EE4CFDA81889A0A6E /* APIKeyModel.swift in Sources */,
 				0A259385C40D25FC87E377D6 /* APIKeyStepView.swift in Sources */,
 				73FA46BD466212E9AE09C847 /* App.swift in Sources */,
 				B391EA5F093506B3DF318F10 /* AppCoordinator+UITesting.swift in Sources */,
