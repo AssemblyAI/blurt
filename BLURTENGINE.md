@@ -132,7 +132,7 @@ func transcribe(pcm: Data, sampleRate: Int, context: TranscriptionContext?) asyn
 func warmUp() async   // optional; no-op default
 ```
 
-`AssemblyAITranscriber` is a stateless `Sendable` struct. One `POST https://sync.assemblyai.com/transcribe` per utterance: the audio as raw S16LE PCM (the `pcm` blob, byte-for-byte) in the `audio` multipart part, plus a JSON `config` part (`sample_rate`, `channels`, and the rendered `prompt`), with `X-AAI-Model: u3-sync-pro` and the API key in `Authorization`. Its initializer takes an `apiKeyProvider` closure (defaults to `APIKeyStore.get`), a `baseURL`, and a `URLSession` — inject a mock session (see `Tests/BlurtEngineTests/Stubs/MockURLProtocol.swift`) to test against canned responses. `warmUp()` fires a throwaway GET at the host root to pre-pool the connection; it never throws and any failure just means the real request pays connection setup as before.
+`AssemblyAITranscriber` is a stateless `Sendable` struct. One `POST https://sync.assemblyai.com/transcribe` per utterance: the audio as raw S16LE PCM (the `pcm` blob, byte-for-byte) in the `audio` multipart part, plus a JSON `config` part (`sample_rate`, `channels`, and the rendered `prompt`), with `X-AAI-Model: u3-sync-pro` and the API key in `Authorization`. Its initializer takes an `apiKeyProvider` closure (defaults to `APIKeyStore.get`), a `baseURL`, and an `HTTPTransport` — inject a fake transport (see `Tests/BlurtEngineTests/Stubs/FakeHTTPTransport.swift`) to test against canned responses. `warmUp()` fires a throwaway GET at the host root to pre-pool the connection; it never throws and any failure just means the real request pays connection setup as before.
 
 The model's limits live in `SyncSTTLimits` (16 kHz sample rate, ~0.1 s–120 s audio, and the auto-release math) — the single source shared by the mic, the session, and the request so recorded and declared geometry can't drift.
 
@@ -172,7 +172,7 @@ Map the router's actions onto the session with `submit`: `.start` → `submit(.p
 
 ## Testing your integration
 
-The engine's own tests are the template. They use **Swift Testing** (`@Suite`/`@Test`/`#expect`), not XCTest, and stub all three seams — see `Tests/BlurtEngineTests/Stubs/` (`StubMicCapture`, `StubTranscriber`, `StubInjector`, plus `MockURLProtocol` for transport-level transcriber tests):
+The engine's own tests are the template. They use **Swift Testing** (`@Suite`/`@Test`/`#expect`), not XCTest, and stub all three seams — see `Tests/BlurtEngineTests/Stubs/` (`StubMicCapture`, `StubTranscriber`, `StubInjector`, plus `FakeHTTPTransport` for transport-level transcriber tests):
 
 ```swift
 let session = DictationSession(

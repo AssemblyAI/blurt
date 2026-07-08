@@ -47,8 +47,8 @@ RUN_UI_TESTS=1 scripts/check.sh   # full health check including the UI suite
 ## Maintenance
 
 - Element lookups use `accessibilityIdentifier`s set in the app. The string
-  constants are mirrored in `BlurtUITestSupport.swift` (`UITestIDs`) because the
-  test bundle can't import the app's internal `UITestID`/`UITestKeys` — keep both
-  sides in sync.
+  constants live in `App/Blurt/Shared/UITestIdentifiers.swift`, which is compiled
+  into both the app target and this bundle — declare any new identifier there so
+  both sides agree by construction.
 - After changing `App/Blurt/project.yml`, run `xcodegen generate` and commit the
   regenerated `project.pbxproj` (CI fails on drift).

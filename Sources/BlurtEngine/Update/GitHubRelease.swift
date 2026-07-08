@@ -24,9 +24,10 @@ struct GitHubRelease: Decodable, Sendable {
     case assets
   }
 
-  /// The first asset whose name ends in `.dmg` — the release pipeline publishes
-  /// exactly one, `Blurt-<version>.dmg` (see `scripts/release-publish.sh`). Nil
-  /// when the release carries no DMG.
+  /// The first asset whose name ends in `.dmg`. The release pipeline publishes
+  /// the one notarized image under two names, `Blurt.dmg` and
+  /// `Blurt-<version>.dmg` (see `scripts/release-publish.sh`), so any match is
+  /// the right download. Nil when the release carries no DMG.
   var dmgAsset: Asset? {
     assets.first { $0.name.lowercased().hasSuffix(".dmg") }
   }

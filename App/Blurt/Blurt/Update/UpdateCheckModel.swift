@@ -53,8 +53,8 @@ final class UpdateCheckModel {
       defer { isChecking = false }
       do {
         switch try await checker.check(current: currentVersion) {
-        case .upToDate(let current):
-          await presentUpToDate(current: current)
+        case .upToDate:
+          await presentUpToDate(current: currentVersion)
         case .available(let version, let dmgURL):
           await presentAvailable(current: currentVersion, version: version, dmgURL: dmgURL)
         }

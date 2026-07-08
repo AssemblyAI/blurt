@@ -90,11 +90,9 @@ final class SettingsUITests: BlurtUITestCase {
   /// that tab first.
   func testDeveloperModeTogglesOn() {
     let settings = openSettingsWindow()
-    selectSettingsTab(settings, named: UITestIdentifiers.advancedSettingsTab)
+    let advanced = selectSettingsTab(settings, named: UITestIdentifiers.advancedSettingsTab)
 
-    // Query the toggle app-wide: selecting the Advanced tab retitles the window,
-    // so a window-scoped proxy captured before the switch would go stale.
-    let toggle = app.descendants(matching: .any)
+    let toggle = advanced.descendants(matching: .any)
       .matching(identifier: UITestIdentifiers.developerToggle).firstMatch
     XCTAssertTrue(toggle.waitForExistence(timeout: 10), "Developer mode toggle not found")
     XCTAssertEqual("\(toggle.value ?? "")", "0", "Developer mode should start switched off")
@@ -110,11 +108,9 @@ final class SettingsUITests: BlurtUITestCase {
   /// result sheet deterministically (no network).
   func testCheckForUpdatesShowsResultAlert() {
     let settings = openSettingsWindow()
-    selectSettingsTab(settings, named: UITestIdentifiers.advancedSettingsTab)
+    let advanced = selectSettingsTab(settings, named: UITestIdentifiers.advancedSettingsTab)
 
-    // Query app-wide: selecting the Advanced tab retitles the window, so a
-    // window-scoped proxy captured beforehand would go stale.
-    let button = app.descendants(matching: .any)
+    let button = advanced.descendants(matching: .any)
       .matching(identifier: UITestIdentifiers.updateCheck).firstMatch
     XCTAssertTrue(button.waitForExistence(timeout: 10), "Check for Updates button not found")
     button.click()

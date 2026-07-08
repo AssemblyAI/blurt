@@ -2,13 +2,14 @@ import Foundation
 
 @testable import BlurtEngine
 
-/// A `DictationSession` plus the three stubs it was wired to, so a test can
-/// configure a collaborator (e.g. `mic.setStartError`, `injector.setError`) or
-/// assert against it after driving the session.
+/// A `DictationSession` plus the stubs a test configures or asserts against
+/// after driving the session (e.g. `mic.setStartError`, `injector.setError`).
+/// The transcriber stub is deliberately absent: its behavior is fully
+/// determined up front by `makeSession`'s `mode`, so no test needs it
+/// afterwards.
 struct SessionFixture {
   let session: DictationSession
   let mic: StubMicCapture
-  let stt: StubTranscriber
   let injector: StubInjector
 }
 
@@ -20,13 +21,12 @@ func makeSession(
   onTranscriptDelivered: (@Sendable (String) -> Void)? = nil
 ) -> SessionFixture {
   let mic = StubMicCapture()
-  let stt = StubTranscriber(mode: mode)
   let injector = StubInjector()
   let session = DictationSession(
-    mic: mic, transcriber: stt, injector: injector,
+    mic: mic, transcriber: StubTranscriber(mode: mode), injector: injector,
     maxRecordingSeconds: maxRecordingSeconds,
     onTranscriptDelivered: onTranscriptDelivered)
-  return SessionFixture(session: session, mic: mic, stt: stt, injector: injector)
+  return SessionFixture(session: session, mic: mic, injector: injector)
 }
 
 extension DictationSession {
