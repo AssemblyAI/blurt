@@ -6,7 +6,7 @@
     <title>Blurt — native macOS dictation</title>
     <meta
       name="description"
-      content="Open-source macOS dictation. Hold a key, talk, and the transcript is pasted into the focused app — one call to AssemblyAI's speech-to-text API, no telemetry, bring your own key."
+      content="Open-source macOS dictation. Hold a key, talk, and clean text lands in the app you're using. Powered by AssemblyAI."
     />
     <link rel="canonical" href="https://blurtblurt.com/" />
     <meta name="theme-color" content="#0a0a0f" />
@@ -48,11 +48,11 @@
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "Blurt",
-        "description": "Open-source macOS dictation. Hold a key, talk, and the transcript is pasted into the focused app — one call to AssemblyAI's speech-to-text API, no telemetry, bring your own key.",
+        "description": "Open-source macOS dictation. Hold a key, talk, and clean text lands in the app you're using. Powered by AssemblyAI.",
         "url": "https://blurtblurt.com/",
         "image": "https://blurtblurt.com/assets/blurt-b-icon.png",
         "applicationCategory": "UtilitiesApplication",
-        "operatingSystem": "macOS 26.0 or later",
+        "operatingSystem": "macOS 15.0 or later",
         "downloadUrl": "https://github.com/AssemblyAI/blurt/releases/latest/download/Blurt.dmg",
         "offers": {
           "@type": "Offer",
@@ -103,10 +103,9 @@
 
         <h1>Open-source dictation for your Mac</h1>
         <p class="lede">
-          Hold a key, talk, and the transcript is pasted into whatever app has
-          focus. One HTTPS call to AssemblyAI's speech-to-text API — typically
-          back in under 100&nbsp;ms — with no local models, no subscription, and
-          no second LLM pass. Bring your own API key.
+          Hold a key, talk, and clean text lands in the app you're using.
+          Transcription runs on AssemblyAI's speech-to-text API — fast,
+          accurate, and with no subscription. Bring your own free API key.
         </p>
 
         <ul class="badges" aria-label="Highlights">
@@ -128,7 +127,7 @@
           </a>
         </div>
         <p class="fine-print">
-          macOS 26+ on Apple Silicon. The
+          macOS 15+ on Apple Silicon. The
           <a href="https://www.assemblyai.com/dashboard/api-keys"
             >free-tier API key</a
           >
@@ -154,45 +153,40 @@
           <article class="feature">
             <h3>Zero dependencies</h3>
             <p>
-              Plain Swift on Apple's frameworks. No external packages — if it
-              isn't in the repo or the SDK, it isn't in the binary.
+              Plain Swift on Apple's frameworks, with no external packages. What
+              you see in the repo is what runs.
             </p>
           </article>
           <article class="feature">
             <h3>No telemetry</h3>
             <p>
-              No crash reporting, no analytics, no update pings. The only
-              network call is the transcription request, and the code that makes
-              it is right there in the repo.
+              No crash reporting, no analytics, no tracking. Blurt talks to one
+              server: the transcription API.
             </p>
           </article>
           <article class="feature">
             <h3>Native Mac app</h3>
             <p>
-              AppKit and SwiftUI, a CGEventTap for the hotkey, a paste into the
-              focused app. No Electron, no web views, no background agents.
+              A small, fast app built with Apple's own tools. No Electron, no
+              web views, nothing running that you didn't ask for.
             </p>
           </article>
           <article class="feature">
             <h3>Accurate transcription</h3>
             <p>
-              Audio goes to AssemblyAI's Sync STT API with a prompt built from
-              the app you're typing into, and comes back already cleaned up —
-              one round trip, no post-processing.
+              Your speech comes back as clean, ready-to-paste text in about a
+              tenth of a second.
             </p>
           </article>
           <article class="feature">
             <h3>18 languages</h3>
-            <p>
-              Dictate in 18 languages, not just English. Pick one in settings
-              and go.
-            </p>
+            <p>Dictate in 18 languages, not just English.</p>
           </article>
           <article class="feature">
             <h3>Real synth cues</h3>
             <p>
-              The start and stop sounds are sampled from an actual Yamaha DX7
-              and Roland Juno-106. There's an off switch, but why would you.
+              Start and stop sounds from a real Yamaha DX7 and Roland Juno-106.
+              There's an off switch, but why would you.
             </p>
           </article>
         </div>
