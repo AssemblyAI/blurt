@@ -6,7 +6,7 @@
     <title>Blurt — native macOS dictation</title>
     <meta
       name="description"
-      content="Incredibly fast, accurate voice dictation by AssemblyAI. Blurt is a small, open-source macOS dictation app for turning speech into text in the app you're already using."
+      content="Free, open-source dictation for your Mac. Hold a key, talk, and the words land in whatever you're typing. No subscription, no account — bring your own AssemblyAI key."
     />
     <link rel="canonical" href="https://blurtblurt.com/" />
     <meta name="theme-color" content="#0a0a0f" />
@@ -16,7 +16,7 @@
     <meta property="og:title" content="Blurt — native macOS dictation" />
     <meta
       property="og:description"
-      content="Incredibly fast, accurate voice dictation by AssemblyAI."
+      content="Free, open-source dictation for your Mac. No subscription — bring your own AssemblyAI key."
     />
     <meta property="og:url" content="https://blurtblurt.com/" />
     <meta
@@ -38,7 +38,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Silkscreen:wght@400;700&family=Space+Mono:wght@400;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Space+Mono:wght@400;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles.css" />
@@ -48,11 +48,11 @@
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "Blurt",
-        "description": "Incredibly fast, accurate voice dictation by AssemblyAI. Blurt is a small, open-source macOS dictation app for turning speech into text in the app you're already using.",
+        "description": "Free, open-source dictation for your Mac. Hold a key, talk, and the words land in whatever you're typing. No subscription, no account — bring your own AssemblyAI key.",
         "url": "https://blurtblurt.com/",
         "image": "https://blurtblurt.com/assets/blurt-b-icon.png",
         "applicationCategory": "UtilitiesApplication",
-        "operatingSystem": "macOS 26.0 or later",
+        "operatingSystem": "macOS 15.0 or later",
         "downloadUrl": "https://github.com/AssemblyAI/blurt/releases/latest/download/Blurt.dmg",
         "offers": {
           "@type": "Offer",
@@ -68,8 +68,8 @@
     </script>
   </head>
   <body>
-    <main class="page">
-      <header class="site-header">
+    <header class="site-header">
+      <div class="header-inner">
         <a class="brand" href="/">
           <img
             class="brand-icon"
@@ -81,52 +81,62 @@
           <span>Blurt</span>
         </a>
         <nav class="site-nav" aria-label="Primary">
+          <a href="#features">Features</a>
           <a href="https://github.com/AssemblyAI/blurt">GitHub</a>
         </nav>
-      </header>
+      </div>
+    </header>
 
+    <main>
       <section class="hero">
-        <div class="hero-copy">
-          <picture class="hero-wordmark">
-            <source srcset="assets/blurt-logo-ansi.webp" type="image/webp" />
-            <img
-              class="wordmark"
-              src="assets/blurt-logo-ansi.png"
-              alt="Blurt"
-              width="1873"
-              height="517"
-              fetchpriority="high"
-            />
-          </picture>
-          <p class="eyebrow">Native macOS dictation</p>
-          <h1>Incredibly fast, accurate voice dictation by AssemblyAI</h1>
-          <p class="lede">
-            A small, open-source Mac dictation app that turns speech into
-            polished text in the app you're already using — cued by real Yamaha
-            DX7 and Roland Juno-106 synths.
-          </p>
+        <picture class="hero-wordmark">
+          <source srcset="assets/blurt-logo-ansi.webp" type="image/webp" />
+          <img
+            class="wordmark"
+            src="assets/blurt-logo-ansi.png"
+            alt="Blurt"
+            width="1873"
+            height="517"
+            fetchpriority="high"
+          />
+        </picture>
 
-          <ul class="hero-points">
-            <li>Built on the world's most accurate transcription model</li>
-            <li>Works in 18 languages</li>
-            <li>Blazing fast at &lt;100ms</li>
-          </ul>
+        <h1>Free, open-source dictation for your Mac</h1>
+        <p class="lede">
+          Hold a key, talk, and the words land in whatever you're typing. One
+          tool, one job. No subscription, no account, no middleman — audio goes
+          straight from your Mac to AssemblyAI with your own key, and you can
+          read every line of code that sends it.
+        </p>
 
-          <div class="actions">
-            <a
-              class="button button-primary"
-              href="https://github.com/AssemblyAI/blurt/releases/latest/download/Blurt.dmg"
-              aria-label="Download Blurt.dmg for macOS"
-            >
-              Download Blurt.dmg
-            </a>
-          </div>
-          <p class="fine-print">
-            Free for macOS 26+ on Apple Silicon. BYO AssemblyAI key.
-          </p>
+        <ul class="badges" aria-label="Highlights">
+          <li>Free &amp; open source</li>
+          <li>MIT licensed</li>
+          <li>No subscription</li>
+          <li>Signed &amp; notarized</li>
+        </ul>
+
+        <div class="actions">
+          <a
+            class="button button-primary"
+            href="https://github.com/AssemblyAI/blurt/releases/latest/download/Blurt.dmg"
+            aria-label="Download Blurt.dmg for macOS"
+          >
+            Download Blurt.dmg
+          </a>
+          <a class="button" href="https://github.com/AssemblyAI/blurt">
+            View on GitHub
+          </a>
         </div>
+        <p class="fine-print">
+          macOS 15+ on Apple Silicon. The
+          <a href="https://www.assemblyai.com/dashboard/api-keys"
+            >free-tier API key</a
+          >
+          works.
+        </p>
 
-        <figure class="demo demo-hero">
+        <figure class="demo">
           <img
             class="shot"
             src="assets/blurt.png"
@@ -138,14 +148,77 @@
         </figure>
       </section>
 
-      <footer class="site-footer">
+      <section class="section" id="features">
+        <p class="eyebrow">Features</p>
+        <h2>Dictation you can trust</h2>
+        <div class="feature-grid">
+          <article class="feature">
+            <h3>Zero dependencies</h3>
+            <p>
+              Plain Swift on Apple's frameworks — no packages you've never heard
+              of, no supply chain to audit. Fork it and make it yours.
+            </p>
+          </article>
+          <article class="feature">
+            <h3>No telemetry</h3>
+            <p>
+              No analytics, no crash reporting, no accounts. Blurt talks to
+              exactly one server, and you can read the code that does it.
+            </p>
+          </article>
+          <article class="feature">
+            <h3>Native Mac app</h3>
+            <p>
+              Not a web page in a window. A small Mac app that starts fast,
+              stays out of the way, and types into whatever has focus.
+            </p>
+          </article>
+          <article class="feature">
+            <h3>Accurate transcription</h3>
+            <p>
+              Speech in, clean text out — usually in about a tenth of a second,
+              with
+              <a
+                href="https://www.assemblyai.com/docs/pre-recorded-audio/benchmarks"
+                >30% fewer hallucinations than Whisper</a
+              >. You pay AssemblyAI directly for what you use.
+            </p>
+          </article>
+          <article class="feature">
+            <h3>18 languages</h3>
+            <p>
+              Dictate in 18 languages, not just English — and code-switch
+              mid-sentence. The model follows you between languages without
+              touching a setting.
+            </p>
+          </article>
+          <article class="feature">
+            <h3>Real synth cues</h3>
+            <p>
+              Start and stop sounds from a real Yamaha DX7 and Roland Juno-106.
+              There's an off switch, but why would you.
+            </p>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
         <p class="footer-note">
-          Powered by <a href="https://www.assemblyai.com">AssemblyAI</a>.
+          Powered by <a href="https://www.assemblyai.com">AssemblyAI</a>. Made
+          with an unreasonable fondness for vintage synths.
         </p>
         <nav class="footer-links" aria-label="Footer">
           <a href="https://github.com/AssemblyAI/blurt">GitHub</a>
+          <a href="https://github.com/AssemblyAI/blurt/blob/main/LICENSE"
+            >MIT License</a
+          >
+          <a href="https://github.com/AssemblyAI/blurt/releases/latest"
+            >Releases</a
+          >
         </nav>
-      </footer>
-    </main>
+      </div>
+    </footer>
   </body>
 </html>

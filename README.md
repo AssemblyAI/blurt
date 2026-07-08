@@ -4,12 +4,14 @@
     <img src=".github/images/blurt-logo-ansi.png" alt="Blurt logo" width="720" />
   </picture>
 
-  <h2>Incredibly fast, accurate voice dictation by AssemblyAI</h2>
+  <h2>Free, open-source dictation for your Mac</h2>
 
   <p>
     <strong>
-      Open-source Mac dictation that turns speech into polished text in the app
-      you're already using.
+      Hold a key, talk, and the words land in whatever you're typing. One tool,
+      one job. No subscription, no account, no middleman — audio goes straight
+      from your Mac to AssemblyAI with your own key, and you can read every
+      line of code that sends it.
     </strong>
   </p>
 
@@ -38,7 +40,8 @@
   </p>
 
   <p>
-    <sub>Free app · Apple Silicon · Bring your own AssemblyAI API key</sub>
+    <sub>MIT licensed · No subscription · Signed &amp; notarized · Bring your
+    own AssemblyAI API key</sub>
   </p>
 
 <img
@@ -82,7 +85,11 @@ utterance.
 - **Fast** — the model responds in under 100 ms. Blurt pre-warms the HTTPS
   connection while you're still speaking and flips to "transcribing" at
   key-up, so text lands about as soon as you stop talking.
-- **Multilingual** — works in 18 languages, detected automatically.
+- **Accurate** —
+  [30% fewer hallucinations than Whisper](https://www.assemblyai.com/docs/pre-recorded-audio/benchmarks)
+  on AssemblyAI's published benchmarks.
+- **Multilingual** — works in 18 languages, detected automatically, and you
+  can code-switch mid-sentence.
 - **Live feedback** — a floating overlay pill shows a real-time mic level
   meter and the pipeline phase; a menu bar indicator mirrors it from anywhere.
 - **Actual synth cues** — start and stop can be cued by real Yamaha DX7 or
