@@ -51,6 +51,14 @@ struct OverlayView: View {
       // no first-frame flash (see `fillColor`). `.animation` below cross-fades the
       // fill on a state change (e.g. into the red error body).
       .background(Capsule().fill(fillColor))
+      // A hairline white rim on the fill's edge. A single opaque fill can only
+      // separate from one end of the brightness range: the drop shadow below
+      // carries light backdrops but is invisible on a dark/black one, where the
+      // pill would otherwise lose its silhouette. The ~12% white stroke is
+      // near-invisible over light content (it rides the shadow) and draws the
+      // capsule's edge over dark content, so the pill reads on any backdrop.
+      // strokeBorder insets by half the line width, so it stays inside the frame.
+      .overlay(Capsule().strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
       // Flatten into one layer before shadowing so the drop shadow takes the
       // capsule's rounded alpha, not the rectangular layer bounds (which renders
       // as a boxy halo, most visible on a white backdrop). The explicit shadow
@@ -86,7 +94,7 @@ struct OverlayView: View {
       // "● REC" tag beside the live waveform, mirroring the site demo's recording
       // pill (magenta tag + bars). The bars fill the width left of the tag.
       HStack(spacing: 8) {
-        RecordingTag()
+        RecordingTag(animated: !reduceMotion)
         WaveformBarsLevel(bridge: bridge, animated: !reduceMotion, color: OverlayBrandPalette.cyan)
       }
       .padding(.horizontal, 12)
@@ -213,22 +221,57 @@ private struct TranscribingLabel: View {
   }
 }
 
-/// The "● REC" recording tag: a steady magenta dot + "REC" caption, sitting to
+/// The "● REC" recording tag: a pulsing magenta dot + "REC" caption, sitting to
 /// the left of the waveform — the native echo of the site demo's magenta pixel
-/// tag. Magenta (the brand --hot) reads as the recording indicator while the
-/// cyan bars carry the live level.
+/// tag. Magenta (the brand --hot) stands in for the conventional red record dot;
+/// its slow pulse (see `dot`) carries the live-capture affordance while the cyan
+/// bars carry the level.
 private struct RecordingTag: View {
+  /// Whether to pulse the dot (off under Reduce Motion).
+  let animated: Bool
+
+  // One pulse every ~1.2 s, dimming to 40% and back: the universal "recording,
+  // right now" heartbeat. Since magenta stands in for the conventional red dot,
+  // the pulse — not the hue — carries the live-capture cue. Driven by the same
+  // continuous-clock TimelineView as the waveform and TranscribingLabel (never a
+  // one-shot repeatForever toggle).
+  private let pulsePeriod: Double = 1.2
+  private let minOpacity: Double = 0.4
+
   var body: some View {
     HStack(spacing: 4) {
-      Circle()
-        .fill(OverlayBrandPalette.magenta)
-        .frame(width: 5, height: 5)
+      dot
       Text("REC")
         .font(.system(size: 9, weight: .semibold))
         .tracking(1.2)
         .foregroundStyle(OverlayBrandPalette.magenta)
     }
     .fixedSize()
+  }
+
+  /// The magenta record dot, breathing while recording.
+  @ViewBuilder private var dot: some View {
+    if animated {
+      // ~20 Hz is plenty for a 1.2 s opacity ramp (same cap as WaveformBars).
+      TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { timeline in
+        circle.opacity(pulseOpacity(at: timeline.date.timeIntervalSinceReferenceDate))
+      }
+    } else {
+      circle
+    }
+  }
+
+  private var circle: some View {
+    Circle()
+      .fill(OverlayBrandPalette.magenta)
+      .frame(width: 5, height: 5)
+  }
+
+  /// Raised cosine over `pulsePeriod`: 1 → `minOpacity` → 1, easing through the
+  /// dim point instead of bouncing off it (matches TranscribingLabel).
+  private func pulseOpacity(at time: TimeInterval) -> Double {
+    let osc = (cos(time / pulsePeriod * 2 * .pi) + 1) / 2  // 0...1
+    return minOpacity + (1 - minOpacity) * osc
   }
 }
 
@@ -251,7 +294,7 @@ private struct WaveformBarsLevel: View {
 /// scrolling history. Bars span the full width (count derived from the available
 /// width) and grow from the vertical center; a symmetric envelope keeps the
 /// middle tallest so the field reads as one voice "blob". When you're between
-/// words the bars breathe with a gentle staggered sine; the breathing fades out
+/// words a gentle wave travels across the bars; the breathing fades out
 /// as your voice gets louder. Under Reduce Motion the breathing is dropped and
 /// heights simply reflect the level.
 private struct WaveformBars: View {
@@ -275,6 +318,10 @@ private struct WaveformBars: View {
   private let envelopeEdge: CGFloat = 0.45
   // How far a bar travels while idle-breathing.
   private let breathDepth: CGFloat = 0.12
+  // Idle wave: one full sweep every ~2 s, each bar trailing its left neighbour by
+  // `wavePhaseStep` radians so a soft crest travels left→right across the row.
+  private let breathPeriod: Double = 2.0
+  private let wavePhaseStep: Double = 0.45
 
   var body: some View {
     GeometryReader { geo in
@@ -321,9 +368,12 @@ private struct WaveformBars: View {
     // so skip it entirely on the louder frames rather than computing-then-zeroing.
     let idleStrength = animated ? max(0, 1 - voice / 0.25) : 0
     if idleStrength > 0 {
-      // Per-bar period + phase so the bars shimmer out of sync when idle.
-      let period = 0.9 + 0.5 * Double(index % 3) / 2
-      let osc = (sin(time / period * 2 * .pi + Double(index)) + 1) / 2  // 0...1
+      // A gentle wave travelling left→right across the row while you're quiet, so
+      // "listening" reads as alive and directional rather than a frozen line. The
+      // phase advances with time and steps back per bar, sending a soft crest
+      // sweeping across; it fades out (idleStrength) as your voice comes in.
+      let phase = time / breathPeriod * 2 * .pi - Double(index) * wavePhaseStep
+      let osc = (sin(phase) + 1) / 2  // 0...1
       breath = breathDepth * weight * osc * idleStrength
     }
     let fraction = max(minBarHeightFraction, voice + breath)
