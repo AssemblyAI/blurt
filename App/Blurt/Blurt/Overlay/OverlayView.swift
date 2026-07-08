@@ -8,7 +8,7 @@ private enum OverlayBrandPalette {
 
 struct OverlayView: View {
   // The single source of pill state. The live mic level is *not* read in this
-  // body: that would rebuild the whole pill (glass, shadow, tint, REC tag) on
+  // body: that would rebuild the whole pill (capsule, shadow, REC tag) on
   // every ~30 Hz meter tick. Only `bridge.state` is read here (via `state`
   // below); the leaf bar view (`WaveformBarsLevel`) reads `bridge.level`, so
   // @Observable confines the per-tick invalidation to the bars — the rest of
@@ -27,47 +27,37 @@ struct OverlayView: View {
   private var pillWidth: CGFloat { OverlayWindowController.pillSize.width }
   private var pillHeight: CGFloat { OverlayWindowController.pillSize.height }
 
-  // A dark tint infused into the Liquid Glass capsule. `.regular` glass passes
-  // more of the backdrop through than the old frosted-material-plus-fill stack,
-  // so these run deeper than the material-era values (0.5–0.58) to keep the
-  // white bars and 10 pt status text legible over a bright desktop — tune
-  // on-device if the pill reads too heavy over dark wallpapers.
-  private var tintColor: Color {
+  // The pill body is a solid, opaque capsule — not Liquid Glass. `.regular` glass
+  // is an adaptive material that samples the backdrop to decide its light/dark
+  // rendering, and can't do so until it's composited on screen; fading in from
+  // alpha 0 it flashed white for a frame over a dark desktop before settling.
+  // A fixed fill never adapts, so it fades in the same dark gray on any backdrop.
+  // Every state is the same dark gray except `.error`, which keeps a red body as
+  // an alarm cue (the ↻ "Try again" content alone shouldn't have to carry it).
+  private var fillColor: Color {
     switch state {
     case .error:
-      return .red.opacity(0.6)
-    case .recording, .pasted, .noTarget:
-      // "Pasted"/"Copied" share recording's cyan-tinted frame: same brand --ice
-      // language, reading as an informational notice rather than the red error flash.
-      return Color(red: 0.08, green: 0.2, blue: 0.24).opacity(0.68)
-    case .processing:
-      return Color(red: 0.18, green: 0.12, blue: 0.24).opacity(0.7)
-    case .idle:
-      return .black.opacity(0.6)
+      return Color(red: 0.62, green: 0.13, blue: 0.13)
+    case .recording, .processing, .pasted, .noTarget, .idle:
+      return Color(white: 0.16)
     }
   }
 
   var body: some View {
     content
       .frame(width: pillWidth, height: pillHeight)
-      // Real Liquid Glass, not the pre-Tahoe imitation stack (frosted material +
-      // tint overlay + stroke): the system draws the refractive edge highlights,
-      // so the per-state story is carried by the tint alone. Deliberately not
-      // `.interactive()` — the pill is a passive status surface, and interactive
-      // glass hit-testing could swallow the mouse-down that starts the panel's
-      // `isMovableByWindowBackground` drag, the only way to reposition the pill.
-      // No `GlassEffectContainer`/`glassEffectID` either: there is exactly one
-      // glass element and its capsule never changes shape or presence, so the
-      // morph machinery would be inert scaffolding.
-      .glassCapsuleCompat(tint: tintColor)
-      // Flatten the glass into one layer before shadowing so the drop shadow
-      // takes the capsule's rounded alpha, not the rectangular layer bounds
-      // (which renders as a boxy halo, most visible on a white backdrop). The
-      // explicit shadow keeps the dark pill separated from light content —
-      // whatever ambient shadow the system gives glass is subtle and outside
-      // our control. The soft falloff spreads to ~2x the radius plus the offset;
-      // OverlayWindowController.shadowMargin is sized to contain that so it fades
-      // fully to nothing before the panel edge rather than clipping into a line.
+      // Solid, opaque capsule rather than Liquid Glass: a fixed fill never adapts
+      // to the backdrop, so the pill fades in the same dark gray everywhere with
+      // no first-frame flash (see `fillColor`). `.animation` below cross-fades the
+      // fill on a state change (e.g. into the red error body).
+      .background(Capsule().fill(fillColor))
+      // Flatten into one layer before shadowing so the drop shadow takes the
+      // capsule's rounded alpha, not the rectangular layer bounds (which renders
+      // as a boxy halo, most visible on a white backdrop). The explicit shadow
+      // keeps the dark pill separated from light content. The soft falloff
+      // spreads to ~2x the radius plus the offset; OverlayWindowController.shadowMargin
+      // is sized to contain that so it fades fully to nothing before the panel
+      // edge rather than clipping into a line.
       .compositingGroup()
       .shadow(color: .black.opacity(0.25), radius: 10, y: 3)
       .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: state)
@@ -88,8 +78,8 @@ struct OverlayView: View {
       // Never actually on screen: dismissal keeps the last real state through
       // the fade-out and only settles to idle once the panel is ordered out
       // (OverlayWindowController.dismissPanel). `Color.clear` (not `EmptyView`,
-      // which renders nothing — modifiers on it produce no view, so the glass
-      // capsule would collapse with it) keeps the pill's shape intact for
+      // which renders nothing — modifiers on it produce no view, so the capsule
+      // background would collapse with it) keeps the pill's shape intact for
       // `hide()`'s pre-hide reset.
       Color.clear
     case .recording:

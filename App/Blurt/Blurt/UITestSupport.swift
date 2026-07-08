@@ -121,6 +121,41 @@
     }
   }
 
+  /// Offline update check for UI testing: a transport that always returns a
+  /// release older than any real version, so `UpdateChecker` reports
+  /// "up to date" without reaching GitHub. `UpdateChecker` ignores the response,
+  /// so a bare `URLResponse` (no force-unwrapped `HTTPURLResponse`) is enough.
+  nonisolated struct UITestUpdateTransport: HTTPTransport {
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+      let json = Data(#"{"tag_name":"0.0.0","assets":[]}"#.utf8)
+      // UpdateChecker ignores the response, so any non-nil URL will do; the
+      // request always carries one (UpdateChecker builds URLRequest(url:)).
+      let url = request.url ?? URL(fileURLWithPath: "/")
+      let response = URLResponse(
+        url: url, mimeType: "application/json",
+        expectedContentLength: json.count, textEncodingName: nil)
+      return (json, response)
+    }
+
+    // The update check only ever GETs; upload is never called.
+    func upload(
+      for request: URLRequest, from bodyData: Data, delegate: (any URLSessionTaskDelegate)?
+    ) async throws -> (Data, URLResponse) {
+      throw URLError(.unsupportedURL)
+    }
+  }
+
+  extension UpdateCheckModel {
+    /// The update controller used under UI testing: a fixed running version and a
+    /// transport that always reports "up to date", so clicking "Check for Updates"
+    /// deterministically shows the up-to-date result alert with no network.
+    static func uiTest() -> UpdateCheckModel {
+      UpdateCheckModel(
+        checker: UpdateChecker(transport: UITestUpdateTransport()),
+        currentVersion: SemanticVersion("1.0.0"))
+    }
+  }
+
   extension DictationComponents {
     /// The all-stub pipeline used under UI testing: no mic, no network, no
     /// Accessibility paste. `UITestMic` inherits `MicCaptureProtocol`'s default
