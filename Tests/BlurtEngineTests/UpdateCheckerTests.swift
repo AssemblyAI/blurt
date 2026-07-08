@@ -41,7 +41,7 @@ struct UpdateCheckerTests {
     let checker = checker(returning: releaseJSON(tag: "v0.1.30"))
     let current = try #require(SemanticVersion("0.1.30"))
     let result = try await checker.check(current: current)
-    #expect(result == .upToDate(current: current))
+    #expect(result == .upToDate)
   }
 
   @Test("reports .upToDate when the release is older than the current build")
@@ -49,7 +49,7 @@ struct UpdateCheckerTests {
     let checker = checker(returning: releaseJSON(tag: "v0.1.0"))
     let current = try #require(SemanticVersion("0.1.30"))
     let result = try await checker.check(current: current)
-    #expect(result == .upToDate(current: current))
+    #expect(result == .upToDate)
   }
 
   @Test("throws when a newer release has no .dmg asset")

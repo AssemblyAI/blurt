@@ -3,7 +3,7 @@ import Foundation
 /// The outcome of a successful update check.
 public enum UpdateCheckResult: Sendable, Equatable {
   /// The running app is the latest published release (or newer).
-  case upToDate(current: SemanticVersion)
+  case upToDate
   /// A newer release exists; `dmgURL` downloads its DMG in the browser.
   case available(version: SemanticVersion, dmgURL: URL)
 }
@@ -36,7 +36,7 @@ public struct UpdateChecker: Sendable {
       throw UpdateCheckError.malformedResponse
     }
     guard current < latest else {
-      return .upToDate(current: current)
+      return .upToDate
     }
     guard let asset = release.dmgAsset else {
       throw UpdateCheckError.malformedResponse

@@ -7,15 +7,12 @@ import XCTest
 // production views and these suites can no longer drift out of sync.
 
 extension UITestIdentifiers {
-  /// The Settings window's title. The `Settings` scene hosts a `TabView`
-  /// (General / Advanced), and macOS titles a preference window after its
-  /// selected pane — so the window opens titled "General" (the first tab), not
-  /// "<bundle name> Settings". Test-bundle-only (the app never declares it).
-  static let settingsWindowTitle = "General"
-
-  /// The label of the Advanced settings pane's tab, where the Updates and
-  /// Developer sections live.
-  static let advancedSettingsTab = "Advanced"
+  /// The Settings window's title. The `Settings` scene hosts a `TabView`, and
+  /// macOS titles a preference window after its selected pane — so the window
+  /// opens titled after the first tab, not "<bundle name> Settings". The label
+  /// itself lives in the shared file; only this framework-derived aliasing is
+  /// test-bundle knowledge.
+  static let settingsWindowTitle = generalSettingsTab
 }
 
 /// Base case that launches Blurt in UI-test mode before each test and tears it
@@ -79,16 +76,21 @@ class BlurtUITestCase: XCTestCase {
   /// Selects a Settings pane (a `TabView` tab in the preferences toolbar) by its
   /// visible name. macOS exposes a preference tab as a radio button or a plain
   /// button depending on the OS build, so try the radio group first and fall
-  /// back to a button.
-  func selectSettingsTab(_ window: XCUIElement, named name: String) {
+  /// back to a button. Returns a fresh proxy for the settings window: selecting
+  /// a pane retitles the window to the pane's name, so a proxy captured before
+  /// the switch (e.g. `openSettingsWindow()`'s) goes stale — scope follow-up
+  /// queries to the returned one.
+  @discardableResult
+  func selectSettingsTab(_ window: XCUIElement, named name: String) -> XCUIElement {
     let radio = window.radioButtons[name]
     if radio.waitForExistence(timeout: 5) {
       radio.click()
-      return
+    } else {
+      let button = window.buttons[name]
+      XCTAssertTrue(button.waitForExistence(timeout: 3), "Settings tab '\(name)' not found")
+      button.click()
     }
-    let button = window.buttons[name]
-    XCTAssertTrue(button.waitForExistence(timeout: 3), "Settings tab '\(name)' not found")
-    button.click()
+    return app.windows[name]
   }
 
   /// The UI-test harness window (auto-presented at launch in test mode). Closes

@@ -20,12 +20,18 @@ enum UITestIdentifiers {
   static let readyLaunchArgument = "-BlurtUITestReady"
 
   // Window titles the XCUITest suite queries, sourced from the `Window(_:id:)`
-  // declarations in `App.swift`. (The framework-derived Settings title, which the
-  // app never declares, is a test-bundle-only constant in BlurtUITestSupport.)
+  // declarations in `App.swift`.
   static let mainWindowTitle = "Blurt"
   static let harnessWindowTitle = "Blurt UI Test Harness"
   /// The harness `Window`'s scene id.
   static let harnessWindowID = "uitest.harness"
+
+  // The Settings panes' tab labels (`SettingsWindowRoot` renders them; the
+  // XCUITest suite clicks them). macOS also titles a preferences window after
+  // its selected pane, so the General label doubles as the Settings window's
+  // opening title (see `settingsWindowTitle` in BlurtUITestSupport).
+  static let generalSettingsTab = "General"
+  static let advancedSettingsTab = "Advanced"
 
   // Test-harness controls (set in `UITestSupport.swift`).
   static let transcriptField = "uitest.transcript"

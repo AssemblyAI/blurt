@@ -252,11 +252,7 @@ struct HTTPClientTests {
     apiKey: String?,
     transport: any HTTPTransport = FakeHTTPTransport { _ in (500, Data()) }
   ) -> AssemblyAITranscriber {
-    AssemblyAITranscriber(
-      apiKeyProvider: { apiKey },
-      baseURL: URL(string: "https://sync.assemblyai.com")!,
-      transport: transport
-    )
+    AssemblyAITranscriber(apiKeyProvider: { apiKey }, transport: transport)
   }
 
   private func collectTranscript(_ transcriber: AssemblyAITranscriber) async throws -> String {

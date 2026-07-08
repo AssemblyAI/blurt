@@ -84,6 +84,6 @@ extension HTTPClientTests {
   // MARK: - helpers
 
   private func makeValidator(_ transport: any HTTPTransport) -> APIKeyValidator {
-    APIKeyValidator(baseURL: URL(string: "https://api.assemblyai.com")!, transport: transport)
+    APIKeyValidator(transport: transport)
   }
 }

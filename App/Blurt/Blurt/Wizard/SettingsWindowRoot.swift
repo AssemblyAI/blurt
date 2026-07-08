@@ -25,10 +25,10 @@ struct SettingsWindowRoot: View {
     if let coordinator = appDelegate.coordinator {
       TabView(selection: $tab) {
         GeneralSettingsTab(coordinator: coordinator)
-          .tabItem { Label("General", systemImage: "gearshape") }
+          .tabItem { Label(UITestIdentifiers.generalSettingsTab, systemImage: "gearshape") }
           .tag(Tab.general)
         AdvancedSettingsTab(updateModel: appDelegate.updateCheckModel)
-          .tabItem { Label("Advanced", systemImage: "gearshape.2") }
+          .tabItem { Label(UITestIdentifiers.advancedSettingsTab, systemImage: "gearshape.2") }
           .tag(Tab.advanced)
       }
       .frame(width: 480)
@@ -38,21 +38,32 @@ struct SettingsWindowRoot: View {
   }
 }
 
+/// The chrome every settings pane shares: a grouped, non-scrolling `Form` that
+/// hugs its content, so each pane sizes the window to exactly its sections and
+/// the panes can't drift apart in layout.
+private struct SettingsPane<Content: View>: View {
+  @ViewBuilder var content: Content
+
+  var body: some View {
+    Form { content }
+      .formStyle(.grouped)
+      .scrollDisabled(true)
+      .fixedSize(horizontal: false, vertical: true)
+  }
+}
+
 /// The everyday setup a user changes: the AssemblyAI key, the dictation
 /// shortcut, the cue sound, and the transcription key terms.
 private struct GeneralSettingsTab: View {
   let coordinator: AppCoordinator
 
   var body: some View {
-    Form {
+    SettingsPane {
       APIKeyStepView(apiKey: coordinator.apiKey)
       HotkeyStepView(coordinator: coordinator)
       SoundStepView(coordinator: coordinator)
       KeyTermsStepView()
     }
-    .formStyle(.grouped)
-    .scrollDisabled(true)
-    .fixedSize(horizontal: false, vertical: true)
   }
 }
 
@@ -62,13 +73,10 @@ private struct AdvancedSettingsTab: View {
   let updateModel: UpdateCheckModel
 
   var body: some View {
-    Form {
+    SettingsPane {
       UpdateSection(model: updateModel)
       DeveloperSection()
     }
-    .formStyle(.grouped)
-    .scrollDisabled(true)
-    .fixedSize(horizontal: false, vertical: true)
   }
 }
 
