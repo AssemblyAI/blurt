@@ -4,12 +4,14 @@
     <img src=".github/images/blurt-logo-ansi.png" alt="Blurt logo" width="720" />
   </picture>
 
-  <h2>Incredibly fast, accurate voice dictation by AssemblyAI</h2>
+  <h2>Free, open-source dictation for your Mac</h2>
 
   <p>
     <strong>
-      Open-source Mac dictation that turns speech into polished text in the app
-      you're already using.
+      Hold a key, talk, and the words land in whatever you're typing. One tool,
+      one job. No subscription, no account, no middleman — audio goes straight
+      from your Mac to AssemblyAI with your own key, and you can read every
+      line of code that sends it.
     </strong>
   </p>
 
@@ -25,8 +27,8 @@
   <p>
     <a href="https://github.com/AssemblyAI/blurt/releases/latest">
       <img
-        src="https://img.shields.io/badge/macOS-26%2B-00d8ef?style=flat-square"
-        alt="macOS 26 or later"
+        src="https://img.shields.io/badge/macOS-15%2B-00d8ef?style=flat-square"
+        alt="macOS 15 or later"
       />
     </a>
     <a href="https://www.assemblyai.com">
@@ -38,7 +40,8 @@
   </p>
 
   <p>
-    <sub>Free app · Apple Silicon · Bring your own AssemblyAI API key</sub>
+    <sub>MIT licensed · No subscription · Signed &amp; notarized · Bring your
+    own AssemblyAI API key</sub>
   </p>
 
 <img
@@ -57,18 +60,17 @@
 3. Launch Blurt and follow setup: Microphone, Accessibility, and your [AssemblyAI API key](https://www.assemblyai.com/dashboard/api-keys).
 4. Dictate with **right command** by default. Tap to toggle, or hold for push-to-talk.
 
-Blurt needs macOS 26 or later on Apple Silicon, plus an AssemblyAI API key
+Blurt needs macOS 15 or later on Apple Silicon, plus an AssemblyAI API key
 (free tier available).
 
 ## Why Blurt
 
-- **Accurate.** Transcription runs on AssemblyAI's most accurate speech-to-text model.
-- **Fast.** The model responds in under 100 ms, so text lands about as soon as you stop speaking.
-- **Multilingual.** Works in 18 languages.
-- **Works anywhere you can type.** Blurt pastes the transcript into the focused Mac app.
-- **Polished in one step.** Audio goes to AssemblyAI's Sync STT API and comes back as clean text — no model downloads, no separate cleanup pass.
-- **Small native app.** The setup window, overlay, hotkey, and paste flow are built for macOS.
-- **Actual synth cues.** Start and stop can be cued by real Yamaha DX7 or Roland Juno-106 sounds, or turned off.
+- **Zero dependencies.** Plain Swift on Apple's frameworks — no packages you've never heard of, no supply chain to audit. Fork it and make it yours.
+- **No telemetry.** No analytics, no crash reporting, no accounts. Blurt talks to exactly one server, and you can read the code that does it.
+- **Native Mac app.** Not a web page in a window. A small Mac app that starts fast, stays out of the way, and types into whatever has focus.
+- **Accurate transcription.** Speech in, clean text out — usually in about a tenth of a second, with [30% fewer hallucinations than Whisper](https://www.assemblyai.com/docs/pre-recorded-audio/benchmarks). You pay AssemblyAI directly for what you use.
+- **18 languages.** Dictate in 18 languages, not just English — and code-switch mid-sentence. The model follows you between languages without touching a setting.
+- **Real synth cues.** Start and stop sounds from a real Yamaha DX7 and Roland Juno-106. There's an off switch, but why would you.
 
 ## Privacy
 
