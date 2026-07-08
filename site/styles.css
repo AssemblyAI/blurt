@@ -60,17 +60,6 @@ a:hover {
   text-decoration-color: var(--ice);
 }
 
-code,
-kbd {
-  font-family: var(--mono);
-  font-size: 0.86em;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 1px 6px;
-  white-space: nowrap;
-}
-
 :focus-visible {
   outline: 2px solid var(--ice);
   outline-offset: 4px;
@@ -344,69 +333,6 @@ h2 {
   font-size: 0.92rem;
 }
 
-/* ---- Install steps ---- */
-
-.steps {
-  margin: 34px 0 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  counter-reset: step;
-}
-
-.steps li {
-  padding: 22px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--panel);
-}
-
-.step-num {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 999px;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  color: var(--ice);
-  font-family: var(--mono);
-  font-weight: 700;
-  font-size: 0.82rem;
-}
-
-.steps p {
-  margin: 12px 0 0;
-  color: var(--dim);
-  font-size: 0.94rem;
-}
-
-.actions-center {
-  justify-content: center;
-  margin-top: 36px;
-}
-
-.fine-print-center {
-  text-align: center;
-}
-
-#install {
-  text-align: center;
-}
-
-#install h2,
-#install .eyebrow {
-  margin-left: auto;
-  margin-right: auto;
-}
-
-#install .steps li {
-  text-align: left;
-}
-
 /* ---- Footer ---- */
 
 .site-footer {
@@ -455,8 +381,7 @@ h2 {
 /* ---- Responsive ---- */
 
 @media (max-width: 900px) {
-  .feature-grid,
-  .steps {
+  .feature-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
@@ -478,8 +403,7 @@ h2 {
     display: none;
   }
 
-  .feature-grid,
-  .steps {
+  .feature-grid {
     grid-template-columns: 1fr;
   }
 
