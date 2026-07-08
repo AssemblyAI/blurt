@@ -6,7 +6,7 @@
     <title>Blurt — native macOS dictation</title>
     <meta
       name="description"
-      content="Incredibly fast, accurate voice dictation by AssemblyAI. Blurt is a small, open-source macOS dictation app for turning speech into text in the app you're already using."
+      content="Open-source macOS dictation. Hold a key, talk, and the transcript is pasted into the focused app — one call to AssemblyAI's speech-to-text API, no telemetry, bring your own key."
     />
     <link rel="canonical" href="https://blurtblurt.com/" />
     <meta name="theme-color" content="#0a0a0f" />
@@ -16,7 +16,7 @@
     <meta property="og:title" content="Blurt — native macOS dictation" />
     <meta
       property="og:description"
-      content="Incredibly fast, accurate voice dictation by AssemblyAI."
+      content="Open-source macOS dictation powered by AssemblyAI."
     />
     <meta property="og:url" content="https://blurtblurt.com/" />
     <meta
@@ -48,7 +48,7 @@
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "Blurt",
-        "description": "Incredibly fast, accurate voice dictation by AssemblyAI. Blurt is a small, open-source macOS dictation app for turning speech into text in the app you're already using.",
+        "description": "Open-source macOS dictation. Hold a key, talk, and the transcript is pasted into the focused app — one call to AssemblyAI's speech-to-text API, no telemetry, bring your own key.",
         "url": "https://blurtblurt.com/",
         "image": "https://blurtblurt.com/assets/blurt-b-icon.png",
         "applicationCategory": "UtilitiesApplication",
@@ -101,11 +101,12 @@
           />
         </picture>
 
-        <h1>Incredibly fast, accurate voice dictation by AssemblyAI</h1>
+        <h1>Open-source dictation for your Mac</h1>
         <p class="lede">
-          Blurt is a small, native Mac app for Apple Silicon. Tap or hold a key,
-          speak, and polished text lands in the app you're already using — no
-          model downloads, no separate cleanup pass.
+          Hold a key, talk, and the transcript is pasted into whatever app has
+          focus. One HTTPS call to AssemblyAI's speech-to-text API — typically
+          back in under 100&nbsp;ms — with no local models, no subscription, and
+          no second LLM pass. Bring your own API key.
         </p>
 
         <ul class="badges" aria-label="Highlights">
@@ -127,10 +128,11 @@
           </a>
         </div>
         <p class="fine-print">
-          Requires macOS 26 or later on Apple Silicon, plus a free
+          macOS 26+ on Apple Silicon. The
           <a href="https://www.assemblyai.com/dashboard/api-keys"
-            >AssemblyAI API key</a
-          >.
+            >free-tier API key</a
+          >
+          works.
         </p>
 
         <figure class="demo">
@@ -147,48 +149,50 @@
 
       <section class="section" id="features">
         <p class="eyebrow">Features</p>
-        <h2>Everything you need to stop typing</h2>
+        <h2>The details</h2>
         <div class="feature-grid">
           <article class="feature">
             <h3>Zero dependencies</h3>
             <p>
-              The whole app is plain Swift on Apple's frameworks — no external
-              packages, nothing pulled in behind your back.
+              Plain Swift on Apple's frameworks. No external packages — if it
+              isn't in the repo or the SDK, it isn't in the binary.
             </p>
           </article>
           <article class="feature">
             <h3>No telemetry</h3>
             <p>
-              No crash reporting, no analytics, no usage tracking. Blurt phones
-              exactly one place: the transcription API.
+              No crash reporting, no analytics, no update pings. The only
+              network call is the transcription request, and the code that makes
+              it is right there in the repo.
             </p>
           </article>
           <article class="feature">
             <h3>Native Mac app</h3>
             <p>
-              AppKit and SwiftUI all the way down — no Electron, no web views.
-              Tap or hold a key and text lands in the focused app.
+              AppKit and SwiftUI, a CGEventTap for the hotkey, a paste into the
+              focused app. No Electron, no web views, no background agents.
             </p>
           </article>
           <article class="feature">
             <h3>Accurate transcription</h3>
             <p>
-              Powered by the world's most accurate speech-to-text model, with
-              polished text back in under 100 milliseconds.
+              Audio goes to AssemblyAI's Sync STT API with a prompt built from
+              the app you're typing into, and comes back already cleaned up —
+              one round trip, no post-processing.
             </p>
           </article>
           <article class="feature">
             <h3>18 languages</h3>
             <p>
-              Dictate in the language you think in. Blurt works in 18 languages
-              out of the box.
+              Dictate in 18 languages, not just English. Pick one in settings
+              and go.
             </p>
           </article>
           <article class="feature">
             <h3>Real synth cues</h3>
             <p>
-              Start and stop are cued by real Yamaha DX7 and Roland Juno-106
-              sounds. Or turn them off and dictate in silence.
+              The start and stop sounds are sampled from an actual Yamaha DX7
+              and Roland Juno-106. There's an off switch, but why would you.
             </p>
           </article>
         </div>
