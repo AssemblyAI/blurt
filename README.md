@@ -53,24 +53,79 @@
 
 </div>
 
+Tap a key, speak, and clean text lands in whatever Mac app has focus — think
+the built-in macOS dictation, but fast, accurate, and working everywhere you
+can type.
+
+To _blurt_ is to say something suddenly, without stopping to think — which is
+more or less what this app lets you do to your Mac.
+
+Built entirely native (AppKit + SwiftUI — no Electron, no web views). The whole
+pipeline lives in **BlurtEngine**, a dependency-free Swift 6 package: mic
+capture, one synchronous `POST` to
+[AssemblyAI's Sync STT API](https://www.assemblyai.com), and a clipboard paste
+into the focused app. No local models, no upload-then-poll job queue, no
+background daemons — audio in, polished text out, one HTTP request per
+utterance.
+
+## Features
+
+- **Works anywhere you can type** — the transcript is pasted into the focused
+  app via a synthesized ⌘V, with your prior clipboard contents saved and
+  restored around it. If the target app quit while you were speaking, the text
+  stays on the clipboard instead of vanishing.
+- **One key, no chords** — dictation is triggered by a single lone modifier
+  (right ⌘ by default; right ⌥ and `fn` also available). Tap to toggle, hold
+  for push-to-talk. The event tap swallows nothing: a lone modifier types
+  nothing anyway, and combos like ⌘C pass through untouched.
+- **Polished in one step** — each utterance rides to AssemblyAI's Sync STT API
+  with a contextual prompt built from the focused app, window, and field, the
+  text around your cursor, and your own key terms — so the transcript comes
+  back already cleaned up. No separate LLM pass, no model downloads.
+- **Fast** — the model responds in under 100 ms. Blurt pre-warms the HTTPS
+  connection while you're still speaking and flips to "transcribing" at
+  key-up, so text lands about as soon as you stop talking.
+- **Accurate** —
+  [30% fewer hallucinations than Whisper](https://www.assemblyai.com/docs/pre-recorded-audio/benchmarks)
+  on AssemblyAI's published benchmarks.
+- **Multilingual** — works in 18 languages, detected automatically, and you
+  can code-switch mid-sentence.
+- **Live feedback** — a floating overlay pill shows a real-time mic level
+  meter and the pipeline phase; a menu bar indicator mirrors it from anywhere.
+- **Actual synth cues** — start and stop can be cued by real Yamaha DX7 or
+  Roland Juno-106 sounds, or turned off.
+- **Guided setup** — a first-run wizard walks through Microphone permission,
+  Accessibility trust, and your API key; the same window later hosts settings
+  for the trigger key, key terms, and sound pack.
+- **No surprises** — updates are manual (check → download the DMG yourself;
+  no background auto-updater), and there's no telemetry of any kind.
+
+## Requirements
+
+- Apple Silicon Mac, macOS 15+ (macOS 26 recommended — enables the Liquid
+  Glass UI)
+- An [AssemblyAI API key](https://www.assemblyai.com/dashboard/api-keys)
+  (free tier available)
+
 ## Install
 
 1. [Download **Blurt.dmg**](https://github.com/AssemblyAI/blurt/releases/latest/download/Blurt.dmg).
 2. Open the disk image and drag **Blurt.app** into `Applications`.
-3. Launch Blurt and follow setup: Microphone, Accessibility, and your [AssemblyAI API key](https://www.assemblyai.com/dashboard/api-keys).
-4. Dictate with **right command** by default. Tap to toggle, or hold for push-to-talk.
 
-Blurt needs macOS 15 or later on Apple Silicon, plus an AssemblyAI API key
-(free tier available).
+## Getting started
 
-## Why Blurt
+From a fresh install to dictated text in your editor:
 
-- **Zero dependencies.** Plain Swift on Apple's frameworks — no packages you've never heard of, no supply chain to audit. Fork it and make it yours.
-- **No telemetry.** No analytics, no crash reporting, no accounts. Blurt talks to exactly one server, and you can read the code that does it.
-- **Native Mac app.** Not a web page in a window. A small Mac app that starts fast, stays out of the way, and types into whatever has focus.
-- **Accurate transcription.** Speech in, clean text out — usually in about a tenth of a second, with [30% fewer hallucinations than Whisper](https://www.assemblyai.com/docs/pre-recorded-audio/benchmarks). You pay AssemblyAI directly for what you use.
-- **18 languages.** Dictate in 18 languages, not just English — and code-switch mid-sentence. The model follows you between languages without touching a setting.
-- **Real synth cues.** Start and stop sounds from a real Yamaha DX7 and Roland Juno-106. There's an off switch, but why would you.
+1. **Launch Blurt** — the setup wizard requests Microphone and Accessibility
+   permissions and asks for your
+   [AssemblyAI API key](https://www.assemblyai.com/dashboard/api-keys).
+2. **Click into any text field** — a document, a chat box, a terminal.
+3. **Tap right ⌘ and speak** — the overlay pill shows the live mic level. Tap
+   again to stop, or hold the key and release for push-to-talk.
+4. **Read what you said** — the polished transcript is pasted at your cursor.
+5. **Tune it** — open Settings to change the trigger key, add key terms
+   (names, jargon, product words the model should get right), or pick a synth
+   sound pack.
 
 ## Privacy
 
@@ -86,16 +141,51 @@ that audio.
 
 ## Build from source
 
-Blurt is MIT-licensed. [`AGENTS.md`](./AGENTS.md) has the architecture notes and
-build workflow.
+Blurt is MIT-licensed and needs only Xcode and Homebrew to build:
 
 ```bash
 scripts/bootstrap.sh   # install the local toolchain
 scripts/dev-build.sh   # build + install Blurt to /Applications
-scripts/check.sh       # full repo health check
+scripts/check.sh       # full repo health check — the same script CI runs
+swift test             # engine unit tests only
 ```
 
-Want to build your own Swift dictation app from scratch? The pipeline —
-mic capture, AssemblyAI Sync transcription, and paste-into-the-focused-app —
-is a standalone, dependency-free Swift package you can embed:
-[`BLURTENGINE.md`](./BLURTENGINE.md) is the developer guide.
+`dev-build.sh` installs to `/Applications` on purpose: macOS won't register
+Accessibility/Input-Monitoring permissions for apps living in build
+directories, so the app needs a stable install path to be usable at all.
+[`AGENTS.md`](./AGENTS.md) has the architecture notes and full workflow;
+[`CONTRIBUTING.md`](./CONTRIBUTING.md) covers how changes land.
+
+## Architecture
+
+```text
+Sources/BlurtEngine/     Swift 6 package owning the pipeline — no external dependencies
+  Audio/                 MicCapture: fresh AVAudioRecorder per session, 16 kHz mono PCM,
+                         live level meter; DX7/Juno-106 sound packs
+  STT/                   AssemblyAITranscriber: one POST to sync.assemblyai.com/transcribe
+                         (u3-sync-pro) + TranscriptionPrompt contextual priming
+  Pipeline/              DictationSession actor: press/release/cancel commands, phase
+                         stream, auto-release before the API's recording cap
+  Hotkey/                DictationKeyGate/Router: pure, unit-tested state machine for the
+                         lone-modifier trigger (tap vs hold vs combo)
+  Injection/             KeyInjector: save clipboard → paste via synthesized ⌘V → restore
+  FocusCapture/          Accessibility reads of the focused app/window/field that prime
+                         the transcription prompt
+  Config/, Update/       Keychain API-key store, key terms, manual release check
+
+App/Blurt/               AppKit/SwiftUI shell (Xcode project generated by XcodeGen)
+  AppCoordinator.swift   the one place the engine is composed for the real app
+  Hotkey/                DictationKeyTap: the CGEventTap feeding the engine's key gate
+  Overlay/, MenuBar/     floating status pill, menu bar dictation indicator
+  Wizard/                setup wizard + settings window
+```
+
+The engine is a standalone package you can embed to build your own dictation
+app — mic capture, Sync transcription, and paste-into-the-focused-app behind
+three protocol seams, fully stubbed in tests. [`BLURTENGINE.md`](./BLURTENGINE.md)
+is the developer guide.
+
+Latency note: perceived speed is mostly bookkeeping. `press()` warms up the
+HTTPS connection and kicks off the focused-field context read without awaiting
+either; `release()` claims the "transcribing" state before the recording is
+even read back from disk — so the stop cue fires at key-up, not after I/O.

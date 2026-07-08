@@ -26,19 +26,4 @@ extension View {
       }
     }
   }
-
-  /// Liquid Glass capsule surface on macOS 26+, tinted; falls back to the
-  /// pre-Tahoe imitation stack (frosted material + tint overlay, capsule-clipped)
-  /// on macOS 15–25 so the overlay pill still reads correctly.
-  @ViewBuilder
-  func glassCapsuleCompat(tint: Color) -> some View {
-    if #available(macOS 26.0, *) {
-      glassEffect(.regular.tint(tint), in: .capsule)
-    } else {
-      background {
-        Capsule().fill(.regularMaterial)
-        Capsule().fill(tint)
-      }
-    }
-  }
 }

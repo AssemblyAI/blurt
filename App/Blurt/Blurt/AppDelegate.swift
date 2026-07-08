@@ -119,6 +119,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
           apiKey: APIKeyModel(
             keyStore: InMemoryAPIKeyStore(),
             validateKey: { UITestKeyValidation.result(for: $0) }))
+        // Offline update check so the Settings "Check for Updates" button shows a
+        // stable "up to date" result without reaching GitHub. Assigned before the
+        // `lazy` default is ever read (first check), so it replaces it cleanly.
+        updateCheckModel = .uiTest()
       } else {
         coord = AppCoordinator(onMissingAPIKey: onMissingAPIKey)
       }

@@ -20,6 +20,10 @@ final class UpdateCheckModel {
   /// button and menu both fired), so we never stack two result alerts.
   private var isChecking = false
 
+  /// The running app version for display in the Settings "Updates" section
+  /// (nil when the bundle version can't be parsed), e.g. "0.1.31".
+  var currentVersionText: String? { currentVersion.map { "\($0)" } }
+
   /// `currentVersion`, `openURL`, and `presentingWindow` are injected (with
   /// sensible production defaults) so this stays exercisable without a real
   /// bundle, a live browser, or an on-screen window.
