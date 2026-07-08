@@ -309,13 +309,6 @@ h2 {
   text-wrap: balance;
 }
 
-.section-lede {
-  max-width: 58ch;
-  margin: 14px 0 0;
-  color: var(--dim);
-  text-wrap: pretty;
-}
-
 /* ---- Feature grid ---- */
 
 .feature-grid {
@@ -349,55 +342,6 @@ h2 {
   margin: 8px 0 0;
   color: var(--dim);
   font-size: 0.92rem;
-}
-
-/* ---- Split (native) ---- */
-
-.split {
-  display: grid;
-  grid-template-columns: minmax(320px, 460px) minmax(0, 1fr);
-  align-items: center;
-  gap: clamp(32px, 5vw, 64px);
-}
-
-.split-copy p {
-  color: var(--dim);
-  margin: 14px 0 0;
-  text-wrap: pretty;
-}
-
-.checklist {
-  margin: 20px 0 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  color: var(--dim);
-  font-size: 0.95rem;
-}
-
-.checklist li {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-}
-
-.checklist li::before {
-  content: "▸";
-  color: var(--hot);
-  font-family: var(--mono);
-  font-size: 0.8rem;
-  flex: 0 0 auto;
-}
-
-.split-shot {
-  margin: 0;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: calc(var(--radius) + 4px);
-  background: var(--panel);
-  box-shadow: 0 32px 70px -36px rgba(0, 0, 0, 0.75);
 }
 
 /* ---- Install steps ---- */
@@ -514,14 +458,6 @@ h2 {
   .feature-grid,
   .steps {
     grid-template-columns: repeat(2, 1fr);
-  }
-
-  .split {
-    grid-template-columns: 1fr;
-  }
-
-  .split-shot {
-    order: -1;
   }
 }
 
