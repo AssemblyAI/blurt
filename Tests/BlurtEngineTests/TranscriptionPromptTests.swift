@@ -108,12 +108,12 @@ struct TranscriptionPromptTests {
       expected: "Dictated into Notes. \(base)"),
   ]
 
-  @Test("build maps focus context to the Sync prompt", arguments: cases)
+  @Test("build maps focus context to the transcription prompt", arguments: cases)
   func build(_ c: Case) {
     #expect(TranscriptionPrompt.build(context: c.context) == c.expected)
   }
 
-  @Test("built prompt fits within the Sync API 4096-character cap for capped prior text")
+  @Test("built prompt fits within the API's 4096-character cap for capped prior text")
   func withinCap() {
     let longPrior = String(repeating: "word ", count: 200)
     let prompt = TranscriptionPrompt.build(

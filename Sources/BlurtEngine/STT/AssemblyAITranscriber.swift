@@ -1,32 +1,37 @@
 import Foundation
 import os
 
-/// Latency instrumentation for the Sync round-trip. Findable via:
+/// Latency instrumentation for the dictation round-trip. Findable via:
 ///   log show --predicate 'subsystem == "dev.alex.blurt" && category == "Transcriber"' --last 1h
 /// File-scoped so both `send(_:body:audioDurationMs:)` (wall-clock) and
 /// `MetricsLogger` (the DNS/TCP/TLS/TTFB split) can write to it.
 private let transcriberLog = Logger(subsystem: BlurtIdentity.subsystem, category: "Transcriber")
 
-/// `TranscriberProtocol` backed by AssemblyAI's **Sync** Speech-to-Text API.
+/// `TranscriberProtocol` backed by AssemblyAI's **dictation** API.
 ///
-/// Mirrors the endpoint used by the `assembly dictate` CLI command: a single
-/// `POST sync.assemblyai.com/transcribe` carries the captured audio (raw S16LE
-/// PCM, exactly the bytes the mic recorded — there is no re-encoding pass)
-/// plus a JSON `config` part, and the finished transcript comes back in the
-/// response body. No upload step, no job submission, no polling — one request
-/// per utterance. The Universal-3 sync model (`u3-sync-pro`) handles audio from
-/// ~80 ms up to 120 s with a server-side inference deadline of ~30 s.
+/// A single `POST dictation.assemblyai.com/transcribe` carries the captured
+/// audio (raw S16LE PCM, exactly the bytes the mic recorded — there is no
+/// re-encoding pass) plus a JSON `config` part, and the response body carries
+/// both the verbatim transcript and — because the config requests one via its
+/// `llm` block — an LLM-rewritten version with disfluencies removed and
+/// punctuation fixed. No upload step, no job submission, no polling — one
+/// request per utterance covers transcription *and* cleanup. The service picks
+/// the STT model server-side and handles audio from ~80 ms up to 120 s; the
+/// rewrite is best-effort with a ~5 s server-side deadline, so a rewrite
+/// failure still returns the verbatim transcript (`llm_response` null).
 public struct AssemblyAITranscriber: TranscriberProtocol {
   private let apiKeyProvider: @Sendable () -> String?
   private let baseURL: URL
   private let transport: any HTTPTransport
 
-  /// Required on every Sync API request — selects the synchronous STT model.
-  private static let syncModel = "u3-sync-pro"
+  /// Client timeout the dictation API documents: generous over the sync
+  /// upstream's ~30 s inference deadline plus the rewrite's 5 s budget, so the
+  /// server — not the client — decides when a slow request has failed.
+  private static let requestTimeout: TimeInterval = 90
 
   public init(
     apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.get() },
-    baseURL: URL = URL(staticString: "https://sync.assemblyai.com"),
+    baseURL: URL = URL(staticString: "https://dictation.assemblyai.com"),
     transport: any HTTPTransport = URLSession.shared
   ) {
     self.apiKeyProvider = apiKeyProvider
@@ -34,7 +39,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     self.transport = transport
   }
 
-  // MARK: - Sync request
+  // MARK: - Dictation request
 
   public func transcribe(
     pcm: Data, sampleRate: Int, context: TranscriptionContext?
@@ -48,8 +53,8 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 
     var request = URLRequest(url: baseURL.appendingPathComponent("transcribe"))
     request.httpMethod = "POST"
+    request.timeoutInterval = Self.requestTimeout
     request.setValue(apiKey, forHTTPHeaderField: "Authorization")
-    request.setValue(Self.syncModel, forHTTPHeaderField: "X-AAI-Model")
     request.setValue(
       "multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
@@ -57,20 +62,26 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     let sampleCount = pcm.count / SyncSTTLimits.bytesPerSample
     let audioDurationMs = Int((Double(sampleCount) / Double(sampleRate)) * 1000)
     let data = try await send(request, body: body, audioDurationMs: audioDurationMs)
-    guard let response = try? JSONDecoder().decode(SyncTranscriptResponse.self, from: data) else {
+    guard let response = try? JSONDecoder().decode(DictationResponse.self, from: data) else {
       throw AssemblyAIError.malformedResponse
     }
-    return response.text
+    if let error = response.llmError {
+      transcriberLog.warning(
+        "llm rewrite unavailable (\(error, privacy: .public)); using verbatim transcript")
+    }
+    // The rewrite is best-effort: a null `llm_response` (rewrite failed or
+    // timed out) degrades to the verbatim transcript rather than an error.
+    return response.llmResponse ?? response.text
   }
 
-  /// Pre-open and pool a connection to the Sync host so the next `transcribe`
-  /// reuses it instead of paying DNS+TCP+TLS on the hot path (~170 ms cold, more
-  /// on mobile — measured). A throwaway GET to the host root is enough to
-  /// establish the HTTP/2 connection `URLSession` then reuses for the POST to
-  /// `/transcribe`; the response (an auth-less 4xx) is discarded. No `X-AAI-Model`
-  /// or key, so it never reaches the model or counts as a transcription. A short
-  /// timeout keeps a dead network from leaving the task hanging. Fire-and-forget:
-  /// any error is swallowed, since the real request degrades to the old behavior.
+  /// Pre-open and pool a connection to the dictation host so the next
+  /// `transcribe` reuses it instead of paying DNS+TCP+TLS on the hot path
+  /// (~170 ms cold, more on mobile — measured). A throwaway GET to the host
+  /// root is enough to establish the HTTP/2 connection `URLSession` then reuses
+  /// for the POST to `/transcribe`; the response (an auth-less 4xx) is
+  /// discarded. No key, so it never counts as a transcription. A short timeout
+  /// keeps a dead network from leaving the task hanging. Fire-and-forget: any
+  /// error is swallowed, since the real request degrades to the old behavior.
   public func warmUp() async {
     var request = URLRequest(url: baseURL)
     request.httpMethod = "GET"
@@ -84,12 +95,14 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 
   /// Builds the JSON `config` part sent alongside the audio. The context
   /// `prompt` is included only when non-empty; a nil or blank prompt omits the
-  /// field so the server applies its default prompt. Internal so tests can
-  /// assert the prompt wiring without inspecting the multipart upload body
-  /// (which `URLProtocol` mocks can't observe reliably for `upload(from:)`).
+  /// field so the server applies its default prompt. The `llm` block is always
+  /// present: an empty object requests the service's default cleanup rewrite
+  /// (remove disfluencies, fix punctuation). Internal so tests can assert the
+  /// prompt wiring without inspecting the multipart upload body (which
+  /// `URLProtocol` mocks can't observe reliably for `upload(from:)`).
   func makeConfigData(sampleRate: Int, prompt: String?) throws -> Data {
     try JSONEncoder().encode(
-      SyncConfig(
+      DictationConfig(
         sampleRate: sampleRate,
         channels: 1,
         prompt: prompt.trimmedNonEmpty()
@@ -97,8 +110,8 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     )
   }
 
-  /// Builds the `audio` (raw PCM) + `config` (JSON) multipart payload the Sync
-  /// API expects, matching the field names `assembly dictate` sends.
+  /// Builds the `audio` (raw PCM) + `config` (JSON) multipart payload the
+  /// dictation API expects.
   private func multipartBody(pcm: Data, config: Data, boundary: String) -> Data {
     var body = Data()
     // Reserve up front (payload + a generous allowance for the boundary/header
@@ -136,7 +149,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     let (data, response) = try await transport.upload(for: request, from: body, delegate: metrics)
     let wallMs = (clock.now - start).milliseconds
     transcriberLog.info(
-      "sync round-trip audioMs=\(audioDurationMs, privacy: .public) wallMs=\(wallMs, format: .fixed(precision: 0), privacy: .public)"
+      "dictation round-trip audioMs=\(audioDurationMs, privacy: .public) wallMs=\(wallMs, format: .fixed(precision: 0), privacy: .public)"
     )
     guard let http = response as? HTTPURLResponse else { return data }
     guard (200..<300).contains(http.statusCode) else {
@@ -145,7 +158,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     return data
   }
 
-  /// Best human-readable explanation for a non-2xx response. The Sync API isn't
+  /// Best human-readable explanation for a non-2xx response. The API isn't
   /// consistent about the field name across error classes (`error`, `message`,
   /// and `detail` have all been seen), so try each; failing that, fall back to
   /// the raw body text (trimmed and capped) so a failure never reaches the user
@@ -162,25 +175,46 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 
   // MARK: - Wire types
 
-  private struct SyncConfig: Encodable {
+  private struct DictationConfig: Encodable {
     let sampleRate: Int
     let channels: Int
     /// Custom transcription instruction. Encoded only when non-nil (the
     /// synthesized `encode` uses `encodeIfPresent` for optionals), so omitting
-    /// it falls back to the server's default prompt.
+    /// it falls back to the server's default prompt. Steers *transcription*;
+    /// the cleanup rewrite is the `llm` block's job.
     let prompt: String?
+    /// The rewrite request. An empty object selects the service's default
+    /// cleanup instruction; per the API's `instruction`-mode rules, output
+    /// format and don't-answer-the-text safeguards are enforced server-side,
+    /// so nothing rides along here.
+    let llm = LLMRewrite()
     enum CodingKeys: String, CodingKey {
       case sampleRate = "sample_rate"
       case channels
       case prompt
+      case llm
     }
   }
 
-  private struct SyncTranscriptResponse: Decodable {
+  /// Encodes as `{}` — the default-cleanup rewrite request.
+  private struct LLMRewrite: Encodable {}
+
+  private struct DictationResponse: Decodable {
+    /// The verbatim transcript — always present, never altered by the LLM.
     let text: String
+    /// The rewritten transcript, or nil when the rewrite failed or timed out.
+    /// Never empty when present: the service nulls out empty rewrites.
+    let llmResponse: String?
+    /// `"timeout"` or `"error"` when a requested rewrite failed.
+    let llmError: String?
+    enum CodingKeys: String, CodingKey {
+      case text
+      case llmResponse = "llm_response"
+      case llmError = "llm_error"
+    }
   }
 
-  /// A Sync API failure body. The endpoint labels the explanation differently
+  /// A dictation API failure body. The endpoint labels the explanation differently
   /// across error classes, so pull it from whichever of `error` / `message` /
   /// `detail` is present and string-valued (a non-string `detail`, e.g. FastAPI's
   /// validation array, is ignored — the caller then falls back to the raw body).
@@ -201,7 +235,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   }
 }
 
-/// Per-request `URLSessionTaskDelegate` that logs the Sync round-trip's latency
+/// Per-request `URLSessionTaskDelegate` that logs the dictation round-trip's latency
 /// breakdown from `URLSessionTaskMetrics`: how much was connection setup
 /// (DNS/TCP/TLS — warmable by pre-connecting at record-start) versus server
 /// inference (`ttfbMs` ≈ requestStart→responseStart). `reused=true` means the
@@ -222,7 +256,7 @@ private final class MetricsLogger: NSObject, URLSessionTaskDelegate, @unchecked 
     }
     transcriberLog.info(
       """
-      sync metrics audioMs=\(self.audioDurationMs, privacy: .public) \
+      dictation metrics audioMs=\(self.audioDurationMs, privacy: .public) \
       reused=\(t.isReusedConnection, privacy: .public) \
       dnsMs=\(ms(t.domainLookupStartDate, t.domainLookupEndDate), privacy: .public) \
       connectMs=\(ms(t.connectStartDate, t.connectEndDate), privacy: .public) \

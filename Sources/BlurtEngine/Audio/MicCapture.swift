@@ -3,7 +3,7 @@ import Foundation
 import os
 
 /// Captures mic audio with `AVAudioRecorder`, which records straight to the
-/// 16 kHz / mono / 16-bit PCM the Sync STT API wants — so there's no manual tap,
+/// 16 kHz / mono / 16-bit PCM the dictation API wants — so there's no manual tap,
 /// sample-rate conversion, or PCM plumbing here. Each session uses a freshly
 /// created recorder, which resolves the *current* default input device at
 /// `record()` time. That's the whole reason this is no longer an `AVAudioEngine`:
@@ -20,7 +20,7 @@ public actor MicCapture: MicCaptureProtocol {
   public nonisolated let levels: AsyncStream<Float>
   private nonisolated let levelsContinuation: AsyncStream<Float>.Continuation
 
-  /// The geometry the recorder converts hardware audio to on the fly. The Sync
+  /// The geometry the recorder converts hardware audio to on the fly. The dictation
   /// API's rate (`SyncSTTLimits.sampleRate`) — the same one the pipeline hands
   /// the transcriber — so `stop()` returns bytes ready to upload with no
   /// resampling or re-encoding pass.
@@ -159,13 +159,13 @@ public actor MicCapture: MicCaptureProtocol {
 
   // MARK: - File helpers
 
-  /// Read a recorded PCM file back as raw S16LE bytes — the Sync API's upload
+  /// Read a recorded PCM file back as raw S16LE bytes — the dictation API's upload
   /// encoding. The on-disk WAV already holds 16-bit int samples, so asking
   /// `AVAudioFile` for the int16 common format makes this a straight copy-out:
   /// no detour through Float32 (which the default `processingFormat` would
   /// impose, and which the transcriber would only convert straight back). Int16
   /// is host-endian; Apple platforms (arm64/x86_64) are little-endian, so the
-  /// bytes are already the S16LE the Sync API expects.
+  /// bytes are already the S16LE the dictation API expects.
   static func decodePCM(fromFileAt url: URL) throws -> Data {
     let file = try AVAudioFile(forReading: url, commonFormat: .pcmFormatInt16, interleaved: true)
     let frameCount = AVAudioFrameCount(file.length)

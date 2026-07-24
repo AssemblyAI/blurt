@@ -3,7 +3,7 @@ import Foundation
 public protocol TranscriberProtocol: Sendable {
   /// Transcribe captured audio (raw S16LE mono PCM at `sampleRate` — the bytes
   /// `MicCaptureProtocol.stop()` returns, uploaded as-is) into text.
-  /// The Sync STT API resolves an utterance to a single final transcript, so
+  /// The dictation API resolves an utterance to a single final transcript, so
   /// this returns that transcript in one shot (no incremental deltas).
   ///
   /// `context` carries per-utterance priming (focused app + text before the

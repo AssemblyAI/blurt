@@ -102,7 +102,7 @@ struct OverlayView: View {
     case .processing:
       // Matches the site demo's "Transcribing…" label (the demo cross-fades REC →
       // Transcribing); cyan echoes the demo's --ice. Cross-fades like the bars.
-      // The label breathes (slow opacity pulse) so the wait for the Sync API +
+      // The label breathes (slow opacity pulse) so the wait for the dictation API +
       // paste reads as active work rather than a frozen pill.
       TranscribingLabel(animated: !reduceMotion)
         .transition(.opacity)
@@ -178,7 +178,7 @@ private struct StatusLineText: View {
 
 /// The "Transcribing…" status line with a slow breathing pulse — the processing
 /// counterpart of the recording bars' idle shimmer, so the pill keeps visibly
-/// working while the app waits on the Sync API and pastes the result. Driven by
+/// working while the app waits on the dictation API and pastes the result. Driven by
 /// the same continuous-clock `TimelineView` pattern as `WaveformBars` (never a
 /// one-shot state toggle). Under Reduce Motion the label holds steady at full
 /// opacity — exactly the pre-animation rendering.

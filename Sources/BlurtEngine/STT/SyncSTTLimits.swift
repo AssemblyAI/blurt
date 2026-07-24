@@ -1,8 +1,9 @@
-/// Limits imposed by AssemblyAI's Sync STT API. `DictationSession` auto-releases
-/// a held hotkey just before the cap so a long press never records audio the
-/// endpoint would reject.
+/// Limits imposed by the Sync STT model behind AssemblyAI's dictation API
+/// (the dictation service forwards audio to Sync unchanged, so its caps apply
+/// end to end). `DictationSession` auto-releases a held hotkey just before the
+/// cap so a long press never records audio the endpoint would reject.
 public enum SyncSTTLimits {
-  /// Sample rate of the 16 kHz / mono / 16-bit PCM geometry the Sync API
+  /// Sample rate of the 16 kHz / mono / 16-bit PCM geometry the API
   /// expects. The single definition shared by `MicCapture` (which records at
   /// this rate) and `DictationSession` (which declares it on the request), so
   /// the recorded and declared rates can't drift apart.
