@@ -11,7 +11,7 @@ import Testing
 @Suite("HTTP network clients")
 struct HTTPClientTests {
 
-  @Test("transcriber posts to the sync endpoint and returns the transcript")
+  @Test("transcriber posts to the dictation endpoint and returns the rewritten text")
   func transcribeHappyPath() async throws {
     let hits = Counter()
     let transport = FakeHTTPTransport { request in
@@ -19,13 +19,28 @@ struct HTTPClientTests {
       guard request.url?.path.hasSuffix("/transcribe") == true,
         request.httpMethod == "POST"
       else { return (404, Data()) }
-      return (200, json(["text": "hello world"]))
+      return (200, json(["text": "um hello world", "llm_response": "Hello world."]))
     }
 
     let result = try await collectTranscript(makeTranscriber(apiKey: "test-key", transport: transport))
-    #expect(result == "hello world")
-    // Single round-trip: no upload/submit/poll fan-out.
+    // The LLM rewrite — not the verbatim transcript — is what gets pasted.
+    #expect(result == "Hello world.")
+    // Single round-trip: transcription + rewrite ride one request, no fan-out.
     #expect(hits.value == 1)
+  }
+
+  @Test("transcriber falls back to the verbatim transcript when no rewrite came back")
+  func transcribeFallsBackWithoutRewrite() async throws {
+    // A null / absent `llm_response` (the rewrite is best-effort) must degrade
+    // to the verbatim transcript, never to an error or an empty paste.
+    for body in [
+      Data(#"{"text":"hello world","llm_response":null,"llm_error":"timeout"}"#.utf8),
+      json(["text": "hello world"]),
+    ] {
+      let transport = FakeHTTPTransport { _ in (200, body) }
+      let result = try await collectTranscript(makeTranscriber(apiKey: "test-key", transport: transport))
+      #expect(result == "hello world")
+    }
   }
 
   @Test("transcriber succeeds with a real context (builds and sends a prompt)")
@@ -47,15 +62,17 @@ struct HTTPClientTests {
     #expect(result == "hello world")
   }
 
-  @Test("transcribe sends the raw key and the sync model selector as headers")
+  @Test("transcribe sends the raw key, no model header, and the documented timeout")
   func transcribeSendsAuthAndModelHeaders() async throws {
     let transport = FakeHTTPTransport { request in
-      // The wire contract: the raw key in Authorization (no "Bearer" prefix),
-      // the sync model selector, and a boundary-tagged multipart body. Anything
-      // else gets a 400 so a header regression fails loudly here.
+      // The wire contract: the raw key in Authorization (no "Bearer" prefix), a
+      // boundary-tagged multipart body, no `X-AAI-Model` (the dictation service
+      // pins the STT model server-side), and the API's documented 90 s client
+      // timeout. Anything else gets a 400 so a regression fails loudly here.
       guard request.value(forHTTPHeaderField: "Authorization") == "test-key",
-        request.value(forHTTPHeaderField: "X-AAI-Model") == "u3-sync-pro",
-        request.value(forHTTPHeaderField: "Content-Type")?.hasPrefix("multipart/form-data; boundary=") == true
+        request.value(forHTTPHeaderField: "X-AAI-Model") == nil,
+        request.value(forHTTPHeaderField: "Content-Type")?.hasPrefix("multipart/form-data; boundary=") == true,
+        request.timeoutInterval == 90
       else { return (400, Data()) }
       return (200, json(["text": "ok"]))
     }
@@ -70,10 +87,9 @@ struct HTTPClientTests {
     let transport = FakeHTTPTransport { request in
       _ = hits.next()
       // The warm-up must be a bare, auth-less GET off the /transcribe path —
-      // carrying the key or model header would make it count as a transcription.
+      // carrying the key would make it count as a transcription.
       if request.httpMethod == "GET", request.url?.path.hasSuffix("/transcribe") == false,
-        request.value(forHTTPHeaderField: "Authorization") == nil,
-        request.value(forHTTPHeaderField: "X-AAI-Model") == nil
+        request.value(forHTTPHeaderField: "Authorization") == nil
       {
         _ = getHits.next()
       }
@@ -138,6 +154,21 @@ struct HTTPClientTests {
     #expect(object?["sample_rate"] as? Int == 16_000)
     // The capture path is mono by construction; the declared geometry must agree.
     #expect(object?["channels"] as? Int == 1)
+  }
+
+  @Test("config part always requests the default cleanup rewrite")
+  func configRequestsDefaultRewrite() throws {
+    // `llm` must be present and empty on every request: present so the service
+    // runs the rewrite at all, empty so the server-owned default cleanup
+    // instruction (and its guardrails) applies rather than a client-side copy.
+    for prompt in ["CONTEXT. Transcribe.", nil] {
+      let config = try makeTranscriber(apiKey: "test-key")
+        .makeConfigData(sampleRate: 16_000, prompt: prompt)
+      let object = try JSONSerialization.jsonObject(with: config) as? [String: Any]
+      let llm = object?["llm"] as? [String: Any]
+      #expect(llm != nil)
+      #expect(llm?.isEmpty == true)
+    }
   }
 
   @Test("config part omits the prompt field when there is no context")

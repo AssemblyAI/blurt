@@ -1,4 +1,4 @@
-/// Per-utterance context the Sync STT model is trained to use as *contextual*
+/// Per-utterance context the STT model is trained to use as *contextual*
 /// priming — it improves recognition accuracy (vocabulary, continuity,
 /// capitalization) without changing the output format. Gathered at dictation
 /// start from the focused app and the text preceding the cursor, then rendered

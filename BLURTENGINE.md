@@ -1,6 +1,6 @@
 # Building on BlurtEngine
 
-BlurtEngine is the Swift package that powers [Blurt](README.md)'s dictation pipeline: capture speech from the microphone, transcribe it in a single AssemblyAI Sync STT call (with server-side cleanup driven by a per-utterance prompt), and paste the polished text into the focused app. This guide is for developers embedding the engine in their own macOS app or extending it inside this repository. For repo-wide conventions and agent workflow, see [AGENTS.md](AGENTS.md).
+BlurtEngine is the Swift package that powers [Blurt](README.md)'s dictation pipeline: capture speech from the microphone, transcribe it in a single AssemblyAI dictation API call (transcription plus a server-side LLM cleanup rewrite, contextually primed by a per-utterance prompt), and paste the polished text into the focused app. This guide is for developers embedding the engine in their own macOS app or extending it inside this repository. For repo-wide conventions and agent workflow, see [AGENTS.md](AGENTS.md).
 
 ## What you get
 
@@ -51,17 +51,17 @@ Before the first dictation can succeed the host must have:
 ```text
 press() ──▶ MicCapture.start()            release() ──▶ MicCapture.stop() → Data (raw S16LE PCM)
             (16 kHz mono 16-bit PCM)                    AssemblyAITranscriber.transcribe(pcm:sampleRate:context:)
-            + focus/context capture                     (one POST sync.assemblyai.com/transcribe, X-AAI-Model: u3-sync-pro)
+            + focus/context capture                     (one POST dictation.assemblyai.com/transcribe: STT + LLM rewrite)
             + connection warm-up                        KeyInjector.insert(text, after: priorText)
                                                         (clipboard paste via synthesized ⌘V)
 ```
 
 Key properties of the design, which your integration can rely on:
 
-- **One request per utterance, no streaming.** The Sync API returns the complete transcript in the response body — no upload step, no job polling, no incremental deltas. `TranscriberProtocol.transcribe` is a single `async throws -> String`. UIs should show a "transcribing…" state and then the whole result; there is nothing to stream.
-- **Cleanup happens server-side.** The per-utterance `config.prompt` (built by `TranscriptionPrompt` from the captured context) rides along with the request, so the transcript comes back already polished. There is no separate LLM pass, no styling stage, and deliberately no hook for one — adjust the prompt instead.
+- **One request per utterance, no streaming.** The dictation API returns the complete transcript — and its LLM-rewritten form — in the response body: no upload step, no job polling, no incremental deltas, no second request for the cleanup. `TranscriberProtocol.transcribe` is a single `async throws -> String`. UIs should show a "transcribing…" state and then the whole result; there is nothing to stream.
+- **Cleanup happens server-side.** The request's empty `llm` block asks the service for its default cleanup rewrite (remove disfluencies, fix punctuation), applied to the verbatim transcript inside the same call; the per-utterance `config.prompt` (built by `TranscriptionPrompt` from the captured context) primes the *transcription*. The engine pastes `llm_response`, falling back to the verbatim `text` when the best-effort rewrite failed (`llm_error`) — a degradation, never a user-facing error. There is no client-side LLM pass, no styling stage, and deliberately no hook for one.
 - **Latency is pre-paid where possible.** `press()` fires a detached `warmUp()` at the transcriber (pre-opening the HTTPS connection while the user speaks, ~170 ms saved cold) and kicks off the cross-process accessibility read of the focused field without awaiting it — the read is then consumed at transcribe time with a bounded wait (`DictationSession.contextWaitBudget`, 500 ms), so an unresponsive frontmost app costs the transcript its priming, never a multi-second stall — and never delays the recording indicator. On the way out, `release()` flips the phase to `.transcribing` _before_ reading the recorded audio back, so a host's stop cue fires at key-up rather than after the disk read.
-- **A held trigger auto-releases.** `DictationSession` stops recording after `maxRecordingSeconds` (default `SyncSTTLimits.autoReleaseSeconds`, 115 s) so audio never exceeds what the Sync endpoint accepts, and transcribes what it has. Clips shorter than `SyncSTTLimits.minPCMBytes` (~100 ms of audio — an accidental tap) are dropped as a silent no-op rather than sent to earn a 400.
+- **A held trigger auto-releases.** `DictationSession` stops recording after `maxRecordingSeconds` (default `SyncSTTLimits.autoReleaseSeconds`, 115 s) so audio never exceeds what the endpoint accepts, and transcribes what it has. Clips shorter than `SyncSTTLimits.minPCMBytes` (~100 ms of audio — an accidental tap) are dropped as a silent no-op rather than sent to earn a 400.
 
 ## DictationSession
 
@@ -101,7 +101,7 @@ Failures surface as `PipelinePhase.failed(BlurtError)`:
 | `.apiKeyMissing`                                                  | No AssemblyAI key stored — point the user at your key-entry UI. With a key-presence `readinessCheck`, this surfaces at press time, before any recording.          |
 | `.microphonePermissionDenied` / `.accessibilityPermissionMissing` | Permission gaps; `PermissionsChecker` has openers for the right Settings panes.                                                                                   |
 | `.audioCaptureFailed(underlying:)`                                | The mic couldn't start, or captured audio couldn't be processed.                                                                                                  |
-| `.sttFailed(underlying:)`                                         | The Sync request failed; the underlying error carries the HTTP status and the server's message when available.                                                    |
+| `.sttFailed(underlying:)`                                         | The dictation request failed; the underlying error carries the HTTP status and the server's message when available.                                               |
 | `.targetAppLost` / `.noEditableTarget`                            | Paste-side outcomes. When thrown by `KeyInjector` the transcript is already on the clipboard, and the session degrades them to `.noTarget` rather than a failure. |
 
 All cases are `LocalizedError` with user-ready `errorDescription` strings, and `BlurtError` is `Equatable` (wrapped errors compare by NSError domain + code), so phase equality is test-friendly.
@@ -121,7 +121,7 @@ func warmUp() async                     // pre-open the device; default: no-op
 
 Only `start()`/`stop()` must be implemented — `levels` and `warmUp()` have defaults, so a stub or headless capture conforms for free while hosts still read the meter and warm the device through the same seam they inject.
 
-`MicCapture` records with `AVAudioRecorder` straight to a temp 16 kHz / mono / 16-bit PCM WAV — exactly the geometry the Sync API wants — and reads it back as raw S16LE bytes on `stop()` (no float detour; the blob uploads as-is). A **fresh recorder per session** resolves the current default input device at `record()` time, which is why device switches (headset ↔ built-in) just work. Do **not** replace this with a long-lived `AVAudioEngine`/`installTap` graph: that design was tried, bound itself to one device, and failed with `-10868` or all-zero buffers on device switches.
+`MicCapture` records with `AVAudioRecorder` straight to a temp 16 kHz / mono / 16-bit PCM WAV — exactly the geometry the dictation API wants — and reads it back as raw S16LE bytes on `stop()` (no float detour; the blob uploads as-is). A **fresh recorder per session** resolves the current default input device at `record()` time, which is why device switches (headset ↔ built-in) just work. Do **not** replace this with a long-lived `AVAudioEngine`/`installTap` graph: that design was tried, bound itself to one device, and failed with `-10868` or all-zero buffers on device switches.
 
 `MicCapture`'s `levels` is a ~30 Hz meter of the recorder's dBFS power mapped to `0…1` (floored at −50 dBFS so room ambient reads as silence) — feed it to a voice-bars view; it costs nothing when unobserved. Its `warmUp()` pre-creates and prepares a recorder so the first `start()` skips hardware route discovery (Blurt calls it at launch, once mic permission is granted, so warming never triggers the permission prompt).
 
@@ -132,9 +132,9 @@ func transcribe(pcm: Data, sampleRate: Int, context: TranscriptionContext?) asyn
 func warmUp() async   // optional; no-op default
 ```
 
-`AssemblyAITranscriber` is a stateless `Sendable` struct. One `POST https://sync.assemblyai.com/transcribe` per utterance: the audio as raw S16LE PCM (the `pcm` blob, byte-for-byte) in the `audio` multipart part, plus a JSON `config` part (`sample_rate`, `channels`, and the rendered `prompt`), with `X-AAI-Model: u3-sync-pro` and the API key in `Authorization`. Its initializer takes an `apiKeyProvider` closure (defaults to `APIKeyStore.get`), a `baseURL`, and an `HTTPTransport` — inject a fake transport (see `Tests/BlurtEngineTests/Stubs/FakeHTTPTransport.swift`) to test against canned responses. `warmUp()` fires a throwaway GET at the host root to pre-pool the connection; it never throws and any failure just means the real request pays connection setup as before.
+`AssemblyAITranscriber` is a stateless `Sendable` struct. One `POST https://dictation.assemblyai.com/transcribe` per utterance: the audio as raw S16LE PCM (the `pcm` blob, byte-for-byte) in the `audio` multipart part, plus a JSON `config` part (`sample_rate`, `channels`, the rendered `prompt`, and an empty `llm` block requesting the service's default cleanup rewrite), with the API key in `Authorization` (no model header — the service pins the STT model server-side). The response carries the verbatim `text` and the rewritten `llm_response`; the transcriber returns the rewrite and falls back to `text` when it is null (the rewrite is best-effort — `llm_error` is logged, never surfaced as a failure). Its initializer takes an `apiKeyProvider` closure (defaults to `APIKeyStore.get`), a `baseURL`, and an `HTTPTransport` — inject a fake transport (see `Tests/BlurtEngineTests/Stubs/FakeHTTPTransport.swift`) to test against canned responses. `warmUp()` fires a throwaway GET at the host root to pre-pool the connection; it never throws and any failure just means the real request pays connection setup as before.
 
-The model's limits live in `SyncSTTLimits` (16 kHz sample rate, ~0.1 s–120 s audio, and the auto-release math) — the single source shared by the mic, the session, and the request so recorded and declared geometry can't drift.
+The model's limits live in `SyncSTTLimits` (16 kHz sample rate, ~0.1 s–120 s audio, and the auto-release math — the sync STT model behind the dictation service) — the single source shared by the mic, the session, and the request so recorded and declared geometry can't drift.
 
 ### `InjectorProtocol` → `KeyInjector`
 
@@ -152,7 +152,7 @@ The session calls `setTargetApp` at press time with the app that was frontmost w
 Recognition quality comes from per-utterance priming, assembled automatically inside `press()` — hosts don't call these APIs directly, but should know what's collected:
 
 - **`TranscriptionContext`** carries the frontmost app name, window title, focused-field label, the text before the caret, the selected text (which a paste will replace), and the user's key terms. It's captured via Accessibility at press time (skipped in secure fields), off the hot path — and consumed at transcribe time with a bounded wait (`DictationSession.contextWaitBudget`), so a hung read is abandoned rather than stalling the transcript.
-- **`TranscriptionPrompt.build(context:)`** renders that into the Sync request's `config.prompt`, opening with the fixed `baseInstruction` ("Transcribe without speaker labels, audio event descriptions, or emotion markers.") and staying under the API's 4096-character cap. An empty context yields `nil`, which omits the field so the server applies its own default. Two deliberate omissions, both regression-tested: no language directive (pinning to English hurt non-English speech) and no "remove filler words" clause (not in the model's trained instruction set — a no-op). Don't reintroduce either.
+- **`TranscriptionPrompt.build(context:)`** renders that into the dictation request's `config.prompt` (transcription steering only — the cleanup rewrite is the separate `llm` block), opening with the fixed `baseInstruction` ("Transcribe without speaker labels, audio event descriptions, or emotion markers.") and staying under the API's 4096-character cap. An empty context yields `nil`, which omits the field so the server applies its own default. Two deliberate omissions, both regression-tested: no language directive (pinning to English hurt non-English speech) and no "remove filler words" clause (not in the model's trained instruction set — a no-op). Don't reintroduce either.
 - **`KeyTermsStore`** persists the user's domain vocabulary (names, jargon) in `UserDefaults`; `DictationSession` re-reads it at every press via its `keyTermsProvider` closure, so Settings edits apply to the next utterance without rebuilding the session. Pass your own provider to source terms from elsewhere.
 
 For key storage, compose against **`APIKeyGateway`** — the injectable get/set/`hasKey` seam over the key store. `ProductionAPIKeyStore` forwards to the Keychain-backed `APIKeyStore`; `InMemoryAPIKeyStore` is a ready-made in-memory conformance for tests and harnesses (Blurt's XCUITest runs use it so the real Keychain item is never touched, and its `hasKey` backs the session's `readinessCheck`). For a settings UI, **`APIKeySubmission`** wraps the gateway with the validate-then-save flow (`submit(_:)` → valid / invalid / unreachable / saveFailed, via `APIKeyValidator`): it saves only a key AssemblyAI actively accepts, so an unverified key never persists.
@@ -192,7 +192,7 @@ Run `swift test` for the engine suites (`--filter DictationSessionTests` for one
 Each of these was tried the other way and reverted; the longer stories are in [AGENTS.md](AGENTS.md) and the source comments:
 
 - **No external SPM dependencies in the engine.** Foundation/Security/AVFoundation only.
-- **No streaming STT, no local models, no separate LLM cleanup pass.** One Sync request per utterance is the architecture; cleanup belongs in `TranscriptionPrompt`.
+- **No streaming STT, no local models, no client-side LLM cleanup pass.** One dictation request per utterance is the architecture; the cleanup rewrite is server-side (the request's `llm` block), and transcription steering belongs in `TranscriptionPrompt`.
 - **No `AVAudioEngine`/`installTap` capture path.** Fresh `AVAudioRecorder` per session, resolved at record time.
 - **Paste is always clipboard-based** (save → write → ⌘V → settle → restore), with the copied-to-clipboard degradation for lost targets.
 - **No English-pinning or filler-word clauses in the prompt.**

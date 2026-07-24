@@ -5,7 +5,7 @@ import os
 // the press-time context read — split from `DictationSession.swift` to stay
 // within the lint file-length budget, like `+Commands` and `+Observation`.
 extension DictationSession {
-  /// Sample rate the mic delivers and the Sync request declares (`SyncSTTLimits`).
+  /// Sample rate the mic delivers and the dictation request declares (`SyncSTTLimits`).
   private static let captureSampleRate = SyncSTTLimits.sampleRate
 
   /// The longest `runTranscribeInject` waits for the press-time AX
@@ -19,12 +19,12 @@ extension DictationSession {
   static let contextWaitBudget: Duration = .milliseconds(500)
 
   func runTranscribeInject(pcm: Data) async {
-    // Times the full post-release hot path — Sync STT round trip plus the paste
+    // Times the full post-release hot path — dictation round trip plus the paste
     // (including the clipboard settle) — across every exit (short-clip no-op,
     // empty transcript, failure, cancel, or a completed paste).
     let pipelineInterval = Self.signposter.beginInterval(Self.pipelineSignpostName)
     defer { Self.signposter.endInterval(Self.pipelineSignpostName, pipelineInterval) }
-    // A clip too short for the Sync model (an accidental brief tap) would only
+    // A clip too short for the STT model (an accidental brief tap) would only
     // earn a 400 — drop it as a silent no-op, like an empty transcript, rather
     // than calling the API and surfacing an error.
     guard pcm.count >= SyncSTTLimits.minPCMBytes else {
@@ -45,8 +45,8 @@ extension DictationSession {
     }
     contextStream = nil
 
-    // The Sync STT API applies the cleanup prompt server-side, so the transcript
-    // it returns is already the final, polished text — there is no separate
+    // The dictation API runs the cleanup rewrite server-side, so the text it
+    // returns is already the final, polished text — there is no client-side
     // styling pass.
     guard let text = await transcribe(pcm: pcm) else { return }
 
@@ -90,7 +90,7 @@ extension DictationSession {
     }
   }
 
-  /// Runs the single Sync STT request. Returns the transcript, or nil if it
+  /// Runs the single dictation request. Returns the transcript, or nil if it
   /// failed (phase set to `.failed`).
   private func transcribe(pcm: Data) async -> String? {
     do {

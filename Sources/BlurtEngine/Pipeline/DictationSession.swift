@@ -30,8 +30,8 @@ public actor DictationSession {
   /// rebuilding the session. Defaults to reading `KeyTermsStore`.
   private let keyTermsProvider: @Sendable () -> [String]
   /// Auto-releases the hotkey after this long so a held key can't run forever.
-  /// Defaults to just under the AssemblyAI Sync STT audio cap (see
-  /// `SyncSTTLimits`) — recording past it would only produce audio the sync
+  /// Defaults to just under the dictation API's audio cap (see
+  /// `SyncSTTLimits`) — recording past it would only produce audio the
   /// endpoint rejects, so we stop early and transcribe what we have.
   private let maxRecordingSeconds: Double
   /// Clock the auto-release timer and the context-wait budget (`+Pipeline`)
@@ -162,7 +162,7 @@ public actor DictationSession {
     // mutually exclusive).
     let pressInterval = Self.signposter.beginInterval(Self.pressSignpostName)
     do {
-      // Pre-open the Sync connection while the user speaks, so the first dictation after an idle
+      // Pre-open the dictation connection while the user speaks, so the first dictation after an idle
       // gap doesn't pay DNS+TCP+TLS on the transcribe hot path (~170 ms cold, measured). Detached
       // + fire-and-forget: it must never delay recording, and a failure is harmless (the request
       // just pays setup as before); warming every press is cheap since a hot pool just reuses it.

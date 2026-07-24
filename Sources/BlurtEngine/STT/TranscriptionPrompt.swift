@@ -1,5 +1,5 @@
-/// Builds the instruction sent to AssemblyAI's Sync STT API as the `prompt`
-/// field of the request `config` (see `AssemblyAITranscriber`). The Sync model
+/// Builds the instruction sent to the dictation API as the `prompt`
+/// field of the request `config` (see `AssemblyAITranscriber`). The STT model
 /// prepends this to its own system prompt.
 ///
 /// Every built prompt opens with a fixed `baseInstruction` — a plain-text
@@ -42,13 +42,13 @@ enum TranscriptionPrompt {
   static let baseInstruction =
     "Transcribe without speaker labels, audio event descriptions, or emotion markers."
 
-  /// Hard cap the Sync API places on `config.prompt`; a longer prompt fails
+  /// Hard cap the API places on `config.prompt`; a longer prompt fails
   /// the whole request, so `build` must never exceed it. The contextual blocks
   /// are all clipped upstream in `FocusCapture`; the user's key terms are the
   /// one unbounded input, so `build` fits them to whatever budget remains.
   static let characterCap = 4096
 
-  /// Renders `context` into a Sync STT prompt, or `nil` when there is no usable
+  /// Renders `context` into a transcription prompt, or `nil` when there is no usable
   /// context (the server then applies its own default prompt).
   static func build(context: TranscriptionContext?) -> String? {
     guard let context else { return nil }
