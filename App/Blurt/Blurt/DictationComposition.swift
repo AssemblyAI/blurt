@@ -12,7 +12,7 @@ struct DictationComponents {
   let transcriber: any TranscriberProtocol
   let injector: any InjectorProtocol
 
-  /// The real pipeline: a fresh `MicCapture`, the AssemblyAI Sync transcriber,
+  /// The real pipeline: a fresh `MicCapture`, the AssemblyAI dictation transcriber,
   /// and the clipboard-paste injector. This is what `AppCoordinator` builds, so
   /// production behavior is unchanged by the test seam existing.
   static func production() -> DictationComponents {

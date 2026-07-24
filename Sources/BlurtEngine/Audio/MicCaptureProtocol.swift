@@ -4,7 +4,7 @@ public protocol MicCaptureProtocol: Sendable {
   /// Begin capturing 16 kHz mono 16-bit PCM. Throws on permission/device failure.
   func start() async throws
   /// Stop capture and return the captured audio as raw S16LE PCM bytes — the
-  /// exact encoding the Sync STT request uploads, so no conversion pass sits on
+  /// exact encoding the dictation request uploads, so no conversion pass sits on
   /// the release hot path. Throws if the captured audio couldn't be read back,
   /// so the pipeline can surface an error instead of silently dropping speech.
   func stop() async throws -> Data

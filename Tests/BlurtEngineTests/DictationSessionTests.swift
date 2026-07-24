@@ -20,7 +20,7 @@ struct DictationSessionTests {
 extension DictationSessionTests {
   @Test("happy path: press → release → transcribe → inject")
   func happyPath() async throws {
-    // The Sync API returns the already-cleaned transcript in one response.
+    // The dictation API returns the already-cleaned text in one response.
     let fixture = makeSession(mode: .transcript("Hello world."))
 
     await fixture.session.press()
@@ -38,7 +38,7 @@ extension DictationSessionTests {
   func tooShortClipNoOps() async throws {
     let fixture = makeSession(mode: .transcript("should not be used"))
     // Below SyncSTTLimits.minPCMBytes (3200 at 16 kHz) — an accidental brief
-    // tap the Sync endpoint would reject with a 400.
+    // tap the endpoint would reject with a 400.
     await fixture.mic.setPCM(Data(count: 6))
 
     await fixture.session.press()
@@ -120,7 +120,7 @@ extension DictationSessionTests {
 
   @Test("empty transcript returns to idle without injecting")
   func emptyTranscriptReturnsToIdle() async throws {
-    // Sync API yielded only whitespace (e.g. silence) — nothing to inject.
+    // The API yielded only whitespace (e.g. silence) — nothing to inject.
     let fixture = makeSession(mode: .transcript("   "))
 
     await fixture.session.press()
