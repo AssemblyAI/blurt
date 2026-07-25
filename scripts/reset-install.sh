@@ -49,7 +49,7 @@ defaults delete "$BUNDLE_ID" 2>/dev/null || true
 # keychain service is `BlurtIdentity.subsystem` (used by APIKeyStore,
 # Sources/BlurtEngine/Config/APIKeyStore.swift) — the lowercase bundle id to
 # match macOS convention. Must match that constant.
-KEYCHAIN_SERVICE="dev.alex.blurt"
+KEYCHAIN_SERVICE="$BUNDLE_ID"
 KEYCHAIN_ACCOUNT="AssemblyAIAPIKey"
 echo "==> Deleting AssemblyAI API key from Keychain ($KEYCHAIN_SERVICE / $KEYCHAIN_ACCOUNT)"
 security delete-generic-password -s "$KEYCHAIN_SERVICE" -a "$KEYCHAIN_ACCOUNT" >/dev/null 2>&1 || true

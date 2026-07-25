@@ -172,12 +172,11 @@
 
   // MARK: - Harness window
 
-  /// The test harness window. It exposes buttons that drive the same pipeline
-  /// the hotkey would (`AppCoordinator.beginDictation`/`…end`/`…cancel`), a
-  /// field to set the canned
-  /// transcript, and read-outs for the live pipeline status and the last
-  /// "pasted" text — everything the XCUITest suite needs to observe the
-  /// record → transcribe → paste flow deterministically.
+  /// The test harness window. It exposes buttons that drive the same
+  /// `DictationSession` the hotkey would (`press`/`release`/`cancel`) and
+  /// read-outs for the live pipeline status and the last "pasted" text —
+  /// everything the XCUITest suite needs to observe the record → transcribe →
+  /// paste flow deterministically.
   struct UITestHarnessView: View {
     var appDelegate: AppDelegate
     @Environment(\.openWindow) private var openWindow
@@ -200,11 +199,11 @@
         HStack(spacing: 8) {
           Button("Set API Key") { coordinator?.apiKey.save(UITestIdentifiers.validAPIKey) }
             .accessibilityIdentifier(UITestIdentifiers.setKeyButton)
-          Button("Start") { Task { await coordinator?.beginDictation() } }
+          Button("Start") { Task { await coordinator?.session.press() } }
             .accessibilityIdentifier(UITestIdentifiers.startButton)
-          Button("Stop") { Task { await coordinator?.endDictation() } }
+          Button("Stop") { Task { await coordinator?.session.release() } }
             .accessibilityIdentifier(UITestIdentifiers.stopButton)
-          Button("Cancel") { Task { await coordinator?.cancelDictation() } }
+          Button("Cancel") { Task { await coordinator?.session.cancel() } }
             .accessibilityIdentifier(UITestIdentifiers.cancelButton)
         }
 

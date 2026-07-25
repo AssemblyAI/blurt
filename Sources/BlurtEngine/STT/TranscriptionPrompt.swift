@@ -51,17 +51,17 @@ enum TranscriptionPrompt {
   /// Renders `context` into a Sync STT prompt, or `nil` when there is no usable
   /// context (the server then applies its own default prompt).
   static func build(context: TranscriptionContext?) -> String? {
-    guard let context else { return nil }
+    // `isEmpty` is the context type's own "no usable content" rule — the same
+    // predicate `DictationSession.performPress` gates on before yielding a
+    // context. Asking it here (rather than re-deriving the field-by-field test)
+    // keeps a newly added context signal from being silently dropped.
+    guard let context, !context.isEmpty else { return nil }
     let prior = context.priorText.trimmedNonEmpty() ?? ""
     let selected = context.selectedText.trimmedNonEmpty() ?? ""
     let app = context.appName.trimmedNonEmpty() ?? ""
     let window = context.windowTitle.trimmedNonEmpty() ?? ""
     let field = context.fieldLabel.trimmedNonEmpty() ?? ""
     let keyTerms = context.keyTerms
-    guard
-      !prior.isEmpty || !selected.isEmpty || !app.isEmpty || !window.isEmpty || !field.isEmpty
-        || !keyTerms.isEmpty
-    else { return nil }
 
     // `baseInstruction` is the pivot of the trained format. Contextual priming
     // sits *before* it; keyword boosting trails *after* it. The leading blocks,

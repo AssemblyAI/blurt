@@ -105,7 +105,7 @@ public actor MicCapture: MicCaptureProtocol {
     let pcm = try Self.decodePCM(fromFileAt: url)
 
     let sampleCount = pcm.count / SyncSTTLimits.bytesPerSample
-    let durationMs = Int((Double(sampleCount) / Self.targetSampleRate) * 1000)
+    let durationMs = SyncSTTLimits.durationMs(ofPCMBytes: pcm.count)
     Self.logger.info("stop samples=\(sampleCount) durationMs=\(durationMs)")
     return pcm
   }
@@ -139,7 +139,7 @@ public actor MicCapture: MicCaptureProtocol {
       while !Task.isCancelled {
         // Rebound per iteration so the actor stays releasable across the sleep.
         // Bail when it's gone: deinit doesn't cancel this task, so the weak
-        // capture is what stops an orphaned meter from spinning at ~30 Hz for
+        // capture is what stops an orphaned meter from spinning at ~20 Hz for
         // the rest of the process if a capture is dropped without stop().
         guard let self else { return }
         await self.emitLevel()

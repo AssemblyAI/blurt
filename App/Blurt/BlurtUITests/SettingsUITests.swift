@@ -12,7 +12,7 @@ final class SettingsUITests: BlurtUITestCase {
     let field = settings.secureTextFields[UITestIdentifiers.apiKeyField]
     XCTAssertTrue(field.waitForExistence(timeout: 10), "API key field not found")
     field.click()
-    field.typeText("a-valid-looking-key")
+    field.typeText(UITestIdentifiers.validAPIKey)
 
     settings.buttons[UITestIdentifiers.apiKeySave].click()
 
@@ -92,8 +92,7 @@ final class SettingsUITests: BlurtUITestCase {
     let settings = openSettingsWindow()
     let advanced = selectSettingsTab(settings, named: UITestIdentifiers.advancedSettingsTab)
 
-    let toggle = advanced.descendants(matching: .any)
-      .matching(identifier: UITestIdentifiers.developerToggle).firstMatch
+    let toggle = advanced.anyDescendant(identified: UITestIdentifiers.developerToggle)
     XCTAssertTrue(toggle.waitForExistence(timeout: 10), "Developer mode toggle not found")
     XCTAssertEqual("\(toggle.value ?? "")", "0", "Developer mode should start switched off")
 
@@ -110,8 +109,7 @@ final class SettingsUITests: BlurtUITestCase {
     let settings = openSettingsWindow()
     let advanced = selectSettingsTab(settings, named: UITestIdentifiers.advancedSettingsTab)
 
-    let button = advanced.descendants(matching: .any)
-      .matching(identifier: UITestIdentifiers.updateCheck).firstMatch
+    let button = advanced.anyDescendant(identified: UITestIdentifiers.updateCheck)
     XCTAssertTrue(button.waitForExistence(timeout: 10), "Check for Updates button not found")
     button.click()
 
@@ -131,7 +129,7 @@ final class SettingsUITests: BlurtUITestCase {
     let field = settings.secureTextFields[UITestIdentifiers.apiKeyField]
     XCTAssertTrue(field.waitForExistence(timeout: 10), "API key field not found")
     field.click()
-    field.typeText("a-valid-looking-key")
+    field.typeText(UITestIdentifiers.validAPIKey)
     settings.buttons[UITestIdentifiers.apiKeySave].click()
 
     let change = settings.buttons[UITestIdentifiers.apiKeyChange]
@@ -153,7 +151,7 @@ final class SettingsUITests: BlurtUITestCase {
     let field = settings.secureTextFields[UITestIdentifiers.apiKeyField]
     XCTAssertTrue(field.waitForExistence(timeout: 10), "API key field not found")
     field.click()
-    field.typeText("a-valid-looking-key")
+    field.typeText(UITestIdentifiers.validAPIKey)
     settings.buttons[UITestIdentifiers.apiKeySave].click()
 
     let change = settings.buttons[UITestIdentifiers.apiKeyChange]

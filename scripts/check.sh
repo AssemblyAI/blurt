@@ -43,6 +43,20 @@ MIN_COVERAGE=80
 
 export OS_ACTIVITY_MODE=disable
 
+# Guard for the optional linters below: true when $1 is on PATH, otherwise emits
+# the standard skip note (with install hint $2) and returns false. On success it
+# also cds to REPO_ROOT, because every one of those checks runs from the repo
+# root — so wiring up a new tool can't forget either half. Use as:
+#   if tool_ready prettier 'brew install prettier'; then … fi
+tool_ready() {
+  if command -v "$1" >/dev/null 2>&1; then
+    cd "$REPO_ROOT"
+    return 0
+  fi
+  echo "note: $1 not installed; skipping ($2)"
+  return 1
+}
+
 # No-external-dependencies guard. The engine is dependency-free by rule and the
 # app carries only the local BlurtEngine package (see AGENTS.md). A third-party
 # dependency is the single biggest supply-chain risk, so fail the moment one is
@@ -122,14 +136,19 @@ else
   # shared mutable state at runtime — catching data races regardless of test
   # ordering (e.g. an unguarded global touched by parallel tests). Runs the
   # suite a second time against a TSan-instrumented build.
-  swift test --sanitize=thread -Xswiftc -warnings-as-errors
+  #
+  # Each sanitizer gets its own --scratch-path: the three passes compile with
+  # different swiftc flags, so sharing the default .build makes every pass
+  # invalidate the previous one's artifacts (and leaves .build poisoned for the
+  # next run's plain pass). Separate paths keep three warm incremental caches.
+  swift test --sanitize=thread --scratch-path "$REPO_ROOT/.build/tsan" -Xswiftc -warnings-as-errors
 
   echo "==> swift test --sanitize=address (memory-safety detection)"
   # AddressSanitizer catches use-after-free, buffer overflows, and other memory
   # corruption at runtime. (LeakSanitizer is unsupported on Darwin, so this does
   # NOT find retain-cycle leaks — those are covered by the weak-reference
   # assertions in MemoryLeakTests.swift.)
-  swift test --sanitize=address -Xswiftc -warnings-as-errors
+  swift test --sanitize=address --scratch-path "$REPO_ROOT/.build/asan" -Xswiftc -warnings-as-errors
 
   echo "==> xcodegen (App/Blurt)"
   cd "$APP_DIR"
@@ -212,9 +231,8 @@ else
   echo "note: swift-format not installed; skipping (Swift formatting is checked on CI)"
 fi
 
-if command -v swiftlint >/dev/null 2>&1; then
+if tool_ready swiftlint 'brew install swiftlint'; then
   echo "==> swiftlint"
-  cd "$REPO_ROOT"
   # Covers what swift-format can't: correctness smells and complexity limits
   # (config in the sibling .swiftlint.yml). --strict promotes warnings to
   # failures, so any lint violation fails the build — keep the tree lint-clean.
@@ -228,46 +246,34 @@ if command -v swiftlint >/dev/null 2>&1; then
     # OSLog are suppressed via always_keep_imports in .swiftlint.yml.
     swiftlint analyze --strict --quiet --compiler-log-path "$APP_BUILD_LOG"
   fi
-else
-  echo "note: swiftlint not installed; skipping (brew install swiftlint)"
 fi
 
 if [ "$PORTABLE" -eq 0 ]; then
-  if command -v periphery >/dev/null 2>&1; then
+  if tool_ready periphery 'brew install periphery'; then
     echo "==> periphery"
-    cd "$REPO_ROOT"
     # --strict promotes any unused-code finding to a non-zero exit.
     # Periphery does its own xcodebuild + index — separate from the build above
     # because reusing DerivedData reliably across machines is fragile.
     periphery scan --strict --quiet
-  else
-    echo "note: periphery not installed; skipping (brew install periphery)"
   fi
 fi
 
-if command -v actionlint >/dev/null 2>&1; then
+if tool_ready actionlint 'brew install actionlint'; then
   echo "==> actionlint"
-  cd "$REPO_ROOT"
   actionlint
-else
-  echo "note: actionlint not installed; skipping (brew install actionlint)"
 fi
 
-if command -v prettier >/dev/null 2>&1; then
+if tool_ready prettier 'brew install prettier'; then
   echo "==> prettier --check"
-  cd "$REPO_ROOT"
   # Formatting authority for the repo's non-Swift text: CI/config (yml/yaml),
   # docs (md), and the GitHub Pages site (html/css — which also covers the
   # JSON-LD embedded in site/index.html). JSON is intentionally left out of the
   # glob: the only non-conforming file is the Xcode-generated AppIcon icon.json,
   # which must not be reformatted by hand.
   prettier --check '**/*.{yml,yaml,md,html,css}'
-else
-  echo "note: prettier not installed; skipping (brew install prettier)"
 fi
 
-if command -v xmllint >/dev/null 2>&1; then
-  cd "$REPO_ROOT"
+if tool_ready xmllint 'ships with libxml2'; then
   # Prettier can't format XML without a plugin (and this repo has no JS toolchain
   # to add one), so libxml2's xmllint validates well-formedness instead — covers
   # the GitHub Pages sitemap. A parse error fails the check; --noout drops the
@@ -279,13 +285,10 @@ if command -v xmllint >/dev/null 2>&1; then
     # shellcheck disable=SC2086
     xmllint --noout $XML_FILES
   fi
-else
-  echo "note: xmllint not installed; skipping XML check (ships with libxml2)"
 fi
 
-if command -v markdownlint >/dev/null 2>&1; then
+if tool_ready markdownlint 'brew install markdownlint-cli'; then
   echo "==> markdownlint"
-  cd "$REPO_ROOT"
   # Structural lint for the repo's Markdown (config in .markdownlint.jsonc;
   # prose-wrapping rules are off there since prettier owns Markdown formatting).
   # CLAUDE.md is a short compatibility shim that points agents at AGENTS.md, so
@@ -293,18 +296,13 @@ if command -v markdownlint >/dev/null 2>&1; then
   # drafts) is excluded too — prose, not shipped source (also in .markdownlintignore;
   # filtered here as well since the file list is passed to markdownlint as args).
   git ls-files '*.md' | grep -vx 'CLAUDE.md' | grep -vE '^docs/' | xargs markdownlint
-else
-  echo "note: markdownlint not installed; skipping (brew install markdownlint-cli)"
 fi
 
-if command -v shellcheck >/dev/null 2>&1; then
+if tool_ready shellcheck 'brew install shellcheck'; then
   echo "==> shellcheck"
-  cd "$REPO_ROOT"
   # Static analysis for the project's shell scripts (release-*, check.sh
   # itself) — catches quoting bugs, unset vars, and unsafe patterns.
   shellcheck scripts/*.sh
-else
-  echo "note: shellcheck not installed; skipping (brew install shellcheck)"
 fi
 
 echo "==> release.sh unit tests"

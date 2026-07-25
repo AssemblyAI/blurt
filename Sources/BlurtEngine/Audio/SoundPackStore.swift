@@ -15,10 +15,7 @@ public struct SoundPackStore {
 
   public var soundPack: SoundPack {
     get {
-      guard let id = defaults.string(forKey: Self.defaultsKey),
-        let pack = SoundPack.find(id: id)
-      else { return .defaultPack }
-      return pack
+      SoundPack.fromPersisted(defaults.string(forKey: Self.defaultsKey))
     }
     nonmutating set {
       defaults.set(newValue.id, forKey: Self.defaultsKey)

@@ -12,14 +12,11 @@ struct DictationSessionSubmitTests {
 
   @Test("submit runs press → release in emit order through the full pipeline")
   func submitHappyPath() async throws {
-    let mic = StubMicCapture()
-    let stt = StubTranscriber(mode: .transcript("Hello world."))
-    let injector = StubInjector()
-    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+    let fixture = makeSession()
 
-    let stream = await session.phaseStream()
-    session.submit(.press)
-    session.submit(.release)
+    let stream = await fixture.session.phaseStream()
+    fixture.session.submit(.press)
+    fixture.session.submit(.release)
 
     var seen: [PipelinePhase] = []
     for await phase in stream {
@@ -31,44 +28,38 @@ struct DictationSessionSubmitTests {
 
     #expect(seen.contains(.recording))
     #expect(seen.last == .pasted)
-    #expect(await injector.inserted == ["Hello world."])
+    #expect(await fixture.injector.inserted == ["Hello world."])
   }
 
   @Test("submit(.cancel) after submit(.press) discards the capture in order")
   func submitCancelHonoredInOrder() async throws {
-    let mic = StubMicCapture()
-    let stt = StubTranscriber(mode: .transcript("never"))
-    let injector = StubInjector()
-    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+    let fixture = makeSession(mode: .transcript("never"))
 
-    let stream = await session.phaseStream()
+    let stream = await fixture.session.phaseStream()
     // The exact shape of the race `submit` exists to prevent: were each of
     // these a separately spawned Task, the cancel could overtake the press,
     // no-op on a still-idle session, and strand the recording.
-    session.submit(.press)
-    session.submit(.cancel)
+    fixture.session.submit(.press)
+    fixture.session.submit(.cancel)
 
     for await phase in stream where phase == .cancelled { break }
 
-    #expect(await session.phase == .cancelled)
-    #expect(await mic.stopCalls == 1)
-    #expect(await injector.inserted.isEmpty)
+    #expect(await fixture.session.phase == .cancelled)
+    #expect(await fixture.mic.stopCalls == 1)
+    #expect(await fixture.injector.inserted.isEmpty)
   }
 
   @Test("submit(.cancelRecording) tears down a live recording")
   func submitCancelRecording() async throws {
-    let mic = StubMicCapture()
-    let stt = StubTranscriber(mode: .transcript("never"))
-    let injector = StubInjector()
-    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+    let fixture = makeSession(mode: .transcript("never"))
 
-    let stream = await session.phaseStream()
-    session.submit(.press)
-    session.submit(.cancelRecording)
+    let stream = await fixture.session.phaseStream()
+    fixture.session.submit(.press)
+    fixture.session.submit(.cancelRecording)
 
     for await phase in stream where phase == .cancelled { break }
 
-    #expect(await session.phase == .cancelled)
-    #expect(await injector.inserted.isEmpty)
+    #expect(await fixture.session.phase == .cancelled)
+    #expect(await fixture.injector.inserted.isEmpty)
   }
 }

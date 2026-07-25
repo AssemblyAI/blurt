@@ -252,10 +252,20 @@ private struct RecentDictationRow: View {
 }
 
 private struct ReadyBrandingView: View {
+  /// Loaded once for the process rather than per `body` evaluation: this view
+  /// sits in `ReadyView`, whose body re-runs on every new dictation
+  /// (`recentDictations.entries`), and a bundle lookup plus a PNG decode is not
+  /// something to re-do on the main thread each time.
+  ///
+  /// `nonisolated(unsafe)` because `NSImage` isn't `Sendable`: this is a
+  /// let-constant assigned once from the bundle and only ever read, so there is no
+  /// mutable state to race on.
+  private nonisolated(unsafe) static let logo: NSImage? = Bundle.main
+    .url(forResource: "blurt-ready-logo", withExtension: "png")
+    .flatMap(NSImage.init(contentsOf:))
+
   var body: some View {
-    if let brandingURL,
-      let image = NSImage(contentsOf: brandingURL)
-    {
+    if let image = Self.logo {
       Image(nsImage: image)
         .interpolation(.none)
         .resizable()
@@ -275,10 +285,6 @@ private struct ReadyBrandingView: View {
       .accessibilityElement(children: .combine)
       .accessibilityLabel("Blurt is ready")
     }
-  }
-
-  private var brandingURL: URL? {
-    Bundle.main.url(forResource: "blurt-ready-logo", withExtension: "png")
   }
 }
 

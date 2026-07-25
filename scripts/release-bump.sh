@@ -19,14 +19,13 @@ NEW_VERSION="$1"
 is_semver "$NEW_VERSION" || die "version must be X.Y.Z (got: $NEW_VERSION)"
 
 step "Preflight"
-command -v xcodegen >/dev/null 2>&1 || die "missing required tool: xcodegen"
+require_tools xcodegen
 [ -f "$PROJECT_YML" ] || die "not found: $PROJECT_YML"
 
 require_clean_tree "bumping"
 
-CURRENT_VERSION="$(parse_short_version <"$PROJECT_YML")"
+CURRENT_VERSION="$(require_project_version "$PROJECT_YML")"
 CURRENT_BUILD="$(parse_bundle_version <"$PROJECT_YML")"
-[ -n "$CURRENT_VERSION" ] || die "could not parse CFBundleShortVersionString from $PROJECT_YML"
 [ -n "$CURRENT_BUILD" ] || die "could not parse CFBundleVersion from $PROJECT_YML"
 [[ "$CURRENT_BUILD" =~ ^[0-9]+$ ]] || die "CFBundleVersion is not an integer: $CURRENT_BUILD"
 

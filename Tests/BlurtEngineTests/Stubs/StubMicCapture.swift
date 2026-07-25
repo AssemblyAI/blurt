@@ -5,10 +5,7 @@ import Foundation
 actor StubMicCapture: MicCaptureProtocol {
   var startCalls = 0
   var stopCalls = 0
-  // Comfortably above `SyncSTTLimits.minPCMBytes` so the default press→release
-  // flow clears the too-short guard and reaches transcribe, tracking the engine
-  // rule so a raised floor can't silently start dropping the canned audio.
-  var pcmToReturn = Data(count: SyncSTTLimits.minPCMBytes * 2)
+  var pcmToReturn = StubPCM.aboveMinimum
   var startError: (any Error & Sendable)?
   var stopError: (any Error & Sendable)?
 

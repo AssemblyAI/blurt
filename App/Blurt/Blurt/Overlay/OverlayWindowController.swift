@@ -11,10 +11,17 @@ final class OverlayBridge {
   var level: Float = 0
 
   func pushLevel(_ value: Float) {
-    // `value` is already a fixed 0...1 scale from the recorder's dBFS meter
-    // (MicCapture.linearLevel) — store the latest as-is. (No auto-gain
-    // normalizing to a running peak: that stretched sustained speech to full.)
-    level = min(1, max(0, value))
+    // `value` arrives on the fixed 0...1 scale `MicCaptureProtocol.levels`
+    // documents (MicCapture.linearLevel). Clamp once here — the single seam where
+    // any capture implementation crosses into the view layer — so the bars can
+    // trust the range instead of re-checking it. (No auto-gain normalizing to a
+    // running peak: that stretched sustained speech to full.)
+    let clamped = min(1, max(0, value))
+    // @Observable invalidates on assignment, not on change, and `linearLevel` is
+    // floored so room ambient maps to exactly 0 — without this guard every silent
+    // tick would rebuild the whole bar row 20×/s with an unchanged value.
+    guard clamped != level else { return }
+    level = clamped
   }
 }
 

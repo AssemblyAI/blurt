@@ -9,7 +9,7 @@ private enum OverlayBrandPalette {
 struct OverlayView: View {
   // The single source of pill state. The live mic level is *not* read in this
   // body: that would rebuild the whole pill (capsule, shadow, REC tag) on
-  // every ~30 Hz meter tick. Only `bridge.state` is read here (via `state`
+  // every ~20 Hz meter tick. Only `bridge.state` is read here (via `state`
   // below); the leaf bar view (`WaveformBarsLevel`) reads `bridge.level`, so
   // @Observable confines the per-tick invalidation to the bars — the rest of
   // the pill stays stable.
@@ -176,6 +176,31 @@ private struct StatusLineText: View {
   }
 }
 
+/// Redraw cap for the pill's continuous animations — the REC dot's pulse, the
+/// "Transcribing…" breath, and the waveform's idle wave. Matched to the mic
+/// meter's cadence (`MicCapture.meterInterval`, 20 Hz): the level feed and these
+/// slow sines can't show anything faster, so rendering at the display's full
+/// refresh rate (up to 120 Hz on ProMotion) would only burn energy.
+private let overlayAnimationInterval: Double = 1.0 / 20.0
+
+extension View {
+  /// Raised-cosine opacity breathing over `period`: 1 → `minOpacity` → 1, so the
+  /// view eases through the dim point instead of bouncing off it. Shared by the
+  /// REC dot and the "Transcribing…" label so the pill's two heartbeats stay one
+  /// curve. With `animated` false (Reduce Motion) the view renders untouched.
+  @ViewBuilder
+  func pulsingOpacity(period: Double, minOpacity: Double, animated: Bool) -> some View {
+    if animated {
+      TimelineView(.animation(minimumInterval: overlayAnimationInterval)) { timeline in
+        let osc = (cos(timeline.date.timeIntervalSinceReferenceDate / period * 2 * .pi) + 1) / 2  // 0...1
+        self.opacity(minOpacity + (1 - minOpacity) * osc)
+      }
+    } else {
+      self
+    }
+  }
+}
+
 /// The "Transcribing…" status line with a slow breathing pulse — the processing
 /// counterpart of the recording bars' idle shimmer, so the pill keeps visibly
 /// working while the app waits on the Sync API and pastes the result. Driven by
@@ -195,29 +220,13 @@ private struct TranscribingLabel: View {
   private let minOpacity: Double = 0.55
 
   var body: some View {
-    if animated {
-      // ~20 Hz is plenty for a 1.8 s opacity ramp — rendering at the display's
-      // full refresh rate would only burn energy (same reasoning as the 30 Hz
-      // cap on WaveformBars).
-      TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { timeline in
-        label.opacity(breathOpacity(at: timeline.date.timeIntervalSinceReferenceDate))
-      }
-    } else {
-      label
-    }
+    label.pulsingOpacity(period: breathPeriod, minOpacity: minOpacity, animated: animated)
   }
 
   // Shared with the "Pasted" notice (OverlayView's `.pasted` case) so the
   // processing → pasted hand-off reads as one status line.
   private var label: some View {
     StatusLineText("Transcribing…")
-  }
-
-  /// Raised cosine over `breathPeriod`: 1 → `minOpacity` → 1, so the label
-  /// eases through the dim point instead of bouncing off it.
-  private func breathOpacity(at time: TimeInterval) -> Double {
-    let osc = (cos(time / breathPeriod * 2 * .pi) + 1) / 2  // 0...1
-    return minOpacity + (1 - minOpacity) * osc
   }
 }
 
@@ -250,15 +259,8 @@ private struct RecordingTag: View {
   }
 
   /// The magenta record dot, breathing while recording.
-  @ViewBuilder private var dot: some View {
-    if animated {
-      // ~20 Hz is plenty for a 1.2 s opacity ramp (same cap as WaveformBars).
-      TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { timeline in
-        circle.opacity(pulseOpacity(at: timeline.date.timeIntervalSinceReferenceDate))
-      }
-    } else {
-      circle
-    }
+  private var dot: some View {
+    circle.pulsingOpacity(period: pulsePeriod, minOpacity: minOpacity, animated: animated)
   }
 
   private var circle: some View {
@@ -266,16 +268,9 @@ private struct RecordingTag: View {
       .fill(OverlayBrandPalette.magenta)
       .frame(width: 5, height: 5)
   }
-
-  /// Raised cosine over `pulsePeriod`: 1 → `minOpacity` → 1, easing through the
-  /// dim point instead of bouncing off it (matches TranscribingLabel).
-  private func pulseOpacity(at time: TimeInterval) -> Double {
-    let osc = (cos(time / pulsePeriod * 2 * .pi) + 1) / 2  // 0...1
-    return minOpacity + (1 - minOpacity) * osc
-  }
 }
 
-/// The only view that reads `bridge.level`, so @Observable scopes the ~30 Hz
+/// The only view that reads `bridge.level`, so @Observable scopes the ~20 Hz
 /// meter invalidation to this leaf (and its `WaveformBars` child) instead of the
 /// enclosing `OverlayView`. `WaveformBars` stays a pure value view — easy to
 /// reason about and drive from a fixed level — with the observation isolated
@@ -331,11 +326,8 @@ private struct WaveformBars: View {
       Group {
         if animated {
           // Continuous clock so the idle breathing is smooth and never depends
-          // on a one-shot state toggle. Capped at ~20 Hz to match the mic meter
-          // (MicCapture.meterInterval) — the level feed and the slow breathing
-          // sine can't show anything faster, so rendering at the display's full
-          // refresh rate (up to 120 Hz on ProMotion) would only burn energy.
-          TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { timeline in
+          // on a one-shot state toggle; capped at `overlayAnimationInterval`.
+          TimelineView(.animation(minimumInterval: overlayAnimationInterval)) { timeline in
             row(count: count, maxBarHeight: maxBarHeight, time: timeline.date.timeIntervalSinceReferenceDate)
           }
         } else {
@@ -361,7 +353,7 @@ private struct WaveformBars: View {
     let weight = envelopeWeight(index, count: count)
     // Voice-driven height: the current level, gamma-shaped, scaled by this bar's
     // envelope weight so the middle leads.
-    let voice = pow(CGFloat(max(0, min(1, level))), levelGamma) * weight
+    let voice = pow(CGFloat(level), levelGamma) * weight
     var breath: CGFloat = 0
     // Full breathing when quiet, fading to none once the voice is moderate. Once
     // it's faded out (voice ≥ 0.25) the per-bar sine below would multiply to ~0,

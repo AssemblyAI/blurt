@@ -42,7 +42,7 @@ final class DictationPipelineUITests: BlurtUITestCase {
   }
 
   /// The same happy path driven through the harness's Start/Stop buttons, which
-  /// call the session directly (`beginDictation`/`endDictation`) rather than the
+  /// call the session directly (`press()`/`release()`) rather than the
   /// key tap. Complements the hotkey test above: it covers the direct-session
   /// seam the overlay/menu-bar affordances use, independent of the tap wiring.
   func testStartStopButtonsDriveRecordTranscribePaste() {
@@ -99,8 +99,8 @@ final class DictationPipelineUITests: BlurtUITestCase {
 
     let status = harness.staticTexts[UITestIdentifiers.statusLabel]
     // The pill lives on a separate floating panel, so search the whole app tree
-    // (not just the harness window) and match by identifier across element types.
-    let pill = app.descendants(matching: .any).matching(identifier: UITestIdentifiers.overlayPill).firstMatch
+    // rather than just the harness window.
+    let pill = app.anyDescendant(identified: UITestIdentifiers.overlayPill)
 
     harness.buttons[UITestIdentifiers.startButton].click()
     waitForLabel(status, equals: "recording", "Start should drive status to recording")

@@ -109,7 +109,7 @@ final class AppCoordinator {
   /// `submit(_:)` command feed (see its doc for the FIFO-ordering guarantee
   /// that rules out spawning a `Task {}` per callback). Drives the
   /// hold-to-dictate hotkey from a CGEventTap (see `DictationKeyTap`) rather
-  /// than a Carbon global hotkey: the latter leaks the chord's auto-repeat key
+  /// than a Carbon global hotkey: the latter leaks the trigger's auto-repeat key
   /// events into the focused app while held.
   private func startDictationDriver() {
     let session = session
@@ -191,33 +191,10 @@ final class AppCoordinator {
     overlay?.hide()
   }
 
-  // MARK: - Dictation drivers
-  //
-  // The await-able begin/end/cancel path used by the UI-test harness
-  // (`UITestSupport`). The key tap drives the same `DictationSession` through
-  // its synchronous `submit(_:)` feed, so both paths hit the same engine
-  // guards and race rules.
-
-  /// Begins a dictation as the hotkey would (the missing-key gate is the
-  /// session's `readinessCheck`; `render(_:)` routes the refusal to Settings).
-  func beginDictation() async {
-    await session.press()
-  }
-
-  /// Stops recording and runs transcribe→inject.
-  func endDictation() async {
-    await session.release()
-  }
-
-  /// Abandons the in-flight dictation.
-  func cancelDictation() async {
-    await session.cancel()
-  }
-
-  /// Called when the user rebinds (or clears) the dictation shortcut in the
-  /// recorder, so the event tap starts matching the new chord. The shortcut no
-  /// longer gates readiness (it has a default and lives in Settings), so there's
-  /// nothing else to re-evaluate here.
+  /// Called when the user rebinds the dictation trigger in the Shortcut picker,
+  /// so the event tap starts matching the new key. The shortcut no longer gates
+  /// readiness (it has a default and lives in Settings), so there's nothing else
+  /// to re-evaluate here.
   func dictationBindingChanged() {
     keyTap?.refreshBinding()
   }

@@ -295,10 +295,10 @@ enum FocusCapture {
       return false
     }
 
-    var roleRef: CFTypeRef?
-    let role =
-      AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleRef) == .success
-      ? roleRef as? String : nil
+    // Same checked reader `captureFieldContext` uses for this attribute, so the
+    // editability path and the secure-field path can't disagree about what a
+    // misbehaving app's role reads as.
+    let role = stringValue(element, kAXRoleAttribute)
 
     var settable = DarwinBoolean(false)
     let valueSettable =

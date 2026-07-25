@@ -7,31 +7,28 @@ import Testing
 /// shell that renders it has no test target).
 @Suite("PipelinePhase → MenuBarStatus")
 struct MenuBarStatusTests {
-  @Test func recordingMapsToRecording() {
-    #expect(PipelinePhase.recording.menuBarStatus == .recording)
-  }
-
-  @Test func transcribingMapsToTranscribing() {
-    #expect(PipelinePhase.transcribing.menuBarStatus == .transcribing)
-  }
-
-  @Test func idleMapsToIdle() {
-    #expect(PipelinePhase.idle.menuBarStatus == .idle)
-  }
-
-  @Test func injectingMapsToIdle() {
+  /// One row per `PipelinePhase` case. A table rather than a `@Test` apiece (the
+  /// precedent `DictationKeyGateTests` sets) so that adding a phase makes the
+  /// missing row visible here instead of leaving the mapping silently unpinned —
+  /// which is how `.noTarget` went uncovered. `.failed` keeps its own test below,
+  /// since its mapping encodes a deliberate policy rather than a coarser icon.
+  static let projections: [(phase: PipelinePhase, expected: MenuBarStatus)] = [
+    (.recording, .recording),
+    (.transcribing, .transcribing),
+    (.idle, .idle),
     // Injection happens silently; the indicator rests at idle through the brief
     // paste rather than showing a distinct state.
-    #expect(PipelinePhase.injecting.menuBarStatus == .idle)
-  }
-
-  @Test func cancelledMapsToIdle() {
-    #expect(PipelinePhase.cancelled.menuBarStatus == .idle)
-  }
-
-  @Test func pastedMapsToIdle() {
+    (.injecting, .idle),
+    (.cancelled, .idle),
     // The completed-paste notice lives on the pill; the menu bar stays idle.
-    #expect(PipelinePhase.pasted.menuBarStatus == .idle)
+    (.pasted, .idle),
+    // Likewise the "copied to clipboard" notice — pill only.
+    (.noTarget, .idle),
+  ]
+
+  @Test("each phase projects to its menu bar status", arguments: projections)
+  func phaseProjectsToMenuBarStatus(phase: PipelinePhase, expected: MenuBarStatus) {
+    #expect(phase.menuBarStatus == expected)
   }
 
   @Test func failedMapsToIdle() {

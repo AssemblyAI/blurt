@@ -14,11 +14,18 @@ public struct SoundPack: Sendable, Hashable, Identifiable {
   /// The "no sound" choice.
   public static let none = SoundPack(id: "none", label: "None", group: nil)
 
+  /// True for the `.none` pack — the one voice with no bundled cues and no synth
+  /// credit. A catalog entry always carries a `group` (its picker section), so its
+  /// absence is what marks the silent pack. Internal: the app asks via
+  /// `startFileName`/`stopFileName`, so exporting this would only trip
+  /// periphery's redundant-public check.
+  var isSilent: Bool { group == nil }
+
   /// Bundled cue stem for the start cue, or nil when no sound plays.
-  public var startFileName: String? { group == nil ? nil : "\(id)-start" }
+  public var startFileName: String? { isSilent ? nil : "\(id)-start" }
 
   /// Bundled cue stem for the stop cue, or nil when no sound plays.
-  public var stopFileName: String? { group == nil ? nil : "\(id)-stop" }
+  public var stopFileName: String? { isSilent ? nil : "\(id)-stop" }
 
   /// The synth this voice comes from, for the ready-screen credit, e.g.
   /// "Yamaha DX-7". nil when no sound plays.
@@ -29,8 +36,9 @@ public struct SoundPack: Sendable, Hashable, Identifiable {
     return nil
   }
 
-  /// `.none` followed by the full catalog — the picker's complete option set.
-  public static var all: [SoundPack] { [.none] + catalog }
+  /// `.none` followed by the full catalog. Private: the picker builds itself from
+  /// `.none` + `groups` + `voices(in:)`, so this exists only to back `find(id:)`.
+  private static var all: [SoundPack] { [.none] + catalog }
 
   /// The default pack: ORCHESTRA (Yamaha DX7 ROM1A voice 6), falling back to
   /// `.none` only if the catalog is somehow empty.
@@ -38,6 +46,16 @@ public struct SoundPack: Sendable, Hashable, Identifiable {
 
   /// Looks a pack up by its persisted `id`.
   public static func find(id: String) -> SoundPack? { all.first { $0.id == id } }
+
+  /// Decodes a persisted pack id, falling back to `defaultPack` when the id is
+  /// unset or names no known pack. The single decode-with-default rule shared by
+  /// `SoundPackStore` and the `@AppStorage` views that read the raw id directly
+  /// (so they re-render live on a Settings change) — mirroring
+  /// `TriggerKey.fromPersisted`.
+  public static func fromPersisted(_ id: String?) -> SoundPack {
+    guard let id, let pack = find(id: id) else { return .defaultPack }
+    return pack
+  }
 
   /// Distinct group names, in catalog order — the picker's sections.
   public static var groups: [String] {

@@ -27,17 +27,10 @@ final class DictationPerformanceTests: XCTestCase {
     return samples.sorted()[samples.count / 2]
   }
 
-  private func makeSession() -> DictationSession {
-    DictationSession(
-      mic: StubMicCapture(),
-      transcriber: StubTranscriber(mode: .transcript("hello world")),
-      injector: StubInjector())
-  }
-
   /// The release → transcribe → inject hot path (STT round trip + paste), stubbed.
   func testTranscribeInjectWithinBudget() async {
     let median = await medianDuration(iterations: 7) {
-      let session = makeSession()
+      let session = makeSession().session
       await session.press()
       await session.release()
       await session.waitForIdle()
@@ -51,7 +44,7 @@ final class DictationPerformanceTests: XCTestCase {
   /// The press → `.recording` startup path (focus capture + mic start), stubbed.
   func testPressStartupWithinBudget() async {
     let median = await medianDuration(iterations: 7) {
-      let session = makeSession()
+      let session = makeSession().session
       await session.press()
       await session.cancel()  // tear down so the mic/recording doesn't linger
     }

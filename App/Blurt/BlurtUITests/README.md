@@ -23,7 +23,7 @@ observable UI rather than mocking views.
 These tests don't need a microphone, the network, Accessibility permission, or
 the real Keychain. Launching with `-BlurtUITest` (set by
 `BlurtUITestCase.setUpWithError`) activates the harness in
-`App/Blurt/Blurt/UITestSupport.swift` (`#if DEBUG`), which:
+`App/Blurt/Blurt/UITestSupport.swift` (`#if UITEST_HOOKS`), which:
 
 - injects offline stub collaborators (`UITestMic`, `UITestTranscriber`,
   `UITestInjector`) and an `InMemoryAPIKeyStore` via the `DictationComponents` /

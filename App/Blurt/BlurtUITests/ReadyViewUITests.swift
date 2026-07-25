@@ -124,8 +124,7 @@ final class ReadyViewUITests: BlurtUITestCase {
   private func driveDictation(via harness: XCUIElement) {
     harness.buttons[UITestIdentifiers.hotkeyPressButton].click()
     harness.buttons[UITestIdentifiers.hotkeyReleaseButton].click()
-    let echo = harness.descendants(matching: .any)
-      .matching(identifier: UITestIdentifiers.transcriptEchoLabel).firstMatch
+    let echo = harness.anyDescendant(identified: UITestIdentifiers.transcriptEchoLabel)
     waitForLabel(echo, equals: UITestIdentifiers.defaultCannedTranscript)
   }
 

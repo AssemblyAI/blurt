@@ -7,28 +7,37 @@ import Testing
 /// shell that renders it has no test target).
 @Suite("PipelinePhase → OverlayUIState")
 struct OverlayUIStateTests {
-  @Test func idleMapsToIdle() {
-    #expect(PipelinePhase.idle.overlayState == .idle)
-  }
-
-  @Test func recordingMapsToRecording() {
-    #expect(PipelinePhase.recording.overlayState == .recording)
-  }
-
-  @Test func transcribingMapsToProcessing() {
-    #expect(PipelinePhase.transcribing.overlayState == .processing)
-  }
-
-  @Test func injectingMapsToIdle() {
+  /// The phase→pill projection, one row per `PipelinePhase` case with a fixed
+  /// mapping. A table rather than a `@Test` apiece (the precedent
+  /// `DictationKeyGateTests` sets): adding a phase case makes the missing row
+  /// visible in one place, and a failure names the phase. The cases whose
+  /// mapping carries a rationale — `.failed` and its `.apiKeyMissing`
+  /// carve-out — stay as their own tests below.
+  static let projections: [(phase: PipelinePhase, expected: OverlayUIState)] = [
+    (.idle, .idle),
+    (.recording, .recording),
+    (.transcribing, .processing),
     // The in-flight injecting phase shows no distinct pill; the terminal
     // `.pasted` phase (set once the paste lands) carries the "Pasted" notice.
-    #expect(PipelinePhase.injecting.overlayState == .idle)
-  }
-
-  @Test func pastedMapsToPasted() {
+    (.injecting, .idle),
     // A completed paste surfaces the quiet "Pasted" notice — the mirror of
     // `.noTarget`'s "Copied" — as a transient notice before settling to idle.
-    #expect(PipelinePhase.pasted.overlayState == .pasted)
+    (.pasted, .pasted),
+    // A cancelled capture leaves no trace on the pill — same rest state as idle.
+    (.cancelled, .idle),
+    // Transcription succeeded but nothing editable was focused, so the pill
+    // shows the neutral "copied to clipboard" notice rather than an error.
+    (.noTarget, .noTarget),
+  ]
+
+  @Test("each phase projects to its pill state", arguments: projections)
+  func phaseProjectsToOverlayState(phase: PipelinePhase, expected: OverlayUIState) {
+    #expect(phase.overlayState == expected)
+  }
+
+  @Test func pastedIsATransientNotice() {
+    // Pinned alongside the mapping: the "Pasted" pill must auto-clear rather
+    // than stick, which is what makes it a notice and not a steady state.
     #expect(OverlayUIState.pasted.noticeDwellSeconds != nil)
   }
 
@@ -56,17 +65,6 @@ struct OverlayUIStateTests {
       Issue.record("expected .error")
     }
   }
-
-  @Test func cancelledMapsToIdle() {
-    // A cancelled capture leaves no trace on the pill — same rest state as idle.
-    #expect(PipelinePhase.cancelled.overlayState == .idle)
-  }
-
-  @Test func noTargetMapsToNoTarget() {
-    // Transcription succeeded but nothing editable was focused, so the pill
-    // shows the neutral "copied to clipboard" notice rather than an error.
-    #expect(PipelinePhase.noTarget.overlayState == .noTarget)
-  }
 }
 
 /// The pill's VoiceOver label is spoken to the user, so lock the exact wording
@@ -74,33 +72,25 @@ struct OverlayUIStateTests {
 /// silent edit would otherwise ship an unannounced regression.
 @Suite("OverlayUIState.accessibilityLabel")
 struct OverlayUIStateAccessibilityLabelTests {
-  @Test func idleLabel() {
-    #expect(OverlayUIState.idle.accessibilityLabel == "Blurt.")
-  }
+  /// One row per fixed-wording state. `.error` is excluded: its label is a rule
+  /// (echo the carried message verbatim), not a constant, so it keeps its own test.
+  static let labels: [(state: OverlayUIState, spoken: String)] = [
+    (.idle, "Blurt."),
+    (.recording, "Recording."),
+    (.processing, "Processing."),
+    (.pasted, "Your dictation was pasted."),
+    (.noTarget, "No text field focused. Your dictation was copied to the clipboard."),
+  ]
 
-  @Test func recordingLabel() {
-    #expect(OverlayUIState.recording.accessibilityLabel == "Recording.")
-  }
-
-  @Test func processingLabel() {
-    #expect(OverlayUIState.processing.accessibilityLabel == "Processing.")
+  @Test("each state speaks its fixed label", arguments: labels)
+  func stateSpeaksItsLabel(state: OverlayUIState, spoken: String) {
+    #expect(state.accessibilityLabel == spoken)
   }
 
   @Test func errorLabelIsTheMessageVerbatim() {
     // The error case surfaces the failure reason directly as the spoken label,
     // so it must echo the message it carries with no wrapping.
     #expect(OverlayUIState.error(message: "AssemblyAI error 401.").accessibilityLabel == "AssemblyAI error 401.")
-  }
-
-  @Test func pastedLabel() {
-    #expect(OverlayUIState.pasted.accessibilityLabel == "Your dictation was pasted.")
-  }
-
-  @Test func noTargetLabel() {
-    #expect(
-      OverlayUIState.noTarget.accessibilityLabel
-        == "No text field focused. Your dictation was copied to the clipboard."
-    )
   }
 }
 

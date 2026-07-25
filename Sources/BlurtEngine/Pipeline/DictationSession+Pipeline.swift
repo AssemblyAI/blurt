@@ -5,9 +5,6 @@ import os
 // the press-time context read — split from `DictationSession.swift` to stay
 // within the lint file-length budget, like `+Commands` and `+Observation`.
 extension DictationSession {
-  /// Sample rate the mic delivers and the Sync request declares (`SyncSTTLimits`).
-  private static let captureSampleRate = SyncSTTLimits.sampleRate
-
   /// The longest `runTranscribeInject` waits for the press-time AX
   /// field-context read before transcribing without it. In the common case the
   /// read finished while the user was speaking and the buffered stream hands
@@ -95,7 +92,7 @@ extension DictationSession {
   private func transcribe(pcm: Data) async -> String? {
     do {
       return try await transcriber.transcribe(
-        pcm: pcm, sampleRate: Self.captureSampleRate, context: capturedContext)
+        pcm: pcm, sampleRate: SyncSTTLimits.sampleRate, context: capturedContext)
     } catch {
       // A cancel() that landed mid-request already tore this task down and set
       // .cancelled; the transport then surfaces a cancellation-shaped error

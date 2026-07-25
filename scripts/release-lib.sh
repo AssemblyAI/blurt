@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Shared helpers for the release scripts (release.sh, release-bump.sh,
-# release-build.sh, release-install.sh, release-publish.sh). Sourced, never
-# executed. Everything here must stay side-effect-free at source time —
+# Shared helpers for the repo's bash scripts — the release pipeline (release.sh,
+# release-bump.sh, release-build.sh, release-install.sh, release-publish.sh) plus
+# dev-build.sh, which reuses the logging and tool-preflight helpers. Sourced,
+# never executed. Everything here must stay side-effect-free at source time —
 # release.test.sh sources release.sh (which sources this) to unit-test the
 # pure helpers.
 
@@ -15,6 +16,24 @@ die() {
 }
 
 # --- shared guards (need REPO_ROOT set by the sourcing script) ---
+
+# Die unless every named command is on PATH. The one definition of the
+# required-tool preflight each release step opens with; pass the tools it needs
+# (e.g. `require_tools xcrun hdiutil codesign ditto awk`). An optional leading
+# `--hint=<text>` is appended to the failure message for tools that aren't
+# preinstalled (e.g. `--hint='brew install create-dmg if needed'`).
+require_tools() {
+  local cmd hint=""
+  case "${1:-}" in
+    --hint=*)
+      hint=" (${1#--hint=})"
+      shift
+      ;;
+  esac
+  for cmd in "$@"; do
+    command -v "$cmd" >/dev/null 2>&1 || die "missing required tool: $cmd$hint"
+  done
+}
 
 # Die unless the git working tree is clean; $1 names the action for the message
 # (e.g. "publishing" -> "… commit or stash before publishing").
@@ -92,15 +111,22 @@ version_gt() {
   [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n1)" = "$1" ]
 }
 
+# Read the scalar value of YAML key $1 from content on stdin, unquoted. Matches
+# the key as a whole field, so `CFBundleVersion` does not also match
+# `CFBundleVersionSomethingElse`.
+parse_yaml_scalar() {
+  awk -v key="$1:" '$1 == key {gsub(/"/, "", $2); print $2; exit}'
+}
+
 # Read CFBundleShortVersionString from project.yml content on stdin. The one
 # definition of the version-read rule every release script gates on.
 parse_short_version() {
-  awk '/CFBundleShortVersionString:/ {gsub(/"/, "", $2); print $2; exit}'
+  parse_yaml_scalar CFBundleShortVersionString
 }
 
 # Read CFBundleVersion (the integer build number) from project.yml on stdin.
 parse_bundle_version() {
-  awk '/CFBundleVersion:/ {gsub(/"/, "", $2); print $2; exit}'
+  parse_yaml_scalar CFBundleVersion
 }
 
 # Read the full commit SHA from build-info.txt content on stdin.

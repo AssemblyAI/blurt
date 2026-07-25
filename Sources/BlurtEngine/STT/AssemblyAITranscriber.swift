@@ -54,8 +54,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
       "multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
     let body = multipartBody(pcm: pcm, config: config, boundary: boundary)
-    let sampleCount = pcm.count / SyncSTTLimits.bytesPerSample
-    let audioDurationMs = Int((Double(sampleCount) / Double(sampleRate)) * 1000)
+    let audioDurationMs = SyncSTTLimits.durationMs(ofPCMBytes: pcm.count, rate: sampleRate)
     let data = try await send(request, body: body, audioDurationMs: audioDurationMs)
     guard let response = try? JSONDecoder().decode(SyncTranscriptResponse.self, from: data) else {
       throw AssemblyAIError.malformedResponse

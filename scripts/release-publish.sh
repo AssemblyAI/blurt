@@ -22,9 +22,7 @@ done
 source "$REPO_ROOT/scripts/release-lib.sh"
 
 step "Preflight"
-for cmd in gh git xcrun awk; do
-  command -v "$cmd" >/dev/null 2>&1 || die "missing required tool: $cmd"
-done
+require_tools gh git xcrun awk
 
 VERSION="$(require_project_version "$APP_DIR/project.yml")"
 DMG="$BUILD_ROOT/Blurt-$VERSION.dmg"

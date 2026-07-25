@@ -21,9 +21,7 @@ source "$REPO_ROOT/scripts/release-lib.sh"
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 
 step "Preflight"
-for cmd in xcrun hdiutil codesign ditto awk; do
-  command -v "$cmd" >/dev/null 2>&1 || die "missing required tool: $cmd"
-done
+require_tools xcrun hdiutil codesign ditto awk
 
 VERSION="$(require_project_version "$APP_DIR/project.yml")"
 info "version: $VERSION"

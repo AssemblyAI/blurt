@@ -123,7 +123,7 @@ Only `start()`/`stop()` must be implemented — `levels` and `warmUp()` have def
 
 `MicCapture` records with `AVAudioRecorder` straight to a temp 16 kHz / mono / 16-bit PCM WAV — exactly the geometry the Sync API wants — and reads it back as raw S16LE bytes on `stop()` (no float detour; the blob uploads as-is). A **fresh recorder per session** resolves the current default input device at `record()` time, which is why device switches (headset ↔ built-in) just work. Do **not** replace this with a long-lived `AVAudioEngine`/`installTap` graph: that design was tried, bound itself to one device, and failed with `-10868` or all-zero buffers on device switches.
 
-`MicCapture`'s `levels` is a ~30 Hz meter of the recorder's dBFS power mapped to `0…1` (floored at −50 dBFS so room ambient reads as silence) — feed it to a voice-bars view; it costs nothing when unobserved. Its `warmUp()` pre-creates and prepares a recorder so the first `start()` skips hardware route discovery (Blurt calls it at launch, once mic permission is granted, so warming never triggers the permission prompt).
+`MicCapture`'s `levels` is a ~20 Hz meter of the recorder's dBFS power mapped to `0…1` (floored at −50 dBFS so room ambient reads as silence) — feed it to a voice-bars view; it costs nothing when unobserved. Its `warmUp()` pre-creates and prepares a recorder so the first `start()` skips hardware route discovery (Blurt calls it at launch, once mic permission is granted, so warming never triggers the permission prompt).
 
 ### `TranscriberProtocol` → `AssemblyAITranscriber`
 

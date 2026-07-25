@@ -11,42 +11,33 @@ struct DictationSessionGuardTests {
 
   @Test("press while already recording is a silent no-op")
   func pressWhileRecordingDropped() async throws {
-    let mic = StubMicCapture()
-    let stt = StubTranscriber(mode: .transcript("hi"))
-    let injector = StubInjector()
-    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+    let fixture = makeSession(mode: .transcript("hi"))
 
-    await session.press()
-    await session.press()  // .recording is non-terminal, so the guard drops this
+    await fixture.session.press()
+    await fixture.session.press()  // .recording is non-terminal, so the guard drops this
 
-    #expect(await mic.startCalls == 1)
-    #expect(await session.phase == .recording)
+    #expect(await fixture.mic.startCalls == 1)
+    #expect(await fixture.session.phase == .recording)
   }
 
   @Test("release with nothing recording is a silent no-op")
   func releaseFromIdleNoOps() async throws {
-    let mic = StubMicCapture()
-    let stt = StubTranscriber(mode: .transcript("hi"))
-    let injector = StubInjector()
-    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+    let fixture = makeSession(mode: .transcript("hi"))
 
-    await session.release()
+    await fixture.session.release()
 
-    #expect(await session.phase == .idle)
-    #expect(await mic.stopCalls == 0)
+    #expect(await fixture.session.phase == .idle)
+    #expect(await fixture.mic.stopCalls == 0)
   }
 
   @Test("cancel with nothing recording is a silent no-op")
   func cancelFromIdleNoOps() async throws {
-    let mic = StubMicCapture()
-    let stt = StubTranscriber(mode: .transcript("hi"))
-    let injector = StubInjector()
-    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+    let fixture = makeSession(mode: .transcript("hi"))
 
-    await session.cancel()
+    await fixture.session.cancel()
 
-    #expect(await session.phase == .idle)
-    #expect(await mic.stopCalls == 0)
+    #expect(await fixture.session.phase == .idle)
+    #expect(await fixture.mic.stopCalls == 0)
   }
 
   @Test("keyTermsProvider is consulted afresh at each press")
@@ -75,15 +66,12 @@ struct DictationSessionGuardTests {
 
   @Test("multiple phaseStream subscribers all receive later transitions")
   func phaseStreamBroadcastsToMultipleSubscribers() async throws {
-    let mic = StubMicCapture()
-    let stt = StubTranscriber(mode: .transcript("hi"))
-    let injector = StubInjector()
-    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+    let fixture = makeSession(mode: .transcript("hi"))
 
     // Subscribe while recording so each stream's initial yield is non-terminal.
-    await session.press()
-    let firstStream = await session.phaseStream()
-    let secondStream = await session.phaseStream()
+    await fixture.session.press()
+    let firstStream = await fixture.session.phaseStream()
+    let secondStream = await fixture.session.phaseStream()
 
     func firstTerminal(_ stream: AsyncStream<PipelinePhase>) async -> PipelinePhase? {
       for await phase in stream where phase.isTerminal { return phase }
@@ -91,7 +79,7 @@ struct DictationSessionGuardTests {
     }
     async let firstTerminalPhase = firstTerminal(firstStream)
     async let secondTerminalPhase = firstTerminal(secondStream)
-    await session.release()
+    await fixture.session.release()
     #expect(await firstTerminalPhase == .pasted)
     #expect(await secondTerminalPhase == .pasted)
   }

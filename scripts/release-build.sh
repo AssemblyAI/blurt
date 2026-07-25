@@ -177,9 +177,8 @@ else
 fi
 
 step "Preflight"
-for cmd in xcodegen xcodebuild xcrun hdiutil codesign spctl create-dmg awk shasum; do
-  command -v "$cmd" >/dev/null 2>&1 || die "missing required tool: $cmd (brew install create-dmg if needed)"
-done
+require_tools --hint='brew install create-dmg if needed' \
+  xcodegen xcodebuild xcrun hdiutil codesign spctl create-dmg awk shasum
 
 xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
   || die "notarytool profile '$NOTARY_PROFILE' not found. Run: xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <you@example.com> --team-id $TEAM_ID --password <app-specific-password>"

@@ -12,7 +12,7 @@ struct SoundStepView: View {
   private var selection: Binding<SoundPack> {
     Binding(
       get: {
-        SoundPack.find(id: soundPackID) ?? .defaultPack
+        SoundPack.fromPersisted(soundPackID)
       },
       set: { newValue in
         soundPackID = newValue.id
