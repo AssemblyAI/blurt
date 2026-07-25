@@ -228,5 +228,15 @@ final class AppCoordinator {
     menuBarStatus = phase.menuBarStatus
 
     cues.transition(for: phase)
+
+    // A dictation that ended without a key event (auto-release cap, a refused or
+    // failed press) leaves the trigger's gate latched, which would swallow the
+    // user's next press entirely. Clearing it here — the one place that sees every
+    // phase — keeps the tap's state honest without the gate needing to know about
+    // pipeline phases. No-op whenever the gate is already idle, which is every
+    // normal flow.
+    if phase.isTerminal {
+      keyTap?.syncAfterTerminalPhase()
+    }
   }
 }

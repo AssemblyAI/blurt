@@ -7,6 +7,31 @@ struct SendablePasteboardItem: Sendable {
   let dataMap: [NSPasteboard.PasteboardType: Data]
 }
 
+/// A best-effort snapshot of the whole pasteboard, taken before a paste so the
+/// user's contents can be put back afterwards.
+///
+/// The distinction that matters: this type is only ever produced when the
+/// pasteboard was *readable*. `SystemClipboard.snapshot()` returns `nil` when the
+/// read itself failed, so a failure can never be mistaken for "the clipboard was
+/// empty" — conflating those two is what made the restore clear the user's
+/// clipboard instead of restoring it.
+///
+/// Known, inherent limitation: pasteboard data can be *promised* (provided lazily
+/// by the owning app on demand). A promise cannot be copied, only materialized, and
+/// an app may decline. Types that decline are absent from `dataMap`, so a restore
+/// of promise-backed contents is a best-effort downgrade, not a byte-faithful
+/// round trip — `plainText` exists to keep at least the text when that happens.
+struct PasteboardSnapshot: Sendable {
+  /// One entry per item the pasteboard held, in order. An entry with an empty
+  /// `dataMap` means the item existed but none of its representations could be
+  /// materialized — distinct from the pasteboard having held no items at all,
+  /// which is `items.isEmpty`.
+  let items: [SendablePasteboardItem]
+  /// The pasteboard's plain-string flavor, kept separately as a restore floor for
+  /// when no item's representations could be materialized.
+  let plainText: String?
+}
+
 /// The two clipboard operations `KeyInjector` actually performs around a paste —
 /// a plain overwrite, or an overwrite that can later restore what it displaced —
 /// rather than exposing NSPasteboard's raw change-count/multi-item bookkeeping.
@@ -31,7 +56,7 @@ struct SystemClipboard: ClipboardAccess {
   func write(_ text: String) { setString(text) }
 
   func writeAndPrepareRestore(_ text: String) -> @Sendable () -> Void {
-    let saved = currentItems()
+    let saved = snapshot()
     setString(text)
     // Snapshot the change count our own write produced. If anything else writes
     // to the pasteboard before the restore fires (e.g. the user copies
@@ -40,6 +65,11 @@ struct SystemClipboard: ClipboardAccess {
     let ourChangeCount = changeCount
     return { [self] in
       guard changeCount == ourChangeCount else { return }
+      // A nil snapshot means the pasteboard could not be read at all. There is
+      // nothing to put back, so leave the transcript on the clipboard (the same
+      // degraded-but-recoverable outcome as the `.noTarget` path) rather than
+      // clearing the user's clipboard to nothing.
+      guard let saved else { return }
       restore(saved)
     }
   }
@@ -48,17 +78,24 @@ struct SystemClipboard: ClipboardAccess {
 
   var changeCount: Int { NSPasteboard.general.changeCount }
 
-  func currentItems() -> [SendablePasteboardItem] {
-    guard let items = NSPasteboard.general.pasteboardItems else { return [] }
-    return items.map { item in
+  /// Snapshots the pasteboard, or `nil` when it can't be read at all
+  /// (`pasteboardItems` is documented to return nil on error). Callers must treat
+  /// nil as "don't restore" — never as an empty clipboard.
+  func snapshot() -> PasteboardSnapshot? {
+    let pb = NSPasteboard.general
+    guard let items = pb.pasteboardItems else { return nil }
+    let captured = items.map { item in
       var dataMap: [NSPasteboard.PasteboardType: Data] = [:]
       for type in item.types {
+        // A nil read is a promised representation the owning app declined to
+        // materialize; record what we did get and let `plainText` be the floor.
         if let data = item.data(forType: type) {
           dataMap[type] = data
         }
       }
       return SendablePasteboardItem(dataMap: dataMap)
     }
+    return PasteboardSnapshot(items: captured, plainText: pb.string(forType: .string))
   }
 
   func setString(_ text: String) {
@@ -67,17 +104,42 @@ struct SystemClipboard: ClipboardAccess {
     pb.setString(text, forType: .string)
   }
 
-  func restore(_ items: [SendablePasteboardItem]) {
+  func restore(_ saved: PasteboardSnapshot) {
     let pb = NSPasteboard.general
-    pb.clearContents()
-    guard !items.isEmpty else { return }
-    let pbItems = items.map { item in
+
+    // The pasteboard genuinely held nothing, so restoring it means emptying it.
+    // Safe to clear because the snapshot succeeded — a *failed* read is nil and
+    // never reaches here.
+    guard !saved.items.isEmpty else {
+      pb.clearContents()
+      return
+    }
+
+    // Build the items BEFORE clearing. Clearing first and then discovering there
+    // is nothing to write is how the user's clipboard got destroyed whenever a
+    // snapshot came back degraded.
+    let pbItems = saved.items.compactMap { item -> NSPasteboardItem? in
+      guard !item.dataMap.isEmpty else { return nil }
       let pbItem = NSPasteboardItem()
       for (type, data) in item.dataMap {
         pbItem.setData(data, forType: type)
       }
       return pbItem
     }
-    pb.writeObjects(pbItems)
+
+    if !pbItems.isEmpty {
+      pb.clearContents()
+      // `writeObjects` can refuse the batch; fall through to the text floor
+      // rather than leaving the pasteboard empty.
+      if pb.writeObjects(pbItems) { return }
+    }
+
+    // Either nothing was materializable, or the write was refused. Put the text
+    // back if we have it; otherwise leave the pasteboard as-is, since clearing it
+    // would discard content we cannot replace.
+    if let plainText = saved.plainText {
+      pb.clearContents()
+      pb.setString(plainText, forType: .string)
+    }
   }
 }

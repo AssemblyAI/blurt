@@ -13,8 +13,11 @@ import SwiftUI
 struct APIKeyStepView: View {
   var apiKey: APIKeyModel
 
-  /// The key currently in the Keychain, loaded on appear (empty when none).
-  @State private var savedKey = ""
+  /// The in-progress edit. Seeded from the Keychain when the user enters edit
+  /// mode (see the "Change" button), never held as a long-lived mirror — this view
+  /// is mounted in BOTH the wizard and Settings, each with its own `@State`, so a
+  /// cached copy in one goes stale the moment the other saves. Whether a key
+  /// exists is read from `apiKey.hasAPIKey`, the observable single source.
   @State private var draft = ""
   /// True while the editable field is shown for an already-saved key (the user
   /// tapped "Change"). When a key is saved and we're not editing, the section
@@ -41,11 +44,11 @@ struct APIKeyStepView: View {
   private var canSubmit: Bool { trimmedKey != nil && !isValidating }
 
   /// "Save" for the first key, "Update" once one exists.
-  private var actionTitle: String { savedKey.isEmpty ? "Save" : "Update" }
+  private var actionTitle: String { apiKey.hasAPIKey ? "Update" : "Save" }
 
   var body: some View {
     Section {
-      if savedKey.isEmpty || isEditing {
+      if !apiKey.hasAPIKey || isEditing {
         keyField
       } else {
         savedRow
@@ -56,8 +59,6 @@ struct APIKeyStepView: View {
       statusFooter
     }
     .onAppear {
-      savedKey = apiKey.current ?? ""
-      draft = savedKey
       // Keep the readiness gate in sync with what's actually in the Keychain. If
       // a key is already saved, this flips `hasAPIKey` true so the wizard advances
       // to the ready screen instead of stranding the user here with a pre-filled
@@ -83,6 +84,11 @@ struct APIKeyStepView: View {
             .accessibilityIdentifier(UITestIdentifiers.apiKeySavedStatus)
         }
         Button("Change") {
+          // Read the stored key here rather than trusting a cached copy: if the
+          // key was rotated in the other window since this view appeared, a stale
+          // mirror would pre-fill the OLD key and "Update" would silently write it
+          // back over the new one.
+          draft = apiKey.current ?? ""
           isEditing = true
         }
         .accessibilityIdentifier(UITestIdentifiers.apiKeyChange)
@@ -138,7 +144,7 @@ struct APIKeyStepView: View {
       // entry — there's no saved key to cancel back to.
       if isEditing {
         Button("Cancel") {
-          draft = savedKey
+          draft = ""
           errorMessage = nil
           isEditing = false
         }
@@ -172,7 +178,7 @@ struct APIKeyStepView: View {
       // `Link` view: a `Link` forces its own (body) font, which reads larger than
       // the surrounding footer copy. As plain `Text` it inherits the grouped
       // Form's native footer font, so the whole footer matches the other sections.
-      if savedKey.isEmpty {
+      if !apiKey.hasAPIKey {
         getKeyLink
       }
     }
@@ -195,10 +201,11 @@ struct APIKeyStepView: View {
       isValidating = false
       switch result {
       case .valid:
-        // Saved — record it and collapse the section to the "✓ Saved" status
-        // row. The controller reveals the overlay via its hasAPIKey observer.
-        savedKey = key
-        draft = key
+        // Saved — collapse the section to the "✓ Saved" status row. `submit`
+        // already refreshed `apiKey.hasAPIKey`, which is what the branch above
+        // reads, so every mounted copy of this view updates together. Clear the
+        // draft rather than parking the key in view state.
+        draft = ""
         isEditing = false
       case .invalid:
         errorMessage = "AssemblyAI rejected that key. Double-check it and try again."

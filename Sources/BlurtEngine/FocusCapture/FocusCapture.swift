@@ -47,9 +47,10 @@ enum FocusCapture {
   /// best-effort. Requires the same Accessibility permission the app already
   /// holds for paste injection, so it adds no new prompt.
   ///
-  /// Secure text fields (password inputs) are detected by role and never have
-  /// their contents read, so a typed password — selected or not — can't leak
-  /// into the STT prompt.
+  /// Secure text fields (password inputs) are detected by role **or** subrole and
+  /// never have their contents read, so a typed password — selected or not — can't
+  /// leak into the STT prompt. The check fails closed: an unreadable role is
+  /// treated as secure, since it can't be shown not to be.
   ///
   /// Deliberately `nonisolated`: each read below is a synchronous cross-process
   /// IPC round trip into the frontmost app, and an unresponsive app blocks the
@@ -62,8 +63,14 @@ enum FocusCapture {
     guard AXIsProcessTrusted() else { return .empty }
     guard let element = systemFocusedElement() else { return .empty }
 
-    // Don't read the value of a password field into the prompt.
-    let isSecure = isSecureFieldRole(stringValue(element, kAXRoleAttribute))
+    // Don't read the value of a password field into the prompt. Fails *closed*:
+    // an unreadable role (AX timeout against a busy app, a non-string value from a
+    // buggy one) means we can't prove the field isn't secure, so treat it as
+    // secure. The cost is losing priming for an already-degraded app; the cost of
+    // failing open is a password in an outbound API request — and, with developer
+    // mode on, in `dictations.jsonl`.
+    let role = stringValue(element, kAXRoleAttribute)
+    let isSecure = role == nil || isSecureField(role: role, subrole: stringValue(element, kAXSubroleAttribute))
     // `visibleTextOrNil` collapses an all-invisible read (e.g. Google Docs' lone
     // U+200B before the caret) to nil so it can't masquerade as real prior text.
     let prior = isSecure ? nil : visibleTextOrNil(priorText(of: element, maxChars: maxPriorChars))
@@ -166,8 +173,10 @@ enum FocusCapture {
       }
     }
 
-    // Fallback: read the full value and clip to the caret (or the tail).
-    return priorSlice(full: stringValue(element, kAXValueAttribute) ?? "", caret: caret, maxChars: maxChars)
+    // Fallback: read the full value and clip to the caret (or the tail). Read it
+    // RAW — `caret` is a UTF-16 offset into the untrimmed value, so a trimmed
+    // string would be indexed with offsets that no longer refer to it.
+    return priorSlice(full: rawStringValue(element, kAXValueAttribute) ?? "", caret: caret, maxChars: maxChars)
   }
 
   /// Up to `maxChars` of selected text, or `nil` when the element exposes no
@@ -211,13 +220,28 @@ enum FocusCapture {
   }
 
   /// Reads a `String`-valued AX attribute, returning `nil` for missing,
-  /// non-string, or blank values.
+  /// non-string, or blank values. Trims, which is what the *label-ish* attributes
+  /// want (role, title, placeholder, description). Do **not** use it for
+  /// `kAXValueAttribute` when a caret offset will index the result — see
+  /// `rawStringValue`.
   private nonisolated static func stringValue(_ element: AXUIElement, _ attribute: String) -> String? {
+    rawStringValue(element, attribute)?.trimmedNonEmpty()
+  }
+
+  /// Reads a `String`-valued AX attribute **verbatim** — no trimming, so a
+  /// caret offset taken from the same element still indexes it correctly.
+  ///
+  /// `kAXSelectedTextRange` locations are UTF-16 offsets into the element's
+  /// *original* value. Trimming shifts every offset past a leading whitespace run
+  /// and shortens the string, so slicing a trimmed value with an untrimmed caret
+  /// silently returns the wrong text (or falls back to the whole tail, which
+  /// destroys the trailing-whitespace signal `withLeadingSeparator` reads).
+  private nonisolated static func rawStringValue(_ element: AXUIElement, _ attribute: String) -> String? {
     var ref: CFTypeRef?
     guard AXUIElementCopyAttributeValue(element, attribute as CFString, &ref) == .success,
       let value = ref as? String
     else { return nil }
-    return value.trimmedNonEmpty()
+    return value
   }
 
   /// Reads an `AXUIElement`-valued AX attribute (e.g. the containing window).
@@ -233,7 +257,7 @@ enum FocusCapture {
 
   /// AX roles a focused element reports when it accepts typed/pasted text.
   /// Includes `secureFieldRole`: a password field is a valid *paste* target even
-  /// though its contents are never read (see `isSecureFieldRole`).
+  /// though its contents are never read (see `isSecureField`).
   private static let editableRoles: Set<String> = [
     "AXTextField", "AXTextArea", "AXComboBox", secureFieldRole, "AXSearchField",
   ]
@@ -326,9 +350,14 @@ enum FocusCapture {
   static let secureFieldRole = "AXSecureTextField"
 
   /// Pure decision behind the password-redaction guard in `captureFieldContext`:
-  /// does this focused-element role mean its contents must never be read?
-  static func isSecureFieldRole(_ role: String?) -> Bool {
-    role == secureFieldRole
+  /// do this focused element's role/subrole mean its contents must never be read?
+  static func isSecureField(role: String?, subrole: String?) -> Bool {
+    // AppKit ships both NSAccessibilitySecureTextFieldRole and
+    // NSAccessibilitySecureTextFieldSubrole (both the same string), and an element
+    // may report a generic `AXTextField` role while expressing secure-ness only
+    // through its subrole — browser password inputs and custom secure fields are
+    // the population that does this. Checking role alone misses them entirely.
+    role == secureFieldRole || subrole == secureFieldRole
   }
 
   /// Collapses an AX text read that carries no *visible* content to `nil`.

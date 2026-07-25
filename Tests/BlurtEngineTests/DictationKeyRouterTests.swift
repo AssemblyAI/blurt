@@ -108,6 +108,43 @@ struct DictationKeyRouterTests {
     #expect(discarded)
   }
 
+  @Test("a latch left behind by a keyless dictation end doesn't swallow the next press")
+  func resetClearsLatchSoNextPressStarts() {
+    // The bug this pins: when a dictation ends WITHOUT a key event — the
+    // auto-release cap fires, or the press is refused/failed — the gate stays
+    // `.latched`. A latched `modifierDown` returns `.none` and the `modifierUp`
+    // after it returns `.stop`, which no-ops on an already-terminal session, so
+    // the user's whole next press does nothing. `DictationKeyTap`'s
+    // `syncAfterTerminalPhase()` calls `reset()` to clear it; this pins that a
+    // reset genuinely restores the next press.
+    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    #expect(router.handle(downEvent(trigger), at: .zero) == .start)
+    #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .none)  // latched
+
+    // Without the reset, this next tap is swallowed — the exact dead press.
+    var swallowed = router
+    #expect(swallowed.handle(downEvent(trigger), at: .seconds(5)) == .none)
+
+    router.reset()
+    #expect(router.handle(downEvent(trigger), at: .seconds(5)) == .start)
+  }
+
+  @Test("reset after a keyless end ignores a stale key-up, then starts cleanly")
+  func resetWhileHeldThenReleaseIsInert() {
+    // The auto-release/failed-press case where the trigger is still physically
+    // held when the phase goes terminal. `syncAfterTerminalPhase` resets anyway
+    // (the dictation is over), which clears the modifier tracker — so the release
+    // that follows must route to `.none` rather than emitting a spurious `.stop`,
+    // and the press after that must start normally.
+    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    #expect(router.handle(downEvent(trigger), at: .zero) == .start)
+
+    router.reset()  // terminal phase arrived while the key is still down
+
+    #expect(router.handle(upEvent(trigger), at: .milliseconds(300)) == .none)
+    #expect(router.handle(downEvent(trigger), at: .seconds(2)) == .start)
+  }
+
   @Test("rebind mid-recording discards it and switches keycodes")
   func rebindMidRecording() {
     var router = DictationKeyRouter(triggerKeyCode: trigger)
