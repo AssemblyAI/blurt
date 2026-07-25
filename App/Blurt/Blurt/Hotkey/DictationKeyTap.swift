@@ -132,14 +132,21 @@ final class DictationKeyTap {
   /// exists to preserve a *live* recording whose key events were dropped; here the
   /// dictation is already over, so there is no state worth keeping even if the
   /// trigger is still physically held — a later key-up just finds
-  /// `modifierIsDown == false` and routes to `.none`. `reset()`'s
-  /// discarded-recording result is ignored for the same reason: the phase is
-  /// terminal, so there is nothing left upstream to cancel.
+  /// `modifierIsDown == false` and routes to `.none`.
+  ///
+  /// Acts on `reset()`'s discarded-recording result the same way `refreshBinding`
+  /// does. In the stale case the session is already terminal, so the
+  /// `cancelRecording` is a no-op. It matters for the one residual race: `render`
+  /// consumes `phaseStream()` asynchronously, so if that loop falls behind,
+  /// dictation N's terminal phase can arrive *after* the gate has armed for
+  /// dictation N+1 — the reset then clears N+1's live state, its key-up routes to
+  /// `.none`, and the recording would otherwise run to the ~115 s auto-release cap.
+  /// Cancelling it turns a silent two-minute hang into a clean stop.
   ///
   /// A no-op in every normal flow, where the gate is already idle by the time a
   /// terminal phase lands.
   func syncAfterTerminalPhase() {
-    router.reset()
+    if router.reset() { onRecordingDiscarded() }
   }
 
   /// Re-read the bound trigger key into the router. Call after the user

@@ -85,10 +85,14 @@ extension FocusCapture {
 
     // A readable selected-text *range* means the element has an insertion point —
     // the hallmark of a text input even when its value isn't reported settable.
+    // Require the range to actually decode, not merely that the read succeeded: a
+    // `.success` carrying a non-CFRange payload is not an insertion point, and this
+    // signal is one of the two that can green-light a ⌘V on an unknown role.
     var rangeRef: CFTypeRef?
     let hasInsertionPoint =
       AXUIElementCopyAttributeValue(
         element, kAXSelectedTextRangeAttribute as CFString, &rangeRef) == .success
+      && rangeRef.flatMap(axRange) != nil
 
     return isEditableTarget(
       hasFocusedElement: true, role: role, valueSettable: valueSettable,

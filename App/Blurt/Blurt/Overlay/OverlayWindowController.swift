@@ -143,9 +143,15 @@ final class OverlayWindowController {
   }
 
   /// Hides the pill immediately, without the fade. Called when the app drops out
-  /// of its fully-configured state (a permission revoked, the key cleared, the
-  /// shortcut unbound) so the pill is only ever on screen while dictation can
-  /// actually work.
+  /// of its fully-configured state (a permission revoked, the key cleared).
+  ///
+  /// This hides the pill; it does **not** disarm the trigger — the `CGEventTap`
+  /// stays installed, so a press while not-ready still runs and the pill comes back
+  /// to report the failure. That's deliberate: tearing the tap down would depend on
+  /// `ensureRunning()` succeeding again to restore dictation, and a tap that failed
+  /// to reinstall is a far worse failure than an error flash. `WizardController`
+  /// surfaces the setup window on the same not-ready edge, which is what actually
+  /// routes the user to the fix.
   func hide() {
     errorRevertTask?.cancel()
     errorRevertTask = nil
@@ -166,8 +172,9 @@ final class OverlayWindowController {
     // PREVIOUS dictation's loudness until the first new meter tick (~50 ms)
     // replaces it — a one-frame "already talking" flash at the start of every
     // dictation. `MicCapture.stop()` cancels the meter task without a final zero
-    // yield, so nothing else resets this. The shared final step of every dismiss
-    // path, so `hide()` is covered through here too.
+    // yield, so nothing else resets this. Reached by every dismiss that actually
+    // had a panel on screen; `hide()` returns early when the panel is already
+    // hidden, but it had to come through here to get hidden, so it's already zero.
     bridge.level = 0
   }
 

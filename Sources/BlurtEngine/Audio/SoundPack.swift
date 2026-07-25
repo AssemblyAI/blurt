@@ -44,8 +44,10 @@ public struct SoundPack: Sendable, Hashable, Identifiable {
   /// `.none` only if the catalog is somehow empty.
   public static var defaultPack: SoundPack { catalog.first { $0.id == "rom1a-6" } ?? .none }
 
-  /// Looks a pack up by its persisted `id`.
-  public static func find(id: String) -> SoundPack? { all.first { $0.id == id } }
+  /// Looks a pack up by its persisted `id`. Internal for the same reason as
+  /// `isSilent`: the app reaches packs through `fromPersisted`, so exporting this
+  /// would only trip periphery's redundant-public check.
+  static func find(id: String) -> SoundPack? { all.first { $0.id == id } }
 
   /// Decodes a persisted pack id, falling back to `defaultPack` when the id is
   /// unset or names no known pack. The single decode-with-default rule shared by

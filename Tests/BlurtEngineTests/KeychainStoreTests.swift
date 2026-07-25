@@ -18,15 +18,15 @@ struct KeychainStoreTests {
   func getEmpty() {
     let store = makeStore()
     defer { store.set(nil) }
-    #expect(store.get() == nil)
+    #expect(store.read() == .absent)
   }
 
-  @Test("set then get round-trips the value")
+  @Test("set then read round-trips the value")
   func setThenGet() {
     let store = makeStore()
     defer { store.set(nil) }
     #expect(store.set("sk-abc123"))
-    #expect(store.get() == "sk-abc123")
+    #expect(store.read() == .value("sk-abc123"))
   }
 
   @Test("read distinguishes an absent item from a stored value")
@@ -52,7 +52,7 @@ struct KeychainStoreTests {
     defer { store.set(nil) }
     #expect(store.set("first"))
     #expect(store.set("second"))
-    #expect(store.get() == "second")
+    #expect(store.read() == .value("second"))
   }
 
   @Test("set trims surrounding whitespace")
@@ -60,7 +60,7 @@ struct KeychainStoreTests {
     let store = makeStore()
     defer { store.set(nil) }
     #expect(store.set("  sk-trim  \n"))
-    #expect(store.get() == "sk-trim")
+    #expect(store.read() == .value("sk-trim"))
   }
 
   @Test("set(nil) deletes the stored value")
@@ -69,7 +69,7 @@ struct KeychainStoreTests {
     defer { store.set(nil) }
     #expect(store.set("to-be-deleted"))
     #expect(store.set(nil))
-    #expect(store.get() == nil)
+    #expect(store.read() == .absent)
   }
 
   @Test("set(whitespace) deletes, get returns nil")
@@ -78,6 +78,6 @@ struct KeychainStoreTests {
     defer { store.set(nil) }
     #expect(store.set("present"))
     #expect(store.set("   "))
-    #expect(store.get() == nil)
+    #expect(store.read() == .absent)
   }
 }

@@ -46,15 +46,6 @@ struct KeychainStore: Sendable {
     }
   }
 
-  /// The stored value, or `nil` if none has been saved (or it's empty).
-  ///
-  /// Deliberately lossy — it maps both `.absent` and `.unavailable` to `nil`. Any
-  /// caller that caches the result must use `read()` instead, or a transient
-  /// failure gets memoized as a permanent "no value".
-  func get() -> String? {
-    guard case .value(let key) = read() else { return nil }
-    return key
-  }
 
   /// Stores `value` (trimmed). Passing `nil` or an empty/whitespace string
   /// deletes the stored value. Returns `true` on success.

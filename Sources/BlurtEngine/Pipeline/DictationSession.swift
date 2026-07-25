@@ -2,6 +2,12 @@ import Foundation
 import os
 
 public actor DictationSession {
+  /// Off-pool home for the press-time AX field read — see its use in
+  /// `performPress` for why blocking IPC must not run on the cooperative pool.
+  private static let contextQueue = DispatchQueue(
+    label: "\(BlurtIdentity.subsystem).FieldContext", qos: .userInitiated,
+    attributes: .concurrent)
+
   public private(set) var phase: PipelinePhase = .idle
 
   // Split for the lint file-length budget: `phaseStream()`/os_signpost live in
@@ -189,7 +195,18 @@ public actor DictationSession {
       let (stream, contextFeed) = AsyncStream.makeStream(
         of: TranscriptionContext?.self, bufferingPolicy: .bufferingNewest(1))
       contextStream = stream
-      Task.detached {
+      // A Dispatch queue, not `Task.detached`: `captureFieldContext` is documented
+      // as making ~6 synchronous cross-process AX round trips, each bounded only by
+      // the 1 s messaging timeout, so against a beachballing frontmost app one
+      // press can *block* a thread for seconds. The Swift cooperative pool is sized
+      // to the core count and does not overcommit, so a few press/cancel cycles
+      // against a hung app could park every cooperative thread and stall the whole
+      // non-main runtime — including this actor. Dispatch overcommits, so a blocked
+      // capture costs a thread instead of the pool. Same reasoning as
+      // `DictationLog`'s serial queue. Concurrent so a hung capture can't delay the
+      // next press's. The body is fully synchronous and captures only Sendable
+      // values, so it needs no task context.
+      Self.contextQueue.async {
         let field = FocusCapture.captureFieldContext()
         let context = TranscriptionContext(
           appName: captured?.processName,
