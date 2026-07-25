@@ -29,6 +29,23 @@ struct KeychainStoreTests {
     #expect(store.get() == "sk-abc123")
   }
 
+  @Test("read distinguishes an absent item from a stored value")
+  func readReportsAbsentVsValue() {
+    // Why this distinction exists: `APIKeyStore` memoizes the read, and collapsing
+    // "nothing saved" and "couldn't read it" to a bare nil let a transient failure
+    // (locked keychain, denied ACL prompt) get cached as a permanent "no API key"
+    // for the whole process. `.unavailable` can't be provoked here — it needs a
+    // locked keychain or a denied prompt — so this pins the two reachable arms.
+    let store = makeStore()
+    defer { store.set(nil) }
+
+    #expect(store.read() == .absent)
+    #expect(store.set("sk-abc123"))
+    #expect(store.read() == .value("sk-abc123"))
+    #expect(store.set(nil))
+    #expect(store.read() == .absent)
+  }
+
   @Test("set overwrites an existing value (update path)")
   func overwrite() {
     let store = makeStore()

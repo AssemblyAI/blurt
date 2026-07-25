@@ -17,9 +17,12 @@ struct OverlayUIStateTests {
     (.idle, .idle),
     (.recording, .recording),
     (.transcribing, .processing),
-    // The in-flight injecting phase shows no distinct pill; the terminal
-    // `.pasted` phase (set once the paste lands) carries the "Pasted" notice.
-    (.injecting, .idle),
+    // `.injecting` is a *working* phase, so it must not project to `.idle`: the
+    // shell reads an idle projection as "dismiss the pill" and would start a
+    // fade-out mid-dictation, blinking the pill out and back in before "Pasted".
+    // Keeping it `.processing` holds the pill up continuously from transcribe
+    // through paste; the terminal `.pasted` phase carries the notice.
+    (.injecting, .processing),
     // A completed paste surfaces the quiet "Pasted" notice — the mirror of
     // `.noTarget`'s "Copied" — as a transient notice before settling to idle.
     (.pasted, .pasted),

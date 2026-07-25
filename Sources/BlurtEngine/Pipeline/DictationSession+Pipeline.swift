@@ -34,13 +34,23 @@ extension DictationSession {
     // Resolve the press-time AX field read now that it's actually needed —
     // waiting at most `contextWaitBudget` (see its doc), so a hung read costs
     // the transcript its priming, not multiple seconds of stall.
-    if let contextStream {
+    // Take the stream out of the actor's state in the SAME turn it's read, before
+    // the suspension below. Reading it and clearing it across an `await` let a
+    // cancelled pipeline clear a *newer* press's stream: `cancel()` detaches this
+    // task while it's parked in `firstValue`, a fresh `press()` installs its own
+    // `contextStream`, and this task's resumption then nils that one out — so
+    // dictation #2 transcribes with `context: nil`, losing not just its priming but
+    // `baseInstruction`, and `[Speaker]`-style markers can reach the pasted text.
+    // The window is microseconds, but the invariant is now local instead of
+    // depending on scheduling.
+    let stream = contextStream
+    contextStream = nil
+    if let stream {
       capturedContext = await Self.firstValue(
-        of: contextStream, within: Self.contextWaitBudget, clock: clock)
+        of: stream, within: Self.contextWaitBudget, clock: clock)
     } else {
       capturedContext = nil
     }
-    contextStream = nil
 
     // The Sync STT API applies the cleanup prompt server-side, so the transcript
     // it returns is already the final, polished text — there is no separate

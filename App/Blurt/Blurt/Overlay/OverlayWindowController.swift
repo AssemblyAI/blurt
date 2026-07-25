@@ -162,6 +162,13 @@ final class OverlayWindowController {
     panel.orderOut(nil)
     panel.alphaValue = 1
     bridge.state = .idle
+    // Clear the level too, or the pill's next appearance renders its bars at the
+    // PREVIOUS dictation's loudness until the first new meter tick (~50 ms)
+    // replaces it — a one-frame "already talking" flash at the start of every
+    // dictation. `MicCapture.stop()` cancels the meter task without a final zero
+    // yield, so nothing else resets this. The shared final step of every dismiss
+    // path, so `hide()` is covered through here too.
+    bridge.level = 0
   }
 
   /// Drives the pill on/off screen, fading unless Reduce Motion is on. Idempotent

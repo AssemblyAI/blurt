@@ -36,9 +36,23 @@ public enum APIKeyStore {
   public static func get() -> String? {
     cache.withLock { state in
       if case .loaded(let value) = state { return value }
-      let value = store.get()
-      state = .loaded(value)
-      return value
+      switch store.read() {
+      case .value(let key):
+        state = .loaded(key)
+        return key
+      case .absent:
+        state = .loaded(nil)
+        return nil
+      case .unavailable:
+        // Deliberately NOT memoized. A transient read failure — a locked login
+        // keychain, or the user denying the item's ACL prompt (which
+        // re-signing the app forces) — would otherwise pin "no API key" for the
+        // rest of the process: the wizard claims setup is incomplete and every
+        // press fails `.apiKeyMissing` with no way back short of a relaunch or
+        // retyping the key. Leaving the cache `.unloaded` means the next press
+        // retries the Keychain, which is how this self-healed before the memo.
+        return nil
+      }
     }
   }
 
@@ -46,13 +60,24 @@ public enum APIKeyStore {
   /// deletes the stored key. Returns `true` on success.
   @discardableResult
   public static func set(_ key: String?) -> Bool {
-    let ok = store.set(key)
-    // Refresh the memo from the store rather than caching `key` verbatim: `set`
-    // trims/normalizes (and maps empty → deleted), so a re-read reflects exactly
-    // what `get()` would now return, and a failed write leaves no stale value.
-    let stored = store.get()
-    cache.withLock { $0 = .loaded(stored) }
-    return ok
+    // The write, the read-back, and the memo update all happen under one lock, so
+    // two overlapping writers can't interleave into a memo that disagrees with the
+    // Keychain (write A, write B, memo B, memo A would leave `hasKey` true for a
+    // key the Keychain no longer holds — a 401 the user can't explain until
+    // relaunch). `store` does not take this lock, so there's no reentrancy.
+    cache.withLock { state in
+      let ok = store.set(key)
+      // Re-read rather than caching `key` verbatim: `set` trims/normalizes (and
+      // maps empty → deleted), so a read-back reflects exactly what `get()` would
+      // now return, and a failed write leaves no stale value. An unreadable
+      // Keychain leaves the memo unloaded so the next `get()` retries.
+      switch store.read() {
+      case .value(let stored): state = .loaded(stored)
+      case .absent: state = .loaded(nil)
+      case .unavailable: state = .unloaded
+      }
+      return ok
+    }
   }
 
   // "Has a key?" lives on the injectable seam: `APIKeyGateway.hasKey`

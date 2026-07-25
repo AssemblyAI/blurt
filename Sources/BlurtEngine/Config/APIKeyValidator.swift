@@ -54,14 +54,16 @@ public struct APIKeyValidator: Sendable {
       guard let http = response as? HTTPURLResponse else { return .unreachable }
       switch http.statusCode {
       case 200..<300: return .valid
-      // 408 (request timeout) and 429 (rate limited) are transient — the key
-      // may be perfectly good, so report unreachable (a retry-when-online error)
-      // rather than rejecting it as invalid.
-      case 408, 429: return .unreachable
-      // Any other 4xx is a client error that means the key/request itself is
-      // bad (401/403 auth rejection, 400/422 malformed). Treat as invalid so
-      // the wizard shows a real error instead of silently saving a dead key.
-      case 400..<500: return .invalid
+      // Only the statuses that actually mean "this credential was rejected" or
+      // "this key is malformed" may report `.invalid`, because `.invalid` HARD
+      // BLOCKS setup: `APIKeySubmission.submit` refuses to persist the key, so the
+      // user can't finish onboarding with a key that works fine for dictation.
+      // A blanket `400..<500` also caught the cases that say nothing about the key
+      // — AssemblyAI retiring or moving this endpoint (404/405/410), or a corporate
+      // proxy or captive portal interposing its own 403/451 page — and told the
+      // user their good key was rejected. Everything else falls through to
+      // `.unreachable`, the outcome designed for "couldn't determine".
+      case 401, 403, 400, 422: return .invalid
       // 5xx and anything unexpected: server-side / can't determine — report
       // unreachable so the user retries rather than seeing a false rejection.
       default: return .unreachable

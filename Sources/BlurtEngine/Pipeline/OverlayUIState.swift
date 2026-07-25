@@ -55,7 +55,15 @@ extension PipelinePhase {
   /// How this phase should be presented on the overlay pill.
   public var overlayState: OverlayUIState {
     switch self {
-    case .idle, .injecting, .cancelled: .idle
+    case .idle, .cancelled: .idle
+    // `.injecting` maps to `.processing`, NOT `.idle`. The shell reads an `.idle`
+    // projection as "dismiss the pill", so mapping this working phase to idle
+    // started a fade-out mid-dictation: two wasted animation groups on the fast
+    // path, and on the slow one (the injector's activation wait runs up to 350 ms)
+    // the fade completed, ordering the panel out and tearing down the pill's
+    // content — then `.pasted` arrived and faded it back in. A visible blink at
+    // the end of a dictation, worst when the user has switched apps mid-transcribe.
+    case .injecting: .processing
     case .recording: .recording
     case .transcribing: .processing
     // A missing API key is an expected setup state, not a fault: the shell

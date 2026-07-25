@@ -24,6 +24,10 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// Required on every Sync API request — selects the synchronous STT model.
   private static let syncModel = "u3-sync-pro"
 
+  /// Wall-clock cap for the transcribe round trip: the server's own ~30 s
+  /// inference deadline plus headroom to upload a 120 s clip.
+  private static let requestTimeoutSeconds: TimeInterval = 45
+
   public init(
     apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.get() },
     baseURL: URL = URL(staticString: "https://sync.assemblyai.com"),
@@ -48,6 +52,13 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 
     var request = URLRequest(url: baseURL.appendingPathComponent("transcribe"))
     request.httpMethod = "POST"
+    // The server enforces a ~30 s per-request deadline (it answers 504 past it),
+    // so anything beyond that plus upload time is a stalled connection, not a slow
+    // transcription. Without an explicit value this inherits URLRequest's 60 s
+    // default — and that is a data-*idle* timeout, not a wall clock, so a
+    // trickling connection could hold the pill on "Transcribing…" far longer with
+    // no progress and no retry.
+    request.timeoutInterval = Self.requestTimeoutSeconds
     request.setValue(apiKey, forHTTPHeaderField: "Authorization")
     request.setValue(Self.syncModel, forHTTPHeaderField: "X-AAI-Model")
     request.setValue(

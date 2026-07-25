@@ -28,7 +28,7 @@
 /// prior-chunk context, the topic hint, and the destination sentence precede it
 /// as the `{context}. {baseInstruction}` shape, and keyword boosting trails it
 /// inline as `Keywords: a, b, c.` (per the mid-training instruction-type
-/// reference). It stays under the API's cap (`characterCap`): the contextual
+/// reference). It stays under a self-imposed ceiling (`characterCap`): the contextual
 /// blocks are clipped upstream in `FocusCapture`, and the key-terms clause is
 /// fitted to the remaining budget here. Exercised by
 /// `Tests/BlurtEngineTests/TranscriptionPromptTests.swift`.
@@ -42,10 +42,13 @@ enum TranscriptionPrompt {
   static let baseInstruction =
     "Transcribe without speaker labels, audio event descriptions, or emotion markers."
 
-  /// Hard cap the Sync API places on `config.prompt`; a longer prompt fails
-  /// the whole request, so `build` must never exceed it. The contextual blocks
-  /// are all clipped upstream in `FocusCapture`; the user's key terms are the
-  /// one unbounded input, so `build` fits them to whatever budget remains.
+  /// Self-imposed ceiling on the built prompt. The Sync API reference documents
+  /// no cap on `config.prompt` (the 4096-character figure it does document belongs
+  /// to `conversation_context`, where over-cap content is trimmed rather than
+  /// rejected), so this is a sanity bound, not a documented limit — an unbounded
+  /// prompt is a latency and cost risk regardless. The contextual blocks are all
+  /// clipped upstream in `FocusCapture`; the user's key terms are the one
+  /// unbounded input, so `build` fits them to whatever budget remains.
   static let characterCap = 4096
 
   /// Renders `context` into a Sync STT prompt, or `nil` when there is no usable
@@ -88,9 +91,9 @@ enum TranscriptionPrompt {
       // inline `Keywords: a, b, c.` form (Section 2.3) trailing the marker so the
       // model favors these exact spellings for names/jargon it would guess at.
       // The terms list is the one input with no upstream length cap, so include
-      // only as many whole terms as `characterCap` leaves room for — a huge
-      // Settings list must not push the prompt over the cap and fail every
-      // dictation with a 400.
+      // only as many whole terms as `characterCap` leaves room for, so a huge
+      // Settings list can't crowd out the instruction itself or balloon every
+      // request.
       var included: [String] = []
       var remaining = characterCap - prompt.count - " Keywords: .".count
       for term in keyTerms {

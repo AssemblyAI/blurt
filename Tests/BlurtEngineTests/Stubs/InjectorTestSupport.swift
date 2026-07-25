@@ -33,6 +33,14 @@ func makeRecordingInjector() -> (injector: KeyInjector, pasted: StringListBox) {
       pasted.append(clip.string)
       return true
     },
+    // Stub the activation. Omitting this defaulted to `KeyInjector.activate`, a
+    // REAL `NSRunningApplication.activate()` — so these tests yanked the
+    // developer's foreground app (twice, in the two-app case), and failed
+    // spuriously whenever `liveTargetApp()`'s unordered pick landed on a
+    // background-only process whose activate() returns false (the injector then
+    // throws `.targetAppLost` for reasons unrelated to separator logic). The
+    // separator tests only need a stable non-nil app identity, not activation.
+    activateTarget: { _ in true },
     clipboard: clip)
   return (injector, pasted)
 }
