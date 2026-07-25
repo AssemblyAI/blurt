@@ -14,15 +14,18 @@ private let transcriberLog = Logger(subsystem: BlurtIdentity.subsystem, category
 /// PCM, exactly the bytes the mic recorded — there is no re-encoding pass)
 /// plus a JSON `config` part, and the finished transcript comes back in the
 /// response body. No upload step, no job submission, no polling — one request
-/// per utterance. The Universal-3 sync model (`u3-sync-pro`) handles audio from
+/// per utterance. The sync model (`universal-3-5-pro`) handles audio from
 /// ~80 ms up to 120 s with a server-side inference deadline of ~30 s.
 public struct AssemblyAITranscriber: TranscriberProtocol {
   private let apiKeyProvider: @Sendable () -> String?
   private let baseURL: URL
   private let transport: any HTTPTransport
 
-  /// Required on every Sync API request — selects the synchronous STT model.
-  private static let syncModel = "u3-sync-pro"
+  /// Required on every Sync API request — selects the synchronous STT model. The
+  /// canonical identifier, and the only value in the endpoint's schema enum;
+  /// `u3-sync-pro` and `u3-pro` are accepted only as legacy aliases, so there's no
+  /// reason for a new request to send one.
+  private static let syncModel = "universal-3-5-pro"
 
   /// Idle timeout for the transcribe round trip — `URLRequest.timeoutInterval` is
   /// reset each time data moves, so this bounds *stalls*, not total elapsed time.
@@ -157,11 +160,14 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     return data
   }
 
-  /// Best human-readable explanation for a non-2xx response. The Sync API isn't
-  /// consistent about the field name across error classes (`error`, `message`,
-  /// and `detail` have all been seen), so try each; failing that, fall back to
-  /// the raw body text (trimmed and capped) so a failure never reaches the user
-  /// as a bare status code with no context. Returns nil only for an empty body.
+  /// Best human-readable explanation for a non-2xx response: `message`, then
+  /// `detail` (the two documented shapes — see `ErrorResponse`), then the raw body
+  /// text, trimmed and capped.
+  ///
+  /// The raw-body arm is deliberately kept. It is not compatibility with an old
+  /// API shape — it is what turns a response the API never promised (a proxy's HTML
+  /// 502, a captive-portal page) into something diagnosable instead of a bare
+  /// status code. Returns nil only for an empty body.
   static func errorMessage(from data: Data) -> String? {
     if let parsed = try? JSONDecoder().decode(ErrorResponse.self, from: data),
       let message = parsed.message
@@ -192,15 +198,19 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     let text: String
   }
 
-  /// A Sync API failure body. The endpoint labels the explanation differently
-  /// across error classes, so pull it from whichever of `error` / `message` /
-  /// `detail` is present and string-valued (a non-string `detail`, e.g. FastAPI's
-  /// validation array, is ignored — the caller then falls back to the raw body).
+  /// A Sync API failure body. The reference documents exactly two shapes:
+  /// `{error_code, message}` for the request/audio/server errors (400, 413, 415,
+  /// 500, 503, 504) and `{detail}` for auth and rate limiting (401, 429) — so read
+  /// `message`, then `detail`. A non-string `detail` (a FastAPI-style validation
+  /// array) is ignored and the caller falls back to the raw body.
+  ///
+  /// A third `error` key used to be tried first. It is in none of the documented
+  /// responses, so it was speculative — removed rather than carried as a guess.
   private struct ErrorResponse: Decodable {
     let message: String?
 
     enum CodingKeys: String, CodingKey {
-      case error, message, detail
+      case message, detail
     }
 
     init(from decoder: Decoder) throws {
@@ -208,7 +218,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
       func string(_ key: CodingKeys) -> String? {
         (try? container.decodeIfPresent(String.self, forKey: key)) ?? nil
       }
-      message = string(.error) ?? string(.message) ?? string(.detail)
+      message = string(.message) ?? string(.detail)
     }
   }
 }

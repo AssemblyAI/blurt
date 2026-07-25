@@ -29,7 +29,7 @@ the fast "don't" list.)
 - **No local models / model downloads.** Transcription is a remote AssemblyAI
   call. No on-device ASR/LLM, no model cache, no download UI.
 - Don't reintroduce a "remove filler words (um, uh, like)" directive in the
-  prompt — `u3-sync-pro` ignores it; it was deliberately dropped.
+  prompt — `universal-3-5-pro` ignores it; it was deliberately dropped.
 
 ## App shape
 

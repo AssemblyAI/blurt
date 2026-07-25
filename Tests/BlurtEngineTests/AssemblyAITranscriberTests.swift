@@ -54,7 +54,7 @@ struct HTTPClientTests {
       // the sync model selector, and a boundary-tagged multipart body. Anything
       // else gets a 400 so a header regression fails loudly here.
       guard request.value(forHTTPHeaderField: "Authorization") == "test-key",
-        request.value(forHTTPHeaderField: "X-AAI-Model") == "u3-sync-pro",
+        request.value(forHTTPHeaderField: "X-AAI-Model") == "universal-3-5-pro",
         request.value(forHTTPHeaderField: "Content-Type")?.hasPrefix("multipart/form-data; boundary=") == true
       else { return (400, Data()) }
       return (200, json(["text": "ok"]))
@@ -173,21 +173,6 @@ struct HTTPClientTests {
     }
   }
 
-  @Test("HTTP error message is read from the `error` field too, not just `message`")
-  func errorMessageFromErrorField() async throws {
-    let transport = FakeHTTPTransport { _ in (400, json(["error": "audio too short"])) }
-
-    do {
-      _ = try await collectTranscript(makeTranscriber(apiKey: "k", transport: transport))
-      Issue.record("expected a throw")
-    } catch let AssemblyAIError.http(status, message) {
-      #expect(status == 400)
-      #expect(message == "audio too short")
-    } catch {
-      Issue.record("expected AssemblyAIError.http, got \(error)")
-    }
-  }
-
   @Test("HTTP error falls back to the raw body when the shape is unknown")
   func errorMessageFallsBackToRawBody() {
     let body = Data(#"{"unexpected":"shape"}"#.utf8)
@@ -199,14 +184,19 @@ struct HTTPClientTests {
     #expect(AssemblyAITranscriber.errorMessage(from: json(["detail": "audio required"])) == "audio required")
   }
 
-  @Test("HTTP error message field precedence is error > message > detail")
+  @Test("HTTP error message field precedence is message > detail")
   func errorMessageFieldPrecedence() {
-    // The API labels its explanation inconsistently; when several fields
-    // co-exist the documented priority must hold, so a reorder can't silently
-    // change which message reaches the user.
-    #expect(
-      AssemblyAITranscriber.errorMessage(from: json(["error": "a", "message": "b", "detail": "c"])) == "a")
+    // The two documented shapes: `{error_code, message}` for request/audio/server
+    // errors and `{detail}` for auth and rate limiting. They shouldn't co-occur,
+    // but pin the order so a reorder can't silently change which reaches the user.
     #expect(AssemblyAITranscriber.errorMessage(from: json(["message": "b", "detail": "c"])) == "b")
+    #expect(AssemblyAITranscriber.errorMessage(from: json(["detail": "c"])) == "c")
+    // An `error` key is in none of the documented responses, so it is no longer
+    // consulted — such a body falls through to the raw-body arm rather than
+    // yielding the value. (Asserting the behavior, not the serialized bytes.)
+    let errorShaped = AssemblyAITranscriber.errorMessage(from: json(["error": "a"]))
+    #expect(errorShaped != "a")
+    #expect(errorShaped?.contains("error") == true)
   }
 
   @Test("a non-string `detail` (validation array) falls back to the raw body")
