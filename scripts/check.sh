@@ -43,6 +43,13 @@ MIN_COVERAGE=80
 
 export OS_ACTIVITY_MODE=disable
 
+# Fail the health check with a message. check.sh doesn't source release-lib.sh
+# (it is not part of the release pipeline), so it carries its own.
+die_check() {
+  echo "error: $*" >&2
+  exit 1
+}
+
 # Guard for the optional linters below: true when $1 is on PATH, otherwise emits
 # the standard skip note (with install hint $2) and returns false. On success it
 # also cds to REPO_ROOT, because every one of those checks runs from the repo
@@ -114,26 +121,30 @@ else
   PROFDATA="$BIN/codecov/default.profdata"
   XCTEST_BUNDLE="$(find "$BIN" -maxdepth 1 -name '*PackageTests.xctest' -print -quit)"
   XCTEST_BIN="$XCTEST_BUNDLE/Contents/MacOS/$(basename "$XCTEST_BUNDLE" .xctest)"
-  if command -v python3 >/dev/null 2>&1 && [ -f "$PROFDATA" ] && [ -f "$XCTEST_BIN" ]; then
-    # Exclusions (so the figure reflects deterministically-testable engine code):
-    #  - Tests/            : test files themselves, not shipping code.
-    #  - MicCapture.swift  : the AVAudioRecorder capture actor. It needs a real
-    #                        audio device, so it can't run in CI (its integration
-    #                        test, MicCaptureLevelsTests, is env-gated for the same
-    #                        reason). Its pure meter math lives in
-    #                        MicCapture+Meter.swift, which IS covered. Keep this
-    #                        list tight — exclude only code that genuinely cannot
-    #                        be exercised without hardware.
-    COVERAGE="$(xcrun llvm-cov export -summary-only -instr-profile "$PROFDATA" "$XCTEST_BIN" \
-      -ignore-filename-regex='Tests/|Audio/MicCapture\.swift' \
-      | python3 -c 'import sys,json; print(round(json.load(sys.stdin)["data"][0]["totals"]["lines"]["percent"],2))')"
-    echo "engine line coverage: ${COVERAGE}%"
-    if ! awk -v c="$COVERAGE" -v min="$MIN_COVERAGE" 'BEGIN{ exit (c+0 < min+0) }'; then
-      echo "error: coverage ${COVERAGE}% is below the ${MIN_COVERAGE}% floor"
-      exit 1
-    fi
-  else
-    echo "note: skipping coverage gate (need python3 + a coverage build)"
+  # These must exist after `swift test --enable-code-coverage`. Previously a
+  # missing one (a renamed test bundle, a coverage build that didn't happen)
+  # turned the >=80% floor into a printed note and check.sh still exited 0 — the
+  # gate vanished silently and CI stayed green. Fail instead.
+  [ -n "$XCTEST_BUNDLE" ] || die_check "no *PackageTests.xctest found under $BIN — coverage gate cannot run"
+  [ -f "$PROFDATA" ] || die_check "no coverage profile at $PROFDATA — coverage gate cannot run"
+  [ -f "$XCTEST_BIN" ] || die_check "no test binary at $XCTEST_BIN — coverage gate cannot run"
+  command -v python3 >/dev/null 2>&1 || die_check "python3 not found — needed to read the coverage summary"
+  # Exclusions (so the figure reflects deterministically-testable engine code):
+  #  - Tests/            : test files themselves, not shipping code.
+  #  - MicCapture.swift  : the AVAudioRecorder capture actor. It needs a real
+  #                        audio device, so it can't run in CI (its integration
+  #                        test, MicCaptureLevelsTests, is env-gated for the same
+  #                        reason). Its pure meter math lives in
+  #                        MicCapture+Meter.swift, which IS covered. Keep this
+  #                        list tight — exclude only code that genuinely cannot
+  #                        be exercised without hardware.
+  COVERAGE="$(xcrun llvm-cov export -summary-only -instr-profile "$PROFDATA" "$XCTEST_BIN" \
+    -ignore-filename-regex='Tests/|Audio/MicCapture\.swift' \
+    | python3 -c 'import sys,json; print(round(json.load(sys.stdin)["data"][0]["totals"]["lines"]["percent"],2))')"
+  echo "engine line coverage: ${COVERAGE}%"
+  if ! awk -v c="$COVERAGE" -v min="$MIN_COVERAGE" 'BEGIN{ exit (c+0 < min+0) }'; then
+    echo "error: coverage ${COVERAGE}% is below the ${MIN_COVERAGE}% floor"
+    exit 1
   fi
 
   echo "==> swift test --sanitize=thread (data-race detection)"

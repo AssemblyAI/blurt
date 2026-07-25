@@ -43,8 +43,12 @@ require_clean_tree() {
 }
 
 # Echo CFBundleShortVersionString read from the project.yml at $1, dying when
-# it can't be parsed. Call as: VERSION="$(require_project_version "$path")" —
-# the die inside the substitution fails the assignment under `set -e`.
+# it can't be parsed. Call as a PLAIN assignment:
+#   VERSION="$(require_project_version "$path")"
+# so the die inside the substitution fails the assignment under `set -e`. Do NOT
+# write `local v="$(require_project_version …)"` — `local`/`declare`/`export`
+# swallow the substitution's exit status, so the die prints but execution
+# continues with an empty value. Declare first, assign on the next line.
 require_project_version() {
   local version
   version="$(parse_short_version <"$1")"
@@ -111,11 +115,15 @@ version_gt() {
   [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n1)" = "$1" ]
 }
 
-# Read the scalar value of YAML key $1 from content on stdin, unquoted. Matches
-# the key as a whole field, so `CFBundleVersion` does not also match
-# `CFBundleVersionSomethingElse`.
+# Read the scalar value of YAML key $1 from content on stdin, stripping single or
+# double quotes. Matches the key as a whole awk field ($1 on an indented line is
+# the key), which the previous unanchored `/key:/` regex did not: `MyCFBundleVersion:`
+# matched and returned the wrong value, and a commented-out `# CFBundleVersion:`
+# matched with `$2` being the key name itself. (A longer key sharing the prefix,
+# like `CFBundleVersionSomethingElse:`, was never a hazard — the old regex already
+# required the colon.) All three are pinned in release.test.sh.
 parse_yaml_scalar() {
-  awk -v key="$1:" '$1 == key {gsub(/"/, "", $2); print $2; exit}'
+  awk -v key="$1:" '$1 == key {gsub(/["'"'"']/, "", $2); print $2; exit}'
 }
 
 # Read CFBundleShortVersionString from project.yml content on stdin. The one

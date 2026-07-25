@@ -58,7 +58,14 @@ jobs:
           if [ -z "$range" ]; then
             echo "code=true" >>"$GITHUB_OUTPUT"; exit 0
           fi
-          changed="$(git diff --name-only "$range")"
+          # `|| true` is the safety property, not tidiness: this step runs under
+          # `bash -e`, so a failing git diff (an unreachable base sha after a
+          # force-push, a fork edge case) fails the step, fails this job, and makes
+          # the `check` job SKIP — which GitHub reports to branch protection as a
+          # passing required check. The entire macOS gate would be bypassed on a
+          # green-looking PR. An empty `changed` falls through to code=true below,
+          # so failing open runs the full check instead.
+          changed="$(git diff --name-only "$range" || true)"
           echo "Changed files in $range:"; echo "$changed"
           # Capture non-docs lines and test emptiness (robust across grep impls).
           nondocs="$(printf '%s\n' "$changed" | grep -vE '^docs/' || true)"

@@ -60,6 +60,8 @@ check "ignores a commented-out key" "32" \
   "$(printf '        # CFBundleVersion: "99"\n        CFBundleVersion: "32"\n' | parse_bundle_version)"
 check "ignores a longer key sharing the prefix" "32" \
   "$(printf '        CFBundleVersionSomethingElse: "99"\n        CFBundleVersion: "32"\n' | parse_bundle_version)"
+check "strips single quotes" "1.2.3" \
+  "$(printf "        CFBundleShortVersionString: '1.2.3'\n" | parse_short_version)"
 
 echo "== parse_bundle_version =="
 check "parses build number" "6" \

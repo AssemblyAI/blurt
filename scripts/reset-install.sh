@@ -40,7 +40,7 @@ if [ -x "$LSREGISTER" ]; then
   for dest in "/Applications/Blurt.app" "$HOME/Applications/Blurt.app"; do
     [ -d "$dest" ] && "$LSREGISTER" -f "$dest" >/dev/null 2>&1 && echo "    registered: $dest" || true
   done
-fi
+fi || info "LaunchServices re-registration skipped (lsregister failed)"
 
 echo "==> Clearing UserDefaults for $BUNDLE_ID"
 defaults delete "$BUNDLE_ID" 2>/dev/null || true

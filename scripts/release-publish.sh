@@ -35,6 +35,22 @@ info "version: $VERSION"
 info "dmg:     $DMG"
 info "dsym:    $DSYM_ZIP"
 
+# The artifacts must have been built from the commit we are about to tag.
+# Without this, building at commit A and then pulling any commit that doesn't
+# touch CFBundleShortVersionString (a code fix, a doc change) lets this script
+# tag commit B and publish A's binary under it — a release whose page and whose
+# bits disagree, with every other check still passing. `release.sh` already
+# makes exactly this comparison to decide whether a rebuild is needed
+# (`dmg_already_built`); the publish step is where it actually protects users.
+BUILD_INFO="$BUILD_ROOT/build-info.txt"
+[ -f "$BUILD_INFO" ] || die "build provenance not found at $BUILD_INFO — rebuild with scripts/release-build.sh"
+BUILT_SHA="$(parse_build_info_git_sha <"$BUILD_INFO")"
+[ -n "$BUILT_SHA" ] || die "could not parse the built commit from $BUILD_INFO — rebuild with scripts/release-build.sh"
+HEAD_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+[ "$BUILT_SHA" = "$HEAD_SHA" ] \
+  || die "DMG was built from $BUILT_SHA but HEAD is $HEAD_SHA — rebuild with scripts/release-build.sh before publishing"
+info "built at: $BUILT_SHA (matches HEAD)"
+
 step "Validate staple"
 xcrun stapler validate "$DMG" >/dev/null || die "DMG not stapled — rebuild with release-build.sh"
 

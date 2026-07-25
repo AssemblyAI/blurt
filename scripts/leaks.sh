@@ -75,13 +75,23 @@ APP_PID=$!
 sleep "$SETTLE_SECONDS"
 
 echo "==> scanning pid $APP_PID with the leak detector"
+# The app must still be alive, or `leaks` has nothing to attach to and the report
+# below is an error string rather than a scan.
+kill -0 "$APP_PID" 2>/dev/null \
+  || die "app exited before the scan could run (see /tmp/blurt-leaks-app.log)"
 # `leaks` returns non-zero when it finds any leak; we do our own attribution
 # below, so don't let its exit status abort the script.
 leaks "$APP_PID" >"$REPORT" 2>&1 || true
 { kill "$APP_PID" && wait "$APP_PID"; } >/dev/null 2>&1 || true
 
-TOTAL_LINE="$(grep -oE '[0-9]+ leaks for [0-9]+ total leaked bytes' "$REPORT" | head -1)"
-echo "==> ${TOTAL_LINE:-no leak summary} (full report: $REPORT)"
+# `|| true` is required: under `set -euo pipefail` a non-matching grep exits 1 and
+# pipefail propagates it, which aborted the whole script *at the assignment* — so a
+# scan that couldn't attach printed nothing at all and the `:-` fallback below was
+# unreachable. CI then showed a bare non-zero exit indistinguishable from a real leak.
+TOTAL_LINE="$(grep -oE '[0-9]+ leaks for [0-9]+ total leaked bytes' "$REPORT" | head -1 || true)"
+[ -n "$TOTAL_LINE" ] \
+  || die "leaks produced no summary — the scan did not run. Report: $REPORT"
+echo "==> $TOTAL_LINE (full report: $REPORT)"
 
 # Attribute: count leak-graph / backtrace lines whose module column is Blurt's
 # own binary (the executable, its Debug dylib, or statically-linked BlurtEngine).
