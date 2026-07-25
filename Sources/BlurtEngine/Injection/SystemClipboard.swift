@@ -134,9 +134,18 @@ struct SystemClipboard: ClipboardAccess {
       if pb.writeObjects(pbItems) { return }
     }
 
-    // Either nothing was materializable, or the write was refused. Put the text
-    // back if we have it; otherwise leave the pasteboard as-is, since clearing it
-    // would discard content we cannot replace.
+    // Either nothing was materializable, or the write above was refused. Put the
+    // text back if we have it.
+    //
+    // Precise about the one case this does NOT recover: if items DID materialize,
+    // `writeObjects` refused them, and there was no plain-string flavor, the
+    // pasteboard has already been cleared and stays empty. That is not gated on
+    // `plainText` being non-nil on purpose — skipping the item write whenever
+    // there's no text flavor would refuse to restore an image-only or
+    // file-only clipboard, which is a far more common clipboard than a refused
+    // batch write. `writeObjects` failing on a freshly-cleared pasteboard holding
+    // valid `NSPasteboardItem`s is a programming error, not a runtime condition,
+    // and NSPasteboard offers no way to test a write before clearing.
     if let plainText = saved.plainText {
       pb.clearContents()
       pb.setString(plainText, forType: .string)

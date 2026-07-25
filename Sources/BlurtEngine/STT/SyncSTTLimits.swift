@@ -44,7 +44,12 @@ public enum SyncSTTLimits {
   /// only the capture/upload code needs it.
   static func durationMs(ofPCMBytes byteCount: Int, rate: Int = sampleRate) -> Int {
     guard rate > 0 else { return 0 }
-    return Int((Double(byteCount / bytesPerSample) / Double(rate)) * 1000)
+    // Convert before dividing: `byteCount / bytesPerSample` in integer arithmetic
+    // truncates a trailing partial sample. That can't happen for well-formed S16LE
+    // (byte counts are always even), and the error bound is one sample — 0.0625 ms
+    // at 16 kHz — but there's no reason for the expression to be wrong for an odd
+    // count it might one day be handed.
+    return Int((Double(byteCount) / Double(bytesPerSample) / Double(rate)) * 1000)
   }
 
   /// Safety margin subtracted from the cap for the auto-release timeout, so the
