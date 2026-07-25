@@ -26,8 +26,6 @@ final class OverlayBridge {
 }
 
 final class OverlayWindowController {
-  private static let customOriginXKey = "BlurtOverlayCustomOriginX"
-  private static let customOriginYKey = "BlurtOverlayCustomOriginY"
   // The panel is sized larger than the visible pill so SwiftUI's drop shadow
   // (see `OverlayView`'s `.shadow`, which documents staying within
   // `shadowMargin`) has room to render without being clipped by the window's
@@ -225,15 +223,15 @@ final class OverlayWindowController {
 
   private func reposition() {
     guard let screen = NSScreen.main else { return }
-    // The placement rules (default bottom-center, clamping a stale dragged
-    // origin back on screen) are the engine's `OverlayPlacement`, unit-tested
-    // there. The 80 pt clearance is measured to the visible *pill*, so the
-    // panel origin backs off by the transparent shadow margin.
-    let origin = OverlayPlacement.origin(
+    // All the placement policy — default bottom-center, the clearance, the
+    // pill-vs-panel shadow correction, and clamping a stale dragged origin back on
+    // screen — is the engine's `OverlayPlacement`, unit-tested there. This passes
+    // only what the shell owns: the panel size, the screen, and the shadow inset.
+    let origin = OverlayPlacement.panelOrigin(
       panelSize: panel.frame.size,
       visibleFrame: screen.visibleFrame,
-      customOrigin: storedCustomOrigin(),
-      bottomOffset: 80 - Self.shadowMargin)
+      customOrigin: Self.originStore.origin,
+      shadowMargin: Self.shadowMargin)
     suppressOriginPersist = true
     panel.setFrameOrigin(origin)
     suppressOriginPersist = false
@@ -241,17 +239,11 @@ final class OverlayWindowController {
 
   private func handleDidMove() {
     guard !suppressOriginPersist else { return }
-    let origin = panel.frame.origin
-    UserDefaults.standard.set(Double(origin.x), forKey: Self.customOriginXKey)
-    UserDefaults.standard.set(Double(origin.y), forKey: Self.customOriginYKey)
+    Self.originStore.origin = panel.frame.origin
   }
 
-  private func storedCustomOrigin() -> NSPoint? {
-    let defaults = UserDefaults.standard
-    guard
-      let x = defaults.object(forKey: Self.customOriginXKey) as? Double,
-      let y = defaults.object(forKey: Self.customOriginYKey) as? Double
-    else { return nil }
-    return NSPoint(x: x, y: y)
-  }
+  /// Persistence for the dragged origin lives in the engine next to the clamping
+  /// it feeds, and is registered in `PersistedSettings.allDefaultsKeys` so reset
+  /// sweeps clear it.
+  private static let originStore = OverlayOriginStore()
 }

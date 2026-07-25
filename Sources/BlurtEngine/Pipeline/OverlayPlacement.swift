@@ -5,6 +5,32 @@ import CoreGraphics
 /// in the screen's visible frame and the persisted drag origin; only the
 /// `NSScreen`/`NSPanel` plumbing stays in the shell.
 public enum OverlayPlacement {
+  /// Default clearance between the bottom of the *visible pill* and the bottom of
+  /// the screen's visible frame.
+  ///
+  /// Measured to the pill, not the panel: the panel is deliberately larger so the
+  /// drop shadow isn't clipped, so a caller placing the panel must back this off
+  /// by that transparent inset. `panelOrigin(…shadowMargin:)` does that here,
+  /// where it's unit-tested — when the arithmetic lived at the AppKit call site,
+  /// changing the shadow margin silently moved the pill and no test noticed.
+  public static let defaultBottomClearance: CGFloat = 80
+
+  /// Resolves the *panel* origin from what the shell genuinely owns — the screen's
+  /// visible frame, the persisted drag origin, and the panel's transparent shadow
+  /// inset — keeping the clearance policy and the pill/panel conversion in here.
+  public static func panelOrigin(
+    panelSize: CGSize,
+    visibleFrame: CGRect,
+    customOrigin: CGPoint?,
+    shadowMargin: CGFloat
+  ) -> CGPoint {
+    origin(
+      panelSize: panelSize,
+      visibleFrame: visibleFrame,
+      customOrigin: customOrigin,
+      bottomOffset: defaultBottomClearance - shadowMargin)
+  }
+
   /// Resolves the panel's origin: the user's dragged `customOrigin` clamped
   /// fully back onto the current screen, or — when the pill has never been
   /// moved — the default placement, horizontally centered with its bottom edge

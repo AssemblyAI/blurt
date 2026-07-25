@@ -23,6 +23,34 @@ public enum PipelinePhase: Equatable, Sendable {
     default: false
     }
   }
+
+  /// The blocker behind this phase when it represents an unfinished **setup**
+  /// step rather than a fault — something the user must go and fix, not a
+  /// dictation that broke. Nil for every other phase and every genuine failure.
+  ///
+  /// Owned here so the classification exists once. Two consumers act on it and
+  /// they must agree: `overlayState` renders it as calm `.idle` (no red flash on
+  /// the way to the fix), and the host routes it to whatever surfaces setup. When
+  /// both re-derived it by pattern-matching `.failed(.apiKeyMissing)`, adding a
+  /// second blocker — a press-time mic-permission check is the obvious next one —
+  /// meant remembering both sites, and missing either gives a red flash with no
+  /// route to the fix, or a press that silently does nothing.
+  public var setupBlocker: BlurtError? {
+    guard case .failed(let error) = self, error.isSetupBlocker else { return nil }
+    return error
+  }
+}
+
+extension BlurtError {
+  /// True for errors that mean "setup isn't finished" rather than "dictation
+  /// failed". Internal: hosts ask `PipelinePhase.setupBlocker`, which is the form
+  /// they actually need.
+  var isSetupBlocker: Bool {
+    switch self {
+    case .apiKeyMissing: true
+    default: false
+    }
+  }
 }
 
 extension BlurtError: Equatable {

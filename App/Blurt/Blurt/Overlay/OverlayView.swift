@@ -177,11 +177,14 @@ private struct StatusLineText: View {
 }
 
 /// Redraw cap for the pill's continuous animations — the REC dot's pulse, the
-/// "Transcribing…" breath, and the waveform's idle wave. Matched to the mic
-/// meter's cadence (`MicCapture.meterInterval`, 20 Hz): the level feed and these
-/// slow sines can't show anything faster, so rendering at the display's full
-/// refresh rate (up to 120 Hz on ProMotion) would only burn energy.
-private let overlayAnimationInterval: Double = 1.0 / 20.0
+/// "Transcribing…" breath, and the waveform's idle wave.
+///
+/// Read from the engine rather than restated: the cap exists *because* of the mic
+/// meter's cadence (the level feed and these slow sines can't show anything
+/// faster, so rendering at the display's full refresh rate — up to 120 Hz on
+/// ProMotion — would only burn energy), so it tracks that one number instead of
+/// duplicating it behind a comment that could go stale.
+private let overlayAnimationInterval = MicCapture.meterIntervalSeconds
 
 extension View {
   /// Raised-cosine opacity breathing over `period`: 1 → `minOpacity` → 1, so the

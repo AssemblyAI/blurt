@@ -8,11 +8,12 @@ final class AppCoordinator {
   /// so the panel and its SwiftUI host aren't built until the app is fully
   /// configured and the pill is about to appear. Stays nil through onboarding.
   private var overlay: OverlayWindowController?
-  /// Invoked when the user triggers dictation without a saved API key. The app
-  /// shell wires this to bring the setup/settings window forward so the user can
-  /// add a key — the actionable fix — rather than flashing a message that
-  /// disappears.
-  let onMissingAPIKey: @MainActor () -> Void
+  /// Invoked when a press is refused because setup isn't finished — today a
+  /// missing API key, and whatever else the engine classifies as a
+  /// `PipelinePhase.setupBlocker`. The app shell wires this to bring the
+  /// setup/settings window forward so the user lands on the actionable fix rather
+  /// than seeing a message that disappears.
+  let onSetupBlocked: @MainActor () -> Void
 
   let session: DictationSession
   /// The mic seam, kept beyond session construction for its two side features —
@@ -50,11 +51,11 @@ final class AppCoordinator {
   /// in-memory store with an offline validator — the engine's `APIKeySubmission`
   /// still owns the never-persist-an-unverified-key invariant either way.
   init(
-    onMissingAPIKey: @escaping @MainActor () -> Void,
+    onSetupBlocked: @escaping @MainActor () -> Void,
     components: DictationComponents = .production(),
     apiKey: APIKeyModel = APIKeyModel()
   ) {
-    self.onMissingAPIKey = onMissingAPIKey
+    self.onSetupBlocked = onSetupBlocked
     self.apiKey = apiKey
 
     // Unbounded: the Recent list is append-only, so every transcript must survive
@@ -211,12 +212,13 @@ final class AppCoordinator {
   }
 
   private func render(_ phase: PipelinePhase) {
-    // A missing key is a setup state, not a fault: the engine projections
-    // below render it as calm idle (no red flash) and Monitoring ignores it —
-    // the only app-level part is the navigation side effect, bringing the
-    // settings window forward so the user lands on the fix.
-    if case .failed(.apiKeyMissing) = phase {
-      onMissingAPIKey()
+    // A setup blocker is a state, not a fault: the engine projections below
+    // render it as calm idle (no red flash) and the menu bar ignores it — the only
+    // app-level part is the navigation side effect, bringing the settings window
+    // forward so the user lands on the fix. Which failures count as setup is the
+    // engine's call (`PipelinePhase.setupBlocker`), not re-derived here.
+    if phase.setupBlocker != nil {
+      onSetupBlocked()
     }
     // Reveal the pill first, then fire the cue: the sound must never sit in
     // front of the visual state change. Pure phase→pill mapping lives in the

@@ -59,6 +59,25 @@ struct OverlayUIStateTests {
     #expect(PipelinePhase.failed(.apiKeyMissing).overlayState == .idle)
   }
 
+  @Test("setupBlocker names the failures that are unfinished setup, not faults")
+  func setupBlockerClassification() {
+    // The single classification both consumers derive from: this projection renders
+    // a setup blocker as calm `.idle`, and the shell routes it to the settings
+    // window. When each pattern-matched `.failed(.apiKeyMissing)` for itself,
+    // adding a second blocker meant remembering both sites — miss the engine one
+    // and the user gets a red flash; miss the shell one and the press silently does
+    // nothing.
+    #expect(PipelinePhase.failed(.apiKeyMissing).setupBlocker == .apiKeyMissing)
+    // A genuine failure is not a setup state.
+    #expect(PipelinePhase.failed(.targetAppLost).setupBlocker == nil)
+    // Neither is any non-failed phase.
+    for phase in [PipelinePhase.idle, .recording, .transcribing, .injecting, .pasted, .noTarget] {
+      #expect(phase.setupBlocker == nil)
+    }
+    // And the pill projection agrees with the classification.
+    #expect(PipelinePhase.failed(.apiKeyMissing).overlayState == .idle)
+  }
+
   @Test func failedFallsBackWhenNoDescription() {
     // Defensive: every BlurtError supplies an errorDescription today, but the
     // mapping must still produce a non-empty message if one ever returns nil.
