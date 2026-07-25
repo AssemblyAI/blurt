@@ -111,8 +111,11 @@ private struct RecentDictationsSection: View {
     } else {
       // Live relative timestamps ("2 minutes ago") without a stored clock: the
       // TimelineView re-renders on a coarse cadence and each row formats against
-      // its current date. 30 s is fine — the smallest unit shown is minutes.
-      TimelineView(.periodic(from: .now, by: 30)) { timeline in
+      // its current date. Half the engine's "just now" window, so a row can't stay
+      // stale for longer than it — derived from that threshold rather than a bare
+      // 30 in case the window changes.
+      TimelineView(.periodic(from: .now, by: RecentDictations.Entry.justNowThreshold / 2)) {
+        timeline in
         VStack(spacing: 0) {
           ForEach(entries) { entry in
             RecentDictationRow(entry: entry, now: timeline.date)

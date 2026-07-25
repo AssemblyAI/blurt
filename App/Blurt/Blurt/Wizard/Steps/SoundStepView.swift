@@ -15,7 +15,9 @@ struct SoundStepView: View {
         SoundPack.fromPersisted(soundPackID)
       },
       set: { newValue in
-        soundPackID = newValue.id
+        // Write through the store (see `HotkeyStepView` for why): the store owns the
+        // encoding, `@AppStorage` observes the key to re-render.
+        SoundPackStore().soundPack = newValue
         coordinator.soundPackChanged()
       })
   }
@@ -30,7 +32,7 @@ struct SoundStepView: View {
         ForEach(SoundPack.groups, id: \.self) { group in
           Section(group) {
             ForEach(SoundPack.voices(in: group)) { pack in
-              Text(displayLabel(for: pack)).tag(pack)
+              Text(pack.label).tag(pack)
             }
           }
         }
@@ -40,10 +42,5 @@ struct SoundStepView: View {
     } footer: {
       Text("Set to None to silence start and stop cues.")
     }
-  }
-
-  private func displayLabel(for pack: SoundPack) -> String {
-    guard let synth = pack.synth else { return pack.label }
-    return "\(pack.label) · \(synth)"
   }
 }

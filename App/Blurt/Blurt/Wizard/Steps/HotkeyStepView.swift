@@ -15,7 +15,14 @@ struct HotkeyStepView: View {
         TriggerKey.fromPersisted(triggerKeyCode)
       },
       set: { newValue in
-        triggerKeyCode = newValue.rawValue
+        // Write through the store, not the raw `@AppStorage` slot: the store owns
+        // how a `TriggerKey` is encoded, and `@AppStorage` is here to *observe* the
+        // key so this view re-renders (it picks up the store's external write).
+        // Assigning `triggerKeyCode` directly left `TriggerKeyStore`'s setter with
+        // no production caller, so a change to the encoding — versioning the key,
+        // storing the case name, a migration — would keep `swift test` green while
+        // the picker silently kept writing the old form.
+        TriggerKeyStore().triggerKey = newValue
         coordinator.dictationBindingChanged()
       })
   }

@@ -27,15 +27,6 @@ public struct SoundPack: Sendable, Hashable, Identifiable {
   /// Bundled cue stem for the stop cue, or nil when no sound plays.
   public var stopFileName: String? { isSilent ? nil : "\(id)-stop" }
 
-  /// The synth this voice comes from, for the ready-screen credit, e.g.
-  /// "Yamaha DX-7". nil when no sound plays.
-  public var synth: String? {
-    guard let group else { return nil }
-    if group.hasPrefix("Yamaha DX7") { return "Yamaha DX-7" }
-    if group.hasPrefix("Roland Juno-106") { return "Roland Juno-106" }
-    return nil
-  }
-
   /// `.none` followed by the full catalog. Private: the picker builds itself from
   /// `.none` + `groups` + `voices(in:)`, so this exists only to back `find(id:)`.
   private static var all: [SoundPack] { [.none] + catalog }
