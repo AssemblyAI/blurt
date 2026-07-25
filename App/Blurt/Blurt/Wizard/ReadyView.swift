@@ -257,10 +257,12 @@ private struct ReadyBrandingView: View {
   /// (`recentDictations.entries`), and a bundle lookup plus a PNG decode is not
   /// something to re-do on the main thread each time.
   ///
-  /// `nonisolated(unsafe)` because `NSImage` isn't `Sendable`: this is a
-  /// let-constant assigned once from the bundle and only ever read, so there is no
-  /// mutable state to race on.
-  private nonisolated(unsafe) static let logo: NSImage? = Bundle.main
+  /// Left to the target's `SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor` default
+  /// rather than spelled `nonisolated(unsafe)`: `body` reads it on the main actor
+  /// either way, and this can't then break if a future SDK marks `NSImage`
+  /// `Sendable` (which would make the attribute an "unnecessary" warning, and the
+  /// app target builds with warnings-as-errors).
+  private static let logo: NSImage? = Bundle.main
     .url(forResource: "blurt-ready-logo", withExtension: "png")
     .flatMap(NSImage.init(contentsOf:))
 

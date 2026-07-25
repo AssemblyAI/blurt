@@ -136,8 +136,8 @@ Engine logic is covered by the Swift Testing unit suites above; the **app shell*
 the user drives it) is covered by an XCUITest bundle, **`App/Blurt/BlurtUITests/`**.
 It's a `bundle.ui-testing` target declared in `project.yml` and wired into the
 `Blurt` scheme's test action, so it runs via `xcodebuild test` — see
-**`scripts/uitest.sh`** (or `RUN_UI_TESTS=1 scripts/check.sh`). It's kept out of
-the default required gate because it needs a GUI session.
+**`scripts/uitest.sh`**, which `scripts/check.sh` also invokes as part of the
+required gate (so it needs a GUI session — it is skipped only by `--portable`).
 
 The suite drives the **real app** against deterministic, offline doubles rather
 than mocking the UI. A `-BlurtUITest` launch argument flips on a Debug-only

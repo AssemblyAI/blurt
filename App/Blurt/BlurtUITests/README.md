@@ -28,10 +28,9 @@ the real Keychain. Launching with `-BlurtUITest` (set by
 - injects offline stub collaborators (`UITestMic`, `UITestTranscriber`,
   `UITestInjector`) and an `InMemoryAPIKeyStore` via the `DictationComponents` /
   `APIKeyGateway` seams on `AppCoordinator`, and
-- presents a harness window with buttons that call the same pipeline entry points
-  the hotkey uses (`AppCoordinator.beginDictation` / `endDictation` /
-  `cancelDictation`), plus read-outs for the live pipeline phase and the
-  injector's last "paste".
+- presents a harness window with buttons that drive the same `DictationSession`
+  the hotkey does (`press()` / `release()` / `cancel()`), plus read-outs for the
+  live pipeline phase and the injector's last "paste".
 
 The lone-modifier `CGEventTap` trigger can't be synthesized by XCUITest (and
 needs an Accessibility-trusted process), so the harness drives the pipeline
@@ -41,7 +40,7 @@ directly; the tap → `DictationKeyGate` wiring is covered by the engine unit te
 
 ```bash
 scripts/uitest.sh                 # just the UI suite (macOS + Xcode)
-RUN_UI_TESTS=1 scripts/check.sh   # full health check including the UI suite
+scripts/check.sh                  # full health check; runs the UI suite too
 ```
 
 ## Maintenance

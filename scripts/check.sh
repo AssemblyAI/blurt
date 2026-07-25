@@ -50,10 +50,15 @@ export OS_ACTIVITY_MODE=disable
 #   if tool_ready prettier 'brew install prettier'; then … fi
 tool_ready() {
   if command -v "$1" >/dev/null 2>&1; then
-    cd "$REPO_ROOT"
+    # `|| return 1` is load-bearing: as an `if` *condition* this function runs
+    # with errexit suppressed, so a failed cd would otherwise fall through to
+    # `return 0` and run the linter from the wrong directory.
+    cd "$REPO_ROOT" || return 1
     return 0
   fi
-  echo "note: $1 not installed; skipping ($2)"
+  # ${2:-} so a one-arg call can't abort the whole script under `set -u` — and
+  # only on a machine where the tool is missing, the hardest path to notice.
+  echo "note: $1 not installed; skipping (${2:-})"
   return 1
 }
 
