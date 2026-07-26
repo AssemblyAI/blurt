@@ -72,6 +72,11 @@ private struct RecentDictationsSection: View {
 
   private static let rowHeight: CGFloat = 28
   private static let separatorThickness: CGFloat = 1
+
+  /// How often the relative timestamps re-render. Half the engine's "just now"
+  /// window, so a row can't read as stale for longer than that window lasts —
+  /// derived from the threshold rather than a bare `30` in case it changes.
+  private static let timestampRefresh = RecentDictations.Entry.justNowThreshold / 2
   /// Height of a full `capacity`-row list (rows + the separators between them);
   /// the container is pinned to this whether it holds 0, 1, or `capacity` rows.
   private var reservedHeight: CGFloat {
@@ -110,12 +115,9 @@ private struct RecentDictationsSection: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     } else {
       // Live relative timestamps ("2 minutes ago") without a stored clock: the
-      // TimelineView re-renders on a coarse cadence and each row formats against
-      // its current date. Half the engine's "just now" window, so a row can't stay
-      // stale for longer than it — derived from that threshold rather than a bare
-      // 30 in case the window changes.
-      TimelineView(.periodic(from: .now, by: RecentDictations.Entry.justNowThreshold / 2)) {
-        timeline in
+      // TimelineView re-renders on a coarse cadence (`timestampRefresh`) and each
+      // row formats against its current date.
+      TimelineView(.periodic(from: .now, by: Self.timestampRefresh)) { timeline in
         VStack(spacing: 0) {
           ForEach(entries) { entry in
             RecentDictationRow(entry: entry, now: timeline.date)

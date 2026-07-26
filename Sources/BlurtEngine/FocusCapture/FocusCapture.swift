@@ -89,12 +89,12 @@ enum FocusCapture {
   /// context capture is best-effort priming, so partial answers beat waiting.
   private static let axMessagingTimeoutSeconds: Float = 1
 
+  // Internal, not private: `hasEditableFocusedElement` in
+  // FocusCapture+Editability.swift calls it from another file.
   /// The system-wide focused UI element, or `nil` when none is resolvable
   /// (process not trusted, or nothing focused). The Accessibility *client* read
   /// APIs are thread-safe, so this serves both the off-main context capture
   /// and the injector's off-main editability check.
-  // Internal, not private: `hasEditableFocusedElement` in
-  // FocusCapture+Editability.swift calls it from another file.
   nonisolated static func systemFocusedElement() -> AXUIElement? {
     let system = AXUIElementCreateSystemWide()
     // Setting the timeout on the system-wide element applies it process-wide
@@ -221,13 +221,13 @@ enum FocusCapture {
       roleDescription: stringValue(element, kAXRoleDescriptionAttribute))
   }
 
+  // Internal for the same reason as `systemFocusedElement`: the editability path in
+  // FocusCapture+Editability.swift reads the role through it.
   /// Reads a `String`-valued AX attribute, returning `nil` for missing,
   /// non-string, or blank values. Trims, which is what the *label-ish* attributes
   /// want (role, title, placeholder, description). Do **not** use it for
   /// `kAXValueAttribute` when a caret offset will index the result — see
   /// `rawStringValue`.
-  // Internal for the same reason as `systemFocusedElement`: the editability path in
-  // FocusCapture+Editability.swift reads the role through it.
   nonisolated static func stringValue(_ element: AXUIElement, _ attribute: String) -> String? {
     rawStringValue(element, attribute)?.trimmedNonEmpty()
   }
