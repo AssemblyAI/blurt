@@ -63,14 +63,13 @@ enum FocusCapture {
     guard AXIsProcessTrusted() else { return .empty }
     guard let element = systemFocusedElement() else { return .empty }
 
-    // Don't read the value of a password field into the prompt. Fails *closed*:
-    // an unreadable role (AX timeout against a busy app, a non-string value from a
-    // buggy one) means we can't prove the field isn't secure, so treat it as
-    // secure. The cost is losing priming for an already-degraded app; the cost of
-    // failing open is a password in an outbound API request — and, with developer
-    // mode on, in `dictations.jsonl`.
-    let role = stringValue(element, kAXRoleAttribute)
-    let isSecure = role == nil || isSecureField(role: role, subrole: stringValue(element, kAXSubroleAttribute))
+    // Don't read the value of a password field into the prompt. The whole
+    // decision — including the fail-closed arm — lives in `mustRedactContents`,
+    // where it is unit-tested; this function needs a live AX element, so anything
+    // decided inline here would be covered by nothing.
+    let isSecure = mustRedactContents(
+      role: stringValue(element, kAXRoleAttribute),
+      subrole: stringValue(element, kAXSubroleAttribute))
     // `visibleTextOrNil` collapses an all-invisible read (e.g. Google Docs' lone
     // U+200B before the caret) to nil so it can't masquerade as real prior text.
     let prior = isSecure ? nil : visibleTextOrNil(priorText(of: element, maxChars: maxPriorChars))
@@ -265,8 +264,28 @@ enum FocusCapture {
   /// `editableRoles`, so a password field still *receives* the paste.
   static let secureFieldRole = "AXSecureTextField"
 
-  /// Pure decision behind the password-redaction guard in `captureFieldContext`:
-  /// do this focused element's role/subrole mean its contents must never be read?
+  /// The whole password-redaction decision `captureFieldContext` acts on: may this
+  /// focused element's contents be read into the STT prompt at all?
+  ///
+  /// Fails **closed** on an unreadable role (an AX timeout against a busy app, a
+  /// non-string value from a buggy one): we can't prove the field isn't secure, so
+  /// treat it as secure. The cost of failing closed is losing priming for an
+  /// already-degraded app; the cost of failing open is a password in an outbound
+  /// API request — and, with developer mode on, in `dictations.jsonl`.
+  ///
+  /// This lives here, whole, rather than as `role == nil || isSecureField(…)` at
+  /// the call site: `captureFieldContext` needs a live `AXUIElement`, so a decision
+  /// made inline there is covered by no test, and `isSecureField(role: nil,
+  /// subrole: nil)` is deliberately `false` — a test pins that. Splitting the
+  /// verdict across a tested half and an untested half is how a fail-closed guard
+  /// gets "simplified" away with the suite still green.
+  static func mustRedactContents(role: String?, subrole: String?) -> Bool {
+    role == nil || isSecureField(role: role, subrole: subrole)
+  }
+
+  /// Whether an element's role/subrole *identify* it as a secure field. Note this
+  /// answers only that narrower question — `mustRedactContents` is the guard
+  /// `captureFieldContext` uses, because an unreadable role must redact too.
   static func isSecureField(role: String?, subrole: String?) -> Bool {
     // AppKit ships both NSAccessibilitySecureTextFieldRole and
     // NSAccessibilitySecureTextFieldSubrole (both the same string), and an element

@@ -86,6 +86,15 @@ public actor DictationSession {
   /// press could wake and `release()` a later, unrelated session.
   private var autoReleaseTask: Task<Void, Never>?
 
+  /// Whether the current press's auto-release timer is still armed.
+  ///
+  /// Internal so a test can witness the teardown *directly*. Asserting it through
+  /// the timer's effects doesn't work: a surviving timer wakes, calls `release()`,
+  /// and then `performRelease` drops out on `guard phase == .recording` — so a
+  /// cancelled session looks identical whether or not the timer was torn down, and
+  /// the test passes with `cancelAutoRelease()` deleted.
+  var autoReleaseIsArmed: Bool { autoReleaseTask != nil }
+
   /// Handle to the transcribe→inject work spawned by `release()`. Stored so a
   /// `cancel()` arriving after recording has stopped (phase `.transcribing` or
   /// `.injecting`) can tear it down — otherwise the transcript would still be

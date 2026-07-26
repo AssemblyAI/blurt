@@ -48,22 +48,36 @@ public enum DictationLog {
   // public entry point is invoked from the `DictationSession` actor mid-
   // pipeline; doing the synchronous FileHandle I/O inline would briefly block
   // the actor. The queue is serial so entries stay append-ordered.
-  private static let queue = DispatchQueue(label: "\(BlurtIdentity.subsystem).DictationLog")
+  //
+  // Internal so a test can `sync {}` on it to drain a dispatched write, rather
+  // than polling the filesystem and hoping.
+  static let queue = DispatchQueue(label: "\(BlurtIdentity.subsystem).DictationLog")
 
-  /// Append a completed transcript to the JSONL log. **Gated on developer
-  /// mode:** with the switch off (the default) this returns without touching
-  /// the disk, so callers can invoke it unconditionally. The actual file I/O is
-  /// dispatched off the caller (see `queue`) so it never blocks the
-  /// `DictationSession` actor.
-  static func append(transcript: String, context: TranscriptionContext? = nil) {
-    guard DeveloperModeStore().isEnabled else { return }
+  /// Append a completed transcript to the JSONL log. **Gated on developer mode:**
+  /// with the switch off (the default) this returns without touching the disk, so
+  /// callers can invoke it unconditionally. The actual file I/O is dispatched off
+  /// the caller (see `queue`) so it never blocks the `DictationSession` actor.
+  ///
+  /// `store` and `url` exist to be overridden by tests: with both hard-coded, the
+  /// gate — the switch's entire privacy guarantee — could only be exercised by
+  /// writing to the real `~/Library/Logs`, so nothing covered it.
+  static func append(
+    transcript: String,
+    context: TranscriptionContext? = nil,
+    store: DeveloperModeStore = DeveloperModeStore(),
+    to url: URL = defaultURL
+  ) {
+    guard store.isEnabled else { return }
     let now = Date()
     queue.async {
-      append(transcript: transcript, context: context, to: defaultURL, now: now)
+      write(transcript: transcript, context: context, to: url, now: now)
     }
   }
 
-  static func append(
+  /// The unconditional writer: formats one entry and appends it. Distinct name
+  /// rather than an `append` overload so the gated entry point above can't be
+  /// bypassed by accidentally satisfying a different signature.
+  static func write(
     transcript: String, context: TranscriptionContext? = nil, to url: URL, now: Date
   ) {
     let entry = Entry(

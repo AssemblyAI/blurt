@@ -114,7 +114,12 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 
   /// Builds the `audio` (raw PCM) + `config` (JSON) multipart payload the Sync
   /// API expects, matching the field names `assembly dictate` sends.
-  private func multipartBody(pcm: Data, config: Data, boundary: String) -> Data {
+  ///
+  /// Internal, not private, so tests can assert the framing against the bytes.
+  /// `FakeHTTPTransport` can't: `URLProtocol`-style mocks don't reliably observe
+  /// the body of an `upload(from:)`, which left the wire format — boundaries, part
+  /// headers, the `audio.pcm` filename, CRLF placement — checked by nothing.
+  func multipartBody(pcm: Data, config: Data, boundary: String) -> Data {
     var body = Data()
     // Reserve up front (payload + a generous allowance for the boundary/header
     // framing) so appending the multi-MB PCM blob never grows the buffer through

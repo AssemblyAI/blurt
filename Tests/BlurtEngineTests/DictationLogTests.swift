@@ -19,35 +19,38 @@ private struct DecodedContext: Decodable {
   let prompt: String?
 }
 
-@Suite("DictationLog.append")
+/// Each test gets a fresh empty file in a unique temp directory so the host's real
+/// `~/Library/Logs/Blurt/dictations.jsonl` is never touched. File-scoped so the
+/// gate suite below shares it.
+private func makeTempLogURL() -> URL {
+  let dir = FileManager.default.temporaryDirectory
+    .appendingPathComponent("BlurtDictationLogTests-\(UUID().uuidString)", isDirectory: true)
+  try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+  return dir.appendingPathComponent("dictations.jsonl")
+}
+
+private func readLog(_ url: URL) -> String {
+  (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+}
+
+/// The unconditional writer: entry formatting and the on-disk JSONL shape. Whether
+/// any of it runs at all is the developer-mode gate, covered in the suite below.
+@Suite("DictationLog.write")
 struct DictationLogTests {
-  /// Each test gets a fresh empty file in a unique temp directory so the
-  /// host's real `~/Library/Logs/Blurt/dictations.jsonl` is never touched.
-  private func makeURL() -> URL {
-    let dir = FileManager.default.temporaryDirectory
-      .appendingPathComponent("BlurtDictationLogTests-\(UUID().uuidString)", isDirectory: true)
-    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    return dir.appendingPathComponent("dictations.jsonl")
-  }
-
-  private func read(_ url: URL) -> String {
-    (try? String(contentsOf: url, encoding: .utf8)) ?? ""
-  }
-
   @Test("creates the file on first append")
   func createsFileOnFirstAppend() {
-    let url = makeURL()
+    let url = makeTempLogURL()
     #expect(!FileManager.default.fileExists(atPath: url.path))
-    DictationLog.append(transcript: "Hi.", to: url, now: Date())
+    DictationLog.write(transcript: "Hi.", to: url, now: Date())
     #expect(FileManager.default.fileExists(atPath: url.path))
   }
 
   @Test("writes one JSON object per line, terminated by \\n")
   func writesOneJSONLine() {
-    let url = makeURL()
+    let url = makeTempLogURL()
     let now = Date(timeIntervalSince1970: 1_700_000_000)
-    DictationLog.append(transcript: "Polished.", to: url, now: now)
-    let contents = read(url)
+    DictationLog.write(transcript: "Polished.", to: url, now: now)
+    let contents = readLog(url)
     #expect(contents.hasSuffix("\n"))
     let lines = contents.split(separator: "\n", omittingEmptySubsequences: false)
     // One data line + one trailing empty (from the \n).
@@ -61,14 +64,14 @@ struct DictationLogTests {
 
   @Test("appends in order, preserves existing entries")
   func appendsInOrder() {
-    let url = makeURL()
+    let url = makeTempLogURL()
     let t0 = Date(timeIntervalSince1970: 1_700_000_000)
     let t1 = t0.addingTimeInterval(1)
     let t2 = t1.addingTimeInterval(1)
-    DictationLog.append(transcript: "A.", to: url, now: t0)
-    DictationLog.append(transcript: "B.", to: url, now: t1)
-    DictationLog.append(transcript: "C.", to: url, now: t2)
-    let lines = read(url)
+    DictationLog.write(transcript: "A.", to: url, now: t0)
+    DictationLog.write(transcript: "B.", to: url, now: t1)
+    DictationLog.write(transcript: "C.", to: url, now: t2)
+    let lines = readLog(url)
       .split(separator: "\n", omittingEmptySubsequences: true)
       .map(String.init)
     #expect(lines.count == 3)
@@ -80,9 +83,9 @@ struct DictationLogTests {
 
   @Test("uses sorted JSON keys for deterministic on-disk format")
   func sortedKeys() throws {
-    let url = makeURL()
-    DictationLog.append(transcript: "p", to: url, now: Date())
-    let line = read(url).split(separator: "\n").first.map(String.init) ?? ""
+    let url = makeTempLogURL()
+    DictationLog.write(transcript: "p", to: url, now: Date())
+    let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
     // Sorted keys → transcript < ts alphabetically.
     let transcript = try #require(line.range(of: "\"transcript\"")).lowerBound
     let ts = try #require(line.range(of: "\"ts\"")).lowerBound
@@ -91,12 +94,12 @@ struct DictationLogTests {
 
   @Test("threads focus context (incl. selected text) onto disk")
   func logsContext() {
-    let url = makeURL()
+    let url = makeTempLogURL()
     let context = TranscriptionContext(
       appName: "Mail", windowTitle: "Re: Q3 pricing", fieldLabel: "Body",
       priorText: "Hi Sam,", selectedText: "the old plan")
-    DictationLog.append(transcript: "p", context: context, to: url, now: Date())
-    let line = read(url).split(separator: "\n").first.map(String.init) ?? ""
+    DictationLog.write(transcript: "p", context: context, to: url, now: Date())
+    let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
     let decoded = try? JSONDecoder().decode(DecodedContext.self, from: Data(line.utf8))
     #expect(decoded?.app == "Mail")
     #expect(decoded?.window == "Re: Q3 pricing")
@@ -107,9 +110,9 @@ struct DictationLogTests {
 
   @Test("omits the selected field when nothing is selected")
   func omitsSelectedWhenAbsent() {
-    let url = makeURL()
-    DictationLog.append(transcript: "p", context: nil, to: url, now: Date())
-    let line = read(url).split(separator: "\n").first.map(String.init) ?? ""
+    let url = makeTempLogURL()
+    DictationLog.write(transcript: "p", context: nil, to: url, now: Date())
+    let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
     // `Encodable` synthesis uses `encodeIfPresent`, so a nil field is absent
     // rather than `"selected":null`.
     #expect(!line.contains("selected"))
@@ -117,31 +120,81 @@ struct DictationLogTests {
 
   @Test("logs the same assembled prompt the transcriber sends")
   func logsAssembledPrompt() {
-    let url = makeURL()
+    let url = makeTempLogURL()
     let context = TranscriptionContext(
       appName: "Mail", windowTitle: "Re: Q3 pricing", fieldLabel: "Body",
       priorText: "Hi Sam,", selectedText: "the old plan")
-    DictationLog.append(transcript: "p", context: context, to: url, now: Date())
-    let line = read(url).split(separator: "\n").first.map(String.init) ?? ""
+    DictationLog.write(transcript: "p", context: context, to: url, now: Date())
+    let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
     let decoded = try? JSONDecoder().decode(DecodedContext.self, from: Data(line.utf8))
     #expect(decoded?.prompt == TranscriptionPrompt.build(context: context))
   }
 
   @Test("omits the prompt field when there is no context to build one")
   func omitsPromptWhenNoContext() {
-    let url = makeURL()
-    DictationLog.append(transcript: "p", context: nil, to: url, now: Date())
-    let line = read(url).split(separator: "\n").first.map(String.init) ?? ""
+    let url = makeTempLogURL()
+    DictationLog.write(transcript: "p", context: nil, to: url, now: Date())
+    let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
     #expect(!line.contains("\"prompt\""))
   }
 
   @Test("survives unicode in transcript field")
   func unicodeRoundTrip() {
-    let url = makeURL()
+    let url = makeTempLogURL()
     let transcript = "Café — 北京 🎙️."
-    DictationLog.append(transcript: transcript, to: url, now: Date())
-    let line = read(url).split(separator: "\n").first.map(String.init) ?? ""
+    DictationLog.write(transcript: transcript, to: url, now: Date())
+    let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
     let decoded = try? JSONDecoder().decode(DecodedEntry.self, from: Data(line.utf8))
     #expect(decoded?.transcript == transcript)
+  }
+}
+
+/// The developer-mode gate on `append` — the switch's entire privacy guarantee:
+/// "a user who never opts in has no dictation text on disk." Every case in the
+/// suite above drives `write` directly, so none of them cross this guard.
+@Suite("DictationLog developer-mode gate")
+struct DictationLogGateTests {
+  @Test("with developer mode off, append writes nothing to disk")
+  func gateClosedWritesNothing() {
+    let url = makeTempLogURL()
+    // An unset key reads as off, which is the default a user who never opts in has.
+    let store = DeveloperModeStore(defaults: freshDefaults())
+    DictationLog.append(transcript: "private dictation", store: store, to: url)
+    // A dispatched write would have landed by the time this drains the serial queue,
+    // so a missing file means nothing was ever enqueued — not that we looked early.
+    DictationLog.queue.sync {}
+    #expect(!FileManager.default.fileExists(atPath: url.path))
+  }
+
+  @Test("with developer mode on, append writes the transcript")
+  func gateOpenWrites() {
+    let url = makeTempLogURL()
+    let store = DeveloperModeStore(defaults: freshDefaults())
+    store.isEnabled = true
+    DictationLog.append(transcript: "logged dictation", store: store, to: url)
+    DictationLog.queue.sync {}
+    #expect(readLog(url).contains("logged dictation"))
+  }
+
+  @Test("the gate is checked before the context is touched, for both settings")
+  func gateAppliesToContextualEntries() {
+    // The pipeline always passes the captured context, which is the part carrying
+    // prior text and the assembled prompt. Off must persist none of it.
+    let context = TranscriptionContext(
+      appName: "1Password", windowTitle: "Vault", fieldLabel: "Password",
+      priorText: "hunter2", selectedText: nil)
+    let offURL = makeTempLogURL()
+    DictationLog.append(
+      transcript: "p", context: context,
+      store: DeveloperModeStore(defaults: freshDefaults()), to: offURL)
+
+    let onStore = DeveloperModeStore(defaults: freshDefaults())
+    onStore.isEnabled = true
+    let onURL = makeTempLogURL()
+    DictationLog.append(transcript: "p", context: context, store: onStore, to: onURL)
+
+    DictationLog.queue.sync {}
+    #expect(!FileManager.default.fileExists(atPath: offURL.path))
+    #expect(readLog(onURL).contains("hunter2"))
   }
 }

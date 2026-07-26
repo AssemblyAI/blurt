@@ -173,6 +173,32 @@ struct FocusCaptureTests {
     #expect(!FocusCapture.isSecureField(role: "AXTextField", subrole: "AXSearchField"))
   }
 
+  // MARK: mustRedactContents
+
+  @Test("an unreadable role redacts — the guard fails closed")
+  func unreadableRoleRedacts() {
+    // The case `isSecureField` deliberately answers `false` for (it identifies
+    // secure fields, and a nil role identifies nothing). The guard
+    // `captureFieldContext` actually consults must answer `true`: an AX read that
+    // timed out or returned a non-string can't prove the field isn't a password, and
+    // guessing wrong puts the typed password in an outbound request and, with
+    // developer mode on, in dictations.jsonl.
+    #expect(FocusCapture.mustRedactContents(role: nil, subrole: nil))
+    #expect(FocusCapture.mustRedactContents(role: nil, subrole: "AXSearchField"))
+    // Same verdict as `isSecureField` everywhere the role *is* readable.
+    #expect(FocusCapture.mustRedactContents(role: "AXSecureTextField", subrole: nil))
+    #expect(FocusCapture.mustRedactContents(role: "AXTextField", subrole: "AXSecureTextField"))
+  }
+
+  @Test("a readable, non-secure role does not redact — priming still works")
+  func readableOrdinaryRoleDoesNotRedact() {
+    // The other half of the contract: failing closed must not degrade into "never
+    // read anything", which would silently drop prior-text priming everywhere.
+    #expect(!FocusCapture.mustRedactContents(role: "AXTextField", subrole: nil))
+    #expect(!FocusCapture.mustRedactContents(role: "AXTextArea", subrole: nil))
+    #expect(!FocusCapture.mustRedactContents(role: "AXTextField", subrole: "AXSearchField"))
+  }
+
   // MARK: isElectronApp
 
   @Test("isElectronApp is false for a missing app")
