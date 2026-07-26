@@ -46,7 +46,6 @@ struct KeychainStore: Sendable {
     }
   }
 
-
   /// Stores `value` (trimmed). Passing `nil` or an empty/whitespace string
   /// deletes the stored value. Returns `true` on success.
   @discardableResult
