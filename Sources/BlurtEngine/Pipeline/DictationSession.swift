@@ -81,19 +81,15 @@ public actor DictationSession {
   /// instead.) `performCancel` clears it whether or not it was consumed early.
   private var cancelRequested = false
 
+  // Internal, like `pipelineTask`, so a test can witness the cancel teardown
+  // *directly* — nil means disarmed. Asserting it through the timer's effects
+  // doesn't work: a surviving timer wakes, calls `release()`, and `performRelease`
+  // drops out on `guard phase == .recording`, so a cancelled session looks
+  // identical either way and the test passes with `cancelAutoRelease()` deleted.
   /// Handle to the auto-release timer started in `press()`. Stored so that
   /// `release()` can cancel it — otherwise a fire-and-forget timer from a prior
   /// press could wake and `release()` a later, unrelated session.
-  private var autoReleaseTask: Task<Void, Never>?
-
-  /// Whether the current press's auto-release timer is still armed.
-  ///
-  /// Internal so a test can witness the teardown *directly*. Asserting it through
-  /// the timer's effects doesn't work: a surviving timer wakes, calls `release()`,
-  /// and then `performRelease` drops out on `guard phase == .recording` — so a
-  /// cancelled session looks identical whether or not the timer was torn down, and
-  /// the test passes with `cancelAutoRelease()` deleted.
-  var autoReleaseIsArmed: Bool { autoReleaseTask != nil }
+  var autoReleaseTask: Task<Void, Never>?
 
   /// Handle to the transcribe→inject work spawned by `release()`. Stored so a
   /// `cancel()` arriving after recording has stopped (phase `.transcribing` or

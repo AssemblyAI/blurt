@@ -224,7 +224,7 @@ struct CancelRaceTests {
 
     await session.press()
     #expect(await session.phase == .recording)
-    #expect(await session.autoReleaseIsArmed)
+    #expect(await session.autoReleaseTask != nil)
     await session.cancel()
     #expect(await session.phase == .cancelled)
 
@@ -232,7 +232,7 @@ struct CancelRaceTests {
     // downstream effects below would pass even with `cancelAutoRelease()` deleted —
     // a surviving timer wakes, calls release(), and performRelease drops out on
     // `guard phase == .recording`, leaving every observable exactly as it is here.
-    #expect(await session.autoReleaseIsArmed == false)
+    #expect(await session.autoReleaseTask == nil)
 
     // Advance well past the auto-release deadline. Belt-and-braces on the above:
     // nothing wakes, so no transcript is produced or injected.
