@@ -42,12 +42,6 @@ struct OverlayOriginStoreTests {
     #expect(defaults.object(forKey: OverlayOriginStore.yDefaultsKey) == nil)
   }
 
-  @Test("both keys are in the reset roster")
-  func inPersistedSettingsRoster() {
-    // The reason this store is engine-side: when the keys were private to
-    // `OverlayWindowController`, no reset sweep knew about them and a pill dragged
-    // during a UI-test run survived into later runs.
-    #expect(PersistedSettings.allDefaultsKeys.contains(OverlayOriginStore.xDefaultsKey))
-    #expect(PersistedSettings.allDefaultsKeys.contains(OverlayOriginStore.yDefaultsKey))
-  }
+  // Roster membership for both keys is asserted in `PersistedSettingsTests`,
+  // alongside the count that pins the roster as a whole.
 }
