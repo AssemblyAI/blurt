@@ -9,13 +9,14 @@ import SwiftUI
 struct KeyTermsStepView: View {
   /// Stored in UserDefaults so multiple settings windows/readers see edits live.
   ///
-  /// `@AppStorage` is the **only** writer of this slot. Normalization happens on
-  /// read instead — `KeyTermsStore.get()` trims, and `parse` trims and dedupes each
-  /// term — so a blank field still reads back as "no terms". Also routing the write
-  /// through `KeyTermsStore.set` stored a second, differently-normalized value on
-  /// every keystroke: `set` trims, `@AppStorage` observed that external write and
-  /// pushed the trimmed string back into the binding, so a trailing space was
-  /// deleted as the user typed it and could never be entered at all.
+  /// `@AppStorage` is the **only** writer of this slot, which is why the store
+  /// deliberately exposes no setter. Normalization happens on read instead —
+  /// `KeyTermsStore.get()` trims, and `parse` trims and dedupes each term — so a
+  /// blank field still reads back as "no terms". A normalizing setter fought the
+  /// text field: it wrote a second, differently-normalized value on every
+  /// keystroke, `@AppStorage` observed that as an external write and pushed the
+  /// trimmed string back into the binding, so a trailing space was deleted as the
+  /// user typed it and could never be entered at all.
   @AppStorage(KeyTermsStore.defaultsKey) private var text = ""
 
   var body: some View {
