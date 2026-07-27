@@ -38,6 +38,32 @@ struct SemanticVersionTests {
     #expect(!(a < b))
   }
 
+  @Test("a shorter version sorts below a longer one whose extra component is non-zero")
+  func extraComponentIsNotIgnored() throws {
+    // `1.2 == 1.2.0` above is satisfied even by an ordering that only walks the
+    // *shorter* version's components — and that shortcut would also call 1.2 and
+    // 1.2.1 equal. `UpdateChecker` gates on `current < latest`, so it would then
+    // report "up to date" for a real published release and the update would never
+    // be offered. Pin both directions and the inequality.
+    let short = try #require(SemanticVersion("1.2"))
+    let longer = try #require(SemanticVersion("1.2.1"))
+    #expect(short < longer)
+    #expect(!(longer < short))
+    #expect(short != longer)
+  }
+
+  @Test("comparison keeps going past the third component")
+  func comparesBeyondThreeComponents() throws {
+    // A tag can carry a fourth component (a re-cut of a published version). It
+    // must order after the three-component release it extends, not equal to it.
+    let release = try #require(SemanticVersion("1.2.3"))
+    let recut = try #require(SemanticVersion("1.2.3.4"))
+    let laterRecut = try #require(SemanticVersion("1.2.3.5"))
+    #expect(release < recut)
+    #expect(recut < laterRecut)
+    #expect(!(laterRecut < recut))
+  }
+
   @Test("equal versions are not less than each other")
   func equalNotLess() throws {
     let v = try #require(SemanticVersion("0.1.30"))
