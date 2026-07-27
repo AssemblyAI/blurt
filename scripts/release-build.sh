@@ -180,14 +180,19 @@ step "Preflight"
 require_tools --hint='brew install create-dmg if needed' \
   xcodegen xcodebuild xcrun hdiutil codesign spctl create-dmg awk shasum
 
-xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
-  || die "notarytool profile '$NOTARY_PROFILE' not found. Run: xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <you@example.com> --team-id $TEAM_ID --password <app-specific-password>"
-
 unlock_signing_keychain
 # Re-lock the dedicated signing keychain no matter how we exit (success, die, or
 # a mid-build failure). Lives here rather than in a dedicated cleanup because the
 # only other EXIT trap (the DMG mount, below) is set up much later.
 trap lock_signing_keychain EXIT
+
+# Check the notary profile only AFTER unlocking the signing keychain: the
+# blurt-notary credentials live in that keychain, and notarytool runs
+# non-interactively, so against a still-locked keychain it can't read the
+# profile item and reports it as missing. Unlock first, then a genuine
+# "not found" here really means the profile was never stored.
+xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
+  || die "notarytool profile '$NOTARY_PROFILE' not found. Run: xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <you@example.com> --team-id $TEAM_ID --password <app-specific-password>"
 
 identity_listed "$IDENTITY" <<<"$(security find-identity -v -p codesigning)" \
   || die "Developer ID identity $IDENTITY not in keychain (check: security find-identity -v -p codesigning). Wrong Mac, or the signing key is missing."
