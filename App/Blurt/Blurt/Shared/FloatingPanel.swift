@@ -6,19 +6,19 @@ enum FloatingPanel {
     collectionBehavior: NSWindow.CollectionBehavior,
     contentView: NSView
   ) -> NSPanel {
-    let p = NSPanel(
-      contentRect: .init(origin: .zero, size: size),
+    let panel = NSPanel(
+      contentRect: CGRect(origin: .zero, size: size),
       styleMask: [.borderless, .nonactivatingPanel],
       backing: .buffered,
       defer: true
     )
-    p.isOpaque = false
-    p.backgroundColor = .clear
-    p.hasShadow = false
-    p.level = .floating
-    p.collectionBehavior = collectionBehavior
-    p.hidesOnDeactivate = false
-    p.contentView = contentView
-    return p
+    panel.isOpaque = false
+    panel.backgroundColor = .clear
+    panel.hasShadow = false
+    panel.level = .floating
+    panel.collectionBehavior = collectionBehavior
+    panel.hidesOnDeactivate = false
+    panel.contentView = contentView
+    return panel
   }
 }

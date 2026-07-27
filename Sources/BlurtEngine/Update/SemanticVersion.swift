@@ -27,28 +27,28 @@ public struct SemanticVersion: Sendable, Equatable, Comparable, CustomStringConv
   }
 
   public static func < (lhs: SemanticVersion, rhs: SemanticVersion) -> Bool {
-    lhs.ordering(vs: rhs) < 0
+    let (left, right) = alignedComponents(lhs, rhs)
+    return left.lexicographicallyPrecedes(right)
   }
 
   public static func == (lhs: SemanticVersion, rhs: SemanticVersion) -> Bool {
-    lhs.ordering(vs: rhs) == 0
+    let (left, right) = alignedComponents(lhs, rhs)
+    return left == right
   }
 
-  /// Component-wise comparison to `other`: negative if `self` sorts first, 0 if
-  /// equal, positive otherwise. Missing trailing components count as 0, so
-  /// `1.2` orders equal to `1.2.0`. The single source both `<` and `==` derive
-  /// from.
-  private func ordering(vs other: SemanticVersion) -> Int {
-    let count = max(components.count, other.components.count)
-    for index in 0..<count {
-      let (mine, theirs) = (component(at: index), other.component(at: index))
-      if mine != theirs { return mine < theirs ? -1 : 1 }
-    }
-    return 0
+  /// Both versions' components zero-extended to a common length, so `1.2` and
+  /// `1.2.0` compare as the identical `[1, 2, 0]`. The single basis both `<` and
+  /// `==` order on: element-wise array comparison, rather than a hand-rolled
+  /// three-way `Int` sentinel the two operators then had to interpret.
+  private static func alignedComponents(
+    _ lhs: SemanticVersion, _ rhs: SemanticVersion
+  ) -> (left: [Int], right: [Int]) {
+    let width = max(lhs.components.count, rhs.components.count)
+    return (lhs.padded(to: width), rhs.padded(to: width))
   }
 
-  /// The component at `index`, or 0 past the end — so `1.2` compares as `1.2.0`.
-  private func component(at index: Int) -> Int {
-    index < components.count ? components[index] : 0
+  /// This version's components zero-extended to `width`.
+  private func padded(to width: Int) -> [Int] {
+    components + Array(repeating: 0, count: max(0, width - components.count))
   }
 }

@@ -51,8 +51,10 @@ empty_count:
   # `count` (e.g. the stream-element counter in MicCaptureProtocolDefaultsTests).
   only_after_dot: true
 
-# The codebase deliberately uses short, idiomatic names (`p`, `e`, comparator
-# `a`/`b`, `pb` for pasteboard). Don't gate on identifier length.
+# Production code spells names out (`panel`, `encoder`, `pasteboard`) per the
+# Swift API Design Guidelines' clarity-over-brevity rule. What still needs a
+# sub-3-character allowance: `id` (the `Identifiable` requirement) and terse
+# fixture/comparator names in test bodies (`a`/`b`, `v`). Don't gate on length.
 identifier_name:
   min_length: 1
 

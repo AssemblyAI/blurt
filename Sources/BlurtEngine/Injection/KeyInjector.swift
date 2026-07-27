@@ -273,12 +273,20 @@ public actor KeyInjector: InjectorProtocol {
     let clock = ContinuousClock()
     let deadline = clock.now.advanced(by: .milliseconds(350))
     while clock.now < deadline {
-      if await MainActor.run(body: { NSWorkspace.shared.frontmostApplication?.processIdentifier == pid }) {
-        return true
-      }
+      if await isFrontmost(pid) { return true }
       try? await Task.sleep(for: .milliseconds(10))
     }
-    return await MainActor.run {
+    // One last read: the final sleep may have carried us past the deadline just
+    // before the activation landed.
+    return await isFrontmost(pid)
+  }
+
+  /// Whether `pid` owns the frontmost application right now. Named rather than
+  /// inlined so the poll and the post-deadline check share one expression — and so
+  /// neither needs `MainActor.run`'s explicit `body:` label, which a trailing
+  /// closure in an `if` condition can't use.
+  private static func isFrontmost(_ pid: pid_t) async -> Bool {
+    await MainActor.run {
       NSWorkspace.shared.frontmostApplication?.processIdentifier == pid
     }
   }
@@ -310,5 +318,4 @@ public actor KeyInjector: InjectorProtocol {
     up.post(tap: .cgAnnotatedSessionEventTap)
     return true
   }
-
 }

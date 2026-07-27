@@ -89,7 +89,7 @@ final class MemoizedKeyStore: Sendable {
     // storage no longer holds — a 401 the user can't explain until relaunch).
     // Neither injected closure takes this lock, so there's no reentrancy.
     cache.withLock { state in
-      let ok = write(key)
+      let didWrite = write(key)
       // Re-read rather than memoizing `key` verbatim: the storage layer
       // trims/normalizes (and maps empty → deleted), so a read-back reflects exactly
       // what `current` would now return, and a failed write leaves no stale value.
@@ -99,7 +99,7 @@ final class MemoizedKeyStore: Sendable {
       case .absent: state = .loaded(nil)
       case .unavailable: state = .unloaded
       }
-      return ok
+      return didWrite
     }
   }
 }

@@ -4,7 +4,7 @@ BlurtEngine is the Swift package that powers [Blurt](README.md)'s dictation pipe
 
 ## What you get
 
-- **`Sources/BlurtEngine/`** — a Swift package (`swift-tools-version:6.2`, macOS 26+, Swift 6 strict concurrency) with **no external dependencies**: just Foundation, Security, AVFoundation, toolchain modules like Synchronization, and AppKit types at the seams. That dependency-free rule is deliberate and enforced — don't add SPM dependencies to the engine.
+- **`Sources/BlurtEngine/`** — a Swift package (`swift-tools-version:6.2`, macOS 15+, Swift 6 strict concurrency) with **no external dependencies**: just Foundation, Security, AVFoundation, toolchain modules like Synchronization, and AppKit types at the seams. That dependency-free rule is deliberate and enforced — don't add SPM dependencies to the engine.
 - Pure logic behind three protocol seams (`MicCaptureProtocol`, `TranscriberProtocol`, `InjectorProtocol`), so every collaborator can be stubbed in tests and replaced in a host app.
 - Production implementations of all three seams (`MicCapture`, `AssemblyAITranscriber`, `KeyInjector`), plus the supporting pieces a dictation product needs: Keychain-backed API-key storage, per-utterance contextual prompting, a hotkey state machine, permission checks, and UI-state projections.
 
@@ -23,7 +23,7 @@ let session = DictationSession(
   injector: KeyInjector()
 )
 
-// Observe phase changes to drive your UI (single observer — see below).
+// Observe phase changes to drive your UI (see "Observing state" below).
 Task {
   for await phase in await session.phaseStream() {
     render(phase.overlayState)  // or phase.menuBarStatus
@@ -88,7 +88,7 @@ idle → recording → transcribing → injecting → pasted | noTarget
                           └── failed(BlurtError) / cancelled (from any stage)
 ```
 
-- `phaseStream()` yields the current phase immediately, then every transition. It is a **multi-observer** stream: every call gets its own continuation and all of them see later transitions, so fanning it out is supported. That's all a host needs — one renderer — but don't fan it out to multiple long-lived consumers; project the phase into your own state instead.
+- `phaseStream()` yields the current phase immediately, then every transition. It is a **multi-observer** stream: every call gets its own continuation and all of them see later transitions, so an extra consumer (a diagnostic, a second window) is safe. Still, prefer one renderer that projects the phase into your own state over a fan-out of long-lived consumers — one source of UI truth is easier to reason about than several.
 - `.pasted` and `.noTarget` are terminal _success_ states, not errors. `.noTarget` means transcription worked but nothing editable was focused (or the target app quit), so the text was left on the clipboard — show a quiet "copied" notice, not a failure.
 - Two ready-made projections keep UI mapping out of your shell: `phase.overlayState` (`OverlayUIState`: idle / recording / processing / error(message:) / pasted / noTarget, with accessibility labels and — for the transient notices — `noticeDwellSeconds`, how long to hold one before reverting to idle) and `phase.menuBarStatus` (coarser: idle / recording / transcribing, never shows errors, with `symbolName`/`accessibilityLabel` presentation).
 - Pill geometry is available too, if you're drawing something like Blurt's overlay: `OverlayPlacement` resolves how big the panel is (`panelSize(pillSize:shadowMargin:)`, sized to hold the pill plus room for its shadow) and where it goes (clearance, clamping a dragged origin back on screen), and `MeterBarGeometry` gives the level meter its shape. Build a `MeterBarRow(availableSize:)` once per layout — it resolves how many bars fit and how tall they may be — then ask it for `height(at:level:time:animated:)` per bar; `MeterBarGeometry.breathingOpacity(time:period:minOpacity:)` is the pulse the record dot and status label share. All pure math; pass `animated: false` to honor Reduce Motion.
