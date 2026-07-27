@@ -76,14 +76,11 @@ public actor MicCapture: MicCaptureProtocol {
 
   public func start() async throws {
     // Reuse the warm recorder for the first session; otherwise build a fresh one
-    // bound to the current default input device.
-    let recorder: AVAudioRecorder
-    if let prepared = preparedRecorder {
-      recorder = prepared
-      preparedRecorder = nil
-    } else {
-      recorder = try Self.makeRecorder()
-    }
+    // bound to the current default input device. `??` only evaluates
+    // `makeRecorder()` when nothing was warmed, so the clear below can be
+    // unconditional — it is a no-op in exactly the case that could have thrown.
+    let recorder = try preparedRecorder ?? Self.makeRecorder()
+    preparedRecorder = nil
 
     // record() returns false when no usable input device is available (unplugged,
     // asleep, route lost). Surface that as a thrown Swift error so

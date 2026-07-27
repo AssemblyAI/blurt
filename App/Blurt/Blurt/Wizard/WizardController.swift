@@ -129,12 +129,12 @@ final class WizardController {
   /// so the row flips to "Granted" without waiting for the next poll tick, and by
   /// the lifetime poll to catch a permission revoked outside the app.
   func refreshPermissions() {
-    let perms = checkPermissions()
+    let latest = checkPermissions()
     // A permission that was granted and is now gone (revoked in System Settings,
     // possibly while no window was open) should pull the user back into onboarding.
-    let revoked = permissions.allGranted && !perms.allGranted
-    if perms != permissions {
-      permissions = perms
+    let revoked = permissions.allGranted && !latest.allGranted
+    if latest != permissions {
+      permissions = latest
     }
     syncReadiness()
     if revoked { onNeedsForeground() }

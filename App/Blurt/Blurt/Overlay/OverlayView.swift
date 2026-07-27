@@ -327,12 +327,12 @@ private struct WaveformBars: View {
 
   private func bars(_ layout: MeterBarRow, time: TimeInterval) -> some View {
     HStack(spacing: MeterBarGeometry.barSpacing) {
-      ForEach(0..<layout.count, id: \.self) { idx in
+      ForEach(0..<layout.count, id: \.self) { index in
         Capsule()
           .fill(color)
           .frame(
             width: MeterBarGeometry.barWidth,
-            height: layout.height(at: idx, level: level, time: time, animated: animated))
+            height: layout.height(at: index, level: level, time: time, animated: animated))
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -26,9 +26,9 @@ extension BlurtError: LocalizedError {
     case .microphonePermissionDenied: "Microphone access is required."
     case .accessibilityPermissionMissing: "Accessibility access is required."
     case .apiKeyMissing: "Add your AssemblyAI API key in Settings to start dictating."
-    case .sttFailed(let e): "Transcription failed: \(e.localizedDescription)"
+    case .sttFailed(let underlying): "Transcription failed: \(underlying.localizedDescription)"
     case .targetAppLost: "Target app lost focus or quit."
-    case .audioCaptureFailed(let e): "Audio capture failed: \(e.localizedDescription)"
+    case .audioCaptureFailed(let underlying): "Audio capture failed: \(underlying.localizedDescription)"
     case .noEditableTarget: "No text field was focused — copied to the clipboard instead."
     }
   }

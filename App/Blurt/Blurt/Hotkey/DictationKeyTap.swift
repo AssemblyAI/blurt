@@ -106,10 +106,10 @@ final class DictationKeyTap {
       return false
     }
     tap = created
-    let src = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, created, 0)
+    let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, created, 0)
     // The main run loop, deliberately: it makes this whole class single-threaded
     // (see the main-actor note above) — the callback below relies on it.
-    CFRunLoopAddSource(CFRunLoopGetMain(), src, .commonModes)
+    CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
     CGEvent.tapEnable(tap: created, enable: true)
     Self.logger.info("dictation key tap installed")
     return true
