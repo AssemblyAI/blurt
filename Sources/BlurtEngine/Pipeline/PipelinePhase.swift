@@ -58,8 +58,8 @@ extension BlurtError {
   var isSetupBlocker: Bool {
     switch self {
     case .apiKeyMissing: true
-    case .microphonePermissionDenied, .accessibilityPermissionMissing, .sttFailed,
-      .targetAppLost, .audioCaptureFailed, .noEditableTarget:
+    case .accessibilityPermissionMissing, .sttFailed, .targetAppLost, .audioCaptureFailed,
+      .noEditableTarget:
       false
     }
   }
