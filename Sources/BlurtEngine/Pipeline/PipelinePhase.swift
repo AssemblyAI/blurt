@@ -58,8 +58,8 @@ extension BlurtError {
   var isSetupBlocker: Bool {
     switch self {
     case .apiKeyMissing: true
-    case .microphonePermissionDenied, .accessibilityPermissionMissing, .sttFailed,
-      .targetAppLost, .audioCaptureFailed, .noEditableTarget:
+    case .accessibilityPermissionMissing, .sttFailed, .targetAppLost, .audioCaptureFailed,
+      .noEditableTarget:
       false
     }
   }
@@ -68,8 +68,7 @@ extension BlurtError {
 extension BlurtError: Equatable {
   public static func == (lhs: BlurtError, rhs: BlurtError) -> Bool {
     switch (lhs, rhs) {
-    case (.microphonePermissionDenied, .microphonePermissionDenied),
-      (.accessibilityPermissionMissing, .accessibilityPermissionMissing),
+    case (.accessibilityPermissionMissing, .accessibilityPermissionMissing),
       (.apiKeyMissing, .apiKeyMissing),
       (.targetAppLost, .targetAppLost),
       (.noEditableTarget, .noEditableTarget):

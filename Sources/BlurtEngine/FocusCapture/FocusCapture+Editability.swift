@@ -16,10 +16,12 @@ extension FocusCapture {
     "AXTextField", "AXTextArea", "AXComboBox", secureFieldRole, "AXSearchField",
   ]
 
-  /// Pure decision: does a focused element with these signals accept pasted text?
-  /// The injector calls this just before a synthesized ⌘V — if it returns false the
-  /// paste is skipped (so macOS doesn't beep into a non-editable target) and the
-  /// transcript is left on the clipboard with a quiet "Copied" notice.
+  /// Pure decision: do these signals, read off a focused element, mean it accepts
+  /// pasted text? The injector calls this just before a synthesized ⌘V — if it
+  /// returns false the paste is skipped (so macOS doesn't beep into a non-editable
+  /// target) and the transcript is left on the clipboard with a quiet "Copied"
+  /// notice. The "is anything focused at all?" question is answered by the caller,
+  /// which never gets this far without an element (see `hasEditableFocusedElement`).
   ///
   /// Requires a *positive* editability signal: a known text role, a settable value,
   /// or an insertion point. Anything else — a non-text control, an unknown role, or
@@ -31,10 +33,7 @@ extension FocusCapture {
   /// injector still pastes into those via a separate Electron-app check (see
   /// `isElectronApp` / `KeyInjector.insert`), so the user's words aren't dropped
   /// to copy-only there.
-  static func isEditableTarget(
-    hasFocusedElement: Bool, role: String?, valueSettable: Bool, hasInsertionPoint: Bool
-  ) -> Bool {
-    guard hasFocusedElement else { return false }
+  static func isEditableTarget(role: String?, valueSettable: Bool, hasInsertionPoint: Bool) -> Bool {
     if let role, editableRoles.contains(role) { return true }
     return valueSettable || hasInsertionPoint
   }
@@ -95,7 +94,6 @@ extension FocusCapture {
       && rangeRef.flatMap(axRange) != nil
 
     return isEditableTarget(
-      hasFocusedElement: true, role: role, valueSettable: valueSettable,
-      hasInsertionPoint: hasInsertionPoint)
+      role: role, valueSettable: valueSettable, hasInsertionPoint: hasInsertionPoint)
   }
 }

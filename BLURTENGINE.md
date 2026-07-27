@@ -97,13 +97,13 @@ idle → recording → transcribing → injecting → pasted | noTarget
 
 Failures surface as `PipelinePhase.failed(BlurtError)`:
 
-| Case                                                              | Meaning                                                                                                                                                           |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.apiKeyMissing`                                                  | No AssemblyAI key stored — point the user at your key-entry UI. With a key-presence `readinessCheck`, this surfaces at press time, before any recording.          |
-| `.microphonePermissionDenied` / `.accessibilityPermissionMissing` | Permission gaps; `PermissionsChecker` has openers for the right Settings panes.                                                                                   |
-| `.audioCaptureFailed(underlying:)`                                | The mic couldn't start, or captured audio couldn't be processed.                                                                                                  |
-| `.sttFailed(underlying:)`                                         | The Sync request failed; the underlying error carries the HTTP status and the server's message when available.                                                    |
-| `.targetAppLost` / `.noEditableTarget`                            | Paste-side outcomes. When thrown by `KeyInjector` the transcript is already on the clipboard, and the session degrades them to `.noTarget` rather than a failure. |
+| Case                                   | Meaning                                                                                                                                                                                                                                          |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.apiKeyMissing`                       | No AssemblyAI key stored — point the user at your key-entry UI. With a key-presence `readinessCheck`, this surfaces at press time, before any recording.                                                                                         |
+| `.accessibilityPermissionMissing`      | Accessibility isn't granted, so the paste keystroke can't be posted; `PermissionsChecker` has openers for the right Settings panes.                                                                                                              |
+| `.audioCaptureFailed(underlying:)`     | The mic couldn't start, or captured audio couldn't be processed. There is no separate microphone-permission case: a denied or revoked Microphone grant surfaces here, so check `PermissionsChecker` up front to catch it before the user speaks. |
+| `.sttFailed(underlying:)`              | The Sync request failed; the underlying error carries the HTTP status and the server's message when available.                                                                                                                                   |
+| `.targetAppLost` / `.noEditableTarget` | Paste-side outcomes. When thrown by `KeyInjector` the transcript is already on the clipboard, and the session degrades them to `.noTarget` rather than a failure.                                                                                |
 
 All cases are `LocalizedError` with user-ready `errorDescription` strings, and `BlurtError` is `Equatable` (wrapped errors compare by NSError domain + code), so phase equality is test-friendly.
 

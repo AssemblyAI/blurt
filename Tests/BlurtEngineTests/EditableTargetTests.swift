@@ -4,18 +4,11 @@ import Testing
 
 @Suite("FocusCapture.isEditableTarget")
 struct EditableTargetTests {
-  @Test("no focused element is never editable")
-  func noFocusedElement() {
-    #expect(
-      !FocusCapture.isEditableTarget(
-        hasFocusedElement: false, role: "AXTextField", valueSettable: true, hasInsertionPoint: true))
-  }
-
   @Test("a known text role is editable")
   func textRole() {
     #expect(
       FocusCapture.isEditableTarget(
-        hasFocusedElement: true, role: "AXTextArea", valueSettable: false, hasInsertionPoint: false))
+        role: "AXTextArea", valueSettable: false, hasInsertionPoint: false))
   }
 
   @Test("a secure (password) field is still a paste target despite prompt redaction")
@@ -25,29 +18,28 @@ struct EditableTargetTests {
     // field must type, even though its contents are never captured.
     #expect(
       FocusCapture.isEditableTarget(
-        hasFocusedElement: true, role: FocusCapture.secureFieldRole, valueSettable: false,
-        hasInsertionPoint: false))
+        role: FocusCapture.secureFieldRole, valueSettable: false, hasInsertionPoint: false))
   }
 
   @Test("a settable value is editable even with an unknown role")
   func settableValue() {
     #expect(
       FocusCapture.isEditableTarget(
-        hasFocusedElement: true, role: "AXUnknown", valueSettable: true, hasInsertionPoint: false))
+        role: "AXUnknown", valueSettable: true, hasInsertionPoint: false))
   }
 
   @Test("an insertion point is editable even with an unknown role")
   func insertionPoint() {
     #expect(
       FocusCapture.isEditableTarget(
-        hasFocusedElement: true, role: nil, valueSettable: false, hasInsertionPoint: true))
+        role: nil, valueSettable: false, hasInsertionPoint: true))
   }
 
   @Test("a non-text control with no editable signal is not editable")
   func nonEditableControl() {
     #expect(
       !FocusCapture.isEditableTarget(
-        hasFocusedElement: true, role: "AXButton", valueSettable: false, hasInsertionPoint: false))
+        role: "AXButton", valueSettable: false, hasInsertionPoint: false))
   }
 
   @Test("an unknown role with no editable signal is not editable (copy, don't beep)")
@@ -58,14 +50,14 @@ struct EditableTargetTests {
     // via the injector's separate Electron-app check, not this signal test.)
     #expect(
       !FocusCapture.isEditableTarget(
-        hasFocusedElement: true, role: "AXWebArea", valueSettable: false, hasInsertionPoint: false))
+        role: "AXWebArea", valueSettable: false, hasInsertionPoint: false))
   }
 
   @Test("a focused element with an unreadable role is not editable (copy, don't beep)")
   func nilRoleWithoutSignalCopies() {
     #expect(
       !FocusCapture.isEditableTarget(
-        hasFocusedElement: true, role: nil, valueSettable: false, hasInsertionPoint: false))
+        role: nil, valueSettable: false, hasInsertionPoint: false))
   }
 }
 

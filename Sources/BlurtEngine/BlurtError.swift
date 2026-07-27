@@ -1,7 +1,6 @@
 import Foundation
 
 public enum BlurtError: Error, Sendable {
-  case microphonePermissionDenied
   case accessibilityPermissionMissing
   case apiKeyMissing
   case sttFailed(underlying: Error)
@@ -23,7 +22,6 @@ public enum BlurtError: Error, Sendable {
 extension BlurtError: LocalizedError {
   public var errorDescription: String? {
     switch self {
-    case .microphonePermissionDenied: "Microphone access is required."
     case .accessibilityPermissionMissing: "Accessibility access is required."
     case .apiKeyMissing: "Add your AssemblyAI API key in Settings to start dictating."
     case .sttFailed(let underlying): "Transcription failed: \(underlying.localizedDescription)"
