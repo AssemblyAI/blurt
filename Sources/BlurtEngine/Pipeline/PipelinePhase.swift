@@ -17,10 +17,16 @@ public enum PipelinePhase: Equatable, Sendable {
   /// shows a quiet "copied" notice rather than the red failure flash.
   case noTarget
 
+  /// Whether the dictation has finished (or never started) — nothing in flight.
+  ///
+  /// Exhaustive (no `default:`) so adding a phase is a compile error here rather
+  /// than a silent "not terminal" — the same reason `menuBarStatus` lists every
+  /// case. A phase wrongly reading as non-terminal strands the trigger's gate,
+  /// swallowing the user's next press.
   public var isTerminal: Bool {
     switch self {
     case .idle, .failed, .cancelled, .pasted, .noTarget: true
-    default: false
+    case .recording, .transcribing, .injecting: false
     }
   }
 
@@ -45,10 +51,16 @@ extension BlurtError {
   /// True for errors that mean "setup isn't finished" rather than "dictation
   /// failed". Internal: hosts ask `PipelinePhase.setupBlocker`, which is the form
   /// they actually need.
+  ///
+  /// Exhaustive for the same reason as `PipelinePhase.isTerminal`: a new error
+  /// that *is* a setup step must not default to "genuine failure", which shows a
+  /// red flash with no route to the fix.
   var isSetupBlocker: Bool {
     switch self {
     case .apiKeyMissing: true
-    default: false
+    case .microphonePermissionDenied, .accessibilityPermissionMissing, .sttFailed,
+      .targetAppLost, .audioCaptureFailed, .noEditableTarget:
+      false
     }
   }
 }
@@ -62,16 +74,16 @@ extension BlurtError: Equatable {
       (.targetAppLost, .targetAppLost),
       (.noEditableTarget, .noEditableTarget):
       return true
-    case (.sttFailed(let a), .sttFailed(let b)),
-      (.audioCaptureFailed(let a), .audioCaptureFailed(let b)):
+    case (.sttFailed(let lhsUnderlying), .sttFailed(let rhsUnderlying)),
+      (.audioCaptureFailed(let lhsUnderlying), .audioCaptureFailed(let rhsUnderlying)):
       // Compare wrapped errors by their bridged NSError identity (domain + code)
       // rather than `localizedDescription`. The description is human-facing copy:
       // comparing it would make equality silently depend on message wording, so a
       // localization or phrasing tweak could break a test. Domain + code is the
       // stable identity of the underlying error.
-      let na = a as NSError
-      let nb = b as NSError
-      return na.domain == nb.domain && na.code == nb.code
+      let lhsError = lhsUnderlying as NSError
+      let rhsError = rhsUnderlying as NSError
+      return lhsError.domain == rhsError.domain && lhsError.code == rhsError.code
     default:
       return false
     }

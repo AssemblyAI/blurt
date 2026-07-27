@@ -229,7 +229,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
     // Blurt keeps running with the overlay pill after its window is closed;
     // the window reopens via ⌘, / the Dock.
-    return false
+    false
   }
 
   /// Bring Blurt's window to the front on relaunch / Dock click. The Dock (or

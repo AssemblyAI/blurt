@@ -191,8 +191,8 @@ final class OverlayWindowController {
       if reduceMotion {
         panel.alphaValue = 1
       } else {
-        NSAnimationContext.runAnimationGroup { ctx in
-          ctx.duration = Self.appearFadeDuration
+        NSAnimationContext.runAnimationGroup { context in
+          context.duration = Self.appearFadeDuration
           panel.animator().alphaValue = 1
         }
       }
@@ -203,8 +203,8 @@ final class OverlayWindowController {
         return
       }
       NSAnimationContext.runAnimationGroup(
-        { ctx in
-          ctx.duration = Self.dismissFadeDuration
+        { context in
+          context.duration = Self.dismissFadeDuration
           panel.animator().alphaValue = 0
         },
         completionHandler: { [weak self] in

@@ -109,10 +109,10 @@ extension DictationSession {
       // (URLError(.cancelled) / CancellationError). Leave the claimed phase
       // alone rather than repainting the user's cancel as a red failure.
       if Task.isCancelled || error is CancellationError { return nil }
-      if let err = error as? BlurtError {
+      if let blurtError = error as? BlurtError {
         // e.g. `.apiKeyMissing` — surface it directly rather than burying it
         // inside `.sttFailed`.
-        setPhase(.failed(err))
+        setPhase(.failed(blurtError))
       } else {
         setPhase(.failed(.sttFailed(underlying: error)))
       }

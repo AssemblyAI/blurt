@@ -82,8 +82,8 @@ struct SystemClipboard: ClipboardAccess {
   /// (`pasteboardItems` is documented to return nil on error). Callers must treat
   /// nil as "don't restore" — never as an empty clipboard.
   func snapshot() -> PasteboardSnapshot? {
-    let pb = NSPasteboard.general
-    guard let items = pb.pasteboardItems else { return nil }
+    let pasteboard = NSPasteboard.general
+    guard let items = pasteboard.pasteboardItems else { return nil }
     let captured = items.map { item in
       var dataMap: [NSPasteboard.PasteboardType: Data] = [:]
       for type in item.types {
@@ -95,43 +95,43 @@ struct SystemClipboard: ClipboardAccess {
       }
       return SendablePasteboardItem(dataMap: dataMap)
     }
-    return PasteboardSnapshot(items: captured, plainText: pb.string(forType: .string))
+    return PasteboardSnapshot(items: captured, plainText: pasteboard.string(forType: .string))
   }
 
   func setString(_ text: String) {
-    let pb = NSPasteboard.general
-    pb.clearContents()
-    pb.setString(text, forType: .string)
+    let pasteboard = NSPasteboard.general
+    pasteboard.clearContents()
+    pasteboard.setString(text, forType: .string)
   }
 
   func restore(_ saved: PasteboardSnapshot) {
-    let pb = NSPasteboard.general
+    let pasteboard = NSPasteboard.general
 
     // The pasteboard genuinely held nothing, so restoring it means emptying it.
     // Safe to clear because the snapshot succeeded — a *failed* read is nil and
     // never reaches here.
     guard !saved.items.isEmpty else {
-      pb.clearContents()
+      pasteboard.clearContents()
       return
     }
 
     // Build the items BEFORE clearing. Clearing first and then discovering there
     // is nothing to write is how the user's clipboard got destroyed whenever a
     // snapshot came back degraded.
-    let pbItems = saved.items.compactMap { item -> NSPasteboardItem? in
+    let rebuilt = saved.items.compactMap { item -> NSPasteboardItem? in
       guard !item.dataMap.isEmpty else { return nil }
-      let pbItem = NSPasteboardItem()
+      let pasteboardItem = NSPasteboardItem()
       for (type, data) in item.dataMap {
-        pbItem.setData(data, forType: type)
+        pasteboardItem.setData(data, forType: type)
       }
-      return pbItem
+      return pasteboardItem
     }
 
-    if !pbItems.isEmpty {
-      pb.clearContents()
+    if !rebuilt.isEmpty {
+      pasteboard.clearContents()
       // `writeObjects` can refuse the batch; fall through to the text floor
       // rather than leaving the pasteboard empty.
-      if pb.writeObjects(pbItems) { return }
+      if pasteboard.writeObjects(rebuilt) { return }
     }
 
     // Either nothing was materializable, or the write above was refused. Put the
@@ -147,8 +147,8 @@ struct SystemClipboard: ClipboardAccess {
     // valid `NSPasteboardItem`s is a programming error, not a runtime condition,
     // and NSPasteboard offers no way to test a write before clearing.
     if let plainText = saved.plainText {
-      pb.clearContents()
-      pb.setString(plainText, forType: .string)
+      pasteboard.clearContents()
+      pasteboard.setString(plainText, forType: .string)
     }
   }
 }

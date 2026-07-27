@@ -67,8 +67,8 @@ public enum MeterBarGeometry {
   /// center, so the bars form a single voice hump filling the pill width.
   static func envelopeWeight(index: Int, count: Int) -> CGFloat {
     guard count > 1 else { return 1 }
-    let t = CGFloat(index) / CGFloat(count - 1)  // 0...1
-    return envelopeEdge + (1 - envelopeEdge) * sin(.pi * t)
+    let position = CGFloat(index) / CGFloat(count - 1)  // 0...1
+    return envelopeEdge + (1 - envelopeEdge) * sin(.pi * position)
   }
 
   /// Raised-cosine opacity breathing over `period`: 1 → `minOpacity` → 1, so a view
