@@ -7,8 +7,8 @@ user-invocable: false
 # Blurt guardrails
 
 These are settled decisions. Don't reintroduce them; if a task seems to require
-one, stop and ask the user first. (CLAUDE.md is the fuller reference — this is
-the fast "don't" list.)
+one, stop and ask the user first. This is the fast "don't" list; AGENTS.md's
+"Settled decisions" table is the fuller reference and the source of truth.
 
 ## Audio
 
@@ -29,7 +29,12 @@ the fast "don't" list.)
 - **No local models / model downloads.** Transcription is a remote AssemblyAI
   call. No on-device ASR/LLM, no model cache, no download UI.
 - Don't reintroduce a "remove filler words (um, uh, like)" directive in the
-  prompt — `universal-3-5-pro` ignores it; it was deliberately dropped.
+  prompt — `universal-3-5-pro` ignores it; it was deliberately dropped. Same for
+  a language directive: pinning the prompt to English hurt non-English speech, so
+  language is left to the model's own detection.
+- **Injection is always a clipboard paste** (save → write → ⌘V → settle →
+  restore), degrading to "left it on the clipboard" when the target is lost. No
+  keystroke-by-keystroke typing path, no length threshold.
 
 ## App shape
 
@@ -43,6 +48,10 @@ the fast "don't" list.)
 - The dictation trigger is a **single lone modifier** (right ⌘ default), home-
   grown via `CGEventTap` + `DictationKeyGate`. No `KeyboardShortcuts` package, no
   key+modifier chord.
+- **Updates are manual and download-only** — check → open the DMG in the browser
+  → the user installs it. The `mxcl/AppUpdater` dependency and its in-place
+  self-updater were removed; don't reintroduce a background/auto-updater or a
+  self-replacing install path. Extend `UpdateChecker` / `UpdateCheckModel`.
 
 ## Build / tests
 
@@ -51,10 +60,17 @@ the fast "don't" list.)
   fails on pbxproj drift (a PreToolUse hook also blocks edits to it).
 - The engine has **no external SPM dependencies** (Foundation/Security/
   AVFoundation only). Don't add one to `Sources/BlurtEngine/`.
-- Tests use **Swift Testing**, not XCTest. **Never touch the real Keychain in
-  tests** — `APIKeyStore` is the production item; use an isolated service like
-  `KeychainStoreTests` does, or you'll trigger Keychain password prompts and
-  corrupt the real item's ACL.
+- Unit tests use **Swift Testing**, not XCTest (the `BlurtUITests` XCUITest
+  bundle is the one exception — XCUIAutomation requires XCTest). **Never touch
+  the real Keychain in tests** — `APIKeyStore` is the production item; use an
+  isolated service like `KeychainStoreTests` does (or `InMemoryAPIKeyStore`), or
+  you'll trigger Keychain password prompts and corrupt the real item's ACL.
+- UI-test-facing strings (identifiers, window titles, launch arguments, sentinel
+  keys) live once in `App/Blurt/Shared/UITestIdentifiers.swift`, compiled into
+  both the app and the test bundle. Don't re-add mirrored copies in
+  `BlurtUITests/`.
+- Don't redirect the post-build install away from `/Applications` — TCC won't
+  register apps in DerivedData/`/tmp`, so permission toggles never appear.
 - Don't add backwards-compat shims for removed types.
 
 ## Notarization
