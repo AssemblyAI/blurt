@@ -1,60 +1,65 @@
 import XCTest
 
-/// Drives the Settings window: the AssemblyAI API-key flow (save / reject), the
+/// Drives the Settings window: the AssemblyAI API-key sheet (connect / reject
+/// / cancel) reached from the account row, the
 /// dictation-key picker, the sound-cue picker, and the key-terms field. All
 /// offline — the API-key submit is short-circuited in UI-test mode, so these
 /// never reach AssemblyAI or the real Keychain.
 final class SettingsUITests: BlurtUITestCase {
-  /// Saving a key collapses the editable field to the "✓ Saved" status row.
-  func testSavingAPIKeyCollapsesToSavedRow() {
+  /// Connecting a key dismisses the sheet and leaves the row showing the stored
+  /// key's masked tail plus the "Change…" affordance.
+  func testConnectingAPIKeyShowsMaskedRow() {
     let settings = openSettingsWindow()
+    let sheet = openKeyEditor(settings)
 
-    let field = settings.secureTextFields[UITestIdentifiers.apiKeyField]
-    XCTAssertTrue(field.waitForExistence(timeout: 10), "API key field not found")
-    field.click()
-    field.typeText(UITestIdentifiers.validAPIKey)
+    typeKey(UITestIdentifiers.validAPIKey, into: sheet)
+    sheet.buttons[UITestIdentifiers.apiKeySave].click()
 
-    settings.buttons[UITestIdentifiers.apiKeySave].click()
-
+    XCTAssertTrue(
+      sheet.waitForNonExistence(timeout: 10),
+      "A verified key should dismiss the sheet")
     let saved = settings.staticTexts[UITestIdentifiers.apiKeySavedStatus]
     XCTAssertTrue(
-      saved.waitForExistence(timeout: 10),
-      "Saving a valid key should collapse to the Saved status row")
-    // The "Change" affordance replaces the editable field once a key is stored.
-    XCTAssertTrue(settings.buttons[UITestIdentifiers.apiKeyChange].exists)
+      saved.waitForExistence(timeout: 5),
+      "A verified key should leave the row connected")
+    XCTAssertTrue(
+      settings.buttons[UITestIdentifiers.apiKeyChange].exists,
+      "The row button should become Change… once a key is stored")
+    XCTAssertFalse(
+      settings.staticTexts[UITestIdentifiers.apiKeyNotConnected].exists,
+      "The row should no longer read Not connected")
   }
 
-  /// A rejected key surfaces an inline error instead of collapsing.
-  func testRejectedAPIKeyShowsInlineError() {
+  /// A rejected key keeps the sheet open and explains itself there, rather than
+  /// dismissing or raising an alert.
+  func testRejectedAPIKeyShowsInlineErrorInSheet() {
     let settings = openSettingsWindow()
+    let sheet = openKeyEditor(settings)
 
-    let field = settings.secureTextFields[UITestIdentifiers.apiKeyField]
-    XCTAssertTrue(field.waitForExistence(timeout: 10))
-    field.click()
-    field.typeText(UITestIdentifiers.invalidAPIKey)
+    typeKey(UITestIdentifiers.invalidAPIKey, into: sheet)
+    sheet.buttons[UITestIdentifiers.apiKeySave].click()
 
-    settings.buttons[UITestIdentifiers.apiKeySave].click()
-
-    let error = settings.staticTexts[UITestIdentifiers.apiKeyError]
+    let error = sheet.staticTexts[UITestIdentifiers.apiKeyError]
     XCTAssertTrue(
       error.waitForExistence(timeout: 10),
-      "A rejected key should show the inline error footer")
-    // It must NOT have collapsed to the saved row.
+      "A rejected key should show the inline error in the sheet")
+    XCTAssertTrue(sheet.exists, "A rejected key should leave the sheet open to retry")
     XCTAssertFalse(settings.staticTexts[UITestIdentifiers.apiKeySavedStatus].exists)
   }
 
-  /// The reveal toggle swaps the secure field for a plain text field so the
-  /// user can read back a pasted key.
-  func testRevealTogglesSecureField() {
+  /// "Show key" swaps the secure field for a plain text field so the user can
+  /// read back a pasted key.
+  func testShowKeyTogglesSecureField() {
     let settings = openSettingsWindow()
+    let sheet = openKeyEditor(settings)
 
     XCTAssertTrue(
-      settings.secureTextFields[UITestIdentifiers.apiKeyField].waitForExistence(timeout: 10))
-    settings.buttons[UITestIdentifiers.apiKeyReveal].click()
+      sheet.secureTextFields[UITestIdentifiers.apiKeyField].waitForExistence(timeout: 5))
+    sheet.checkBoxes[UITestIdentifiers.apiKeyReveal].click()
 
     XCTAssertTrue(
-      settings.textFields[UITestIdentifiers.apiKeyField].waitForExistence(timeout: 5),
-      "Revealing should expose a plain (non-secure) text field")
+      sheet.textFields[UITestIdentifiers.apiKeyField].waitForExistence(timeout: 5),
+      "Show key should expose a plain (non-secure) text field")
   }
 
   /// The dictation-key picker changes the persisted trigger selection.
@@ -121,52 +126,76 @@ final class SettingsUITests: BlurtUITestCase {
     alert.buttons["OK"].click()
   }
 
-  /// After a key is saved, "Change" re-opens the editable field so the key can
-  /// be rotated.
-  func testChangeReopensEditableFieldAfterSaving() {
+  /// After a key is stored, "Change…" re-opens the sheet so it can be rotated.
+  func testChangeReopensEditorAfterConnecting() {
     let settings = openSettingsWindow()
+    connectValidKey(settings)
 
-    let field = settings.secureTextFields[UITestIdentifiers.apiKeyField]
-    XCTAssertTrue(field.waitForExistence(timeout: 10), "API key field not found")
-    field.click()
-    field.typeText(UITestIdentifiers.validAPIKey)
-    settings.buttons[UITestIdentifiers.apiKeySave].click()
-
-    let change = settings.buttons[UITestIdentifiers.apiKeyChange]
+    let reopened = openKeyEditor(settings, via: UITestIdentifiers.apiKeyChange)
     XCTAssertTrue(
-      change.waitForExistence(timeout: 10),
-      "Saving should collapse to the row with a Change button")
-    change.click()
-
-    XCTAssertTrue(
-      settings.secureTextFields[UITestIdentifiers.apiKeyField].waitForExistence(timeout: 5),
-      "Change should re-open the editable key field")
+      reopened.secureTextFields[UITestIdentifiers.apiKeyField].waitForExistence(timeout: 5),
+      "Change… should re-open the sheet on the key field")
   }
 
-  /// "Cancel" while changing a saved key discards the edit and restores the
-  /// "✓ Saved" row instead of committing.
-  func testCancelDiscardsKeyEditAndRestoresSavedRow() {
+  /// "Cancel" in the sheet discards the edit and leaves the stored key's row
+  /// untouched instead of committing.
+  func testCancelDiscardsKeyEditAndKeepsRow() {
     let settings = openSettingsWindow()
+    connectValidKey(settings)
 
-    let field = settings.secureTextFields[UITestIdentifiers.apiKeyField]
-    XCTAssertTrue(field.waitForExistence(timeout: 10), "API key field not found")
-    field.click()
-    field.typeText(UITestIdentifiers.validAPIKey)
-    settings.buttons[UITestIdentifiers.apiKeySave].click()
+    let sheet = openKeyEditor(settings, via: UITestIdentifiers.apiKeyChange)
+    sheet.buttons[UITestIdentifiers.apiKeyCancel].click()
 
-    let change = settings.buttons[UITestIdentifiers.apiKeyChange]
-    XCTAssertTrue(change.waitForExistence(timeout: 10), "Saving should offer a Change button")
-    change.click()
-
-    let cancel = settings.buttons[UITestIdentifiers.apiKeyCancel]
-    XCTAssertTrue(cancel.waitForExistence(timeout: 5), "Change should expose a Cancel button")
-    cancel.click()
-
+    // Dismissal is asynchronous, so wait it out rather than asserting on
+    // `exists` in the same run-loop turn as the click.
+    XCTAssertTrue(sheet.waitForNonExistence(timeout: 5), "Cancel should dismiss the sheet")
     XCTAssertTrue(
       settings.staticTexts[UITestIdentifiers.apiKeySavedStatus].waitForExistence(timeout: 5),
-      "Cancel should restore the ✓ Saved row")
-    XCTAssertFalse(
-      settings.secureTextFields[UITestIdentifiers.apiKeyField].exists,
-      "Cancel should hide the editable key field")
+      "Cancel should return to the connected row")
+  }
+
+  // MARK: - API-key helpers
+
+  /// Opens the API-key sheet from the settings row and returns it. `identifier`
+  /// picks the row button by its state: "Connect…" before a key exists,
+  /// "Change…" once one is stored.
+  private func openKeyEditor(
+    _ settings: XCUIElement,
+    via identifier: String = UITestIdentifiers.apiKeyConnect
+  ) -> XCUIElement {
+    let button = settings.buttons[identifier]
+    XCTAssertTrue(button.waitForExistence(timeout: 10), "API key row button (\(identifier)) not found")
+    button.click()
+    let sheet = settings.sheets.firstMatch
+    XCTAssertTrue(sheet.waitForExistence(timeout: 5), "The API key sheet should open")
+    return sheet
+  }
+
+  /// Types into the sheet's key field. The field is focused on open, but a click
+  /// makes the target explicit rather than relying on default focus.
+  private func typeKey(_ key: String, into sheet: XCUIElement) {
+    let field = sheet.secureTextFields[UITestIdentifiers.apiKeyField]
+    XCTAssertTrue(field.waitForExistence(timeout: 5), "API key field not found in the sheet")
+    field.click()
+    field.typeText(key)
+  }
+
+  /// Drives the whole connect flow so tests about the *stored* state don't each
+  /// repeat it.
+  ///
+  /// Waits on the sheet's *disappearance*, not on the connected row's text: the
+  /// row sits behind the sheet and is already on screen when it's still modal,
+  /// so using it as the done signal lets the next step click a row button
+  /// through a live sheet.
+  private func connectValidKey(_ settings: XCUIElement) {
+    let sheet = openKeyEditor(settings)
+    typeKey(UITestIdentifiers.validAPIKey, into: sheet)
+    sheet.buttons[UITestIdentifiers.apiKeySave].click()
+    XCTAssertTrue(
+      sheet.waitForNonExistence(timeout: 10),
+      "Connecting a valid key should dismiss the sheet")
+    XCTAssertTrue(
+      settings.staticTexts[UITestIdentifiers.apiKeySavedStatus].waitForExistence(timeout: 5),
+      "Connecting a valid key should show the connected row")
   }
 }

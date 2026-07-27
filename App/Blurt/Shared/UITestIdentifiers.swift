@@ -46,12 +46,18 @@ enum UITestIdentifiers {
   static let transcriptEchoLabel = "uitest.transcriptEcho"
 
   // Settings/wizard controls (set on the step views).
+  // The API-key row and the sheet it opens (`APIKeyStepView`). `connect` /
+  // `change` are the same row button under its two titles; the rest live in the
+  // sheet.
+  static let apiKeyConnect = "settings.apiKey.connect"
+  static let apiKeyChange = "settings.apiKey.change"
+  static let apiKeyNotConnected = "settings.apiKey.notConnected"
+  static let apiKeySavedStatus = "settings.apiKey.savedStatus"
   static let apiKeyField = "settings.apiKey.field"
   static let apiKeyReveal = "settings.apiKey.reveal"
+  static let apiKeyGetKey = "settings.apiKey.getKey"
   static let apiKeySave = "settings.apiKey.save"
   static let apiKeyCancel = "settings.apiKey.cancel"
-  static let apiKeyChange = "settings.apiKey.change"
-  static let apiKeySavedStatus = "settings.apiKey.savedStatus"
   static let apiKeyError = "settings.apiKey.error"
   static let keyTermsField = "settings.keyTerms.field"
   static let hotkeyPicker = "settings.hotkey.picker"

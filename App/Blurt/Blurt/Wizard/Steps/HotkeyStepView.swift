@@ -50,7 +50,7 @@ struct HotkeyStepView: View {
 /// the label. A plain `HStack` (default `.center` alignment) rather than
 /// `LabeledContent`, which baseline-aligns the control to the label and leaves
 /// it reading slightly high. Shared so every settings/setup row stays visually
-/// identical (see `APIKeyStepView.savedRow`, `PermissionsStepView`,
+/// identical (see `APIKeyStepView`, `PermissionsStepView`,
 /// `PickerSettingRow`). (Housed here rather than in its own file so the
 /// committed XcodeGen project doesn't need regenerating; move it to its own file
 /// next time `xcodegen generate` runs anyway.)
