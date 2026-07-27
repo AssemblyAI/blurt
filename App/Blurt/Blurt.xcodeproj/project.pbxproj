@@ -196,6 +196,7 @@
 		738A8EF4AB672CD2B7F13319 /* juno-86-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 40703D977839CB4F625C0284 /* juno-86-stop.m4a */; };
 		73E75F74DC2F7984F50E184A /* juno-110-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 09CD5D88E1A2BE5D0095F167 /* juno-110-start.m4a */; };
 		73FA46BD466212E9AE09C847 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C151FD5B49E5D7E61BDDEF0 /* App.swift */; };
+		74BD28AA54484635D62FA797 /* OverlayPillContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41AD30574EA478D2BD0E87ED /* OverlayPillContent.swift */; };
 		750BE46A52E2E794D4FD3366 /* rom1b-26-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DD0650160548287F62C1FA77 /* rom1b-26-start.m4a */; };
 		7661BD55883B6F3B03AA3905 /* juno-40-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = BCE9C2C9715E2C1C96683AE0 /* juno-40-stop.m4a */; };
 		76C1876DB538F8E190EB509E /* BlurtCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = D643CB1D491E00A2182907F8 /* BlurtCommands.swift */; };
@@ -304,6 +305,7 @@
 		B3FC1877229B7510E656EEFC /* rom1a-7-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D79CA18872ADF342DE5426CA /* rom1a-7-stop.m4a */; };
 		B56AB7FEAEC9E9ECE36B400E /* juno-28-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 8A319EF914358A938C87389D /* juno-28-stop.m4a */; };
 		B5A7CEA6517E5A1E4D77623F /* FloatingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE2598E3B8BA1D650EEEEF4B /* FloatingPanel.swift */; };
+		B5ADC67B78CA3EA70D6BAEB3 /* RecentDictationsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0EC4E3D73862F8E4DB6F47D /* RecentDictationsSection.swift */; };
 		B6ACE56CCFCAE22FC67833AF /* juno-76-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 94546743017BF75E0DC24ACC /* juno-76-start.m4a */; };
 		B6B9598209C21737FC80D9FC /* MenuBarUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63869ED0BF971F732668349B /* MenuBarUITests.swift */; };
 		B844779F8427A1225C45A9FB /* WizardController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30E57A9C9B934A2120381005 /* WizardController.swift */; };
@@ -575,6 +577,7 @@
 		40A711B3442D9CBE0189BEF3 /* juno-2-stop.m4a */ = {isa = PBXFileReference; path = "juno-2-stop.m4a"; sourceTree = "<group>"; };
 		41587FEDA3BE5310D3FA6CDA /* juno-127-stop.m4a */ = {isa = PBXFileReference; path = "juno-127-stop.m4a"; sourceTree = "<group>"; };
 		41736827B0D4E7E1D024DCF1 /* juno-30-start.m4a */ = {isa = PBXFileReference; path = "juno-30-start.m4a"; sourceTree = "<group>"; };
+		41AD30574EA478D2BD0E87ED /* OverlayPillContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayPillContent.swift; sourceTree = "<group>"; };
 		41CCE59FAFC731DAAFB8B09A /* juno-103-start.m4a */ = {isa = PBXFileReference; path = "juno-103-start.m4a"; sourceTree = "<group>"; };
 		429B975FA7FFA777106D0A49 /* rom1b-13-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-13-stop.m4a"; sourceTree = "<group>"; };
 		44DD60B425DF100431946DAB /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
@@ -732,6 +735,7 @@
 		A01872064CB7D739DE6F9952 /* rom1a-25-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-25-stop.m4a"; sourceTree = "<group>"; };
 		A0C585C5F805520ADA502A8F /* UITestIdentifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestIdentifiers.swift; sourceTree = "<group>"; };
 		A0C78659208520BB93EAB372 /* juno-12-start.m4a */ = {isa = PBXFileReference; path = "juno-12-start.m4a"; sourceTree = "<group>"; };
+		A0EC4E3D73862F8E4DB6F47D /* RecentDictationsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentDictationsSection.swift; sourceTree = "<group>"; };
 		A27D7F43295DE2A81EFFDDBC /* OverlayWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayWindowController.swift; sourceTree = "<group>"; };
 		A2C5021E8F72182F331DA397 /* juno-3-start.m4a */ = {isa = PBXFileReference; path = "juno-3-start.m4a"; sourceTree = "<group>"; };
 		A4AFAD52CAC3825D7A603DC5 /* juno-100-start.m4a */ = {isa = PBXFileReference; path = "juno-100-start.m4a"; sourceTree = "<group>"; };
@@ -1359,6 +1363,7 @@
 				C7C95B4C80443E2A6EFE05E7 /* DeveloperSection.swift */,
 				01F10B3261EA8F8616B8595A /* MainWindowRoot.swift */,
 				383E03AB60BA21AAD92655D5 /* ReadyView.swift */,
+				A0EC4E3D73862F8E4DB6F47D /* RecentDictationsSection.swift */,
 				254D4D3CAC1C114EC51C96C8 /* SettingRow.swift */,
 				37CBB4580F251B182A8B1937 /* SettingsWindowRoot.swift */,
 				30E57A9C9B934A2120381005 /* WizardController.swift */,
@@ -1387,6 +1392,7 @@
 		912505E1D0FBD5D5CA591BA2 /* Overlay */ = {
 			isa = PBXGroup;
 			children = (
+				41AD30574EA478D2BD0E87ED /* OverlayPillContent.swift */,
 				2E79CB809D285C0C27E8D43D /* OverlayView.swift */,
 				A27D7F43295DE2A81EFFDDBC /* OverlayWindowController.swift */,
 			);
@@ -1997,10 +2003,12 @@
 				E8AE03AA4DCD807D2BB8D660 /* LiquidGlass.swift in Sources */,
 				7F838018EA0ACE7170FC32C4 /* MainWindowRoot.swift in Sources */,
 				AD32046355138298E7FC40D0 /* MenuBarScene.swift in Sources */,
+				74BD28AA54484635D62FA797 /* OverlayPillContent.swift in Sources */,
 				9437C292A6D7FE533338073D /* OverlayView.swift in Sources */,
 				8FE4B9B139BB9557FBC5589B /* OverlayWindowController.swift in Sources */,
 				D750C1BF16502EEC92182ECD /* PermissionsStepView.swift in Sources */,
 				A13335FE97FA2E60A4F5CABC /* ReadyView.swift in Sources */,
+				B5ADC67B78CA3EA70D6BAEB3 /* RecentDictationsSection.swift in Sources */,
 				6A1402BFED3758AAD9C84ADF /* SettingRow.swift in Sources */,
 				1D1100AB3D47EFC80D47B04B /* SettingsWindowRoot.swift in Sources */,
 				69E27229D8C64D7119918B7A /* SoundStepView.swift in Sources */,
