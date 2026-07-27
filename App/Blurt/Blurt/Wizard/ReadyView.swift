@@ -72,12 +72,17 @@ private struct RecentDictationsSection: View {
 
   private static let rowHeight: CGFloat = 28
   private static let separatorThickness: CGFloat = 1
-  /// Height of a full `capacity`-row list (rows + the separators between them);
-  /// the container is pinned to this whether it holds 0, 1, or `capacity` rows.
+
+  /// How often the relative timestamps re-render. Half the engine's "just now"
+  /// window, so a row can't read as stale for longer than that window lasts —
+  /// derived from the threshold rather than a bare `30` in case it changes.
+  private static let timestampRefresh = RecentDictations.Entry.justNowThreshold / 2
+  /// Height of a full `capacity`-row list; the container is pinned to this whether
+  /// it holds 0, 1, or `capacity` rows. The row-count arithmetic is the engine's,
+  /// next to the `capacity` it depends on.
   private var reservedHeight: CGFloat {
-    let rows = CGFloat(RecentDictations.capacity) * Self.rowHeight
-    let separators = CGFloat(RecentDictations.capacity - 1) * Self.separatorThickness
-    return rows + separators
+    RecentDictations.reservedHeight(
+      rowHeight: Self.rowHeight, separatorThickness: Self.separatorThickness)
   }
 
   var body: some View {
@@ -110,9 +115,9 @@ private struct RecentDictationsSection: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     } else {
       // Live relative timestamps ("2 minutes ago") without a stored clock: the
-      // TimelineView re-renders on a coarse cadence and each row formats against
-      // its current date. 30 s is fine — the smallest unit shown is minutes.
-      TimelineView(.periodic(from: .now, by: 30)) { timeline in
+      // TimelineView re-renders on a coarse cadence (`timestampRefresh`) and each
+      // row formats against its current date.
+      TimelineView(.periodic(from: .now, by: Self.timestampRefresh)) { timeline in
         VStack(spacing: 0) {
           ForEach(entries) { entry in
             RecentDictationRow(entry: entry, now: timeline.date)
@@ -252,10 +257,22 @@ private struct RecentDictationRow: View {
 }
 
 private struct ReadyBrandingView: View {
+  /// Loaded once for the process rather than per `body` evaluation: this view
+  /// sits in `ReadyView`, whose body re-runs on every new dictation
+  /// (`recentDictations.entries`), and a bundle lookup plus a PNG decode is not
+  /// something to re-do on the main thread each time.
+  ///
+  /// Left to the target's `SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor` default
+  /// rather than spelled `nonisolated(unsafe)`: `body` reads it on the main actor
+  /// either way, and this can't then break if a future SDK marks `NSImage`
+  /// `Sendable` (which would make the attribute an "unnecessary" warning, and the
+  /// app target builds with warnings-as-errors).
+  private static let logo: NSImage? = Bundle.main
+    .url(forResource: "blurt-ready-logo", withExtension: "png")
+    .flatMap(NSImage.init(contentsOf:))
+
   var body: some View {
-    if let brandingURL,
-      let image = NSImage(contentsOf: brandingURL)
-    {
+    if let image = Self.logo {
       Image(nsImage: image)
         .interpolation(.none)
         .resizable()
@@ -275,10 +292,6 @@ private struct ReadyBrandingView: View {
       .accessibilityElement(children: .combine)
       .accessibilityLabel("Blurt is ready")
     }
-  }
-
-  private var brandingURL: URL? {
-    Bundle.main.url(forResource: "blurt-ready-logo", withExtension: "png")
   }
 }
 

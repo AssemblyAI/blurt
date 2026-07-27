@@ -43,6 +43,32 @@ MIN_COVERAGE=80
 
 export OS_ACTIVITY_MODE=disable
 
+# Fail the health check with a message. check.sh doesn't source release-lib.sh
+# (it is not part of the release pipeline), so it carries its own.
+die_check() {
+  echo "error: $*" >&2
+  exit 1
+}
+
+# Guard for the optional linters below: true when $1 is on PATH, otherwise emits
+# the standard skip note (with install hint $2) and returns false. On success it
+# also cds to REPO_ROOT, because every one of those checks runs from the repo
+# root — so wiring up a new tool can't forget either half. Use as:
+#   if tool_ready prettier 'brew install prettier'; then … fi
+tool_ready() {
+  if command -v "$1" >/dev/null 2>&1; then
+    # `|| return 1` is load-bearing: as an `if` *condition* this function runs
+    # with errexit suppressed, so a failed cd would otherwise fall through to
+    # `return 0` and run the linter from the wrong directory.
+    cd "$REPO_ROOT" || return 1
+    return 0
+  fi
+  # ${2:-} so a one-arg call can't abort the whole script under `set -u` — and
+  # only on a machine where the tool is missing, the hardest path to notice.
+  echo "note: $1 not installed; skipping (${2:-})"
+  return 1
+}
+
 # No-external-dependencies guard. The engine is dependency-free by rule and the
 # app carries only the local BlurtEngine package (see AGENTS.md). A third-party
 # dependency is the single biggest supply-chain risk, so fail the moment one is
@@ -73,6 +99,63 @@ fi
 [ "$DEP_VIOLATION" -eq 0 ] || exit 1
 echo "no external dependencies (engine dependency-free; app carries only local BlurtEngine)"
 
+# Sound-catalog integrity. `SoundPackCatalog.swift` and the cue audio are both
+# emitted by scripts/generate-sounds.swift, but they land in different targets —
+# engine source vs. app resources — so a partial regeneration or commit can leave
+# them disagreeing. Nothing at runtime notices: `SoundPack.startFileName` names a
+# stem, `Bundle.main.url(forResource:)` returns nil for it, and the cue play is a
+# silent no-op, so the user picks that voice and simply hears nothing. Unit tests
+# can't cover it either — the engine deliberately ships no resources, so the two
+# halves only meet here. Pure text/filesystem, so it runs in --portable too.
+echo "==> sound catalog integrity"
+CATALOG="$REPO_ROOT/Sources/BlurtEngine/Audio/SoundPackCatalog.swift"
+SOUNDS_DIR="$APP_DIR/Blurt/Resources/Sounds"
+SOUND_VIOLATION=0
+
+CATALOG_IDS="$(sed -n 's/.*SoundPack(id: "\([^"]*\)".*/\1/p' "$CATALOG" | sort)"
+[ -n "$CATALOG_IDS" ] || die_check "parsed no SoundPack ids from $CATALOG — the id extraction broke"
+
+DUPLICATE_IDS="$(printf '%s\n' "$CATALOG_IDS" | uniq -d)"
+if [ -n "$DUPLICATE_IDS" ]; then
+  echo "error: duplicate SoundPack ids in the catalog (find(id:) returns only the first," >&2
+  echo "       and the picker would list the same voice twice):" >&2
+  printf '%s\n' "$DUPLICATE_IDS" | sed 's/^/  /' >&2
+  SOUND_VIOLATION=1
+fi
+
+# `none` belongs to SoundPack.none; a catalog entry claiming it would shadow the
+# silent pack in `find(id:)`, so a user could never select "no sound" again.
+if printf '%s\n' "$CATALOG_IDS" | grep -qx 'none'; then
+  echo "error: a catalog entry uses the reserved id 'none' — it would shadow SoundPack.none" >&2
+  SOUND_VIOLATION=1
+fi
+
+# Every voice needs both cues (`<id>-start.m4a` / `<id>-stop.m4a`), and every
+# shipped file needs a voice — an orphan is dead weight in the app bundle and a
+# sign the catalog lost an entry.
+# `sort -u` so a duplicate id (already reported above) can't also fake a missing
+# file here — `comm` mismatches on a repeated line and would name a file that
+# exists, sending the reader after the wrong problem.
+EXPECTED_SOUNDS="$(printf '%s\n' "$CATALOG_IDS" | sed -e 's/$/-start.m4a/' -e 'p' -e 's/-start\.m4a$/-stop.m4a/' | sort -u)"
+ACTUAL_SOUNDS="$(find "$SOUNDS_DIR" -maxdepth 1 -name '*.m4a' | sed 's|.*/||' | sort -u)"
+
+MISSING_SOUNDS="$(comm -23 <(printf '%s\n' "$EXPECTED_SOUNDS") <(printf '%s\n' "$ACTUAL_SOUNDS"))"
+if [ -n "$MISSING_SOUNDS" ]; then
+  echo "error: catalog voices with no cue audio in $SOUNDS_DIR (they would play silently):" >&2
+  printf '%s\n' "$MISSING_SOUNDS" | sed 's/^/  /' >&2
+  SOUND_VIOLATION=1
+fi
+
+ORPHAN_SOUNDS="$(comm -13 <(printf '%s\n' "$EXPECTED_SOUNDS") <(printf '%s\n' "$ACTUAL_SOUNDS"))"
+if [ -n "$ORPHAN_SOUNDS" ]; then
+  echo "error: cue audio in $SOUNDS_DIR with no catalog voice (unreachable, and shipped anyway):" >&2
+  printf '%s\n' "$ORPHAN_SOUNDS" | sed 's/^/  /' >&2
+  SOUND_VIOLATION=1
+fi
+
+[ "$SOUND_VIOLATION" -eq 0 ] || exit 1
+echo "$(printf '%s\n' "$CATALOG_IDS" | wc -l | tr -d ' ') voices, each with both cues, no orphans"
+
 if [ "$PORTABLE" -eq 1 ]; then
   echo "==> portable mode: skipping swift test, coverage gate, sanitizers, xcodegen"
   echo "    drift check, app build, UI tests, leaks, swiftlint analyze, periphery"
@@ -95,26 +178,30 @@ else
   PROFDATA="$BIN/codecov/default.profdata"
   XCTEST_BUNDLE="$(find "$BIN" -maxdepth 1 -name '*PackageTests.xctest' -print -quit)"
   XCTEST_BIN="$XCTEST_BUNDLE/Contents/MacOS/$(basename "$XCTEST_BUNDLE" .xctest)"
-  if command -v python3 >/dev/null 2>&1 && [ -f "$PROFDATA" ] && [ -f "$XCTEST_BIN" ]; then
-    # Exclusions (so the figure reflects deterministically-testable engine code):
-    #  - Tests/            : test files themselves, not shipping code.
-    #  - MicCapture.swift  : the AVAudioRecorder capture actor. It needs a real
-    #                        audio device, so it can't run in CI (its integration
-    #                        test, MicCaptureLevelsTests, is env-gated for the same
-    #                        reason). Its pure meter math lives in
-    #                        MicCapture+Meter.swift, which IS covered. Keep this
-    #                        list tight — exclude only code that genuinely cannot
-    #                        be exercised without hardware.
-    COVERAGE="$(xcrun llvm-cov export -summary-only -instr-profile "$PROFDATA" "$XCTEST_BIN" \
-      -ignore-filename-regex='Tests/|Audio/MicCapture\.swift' \
-      | python3 -c 'import sys,json; print(round(json.load(sys.stdin)["data"][0]["totals"]["lines"]["percent"],2))')"
-    echo "engine line coverage: ${COVERAGE}%"
-    if ! awk -v c="$COVERAGE" -v min="$MIN_COVERAGE" 'BEGIN{ exit (c+0 < min+0) }'; then
-      echo "error: coverage ${COVERAGE}% is below the ${MIN_COVERAGE}% floor"
-      exit 1
-    fi
-  else
-    echo "note: skipping coverage gate (need python3 + a coverage build)"
+  # These must exist after `swift test --enable-code-coverage`. Previously a
+  # missing one (a renamed test bundle, a coverage build that didn't happen)
+  # turned the >=80% floor into a printed note and check.sh still exited 0 — the
+  # gate vanished silently and CI stayed green. Fail instead.
+  [ -n "$XCTEST_BUNDLE" ] || die_check "no *PackageTests.xctest found under $BIN — coverage gate cannot run"
+  [ -f "$PROFDATA" ] || die_check "no coverage profile at $PROFDATA — coverage gate cannot run"
+  [ -f "$XCTEST_BIN" ] || die_check "no test binary at $XCTEST_BIN — coverage gate cannot run"
+  command -v python3 >/dev/null 2>&1 || die_check "python3 not found — needed to read the coverage summary"
+  # Exclusions (so the figure reflects deterministically-testable engine code):
+  #  - Tests/            : test files themselves, not shipping code.
+  #  - MicCapture.swift  : the AVAudioRecorder capture actor. It needs a real
+  #                        audio device, so it can't run in CI (its integration
+  #                        test, MicCaptureLevelsTests, is env-gated for the same
+  #                        reason). Its pure meter math lives in
+  #                        MicCapture+Meter.swift, which IS covered. Keep this
+  #                        list tight — exclude only code that genuinely cannot
+  #                        be exercised without hardware.
+  COVERAGE="$(xcrun llvm-cov export -summary-only -instr-profile "$PROFDATA" "$XCTEST_BIN" \
+    -ignore-filename-regex='Tests/|Audio/MicCapture\.swift' \
+    | python3 -c 'import sys,json; print(round(json.load(sys.stdin)["data"][0]["totals"]["lines"]["percent"],2))')"
+  echo "engine line coverage: ${COVERAGE}%"
+  if ! awk -v c="$COVERAGE" -v min="$MIN_COVERAGE" 'BEGIN{ exit (c+0 < min+0) }'; then
+    echo "error: coverage ${COVERAGE}% is below the ${MIN_COVERAGE}% floor"
+    exit 1
   fi
 
   echo "==> swift test --sanitize=thread (data-race detection)"
@@ -122,14 +209,19 @@ else
   # shared mutable state at runtime — catching data races regardless of test
   # ordering (e.g. an unguarded global touched by parallel tests). Runs the
   # suite a second time against a TSan-instrumented build.
-  swift test --sanitize=thread -Xswiftc -warnings-as-errors
+  #
+  # Each sanitizer gets its own --scratch-path: the three passes compile with
+  # different swiftc flags, so sharing the default .build makes every pass
+  # invalidate the previous one's artifacts (and leaves .build poisoned for the
+  # next run's plain pass). Separate paths keep three warm incremental caches.
+  swift test --sanitize=thread --scratch-path "$REPO_ROOT/.build/tsan" -Xswiftc -warnings-as-errors
 
   echo "==> swift test --sanitize=address (memory-safety detection)"
   # AddressSanitizer catches use-after-free, buffer overflows, and other memory
   # corruption at runtime. (LeakSanitizer is unsupported on Darwin, so this does
   # NOT find retain-cycle leaks — those are covered by the weak-reference
   # assertions in MemoryLeakTests.swift.)
-  swift test --sanitize=address -Xswiftc -warnings-as-errors
+  swift test --sanitize=address --scratch-path "$REPO_ROOT/.build/asan" -Xswiftc -warnings-as-errors
 
   echo "==> xcodegen (App/Blurt)"
   cd "$APP_DIR"
@@ -212,9 +304,8 @@ else
   echo "note: swift-format not installed; skipping (Swift formatting is checked on CI)"
 fi
 
-if command -v swiftlint >/dev/null 2>&1; then
+if tool_ready swiftlint 'brew install swiftlint'; then
   echo "==> swiftlint"
-  cd "$REPO_ROOT"
   # Covers what swift-format can't: correctness smells and complexity limits
   # (config in the sibling .swiftlint.yml). --strict promotes warnings to
   # failures, so any lint violation fails the build — keep the tree lint-clean.
@@ -228,46 +319,34 @@ if command -v swiftlint >/dev/null 2>&1; then
     # OSLog are suppressed via always_keep_imports in .swiftlint.yml.
     swiftlint analyze --strict --quiet --compiler-log-path "$APP_BUILD_LOG"
   fi
-else
-  echo "note: swiftlint not installed; skipping (brew install swiftlint)"
 fi
 
 if [ "$PORTABLE" -eq 0 ]; then
-  if command -v periphery >/dev/null 2>&1; then
+  if tool_ready periphery 'brew install periphery'; then
     echo "==> periphery"
-    cd "$REPO_ROOT"
     # --strict promotes any unused-code finding to a non-zero exit.
     # Periphery does its own xcodebuild + index — separate from the build above
     # because reusing DerivedData reliably across machines is fragile.
     periphery scan --strict --quiet
-  else
-    echo "note: periphery not installed; skipping (brew install periphery)"
   fi
 fi
 
-if command -v actionlint >/dev/null 2>&1; then
+if tool_ready actionlint 'brew install actionlint'; then
   echo "==> actionlint"
-  cd "$REPO_ROOT"
   actionlint
-else
-  echo "note: actionlint not installed; skipping (brew install actionlint)"
 fi
 
-if command -v prettier >/dev/null 2>&1; then
+if tool_ready prettier 'brew install prettier'; then
   echo "==> prettier --check"
-  cd "$REPO_ROOT"
   # Formatting authority for the repo's non-Swift text: CI/config (yml/yaml),
   # docs (md), and the GitHub Pages site (html/css — which also covers the
   # JSON-LD embedded in site/index.html). JSON is intentionally left out of the
   # glob: the only non-conforming file is the Xcode-generated AppIcon icon.json,
   # which must not be reformatted by hand.
   prettier --check '**/*.{yml,yaml,md,html,css}'
-else
-  echo "note: prettier not installed; skipping (brew install prettier)"
 fi
 
-if command -v xmllint >/dev/null 2>&1; then
-  cd "$REPO_ROOT"
+if tool_ready xmllint 'ships with libxml2'; then
   # Prettier can't format XML without a plugin (and this repo has no JS toolchain
   # to add one), so libxml2's xmllint validates well-formedness instead — covers
   # the GitHub Pages sitemap. A parse error fails the check; --noout drops the
@@ -279,13 +358,10 @@ if command -v xmllint >/dev/null 2>&1; then
     # shellcheck disable=SC2086
     xmllint --noout $XML_FILES
   fi
-else
-  echo "note: xmllint not installed; skipping XML check (ships with libxml2)"
 fi
 
-if command -v markdownlint >/dev/null 2>&1; then
+if tool_ready markdownlint 'brew install markdownlint-cli'; then
   echo "==> markdownlint"
-  cd "$REPO_ROOT"
   # Structural lint for the repo's Markdown (config in .markdownlint.jsonc;
   # prose-wrapping rules are off there since prettier owns Markdown formatting).
   # CLAUDE.md is a short compatibility shim that points agents at AGENTS.md, so
@@ -293,18 +369,13 @@ if command -v markdownlint >/dev/null 2>&1; then
   # drafts) is excluded too — prose, not shipped source (also in .markdownlintignore;
   # filtered here as well since the file list is passed to markdownlint as args).
   git ls-files '*.md' | grep -vx 'CLAUDE.md' | grep -vE '^docs/' | xargs markdownlint
-else
-  echo "note: markdownlint not installed; skipping (brew install markdownlint-cli)"
 fi
 
-if command -v shellcheck >/dev/null 2>&1; then
+if tool_ready shellcheck 'brew install shellcheck'; then
   echo "==> shellcheck"
-  cd "$REPO_ROOT"
   # Static analysis for the project's shell scripts (release-*, check.sh
   # itself) — catches quoting bugs, unset vars, and unsafe patterns.
   shellcheck scripts/*.sh
-else
-  echo "note: shellcheck not installed; skipping (brew install shellcheck)"
 fi
 
 echo "==> release.sh unit tests"

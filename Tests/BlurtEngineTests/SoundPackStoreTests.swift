@@ -31,7 +31,7 @@ struct SoundPackStoreTests {
   @Test("an unknown stored value falls back to the default")
   func unknownFallsBack() {
     let defaults = freshDefaults()
-    defaults.set("trombone", forKey: "BlurtSoundPack")
+    defaults.set("trombone", forKey: SoundPackStore.defaultsKey)
     #expect(SoundPackStore(defaults: defaults).soundPack == .defaultPack)
   }
 }

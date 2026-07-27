@@ -5,9 +5,6 @@ import os
 // the press-time context read — split from `DictationSession.swift` to stay
 // within the lint file-length budget, like `+Commands` and `+Observation`.
 extension DictationSession {
-  /// Sample rate the mic delivers and the Sync request declares (`SyncSTTLimits`).
-  private static let captureSampleRate = SyncSTTLimits.sampleRate
-
   /// The longest `runTranscribeInject` waits for the press-time AX
   /// field-context read before transcribing without it. In the common case the
   /// read finished while the user was speaking and the buffered stream hands
@@ -37,13 +34,23 @@ extension DictationSession {
     // Resolve the press-time AX field read now that it's actually needed —
     // waiting at most `contextWaitBudget` (see its doc), so a hung read costs
     // the transcript its priming, not multiple seconds of stall.
-    if let contextStream {
+    // Take the stream out of the actor's state in the SAME turn it's read, before
+    // the suspension below. Reading it and clearing it across an `await` let a
+    // cancelled pipeline clear a *newer* press's stream: `cancel()` detaches this
+    // task while it's parked in `firstValue`, a fresh `press()` installs its own
+    // `contextStream`, and this task's resumption then nils that one out — so
+    // dictation #2 transcribes with `context: nil`, losing not just its priming but
+    // `baseInstruction`, and `[Speaker]`-style markers can reach the pasted text.
+    // The window is microseconds, but the invariant is now local instead of
+    // depending on scheduling.
+    let stream = contextStream
+    contextStream = nil
+    if let stream {
       capturedContext = await Self.firstValue(
-        of: contextStream, within: Self.contextWaitBudget, clock: clock)
+        of: stream, within: Self.contextWaitBudget, clock: clock)
     } else {
       capturedContext = nil
     }
-    contextStream = nil
 
     // The Sync STT API applies the cleanup prompt server-side, so the transcript
     // it returns is already the final, polished text — there is no separate
@@ -95,7 +102,7 @@ extension DictationSession {
   private func transcribe(pcm: Data) async -> String? {
     do {
       return try await transcriber.transcribe(
-        pcm: pcm, sampleRate: Self.captureSampleRate, context: capturedContext)
+        pcm: pcm, sampleRate: SyncSTTLimits.sampleRate, context: capturedContext)
     } catch {
       // A cancel() that landed mid-request already tore this task down and set
       // .cancelled; the transport then surfaces a cancellation-shaped error

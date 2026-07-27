@@ -6,9 +6,16 @@ import Foundation
 /// them correctly (see `TranscriptionPrompt.build`).
 ///
 /// Unlike the API key these aren't secret, so they live in `UserDefaults` rather
-/// than the Keychain. The setup wizard and the Settings window read/write the
-/// raw string via `get`/`set`; the transcription pipeline reads the parsed list
-/// via `terms()`.
+/// than the Keychain. The transcription pipeline reads the parsed list via
+/// `terms()`; the editor reads the raw string via `get()`.
+///
+/// Read-only by design: the Settings field binds `@AppStorage` straight to
+/// `defaultsKey`, which is the sole writer. There is deliberately no setter —
+/// normalizing on write fought the text field, because the trimmed value was
+/// pushed back into the binding as an external change and a trailing space was
+/// deleted as the user typed it. Normalization lives on the read side instead
+/// (`get()` trims, `parse` trims and dedupes), so a blank field still reads back
+/// as "no terms". See the note on `KeyTermsStepView.text`.
 public enum KeyTermsStore {
   /// `UserDefaults` key for the raw, comma-separated string the user typed.
   /// Public so the app can clear it when resetting to a clean state under UI
@@ -19,32 +26,23 @@ public enum KeyTermsStore {
 
   /// The raw comma-separated string exactly as the user entered it (preserving
   /// their spacing/order for round-tripping in the editor), or `nil` if unset.
-  public static func get() -> String? {
+  public static var raw: String? {
     defaults.string(forKey: defaultsKey).trimmedNonEmpty()
-  }
-
-  /// Stores the raw string. Passing `nil` or a blank string clears it.
-  public static func set(_ raw: String?) {
-    if let trimmed = raw.trimmedNonEmpty() {
-      defaults.set(trimmed, forKey: defaultsKey)
-    } else {
-      defaults.removeObject(forKey: defaultsKey)
-    }
   }
 
   /// The stored terms parsed into a clean list: split on commas, trimmed, with
   /// blanks and duplicates removed (case-insensitively, keeping first spelling).
-  public static func terms() -> [String] {
-    parse(get())
+  public static var terms: [String] {
+    parse(raw)
   }
 
   /// Pure parse of a comma-separated string into a clean term list. Exposed so
   /// `TranscriptionPrompt` and tests can reuse the exact same rules.
-  public static func parse(_ raw: String?) -> [String] {
-    guard let raw else { return [] }
+  public static func parse(_ text: String?) -> [String] {
+    guard let text else { return [] }
     var seen = Set<String>()
     var result: [String] = []
-    for piece in raw.split(separator: ",") {
+    for piece in text.split(separator: ",") {
       guard let term = String(piece).trimmedNonEmpty() else { continue }
       let key = term.lowercased()
       guard seen.insert(key).inserted else { continue }

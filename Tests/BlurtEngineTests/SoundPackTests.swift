@@ -32,13 +32,6 @@ struct SoundPackTests {
     #expect(SoundPack.find(id: "juno-0")?.label == "Brass")
   }
 
-  @Test("synth credit names the source synth; nil for none")
-  func synth() {
-    #expect(SoundPack.none.synth == nil)
-    #expect(SoundPack.find(id: "rom1a-6")?.synth == "Yamaha DX-7")
-    #expect(SoundPack.find(id: "juno-13")?.synth == "Roland Juno-106")
-  }
-
   @Test("default pack is Orchestra; lookups round-trip and reject unknowns")
   func lookup() {
     #expect(SoundPack.defaultPack.id == "rom1a-6")

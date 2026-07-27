@@ -115,6 +115,40 @@ final class DictationKeyTap {
     return true
   }
 
+  /// Discard stale gate state after the session reached a terminal phase, so the
+  /// user's next trigger press isn't swallowed.
+  ///
+  /// A dictation can end *without* a key event ending it: the auto-release cap
+  /// fires on a long hold, or the press is refused (no API key) / fails (no input
+  /// device). The gate is then left `.latched` — or `.armed`, which a quick release
+  /// promotes to `.latched` — and nothing can clear it, because
+  /// `DictationKeyGate.modifierDown` from `.latched` returns `.none` (so the next
+  /// tap starts nothing) and the `modifierUp` after it returns `.stop`, which
+  /// no-ops on an already-terminal session. The user gets one completely dead
+  /// press: no pill, no chime, nothing — and if that press was a hold, a whole
+  /// utterance spoken into a session that never started.
+  ///
+  /// Resets unconditionally, unlike the disabled-tap recovery above. That guard
+  /// exists to preserve a *live* recording whose key events were dropped; here the
+  /// dictation is already over, so there is no state worth keeping even if the
+  /// trigger is still physically held — a later key-up just finds
+  /// `modifierIsDown == false` and routes to `.none`.
+  ///
+  /// Acts on `reset()`'s discarded-recording result the same way `refreshBinding`
+  /// does. In the stale case the session is already terminal, so the
+  /// `cancelRecording` is a no-op. It matters for the one residual race: `render`
+  /// consumes `phaseStream()` asynchronously, so if that loop falls behind,
+  /// dictation N's terminal phase can arrive *after* the gate has armed for
+  /// dictation N+1 — the reset then clears N+1's live state, its key-up routes to
+  /// `.none`, and the recording would otherwise run to the ~115 s auto-release cap.
+  /// Cancelling it turns a silent two-minute hang into a clean stop.
+  ///
+  /// A no-op in every normal flow, where the gate is already idle by the time a
+  /// terminal phase lands.
+  func syncAfterTerminalPhase() {
+    if router.reset() { onRecordingDiscarded() }
+  }
+
   /// Re-read the bound trigger key into the router. Call after the user
   /// rebinds. The router's reset reports a discarded live recording: rebinding
   /// mid-dictation means the old key's up-event will never match, so the capture

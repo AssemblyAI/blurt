@@ -17,13 +17,10 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_DIR="$REPO_ROOT/App/Blurt"
 DERIVED_BASE="/tmp/blurt-build"
 
-info() { printf '\033[34m▸\033[0m %s\n' "$*"; }
-die() {
-  printf '\033[31m✗\033[0m %s\n' "$*" >&2
-  exit 1
-}
+# shellcheck source=scripts/release-lib.sh
+source "$REPO_ROOT/scripts/release-lib.sh"
 
-command -v xcodebuild >/dev/null 2>&1 || die "missing required tool: xcodebuild"
+require_tools xcodebuild
 
 if command -v xcbeautify >/dev/null 2>&1; then
   PRETTY=(xcbeautify --quiet)

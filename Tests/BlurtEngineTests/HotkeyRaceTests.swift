@@ -136,8 +136,7 @@ private actor GatedMicCapture: MicCaptureProtocol {
 
   func stop() async throws -> Data {
     stopCalls += 1
-    // Above SyncSTTLimits.minPCMBytes so the transcript isn't dropped by the
-    // too-short guard — this suite exercises the press/release race, not it.
-    return Data(count: SyncSTTLimits.minPCMBytes * 2)
+    // This suite exercises the press/release race, not the too-short guard.
+    return StubPCM.aboveMinimum
   }
 }

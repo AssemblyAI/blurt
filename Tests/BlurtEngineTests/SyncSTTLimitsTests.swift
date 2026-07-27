@@ -39,6 +39,22 @@ struct SyncSTTLimitsTests {
     #expect(SyncSTTLimits.minPCMBytes == 3200)
   }
 
+  @Test("durationMs converts a raw S16LE byte count to milliseconds")
+  func durationMsDerivation() {
+    // Both the capture log (MicCapture.stop) and the upload log
+    // (AssemblyAITranscriber.transcribe) report a clip's duration through this,
+    // and those logs are the documented way to diagnose pipeline latency — so
+    // pin the arithmetic rather than only exercising it incidentally.
+    #expect(SyncSTTLimits.durationMs(ofPCMBytes: SyncSTTLimits.minPCMBytes) == 100)
+    #expect(SyncSTTLimits.durationMs(ofPCMBytes: 32_000) == 1000)
+    #expect(SyncSTTLimits.durationMs(ofPCMBytes: 0) == 0)
+    // An explicit rate covers the transcriber's call, which passes the rate it
+    // declared on the request rather than defaulting.
+    #expect(SyncSTTLimits.durationMs(ofPCMBytes: 16_000, rate: 8_000) == 1000)
+    // A zero/garbage rate must not divide by zero into an Int conversion trap.
+    #expect(SyncSTTLimits.durationMs(ofPCMBytes: 32_000, rate: 0) == 0)
+  }
+
   @Test("the capture geometry is the Sync API's 16 kHz")
   func sampleRatePinned() {
     // Shared by MicCapture (recording) and the request's declared rate — a

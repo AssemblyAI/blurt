@@ -58,7 +58,14 @@ jobs:
           if [ -z "$range" ]; then
             echo "code=true" >>"$GITHUB_OUTPUT"; exit 0
           fi
-          changed="$(git diff --name-only "$range")"
+          # `|| true` is the safety property, not tidiness: this step runs under
+          # `bash -e`, so a failing git diff (an unreachable base sha after a
+          # force-push, a fork edge case) fails the step, fails this job, and makes
+          # the `check` job SKIP — which GitHub reports to branch protection as a
+          # passing required check. The entire macOS gate would be bypassed on a
+          # green-looking PR. An empty `changed` falls through to code=true below,
+          # so failing open runs the full check instead.
+          changed="$(git diff --name-only "$range" || true)"
           echo "Changed files in $range:"; echo "$changed"
           # Capture non-docs lines and test emptiness (robust across grep impls).
           nondocs="$(printf '%s\n' "$changed" | grep -vE '^docs/' || true)"
@@ -93,3 +100,41 @@ jobs:
       - name: Run check.sh
         working-directory: blurt
         run: scripts/check.sh
+
+  # Always-runs summary job, so a *skipped* `check` can't be mistaken for a pass.
+  # GitHub reports a skipped required check to branch protection as successful, so
+  # anything that makes `check` skip — the `changes` filter erroring, a `needs`
+  # failure — silently bypasses the entire macOS gate on a green-looking PR.
+  # This job runs `if: always()` and fails unless `check` either succeeded or was
+  # skipped *by the docs-only design* (changes.outputs.code == 'false').
+  #
+  # NOTE: this only protects the repo once branch protection requires `gate`
+  # instead of (or as well as) `check` — that's a repo settings change.
+  gate:
+    needs: [changes, check]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assert the macOS gate ran or was intentionally skipped
+        env:
+          CHECK_RESULT: ${{ needs.check.result }}
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          CODE_CHANGED: ${{ needs.changes.outputs.code }}
+        run: |
+          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED check=$CHECK_RESULT"
+          if [ "$CHANGES_RESULT" != "success" ]; then
+            echo "error: the changes filter did not succeed, so the gate cannot be trusted" >&2
+            exit 1
+          fi
+          case "$CHECK_RESULT" in
+            success) echo "macOS gate passed" ;;
+            skipped)
+              if [ "$CODE_CHANGED" = "false" ]; then
+                echo "docs-only change; macOS gate intentionally skipped"
+              else
+                echo "error: check was skipped but code changed" >&2
+                exit 1
+              fi
+              ;;
+            *) echo "error: macOS gate result was '$CHECK_RESULT'" >&2; exit 1 ;;
+          esac

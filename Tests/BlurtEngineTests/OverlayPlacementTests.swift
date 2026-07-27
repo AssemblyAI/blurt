@@ -12,6 +12,30 @@ struct OverlayPlacementTests {
   private let screen = CGRect(x: 0, y: 0, width: 1000, height: 600)
   private let panel = CGSize(width: 200, height: 60)
 
+  @Test("panelOrigin measures the clearance to the pill, not the panel")
+  func panelOriginBacksOffTheShadowMargin() {
+    // This arithmetic used to live at the AppKit call site as
+    // `bottomOffset: 80 - Self.shadowMargin`, so changing the shadow margin moved
+    // the pill and no test noticed. The clearance is to the *visible pill*; the
+    // panel is larger by `shadowMargin` on every side, so its origin sits that
+    // much lower.
+    let margin: CGFloat = 28
+    let origin = OverlayPlacement.panelOrigin(
+      panelSize: panel, visibleFrame: screen, customOrigin: nil, shadowMargin: margin)
+    #expect(origin.y == OverlayPlacement.defaultBottomClearance - margin)
+    // The pill's own bottom edge still lands exactly at the clearance.
+    #expect(origin.y + margin == OverlayPlacement.defaultBottomClearance)
+    #expect(origin.x == 400)
+  }
+
+  @Test("panelOrigin still clamps a stale dragged origin back on screen")
+  func panelOriginClampsCustom() {
+    let far = CGPoint(x: 5000, y: 5000)
+    let origin = OverlayPlacement.panelOrigin(
+      panelSize: panel, visibleFrame: screen, customOrigin: far, shadowMargin: 28)
+    #expect(origin == CGPoint(x: 800, y: 540))
+  }
+
   @Test("no custom origin: horizontally centered, bottomOffset above the bottom")
   func defaultPlacement() {
     let origin = OverlayPlacement.origin(

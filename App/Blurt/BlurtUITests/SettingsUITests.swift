@@ -12,7 +12,7 @@ final class SettingsUITests: BlurtUITestCase {
     let settings = openSettingsWindow()
     let sheet = openKeyEditor(settings)
 
-    typeKey("a-valid-looking-key", into: sheet)
+    typeKey(UITestIdentifiers.validAPIKey, into: sheet)
     sheet.buttons[UITestIdentifiers.apiKeySave].click()
 
     XCTAssertTrue(
@@ -97,8 +97,7 @@ final class SettingsUITests: BlurtUITestCase {
     let settings = openSettingsWindow()
     let advanced = selectSettingsTab(settings, named: UITestIdentifiers.advancedSettingsTab)
 
-    let toggle = advanced.descendants(matching: .any)
-      .matching(identifier: UITestIdentifiers.developerToggle).firstMatch
+    let toggle = advanced.anyDescendant(identified: UITestIdentifiers.developerToggle)
     XCTAssertTrue(toggle.waitForExistence(timeout: 10), "Developer mode toggle not found")
     XCTAssertEqual("\(toggle.value ?? "")", "0", "Developer mode should start switched off")
 
@@ -115,8 +114,7 @@ final class SettingsUITests: BlurtUITestCase {
     let settings = openSettingsWindow()
     let advanced = selectSettingsTab(settings, named: UITestIdentifiers.advancedSettingsTab)
 
-    let button = advanced.descendants(matching: .any)
-      .matching(identifier: UITestIdentifiers.updateCheck).firstMatch
+    let button = advanced.anyDescendant(identified: UITestIdentifiers.updateCheck)
     XCTAssertTrue(button.waitForExistence(timeout: 10), "Check for Updates button not found")
     button.click()
 
@@ -191,7 +189,7 @@ final class SettingsUITests: BlurtUITestCase {
   /// through a live sheet.
   private func connectValidKey(_ settings: XCUIElement) {
     let sheet = openKeyEditor(settings)
-    typeKey("a-valid-looking-key", into: sheet)
+    typeKey(UITestIdentifiers.validAPIKey, into: sheet)
     sheet.buttons[UITestIdentifiers.apiKeySave].click()
     XCTAssertTrue(
       sheet.waitForNonExistence(timeout: 10),

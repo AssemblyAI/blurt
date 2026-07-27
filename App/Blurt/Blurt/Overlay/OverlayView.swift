@@ -9,7 +9,7 @@ private enum OverlayBrandPalette {
 struct OverlayView: View {
   // The single source of pill state. The live mic level is *not* read in this
   // body: that would rebuild the whole pill (capsule, shadow, REC tag) on
-  // every ~30 Hz meter tick. Only `bridge.state` is read here (via `state`
+  // every ~20 Hz meter tick. Only `bridge.state` is read here (via `state`
   // below); the leaf bar view (`WaveformBarsLevel`) reads `bridge.level`, so
   // @Observable confines the per-tick invalidation to the bars — the rest of
   // the pill stays stable.
@@ -176,6 +176,36 @@ private struct StatusLineText: View {
   }
 }
 
+/// Redraw cap for the pill's continuous animations — the REC dot's pulse, the
+/// "Transcribing…" breath, and the waveform's idle wave.
+///
+/// Read from the engine rather than restated: the cap exists *because* of the mic
+/// meter's cadence (the level feed and these slow sines can't show anything
+/// faster, so rendering at the display's full refresh rate — up to 120 Hz on
+/// ProMotion — would only burn energy), so it tracks that one number instead of
+/// duplicating it behind a comment that could go stale.
+private let overlayAnimationInterval = MicCapture.meterIntervalSeconds
+
+extension View {
+  /// Raised-cosine opacity breathing over `period`: 1 → `minOpacity` → 1, so the
+  /// view eases through the dim point instead of bouncing off it. Shared by the
+  /// REC dot and the "Transcribing…" label so the pill's two heartbeats stay one
+  /// curve. With `animated` false (Reduce Motion) the view renders untouched.
+  @ViewBuilder
+  func pulsingOpacity(period: Double, minOpacity: Double, animated: Bool) -> some View {
+    if animated {
+      TimelineView(.animation(minimumInterval: overlayAnimationInterval)) { timeline in
+        self.opacity(
+          MeterBarGeometry.breathingOpacity(
+            time: timeline.date.timeIntervalSinceReferenceDate,
+            period: period, minOpacity: minOpacity))
+      }
+    } else {
+      self
+    }
+  }
+}
+
 /// The "Transcribing…" status line with a slow breathing pulse — the processing
 /// counterpart of the recording bars' idle shimmer, so the pill keeps visibly
 /// working while the app waits on the Sync API and pastes the result. Driven by
@@ -195,29 +225,13 @@ private struct TranscribingLabel: View {
   private let minOpacity: Double = 0.55
 
   var body: some View {
-    if animated {
-      // ~20 Hz is plenty for a 1.8 s opacity ramp — rendering at the display's
-      // full refresh rate would only burn energy (same reasoning as the 30 Hz
-      // cap on WaveformBars).
-      TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { timeline in
-        label.opacity(breathOpacity(at: timeline.date.timeIntervalSinceReferenceDate))
-      }
-    } else {
-      label
-    }
+    label.pulsingOpacity(period: breathPeriod, minOpacity: minOpacity, animated: animated)
   }
 
   // Shared with the "Pasted" notice (OverlayView's `.pasted` case) so the
   // processing → pasted hand-off reads as one status line.
   private var label: some View {
     StatusLineText("Transcribing…")
-  }
-
-  /// Raised cosine over `breathPeriod`: 1 → `minOpacity` → 1, so the label
-  /// eases through the dim point instead of bouncing off it.
-  private func breathOpacity(at time: TimeInterval) -> Double {
-    let osc = (cos(time / breathPeriod * 2 * .pi) + 1) / 2  // 0...1
-    return minOpacity + (1 - minOpacity) * osc
   }
 }
 
@@ -250,15 +264,8 @@ private struct RecordingTag: View {
   }
 
   /// The magenta record dot, breathing while recording.
-  @ViewBuilder private var dot: some View {
-    if animated {
-      // ~20 Hz is plenty for a 1.2 s opacity ramp (same cap as WaveformBars).
-      TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { timeline in
-        circle.opacity(pulseOpacity(at: timeline.date.timeIntervalSinceReferenceDate))
-      }
-    } else {
-      circle
-    }
+  private var dot: some View {
+    circle.pulsingOpacity(period: pulsePeriod, minOpacity: minOpacity, animated: animated)
   }
 
   private var circle: some View {
@@ -266,16 +273,9 @@ private struct RecordingTag: View {
       .fill(OverlayBrandPalette.magenta)
       .frame(width: 5, height: 5)
   }
-
-  /// Raised cosine over `pulsePeriod`: 1 → `minOpacity` → 1, easing through the
-  /// dim point instead of bouncing off it (matches TranscribingLabel).
-  private func pulseOpacity(at time: TimeInterval) -> Double {
-    let osc = (cos(time / pulsePeriod * 2 * .pi) + 1) / 2  // 0...1
-    return minOpacity + (1 - minOpacity) * osc
-  }
 }
 
-/// The only view that reads `bridge.level`, so @Observable scopes the ~30 Hz
+/// The only view that reads `bridge.level`, so @Observable scopes the ~20 Hz
 /// meter invalidation to this leaf (and its `WaveformBars` child) instead of the
 /// enclosing `OverlayView`. `WaveformBars` stays a pure value view — easy to
 /// reason about and drive from a fixed level — with the observation isolated
@@ -304,87 +304,37 @@ private struct WaveformBars: View {
   let animated: Bool
   let color: Color
 
-  private let barWidth: CGFloat = 3
-  private let barSpacing: CGFloat = 3
-  // The REC tag and the enclosing HStack padding now hold the bars clear of the
-  // capsule's rounded ends, so the bar field only needs a hair of its own inset.
-  private let horizontalInset: CGFloat = 4
-  private let verticalInset: CGFloat = 3
-  private let minBarHeightFraction: CGFloat = 0.12
-  // Compresses the 0...1 level into bar height. Lowish so normal speech already
-  // fills much of the pill height; raise toward 2 for shorter bars.
-  private let levelGamma: CGFloat = 1.3
-  // Height fraction at the far ends of the symmetric envelope (center is 1).
-  private let envelopeEdge: CGFloat = 0.45
-  // How far a bar travels while idle-breathing.
-  private let breathDepth: CGFloat = 0.12
-  // Idle wave: one full sweep every ~2 s, each bar trailing its left neighbour by
-  // `wavePhaseStep` radians so a soft crest travels left→right across the row.
-  private let breathPeriod: Double = 2.0
-  private let wavePhaseStep: Double = 0.45
-
   var body: some View {
     GeometryReader { geo in
-      let maxBarHeight = max(1, geo.size.height - verticalInset * 2)
-      let usableWidth = max(1, geo.size.width - horizontalInset * 2)
-      let count = max(3, Int((usableWidth + barSpacing) / (barWidth + barSpacing)))
+      // Bar count, heights, the envelope, and the idle wave are all engine
+      // geometry (unit-tested there); this view owns the frame, the color, and the
+      // redraw cadence. Resolved once per layout, then shared by every bar.
+      let layout = MeterBarRow(availableSize: geo.size)
       Group {
         if animated {
           // Continuous clock so the idle breathing is smooth and never depends
-          // on a one-shot state toggle. Capped at ~20 Hz to match the mic meter
-          // (MicCapture.meterInterval) — the level feed and the slow breathing
-          // sine can't show anything faster, so rendering at the display's full
-          // refresh rate (up to 120 Hz on ProMotion) would only burn energy.
-          TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { timeline in
-            row(count: count, maxBarHeight: maxBarHeight, time: timeline.date.timeIntervalSinceReferenceDate)
+          // on a one-shot state toggle; capped at `overlayAnimationInterval`.
+          TimelineView(.animation(minimumInterval: overlayAnimationInterval)) { timeline in
+            bars(layout, time: timeline.date.timeIntervalSinceReferenceDate)
           }
         } else {
-          row(count: count, maxBarHeight: maxBarHeight, time: 0)
+          bars(layout, time: 0)
         }
       }
       .frame(width: geo.size.width, height: geo.size.height)
     }
   }
 
-  private func row(count: Int, maxBarHeight: CGFloat, time: TimeInterval) -> some View {
-    HStack(spacing: barSpacing) {
-      ForEach(0..<count, id: \.self) { idx in
+  private func bars(_ layout: MeterBarRow, time: TimeInterval) -> some View {
+    HStack(spacing: MeterBarGeometry.barSpacing) {
+      ForEach(0..<layout.count, id: \.self) { idx in
         Capsule()
           .fill(color)
-          .frame(width: barWidth, height: barHeight(idx, count: count, maxBarHeight: maxBarHeight, time: time))
+          .frame(
+            width: MeterBarGeometry.barWidth,
+            height: layout.height(at: idx, level: level, time: time, animated: animated))
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-  }
-
-  private func barHeight(_ index: Int, count: Int, maxBarHeight: CGFloat, time: TimeInterval) -> CGFloat {
-    let weight = envelopeWeight(index, count: count)
-    // Voice-driven height: the current level, gamma-shaped, scaled by this bar's
-    // envelope weight so the middle leads.
-    let voice = pow(CGFloat(max(0, min(1, level))), levelGamma) * weight
-    var breath: CGFloat = 0
-    // Full breathing when quiet, fading to none once the voice is moderate. Once
-    // it's faded out (voice ≥ 0.25) the per-bar sine below would multiply to ~0,
-    // so skip it entirely on the louder frames rather than computing-then-zeroing.
-    let idleStrength = animated ? max(0, 1 - voice / 0.25) : 0
-    if idleStrength > 0 {
-      // A gentle wave travelling left→right across the row while you're quiet, so
-      // "listening" reads as alive and directional rather than a frozen line. The
-      // phase advances with time and steps back per bar, sending a soft crest
-      // sweeping across; it fades out (idleStrength) as your voice comes in.
-      let phase = time / breathPeriod * 2 * .pi - Double(index) * wavePhaseStep
-      let osc = (sin(phase) + 1) / 2  // 0...1
-      breath = breathDepth * weight * osc * idleStrength
-    }
-    let fraction = max(minBarHeightFraction, voice + breath)
-    return maxBarHeight * min(1, fraction)
-  }
-
-  /// Symmetric raised-sine window: `envelopeEdge` at the ends rising to 1 at the
-  /// center, so the bars form a single voice hump filling the pill width.
-  private func envelopeWeight(_ index: Int, count: Int) -> CGFloat {
-    guard count > 1 else { return 1 }
-    let t = CGFloat(index) / CGFloat(count - 1)  // 0...1
-    return envelopeEdge + (1 - envelopeEdge) * sin(.pi * t)
   }
 }

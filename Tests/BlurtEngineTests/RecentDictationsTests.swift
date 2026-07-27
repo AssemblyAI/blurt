@@ -47,6 +47,19 @@ struct RecentDictationsTests {
     recent.record("hi", at: when)
     #expect(recent.entries[0].timestamp == when)
   }
+
+  @Test("reserved height counts separators between rows, not after every row")
+  func reservedHeightCountsInteriorSeparators() {
+    // The off-by-one a capacity change is most likely to introduce: 3 rows have
+    // 2 separators, not 3. Getting it wrong leaves the ready window's list area a
+    // hair too tall and everything above it shifts when the first dictation lands.
+    // The ready window's real metrics: capacity 3 × 28 pt rows + 2 × 1 pt rules.
+    #expect(RecentDictations.reservedHeight(rowHeight: 28, separatorThickness: 1) == 86)
+    // Each term isolated, so a wrong count shows up as which half is off. A change
+    // to `capacity` fails all three, which is what pins the two to each other.
+    #expect(RecentDictations.reservedHeight(rowHeight: 10, separatorThickness: 0) == 30)
+    #expect(RecentDictations.reservedHeight(rowHeight: 0, separatorThickness: 2) == 4)
+  }
 }
 
 /// The Recent row's relative timestamp: "just now" for the first minute, then

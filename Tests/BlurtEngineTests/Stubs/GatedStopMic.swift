@@ -24,9 +24,8 @@ actor GatedStopMic: MicCaptureProtocol {
     stopCalls += 1
     await gate.enter()
     if let stopError { throw stopError }
-    // Above SyncSTTLimits.minPCMBytes so the transcript isn't dropped by the
-    // too-short guard — these suites exercise stop races, not it.
-    return Data(count: SyncSTTLimits.minPCMBytes * 2)
+    // These suites exercise stop races, not the too-short-audio guard.
+    return StubPCM.aboveMinimum
   }
 
   func waitUntilStopEntered() async { await gate.waitUntilEntered() }

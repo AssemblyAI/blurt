@@ -11,16 +11,21 @@ final class OverlayBridge {
   var level: Float = 0
 
   func pushLevel(_ value: Float) {
-    // `value` is already a fixed 0...1 scale from the recorder's dBFS meter
-    // (MicCapture.linearLevel) — store the latest as-is. (No auto-gain
-    // normalizing to a running peak: that stretched sustained speech to full.)
-    level = min(1, max(0, value))
+    // `value` arrives on the fixed 0...1 scale `MicCaptureProtocol.levels`
+    // documents (MicCapture.linearLevel). Clamp once here — the single seam where
+    // any capture implementation crosses into the view layer — so the bars can
+    // trust the range instead of re-checking it. (No auto-gain normalizing to a
+    // running peak: that stretched sustained speech to full.)
+    let clamped = min(1, max(0, value))
+    // @Observable invalidates on assignment, not on change, and `linearLevel` is
+    // floored so room ambient maps to exactly 0 — without this guard every silent
+    // tick would rebuild the whole bar row 20×/s with an unchanged value.
+    guard clamped != level else { return }
+    level = clamped
   }
 }
 
 final class OverlayWindowController {
-  private static let customOriginXKey = "BlurtOverlayCustomOriginX"
-  private static let customOriginYKey = "BlurtOverlayCustomOriginY"
   // The panel is sized larger than the visible pill so SwiftUI's drop shadow
   // (see `OverlayView`'s `.shadow`, which documents staying within
   // `shadowMargin`) has room to render without being clipped by the window's
@@ -136,9 +141,15 @@ final class OverlayWindowController {
   }
 
   /// Hides the pill immediately, without the fade. Called when the app drops out
-  /// of its fully-configured state (a permission revoked, the key cleared, the
-  /// shortcut unbound) so the pill is only ever on screen while dictation can
-  /// actually work.
+  /// of its fully-configured state (a permission revoked, the key cleared).
+  ///
+  /// This hides the pill; it does **not** disarm the trigger — the `CGEventTap`
+  /// stays installed, so a press while not-ready still runs and the pill comes back
+  /// to report the failure. That's deliberate: tearing the tap down would depend on
+  /// `ensureRunning()` succeeding again to restore dictation, and a tap that failed
+  /// to reinstall is a far worse failure than an error flash. `WizardController`
+  /// surfaces the setup window on the same not-ready edge, which is what actually
+  /// routes the user to the fix.
   func hide() {
     errorRevertTask?.cancel()
     errorRevertTask = nil
@@ -155,6 +166,14 @@ final class OverlayWindowController {
     panel.orderOut(nil)
     panel.alphaValue = 1
     bridge.state = .idle
+    // Clear the level too, or the pill's next appearance renders its bars at the
+    // PREVIOUS dictation's loudness until the first new meter tick (~50 ms)
+    // replaces it — a one-frame "already talking" flash at the start of every
+    // dictation. `MicCapture.stop()` cancels the meter task without a final zero
+    // yield, so nothing else resets this. Reached by every dismiss that actually
+    // had a panel on screen; `hide()` returns early when the panel is already
+    // hidden, but it had to come through here to get hidden, so it's already zero.
+    bridge.level = 0
   }
 
   /// Drives the pill on/off screen, fading unless Reduce Motion is on. Idempotent
@@ -204,15 +223,15 @@ final class OverlayWindowController {
 
   private func reposition() {
     guard let screen = NSScreen.main else { return }
-    // The placement rules (default bottom-center, clamping a stale dragged
-    // origin back on screen) are the engine's `OverlayPlacement`, unit-tested
-    // there. The 80 pt clearance is measured to the visible *pill*, so the
-    // panel origin backs off by the transparent shadow margin.
-    let origin = OverlayPlacement.origin(
+    // All the placement policy — default bottom-center, the clearance, the
+    // pill-vs-panel shadow correction, and clamping a stale dragged origin back on
+    // screen — is the engine's `OverlayPlacement`, unit-tested there. This passes
+    // only what the shell owns: the panel size, the screen, and the shadow inset.
+    let origin = OverlayPlacement.panelOrigin(
       panelSize: panel.frame.size,
       visibleFrame: screen.visibleFrame,
-      customOrigin: storedCustomOrigin(),
-      bottomOffset: 80 - Self.shadowMargin)
+      customOrigin: Self.originStore.origin,
+      shadowMargin: Self.shadowMargin)
     suppressOriginPersist = true
     panel.setFrameOrigin(origin)
     suppressOriginPersist = false
@@ -220,17 +239,11 @@ final class OverlayWindowController {
 
   private func handleDidMove() {
     guard !suppressOriginPersist else { return }
-    let origin = panel.frame.origin
-    UserDefaults.standard.set(Double(origin.x), forKey: Self.customOriginXKey)
-    UserDefaults.standard.set(Double(origin.y), forKey: Self.customOriginYKey)
+    Self.originStore.origin = panel.frame.origin
   }
 
-  private func storedCustomOrigin() -> NSPoint? {
-    let defaults = UserDefaults.standard
-    guard
-      let x = defaults.object(forKey: Self.customOriginXKey) as? Double,
-      let y = defaults.object(forKey: Self.customOriginYKey) as? Double
-    else { return nil }
-    return NSPoint(x: x, y: y)
-  }
+  /// Persistence for the dragged origin lives in the engine next to the clamping
+  /// it feeds, and is registered in `PersistedSettings.allDefaultsKeys` so reset
+  /// sweeps clear it.
+  private static let originStore = OverlayOriginStore()
 }

@@ -33,12 +33,17 @@ struct KeyTermsStoreTests {
   }
 }
 
-/// `get`/`set` round-trip through `UserDefaults.standard`, so this suite is
-/// serialized and saves/restores the real key around each case — it must not
-/// leave the dev machine's stored terms changed.
-@Suite("KeyTermsStore.get/set", .serialized)
-struct KeyTermsStoreGetSetTests {
-  private func withCleanStore(_ body: () -> Void) {
+/// `get`/`terms` read `UserDefaults.standard`, so this suite is serialized and
+/// saves/restores the real key around each case — it must not leave the dev
+/// machine's stored terms changed.
+///
+/// Each case writes the defaults slot directly, which is exactly how production
+/// writes it: the store has no setter, and the Settings field's `@AppStorage`
+/// binding is the only writer. So these pin the contract that matters — whatever
+/// raw text the field happens to hold, the read side normalizes it.
+@Suite("KeyTermsStore.raw", .serialized)
+struct KeyTermsStoreGetTests {
+  private func withCleanStore(_ stored: String?, _ body: () -> Void) {
     let key = KeyTermsStore.defaultsKey
     let original = UserDefaults.standard.string(forKey: key)
     defer {
@@ -48,33 +53,42 @@ struct KeyTermsStoreGetSetTests {
         UserDefaults.standard.removeObject(forKey: key)
       }
     }
+    if let stored {
+      UserDefaults.standard.set(stored, forKey: key)
+    } else {
+      UserDefaults.standard.removeObject(forKey: key)
+    }
     body()
   }
 
-  @Test("set stores the trimmed string; get and terms round-trip it")
-  func setAndGet() {
-    withCleanStore {
-      KeyTermsStore.set("  AssemblyAI, Slack  ")
-      #expect(KeyTermsStore.get() == "AssemblyAI, Slack")
-      #expect(KeyTermsStore.terms() == ["AssemblyAI", "Slack"])
+  @Test("get trims the stored string; terms parses it")
+  func getAndTerms() {
+    withCleanStore("  AssemblyAI, Slack  ") {
+      #expect(KeyTermsStore.raw == "AssemblyAI, Slack")
+      #expect(KeyTermsStore.terms == ["AssemblyAI", "Slack"])
     }
   }
 
-  @Test("set(nil) clears the stored value")
-  func setNilClears() {
-    withCleanStore {
-      KeyTermsStore.set("Kubernetes")
-      KeyTermsStore.set(nil)
-      #expect(KeyTermsStore.get() == nil)
+  @Test("an unset key reads as no terms")
+  func unsetReadsAsNil() {
+    withCleanStore(nil) {
+      #expect(KeyTermsStore.raw == nil)
+      #expect(KeyTermsStore.terms.isEmpty)
     }
   }
 
-  @Test("set with a blank string clears the stored value")
-  func setBlankClears() {
-    withCleanStore {
-      KeyTermsStore.set("Kubernetes")
-      KeyTermsStore.set("   \n")
-      #expect(KeyTermsStore.get() == nil)
+  @Test("a blank field reads as no terms rather than an empty term")
+  func blankReadsAsNil() {
+    // The field is cleared by emptying it, not by deleting the key, so the slot
+    // genuinely holds "" (or whitespace mid-edit). That must read as "no terms",
+    // otherwise the prompt would carry an empty vocabulary clause.
+    withCleanStore("   \n") {
+      #expect(KeyTermsStore.raw == nil)
+      #expect(KeyTermsStore.terms.isEmpty)
+    }
+    withCleanStore("") {
+      #expect(KeyTermsStore.raw == nil)
+      #expect(KeyTermsStore.terms.isEmpty)
     }
   }
 }

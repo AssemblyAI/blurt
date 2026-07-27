@@ -10,8 +10,8 @@ import Testing
 struct APIKeySubmissionTests {
   /// Gateway whose writes always fail — the Keychain-write-fault branch.
   private struct RejectingKeyStore: APIKeyGateway {
-    func get() -> String? { nil }
-    @discardableResult func set(_ key: String?) -> Bool { false }
+    var current: String? { nil }
+    @discardableResult func save(_ key: String?) -> Bool { false }
   }
 
   /// A submission whose validator deterministically returns `result`.
@@ -26,7 +26,7 @@ struct APIKeySubmissionTests {
     let store = InMemoryAPIKeyStore()
     let outcome = await submission(store: store, result: .valid).submit("sk-good")
     #expect(outcome == .valid)
-    #expect(store.get() == "sk-good")
+    #expect(store.current == "sk-good")
   }
 
   @Test("a rejected key is never persisted")
@@ -34,16 +34,16 @@ struct APIKeySubmissionTests {
     let store = InMemoryAPIKeyStore()
     let outcome = await submission(store: store, result: .invalid).submit("sk-bad")
     #expect(outcome == .invalid)
-    #expect(store.get() == nil)
+    #expect(store.current == nil)
   }
 
   @Test("a rejected key never overwrites the previously saved one")
   func invalidKeyKeepsExistingKey() async {
     let store = InMemoryAPIKeyStore()
-    store.set("sk-old")
+    store.save("sk-old")
     let outcome = await submission(store: store, result: .invalid).submit("sk-bad")
     #expect(outcome == .invalid)
-    #expect(store.get() == "sk-old")
+    #expect(store.current == "sk-old")
   }
 
   @Test("an unreachable server never persists the unverified key")
@@ -53,7 +53,7 @@ struct APIKeySubmissionTests {
     let store = InMemoryAPIKeyStore()
     let outcome = await submission(store: store, result: .unreachable).submit("sk-maybe")
     #expect(outcome == .unreachable)
-    #expect(store.get() == nil)
+    #expect(store.current == nil)
   }
 
   @Test("a validated key whose write fails reports saveFailed")
@@ -78,6 +78,6 @@ struct APIKeySubmissionTests {
     let store = InMemoryAPIKeyStore()
     let keySubmission = submission(store: store, result: .valid)
     #expect(keySubmission.save("sk-good"))
-    #expect(store.get() == "sk-good")
+    #expect(store.current == "sk-good")
   }
 }

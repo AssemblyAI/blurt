@@ -7,29 +7,49 @@ struct KeychainStore: Sendable {
   let service: String
   let account: String
 
-  /// The stored value, or `nil` if none has been saved (or it's empty).
-  func get() -> String? {
+  /// Why a read produced no value. Collapsing these to a bare `nil` is unsafe for
+  /// any caller that *memoizes* the answer: `errSecItemNotFound` is a durable fact
+  /// ("nothing saved"), while a locked keychain or a denied ACL prompt is a
+  /// transient failure that must not be cached as "nothing saved".
+  enum ReadResult: Sendable, Equatable {
+    /// The item is absent, or present but empty / not valid UTF-8 — a durable
+    /// "there is no usable value here".
+    case absent
+    /// The stored value.
+    case value(String)
+    /// The read itself failed, so whether a value exists is unknown. Seen when the
+    /// login keychain is locked, when the user denies the "wants to use your
+    /// confidential information" ACL prompt, or when the item's ACL needs
+    /// re-approval after the app is re-signed.
+    case unavailable(OSStatus)
+  }
+
+  /// Reads the item, distinguishing "nothing saved" from "couldn't read it".
+  func read() -> ReadResult {
     var query = baseQuery()
     query[kSecReturnData as String] = true
     query[kSecMatchLimit as String] = kSecMatchLimitOne
 
     var item: CFTypeRef?
     let status = SecItemCopyMatching(query as CFDictionary, &item)
-    guard
-      status == errSecSuccess,
-      let data = item as? Data,
-      let key = String(data: data, encoding: .utf8),
-      !key.isEmpty
-    else {
-      return nil
+    switch status {
+    case errSecSuccess:
+      guard let data = item as? Data,
+        let key = String(data: data, encoding: .utf8),
+        !key.isEmpty
+      else { return .absent }
+      return .value(key)
+    case errSecItemNotFound:
+      return .absent
+    default:
+      return .unavailable(status)
     }
-    return key
   }
 
   /// Stores `value` (trimmed). Passing `nil` or an empty/whitespace string
   /// deletes the stored value. Returns `true` on success.
   @discardableResult
-  func set(_ value: String?) -> Bool {
+  func write(_ value: String?) -> Bool {
     guard let trimmed = value.trimmedNonEmpty() else {
       let status = SecItemDelete(baseQuery() as CFDictionary)
       return status == errSecSuccess || status == errSecItemNotFound

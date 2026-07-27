@@ -8,6 +8,15 @@ import SwiftUI
 /// spellings. Optional — it never gates setup; an empty list just sends no terms.
 struct KeyTermsStepView: View {
   /// Stored in UserDefaults so multiple settings windows/readers see edits live.
+  ///
+  /// `@AppStorage` is the **only** writer of this slot, which is why the store
+  /// deliberately exposes no setter. Normalization happens on read instead —
+  /// `KeyTermsStore.raw` trims, and `parse` trims and dedupes each term — so a
+  /// blank field still reads back as "no terms". A normalizing setter fought the
+  /// text field: it wrote a second, differently-normalized value on every
+  /// keystroke, `@AppStorage` observed that as an external write and pushed the
+  /// trimmed string back into the binding, so a trailing space was deleted as the
+  /// user typed it and could never be entered at all.
   @AppStorage(KeyTermsStore.defaultsKey) private var text = ""
 
   var body: some View {
@@ -28,7 +37,6 @@ struct KeyTermsStepView: View {
       .font(.body)
       .disableAutocorrection(true)
       .accessibilityIdentifier(UITestIdentifiers.keyTermsField)
-      .onChange(of: text) { _, newValue in KeyTermsStore.set(newValue) }
     } header: {
       Text("Key Terms")
     } footer: {

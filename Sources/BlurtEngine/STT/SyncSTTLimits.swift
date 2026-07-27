@@ -35,6 +35,23 @@ public enum SyncSTTLimits {
   /// `DictationSession` applies to the blob `MicCaptureProtocol.stop()` returns.
   public static let minPCMBytes = minSamples * bytesPerSample
 
+  /// Milliseconds of audio a raw S16LE byte count represents at `rate`. Both the
+  /// capture side (`MicCapture.stop`) and the upload side
+  /// (`AssemblyAITranscriber.transcribe`) log the clip's duration, and those logs
+  /// are the documented way to diagnose pipeline latency — deriving it here, from
+  /// the two facts this type already owns, keeps them from disagreeing if the
+  /// geometry ever changes. Internal for the same reason as `bytesPerSample`:
+  /// only the capture/upload code needs it.
+  static func durationMs(ofPCMBytes byteCount: Int, rate: Int = sampleRate) -> Int {
+    guard rate > 0 else { return 0 }
+    // Convert before dividing: `byteCount / bytesPerSample` in integer arithmetic
+    // truncates a trailing partial sample. That can't happen for well-formed S16LE
+    // (byte counts are always even), and the error bound is one sample — 0.0625 ms
+    // at 16 kHz — but there's no reason for the expression to be wrong for an odd
+    // count it might one day be handed.
+    return Int((Double(byteCount) / Double(bytesPerSample) / Double(rate)) * 1000)
+  }
+
   /// Safety margin subtracted from the cap for the auto-release timeout, so the
   /// session stops recording before it hits the hard limit.
   public static let autoReleaseMargin: Double = 5

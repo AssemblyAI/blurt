@@ -33,6 +33,14 @@ func makeRecordingInjector() -> (injector: KeyInjector, pasted: StringListBox) {
       pasted.append(clip.string)
       return true
     },
+    // Stub the activation. Omitting this defaulted to `KeyInjector.activate`, a
+    // REAL `NSRunningApplication.activate()` — so these tests yanked the
+    // developer's foreground app (twice, in the two-app case), and failed
+    // spuriously whenever `liveTargetApp()`'s unordered pick landed on a
+    // background-only process whose activate() returns false (the injector then
+    // throws `.targetAppLost` for reasons unrelated to separator logic). The
+    // separator tests only need a stable non-nil app identity, not activation.
+    activateTarget: { _ in true },
     clipboard: clip)
   return (injector, pasted)
 }
@@ -85,11 +93,12 @@ final class StringListBox: Sendable {
 final class ValueBox<T: Sendable>: Sendable {
   private let stored: Mutex<T>
   init(_ initial: T) { stored = Mutex(initial) }
-  func set(_ value: T) {
-    stored.withLock { $0 = value }
-  }
+  /// One settable property rather than a `value` getter beside a `set(_:)` — the
+  /// `Mutex` is what makes the class `Sendable`, so both accessors can go through
+  /// it and callers read as ordinary assignment.
   var value: T {
-    stored.withLock { $0 }
+    get { stored.withLock { $0 } }
+    set { stored.withLock { $0 = newValue } }
   }
 }
 

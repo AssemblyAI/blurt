@@ -72,6 +72,25 @@ struct FocusCaptureTests {
     #expect(FocusCapture.priorSlice(full: "hello", caret: 0, maxChars: 320) == nil)
   }
 
+  @Test("priorSlice is given the raw value, so surrounding whitespace keeps caret offsets valid")
+  func priorSliceUntrimmedValue() {
+    // These are the two cases that broke while the caller trimmed the value before
+    // slicing it with an untrimmed caret offset (see `rawStringValue`).
+    //
+    // Trailing whitespace: "Hello " with the caret at 6 must yield "Hello " — the
+    // trailing space is exactly what `withLeadingSeparator` reads to decide it must
+    // NOT add another one. Trimmed to "Hello" (5 units), 6 > 5 fell through to the
+    // whole-value tail "Hello", so the separator was added and the field got
+    // "Hello  world".
+    #expect(FocusCapture.priorSlice(full: "Hello ", caret: 6, maxChars: 320) == "Hello ")
+    // Leading whitespace (an indented editor line): the caret at 8 in
+    // "  Hello world" is just past "  Hello ". Trimmed to "Hello world" the slice
+    // *succeeded* and returned "Hello wo" — text from AFTER the caret.
+    #expect(FocusCapture.priorSlice(full: "  Hello world", caret: 8, maxChars: 320) == "  Hello ")
+    // A value that is only whitespace still has a real prefix before the caret.
+    #expect(FocusCapture.priorSlice(full: "   ", caret: 2, maxChars: 320) == "  ")
+  }
+
   @Test("priorSlice treats the caret as a UTF-16 offset, not a Character count")
   func priorCaretIsUTF16() {
     // AX selected-text ranges are UTF-16: each emoji below is 2 UTF-16 units but
@@ -130,16 +149,54 @@ struct FocusCaptureTests {
     #expect(FocusCapture.visibleTextOrNil("hello ") == "hello ")
   }
 
-  // MARK: isSecureFieldRole
+  // MARK: isSecureField
 
-  @Test("only the password-field role triggers the prompt redaction")
+  @Test("the password-field role triggers the prompt redaction")
   func secureFieldRoleDetection() {
     // The guard that keeps a typed password out of the STT prompt keys on this
     // exact role string — a rename or typo here would silently stop redacting.
-    #expect(FocusCapture.isSecureFieldRole("AXSecureTextField"))
-    #expect(!FocusCapture.isSecureFieldRole("AXTextField"))
-    #expect(!FocusCapture.isSecureFieldRole("AXTextArea"))
-    #expect(!FocusCapture.isSecureFieldRole(nil))
+    #expect(FocusCapture.isSecureField(role: "AXSecureTextField", subrole: nil))
+    #expect(!FocusCapture.isSecureField(role: "AXTextField", subrole: nil))
+    #expect(!FocusCapture.isSecureField(role: "AXTextArea", subrole: nil))
+    #expect(!FocusCapture.isSecureField(role: nil, subrole: nil))
+  }
+
+  @Test("a secure *subrole* under a generic text role also redacts")
+  func secureFieldSubroleDetection() {
+    // AppKit exposes secure-ness as either a role or a subrole, and an element can
+    // report a plain `AXTextField` role while only its subrole says "password" —
+    // browser password inputs and custom secure fields do this. Keying on role
+    // alone read those as ordinary text and sent their contents to the STT prompt.
+    #expect(FocusCapture.isSecureField(role: "AXTextField", subrole: "AXSecureTextField"))
+    #expect(FocusCapture.isSecureField(role: nil, subrole: "AXSecureTextField"))
+    // A non-secure subrole must not redact an ordinary field.
+    #expect(!FocusCapture.isSecureField(role: "AXTextField", subrole: "AXSearchField"))
+  }
+
+  // MARK: mustRedactContents
+
+  @Test("an unreadable role redacts — the guard fails closed")
+  func unreadableRoleRedacts() {
+    // The case `isSecureField` deliberately answers `false` for (it identifies
+    // secure fields, and a nil role identifies nothing). The guard
+    // `captureFieldContext` actually consults must answer `true`: an AX read that
+    // timed out or returned a non-string can't prove the field isn't a password, and
+    // guessing wrong puts the typed password in an outbound request and, with
+    // developer mode on, in dictations.jsonl.
+    #expect(FocusCapture.mustRedactContents(role: nil, subrole: nil))
+    #expect(FocusCapture.mustRedactContents(role: nil, subrole: "AXSearchField"))
+    // Same verdict as `isSecureField` everywhere the role *is* readable.
+    #expect(FocusCapture.mustRedactContents(role: "AXSecureTextField", subrole: nil))
+    #expect(FocusCapture.mustRedactContents(role: "AXTextField", subrole: "AXSecureTextField"))
+  }
+
+  @Test("a readable, non-secure role does not redact — priming still works")
+  func readableOrdinaryRoleDoesNotRedact() {
+    // The other half of the contract: failing closed must not degrade into "never
+    // read anything", which would silently drop prior-text priming everywhere.
+    #expect(!FocusCapture.mustRedactContents(role: "AXTextField", subrole: nil))
+    #expect(!FocusCapture.mustRedactContents(role: "AXTextArea", subrole: nil))
+    #expect(!FocusCapture.mustRedactContents(role: "AXTextField", subrole: "AXSearchField"))
   }
 
   // MARK: isElectronApp

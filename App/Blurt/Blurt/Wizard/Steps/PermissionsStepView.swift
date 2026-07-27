@@ -9,6 +9,17 @@ import SwiftUI
 struct PermissionsStepView: View {
   var controller: WizardController
 
+  /// Observed rather than read once via `TriggerKeyStore()`: Settings is reachable
+  /// with ⌘, while this page is showing, so a one-shot read left the footer naming
+  /// the old key after a rebind until something else re-rendered the view. Same
+  /// pattern as `ReadyView` / `MenuBarScene` / `HotkeyStepView`.
+  @AppStorage(TriggerKeyStore.defaultsKey) private var triggerKeyCode = TriggerKey.rightCommand
+    .rawValue
+
+  /// The bound trigger's display label, re-read on every render so a rebind in
+  /// Settings updates the footer immediately.
+  private var triggerLabel: String { TriggerKey.fromPersisted(triggerKeyCode).label }
+
   /// Set when the user taps a settings button so the section can show a
   /// "waiting for you to come back" cue until the poll sees the grant.
   @State private var openedAccessibilitySettings = false
@@ -50,7 +61,8 @@ struct PermissionsStepView: View {
         opened: openedMicrophoneSettings,
         granted: controller.permissions.microphone,
         waiting: "Waiting for you to turn on Blurt under Microphone…",
-        description: "Blurt records only after you start dictating with \(TriggerKeyStore().triggerKey.label)."
+        description:
+          "Blurt records only after you start dictating with \(triggerLabel)."
       )
     }
   }

@@ -14,18 +14,31 @@ private let transcriberLog = Logger(subsystem: BlurtIdentity.subsystem, category
 /// PCM, exactly the bytes the mic recorded — there is no re-encoding pass)
 /// plus a JSON `config` part, and the finished transcript comes back in the
 /// response body. No upload step, no job submission, no polling — one request
-/// per utterance. The Universal-3 sync model (`u3-sync-pro`) handles audio from
+/// per utterance. The sync model (`universal-3-5-pro`) handles audio from
 /// ~80 ms up to 120 s with a server-side inference deadline of ~30 s.
 public struct AssemblyAITranscriber: TranscriberProtocol {
   private let apiKeyProvider: @Sendable () -> String?
   private let baseURL: URL
   private let transport: any HTTPTransport
 
-  /// Required on every Sync API request — selects the synchronous STT model.
-  private static let syncModel = "u3-sync-pro"
+  /// Required on every Sync API request — selects the synchronous STT model. The
+  /// canonical identifier, and the only value in the endpoint's schema enum;
+  /// `u3-sync-pro` and `u3-pro` are accepted only as legacy aliases, so there's no
+  /// reason for a new request to send one.
+  private static let syncModel = "universal-3-5-pro"
+
+  /// Idle timeout for the transcribe round trip — `URLRequest.timeoutInterval` is
+  /// reset each time data moves, so this bounds *stalls*, not total elapsed time.
+  /// That is the failure worth bounding here: the server enforces its own ~30 s
+  /// inference deadline (answering 504 past it), so a request that keeps making
+  /// progress will finish or be rejected on its own, while a connection that stops
+  /// delivering bytes would otherwise sit on URLRequest's 60 s default with the
+  /// pill stuck on "Transcribing…". Sized above the server deadline so a slow but
+  /// live inference is never cut off client-side.
+  private static let requestTimeoutSeconds: TimeInterval = 45
 
   public init(
-    apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.get() },
+    apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.current },
     baseURL: URL = URL(staticString: "https://sync.assemblyai.com"),
     transport: any HTTPTransport = URLSession.shared
   ) {
@@ -48,14 +61,16 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 
     var request = URLRequest(url: baseURL.appendingPathComponent("transcribe"))
     request.httpMethod = "POST"
+    // Bounds a stalled connection; see `requestTimeoutSeconds` for why an idle
+    // timeout is the right shape here.
+    request.timeoutInterval = Self.requestTimeoutSeconds
     request.setValue(apiKey, forHTTPHeaderField: "Authorization")
     request.setValue(Self.syncModel, forHTTPHeaderField: "X-AAI-Model")
     request.setValue(
       "multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
     let body = multipartBody(pcm: pcm, config: config, boundary: boundary)
-    let sampleCount = pcm.count / SyncSTTLimits.bytesPerSample
-    let audioDurationMs = Int((Double(sampleCount) / Double(sampleRate)) * 1000)
+    let audioDurationMs = SyncSTTLimits.durationMs(ofPCMBytes: pcm.count, rate: sampleRate)
     let data = try await send(request, body: body, audioDurationMs: audioDurationMs)
     guard let response = try? JSONDecoder().decode(SyncTranscriptResponse.self, from: data) else {
       throw AssemblyAIError.malformedResponse
@@ -99,7 +114,12 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 
   /// Builds the `audio` (raw PCM) + `config` (JSON) multipart payload the Sync
   /// API expects, matching the field names `assembly dictate` sends.
-  private func multipartBody(pcm: Data, config: Data, boundary: String) -> Data {
+  ///
+  /// Internal, not private, so tests can assert the framing against the bytes.
+  /// `FakeHTTPTransport` can't: `URLProtocol`-style mocks don't reliably observe
+  /// the body of an `upload(from:)`, which left the wire format — boundaries, part
+  /// headers, the `audio.pcm` filename, CRLF placement — checked by nothing.
+  func multipartBody(pcm: Data, config: Data, boundary: String) -> Data {
     var body = Data()
     // Reserve up front (payload + a generous allowance for the boundary/header
     // framing) so appending the multi-MB PCM blob never grows the buffer through
@@ -145,11 +165,14 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     return data
   }
 
-  /// Best human-readable explanation for a non-2xx response. The Sync API isn't
-  /// consistent about the field name across error classes (`error`, `message`,
-  /// and `detail` have all been seen), so try each; failing that, fall back to
-  /// the raw body text (trimmed and capped) so a failure never reaches the user
-  /// as a bare status code with no context. Returns nil only for an empty body.
+  /// Best human-readable explanation for a non-2xx response: `message`, then
+  /// `detail` (the two documented shapes — see `ErrorResponse`), then the raw body
+  /// text, trimmed and capped.
+  ///
+  /// The raw-body arm is deliberately kept. It is not compatibility with an old
+  /// API shape — it is what turns a response the API never promised (a proxy's HTML
+  /// 502, a captive-portal page) into something diagnosable instead of a bare
+  /// status code. Returns nil only for an empty body.
   static func errorMessage(from data: Data) -> String? {
     if let parsed = try? JSONDecoder().decode(ErrorResponse.self, from: data),
       let message = parsed.message
@@ -180,15 +203,19 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     let text: String
   }
 
-  /// A Sync API failure body. The endpoint labels the explanation differently
-  /// across error classes, so pull it from whichever of `error` / `message` /
-  /// `detail` is present and string-valued (a non-string `detail`, e.g. FastAPI's
-  /// validation array, is ignored — the caller then falls back to the raw body).
+  /// A Sync API failure body. The reference documents exactly two shapes:
+  /// `{error_code, message}` for the request/audio/server errors (400, 413, 415,
+  /// 500, 503, 504) and `{detail}` for auth and rate limiting (401, 429) — so read
+  /// `message`, then `detail`. A non-string `detail` (a FastAPI-style validation
+  /// array) is ignored and the caller falls back to the raw body.
+  ///
+  /// A third `error` key used to be tried first. It is in none of the documented
+  /// responses, so it was speculative — removed rather than carried as a guess.
   private struct ErrorResponse: Decodable {
     let message: String?
 
     enum CodingKeys: String, CodingKey {
-      case error, message, detail
+      case message, detail
     }
 
     init(from decoder: Decoder) throws {
@@ -196,7 +223,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
       func string(_ key: CodingKeys) -> String? {
         (try? container.decodeIfPresent(String.self, forKey: key)) ?? nil
       }
-      message = string(.error) ?? string(.message) ?? string(.detail)
+      message = string(.message) ?? string(.detail)
     }
   }
 }

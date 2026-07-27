@@ -8,11 +8,12 @@ final class AppCoordinator {
   /// so the panel and its SwiftUI host aren't built until the app is fully
   /// configured and the pill is about to appear. Stays nil through onboarding.
   private var overlay: OverlayWindowController?
-  /// Invoked when the user triggers dictation without a saved API key. The app
-  /// shell wires this to bring the setup/settings window forward so the user can
-  /// add a key — the actionable fix — rather than flashing a message that
-  /// disappears.
-  let onMissingAPIKey: @MainActor () -> Void
+  /// Invoked when a press is refused because setup isn't finished — today a
+  /// missing API key, and whatever else the engine classifies as a
+  /// `PipelinePhase.setupBlocker`. The app shell wires this to bring the
+  /// setup/settings window forward so the user lands on the actionable fix rather
+  /// than seeing a message that disappears.
+  let onSetupBlocked: @MainActor () -> Void
 
   let session: DictationSession
   /// The mic seam, kept beyond session construction for its two side features —
@@ -50,11 +51,11 @@ final class AppCoordinator {
   /// in-memory store with an offline validator — the engine's `APIKeySubmission`
   /// still owns the never-persist-an-unverified-key invariant either way.
   init(
-    onMissingAPIKey: @escaping @MainActor () -> Void,
+    onSetupBlocked: @escaping @MainActor () -> Void,
     components: DictationComponents = .production(),
     apiKey: APIKeyModel = APIKeyModel()
   ) {
-    self.onMissingAPIKey = onMissingAPIKey
+    self.onSetupBlocked = onSetupBlocked
     self.apiKey = apiKey
 
     // Unbounded: the Recent list is append-only, so every transcript must survive
@@ -109,7 +110,7 @@ final class AppCoordinator {
   /// `submit(_:)` command feed (see its doc for the FIFO-ordering guarantee
   /// that rules out spawning a `Task {}` per callback). Drives the
   /// hold-to-dictate hotkey from a CGEventTap (see `DictationKeyTap`) rather
-  /// than a Carbon global hotkey: the latter leaks the chord's auto-repeat key
+  /// than a Carbon global hotkey: the latter leaks the trigger's auto-repeat key
   /// events into the focused app while held.
   private func startDictationDriver() {
     let session = session
@@ -191,33 +192,10 @@ final class AppCoordinator {
     overlay?.hide()
   }
 
-  // MARK: - Dictation drivers
-  //
-  // The await-able begin/end/cancel path used by the UI-test harness
-  // (`UITestSupport`). The key tap drives the same `DictationSession` through
-  // its synchronous `submit(_:)` feed, so both paths hit the same engine
-  // guards and race rules.
-
-  /// Begins a dictation as the hotkey would (the missing-key gate is the
-  /// session's `readinessCheck`; `render(_:)` routes the refusal to Settings).
-  func beginDictation() async {
-    await session.press()
-  }
-
-  /// Stops recording and runs transcribe→inject.
-  func endDictation() async {
-    await session.release()
-  }
-
-  /// Abandons the in-flight dictation.
-  func cancelDictation() async {
-    await session.cancel()
-  }
-
-  /// Called when the user rebinds (or clears) the dictation shortcut in the
-  /// recorder, so the event tap starts matching the new chord. The shortcut no
-  /// longer gates readiness (it has a default and lives in Settings), so there's
-  /// nothing else to re-evaluate here.
+  /// Called when the user rebinds the dictation trigger in the Shortcut picker,
+  /// so the event tap starts matching the new key. The shortcut no longer gates
+  /// readiness (it has a default and lives in Settings), so there's nothing else
+  /// to re-evaluate here.
   func dictationBindingChanged() {
     keyTap?.refreshBinding()
   }
@@ -234,12 +212,13 @@ final class AppCoordinator {
   }
 
   private func render(_ phase: PipelinePhase) {
-    // A missing key is a setup state, not a fault: the engine projections
-    // below render it as calm idle (no red flash) and Monitoring ignores it —
-    // the only app-level part is the navigation side effect, bringing the
-    // settings window forward so the user lands on the fix.
-    if case .failed(.apiKeyMissing) = phase {
-      onMissingAPIKey()
+    // A setup blocker is a state, not a fault: the engine projections below
+    // render it as calm idle (no red flash) and the menu bar ignores it — the only
+    // app-level part is the navigation side effect, bringing the settings window
+    // forward so the user lands on the fix. Which failures count as setup is the
+    // engine's call (`PipelinePhase.setupBlocker`), not re-derived here.
+    if phase.setupBlocker != nil {
+      onSetupBlocked()
     }
     // Reveal the pill first, then fire the cue: the sound must never sit in
     // front of the visual state change. Pure phase→pill mapping lives in the
@@ -251,5 +230,15 @@ final class AppCoordinator {
     menuBarStatus = phase.menuBarStatus
 
     cues.transition(for: phase)
+
+    // A dictation that ended without a key event (auto-release cap, a refused or
+    // failed press) leaves the trigger's gate latched, which would swallow the
+    // user's next press entirely. Clearing it here — the one place that sees every
+    // phase — keeps the tap's state honest without the gate needing to know about
+    // pipeline phases. No-op whenever the gate is already idle, which is every
+    // normal flow.
+    if phase.isTerminal {
+      keyTap?.syncAfterTerminalPhase()
+    }
   }
 }

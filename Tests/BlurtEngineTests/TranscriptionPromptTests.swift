@@ -113,7 +113,7 @@ struct TranscriptionPromptTests {
     #expect(TranscriptionPrompt.build(context: c.context) == c.expected)
   }
 
-  @Test("built prompt fits within the Sync API 4096-character cap for capped prior text")
+  @Test("built prompt fits within the self-imposed characterCap for capped prior text")
   func withinCap() {
     let longPrior = String(repeating: "word ", count: 200)
     let prompt = TranscriptionPrompt.build(

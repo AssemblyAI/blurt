@@ -95,7 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // launch), so it's set by the time the hotkey fires.
     // The overlay pill isn't built here — `AppCoordinator` creates it lazily in
     // `showOverlay()` once the app is fully configured.
-    let onMissingAPIKey: @MainActor () -> Void = { [weak self] in self?.surfaceMainWindow() }
+    let onSetupBlocked: @MainActor () -> Void = { [weak self] in self?.surfaceMainWindow() }
     let coord: AppCoordinator
     #if UITEST_HOOKS
       // Under UI testing, compose the app with offline stub collaborators and an
@@ -114,7 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
           defaults.removeObject(forKey: key)
         }
         coord = AppCoordinator(
-          onMissingAPIKey: onMissingAPIKey,
+          onSetupBlocked: onSetupBlocked,
           components: .uiTest(),
           apiKey: APIKeyModel(
             keyStore: InMemoryAPIKeyStore(),
@@ -124,10 +124,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // `lazy` default is ever read (first check), so it replaces it cleanly.
         updateCheckModel = .uiTest()
       } else {
-        coord = AppCoordinator(onMissingAPIKey: onMissingAPIKey)
+        coord = AppCoordinator(onSetupBlocked: onSetupBlocked)
       }
     #else
-      coord = AppCoordinator(onMissingAPIKey: onMissingAPIKey)
+      coord = AppCoordinator(onSetupBlocked: onSetupBlocked)
     #endif
     self.coordinator = coord
 

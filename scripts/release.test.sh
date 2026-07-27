@@ -48,10 +48,23 @@ check "parses version" "0.1.5" \
   "$(printf '        CFBundleVersion: "6"\n        CFBundleShortVersionString: "0.1.5"\n' | parse_short_version)"
 check "takes first match only" "0.1.5" \
   "$(printf '        CFBundleShortVersionString: "0.1.5"\n        CFBundleShortVersionString: "9.9.9"\n' | parse_short_version)"
+check "strips single quotes" "1.2.3" \
+  "$(printf "        CFBundleShortVersionString: '1.2.3'\n" | parse_short_version)"
 
+# Pins what the whole-field key match (`$1 == key`) buys over the old unanchored
+# substring regex. Note `CFBundleVersionSomethingElse` was NOT a real hazard --
+# the old `/CFBundleVersion:/` already required the colon. The two cases that did
+# break are a key with a *prefix* and a commented-out key (where the old awk
+# printed `$2`, i.e. the literal key name, as the version).
 echo "== parse_bundle_version =="
 check "parses build number" "6" \
   "$(printf '        CFBundleShortVersionString: "0.1.5"\n        CFBundleVersion: "6"\n' | parse_bundle_version)"
+check "ignores a prefixed key" "32" \
+  "$(printf '        MyCFBundleVersion: "99"\n        CFBundleVersion: "32"\n' | parse_bundle_version)"
+check "ignores a commented-out key" "32" \
+  "$(printf '        # CFBundleVersion: "99"\n        CFBundleVersion: "32"\n' | parse_bundle_version)"
+check "ignores a longer key sharing the prefix" "32" \
+  "$(printf '        CFBundleVersionSomethingElse: "99"\n        CFBundleVersion: "32"\n' | parse_bundle_version)"
 
 echo "== parse_build_info_git_sha =="
 check "parses build provenance sha" "0123456789abcdef0123456789abcdef01234567" \

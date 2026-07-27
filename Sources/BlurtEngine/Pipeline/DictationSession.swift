@@ -2,6 +2,12 @@ import Foundation
 import os
 
 public actor DictationSession {
+  /// Off-pool home for the press-time AX field read — see its use in
+  /// `performPress` for why blocking IPC must not run on the cooperative pool.
+  private static let contextQueue = DispatchQueue(
+    label: "\(BlurtIdentity.subsystem).FieldContext", qos: .userInitiated,
+    attributes: .concurrent)
+
   public private(set) var phase: PipelinePhase = .idle
 
   // Split for the lint file-length budget: `phaseStream()`/os_signpost live in
@@ -75,10 +81,15 @@ public actor DictationSession {
   /// instead.) `performCancel` clears it whether or not it was consumed early.
   private var cancelRequested = false
 
+  // Internal, like `pipelineTask`, so a test can witness the cancel teardown
+  // *directly* — nil means disarmed. Asserting it through the timer's effects
+  // doesn't work: a surviving timer wakes, calls `release()`, and `performRelease`
+  // drops out on `guard phase == .recording`, so a cancelled session looks
+  // identical either way and the test passes with `cancelAutoRelease()` deleted.
   /// Handle to the auto-release timer started in `press()`. Stored so that
   /// `release()` can cancel it — otherwise a fire-and-forget timer from a prior
   /// press could wake and `release()` a later, unrelated session.
-  private var autoReleaseTask: Task<Void, Never>?
+  var autoReleaseTask: Task<Void, Never>?
 
   /// Handle to the transcribe→inject work spawned by `release()`. Stored so a
   /// `cancel()` arriving after recording has stopped (phase `.transcribing` or
@@ -93,7 +104,7 @@ public actor DictationSession {
     injector: InjectorProtocol,
     maxRecordingSeconds: Double = SyncSTTLimits.autoReleaseSeconds,
     clock: any Clock<Duration> = ContinuousClock(),
-    keyTermsProvider: @escaping @Sendable () -> [String] = { KeyTermsStore.terms() },
+    keyTermsProvider: @escaping @Sendable () -> [String] = { KeyTermsStore.terms },
     readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
     onTranscriptDelivered: (@Sendable (String) -> Void)? = nil
   ) {
@@ -189,7 +200,18 @@ public actor DictationSession {
       let (stream, contextFeed) = AsyncStream.makeStream(
         of: TranscriptionContext?.self, bufferingPolicy: .bufferingNewest(1))
       contextStream = stream
-      Task.detached {
+      // A Dispatch queue, not `Task.detached`: `captureFieldContext` is documented
+      // as making ~6 synchronous cross-process AX round trips, each bounded only by
+      // the 1 s messaging timeout, so against a beachballing frontmost app one
+      // press can *block* a thread for seconds. The Swift cooperative pool is sized
+      // to the core count and does not overcommit, so a few press/cancel cycles
+      // against a hung app could park every cooperative thread and stall the whole
+      // non-main runtime — including this actor. Dispatch overcommits, so a blocked
+      // capture costs a thread instead of the pool. Same reasoning as
+      // `DictationLog`'s serial queue. Concurrent so a hung capture can't delay the
+      // next press's. The body is fully synchronous and captures only Sendable
+      // values, so it needs no task context.
+      Self.contextQueue.async {
         let field = FocusCapture.captureFieldContext()
         let context = TranscriptionContext(
           appName: captured?.processName,

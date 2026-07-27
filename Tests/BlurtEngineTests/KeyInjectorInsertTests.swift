@@ -53,7 +53,7 @@ struct KeyInjectorInsertTests {
       pasteSettleDuration: .zero,
       postPaste: { true },
       activateTarget: { _ in
-        activated.set(true)
+        activated.value = true
         return true
       },
       clipboard: FakeClipboard(string: nil))
@@ -69,7 +69,7 @@ struct KeyInjectorInsertTests {
     let injector = KeyInjector(
       pasteSettleDuration: .zero,
       postPaste: {
-        posted.set(true)
+        posted.value = true
         return true
       },
       activateTarget: { _ in false },
@@ -91,7 +91,7 @@ struct KeyInjectorInsertTests {
     let injector = KeyInjector(
       pasteSettleDuration: .zero,
       postPaste: {
-        posted.set(true)
+        posted.value = true
         return true
       })
     try await injector.insert("")
@@ -117,7 +117,7 @@ struct KeyInjectorInsertTests {
     let injector = KeyInjector(
       pasteSettleDuration: .zero,
       postPaste: {
-        posted.set(true)
+        posted.value = true
         return true
       },
       isAccessibilityTrusted: { false },
@@ -138,7 +138,7 @@ struct KeyInjectorInsertTests {
     let injector = KeyInjector(
       pasteSettleDuration: .zero,
       postPaste: {
-        posted.set(true)
+        posted.value = true
         return true
       },
       hasEditableTarget: { false },
@@ -160,7 +160,7 @@ struct KeyInjectorInsertTests {
     let injector = KeyInjector(
       pasteSettleDuration: .zero,
       postPaste: {
-        posted.set(true)
+        posted.value = true
         return true
       },
       hasEditableTarget: { false },  // Electron/Chromium exposes no editable AX signal
@@ -305,7 +305,7 @@ struct KeyInjectorInsertTests {
     let injector = KeyInjector(
       pasteSettleDuration: .zero,
       postPaste: {
-        posted.set(true)
+        posted.value = true
         return true
       })
     // Gate the body so `cancel()` is guaranteed to land before `insert` reaches

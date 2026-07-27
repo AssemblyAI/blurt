@@ -55,13 +55,23 @@ extension PipelinePhase {
   /// How this phase should be presented on the overlay pill.
   public var overlayState: OverlayUIState {
     switch self {
-    case .idle, .injecting, .cancelled: .idle
+    case .idle, .cancelled: .idle
+    // `.injecting` maps to `.processing`, NOT `.idle`. The shell reads an `.idle`
+    // projection as "dismiss the pill", so mapping this working phase to idle
+    // started a fade-out mid-dictation: two wasted animation groups on the fast
+    // path, and on the slow one (the injector's activation wait runs up to 350 ms)
+    // the fade completed, ordering the panel out and tearing down the pill's
+    // content — then `.pasted` arrived and faded it back in. A visible blink at
+    // the end of a dictation, worst when the user has switched apps mid-transcribe.
+    case .injecting: .processing
     case .recording: .recording
     case .transcribing: .processing
-    // A missing API key is an expected setup state, not a fault: the shell
-    // routes it to the settings window (the actionable fix), so the pill stays
-    // calm idle rather than flashing red on the way there.
-    case .failed(.apiKeyMissing): .idle
+    // A setup blocker (a missing API key) is an expected state, not a fault: the
+    // shell routes it to the settings window — the actionable fix — so the pill
+    // stays calm idle rather than flashing red on the way there. The
+    // classification is `PipelinePhase.setupBlocker`, so this and the shell's
+    // navigation can't disagree about which failures are setup states.
+    case .failed(let error) where error.isSetupBlocker: .idle
     case .failed(let error): .error(message: error.errorDescription ?? "Dictation failed.")
     case .pasted: .pasted
     case .noTarget: .noTarget

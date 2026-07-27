@@ -22,7 +22,7 @@ struct TriggerKeyStoreTests {
   @Test("an unknown stored code falls back to the default")
   func unknownFallsBack() {
     let defaults = freshDefaults()
-    defaults.set(123, forKey: "BlurtTriggerKeyCode")
+    defaults.set(123, forKey: TriggerKeyStore.defaultsKey)
     #expect(TriggerKeyStore(defaults: defaults).triggerKey == .rightCommand)
   }
 }

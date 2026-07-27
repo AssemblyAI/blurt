@@ -4,8 +4,8 @@
   // XCUITest can't synthesize the lone right-modifier `flagsChanged` event the
   // real trigger relies on — and the `CGEventTap` that reads it needs the
   // process to be Accessibility-trusted, which the CI test host isn't. The test
-  // harness window instead calls `beginDictation`/`endDictation`/
-  // `cancelDictation`, which drive the *same* `DictationSession` (and its
+  // harness window instead calls `session.press()`/`release()`/`cancel()`
+  // directly, driving the *same* `DictationSession` (and its
   // press-time missing-key readiness check) the key tap's closures reach via
   // `session.submit(_:)`. Compiled only in Debug, so nothing here ships in the
   // notarized Release build.

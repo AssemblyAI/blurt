@@ -22,9 +22,7 @@ done
 source "$REPO_ROOT/scripts/release-lib.sh"
 
 step "Preflight"
-for cmd in gh git xcrun awk; do
-  command -v "$cmd" >/dev/null 2>&1 || die "missing required tool: $cmd"
-done
+require_tools gh git xcrun awk
 
 VERSION="$(require_project_version "$APP_DIR/project.yml")"
 DMG="$BUILD_ROOT/Blurt-$VERSION.dmg"
@@ -36,6 +34,22 @@ CHECKSUMS="$BUILD_ROOT/SHA256SUMS"
 info "version: $VERSION"
 info "dmg:     $DMG"
 info "dsym:    $DSYM_ZIP"
+
+# The artifacts must have been built from the commit we are about to tag.
+# Without this, building at commit A and then pulling any commit that doesn't
+# touch CFBundleShortVersionString (a code fix, a doc change) lets this script
+# tag commit B and publish A's binary under it — a release whose page and whose
+# bits disagree, with every other check still passing. `release.sh` already
+# makes exactly this comparison to decide whether a rebuild is needed
+# (`dmg_already_built`); the publish step is where it actually protects users.
+BUILD_INFO="$BUILD_ROOT/build-info.txt"
+[ -f "$BUILD_INFO" ] || die "build provenance not found at $BUILD_INFO — rebuild with scripts/release-build.sh"
+BUILT_SHA="$(parse_build_info_git_sha <"$BUILD_INFO")"
+[ -n "$BUILT_SHA" ] || die "could not parse the built commit from $BUILD_INFO — rebuild with scripts/release-build.sh"
+HEAD_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+[ "$BUILT_SHA" = "$HEAD_SHA" ] \
+  || die "DMG was built from $BUILT_SHA but HEAD is $HEAD_SHA — rebuild with scripts/release-build.sh before publishing"
+info "built at: $BUILT_SHA (matches HEAD)"
 
 step "Validate staple"
 xcrun stapler validate "$DMG" >/dev/null || die "DMG not stapled — rebuild with release-build.sh"
@@ -112,13 +126,18 @@ ln -f "$DSYM_ZIP" "$STABLE_DSYM"
 # SHA256SUMS itself is NOT attached as an asset: the notarized Developer-ID
 # signature is the real integrity/authenticity guarantee (Gatekeeper on first
 # open), so the checksums are informational and live in the release notes body.
+# Created as a DRAFT on purpose. `--latest` repoints
+# releases/latest/download/Blurt.dmg — the URL README.md links — so publishing
+# before the assets are verified put a possibly-truncated upload in front of
+# users for the length of the verify step. The draft is flipped live at the end,
+# after the re-download + sha + staple checks pass.
 gh release create "$TAG" \
   "$STABLE_DMG" \
   "$DMG" \
   "$STABLE_DSYM" \
   --title "$TAG" \
   --generate-notes \
-  --latest
+  --draft
 
 # Fold the checksums into the generated notes (see above for why not as an asset).
 GENERATED_NOTES="$(gh release view "$TAG" --json body -q .body)"
@@ -154,6 +173,11 @@ xcrun stapler validate "$VERIFY_DIR/Blurt.dmg" >/dev/null \
 rm -rf "$VERIFY_DIR"
 trap - EXIT
 info "published assets verified (sha + staple match the local build)"
+
+# Everything checked out — now make it visible and repoint /latest.
+step "Publish"
+gh release edit "$TAG" --draft=false --latest \
+  || die "assets verified but flipping the draft live failed — re-run with --republish"
 
 URL="$(gh release view "$TAG" --json url -q .url)"
 info "published: $URL"

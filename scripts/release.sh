@@ -204,9 +204,7 @@ main() {
     is_semver "$version" || die "version must be X.Y.Z (got: $version)"
   fi
 
-  for cmd in git gh xcodegen awk; do
-    command -v "$cmd" >/dev/null 2>&1 || die "missing required tool: $cmd"
-  done
+  require_tools git gh xcodegen awk
 
   require_clean_tree "releasing"
 

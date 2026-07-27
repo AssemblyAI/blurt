@@ -37,12 +37,20 @@ public actor MicCapture: MicCaptureProtocol {
   private var activeRecorder: AVAudioRecorder?
   /// Polls the active recorder's meter and feeds `levels` while recording.
   private var meterTask: Task<Void, Never>?
-  /// How often the meter is sampled for the overlay. 20 Hz reads as smooth for a
-  /// voice-level meter while cutting the per-tick work (recorder poll + stream
-  /// yield, and the SwiftUI bar redraw it drives) by a third versus 30 Hz — the
-  /// bars' `TimelineView` cap is matched to it so it never redraws faster than
-  /// the level actually changes.
-  private static let meterInterval = Duration.milliseconds(50)
+  /// How often the meter is sampled for the overlay, in seconds. 20 Hz reads as
+  /// smooth for a voice-level meter while cutting the per-tick work (recorder poll
+  /// + stream yield, and the SwiftUI bar redraw it drives) by a third versus 30 Hz.
+  ///
+  /// Public, and the single definition: the pill's continuous animations cap their
+  /// redraw to this cadence because the level feed can't show anything faster, so
+  /// the view reads it here rather than restating `1.0 / 20.0` behind a comment
+  /// claiming the two match — a coupling nothing enforced, which a change here
+  /// would silently break, leaving the view under-sampling frames the meter is
+  /// paying to produce.
+  public static let meterIntervalSeconds: Double = 0.05
+
+  /// `meterIntervalSeconds` as the `Duration` the meter task sleeps for.
+  private static let meterInterval = Duration.seconds(meterIntervalSeconds)
 
   public init() {
     // The continuation is fed from a ~20 Hz meter timer; the levels stream is a
@@ -105,7 +113,7 @@ public actor MicCapture: MicCaptureProtocol {
     let pcm = try Self.decodePCM(fromFileAt: url)
 
     let sampleCount = pcm.count / SyncSTTLimits.bytesPerSample
-    let durationMs = Int((Double(sampleCount) / Self.targetSampleRate) * 1000)
+    let durationMs = SyncSTTLimits.durationMs(ofPCMBytes: pcm.count)
     Self.logger.info("stop samples=\(sampleCount) durationMs=\(durationMs)")
     return pcm
   }
@@ -139,7 +147,7 @@ public actor MicCapture: MicCaptureProtocol {
       while !Task.isCancelled {
         // Rebound per iteration so the actor stays releasable across the sleep.
         // Bail when it's gone: deinit doesn't cancel this task, so the weak
-        // capture is what stops an orphaned meter from spinning at ~30 Hz for
+        // capture is what stops an orphaned meter from spinning at ~20 Hz for
         // the rest of the process if a capture is dropped without stop().
         guard let self else { return }
         await self.emitLevel()

@@ -9,6 +9,15 @@ import Foundation
 public struct RecentDictations: Equatable, Sendable {
   /// One recorded dictation: the transcript plus when it landed.
   public struct Entry: Identifiable, Equatable, Sendable {
+    /// How long after a dictation `relativeLabel` keeps saying "just now", in
+    /// seconds — the smallest unit it shows above this is minutes.
+    ///
+    /// Public because the ready screen's timestamp refresh cadence is chosen
+    /// against it: a view redrawing slower than this leaves rows stale. Published
+    /// rather than restated so the two can't drift, the same reason
+    /// `MicCapture.meterIntervalSeconds` is public.
+    public static let justNowThreshold: TimeInterval = 60
+
     /// Stable identity for SwiftUI list diffing — assigned once at creation, so
     /// an entry keeps its id as newer dictations push in ahead of it.
     public let id = UUID()
@@ -19,6 +28,18 @@ public struct RecentDictations: Equatable, Sendable {
   /// How many recent dictations the list holds. The ready window reserves space
   /// for exactly this many rows.
   public static let capacity = 3
+
+  /// Height a list showing a full `capacity` rows occupies: every row, plus a
+  /// separator *between* each adjacent pair. The ready window pins its list area
+  /// to this whether it holds 0, 1, or `capacity` entries, so nothing above it
+  /// shifts as dictations arrive.
+  ///
+  /// The row metrics come from the view; what lives here is the count arithmetic,
+  /// which is a fact about `capacity` — including the `capacity - 1` that a
+  /// change to the capacity is most likely to get wrong.
+  public static func reservedHeight(rowHeight: CGFloat, separatorThickness: CGFloat) -> CGFloat {
+    CGFloat(capacity) * rowHeight + CGFloat(capacity - 1) * separatorThickness
+  }
 
   /// Most-recent-first, capped at `capacity`.
   public private(set) var entries: [Entry] = []
@@ -42,7 +63,7 @@ extension RecentDictations.Entry {
   /// landed), then the full relative phrasing ("2 minutes ago"). `now` is
   /// injected so tests are deterministic; `locale` so they can pin the wording.
   public func relativeLabel(now: Date, locale: Locale = .autoupdatingCurrent) -> String {
-    if now.timeIntervalSince(timestamp) < 60 {
+    if now.timeIntervalSince(timestamp) < Self.justNowThreshold {
       return "just now"
     }
     // Built per call rather than cached: a stored formatter would be shared

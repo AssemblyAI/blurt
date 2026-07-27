@@ -34,10 +34,26 @@ extension HTTPClientTests {
     #expect(await makeValidator(transport).validate("any-key") == .unreachable)
   }
 
-  @Test("validator treats a 4xx client error (other than 408/429) as invalid")
+  @Test("validator treats a 400 malformed-request as invalid")
   func validateClientErrorIsInvalid() async {
     let transport = FakeHTTPTransport { _ in (400, json(["error": "bad request"])) }
     #expect(await makeValidator(transport).validate("malformed-key") == .invalid)
+  }
+
+  @Test("a 4xx that says nothing about the key is unreachable, not invalid")
+  func validateEndpointErrorIsUnreachable() async {
+    // `.invalid` hard-blocks setup: `APIKeySubmission` refuses to persist, so the
+    // user can't finish onboarding. Only statuses that actually mean "credential
+    // rejected" or "malformed key" may report it. A 404/405/410 (endpoint retired
+    // or moved) or a proxy/captive-portal 403-page equivalent says nothing about
+    // the key, so it must fall through to the retry-later outcome — a blanket
+    // `400..<500 -> .invalid` told users their working key was rejected.
+    for status in [404, 405, 410, 451] {
+      let transport = FakeHTTPTransport { _ in (status, json(["error": "not here"])) }
+      #expect(
+        await makeValidator(transport).validate("good-key") == .unreachable,
+        "status \(status) must not reject the key")
+    }
   }
 
   @Test("validator treats 429 rate-limit as unreachable, not invalid")

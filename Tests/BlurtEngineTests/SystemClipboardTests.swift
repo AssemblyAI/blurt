@@ -11,14 +11,18 @@ import Testing
 @Suite("SystemClipboard", .serialized)
 struct SystemClipboardTests {
 
-  /// Snapshot/restore the user's clipboard string around a test body so the
-  /// suite leaves the real pasteboard as it found it.
+  /// Snapshot/restore the user's clipboard around a test body so the suite leaves
+  /// the real pasteboard as it found it.
+  ///
+  /// Uses the full `snapshot()`/`restore()` primitives rather than just the string
+  /// flavor: snapshotting only `.string` and then clearing unconditionally meant
+  /// running these tests wiped a developer's real clipboard whenever it held an
+  /// image, a file, or styled text.
   private func withClipboardRestored(_ body: () throws -> Void) rethrows {
-    let pb = NSPasteboard.general
-    let saved = pb.string(forType: .string)
+    let clip = SystemClipboard()
+    let saved = clip.snapshot()
     defer {
-      pb.clearContents()
-      if let saved { pb.setString(saved, forType: .string) }
+      if let saved { clip.restore(saved) }
     }
     try body()
   }
@@ -37,15 +41,15 @@ struct SystemClipboardTests {
     }
   }
 
-  @Test("currentItems snapshots contents that restore brings back")
-  func snapshotRestoreRoundTrips() {
-    withClipboardRestored {
+  @Test("snapshot captures contents that restore brings back")
+  func snapshotRestoreRoundTrips() throws {
+    try withClipboardRestored {
       let pb = NSPasteboard.general
       let clip = SystemClipboard()
 
       pb.clearContents()
       pb.setString("original", forType: .string)
-      let snapshot = clip.currentItems()
+      let snapshot = try #require(clip.snapshot())
 
       clip.setString("overwritten")
       #expect(pb.string(forType: .string) == "overwritten")
@@ -56,12 +60,12 @@ struct SystemClipboardTests {
   }
 
   @Test("snapshot/restore preserves every representation of multi-type, multi-item contents")
-  func multiTypeSnapshotRoundTrips() {
+  func multiTypeSnapshotRoundTrips() throws {
     // The reason `SendablePasteboardItem` keys data by pasteboard *type*: a copy
     // of styled text carries several representations (plain string + RTF), and
     // the restore must bring all of them back — a string-only round trip would
     // silently downgrade the user's clipboard to plain text.
-    withClipboardRestored {
+    try withClipboardRestored {
       let pb = NSPasteboard.general
       let clip = SystemClipboard()
 
@@ -72,7 +76,7 @@ struct SystemClipboardTests {
       plain.setString("second item", forType: .string)
       pb.clearContents()
       pb.writeObjects([styled, plain])
-      let snapshot = clip.currentItems()
+      let snapshot = try #require(clip.snapshot())
 
       clip.setString("overwritten")
       clip.restore(snapshot)
@@ -85,14 +89,54 @@ struct SystemClipboardTests {
     }
   }
 
-  @Test("restore of an empty snapshot leaves the cleared pasteboard empty")
-  func restoreEmptyIsNoOp() {
+  @Test("a degraded snapshot never clears the clipboard it cannot replace")
+  func degradedSnapshotDoesNotDestroy() {
+    // The failure this guards: an item that exists but whose representations can't
+    // be materialized (a promise the owning app declines) used to produce an
+    // all-empty snapshot, and `restore` cleared first and wrote nothing — so the
+    // user's clipboard came back EMPTY instead of unchanged.
     withClipboardRestored {
       let pb = NSPasteboard.general
       let clip = SystemClipboard()
 
+      // An item with a declared type but no retrievable data models the promise.
+      let degraded = PasteboardSnapshot(
+        items: [SendablePasteboardItem(dataMap: [:])], plainText: nil)
+
+      clip.setString("transcript")
+      clip.restore(degraded)
+
+      // Left alone rather than emptied — the transcript is still recoverable.
+      #expect(pb.string(forType: .string) == "transcript")
+    }
+  }
+
+  @Test("a partly-readable snapshot falls back to the plain-text floor")
+  func degradedSnapshotUsesTextFloor() {
+    withClipboardRestored {
+      let pb = NSPasteboard.general
+      let clip = SystemClipboard()
+
+      let degraded = PasteboardSnapshot(
+        items: [SendablePasteboardItem(dataMap: [:])], plainText: "original text")
+
+      clip.setString("transcript")
+      clip.restore(degraded)
+
+      // Not byte-faithful (the richer flavors are unrecoverable), but the user's
+      // text survives instead of their clipboard being emptied.
+      #expect(pb.string(forType: .string) == "original text")
+    }
+  }
+
+  @Test("restore of an empty snapshot leaves the cleared pasteboard empty")
+  func restoreEmptyIsNoOp() throws {
+    try withClipboardRestored {
+      let pb = NSPasteboard.general
+      let clip = SystemClipboard()
+
       pb.clearContents()  // an empty pasteboard has no items to snapshot
-      let empty = clip.currentItems()
+      let empty = try #require(clip.snapshot())
       clip.setString("temp")
       clip.restore(empty)
 
