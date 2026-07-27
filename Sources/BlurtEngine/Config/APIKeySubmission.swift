@@ -16,6 +16,22 @@ public struct APIKeySubmission: Sendable {
     case saveFailed
   }
 
+  /// How a failed submission should be reported. The *classification* is the
+  /// case: a problem the user can fix by editing the field belongs inline, while
+  /// a system fault retyping can't touch belongs in an alert — the convention
+  /// that makes the inline cases legible as "retype this" rather than "something
+  /// broke". Owned here, next to the outcomes it classifies, for the same reason
+  /// as `PipelinePhase.setupBlocker`: the shell renders the engine's single
+  /// judgement instead of re-deriving it, so adding an `Outcome` case can't
+  /// silently ship with the wrong severity.
+  public enum FailureReport: Sendable, Equatable {
+    /// Recoverable — show `message` beside the field and let the user retry.
+    case inline(message: String)
+    /// A genuine fault (the Keychain write itself failed). Retyping the key
+    /// can't fix it, so present it as an alert.
+    case alert(title: String, message: String)
+  }
+
   private let keyStore: any APIKeyGateway
   private let validate: @Sendable (String) async -> APIKeyValidator.Result
 
@@ -52,6 +68,27 @@ public struct APIKeySubmission: Sendable {
       return .invalid
     case .unreachable:
       return .unreachable
+    }
+  }
+}
+
+extension APIKeySubmission.Outcome {
+  /// How to report this outcome, or `nil` for `.valid` — which has nothing to
+  /// report: the key verified and stored, so the sheet just closes.
+  public var failureReport: APIKeySubmission.FailureReport? {
+    switch self {
+    case .valid:
+      nil
+    case .invalid:
+      .inline(message: "AssemblyAI rejected that key. Double-check it and try again.")
+    case .unreachable:
+      .inline(message: "Couldn't reach AssemblyAI. Check your connection and try again.")
+    case .saveFailed:
+      .alert(
+        title: "Couldn’t Save Your Key",
+        message:
+          "Blurt couldn’t write the key to your macOS Keychain. Check Keychain access and try again."
+      )
     }
   }
 }

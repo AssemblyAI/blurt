@@ -15,6 +15,22 @@ public enum OverlayPlacement {
   /// changing the shadow margin silently moved the pill and no test noticed.
   public static let defaultBottomClearance: CGFloat = 80
 
+  /// The panel size that holds a `pillSize` pill with `shadowMargin` of
+  /// transparent room on all four sides, so the pill's drop shadow renders its
+  /// full falloff instead of being clipped by the window's contentRect.
+  ///
+  /// Here rather than at the AppKit call site for the same reason
+  /// `panelOrigin` backs the clearance off by the margin: the pill/panel
+  /// relationship is one fact, and half of it living in the shell meant a change
+  /// to the margin only got checked on one side. Same split as
+  /// `RecentDictations.reservedHeight` — the shell owns the measurements, the
+  /// engine owns the arithmetic over them.
+  public static func panelSize(pillSize: CGSize, shadowMargin: CGFloat) -> CGSize {
+    CGSize(
+      width: pillSize.width + shadowMargin * 2,
+      height: pillSize.height + shadowMargin * 2)
+  }
+
   /// Resolves the *panel* origin from what the shell genuinely owns — the screen's
   /// visible frame, the persisted drag origin, and the panel's transparent shadow
   /// inset — keeping the clearance policy and the pill/panel conversion in here.

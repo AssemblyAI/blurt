@@ -91,7 +91,9 @@ private struct UpdateSection: View {
 
   var body: some View {
     Section {
-      SettingRow(title: versionTitle, systemImage: "arrow.triangle.2.circlepath") {
+      // "Blurt 0.1.31" — the label is the engine's (shared with the result
+      // alerts, so the two can't name the version differently).
+      SettingRow(title: model.versionLabel, systemImage: "arrow.triangle.2.circlepath") {
         HStack(spacing: 8) {
           // A user-initiated check that can stall on a slow connection needs
           // visible progress, or the button reads as dead until the result
@@ -109,12 +111,6 @@ private struct UpdateSection: View {
     } header: {
       Text("Updates")
     }
-  }
-
-  /// "Blurt 0.1.31" when the version is known, otherwise a plain "Blurt" (the
-  /// button still works — the check reads the version itself).
-  private var versionTitle: String {
-    model.currentVersionText.map { "Blurt \($0)" } ?? "Blurt"
   }
 }
 
@@ -137,15 +133,11 @@ private struct DeveloperSection: View {
     } header: {
       Text("Developer")
     } footer: {
-      Text("Logs each dictation to \(Self.logPath).")
+      // The home-abbreviated path is derived in the engine next to the URL the
+      // writer appends to, so this label can never drift from where the log
+      // actually lands.
+      Text("Logs each dictation to \(DictationLog.defaultDisplayPath).")
         .textSelection(.enabled)
     }
-  }
-
-  /// The dictation log's location, home-abbreviated for display (the engine
-  /// exposes the real URL so this label can never drift from where the log is
-  /// actually written).
-  private static var logPath: String {
-    (DictationLog.defaultURL.path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath
   }
 }

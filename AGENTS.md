@@ -198,9 +198,12 @@ framework, or notarization rejects the build; roll-forward-only for a bad releas
 - **Unit tests use Swift Testing** (`@Suite`/`@Test`/`#expect`), not XCTest. The XCUITest bundle is
   the one exception (XCTest, because XCUIAutomation requires it).
 - **Pure projections over shell logic**: phase→UI mapping (`OverlayUIState`, `MenuBarStatus`),
-  chime edges (`RecordingCueGate`), geometry (`OverlayPlacement`, `MeterBarGeometry`) and history
-  (`RecentDictations`) live in the engine as value types so they're unit-testable; the AppKit side
-  just renders whatever they resolve to. Keep new logic on that side of the line.
+  chime edges (`RecordingCueGate`), geometry (`OverlayPlacement`, `MeterBarGeometry`), history
+  (`RecentDictations`), alert wording (`UpdateAlertContent`, `APIKeySubmission.FailureReport`),
+  credential display (`APIKeyDisplay`) and setup policy (`SetupReadiness`) live in the engine as value
+  types so they're unit-testable; the AppKit side just renders whatever they resolve to. Keep new logic
+  on that side of the line — the shell has no test target, so wording and classification assembled at
+  a SwiftUI/`NSAlert` call site is covered by nothing.
 - **Docs**: prose lines are wrapped ~100 cols in this file; prettier owns Markdown formatting
   (`proseWrap: preserve`, so wrapping is yours to keep tidy) and `MD013` is off.
 
@@ -357,9 +360,11 @@ working.
 The trigger is editable in the Shortcut section of the setup/settings UI (`HotkeyStepView`) — a
 `Picker` over `TriggerKey.allCases` that writes `TriggerKeyStore`, after which
 `AppCoordinator.dictationBindingChanged()` re-reads it into the tap. For display strings, use
-`TriggerKeyStore().triggerKey.label` for one-shot reads, or `@AppStorage(TriggerKeyStore.defaultsKey)`
-
-- `TriggerKey.fromPersisted` in views that must re-render live on a Settings change.
+`TriggerKeyStore().triggerKey.label` for one-shot reads; in views that must re-render live on a
+Settings change, use **`@BoundTriggerKey`** — a `DynamicProperty` in `HotkeyStepView.swift` wrapping
+the `@AppStorage(TriggerKeyStore.defaultsKey)` + `TriggerKey.fromPersisted` pair — rather than
+restating that pairing per view. The unset default belongs to `fromPersisted` (an absent keycode maps
+to right ⌘), so views must not re-declare `TriggerKey.rightCommand.rawValue` themselves.
 
 ## Transcription prompt
 
@@ -409,9 +414,29 @@ resolves.
 
 History: **`RecentDictations`** is an in-memory, newest-first ring shown in the ready window (never
 written to disk). **`DictationLog`** appends each completed dictation with its context snapshot to
-`~/Library/Logs/Blurt/dictations.jsonl` (`DictationLog.defaultURL`) — but **only** while developer
-mode is on; with it off, nothing is written. The Settings window's Developer section surfaces both the
-switch and the path.
+`~/Library/Logs/Blurt/dictations.jsonl` (`DictationLog.defaultURL`, or `defaultDisplayPath` for the
+home-abbreviated form to show in UI — derived next to the URL so the label can't drift from the write
+target) — but **only** while developer mode is on; with it off, nothing is written. The Settings
+window's Developer section surfaces both the switch and the path.
+
+API key: stored in the macOS Keychain via **`APIKeyStore`**, a thin static facade over
+**`MemoizedKeyStore`** (which takes its storage as `read`/`write` closures, so the memo-and-write rules
+are unit-tested against a double instead of the real item). The injectable seam is **`APIKeyGateway`**
+— `ProductionAPIKeyStore` forwards to the Keychain, `InMemoryAPIKeyStore` keeps automated runs away
+from it. **`APIKeySubmission`** owns the validate-then-save flow (an unverified key never persists) and
+its `Outcome.failureReport` classifies a failure as `.inline` (recoverable, shown beside the field) or
+`.alert` (a Keychain fault retyping can't fix), so `APIKeyStepView` can't disagree with the engine
+about severity. **`APIKeyDisplay.resolve(key:)`** owns how a stored key is _presented_ — masked tail,
+status and VoiceOver wording, connect-vs-rotate control titles. The mask reveals only the last four
+characters and, below `minimumLengthToMask`, none at all (a bare `suffix(4)` in the view once rendered
+a short key whole).
+
+Setup gating: **`SetupReadiness.isReady(permissions:hasAPIKey:)`** is the fully-configured rule
+(deliberately excluding the trigger key, which has a default binding, so a shortcut change can't trap
+the user in the wizard), `SetupReadiness.pollInterval(isReady:)` the permission-poll cadence (brisk
+during setup, coasting once ready), and `PermissionStatus.lostGrant(since:)` the revocation edge that
+pulls a configured app back into onboarding. `WizardController` applies all three rather than
+restating them.
 
 ## App shell surfaces
 
@@ -433,7 +458,7 @@ switch and the path.
 ## Updates
 
 Update checking is **manual and download-only** — no in-place install, no background auto-updater.
-Two pieces:
+Three pieces:
 
 - **`UpdateChecker`** (`Sources/BlurtEngine/Update/UpdateChecker.swift`) — a `Sendable` struct that
   `GET`s `https://api.github.com/repos/AssemblyAI/blurt/releases/latest`, decodes `GitHubRelease`
@@ -441,13 +466,22 @@ Two pieces:
   `.available(version:, dmgURL:)`. It throws on network failure, malformed JSON, an unparseable tag,
   or a newer release with no `.dmg` asset. The call goes through the injected `HTTPTransport`, so
   tests run against fixture JSON (`UpdateCheckerTests`); no AppKit here.
+- **`UpdateAlertContent`** (`Sources/BlurtEngine/Update/UpdateAlertContent.swift`) — what each result
+  _says_: title, body, button titles (the first is the default), the `downloadURL` that default button
+  opens, and the alert style. A pure projection of a result into wording, owned in the engine for the
+  same reason as `OverlayUIState.accessibilityLabel`. `appVersionLabel(_:)` is the shared "Blurt
+  0.1.31" form, so the alerts and the Settings Updates row can't name the version two ways. The
+  memberwise init is private: an alert comes from a named result (`upToDate` / `available` /
+  `checkFailed`), never assembled ad hoc in the shell.
 - **`UpdateCheckModel`** (`App/Blurt/Blurt/Update/UpdateCheckModel.swift`, `@MainActor`) — runs a
   user-initiated check and reports it in a Sparkle-style alert: _up to date_, _available_ (**Download**
-  opens the release DMG in the browser, **Later** dismisses), or a recoverable _couldn't check_. It
-  presents via `beginSheetModal` on the host window (a nested `runModal()` loop was reported as an app
-  hang, so `runModal()` is the fallback only when no window can host a sheet), and an `isChecking`
-  guard stops the Settings button and the app-menu command from stacking two alerts. One shared
-  instance (owned by `AppDelegate`) backs both entry points.
+  opens the release DMG in the browser, **Later** dismisses), or a recoverable _couldn't check_ (every
+  throw, plus an unparseable bundle version, collapses to that one content). It holds only the AppKit
+  half: build an `NSAlert` from an `UpdateAlertContent`, then open `downloadURL` if the default button
+  came back. It presents via `beginSheetModal` on the host window (a nested `runModal()` loop was
+  reported as an app hang, so `runModal()` is the fallback only when no window can host a sheet), and
+  an `isChecking` guard stops the Settings button and the app-menu command from stacking two alerts.
+  One shared instance (owned by `AppDelegate`) backs both entry points.
 
 ## Tests
 

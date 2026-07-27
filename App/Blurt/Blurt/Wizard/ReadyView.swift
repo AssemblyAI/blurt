@@ -8,12 +8,9 @@ import SwiftUI
 struct ReadyView: View {
   var coordinator: AppCoordinator
   var openSettings: () -> Void
-  // Observe the persisted trigger keycode directly so changing the dictation key
-  // in the (separate) Settings window re-renders this window's keycap live.
-  // `@AppStorage` reflects writes to the same default across windows; reading
-  // `TriggerKeyStore` (plain UserDefaults) would not trigger a re-render.
-  @AppStorage(TriggerKeyStore.defaultsKey) private var triggerKeyCode: Int =
-    TriggerKey.rightCommand.rawValue
+  // Observed (not read once) so changing the dictation key in the separate
+  // Settings window re-renders this window's keycap live — see `BoundTriggerKey`.
+  @BoundTriggerKey private var triggerKey
 
   var body: some View {
     // Sections sit 20 pt apart; the logo and shortcut readout are one idea,
@@ -54,7 +51,7 @@ struct ReadyView: View {
     HStack(spacing: 6) {
       Text("Tap or hold")
         .foregroundStyle(.secondary)
-      KeyCap(label: TriggerKey.fromPersisted(triggerKeyCode).label)
+      KeyCap(label: triggerKey.label)
       Text("to blurt")
         .foregroundStyle(.secondary)
     }

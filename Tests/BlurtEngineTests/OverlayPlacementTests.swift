@@ -12,6 +12,41 @@ struct OverlayPlacementTests {
   private let screen = CGRect(x: 0, y: 0, width: 1000, height: 600)
   private let panel = CGSize(width: 200, height: 60)
 
+  @Test("the panel grows by the shadow margin on every side")
+  func panelSizeAddsTheMarginTwice() {
+    // The other half of the pill/panel relationship `panelOrigin` corrects for.
+    // It lived in the AppKit controller as `pill + shadowMargin * 2`, so a change
+    // to the margin was only checked on the origin side.
+    let pill = CGSize(width: 168, height: 28)
+    let size = OverlayPlacement.panelSize(pillSize: pill, shadowMargin: 28)
+    #expect(size == CGSize(width: 224, height: 84))
+    // Stated as the invariant rather than the arithmetic: the pill is centered in
+    // the panel with exactly `shadowMargin` of transparent room all round.
+    #expect((size.width - pill.width) / 2 == 28)
+    #expect((size.height - pill.height) / 2 == 28)
+  }
+
+  @Test("a zero margin leaves the panel exactly pill-sized")
+  func panelSizeWithoutMargin() {
+    let pill = CGSize(width: 100, height: 20)
+    #expect(OverlayPlacement.panelSize(pillSize: pill, shadowMargin: 0) == pill)
+  }
+
+  @Test("the panel's placement and its size agree about the margin")
+  func panelSizeAndOriginUseTheSameMargin() {
+    // Together these put the *pill's* bottom edge at the default clearance: the
+    // panel sits `margin` lower, and its bottom `margin` is transparent.
+    let margin: CGFloat = 28
+    let pill = CGSize(width: 168, height: 28)
+    let size = OverlayPlacement.panelSize(pillSize: pill, shadowMargin: margin)
+    let origin = OverlayPlacement.panelOrigin(
+      panelSize: size, visibleFrame: screen, customOrigin: nil, shadowMargin: margin)
+    #expect(origin.y + margin == OverlayPlacement.defaultBottomClearance)
+    // And the pill ends up horizontally centered on screen, not the panel's
+    // transparent box being centered while the pill drifts.
+    #expect(origin.x + margin + pill.width / 2 == screen.midX)
+  }
+
   @Test("panelOrigin measures the clearance to the pill, not the panel")
   func panelOriginBacksOffTheShadowMargin() {
     // This arithmetic used to live at the AppKit call site as

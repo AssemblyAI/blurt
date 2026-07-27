@@ -30,14 +30,20 @@ struct APIKeyStepView: View {
   @State private var savedKey = ""
   @State private var isPresentingEditor = false
 
+  /// How the stored key is presented — the masking rule, the status wording, and
+  /// the control titles all live in the engine's `APIKeyDisplay`, where they're
+  /// unit-tested (a fixed `suffix(4)` here once put a short key on screen whole).
+  /// This view just renders what it resolves to.
+  private var display: APIKeyDisplay { .resolve(key: savedKey) }
+
   var body: some View {
     Section {
       SettingRow(title: "API Key", systemImage: "key.fill") {
         HStack(spacing: 12) {
           statusLabel
-          Button(savedKey.isEmpty ? "Connect…" : "Change…") { isPresentingEditor = true }
+          Button(display.editButtonTitle) { isPresentingEditor = true }
             .accessibilityIdentifier(
-              savedKey.isEmpty ? UITestIdentifiers.apiKeyConnect : UITestIdentifiers.apiKeyChange
+              display.isConnected ? UITestIdentifiers.apiKeyChange : UITestIdentifiers.apiKeyConnect
             )
         }
       }
@@ -70,27 +76,18 @@ struct APIKeyStepView: View {
   }
 
   /// The row's state: "Not connected", or the stored key's masked tail once one
-  /// exists. Monospaced so the four revealed characters line up as an identifier
-  /// rather than reading as prose.
-  @ViewBuilder
+  /// exists. Monospaced only when the text *is* an identifier, so the revealed
+  /// characters line up as a key ending rather than prose being set in code type.
   private var statusLabel: some View {
-    if savedKey.isEmpty {
-      Text("Not connected")
-        .foregroundStyle(.secondary)
-        .accessibilityIdentifier(UITestIdentifiers.apiKeyNotConnected)
-    } else {
-      Text(maskedKey)
-        .font(.body.monospaced())
-        .foregroundStyle(.secondary)
-        // The bullets are decoration; spell the state out for VoiceOver.
-        .accessibilityLabel("Connected, key ending \(savedKey.suffix(4))")
-        .accessibilityIdentifier(UITestIdentifiers.apiKeySavedStatus)
-    }
+    Text(display.statusText)
+      .font(display.rendersIdentifier ? .body.monospaced() : .body)
+      .foregroundStyle(.secondary)
+      // The bullets are decoration; the engine's label spells the state out.
+      .accessibilityLabel(display.accessibilityLabel)
+      .accessibilityIdentifier(
+        display.isConnected
+          ? UITestIdentifiers.apiKeySavedStatus : UITestIdentifiers.apiKeyNotConnected)
   }
-
-  /// The stored key as `••••` plus its last four characters — enough to tell two
-  /// keys apart (which account is this?) without putting the secret on screen.
-  private var maskedKey: String { "••••\(savedKey.suffix(4))" }
 }
 
 /// The credential-entry task itself, presented as a sheet from the settings row.
@@ -128,8 +125,9 @@ private struct APIKeyEditorSheet: View {
   /// A non-inline system fault (the Keychain write itself failed). Retyping the
   /// key can't fix it, so it's surfaced as an alert rather than footer text —
   /// the convention for genuine faults, and the reason the recoverable cases
-  /// above are *not* alerts.
-  @State private var showSaveFault = false
+  /// above are *not* alerts. Which outcomes land here rather than inline is the
+  /// engine's call (`APIKeySubmission.Outcome.failureReport`), wording included.
+  @State private var saveFault: SaveFault?
   /// The in-flight verify-then-store. Held so dismissing the sheet can cancel
   /// it: without that, Cancel/Escape during a check would let the submission run
   /// on and persist the key anyway — a Cancel that silently commits.
@@ -146,28 +144,36 @@ private struct APIKeyEditorSheet: View {
   /// The draft trimmed to usable text (the engine's shared rule), nil when blank.
   private var trimmedKey: String? { draft.trimmedNonEmpty() }
 
+  /// The first-connect vs. rotate wording, resolved from the same engine
+  /// projection the row uses so the sheet and the row can't disagree about
+  /// whether a key is stored.
+  private var display: APIKeyDisplay { .resolve(key: savedKey) }
+
+  /// The alert-shaped failure the engine reported, carried as view state so the
+  /// alert can present it. Purely a container — the strings are the engine's.
+  private struct SaveFault {
+    let title: String
+    let message: String
+  }
+
+  /// Presentation binding for the fault alert: clearing it on dismiss is what
+  /// lets a later fault present again.
+  private var isPresentingSaveFault: Binding<Bool> {
+    Binding(get: { saveFault != nil }, set: { if !$0 { saveFault = nil } })
+  }
+
   /// Enabled for any non-empty key while no validation is in flight. We don't
   /// gate on "differs from the saved key" — re-submitting an unchanged key is a
   /// harmless re-validate against AssemblyAI, and a button that's disabled for a
   /// reason the user can't see is worse than a redundant round trip.
   private var canSubmit: Bool { trimmedKey != nil && !isValidating }
 
-  /// A verb describing what the button does. "Save" describes storage; the
-  /// operation is really verify-then-store, and on first run it's a connection.
-  private var actionTitle: String { savedKey.isEmpty ? "Connect" : "Update" }
-
-  private var rationale: String {
-    savedKey.isEmpty
-      ? "Blurt needs an AssemblyAI API key to transcribe your speech. A free-tier key works."
-      : "Paste a new key to replace the one Blurt is using."
-  }
-
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
       VStack(alignment: .leading, spacing: 6) {
         Text("AssemblyAI API Key")
           .font(.headline)
-        Text(rationale)
+        Text(display.rationale)
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
       }
@@ -199,10 +205,12 @@ private struct APIKeyEditorSheet: View {
     // Cancel is not the only way out — the window can close under the sheet.
     // Catch every dismissal, not just the button.
     .onDisappear { submitTask?.cancel() }
-    .alert("Couldn’t Save Your Key", isPresented: $showSaveFault) {
+    .alert(
+      saveFault?.title ?? "", isPresented: isPresentingSaveFault, presenting: saveFault
+    ) { _ in
       Button("OK", role: .cancel) {}
-    } message: {
-      Text("Blurt couldn’t write the key to your macOS Keychain. Check Keychain access and try again.")
+    } message: { fault in
+      Text(fault.message)
     }
   }
 
@@ -250,7 +258,7 @@ private struct APIKeyEditorSheet: View {
       // rather than caption-sized footer text. It doesn't dismiss the sheet, so
       // it sits at the leading edge, away from Cancel / the default action —
       // and the sheet stays open behind the browser, ready for the paste.
-      if savedKey.isEmpty {
+      if !display.isConnected {
         Button("Get a Free Key") { openURL(APIKeyStore.dashboardURL) }
           .accessibilityIdentifier(UITestIdentifiers.apiKeyGetKey)
       }
@@ -261,7 +269,7 @@ private struct APIKeyEditorSheet: View {
       Button("Cancel", action: cancel)
         .keyboardShortcut(.cancelAction)
         .accessibilityIdentifier(UITestIdentifiers.apiKeyCancel)
-      Button(actionTitle, action: submit)
+      Button(display.commitButtonTitle, action: submit)
         .glassButtonStyleCompat(prominent: true)
         .keyboardShortcut(.defaultAction)
         .disabled(!canSubmit)
@@ -292,19 +300,20 @@ private struct APIKeyEditorSheet: View {
       // `.saveFailed` alert would have nowhere to appear), so stop here.
       guard !Task.isCancelled else { return }
       isValidating = false
-      switch result {
-      case .valid:
+      // Which outcomes are recoverable-inline and which is a genuine fault (and
+      // what each one says) is the engine's single classification, so this can't
+      // disagree with it — nor ship a new outcome that reports nothing at all.
+      switch result.failureReport {
+      case nil:
         // Verified and stored — hand the key back to the row and close. The
         // controller reveals the overlay via its hasAPIKey observer.
         onSaved(key)
         dismiss()
-      case .invalid:
-        errorMessage = "AssemblyAI rejected that key. Double-check it and try again."
-      case .unreachable:
-        errorMessage = "Couldn't reach AssemblyAI. Check your connection and try again."
-      case .saveFailed:
+      case .some(.inline(let message)):
+        errorMessage = message
+      case .some(.alert(let title, let message)):
         // A system fault retyping can't fix — surface it as an alert, not inline.
-        showSaveFault = true
+        saveFault = SaveFault(title: title, message: message)
       }
     }
   }

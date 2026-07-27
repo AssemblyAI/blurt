@@ -9,6 +9,12 @@ import Observation
 /// instance backs both (owned by `AppDelegate`). No in-place install: on an
 /// available update the alert offers **Download** (opens the release DMG in the
 /// browser) or **Later**.
+///
+/// What each result *says* — titles, bodies, button titles, and which button
+/// downloads — is the engine's `UpdateAlertContent`, where `swift test` covers
+/// it. What's left here is the AppKit half: turning a content value into an
+/// `NSAlert`, hosting it as a sheet, and opening the URL the default button
+/// carries.
 @MainActor
 @Observable
 final class UpdateCheckModel {
@@ -24,9 +30,12 @@ final class UpdateCheckModel {
   /// itself while a check runs — the feedback a slow connection otherwise lacks.
   private(set) var isChecking = false
 
-  /// The running app version for display in the Settings "Updates" section
-  /// (nil when the bundle version can't be parsed), e.g. "0.1.31".
-  var currentVersionText: String? { currentVersion.map { "\($0)" } }
+  /// Title of the Settings "Updates" row, e.g. "Blurt 0.1.31" — or just "Blurt"
+  /// when the bundle version can't be parsed (the button still works; the check
+  /// reads the version itself). The wording is the engine's, shared with the
+  /// alerts, so the row and the "you have …" line can't name the version two
+  /// different ways.
+  var versionLabel: String { UpdateAlertContent.appVersionLabel(currentVersion) }
 
   /// `currentVersion`, `openURL`, and `presentingWindow` are injected (with
   /// sensible production defaults) so this stays exercisable without a real
@@ -49,59 +58,49 @@ final class UpdateCheckModel {
     guard !isChecking else { return }
     guard let currentVersion else {
       log.error("no parseable CFBundleShortVersionString; can't check for updates")
-      Task { await presentFailure() }
+      // Indistinguishable from any other failed check as far as the user is
+      // concerned — which is why it shares the one `.checkFailed` content
+      // rather than a second hand-rolled alert.
+      Task { await present(.checkFailed) }
       return
     }
     isChecking = true
     Task {
       defer { isChecking = false }
-      do {
-        switch try await checker.check(current: currentVersion) {
-        case .upToDate:
-          await presentUpToDate(current: currentVersion)
-        case .available(let version, let dmgURL):
-          await presentAvailable(current: currentVersion, version: version, dmgURL: dmgURL)
-        }
-      } catch {
-        log.error("update check failed: \(error.localizedDescription, privacy: .public)")
-        await presentFailure()
-      }
+      await present(await resolveContent(current: currentVersion))
     }
   }
 
-  /// "You're up to date" — the reassuring result the classic updater shows so a
-  /// user-initiated check always visibly confirms it ran.
-  private func presentUpToDate(current: SemanticVersion) async {
-    let alert = NSAlert()
-    alert.messageText = "You’re up to date"
-    alert.informativeText = "Blurt \(current) is the latest version."
-    alert.addButton(withTitle: "OK")
-    _ = await runAlert(alert)
+  /// Runs the check and resolves what to show. Every throw — offline, GitHub
+  /// unreachable, malformed JSON, an unparseable tag — is the same recoverable
+  /// "couldn't check" to the user, so they collapse to one content value here.
+  private func resolveContent(current: SemanticVersion) async -> UpdateAlertContent {
+    do {
+      return UpdateAlertContent(result: try await checker.check(current: current), current: current)
+    } catch {
+      log.error("update check failed: \(error.localizedDescription, privacy: .public)")
+      return .checkFailed
+    }
   }
 
-  /// "A new version is available" — **Download** (default) opens the release DMG
-  /// in the browser; **Later** dismisses. `current` is the running version the
-  /// check compared against (always known by the time we get here).
-  private func presentAvailable(current: SemanticVersion, version: SemanticVersion, dmgURL: URL) async {
+  /// Presents `content` as an alert and performs its default action. The only
+  /// judgement left here is AppKit-shaped: the *first* button is the default, so
+  /// that response — and only when the content carries a URL — is the download.
+  private func present(_ content: UpdateAlertContent) async {
     let alert = NSAlert()
-    alert.messageText = "A new version of Blurt is available"
-    alert.informativeText = "Blurt \(version) is available—you have \(current). Download it now?"
-    alert.addButton(withTitle: "Download")  // default (first button)
-    alert.addButton(withTitle: "Later")
-    if await runAlert(alert) == .alertFirstButtonReturn {
+    alert.messageText = content.title
+    alert.informativeText = content.message
+    // `NSAlert` already defaults to `.warning`, and on current macOS `.warning`
+    // and `.informational` render identically (only `.critical` adds the caution
+    // badge), so only the caution case is worth stating — same presentation the
+    // three hand-built alerts had.
+    if content.style == .warning { alert.alertStyle = .warning }
+    for title in content.buttons {
+      alert.addButton(withTitle: title)  // first added is the default button
+    }
+    if await runAlert(alert) == .alertFirstButtonReturn, let dmgURL = content.downloadURL {
       openURL(dmgURL)
     }
-  }
-
-  /// A recoverable "couldn't check" result (offline, GitHub unreachable, a
-  /// malformed response). The user just tries again.
-  private func presentFailure() async {
-    let alert = NSAlert()
-    alert.alertStyle = .warning
-    alert.messageText = "Couldn’t check for updates"
-    alert.informativeText = "Check your internet connection and try again."
-    alert.addButton(withTitle: "OK")
-    _ = await runAlert(alert)
   }
 
   /// Presents `alert` as a sheet on the host window and awaits the choice. A
