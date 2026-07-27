@@ -56,6 +56,14 @@ struct APIKeyStepView: View {
       // to the ready screen instead of stranding the user on a setup step.
       apiKey.refreshStatus()
     }
+    // The setup window and Settings both host this section, so a key connected
+    // in one has to reach the other's row — a snapshot taken once on appear
+    // would leave the second window insisting "Not connected" and reopening its
+    // sheet in first-connect mode. `hasAPIKey` is the observable edge; the
+    // sheet's `onSaved` covers a rotation, which never moves it.
+    .onChange(of: apiKey.hasAPIKey) {
+      savedKey = apiKey.current ?? ""
+    }
     .sheet(isPresented: $isPresentingEditor) {
       APIKeyEditorSheet(apiKey: apiKey, savedKey: savedKey) { savedKey = $0 }
     }
@@ -121,6 +129,10 @@ private struct APIKeyEditorSheet: View {
   /// the convention for genuine faults, and the reason the recoverable cases
   /// above are *not* alerts.
   @State private var showSaveFault = false
+  /// The in-flight verify-then-store. Held so dismissing the sheet can cancel
+  /// it: without that, Cancel/Escape during a check would let the submission run
+  /// on and persist the key anyway — a Cancel that silently commits.
+  @State private var submitTask: Task<Void, Never>?
   @FocusState private var fieldFocused: Bool
 
   init(apiKey: APIKeyModel, savedKey: String, onSaved: @escaping (String) -> Void) {
@@ -182,6 +194,9 @@ private struct APIKeyEditorSheet: View {
     // Focus the field on open so the common path — arrive with the key on the
     // clipboard — is ⌘V then Return, with no click at all.
     .defaultFocus($fieldFocused, true)
+    // Cancel is not the only way out — the window can close under the sheet.
+    // Catch every dismissal, not just the button.
+    .onDisappear { submitTask?.cancel() }
     .alert("Couldn’t Save Your Key", isPresented: $showSaveFault) {
       Button("OK", role: .cancel) {}
     } message: {
@@ -241,7 +256,7 @@ private struct APIKeyEditorSheet: View {
       if isValidating {
         ProgressView().controlSize(.small)
       }
-      Button("Cancel") { dismiss() }
+      Button("Cancel", action: cancel)
         .keyboardShortcut(.cancelAction)
         .accessibilityIdentifier(UITestIdentifiers.apiKeyCancel)
       Button(actionTitle, action: submit)
@@ -252,12 +267,28 @@ private struct APIKeyEditorSheet: View {
     }
   }
 
+  /// Abandons an in-flight check and closes. Cancelling the task cancels the
+  /// `URLSession` request inside `APIKeyValidator`, which reports `.unreachable`
+  /// — and `APIKeySubmission` never persists on that outcome, so the key stays
+  /// unsaved. (A response that has already landed can still commit; the write is
+  /// synchronous past that point. Vanishingly narrow, and it stores a key the
+  /// user did type and submit.)
+  private func cancel() {
+    submitTask?.cancel()
+    submitTask = nil
+    dismiss()
+  }
+
   private func submit() {
     guard canSubmit, let key = trimmedKey else { return }
     isValidating = true
     errorMessage = nil
-    Task {
+    submitTask = Task {
       let result = await apiKey.submit(key)
+      // The sheet may be gone — cancelled, or dismissed by the window closing.
+      // Writing `@State` on a torn-down view can't surface anything (a
+      // `.saveFailed` alert would have nowhere to appear), so stop here.
+      guard !Task.isCancelled else { return }
       isValidating = false
       switch result {
       case .valid:

@@ -15,10 +15,13 @@ final class SettingsUITests: BlurtUITestCase {
     typeKey("a-valid-looking-key", into: sheet)
     sheet.buttons[UITestIdentifiers.apiKeySave].click()
 
+    XCTAssertTrue(
+      sheet.waitForNonExistence(timeout: 10),
+      "A verified key should dismiss the sheet")
     let saved = settings.staticTexts[UITestIdentifiers.apiKeySavedStatus]
     XCTAssertTrue(
-      saved.waitForExistence(timeout: 10),
-      "A verified key should dismiss the sheet and show the connected row")
+      saved.waitForExistence(timeout: 5),
+      "A verified key should leave the row connected")
     XCTAssertTrue(
       settings.buttons[UITestIdentifiers.apiKeyChange].exists,
       "The row button should become Change… once a key is stored")
@@ -145,10 +148,12 @@ final class SettingsUITests: BlurtUITestCase {
     let sheet = openKeyEditor(settings, via: UITestIdentifiers.apiKeyChange)
     sheet.buttons[UITestIdentifiers.apiKeyCancel].click()
 
+    // Dismissal is asynchronous, so wait it out rather than asserting on
+    // `exists` in the same run-loop turn as the click.
+    XCTAssertTrue(sheet.waitForNonExistence(timeout: 5), "Cancel should dismiss the sheet")
     XCTAssertTrue(
       settings.staticTexts[UITestIdentifiers.apiKeySavedStatus].waitForExistence(timeout: 5),
       "Cancel should return to the connected row")
-    XCTAssertFalse(sheet.exists, "Cancel should dismiss the sheet")
   }
 
   // MARK: - API-key helpers
@@ -179,12 +184,20 @@ final class SettingsUITests: BlurtUITestCase {
 
   /// Drives the whole connect flow so tests about the *stored* state don't each
   /// repeat it.
+  ///
+  /// Waits on the sheet's *disappearance*, not on the connected row's text: the
+  /// row sits behind the sheet and is already on screen when it's still modal,
+  /// so using it as the done signal lets the next step click a row button
+  /// through a live sheet.
   private func connectValidKey(_ settings: XCUIElement) {
     let sheet = openKeyEditor(settings)
     typeKey("a-valid-looking-key", into: sheet)
     sheet.buttons[UITestIdentifiers.apiKeySave].click()
     XCTAssertTrue(
-      settings.staticTexts[UITestIdentifiers.apiKeySavedStatus].waitForExistence(timeout: 10),
+      sheet.waitForNonExistence(timeout: 10),
+      "Connecting a valid key should dismiss the sheet")
+    XCTAssertTrue(
+      settings.staticTexts[UITestIdentifiers.apiKeySavedStatus].waitForExistence(timeout: 5),
       "Connecting a valid key should show the connected row")
   }
 }
