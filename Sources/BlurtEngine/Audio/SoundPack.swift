@@ -50,13 +50,15 @@ public struct SoundPack: Sendable, Hashable, Identifiable {
     return pack
   }
 
-  /// Distinct group names, in catalog order — the picker's sections.
+  /// Distinct group names, in catalog order — the picker's sections. Dedupes
+  /// through a `Set` (`insert(_:).inserted` as the filter, matching
+  /// `KeyTermsStore.parse`) rather than an array `contains` scan per element.
   public static var groups: [String] {
-    var seen: [String] = []
-    for pack in catalog {
-      if let group = pack.group, !seen.contains(group) { seen.append(group) }
+    var seen = Set<String>()
+    return catalog.compactMap { pack -> String? in
+      guard let group = pack.group, seen.insert(group).inserted else { return nil }
+      return group
     }
-    return seen
   }
 
   /// The voices belonging to one group, in catalog order.

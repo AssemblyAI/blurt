@@ -93,8 +93,9 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     let clock = ContinuousClock()
     let start = clock.now
     _ = try? await transport.data(for: request)
-    let ms = (clock.now - start).milliseconds
-    transcriberLog.info("warm-up connect \(ms, format: .fixed(precision: 0), privacy: .public)ms")
+    let elapsedMs = (clock.now - start).milliseconds
+    transcriberLog.info(
+      "warm-up connect \(elapsedMs, format: .fixed(precision: 0), privacy: .public)ms")
   }
 
   /// Builds the JSON `config` part sent alongside the audio. The context
@@ -220,8 +221,11 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 
     init(from decoder: Decoder) throws {
       let container = try decoder.container(keyedBy: CodingKeys.self)
+      // `try? decode` already yields `String?` for a key that is missing, null,
+      // or the wrong type — `decodeIfPresent` would return `String??` here and
+      // need flattening back down.
       func string(_ key: CodingKeys) -> String? {
-        (try? container.decodeIfPresent(String.self, forKey: key)) ?? nil
+        try? container.decode(String.self, forKey: key)
       }
       message = string(.message) ?? string(.detail)
     }
@@ -242,7 +246,7 @@ private final class MetricsLogger: NSObject, URLSessionTaskDelegate, @unchecked 
   func urlSession(
     _ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics
   ) {
-    guard let t = metrics.transactionMetrics.last else { return }
+    guard let transaction = metrics.transactionMetrics.last else { return }
     func ms(_ from: Date?, _ to: Date?) -> String {
       guard let from, let to else { return "n/a" }
       return String(format: "%.0f", to.timeIntervalSince(from) * 1000)
@@ -250,24 +254,23 @@ private final class MetricsLogger: NSObject, URLSessionTaskDelegate, @unchecked 
     transcriberLog.info(
       """
       sync metrics audioMs=\(self.audioDurationMs, privacy: .public) \
-      reused=\(t.isReusedConnection, privacy: .public) \
-      dnsMs=\(ms(t.domainLookupStartDate, t.domainLookupEndDate), privacy: .public) \
-      connectMs=\(ms(t.connectStartDate, t.connectEndDate), privacy: .public) \
-      tlsMs=\(ms(t.secureConnectionStartDate, t.secureConnectionEndDate), privacy: .public) \
-      ttfbMs=\(ms(t.requestStartDate, t.responseStartDate), privacy: .public) \
-      totalMs=\(ms(t.fetchStartDate, t.responseEndDate), privacy: .public)
+      reused=\(transaction.isReusedConnection, privacy: .public) \
+      dnsMs=\(ms(transaction.domainLookupStartDate, transaction.domainLookupEndDate), privacy: .public) \
+      connectMs=\(ms(transaction.connectStartDate, transaction.connectEndDate), privacy: .public) \
+      tlsMs=\(ms(transaction.secureConnectionStartDate, transaction.secureConnectionEndDate), privacy: .public) \
+      ttfbMs=\(ms(transaction.requestStartDate, transaction.responseStartDate), privacy: .public) \
+      totalMs=\(ms(transaction.fetchStartDate, transaction.responseEndDate), privacy: .public)
       """
     )
   }
 }
 
 extension Duration {
-  /// This duration in milliseconds as a Double (for latency logging). The
-  /// stdlib's `Duration / Duration -> Double` (SE-0329) does the seconds +
-  /// attoseconds arithmetic exactly, so expressing the ratio directly beats
-  /// re-deriving it from `components`.
+  /// This duration in milliseconds as a Double (for latency logging). Expressed
+  /// as a ratio of two `Duration`s rather than reassembled from `components`,
+  /// which meant restating the attoseconds-per-millisecond constant by hand.
   fileprivate var milliseconds: Double {
-    self / .milliseconds(1)
+    self / Duration.milliseconds(1)
   }
 }
 
