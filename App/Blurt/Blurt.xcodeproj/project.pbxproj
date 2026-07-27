@@ -29,6 +29,7 @@
 		0F6D746DF48BB048827A358F /* rom1b-29-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 786672855B44AB80CAF4D782 /* rom1b-29-stop.m4a */; };
 		1088FECB82D84AD0951CA1E2 /* juno-83-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 920F5A55960A00E2AECF1362 /* juno-83-stop.m4a */; };
 		10EA68562CE70506895CB2FE /* rom1b-31-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1D5C52A673686FB041595227 /* rom1b-31-stop.m4a */; };
+		121DC6CD82DEAC7CC0F5AC24 /* BoundTriggerKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8999B37D9418B7A6923BD358 /* BoundTriggerKey.swift */; };
 		1275CFCDBF1D593B545C8A84 /* rom1b-15-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6D89280137DAC07403FB60FC /* rom1b-15-start.m4a */; };
 		15210F6BE968D3E2EF771DE0 /* rom1a-5-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2CA6F4E6A10AE93F169DF19B /* rom1a-5-stop.m4a */; };
 		152452FE264E453808327885 /* juno-122-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 9FE15281EA6DE5C2C1978C44 /* juno-122-stop.m4a */; };
@@ -120,6 +121,7 @@
 		409F9B76AE0CB9FD2D78EA3D /* rom1b-22-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DAA2E01D418EA3ABA8A9DD5F /* rom1b-22-start.m4a */; };
 		40CFC003124E4E9E13CFDB76 /* rom1a-11-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = CDCD486F98020360173EBEFA /* rom1a-11-start.m4a */; };
 		418B5EABF6FB429CB94F6B0C /* juno-66-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4E414413BCDA4C613782919D /* juno-66-stop.m4a */; };
+		4290831AB516CD38229449D8 /* DeveloperSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7C95B4C80443E2A6EFE05E7 /* DeveloperSection.swift */; };
 		43223BEF5DB80A497D743186 /* juno-102-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 9308FFA344AB1B73A960BD15 /* juno-102-stop.m4a */; };
 		4372C0AD932309335C25FF8D /* juno-123-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 96D2FE2DE3A2177A80764E1B /* juno-123-start.m4a */; };
 		438A2882ACACB5153CCA1D21 /* juno-127-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 88CC243509230D21563FDF89 /* juno-127-start.m4a */; };
@@ -178,6 +180,7 @@
 		697C21589BFDE5A66DD168A1 /* juno-67-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 5D1E0161AF60ADB6D903535E /* juno-67-start.m4a */; };
 		69C396E4080D37117F2AEB01 /* juno-87-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 9D02AECDAE6B146F11B7A721 /* juno-87-stop.m4a */; };
 		69E27229D8C64D7119918B7A /* SoundStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27E18FF6880EADB94F98C7C4 /* SoundStepView.swift */; };
+		6A1402BFED3758AAD9C84ADF /* SettingRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 254D4D3CAC1C114EC51C96C8 /* SettingRow.swift */; };
 		6A498D9EE4EDDA7B47837FB6 /* juno-73-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D6CA551786B56B10B45B9BF3 /* juno-73-start.m4a */; };
 		6B3FF5991DA85C563D97B83C /* juno-109-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 47B0B08D890A1A7CB4577410 /* juno-109-start.m4a */; };
 		6B5EAA66BF23484BBB1F5640 /* rom1b-7-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = EA933A670288BEAFD43D468E /* rom1b-7-start.m4a */; };
@@ -504,6 +507,7 @@
 		22FF5E0C4681C483B4828FB2 /* juno-38-start.m4a */ = {isa = PBXFileReference; path = "juno-38-start.m4a"; sourceTree = "<group>"; };
 		240939D503F3CE03A0697A5F /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
 		24B8138546D9CD21F6D55F54 /* juno-60-start.m4a */ = {isa = PBXFileReference; path = "juno-60-start.m4a"; sourceTree = "<group>"; };
+		254D4D3CAC1C114EC51C96C8 /* SettingRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingRow.swift; sourceTree = "<group>"; };
 		258681056CA44359083EDC9B /* rom1b-12-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-12-stop.m4a"; sourceTree = "<group>"; };
 		27E18FF6880EADB94F98C7C4 /* SoundStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundStepView.swift; sourceTree = "<group>"; };
 		281E6ED71E7F613E6E6689D0 /* juno-25-start.m4a */ = {isa = PBXFileReference; path = "juno-25-start.m4a"; sourceTree = "<group>"; };
@@ -690,6 +694,7 @@
 		886848A89BE3512619263E54 /* juno-94-start.m4a */ = {isa = PBXFileReference; path = "juno-94-start.m4a"; sourceTree = "<group>"; };
 		8887DCE124B065F8313AC59F /* juno-9-start.m4a */ = {isa = PBXFileReference; path = "juno-9-start.m4a"; sourceTree = "<group>"; };
 		88CC243509230D21563FDF89 /* juno-127-start.m4a */ = {isa = PBXFileReference; path = "juno-127-start.m4a"; sourceTree = "<group>"; };
+		8999B37D9418B7A6923BD358 /* BoundTriggerKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoundTriggerKey.swift; sourceTree = "<group>"; };
 		899D9AD955B936F6BFC4E293 /* juno-52-start.m4a */ = {isa = PBXFileReference; path = "juno-52-start.m4a"; sourceTree = "<group>"; };
 		89F61F7352130DAAA530D836 /* juno-107-stop.m4a */ = {isa = PBXFileReference; path = "juno-107-stop.m4a"; sourceTree = "<group>"; };
 		8A319EF914358A938C87389D /* juno-28-stop.m4a */ = {isa = PBXFileReference; path = "juno-28-stop.m4a"; sourceTree = "<group>"; };
@@ -773,6 +778,7 @@
 		C59092F9220BBE7465068325 /* KeyTermsStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyTermsStepView.swift; sourceTree = "<group>"; };
 		C6EFB0086ED63DB182AFFC8F /* SettingsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsUITests.swift; sourceTree = "<group>"; };
 		C7714523A92F4753092CA67C /* juno-81-start.m4a */ = {isa = PBXFileReference; path = "juno-81-start.m4a"; sourceTree = "<group>"; };
+		C7C95B4C80443E2A6EFE05E7 /* DeveloperSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperSection.swift; sourceTree = "<group>"; };
 		C7DAE8C9E70F6D2232F409DE /* juno-101-start.m4a */ = {isa = PBXFileReference; path = "juno-101-start.m4a"; sourceTree = "<group>"; };
 		CB487BE3C821FF18E414CF4B /* juno-117-stop.m4a */ = {isa = PBXFileReference; path = "juno-117-stop.m4a"; sourceTree = "<group>"; };
 		CBBA2376BDBD82E7474C9D84 /* juno-46-start.m4a */ = {isa = PBXFileReference; path = "juno-46-start.m4a"; sourceTree = "<group>"; };
@@ -1349,8 +1355,11 @@
 			isa = PBXGroup;
 			children = (
 				D643CB1D491E00A2182907F8 /* BlurtCommands.swift */,
+				8999B37D9418B7A6923BD358 /* BoundTriggerKey.swift */,
+				C7C95B4C80443E2A6EFE05E7 /* DeveloperSection.swift */,
 				01F10B3261EA8F8616B8595A /* MainWindowRoot.swift */,
 				383E03AB60BA21AAD92655D5 /* ReadyView.swift */,
+				254D4D3CAC1C114EC51C96C8 /* SettingRow.swift */,
 				37CBB4580F251B182A8B1937 /* SettingsWindowRoot.swift */,
 				30E57A9C9B934A2120381005 /* WizardController.swift */,
 				7F646CD07DBBA47F44CE0AD1 /* WizardView.swift */,
@@ -1977,7 +1986,9 @@
 				3407E8759D61D569A998EE78 /* AppCoordinator.swift in Sources */,
 				8D2BA6E9FAC605D678A73164 /* AppDelegate.swift in Sources */,
 				76C1876DB538F8E190EB509E /* BlurtCommands.swift in Sources */,
+				121DC6CD82DEAC7CC0F5AC24 /* BoundTriggerKey.swift in Sources */,
 				A5D51CD762229A68757463C8 /* CueSoundPlayer.swift in Sources */,
+				4290831AB516CD38229449D8 /* DeveloperSection.swift in Sources */,
 				0F1317CCFA2A3245DAA96141 /* DictationComposition.swift in Sources */,
 				1C40B5DB92262E05808ECCEA /* DictationKeyTap.swift in Sources */,
 				B5A7CEA6517E5A1E4D77623F /* FloatingPanel.swift in Sources */,
@@ -1990,6 +2001,7 @@
 				8FE4B9B139BB9557FBC5589B /* OverlayWindowController.swift in Sources */,
 				D750C1BF16502EEC92182ECD /* PermissionsStepView.swift in Sources */,
 				A13335FE97FA2E60A4F5CABC /* ReadyView.swift in Sources */,
+				6A1402BFED3758AAD9C84ADF /* SettingRow.swift in Sources */,
 				1D1100AB3D47EFC80D47B04B /* SettingsWindowRoot.swift in Sources */,
 				69E27229D8C64D7119918B7A /* SoundStepView.swift in Sources */,
 				1817ACD2F7D8F7AF3C9B1C7C /* UITestIdentifiers.swift in Sources */,
