@@ -1,4 +1,3 @@
-import CoreGraphics
 import Foundation
 
 /// The in-memory ring of the most recent dictations shown in the ready window's
