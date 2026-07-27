@@ -76,11 +76,12 @@ final class WizardController {
   /// The live readiness value, computed from the current inputs. Private so only
   /// `syncReadiness` touches the raw `permissions`/`hasAPIKey` — that keeps their
   /// observable dependency off view bodies (the whole point of the stored
-  /// `isReady`). The dictation shortcut is *not* part of this gate — it has a
-  /// default binding and is rebound in Settings, so a cleared shortcut surfaces as
-  /// a hint on the ready screen rather than trapping the user in the wizard.
+  /// `isReady`). The gate itself is the engine's `SetupReadiness`, where it's
+  /// unit-tested (including the deliberate exclusion of the dictation shortcut,
+  /// which has a default binding and is rebound in Settings — so a shortcut change
+  /// can't trap the user in the wizard).
   private var computedReadiness: Bool {
-    permissions.allGranted && apiKey.hasAPIKey
+    SetupReadiness.isReady(permissions: permissions, hasAPIKey: apiKey.hasAPIKey)
   }
 
   /// Streams the API-key model's readiness input (`hasAPIKey`) via `Observations`,
@@ -113,11 +114,11 @@ final class WizardController {
     pollTask?.cancel()
     pollTask = Task { @MainActor [weak self] in
       while !Task.isCancelled {
-        // Poll briskly during setup so a freshly-granted permission shows at
-        // once; once configured, coast — the poll then only needs to catch a
-        // rare revocation, not wake the main actor every second for the app's
-        // whole life. (`self?` keeps the controller releasable across the sleep.)
-        let interval: Duration = (self?.isReady ?? false) ? .seconds(5) : .seconds(1)
+        // Brisk during setup so a freshly-granted permission shows at once, then
+        // coasting once configured — the cadence policy (and why it differs) is
+        // the engine's `SetupReadiness`. (`self?` keeps the controller releasable
+        // across the sleep.)
+        let interval = SetupReadiness.pollInterval(isReady: self?.isReady ?? false)
         try? await Task.sleep(for: interval)
         guard !Task.isCancelled, let self else { return }
         self.refreshPermissions()
@@ -132,7 +133,8 @@ final class WizardController {
     let perms = checkPermissions()
     // A permission that was granted and is now gone (revoked in System Settings,
     // possibly while no window was open) should pull the user back into onboarding.
-    let revoked = permissions.allGranted && !perms.allGranted
+    // The edge test is the engine's, next to the `allGranted` it's built from.
+    let revoked = perms.lostGrant(since: permissions)
     if perms != permissions {
       permissions = perms
     }

@@ -34,6 +34,14 @@ public enum DictationLog {
   /// appended, so reading this never touches the disk.
   public static let defaultURL = URL.libraryDirectory.appending(path: "Logs/Blurt/dictations.jsonl")
 
+  /// `defaultURL` as a home-abbreviated path (`~/Library/Logs/…`) for the label
+  /// beside the developer-mode switch. Derived here, next to the URL the writer
+  /// actually uses, so the displayed path can't drift from where the log lands —
+  /// and so the `NSString` bridge this needs stays out of a SwiftUI view.
+  public static var defaultDisplayPath: String {
+    (defaultURL.path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath
+  }
+
   // .sortedKeys keeps the on-disk JSONL deterministic (stable diff for tests
   // and post-hoc grep).
   static func makeEncoder() -> JSONEncoder {

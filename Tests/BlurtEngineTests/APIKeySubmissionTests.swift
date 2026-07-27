@@ -80,4 +80,51 @@ struct APIKeySubmissionTests {
     #expect(keySubmission.save("sk-good"))
     #expect(store.current == "sk-good")
   }
+
+  // MARK: - Failure reporting
+  //
+  // Which outcomes are recoverable-inline and which is a genuine fault used to be
+  // decided in the settings sheet's `switch`. Owning the classification here is
+  // the same move as `PipelinePhase.setupBlocker`: adding an `Outcome` case can't
+  // ship with the wrong severity, because that judgement now has a test.
+
+  @Test("a stored key has nothing to report")
+  func validReportsNothing() {
+    #expect(APIKeySubmission.Outcome.valid.failureReport == nil)
+  }
+
+  @Test("a rejected key is inline and recoverable")
+  func invalidIsInline() {
+    #expect(
+      APIKeySubmission.Outcome.invalid.failureReport
+        == .inline(message: "AssemblyAI rejected that key. Double-check it and try again."))
+  }
+
+  @Test("an unreachable server is inline and recoverable")
+  func unreachableIsInline() {
+    #expect(
+      APIKeySubmission.Outcome.unreachable.failureReport
+        == .inline(message: "Couldn't reach AssemblyAI. Check your connection and try again."))
+  }
+
+  @Test("a Keychain write fault is an alert, not inline text")
+  func saveFailedIsAnAlert() {
+    // Retyping the key can't fix a failed Keychain write, so it must not be
+    // shown as field text the user is invited to correct.
+    let report = APIKeySubmission.Outcome.saveFailed.failureReport
+    guard case .some(.alert(let title, let message)) = report else {
+      Issue.record("saveFailed must report as an alert, got \(String(describing: report))")
+      return
+    }
+    #expect(title == "Couldn’t Save Your Key")
+    #expect(message.contains("Keychain"))
+  }
+
+  @Test("every failing outcome reports something the user can read")
+  func everyFailureIsReported() {
+    // A failure with no report would leave the sheet silently doing nothing.
+    for outcome in [APIKeySubmission.Outcome.invalid, .unreachable, .saveFailed] {
+      #expect(outcome.failureReport != nil)
+    }
+  }
 }

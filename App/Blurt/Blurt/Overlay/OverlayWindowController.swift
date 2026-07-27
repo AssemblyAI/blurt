@@ -39,9 +39,11 @@ final class OverlayWindowController {
   // `radius: 10, y: 3` shadow — otherwise the falloff is cut off mid-gradient and
   // reads as a hard line around the pill rather than a soft shadow.
   static let shadowMargin: CGFloat = 28
-  private static let panelSize = CGSize(
-    width: pillSize.width + shadowMargin * 2,
-    height: pillSize.height + shadowMargin * 2)
+  // The pill/panel size relationship is the engine's, next to the `panelOrigin`
+  // that backs the placement clearance off by the same margin — so a change to
+  // `shadowMargin` is checked on both sides rather than only one.
+  private static let panelSize = OverlayPlacement.panelSize(
+    pillSize: pillSize, shadowMargin: shadowMargin)
 
   private let panel: NSPanel
   private let hosting: NSHostingView<OverlayView>
