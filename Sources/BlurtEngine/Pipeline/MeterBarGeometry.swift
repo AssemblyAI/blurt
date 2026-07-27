@@ -63,43 +63,6 @@ public enum MeterBarGeometry {
     max(1, availableHeight - verticalInset * 2)
   }
 
-  /// Height of the bar at `index` for the current `level`.
-  ///
-  /// `level` is the `0...1` scale `MicCaptureProtocol.levels` documents; the range
-  /// is guaranteed once by `OverlayBridge.pushLevel`, the single seam where a
-  /// capture implementation crosses into the view layer, so it isn't re-checked
-  /// here. `time` advances the idle wave and is ignored unless `animated`; pass 0
-  /// when motion is off (Reduce Motion), which the `animated` flag also enforces.
-  public static func barHeight(
-    index: Int,
-    count: Int,
-    maxBarHeight: CGFloat,
-    level: Float,
-    time: TimeInterval,
-    animated: Bool
-  ) -> CGFloat {
-    let weight = envelopeWeight(index: index, count: count)
-    // Voice-driven height: the current level, gamma-shaped, scaled by this bar's
-    // envelope weight so the middle leads.
-    let voice = pow(CGFloat(level), levelGamma) * weight
-    var breath: CGFloat = 0
-    // Full breathing when quiet, fading to none once the voice is moderate. Once
-    // it's faded out the per-bar sine would multiply to ~0, so skip it entirely on
-    // the louder frames rather than computing-then-zeroing.
-    let idleStrength = animated ? max(0, 1 - voice / breathFadeCeiling) : 0
-    if idleStrength > 0 {
-      // A gentle wave travelling left→right across the row while you're quiet, so
-      // "listening" reads as alive and directional rather than a frozen line. The
-      // phase advances with time and steps back per bar, sending a soft crest
-      // sweeping across; it fades out (`idleStrength`) as your voice comes in.
-      let phase = time / breathPeriod * 2 * .pi - Double(index) * wavePhaseStep
-      let osc = (sin(phase) + 1) / 2  // 0...1
-      breath = breathDepth * weight * CGFloat(osc) * idleStrength
-    }
-    let fraction = max(minBarHeightFraction, voice + breath)
-    return maxBarHeight * min(1, fraction)
-  }
-
   /// Symmetric raised-sine window: `envelopeEdge` at the ends rising to 1 at the
   /// center, so the bars form a single voice hump filling the pill width.
   static func envelopeWeight(index: Int, count: Int) -> CGFloat {
@@ -118,5 +81,58 @@ public enum MeterBarGeometry {
   {
     let osc = (cos(time / period * 2 * .pi) + 1) / 2  // 0...1
     return minOpacity + (1 - minOpacity) * osc
+  }
+}
+
+/// One laid-out row of meter bars: how many fit the frame and how tall each may
+/// be, resolved once per render so the count used to lay the row out and the count
+/// used to shape it can't disagree.
+///
+/// A value rather than more `MeterBarGeometry` statics because `count` and
+/// `maxBarHeight` are facts about the *row*, and threading them through every
+/// per-bar call made the height function take six arguments — the row itself is
+/// what they belong to.
+public struct MeterBarRow: Sendable, Equatable {
+  /// Bars that fit the width, never below `MeterBarGeometry.minBarCount`.
+  public let count: Int
+  /// The tallest a bar in this row may be.
+  public let maxBarHeight: CGFloat
+
+  /// Resolves the row for the frame the meter has been given.
+  public init(availableSize: CGSize) {
+    self.count = MeterBarGeometry.barCount(availableWidth: availableSize.width)
+    self.maxBarHeight = MeterBarGeometry.maxBarHeight(availableHeight: availableSize.height)
+  }
+
+  /// Height of the bar at `index` for the current `level`.
+  ///
+  /// `level` is the `0...1` scale `MicCaptureProtocol.levels` documents; the range
+  /// is guaranteed once by `OverlayBridge.pushLevel`, the single seam where a
+  /// capture implementation crosses into the view layer, so it isn't re-checked
+  /// here. `time` advances the idle wave and is ignored unless `animated` — pass
+  /// `animated: false` to honor Reduce Motion, which drops the wave entirely.
+  public func height(at index: Int, level: Float, time: TimeInterval, animated: Bool) -> CGFloat {
+    let weight = MeterBarGeometry.envelopeWeight(index: index, count: count)
+    // Voice-driven height: the current level, gamma-shaped, scaled by this bar's
+    // envelope weight so the middle leads.
+    let voice = pow(CGFloat(level), MeterBarGeometry.levelGamma) * weight
+    var breath: CGFloat = 0
+    // Full breathing when quiet, fading to none once the voice is moderate. Once
+    // it's faded out the per-bar sine would multiply to ~0, so skip it entirely on
+    // the louder frames rather than computing-then-zeroing.
+    let idleStrength = animated ? max(0, 1 - voice / MeterBarGeometry.breathFadeCeiling) : 0
+    if idleStrength > 0 {
+      // A gentle wave travelling left→right across the row while you're quiet, so
+      // "listening" reads as alive and directional rather than a frozen line. The
+      // phase advances with time and steps back per bar, sending a soft crest
+      // sweeping across; it fades out (`idleStrength`) as your voice comes in.
+      let phase =
+        time / MeterBarGeometry.breathPeriod * 2 * .pi
+        - Double(index) * MeterBarGeometry.wavePhaseStep
+      let osc = (sin(phase) + 1) / 2  // 0...1
+      breath = MeterBarGeometry.breathDepth * weight * CGFloat(osc) * idleStrength
+    }
+    let fraction = max(MeterBarGeometry.minBarHeightFraction, voice + breath)
+    return maxBarHeight * min(1, fraction)
   }
 }

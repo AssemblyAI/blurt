@@ -306,36 +306,33 @@ private struct WaveformBars: View {
 
   var body: some View {
     GeometryReader { geo in
-      // Bar count, heights, the envelope, and the idle wave are all
-      // `MeterBarGeometry` (engine, unit-tested); this view owns the frame, the
-      // color, and the redraw cadence.
-      let maxBarHeight = MeterBarGeometry.maxBarHeight(availableHeight: geo.size.height)
-      let count = MeterBarGeometry.barCount(availableWidth: geo.size.width)
+      // Bar count, heights, the envelope, and the idle wave are all engine
+      // geometry (unit-tested there); this view owns the frame, the color, and the
+      // redraw cadence. Resolved once per layout, then shared by every bar.
+      let layout = MeterBarRow(availableSize: geo.size)
       Group {
         if animated {
           // Continuous clock so the idle breathing is smooth and never depends
           // on a one-shot state toggle; capped at `overlayAnimationInterval`.
           TimelineView(.animation(minimumInterval: overlayAnimationInterval)) { timeline in
-            row(count: count, maxBarHeight: maxBarHeight, time: timeline.date.timeIntervalSinceReferenceDate)
+            bars(layout, time: timeline.date.timeIntervalSinceReferenceDate)
           }
         } else {
-          row(count: count, maxBarHeight: maxBarHeight, time: 0)
+          bars(layout, time: 0)
         }
       }
       .frame(width: geo.size.width, height: geo.size.height)
     }
   }
 
-  private func row(count: Int, maxBarHeight: CGFloat, time: TimeInterval) -> some View {
+  private func bars(_ layout: MeterBarRow, time: TimeInterval) -> some View {
     HStack(spacing: MeterBarGeometry.barSpacing) {
-      ForEach(0..<count, id: \.self) { idx in
+      ForEach(0..<layout.count, id: \.self) { idx in
         Capsule()
           .fill(color)
           .frame(
             width: MeterBarGeometry.barWidth,
-            height: MeterBarGeometry.barHeight(
-              index: idx, count: count, maxBarHeight: maxBarHeight,
-              level: level, time: time, animated: animated))
+            height: layout.height(at: idx, level: level, time: time, animated: animated))
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
