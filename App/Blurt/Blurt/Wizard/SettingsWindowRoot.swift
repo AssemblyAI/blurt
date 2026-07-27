@@ -92,8 +92,19 @@ private struct UpdateSection: View {
   var body: some View {
     Section {
       SettingRow(title: versionTitle, systemImage: "arrow.triangle.2.circlepath") {
-        Button("Check for Updates") { model.checkForUpdates() }
-          .accessibilityIdentifier(UITestIdentifiers.updateCheck)
+        HStack(spacing: 8) {
+          // A user-initiated check that can stall on a slow connection needs
+          // visible progress, or the button reads as dead until the result
+          // alert lands. Show a spinner and disable the button while in flight
+          // (the model already ignores a second check) — the native equivalent
+          // of Sparkle's "Checking for updates…".
+          if model.isChecking {
+            ProgressView().controlSize(.small)
+          }
+          Button("Check for Updates") { model.checkForUpdates() }
+            .disabled(model.isChecking)
+            .accessibilityIdentifier(UITestIdentifiers.updateCheck)
+        }
       }
     } header: {
       Text("Updates")

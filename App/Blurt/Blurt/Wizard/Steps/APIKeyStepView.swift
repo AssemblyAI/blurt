@@ -97,10 +97,11 @@ struct APIKeyStepView: View {
 ///
 /// A sheet because this is exactly what HIG reserves them for: a focused, modal
 /// step that must be committed or cancelled before anything else happens. It
-/// also gives the field the room an inline settings row can't — a standing label
-/// (a placeholder disappears the moment text lands, so it can't be the only
-/// label), a "Show key" checkbox rather than a bare glyph toggle, and a footer
-/// that swaps the storage reassurance for a specific error.
+/// also gives the field the room an inline settings row can't — a full-width
+/// field under a headline that names it (the placeholder disappears the moment
+/// text lands, so it can't be the only label), a "Show key" checkbox rather than
+/// a bare glyph toggle, and a footer that swaps the storage reassurance for a
+/// specific error.
 ///
 /// Button layout follows the sheet convention: the non-dismissing secondary
 /// action sits at the leading edge, clear of the Cancel / default-action pair at
@@ -171,19 +172,20 @@ private struct APIKeyEditorSheet: View {
           .fixedSize(horizontal: false, vertical: true)
       }
 
-      // `.columns` is the aligned-label form layout: a right-aligned "API Key:"
-      // in the label column with the field beside it, so the label stays put
-      // once the field has content.
-      Form {
-        LabeledContent("API Key:") {
-          VStack(alignment: .leading, spacing: 8) {
-            keyField
-            Toggle("Show key", isOn: $isRevealed)
-              .accessibilityIdentifier(UITestIdentifiers.apiKeyReveal)
-          }
-        }
+      // A single credential field reads as more native left un-labelled and
+      // full-width: the headline above already names it, so a right-aligned
+      // "API Key:" column would only repeat it. This matches the plain-field
+      // layout of a system sign-in sheet rather than a settings form row.
+      VStack(alignment: .leading, spacing: 8) {
+        keyField
+        // Pin the checkbox style: outside a `Form` the default toggle style
+        // still renders as a checkbox here, but stating it keeps the reveal a
+        // labeled checkbox (the Wi-Fi "Show password" idiom) rather than
+        // leaving it to the ambient style.
+        Toggle("Show key", isOn: $isRevealed)
+          .toggleStyle(.checkbox)
+          .accessibilityIdentifier(UITestIdentifiers.apiKeyReveal)
       }
-      .formStyle(.columns)
 
       statusText
 
