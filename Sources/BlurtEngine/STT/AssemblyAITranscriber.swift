@@ -262,10 +262,12 @@ private final class MetricsLogger: NSObject, URLSessionTaskDelegate, @unchecked 
 }
 
 extension Duration {
-  /// This duration in milliseconds as a Double (for latency logging).
+  /// This duration in milliseconds as a Double (for latency logging). The
+  /// stdlib's `Duration / Duration -> Double` (SE-0329) does the seconds +
+  /// attoseconds arithmetic exactly, so expressing the ratio directly beats
+  /// re-deriving it from `components`.
   fileprivate var milliseconds: Double {
-    let c = components
-    return Double(c.seconds) * 1000 + Double(c.attoseconds) / 1_000_000_000_000_000
+    self / .milliseconds(1)
   }
 }
 
