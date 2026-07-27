@@ -1,6 +1,7 @@
 import AppKit
 import BlurtEngine
 import OSLog
+import Observation
 
 /// Runs a user-initiated update check and reports the result in a modal alert
 /// (Sparkle-style). Triggered from either the Settings "Check for Updates"
@@ -9,6 +10,7 @@ import OSLog
 /// available update the alert offers **Download** (opens the release DMG in the
 /// browser) or **Later**.
 @MainActor
+@Observable
 final class UpdateCheckModel {
   private let checker: UpdateChecker
   private let currentVersion: SemanticVersion?
@@ -17,8 +19,10 @@ final class UpdateCheckModel {
   private let log = Logger(subsystem: BlurtIdentity.subsystem, category: "update")
 
   /// Guards against a second check while one is in flight (double-click, or the
-  /// button and menu both fired), so we never stack two result alerts.
-  private var isChecking = false
+  /// button and menu both fired), so we never stack two result alerts. Observable
+  /// so the Settings "Check for Updates" button can show a spinner and disable
+  /// itself while a check runs — the feedback a slow connection otherwise lacks.
+  private(set) var isChecking = false
 
   /// The running app version for display in the Settings "Updates" section
   /// (nil when the bundle version can't be parsed), e.g. "0.1.31".

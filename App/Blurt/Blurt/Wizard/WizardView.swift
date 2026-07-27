@@ -42,7 +42,10 @@ struct WizardView: View {
   }
 
   private var header: some View {
-    HStack(alignment: .top, spacing: 8) {
+    // Center the mark against the two-line text block rather than pinning it to
+    // the first line's top — top-alignment left the icon reading high over the
+    // taller title+subtitle stack. A little more spacing gives it room.
+    HStack(alignment: .center, spacing: 12) {
       OnboardingBrandMark()
 
       VStack(alignment: .leading, spacing: 4) {
@@ -73,7 +76,7 @@ private struct OnboardingBrandMark: View {
       .resizable()
       .interpolation(.high)
       .scaledToFit()
-      .frame(width: 30, height: 30)
+      .frame(width: 38, height: 38)
       .accessibilityHidden(true)
   }
 }
