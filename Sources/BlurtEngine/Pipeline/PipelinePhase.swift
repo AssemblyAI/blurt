@@ -56,8 +56,7 @@ extension BlurtError {
 extension BlurtError: Equatable {
   public static func == (lhs: BlurtError, rhs: BlurtError) -> Bool {
     switch (lhs, rhs) {
-    case (.microphonePermissionDenied, .microphonePermissionDenied),
-      (.accessibilityPermissionMissing, .accessibilityPermissionMissing),
+    case (.accessibilityPermissionMissing, .accessibilityPermissionMissing),
       (.apiKeyMissing, .apiKeyMissing),
       (.targetAppLost, .targetAppLost),
       (.noEditableTarget, .noEditableTarget):

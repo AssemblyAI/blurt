@@ -41,18 +41,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// possibly minimized to the Dock), raise it directly: `openWindow(id:)` focuses
   /// the scene but won't deminiaturize a window the user sent to the Dock or
   /// reliably re-front an existing one. Only when no main window exists (the user
-  /// closed it) do we recreate it via the scene. Returns the window it raised,
-  /// or nil when it had to ask the scene to recreate one — the new NSWindow only
-  /// materializes on a later run-loop pass.
-  @discardableResult func surfaceMainWindow() -> NSWindow? {
+  /// closed it) do we recreate it via the scene.
+  func surfaceMainWindow() {
     NSApp.activate()
     if let main = NSApp.windows.first(where: { $0.identifier?.rawValue == MainWindow.id }) {
       main.deminiaturize(nil)
       main.makeKeyAndOrderFront(nil)
-      return main
+      return
     }
     openMainWindow()
-    return nil
   }
 
   /// True once the launch-time activation has run.

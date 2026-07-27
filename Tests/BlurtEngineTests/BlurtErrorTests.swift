@@ -8,7 +8,6 @@ struct BlurtErrorTests {
   @Test("each non-wrapping case has a non-empty errorDescription")
   func descriptionsExist() {
     let cases: [BlurtError] = [
-      .microphonePermissionDenied,
       .accessibilityPermissionMissing,
       .apiKeyMissing,
       .targetAppLost,
@@ -39,7 +38,6 @@ struct BlurtErrorTests {
   func equalSingletons() {
     #expect(BlurtError.apiKeyMissing == .apiKeyMissing)
     #expect(BlurtError.targetAppLost == .targetAppLost)
-    #expect(BlurtError.microphonePermissionDenied == .microphonePermissionDenied)
     #expect(BlurtError.accessibilityPermissionMissing == .accessibilityPermissionMissing)
     #expect(BlurtError.noEditableTarget == .noEditableTarget)
   }
@@ -47,7 +45,7 @@ struct BlurtErrorTests {
   @Test("different singleton cases compare unequal")
   func unequalSingletons() {
     #expect(BlurtError.apiKeyMissing != .targetAppLost)
-    #expect(BlurtError.microphonePermissionDenied != .accessibilityPermissionMissing)
+    #expect(BlurtError.accessibilityPermissionMissing != .apiKeyMissing)
     // The two quiet copy-fallback errors are distinct cases, not aliases.
     #expect(BlurtError.noEditableTarget != .targetAppLost)
   }

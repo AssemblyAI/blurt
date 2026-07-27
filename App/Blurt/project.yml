@@ -96,7 +96,6 @@ targets:
         LSMinimumSystemVersion: "15.0"
         LSApplicationCategoryType: public.app-category.productivity
         NSMicrophoneUsageDescription: Blurt uses your microphone to transcribe your dictation with AssemblyAI.
-        NSAppleEventsUsageDescription: Blurt inserts text into the app you're using.
     entitlements:
       path: Blurt/Blurt.entitlements
       properties:
