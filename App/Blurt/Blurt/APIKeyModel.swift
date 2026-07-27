@@ -77,8 +77,8 @@ final class APIKeyModel {
   /// screen instead of stranding the user on a setup step whose only control (a
   /// *changed*-key "Update") is disabled.
   func refreshStatus() {
-    let has = keyStore.hasKey
-    if has != hasAPIKey { hasAPIKey = has }
+    let hasKey = keyStore.hasKey
+    if hasKey != hasAPIKey { hasAPIKey = hasKey }
   }
 
   /// Verifies `key` against AssemblyAI and saves it only when AssemblyAI

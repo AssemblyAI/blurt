@@ -37,9 +37,9 @@ public enum DictationLog {
   // .sortedKeys keeps the on-disk JSONL deterministic (stable diff for tests
   // and post-hoc grep).
   static func makeEncoder() -> JSONEncoder {
-    let e = JSONEncoder()
-    e.outputFormatting = [.sortedKeys]
-    return e
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    return encoder
   }
 
   static let timestampFormat = Date.ISO8601FormatStyle(includingFractionalSeconds: true)

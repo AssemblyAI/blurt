@@ -11,7 +11,7 @@ local `check.sh` matches CI by construction.
 
 ## Before you run: the macOS-only guard
 
-Blurt is macOS-only (`platforms: [.macOS(.v26)]`, AppKit + AVFoundation). The
+Blurt is macOS-only (`platforms: [.macOS(.v15)]`, AppKit + AVFoundation). The
 engine imports AVFoundation, so even the SPM package won't compile off-Mac.
 
 **If `swift`/`xcodebuild`/`xcodegen` are unavailable (Linux or web sandbox):**
@@ -62,9 +62,12 @@ Mac they're all present, so don't treat a skip as a pass):
 4. ThreadSanitizer + AddressSanitizer test passes
 5. xcodegen drift check (regenerating must not change the committed `.pbxproj`)
 6. codesign-skipped app build (warnings-as-errors)
-7. `swift-format lint --strict`
-8. `swiftlint lint --strict` (warnings are failures), `periphery scan --strict`
-9. actionlint / prettier / xmllint / markdownlint / shellcheck
+7. `scripts/uitest.sh` (the XCUITest bundle) and `scripts/leaks.sh` (whole-app
+   leak check) — both need a GUI session, which the `macos-26` runner provides
+8. `swift-format lint --strict`
+9. `swiftlint lint --strict` (warnings are failures), `swiftlint analyze`
+   (unused imports), `periphery scan --strict`
+10. actionlint / prettier / xmllint / markdownlint / shellcheck
 
 ## Interpreting the result
 
