@@ -77,12 +77,12 @@ private struct RecentDictationsSection: View {
   /// window, so a row can't read as stale for longer than that window lasts —
   /// derived from the threshold rather than a bare `30` in case it changes.
   private static let timestampRefresh = RecentDictations.Entry.justNowThreshold / 2
-  /// Height of a full `capacity`-row list (rows + the separators between them);
-  /// the container is pinned to this whether it holds 0, 1, or `capacity` rows.
+  /// Height of a full `capacity`-row list; the container is pinned to this whether
+  /// it holds 0, 1, or `capacity` rows. The row-count arithmetic is the engine's,
+  /// next to the `capacity` it depends on.
   private var reservedHeight: CGFloat {
-    let rows = CGFloat(RecentDictations.capacity) * Self.rowHeight
-    let separators = CGFloat(RecentDictations.capacity - 1) * Self.separatorThickness
-    return rows + separators
+    RecentDictations.reservedHeight(
+      rowHeight: Self.rowHeight, separatorThickness: Self.separatorThickness)
   }
 
   var body: some View {
