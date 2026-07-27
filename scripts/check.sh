@@ -99,6 +99,63 @@ fi
 [ "$DEP_VIOLATION" -eq 0 ] || exit 1
 echo "no external dependencies (engine dependency-free; app carries only local BlurtEngine)"
 
+# Sound-catalog integrity. `SoundPackCatalog.swift` and the cue audio are both
+# emitted by scripts/generate-sounds.swift, but they land in different targets —
+# engine source vs. app resources — so a partial regeneration or commit can leave
+# them disagreeing. Nothing at runtime notices: `SoundPack.startFileName` names a
+# stem, `Bundle.main.url(forResource:)` returns nil for it, and the cue play is a
+# silent no-op, so the user picks that voice and simply hears nothing. Unit tests
+# can't cover it either — the engine deliberately ships no resources, so the two
+# halves only meet here. Pure text/filesystem, so it runs in --portable too.
+echo "==> sound catalog integrity"
+CATALOG="$REPO_ROOT/Sources/BlurtEngine/Audio/SoundPackCatalog.swift"
+SOUNDS_DIR="$APP_DIR/Blurt/Resources/Sounds"
+SOUND_VIOLATION=0
+
+CATALOG_IDS="$(sed -n 's/.*SoundPack(id: "\([^"]*\)".*/\1/p' "$CATALOG" | sort)"
+[ -n "$CATALOG_IDS" ] || die_check "parsed no SoundPack ids from $CATALOG — the id extraction broke"
+
+DUPLICATE_IDS="$(printf '%s\n' "$CATALOG_IDS" | uniq -d)"
+if [ -n "$DUPLICATE_IDS" ]; then
+  echo "error: duplicate SoundPack ids in the catalog (find(id:) returns only the first," >&2
+  echo "       and the picker would list the same voice twice):" >&2
+  printf '%s\n' "$DUPLICATE_IDS" | sed 's/^/  /' >&2
+  SOUND_VIOLATION=1
+fi
+
+# `none` belongs to SoundPack.none; a catalog entry claiming it would shadow the
+# silent pack in `find(id:)`, so a user could never select "no sound" again.
+if printf '%s\n' "$CATALOG_IDS" | grep -qx 'none'; then
+  echo "error: a catalog entry uses the reserved id 'none' — it would shadow SoundPack.none" >&2
+  SOUND_VIOLATION=1
+fi
+
+# Every voice needs both cues (`<id>-start.m4a` / `<id>-stop.m4a`), and every
+# shipped file needs a voice — an orphan is dead weight in the app bundle and a
+# sign the catalog lost an entry.
+# `sort -u` so a duplicate id (already reported above) can't also fake a missing
+# file here — `comm` mismatches on a repeated line and would name a file that
+# exists, sending the reader after the wrong problem.
+EXPECTED_SOUNDS="$(printf '%s\n' "$CATALOG_IDS" | sed -e 's/$/-start.m4a/' -e 'p' -e 's/-start\.m4a$/-stop.m4a/' | sort -u)"
+ACTUAL_SOUNDS="$(find "$SOUNDS_DIR" -maxdepth 1 -name '*.m4a' | sed 's|.*/||' | sort -u)"
+
+MISSING_SOUNDS="$(comm -23 <(printf '%s\n' "$EXPECTED_SOUNDS") <(printf '%s\n' "$ACTUAL_SOUNDS"))"
+if [ -n "$MISSING_SOUNDS" ]; then
+  echo "error: catalog voices with no cue audio in $SOUNDS_DIR (they would play silently):" >&2
+  printf '%s\n' "$MISSING_SOUNDS" | sed 's/^/  /' >&2
+  SOUND_VIOLATION=1
+fi
+
+ORPHAN_SOUNDS="$(comm -13 <(printf '%s\n' "$EXPECTED_SOUNDS") <(printf '%s\n' "$ACTUAL_SOUNDS"))"
+if [ -n "$ORPHAN_SOUNDS" ]; then
+  echo "error: cue audio in $SOUNDS_DIR with no catalog voice (unreachable, and shipped anyway):" >&2
+  printf '%s\n' "$ORPHAN_SOUNDS" | sed 's/^/  /' >&2
+  SOUND_VIOLATION=1
+fi
+
+[ "$SOUND_VIOLATION" -eq 0 ] || exit 1
+echo "$(printf '%s\n' "$CATALOG_IDS" | wc -l | tr -d ' ') voices, each with both cues, no orphans"
+
 if [ "$PORTABLE" -eq 1 ]; then
   echo "==> portable mode: skipping swift test, coverage gate, sanitizers, xcodegen"
   echo "    drift check, app build, UI tests, leaks, swiftlint analyze, periphery"

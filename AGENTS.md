@@ -23,15 +23,19 @@ scripts/check.sh                            # full health check (see below) — 
 scripts/dev-build.sh                        # signed Debug build + install to /Applications (local dev)
 ```
 
-`check.sh` is the source of truth for "is this green?" and runs, in order: `swift test` with
-`-warnings-as-errors`, an engine line-coverage gate (≥80%, `Tests/` excluded; tune `MIN_COVERAGE`
-upward as coverage grows), ThreadSanitizer and AddressSanitizer test passes, an xcodegen drift
-check (regenerating must not change the committed `.pbxproj`), the codesign-skipped app build
-(warnings-as-errors via `SWIFT_TREAT_WARNINGS_AS_ERRORS` in `project.yml`, scoped to the app target
-so it doesn't collide with the `-suppress-warnings` Xcode applies to SPM deps), `swift-format lint
---strict`, then swiftlint / periphery / actionlint / prettier (yml/yaml/md plus the GitHub Pages
-site's html/css) / xmllint (XML well-formedness, e.g. the Pages sitemap) / markdownlint / shellcheck
-(each skipped with a note if the tool is absent). CI (`.github/workflows/check.yml`) installs all of
+`check.sh` is the source of truth for "is this green?" and runs, in order: two repo-integrity guards
+(no external SPM dependencies, and sound-catalog integrity — every `SoundPackCatalog` voice has both
+cue files, no orphans, no duplicate or reserved ids; the catalog and the audio are generated together
+but ship from different targets, so a drift plays silence with nothing raising an error), `swift test`
+with `-warnings-as-errors`, an engine line-coverage gate (≥80%, `Tests/` excluded; tune
+`MIN_COVERAGE` upward as coverage grows), ThreadSanitizer and AddressSanitizer test passes, an
+xcodegen drift check (regenerating must not change the committed `.pbxproj`), the codesign-skipped
+app build (warnings-as-errors via `SWIFT_TREAT_WARNINGS_AS_ERRORS` in `project.yml`, scoped to the
+app target so it doesn't collide with the `-suppress-warnings` Xcode applies to SPM deps),
+`swift-format lint --strict`, then swiftlint / periphery / actionlint / prettier (yml/yaml/md plus
+the GitHub Pages site's html/css) / xmllint (XML well-formedness, e.g. the Pages sitemap) /
+markdownlint / shellcheck (each skipped with a note if the tool is absent). The two guards are pure
+text/filesystem, so they run in `--portable` too. CI (`.github/workflows/check.yml`) installs all of
 these via Homebrew on `macos-26` and runs the same script — so a clean local `check.sh` matches CI.
 
 ```bash

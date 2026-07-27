@@ -53,14 +53,18 @@ scripts/check.sh
 It runs, in order (each tool skipped with a note if absent — but on a configured
 Mac they're all present, so don't treat a skip as a pass):
 
-1. `swift test` with `-warnings-as-errors`
-2. engine line-coverage gate (≥80%, `Tests/` excluded — see `MIN_COVERAGE`)
-3. ThreadSanitizer + AddressSanitizer test passes
-4. xcodegen drift check (regenerating must not change the committed `.pbxproj`)
-5. codesign-skipped app build (warnings-as-errors)
-6. `swift-format lint --strict`
-7. `swiftlint lint --strict` (warnings are failures), `periphery scan --strict`
-8. actionlint / prettier / xmllint / markdownlint / shellcheck
+1. repo-integrity guards: no external SPM dependencies, and sound-catalog
+   integrity (every `SoundPackCatalog` voice has both cue files, no orphans, no
+   duplicate or reserved ids) — pure text/filesystem, so they run in
+   `--portable` too
+2. `swift test` with `-warnings-as-errors`
+3. engine line-coverage gate (≥80%, `Tests/` excluded — see `MIN_COVERAGE`)
+4. ThreadSanitizer + AddressSanitizer test passes
+5. xcodegen drift check (regenerating must not change the committed `.pbxproj`)
+6. codesign-skipped app build (warnings-as-errors)
+7. `swift-format lint --strict`
+8. `swiftlint lint --strict` (warnings are failures), `periphery scan --strict`
+9. actionlint / prettier / xmllint / markdownlint / shellcheck
 
 ## Interpreting the result
 
