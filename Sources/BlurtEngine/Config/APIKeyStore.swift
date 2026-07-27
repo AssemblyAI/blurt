@@ -33,7 +33,7 @@ public enum APIKeyStore {
 
   /// The stored key, or `nil` if none has been saved (or it's empty). Served from
   /// the in-memory memo after the first read; see `cache`.
-  public static func get() -> String? {
+  public static var current: String? {
     cache.withLock { state in
       if case .loaded(let value) = state { return value }
       switch store.read() {
@@ -59,14 +59,14 @@ public enum APIKeyStore {
   /// Stores `key` (trimmed). Passing `nil` or an empty/whitespace string
   /// deletes the stored key. Returns `true` on success.
   @discardableResult
-  public static func set(_ key: String?) -> Bool {
+  public static func save(_ key: String?) -> Bool {
     // The write, the read-back, and the memo update all happen under one lock, so
     // two overlapping writers can't interleave into a memo that disagrees with the
     // Keychain (write A, write B, memo B, memo A would leave `hasKey` true for a
     // key the Keychain no longer holds — a 401 the user can't explain until
     // relaunch). `store` does not take this lock, so there's no reentrancy.
     cache.withLock { state in
-      let ok = store.set(key)
+      let ok = store.write(key)
       // Re-read rather than caching `key` verbatim: `set` trims/normalizes (and
       // maps empty → deleted), so a read-back reflects exactly what `get()` would
       // now return, and a failed write leaves no stale value. An unreadable

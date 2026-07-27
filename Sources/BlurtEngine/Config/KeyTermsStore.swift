@@ -26,23 +26,23 @@ public enum KeyTermsStore {
 
   /// The raw comma-separated string exactly as the user entered it (preserving
   /// their spacing/order for round-tripping in the editor), or `nil` if unset.
-  public static func get() -> String? {
+  public static var raw: String? {
     defaults.string(forKey: defaultsKey).trimmedNonEmpty()
   }
 
   /// The stored terms parsed into a clean list: split on commas, trimmed, with
   /// blanks and duplicates removed (case-insensitively, keeping first spelling).
-  public static func terms() -> [String] {
-    parse(get())
+  public static var terms: [String] {
+    parse(raw)
   }
 
   /// Pure parse of a comma-separated string into a clean term list. Exposed so
   /// `TranscriptionPrompt` and tests can reuse the exact same rules.
-  public static func parse(_ raw: String?) -> [String] {
-    guard let raw else { return [] }
+  public static func parse(_ text: String?) -> [String] {
+    guard let text else { return [] }
     var seen = Set<String>()
     var result: [String] = []
-    for piece in raw.split(separator: ",") {
+    for piece in text.split(separator: ",") {
       guard let term = String(piece).trimmedNonEmpty() else { continue }
       let key = term.lowercased()
       guard seen.insert(key).inserted else { continue }

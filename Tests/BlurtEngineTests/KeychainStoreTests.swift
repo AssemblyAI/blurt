@@ -17,15 +17,15 @@ struct KeychainStoreTests {
   @Test("get returns nil before anything is stored")
   func getEmpty() {
     let store = makeStore()
-    defer { store.set(nil) }
+    defer { store.write(nil) }
     #expect(store.read() == .absent)
   }
 
   @Test("set then read round-trips the value")
   func setThenGet() {
     let store = makeStore()
-    defer { store.set(nil) }
-    #expect(store.set("sk-abc123"))
+    defer { store.write(nil) }
+    #expect(store.write("sk-abc123"))
     #expect(store.read() == .value("sk-abc123"))
   }
 
@@ -37,47 +37,47 @@ struct KeychainStoreTests {
     // for the whole process. `.unavailable` can't be provoked here — it needs a
     // locked keychain or a denied prompt — so this pins the two reachable arms.
     let store = makeStore()
-    defer { store.set(nil) }
+    defer { store.write(nil) }
 
     #expect(store.read() == .absent)
-    #expect(store.set("sk-abc123"))
+    #expect(store.write("sk-abc123"))
     #expect(store.read() == .value("sk-abc123"))
-    #expect(store.set(nil))
+    #expect(store.write(nil))
     #expect(store.read() == .absent)
   }
 
   @Test("set overwrites an existing value (update path)")
   func overwrite() {
     let store = makeStore()
-    defer { store.set(nil) }
-    #expect(store.set("first"))
-    #expect(store.set("second"))
+    defer { store.write(nil) }
+    #expect(store.write("first"))
+    #expect(store.write("second"))
     #expect(store.read() == .value("second"))
   }
 
   @Test("set trims surrounding whitespace")
   func trimsWhitespace() {
     let store = makeStore()
-    defer { store.set(nil) }
-    #expect(store.set("  sk-trim  \n"))
+    defer { store.write(nil) }
+    #expect(store.write("  sk-trim  \n"))
     #expect(store.read() == .value("sk-trim"))
   }
 
   @Test("set(nil) deletes the stored value")
   func deleteWithNil() {
     let store = makeStore()
-    defer { store.set(nil) }
-    #expect(store.set("to-be-deleted"))
-    #expect(store.set(nil))
+    defer { store.write(nil) }
+    #expect(store.write("to-be-deleted"))
+    #expect(store.write(nil))
     #expect(store.read() == .absent)
   }
 
   @Test("set(whitespace) deletes, get returns nil")
   func deleteWithBlank() {
     let store = makeStore()
-    defer { store.set(nil) }
-    #expect(store.set("present"))
-    #expect(store.set("   "))
+    defer { store.write(nil) }
+    #expect(store.write("present"))
+    #expect(store.write("   "))
     #expect(store.read() == .absent)
   }
 }

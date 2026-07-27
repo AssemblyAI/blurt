@@ -19,7 +19,7 @@ struct KeyInjectorFallbackTests {
     let injector = KeyInjector(
       pasteSettleDuration: .zero,
       postPaste: {
-        posted.set(true)
+        posted.value = true
         return true
       },
       activateTarget: { _ in
@@ -87,7 +87,7 @@ struct KeyInjectorFallbackTests {
     // The throw path must have released the paste lock: a following insert
     // proceeds (rather than deadlocking behind a leaked lock, which the time
     // limit would surface) and completes a normal paste + deferred restore.
-    editable.set(true)
+    editable.value = true
     try await injector.insert("second")
     await injector.pendingSettle?.value
     // The restore brings back the pre-paste contents — which the failed insert

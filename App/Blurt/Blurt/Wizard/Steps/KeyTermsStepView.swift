@@ -11,7 +11,7 @@ struct KeyTermsStepView: View {
   ///
   /// `@AppStorage` is the **only** writer of this slot, which is why the store
   /// deliberately exposes no setter. Normalization happens on read instead —
-  /// `KeyTermsStore.get()` trims, and `parse` trims and dedupes each term — so a
+  /// `KeyTermsStore.raw` trims, and `parse` trims and dedupes each term — so a
   /// blank field still reads back as "no terms". A normalizing setter fought the
   /// text field: it wrote a second, differently-normalized value on every
   /// keystroke, `@AppStorage` observed that as an external write and pushed the

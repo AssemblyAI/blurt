@@ -29,7 +29,7 @@ final class APIKeyModel {
   /// `validateKey` defaults to the engine's real AssemblyAI check; UI tests
   /// inject an offline validator so the settings flow needs no network.
   ///
-  /// The `hasKey` read below also loads the Keychain memo (`APIKeyStore.get()`),
+  /// The `hasKey` read below also loads the Keychain memo (`APIKeyStore.current`),
   /// so every later readiness check on the press→recording latency path is
   /// served from memory instead of paying a cold `SecItemCopyMatching`.
   init(
@@ -46,7 +46,7 @@ final class APIKeyModel {
   /// The key currently stored, read through the gateway. The setup/settings
   /// API-key view reads this (rather than `APIKeyStore` directly) so a UI-test
   /// run sees the injected in-memory store instead of the real Keychain.
-  var current: String? { keyStore.get() }
+  var current: String? { keyStore.current }
 
   /// A `@Sendable` snapshot of the readiness gate for `DictationSession`: a press
   /// with no key saved fails fast as `.failed(.apiKeyMissing)` before any capture.

@@ -41,7 +41,7 @@ struct KeyTermsStoreTests {
 /// writes it: the store has no setter, and the Settings field's `@AppStorage`
 /// binding is the only writer. So these pin the contract that matters — whatever
 /// raw text the field happens to hold, the read side normalizes it.
-@Suite("KeyTermsStore.get", .serialized)
+@Suite("KeyTermsStore.raw", .serialized)
 struct KeyTermsStoreGetTests {
   private func withCleanStore(_ stored: String?, _ body: () -> Void) {
     let key = KeyTermsStore.defaultsKey
@@ -64,16 +64,16 @@ struct KeyTermsStoreGetTests {
   @Test("get trims the stored string; terms parses it")
   func getAndTerms() {
     withCleanStore("  AssemblyAI, Slack  ") {
-      #expect(KeyTermsStore.get() == "AssemblyAI, Slack")
-      #expect(KeyTermsStore.terms() == ["AssemblyAI", "Slack"])
+      #expect(KeyTermsStore.raw == "AssemblyAI, Slack")
+      #expect(KeyTermsStore.terms == ["AssemblyAI", "Slack"])
     }
   }
 
   @Test("an unset key reads as no terms")
   func unsetReadsAsNil() {
     withCleanStore(nil) {
-      #expect(KeyTermsStore.get() == nil)
-      #expect(KeyTermsStore.terms().isEmpty)
+      #expect(KeyTermsStore.raw == nil)
+      #expect(KeyTermsStore.terms.isEmpty)
     }
   }
 
@@ -83,12 +83,12 @@ struct KeyTermsStoreGetTests {
     // genuinely holds "" (or whitespace mid-edit). That must read as "no terms",
     // otherwise the prompt would carry an empty vocabulary clause.
     withCleanStore("   \n") {
-      #expect(KeyTermsStore.get() == nil)
-      #expect(KeyTermsStore.terms().isEmpty)
+      #expect(KeyTermsStore.raw == nil)
+      #expect(KeyTermsStore.terms.isEmpty)
     }
     withCleanStore("") {
-      #expect(KeyTermsStore.get() == nil)
-      #expect(KeyTermsStore.terms().isEmpty)
+      #expect(KeyTermsStore.raw == nil)
+      #expect(KeyTermsStore.terms.isEmpty)
     }
   }
 }

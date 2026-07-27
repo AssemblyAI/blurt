@@ -8,18 +8,16 @@ import Synchronization
 /// production key's ACL).
 public protocol APIKeyGateway: Sendable {
   /// The stored key, or `nil` if none has been saved (or it's empty).
-  func get() -> String?
+  var current: String? { get }
   /// Stores `key` (trimmed). Passing `nil` or an empty/whitespace string
   /// deletes the stored key. Returns `true` on success.
-  @discardableResult func set(_ key: String?) -> Bool
+  @discardableResult func save(_ key: String?) -> Bool
 }
 
 extension APIKeyGateway {
-  /// Whether a non-empty key is currently stored. Derived from `get()` so every
-  /// conformance shares the one definition of "has a key". (`self.` is
-  /// load-bearing: a bare `get()` opening the accessor block parses as the
-  /// `get` accessor keyword, not a call.)
-  public var hasKey: Bool { self.get() != nil }
+  /// Whether a non-empty key is currently stored. Derived from `current` so every
+  /// conformance shares the one definition of "has a key".
+  public var hasKey: Bool { current != nil }
 }
 
 /// The production `APIKeyGateway`: a thin, stateless forwarder to the
@@ -27,8 +25,8 @@ extension APIKeyGateway {
 /// exactly as the static API does.
 public struct ProductionAPIKeyStore: APIKeyGateway {
   public init() {}
-  public func get() -> String? { APIKeyStore.get() }
-  @discardableResult public func set(_ key: String?) -> Bool { APIKeyStore.set(key) }
+  public var current: String? { APIKeyStore.current }
+  @discardableResult public func save(_ key: String?) -> Bool { APIKeyStore.save(key) }
 }
 
 /// In-memory `APIKeyGateway` for tests and harnesses (Blurt's XCUITest runs use
@@ -40,12 +38,12 @@ public final class InMemoryAPIKeyStore: APIKeyGateway {
 
   public init() {}
 
-  public func get() -> String? {
+  public var current: String? {
     key.withLock { $0 }
   }
 
   @discardableResult
-  public func set(_ newKey: String?) -> Bool {
+  public func save(_ newKey: String?) -> Bool {
     key.withLock { $0 = newKey.trimmedNonEmpty() }
     return true
   }

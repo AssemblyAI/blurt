@@ -104,7 +104,7 @@ public actor DictationSession {
     injector: InjectorProtocol,
     maxRecordingSeconds: Double = SyncSTTLimits.autoReleaseSeconds,
     clock: any Clock<Duration> = ContinuousClock(),
-    keyTermsProvider: @escaping @Sendable () -> [String] = { KeyTermsStore.terms() },
+    keyTermsProvider: @escaping @Sendable () -> [String] = { KeyTermsStore.terms },
     readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
     onTranscriptDelivered: (@Sendable (String) -> Void)? = nil
   ) {

@@ -93,11 +93,12 @@ final class StringListBox: Sendable {
 final class ValueBox<T: Sendable>: Sendable {
   private let stored: Mutex<T>
   init(_ initial: T) { stored = Mutex(initial) }
-  func set(_ value: T) {
-    stored.withLock { $0 = value }
-  }
+  /// One settable property rather than a `value` getter beside a `set(_:)` — the
+  /// `Mutex` is what makes the class `Sendable`, so both accessors can go through
+  /// it and callers read as ordinary assignment.
   var value: T {
-    stored.withLock { $0 }
+    get { stored.withLock { $0 } }
+    set { stored.withLock { $0 = newValue } }
   }
 }
 

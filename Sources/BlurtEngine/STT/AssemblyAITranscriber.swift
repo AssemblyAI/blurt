@@ -38,7 +38,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   private static let requestTimeoutSeconds: TimeInterval = 45
 
   public init(
-    apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.get() },
+    apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.current },
     baseURL: URL = URL(staticString: "https://sync.assemblyai.com"),
     transport: any HTTPTransport = URLSession.shared
   ) {

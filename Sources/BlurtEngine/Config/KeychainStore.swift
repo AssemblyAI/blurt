@@ -49,7 +49,7 @@ struct KeychainStore: Sendable {
   /// Stores `value` (trimmed). Passing `nil` or an empty/whitespace string
   /// deletes the stored value. Returns `true` on success.
   @discardableResult
-  func set(_ value: String?) -> Bool {
+  func write(_ value: String?) -> Bool {
     guard let trimmed = value.trimmedNonEmpty() else {
       let status = SecItemDelete(baseQuery() as CFDictionary)
       return status == errSecSuccess || status == errSecItemNotFound

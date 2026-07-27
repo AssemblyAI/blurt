@@ -38,7 +38,7 @@ public struct APIKeySubmission: Sendable {
   /// treats as a delete) is a failure to save a key.
   @discardableResult
   public func save(_ key: String) -> Bool {
-    keyStore.set(key) && keyStore.hasKey
+    keyStore.save(key) && keyStore.hasKey
   }
 
   /// Verifies `key` against AssemblyAI and saves it only when AssemblyAI
