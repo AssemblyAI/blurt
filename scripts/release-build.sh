@@ -42,6 +42,16 @@ source "$REPO_ROOT/scripts/release-lib.sh"
 SIGNING_KEYCHAIN="${BLURT_SIGNING_KEYCHAIN:-$HOME/Library/Keychains/blurt-signing.keychain-db}"
 SIGNING_KEYCHAIN_UNLOCKED=0
 
+# notarytool --keychain args, populated once the signing keychain is unlocked so
+# every notary call resolves the profile from THAT keychain rather than from
+# whatever the search list happens to surface. Without this, a stray duplicate
+# blurt-notary profile in another keychain (e.g. one electron-builder created)
+# can shadow the intended one, and which profile wins depends on search-list
+# order and lock state — non-deterministic. Empty on machines with no dedicated
+# signing keychain, where we fall back to the search list.
+# shellcheck disable=SC2034  # expanded via ${NOTARY_KEYCHAIN[@]+...} below
+NOTARY_KEYCHAIN=()
+
 # Resolve the keychain password, in order:
 #   1. BLURT_SIGNING_KEYCHAIN_PASSWORD — env (a CI secret, or `op read` inline).
 #   2. BLURT_SIGNING_KEYCHAIN_OP — an `op://…` 1Password secret reference; the
@@ -116,13 +126,15 @@ notarize() {
   local log_json="$BUILD_ROOT/notary-$tag-log.json"
   xcrun notarytool submit "$artifact" \
     --keychain-profile "$NOTARY_PROFILE" \
+    ${NOTARY_KEYCHAIN[@]+"${NOTARY_KEYCHAIN[@]}"} \
     --wait \
     --output-format plist > "$result_plist"
   local status id
   status="$(/usr/libexec/PlistBuddy -c 'Print :status' "$result_plist" 2>/dev/null || echo unknown)"
   id="$(/usr/libexec/PlistBuddy -c 'Print :id' "$result_plist" 2>/dev/null || echo unknown)"
   info "notary status ($tag): $status (id $id)"
-  xcrun notarytool log "$id" --keychain-profile "$NOTARY_PROFILE" > "$log_json" 2>&1 || true
+  xcrun notarytool log "$id" --keychain-profile "$NOTARY_PROFILE" \
+    ${NOTARY_KEYCHAIN[@]+"${NOTARY_KEYCHAIN[@]}"} > "$log_json" 2>&1 || true
   if [ "$status" != "Accepted" ]; then
     step "Notary log ($tag)"
     cat "$log_json" 2>/dev/null || true
@@ -186,13 +198,20 @@ unlock_signing_keychain
 # only other EXIT trap (the DMG mount, below) is set up much later.
 trap lock_signing_keychain EXIT
 
-# Check the notary profile only AFTER unlocking the signing keychain: the
-# blurt-notary credentials live in that keychain, and notarytool runs
-# non-interactively, so against a still-locked keychain it can't read the
-# profile item and reports it as missing. Unlock first, then a genuine
-# "not found" here really means the profile was never stored.
-xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
-  || die "notarytool profile '$NOTARY_PROFILE' not found. Run: xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <you@example.com> --team-id $TEAM_ID --password <app-specific-password>"
+# Check the notary profile only AFTER unlocking the signing keychain: when a
+# dedicated signing keychain exists, the blurt-notary profile is expected to
+# live there, and we pin every notary call to it (see NOTARY_KEYCHAIN) so the
+# lookup is deterministic rather than at the mercy of the search list.
+[ "$SIGNING_KEYCHAIN_UNLOCKED" -eq 1 ] && NOTARY_KEYCHAIN=(--keychain "$SIGNING_KEYCHAIN")
+
+if ! xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" \
+  ${NOTARY_KEYCHAIN[@]+"${NOTARY_KEYCHAIN[@]}"} >/dev/null 2>&1; then
+  if [ "$SIGNING_KEYCHAIN_UNLOCKED" -eq 1 ]; then
+    die "notarytool profile '$NOTARY_PROFILE' not found in $SIGNING_KEYCHAIN. Store it there: xcrun notarytool store-credentials $NOTARY_PROFILE --keychain $SIGNING_KEYCHAIN --apple-id <you@example.com> --team-id $TEAM_ID --password <app-specific-password>"
+  else
+    die "notarytool profile '$NOTARY_PROFILE' not found. Run: xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <you@example.com> --team-id $TEAM_ID --password <app-specific-password>"
+  fi
+fi
 
 identity_listed "$IDENTITY" <<<"$(security find-identity -v -p codesigning)" \
   || die "Developer ID identity $IDENTITY not in keychain (check: security find-identity -v -p codesigning). Wrong Mac, or the signing key is missing."
