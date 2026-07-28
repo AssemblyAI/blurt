@@ -12,6 +12,10 @@ public enum DictationLog {
     let ts: String
     /// Focused-app topic hint sent as context, when one was captured.
     let app: String?
+    /// Focused-app bundle identifier, when one was captured. The input the
+    /// prompt's app-kind guidance (`AppKindPriming`) keys on, logged so the
+    /// corpus shows *why* a prompt carried (or lacked) a guidance sentence.
+    let bundle: String?
     /// Focused-window title sent as a topic hint, when one was captured.
     let window: String?
     /// Focused-field label sent as context, when one was captured.
@@ -90,7 +94,8 @@ public enum DictationLog {
   ) {
     let entry = Entry(
       transcript: transcript, ts: now.formatted(timestampFormat),
-      app: context?.appName, window: context?.windowTitle, field: context?.fieldLabel,
+      app: context?.appName, bundle: context?.bundleID,
+      window: context?.windowTitle, field: context?.fieldLabel,
       prior: context?.priorText, selected: context?.selectedText,
       prompt: TranscriptionPrompt.build(context: context))
     guard var line = try? makeEncoder().encode(entry) else { return }

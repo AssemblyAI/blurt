@@ -12,6 +12,7 @@ private struct DecodedEntry: Decodable {
 /// threaded from the `TranscriptionContext` onto disk.
 private struct DecodedContext: Decodable {
   let app: String?
+  let bundle: String?
   let window: String?
   let field: String?
   let prior: String?
@@ -96,12 +97,13 @@ struct DictationLogTests {
   func logsContext() {
     let url = makeTempLogURL()
     let context = TranscriptionContext(
-      appName: "Mail", windowTitle: "Re: Q3 pricing", fieldLabel: "Body",
-      priorText: "Hi Sam,", selectedText: "the old plan")
+      appName: "Mail", bundleID: "com.apple.mail", windowTitle: "Re: Q3 pricing",
+      fieldLabel: "Body", priorText: "Hi Sam,", selectedText: "the old plan")
     DictationLog.write(transcript: "p", context: context, to: url, now: Date())
     let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
     let decoded = try? JSONDecoder().decode(DecodedContext.self, from: Data(line.utf8))
     #expect(decoded?.app == "Mail")
+    #expect(decoded?.bundle == "com.apple.mail")
     #expect(decoded?.window == "Re: Q3 pricing")
     #expect(decoded?.field == "Body")
     #expect(decoded?.prior == "Hi Sam,")
@@ -128,6 +130,20 @@ struct DictationLogTests {
     let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
     let decoded = try? JSONDecoder().decode(DecodedContext.self, from: Data(line.utf8))
     #expect(decoded?.prompt == TranscriptionPrompt.build(context: context))
+  }
+
+  @Test("the logged prompt carries the app-kind guidance the bundle ID selected")
+  func logsPromptWithAppKindGuidance() {
+    let url = makeTempLogURL()
+    let context = TranscriptionContext(
+      appName: "Slack", bundleID: "com.tinyspeck.slackmacgap", fieldLabel: "Message",
+      priorText: nil)
+    DictationLog.write(transcript: "p", context: context, to: url, now: Date())
+    let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
+    let decoded = try? JSONDecoder().decode(DecodedContext.self, from: Data(line.utf8))
+    // The exact wording is TranscriptionPromptTests' contract; here the point is
+    // that what lands on disk includes the guidance actually sent for this app.
+    #expect(decoded?.prompt?.contains("You are writing a Slack message") == true)
   }
 
   @Test("omits the prompt field when there is no context to build one")
