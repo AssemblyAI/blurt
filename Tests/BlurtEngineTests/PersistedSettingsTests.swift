@@ -19,14 +19,17 @@ struct PersistedSettingsTests {
     // during a UI-test run survived into later runs.
     #expect(PersistedSettings.allDefaultsKeys.contains(OverlayOriginStore.xDefaultsKey))
     #expect(PersistedSettings.allDefaultsKeys.contains(OverlayOriginStore.yDefaultsKey))
+    // The launch update check's throttle: left out of the sweep, a UI-test run
+    // (or a "clean install") would inherit yesterday's stamp and skip the check.
+    #expect(PersistedSettings.allDefaultsKeys.contains(LastUpdateCheckStore.defaultsKey))
   }
 
   @Test("the roster carries no stale or duplicate keys")
   func rosterHasNoStrays() {
-    // Exactly the five known stores' keys (OverlayOriginStore contributes two):
+    // Exactly the six known stores' keys (OverlayOriginStore contributes two):
     // a removed store must leave the roster in the same change, and a key listed
     // twice would hint at a copy-paste slip.
-    #expect(PersistedSettings.allDefaultsKeys.count == 6)
+    #expect(PersistedSettings.allDefaultsKeys.count == 7)
     #expect(Set(PersistedSettings.allDefaultsKeys).count == PersistedSettings.allDefaultsKeys.count)
   }
 }

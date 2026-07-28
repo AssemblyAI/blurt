@@ -3,12 +3,21 @@ import BlurtEngine
 import OSLog
 import Observation
 
-/// Runs a user-initiated update check and reports the result in a modal alert
-/// (Sparkle-style). Triggered from either the Settings "Check for Updates"
-/// button or the "Check for Updates…" app-menu command — a single shared
-/// instance backs both (owned by `AppDelegate`). No in-place install: on an
-/// available update the alert offers **Download** (opens the release DMG in the
-/// browser) or **Later**.
+/// Runs an update check and reports the result in a modal alert (Sparkle-style).
+/// One shared instance (owned by `AppDelegate`) backs every entry point, so no
+/// two checks can stack two result alerts. Two kinds of check:
+///
+/// - **User-initiated** — `checkForUpdates()`, from the Settings "Check for
+///   Updates" button or the "Check for Updates…" app-menu command. Always
+///   reports something, including "you're up to date" and "couldn't check": the
+///   user asked, so the check has to visibly conclude.
+/// - **Automatic at launch** — `checkForUpdatesAtLaunch(isConfigured:)`, once per
+///   launch on a configured app and at most once a day, speaking *only* when a
+///   newer release exists. Nobody launches Blurt to be told it's current, and a
+///   laptop opened offline mustn't be greeted by an error it never asked for.
+///
+/// Neither installs anything. On an available update the alert offers
+/// **Download** (opens the release DMG in the browser) or **Later**.
 ///
 /// What each result *says* — titles, bodies, button titles, and which button
 /// downloads — is the engine's `UpdateAlertContent`, where `swift test` covers
@@ -22,6 +31,13 @@ final class UpdateCheckModel {
   private let currentVersion: SemanticVersion?
   private let openURL: (URL) -> Void
   private let presentingWindow: () -> NSWindow?
+  /// When a check last completed, the input to the launch check's daily
+  /// throttle. Written by every completed check — manual ones included, so a
+  /// check the user just ran isn't repeated by the next launch.
+  private let lastCheckStore: LastUpdateCheckStore
+  /// The clock, injected alongside the store so the throttle is drivable in a
+  /// test without waiting a day.
+  private let now: () -> Date
   private let log = Logger(subsystem: BlurtIdentity.subsystem, category: "update")
 
   /// Guards against a second check while one is in flight (double-click, or the
@@ -37,19 +53,23 @@ final class UpdateCheckModel {
   /// different ways.
   var versionLabel: String { UpdateAlertContent.appVersionLabel(currentVersion) }
 
-  /// `currentVersion`, `openURL`, and `presentingWindow` are injected (with
-  /// sensible production defaults) so this stays exercisable without a real
-  /// bundle, a live browser, or an on-screen window.
+  /// Every collaborator is injected (with sensible production defaults) so this
+  /// stays exercisable without a real bundle, a live browser, an on-screen
+  /// window, the user's defaults, or the wall clock.
   init(
     checker: UpdateChecker = UpdateChecker(),
     currentVersion: SemanticVersion? = UpdateCheckModel.bundleVersion(),
     openURL: @escaping (URL) -> Void = { _ = NSWorkspace.shared.open($0) },
-    presentingWindow: @escaping () -> NSWindow? = { NSApp.keyWindow }
+    presentingWindow: @escaping () -> NSWindow? = { NSApp.keyWindow },
+    lastCheckStore: LastUpdateCheckStore = LastUpdateCheckStore(),
+    now: @escaping () -> Date = { Date() }
   ) {
     self.checker = checker
     self.currentVersion = currentVersion
     self.openURL = openURL
     self.presentingWindow = presentingWindow
+    self.lastCheckStore = lastCheckStore
+    self.now = now
   }
 
   /// Checks GitHub and reports the result in a modal alert. Safe to call from
@@ -71,15 +91,65 @@ final class UpdateCheckModel {
     }
   }
 
+  /// The automatic check, run once from `applicationDidFinishLaunching` on a
+  /// configured app. Whether it runs at all — setup finished, and a day since the
+  /// last completed check — is the engine's `AutomaticUpdateCheck.shouldRun`.
+  ///
+  /// Deliberately quieter than the manual path: it alerts only on an available
+  /// update. "Up to date" and "couldn't check" answer a question the user didn't
+  /// ask, and a modal at launch saying either one is a nuisance (offline, on a
+  /// plane, GitHub down). They still log, and the menu command still reports
+  /// them on demand.
+  func checkForUpdatesAtLaunch(isConfigured: Bool) {
+    let isDue = AutomaticUpdateCheck.shouldRun(
+      isConfigured: isConfigured, lastCheck: lastCheckStore.lastCheck, now: now())
+    guard isDue else { return }
+    // No parseable bundle version means no check to run. The manual path turns
+    // that into an alert because someone is waiting on an answer; here nobody is.
+    guard currentVersion != nil else {
+      log.error("no parseable CFBundleShortVersionString; skipping the launch update check")
+      return
+    }
+    Task {
+      // Let the launch settle before fetching, and give the main window time to
+      // exist so a result has a sheet host — see `AutomaticUpdateCheck.launchDelay`.
+      try? await Task.sleep(for: AutomaticUpdateCheck.launchDelay)
+      // Claimed after the wait, not before, so the Settings button doesn't sit
+      // disabled through a delay during which nothing is actually in flight.
+      // (Re-read rather than captured: the user may have checked manually in the
+      // meantime, and two checks would stack two alerts.)
+      guard !isChecking, let currentVersion else { return }
+      isChecking = true
+      defer { isChecking = false }
+      guard let result = await runCheck(current: currentVersion) else { return }
+      guard case .available(let latest, let dmgURL) = result else { return }
+      await present(.available(current: currentVersion, latest: latest, dmgURL: dmgURL))
+    }
+  }
+
   /// Runs the check and resolves what to show. Every throw — offline, GitHub
   /// unreachable, malformed JSON, an unparseable tag — is the same recoverable
   /// "couldn't check" to the user, so they collapse to one content value here.
   private func resolveContent(current: SemanticVersion) async -> UpdateAlertContent {
+    guard let result = await runCheck(current: current) else { return .checkFailed }
+    return UpdateAlertContent(result: result, current: current)
+  }
+
+  /// Performs the check and stamps the throttle, returning `nil` when it threw
+  /// (the callers differ only in whether they say so out loud).
+  ///
+  /// Only a *completed* check is stamped: a failed one never answered the
+  /// question, so the next launch should ask again rather than coast for a day
+  /// on a fetch that never landed. A successful manual check is stamped too —
+  /// the launch check has nothing to add the morning after the user looked.
+  private func runCheck(current: SemanticVersion) async -> UpdateCheckResult? {
     do {
-      return UpdateAlertContent(result: try await checker.check(current: current), current: current)
+      let result = try await checker.check(current: current)
+      lastCheckStore.lastCheck = now()
+      return result
     } catch {
       log.error("update check failed: \(error.localizedDescription, privacy: .public)")
-      return .checkFailed
+      return nil
     }
   }
 
