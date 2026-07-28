@@ -72,7 +72,13 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     }
     // The rewrite is best-effort: a null `llm_response` (rewrite failed or
     // timed out) degrades to the verbatim transcript rather than an error.
-    if let rewrite = response.llmResponse { return rewrite }
+    // Blank counts as absent too: the service is documented to null out an empty
+    // rewrite, but returning "" here would strand the utterance — the pipeline
+    // drops a whitespace-only transcript back to `.idle` without pasting or
+    // surfacing an error, discarding the perfectly good verbatim `text` below.
+    // `trimmedNonEmpty()` is the same "usable text" rule the rest of the engine
+    // applies, so the fallback covers both shapes instead of trusting the server.
+    if let rewrite = response.llmResponse.trimmedNonEmpty() { return rewrite }
     if let error = response.llmError {
       transcriberLog.warning(
         "llm rewrite unavailable (\(error, privacy: .public)); using verbatim transcript")
@@ -219,7 +225,9 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     /// The verbatim transcript — always present, never altered by the LLM.
     let text: String
     /// The rewritten transcript, or nil when the rewrite failed or timed out.
-    /// Never empty when present: the service nulls out empty rewrites.
+    /// The service is documented to null out an empty rewrite rather than
+    /// returning `""`, but `transcribe` treats blank as absent anyway — that
+    /// assumption isn't worth a silently dropped utterance if it ever breaks.
     let llmResponse: String?
     /// `"timeout"` or `"error"` when a requested rewrite failed.
     let llmError: String?

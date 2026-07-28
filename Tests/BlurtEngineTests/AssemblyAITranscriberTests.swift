@@ -31,11 +31,16 @@ struct HTTPClientTests {
 
   @Test("transcriber falls back to the verbatim transcript when no rewrite came back")
   func transcribeFallsBackWithoutRewrite() async throws {
-    // A null / absent `llm_response` (the rewrite is best-effort) must degrade
-    // to the verbatim transcript, never to an error or an empty paste.
+    // A null / absent / blank `llm_response` (the rewrite is best-effort) must
+    // degrade to the verbatim transcript, never to an error or an empty paste.
+    // The blank cases matter most: returning "" would reach the pipeline's
+    // whitespace guard, which drops the utterance to `.idle` with nothing pasted
+    // and no error — the verbatim text lost even though it arrived intact.
     for body in [
       Data(#"{"text":"hello world","llm_response":null,"llm_error":"timeout"}"#.utf8),
       json(["text": "hello world"]),
+      json(["text": "hello world", "llm_response": ""]),
+      json(["text": "hello world", "llm_response": "   \n "]),
     ] {
       let transport = FakeHTTPTransport { _ in (200, body) }
       let result = try await collectTranscript(makeTranscriber(apiKey: "test-key", transport: transport))
