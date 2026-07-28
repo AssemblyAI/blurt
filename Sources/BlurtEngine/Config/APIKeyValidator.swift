@@ -60,9 +60,11 @@ public struct APIKeyValidator: Sendable {
       // user can't finish onboarding with a key that works fine for dictation.
       // A blanket `400..<500` also caught the cases that say nothing about the key
       // — AssemblyAI retiring or moving this endpoint (404/405/410), or a corporate
-      // proxy or captive portal interposing its own 403/451 page — and told the
+      // proxy or captive portal interposing its own block page (451) — and told the
       // user their good key was rejected. Everything else falls through to
       // `.unreachable`, the outcome designed for "couldn't determine".
+      // 403 stays on the rejected side: AssemblyAI answers an authenticated request
+      // it won't serve with it, which is a verdict on the credential.
       case 401, 403, 400, 422: return .invalid
       // 5xx and anything unexpected: server-side / can't determine — report
       // unreachable so the user retries rather than seeing a false rejection.

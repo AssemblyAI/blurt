@@ -109,10 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // side. Guarded by UITestMode (only the runner passes -BlurtUITest), so a
         // normal launch is untouched — running the UI tests locally does reset
         // these, by design.
-        let defaults = UserDefaults.standard
-        for key in PersistedSettings.allDefaultsKeys {
-          defaults.removeObject(forKey: key)
-        }
+        PersistedSettings.resetAll()
         coord = AppCoordinator(
           onSetupBlocked: onSetupBlocked,
           components: .uiTest(),
@@ -206,7 +203,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// never spawn `tccutil`. Persists the new team only on a successful reset, so a
   /// failed reset retries next launch instead of being masked.
   private func runAccessibilityGrantMigration() {
-    let key = "accessibility.lastSigningTeam"
+    let key = SigningIdentityMigration.lastSigningTeamDefaultsKey
     let defaults = UserDefaults.standard
     let persist = SigningIdentityMigration.run(
       lastTeam: defaults.string(forKey: key),

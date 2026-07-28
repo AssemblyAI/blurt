@@ -7,7 +7,13 @@ import SwiftUI
 struct HotkeyStepView: View {
   var coordinator: AppCoordinator
 
-  @AppStorage(TriggerKeyStore.defaultsKey) private var triggerKeyCode = TriggerKey.rightCommand.rawValue
+  // `0` is "no keycode persisted", not a default binding: the unset default belongs
+  // to `TriggerKey.fromPersisted` (below), which maps any unknown keycode to right
+  // ⌘. Restating `TriggerKey.rightCommand.rawValue` here would give the empty slot
+  // two answers, and this one would win for an unset key — so a change to the
+  // engine's default would leave this picker showing the old binding while the
+  // ready screen and menu bar showed the new one. Matches `@BoundTriggerKey`.
+  @AppStorage(TriggerKeyStore.defaultsKey) private var triggerKeyCode = 0
 
   private var selection: Binding<TriggerKey> {
     Binding(

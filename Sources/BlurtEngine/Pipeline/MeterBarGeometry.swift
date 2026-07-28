@@ -98,10 +98,18 @@ public struct MeterBarRow: Sendable, Equatable {
   /// The tallest a bar in this row may be.
   public let maxBarHeight: CGFloat
 
+  /// `MeterBarGeometry.envelopeWeight` per bar. Resolved here with `count` because
+  /// it is a fact about the row's layout, not about a frame: recomputed inside
+  /// `height(at:)` it was a `sin()` per bar per meter tick (~16 bars at 20 Hz)
+  /// re-deriving values that only change when the pill is resized.
+  private let weights: [CGFloat]
+
   /// Resolves the row for the frame the meter has been given.
   public init(availableSize: CGSize) {
-    self.count = MeterBarGeometry.barCount(availableWidth: availableSize.width)
+    let count = MeterBarGeometry.barCount(availableWidth: availableSize.width)
+    self.count = count
     self.maxBarHeight = MeterBarGeometry.maxBarHeight(availableHeight: availableSize.height)
+    self.weights = (0..<count).map { MeterBarGeometry.envelopeWeight(index: $0, count: count) }
   }
 
   /// Height of the bar at `index` for the current `level`.
@@ -112,7 +120,9 @@ public struct MeterBarRow: Sendable, Equatable {
   /// here. `time` advances the idle wave and is ignored unless `animated` — pass
   /// `animated: false` to honor Reduce Motion, which drops the wave entirely.
   public func height(at index: Int, level: Float, time: TimeInterval, animated: Bool) -> CGFloat {
-    let weight = MeterBarGeometry.envelopeWeight(index: index, count: count)
+    // Out-of-range indices can't shape a bar that isn't in the row; fall back to the
+    // unweighted 1 rather than trapping, matching `envelopeWeight`'s count <= 1 arm.
+    let weight = weights.indices.contains(index) ? weights[index] : 1
     // Voice-driven height: the current level, gamma-shaped, scaled by this bar's
     // envelope weight so the middle leads.
     let voice = pow(CGFloat(level), MeterBarGeometry.levelGamma) * weight

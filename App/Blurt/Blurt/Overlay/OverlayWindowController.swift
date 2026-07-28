@@ -120,7 +120,15 @@ final class OverlayWindowController {
       return
     }
 
-    bridge.state = state
+    // Guard the assignment the way `OverlayBridge.pushLevel` does: `@Observable`
+    // invalidates on assignment, not on change, and `.transcribing` and `.injecting`
+    // both project to `.processing` — so every dictation re-evaluated the whole
+    // `OverlayView` body (capsule fill, border, shadow, a fresh `TimelineView`) for
+    // a value that hadn't moved. The notice handling below stays outside the guard:
+    // a repeated notice still has to announce and re-arm its revert.
+    if bridge.state != state {
+      bridge.state = state
+    }
     // The red error flash and the neutral "copied" notice are both transient: the
     // pill is otherwise only up during active dictation, so they linger briefly to
     // be read, then settle back to idle. Announce them for VoiceOver since this
@@ -185,6 +193,12 @@ final class OverlayWindowController {
   private func setVisible(_ visible: Bool) {
     let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     if visible {
+      // Already up and fully opaque: nothing to ramp. Without this, each phase
+      // change during one dictation spun up an `NSAnimationContext` group animating
+      // alpha from 1 to 1 (~3 per dictation). A panel mid-fade-out is visible with
+      // alpha below 1, so it still falls through and re-targets alpha to 1 — the
+      // re-entrancy the doc comment above promises.
+      if panel.isVisible, panel.alphaValue >= 1 { return }
       if !panel.isVisible {
         reposition()
         panel.alphaValue = reduceMotion ? 1 : 0

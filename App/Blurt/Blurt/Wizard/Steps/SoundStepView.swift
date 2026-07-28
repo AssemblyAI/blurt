@@ -7,7 +7,11 @@ import SwiftUI
 struct SoundStepView: View {
   var coordinator: AppCoordinator
 
-  @AppStorage(SoundPackStore.defaultsKey) private var soundPackID = SoundPack.defaultPack.id
+  // Empty means "no pack persisted" — the unset default belongs to
+  // `SoundPack.fromPersisted` (below), which names no known pack for `""` and so
+  // resolves `defaultPack`. See `HotkeyStepView` for why the view must not restate
+  // it.
+  @AppStorage(SoundPackStore.defaultsKey) private var soundPackID = ""
 
   private var selection: Binding<SoundPack> {
     Binding(

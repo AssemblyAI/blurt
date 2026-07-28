@@ -41,7 +41,7 @@ struct ReadyView: View {
     .padding(.horizontal, 32)
     .padding(.top, 4)
     .padding(.bottom, 20)
-    .frame(width: 480)
+    .frame(width: MainWindow.contentWidth)
     .fixedSize(horizontal: false, vertical: true)
   }
 

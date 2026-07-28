@@ -156,12 +156,12 @@ gh release download "$TAG" --dir "$VERIFY_DIR" \
 
 WANT_SHA="$(sha_from_sums "Blurt-$VERSION.dmg" <"$CHECKSUMS")"
 [ -n "$WANT_SHA" ] || die "no checksum for Blurt-$VERSION.dmg in $CHECKSUMS"
-GOT_SHA="$(shasum -a 256 "$VERIFY_DIR/Blurt-$VERSION.dmg" | awk '{print $1}')"
+GOT_SHA="$(sha256_of_file "$VERIFY_DIR/Blurt-$VERSION.dmg")"
 [ "$WANT_SHA" = "$GOT_SHA" ] \
   || die "published Blurt-$VERSION.dmg sha mismatch (want $WANT_SHA got $GOT_SHA) — re-run with --republish"
 
-LOCAL_STABLE_SHA="$(shasum -a 256 "$DMG" | awk '{print $1}')"
-GOT_STABLE_SHA="$(shasum -a 256 "$VERIFY_DIR/Blurt.dmg" | awk '{print $1}')"
+LOCAL_STABLE_SHA="$(sha256_of_file "$DMG")"
+GOT_STABLE_SHA="$(sha256_of_file "$VERIFY_DIR/Blurt.dmg")"
 [ "$LOCAL_STABLE_SHA" = "$GOT_STABLE_SHA" ] \
   || die "published Blurt.dmg differs from local build — re-run with --republish"
 

@@ -18,6 +18,11 @@
   --mono: "Space Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   --container: 1080px;
+  /* The page gutter: every full-width band (header, hero, sections, footer)
+     sits on it, so they share vertical rules. One variable rather than the
+     same min()/calc() in each rule, which also lets the narrow-viewport
+     override below change the gutter in one place instead of four. */
+  --page: min(var(--container), calc(100% - 44px));
   --radius: 14px;
 }
 
@@ -79,7 +84,7 @@ a:hover {
 }
 
 .header-inner {
-  width: min(var(--container), calc(100% - 44px));
+  width: var(--page);
   margin: 0 auto;
   padding: 12px 0;
   display: flex;
@@ -128,7 +133,7 @@ a:hover {
 /* ---- Hero ---- */
 
 .hero {
-  width: min(var(--container), calc(100% - 44px));
+  width: var(--page);
   margin: 0 auto;
   padding: clamp(48px, 9vh, 92px) 0 0;
   display: flex;
@@ -272,7 +277,7 @@ h1 {
 /* ---- Sections ---- */
 
 .section {
-  width: min(var(--container), calc(100% - 44px));
+  width: var(--page);
   margin: 0 auto;
   padding: clamp(64px, 11vh, 110px) 0 0;
 }
@@ -341,7 +346,7 @@ h2 {
 }
 
 .footer-inner {
-  width: min(var(--container), calc(100% - 44px));
+  width: var(--page);
   margin: 0 auto;
   padding: 22px 0 26px;
   color: var(--muted);
@@ -387,11 +392,9 @@ h2 {
 }
 
 @media (max-width: 600px) {
-  .header-inner,
-  .hero,
-  .section,
-  .footer-inner {
-    width: calc(100% - 32px);
+  /* Tighter gutter on a phone; every band follows because they all read --page. */
+  :root {
+    --page: calc(100% - 32px);
   }
 
   .site-nav {

@@ -68,6 +68,15 @@ enum UITestIdentifiers {
   /// The dictation overlay pill (`OverlayView`).
   static let overlayPill = "overlay.pill"
 
+  /// The harness's pipeline-status read-out values (`UITestHarnessView.statusText`,
+  /// a projection of `MenuBarStatus`). Both sides name them from here for the same
+  /// reason as `defaultCannedTranscript`: they're compared as strings, so a rename
+  /// on one side alone still compiles and every assertion instead burns its full
+  /// `waitForLabel` timeout — three times over, once per xctestplan retry.
+  static let statusIdle = "idle"
+  static let statusRecording = "recording"
+  static let statusTranscribing = "transcribing"
+
   /// The stub transcriber's default canned transcript
   /// (`UITestState.cannedTranscript`); the suites assert against it rather than
   /// typing a custom one (a headless runner can't give the harness's text field

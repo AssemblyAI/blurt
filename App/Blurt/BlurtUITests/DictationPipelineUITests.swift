@@ -30,7 +30,7 @@ final class DictationPipelineUITests: BlurtUITestCase {
     let status = harness.staticTexts[UITestIdentifiers.statusLabel]
 
     harness.buttons[UITestIdentifiers.hotkeyPressButton].click()
-    waitForLabel(status, equals: "recording", "Hotkey press should drive status to recording")
+    waitForLabel(status, equals: UITestIdentifiers.statusRecording, "Hotkey press should drive status to recording")
 
     harness.buttons[UITestIdentifiers.hotkeyReleaseButton].click()
 
@@ -38,7 +38,7 @@ final class DictationPipelineUITests: BlurtUITestCase {
     waitForLabel(
       pasted, equals: UITestIdentifiers.defaultCannedTranscript, timeout: 15,
       "Hotkey release should paste the transcript")
-    waitForLabel(status, equals: "idle", "Pipeline should return to idle after pasting")
+    waitForLabel(status, equals: UITestIdentifiers.statusIdle, "Pipeline should return to idle after pasting")
   }
 
   /// The same happy path driven through the harness's Start/Stop buttons, which
@@ -53,7 +53,7 @@ final class DictationPipelineUITests: BlurtUITestCase {
     let status = harness.staticTexts[UITestIdentifiers.statusLabel]
 
     harness.buttons[UITestIdentifiers.startButton].click()
-    waitForLabel(status, equals: "recording", "Start should drive status to recording")
+    waitForLabel(status, equals: UITestIdentifiers.statusRecording, "Start should drive status to recording")
 
     harness.buttons[UITestIdentifiers.stopButton].click()
 
@@ -61,7 +61,7 @@ final class DictationPipelineUITests: BlurtUITestCase {
     waitForLabel(
       pasted, equals: UITestIdentifiers.defaultCannedTranscript, timeout: 15,
       "Stop should paste the transcript")
-    waitForLabel(status, equals: "idle", "Pipeline should return to idle after pasting")
+    waitForLabel(status, equals: UITestIdentifiers.statusIdle, "Pipeline should return to idle after pasting")
   }
 
   /// The pipeline re-arms cleanly: two back-to-back dictations each record,
@@ -77,13 +77,13 @@ final class DictationPipelineUITests: BlurtUITestCase {
 
     for pass in 1...2 {
       harness.buttons[UITestIdentifiers.startButton].click()
-      waitForLabel(status, equals: "recording", "Pass \(pass): press should record")
+      waitForLabel(status, equals: UITestIdentifiers.statusRecording, "Pass \(pass): press should record")
 
       harness.buttons[UITestIdentifiers.stopButton].click()
       waitForLabel(
         pasted, equals: UITestIdentifiers.defaultCannedTranscript, timeout: 15,
         "Pass \(pass): release should paste the transcript")
-      waitForLabel(status, equals: "idle", "Pass \(pass): pipeline should return to idle")
+      waitForLabel(status, equals: UITestIdentifiers.statusIdle, "Pass \(pass): pipeline should return to idle")
     }
   }
 
@@ -103,11 +103,11 @@ final class DictationPipelineUITests: BlurtUITestCase {
     let pill = app.anyDescendant(identified: UITestIdentifiers.overlayPill)
 
     harness.buttons[UITestIdentifiers.startButton].click()
-    waitForLabel(status, equals: "recording", "Start should drive status to recording")
+    waitForLabel(status, equals: UITestIdentifiers.statusRecording, "Start should drive status to recording")
     waitForLabel(pill, equals: "Recording.", "Overlay pill should show the recording state")
 
     harness.buttons[UITestIdentifiers.stopButton].click()
-    waitForLabel(status, equals: "idle", "Pipeline should return to idle after pasting")
+    waitForLabel(status, equals: UITestIdentifiers.statusIdle, "Pipeline should return to idle after pasting")
     // Once the pipeline settles, the pill fades out and leaves the AX tree — so an
     // absent element is the "no dictation happening" resting state.
     XCTAssertTrue(
@@ -123,10 +123,10 @@ final class DictationPipelineUITests: BlurtUITestCase {
     let status = harness.staticTexts[UITestIdentifiers.statusLabel]
 
     harness.buttons[UITestIdentifiers.startButton].click()
-    waitForLabel(status, equals: "recording")
+    waitForLabel(status, equals: UITestIdentifiers.statusRecording)
 
     harness.buttons[UITestIdentifiers.cancelButton].click()
-    waitForLabel(status, equals: "idle", "Cancel should return the pipeline to idle")
+    waitForLabel(status, equals: UITestIdentifiers.statusIdle, "Cancel should return the pipeline to idle")
 
     // Nothing was pasted. The read-out is a plain `Text` bound to the injector's
     // recorded paste; while it's the empty string SwiftUI emits no accessibility

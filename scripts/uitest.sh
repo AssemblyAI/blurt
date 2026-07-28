@@ -13,12 +13,12 @@ APP_DIR="$REPO_ROOT/App/Blurt"
 
 export OS_ACTIVITY_MODE=disable
 
-if command -v xcbeautify >/dev/null 2>&1; then
-  PRETTY=(xcbeautify --quiet)
-else
-  PRETTY=(cat)
-  echo "note: xcbeautify not installed; using raw output (brew install xcbeautify)"
-fi
+# For `pretty_xcodebuild`, as dev-build.sh does. (check.sh keeps its own copy on
+# purpose — see the `die_check` note there.)
+# shellcheck source=scripts/release-lib.sh
+source "$REPO_ROOT/scripts/release-lib.sh"
+
+pretty_xcodebuild
 
 echo "==> xcodebuild test (BlurtUITests)"
 cd "$APP_DIR"

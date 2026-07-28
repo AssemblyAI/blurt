@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import BlurtEngine
@@ -31,5 +32,23 @@ struct PersistedSettingsTests {
     // twice would hint at a copy-paste slip.
     #expect(PersistedSettings.allDefaultsKeys.count == 7)
     #expect(Set(PersistedSettings.allDefaultsKeys).count == PersistedSettings.allDefaultsKeys.count)
+  }
+
+  @Test("resetAll clears every roster key and leaves unrelated ones alone")
+  func resetAllClearsTheRoster() {
+    let defaults = freshDefaults()
+    for key in PersistedSettings.allDefaultsKeys {
+      defaults.set("stale", forKey: key)
+    }
+    // The signing-team marker is deliberately outside the roster — it records what
+    // the TCC migration has already done, and clearing it would re-run the reset.
+    defaults.set("TEAMID", forKey: SigningIdentityMigration.lastSigningTeamDefaultsKey)
+
+    PersistedSettings.resetAll(in: defaults)
+
+    for key in PersistedSettings.allDefaultsKeys {
+      #expect(defaults.object(forKey: key) == nil, "\(key) should have been cleared")
+    }
+    #expect(defaults.string(forKey: SigningIdentityMigration.lastSigningTeamDefaultsKey) == "TEAMID")
   }
 }

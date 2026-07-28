@@ -35,6 +35,22 @@ require_tools() {
   done
 }
 
+# Set the PRETTY array every xcodebuild caller pipes through: `xcbeautify --quiet`
+# when installed, `cat` otherwise. The one definition, because four scripts had
+# copied it and two of the copies had already lost the "not installed" note — so a
+# developer without xcbeautify got raw logs from those with no explanation. Use as:
+#   pretty_xcodebuild
+#   xcodebuild … | "${PRETTY[@]}"
+# shellcheck disable=SC2034  # PRETTY is read by the sourcing script, not here.
+pretty_xcodebuild() {
+  if command -v xcbeautify >/dev/null 2>&1; then
+    PRETTY=(xcbeautify --quiet)
+  else
+    PRETTY=(cat)
+    info "xcbeautify not installed; using raw output (brew install xcbeautify)"
+  fi
+}
+
 # Die unless the git working tree is clean; $1 names the action for the message
 # (e.g. "publishing" -> "… commit or stash before publishing").
 require_clean_tree() {
@@ -147,4 +163,12 @@ parse_build_info_git_sha() {
 # Empty output if the name isn't listed.
 sha_from_sums() {
   awk -v name="$1" '{ f = $2; sub(/^\*/, "", f); if (f == name) { print $1; exit } }'
+}
+
+# Echo the SHA-256 hex of the file at $1 — the digest form `sha_from_sums` reads
+# back out of SHA256SUMS. One definition so the algorithm and the field extraction
+# can't drift between the build that publishes a digest and the publish step that
+# compares the uploaded artifact against it.
+sha256_of_file() {
+  shasum -a 256 "$1" | awk '{print $1}'
 }

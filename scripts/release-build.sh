@@ -153,8 +153,15 @@ crash_list() {
   [ -d "$dir" ] || return 0
   find "$dir" -maxdepth 1 -name 'Blurt*' -print 2>/dev/null | sort || true
 }
+# Echo the crash reports that appeared since the listing in $1 (a `crash_list`
+# snapshot). One definition: both smoke-test exits ask the same question, and a
+# copy of the comm/printf pairing at each was a chance for them to disagree about
+# what "new" means.
+new_crashes() {
+  comm -13 <(printf '%s\n' "$1") <(printf '%s\n' "$(crash_list)")
+}
 smoke_launch() {
-  local app="$1" before after new
+  local app="$1" before new
   # Quit any Blurt the maintainer already has running so the checks below
   # reflect the freshly-built staged instance — `open` would otherwise just
   # reactivate the existing one, and `pgrep -x Blurt` can't tell them apart.
@@ -168,13 +175,11 @@ smoke_launch() {
   open -gn "$app" || die "smoke test: could not launch $app"
   sleep 2
   if ! pgrep -x Blurt >/dev/null; then
-    after="$(crash_list)"
-    new="$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after"))"
+    new="$(new_crashes "$before")"
     die "smoke test: Blurt exited within 2s of launch${new:+ (new crash report: $new)}"
   fi
   sleep 3
-  after="$(crash_list)"
-  new="$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after"))"
+  new="$(new_crashes "$before")"
   osascript -e 'tell application "Blurt" to quit' >/dev/null 2>&1 || true
   sleep 1
   pkill -x Blurt >/dev/null 2>&1 || true
@@ -182,11 +187,7 @@ smoke_launch() {
   info "smoke test: launched, stayed up 5s, no crash report"
 }
 
-if command -v xcbeautify >/dev/null 2>&1; then
-  PRETTY=(xcbeautify --quiet)
-else
-  PRETTY=(cat)
-fi
+pretty_xcodebuild
 
 step "Preflight"
 require_tools --hint='brew install create-dmg if needed' \
@@ -427,7 +428,7 @@ info "checksums: $CHECKSUMS"
 
 step "Summary"
 SIZE="$(du -h "$DMG" | cut -f1)"
-SHA="$(shasum -a 256 "$DMG" | awk '{print $1}')"
+SHA="$(sha256_of_file "$DMG")"
 cat <<EOF
 
   DMG:        $DMG

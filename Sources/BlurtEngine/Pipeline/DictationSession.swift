@@ -254,23 +254,32 @@ public actor DictationSession {
     do {
       pcm = try await mic.stop()
     } catch {
-      // A cancel that landed while mic.stop() was in flight wins over
-      // surfacing the audio error — the user asked for nothing to happen. It
-      // arrived either synchronously (cancel() saw `.transcribing` and claimed
-      // the phase, moving it off `.transcribing`) or as a recorded request
-      // from before this release's turn, consumed here.
-      if consumeCancelRequest() || phase != .transcribing { return }
+      // A cancel wins over surfacing the audio error — the user asked for
+      // nothing to happen.
+      if cancelWonRelease() { return }
       // Audio capture/conversion failed (e.g. the recorded file couldn't be
       // read back). Surface it instead of silently transcribing an empty blob.
       setPhase(.failed(.audioCaptureFailed(underlying: error)))
       return
     }
-    // The same two cancel paths, honored here before any pipeline exists —
-    // deterministically no transcription, no paste.
-    if consumeCancelRequest() || phase != .transcribing { return }
+    // Honored again here, before any pipeline exists — deterministically no
+    // transcription, no paste.
+    if cancelWonRelease() { return }
     pipelineTask = Task { [weak self] in
       await self?.runTranscribeInject(pcm: pcm)
     }
+  }
+
+  /// Whether a cancel beat this release across the `mic.stop()` suspension, in
+  /// which case the release must abandon the run. Both exits of `performRelease`
+  /// ask, so the composite rule lives here rather than being spelled out twice —
+  /// a new cancel route then reaches both exits by construction.
+  ///
+  /// Two routes: the cancel arrived synchronously (`cancel()` saw `.transcribing`
+  /// and claimed the phase, moving it off `.transcribing`), or it was recorded
+  /// before this release's turn and is consumed now.
+  private func cancelWonRelease() -> Bool {
+    consumeCancelRequest() || phase != .transcribing
   }
 
   /// Consumes a cancel requested while this release held the queue, claiming the

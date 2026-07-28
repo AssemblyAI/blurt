@@ -36,16 +36,15 @@ DERIVED="/tmp/blurt-leaks-dd"
 REPORT="/tmp/blurt-leaks.txt"
 SETTLE_SECONDS="${LEAKS_SETTLE_SECONDS:-6}"
 
-command -v xcodebuild >/dev/null 2>&1 || {
-  echo "error: xcodebuild not found (macOS/Xcode required)" >&2
-  exit 1
-}
+# For `die` and `require_tools`/`pretty_xcodebuild` — the same helpers dev-build.sh
+# reuses. This script called `die` on its two most important failure paths without
+# defining it, so a scan that couldn't run reported "die: command not found" instead
+# of the diagnostic written for it.
+# shellcheck source=scripts/release-lib.sh
+source "$REPO_ROOT/scripts/release-lib.sh"
 
-if command -v xcbeautify >/dev/null 2>&1; then
-  PRETTY=(xcbeautify --quiet)
-else
-  PRETTY=(cat)
-fi
+require_tools --hint='macOS/Xcode required' xcodebuild
+pretty_xcodebuild
 
 echo "==> building Blurt (Debug, ad-hoc) for the leak run"
 cd "$APP_DIR"
@@ -62,10 +61,7 @@ xcodebuild \
   build | "${PRETTY[@]}"
 
 APP_BIN="$DERIVED/Build/Products/Debug/Blurt.app/Contents/MacOS/Blurt"
-[ -x "$APP_BIN" ] || {
-  echo "error: built app binary not found at $APP_BIN" >&2
-  exit 1
-}
+[ -x "$APP_BIN" ] || die "built app binary not found at $APP_BIN"
 
 echo "==> launching the app and exercising the dictation path"
 MallocStackLogging=1 BLURT_LEAK_EXERCISE=1 "$APP_BIN" -BlurtUITest \

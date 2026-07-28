@@ -8,6 +8,18 @@
 /// Pure and fully injectable: the caller supplies the persisted team, the current
 /// team, the live trust state, and the reset side effect.
 public enum SigningIdentityMigration {
+  /// `UserDefaults` key holding the signing team recorded by the last migration
+  /// pass — the `lastTeam` input to `run`. Owned here, next to the decision it
+  /// feeds, rather than as a literal at the shell call site.
+  ///
+  /// Deliberately **absent** from `PersistedSettings.allDefaultsKeys`: that roster
+  /// is the "reset to a clean preinstall state" sweep, and this marker is not a
+  /// user setting but a record of what the migration has already done. Clearing it
+  /// would make every swept launch look like a team change and re-run the
+  /// `tccutil` reset. Renaming it would do the same for every installed user, so
+  /// the string is frozen.
+  public static let lastSigningTeamDefaultsKey = "accessibility.lastSigningTeam"
+
   public enum Decision: Equatable {
     /// Unsigned/ad-hoc build, or the team is unchanged since last launch.
     case noAction
