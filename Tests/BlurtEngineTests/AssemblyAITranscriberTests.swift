@@ -43,6 +43,16 @@ struct HTTPClientTests {
     }
   }
 
+  @Test("transcriber prefers the rewrite even when an llm_error rides along")
+  func transcribePrefersRewriteDespiteError() async throws {
+    // `llm_error` alongside a non-null rewrite marks the rewrite degraded, not
+    // absent — the rewrite still wins; the error is only logged.
+    let body = Data(#"{"text":"um hello","llm_response":"Hello.","llm_error":"slow"}"#.utf8)
+    let transport = FakeHTTPTransport { _ in (200, body) }
+    let result = try await collectTranscript(makeTranscriber(apiKey: "test-key", transport: transport))
+    #expect(result == "Hello.")
+  }
+
   @Test("transcriber succeeds with a real context (builds and sends a prompt)")
   func transcribeWithContext() async throws {
     let transport = FakeHTTPTransport { request in

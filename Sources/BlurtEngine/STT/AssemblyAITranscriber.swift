@@ -70,13 +70,14 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     guard let response = try? JSONDecoder().decode(DictationResponse.self, from: data) else {
       throw AssemblyAIError.malformedResponse
     }
+    // The rewrite is best-effort: a null `llm_response` (rewrite failed or
+    // timed out) degrades to the verbatim transcript rather than an error.
+    if let rewrite = response.llmResponse { return rewrite }
     if let error = response.llmError {
       transcriberLog.warning(
         "llm rewrite unavailable (\(error, privacy: .public)); using verbatim transcript")
     }
-    // The rewrite is best-effort: a null `llm_response` (rewrite failed or
-    // timed out) degrades to the verbatim transcript rather than an error.
-    return response.llmResponse ?? response.text
+    return response.text
   }
 
   /// Pre-open and pool a connection to the dictation host so the next
