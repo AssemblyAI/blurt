@@ -166,11 +166,11 @@ check "main == tag -> next patch" "0.1.6" "$(default_target 0.1.5 0.1.5)"
 check "no tags -> next patch" "0.1.6" "$(default_target 0.1.5 '')"
 
 echo "== identity_listed =="
-printf '  1) 640A7F5A9754400D4A0491E7A6FB30542D907806 "Developer ID Application: Alexander Kroman (Y54ZB9JF63)"\n' \
-  | identity_listed 640A7F5A9754400D4A0491E7A6FB30542D907806
+printf '  1) 602F699488189767137DF15633B967B1371ACD86 "Developer ID Application: Alex Kroman (B2VQF7Q2QY)"\n' \
+  | identity_listed 602F699488189767137DF15633B967B1371ACD86
 check "present -> rc 0" "0" "$?"
 printf '  1) 0000000000000000000000000000000000000000 "Some Other Identity"\n' \
-  | identity_listed 640A7F5A9754400D4A0491E7A6FB30542D907806
+  | identity_listed 602F699488189767137DF15633B967B1371ACD86
 check "absent -> rc 1" "1" "$?"
 
 echo "== sha_from_sums =="
