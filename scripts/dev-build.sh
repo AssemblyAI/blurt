@@ -22,12 +22,7 @@ source "$REPO_ROOT/scripts/release-lib.sh"
 
 require_tools xcodebuild
 
-if command -v xcbeautify >/dev/null 2>&1; then
-  PRETTY=(xcbeautify --quiet)
-else
-  PRETTY=(cat)
-  info "xcbeautify not installed; using raw output (brew install xcbeautify)"
-fi
+pretty_xcodebuild
 
 cd "$APP_DIR"
 

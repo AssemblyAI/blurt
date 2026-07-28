@@ -249,17 +249,19 @@
         // UI tests need the main Window scene to be present even when SwiftUI's
         // restoration state remembers it as closed from a prior test. The harness
         // scene is always presented in UI-test mode, so capture its openWindow
-        // action and use it to deterministically restore the main window.
-        appDelegate.openWindowByID = { openWindow(id: $0) }
+        // action and use it to deterministically restore the main window. Capture
+        // the action alone — see `MainWindowRoot` for the cycle a bare
+        // `openWindow(id:)` creates here.
+        appDelegate.openWindowByID = { [openWindow] id in openWindow(id: id) }
         appDelegate.openMainWindow()
       }
     }
 
     private var statusText: String {
       switch coordinator?.menuBarStatus ?? .idle {
-      case .idle: "idle"
-      case .recording: "recording"
-      case .transcribing: "transcribing"
+      case .idle: UITestIdentifiers.statusIdle
+      case .recording: UITestIdentifiers.statusRecording
+      case .transcribing: UITestIdentifiers.statusTranscribing
       }
     }
   }

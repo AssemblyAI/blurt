@@ -73,13 +73,24 @@ extension FocusCapture {
   /// (placeholder → description → title → role description), skipping blanks.
   /// Placeholder/description tend to be the most meaningful; role description
   /// ("text entry area") is the generic last resort.
+  ///
+  /// The candidates are `@autoclosure`s so each is read only if the ones before it
+  /// came back blank. `fieldLabel` passes AX attribute reads, and every one is a
+  /// synchronous cross-process round trip bounded by
+  /// `axMessagingTimeoutSeconds` — evaluated eagerly, a first-match-wins choice
+  /// cost four timeouts against an unresponsive app where one would do, inside a
+  /// capture whose whole design point is bounded cost. Call sites are unchanged:
+  /// an autoclosure wraps the argument expression for them.
   static func selectLabel(
-    placeholder: String?, description: String?, title: String?, roleDescription: String?
+    placeholder: @autoclosure () -> String?,
+    description: @autoclosure () -> String?,
+    title: @autoclosure () -> String?,
+    roleDescription: @autoclosure () -> String?
   ) -> String? {
-    for candidate in [placeholder, description, title, roleDescription] {
-      if let value = candidate.trimmedNonEmpty() { return value }
-    }
-    return nil
+    if let value = placeholder().trimmedNonEmpty() { return value }
+    if let value = description().trimmedNonEmpty() { return value }
+    if let value = title().trimmedNonEmpty() { return value }
+    return roleDescription().trimmedNonEmpty()
   }
 
   /// The up-to-`maxChars` slice of `full` ending at `caret`. `caret` is a

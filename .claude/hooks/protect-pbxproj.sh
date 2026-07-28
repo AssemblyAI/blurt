@@ -10,10 +10,10 @@
 # the stderr message back to Claude; exit 0 allows everything else.
 set -euo pipefail
 
-payload="$(cat)"
-file="$(printf '%s' "$payload" \
-  | python3 -c 'import json,sys; print(json.load(sys.stdin).get("tool_input",{}).get("file_path",""))' \
-  2>/dev/null || true)"
+# shellcheck source=.claude/hooks/hook-lib.sh
+source "$(dirname "$0")/hook-lib.sh"
+
+file="$(hook_file_path)"
 
 case "$file" in
   */Blurt.xcodeproj/project.pbxproj)

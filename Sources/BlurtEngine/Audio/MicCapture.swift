@@ -37,6 +37,10 @@ public actor MicCapture: MicCaptureProtocol {
   private var activeRecorder: AVAudioRecorder?
   /// Polls the active recorder's meter and feeds `levels` while recording.
   private var meterTask: Task<Void, Never>?
+  /// The last value `emitLevel` put on the stream, so an unchanged tick can be
+  /// dropped. Reset per capture in `start()` — a fresh recording must emit its
+  /// first level even when it matches where the previous one left off.
+  private var lastEmittedLevel: Float?
   /// How often the meter is sampled for the overlay, in seconds. 20 Hz reads as
   /// smooth for a voice-level meter while cutting the per-tick work (recorder poll
   /// + stream yield, and the SwiftUI bar redraw it drives) by a third versus 30 Hz.
@@ -94,6 +98,7 @@ public actor MicCapture: MicCaptureProtocol {
     }
 
     activeRecorder = recorder
+    lastEmittedLevel = nil
     Self.logger.info("start recording to \(recorder.url.lastPathComponent, privacy: .public)")
     startMeterTimer()
   }
@@ -156,7 +161,15 @@ public actor MicCapture: MicCaptureProtocol {
   private func emitLevel() {
     guard let recorder = activeRecorder else { return }
     recorder.updateMeters()
-    levelsContinuation.yield(Self.linearLevel(fromPowerDB: recorder.averagePower(forChannel: 0)))
+    let level = Self.linearLevel(fromPowerDB: recorder.averagePower(forChannel: 0))
+    // Only yield transitions. `linearLevel` floors room ambient to exactly 0, so a
+    // silent stretch would otherwise push the same value 20×/s, resuming the
+    // host's `@MainActor` observer each time just to have it discard the
+    // duplicate. Hosts still guard their own side (the range contract is the
+    // seam's), but the cheapest place to drop a no-op tick is before it crosses.
+    guard level != lastEmittedLevel else { return }
+    lastEmittedLevel = level
+    levelsContinuation.yield(level)
   }
 
   // The dB→0...1 conversion `emitLevel` uses lives in `MicCapture+Meter.swift`

@@ -70,12 +70,24 @@ enum FocusCapture {
     let isSecure = mustRedactContents(
       role: stringValue(element, kAXRoleAttribute),
       subrole: stringValue(element, kAXSubroleAttribute))
-    // `visibleTextOrNil` collapses an all-invisible read (e.g. Google Docs' lone
-    // U+200B before the caret) to nil so it can't masquerade as real prior text.
-    let prior = isSecure ? nil : visibleTextOrNil(priorText(of: element, maxChars: maxPriorChars))
-    // The selected range's text (empty when there's no selection). Capped like
-    // prior text so a huge highlight can't dominate the prompt budget.
-    let selected = isSecure ? nil : visibleTextOrNil(selectedText(of: element, maxChars: maxSelectedChars))
+    // Both text slices stay nil for a secure field — the whole point of the guard
+    // above — so the reads that feed them are skipped wholesale rather than each
+    // being individually conditional.
+    var prior: String?
+    var selected: String?
+    if !isSecure {
+      // One read of the selected range serves both slices: its location *is* the
+      // insertion point the prior-text slice ends at, and its extent is what the
+      // selected-text slice asks for. Reading it here rather than inside each slice
+      // costs the capture one cross-process round trip for it instead of two.
+      let selection = selectedTextRange(of: element)
+      // `visibleTextOrNil` collapses an all-invisible read (e.g. Google Docs' lone
+      // U+200B before the caret) to nil so it can't masquerade as real prior text.
+      prior = visibleTextOrNil(priorText(of: element, selection: selection, maxChars: maxPriorChars))
+      // The selected range's text (empty when there's no selection). Capped like
+      // prior text so a huge highlight can't dominate the prompt budget.
+      selected = visibleTextOrNil(selectedText(of: element, selection: selection, maxChars: maxSelectedChars))
+    }
     return FocusedFieldContext(
       priorText: prior,
       selectedText: selected,
@@ -140,37 +152,53 @@ enum FocusCapture {
     return range
   }
 
-  /// The insertion point (UTF-16 location of the selected range) of `element`,
-  /// or `nil` when it exposes no readable selection.
-  private nonisolated static func caretLocation(of element: AXUIElement) -> Int? {
+  /// The element's selected text range — a zero-length range when there's just a
+  /// caret — or `nil` when it exposes no readable selection. Its `location` is the
+  /// insertion point.
+  private nonisolated static func selectedTextRange(of element: AXUIElement) -> CFRange? {
     var rangeRef: CFTypeRef?
     guard
       AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeRef)
         == .success,
       let rangeRef
     else { return nil }
-    return axRange(rangeRef)?.location
+    return axRange(rangeRef)
+  }
+
+  /// The element's text for `range` via the parameterized "string for range"
+  /// attribute, so only the slice asked for crosses Accessibility IPC rather than
+  /// the whole field value. Shared by the prior-text and selected-text reads,
+  /// which differ only in the range they request and how they post-process it.
+  private nonisolated static func string(of element: AXUIElement, in range: CFRange) -> String? {
+    var range = range
+    guard let axRange = AXValueCreate(.cfRange, &range) else { return nil }
+    var sliceRef: CFTypeRef?
+    guard
+      AXUIElementCopyParameterizedAttributeValue(
+        element, kAXStringForRangeParameterizedAttribute as CFString, axRange, &sliceRef)
+        == .success,
+      let slice = sliceRef as? String
+    else { return nil }
+    return slice
   }
 
   /// Up to `maxChars` of text immediately preceding the insertion point, or
   /// `nil` when the element exposes no readable text before the cursor.
-  private nonisolated static func priorText(of element: AXUIElement, maxChars: Int) -> String? {
+  /// `selection` is the already-read selected range (see `selectedTextRange`).
+  private nonisolated static func priorText(
+    of element: AXUIElement, selection: CFRange?, maxChars: Int
+  ) -> String? {
     // Insertion point = the location of the (possibly empty) selected range.
-    let caret = caretLocation(of: element) ?? -1
+    let caret = selection?.location ?? -1
 
     // Prefer the parameterized "string for range" so we read only the slice we
     // need (cheap even in huge documents) rather than the whole field value.
     if caret > 0 {
       let start = max(0, caret - maxChars)
-      var sliceRange = CFRange(location: start, length: caret - start)
-      if let axRange = AXValueCreate(.cfRange, &sliceRange) {
-        var sliceRef: CFTypeRef?
-        if AXUIElementCopyParameterizedAttributeValue(
-          element, kAXStringForRangeParameterizedAttribute as CFString, axRange, &sliceRef)
-          == .success, let slice = sliceRef as? String, !slice.isEmpty
-        {
-          return slice
-        }
+      if let slice = string(of: element, in: CFRange(location: start, length: caret - start)),
+        !slice.isEmpty
+      {
+        return slice
       }
     }
 
@@ -181,23 +209,17 @@ enum FocusCapture {
   }
 
   /// Up to `maxChars` of selected text, or `nil` when the element exposes no
-  /// readable selection. Uses the selected range plus the parameterized
+  /// readable selection. Slices `selection` through the parameterized
   /// string-for-range attribute first so a huge highlight does not copy the full
-  /// selection across Accessibility IPC before being clipped locally.
-  private nonisolated static func selectedText(of element: AXUIElement, maxChars: Int) -> String? {
-    var rangeRef: CFTypeRef?
-    if AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeRef)
-      == .success, let rangeRef, var selectedRange = axRange(rangeRef), selectedRange.length > 0
-    {
+  /// selection across Accessibility IPC before being clipped locally; falls back
+  /// to `kAXSelectedText` for elements that expose no string-for-range.
+  private nonisolated static func selectedText(
+    of element: AXUIElement, selection: CFRange?, maxChars: Int
+  ) -> String? {
+    if var selectedRange = selection, selectedRange.length > 0 {
       selectedRange.length = min(selectedRange.length, maxChars)
-      if let axRange = AXValueCreate(.cfRange, &selectedRange) {
-        var sliceRef: CFTypeRef?
-        if AXUIElementCopyParameterizedAttributeValue(
-          element, kAXStringForRangeParameterizedAttribute as CFString, axRange, &sliceRef)
-          == .success, let slice = sliceRef as? String
-        {
-          return clip(slice.trimmedNonEmpty(), to: maxChars)
-        }
+      if let slice = string(of: element, in: selectedRange) {
+        return clip(slice.trimmedNonEmpty(), to: maxChars)
       }
     }
 

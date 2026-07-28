@@ -361,7 +361,7 @@ The trigger is editable in the Shortcut section of the setup/settings UI (`Hotke
 `Picker` over `TriggerKey.allCases` that writes `TriggerKeyStore`, after which
 `AppCoordinator.dictationBindingChanged()` re-reads it into the tap. For display strings, use
 `TriggerKeyStore().triggerKey.label` for one-shot reads; in views that must re-render live on a
-Settings change, use **`@BoundTriggerKey`** — a `DynamicProperty` in `HotkeyStepView.swift` wrapping
+Settings change, use **`@BoundTriggerKey`** — a `DynamicProperty` in `Wizard/BoundTriggerKey.swift` wrapping
 the `@AppStorage(TriggerKeyStore.defaultsKey)` + `TriggerKey.fromPersisted` pair — rather than
 restating that pairing per view. The unset default belongs to `fromPersisted` (an absent keycode maps
 to right ⌘), so views must not re-declare `TriggerKey.rightCommand.rawValue` themselves.
@@ -401,9 +401,15 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
   `keyTermsProvider`), **`DeveloperModeStore`** (`BlurtDeveloperMode`, off by default),
   **`OverlayOriginStore`** (the pill's dragged origin, x/y), **`LastUpdateCheckStore`**
   (`BlurtLastUpdateCheck`, the stamp throttling the automatic launch update check).
-- **`PersistedSettings.allDefaultsKeys`** is the roster of every key those stores write. Adding a
-  store and adding it to every "reset to a clean state" sweep (e.g. the UI-test launch reset) must be
-  the same edit — that's why the roster exists, so keep it in sync.
+- **`PersistedSettings.allDefaultsKeys`** is the roster of every key those stores write, and
+  **`PersistedSettings.resetAll(in:)`** is the sweep over it — the public door, which the UI-test
+  launch reset calls. Adding a store and adding it to every "reset to a clean state" sweep must be the
+  same edit — that's why the roster exists, so keep it in sync. The sweep lives next to the roster
+  (not in the shell) so a reset needing more than a defaults removal has one place to grow and stays
+  inside the test target; the roster itself is internal so no caller re-rolls its own sweep.
+  `SigningIdentityMigration.lastSigningTeamDefaultsKey` is deliberately **outside** the roster: it
+  records what the TCC migration already did, not a user setting, and clearing it would make the next
+  launch re-run the `tccutil` reset.
 
 Record cues: **`SoundPack`** is a selectable start/stop chime voice (vintage synth samples;
 `id` doubles as the bundled stem `<id>-start.m4a` / `<id>-stop.m4a` under

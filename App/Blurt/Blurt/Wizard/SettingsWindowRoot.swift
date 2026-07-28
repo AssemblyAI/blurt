@@ -30,9 +30,9 @@ struct SettingsWindowRoot: View {
           .tabItem { Label(UITestIdentifiers.advancedSettingsTab, systemImage: "gearshape.2") }
           .tag(Tab.advanced)
       }
-      .frame(width: 480)
+      .frame(width: MainWindow.contentWidth)
     } else {
-      Color.clear.frame(width: 480, height: 240)
+      Color.clear.frame(width: MainWindow.contentWidth, height: 240)
     }
   }
 }

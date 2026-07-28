@@ -81,7 +81,12 @@ struct MicCaptureFormatTests {
       .appendingPathComponent("blurt-test-\(UUID().uuidString).wav")
     let settings: [String: Any] = [
       AVFormatIDKey: kAudioFormatLinearPCM,
-      AVSampleRateKey: 16_000.0,
+      // The engine's rate, not a restated literal: this helper claims to write
+      // "the same on-disk format MicCapture records", and MicCapture derives its
+      // targetSampleRate from here too. Pinned independently, a rate change would
+      // leave decodePCM's round trip exercising a format the recorder never makes,
+      // with the suite still green. (SyncSTTLimitsTests pins the value itself.)
+      AVSampleRateKey: Double(SyncSTTLimits.sampleRate),
       AVNumberOfChannelsKey: 1,
       AVLinearPCMBitDepthKey: 16,
       AVLinearPCMIsFloatKey: false,

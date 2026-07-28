@@ -16,6 +16,18 @@ import SwiftUI
 enum MainWindow {
   /// Scene identifier for `openWindow(id:)` / the `Window(id:)` scene.
   static let id = "main"
+
+  /// Width of every window's content, and so — under
+  /// `.windowResizability(.contentSize)` — of the windows themselves. Apple's
+  /// common settings-pane width; height stays content-driven (`.fixedSize`), so a
+  /// grouped `Form` hugs its content like a native pane instead of padding out to
+  /// a hard-coded box.
+  ///
+  /// Shared rather than restated per view because the main window swaps
+  /// `WizardView` ↔ `ReadyView` in place: if those two disagree, the window visibly
+  /// jumps on the transition, and the `Color.clear` placeholders have to match them
+  /// or the defensive branch resizes it.
+  static let contentWidth: CGFloat = 480
 }
 
 /// Root view of the main `Window` scene. It pulls the long-lived models off the
@@ -42,7 +54,15 @@ struct MainWindowRoot: View {
         // (`.defaultLaunchBehavior(.presented)`), so this runs before any of
         // those paths can fire, and `openWindow(id:)` opens any Window scene
         // regardless of which scene's environment supplied the action.
-        appDelegate.openWindowByID = { openWindow(id: $0) }
+        //
+        // Capture the action alone, not `self`: `openWindow` is an `@Environment`
+        // property wrapper, so a bare `openWindow(id:)` in an escaping closure reads
+        // as `self.openWindow` and captures the whole view struct — including this
+        // strong `appDelegate`, which owns the closure. That cycle would keep a copy
+        // of the view's environment alive for the process lifetime, and neither gate
+        // sees it (`leaks.sh` can't fault an `AppDelegate` reachable from a root, and
+        // `MemoryLeakTests` covers only the engine).
+        appDelegate.openWindowByID = { [openWindow] id in openWindow(id: id) }
         // Permission polling runs for the app's whole life (started in the
         // controller's init), so the window only needs to refresh once on
         // appear to reflect any change made while it was closed.
@@ -62,7 +82,7 @@ struct MainWindowRoot: View {
     } else {
       // Defensive only: `applicationDidFinishLaunching` creates the models
       // before the run loop presents any scene, so this branch shouldn't show.
-      Color.clear.frame(width: 480, height: 320)
+      Color.clear.frame(width: MainWindow.contentWidth, height: 320)
     }
   }
 }

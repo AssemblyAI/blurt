@@ -26,10 +26,18 @@ struct UpdateCheckerTests {
     UpdateChecker(transport: FakeHTTPTransport { _ in (200, data) })
   }
 
+  /// The installed version every case's fixture tag is chosen relative to
+  /// (`v0.2.0` is newer, `v0.1.0` older). Factored out like the two fixtures above:
+  /// spelled at each case, bumping it is seven edits and a missed one inverts that
+  /// case's meaning while still passing.
+  private func currentVersion() throws -> SemanticVersion {
+    try #require(SemanticVersion("0.1.30"))
+  }
+
   @Test("reports .available with the DMG URL when the release is newer")
   func availableWhenNewer() async throws {
     let checker = checker(returning: releaseJSON(tag: "v0.2.0"))
-    let current = try #require(SemanticVersion("0.1.30"))
+    let current = try currentVersion()
     let result = try await checker.check(current: current)
     let expectedVersion = try #require(SemanticVersion("0.2.0"))
     let expectedURL = try #require(URL(string: "https://example.com/Blurt.dmg"))
@@ -39,7 +47,7 @@ struct UpdateCheckerTests {
   @Test("reports .upToDate when the release matches the current version")
   func upToDateWhenSame() async throws {
     let checker = checker(returning: releaseJSON(tag: "v0.1.30"))
-    let current = try #require(SemanticVersion("0.1.30"))
+    let current = try currentVersion()
     let result = try await checker.check(current: current)
     #expect(result == .upToDate)
   }
@@ -47,7 +55,7 @@ struct UpdateCheckerTests {
   @Test("reports .upToDate when the release is older than the current build")
   func upToDateWhenOlder() async throws {
     let checker = checker(returning: releaseJSON(tag: "v0.1.0"))
-    let current = try #require(SemanticVersion("0.1.30"))
+    let current = try currentVersion()
     let result = try await checker.check(current: current)
     #expect(result == .upToDate)
   }
@@ -55,7 +63,7 @@ struct UpdateCheckerTests {
   @Test("throws when a newer release has no .dmg asset")
   func throwsWithoutDMG() async throws {
     let checker = checker(returning: releaseJSON(tag: "v0.2.0", assetName: "notes.txt"))
-    let current = try #require(SemanticVersion("0.1.30"))
+    let current = try currentVersion()
     await #expect(throws: (any Error).self) {
       try await checker.check(current: current)
     }
@@ -64,7 +72,7 @@ struct UpdateCheckerTests {
   @Test("throws on an unparseable tag")
   func throwsOnBadTag() async throws {
     let checker = checker(returning: releaseJSON(tag: "nightly"))
-    let current = try #require(SemanticVersion("0.1.30"))
+    let current = try currentVersion()
     await #expect(throws: (any Error).self) {
       try await checker.check(current: current)
     }
@@ -73,7 +81,7 @@ struct UpdateCheckerTests {
   @Test("throws on malformed JSON")
   func throwsOnMalformedJSON() async throws {
     let checker = checker(returning: Data("not json".utf8))
-    let current = try #require(SemanticVersion("0.1.30"))
+    let current = try currentVersion()
     await #expect(throws: (any Error).self) {
       try await checker.check(current: current)
     }
@@ -82,7 +90,7 @@ struct UpdateCheckerTests {
   @Test("propagates a network failure from the transport")
   func propagatesFetchError() async throws {
     let checker = UpdateChecker(transport: FakeHTTPTransport.failing(with: URLError(.notConnectedToInternet)))
-    let current = try #require(SemanticVersion("0.1.30"))
+    let current = try currentVersion()
     await #expect(throws: (any Error).self) {
       try await checker.check(current: current)
     }

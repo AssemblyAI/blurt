@@ -43,6 +43,27 @@ struct FocusCaptureTests {
     #expect(label == "To")
   }
 
+  @Test("selectLabel stops reading candidates once one answers")
+  func labelIsLazy() {
+    // `fieldLabel` passes AX attribute reads as the candidates, and each is a
+    // synchronous cross-process round trip. First-match-wins must therefore also
+    // mean first-match-only: pinned here so a refactor back to eager arguments
+    // (e.g. collecting them into an array) fails instead of quietly costing three
+    // extra AX timeouts per capture against an unresponsive app.
+    var reads: [String] = []
+    func read(_ attribute: String, _ value: String?) -> String? {
+      reads.append(attribute)
+      return value
+    }
+    let label = FocusCapture.selectLabel(
+      placeholder: read("placeholder", "Search"),
+      description: read("description", "desc"),
+      title: read("title", "title"),
+      roleDescription: read("roleDescription", "text field"))
+    #expect(label == "Search")
+    #expect(reads == ["placeholder"])
+  }
+
   // MARK: priorSlice
 
   @Test("priorSlice returns text up to the caret")

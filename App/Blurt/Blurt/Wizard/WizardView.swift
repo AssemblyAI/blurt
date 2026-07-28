@@ -33,11 +33,10 @@ struct WizardView: View {
       .scrollDisabled(true)
     }
     // The window uses `.windowResizability(.contentSize)`, so this view's size is
-    // the window's size. Pin the width (Apple's common settings-pane width) but
-    // let height be content-driven — `.fixedSize` collapses the grouped Form to
-    // its ideal height so the window hugs its content like a native settings pane
-    // instead of padding out to a hard-coded box.
-    .frame(width: 480)
+    // the window's size. Pin the shared width (see `MainWindow.contentWidth` — the
+    // ready screen this swaps with must match) but let height be content-driven:
+    // `.fixedSize` collapses the grouped Form to its ideal height.
+    .frame(width: MainWindow.contentWidth)
     .fixedSize(horizontal: false, vertical: true)
   }
 

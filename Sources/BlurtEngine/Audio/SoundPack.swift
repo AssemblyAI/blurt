@@ -27,18 +27,32 @@ public struct SoundPack: Sendable, Hashable, Identifiable {
   /// Bundled cue stem for the stop cue, or nil when no sound plays.
   public var stopFileName: String? { isSilent ? nil : "\(id)-stop" }
 
-  /// `.none` followed by the full catalog. Private: the picker builds itself from
-  /// `.none` + `groups` + `voices(in:)`, so this exists only to back `find(id:)`.
-  private static var all: [SoundPack] { [.none] + catalog }
+  /// `.none` plus the full catalog, keyed by `id`. Private: the picker builds
+  /// itself from `.none` + `groups` + `voices(in:)`, so this exists only to back
+  /// `find(id:)`. Stored, not computed: `find` runs from a `Binding` getter on
+  /// every settings render and from `CueSoundPlayer`'s pack load, and a computed
+  /// version rebuilt a ~190-element array and scanned it linearly each time.
+  private static let byID: [String: SoundPack] = {
+    var index = [SoundPack.none.id: SoundPack.none]
+    for pack in catalog {
+      index[pack.id] = pack
+    }
+    return index
+  }()
 
   /// The default pack: ORCHESTRA (Yamaha DX7 ROM1A voice 6), falling back to
   /// `.none` only if the catalog is somehow empty.
-  public static var defaultPack: SoundPack { catalog.first { $0.id == "rom1a-6" } ?? .none }
+  ///
+  /// Internal for the same reason as `isSilent` and `find(id:)`: the app reaches the
+  /// default only through `fromPersisted` — restating it view-side is exactly what
+  /// `SoundStepView` was corrected not to do — so exporting it would just trip
+  /// periphery's redundant-public check.
+  static let defaultPack: SoundPack = catalog.first { $0.id == "rom1a-6" } ?? .none
 
   /// Looks a pack up by its persisted `id`. Internal for the same reason as
   /// `isSilent`: the app reaches packs through `fromPersisted`, so exporting this
   /// would only trip periphery's redundant-public check.
-  static func find(id: String) -> SoundPack? { all.first { $0.id == id } }
+  static func find(id: String) -> SoundPack? { byID[id] }
 
   /// Decodes a persisted pack id, falling back to `defaultPack` when the id is
   /// unset or names no known pack. The single decode-with-default rule shared by
@@ -53,16 +67,29 @@ public struct SoundPack: Sendable, Hashable, Identifiable {
   /// Distinct group names, in catalog order — the picker's sections. Dedupes
   /// through a `Set` (`insert(_:).inserted` as the filter, matching
   /// `KeyTermsStore.parse`) rather than an array `contains` scan per element.
-  public static var groups: [String] {
+  /// Stored for the same reason as `byID`: the picker reads it, then `voices(in:)`
+  /// per group, on every settings render.
+  public static let groups: [String] = {
     var seen = Set<String>()
     return catalog.compactMap { pack -> String? in
       guard let group = pack.group, seen.insert(group).inserted else { return nil }
       return group
     }
+  }()
+
+  /// The voices belonging to one group, in catalog order. Backed by a stored index
+  /// so the picker's per-group read is a dictionary hit rather than a full-catalog
+  /// filter per section.
+  public static func voices(in group: String) -> [SoundPack] {
+    voicesByGroup[group] ?? []
   }
 
-  /// The voices belonging to one group, in catalog order.
-  public static func voices(in group: String) -> [SoundPack] {
-    catalog.filter { $0.group == group }
-  }
+  private static let voicesByGroup: [String: [SoundPack]] = {
+    var index: [String: [SoundPack]] = [:]
+    for pack in catalog {
+      guard let group = pack.group else { continue }
+      index[group, default: []].append(pack)
+    }
+    return index
+  }()
 }
