@@ -53,7 +53,7 @@ Sources/BlurtEngine/         the engine (dependency-free Swift package)
   Permissions/               PermissionsChecker (mic + Accessibility)
   Pipeline/                  DictationSession (actor) + phases, UI projections, geometry, log
   STT/                       AssemblyAITranscriber, TranscriptionPrompt/Context, SyncSTTLimits
-  Update/                    UpdateChecker (manual, download-only)
+  Update/                    UpdateChecker (download-only) + the launch-check policy
 App/Blurt/
   project.yml                XcodeGen source of truth — Blurt.xcodeproj is GENERATED
   Blurt/                     the shell: App.swift scenes, AppCoordinator, Wizard/, Overlay/,
@@ -170,7 +170,7 @@ Each was tried the other way and reverted. If a task seems to require one, stop 
 | Add a keystroke-typing paste path or a length threshold   | Injection is **always** clipboard paste (save → write → ⌘V → settle → restore), with the copied-to-clipboard degradation when the target is lost.                                                                             |
 | Add `LSUIElement` or a menu-bar-**only** mode             | Blurt is a Dock app first. The `MenuBarExtra` status item is convenience layered on the Dock icon; the notch can hide a status item, so nothing may depend on it. A menu-bar-only variant was reverted twice.                 |
 | Add a `KeyboardShortcuts` package or a key+modifier chord | The trigger is a single lone modifier, home-grown (`CGEventTap` + `DictationKeyGate`), and swallows nothing.                                                                                                                  |
-| Add a background/auto-updater or self-replacing install   | Updates are manual and download-only; `mxcl/AppUpdater` and its in-place updater were removed. Extend `UpdateChecker` / `UpdateCheckModel`.                                                                                   |
+| Add a self-replacing install or background auto-updater   | Updates are download-only; `mxcl/AppUpdater` and its in-place updater were removed. The once-a-day launch _check_ (`AutomaticUpdateCheck`) is fine; installing for the user, or polling, is not. Extend `UpdateCheckModel`.   |
 | Hand-edit `Blurt.xcodeproj/project.pbxproj`               | Generated from `project.yml`; `check.sh`'s drift check fails on any manual edit (a Claude PreToolUse hook also blocks it).                                                                                                    |
 | Redirect the post-build install away from `/Applications` | TCC won't register apps in DerivedData/`/tmp`, so permission toggles never appear.                                                                                                                                            |
 | Touch the real Keychain in tests                          | `APIKeyStore` is the production item — a test that writes it triggers Keychain prompts and corrupts the real item's ACL. Use an isolated service (see `KeychainStoreTests`) or `InMemoryAPIKeyStore`.                         |
@@ -399,7 +399,8 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
 - **`TriggerKeyStore`** (`BlurtTriggerKeyCode`), **`SoundPackStore`** (`BlurtSoundPack`),
   **`KeyTermsStore`** (the user's domain vocabulary, re-read at every press via the session's
   `keyTermsProvider`), **`DeveloperModeStore`** (`BlurtDeveloperMode`, off by default),
-  **`OverlayOriginStore`** (the pill's dragged origin, x/y).
+  **`OverlayOriginStore`** (the pill's dragged origin, x/y), **`LastUpdateCheckStore`**
+  (`BlurtLastUpdateCheck`, the stamp throttling the automatic launch update check).
 - **`PersistedSettings.allDefaultsKeys`** is the roster of every key those stores write. Adding a
   store and adding it to every "reset to a clean state" sweep (e.g. the UI-test launch reset) must be
   the same edit — that's why the roster exists, so keep it in sync.
@@ -457,8 +458,10 @@ restating them.
 
 ## Updates
 
-Update checking is **manual and download-only** — no in-place install, no background auto-updater.
-Three pieces:
+Updates are **download-only** — Blurt opens the release DMG in the browser and the user installs it.
+Nothing installs itself and nothing polls on a timer. Checks happen when the user asks (the Settings
+button, the app menu, the menu-bar item) **and** once shortly after launch on an app that's already
+configured, at most once a day. Five pieces:
 
 - **`UpdateChecker`** (`Sources/BlurtEngine/Update/UpdateChecker.swift`) — a `Sendable` struct that
   `GET`s `https://api.github.com/repos/AssemblyAI/blurt/releases/latest`, decodes `GitHubRelease`
@@ -473,15 +476,33 @@ Three pieces:
   0.1.31" form, so the alerts and the Settings Updates row can't name the version two ways. The
   memberwise init is private: an alert comes from a named result (`upToDate` / `available` /
   `checkFailed`), never assembled ad hoc in the shell.
-- **`UpdateCheckModel`** (`App/Blurt/Blurt/Update/UpdateCheckModel.swift`, `@MainActor`) — runs a
-  user-initiated check and reports it in a Sparkle-style alert: _up to date_, _available_ (**Download**
+- **`AutomaticUpdateCheck`** (`Sources/BlurtEngine/Update/AutomaticUpdateCheck.swift`) — the policy
+  for the launch check: `shouldRun(isConfigured:lastCheck:now:)` (setup finished, and ≥ 24 h since the
+  last completed check — a stamp in the future counts as due, so clock skew can't wedge the check off)
+  plus `launchDelay`, the short wait before fetching. Engine-side for the `SetupReadiness` reason: it's
+  a rule, and the shell that applies it has no test target.
+- **`LastUpdateCheckStore`** (`Sources/BlurtEngine/Update/LastUpdateCheckStore.swift`) — the
+  `UserDefaults` timestamp that throttle reads (`BlurtLastUpdateCheck`, in
+  `PersistedSettings.allDefaultsKeys`). Only a check that _completed_ stamps it — a failed one hasn't
+  answered the question, so the next launch asks again instead of coasting for a day on a fetch that
+  never landed.
+- **`UpdateCheckModel`** (`App/Blurt/Blurt/Update/UpdateCheckModel.swift`, `@MainActor`) — runs both
+  kinds of check and reports them in a Sparkle-style alert: _up to date_, _available_ (**Download**
   opens the release DMG in the browser, **Later** dismisses), or a recoverable _couldn't check_ (every
   throw, plus an unparseable bundle version, collapses to that one content). It holds only the AppKit
   half: build an `NSAlert` from an `UpdateAlertContent`, then open `downloadURL` if the default button
   came back. It presents via `beginSheetModal` on the host window (a nested `runModal()` loop was
   reported as an app hang, so `runModal()` is the fallback only when no window can host a sheet), and
-  an `isChecking` guard stops the Settings button and the app-menu command from stacking two alerts.
-  One shared instance (owned by `AppDelegate`) backs both entry points.
+  an `isChecking` guard stops any two entry points from stacking two alerts. One shared instance
+  (owned by `AppDelegate`) backs all of them.
+  - `checkForUpdates()` is the user-initiated path — it always reports a result, including "you're up
+    to date", because the user asked and the check has to visibly conclude.
+  - `checkForUpdatesAtLaunch(isConfigured:)` is the automatic one, called once from
+    `applicationDidFinishLaunching` with the wizard's `isReady`. It alerts **only** on an available
+    update: up-to-date and couldn't-check answer a question nobody asked, so they only log (a laptop
+    opened offline must not be greeted by an error). Gated on readiness so a first run never gets a
+    modal over its setup screen, and read once at launch rather than observed — someone who just
+    finished onboarding installed the newest build minutes ago.
 
 ## Tests
 

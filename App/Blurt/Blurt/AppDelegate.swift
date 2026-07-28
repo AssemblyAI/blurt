@@ -19,10 +19,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private(set) var coordinator: AppCoordinator?
   private(set) var wizardController: WizardController?
 
-  /// Backs both the app-menu "Check for Updates…" command and the menu-bar
-  /// item, so a check from either place runs through the same controller and
-  /// can't stack two result alerts. `lazy` so its bundle-version parse stays off
-  /// the launch path — it's built on first check, not at startup.
+  /// Backs the app-menu "Check for Updates…" command, the menu-bar item, the
+  /// Settings button, and the automatic launch check, so a check from any of
+  /// them runs through the same controller and can't stack two result alerts.
+  /// `lazy` so the UI-test substitution below can replace it before it's ever
+  /// read — `applicationDidFinishLaunching` assigns `.uiTest()` ahead of the
+  /// launch check, which is the first read on a normal launch.
   @ObservationIgnored lazy var updateCheckModel = UpdateCheckModel()
 
   /// Opens a window scene by id. The `openWindow` action lives in SwiftUI, so
@@ -146,7 +148,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // that never dismisses. See runAccessibilityGrantMigration().
     runAccessibilityGrantMigration()
 
-    self.wizardController = makeWizardController(coord: coord)
+    let wizard = makeWizardController(coord: coord)
+    self.wizardController = wizard
+
+    // A configured app checks for updates on its own shortly after launch —
+    // at most once a day, and silent unless a newer release exists (see
+    // `UpdateCheckModel.checkForUpdatesAtLaunch`). Still download-only: the
+    // alert offers the DMG, nothing installs itself.
+    //
+    // Gated on the wizard's readiness so a first run never gets an update modal
+    // thrown over its setup screen. Read once, here, rather than observed: this
+    // is the launch check, not a watcher that fires the moment the user finishes
+    // onboarding — someone who just installed Blurt has the newest build.
+    updateCheckModel.checkForUpdatesAtLaunch(isConfigured: wizard.isReady)
 
     #if UITEST_HOOKS
       // Build the overlay pill up front under UI testing so the suite can observe

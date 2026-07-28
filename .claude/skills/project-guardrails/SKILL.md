@@ -48,10 +48,14 @@ one, stop and ask the user first. This is the fast "don't" list; AGENTS.md's
 - The dictation trigger is a **single lone modifier** (right ⌘ default), home-
   grown via `CGEventTap` + `DictationKeyGate`. No `KeyboardShortcuts` package, no
   key+modifier chord.
-- **Updates are manual and download-only** — check → open the DMG in the browser
-  → the user installs it. The `mxcl/AppUpdater` dependency and its in-place
-  self-updater were removed; don't reintroduce a background/auto-updater or a
-  self-replacing install path. Extend `UpdateChecker` / `UpdateCheckModel`.
+- **Updates are download-only** — check → open the DMG in the browser → the user
+  installs it. The `mxcl/AppUpdater` dependency and its in-place self-updater
+  were removed; don't reintroduce a self-replacing install path, a timer-driven
+  poll, or anything that installs on the user's behalf. Checking automatically
+  once at launch on a configured app (`AutomaticUpdateCheck`, ≤ once a day,
+  silent unless a newer release exists) is the one automatic part, and it still
+  ends in the same Download/Later alert. Extend `UpdateChecker` /
+  `UpdateCheckModel`.
 
 ## Build / tests
 
