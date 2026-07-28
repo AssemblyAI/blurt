@@ -73,7 +73,7 @@ struct HTTPClientTests {
   }
 
   @Test("transcribe sends the raw key, no model header, and the documented timeout")
-  func transcribeSendsAuthAndModelHeaders() async throws {
+  func transcribeSendsRawKeyNoModelHeaderAndTimeout() async throws {
     let transport = FakeHTTPTransport { request in
       // The wire contract: the raw key in Authorization (no "Bearer" prefix), a
       // boundary-tagged multipart body, no `X-AAI-Model` (the dictation service

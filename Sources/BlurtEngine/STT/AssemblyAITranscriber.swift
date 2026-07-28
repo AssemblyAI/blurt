@@ -87,7 +87,8 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// for the POST to `/transcribe`; the response (an auth-less 4xx) is
   /// discarded. No key, so it never counts as a transcription. A short timeout
   /// keeps a dead network from leaving the task hanging. Fire-and-forget: any
-  /// error is swallowed, since the real request degrades to the old behavior.
+  /// error is swallowed — a failed warm-up just means the next request pays
+  /// connection setup itself.
   public func warmUp() async {
     var request = URLRequest(url: baseURL)
     request.httpMethod = "GET"
