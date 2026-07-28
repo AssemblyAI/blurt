@@ -28,6 +28,13 @@ struct TranscriptionContextTests {
     #expect(!TranscriptionContext(appName: nil, priorText: "hello there").isEmpty)
   }
 
+  @Test("a bundle ID alone makes it non-empty (and produces a prompt)")
+  func bundleIDPresent() {
+    let context = TranscriptionContext(appName: nil, bundleID: "com.apple.Terminal", priorText: nil)
+    #expect(!context.isEmpty)
+    #expect(TranscriptionPrompt.build(context: context) != nil)
+  }
+
   @Test("real selected text makes it non-empty")
   func selectedTextPresent() {
     #expect(!TranscriptionContext(appName: nil, priorText: nil, selectedText: "highlighted").isEmpty)
@@ -89,5 +96,8 @@ struct TranscriptionContextTests {
     #expect(
       TranscriptionContext(appName: "Notes", priorText: "x", keyTerms: ["a"])
         != TranscriptionContext(appName: "Notes", priorText: "x", keyTerms: ["b"]))
+    #expect(
+      TranscriptionContext(appName: "Notes", bundleID: "com.a.b", priorText: "x")
+        != TranscriptionContext(appName: "Notes", bundleID: "com.c.d", priorText: "x"))
   }
 }

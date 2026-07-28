@@ -53,7 +53,7 @@ Sources/BlurtEngine/         the engine (dependency-free Swift package)
   Injection/                 KeyInjector (clipboard paste), SystemClipboard
   Permissions/               PermissionsChecker (mic + Accessibility)
   Pipeline/                  DictationSession (actor) + phases, UI projections, geometry, log
-  STT/                       AssemblyAITranscriber, TranscriptionPrompt/Context, SyncSTTLimits
+  STT/                       AssemblyAITranscriber, TranscriptionPrompt/Context, AppKindPriming, SyncSTTLimits
   Update/                    UpdateChecker (download-only) + the launch-check policy
 App/Blurt/
   project.yml                XcodeGen source of truth — Blurt.xcodeproj is GENERATED
@@ -388,8 +388,11 @@ the user's text.
 highlighted run the dictation will replace, so the model is primed on what's being rewritten — read
 via `kAXSelectedTextAttribute`, skipped in secure fields, detected by AX role **or** subrole and
 failing closed when the role can't be read, so a password can't reach the prompt); a topic hint from
-the window title; a destination sentence from the app/field; and inline keyword boosting from the
-user's key terms. It's phrased per AssemblyAI's Universal-3 Pro prompting guidance
+the window title; a destination sentence from the app/field; an app-kind guidance sentence
+(`AppKindPriming` — the frontmost app's bundle ID is recognized as a terminal, code editor, Slack,
+or Obsidian, and a code editor's clause names the language inferred from the window title's
+filename, so the model expects the right shape of text: shell commands, identifiers, casual chat
+with emoji, or Markdown); and inline keyword boosting from the user's key terms. It's phrased per AssemblyAI's Universal-3 Pro prompting guidance
 (positive/authoritative wording, no "Don't"/"Avoid"/"Never") and stays under the dictation API's
 documented 4096-character cap on `config.prompt` (`characterCap`).
 

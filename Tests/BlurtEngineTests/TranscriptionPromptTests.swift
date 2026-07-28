@@ -95,6 +95,30 @@ struct TranscriptionPromptTests {
         "Previous transcript:\nthanks for\n\nSelected text:\nthe draft\n\nDictated into Slack. \(base) Keywords: Blurt."
     ),
     Case(
+      name: "recognized bundle ID → app-kind guidance after the destination",
+      context: TranscriptionContext(
+        appName: "Slack", bundleID: "com.tinyspeck.slackmacgap", fieldLabel: "Message", priorText: nil),
+      expected:
+        "Dictated into Slack, in the \"Message\" field. You are writing a Slack message: casual tone and emoji are expected. \(base)"
+    ),
+    Case(
+      name: "bundle ID alone → guidance still built",
+      context: TranscriptionContext(appName: nil, bundleID: "com.apple.Terminal", priorText: nil),
+      expected:
+        "You are dictating into a terminal: expect shell commands, program names, flags, and file paths. \(base)"
+    ),
+    Case(
+      name: "code-editor guidance names the window title's language",
+      context: TranscriptionContext(
+        appName: "Code", bundleID: "com.microsoft.VSCode", windowTitle: "main.py — blurt", priorText: nil),
+      expected:
+        "This is about \"main.py — blurt\". Dictated into Code. You are writing Python in a code editor: expect code identifiers, symbols, and technical terms. \(base)"
+    ),
+    Case(
+      name: "unrecognized bundle ID adds no guidance",
+      context: TranscriptionContext(appName: "Mail", bundleID: "com.apple.mail", priorText: nil),
+      expected: "Dictated into Mail. \(base)"),
+    Case(
       name: "key terms only → inline keyword boost",
       context: TranscriptionContext(appName: nil, priorText: nil, keyTerms: ["AssemblyAI", "Kubernetes"]),
       expected: "\(base) Keywords: AssemblyAI, Kubernetes."),

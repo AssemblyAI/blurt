@@ -5,7 +5,9 @@
 /// Every built prompt opens with a fixed `baseInstruction` — a plain-text
 /// exclusion clause (see below) — and wraps it in
 /// *contextual* priming: a topic hint built from the window title, a
-/// destination sentence built from the focused app and field label, "prior
+/// destination sentence built from the focused app and field label, an
+/// app-kind guidance sentence recognized from the frontmost app's bundle ID
+/// (`AppKindPriming` — terminal, code editor, Slack, Obsidian), "prior
 /// chunk context" (the text preceding the cursor), the selected text (which the
 /// dictation replaces), and keyword boosting, all of which the model is
 /// mid-trained to use for better recognition accuracy.
@@ -70,7 +72,8 @@ enum TranscriptionPrompt {
     //   1. the prior-chunk block (`Previous transcript:\n…`, its own paragraph),
     //   2. the selected-text block (`Selected text:\n…`, what the dictation
     //      replaces — primes vocabulary/topic of the text being rewritten),
-    //   3. the location clause (topic hint + destination sentence).
+    //   3. the location clause (topic hint + destination sentence + app-kind
+    //      guidance).
     var blocks: [String] = []
     if !prior.isEmpty {
       blocks.append("Previous transcript:\n\(prior)")
@@ -78,7 +81,14 @@ enum TranscriptionPrompt {
     if !selected.isEmpty {
       blocks.append("Selected text:\n\(selected)")
     }
-    let location = locationClause(app: app, window: window, field: field)
+    // App-kind guidance ("You are dictating into a terminal …") follows the
+    // destination sentence: recognized from the bundle ID, refined by the
+    // window title (a code editor's title names the open file, hence the
+    // language). Unrecognized apps add nothing.
+    let guidance = AppKindPriming.clause(bundleID: context.bundleID, windowTitle: window) ?? ""
+    let location = [locationClause(app: app, window: window, field: field), guidance]
+      .filter { !$0.isEmpty }
+      .joined(separator: " ")
     // The topic hint and `baseInstruction` share one line as the trained
     // `{context}. {baseInstruction}` shape; with no topic it's the bare base.
     let instruction = location.isEmpty ? baseInstruction : "\(location) \(baseInstruction)"

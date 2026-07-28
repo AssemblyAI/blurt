@@ -11,6 +11,14 @@ public struct TranscriptionContext: Sendable, Equatable {
   /// as a domain/topic hint so the model expects that app's vocabulary.
   public let appName: String?
 
+  /// The frontmost application's bundle identifier (e.g.
+  /// "com.tinyspeck.slackmacgap"). Never rendered verbatim: it keys the
+  /// app-*kind* recognition (`AppKindPriming`) that adds destination-specific
+  /// guidance — terminal, code editor, Slack, Obsidian — to the prompt.
+  /// Preferred over `appName` for recognition because display names are
+  /// localized and user-editable while the bundle ID is stable.
+  public let bundleID: String?
+
   /// The focused window's title (e.g. "Re: Q3 pricing — Gmail", a document
   /// name, a Slack channel). The densest topic hint available — usually packed
   /// with the proper nouns and domain vocabulary the model would otherwise guess.
@@ -40,6 +48,7 @@ public struct TranscriptionContext: Sendable, Equatable {
 
   public init(
     appName: String?,
+    bundleID: String? = nil,
     windowTitle: String? = nil,
     fieldLabel: String? = nil,
     priorText: String?,
@@ -47,6 +56,7 @@ public struct TranscriptionContext: Sendable, Equatable {
     keyTerms: [String] = []
   ) {
     self.appName = appName
+    self.bundleID = bundleID
     self.windowTitle = windowTitle
     self.fieldLabel = fieldLabel
     self.priorText = priorText
@@ -58,7 +68,7 @@ public struct TranscriptionContext: Sendable, Equatable {
   /// are no key terms.
   public var isEmpty: Bool {
     keyTerms.isEmpty
-      && [appName, windowTitle, fieldLabel, priorText, selectedText].allSatisfy {
+      && [appName, bundleID, windowTitle, fieldLabel, priorText, selectedText].allSatisfy {
         $0.trimmedNonEmpty() == nil
       }
   }
