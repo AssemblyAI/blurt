@@ -83,9 +83,10 @@ utterance.
   text around your cursor, and your own key terms; the same call runs a
   server-side LLM cleanup (disfluencies out, punctuation fixed), so the text
   comes back already polished. No second request, no model downloads.
-- **Fast** — the model responds in under 100 ms. Blurt pre-warms the HTTPS
-  connection while you're still speaking and flips to "transcribing" at
-  key-up, so text lands about as soon as you stop talking.
+- **Fast** — transcription and cleanup share one round trip that typically
+  finishes in about a second. Blurt pre-warms the HTTPS connection while
+  you're still speaking and flips to "transcribing" at key-up, so polished
+  text lands moments after you stop talking.
 - **Accurate** —
   [30% fewer hallucinations than Whisper](https://www.assemblyai.com/docs/pre-recorded-audio/benchmarks)
   on AssemblyAI's published benchmarks.
