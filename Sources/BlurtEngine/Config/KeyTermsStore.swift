@@ -1,7 +1,7 @@
 import Foundation
 
 /// Storage for the user's dictation "key terms" — a comma-separated list of
-/// domain words (names, jargon, product names) that get folded into the Sync STT
+/// domain words (names, jargon, product names) that get folded into the dictation
 /// request `prompt` as vocabulary priming, so the model is more likely to spell
 /// them correctly (see `TranscriptionPrompt.build`).
 ///

@@ -97,7 +97,7 @@ struct OverlayView: View {
     case .processing:
       // Matches the site demo's "Transcribing…" label (the demo cross-fades REC →
       // Transcribing); cyan echoes the demo's --ice. Cross-fades like the bars.
-      // The label breathes (slow opacity pulse) so the wait for the Sync API +
+      // The label breathes (slow opacity pulse) so the wait for the dictation API +
       // paste reads as active work rather than a frozen pill.
       TranscribingLabel(animated: !reduceMotion)
         .transition(.opacity)

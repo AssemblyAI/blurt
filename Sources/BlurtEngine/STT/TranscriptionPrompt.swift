@@ -1,5 +1,5 @@
-/// Builds the instruction sent to AssemblyAI's Sync STT API as the `prompt`
-/// field of the request `config` (see `AssemblyAITranscriber`). The Sync model
+/// Builds the instruction sent to the dictation API as the `prompt`
+/// field of the request `config` (see `AssemblyAITranscriber`). The STT model
 /// prepends this to its own system prompt.
 ///
 /// Every built prompt opens with a fixed `baseInstruction` — a plain-text
@@ -28,7 +28,7 @@
 /// prior-chunk context, the topic hint, and the destination sentence precede it
 /// as the `{context}. {baseInstruction}` shape, and keyword boosting trails it
 /// inline as `Keywords: a, b, c.` (per the mid-training instruction-type
-/// reference). It stays under a self-imposed ceiling (`characterCap`): the contextual
+/// reference). It stays under the API's `characterCap`: the contextual
 /// blocks are clipped upstream in `FocusCapture`, and the key-terms clause is
 /// fitted to the remaining budget here. Exercised by
 /// `Tests/BlurtEngineTests/TranscriptionPromptTests.swift`.
@@ -42,16 +42,14 @@ enum TranscriptionPrompt {
   static let baseInstruction =
     "Transcribe without speaker labels, audio event descriptions, or emotion markers."
 
-  /// Self-imposed ceiling on the built prompt. The Sync API reference documents
-  /// no cap on `config.prompt` (the 4096-character figure it does document belongs
-  /// to `conversation_context`, where over-cap content is trimmed rather than
-  /// rejected), so this is a sanity bound, not a documented limit — an unbounded
-  /// prompt is a latency and cost risk regardless. The contextual blocks are all
-  /// clipped upstream in `FocusCapture`; the user's key terms are the one
-  /// unbounded input, so `build` fits them to whatever budget remains.
+  /// Hard cap the dictation API places on `config.prompt` ("max 4096 chars");
+  /// a longer prompt risks failing the whole request, so `build` must never
+  /// exceed it. The contextual blocks are all clipped upstream in
+  /// `FocusCapture`; the user's key terms are the one unbounded input, so
+  /// `build` fits them to whatever budget remains.
   static let characterCap = 4096
 
-  /// Renders `context` into a Sync STT prompt, or `nil` when there is no usable
+  /// Renders `context` into a transcription prompt, or `nil` when there is no usable
   /// context (the server then applies its own default prompt).
   static func build(context: TranscriptionContext?) -> String? {
     // `isEmpty` is the context type's own "no usable content" rule — the same
