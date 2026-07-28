@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import BlurtEngine
 import Foundation
 import Observation
@@ -140,6 +141,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // though no window is shown. `onNeedsForeground` fires when a configured app
     // loses a requirement (e.g. a revoked permission) so the user is pulled back
     // into onboarding even if every window was closed.
+    // Clear a stale Accessibility grant left by a signing-team change before the
+    // wizard's first permission check, so an updated user isn't stuck on a modal
+    // that never dismisses. See runAccessibilityGrantMigration().
+    runAccessibilityGrantMigration()
+
     self.wizardController = makeWizardController(coord: coord)
 
     #if UITEST_HOOKS
@@ -174,6 +180,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { await self.runLeakExercise(coord) }
       }
     #endif
+  }
+
+  /// One-shot startup migration: if the signing team changed since the last launch
+  /// (or was never recorded — every currently-shipped build), a prior Accessibility
+  /// grant is pinned to the old team's designated requirement and `tccd` will keep
+  /// reporting the re-signed binary as untrusted ("toggle on, still denied"). Reset
+  /// the grant once so the normal wizard grant flow recaptures a matching
+  /// requirement. Runs before the wizard's first permission check. No-ops for
+  /// ad-hoc/unsigned builds (Team ID is nil), so CI, `swift build`, and UI-test runs
+  /// never spawn `tccutil`. Persists the new team only on a successful reset, so a
+  /// failed reset retries next launch instead of being masked.
+  private func runAccessibilityGrantMigration() {
+    let key = "accessibility.lastSigningTeam"
+    let defaults = UserDefaults.standard
+    let persist = SigningIdentityMigration.run(
+      lastTeam: defaults.string(forKey: key),
+      currentTeam: SigningIdentity.currentTeamIdentifier(),
+      isTrusted: AXIsProcessTrusted(),
+      reset: { SigningIdentity.resetAccessibilityGrant(bundleID: BlurtIdentity.subsystem) }
+    )
+    if let persist { defaults.set(persist, forKey: key) }
   }
 
   /// Builds the setup wizard's controller. Created before the run loop presents
