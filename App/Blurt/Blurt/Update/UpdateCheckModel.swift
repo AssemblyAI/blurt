@@ -101,9 +101,9 @@ final class UpdateCheckModel {
   /// plane, GitHub down). They still log, and the menu command still reports
   /// them on demand.
   func checkForUpdatesAtLaunch(isConfigured: Bool) {
-    let isDue = AutomaticUpdateCheck.shouldRun(
-      isConfigured: isConfigured, lastCheck: lastCheckStore.lastCheck, now: now())
-    guard isDue else { return }
+    // Cheap early-out so a launch that clearly isn't due spawns nothing. The
+    // decision is made again after the wait, where it's authoritative.
+    guard isLaunchCheckDue(isConfigured: isConfigured) else { return }
     // No parseable bundle version means no check to run. The manual path turns
     // that into an alert because someone is waiting on an answer; here nobody is.
     guard currentVersion != nil else {
@@ -114,17 +114,26 @@ final class UpdateCheckModel {
       // Let the launch settle before fetching, and give the main window time to
       // exist so a result has a sheet host — see `AutomaticUpdateCheck.launchDelay`.
       try? await Task.sleep(for: AutomaticUpdateCheck.launchDelay)
-      // Claimed after the wait, not before, so the Settings button doesn't sit
-      // disabled through a delay during which nothing is actually in flight.
-      // (Re-read rather than captured: the user may have checked manually in the
-      // meantime, and two checks would stack two alerts.)
-      guard !isChecking, let currentVersion else { return }
+      // Everything is re-read after the wait, because the user can act during it:
+      // `isChecking` catches a manual check still in flight (two would stack two
+      // alerts), and the throttle catches one that *completed* here — it stamped
+      // the store, so this launch has its answer already and fetching again would
+      // be a redundant request and possibly a second alert.
+      guard !isChecking, isLaunchCheckDue(isConfigured: isConfigured), let currentVersion else { return }
       isChecking = true
       defer { isChecking = false }
       guard let result = await runCheck(current: currentVersion) else { return }
       guard case .available(let latest, let dmgURL) = result else { return }
       await present(.available(current: currentVersion, latest: latest, dmgURL: dmgURL))
     }
+  }
+
+  /// The launch gate, read fresh each time: the stored stamp moves whenever any
+  /// check completes, so this can flip between the call and the post-delay
+  /// re-check. `isConfigured` is the caller's (the wizard's readiness at launch),
+  /// which is why it's passed through rather than captured here.
+  private func isLaunchCheckDue(isConfigured: Bool) -> Bool {
+    AutomaticUpdateCheck.shouldRun(isConfigured: isConfigured, lastCheck: lastCheckStore.lastCheck, now: now())
   }
 
   /// Runs the check and resolves what to show. Every throw — offline, GitHub
