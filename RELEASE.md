@@ -7,8 +7,8 @@ policy decisions that aren't obvious from the scripts.
 
 ## Signing key custody
 
-The Developer ID Application key (`640A7F5A9754400D4A0491E7A6FB30542D907806`,
-team `Y54ZB9JF63`) is the root of trust: Gatekeeper accepts anything signed with
+The Developer ID Application key (`602F699488189767137DF15633B967B1371ACD86`,
+team `B2VQF7Q2QY`) is the root of trust: Gatekeeper accepts anything signed with
 it, so every published DMG must carry this signature. Protect it accordingly:
 
 - Keep the private key in a **dedicated keychain that stays locked at rest**
@@ -46,7 +46,7 @@ it, so every published DMG must carry this signature. Protect it accordingly:
   (`security find-identity -v -p codesigning`) and refuses to build without it.
 - **Everyday dev builds never touch this key.** The `Debug` / `Debug-Local`
   configs sign with the **Apple Development** cert (login keychain, same team
-  `Y54ZB9JF63`), so `scripts/dev-build.sh` and Xcode builds work with the release
+  `B2VQF7Q2QY`), so `scripts/dev-build.sh` and Xcode builds work with the release
   keychain locked. Only `release-build.sh` uses the Developer ID key.
 
 ## Rotating the signing certificate
@@ -55,12 +55,12 @@ If the key is compromised (or the cert expires):
 
 1. Revoke the Developer ID Application certificate in the Apple Developer portal.
 2. Issue a new Developer ID Application certificate **on the same team**
-   (`Y54ZB9JF63`).
+   (`B2VQF7Q2QY`).
 3. Update `IDENTITY` in `scripts/release-build.sh` to the new cert's SHA-1
    (`security find-identity -v -p codesigning`).
 4. Cut a fresh notarized release.
 
-Rotating to a new cert **within the same team** (`Y54ZB9JF63`) is seamless for
+Rotating to a new cert **within the same team** (`B2VQF7Q2QY`) is seamless for
 users — Gatekeeper accepts any valid Developer ID from any team, and updates are
 a manual DMG download (see [Updates in AGENTS.md](./AGENTS.md#updates)), so there
 is no signing-requirement pin to break. A **team change** (new Team ID) is still
@@ -73,7 +73,7 @@ The notary Apple-ID app-specific password lives in the `blurt-notary` keychain
 profile (submit-only; it cannot sign). To rotate: revoke the old app-specific
 password at appleid.apple.com, mint a new one, and re-run
 `xcrun notarytool store-credentials blurt-notary --apple-id <you> --team-id
-Y54ZB9JF63 --password <new-app-specific-password>`.
+B2VQF7Q2QY --password <new-app-specific-password>`.
 
 ## A bad release: roll forward, never roll back
 
