@@ -31,7 +31,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// the server — not the client — decides when a slow request has failed,
   /// while a connection that stops delivering bytes still can't leave the pill
   /// stuck on "Transcribing…" indefinitely.
-  private static let requestTimeout: TimeInterval = 90
+  private static let requestTimeoutSeconds: TimeInterval = 90
 
   public init(
     apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.current },
@@ -57,9 +57,9 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 
     var request = URLRequest(url: baseURL.appendingPathComponent("transcribe"))
     request.httpMethod = "POST"
-    // Bounds a stalled connection; see `requestTimeout` for why an idle
+    // Bounds a stalled connection; see `requestTimeoutSeconds` for why an idle
     // timeout is the right shape here.
-    request.timeoutInterval = Self.requestTimeout
+    request.timeoutInterval = Self.requestTimeoutSeconds
     request.setValue(apiKey, forHTTPHeaderField: "Authorization")
     request.setValue(
       "multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
@@ -70,14 +70,12 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     guard let response = try? JSONDecoder().decode(DictationResponse.self, from: data) else {
       throw AssemblyAIError.malformedResponse
     }
-    // The rewrite is best-effort: a null `llm_response` (rewrite failed or
-    // timed out) degrades to the verbatim transcript rather than an error.
-    // Blank counts as absent too: the service is documented to null out an empty
-    // rewrite, but returning "" here would strand the utterance — the pipeline
-    // drops a whitespace-only transcript back to `.idle` without pasting or
-    // surfacing an error, discarding the perfectly good verbatim `text` below.
-    // `trimmedNonEmpty()` is the same "usable text" rule the rest of the engine
-    // applies, so the fallback covers both shapes instead of trusting the server.
+    // The rewrite is best-effort, so anything unusable degrades to the verbatim
+    // transcript rather than an error. Blank counts as unusable alongside null:
+    // the service is documented to null out an empty rewrite, but a "" slipping
+    // through would strand the utterance — the pipeline drops a whitespace-only
+    // transcript to `.idle` without pasting or reporting, wasting the good
+    // verbatim `text` right below it.
     if let rewrite = response.llmResponse.trimmedNonEmpty() { return rewrite }
     if let error = response.llmError {
       transcriberLog.warning(
@@ -109,9 +107,8 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 
   /// Builds the JSON `config` part sent alongside the audio. The context
   /// `prompt` is included only when non-empty; a nil or blank prompt omits the
-  /// field so the server applies its default prompt. The `llm` block is always
-  /// present: an empty object requests the service's default cleanup rewrite
-  /// (remove disfluencies, fix punctuation). Internal so tests can assert the
+  /// field so the server applies its default prompt. The `llm` block always
+  /// rides along — see `DictationConfig.llm`. Internal so tests can assert the
   /// prompt wiring without inspecting the multipart upload body (which
   /// `URLProtocol` mocks can't observe reliably for `upload(from:)`).
   func makeConfigData(sampleRate: Int, prompt: String?) throws -> Data {
@@ -218,16 +215,12 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     }
   }
 
-  /// Encodes as `{}` — the default-cleanup rewrite request.
   private struct LLMRewrite: Encodable {}
 
   private struct DictationResponse: Decodable {
     /// The verbatim transcript — always present, never altered by the LLM.
     let text: String
     /// The rewritten transcript, or nil when the rewrite failed or timed out.
-    /// The service is documented to null out an empty rewrite rather than
-    /// returning `""`, but `transcribe` treats blank as absent anyway — that
-    /// assumption isn't worth a silently dropped utterance if it ever breaks.
     let llmResponse: String?
     /// `"timeout"` or `"error"` when a requested rewrite failed.
     let llmError: String?

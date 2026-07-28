@@ -28,7 +28,7 @@
 /// prior-chunk context, the topic hint, and the destination sentence precede it
 /// as the `{context}. {baseInstruction}` shape, and keyword boosting trails it
 /// inline as `Keywords: a, b, c.` (per the mid-training instruction-type
-/// reference). It stays under a self-imposed ceiling (`characterCap`): the contextual
+/// reference). It stays under the API's `characterCap`: the contextual
 /// blocks are clipped upstream in `FocusCapture`, and the key-terms clause is
 /// fitted to the remaining budget here. Exercised by
 /// `Tests/BlurtEngineTests/TranscriptionPromptTests.swift`.

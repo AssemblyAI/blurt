@@ -29,33 +29,27 @@ struct HTTPClientTests {
     #expect(hits.value == 1)
   }
 
-  @Test("transcriber falls back to the verbatim transcript when no rewrite came back")
-  func transcribeFallsBackWithoutRewrite() async throws {
-    // A null / absent / blank `llm_response` (the rewrite is best-effort) must
-    // degrade to the verbatim transcript, never to an error or an empty paste.
-    // The blank cases matter most: returning "" would reach the pipeline's
-    // whitespace guard, which drops the utterance to `.idle` with nothing pasted
-    // and no error — the verbatim text lost even though it arrived intact.
-    for body in [
-      Data(#"{"text":"hello world","llm_response":null,"llm_error":"timeout"}"#.utf8),
-      json(["text": "hello world"]),
-      json(["text": "hello world", "llm_response": ""]),
-      json(["text": "hello world", "llm_response": "   \n "]),
-    ] {
-      let transport = FakeHTTPTransport { _ in (200, body) }
-      let result = try await collectTranscript(makeTranscriber(apiKey: "test-key", transport: transport))
-      #expect(result == "hello world")
-    }
-  }
+  /// The whole rewrite-selection rule, one row per response shape: a usable
+  /// `llm_response` wins (even when an `llm_error` marks it degraded), and
+  /// anything unusable — null, absent, or blank — falls back to the verbatim
+  /// `text`. The blank rows are the ones that bite: a "" reaching the pipeline's
+  /// whitespace guard drops the utterance to `.idle` with nothing pasted and no
+  /// error, losing verbatim text that arrived intact. Raw JSON throughout
+  /// because `json(_:)` takes `[String: String]` and so can't express `null`.
+  static let rewriteSelectionCases: [(body: Data, expected: String)] = [
+    (Data(#"{"text":"um hello","llm_response":"Hello."}"#.utf8), "Hello."),
+    (Data(#"{"text":"um hello","llm_response":"Hello.","llm_error":"timeout"}"#.utf8), "Hello."),
+    (Data(#"{"text":"hello world","llm_response":null,"llm_error":"timeout"}"#.utf8), "hello world"),
+    (Data(#"{"text":"hello world"}"#.utf8), "hello world"),
+    (Data(#"{"text":"hello world","llm_response":""}"#.utf8), "hello world"),
+    (Data(#"{"text":"hello world","llm_response":"   \n "}"#.utf8), "hello world"),
+  ]
 
-  @Test("transcriber prefers the rewrite even when an llm_error rides along")
-  func transcribePrefersRewriteDespiteError() async throws {
-    // `llm_error` alongside a non-null rewrite marks the rewrite degraded, not
-    // absent — the rewrite still wins; the error is only logged.
-    let body = Data(#"{"text":"um hello","llm_response":"Hello.","llm_error":"slow"}"#.utf8)
+  @Test("transcriber returns a usable rewrite, else the verbatim transcript", arguments: rewriteSelectionCases)
+  func transcribePicksRewriteOrVerbatim(body: Data, expected: String) async throws {
     let transport = FakeHTTPTransport { _ in (200, body) }
     let result = try await collectTranscript(makeTranscriber(apiKey: "test-key", transport: transport))
-    #expect(result == "Hello.")
+    #expect(result == expected)
   }
 
   @Test("transcriber succeeds with a real context (builds and sends a prompt)")
@@ -162,44 +156,27 @@ struct HTTPClientTests {
 
   @Test("config part carries the built context prompt")
   func configIncludesPrompt() throws {
-    let config = try makeTranscriber(apiKey: "test-key")
-      .makeConfigData(sampleRate: 16_000, prompt: "CONTEXT. Transcribe.")
-    let object = try JSONSerialization.jsonObject(with: config) as? [String: Any]
-    #expect(object?["prompt"] as? String == "CONTEXT. Transcribe.")
-    #expect(object?["sample_rate"] as? Int == 16_000)
+    let object = try configObject(prompt: "CONTEXT. Transcribe.")
+    #expect(object["prompt"] as? String == "CONTEXT. Transcribe.")
+    #expect(object["sample_rate"] as? Int == 16_000)
     // The capture path is mono by construction; the declared geometry must agree.
-    #expect(object?["channels"] as? Int == 1)
+    #expect(object["channels"] as? Int == 1)
   }
 
-  @Test("config part always requests the default cleanup rewrite")
-  func configRequestsDefaultRewrite() throws {
+  @Test("config part always requests the default cleanup rewrite", arguments: ["CONTEXT. Transcribe.", nil])
+  func configRequestsDefaultRewrite(prompt: String?) throws {
     // `llm` must be present and empty on every request: present so the service
     // runs the rewrite at all, empty so the server-owned default cleanup
     // instruction (and its guardrails) applies rather than a client-side copy.
-    for prompt in ["CONTEXT. Transcribe.", nil] {
-      let config = try makeTranscriber(apiKey: "test-key")
-        .makeConfigData(sampleRate: 16_000, prompt: prompt)
-      let object = try JSONSerialization.jsonObject(with: config) as? [String: Any]
-      let llm = object?["llm"] as? [String: Any]
-      #expect(llm != nil)
-      #expect(llm?.isEmpty == true)
-    }
+    // `isEmpty == true` also covers presence — it is false for a missing `llm`.
+    #expect((try configObject(prompt: prompt)["llm"] as? [String: Any])?.isEmpty == true)
   }
 
-  @Test("config part omits the prompt field when there is no context")
-  func configOmitsPromptWhenNil() throws {
-    let config = try makeTranscriber(apiKey: "test-key")
-      .makeConfigData(sampleRate: 16_000, prompt: nil)
-    let object = try JSONSerialization.jsonObject(with: config) as? [String: Any]
-    #expect(object?.keys.contains("prompt") == false)
-  }
-
-  @Test("config part omits the prompt field when the prompt is only whitespace")
-  func configOmitsBlankPrompt() throws {
-    let config = try makeTranscriber(apiKey: "test-key")
-      .makeConfigData(sampleRate: 16_000, prompt: "   \n")
-    let object = try JSONSerialization.jsonObject(with: config) as? [String: Any]
-    #expect(object?.keys.contains("prompt") == false)
+  @Test(
+    "config part omits the prompt field when there is no usable context",
+    arguments: [nil, "   \n"])
+  func configOmitsPrompt(prompt: String?) throws {
+    #expect(try configObject(prompt: prompt).keys.contains("prompt") == false)
   }
 
   @Test("the multipart body frames the audio and config parts the dictation API expects")
@@ -323,6 +300,16 @@ struct HTTPClientTests {
 
   private func collectTranscript(_ transcriber: AssemblyAITranscriber) async throws -> String {
     try await transcriber.transcribe(pcm: Self.testPCM, sampleRate: 16_000, context: nil)
+  }
+
+  /// The encoded `config` part re-parsed as a dictionary — the shape every
+  /// config assertion below wants, since `makeConfigData` returns raw JSON.
+  /// A part that isn't a JSON object at all fails here rather than turning every
+  /// downstream assertion into a silent nil-compare.
+  private func configObject(prompt: String?) throws -> [String: Any] {
+    let config = try makeTranscriber(apiKey: "test-key")
+      .makeConfigData(sampleRate: 16_000, prompt: prompt)
+    return try #require(JSONSerialization.jsonObject(with: config) as? [String: Any])
   }
 
   /// Three arbitrary S16LE samples — the raw blob shape `MicCapture.stop()`
