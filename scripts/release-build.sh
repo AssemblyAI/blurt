@@ -11,12 +11,12 @@ DERIVED="$BUILD_ROOT/derived"
 STAGE="$BUILD_ROOT/stage"
 ENTITLEMENTS="$APP_DIR/Blurt/Blurt.entitlements"
 
-readonly IDENTITY="640A7F5A9754400D4A0491E7A6FB30542D907806"
+readonly IDENTITY="602F699488189767137DF15633B967B1371ACD86"
 # SHA-256 fingerprint of the same Developer ID leaf cert as IDENTITY (which is
 # its SHA-1 identity hash, the only format `codesign --sign` accepts). The
 # signer-pin verifies produced artifacts against this stronger digest.
-readonly IDENTITY_SHA256="FB3F95250468655C8329314E104B96E3C75443AEB1A349A43D0C9AABF0B255B5"
-readonly TEAM_ID="Y54ZB9JF63"
+readonly IDENTITY_SHA256="3FD515692E25B96159AEFA3BEE9643EB4D804CF1B95012EEF0E9B8E3B98F207F"
+readonly TEAM_ID="B2VQF7Q2QY"
 readonly NOTARY_PROFILE="blurt-notary"
 
 SKIP_CHECKS=0

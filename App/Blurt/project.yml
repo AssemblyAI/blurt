@@ -25,8 +25,8 @@ settings:
     MACOSX_DEPLOYMENT_TARGET: "15.0"
     ARCHS: arm64
     CODE_SIGN_STYLE: Manual
-    CODE_SIGN_IDENTITY: "640A7F5A9754400D4A0491E7A6FB30542D907806"
-    DEVELOPMENT_TEAM: "Y54ZB9JF63"
+    CODE_SIGN_IDENTITY: "602F699488189767137DF15633B967B1371ACD86"
+    DEVELOPMENT_TEAM: "B2VQF7Q2QY"
     ENABLE_HARDENED_RUNTIME: YES
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     DEAD_CODE_STRIPPING: YES
@@ -37,7 +37,7 @@ settings:
     # keychain), never the Developer ID release key. That key lives in a
     # dedicated, normally-locked keychain used only by scripts/release-build.sh,
     # so daily builds must not depend on it being unlocked. Same team
-    # (Y54ZB9JF63), so DEVELOPMENT_TEAM above still applies. See RELEASE.md.
+    # (B2VQF7Q2QY), so DEVELOPMENT_TEAM above still applies. See RELEASE.md.
     Debug:
       CODE_SIGN_IDENTITY: "Apple Development"
     Debug-Local:
