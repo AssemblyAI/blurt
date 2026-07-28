@@ -12,7 +12,10 @@ the target version with the user before publishing** — publishing is hard to u
 ## Preconditions (verify first)
 
 - Clean working tree on an up-to-date `main` (releases ship from `main`).
-- Notary profile `blurt-notary` exists (`xcrun notarytool store-credentials`).
+- Notary profile `blurt-notary` is stored **in the dedicated signing keychain**
+  (`xcrun notarytool store-credentials blurt-notary --keychain ~/Library/Keychains/blurt-signing.keychain-db …`).
+  The build pins every notary call to that keychain, so a profile stored only in
+  login (or an incidental keychain like electron-builder's) will not be found.
 - Developer ID signing identity present in the keychain.
 
 ## Steps
