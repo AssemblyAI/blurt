@@ -215,6 +215,7 @@ public actor DictationSession {
         let field = FocusCapture.captureFieldContext()
         let context = TranscriptionContext(
           appName: captured?.processName,
+          bundleID: captured?.bundleID,
           windowTitle: field.windowTitle,
           fieldLabel: field.fieldLabel,
           priorText: field.priorText,

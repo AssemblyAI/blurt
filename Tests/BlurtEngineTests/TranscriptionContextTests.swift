@@ -3,9 +3,11 @@ import Testing
 @testable import BlurtEngine
 
 /// `TranscriptionContext.isEmpty` is the gate `FocusCapture`/`DictationSession`
-/// use to decide whether a context is worth sending as priming. It mirrors the
-/// emptiness logic in `TranscriptionPrompt.build`, so the two must agree:
-/// `isEmpty == true` should always correspond to `build` returning `nil`.
+/// use to decide whether a context is worth carrying at all (steering AND log).
+/// The agreement with `TranscriptionSteering.build` is one-directional:
+/// `isEmpty == true` must always correspond to empty steering fields, while a
+/// non-empty context may still steer nothing — its signals can be carry-only
+/// (app name, field label, or selected text from an unrecognized app).
 @Suite("TranscriptionContext")
 struct TranscriptionContextTests {
   @Test("both fields nil is empty")
@@ -28,6 +30,13 @@ struct TranscriptionContextTests {
     #expect(!TranscriptionContext(appName: nil, priorText: "hello there").isEmpty)
   }
 
+  @Test("a bundle ID alone makes it non-empty (and produces a rewrite instruction)")
+  func bundleIDPresent() {
+    let context = TranscriptionContext(appName: nil, bundleID: "com.apple.Terminal", priorText: nil)
+    #expect(!context.isEmpty)
+    #expect(TranscriptionSteering.build(context: context).rewriteInstruction != nil)
+  }
+
   @Test("real selected text makes it non-empty")
   func selectedTextPresent() {
     #expect(!TranscriptionContext(appName: nil, priorText: nil, selectedText: "highlighted").isEmpty)
@@ -38,32 +47,42 @@ struct TranscriptionContextTests {
     #expect(TranscriptionContext(appName: nil, priorText: nil, selectedText: "  \n").isEmpty)
   }
 
-  @Test("key terms alone make it non-empty (and produce a prompt)")
+  @Test("key terms alone make it non-empty (and produce keyterms)")
   func keyTermsPresent() {
     let context = TranscriptionContext(appName: nil, priorText: nil, keyTerms: ["Blurt"])
     #expect(!context.isEmpty)
-    #expect(TranscriptionPrompt.build(context: context) != nil)
+    #expect(TranscriptionSteering.build(context: context).keyterms == ["Blurt"])
   }
 
-  @Test("emptiness agrees with TranscriptionPrompt.build returning nil")
-  func agreesWithPromptBuild() {
+  @Test("an empty context always corresponds to empty steering fields")
+  func agreesWithSteeringBuild() {
     let empties = [
       TranscriptionContext(appName: nil, priorText: nil),
       TranscriptionContext(appName: "  ", priorText: "\n"),
     ]
     for context in empties {
       #expect(context.isEmpty)
-      #expect(TranscriptionPrompt.build(context: context) == nil)
+      #expect(TranscriptionSteering.build(context: context) == .empty)
     }
 
-    let nonEmpties = [
-      TranscriptionContext(appName: "Mail", priorText: nil),
-      TranscriptionContext(appName: nil, priorText: nil, selectedText: "selected"),
+    // Renderable signals (a recognized bundle ID, key terms, prior text) each
+    // steer at least one field…
+    let renderable = [
+      TranscriptionContext(appName: nil, bundleID: "com.apple.Terminal", priorText: nil),
+      TranscriptionContext(appName: nil, priorText: nil, keyTerms: ["Blurt"]),
+      TranscriptionContext(appName: nil, priorText: "Hi Sam,"),
     ]
-    for context in nonEmpties {
+    for context in renderable {
       #expect(!context.isEmpty)
-      #expect(TranscriptionPrompt.build(context: context) != nil)
+      #expect(TranscriptionSteering.build(context: context) != .empty)
     }
+
+    // …while carry-only signals make the context non-empty (worth carrying for
+    // the injector) yet steer nothing. Selected text is the interesting one: the
+    // paste replaces it, so it is never priming.
+    let carryOnly = TranscriptionContext(appName: "Mail", priorText: nil, selectedText: "sel")
+    #expect(!carryOnly.isEmpty)
+    #expect(TranscriptionSteering.build(context: carryOnly) == .empty)
   }
 
   @Test("Equatable compares every field")
@@ -89,5 +108,8 @@ struct TranscriptionContextTests {
     #expect(
       TranscriptionContext(appName: "Notes", priorText: "x", keyTerms: ["a"])
         != TranscriptionContext(appName: "Notes", priorText: "x", keyTerms: ["b"]))
+    #expect(
+      TranscriptionContext(appName: "Notes", bundleID: "com.a.b", priorText: "x")
+        != TranscriptionContext(appName: "Notes", bundleID: "com.c.d", priorText: "x"))
   }
 }

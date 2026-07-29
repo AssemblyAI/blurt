@@ -4,6 +4,9 @@ import ApplicationServices
 struct CapturedFocus: Sendable {
   let pid: pid_t
   let processName: String?
+  /// The frontmost app's stable identity, feeding the prompt's app-kind
+  /// recognition (`AppKindPriming`) via `TranscriptionContext.bundleID`.
+  let bundleID: String?
 }
 
 enum FocusCapture {
@@ -12,7 +15,8 @@ enum FocusCapture {
     guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
     return CapturedFocus(
       pid: app.processIdentifier,
-      processName: app.localizedName
+      processName: app.localizedName,
+      bundleID: app.bundleIdentifier
     )
   }
 
@@ -20,17 +24,18 @@ enum FocusCapture {
     NSRunningApplication(processIdentifier: captured.pid)
   }
 
-  /// Accessibility-derived priming read from the system-wide focused UI element
-  /// at dictation start (see `TranscriptionContext`). Every field is
-  /// best-effort: any signal that can't be read is `nil`, and a fully-empty
-  /// result simply means less context, never an error.
+  /// Accessibility-derived focus context read from the system-wide focused UI
+  /// element at dictation start (see `TranscriptionContext` for what each
+  /// signal feeds). Every field is best-effort: any signal that can't be read
+  /// is `nil`, and a fully-empty result simply means less context, never an
+  /// error.
   struct FocusedFieldContext: Sendable {
-    /// Text immediately preceding the insertion point ("prior chunk context").
+    /// Text immediately preceding the insertion point.
     let priorText: String?
     /// The text currently selected in the focused field — the dictation will
-    /// replace it, so it primes the model on what the utterance is about.
+    /// replace it.
     let selectedText: String?
-    /// The focused window's title — a dense topic hint.
+    /// The focused window's title (in a code editor it names the open file).
     let windowTitle: String?
     /// A short label for the focused field ("To", "Search", "Message").
     let fieldLabel: String?
@@ -49,8 +54,8 @@ enum FocusCapture {
   ///
   /// Secure text fields (password inputs) are detected by role **or** subrole and
   /// never have their contents read, so a typed password — selected or not — can't
-  /// leak into the STT prompt. The check fails closed: an unreadable role is
-  /// treated as secure, since it can't be shown not to be.
+  /// leak into the dictation log or the injector. The check fails closed: an
+  /// unreadable role is treated as secure, since it can't be shown not to be.
   ///
   /// Deliberately `nonisolated`: each read below is a synchronous cross-process
   /// IPC round trip into the frontmost app, and an unresponsive app blocks the
