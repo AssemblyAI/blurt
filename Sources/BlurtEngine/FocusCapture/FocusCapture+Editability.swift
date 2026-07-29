@@ -93,7 +93,9 @@ extension FocusCapture {
   /// accepted trade-off is a rare ⌘V beep when such an app truly has nothing
   /// editable focused.
   static func isAXOpaqueApp(_ app: NSRunningApplication?) -> Bool {
-    isElectronApp(app) || isBrowserApp(app)
+    // Browser first: it's a string prefix check, whereas isElectronApp probes
+    // the disk (FileManager.fileExists) — skip that I/O for the common case.
+    isBrowserApp(app) || isElectronApp(app)
   }
 
   /// Whether the system-wide focused element can accept pasted text right now.
