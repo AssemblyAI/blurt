@@ -163,13 +163,26 @@ struct HTTPClientTests {
     #expect(object["channels"] as? Int == 1)
   }
 
-  @Test("config part always requests the default cleanup rewrite", arguments: ["CONTEXT. Transcribe.", nil])
+  @Test(
+    "config part requests the default cleanup rewrite while enhanced transcripts are on",
+    arguments: ["CONTEXT. Transcribe.", nil])
   func configRequestsDefaultRewrite(prompt: String?) throws {
-    // `llm` must be present and empty on every request: present so the service
-    // runs the rewrite at all, empty so the server-owned default cleanup
+    // `llm` must be present and empty on every enhanced request: present so the
+    // service runs the rewrite at all, empty so the server-owned default cleanup
     // instruction (and its guardrails) applies rather than a client-side copy.
     // `isEmpty == true` also covers presence — it is false for a missing `llm`.
     #expect((try configObject(prompt: prompt)["llm"] as? [String: Any])?.isEmpty == true)
+  }
+
+  @Test("config part omits the llm block when enhanced transcripts are off")
+  func configOmitsRewriteWhenDisabled() throws {
+    // Omission — not an empty or null `llm` — is what tells the service to skip
+    // the rewrite, so the user gets the verbatim transcript pasted as spoken.
+    let object = try configObject(prompt: "CONTEXT. Transcribe.", enhancedTranscripts: false)
+    #expect(object.keys.contains("llm") == false)
+    // The rest of the config is unaffected by the switch.
+    #expect(object["sample_rate"] as? Int == 16_000)
+    #expect(object["prompt"] as? String == "CONTEXT. Transcribe.")
   }
 
   @Test(
@@ -291,11 +304,17 @@ struct HTTPClientTests {
 
   /// Builds a transcriber wired to `transport`. The default transport answers
   /// every request with a 500, for the cases that must never reach the wire.
+  /// Enhanced transcripts are pinned (on unless a test opts out) rather than
+  /// left to the production default, which reads the process's real
+  /// `UserDefaults`.
   private func makeTranscriber(
     apiKey: String?,
-    transport: any HTTPTransport = FakeHTTPTransport { _ in (500, Data()) }
+    transport: any HTTPTransport = FakeHTTPTransport { _ in (500, Data()) },
+    enhancedTranscripts: Bool = true
   ) -> AssemblyAITranscriber {
-    AssemblyAITranscriber(apiKeyProvider: { apiKey }, transport: transport)
+    AssemblyAITranscriber(
+      apiKeyProvider: { apiKey }, transport: transport,
+      enhancedTranscripts: { enhancedTranscripts })
   }
 
   private func collectTranscript(_ transcriber: AssemblyAITranscriber) async throws -> String {
@@ -306,8 +325,8 @@ struct HTTPClientTests {
   /// config assertion below wants, since `makeConfigData` returns raw JSON.
   /// A part that isn't a JSON object at all fails here rather than turning every
   /// downstream assertion into a silent nil-compare.
-  private func configObject(prompt: String?) throws -> [String: Any] {
-    let config = try makeTranscriber(apiKey: "test-key")
+  private func configObject(prompt: String?, enhancedTranscripts: Bool = true) throws -> [String: Any] {
+    let config = try makeTranscriber(apiKey: "test-key", enhancedTranscripts: enhancedTranscripts)
       .makeConfigData(sampleRate: 16_000, prompt: prompt)
     return try #require(JSONSerialization.jsonObject(with: config) as? [String: Any])
   }

@@ -1,7 +1,8 @@
 import Foundation
 
 /// The roster of `UserDefaults` keys the engine's settings stores persist:
-/// trigger key, sound pack, key terms, developer mode, overlay origin, and the
+/// trigger key, sound pack, key terms, developer mode, enhanced transcripts,
+/// overlay origin, and the
 /// timestamp throttling the automatic update check. Owned
 /// here — next to the stores — so adding a store and adding it to every "reset
 /// to a clean state" sweep (e.g. the app's UI-test launch reset) are the same
@@ -19,6 +20,7 @@ public enum PersistedSettings {
     SoundPackStore.defaultsKey,
     KeyTermsStore.defaultsKey,
     DeveloperModeStore.defaultsKey,
+    EnhancedTranscriptsStore.defaultsKey,
     OverlayOriginStore.xDefaultsKey,
     OverlayOriginStore.yDefaultsKey,
     LastUpdateCheckStore.defaultsKey,

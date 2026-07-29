@@ -12,9 +12,10 @@ private let transcriberLog = Logger(subsystem: BlurtIdentity.subsystem, category
 /// A single `POST dictation.assemblyai.com/transcribe` carries the captured
 /// audio (raw S16LE PCM, exactly the bytes the mic recorded — there is no
 /// re-encoding pass) plus a JSON `config` part, and the response body carries
-/// both the verbatim transcript and — because the config requests one via its
-/// `llm` block — an LLM-rewritten version with disfluencies removed and
-/// punctuation fixed. No upload step, no job submission, no polling — one
+/// both the verbatim transcript and — when the config requests one via its
+/// `llm` block (the "enhanced transcripts" setting, on by default) — an
+/// LLM-rewritten version with disfluencies removed and punctuation fixed.
+/// No upload step, no job submission, no polling — one
 /// request per utterance covers transcription *and* cleanup. The service picks
 /// the STT model server-side and handles audio from ~80 ms up to 120 s; the
 /// rewrite is best-effort with a ~5 s server-side deadline, so a rewrite
@@ -23,6 +24,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   private let apiKeyProvider: @Sendable () -> String?
   private let baseURL: URL
   private let transport: any HTTPTransport
+  private let enhancedTranscriptsEnabled: @Sendable () -> Bool
 
   /// Idle timeout for the transcribe round trip — `URLRequest.timeoutInterval` is
   /// reset each time data moves, so this bounds *stalls*, not total elapsed time.
@@ -33,14 +35,22 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// stuck on "Transcribing…" indefinitely.
   private static let requestTimeoutSeconds: TimeInterval = 90
 
+  /// `enhancedTranscripts` decides, per request, whether the config carries
+  /// the `llm` cleanup-rewrite block. Read at every `transcribe` so a settings
+  /// change applies to the next dictation without rebuilding the transcriber.
+  /// `nil` (the default) reads `EnhancedTranscriptsStore` — spelled as an
+  /// optional rather than a default closure because a public default argument
+  /// can't reference the store's internal `isEnabled`.
   public init(
     apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.current },
     baseURL: URL = URL(staticString: "https://dictation.assemblyai.com"),
-    transport: any HTTPTransport = URLSession.shared
+    transport: any HTTPTransport = URLSession.shared,
+    enhancedTranscripts: (@Sendable () -> Bool)? = nil
   ) {
     self.apiKeyProvider = apiKeyProvider
     self.baseURL = baseURL
     self.transport = transport
+    self.enhancedTranscriptsEnabled = enhancedTranscripts ?? { EnhancedTranscriptsStore().isEnabled }
   }
 
   // MARK: - Dictation request
@@ -107,8 +117,11 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 
   /// Builds the JSON `config` part sent alongside the audio. The context
   /// `prompt` is included only when non-empty; a nil or blank prompt omits the
-  /// field so the server applies its default prompt. The `llm` block always
-  /// rides along — see `DictationConfig.llm`. Internal so tests can assert the
+  /// field so the server applies its default prompt. The `llm` block rides
+  /// along while enhanced transcripts are enabled (the default) and is omitted
+  /// entirely when the user has turned them off, so the service skips the
+  /// rewrite and the verbatim transcript is what gets pasted — see
+  /// `DictationConfig.llm`. Internal so tests can assert the
   /// prompt wiring without inspecting the multipart upload body (which
   /// `URLProtocol` mocks can't observe reliably for `upload(from:)`).
   func makeConfigData(sampleRate: Int, prompt: String?) throws -> Data {
@@ -116,7 +129,8 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
       DictationConfig(
         sampleRate: sampleRate,
         channels: 1,
-        prompt: prompt.trimmedNonEmpty()
+        prompt: prompt.trimmedNonEmpty(),
+        llm: enhancedTranscriptsEnabled() ? LLMRewrite() : nil
       )
     )
   }
@@ -202,11 +216,14 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     /// it falls back to the server's default prompt. Steers *transcription*;
     /// the cleanup rewrite is the `llm` block's job.
     let prompt: String?
-    /// The rewrite request. An empty object selects the service's default
+    /// The rewrite request, present only while enhanced transcripts are
+    /// enabled (nil — the synthesized `encode` omits it — asks for no rewrite,
+    /// so the response's `llm_response` is null and the verbatim `text` is
+    /// used). An empty object selects the service's default
     /// cleanup instruction; per the API's `instruction`-mode rules, output
     /// format and don't-answer-the-text safeguards are enforced server-side,
     /// so nothing rides along here.
-    let llm = LLMRewrite()
+    let llm: LLMRewrite?
     enum CodingKeys: String, CodingKey {
       case sampleRate = "sample_rate"
       case channels
