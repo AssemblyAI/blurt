@@ -52,13 +52,11 @@ enum TranscriptionSteering {
     let rewriteInstruction: String?
 
     /// Nothing to customize — every field omitted, so the service applies its
-    /// managed default prompt and its default cleanup rewrite.
+    /// managed default prompt and its default cleanup rewrite. Also the value
+    /// to compare against for "does this utterance customize anything?" —
+    /// `Fields` is `Equatable`, so no separate emptiness predicate exists to
+    /// drift from the fields themselves.
     static let empty = Fields(conversationContext: [], keyterms: [], rewriteInstruction: nil)
-
-    /// True when this utterance customizes nothing.
-    var isEmpty: Bool {
-      conversationContext.isEmpty && keyterms.isEmpty && rewriteInstruction == nil
-    }
   }
 
   /// Cap the dictation API documents for `conversation_context`: 4096 characters

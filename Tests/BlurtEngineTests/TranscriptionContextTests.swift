@@ -62,7 +62,7 @@ struct TranscriptionContextTests {
     ]
     for context in empties {
       #expect(context.isEmpty)
-      #expect(TranscriptionSteering.build(context: context).isEmpty)
+      #expect(TranscriptionSteering.build(context: context) == .empty)
     }
 
     // Renderable signals (a recognized bundle ID, key terms, prior text) each
@@ -74,7 +74,7 @@ struct TranscriptionContextTests {
     ]
     for context in renderable {
       #expect(!context.isEmpty)
-      #expect(!TranscriptionSteering.build(context: context).isEmpty)
+      #expect(TranscriptionSteering.build(context: context) != .empty)
     }
 
     // …while carry-only signals make the context non-empty (worth carrying for
@@ -82,7 +82,7 @@ struct TranscriptionContextTests {
     // paste replaces it, so it is never priming.
     let carryOnly = TranscriptionContext(appName: "Mail", priorText: nil, selectedText: "sel")
     #expect(!carryOnly.isEmpty)
-    #expect(TranscriptionSteering.build(context: carryOnly).isEmpty)
+    #expect(TranscriptionSteering.build(context: carryOnly) == .empty)
   }
 
   @Test("Equatable compares every field")
