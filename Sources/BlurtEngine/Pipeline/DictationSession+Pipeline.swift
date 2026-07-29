@@ -39,7 +39,8 @@ extension DictationSession {
     // cancelled pipeline clear a *newer* press's stream: `cancel()` detaches this
     // task while it's parked in `firstValue`, a fresh `press()` installs its own
     // `contextStream`, and this task's resumption then nils that one out — so
-    // dictation #2 transcribes with `context: nil`, silently losing its priming.
+    // dictation #2 transcribes with `context: nil`, losing not just its priming but
+    // `baseInstruction`, and `[Speaker]`-style markers can reach the pasted text.
     // The window is microseconds, but the invariant is now local instead of
     // depending on scheduling.
     let stream = contextStream

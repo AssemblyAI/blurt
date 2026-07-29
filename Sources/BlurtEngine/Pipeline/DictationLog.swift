@@ -1,54 +1,31 @@
 import Foundation
 
-/// Append-only JSONL log of completed dictations — the transcript that came
-/// back and every request field that was sent to get it — at
+/// Append-only JSONL log of completed transcripts at
 /// `~/Library/Logs/Blurt/dictations.jsonl`. Used to build a real-world
 /// corpus for prompt iteration. Written only while developer mode is switched
 /// on (`DeveloperModeStore` — the Settings window's Developer section, which
 /// also displays this path), so a user who never opts in has no dictation
 /// text on disk.
 public enum DictationLog {
-  /// One logged dictation: what came back (`transcript`), when, and exactly what
-  /// was sent to steer it. Fields carry the request's own wire names so a log
-  /// line reads as the request it describes.
-  ///
-  /// Only what was *sent* is recorded. The captured-but-unsent focus context —
-  /// app and field names, the window title, selected text — deliberately stays
-  /// off disk. Prior-cursor text is on the sent side of that line now that it
-  /// rides as `conversation_context`; what keeps a password out of it is
-  /// `FocusCapture`, which skips prior and selected text in secure fields
-  /// entirely (failing closed when the AX role can't be read), so it never
-  /// reaches a context in the first place.
   struct Entry: Encodable {
     let transcript: String
     let ts: String
-    /// The steering fields sent to AssemblyAI for this utterance. Built here
-    /// from `context` (rather than threaded through from the transcriber) so the
-    /// log always reflects what was actually sent, even for calls that construct
-    /// an entry directly from a context.
-    let conversationContext: [String]
-    let keytermsPrompt: [String]
-
-    enum CodingKeys: String, CodingKey {
-      case transcript
-      case ts
-      case conversationContext = "conversation_context"
-      case keytermsPrompt = "keyterms_prompt"
-    }
-
-    /// Mirrors `DictationConfig.encode(to:)`: an empty array omits its field, so
-    /// a line states only what the request actually carried.
-    func encode(to encoder: Encoder) throws {
-      var container = encoder.container(keyedBy: CodingKeys.self)
-      try container.encode(transcript, forKey: .transcript)
-      try container.encode(ts, forKey: .ts)
-      if !conversationContext.isEmpty {
-        try container.encode(conversationContext, forKey: .conversationContext)
-      }
-      if !keytermsPrompt.isEmpty {
-        try container.encode(keytermsPrompt, forKey: .keytermsPrompt)
-      }
-    }
+    /// Focused-app topic hint sent as context, when one was captured.
+    let app: String?
+    /// Focused-window title sent as a topic hint, when one was captured.
+    let window: String?
+    /// Focused-field label sent as context, when one was captured.
+    let field: String?
+    /// Text-before-cursor "prior chunk context" sent, when any was captured.
+    /// Lets you verify accessibility-tree prior-text reading actually fired.
+    let prior: String?
+    /// Selected text sent as context (the dictation replaced it), when any.
+    let selected: String?
+    /// The fully-assembled `config.prompt` sent to AssemblyAI for this
+    /// utterance. Built here from `context` (rather than threaded through from
+    /// the transcriber) so the log always reflects what was actually sent,
+    /// even for calls that construct an entry directly from a context.
+    let prompt: String?
   }
 
   /// Where the log lives. Public so the Settings window's Developer section
@@ -111,11 +88,11 @@ public enum DictationLog {
   static func write(
     transcript: String, context: TranscriptionContext? = nil, to url: URL, now: Date
   ) {
-    let steering = TranscriptionSteering.build(context: context)
     let entry = Entry(
       transcript: transcript, ts: now.formatted(timestampFormat),
-      conversationContext: steering.conversationContext,
-      keytermsPrompt: steering.keyterms)
+      app: context?.appName, window: context?.windowTitle, field: context?.fieldLabel,
+      prior: context?.priorText, selected: context?.selectedText,
+      prompt: TranscriptionPrompt.build(context: context))
     guard var line = try? makeEncoder().encode(entry) else { return }
     line.append(0x0A)  // '\n'
 

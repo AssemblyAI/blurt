@@ -10,25 +10,27 @@ enum FocusCapture {
   @MainActor
   static func captureFrontmost() -> CapturedFocus? {
     guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
-    return CapturedFocus(pid: app.processIdentifier, processName: app.localizedName)
+    return CapturedFocus(
+      pid: app.processIdentifier,
+      processName: app.localizedName
+    )
   }
 
   static func runningApp(for captured: CapturedFocus) -> NSRunningApplication? {
     NSRunningApplication(processIdentifier: captured.pid)
   }
 
-  /// Accessibility-derived focus context read from the system-wide focused UI
-  /// element at dictation start (see `TranscriptionContext` for what each
-  /// signal feeds). Every field is best-effort: any signal that can't be read
-  /// is `nil`, and a fully-empty result simply means less context, never an
-  /// error.
+  /// Accessibility-derived priming read from the system-wide focused UI element
+  /// at dictation start (see `TranscriptionContext`). Every field is
+  /// best-effort: any signal that can't be read is `nil`, and a fully-empty
+  /// result simply means less context, never an error.
   struct FocusedFieldContext: Sendable {
-    /// Text immediately preceding the insertion point.
+    /// Text immediately preceding the insertion point ("prior chunk context").
     let priorText: String?
     /// The text currently selected in the focused field — the dictation will
-    /// replace it.
+    /// replace it, so it primes the model on what the utterance is about.
     let selectedText: String?
-    /// The focused window's title (in a code editor it names the open file).
+    /// The focused window's title — a dense topic hint.
     let windowTitle: String?
     /// A short label for the focused field ("To", "Search", "Message").
     let fieldLabel: String?
@@ -47,8 +49,8 @@ enum FocusCapture {
   ///
   /// Secure text fields (password inputs) are detected by role **or** subrole and
   /// never have their contents read, so a typed password — selected or not — can't
-  /// leak into the dictation log or the injector. The check fails closed: an
-  /// unreadable role is treated as secure, since it can't be shown not to be.
+  /// leak into the STT prompt. The check fails closed: an unreadable role is
+  /// treated as secure, since it can't be shown not to be.
   ///
   /// Deliberately `nonisolated`: each read below is a synchronous cross-process
   /// IPC round trip into the frontmost app, and an unresponsive app blocks the

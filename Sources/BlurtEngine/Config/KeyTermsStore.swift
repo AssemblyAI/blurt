@@ -1,9 +1,9 @@
 import Foundation
 
 /// Storage for the user's dictation "key terms" — a comma-separated list of
-/// domain words (names, jargon, product names) sent as the dictation request's
-/// `keyterms_prompt` vocabulary list, so the model is more likely to spell
-/// them correctly (see `TranscriptionSteering.build`).
+/// domain words (names, jargon, product names) that get folded into the dictation
+/// request `prompt` as vocabulary priming, so the model is more likely to spell
+/// them correctly (see `TranscriptionPrompt.build`).
 ///
 /// Unlike the API key these aren't secret, so they live in `UserDefaults` rather
 /// than the Keychain. The transcription pipeline reads the parsed list via
@@ -37,7 +37,7 @@ public enum KeyTermsStore {
   }
 
   /// Pure parse of a comma-separated string into a clean term list. Exposed so
-  /// `TranscriptionSteering` and tests can reuse the exact same rules.
+  /// `TranscriptionPrompt` and tests can reuse the exact same rules.
   public static func parse(_ text: String?) -> [String] {
     guard let text else { return [] }
     var seen = Set<String>()
