@@ -101,6 +101,28 @@ jobs:
         working-directory: blurt
         run: scripts/check.sh
 
+  # Docker build + test: builds the portable-check image (Dockerfile) and runs
+  # `scripts/check.sh --portable` inside it. Blurt itself is macOS-only, so this
+  # cannot replace the macOS gate — it proves the Docker image builds and that
+  # the platform-independent checks (repo-integrity guards, actionlint,
+  # prettier, xmllint, markdownlint, shellcheck, release.test.sh) pass on Linux,
+  # keeping the containerized environment web sandboxes rely on working.
+  docker:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          persist-credentials: false
+
+      - name: Docker build + portable check
+        working-directory: blurt
+        run: scripts/docker-check.sh
+
   # Always-runs summary job, so a *skipped* `check` can't be mistaken for a pass.
   # GitHub reports a skipped required check to branch protection as successful, so
   # anything that makes `check` skip — the `changes` filter erroring, a `needs`
@@ -111,30 +133,38 @@ jobs:
   # NOTE: this only protects the repo once branch protection requires `gate`
   # instead of (or as well as) `check` — that's a repo settings change.
   gate:
-    needs: [changes, check]
+    needs: [changes, check, docker]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Assert the macOS gate ran or was intentionally skipped
+      - name: Assert the gated jobs ran or were intentionally skipped
         env:
           CHECK_RESULT: ${{ needs.check.result }}
+          DOCKER_RESULT: ${{ needs.docker.result }}
           CHANGES_RESULT: ${{ needs.changes.result }}
           CODE_CHANGED: ${{ needs.changes.outputs.code }}
         run: |
-          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED check=$CHECK_RESULT"
+          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED check=$CHECK_RESULT docker=$DOCKER_RESULT"
           if [ "$CHANGES_RESULT" != "success" ]; then
             echo "error: the changes filter did not succeed, so the gate cannot be trusted" >&2
             exit 1
           fi
-          case "$CHECK_RESULT" in
-            success) echo "macOS gate passed" ;;
-            skipped)
-              if [ "$CODE_CHANGED" = "false" ]; then
-                echo "docs-only change; macOS gate intentionally skipped"
-              else
-                echo "error: check was skipped but code changed" >&2
-                exit 1
-              fi
-              ;;
-            *) echo "error: macOS gate result was '$CHECK_RESULT'" >&2; exit 1 ;;
-          esac
+          # Both gated jobs share the same skip condition, so the same rule
+          # applies to each: success passes, a skip passes only when the
+          # changes filter said docs-only, anything else fails.
+          assert_job() {
+            case "$2" in
+              success) echo "$1 gate passed" ;;
+              skipped)
+                if [ "$CODE_CHANGED" = "false" ]; then
+                  echo "docs-only change; $1 gate intentionally skipped"
+                else
+                  echo "error: $1 was skipped but code changed" >&2
+                  exit 1
+                fi
+                ;;
+              *) echo "error: $1 gate result was '$2'" >&2; exit 1 ;;
+            esac
+          }
+          assert_job check "$CHECK_RESULT"
+          assert_job docker "$DOCKER_RESULT"

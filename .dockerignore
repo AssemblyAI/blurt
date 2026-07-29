@@ -1,0 +1,4 @@
+# The Dockerfile COPYs nothing from the build context — the repo is
+# bind-mounted at run time (scripts/docker-check.sh) — so exclude everything
+# and keep the context (and the build) small.
+*

@@ -62,9 +62,11 @@ App/Blurt/
   Shared/                    UITestIdentifiers.swift — compiled into BOTH app and UI-test targets
   BlurtUITests/              XCUITest bundle (see Tests)
 Tests/BlurtEngineTests/      Swift Testing suites; Stubs/ holds the seam doubles
-scripts/                     check.sh, bootstrap.sh, dev-build.sh, uitest.sh, leaks.sh, release*.sh
+scripts/                     check.sh, bootstrap.sh, dev-build.sh, uitest.sh, leaks.sh, release*.sh,
+                             docker-check.sh (containerized portable check)
 site/                        the GitHub Pages site (html/css, sitemap) — linted by check.sh
-.github/workflows/           check.yml (the gate, macos-26), codeql.yml, pages.yml
+Dockerfile                   Linux image for the portable check subset (built + run by CI's docker job)
+.github/workflows/           check.yml (the gate: macos-26 check + docker portable job), codeql.yml, pages.yml
 .claude/                     Claude Code hooks, skills, subagents (see CLAUDE.md)
 ```
 
@@ -78,6 +80,7 @@ swift test --filter happyPath               # single test case by name
 
 scripts/check.sh                            # full health check — the same script CI runs
 scripts/check.sh --portable                 # platform-independent subset (no macOS toolchain)
+scripts/docker-check.sh                     # the --portable subset in the Docker image CI's docker job builds
 scripts/dev-build.sh                        # signed Debug build + install to /Applications
 ```
 
