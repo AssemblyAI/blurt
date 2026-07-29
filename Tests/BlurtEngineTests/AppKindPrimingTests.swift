@@ -7,7 +7,7 @@ struct AppKindPrimingTests {
   // MARK: - Kind recognition
 
   /// One bundle-ID → kind expectation, tabled for per-case failure output like
-  /// `TranscriptionPromptTests.Case`.
+  /// `TranscriptionSteeringTests.Case`.
   struct KindCase: Sendable, CustomTestStringConvertible {
     let bundleID: String?
     let expected: AppKindPriming.Kind?
@@ -71,39 +71,54 @@ struct AppKindPrimingTests {
 
   // MARK: - Clause rendering
 
-  @Test("a terminal renders the shell-commands instruction")
+  @Test("a terminal renders the shell-command formatting instruction")
   func terminalClause() {
     #expect(
       AppKindPriming.clause(bundleID: "com.apple.Terminal", windowTitle: nil)
-        == "Transcribe speech into shell commands.")
+        == "Format the result as a shell command with no trailing period.")
   }
 
   @Test("a code editor names the open file's language when the title carries one")
   func codeEditorClauseWithLanguage() {
     #expect(
       AppKindPriming.clause(bundleID: "com.microsoft.VSCode", windowTitle: "main.py — blurt")
-        == "Transcribe speech into Python code.")
+        == "Format the result as Python code.")
   }
 
   @Test("a code editor stays generic when the title names no recognizable file")
   func codeEditorClauseGeneric() {
     #expect(
       AppKindPriming.clause(bundleID: "com.apple.dt.Xcode", windowTitle: "Welcome to Xcode")
-        == "Transcribe speech into code.")
+        == "Format the result as code.")
   }
 
-  @Test("Slack renders the casual-message instruction")
+  @Test("Slack renders the casual-message formatting instruction")
   func slackClause() {
     #expect(
       AppKindPriming.clause(bundleID: "com.tinyspeck.slackmacgap", windowTitle: "#eng-backend")
-        == "Transcribe speech into a casual Slack message with emoji.")
+        == "Format the result as a casual Slack message, using Slack emoji where they fit.")
   }
 
-  @Test("Obsidian renders the markdown instruction")
+  @Test("Obsidian renders the markdown formatting instruction")
   func obsidianClause() {
     #expect(
       AppKindPriming.clause(bundleID: "md.obsidian", windowTitle: "Meeting notes")
-        == "Transcribe speech into markdown.")
+        == "Format the result as markdown.")
+  }
+
+  @Test("every clause reads as a rewrite instruction, not a transcription instruction")
+  func clausesAreRewriteInstructions() {
+    // These render into `config.llm.instruction`, which is an instruction to an
+    // LLM rewriting finished text. The Sync STT docs are explicit that
+    // `config.prompt` takes a *description of the audio* instead — so a clause
+    // that slipped back into "Transcribe speech into …" phrasing would be aimed
+    // at the wrong field, which is how the app-kind priming was silently a no-op
+    // before.
+    for bundleID in ["com.apple.Terminal", "com.microsoft.VSCode", "com.tinyspeck.slackmacgap", "md.obsidian"] {
+      let clause = AppKindPriming.clause(bundleID: bundleID, windowTitle: nil)
+      #expect(clause?.hasPrefix("Format the result as ") == true, "\(bundleID)")
+      #expect(clause?.contains("Transcribe") == false, "\(bundleID)")
+    }
   }
 
   @Test("an unrecognized app contributes no clause")

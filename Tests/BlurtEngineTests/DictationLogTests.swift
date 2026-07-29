@@ -8,10 +8,29 @@ private struct DecodedEntry: Decodable {
   let ts: String
 }
 
-/// Decodes the optional prompt field so tests can assert the exact
-/// `config.prompt` that was sent is what lands on disk.
-private struct DecodedPrompt: Decodable {
-  let prompt: String?
+/// Decodes the steering fields so tests can assert the exact request
+/// customization that was sent is what lands on disk, under the same wire names
+/// the request uses.
+private struct DecodedSteering: Decodable {
+  let conversationContext: [String]
+  let keytermsPrompt: [String]
+  let llmInstruction: String?
+
+  enum CodingKeys: String, CodingKey {
+    case conversationContext = "conversation_context"
+    case keytermsPrompt = "keyterms_prompt"
+    case llmInstruction = "llm_instruction"
+  }
+
+  // A missing array decodes to empty rather than nil: whether a field was
+  // *omitted* is asserted against the raw line, so nothing here needs to tell
+  // absent from empty.
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    conversationContext = try container.decodeIfPresent([String].self, forKey: .conversationContext) ?? []
+    keytermsPrompt = try container.decodeIfPresent([String].self, forKey: .keytermsPrompt) ?? []
+    llmInstruction = try container.decodeIfPresent(String.self, forKey: .llmInstruction)
+  }
 }
 
 /// Each test gets a fresh empty file in a unique temp directory so the host's real
@@ -87,7 +106,7 @@ struct DictationLogTests {
     #expect(transcript < ts)
   }
 
-  @Test("logs only what was sent — raw focus context stays off disk")
+  @Test("logs only what was sent — context captured but never sent stays off disk")
   func logsOnlyWhatWasSent() {
     let url = makeTempLogURL()
     let context = TranscriptionContext(
@@ -95,37 +114,48 @@ struct DictationLogTests {
       fieldLabel: "text entry area", priorText: "- milk", selectedText: "- bread")
     DictationLog.write(transcript: "p", context: context, to: url, now: Date())
     let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
-    // The prompt that was sent is recorded…
-    let decoded = try? JSONDecoder().decode(DecodedPrompt.self, from: Data(line.utf8))
-    #expect(decoded?.prompt == "Transcribe speech into markdown.")
+    // Everything the request carried is recorded, under the wire's own names…
+    let decoded = try? JSONDecoder().decode(DecodedSteering.self, from: Data(line.utf8))
+    #expect(decoded?.llmInstruction == "Format the result as markdown.")
+    #expect(decoded?.conversationContext == ["- milk"])
     // …and none of the captured-but-unsent context is. Values, not just keys:
-    // the entry must carry no trace of what stayed on the machine.
-    for unsent in ["Obsidian", "md.obsidian", "Grocery list", "text entry area", "- milk", "- bread"] {
+    // the entry must carry no trace of what stayed on the machine. Selected text
+    // is on this list because the paste replaces it, so it is never sent.
+    for unsent in ["Obsidian", "md.obsidian", "Grocery list", "text entry area", "- bread"] {
       #expect(!line.contains(unsent))
     }
   }
 
-  @Test("logs the same assembled prompt the transcriber sends")
-  func logsAssembledPrompt() {
+  @Test("logs the same steering fields the transcriber sends")
+  func logsAssembledSteering() {
     let url = makeTempLogURL()
     let context = TranscriptionContext(
       appName: "Obsidian", bundleID: "md.obsidian", windowTitle: "Grocery list",
       fieldLabel: "text entry area", priorText: "- milk", keyTerms: ["Blurt"])
     DictationLog.write(transcript: "p", context: context, to: url, now: Date())
     let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
-    let decoded = try? JSONDecoder().decode(DecodedPrompt.self, from: Data(line.utf8))
-    #expect(decoded?.prompt == TranscriptionPrompt.build(context: context))
-    #expect(decoded?.prompt == "Transcribe speech into markdown. Keywords: Blurt.")
+    let decoded = try? JSONDecoder().decode(DecodedSteering.self, from: Data(line.utf8))
+    let sent = TranscriptionSteering.build(context: context)
+    // The log is the corpus prompt iteration reads, so it has to agree with the
+    // builder field-for-field rather than approximately.
+    #expect(decoded?.llmInstruction == sent.rewriteInstruction)
+    #expect(decoded?.conversationContext == sent.conversationContext)
+    #expect(decoded?.keytermsPrompt == sent.keyterms)
+    #expect(decoded?.llmInstruction == "Format the result as markdown.")
+    #expect(decoded?.keytermsPrompt == ["Blurt"])
   }
 
-  @Test("omits the prompt field when there is no context to build one")
-  func omitsPromptWhenNoContext() {
+  @Test("omits every steering field when there is no context to build one")
+  func omitsSteeringWhenNoContext() {
     let url = makeTempLogURL()
     DictationLog.write(transcript: "p", context: nil, to: url, now: Date())
     let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
-    // `Encodable` synthesis uses `encodeIfPresent`, so a nil prompt is absent
-    // rather than `"prompt":null`.
+    // Absent, not `null` and not `[]` — the entry should read as "nothing was
+    // customized", matching the request, which omits these fields too.
     #expect(!line.contains("\"prompt\""))
+    #expect(!line.contains("\"llm_instruction\""))
+    #expect(!line.contains("\"conversation_context\""))
+    #expect(!line.contains("\"keyterms_prompt\""))
   }
 
   @Test("survives unicode in transcript field")
@@ -169,13 +199,20 @@ struct DictationLogGateTests {
   @Test("the gate is checked before the context is touched, for both settings")
   func gateAppliesToContextualEntries() {
     // The pipeline always passes the captured context — the input the logged
-    // prompt is built from. Off must persist nothing at all; on persists the
-    // prompt but still never the raw context (prior text stays off disk even
-    // for a user who opted in).
+    // steering fields are built from. Off must persist nothing at all; on
+    // persists what was sent, and still never the context that wasn't (the
+    // window title and field label stay off disk either way).
+    //
+    // Prior-cursor text *is* sent now (as `conversation_context`), so it is on
+    // disk for a user who opted in. What keeps a password out of it is upstream,
+    // in `FocusCapture`: prior and selected text are skipped entirely in secure
+    // fields, failing closed when the AX role can't be read. That guard is
+    // covered in `FocusCaptureTests`; this suite can only see contexts that
+    // already cleared it.
     let context = TranscriptionContext(
       appName: "Terminal", bundleID: "com.apple.Terminal",
-      windowTitle: "Vault", fieldLabel: "Password",
-      priorText: "hunter2", selectedText: nil)
+      windowTitle: "Vault", fieldLabel: "Command",
+      priorText: "$ git", selectedText: nil)
     let offURL = makeTempLogURL()
     DictationLog.append(
       transcript: "p", context: context,
@@ -189,8 +226,10 @@ struct DictationLogGateTests {
     DictationLog.queue.sync {}
     #expect(!FileManager.default.fileExists(atPath: offURL.path))
     let logged = readLog(onURL)
-    #expect(logged.contains("Transcribe speech into shell commands."))
-    #expect(!logged.contains("hunter2"))
+    #expect(logged.contains("Format the result as a shell command with no trailing period."))
+    #expect(logged.contains("$ git"))
+    #expect(!logged.contains("Vault"))
+    #expect(!logged.contains("Command"))
   }
 }
 

@@ -1,24 +1,29 @@
 import Foundation
 
-/// The app-kind transcription instruction: recognizes what *kind* of app the
+/// The app-kind formatting instruction: recognizes what *kind* of app the
 /// dictation targets (a terminal, a code editor, Slack, Obsidian) from the
-/// frontmost app's bundle identifier and renders the one instruction sentence
-/// `TranscriptionPrompt` sends — "Transcribe speech into shell commands." /
-/// "… into Swift code." / "… into a casual Slack message with emoji." /
-/// "… into markdown." — telling the model what shape of text the destination
-/// expects, which the app's display name alone doesn't convey.
+/// frontmost app's bundle identifier and renders the one sentence
+/// `TranscriptionSteering` sends as `config.llm.instruction` — "Format the
+/// result as a shell command with no trailing period." / "… as Swift code." /
+/// "… as a casual Slack message, using Slack emoji where they fit." / "… as
+/// markdown." — telling the rewrite what shape of text the destination expects,
+/// which the app's display name alone doesn't convey.
 ///
 /// For code editors the window title usually names the open file, so the
 /// clause names the language inferred from that filename's extension
-/// ("Transcribe speech into Python code.") when one is recognizable, and stays
-/// generic ("… into code.") otherwise.
+/// ("Format the result as Python code.") when one is recognizable, and stays
+/// generic ("… as code.") otherwise.
+///
+/// These are instructions to the **LLM that rewrites the finished transcript**,
+/// not to the STT model. Reshaping output is not something `config.prompt` acts
+/// on — that field takes a description of the audio — so a clause phrased as
+/// "Transcribe speech into markdown." was a no-op wherever it landed. Keep the
+/// imperative "Format the result as …" shape.
 ///
 /// Detection keys on bundle IDs, not display names: names are localized and
 /// user-editable, while the bundle ID is the app's stable identity. An
-/// unrecognized app contributes no clause — the request then carries no
-/// instruction and the service's own default prompt applies. Wording follows
-/// Universal-3 Pro prompting guidance (positive/authoritative phrasing, no
-/// negations). Exercised by
+/// unrecognized app contributes no clause — the request's `llm` block is then
+/// empty and the service's own default cleanup instruction applies. Exercised by
 /// `Tests/BlurtEngineTests/AppKindPrimingTests.swift`.
 enum AppKindPriming {
   /// The recognized destination families. Each renders one guidance sentence;
@@ -73,21 +78,23 @@ enum AppKindPriming {
     return kindsByBundleIDPrefix.first { bundleID.hasPrefix($0.prefix) }?.kind
   }
 
-  /// The instruction sentence for the app `bundleID` identifies, or `nil` when
+  /// The formatting instruction for the app `bundleID` identifies, or `nil` when
   /// the app isn't recognized. `windowTitle` refines the code-editor clause
   /// with the open file's language; the other kinds ignore it.
   static func clause(bundleID: String?, windowTitle: String?) -> String? {
     guard let kind = kind(ofBundleID: bundleID) else { return nil }
     switch kind {
     case .terminal:
-      return "Transcribe speech into shell commands."
+      // "Trailing period", not "terminal punctuation": in a clause about
+      // terminals the latter reads as the app, not the end of a sentence.
+      return "Format the result as a shell command with no trailing period."
     case .codeEditor:
       let subject = windowTitle.flatMap(language(inWindowTitle:)) ?? "code"
-      return "Transcribe speech into \(subject)."
+      return "Format the result as \(subject)."
     case .slack:
-      return "Transcribe speech into a casual Slack message with emoji."
+      return "Format the result as a casual Slack message, using Slack emoji where they fit."
     case .obsidian:
-      return "Transcribe speech into markdown."
+      return "Format the result as markdown."
     }
   }
 
@@ -112,10 +119,10 @@ enum AppKindPriming {
   /// markers, quotes, brackets, dash separators.
   private static let filenameTrim = CharacterSet(charactersIn: "\"'`•●◆*()[]{}<>,;:—–-")
 
-  /// Filename extension → what the clause says speech becomes. Values complete
-  /// "Transcribe speech into …", so languages carry a trailing "code" while
-  /// markup/data formats stand alone. Lowercased keys; lookups lowercase the
-  /// extension first.
+  /// Filename extension → what the clause says the result should be. Values
+  /// complete "Format the result as …", so languages carry a trailing "code"
+  /// while markup/data formats stand alone. Lowercased keys; lookups lowercase
+  /// the extension first.
   private static let languagesByExtension: [String: String] = [
     "c": "C code", "h": "C code",
     "cc": "C++ code", "cpp": "C++ code", "cxx": "C++ code", "hpp": "C++ code",

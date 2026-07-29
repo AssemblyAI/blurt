@@ -51,8 +51,8 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     guard let apiKey = apiKeyProvider(), !apiKey.isEmpty else {
       throw BlurtError.apiKeyMissing
     }
-    let prompt = TranscriptionPrompt.build(context: context)
-    let config = try makeConfigData(sampleRate: sampleRate, prompt: prompt)
+    let steering = TranscriptionSteering.build(context: context)
+    let config = try makeConfigData(sampleRate: sampleRate, steering: steering)
     let boundary = "blurt-\(UUID().uuidString)"
 
     var request = URLRequest(url: baseURL.appendingPathComponent("transcribe"))
@@ -105,18 +105,21 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
       "warm-up connect \(elapsedMs, format: .fixed(precision: 0), privacy: .public)ms")
   }
 
-  /// Builds the JSON `config` part sent alongside the audio. The context
-  /// `prompt` is included only when non-empty; a nil or blank prompt omits the
-  /// field so the server applies its default prompt. The `llm` block always
-  /// rides along — see `DictationConfig.llm`. Internal so tests can assert the
-  /// prompt wiring without inspecting the multipart upload body (which
-  /// `URLProtocol` mocks can't observe reliably for `upload(from:)`).
-  func makeConfigData(sampleRate: Int, prompt: String?) throws -> Data {
+  /// Builds the JSON `config` part sent alongside the audio. Each steering field
+  /// is included only when it carries something — an empty array or a nil
+  /// instruction omits the field rather than stating an empty value, so the
+  /// service applies its own default. The `llm` block always rides along — see
+  /// `DictationConfig.llm`. Internal so tests can assert the steering wiring
+  /// without inspecting the multipart upload body (which `URLProtocol` mocks
+  /// can't observe reliably for `upload(from:)`).
+  func makeConfigData(sampleRate: Int, steering: TranscriptionSteering.Fields) throws -> Data {
     try JSONEncoder().encode(
       DictationConfig(
         sampleRate: sampleRate,
         channels: 1,
-        prompt: prompt.trimmedNonEmpty()
+        conversationContext: steering.conversationContext,
+        keytermsPrompt: steering.keyterms,
+        llm: LLMRewrite(instruction: steering.rewriteInstruction)
       )
     )
   }
@@ -194,28 +197,56 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 
   // MARK: - Wire types
 
+  /// The JSON `config` part. Note the absence of `prompt`: that field takes a
+  /// description of the audio rather than instructions, and a custom value
+  /// replaces the service's managed default (language steering included), so
+  /// Blurt sends none — see `TranscriptionSteering` for the full reasoning.
   private struct DictationConfig: Encodable {
     let sampleRate: Int
     let channels: Int
-    /// Custom transcription instruction. Encoded only when non-nil (the
-    /// synthesized `encode` uses `encodeIfPresent` for optionals), so omitting
-    /// it falls back to the server's default prompt. Steers *transcription*;
-    /// the cleanup rewrite is the `llm` block's job.
-    let prompt: String?
-    /// The rewrite request. An empty object selects the service's default
-    /// cleanup instruction; per the API's `instruction`-mode rules, output
-    /// format and don't-answer-the-text safeguards are enforced server-side,
-    /// so nothing rides along here.
-    let llm = LLMRewrite()
+    /// Turns preceding this utterance (Blurt sends at most one: the text before
+    /// the insertion point). Encoded only when non-nil — the synthesized
+    /// `encode` uses `encodeIfPresent` for optionals — so an utterance with no
+    /// prior text omits the field instead of sending `[]`.
+    let conversationContext: [String]
+    /// The user's key terms as the explicit vocabulary list, omitted when empty.
+    let keytermsPrompt: [String]
+    /// The rewrite request. Always present so the service runs the rewrite at
+    /// all; its `instruction` is the app-kind formatting clause, or absent to
+    /// select the service's default cleanup instruction. Per the API's
+    /// `instruction`-mode rules, output format and don't-answer-the-text
+    /// safeguards are enforced server-side either way.
+    let llm: LLMRewrite
     enum CodingKeys: String, CodingKey {
       case sampleRate = "sample_rate"
       case channels
-      case prompt
+      case conversationContext = "conversation_context"
+      case keytermsPrompt = "keyterms_prompt"
       case llm
+    }
+
+    /// Hand-written so an empty array *omits* its field rather than encoding
+    /// `[]`. The distinction is on the wire: `"keyterms_prompt": []` states an
+    /// empty vocabulary, while omission leaves the service to its own handling.
+    /// (Optional arrays would express this too, but read as "maybe no list"
+    /// where the truth is "a list, possibly empty".)
+    func encode(to encoder: Encoder) throws {
+      var container = encoder.container(keyedBy: CodingKeys.self)
+      try container.encode(sampleRate, forKey: .sampleRate)
+      try container.encode(channels, forKey: .channels)
+      if !conversationContext.isEmpty {
+        try container.encode(conversationContext, forKey: .conversationContext)
+      }
+      if !keytermsPrompt.isEmpty {
+        try container.encode(keytermsPrompt, forKey: .keytermsPrompt)
+      }
+      try container.encode(llm, forKey: .llm)
     }
   }
 
-  private struct LLMRewrite: Encodable {}
+  private struct LLMRewrite: Encodable {
+    let instruction: String?
+  }
 
   private struct DictationResponse: Decodable {
     /// The verbatim transcript — always present, never altered by the LLM.

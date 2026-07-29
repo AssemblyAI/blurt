@@ -23,15 +23,22 @@ one, stop and ask the user first. This is the fast "don't" list; AGENTS.md's
 
 - **No streaming STT.** The AssemblyAI Sync API returns the full transcript in
   one response. Overlay goes "Transcribing…" → full text.
-- **No separate LLM cleanup pass.** Cleanup rides in the Sync STT request's
-  `config.prompt` (`TranscriptionPrompt`). No LLM Gateway client, no
+- **No separate LLM cleanup pass.** Cleanup rides in the dictation request's
+  server-side `llm` block (`TranscriptionSteering`). No LLM Gateway client, no
   `StylerProtocol`, no post-transcription styling stage.
 - **No local models / model downloads.** Transcription is a remote AssemblyAI
   call. No on-device ASR/LLM, no model cache, no download UI.
-- Don't reintroduce a "remove filler words (um, uh, like)" directive in the
-  prompt — `universal-3-5-pro` ignores it; it was deliberately dropped. Same for
-  a language directive: pinning the prompt to English hurt non-English speech, so
-  language is left to the model's own detection.
+- **Never send `config.prompt`.** It takes a _description of the audio_, not
+  instructions, and a custom value replaces the service's managed default
+  including its language steering. Formatting goes in `llm.instruction`
+  ("Format the result as markdown."), vocabulary in `keyterms_prompt`, the text
+  before the cursor in `conversation_context`. An imperative like "Transcribe
+  speech into markdown." in `prompt` is a measured no-op — that is exactly why
+  these three fields exist.
+- Don't reintroduce a "remove filler words (um, uh, like)" directive — the STT
+  prompt doesn't act on it; it was deliberately dropped, and disfluency removal
+  is the LLM rewrite's job. Same for a language directive: pinning to English
+  hurt non-English speech, so language is left to the model's own detection.
 - **Injection is always a clipboard paste** (save → write → ⌘V → settle →
   restore), degrading to "left it on the clipboard" when the target is lost. No
   keystroke-by-keystroke typing path, no length threshold.

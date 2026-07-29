@@ -52,14 +52,14 @@ struct HTTPClientTests {
     #expect(result == expected)
   }
 
-  @Test("transcriber succeeds with a real context (builds and sends a prompt)")
+  @Test("transcriber succeeds with a real context (builds and sends steering fields)")
   func transcribeWithContext() async throws {
     let transport = FakeHTTPTransport { request in
       guard request.url?.path.hasSuffix("/transcribe") == true else { return (404, Data()) }
       return (200, json(["text": "hello world"]))
     }
 
-    // A non-empty context exercises the TranscriptionPrompt.build path inside
+    // A non-empty context exercises the TranscriptionSteering.build path inside
     // transcribe() that the nil-context happy path skips. The fake can't observe
     // the multipart upload body, so this asserts the request still round-trips
     // cleanly rather than the wire contents (covered directly by makeConfigData).
@@ -154,29 +154,55 @@ struct HTTPClientTests {
     }
   }
 
-  @Test("config part carries the built context prompt")
-  func configIncludesPrompt() throws {
-    let object = try configObject(prompt: "CONTEXT. Transcribe.")
-    #expect(object["prompt"] as? String == "CONTEXT. Transcribe.")
+  @Test("config part carries each steering field under its documented wire name")
+  func configIncludesSteeringFields() throws {
+    let object = try configObject(
+      steering: TranscriptionSteering.Fields(
+        conversationContext: ["$ git status"], keyterms: ["Blurt", "AssemblyAI"],
+        rewriteInstruction: "Format the result as markdown."))
+    #expect(object["conversation_context"] as? [String] == ["$ git status"])
+    #expect(object["keyterms_prompt"] as? [String] == ["Blurt", "AssemblyAI"])
+    #expect((object["llm"] as? [String: Any])?["instruction"] as? String == "Format the result as markdown.")
     #expect(object["sample_rate"] as? Int == 16_000)
     // The capture path is mono by construction; the declared geometry must agree.
     #expect(object["channels"] as? Int == 1)
   }
 
-  @Test("config part always requests the default cleanup rewrite", arguments: ["CONTEXT. Transcribe.", nil])
-  func configRequestsDefaultRewrite(prompt: String?) throws {
-    // `llm` must be present and empty on every request: present so the service
-    // runs the rewrite at all, empty so the server-owned default cleanup
-    // instruction (and its guardrails) applies rather than a client-side copy.
-    // `isEmpty == true` also covers presence — it is false for a missing `llm`.
-    #expect((try configObject(prompt: prompt)["llm"] as? [String: Any])?.isEmpty == true)
+  @Test("config part never sends a prompt — the managed default is what steers transcription")
+  func configNeverSendsPrompt() throws {
+    // A custom `config.prompt` replaces the service's managed default *and* its
+    // language steering, and the field wants a description of the audio rather
+    // than instructions — which is why formatting moved to `llm.instruction` and
+    // vocabulary to `keyterms_prompt`. Sending no prompt keeps the managed
+    // default, so this pins the field's absence for every steering shape.
+    let shapes: [TranscriptionSteering.Fields] = [
+      .empty,
+      TranscriptionSteering.Fields(
+        conversationContext: ["Hi Sam,"], keyterms: ["Blurt"],
+        rewriteInstruction: "Format the result as markdown."),
+    ]
+    for steering in shapes {
+      #expect(try configObject(steering: steering).keys.contains("prompt") == false)
+    }
   }
 
-  @Test(
-    "config part omits the prompt field when there is no usable context",
-    arguments: [nil, "   \n"])
-  func configOmitsPrompt(prompt: String?) throws {
-    #expect(try configObject(prompt: prompt).keys.contains("prompt") == false)
+  @Test("config part requests the default cleanup rewrite when no formatting is needed")
+  func configRequestsDefaultRewrite() throws {
+    // `llm` must be present and empty when there is no app-kind clause: present
+    // so the service runs the rewrite at all, empty so the server-owned default
+    // cleanup instruction (and its guardrails) applies rather than a client-side
+    // copy. `isEmpty == true` also covers presence — false for a missing `llm`.
+    #expect((try configObject(steering: .empty)["llm"] as? [String: Any])?.isEmpty == true)
+  }
+
+  @Test("config part omits the context and keyterms fields when they are empty")
+  func configOmitsEmptySteeringFields() throws {
+    // An empty array is not the same as an absent field: sending
+    // `"keyterms_prompt": []` states an empty vocabulary where omission lets the
+    // service apply its own handling.
+    let object = try configObject(steering: .empty)
+    #expect(object.keys.contains("conversation_context") == false)
+    #expect(object.keys.contains("keyterms_prompt") == false)
   }
 
   @Test("the multipart body frames the audio and config parts the dictation API expects")
@@ -306,9 +332,9 @@ struct HTTPClientTests {
   /// config assertion below wants, since `makeConfigData` returns raw JSON.
   /// A part that isn't a JSON object at all fails here rather than turning every
   /// downstream assertion into a silent nil-compare.
-  private func configObject(prompt: String?) throws -> [String: Any] {
+  private func configObject(steering: TranscriptionSteering.Fields) throws -> [String: Any] {
     let config = try makeTranscriber(apiKey: "test-key")
-      .makeConfigData(sampleRate: 16_000, prompt: prompt)
+      .makeConfigData(sampleRate: 16_000, steering: steering)
     return try #require(JSONSerialization.jsonObject(with: config) as? [String: Any])
   }
 
