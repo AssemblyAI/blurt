@@ -391,10 +391,11 @@ AssemblyAI's Universal-3 Pro prompting guidance (positive/authoritative, no
 The rest of the captured focus context — window title, app and field names, prior-cursor text, the
 selected text — is deliberately **not** rendered into the prompt: real-world logs showed it
 crowding the instruction (VS Code, for one, parks a screen-reader help announcement in the focused
-field's description). It is still captured, feeding the dictation log, the injector's separator
-logic, and the code-editor language refinement — and reading it stays privacy-guarded (prior and
-selected text are skipped in secure fields, detected by AX role **or** subrole and failing closed
-when the role can't be read, so a password can't reach the log or leave the machine).
+field's description). It is still captured — the injector's separator logic
+consumes the prior text and window title, and the code-editor language refinement reads the window
+title — but none of it is written to the dictation log, and reading it stays privacy-guarded (prior
+and selected text are skipped in secure fields, detected by AX role **or** subrole and failing
+closed when the role can't be read, so a password is never read out of the field at all).
 
 `build(context:)` returns `nil` when there's no usable context (or when nothing renders — focus
 signals from an unrecognized app, no key terms), and passing `prompt: nil` to the transcriber omits
@@ -431,7 +432,8 @@ pure edge detector deciding when the chimes fire; the AppKit `CueSoundPlayer` ju
 resolves.
 
 History: **`RecentDictations`** is an in-memory, newest-first ring shown in the ready window (never
-written to disk). **`DictationLog`** appends each completed dictation with its context snapshot to
+written to disk). **`DictationLog`** appends each completed dictation — the transcript plus the exact
+`config.prompt` sent — to
 `~/Library/Logs/Blurt/dictations.jsonl` (`DictationLog.defaultURL`, or `defaultDisplayPath` for the
 home-abbreviated form to show in UI — derived next to the URL so the label can't drift from the write
 target) — but **only** while developer mode is on; with it off, nothing is written. The Settings

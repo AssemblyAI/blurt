@@ -8,15 +8,9 @@ private struct DecodedEntry: Decodable {
   let ts: String
 }
 
-/// Decodes the optional focus-context fields so tests can assert they're
-/// threaded from the `TranscriptionContext` onto disk.
-private struct DecodedContext: Decodable {
-  let app: String?
-  let bundle: String?
-  let window: String?
-  let field: String?
-  let prior: String?
-  let selected: String?
+/// Decodes the optional prompt field so tests can assert the exact
+/// `config.prompt` that was sent is what lands on disk.
+private struct DecodedPrompt: Decodable {
   let prompt: String?
 }
 
@@ -93,31 +87,22 @@ struct DictationLogTests {
     #expect(transcript < ts)
   }
 
-  @Test("threads focus context (incl. selected text) onto disk")
-  func logsContext() {
+  @Test("logs only what was sent — raw focus context stays off disk")
+  func logsOnlyWhatWasSent() {
     let url = makeTempLogURL()
     let context = TranscriptionContext(
-      appName: "Mail", bundleID: "com.apple.mail", windowTitle: "Re: Q3 pricing",
-      fieldLabel: "Body", priorText: "Hi Sam,", selectedText: "the old plan")
+      appName: "Obsidian", bundleID: "md.obsidian", windowTitle: "Grocery list",
+      fieldLabel: "text entry area", priorText: "- milk", selectedText: "- bread")
     DictationLog.write(transcript: "p", context: context, to: url, now: Date())
     let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
-    let decoded = try? JSONDecoder().decode(DecodedContext.self, from: Data(line.utf8))
-    #expect(decoded?.app == "Mail")
-    #expect(decoded?.bundle == "com.apple.mail")
-    #expect(decoded?.window == "Re: Q3 pricing")
-    #expect(decoded?.field == "Body")
-    #expect(decoded?.prior == "Hi Sam,")
-    #expect(decoded?.selected == "the old plan")
-  }
-
-  @Test("omits the selected field when nothing is selected")
-  func omitsSelectedWhenAbsent() {
-    let url = makeTempLogURL()
-    DictationLog.write(transcript: "p", context: nil, to: url, now: Date())
-    let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
-    // `Encodable` synthesis uses `encodeIfPresent`, so a nil field is absent
-    // rather than `"selected":null`.
-    #expect(!line.contains("selected"))
+    // The prompt that was sent is recorded…
+    let decoded = try? JSONDecoder().decode(DecodedPrompt.self, from: Data(line.utf8))
+    #expect(decoded?.prompt == "Transcribe speech into markdown.")
+    // …and none of the captured-but-unsent context is. Values, not just keys:
+    // the entry must carry no trace of what stayed on the machine.
+    for unsent in ["Obsidian", "md.obsidian", "Grocery list", "text entry area", "- milk", "- bread"] {
+      #expect(!line.contains(unsent))
+    }
   }
 
   @Test("logs the same assembled prompt the transcriber sends")
@@ -128,23 +113,9 @@ struct DictationLogTests {
       fieldLabel: "text entry area", priorText: "- milk", keyTerms: ["Blurt"])
     DictationLog.write(transcript: "p", context: context, to: url, now: Date())
     let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
-    let decoded = try? JSONDecoder().decode(DecodedContext.self, from: Data(line.utf8))
+    let decoded = try? JSONDecoder().decode(DecodedPrompt.self, from: Data(line.utf8))
     #expect(decoded?.prompt == TranscriptionPrompt.build(context: context))
     #expect(decoded?.prompt == "Transcribe speech into markdown. Keywords: Blurt.")
-  }
-
-  @Test("the logged prompt carries the app-kind instruction the bundle ID selected")
-  func logsPromptWithAppKindInstruction() {
-    let url = makeTempLogURL()
-    let context = TranscriptionContext(
-      appName: "Slack", bundleID: "com.tinyspeck.slackmacgap", fieldLabel: "Message",
-      priorText: nil)
-    DictationLog.write(transcript: "p", context: context, to: url, now: Date())
-    let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
-    let decoded = try? JSONDecoder().decode(DecodedContext.self, from: Data(line.utf8))
-    // The exact wording is TranscriptionPromptTests' contract; here the point is
-    // that what lands on disk includes the instruction actually sent for this app.
-    #expect(decoded?.prompt?.contains("Slack message") == true)
   }
 
   @Test("omits the prompt field when there is no context to build one")
@@ -152,6 +123,8 @@ struct DictationLogTests {
     let url = makeTempLogURL()
     DictationLog.write(transcript: "p", context: nil, to: url, now: Date())
     let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
+    // `Encodable` synthesis uses `encodeIfPresent`, so a nil prompt is absent
+    // rather than `"prompt":null`.
     #expect(!line.contains("\"prompt\""))
   }
 
@@ -195,10 +168,13 @@ struct DictationLogGateTests {
 
   @Test("the gate is checked before the context is touched, for both settings")
   func gateAppliesToContextualEntries() {
-    // The pipeline always passes the captured context, which is the part carrying
-    // prior text and the assembled prompt. Off must persist none of it.
+    // The pipeline always passes the captured context — the input the logged
+    // prompt is built from. Off must persist nothing at all; on persists the
+    // prompt but still never the raw context (prior text stays off disk even
+    // for a user who opted in).
     let context = TranscriptionContext(
-      appName: "1Password", windowTitle: "Vault", fieldLabel: "Password",
+      appName: "Terminal", bundleID: "com.apple.Terminal",
+      windowTitle: "Vault", fieldLabel: "Password",
       priorText: "hunter2", selectedText: nil)
     let offURL = makeTempLogURL()
     DictationLog.append(
@@ -212,7 +188,9 @@ struct DictationLogGateTests {
 
     DictationLog.queue.sync {}
     #expect(!FileManager.default.fileExists(atPath: offURL.path))
-    #expect(readLog(onURL).contains("hunter2"))
+    let logged = readLog(onURL)
+    #expect(logged.contains("Transcribe speech into shell commands."))
+    #expect(!logged.contains("hunter2"))
   }
 }
 

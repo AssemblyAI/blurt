@@ -1,31 +1,21 @@
 import Foundation
 
-/// Append-only JSONL log of completed transcripts at
+/// Append-only JSONL log of completed dictations — the transcript that came
+/// back and the exact `config.prompt` that was sent — at
 /// `~/Library/Logs/Blurt/dictations.jsonl`. Used to build a real-world
 /// corpus for prompt iteration. Written only while developer mode is switched
 /// on (`DeveloperModeStore` — the Settings window's Developer section, which
 /// also displays this path), so a user who never opts in has no dictation
 /// text on disk.
 public enum DictationLog {
+  /// One logged dictation: what came back (`transcript`), when, and exactly
+  /// what was sent (`prompt`). Nothing else — the raw focus context (app and
+  /// field names, window title, prior/selected text) deliberately stays off
+  /// disk: it isn't sent to the service, so it doesn't belong in a log of the
+  /// exchange.
   struct Entry: Encodable {
     let transcript: String
     let ts: String
-    /// Focused-app display name, when one was captured.
-    let app: String?
-    /// Focused-app bundle identifier, when one was captured. The input the
-    /// prompt's app-kind guidance (`AppKindPriming`) keys on, logged so the
-    /// corpus shows *why* a prompt carried (or lacked) a guidance sentence.
-    let bundle: String?
-    /// Focused-window title, when one was captured (in a code editor it names
-    /// the open file, which is what refines the prompt's instruction).
-    let window: String?
-    /// Focused-field label sent as context, when one was captured.
-    let field: String?
-    /// Text before the cursor at press time, when any was captured. Lets you
-    /// verify accessibility-tree prior-text reading actually fired.
-    let prior: String?
-    /// Selected text at press time (the dictation replaced it), when any.
-    let selected: String?
     /// The fully-assembled `config.prompt` sent to AssemblyAI for this
     /// utterance. Built here from `context` (rather than threaded through from
     /// the transcriber) so the log always reflects what was actually sent,
@@ -95,9 +85,6 @@ public enum DictationLog {
   ) {
     let entry = Entry(
       transcript: transcript, ts: now.formatted(timestampFormat),
-      app: context?.appName, bundle: context?.bundleID,
-      window: context?.windowTitle, field: context?.fieldLabel,
-      prior: context?.priorText, selected: context?.selectedText,
       prompt: TranscriptionPrompt.build(context: context))
     guard var line = try? makeEncoder().encode(entry) else { return }
     line.append(0x0A)  // '\n'

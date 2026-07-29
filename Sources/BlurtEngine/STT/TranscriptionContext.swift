@@ -2,15 +2,16 @@
 /// dictation start from the focused app and field. `TranscriptionPrompt.build`
 /// renders only the parts of it the request prompt uses — the bundle ID (via
 /// the `AppKindPriming` app-kind instruction), the window title (the language
-/// refinement of that instruction), and the key terms — while the rest rides
-/// along for the dictation log and the injector's separator logic.
+/// refinement of that instruction), and the key terms. The prior text and
+/// window title also steer the injector's paste separator; nothing else is
+/// consumed, and none of the raw context is sent or logged.
 ///
 /// Every focus field is optional and best-effort: whatever couldn't be read is
 /// `nil`, and an entirely empty context yields no prompt (the server applies
 /// its own default).
 public struct TranscriptionContext: Sendable, Equatable {
   /// The frontmost application's display name (e.g. "Slack", "Xcode"). Not
-  /// rendered into the prompt; recorded in the dictation log.
+  /// rendered into the prompt.
   public let appName: String?
 
   /// The frontmost application's bundle identifier (e.g.
@@ -28,18 +29,16 @@ public struct TranscriptionContext: Sendable, Equatable {
   public let windowTitle: String?
 
   /// A short label for the focused field (placeholder/title/role, e.g. "To",
-  /// "Subject", "Search", "Message"). Not rendered into the prompt; recorded
-  /// in the dictation log.
+  /// "Subject", "Search", "Message"). Not rendered into the prompt.
   public let fieldLabel: String?
 
   /// Text immediately preceding the insertion point in the focused field. Not
   /// rendered into the prompt; it drives the injector's leading-separator
-  /// decision and is recorded in the dictation log.
+  /// decision.
   public let priorText: String?
 
   /// The text currently selected in the focused field, when any (the paste
-  /// will replace it). Not rendered into the prompt; recorded in the
-  /// dictation log.
+  /// will replace it). Not rendered into the prompt.
   public let selectedText: String?
 
   /// User-configured domain vocabulary (names, jargon, product names) carried as
