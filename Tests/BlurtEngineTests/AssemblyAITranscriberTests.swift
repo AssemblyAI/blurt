@@ -158,11 +158,9 @@ struct HTTPClientTests {
   func configIncludesSteeringFields() throws {
     let object = try configObject(
       steering: TranscriptionSteering.Fields(
-        conversationContext: ["$ git status"], keyterms: ["Blurt", "AssemblyAI"],
-        rewriteInstruction: "Format the result as markdown."))
+        conversationContext: ["$ git status"], keyterms: ["Blurt", "AssemblyAI"]))
     #expect(object["conversation_context"] as? [String] == ["$ git status"])
     #expect(object["keyterms_prompt"] as? [String] == ["Blurt", "AssemblyAI"])
-    #expect((object["llm"] as? [String: Any])?["instruction"] as? String == "Format the result as markdown.")
     #expect(object["sample_rate"] as? Int == 16_000)
     // The capture path is mono by construction; the declared geometry must agree.
     #expect(object["channels"] as? Int == 1)
@@ -172,27 +170,33 @@ struct HTTPClientTests {
   func configNeverSendsPrompt() throws {
     // A custom `config.prompt` replaces the service's managed default *and* its
     // language steering, and the field wants a description of the audio rather
-    // than instructions — which is why formatting moved to `llm.instruction` and
-    // vocabulary to `keyterms_prompt`. Sending no prompt keeps the managed
-    // default, so this pins the field's absence for every steering shape.
+    // than instructions — which is why vocabulary rides in `keyterms_prompt`.
+    // Sending no prompt keeps the managed default, so this pins the field's
+    // absence for every steering shape.
     let shapes: [TranscriptionSteering.Fields] = [
       .empty,
-      TranscriptionSteering.Fields(
-        conversationContext: ["Hi Sam,"], keyterms: ["Blurt"],
-        rewriteInstruction: "Format the result as markdown."),
+      TranscriptionSteering.Fields(conversationContext: ["Hi Sam,"], keyterms: ["Blurt"]),
     ]
     for steering in shapes {
       #expect(try configObject(steering: steering).keys.contains("prompt") == false)
     }
   }
 
-  @Test("config part requests the default cleanup rewrite when no formatting is needed")
+  @Test("config part always requests the unsteered default cleanup rewrite")
   func configRequestsDefaultRewrite() throws {
-    // `llm` must be present and empty when there is no app-kind clause: present
-    // so the service runs the rewrite at all, empty so the server-owned default
-    // cleanup instruction (and its guardrails) applies rather than a client-side
-    // copy. `isEmpty == true` also covers presence — false for a missing `llm`.
-    #expect((try configObject(steering: .empty)["llm"] as? [String: Any])?.isEmpty == true)
+    // `llm` must be present and empty for every utterance: present so the service
+    // runs the rewrite at all, empty so the server-owned default cleanup
+    // instruction (and its guardrails) applies rather than a client-side copy.
+    // Empty also means nothing about the destination app rides here, which is
+    // what an earlier `instruction` carried. `isEmpty == true` covers presence
+    // too — it is false for a missing `llm`.
+    let shapes: [TranscriptionSteering.Fields] = [
+      .empty,
+      TranscriptionSteering.Fields(conversationContext: ["Hi Sam,"], keyterms: ["Blurt"]),
+    ]
+    for steering in shapes {
+      #expect((try configObject(steering: steering)["llm"] as? [String: Any])?.isEmpty == true)
+    }
   }
 
   @Test("config part omits the context and keyterms fields when they are empty")

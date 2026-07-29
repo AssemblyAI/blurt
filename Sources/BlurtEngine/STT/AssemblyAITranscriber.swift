@@ -106,12 +106,11 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   }
 
   /// Builds the JSON `config` part sent alongside the audio. Each steering field
-  /// is included only when it carries something — an empty array or a nil
-  /// instruction omits the field rather than stating an empty value, so the
-  /// service applies its own default. The `llm` block always rides along — see
-  /// `DictationConfig.llm`. Internal so tests can assert the steering wiring
-  /// without inspecting the multipart upload body (which `URLProtocol` mocks
-  /// can't observe reliably for `upload(from:)`).
+  /// is included only when it carries something — an empty array omits the field
+  /// rather than stating an empty value, so the service applies its own default.
+  /// The `llm` block always rides along — see `DictationConfig.llm`. Internal so
+  /// tests can assert the steering wiring without inspecting the multipart upload
+  /// body (which `URLProtocol` mocks can't observe reliably for `upload(from:)`).
   func makeConfigData(sampleRate: Int, steering: TranscriptionSteering.Fields) throws -> Data {
     try JSONEncoder().encode(
       DictationConfig(
@@ -119,7 +118,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
         channels: 1,
         conversationContext: steering.conversationContext,
         keytermsPrompt: steering.keyterms,
-        llm: LLMRewrite(instruction: steering.rewriteInstruction)
+        llm: LLMRewrite()
       )
     )
   }
@@ -212,10 +211,8 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     /// The user's key terms as the explicit vocabulary list, omitted when empty.
     let keytermsPrompt: [String]
     /// The rewrite request. Always present so the service runs the rewrite at
-    /// all; its `instruction` is the app-kind formatting clause, or absent to
-    /// select the service's default cleanup instruction. Per the API's
-    /// `instruction`-mode rules, output format and don't-answer-the-text
-    /// safeguards are enforced server-side either way.
+    /// all, and always empty so the instruction it runs is the service's own
+    /// default cleanup — Blurt sends nothing describing the destination app.
     let llm: LLMRewrite
     enum CodingKeys: String, CodingKey {
       case sampleRate = "sample_rate"
@@ -244,9 +241,11 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     }
   }
 
-  private struct LLMRewrite: Encodable {
-    let instruction: String?
-  }
+  /// Encodes as `{}`: asking for the rewrite without steering it. An
+  /// `instruction` here once carried a formatting clause derived from the
+  /// frontmost app's bundle ID; that was removed, and the service's default
+  /// cleanup instruction is what runs now.
+  private struct LLMRewrite: Encodable {}
 
   private struct DictationResponse: Decodable {
     /// The verbatim transcript — always present, never altered by the LLM.

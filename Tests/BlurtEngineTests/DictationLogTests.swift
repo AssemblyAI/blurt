@@ -14,12 +14,10 @@ private struct DecodedEntry: Decodable {
 private struct DecodedSteering: Decodable {
   let conversationContext: [String]
   let keytermsPrompt: [String]
-  let llmInstruction: String?
 
   enum CodingKeys: String, CodingKey {
     case conversationContext = "conversation_context"
     case keytermsPrompt = "keyterms_prompt"
-    case llmInstruction = "llm_instruction"
   }
 
   // A missing array decodes to empty rather than nil: whether a field was
@@ -29,7 +27,6 @@ private struct DecodedSteering: Decodable {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     conversationContext = try container.decodeIfPresent([String].self, forKey: .conversationContext) ?? []
     keytermsPrompt = try container.decodeIfPresent([String].self, forKey: .keytermsPrompt) ?? []
-    llmInstruction = try container.decodeIfPresent(String.self, forKey: .llmInstruction)
   }
 }
 
@@ -110,18 +107,18 @@ struct DictationLogTests {
   func logsOnlyWhatWasSent() {
     let url = makeTempLogURL()
     let context = TranscriptionContext(
-      appName: "Obsidian", bundleID: "md.obsidian", windowTitle: "Grocery list",
+      appName: "Obsidian", windowTitle: "Grocery list",
       fieldLabel: "text entry area", priorText: "- milk", selectedText: "- bread")
     DictationLog.write(transcript: "p", context: context, to: url, now: Date())
     let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
     // Everything the request carried is recorded, under the wire's own names…
     let decoded = try? JSONDecoder().decode(DecodedSteering.self, from: Data(line.utf8))
-    #expect(decoded?.llmInstruction == "Format the result as markdown.")
     #expect(decoded?.conversationContext == ["- milk"])
     // …and none of the captured-but-unsent context is. Values, not just keys:
-    // the entry must carry no trace of what stayed on the machine. Selected text
-    // is on this list because the paste replaces it, so it is never sent.
-    for unsent in ["Obsidian", "md.obsidian", "Grocery list", "text entry area", "- bread"] {
+    // the entry must carry no trace of what stayed on the machine. Two are
+    // load-bearing: selected text, which the paste replaces so it is never sent,
+    // and anything naming the destination app, which is never sent either.
+    for unsent in ["Obsidian", "Grocery list", "text entry area", "- bread"] {
       #expect(!line.contains(unsent))
     }
   }
@@ -130,7 +127,7 @@ struct DictationLogTests {
   func logsAssembledSteering() {
     let url = makeTempLogURL()
     let context = TranscriptionContext(
-      appName: "Obsidian", bundleID: "md.obsidian", windowTitle: "Grocery list",
+      appName: "Obsidian", windowTitle: "Grocery list",
       fieldLabel: "text entry area", priorText: "- milk", keyTerms: ["Blurt"])
     DictationLog.write(transcript: "p", context: context, to: url, now: Date())
     let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
@@ -138,10 +135,9 @@ struct DictationLogTests {
     let sent = TranscriptionSteering.build(context: context)
     // The log is the corpus prompt iteration reads, so it has to agree with the
     // builder field-for-field rather than approximately.
-    #expect(decoded?.llmInstruction == sent.rewriteInstruction)
     #expect(decoded?.conversationContext == sent.conversationContext)
     #expect(decoded?.keytermsPrompt == sent.keyterms)
-    #expect(decoded?.llmInstruction == "Format the result as markdown.")
+    #expect(decoded?.conversationContext == ["- milk"])
     #expect(decoded?.keytermsPrompt == ["Blurt"])
   }
 
@@ -151,7 +147,9 @@ struct DictationLogTests {
     DictationLog.write(transcript: "p", context: nil, to: url, now: Date())
     let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
     // Absent, not `null` and not `[]` — the entry should read as "nothing was
-    // customized", matching the request, which omits these fields too.
+    // customized", matching the request, which omits these fields too. `prompt`
+    // and `llm_instruction` are never written for any context, so their absence
+    // here doubles as a pin against reintroducing either.
     #expect(!line.contains("\"prompt\""))
     #expect(!line.contains("\"llm_instruction\""))
     #expect(!line.contains("\"conversation_context\""))
@@ -210,8 +208,7 @@ struct DictationLogGateTests {
     // covered in `FocusCaptureTests`; this suite can only see contexts that
     // already cleared it.
     let context = TranscriptionContext(
-      appName: "Terminal", bundleID: "com.apple.Terminal",
-      windowTitle: "Vault", fieldLabel: "Command",
+      appName: "Terminal", windowTitle: "Vault", fieldLabel: "Command",
       priorText: "$ git", selectedText: nil)
     let offURL = makeTempLogURL()
     DictationLog.append(
@@ -226,8 +223,8 @@ struct DictationLogGateTests {
     DictationLog.queue.sync {}
     #expect(!FileManager.default.fileExists(atPath: offURL.path))
     let logged = readLog(onURL)
-    #expect(logged.contains("Format the result as a shell command with no trailing period."))
     #expect(logged.contains("$ git"))
+    #expect(!logged.contains("Terminal"))
     #expect(!logged.contains("Vault"))
     #expect(!logged.contains("Command"))
   }

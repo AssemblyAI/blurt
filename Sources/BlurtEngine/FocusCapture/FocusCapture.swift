@@ -4,20 +4,13 @@ import ApplicationServices
 struct CapturedFocus: Sendable {
   let pid: pid_t
   let processName: String?
-  /// The frontmost app's stable identity, feeding the prompt's app-kind
-  /// recognition (`AppKindPriming`) via `TranscriptionContext.bundleID`.
-  let bundleID: String?
 }
 
 enum FocusCapture {
   @MainActor
   static func captureFrontmost() -> CapturedFocus? {
     guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
-    return CapturedFocus(
-      pid: app.processIdentifier,
-      processName: app.localizedName,
-      bundleID: app.bundleIdentifier
-    )
+    return CapturedFocus(pid: app.processIdentifier, processName: app.localizedName)
   }
 
   static func runningApp(for captured: CapturedFocus) -> NSRunningApplication? {
