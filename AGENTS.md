@@ -379,12 +379,12 @@ to right ⌘), so views must not re-declare `TriggerKey.rightCommand.rawValue` t
 request's `config.prompt` — it steers the _transcription_, not the LLM rewrite (that's the request's
 separate `llm` block). It's unit-tested in `Tests/BlurtEngineTests/TranscriptionPromptTests.swift`.
 
-Every built prompt opens with the fixed `baseInstruction` — _"Transcribe without speaker labels,
-audio event descriptions, or emotion markers."_ — a negative-exclusion clause that suppresses the
-annotation markers (`[Speaker]`, `[door creaks]`, `[laughing]`) the model would otherwise paste into
-the user's text.
+The built prompt is _contextual priming only_ — no standing instruction opens it. The
+annotation-suppression clause that once did (_"Transcribe without speaker labels, audio event
+descriptions, or emotion markers."_) is already part of the dictation service's own default prompt,
+so restating it client-side only spent budget from the 4096-character cap.
 
-`build(context:)` wraps that pivot in _contextual priming_: prior-cursor text; the selected text (the
+`build(context:)` assembles: prior-cursor text; the selected text (the
 highlighted run the dictation will replace, so the model is primed on what's being rewritten — read
 via `kAXSelectedTextAttribute`, skipped in secure fields, detected by AX role **or** subrole and
 failing closed when the role can't be read, so a password can't reach the prompt); a topic hint from
@@ -396,9 +396,10 @@ with emoji, or Markdown); and inline keyword boosting from the user's key terms.
 (positive/authoritative wording, no "Don't"/"Avoid"/"Never") and stays under the dictation API's
 documented 4096-character cap on `config.prompt` (`characterCap`).
 
-`build(context:)` returns `nil` when there's no usable context, and passing `prompt: nil` to the
-transcriber omits the field so the server applies its own default. Two omissions are deliberate and
-regression-tested — no language directive and no filler-word clause; see
+`build(context:)` returns `nil` when there's no usable context (or when the context renders no
+text, e.g. only an unrecognized bundle ID), and passing `prompt: nil` to the transcriber omits the
+field so the server applies its own default. Two omissions are deliberate and regression-tested —
+no language directive and no filler-word clause; see
 [Settled decisions](#settled-decisions--dont-reintroduce-these).
 
 ## Settings, persistence, and cues

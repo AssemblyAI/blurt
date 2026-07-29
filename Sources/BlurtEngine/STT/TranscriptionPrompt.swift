@@ -2,48 +2,35 @@
 /// field of the request `config` (see `AssemblyAITranscriber`). The STT model
 /// prepends this to its own system prompt.
 ///
-/// Every built prompt opens with a fixed `baseInstruction` — a plain-text
-/// exclusion clause (see below) — and wraps it in
-/// *contextual* priming: a topic hint built from the window title, a
-/// destination sentence built from the focused app and field label, an
-/// app-kind guidance sentence recognized from the frontmost app's bundle ID
-/// (`AppKindPriming` — terminal, code editor, Slack, Obsidian), "prior
-/// chunk context" (the text preceding the cursor), the selected text (which the
-/// dictation replaces), and keyword boosting, all of which the model is
-/// mid-trained to use for better recognition accuracy.
+/// The built prompt is *contextual priming only*: a topic hint built from the
+/// window title, a destination sentence built from the focused app and field
+/// label, an app-kind guidance sentence recognized from the frontmost app's
+/// bundle ID (`AppKindPriming` — terminal, code editor, Slack, Obsidian),
+/// "prior chunk context" (the text preceding the cursor), the selected text
+/// (which the dictation replaces), and keyword boosting, all of which the
+/// model is mid-trained to use for better recognition accuracy.
 ///
-/// On the directives in `baseInstruction`: a "remove filler words"-style
-/// *content* reshaping is **not** in the model's trained instruction set, so it
-/// is a no-op and is deliberately omitted (see the project memory note). A
-/// language directive is likewise omitted — pinning the prompt to English hurt
-/// non-English transcription, so language is left to the model's own detection.
-/// The negative feature *exclusion* ("without speaker labels, …") is a trained
-/// instruction-following type, so it does take effect — the exclusion
-/// suppresses the annotation markers the model would otherwise emit (`[Speaker]`,
-/// `[door creaks]`, `[laughing]`, …), which in a dictation product would be
-/// pasted into the user's text as literal tokens. The list is trimmed to the
-/// three annotation types a dictation user could plausibly trigger; the rarer
-/// types (unclear-speech, censor, foreign-language, lyrics) are left out to keep
-/// the negative clause short, matching the doc's brief negative examples.
+/// Three standing directives are deliberately *absent*:
+/// - No annotation-suppression clause ("Transcribe without speaker labels,
+///   audio event descriptions, or emotion markers."): the dictation service
+///   already includes it in its own default prompt, so restating it here only
+///   spent budget from `characterCap`.
+/// - No "remove filler words"-style *content* reshaping: not in the model's
+///   trained instruction set, so it is a no-op and is deliberately omitted
+///   (see the project memory note); disfluency removal is the server-side LLM
+///   rewrite's job.
+/// - No language directive: pinning the prompt to English hurt non-English
+///   transcription, so language is left to the model's own detection.
 ///
-/// Output follows the trained format with `baseInstruction` as its pivot: the
-/// prior-chunk context, the topic hint, and the destination sentence precede it
-/// as the `{context}. {baseInstruction}` shape, and keyword boosting trails it
-/// inline as `Keywords: a, b, c.` (per the mid-training instruction-type
-/// reference). It stays under the API's `characterCap`: the contextual
-/// blocks are clipped upstream in `FocusCapture`, and the key-terms clause is
-/// fitted to the remaining budget here. Exercised by
+/// Output follows the trained format: the prior-chunk context and the selected
+/// text lead as their own paragraphs, the location clause (topic hint +
+/// destination sentence + app-kind guidance) follows, and keyword boosting
+/// trails inline as `Keywords: a, b, c.` (per the mid-training
+/// instruction-type reference). It stays under the API's `characterCap`: the
+/// contextual blocks are clipped upstream in `FocusCapture`, and the key-terms
+/// clause is fitted to the remaining budget here. Exercised by
 /// `Tests/BlurtEngineTests/TranscriptionPromptTests.swift`.
 enum TranscriptionPrompt {
-  /// The standing dictation instruction prepended to the model's system prompt
-  /// on every built prompt. A negative-exclusion clause (§5/§6) naming the
-  /// annotation feature types the model is trained to emit, so it suppresses
-  /// them. No language directive: pinning the prompt to English degraded
-  /// transcription for non-English speech, so the model is left to detect the
-  /// spoken language itself.
-  static let baseInstruction =
-    "Transcribe without speaker labels, audio event descriptions, or emotion markers."
-
   /// Hard cap the dictation API places on `config.prompt` ("max 4096 chars");
   /// a longer prompt risks failing the whole request, so `build` must never
   /// exceed it. The contextual blocks are all clipped upstream in
@@ -66,9 +53,8 @@ enum TranscriptionPrompt {
     let field = context.fieldLabel.trimmedNonEmpty() ?? ""
     let keyTerms = context.keyTerms
 
-    // `baseInstruction` is the pivot of the trained format. Contextual priming
-    // sits *before* it; keyword boosting trails *after* it. The leading blocks,
-    // separated by blank lines, precede it:
+    // The priming blocks, separated by blank lines; keyword boosting trails
+    // the last one inline:
     //   1. the prior-chunk block (`Previous transcript:\n…`, its own paragraph),
     //   2. the selected-text block (`Selected text:\n…`, what the dictation
     //      replaces — primes vocabulary/topic of the text being rewritten),
@@ -89,21 +75,21 @@ enum TranscriptionPrompt {
     let location = [locationClause(app: app, window: window, field: field), guidance]
       .filter { !$0.isEmpty }
       .joined(separator: " ")
-    // The topic hint and `baseInstruction` share one line as the trained
-    // `{context}. {baseInstruction}` shape; with no topic it's the bare base.
-    let instruction = location.isEmpty ? baseInstruction : "\(location) \(baseInstruction)"
-    blocks.append(instruction)
+    if !location.isEmpty {
+      blocks.append(location)
+    }
     var prompt = blocks.joined(separator: "\n\n")
     if !keyTerms.isEmpty {
       // Spelling priming: the user's domain vocabulary, boosted via the trained
-      // inline `Keywords: a, b, c.` form (Section 2.3) trailing the marker so the
+      // inline `Keywords: a, b, c.` form (Section 2.3) trailing the context so the
       // model favors these exact spellings for names/jargon it would guess at.
       // The terms list is the one input with no upstream length cap, so include
       // only as many whole terms as `characterCap` leaves room for, so a huge
-      // Settings list can't crowd out the instruction itself or balloon every
+      // Settings list can't crowd out the priming itself or balloon every
       // request.
+      let scaffold = prompt.isEmpty ? "Keywords: ." : " Keywords: ."
       var included: [String] = []
-      var remaining = characterCap - prompt.count - " Keywords: .".count
+      var remaining = characterCap - prompt.count - scaffold.count
       for term in keyTerms {
         let cost = term.count + (included.isEmpty ? 0 : ", ".count)
         guard cost <= remaining else { break }
@@ -111,10 +97,14 @@ enum TranscriptionPrompt {
         remaining -= cost
       }
       if !included.isEmpty {
-        prompt += " Keywords: \(included.joined(separator: ", "))."
+        let clause = "Keywords: \(included.joined(separator: ", "))."
+        prompt = prompt.isEmpty ? clause : "\(prompt) \(clause)"
       }
     }
-    return prompt
+    // A context can be non-empty yet render nothing — e.g. its only signal is
+    // a bundle ID no app-kind guidance recognizes. Return nil rather than an
+    // empty prompt so the server default still applies.
+    return prompt.trimmedNonEmpty()
   }
 
   /// The "where am I typing" priming clause, assembled from whichever of the
@@ -123,7 +113,7 @@ enum TranscriptionPrompt {
   /// richest vocabulary signal — `This is about "…".`, mid-training §2.1) leads,
   /// and a destination sentence built from the app/field (`Dictated into …`)
   /// trails it. Each sentence ends with a period so the clause joins cleanly
-  /// before `baseInstruction`.
+  /// with the app-kind guidance that may follow it.
   private static func locationClause(app: String, window: String, field: String) -> String {
     let topic = window.isEmpty ? "" : "This is about \"\(window)\"."
 

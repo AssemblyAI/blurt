@@ -3,8 +3,8 @@ import Foundation
 /// App-kind guidance for the transcription prompt: recognizes what *kind* of
 /// app the dictation targets (a terminal, a code editor, Slack, Obsidian) from
 /// the frontmost app's bundle identifier and renders one priming sentence for
-/// `TranscriptionPrompt` to place before `baseInstruction`. The sentence tells
-/// the model what shape of text the destination expects — shell commands in a
+/// `TranscriptionPrompt` to place after the destination sentence. The sentence
+/// tells the model what shape of text the destination expects — shell commands in a
 /// terminal, identifiers and symbols in an editor, casual chat in Slack,
 /// Markdown in Obsidian — which the app's display name alone doesn't convey.
 ///

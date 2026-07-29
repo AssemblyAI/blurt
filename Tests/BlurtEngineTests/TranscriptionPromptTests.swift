@@ -4,15 +4,14 @@ import Testing
 
 @Suite("TranscriptionPrompt")
 struct TranscriptionPromptTests {
-  /// The standing plain-text exclusion clause that every built prompt carries
-  /// (see `TranscriptionPrompt.baseInstruction`). Kept here as the single source
-  /// of truth so the expectations below read clearly.
-  static let base =
-    "Transcribe without speaker labels, audio event descriptions, or emotion markers."
-
   /// One `build(context:)` → prompt expectation. Parameterizing these (rather
   /// than a `@Test` apiece) keeps the whole context→prompt contract in one
   /// readable table and gives per-case failure output.
+  ///
+  /// The prompt is contextual priming only — no standing instruction opens it.
+  /// The annotation-suppression clause ("Transcribe without speaker labels, …")
+  /// is part of the dictation service's own default prompt, so a case's
+  /// expectation is exactly its context rendered, nothing more.
   struct Case: Sendable, CustomTestStringConvertible {
     let name: String
     let context: TranscriptionContext?
@@ -31,105 +30,109 @@ struct TranscriptionPromptTests {
     Case(
       name: "app only → destination sentence",
       context: TranscriptionContext(appName: "Slack", priorText: nil),
-      expected: "Dictated into Slack. \(base)"),
+      expected: "Dictated into Slack."),
     Case(
       name: "prior only → Previous transcript framing",
       context: TranscriptionContext(appName: nil, priorText: "and then the build finished"),
-      expected: "Previous transcript:\nand then the build finished\n\n\(base)"),
+      expected: "Previous transcript:\nand then the build finished"),
     Case(
       name: "app + window → topic hint leads, destination trails",
       context: TranscriptionContext(appName: "Mail", windowTitle: "Re: Q3 pricing", priorText: nil),
-      expected: "This is about \"Re: Q3 pricing\". Dictated into Mail. \(base)"),
+      expected: "This is about \"Re: Q3 pricing\". Dictated into Mail."),
     Case(
       name: "window only → bare topic hint",
       context: TranscriptionContext(appName: nil, windowTitle: "Untitled.txt", priorText: nil),
-      expected: "This is about \"Untitled.txt\". \(base)"),
+      expected: "This is about \"Untitled.txt\"."),
     Case(
       name: "field only → destination sentence",
       context: TranscriptionContext(appName: nil, fieldLabel: "Search", priorText: nil),
-      expected: "Dictated in the \"Search\" field. \(base)"),
+      expected: "Dictated in the \"Search\" field."),
     Case(
       name: "app + field without window → destination names both",
       context: TranscriptionContext(appName: "Slack", fieldLabel: "Message", priorText: nil),
-      expected: "Dictated into Slack, in the \"Message\" field. \(base)"),
+      expected: "Dictated into Slack, in the \"Message\" field."),
     Case(
       name: "all four signals combine",
       context: TranscriptionContext(
         appName: "Slack", windowTitle: "#eng-backend", fieldLabel: "Message", priorText: "thanks for"),
       expected:
-        "Previous transcript:\nthanks for\n\nThis is about \"#eng-backend\". Dictated into Slack, in the \"Message\" field. \(base)"
+        "Previous transcript:\nthanks for\n\nThis is about \"#eng-backend\". Dictated into Slack, in the \"Message\" field."
     ),
     Case(
       name: "prior + app combine",
       context: TranscriptionContext(appName: "Mail", priorText: "Dear Sam,"),
-      expected: "Previous transcript:\nDear Sam,\n\nDictated into Mail. \(base)"),
+      expected: "Previous transcript:\nDear Sam,\n\nDictated into Mail."),
     Case(
       name: "prior + app are trimmed",
       context: TranscriptionContext(appName: "  Notes  ", priorText: "  hello  "),
-      expected: "Previous transcript:\nhello\n\nDictated into Notes. \(base)"),
+      expected: "Previous transcript:\nhello\n\nDictated into Notes."),
     Case(
       name: "selected only → Selected text framing",
       context: TranscriptionContext(appName: nil, priorText: nil, selectedText: "the quarterly numbers"),
-      expected: "Selected text:\nthe quarterly numbers\n\n\(base)"),
+      expected: "Selected text:\nthe quarterly numbers"),
     Case(
       name: "selected follows prior as its own block",
       context: TranscriptionContext(appName: nil, priorText: "as we discussed,", selectedText: "the old plan"),
-      expected: "Previous transcript:\nas we discussed,\n\nSelected text:\nthe old plan\n\n\(base)"),
+      expected: "Previous transcript:\nas we discussed,\n\nSelected text:\nthe old plan"),
     Case(
       name: "selected + location + prior combine",
       context: TranscriptionContext(
         appName: "Mail", windowTitle: "Re: Q3 pricing", fieldLabel: "Body",
         priorText: "Hi Sam,", selectedText: "let's push the date"),
       expected:
-        "Previous transcript:\nHi Sam,\n\nSelected text:\nlet's push the date\n\nThis is about \"Re: Q3 pricing\". Dictated into Mail, in the \"Body\" field. \(base)"
+        "Previous transcript:\nHi Sam,\n\nSelected text:\nlet's push the date\n\nThis is about \"Re: Q3 pricing\". Dictated into Mail, in the \"Body\" field."
     ),
     Case(
       name: "blank selected adds no block",
       context: TranscriptionContext(appName: "Notes", priorText: nil, selectedText: "   \n"),
-      expected: "Dictated into Notes. \(base)"),
+      expected: "Dictated into Notes."),
     Case(
       name: "selected sits between prior and keyword boost",
       context: TranscriptionContext(
         appName: "Slack", priorText: "thanks for", selectedText: "the draft", keyTerms: ["Blurt"]),
       expected:
-        "Previous transcript:\nthanks for\n\nSelected text:\nthe draft\n\nDictated into Slack. \(base) Keywords: Blurt."
+        "Previous transcript:\nthanks for\n\nSelected text:\nthe draft\n\nDictated into Slack. Keywords: Blurt."
     ),
     Case(
       name: "recognized bundle ID → app-kind guidance after the destination",
       context: TranscriptionContext(
         appName: "Slack", bundleID: "com.tinyspeck.slackmacgap", fieldLabel: "Message", priorText: nil),
       expected:
-        "Dictated into Slack, in the \"Message\" field. You are writing a Slack message: casual tone and emoji are expected. \(base)"
+        "Dictated into Slack, in the \"Message\" field. You are writing a Slack message: casual tone and emoji are expected."
     ),
     Case(
       name: "bundle ID alone → guidance still built",
       context: TranscriptionContext(appName: nil, bundleID: "com.apple.Terminal", priorText: nil),
       expected:
-        "You are dictating into a terminal: expect shell commands, program names, flags, and file paths. \(base)"
+        "You are dictating into a terminal: expect shell commands, program names, flags, and file paths."
     ),
     Case(
       name: "code-editor guidance names the window title's language",
       context: TranscriptionContext(
         appName: "Code", bundleID: "com.microsoft.VSCode", windowTitle: "main.py — blurt", priorText: nil),
       expected:
-        "This is about \"main.py — blurt\". Dictated into Code. You are writing Python in a code editor: expect code identifiers, symbols, and technical terms. \(base)"
+        "This is about \"main.py — blurt\". Dictated into Code. You are writing Python in a code editor: expect code identifiers, symbols, and technical terms."
     ),
     Case(
       name: "unrecognized bundle ID adds no guidance",
       context: TranscriptionContext(appName: "Mail", bundleID: "com.apple.mail", priorText: nil),
-      expected: "Dictated into Mail. \(base)"),
+      expected: "Dictated into Mail."),
     Case(
-      name: "key terms only → inline keyword boost",
+      name: "unrecognized bundle ID with no other signal → no prompt",
+      context: TranscriptionContext(appName: nil, bundleID: "com.example.mystery", priorText: nil),
+      expected: nil),
+    Case(
+      name: "key terms only → bare keyword boost",
       context: TranscriptionContext(appName: nil, priorText: nil, keyTerms: ["AssemblyAI", "Kubernetes"]),
-      expected: "\(base) Keywords: AssemblyAI, Kubernetes."),
+      expected: "Keywords: AssemblyAI, Kubernetes."),
     Case(
-      name: "key terms trail base alongside focus context",
+      name: "key terms trail the focus context inline",
       context: TranscriptionContext(appName: "Slack", priorText: nil, keyTerms: ["Blurt"]),
-      expected: "Dictated into Slack. \(base) Keywords: Blurt."),
+      expected: "Dictated into Slack. Keywords: Blurt."),
     Case(
       name: "empty key terms add no clause",
       context: TranscriptionContext(appName: "Notes", priorText: nil, keyTerms: []),
-      expected: "Dictated into Notes. \(base)"),
+      expected: "Dictated into Notes."),
   ]
 
   @Test("build maps focus context to the transcription prompt", arguments: cases)
@@ -153,7 +156,17 @@ struct TranscriptionPromptTests {
     let huge = String(repeating: "k", count: TranscriptionPrompt.characterCap)
     let prompt = TranscriptionPrompt.build(
       context: TranscriptionContext(appName: "Xcode", priorText: nil, keyTerms: [huge]))
-    #expect(prompt == "Dictated into Xcode. \(Self.base)")
+    #expect(prompt == "Dictated into Xcode.")
+  }
+
+  @Test("a key-terms-only prompt whose first term doesn't fit yields no prompt at all")
+  func keyTermsOnlyNoneFit() {
+    // With no other context and no term fitting the cap, nothing renders — and
+    // an empty prompt must collapse to nil so the server default applies.
+    let huge = String(repeating: "k", count: TranscriptionPrompt.characterCap)
+    let prompt = TranscriptionPrompt.build(
+      context: TranscriptionContext(appName: nil, priorText: nil, keyTerms: [huge]))
+    #expect(prompt == nil)
   }
 
   @Test("an oversized key-terms list is fitted to the cap, keeping whole leading terms")
