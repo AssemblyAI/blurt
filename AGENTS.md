@@ -246,7 +246,11 @@ in the `audio` multipart part plus a JSON `config` part (`sample_rate`, `channel
 empty `llm` block). No model header — the service pins the STT model server-side. The `prompt`
 (built per utterance by `TranscriptionPrompt`) steers _transcription_; the `llm` block asks the
 service to run its default LLM cleanup rewrite (remove disfluencies, fix punctuation) over the
-verbatim transcript, all inside the same request. The response carries both `text` (verbatim) and
+verbatim transcript, all inside the same request. The block rides along while **enhanced
+transcripts** are enabled (`EnhancedTranscriptsStore`, on by default, read per request via the
+transcriber's injected `enhancedTranscripts` closure); with the setting off the config omits `llm`
+entirely, the service skips the rewrite, and the verbatim transcript is pasted as spoken. The
+response carries both `text` (verbatim) and
 `llm_response` (the rewrite); the transcriber returns the rewrite and falls back to `text` when
 `llm_response` is null — the rewrite is best-effort (5 s server-side budget), so a rewrite failure
 (`llm_error`) is a logged degradation, never a user-facing error.
@@ -405,6 +409,8 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
 - **`TriggerKeyStore`** (`BlurtTriggerKeyCode`), **`SoundPackStore`** (`BlurtSoundPack`),
   **`KeyTermsStore`** (the user's domain vocabulary, re-read at every press via the session's
   `keyTermsProvider`), **`DeveloperModeStore`** (`BlurtDeveloperMode`, off by default),
+  **`EnhancedTranscriptsStore`** (`BlurtEnhancedTranscripts`, **on** by default — unset reads as
+  enabled; gates the dictation request's `llm` cleanup-rewrite block, re-read at every request),
   **`OverlayOriginStore`** (the pill's dragged origin, x/y), **`LastUpdateCheckStore`**
   (`BlurtLastUpdateCheck`, the stamp throttling the automatic launch update check).
 - **`PersistedSettings.allDefaultsKeys`** is the roster of every key those stores write, and

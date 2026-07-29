@@ -14,6 +14,10 @@ struct PersistedSettingsTests {
     #expect(PersistedSettings.allDefaultsKeys.contains(SoundPackStore.defaultsKey))
     #expect(PersistedSettings.allDefaultsKeys.contains(KeyTermsStore.defaultsKey))
     #expect(PersistedSettings.allDefaultsKeys.contains(DeveloperModeStore.defaultsKey))
+    // Enhanced transcripts default to ON, so its key matters to the sweep in
+    // the other direction too: a stray `false` surviving a reset would leave a
+    // "clean" install pasting verbatim transcripts.
+    #expect(PersistedSettings.allDefaultsKeys.contains(EnhancedTranscriptsStore.defaultsKey))
     // OverlayOriginStore persists a point, so it contributes two keys rather
     // than one. Both belong to the sweep: while they were private to
     // `OverlayWindowController`, no reset knew about them and a pill dragged
@@ -27,10 +31,10 @@ struct PersistedSettingsTests {
 
   @Test("the roster carries no stale or duplicate keys")
   func rosterHasNoStrays() {
-    // Exactly the six known stores' keys (OverlayOriginStore contributes two):
+    // Exactly the seven known stores' keys (OverlayOriginStore contributes two):
     // a removed store must leave the roster in the same change, and a key listed
     // twice would hint at a copy-paste slip.
-    #expect(PersistedSettings.allDefaultsKeys.count == 7)
+    #expect(PersistedSettings.allDefaultsKeys.count == 8)
     #expect(Set(PersistedSettings.allDefaultsKeys).count == PersistedSettings.allDefaultsKeys.count)
   }
 
