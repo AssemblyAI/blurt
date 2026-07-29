@@ -88,12 +88,14 @@ public actor KeyInjector: InjectorProtocol {
   /// host's live focus (defaults to "editable" there).
   private let hasEditableTarget: @Sendable () -> Bool
 
-  /// Whether the captured target app is an AX-opaque Electron/Chromium editor
-  /// (VS Code, Slack), which exposes no editable AX signal even for a real text
-  /// field. When `hasEditableTarget` reads false but this is true, we still paste
-  /// rather than copy — dropping the user's words into an Electron editor they're
-  /// clearly typing in would be the worse mistake. Injectable so tests don't
-  /// depend on which apps are installed (defaults to "not Electron").
+  /// Whether the captured target app is AX-opaque — an Electron/Chromium editor
+  /// (VS Code, Slack) or a web browser — which can expose no editable AX signal
+  /// even for a real text field (Chromium builds its accessibility tree lazily,
+  /// and `contenteditable` composers like ChatGPT's surface no editable role).
+  /// When `hasEditableTarget` reads false but this is true, we still paste
+  /// rather than copy — dropping the user's words into a field they're clearly
+  /// typing in would be the worse mistake. Injectable so tests don't depend on
+  /// which apps are installed (defaults to "not opaque").
   private let isAXOpaqueEditor: @Sendable (NSRunningApplication?) -> Bool
 
   /// The pasteboard the paste reads, writes, and restores. Behind a seam so
@@ -111,7 +113,7 @@ public actor KeyInjector: InjectorProtocol {
       waitForTargetActivation: KeyInjector.waitUntilFrontmost,
       isAccessibilityTrusted: KeyInjector.accessibilityTrusted,
       hasEditableTarget: FocusCapture.hasEditableFocusedElement,
-      isAXOpaqueEditor: FocusCapture.isElectronApp)
+      isAXOpaqueEditor: FocusCapture.isAXOpaqueApp)
   }
 
   init(
@@ -232,8 +234,9 @@ public actor KeyInjector: InjectorProtocol {
     // a synthesized ⌘V would just make macOS beep. Leave the transcript on the
     // clipboard so the user can paste it by hand, and signal the pipeline to show
     // a quiet "copied" notice instead of typing. The exception is an AX-opaque
-    // Electron editor (VS Code, Slack), which reports no editable signal even for
-    // a real text field — there we still paste rather than drop the user's words.
+    // app — an Electron editor (VS Code, Slack) or a web browser — which can
+    // report no editable signal even for a real text field; there we still paste
+    // rather than drop the user's words.
     guard hasEditableTarget() || isAXOpaqueEditor(target) else {
       clipboard.write(finalText)
       throw BlurtError.noEditableTarget
