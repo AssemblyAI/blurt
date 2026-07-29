@@ -1,43 +1,45 @@
-/// Per-utterance context the STT model is trained to use as *contextual*
-/// priming — it improves recognition accuracy (vocabulary, continuity,
-/// capitalization) without changing the output format. Gathered at dictation
-/// start from the focused app and the text preceding the cursor, then rendered
-/// into the request `prompt` by `TranscriptionPrompt.build`.
+/// Per-utterance snapshot of where the dictation is going, gathered at
+/// dictation start from the focused app and field. `TranscriptionPrompt.build`
+/// renders only the parts of it the request prompt uses — the bundle ID (via
+/// the `AppKindPriming` app-kind instruction), the window title (the language
+/// refinement of that instruction), and the key terms — while the rest rides
+/// along for the dictation log and the injector's separator logic.
 ///
-/// Both fields are optional: whichever is available is used, and an entirely
-/// empty context yields no prompt (the server applies its own default).
+/// Every focus field is optional and best-effort: whatever couldn't be read is
+/// `nil`, and an entirely empty context yields no prompt (the server applies
+/// its own default).
 public struct TranscriptionContext: Sendable, Equatable {
-  /// The frontmost application's display name (e.g. "Slack", "Xcode"), passed
-  /// as a domain/topic hint so the model expects that app's vocabulary.
+  /// The frontmost application's display name (e.g. "Slack", "Xcode"). Not
+  /// rendered into the prompt; recorded in the dictation log.
   public let appName: String?
 
   /// The frontmost application's bundle identifier (e.g.
   /// "com.tinyspeck.slackmacgap"). Never rendered verbatim: it keys the
-  /// app-*kind* recognition (`AppKindPriming`) that adds destination-specific
-  /// guidance — terminal, code editor, Slack, Obsidian — to the prompt.
+  /// app-*kind* recognition (`AppKindPriming`) that selects the prompt's
+  /// transcription instruction — terminal, code editor, Slack, Obsidian.
   /// Preferred over `appName` for recognition because display names are
   /// localized and user-editable while the bundle ID is stable.
   public let bundleID: String?
 
-  /// The focused window's title (e.g. "Re: Q3 pricing — Gmail", a document
-  /// name, a Slack channel). The densest topic hint available — usually packed
-  /// with the proper nouns and domain vocabulary the model would otherwise guess.
+  /// The focused window's title (e.g. "main.py — blurt", a document name, a
+  /// Slack channel). In a code editor it usually names the open file, which is
+  /// how the app-kind instruction learns the language ("… into Swift code.");
+  /// it also anchors the injector's same-window separator fallback.
   public let windowTitle: String?
 
   /// A short label for the focused field (placeholder/title/role, e.g. "To",
-  /// "Subject", "Search", "Message"), passed so the model knows what *kind* of
-  /// text is expected — an email address, a search query, and prose should be
-  /// transcribed differently.
+  /// "Subject", "Search", "Message"). Not rendered into the prompt; recorded
+  /// in the dictation log.
   public let fieldLabel: String?
 
-  /// Text immediately preceding the insertion point in the focused field,
-  /// passed as "prior chunk context" so the transcript continues naturally.
+  /// Text immediately preceding the insertion point in the focused field. Not
+  /// rendered into the prompt; it drives the injector's leading-separator
+  /// decision and is recorded in the dictation log.
   public let priorText: String?
 
-  /// The text currently selected in the focused field, when any. Dictating with
-  /// a selection replaces it (the paste overwrites the highlighted range), so
-  /// this is passed as priming for what the utterance is about — the vocabulary
-  /// and topic of the text being rewritten.
+  /// The text currently selected in the focused field, when any (the paste
+  /// will replace it). Not rendered into the prompt; recorded in the
+  /// dictation log.
   public let selectedText: String?
 
   /// User-configured domain vocabulary (names, jargon, product names) carried as

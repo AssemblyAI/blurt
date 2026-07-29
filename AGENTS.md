@@ -7,8 +7,8 @@ the Claude-Code-specific tooling under `.claude/` (hooks, skills, subagents).
 
 Blurt is a macOS dictation app powered by [AssemblyAI](https://www.assemblyai.com). Tap or hold a
 trigger key, speak, and polished text is pasted into the focused app. Transcription is **one remote
-AssemblyAI dictation API call**: a per-utterance `prompt` (a transcription directive plus contextual
-priming built from the focused app/window/field and the user's key terms) rides along with the
+AssemblyAI dictation API call**: a per-utterance `prompt` (an app-kind transcription instruction
+recognized from the frontmost app, plus the user's key terms) rides along with the
 request, and the same request asks the service for its server-side LLM cleanup rewrite
 (`config.llm`), so the text that comes back is already polished. The user supplies their own API
 key.
@@ -379,27 +379,28 @@ to right ⌘), so views must not re-declare `TriggerKey.rightCommand.rawValue` t
 request's `config.prompt` — it steers the _transcription_, not the LLM rewrite (that's the request's
 separate `llm` block). It's unit-tested in `Tests/BlurtEngineTests/TranscriptionPromptTests.swift`.
 
-The built prompt is _contextual priming only_ — no standing instruction opens it. The
-annotation-suppression clause that once did (_"Transcribe without speaker labels, audio event
-descriptions, or emotion markers."_) is already part of the dictation service's own default prompt,
-so restating it client-side only spent budget from the 4096-character cap.
+The built prompt is deliberately minimal — two clauses, each optional. `AppKindPriming` recognizes
+the frontmost app's bundle ID as a terminal, code editor, Slack, or Obsidian and renders the
+app-kind instruction (_"Transcribe speech into markdown."_ — for a code editor, the language is
+inferred from the window title's filename: _"Transcribe speech into Swift code."_); the user's key
+terms trail it as inline keyword boosting (`Keywords: a, b, c.`), fitted to the dictation API's
+documented 4096-character cap on `config.prompt` (`characterCap`). Wording is phrased per
+AssemblyAI's Universal-3 Pro prompting guidance (positive/authoritative, no
+"Don't"/"Avoid"/"Never").
 
-`build(context:)` assembles: prior-cursor text; the selected text (the
-highlighted run the dictation will replace, so the model is primed on what's being rewritten — read
-via `kAXSelectedTextAttribute`, skipped in secure fields, detected by AX role **or** subrole and
-failing closed when the role can't be read, so a password can't reach the prompt); a topic hint from
-the window title; a destination sentence from the app/field; an app-kind guidance sentence
-(`AppKindPriming` — the frontmost app's bundle ID is recognized as a terminal, code editor, Slack,
-or Obsidian, and a code editor's clause names the language inferred from the window title's
-filename, so the model expects the right shape of text: shell commands, identifiers, casual chat
-with emoji, or Markdown); and inline keyword boosting from the user's key terms. It's phrased per AssemblyAI's Universal-3 Pro prompting guidance
-(positive/authoritative wording, no "Don't"/"Avoid"/"Never") and stays under the dictation API's
-documented 4096-character cap on `config.prompt` (`characterCap`).
+The rest of the captured focus context — window title, app and field names, prior-cursor text, the
+selected text — is deliberately **not** rendered into the prompt: real-world logs showed it
+crowding the instruction (VS Code, for one, parks a screen-reader help announcement in the focused
+field's description). It is still captured, feeding the dictation log, the injector's separator
+logic, and the code-editor language refinement — and reading it stays privacy-guarded (prior and
+selected text are skipped in secure fields, detected by AX role **or** subrole and failing closed
+when the role can't be read, so a password can't reach the log or leave the machine).
 
-`build(context:)` returns `nil` when there's no usable context (or when the context renders no
-text, e.g. only an unrecognized bundle ID), and passing `prompt: nil` to the transcriber omits the
-field so the server applies its own default. Two omissions are deliberate and regression-tested —
-no language directive and no filler-word clause; see
+`build(context:)` returns `nil` when there's no usable context (or when nothing renders — focus
+signals from an unrecognized app, no key terms), and passing `prompt: nil` to the transcriber omits
+the field so the server applies its own default. Three omissions are deliberate — no
+annotation-suppression clause (_"Transcribe without speaker labels, …"_ is already part of the
+dictation service's own default prompt), no language directive, and no filler-word clause; see
 [Settled decisions](#settled-decisions--dont-reintroduce-these).
 
 ## Settings, persistence, and cues

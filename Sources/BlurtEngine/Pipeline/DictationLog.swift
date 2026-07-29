@@ -10,20 +10,21 @@ public enum DictationLog {
   struct Entry: Encodable {
     let transcript: String
     let ts: String
-    /// Focused-app topic hint sent as context, when one was captured.
+    /// Focused-app display name, when one was captured.
     let app: String?
     /// Focused-app bundle identifier, when one was captured. The input the
     /// prompt's app-kind guidance (`AppKindPriming`) keys on, logged so the
     /// corpus shows *why* a prompt carried (or lacked) a guidance sentence.
     let bundle: String?
-    /// Focused-window title sent as a topic hint, when one was captured.
+    /// Focused-window title, when one was captured (in a code editor it names
+    /// the open file, which is what refines the prompt's instruction).
     let window: String?
     /// Focused-field label sent as context, when one was captured.
     let field: String?
-    /// Text-before-cursor "prior chunk context" sent, when any was captured.
-    /// Lets you verify accessibility-tree prior-text reading actually fired.
+    /// Text before the cursor at press time, when any was captured. Lets you
+    /// verify accessibility-tree prior-text reading actually fired.
     let prior: String?
-    /// Selected text sent as context (the dictation replaced it), when any.
+    /// Selected text at press time (the dictation replaced it), when any.
     let selected: String?
     /// The fully-assembled `config.prompt` sent to AssemblyAI for this
     /// utterance. Built here from `context` (rather than threaded through from

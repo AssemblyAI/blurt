@@ -3,9 +3,11 @@ import Testing
 @testable import BlurtEngine
 
 /// `TranscriptionContext.isEmpty` is the gate `FocusCapture`/`DictationSession`
-/// use to decide whether a context is worth sending as priming. It mirrors the
-/// emptiness logic in `TranscriptionPrompt.build`, so the two must agree:
-/// `isEmpty == true` should always correspond to `build` returning `nil`.
+/// use to decide whether a context is worth carrying at all (prompt AND log).
+/// The agreement with `TranscriptionPrompt.build` is one-directional:
+/// `isEmpty == true` must always correspond to `build` returning `nil`, while a
+/// non-empty context may still build no prompt — its signals can be log-only
+/// (app/window/field/prior/selected from an unrecognized app).
 @Suite("TranscriptionContext")
 struct TranscriptionContextTests {
   @Test("both fields nil is empty")
@@ -52,7 +54,7 @@ struct TranscriptionContextTests {
     #expect(TranscriptionPrompt.build(context: context) != nil)
   }
 
-  @Test("emptiness agrees with TranscriptionPrompt.build returning nil")
+  @Test("an empty context always corresponds to build returning nil")
   func agreesWithPromptBuild() {
     let empties = [
       TranscriptionContext(appName: nil, priorText: nil),
@@ -63,14 +65,21 @@ struct TranscriptionContextTests {
       #expect(TranscriptionPrompt.build(context: context) == nil)
     }
 
-    let nonEmpties = [
-      TranscriptionContext(appName: "Mail", priorText: nil),
-      TranscriptionContext(appName: nil, priorText: nil, selectedText: "selected"),
+    // Renderable signals (a recognized bundle ID, key terms) build a prompt…
+    let renderable = [
+      TranscriptionContext(appName: nil, bundleID: "com.apple.Terminal", priorText: nil),
+      TranscriptionContext(appName: nil, priorText: nil, keyTerms: ["Blurt"]),
     ]
-    for context in nonEmpties {
+    for context in renderable {
       #expect(!context.isEmpty)
       #expect(TranscriptionPrompt.build(context: context) != nil)
     }
+
+    // …while log-only signals make the context non-empty (worth carrying for
+    // the dictation log and the injector) yet build no prompt.
+    let logOnly = TranscriptionContext(appName: "Mail", priorText: "Hi Sam,", selectedText: "sel")
+    #expect(!logOnly.isEmpty)
+    #expect(TranscriptionPrompt.build(context: logOnly) == nil)
   }
 
   @Test("Equatable compares every field")

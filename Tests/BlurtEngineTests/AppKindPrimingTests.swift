@@ -47,15 +47,15 @@ struct AppKindPrimingTests {
   }
 
   static let languageCases: [LanguageCase] = [
-    LanguageCase(title: "main.py — blurt — Visual Studio Code", expected: "Python"),
+    LanguageCase(title: "main.py — blurt — Visual Studio Code", expected: "Python code"),
     // VS Code prepends ● to the filename of a dirty buffer.
-    LanguageCase(title: "● api.ts — server", expected: "TypeScript"),
-    LanguageCase(title: "blurt — TranscriptionPrompt.swift", expected: "Swift"),
+    LanguageCase(title: "● api.ts — server", expected: "TypeScript code"),
+    LanguageCase(title: "blurt — TranscriptionPrompt.swift", expected: "Swift code"),
     LanguageCase(title: "deploy.sh — infra", expected: "a shell script"),
     // Extension matching is case-insensitive.
-    LanguageCase(title: "README.MD — notes", expected: "Markdown"),
+    LanguageCase(title: "README.MD — notes", expected: "markdown"),
     // First filename wins when several tokens carry extensions.
-    LanguageCase(title: "index.js next.config.ts", expected: "JavaScript"),
+    LanguageCase(title: "index.js next.config.ts", expected: "JavaScript code"),
     // A dotfile has no base name + extension split.
     LanguageCase(title: ".zshrc — dotfiles", expected: nil),
     // Version numbers and hostnames are not filenames.
@@ -71,39 +71,39 @@ struct AppKindPrimingTests {
 
   // MARK: - Clause rendering
 
-  @Test("a terminal renders the command-line clause")
+  @Test("a terminal renders the shell-commands instruction")
   func terminalClause() {
     #expect(
       AppKindPriming.clause(bundleID: "com.apple.Terminal", windowTitle: nil)
-        == "You are dictating into a terminal: expect shell commands, program names, flags, and file paths.")
+        == "Transcribe speech into shell commands.")
   }
 
   @Test("a code editor names the open file's language when the title carries one")
   func codeEditorClauseWithLanguage() {
     #expect(
       AppKindPriming.clause(bundleID: "com.microsoft.VSCode", windowTitle: "main.py — blurt")
-        == "You are writing Python in a code editor: expect code identifiers, symbols, and technical terms.")
+        == "Transcribe speech into Python code.")
   }
 
   @Test("a code editor stays generic when the title names no recognizable file")
   func codeEditorClauseGeneric() {
     #expect(
       AppKindPriming.clause(bundleID: "com.apple.dt.Xcode", windowTitle: "Welcome to Xcode")
-        == "You are writing code in a code editor: expect code identifiers, symbols, and technical terms.")
+        == "Transcribe speech into code.")
   }
 
-  @Test("Slack renders the casual-chat clause")
+  @Test("Slack renders the casual-message instruction")
   func slackClause() {
     #expect(
       AppKindPriming.clause(bundleID: "com.tinyspeck.slackmacgap", windowTitle: "#eng-backend")
-        == "You are writing a Slack message: casual tone and emoji are expected.")
+        == "Transcribe speech into a casual Slack message with emoji.")
   }
 
-  @Test("Obsidian renders the Markdown clause")
+  @Test("Obsidian renders the markdown instruction")
   func obsidianClause() {
     #expect(
       AppKindPriming.clause(bundleID: "md.obsidian", windowTitle: "Meeting notes")
-        == "You are writing a Markdown note in Obsidian: Markdown syntax is expected.")
+        == "Transcribe speech into markdown.")
   }
 
   @Test("an unrecognized app contributes no clause")

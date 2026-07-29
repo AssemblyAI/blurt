@@ -1,23 +1,24 @@
 import Foundation
 
-/// App-kind guidance for the transcription prompt: recognizes what *kind* of
-/// app the dictation targets (a terminal, a code editor, Slack, Obsidian) from
-/// the frontmost app's bundle identifier and renders one priming sentence for
-/// `TranscriptionPrompt` to place after the destination sentence. The sentence
-/// tells the model what shape of text the destination expects — shell commands in a
-/// terminal, identifiers and symbols in an editor, casual chat in Slack,
-/// Markdown in Obsidian — which the app's display name alone doesn't convey.
+/// The app-kind transcription instruction: recognizes what *kind* of app the
+/// dictation targets (a terminal, a code editor, Slack, Obsidian) from the
+/// frontmost app's bundle identifier and renders the one instruction sentence
+/// `TranscriptionPrompt` sends — "Transcribe speech into shell commands." /
+/// "… into Swift code." / "… into a casual Slack message with emoji." /
+/// "… into markdown." — telling the model what shape of text the destination
+/// expects, which the app's display name alone doesn't convey.
 ///
 /// For code editors the window title usually names the open file, so the
-/// clause names the language inferred from that filename's extension ("You are
-/// writing Python …") when one is recognizable, and stays generic otherwise.
+/// clause names the language inferred from that filename's extension
+/// ("Transcribe speech into Python code.") when one is recognizable, and stays
+/// generic ("… into code.") otherwise.
 ///
 /// Detection keys on bundle IDs, not display names: names are localized and
 /// user-editable, while the bundle ID is the app's stable identity. An
-/// unrecognized app contributes no clause — the prompt simply falls back to
-/// the existing destination sentence built from the app name. Wording follows
-/// the same Universal-3 Pro prompting guidance as the rest of the prompt
-/// (positive/authoritative phrasing, no negations). Exercised by
+/// unrecognized app contributes no clause — the request then carries no
+/// instruction and the service's own default prompt applies. Wording follows
+/// Universal-3 Pro prompting guidance (positive/authoritative phrasing, no
+/// negations). Exercised by
 /// `Tests/BlurtEngineTests/AppKindPrimingTests.swift`.
 enum AppKindPriming {
   /// The recognized destination families. Each renders one guidance sentence;
@@ -72,28 +73,29 @@ enum AppKindPriming {
     return kindsByBundleIDPrefix.first { bundleID.hasPrefix($0.prefix) }?.kind
   }
 
-  /// The guidance sentence for the app `bundleID` identifies, or `nil` when
+  /// The instruction sentence for the app `bundleID` identifies, or `nil` when
   /// the app isn't recognized. `windowTitle` refines the code-editor clause
   /// with the open file's language; the other kinds ignore it.
   static func clause(bundleID: String?, windowTitle: String?) -> String? {
     guard let kind = kind(ofBundleID: bundleID) else { return nil }
     switch kind {
     case .terminal:
-      return "You are dictating into a terminal: expect shell commands, program names, flags, and file paths."
+      return "Transcribe speech into shell commands."
     case .codeEditor:
       let subject = windowTitle.flatMap(language(inWindowTitle:)) ?? "code"
-      return "You are writing \(subject) in a code editor: expect code identifiers, symbols, and technical terms."
+      return "Transcribe speech into \(subject)."
     case .slack:
-      return "You are writing a Slack message: casual tone and emoji are expected."
+      return "Transcribe speech into a casual Slack message with emoji."
     case .obsidian:
-      return "You are writing a Markdown note in Obsidian: Markdown syntax is expected."
+      return "Transcribe speech into markdown."
     }
   }
 
-  /// The language of the first token in `title` that reads as a filename with
-  /// a recognized extension ("● main.py — blurt — Visual Studio Code" →
-  /// "Python"), or `nil` when no token does. Editors lead their window titles
-  /// with the open file, so first match wins.
+  /// What the open file says speech becomes, from the first token in `title`
+  /// that reads as a filename with a recognized extension
+  /// ("● main.py — blurt — Visual Studio Code" → "Python code"), or `nil` when
+  /// no token does. Editors lead their window titles with the open file, so
+  /// first match wins.
   static func language(inWindowTitle title: String) -> String? {
     for token in title.split(whereSeparator: \.isWhitespace) {
       let name = token.trimmingCharacters(in: Self.filenameTrim)
@@ -110,32 +112,33 @@ enum AppKindPriming {
   /// markers, quotes, brackets, dash separators.
   private static let filenameTrim = CharacterSet(charactersIn: "\"'`•●◆*()[]{}<>,;:—–-")
 
-  /// Filename extension → how the clause names what's being written. Values
-  /// complete "You are writing … in a code editor", so most are bare language
-  /// names. Lowercased keys; lookups lowercase the extension first.
+  /// Filename extension → what the clause says speech becomes. Values complete
+  /// "Transcribe speech into …", so languages carry a trailing "code" while
+  /// markup/data formats stand alone. Lowercased keys; lookups lowercase the
+  /// extension first.
   private static let languagesByExtension: [String: String] = [
-    "c": "C", "h": "C",
-    "cc": "C++", "cpp": "C++", "cxx": "C++", "hpp": "C++",
-    "cs": "C#",
+    "c": "C code", "h": "C code",
+    "cc": "C++ code", "cpp": "C++ code", "cxx": "C++ code", "hpp": "C++ code",
+    "cs": "C# code",
     "css": "CSS", "scss": "CSS",
-    "go": "Go",
+    "go": "Go code",
     "htm": "HTML", "html": "HTML",
-    "java": "Java",
-    "cjs": "JavaScript", "js": "JavaScript", "jsx": "JavaScript", "mjs": "JavaScript",
+    "java": "Java code",
+    "cjs": "JavaScript code", "js": "JavaScript code", "jsx": "JavaScript code", "mjs": "JavaScript code",
     "json": "JSON",
-    "kt": "Kotlin", "kts": "Kotlin",
-    "lua": "Lua",
-    "m": "Objective-C", "mm": "Objective-C",
-    "markdown": "Markdown", "md": "Markdown",
-    "php": "PHP",
-    "py": "Python", "pyi": "Python",
-    "rb": "Ruby",
-    "rs": "Rust",
+    "kt": "Kotlin code", "kts": "Kotlin code",
+    "lua": "Lua code",
+    "m": "Objective-C code", "mm": "Objective-C code",
+    "markdown": "markdown", "md": "markdown",
+    "php": "PHP code",
+    "py": "Python code", "pyi": "Python code",
+    "rb": "Ruby code",
+    "rs": "Rust code",
     "bash": "a shell script", "sh": "a shell script", "zsh": "a shell script",
     "sql": "SQL",
-    "swift": "Swift",
+    "swift": "Swift code",
     "toml": "TOML",
-    "ts": "TypeScript", "tsx": "TypeScript",
+    "ts": "TypeScript code", "tsx": "TypeScript code",
     "yaml": "YAML", "yml": "YAML",
   ]
 }
