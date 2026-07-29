@@ -30,11 +30,15 @@ one, stop and ask the user first. This is the fast "don't" list; AGENTS.md's
   call. No on-device ASR/LLM, no model cache, no download UI.
 - **Never send `config.prompt`.** It takes a _description of the audio_, not
   instructions, and a custom value replaces the service's managed default
-  including its language steering. Formatting goes in `llm.instruction`
-  ("Format the result as markdown."), vocabulary in `keyterms_prompt`, the text
-  before the cursor in `conversation_context`. An imperative like "Transcribe
-  speech into markdown." in `prompt` is a measured no-op — that is exactly why
-  these three fields exist.
+  including its language steering. Vocabulary goes in `keyterms_prompt`, the
+  text before the cursor in `conversation_context`. An imperative like
+  "Transcribe speech into markdown." in `prompt` is a measured no-op — that is
+  exactly why those fields exist.
+- **Never send anything about the frontmost app.** `AppKindPriming` recognized
+  the app's bundle ID as a kind (terminal, code editor, Slack, Obsidian) and
+  sent a formatting clause as `llm.instruction`; the whole path was removed.
+  The bundle ID isn't captured, and `llm` always goes out empty so the
+  service's default cleanup rewrite applies everywhere.
 - Don't reintroduce a "remove filler words (um, uh, like)" directive — the STT
   prompt doesn't act on it; it was deliberately dropped, and disfluency removal
   is the LLM rewrite's job. Same for a language directive: pinning to English

@@ -7,7 +7,7 @@ import Testing
 /// The agreement with `TranscriptionSteering.build` is one-directional:
 /// `isEmpty == true` must always correspond to empty steering fields, while a
 /// non-empty context may still steer nothing — its signals can be carry-only
-/// (app name, field label, or selected text from an unrecognized app).
+/// (app name, window title, field label, or selected text).
 @Suite("TranscriptionContext")
 struct TranscriptionContextTests {
   @Test("both fields nil is empty")
@@ -28,13 +28,6 @@ struct TranscriptionContextTests {
   @Test("real prior text makes it non-empty")
   func priorTextPresent() {
     #expect(!TranscriptionContext(appName: nil, priorText: "hello there").isEmpty)
-  }
-
-  @Test("a bundle ID alone makes it non-empty (and produces a rewrite instruction)")
-  func bundleIDPresent() {
-    let context = TranscriptionContext(appName: nil, bundleID: "com.apple.Terminal", priorText: nil)
-    #expect(!context.isEmpty)
-    #expect(TranscriptionSteering.build(context: context).rewriteInstruction != nil)
   }
 
   @Test("real selected text makes it non-empty")
@@ -65,10 +58,8 @@ struct TranscriptionContextTests {
       #expect(TranscriptionSteering.build(context: context) == .empty)
     }
 
-    // Renderable signals (a recognized bundle ID, key terms, prior text) each
-    // steer at least one field…
+    // The two renderable signals (key terms, prior text) each steer a field…
     let renderable = [
-      TranscriptionContext(appName: nil, bundleID: "com.apple.Terminal", priorText: nil),
       TranscriptionContext(appName: nil, priorText: nil, keyTerms: ["Blurt"]),
       TranscriptionContext(appName: nil, priorText: "Hi Sam,"),
     ]
@@ -78,11 +69,18 @@ struct TranscriptionContextTests {
     }
 
     // …while carry-only signals make the context non-empty (worth carrying for
-    // the injector) yet steer nothing. Selected text is the interesting one: the
-    // paste replaces it, so it is never priming.
-    let carryOnly = TranscriptionContext(appName: "Mail", priorText: nil, selectedText: "sel")
-    #expect(!carryOnly.isEmpty)
-    #expect(TranscriptionSteering.build(context: carryOnly) == .empty)
+    // the injector) yet steer nothing. Two are load-bearing: selected text,
+    // because the paste replaces it so it is never priming; and everything
+    // naming the destination app, which is deliberately not sent at all.
+    let carryOnly = [
+      TranscriptionContext(appName: "Mail", priorText: nil, selectedText: "sel"),
+      TranscriptionContext(appName: "Code", windowTitle: "main.py — blurt", priorText: nil),
+      TranscriptionContext(appName: "Slack", fieldLabel: "Message", priorText: nil),
+    ]
+    for context in carryOnly {
+      #expect(!context.isEmpty)
+      #expect(TranscriptionSteering.build(context: context) == .empty)
+    }
   }
 
   @Test("Equatable compares every field")
@@ -108,8 +106,5 @@ struct TranscriptionContextTests {
     #expect(
       TranscriptionContext(appName: "Notes", priorText: "x", keyTerms: ["a"])
         != TranscriptionContext(appName: "Notes", priorText: "x", keyTerms: ["b"]))
-    #expect(
-      TranscriptionContext(appName: "Notes", bundleID: "com.a.b", priorText: "x")
-        != TranscriptionContext(appName: "Notes", bundleID: "com.c.d", priorText: "x"))
   }
 }

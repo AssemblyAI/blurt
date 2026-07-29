@@ -1,11 +1,10 @@
 /// Per-utterance snapshot of where the dictation is going, gathered at
 /// dictation start from the focused app and field. `TranscriptionSteering.build`
 /// renders only the parts the request uses — the prior text (as
-/// `conversation_context`), the key terms (as `keyterms_prompt`), the bundle ID
-/// (via the `AppKindPriming` formatting clause in `llm.instruction`), and the
-/// window title (the language refinement of that clause). The prior text and
-/// window title also steer the injector's paste separator; nothing else is
-/// consumed, and the rest of the context is neither sent nor logged.
+/// `conversation_context`) and the key terms (as `keyterms_prompt`). Nothing
+/// identifying the destination app is sent. The prior text and window title
+/// also steer the injector's paste separator; nothing else is consumed, and the
+/// rest of the context is neither sent nor logged.
 ///
 /// Every focus field is optional and best-effort: whatever couldn't be read is
 /// `nil`, and an entirely empty context customizes nothing (the server applies
@@ -15,19 +14,9 @@ public struct TranscriptionContext: Sendable, Equatable {
   /// sent.
   public let appName: String?
 
-  /// The frontmost application's bundle identifier (e.g.
-  /// "com.tinyspeck.slackmacgap"). Never sent verbatim: it keys the
-  /// app-*kind* recognition (`AppKindPriming`) that selects the rewrite's
-  /// formatting instruction — terminal, code editor, Slack, Obsidian.
-  /// Preferred over `appName` for recognition because display names are
-  /// localized and user-editable while the bundle ID is stable.
-  public let bundleID: String?
-
   /// The focused window's title (e.g. "main.py — blurt", a document name, a
-  /// Slack channel). Never sent verbatim. In a code editor it usually names the
-  /// open file, which is how the formatting clause learns the language ("… as
-  /// Swift code."); it also anchors the injector's same-window separator
-  /// fallback.
+  /// Slack channel). Never sent. Read only to anchor the injector's same-window
+  /// separator fallback.
   public let windowTitle: String?
 
   /// A short label for the focused field (placeholder/title/role, e.g. "To",
@@ -54,7 +43,6 @@ public struct TranscriptionContext: Sendable, Equatable {
 
   public init(
     appName: String?,
-    bundleID: String? = nil,
     windowTitle: String? = nil,
     fieldLabel: String? = nil,
     priorText: String?,
@@ -62,7 +50,6 @@ public struct TranscriptionContext: Sendable, Equatable {
     keyTerms: [String] = []
   ) {
     self.appName = appName
-    self.bundleID = bundleID
     self.windowTitle = windowTitle
     self.fieldLabel = fieldLabel
     self.priorText = priorText
@@ -74,7 +61,7 @@ public struct TranscriptionContext: Sendable, Equatable {
   /// are no key terms.
   public var isEmpty: Bool {
     keyTerms.isEmpty
-      && [appName, bundleID, windowTitle, fieldLabel, priorText, selectedText].allSatisfy {
+      && [appName, windowTitle, fieldLabel, priorText, selectedText].allSatisfy {
         $0.trimmedNonEmpty() == nil
       }
   }

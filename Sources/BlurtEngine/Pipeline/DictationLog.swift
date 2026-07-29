@@ -28,14 +28,12 @@ public enum DictationLog {
     /// an entry directly from a context.
     let conversationContext: [String]
     let keytermsPrompt: [String]
-    let llmInstruction: String?
 
     enum CodingKeys: String, CodingKey {
       case transcript
       case ts
       case conversationContext = "conversation_context"
       case keytermsPrompt = "keyterms_prompt"
-      case llmInstruction = "llm_instruction"
     }
 
     /// Mirrors `DictationConfig.encode(to:)`: an empty array omits its field, so
@@ -50,7 +48,6 @@ public enum DictationLog {
       if !keytermsPrompt.isEmpty {
         try container.encode(keytermsPrompt, forKey: .keytermsPrompt)
       }
-      try container.encodeIfPresent(llmInstruction, forKey: .llmInstruction)
     }
   }
 
@@ -118,8 +115,7 @@ public enum DictationLog {
     let entry = Entry(
       transcript: transcript, ts: now.formatted(timestampFormat),
       conversationContext: steering.conversationContext,
-      keytermsPrompt: steering.keyterms,
-      llmInstruction: steering.rewriteInstruction)
+      keytermsPrompt: steering.keyterms)
     guard var line = try? makeEncoder().encode(entry) else { return }
     line.append(0x0A)  // '\n'
 

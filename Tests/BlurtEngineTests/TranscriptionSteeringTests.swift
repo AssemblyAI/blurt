@@ -10,10 +10,11 @@ struct TranscriptionSteeringTests {
   ///
   /// Each recognized signal has exactly one home, and the table pins both
   /// directions — what renders and what must never leak into the wrong field:
-  /// prior-cursor text → `conversation_context`, key terms → `keyterms_prompt`,
-  /// the app-kind formatting clause → `llm.instruction`. The remaining focus
-  /// signals (app name, field label, selected text) render nowhere; the window
-  /// title is read only to name a code editor's language.
+  /// prior-cursor text → `conversation_context`, key terms → `keyterms_prompt`.
+  /// Every other focus signal renders nowhere. That includes anything naming the
+  /// destination app: the table keeps a case per app family that once earned a
+  /// formatting clause, each pinned to `.empty`, so reintroducing app-kind
+  /// steering fails here.
   struct Case: Sendable, CustomTestStringConvertible {
     let name: String
     let context: TranscriptionContext?
@@ -36,66 +37,44 @@ struct TranscriptionSteeringTests {
         priorText: nil, selectedText: "the old plan"),
       expected: .empty),
     Case(
-      name: "unrecognized bundle ID renders no instruction",
-      context: TranscriptionContext(appName: "Mail", bundleID: "com.apple.mail", priorText: nil),
-      expected: .empty),
-    Case(
       name: "prior-cursor text becomes the single conversation-context turn",
       context: TranscriptionContext(appName: "Mail", priorText: "Hi Sam, thanks for"),
       expected: TranscriptionSteering.Fields(
-        conversationContext: ["Hi Sam, thanks for"], keyterms: [], rewriteInstruction: nil)),
+        conversationContext: ["Hi Sam, thanks for"], keyterms: [])),
     Case(
       name: "prior text is trimmed of surrounding whitespace",
       context: TranscriptionContext(appName: nil, priorText: "  Hi Sam,\n "),
-      expected: TranscriptionSteering.Fields(
-        conversationContext: ["Hi Sam,"], keyterms: [], rewriteInstruction: nil)),
+      expected: TranscriptionSteering.Fields(conversationContext: ["Hi Sam,"], keyterms: [])),
     Case(
       name: "key terms become keyterms_prompt, not a prompt clause",
       context: TranscriptionContext(appName: nil, priorText: nil, keyTerms: ["AssemblyAI", "Kubernetes"]),
       expected: TranscriptionSteering.Fields(
-        conversationContext: [], keyterms: ["AssemblyAI", "Kubernetes"], rewriteInstruction: nil)),
+        conversationContext: [], keyterms: ["AssemblyAI", "Kubernetes"])),
     Case(
-      name: "terminal → shell-command formatting instruction",
-      context: TranscriptionContext(appName: "Terminal", bundleID: "com.apple.Terminal", priorText: nil),
-      expected: TranscriptionSteering.Fields(
-        conversationContext: [], keyterms: [],
-        rewriteInstruction: "Format the result as a shell command with no trailing period.")),
+      name: "a terminal steers nothing",
+      context: TranscriptionContext(appName: "Terminal", windowTitle: "zsh — 80×24", priorText: nil),
+      expected: .empty),
     Case(
-      name: "code editor names the window title's language",
+      name: "a code editor steers nothing, not even the open file's language",
+      context: TranscriptionContext(appName: "Code", windowTitle: "main.py — blurt", priorText: nil),
+      expected: .empty),
+    Case(
+      name: "Slack steers nothing",
+      context: TranscriptionContext(appName: "Slack", fieldLabel: "Message", priorText: nil),
+      expected: .empty),
+    Case(
+      name: "Obsidian steers nothing",
       context: TranscriptionContext(
-        appName: "Code", bundleID: "com.microsoft.VSCode", windowTitle: "main.py — blurt", priorText: nil),
-      expected: TranscriptionSteering.Fields(
-        conversationContext: [], keyterms: [],
-        rewriteInstruction: "Format the result as Python code.")),
+        appName: "Obsidian", windowTitle: "Grocery list - Cowork - Obsidian 1.12.7",
+        fieldLabel: "text entry area", priorText: nil),
+      expected: .empty),
     Case(
-      name: "code editor with no recognizable filename stays generic",
+      name: "both fields populate independently, and the app still renders nowhere",
       context: TranscriptionContext(
-        appName: "Xcode", bundleID: "com.apple.dt.Xcode", windowTitle: "Welcome to Xcode", priorText: nil),
-      expected: TranscriptionSteering.Fields(
-        conversationContext: [], keyterms: [], rewriteInstruction: "Format the result as code.")),
-    Case(
-      name: "Slack → casual-message formatting instruction",
-      context: TranscriptionContext(
-        appName: "Slack", bundleID: "com.tinyspeck.slackmacgap", fieldLabel: "Message", priorText: nil),
-      expected: TranscriptionSteering.Fields(
-        conversationContext: [], keyterms: [],
-        rewriteInstruction: "Format the result as a casual Slack message, using Slack emoji where they fit.")),
-    Case(
-      name: "Obsidian → markdown formatting instruction",
-      context: TranscriptionContext(
-        appName: "Obsidian", bundleID: "md.obsidian",
-        windowTitle: "Grocery list - Cowork - Obsidian 1.12.7", fieldLabel: "text entry area",
-        priorText: nil),
-      expected: TranscriptionSteering.Fields(
-        conversationContext: [], keyterms: [], rewriteInstruction: "Format the result as markdown.")),
-    Case(
-      name: "all three fields populate independently",
-      context: TranscriptionContext(
-        appName: "Terminal", bundleID: "com.apple.Terminal", windowTitle: "zsh — 80×24",
+        appName: "Terminal", windowTitle: "zsh — 80×24",
         priorText: "$ git status", selectedText: "modified: README.md", keyTerms: ["Blurt"]),
       expected: TranscriptionSteering.Fields(
-        conversationContext: ["$ git status"], keyterms: ["Blurt"],
-        rewriteInstruction: "Format the result as a shell command with no trailing period.")),
+        conversationContext: ["$ git status"], keyterms: ["Blurt"])),
   ]
 
   @Test("build maps focus context to the dictation steering fields", arguments: cases)

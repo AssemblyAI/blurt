@@ -1,4 +1,4 @@
-/// Renders a `TranscriptionContext` into the three request-customization fields
+/// Renders a `TranscriptionContext` into the two request-customization fields
 /// the dictation API accepts, each of which has one job (see
 /// `AssemblyAITranscriber` for the wire encoding):
 ///
@@ -8,22 +8,24 @@
 ///   proper-noun consistency.
 /// - `keyterms_prompt` — the user's key terms, verbatim, as the explicit
 ///   vocabulary list the field is for.
-/// - `llm.instruction` — the app-kind formatting clause (`AppKindPriming`),
-///   recognized from the frontmost app's bundle ID: markdown in Obsidian, Swift
-///   code in a code editor (the language inferred from the window title's
-///   filename), a shell command in a terminal, a casual message in Slack.
 ///
 /// **`config.prompt` is deliberately never sent.** The field takes a
 /// *description of the audio* ("Cardiology consultation about chest pain
 /// symptoms."), not instructions — transcription behavior is optimized out of
 /// the box, so an imperative like "Transcribe speech into markdown." was aimed
-/// at a field that does not act on instructions. That is why the app-kind
-/// priming now rides in `llm.instruction`, where an LLM actually rewrites the
-/// text, and why the key terms moved to `keyterms_prompt` rather than being
-/// packed into the prompt as a `Keywords:` clause. Sending no prompt also keeps
-/// the service's managed default — a custom prompt replaces it wholesale,
-/// including its language steering, which is the mechanism behind the earlier
-/// finding that pinning the prompt to English hurt non-English speech.
+/// at a field that does not act on instructions. That is also why the key terms
+/// ride in `keyterms_prompt` rather than being packed into the prompt as a
+/// `Keywords:` clause. Sending no prompt keeps the service's managed default —
+/// a custom prompt replaces it wholesale, including its language steering,
+/// which is the mechanism behind the earlier finding that pinning the prompt to
+/// English hurt non-English speech.
+///
+/// **Nothing describing the destination app is sent either.** An earlier
+/// version recognized the frontmost app's bundle ID as a *kind* (terminal, code
+/// editor, Slack, Obsidian) and sent a matching formatting clause as
+/// `llm.instruction`. That is gone: the `llm` block now carries no instruction,
+/// so the service's own default cleanup rewrite applies to every utterance
+/// regardless of where the text is going.
 ///
 /// Blurt has no earlier turns to send: `conversation_context` carries exactly
 /// one entry, the prior-cursor text, or none.
@@ -31,8 +33,8 @@
 /// The rest of the captured context is not sent at all. The app name and field
 /// label render nowhere (real-world logs showed them crowding the request — VS
 /// Code parks a screen-reader help announcement in the focused field's
-/// description), and the window title is read only to name a code editor's
-/// language. Selected text is never priming: the paste replaces it, so
+/// description), and the window title is read only to anchor the injector's
+/// paste separator. Selected text is never priming: the paste replaces it, so
 /// conditioning the model on it would prime for text on its way out.
 ///
 /// Exercised by `Tests/BlurtEngineTests/TranscriptionSteeringTests.swift`.
@@ -47,16 +49,13 @@ enum TranscriptionSteering {
     /// Explicit vocabulary to bias recognition toward, in the user's own
     /// spelling and capitalization.
     let keyterms: [String]
-    /// The rewrite instruction, or `nil` to let the service's default cleanup
-    /// instruction stand.
-    let rewriteInstruction: String?
 
     /// Nothing to customize — every field omitted, so the service applies its
     /// managed default prompt and its default cleanup rewrite. Also the value
     /// to compare against for "does this utterance customize anything?" —
     /// `Fields` is `Equatable`, so no separate emptiness predicate exists to
     /// drift from the fields themselves.
-    static let empty = Fields(conversationContext: [], keyterms: [], rewriteInstruction: nil)
+    static let empty = Fields(conversationContext: [], keyterms: [])
   }
 
   /// Cap the dictation API documents for `conversation_context`: 4096 characters
@@ -84,9 +83,7 @@ enum TranscriptionSteering {
     guard let context, !context.isEmpty else { return .empty }
     return Fields(
       conversationContext: priorTurn(of: context).map { [$0] } ?? [],
-      keyterms: fittedKeyterms(context.keyTerms),
-      rewriteInstruction: AppKindPriming.clause(
-        bundleID: context.bundleID, windowTitle: context.windowTitle.trimmedNonEmpty()))
+      keyterms: fittedKeyterms(context.keyTerms))
   }
 
   /// The prior-cursor text as one conversation turn, clipped to the field's cap
