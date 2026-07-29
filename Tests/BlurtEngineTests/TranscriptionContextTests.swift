@@ -3,11 +3,9 @@ import Testing
 @testable import BlurtEngine
 
 /// `TranscriptionContext.isEmpty` is the gate `FocusCapture`/`DictationSession`
-/// use to decide whether a context is worth carrying at all (steering AND log).
-/// The agreement with `TranscriptionSteering.build` is one-directional:
-/// `isEmpty == true` must always correspond to empty steering fields, while a
-/// non-empty context may still steer nothing — its signals can be carry-only
-/// (app name, window title, field label, or selected text).
+/// use to decide whether a context is worth sending as priming. It mirrors the
+/// emptiness logic in `TranscriptionPrompt.build`, so the two must agree:
+/// `isEmpty == true` should always correspond to `build` returning `nil`.
 @Suite("TranscriptionContext")
 struct TranscriptionContextTests {
   @Test("both fields nil is empty")
@@ -40,46 +38,31 @@ struct TranscriptionContextTests {
     #expect(TranscriptionContext(appName: nil, priorText: nil, selectedText: "  \n").isEmpty)
   }
 
-  @Test("key terms alone make it non-empty (and produce keyterms)")
+  @Test("key terms alone make it non-empty (and produce a prompt)")
   func keyTermsPresent() {
     let context = TranscriptionContext(appName: nil, priorText: nil, keyTerms: ["Blurt"])
     #expect(!context.isEmpty)
-    #expect(TranscriptionSteering.build(context: context).keyterms == ["Blurt"])
+    #expect(TranscriptionPrompt.build(context: context) != nil)
   }
 
-  @Test("an empty context always corresponds to empty steering fields")
-  func agreesWithSteeringBuild() {
+  @Test("emptiness agrees with TranscriptionPrompt.build returning nil")
+  func agreesWithPromptBuild() {
     let empties = [
       TranscriptionContext(appName: nil, priorText: nil),
       TranscriptionContext(appName: "  ", priorText: "\n"),
     ]
     for context in empties {
       #expect(context.isEmpty)
-      #expect(TranscriptionSteering.build(context: context) == .empty)
+      #expect(TranscriptionPrompt.build(context: context) == nil)
     }
 
-    // The two renderable signals (key terms, prior text) each steer a field…
-    let renderable = [
-      TranscriptionContext(appName: nil, priorText: nil, keyTerms: ["Blurt"]),
-      TranscriptionContext(appName: nil, priorText: "Hi Sam,"),
+    let nonEmpties = [
+      TranscriptionContext(appName: "Mail", priorText: nil),
+      TranscriptionContext(appName: nil, priorText: nil, selectedText: "selected"),
     ]
-    for context in renderable {
+    for context in nonEmpties {
       #expect(!context.isEmpty)
-      #expect(TranscriptionSteering.build(context: context) != .empty)
-    }
-
-    // …while carry-only signals make the context non-empty (worth carrying for
-    // the injector) yet steer nothing. Two are load-bearing: selected text,
-    // because the paste replaces it so it is never priming; and everything
-    // naming the destination app, which is deliberately not sent at all.
-    let carryOnly = [
-      TranscriptionContext(appName: "Mail", priorText: nil, selectedText: "sel"),
-      TranscriptionContext(appName: "Code", windowTitle: "main.py — blurt", priorText: nil),
-      TranscriptionContext(appName: "Slack", fieldLabel: "Message", priorText: nil),
-    ]
-    for context in carryOnly {
-      #expect(!context.isEmpty)
-      #expect(TranscriptionSteering.build(context: context) == .empty)
+      #expect(TranscriptionPrompt.build(context: context) != nil)
     }
   }
 
