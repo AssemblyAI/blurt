@@ -60,10 +60,15 @@ enum UITestIdentifiers {
   static let apiKeyCancel = "settings.apiKey.cancel"
   static let apiKeyError = "settings.apiKey.error"
   static let keyTermsField = "settings.keyTerms.field"
+  /// The cleaned-up (LLM rewrite) dictation-key picker.
   static let hotkeyPicker = "settings.hotkey.picker"
+  /// The raw (verbatim) dictation-key picker.
+  static let rawHotkeyPicker = "settings.hotkey.rawPicker"
   static let soundPicker = "settings.sound.picker"
   static let developerToggle = "settings.developer.toggle"
-  static let enhancedTranscriptsToggle = "settings.enhancedTranscripts.toggle"
+  /// The editable cleanup-instruction field (sent as the request's
+  /// `llm.instruction`).
+  static let cleanupPromptField = "settings.cleanupPrompt.field"
   static let updateCheck = "settings.update.check"
 
   /// The dictation overlay pill (`OverlayView`).

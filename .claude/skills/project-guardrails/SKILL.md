@@ -23,9 +23,13 @@ one, stop and ask the user first. This is the fast "don't" list; AGENTS.md's
 
 - **No streaming STT.** The AssemblyAI Sync API returns the full transcript in
   one response. Overlay goes "Transcribing…" → full text.
-- **No separate LLM cleanup pass.** Cleanup rides in the Sync STT request's
-  `config.prompt` (`TranscriptionPrompt`). No LLM Gateway client, no
-  `StylerProtocol`, no post-transcription styling stage.
+- **No separate/client-side LLM cleanup pass.** Cleanup is the dictation API's
+  server-side rewrite, requested by the `llm` block on the same `/transcribe`
+  call — one request, no second round-trip. No LLM Gateway client, no
+  `StylerProtocol`, no post-transcription styling stage. The block's
+  `instruction` is now user-editable (`CleanupPromptStore`, sent as
+  `llm.instruction`; blank = the service default) and requested per-press by the
+  cleaned trigger, but it is still one server-side request.
 - **No local models / model downloads.** Transcription is a remote AssemblyAI
   call. No on-device ASR/LLM, no model cache, no download UI.
 - Don't reintroduce a "remove filler words (um, uh, like)" directive in the
@@ -45,9 +49,10 @@ one, stop and ask the user first. This is the fast "don't" list; AGENTS.md's
   menu bar, so nothing may depend on it being visible. A menu-bar-_only_ variant
   (no Dock icon) was tried and reverted twice for that reason — don't drop the
   Dock icon or add `LSUIElement`.
-- The dictation trigger is a **single lone modifier** (right ⌘ default), home-
-  grown via `CGEventTap` + `DictationKeyGate`. No `KeyboardShortcuts` package, no
-  key+modifier chord.
+- The dictation trigger is **two lone modifiers** — a cleaned key (right ⌘
+  default) and a raw key (right ⌥ default) — home-grown via `CGEventTap` +
+  `DictationKeyGate` (routed by `DualTriggerRouter`). Two lone-modifier keys are
+  fine; no `KeyboardShortcuts` package, no key+modifier chord.
 - **Updates are download-only** — check → open the DMG in the browser → the user
   installs it. The `mxcl/AppUpdater` dependency and its in-place self-updater
   were removed; don't reintroduce a self-replacing install path, a timer-driven

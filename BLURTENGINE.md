@@ -1,6 +1,6 @@
 # Building on BlurtEngine
 
-BlurtEngine is the Swift package that powers [Blurt](README.md)'s dictation pipeline: capture speech from the microphone, transcribe it in a single AssemblyAI dictation API call (transcription plus a server-side LLM cleanup rewrite, contextually primed by a per-utterance prompt), and paste the polished text into the focused app. This guide is for developers embedding the engine in their own macOS app or extending it inside this repository. For repo-wide conventions and agent workflow, see [AGENTS.md](AGENTS.md).
+BlurtEngine is the Swift package that powers [Blurt](README.md)'s dictation pipeline: capture speech from the microphone, transcribe it in a single AssemblyAI dictation API call (transcription plus an optional server-side LLM cleanup rewrite, contextually primed by a per-utterance prompt), and paste the text into the focused app. This guide is for developers embedding the engine in their own macOS app or extending it inside this repository. For repo-wide conventions and agent workflow, see [AGENTS.md](AGENTS.md).
 
 ## What you get
 
@@ -37,7 +37,7 @@ await session.cancel()   // abort, whatever the pipeline is doing
 
 // Or, from a callback that can't await (an event tap, a UI action),
 // use the synchronous fire-and-forget feed — same commands, same order:
-session.submit(.press)
+session.submit(.press(.cleaned))
 ```
 
 Before the first dictation can succeed the host must have:
@@ -50,8 +50,8 @@ Before the first dictation can succeed the host must have:
 
 ```text
 press() ──▶ MicCapture.start()            release() ──▶ MicCapture.stop() → Data (raw S16LE PCM)
-            (16 kHz mono 16-bit PCM)                    AssemblyAITranscriber.transcribe(pcm:sampleRate:context:)
-            + focus/context capture                     (one POST dictation.assemblyai.com/transcribe: STT + LLM rewrite)
+            (16 kHz mono 16-bit PCM)                    AssemblyAITranscriber.transcribe(pcm:sampleRate:context:cleanup:)
+            + focus/context capture                     (one POST dictation.assemblyai.com/transcribe: STT + optional LLM rewrite)
             + connection warm-up                        KeyInjector.insert(text, after: priorText)
                                                         (clipboard paste via synthesized ⌘V)
 ```
@@ -59,7 +59,7 @@ press() ──▶ MicCapture.start()            release() ──▶ MicCapture.s
 Key properties of the design, which your integration can rely on:
 
 - **One request per utterance, no streaming.** The dictation API returns the complete transcript — and its LLM-rewritten form — in the response body: no upload step, no job polling, no incremental deltas, no second request for the cleanup. `TranscriberProtocol.transcribe` is a single `async throws -> String`. UIs should show a "transcribing…" state and then the whole result; there is nothing to stream.
-- **Cleanup happens server-side, and it's optional.** The request's empty `llm` block asks the service for its default cleanup rewrite (remove disfluencies, fix punctuation), applied to the verbatim transcript inside the same call; the per-utterance `config.prompt` (built by `TranscriptionPrompt` from the captured context) primes the _transcription_. The block is gated by the **enhanced transcripts** setting (`EnhancedTranscriptsStore`, on by default): turned off, the config omits `llm` and the verbatim transcript is pasted as spoken. The engine pastes `llm_response`, falling back to the verbatim `text` when the best-effort rewrite failed (`llm_error`) — a degradation, never a user-facing error. There is no client-side LLM pass, no styling stage, and deliberately no hook for one.
+- **Cleanup happens server-side, and it's per-press.** For a _cleaned_ dictation the request's `llm` block asks the service for its cleanup rewrite (remove disfluencies, fix punctuation), applied to the verbatim transcript inside the same call; the per-utterance `config.prompt` (built by `TranscriptionPrompt` from the captured context) primes the _transcription_. The block is chosen by `transcribe`'s `cleanup` flag (from the `DictationMode` the trigger key selected): a _raw_ dictation omits `llm` and the verbatim transcript is pasted as spoken. When present, the block carries the user's editable instruction (`CleanupPromptStore`) as `llm.instruction`; blank selects the service default (an empty `{}` block). The engine pastes `llm_response`, falling back to the verbatim `text` when the best-effort rewrite failed (`llm_error`) — a degradation, never a user-facing error. There is no client-side LLM pass, no styling stage, and deliberately no hook for one.
 - **Latency is pre-paid where possible.** `press()` fires a detached `warmUp()` at the transcriber (pre-opening the HTTPS connection while the user speaks, ~170 ms saved cold) and kicks off the cross-process accessibility read of the focused field without awaiting it — the read is then consumed at transcribe time with a bounded wait (`DictationSession.contextWaitBudget`, 500 ms), so an unresponsive frontmost app costs the transcript its priming, never a multi-second stall — and never delays the recording indicator. On the way out, `release()` flips the phase to `.transcribing` _before_ reading the recorded audio back, so a host's stop cue fires at key-up rather than after the disk read.
 - **A held trigger auto-releases.** `DictationSession` stops recording after `maxRecordingSeconds` (default `SyncSTTLimits.autoReleaseSeconds`, 115 s) so audio never exceeds what the endpoint accepts, and transcribes what it has. Clips shorter than `SyncSTTLimits.minPCMBytes` (~100 ms of audio — an accidental tap) are dropped as a silent no-op rather than sent to earn a 400.
 
@@ -129,11 +129,11 @@ Only `start()`/`stop()` must be implemented — `levels` and `warmUp()` have def
 ### `TranscriberProtocol` → `AssemblyAITranscriber`
 
 ```swift
-func transcribe(pcm: Data, sampleRate: Int, context: TranscriptionContext?) async throws -> String
+func transcribe(pcm: Data, sampleRate: Int, context: TranscriptionContext?, cleanup: Bool) async throws -> String
 func warmUp() async   // optional; no-op default
 ```
 
-`AssemblyAITranscriber` is a stateless `Sendable` struct. One `POST https://dictation.assemblyai.com/transcribe` per utterance: the audio as raw S16LE PCM (the `pcm` blob, byte-for-byte) in the `audio` multipart part, plus a JSON `config` part (`sample_rate`, `channels`, the rendered `prompt`, and — while enhanced transcripts are enabled, the default — an empty `llm` block requesting the service's default cleanup rewrite), with the API key in `Authorization` (no model header — the service pins the STT model server-side). The response carries the verbatim `text` and the rewritten `llm_response`; the transcriber returns the rewrite and falls back to `text` when it is null (the rewrite is best-effort — `llm_error` is logged, never surfaced as a failure). Its initializer takes an `apiKeyProvider` closure (defaults to `APIKeyStore.current`), a `baseURL`, an `HTTPTransport` — inject a fake transport (see `Tests/BlurtEngineTests/Stubs/FakeHTTPTransport.swift`) to test against canned responses — and an `enhancedTranscripts` closure deciding, per request, whether the `llm` block is sent (nil, the default, reads `EnhancedTranscriptsStore`). `warmUp()` fires a throwaway GET at the host root to pre-pool the connection; it never throws and any failure just means the real request pays connection setup as before.
+`AssemblyAITranscriber` is a stateless `Sendable` struct. One `POST https://dictation.assemblyai.com/transcribe` per utterance: the audio as raw S16LE PCM (the `pcm` blob, byte-for-byte) in the `audio` multipart part, plus a JSON `config` part (`sample_rate`, `channels`, the rendered `prompt`, and — when the caller's `cleanup` flag is set — an `llm` block requesting the cleanup rewrite), with the API key in `Authorization` (no model header — the service pins the STT model server-side). The response carries the verbatim `text` and the rewritten `llm_response`; the transcriber returns the rewrite and falls back to `text` when it is null (the rewrite is best-effort — `llm_error` is logged, never surfaced as a failure). Its initializer takes an `apiKeyProvider` closure (defaults to `APIKeyStore.current`), a `baseURL`, an `HTTPTransport` — inject a fake transport (see `Tests/BlurtEngineTests/Stubs/FakeHTTPTransport.swift`) to test against canned responses — and a `cleanupInstruction` closure supplying the user's custom `llm.instruction` (nil, the default, reads `CleanupPromptStore`; a blank instruction encodes an empty `llm` block and selects the service default). `warmUp()` fires a throwaway GET at the host root to pre-pool the connection; it never throws and any failure just means the real request pays connection setup as before.
 
 The model's limits live in `SyncSTTLimits` (16 kHz sample rate, ~0.1 s–120 s audio, and the auto-release math — the sync STT model behind the dictation service) — the single source shared by the mic, the session, and the request so recorded and declared geometry can't drift.
 
@@ -164,14 +164,15 @@ Each completed dictation is appended to **`DictationLog`** (a local JSONL histor
 
 ## Hotkey building blocks
 
-The engine ships the _decision logic_ for a lone-modifier trigger; the host supplies the event source (in Blurt, a `CGEventTap` — see `App/Blurt/Blurt/Hotkey/DictationKeyTap.swift` for the reference wiring).
+The engine ships the _decision logic_ for **two** lone-modifier triggers — a _raw_ (verbatim) key and a _cleaned_ (LLM-rewrite) key sharing one gate — the host supplies the event source (in Blurt, a `CGEventTap` — see `App/Blurt/Blurt/Hotkey/DictationKeyTap.swift` for the reference wiring).
 
 - **`TriggerKey`** — the curated lone modifiers usable as a trigger (right ⌘, right ⌥, `fn`), with keycodes, display labels, and the device-modifier masks the event source needs.
-- **`TriggerKeyStore`** — persists the chosen key in `UserDefaults` (`BlurtTriggerKeyCode`), defaulting to right ⌘.
+- **`DictationMode`** — `.raw` / `.cleaned`; `cleansUp` selects whether the request asks for the server-side cleanup rewrite. The `DualTriggerRouter` reports it on `.start` so the host presses the session in that mode.
+- **`TriggerKeyStore`** / **`RawTriggerKeyStore`** — persist the two chosen keys in `UserDefaults` (`BlurtTriggerKeyCode`, default right ⌘, for the cleaned key; `BlurtRawTriggerKeyCode`, default right ⌥, for the raw key). **`DictationTriggerPair`** holds both and `assigning(_:to:)` swaps on a collision so the two stay distinct.
 - **`DictationKeyGate`** — a pure, clock-free state machine that turns `modifierDown(at:)` / `modifierUp(at:)` / `otherKeyDown()` into `.start` / `.stop` / `.cancel` / `.none`. Recording starts the instant the modifier goes down; on key-up, a release held ≥ `holdThreshold` (default 1 s) is push-to-talk (stop), a shorter release latches tap-to-toggle (next tap stops). A modifier+key combo from idle cancels the fresh capture; over a latched recording it passes through as a normal shortcut. Callers pass monotonic timestamps, so every decision is deterministic and unit-tested (`DictationKeyGateTests`, `HotkeyRaceTests`).
-- **`DictationKeyRouter`** — the recommended layer over the gate: reduce each raw event to `.flagsChanged(keyCode:triggerFlagIsOn:)` / `.keyDown(keyCode:)` and `handle(_:at:)` applies the filters every event source needs — only the bound keycode's flag changes count, and only genuine down/up _edges_ reach the gate (`flagsChanged` deliveries re-report the bit whether or not it changed, so a repeat must not double-start a dictation). `reset()` / `rebind(triggerKeyCode:)` clear state that can no longer be trusted (dropped events, a rebound trigger) and return whether they discarded a live recording. Unit-tested (`DictationKeyRouterTests`).
+- **`DualTriggerRouter`** — the recommended layer over the gate for both keys: reduce each raw event to `.flagsChanged(keyCode:rawFlagIsOn:cleanedFlagIsOn:)` / `.keyDown(keyCode:)` and `handle(_:at:)` applies the filters every event source needs — only a bound keycode's flag changes count, only genuine down/up _edges_ reach the gate (`flagsChanged` deliveries re-report the bit whether or not it changed, so a repeat must not double-start a dictation), and the first key to open the idle gate owns it (the other key is ignored until idle — no chord across the two). Its `Outcome` carries the gate action plus, on `.start`, the owning `DictationMode`. `reset()` / `rebind(rawKeyCode:cleanedKeyCode:)` clear state that can no longer be trusted (dropped events, a rebound trigger) and return whether they discarded a live recording. Unit-tested (`DualTriggerRouterTests`).
 
-Map the router's actions onto the session with `submit`: `.start` → `submit(.press)`, `.stop` → `submit(.release)`, `.cancel` → `submit(.cancel)` — event-tap callbacks can't `await`, and `submit` preserves their emit order where per-callback `Task` spawning wouldn't. If your event source can lose key-ups (a disabled tap, a rebind), call the router's `reset()`/`rebind(triggerKeyCode:)` and recover a discarded recording with `submit(.cancelRecording)`.
+Map the router's outcome onto the session with `submit`: `.start` → `submit(.press(outcome.mode ?? .cleaned))`, `.stop` → `submit(.release)`, `.cancel` → `submit(.cancel)` — event-tap callbacks can't `await`, and `submit` preserves their emit order where per-callback `Task` spawning wouldn't. If your event source can lose key-ups (a disabled tap, a rebind), call the router's `reset()`/`rebind(rawKeyCode:cleanedKeyCode:)` and recover a discarded recording with `submit(.cancelRecording)`.
 
 ## Testing your integration
 

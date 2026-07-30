@@ -59,6 +59,13 @@ public actor DictationSession {
   /// transcriber, `inject`'s separator decision, and the log share one snapshot.
   var capturedContext: TranscriptionContext?
 
+  /// Which trigger started the in-flight dictation, set at the top of
+  /// `performPress` and read in `+Pipeline` to decide whether the request asks
+  /// for the server-side cleanup rewrite (`DictationMode.cleansUp`). Defaults to
+  /// `.cleaned` so a direct `press()` with no mode keeps the historical
+  /// cleaned-transcript behavior.
+  var activeMode: DictationMode = .cleaned
+
   /// The in-flight AX field-context read, started by `press()` — that's when
   /// the target field still holds focus — but consumed only in
   /// `runTranscribeInject`, bounded by `contextWaitBudget`. Deliberately not
@@ -149,15 +156,19 @@ public actor DictationSession {
     await task.value
   }
 
-  public func press() async {
-    await enqueue { await self.performPress() }
+  /// Starts a dictation in `mode` — `.raw` pastes the verbatim transcript,
+  /// `.cleaned` (the default) the server-side cleanup rewrite. The mode is
+  /// captured for the whole run at press time and read again in `+Pipeline`.
+  public func press(mode: DictationMode = .cleaned) async {
+    await enqueue { await self.performPress(mode: mode) }
   }
 
   public func release() async {
     await enqueue { await self.performRelease() }
   }
 
-  private func performPress() async {
+  private func performPress(mode: DictationMode) async {
+    activeMode = mode
     guard phase.isTerminal else { return }
     // Refuse the press before any capture begins when the host reports a
     // blocker (e.g. no API key saved): recording an utterance that can only

@@ -67,7 +67,7 @@ private struct GeneralSettingsTab: View {
   }
 }
 
-/// The occasional stuff: the enhanced-transcripts switch, checking for an
+/// The occasional stuff: the cleanup-instruction editor, checking for an
 /// update, and the developer-mode log toggle. Kept out of General so the
 /// common pane stays short.
 private struct AdvancedSettingsTab: View {
@@ -82,29 +82,35 @@ private struct AdvancedSettingsTab: View {
   }
 }
 
-/// The Transcription section of the Settings window: the enhanced-transcripts
-/// switch. While on (the default), every dictation request asks AssemblyAI's
-/// dictation API for its server-side cleanup rewrite, so the pasted text is
-/// the polished version; turned off, the request omits the rewrite and the
-/// verbatim transcript is pasted exactly as spoken. The transcriber reads the
-/// same default this toggle writes at every request, so a change applies to
-/// the next dictation. Settings-only — not a wizard step, since it never
-/// gates setup.
+/// The Transcription section of the Settings window: the editable cleanup
+/// instruction. Whatever is typed here is sent as the dictation request's
+/// `llm.instruction` on a *cleaned* dictation (the cleaned-up trigger key), so
+/// the user can steer the server-side rewrite. Leaving it blank sends an empty
+/// `llm` block, which selects AssemblyAI's own default cleanup rewrite. The
+/// transcriber reads the same default this field writes at every request, so a
+/// change applies to the next dictation. Settings-only — not a wizard step,
+/// since it never gates setup.
 private struct TranscriptionSection: View {
-  @AppStorage(EnhancedTranscriptsStore.defaultsKey) private var enhancedTranscripts = true
+  // Bound to the raw defaults slot (default ""), so an unset prompt reads as
+  // empty and the transcriber's blank → default-rewrite rule applies. `axis:
+  // .vertical` grows the field to a few lines as the instruction lengthens.
+  @AppStorage(CleanupPromptStore.defaultsKey) private var cleanupPrompt = ""
 
   var body: some View {
     Section {
-      Toggle(isOn: $enhancedTranscripts) {
-        Label("Enhanced transcripts", systemImage: "wand.and.stars")
-      }
-      .accessibilityIdentifier(UITestIdentifiers.enhancedTranscriptsToggle)
+      TextField(
+        "Rewrite instruction", text: $cleanupPrompt,
+        prompt: Text("Leave blank to use the default cleanup"), axis: .vertical
+      )
+      .lineLimit(2...6)
+      .accessibilityIdentifier(UITestIdentifiers.cleanupPromptField)
     } header: {
-      Text("Transcription")
+      Text("Cleanup")
     } footer: {
       Text(
-        "Polishes each dictation before pasting — removing filler words and fixing punctuation. "
-          + "Turn off to paste your words exactly as spoken.")
+        "The instruction sent to the cleanup rewrite for the cleaned-up dictation key — for "
+          + "example, \"Fix punctuation and remove filler words.\" Leave it blank to use "
+          + "AssemblyAI's default cleanup.")
     }
   }
 }

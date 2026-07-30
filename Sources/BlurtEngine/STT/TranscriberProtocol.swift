@@ -8,7 +8,15 @@ public protocol TranscriberProtocol: Sendable {
   ///
   /// `context` carries per-utterance priming (focused app + text before the
   /// cursor) rendered into the request prompt; pass `nil` for none.
-  func transcribe(pcm: Data, sampleRate: Int, context: TranscriptionContext?) async throws -> String
+  ///
+  /// `cleanup` selects which transcript the caller wants: `true` asks the
+  /// dictation API for its server-side LLM cleanup rewrite (the `llm` block
+  /// rides along and the polished text comes back), `false` omits it so the
+  /// verbatim transcript is returned as spoken. It maps straight from the
+  /// `DictationMode` that started the session (`DictationMode.cleansUp`).
+  func transcribe(
+    pcm: Data, sampleRate: Int, context: TranscriptionContext?, cleanup: Bool
+  ) async throws -> String
 
   /// Optionally pre-open the transcription connection so the next `transcribe`
   /// doesn't pay connection setup (DNS/TCP/TLS) on the latency-sensitive hot

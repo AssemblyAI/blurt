@@ -83,7 +83,9 @@
   /// Stub transcriber: returns the harness's canned transcript, so the "spoken"
   /// text is whatever the test set — no network, fully deterministic.
   nonisolated struct UITestTranscriber: TranscriberProtocol {
-    func transcribe(pcm: Data, sampleRate: Int, context: TranscriptionContext?) async throws -> String {
+    func transcribe(
+      pcm: Data, sampleRate: Int, context: TranscriptionContext?, cleanup: Bool
+    ) async throws -> String {
       await MainActor.run { UITestState.shared.cannedTranscript }
     }
   }

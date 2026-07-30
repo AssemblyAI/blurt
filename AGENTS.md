@@ -6,12 +6,14 @@ the Claude-Code-specific tooling under `.claude/` (hooks, skills, subagents).
 ## Start here
 
 Blurt is a macOS dictation app powered by [AssemblyAI](https://www.assemblyai.com). Tap or hold a
-trigger key, speak, and polished text is pasted into the focused app. Transcription is **one remote
-AssemblyAI dictation API call**: a per-utterance `prompt` (a transcription directive plus contextual
-priming built from the focused app/window/field and the user's key terms) rides along with the
-request, and the same request asks the service for its server-side LLM cleanup rewrite
-(`config.llm`), so the text that comes back is already polished. The user supplies their own API
-key.
+trigger key, speak, and text is pasted into the focused app. There are **two** trigger keys: a
+_cleaned_ key that pastes the server-side LLM cleanup rewrite and a _raw_ key that pastes the
+verbatim transcript. Transcription is **one remote AssemblyAI dictation API call**: a per-utterance
+`prompt` (a transcription directive plus contextual priming built from the focused app/window/field
+and the user's key terms) rides along with the request, and — only for a cleaned dictation — the
+same request asks the service for its server-side LLM cleanup rewrite (`config.llm`, carrying the
+user's editable instruction), so the text that comes back is already polished. The user supplies
+their own API key.
 
 Four reflexes before you touch anything:
 
@@ -49,7 +51,8 @@ Sources/BlurtEngine/         the engine (dependency-free Swift package)
   Audio/                     MicCapture (+meter), SoundPack/Catalog/Store — record cues
   Config/                    Keychain-backed API key, key terms, developer mode, PersistedSettings
   FocusCapture/              Accessibility reads of the frontmost app / focused field
-  Hotkey/                    TriggerKey(+Store), DictationKeyGate, DictationKeyRouter
+  Hotkey/                    TriggerKey(+Store), RawTriggerKeyStore, DictationMode/TriggerPair,
+                             DictationKeyGate, DualTriggerRouter
   Injection/                 KeyInjector (clipboard paste), SystemClipboard
   Permissions/               PermissionsChecker (mic + Accessibility)
   Pipeline/                  DictationSession (actor) + phases, UI projections, geometry, log
@@ -159,23 +162,23 @@ In Claude Code on the web, a `SessionStart` hook installs the portable linters a
 Each was tried the other way and reverted. If a task seems to require one, stop and ask first.
 (`.claude/skills/project-guardrails` is the compressed version of this list.)
 
-| Don't                                                     | Because                                                                                                                                                                                                                                                     |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Add an external SPM dependency to the engine              | Dependency-free by rule (biggest supply-chain risk); a `check.sh` guard fails on `.package(` in `Package.swift` or a `url:`/`github:` package in `project.yml`. Extend `BlurtEngine` instead.                                                               |
-| Use `AVAudioEngine` / `installTap` for capture            | A long-lived engine bound its input graph to one device and went stale on a mic↔built-in switch — `-10868` (`kAudioUnitErr_FormatNotSupported`) or all-zero buffers. `MicCapture` uses a fresh `AVAudioRecorder` per session.                               |
-| Add streaming STT                                         | The dictation API returns the full (already rewritten) text in one response; the overlay shows "Transcribing…" then the full text.                                                                                                                          |
-| Add a client-side LLM cleanup pass                        | Cleanup is the dictation API's server-side rewrite, requested by the `llm` block on the same `/transcribe` call. No LLM Gateway client, no `StylerProtocol`, no styling stage, no second request — transcription steering belongs in `TranscriptionPrompt`. |
-| Add local models or model downloads                       | Transcription is a remote AssemblyAI call: no on-device ASR/LLM, no model cache, no download UI.                                                                                                                                                            |
-| Pin the prompt to English                                 | Hurt non-English transcription; language is left to the model's own detection.                                                                                                                                                                              |
-| Add a "remove filler words (um, uh, like)" clause         | Not in the STT model's trained instruction set — a no-op, deliberately dropped; disfluency removal is the server-side LLM rewrite's job.                                                                                                                    |
-| Add a keystroke-typing paste path or a length threshold   | Injection is **always** clipboard paste (save → write → ⌘V → settle → restore), with the copied-to-clipboard degradation when the target is lost.                                                                                                           |
-| Add `LSUIElement` or a menu-bar-**only** mode             | Blurt is a Dock app first. The `MenuBarExtra` status item is convenience layered on the Dock icon; the notch can hide a status item, so nothing may depend on it. A menu-bar-only variant was reverted twice.                                               |
-| Add a `KeyboardShortcuts` package or a key+modifier chord | The trigger is a single lone modifier, home-grown (`CGEventTap` + `DictationKeyGate`), and swallows nothing.                                                                                                                                                |
-| Add a self-replacing install or background auto-updater   | Updates are download-only; `mxcl/AppUpdater` and its in-place updater were removed. The once-a-day launch _check_ (`AutomaticUpdateCheck`) is fine; installing for the user, or polling, is not. Extend `UpdateCheckModel`.                                 |
-| Hand-edit `Blurt.xcodeproj/project.pbxproj`               | Generated from `project.yml`; `check.sh`'s drift check fails on any manual edit (a Claude PreToolUse hook also blocks it).                                                                                                                                  |
-| Redirect the post-build install away from `/Applications` | TCC won't register apps in DerivedData/`/tmp`, so permission toggles never appear.                                                                                                                                                                          |
-| Touch the real Keychain in tests                          | `APIKeyStore` is the production item — a test that writes it triggers Keychain prompts and corrupts the real item's ACL. Use an isolated service (see `KeychainStoreTests`) or `InMemoryAPIKeyStore`.                                                       |
-| Add backwards-compat shims for removed types              | Deleted types stay deleted — no deprecated re-exports.                                                                                                                                                                                                      |
+| Don't                                                     | Because                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Add an external SPM dependency to the engine              | Dependency-free by rule (biggest supply-chain risk); a `check.sh` guard fails on `.package(` in `Package.swift` or a `url:`/`github:` package in `project.yml`. Extend `BlurtEngine` instead.                                                                                                                                                                                                                                                        |
+| Use `AVAudioEngine` / `installTap` for capture            | A long-lived engine bound its input graph to one device and went stale on a mic↔built-in switch — `-10868` (`kAudioUnitErr_FormatNotSupported`) or all-zero buffers. `MicCapture` uses a fresh `AVAudioRecorder` per session.                                                                                                                                                                                                                        |
+| Add streaming STT                                         | The dictation API returns the full (already rewritten) text in one response; the overlay shows "Transcribing…" then the full text.                                                                                                                                                                                                                                                                                                                   |
+| Add a client-side LLM cleanup pass                        | Cleanup is the dictation API's server-side rewrite, requested by the `llm` block on the same `/transcribe` call. No LLM Gateway client, no `StylerProtocol`, no styling stage, no second request. The block's `instruction` is now user-editable (`CleanupPromptStore`, sent as `llm.instruction`; blank = the service default) and requested per-press by the _cleaned_ trigger — but it is still one server-side request, never a client-side LLM. |
+| Add local models or model downloads                       | Transcription is a remote AssemblyAI call: no on-device ASR/LLM, no model cache, no download UI.                                                                                                                                                                                                                                                                                                                                                     |
+| Pin the prompt to English                                 | Hurt non-English transcription; language is left to the model's own detection.                                                                                                                                                                                                                                                                                                                                                                       |
+| Add a "remove filler words (um, uh, like)" clause         | Not in the STT model's trained instruction set — a no-op, deliberately dropped; disfluency removal is the server-side LLM rewrite's job.                                                                                                                                                                                                                                                                                                             |
+| Add a keystroke-typing paste path or a length threshold   | Injection is **always** clipboard paste (save → write → ⌘V → settle → restore), with the copied-to-clipboard degradation when the target is lost.                                                                                                                                                                                                                                                                                                    |
+| Add `LSUIElement` or a menu-bar-**only** mode             | Blurt is a Dock app first. The `MenuBarExtra` status item is convenience layered on the Dock icon; the notch can hide a status item, so nothing may depend on it. A menu-bar-only variant was reverted twice.                                                                                                                                                                                                                                        |
+| Add a `KeyboardShortcuts` package or a key+modifier chord | The triggers are **two lone modifiers** (raw + cleaned), home-grown (`CGEventTap` + `DictationKeyGate` via `DualTriggerRouter`), and swallow nothing. Two lone-modifier keys are supported; chords and the `KeyboardShortcuts` package are still out.                                                                                                                                                                                                |
+| Add a self-replacing install or background auto-updater   | Updates are download-only; `mxcl/AppUpdater` and its in-place updater were removed. The once-a-day launch _check_ (`AutomaticUpdateCheck`) is fine; installing for the user, or polling, is not. Extend `UpdateCheckModel`.                                                                                                                                                                                                                          |
+| Hand-edit `Blurt.xcodeproj/project.pbxproj`               | Generated from `project.yml`; `check.sh`'s drift check fails on any manual edit (a Claude PreToolUse hook also blocks it).                                                                                                                                                                                                                                                                                                                           |
+| Redirect the post-build install away from `/Applications` | TCC won't register apps in DerivedData/`/tmp`, so permission toggles never appear.                                                                                                                                                                                                                                                                                                                                                                   |
+| Touch the real Keychain in tests                          | `APIKeyStore` is the production item — a test that writes it triggers Keychain prompts and corrupts the real item's ACL. Use an isolated service (see `KeychainStoreTests`) or `InMemoryAPIKeyStore`.                                                                                                                                                                                                                                                |
+| Add backwards-compat shims for removed types              | Deleted types stay deleted — no deprecated re-exports.                                                                                                                                                                                                                                                                                                                                                                                               |
 
 Release-side invariants (hardened runtime and a secure timestamp on every nested mach-o and embedded
 framework, or notarization rejects the build; roll-forward-only for a bad release) live in
@@ -242,22 +245,24 @@ the seam they inject.
 
 Implements `TranscriberProtocol` against AssemblyAI's **dictation** API: a single
 `POST https://dictation.assemblyai.com/transcribe` with the captured audio as a raw S16LE PCM blob
-in the `audio` multipart part plus a JSON `config` part (`sample_rate`, `channels`, `prompt`, and an
-empty `llm` block). No model header — the service pins the STT model server-side. The `prompt`
-(built per utterance by `TranscriptionPrompt`) steers _transcription_; the `llm` block asks the
-service to run its default LLM cleanup rewrite (remove disfluencies, fix punctuation) over the
-verbatim transcript, all inside the same request. The block rides along while **enhanced
-transcripts** are enabled (`EnhancedTranscriptsStore`, on by default, read per request via the
-transcriber's injected `enhancedTranscripts` closure); with the setting off the config omits `llm`
-entirely, the service skips the rewrite, and the verbatim transcript is pasted as spoken. The
-response carries both `text` (verbatim) and
+in the `audio` multipart part plus a JSON `config` part (`sample_rate`, `channels`, `prompt`, and —
+for a cleaned dictation — an `llm` block). No model header — the service pins the STT model
+server-side. The `prompt` (built per utterance by `TranscriptionPrompt`) steers _transcription_; the
+`llm` block asks the service to run its LLM cleanup rewrite (remove disfluencies, fix punctuation)
+over the verbatim transcript, all inside the same request. Whether the block rides along is decided
+**per press** by `transcribe`'s `cleanup` flag (from the `DictationMode` the trigger key selected):
+the _cleaned_ key includes it, the _raw_ key omits it entirely, so the service skips the rewrite and
+the verbatim transcript is pasted as spoken. When included, the block carries the user's editable
+cleanup instruction (`CleanupPromptStore`, read per request via the transcriber's injected
+`cleanupInstruction` closure) as `llm.instruction`; a blank instruction encodes an empty block
+(`{}`) and selects the service's own default rewrite. The response carries both `text` (verbatim) and
 `llm_response` (the rewrite); the transcriber returns the rewrite and falls back to `text` when
 `llm_response` is null — the rewrite is best-effort (5 s server-side budget), so a rewrite failure
 (`llm_error`) is a logged degradation, never a user-facing error.
 
 The finished text arrives in the response body — no `/v2/upload`, no job submission, no polling.
-Truly synchronous: `transcribe(pcm:sampleRate:context:)` is a single `async throws -> String`
-returning the whole polished text at once (no streaming, no deltas). The underlying sync STT model
+Truly synchronous: `transcribe(pcm:sampleRate:context:cleanup:)` is a single `async throws -> String`
+returning the whole text at once (no streaming, no deltas). The underlying sync STT model
 handles audio from ~80 ms up to 120 s (server-side ~30 s inference deadline); those limits live in
 `SyncSTTLimits` and back `DictationSession`'s auto-release timeout, so a held hotkey stops before
 the cap.
@@ -321,7 +326,8 @@ process" (a browser hosts many unrelated tabs under one PID).
 ### `AppCoordinator` — `App/Blurt/Blurt/AppCoordinator.swift`
 
 The only place the engine is composed for the real app. It builds the concrete instances and owns a
-`DictationKeyTap` whose `onStart` → `session.submit(.press)`, `onStop` → `submit(.release)`,
+`DictationKeyTap` whose `onStart` → `session.submit(.press(mode))` (the mode the triggering key
+selected), `onStop` → `submit(.release)`,
 `onCancel` → `submit(.cancel)`, and `onRecordingDiscarded` → `submit(.cancelRecording)`, then
 observes `session.phaseStream()` to drive the overlay.
 
@@ -336,15 +342,22 @@ user picks a different trigger key.
 
 ## Hotkey
 
-The dictation trigger is a **single lone modifier key** (tap-to-toggle or hold-to-talk), implemented
-in-house. Four pieces, three of them pure engine logic:
+The dictation trigger is **two lone modifier keys** (each tap-to-toggle or hold-to-talk) — a
+_cleaned_ key (LLM rewrite) and a _raw_ key (verbatim) sharing one gate, so only one dictation runs
+at a time and the key that started it picks the `DictationMode`. Implemented in-house:
 
+- **`DictationMode`** (`Hotkey/DictationMode.swift`) — `raw` / `cleaned`; `cleansUp` is what the
+  transcriber reads to decide the `llm` block's presence. It rides from the triggering key through
+  `DictationSession` into the request, so the two keys can't disagree with what they ask for.
 - **`TriggerKey`** (`Hotkey/TriggerKey.swift`) — enum of the curated lone momentary modifiers usable
-  as the trigger (right ⌘, right ⌥, `fn`), `rawValue` = the macOS virtual keycode, plus `label`
+  as a trigger (right ⌘, right ⌥, `fn`), `rawValue` = the macOS virtual keycode, plus `label`
   ("right ⌘") and the device-modifier masks the event source needs. Right-side modifiers are chosen
   because a solo press rarely collides with app shortcuts.
-- **`TriggerKeyStore`** — persists the chosen keycode in `UserDefaults` (`BlurtTriggerKeyCode`),
-  defaulting to **right ⌘**.
+- **`TriggerKeyStore`** / **`RawTriggerKeyStore`** — persist the two chosen keycodes in `UserDefaults`
+  (`BlurtTriggerKeyCode` for the cleaned key, defaulting to **right ⌘**; `BlurtRawTriggerKeyCode` for
+  the raw key, defaulting to **right ⌥**), so the two start out distinct.
+- **`DictationTriggerPair`** — a pure value type holding both keys; `assigning(_:to:)` swaps on a
+  collision so the two keys stay distinct, the one rule the Settings pickers apply.
 - **`DictationKeyGate`** — pure, clock-free state machine (`idle`/`armed`/`latched`) turning
   modifier-down/up and other-key-down into `start`/`stop`/`cancel`/`none`. Recording starts the
   instant the modifier goes down; on key-up a release ≥ `holdThreshold` (default 1 s) is a **hold**
@@ -352,25 +365,28 @@ in-house. Four pieces, three of them pure engine logic:
   (modifier + another key, e.g. ⌘C) from idle cancels the fresh capture; over a latched recording it
   passes through as a normal shortcut. Callers pass monotonic timestamps, so every decision is
   deterministic and unit-tested.
-- **`DictationKeyRouter`** — the event-routing layer over the gate: only the bound keycode's flag
-  changes drive the modifier, and only genuine down/up **edges** reach the gate (`flagsChanged`
-  deliveries re-report the bit whether or not it changed, so a repeat must not double-fire).
-  `reset()`/`rebind(triggerKeyCode:)` report whether they discarded a live recording the host must
-  cancel upstream.
+- **`DualTriggerRouter`** — the event-routing layer over one gate for both keys: only a bound
+  keycode's flag changes drive the modifier, only genuine down/up **edges** reach the gate
+  (`flagsChanged` deliveries re-report the bit whether or not it changed, so a repeat must not
+  double-fire), and the first key to open the idle gate _owns_ it — the other key's flag changes are
+  ignored until the gate goes idle, so no chord across the two. Its `Outcome` reports the gate action
+  plus, on `.start`, which mode owns the session. `reset()`/`rebind(rawKeyCode:cleanedKeyCode:)`
+  report whether they discarded a live recording the host must cancel upstream.
 
 The app side, **`DictationKeyTap`** (`App/Blurt/Blurt/Hotkey/DictationKeyTap.swift`), reduces each
-`CGEventTap` delivery (watching `flagsChanged` for the bound modifier and `keyDown` for any other
-key) to a `DictationKeyRouter.Event` and owns the tap lifecycle. `AppCoordinator` calls its
-`syncAfterTerminalPhase()` on every terminal phase: a dictation can end with no key event to close
-the gate (the auto-release cap, or a refused/failed press), which would leave the gate `.latched`
-and silently swallow the user's next press — a latched `modifierDown` returns `.none`, and the
-`modifierUp` after it returns `.stop`, which no-ops on an already-terminal session. The tap
-**swallows nothing**: a lone modifier types nothing, and combos pass through so normal shortcuts keep
-working.
+`CGEventTap` delivery (watching `flagsChanged` for either bound modifier and `keyDown` for any other
+key) to a `DualTriggerRouter.Event` and owns the tap lifecycle, calling `onStart(mode)` with the
+owning mode. `AppCoordinator` calls its `syncAfterTerminalPhase()` on every terminal phase: a
+dictation can end with no key event to close the gate (the auto-release cap, or a refused/failed
+press), which would leave the gate `.latched` and silently swallow the user's next press — a latched
+`modifierDown` returns `.none`, and the `modifierUp` after it returns `.stop`, which no-ops on an
+already-terminal session. The tap **swallows nothing**: a lone modifier types nothing, and combos
+pass through so normal shortcuts keep working.
 
-The trigger is editable in the Shortcut section of the setup/settings UI (`HotkeyStepView`) — a
-`Picker` over `TriggerKey.allCases` that writes `TriggerKeyStore`, after which
-`AppCoordinator.dictationBindingChanged()` re-reads it into the tap. For display strings, use
+Both triggers are editable in the Shortcut section of the setup/settings UI (`HotkeyStepView`) — two
+`Picker`s over `TriggerKey.allCases` that write `TriggerKeyStore` (cleaned) and `RawTriggerKeyStore`
+(raw) through `DictationTriggerPair.assigning` (keeping the two distinct), after which
+`AppCoordinator.dictationBindingChanged()` re-reads both into the tap. For display strings, use
 `TriggerKeyStore().triggerKey.label` for one-shot reads; in views that must re-render live on a
 Settings change, use **`@BoundTriggerKey`** — a `DynamicProperty` in `Wizard/BoundTriggerKey.swift` wrapping
 the `@AppStorage(TriggerKeyStore.defaultsKey)` + `TriggerKey.fromPersisted` pair — rather than
@@ -406,11 +422,14 @@ regression-tested — no language directive and no filler-word clause; see
 
 Engine-side stores, all `UserDefaults`-backed value types with the same shape:
 
-- **`TriggerKeyStore`** (`BlurtTriggerKeyCode`), **`SoundPackStore`** (`BlurtSoundPack`),
+- **`TriggerKeyStore`** (`BlurtTriggerKeyCode`, the cleaned key, default right ⌘),
+  **`RawTriggerKeyStore`** (`BlurtRawTriggerKeyCode`, the raw key, default right ⌥),
+  **`SoundPackStore`** (`BlurtSoundPack`),
   **`KeyTermsStore`** (the user's domain vocabulary, re-read at every press via the session's
   `keyTermsProvider`), **`DeveloperModeStore`** (`BlurtDeveloperMode`, off by default),
-  **`EnhancedTranscriptsStore`** (`BlurtEnhancedTranscripts`, **on** by default — unset reads as
-  enabled; gates the dictation request's `llm` cleanup-rewrite block, re-read at every request),
+  **`CleanupPromptStore`** (`BlurtCleanupPrompt`, the user's editable cleanup instruction sent as
+  `llm.instruction` on a cleaned dictation; blank/unset selects the service default, re-read at every
+  request),
   **`OverlayOriginStore`** (the pill's dragged origin, x/y), **`LastUpdateCheckStore`**
   (`BlurtLastUpdateCheck`, the stamp throttling the automatic launch update check).
 - **`PersistedSettings.allDefaultsKeys`** is the roster of every key those stores write, and

@@ -52,9 +52,10 @@ extension DictationSession {
       capturedContext = nil
     }
 
-    // The dictation API runs the cleanup rewrite server-side, so the text it
-    // returns is already the final, polished text — there is no client-side
-    // styling pass.
+    // When the active trigger asked for cleanup, the dictation API runs the
+    // rewrite server-side, so the text it returns is already the final, polished
+    // text; a raw trigger gets the verbatim transcript. Either way there is no
+    // client-side styling pass — the choice is one flag on the same request.
     guard let text = await transcribe(pcm: pcm) else { return }
 
     // A cancel() that landed while transcribe was in flight already set
@@ -102,7 +103,8 @@ extension DictationSession {
   private func transcribe(pcm: Data) async -> String? {
     do {
       return try await transcriber.transcribe(
-        pcm: pcm, sampleRate: SyncSTTLimits.sampleRate, context: capturedContext)
+        pcm: pcm, sampleRate: SyncSTTLimits.sampleRate, context: capturedContext,
+        cleanup: activeMode.cleansUp)
     } catch {
       // A cancel() that landed mid-request already tore this task down and set
       // .cancelled; the transport then surfaces a cancellation-shaped error

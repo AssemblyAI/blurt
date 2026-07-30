@@ -1,8 +1,9 @@
 extension DictationSession {
   /// One host-initiated pipeline command, for `submit(_:)`. Mirrors the four
-  /// async methods one-to-one; see each method's doc for semantics.
+  /// async methods one-to-one; see each method's doc for semantics. `press`
+  /// carries the `DictationMode` its trigger key selected (raw vs cleaned).
   public enum Command: Sendable {
-    case press
+    case press(DictationMode)
     case release
     case cancel
     case cancelRecording
@@ -25,7 +26,7 @@ extension DictationSession {
   /// mirrors, so `submit` and direct calls share every guard and race rule.
   func run(_ command: Command) async {
     switch command {
-    case .press: await press()
+    case .press(let mode): await press(mode: mode)
     case .release: await release()
     case .cancel: await cancel()
     case .cancelRecording: await cancelRecording()

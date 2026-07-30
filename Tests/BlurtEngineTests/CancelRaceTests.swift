@@ -262,7 +262,7 @@ private actor GatedTranscriber: TranscriberProtocol {
     self.throwsWhenCancelled = throwsWhenCancelled
   }
 
-  func transcribe(pcm: Data, sampleRate: Int, context: TranscriptionContext?)
+  func transcribe(pcm: Data, sampleRate: Int, context: TranscriptionContext?, cleanup: Bool)
     async throws -> String
   {
     await gate.enter()
