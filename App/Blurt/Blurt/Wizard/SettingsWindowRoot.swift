@@ -91,17 +91,33 @@ private struct AdvancedSettingsTab: View {
 /// change applies to the next dictation. Settings-only — not a wizard step,
 /// since it never gates setup.
 private struct TranscriptionSection: View {
-  // Bound to the raw defaults slot (default ""), so an unset prompt reads as
-  // empty and the transcriber's blank → default-rewrite rule applies. `axis:
-  // .vertical` grows the field to a few lines as the instruction lengthens.
-  @AppStorage(CleanupPromptStore.defaultsKey) private var cleanupPrompt = ""
+  // Observe-only: `@AppStorage` re-renders the view when the slot changes (default
+  // "" so an unset prompt reads as empty). The field writes *through*
+  // `CleanupPromptStore`, not this slot directly — the store owns the cap and the
+  // blank → remove-key rule, and is the setter's only production caller (so a
+  // change to how the prompt is persisted can't leave the setter untested), the
+  // same pattern `HotkeyStepView` uses for the trigger keys.
+  @AppStorage(CleanupPromptStore.defaultsKey) private var storedPrompt = ""
+
+  private var prompt: Binding<String> {
+    Binding(
+      get: { storedPrompt },
+      set: { CleanupPromptStore().instruction = $0 })
+  }
 
   var body: some View {
     Section {
+      // A vertical-axis TextField grows with content up to `lineLimit`; a
+      // `@ViewBuilder` label + `labelsHidden()` renders it full-width (like the
+      // Key Terms field) rather than squeezed into a leading label column.
       TextField(
-        "Rewrite instruction", text: $cleanupPrompt,
-        prompt: Text("Leave blank to use the default cleanup"), axis: .vertical
-      )
+        text: prompt,
+        prompt: Text("Leave blank to use the default cleanup"),
+        axis: .vertical
+      ) {
+        Text("Rewrite instruction")
+      }
+      .labelsHidden()
       .lineLimit(2...6)
       .accessibilityIdentifier(UITestIdentifiers.cleanupPromptField)
     } header: {

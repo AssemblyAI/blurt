@@ -168,8 +168,13 @@ public actor DictationSession {
   }
 
   private func performPress(mode: DictationMode) async {
-    activeMode = mode
     guard phase.isTerminal else { return }
+    // Claim the mode only once the guard confirms this press is starting a
+    // session. A press rejected here — e.g. the *other* key tapped while the
+    // prior dictation is still `.transcribing` — must not clobber the in-flight
+    // session's mode, which `runTranscribeInject` reads (via `activeMode`) only
+    // after the up-to-500 ms context-wait suspension.
+    activeMode = mode
     // Refuse the press before any capture begins when the host reports a
     // blocker (e.g. no API key saved): recording an utterance that can only
     // fail at transcribe time would discard the user's words after the fact.

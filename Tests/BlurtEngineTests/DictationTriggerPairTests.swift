@@ -14,6 +14,13 @@ struct DictationTriggerPairTests {
     #expect(updated == DictationTriggerPair(raw: .function, cleaned: .rightCommand))
   }
 
+  @Test("assigning a free key to the cleaned mode leaves the other mode untouched")
+  func assignCleanedWithoutCollision() {
+    let pair = DictationTriggerPair(raw: .rightOption, cleaned: .rightCommand)
+    let updated = pair.assigning(.cleaned, to: .function)
+    #expect(updated == DictationTriggerPair(raw: .rightOption, cleaned: .function))
+  }
+
   @Test("assigning a mode the other mode's key swaps them, preserving distinctness")
   func assignWithCollisionSwaps() {
     let pair = DictationTriggerPair(raw: .rightOption, cleaned: .rightCommand)

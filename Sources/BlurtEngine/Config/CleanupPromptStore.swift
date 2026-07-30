@@ -22,14 +22,18 @@ public struct CleanupPromptStore {
     self.defaults = defaults
   }
 
-  /// The stored instruction, trimmed to non-empty — nil when unset or blank, so
-  /// the transcriber can treat "no custom prompt" as a single case. The setter
-  /// removes the key entirely when the value is blank and truncates to
-  /// `characterCap`.
+  /// The stored instruction. The **getter** trims to non-empty — nil when unset
+  /// or blank — so the transcriber can treat "no custom prompt" as one case. The
+  /// **setter** removes the key when the value is blank (after trimming) and
+  /// otherwise stores the value *raw* (untrimmed), capped at `characterCap`.
+  /// Storing raw rather than trimmed matters for the Settings editor's binding:
+  /// a normalizing write would bounce a trimmed string back through
+  /// `@AppStorage` and eat a trailing space the moment the user typed it — the
+  /// same reason `KeyTermsStore` normalizes on read, not write.
   var instruction: String? {
     get { defaults.string(forKey: Self.defaultsKey).trimmedNonEmpty() }
     nonmutating set {
-      guard let value = newValue.trimmedNonEmpty() else {
+      guard newValue.trimmedNonEmpty() != nil, let value = newValue else {
         defaults.removeObject(forKey: Self.defaultsKey)
         return
       }

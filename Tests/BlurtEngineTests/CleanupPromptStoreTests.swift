@@ -29,6 +29,18 @@ struct CleanupPromptStoreTests {
     #expect(defaults.object(forKey: CleanupPromptStore.defaultsKey) == nil)
   }
 
+  @Test("the setter stores the raw value so trailing whitespace survives")
+  func setterPreservesRawWhitespace() {
+    let defaults = freshDefaults()
+    let store = CleanupPromptStore(defaults: defaults)
+    store.instruction = "Be terse. "
+    // Stored raw (untrimmed), so a trailing space the user is mid-typing isn't
+    // eaten by a normalizing write bouncing back through `@AppStorage`.
+    #expect(defaults.string(forKey: CleanupPromptStore.defaultsKey) == "Be terse. ")
+    // The getter still trims for the transcriber.
+    #expect(store.instruction == "Be terse.")
+  }
+
   @Test("the getter trims surrounding whitespace")
   func getterTrims() {
     let defaults = freshDefaults()

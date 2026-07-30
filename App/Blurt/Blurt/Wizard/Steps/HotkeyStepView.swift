@@ -65,7 +65,7 @@ struct HotkeyStepView: View {
         }
       }
     } header: {
-      Text("Shortcut")
+      Text("Shortcuts")
     } footer: {
       Text(
         "Two keys, each tap-to-toggle or hold-to-talk. The cleaned-up key pastes a polished "
