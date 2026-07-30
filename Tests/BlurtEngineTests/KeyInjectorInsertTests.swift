@@ -164,7 +164,7 @@ struct KeyInjectorInsertTests {
         return true
       },
       hasEditableTarget: { false },  // Electron/Chromium exposes no editable AX signal
-      isAXOpaqueEditor: { _ in true },  // …but it *is* an Electron editor
+      isAXOpaqueApp: { _ in true },  // …but it *is* an AX-opaque app (Electron editor)
       clipboard: clip)
 
     // Must not throw noEditableTarget: the Electron exception keeps the paste.

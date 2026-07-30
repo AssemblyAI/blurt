@@ -28,11 +28,11 @@ extension FocusCapture {
   /// no readable role — is treated as not editable, so we copy rather than beep a
   /// ⌘V into a target that can't take it.
   ///
-  /// AX-opaque Electron editors (VS Code, Slack) expose *none* of these signals
-  /// even for a genuine text field, so this returns false for them too — but the
-  /// injector still pastes into those via a separate Electron-app check (see
-  /// `isElectronApp` / `KeyInjector.insert`), so the user's words aren't dropped
-  /// to copy-only there.
+  /// AX-opaque apps — Electron editors (VS Code, Slack) and web browsers — can
+  /// expose *none* of these signals even for a genuine text field, so this
+  /// returns false for them too. The injector still pastes into those via a
+  /// separate app-identity check (see `isAXOpaqueApp` / `KeyInjector.insert`),
+  /// so the user's words aren't dropped to copy-only there.
   static func isEditableTarget(role: String?, valueSettable: Bool, hasInsertionPoint: Bool) -> Bool {
     if let role, editableRoles.contains(role) { return true }
     return valueSettable || hasInsertionPoint
@@ -41,15 +41,61 @@ extension FocusCapture {
   /// Whether `app` is an Electron/Chromium-based app, detected by the bundled
   /// Electron framework. Such apps ship with their accessibility tree off, so even
   /// a focused text field exposes no editable AX signal and
-  /// `hasEditableFocusedElement` reads them as non-editable. They're the one case
-  /// the injector still pastes into on no signal (dropping the user's words into a
-  /// copy-only fallback would be the worse mistake). A native app with genuinely no
-  /// editable focus bundles no such framework and correctly falls back to copy.
+  /// `hasEditableFocusedElement` reads them as non-editable. A native app with
+  /// genuinely no editable focus bundles no such framework and correctly falls
+  /// back to copy.
   static func isElectronApp(_ app: NSRunningApplication?) -> Bool {
     guard let bundleURL = app?.bundleURL else { return false }
     let electronFramework = bundleURL.appendingPathComponent(
       "Contents/Frameworks/Electron Framework.framework")
     return FileManager.default.fileExists(atPath: electronFramework.path)
+  }
+
+  /// Bundle-identifier prefixes of known web browsers. Prefix-matched so channel
+  /// variants classify with their stable siblings (`com.google.Chrome.beta`,
+  /// `com.apple.SafariTechnologyPreview`).
+  private static let browserBundleIDPrefixes: [String] = [
+    "com.apple.Safari",  // Safari + Safari Technology Preview
+    "com.google.Chrome",  // Chrome + Beta/Dev/Canary
+    "org.chromium.Chromium",
+    "com.microsoft.edgemac",  // Edge + Beta/Dev/Canary
+    "com.brave.Browser",  // Brave + Beta/Nightly
+    "com.operasoftware.Opera",
+    "com.vivaldi.Vivaldi",
+    "company.thebrowser.Browser",  // Arc
+    "org.mozilla.firefox",
+    "com.duckduckgo.macos.browser",
+    "com.kagi.kagimacOS",  // Orion
+  ]
+
+  /// Pure decision behind `isBrowserApp`: does this bundle identifier belong to a
+  /// known browser? Split from the `NSRunningApplication` wrapper so the
+  /// classification is unit-testable without live running apps.
+  static func isBrowserBundleID(_ bundleID: String?) -> Bool {
+    guard let bundleID else { return false }
+    return browserBundleIDPrefixes.contains { bundleID.hasPrefix($0) }
+  }
+
+  /// Whether `app` is a known web browser. Web content is AX-opaque in practice:
+  /// Chromium builds its accessibility tree lazily (the first query after launch
+  /// resolves only a bare `AXWebArea` with no editable signal), and even with the
+  /// tree live, a `contenteditable` composer (ChatGPT's ProseMirror field) can
+  /// surface as a generic group with no settable value. So "no editable signal"
+  /// in a browser usually means "AX can't see the field," not "no field."
+  static func isBrowserApp(_ app: NSRunningApplication?) -> Bool {
+    isBrowserBundleID(app?.bundleIdentifier)
+  }
+
+  /// Whether `app` is AX-opaque — an Electron editor or a web browser — where a
+  /// focused text field can expose no editable AX signal at all. These are the
+  /// one case the injector still pastes into on no signal: dropping the user's
+  /// words into a copy-only fallback there would be the worse mistake. The
+  /// accepted trade-off is a rare ⌘V beep when such an app truly has nothing
+  /// editable focused.
+  static func isAXOpaqueApp(_ app: NSRunningApplication?) -> Bool {
+    // Browser first: it's a string prefix check, whereas isElectronApp probes
+    // the disk (FileManager.fileExists) — skip that I/O for the common case.
+    isBrowserApp(app) || isElectronApp(app)
   }
 
   /// Whether the system-wide focused element can accept pasted text right now.
@@ -66,9 +112,10 @@ extension FocusCapture {
       // AX is trusted but reports no focused element — e.g. a native app frontmost
       // with nothing editable focused (Finder, the desktop, a button-only window).
       // Posting ⌘V there only beeps, so treat it as non-editable and copy instead.
-      // AX-opaque Electron apps (VS Code, Slack) also expose no focused element
-      // here, but the injector's Electron-app check still pastes into those (see
-      // `KeyInjector.insert` / `isElectronApp`).
+      // AX-opaque apps (Electron editors like VS Code/Slack, and browsers before
+      // Chromium's lazy accessibility tree is built) also expose no focused
+      // element here, but the injector's app-identity check still pastes into
+      // those (see `KeyInjector.insert` / `isAXOpaqueApp`).
       return false
     }
 

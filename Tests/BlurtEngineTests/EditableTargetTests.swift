@@ -46,8 +46,9 @@ struct EditableTargetTests {
   func unknownRoleWithoutSignalCopies() {
     // A focused element that reports an unrecognized role and exposes no settable
     // value or insertion point isn't a text target — copy rather than beep a ⌘V
-    // into it. (AX-opaque Electron editors, which also land here, are pasted into
-    // via the injector's separate Electron-app check, not this signal test.)
+    // into it. (AX-opaque apps — Electron editors and browsers — also land here,
+    // but are pasted into via the injector's separate app-identity check, not
+    // this signal test.)
     #expect(
       !FocusCapture.isEditableTarget(
         role: "AXWebArea", valueSettable: false, hasInsertionPoint: false))
