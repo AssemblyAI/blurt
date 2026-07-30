@@ -96,7 +96,7 @@ public actor KeyInjector: InjectorProtocol {
   /// rather than copy — dropping the user's words into a field they're clearly
   /// typing in would be the worse mistake. Injectable so tests don't depend on
   /// which apps are installed (defaults to "not opaque").
-  private let isAXOpaqueEditor: @Sendable (NSRunningApplication?) -> Bool
+  private let isAXOpaqueApp: @Sendable (NSRunningApplication?) -> Bool
 
   /// The pasteboard the paste reads, writes, and restores. Behind a seam so
   /// tests exercise the save/restore + changeCount logic against an in-memory
@@ -113,7 +113,7 @@ public actor KeyInjector: InjectorProtocol {
       waitForTargetActivation: KeyInjector.waitUntilFrontmost,
       isAccessibilityTrusted: KeyInjector.accessibilityTrusted,
       hasEditableTarget: FocusCapture.hasEditableFocusedElement,
-      isAXOpaqueEditor: FocusCapture.isAXOpaqueApp)
+      isAXOpaqueApp: FocusCapture.isAXOpaqueApp)
   }
 
   init(
@@ -123,7 +123,7 @@ public actor KeyInjector: InjectorProtocol {
     waitForTargetActivation: @escaping @Sendable (NSRunningApplication) async -> Bool = { _ in true },
     isAccessibilityTrusted: @escaping @Sendable () -> Bool = { true },
     hasEditableTarget: @escaping @Sendable () -> Bool = { true },
-    isAXOpaqueEditor: @escaping @Sendable (NSRunningApplication?) -> Bool = { _ in false },
+    isAXOpaqueApp: @escaping @Sendable (NSRunningApplication?) -> Bool = { _ in false },
     clipboard: any ClipboardAccess = SystemClipboard()
   ) {
     self.pasteSettleDuration = pasteSettleDuration
@@ -132,7 +132,7 @@ public actor KeyInjector: InjectorProtocol {
     self.waitForTargetActivation = waitForTargetActivation
     self.isAccessibilityTrusted = isAccessibilityTrusted
     self.hasEditableTarget = hasEditableTarget
-    self.isAXOpaqueEditor = isAXOpaqueEditor
+    self.isAXOpaqueApp = isAXOpaqueApp
     self.clipboard = clipboard
   }
 
@@ -237,7 +237,7 @@ public actor KeyInjector: InjectorProtocol {
     // app — an Electron editor (VS Code, Slack) or a web browser — which can
     // report no editable signal even for a real text field; there we still paste
     // rather than drop the user's words.
-    guard hasEditableTarget() || isAXOpaqueEditor(target) else {
+    guard hasEditableTarget() || isAXOpaqueApp(target) else {
       clipboard.write(finalText)
       throw BlurtError.noEditableTarget
     }
