@@ -18,7 +18,7 @@ public struct CleanupPromptStore {
   static let characterCap = 4096
   private let defaults: UserDefaults
 
-  init(defaults: UserDefaults = .standard) {
+  public init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
   }
 
@@ -30,7 +30,7 @@ public struct CleanupPromptStore {
   /// a normalizing write would bounce a trimmed string back through
   /// `@AppStorage` and eat a trailing space the moment the user typed it — the
   /// same reason `KeyTermsStore` normalizes on read, not write.
-  var instruction: String? {
+  public var instruction: String? {
     get { defaults.string(forKey: Self.defaultsKey).trimmedNonEmpty() }
     nonmutating set {
       guard newValue.trimmedNonEmpty() != nil, let value = newValue else {
