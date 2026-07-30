@@ -11,13 +11,15 @@ struct PersistedSettingsTests {
   @Test("the reset roster names every engine store's defaults key")
   func rosterCoversEveryStore() {
     #expect(PersistedSettings.allDefaultsKeys.contains(TriggerKeyStore.defaultsKey))
+    // The raw trigger's keycode — the companion to the cleaned trigger, so a
+    // reset returns both dictation keys to their (distinct) defaults.
+    #expect(PersistedSettings.allDefaultsKeys.contains(RawTriggerKeyStore.defaultsKey))
     #expect(PersistedSettings.allDefaultsKeys.contains(SoundPackStore.defaultsKey))
     #expect(PersistedSettings.allDefaultsKeys.contains(KeyTermsStore.defaultsKey))
     #expect(PersistedSettings.allDefaultsKeys.contains(DeveloperModeStore.defaultsKey))
-    // Enhanced transcripts default to ON, so its key matters to the sweep in
-    // the other direction too: a stray `false` surviving a reset would leave a
-    // "clean" install pasting verbatim transcripts.
-    #expect(PersistedSettings.allDefaultsKeys.contains(EnhancedTranscriptsStore.defaultsKey))
+    // The editable cleanup instruction: a stray custom prompt surviving a reset
+    // would steer a "clean" install's rewrites in ways the user never set.
+    #expect(PersistedSettings.allDefaultsKeys.contains(CleanupPromptStore.defaultsKey))
     // OverlayOriginStore persists a point, so it contributes two keys rather
     // than one. Both belong to the sweep: while they were private to
     // `OverlayWindowController`, no reset knew about them and a pill dragged
@@ -31,10 +33,10 @@ struct PersistedSettingsTests {
 
   @Test("the roster carries no stale or duplicate keys")
   func rosterHasNoStrays() {
-    // Exactly the seven known stores' keys (OverlayOriginStore contributes two):
+    // Exactly the eight known stores' keys (OverlayOriginStore contributes two):
     // a removed store must leave the roster in the same change, and a key listed
     // twice would hint at a copy-paste slip.
-    #expect(PersistedSettings.allDefaultsKeys.count == 8)
+    #expect(PersistedSettings.allDefaultsKeys.count == 9)
     #expect(Set(PersistedSettings.allDefaultsKeys).count == PersistedSettings.allDefaultsKeys.count)
   }
 

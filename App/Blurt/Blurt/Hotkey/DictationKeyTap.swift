@@ -2,18 +2,22 @@ import BlurtEngine
 import CoreGraphics
 import os
 
-/// Drives the single lone-modifier dictation trigger from a `CGEventTap`.
+/// Drives the **two** lone-modifier dictation triggers from a `CGEventTap`.
 ///
-/// Watches `flagsChanged` for the bound modifier (e.g. right ⌘, keycode 54) to
-/// detect down/up, and `keyDown` for any *other* key to spot a modifier combo
-/// (⌘C, ⌘V…). The per-event decision lives in the engine — `DictationKeyRouter`
-/// (keycode relevance + down/up edge dedup) over `DictationKeyGate` (tap/hold
-/// semantics) — so this type only reduces each `CGEvent` to a router event and
-/// owns the tap lifecycle.
+/// One key produces the raw verbatim transcript, the other the server-side
+/// cleanup rewrite; they share one gate, so only one dictation runs at a time
+/// and the key that started it decides the `DictationMode` handed to `onStart`.
+/// Watches `flagsChanged` for either bound modifier (e.g. right ⌥ raw, right ⌘
+/// cleaned) to detect down/up, and `keyDown` for any *other* key to spot a
+/// modifier combo (⌘C, ⌘V…). The per-event decision lives in the engine —
+/// `DualTriggerRouter` (keycode relevance, per-key edge dedup, and single-gate
+/// ownership) over `DictationKeyGate` (tap/hold semantics) — so this type only
+/// reduces each `CGEvent` to a router event and owns the tap lifecycle.
 ///
-/// Unlike the old chord trigger, this **swallows nothing**: a lone modifier
-/// types nothing into the focused app, and combos must pass through so normal
-/// shortcuts keep working. The tap is therefore created `.listenOnly` — an
+/// Like the old single trigger and unlike a chord, this **swallows nothing**: a
+/// lone modifier types nothing into the focused app, and combos must pass
+/// through so normal shortcuts keep working. The tap is therefore created
+/// `.listenOnly` — an
 /// active (`.defaultTap`) tap would make macOS synchronously wait on this
 /// process before delivering every keystroke system-wide, so any main-thread
 /// stall in Blurt would add typing latency in *other* apps.
@@ -28,7 +32,7 @@ final class DictationKeyTap {
   private static let logger = Logger(
     subsystem: BlurtIdentity.subsystem, category: "DictationKeyTap")
 
-  private let onStart: @Sendable () -> Void
+  private let onStart: @Sendable (DictationMode) -> Void
   private let onStop: @Sendable () -> Void
   private let onCancel: @Sendable () -> Void
   /// Fired when a *state-recovery* reset (disabled-tap recovery, trigger
@@ -40,12 +44,17 @@ final class DictationKeyTap {
   /// a transcript already in flight — see `DictationSession.cancelRecording`.
   private let onRecordingDiscarded: @Sendable () -> Void
 
-  /// The engine-side event router (keycode relevance, down/up edge dedup, and
-  /// the gate's tap/hold state machine — all unit-tested in BlurtEngine).
-  private var router = DictationKeyRouter(triggerKeyCode: TriggerKey.rightCommand.keyCode)
-  /// The bound key's device-dependent `CGEventFlags` bit — the one CoreGraphics-
+  /// The engine-side event router (keycode relevance, per-key down/up edge
+  /// dedup, single-gate ownership, and the gate's tap/hold state machine — all
+  /// unit-tested in BlurtEngine). `refreshBinding()` syncs the keycodes to the
+  /// persisted raw/cleaned stores.
+  private var router = DualTriggerRouter(
+    rawKeyCode: TriggerKey.rightOption.keyCode,
+    cleanedKeyCode: TriggerKey.rightCommand.keyCode)
+  /// Each bound key's device-dependent `CGEventFlags` bit — the CoreGraphics-
   /// typed piece of the binding, so it stays here rather than in the router.
-  private var triggerFlag = DictationKeyTap.flag(for: .rightCommand)
+  private var rawFlag = DictationKeyTap.flag(for: .rightOption)
+  private var cleanedFlag = DictationKeyTap.flag(for: .rightCommand)
 
   /// Monotonic reference; per-event timestamps are `reference.duration(to: now)`.
   private let reference = ContinuousClock.now
@@ -57,7 +66,7 @@ final class DictationKeyTap {
   nonisolated(unsafe) private var tap: CFMachPort?
 
   init(
-    onStart: @escaping @Sendable () -> Void,
+    onStart: @escaping @Sendable (DictationMode) -> Void,
     onStop: @escaping @Sendable () -> Void,
     onCancel: @escaping @Sendable () -> Void,
     onRecordingDiscarded: @escaping @Sendable () -> Void
@@ -149,14 +158,18 @@ final class DictationKeyTap {
     if router.reset() { onRecordingDiscarded() }
   }
 
-  /// Re-read the bound trigger key into the router. Call after the user
-  /// rebinds. The router's reset reports a discarded live recording: rebinding
-  /// mid-dictation means the old key's up-event will never match, so the capture
-  /// must be cancelled, not left to run out the auto-release cap.
+  /// Re-read both bound trigger keys into the router. Call after the user
+  /// rebinds either. The router's reset reports a discarded live recording:
+  /// rebinding mid-dictation means the old key's up-event will never match, so
+  /// the capture must be cancelled, not left to run out the auto-release cap.
   func refreshBinding() {
-    let key = TriggerKeyStore().triggerKey
-    triggerFlag = Self.flag(for: key)
-    if router.rebind(triggerKeyCode: key.keyCode) { onRecordingDiscarded() }
+    let rawKey = RawTriggerKeyStore().triggerKey
+    let cleanedKey = TriggerKeyStore().triggerKey
+    rawFlag = Self.flag(for: rawKey)
+    cleanedFlag = Self.flag(for: cleanedKey)
+    if router.rebind(rawKeyCode: rawKey.keyCode, cleanedKeyCode: cleanedKey.keyCode) {
+      onRecordingDiscarded()
+    }
   }
 
   /// Callback entry point (always on the main thread — the tap's source lives on
@@ -171,8 +184,10 @@ final class DictationKeyTap {
       // here would discard speech the user is mid-sentence on. Otherwise the
       // trigger's key-up may have been missed; reset, and cancel a recording
       // the reset discards rather than leaving the session in .recording until
-      // the auto-release cap fires and pastes an unprompted transcript.
-      if CGEventSource.flagsState(.combinedSessionState).contains(triggerFlag) { return }
+      // the auto-release cap fires and pastes an unprompted transcript. Either
+      // trigger being held means a live capture whose key-up is still coming.
+      let held = CGEventSource.flagsState(.combinedSessionState)
+      if held.contains(rawFlag) || held.contains(cleanedFlag) { return }
       if router.reset() { onRecordingDiscarded() }
       return
     }
@@ -183,12 +198,17 @@ final class DictationKeyTap {
   }
 
   /// Reduces a `CGEvent` to the router's CoreGraphics-free event shape, or nil
-  /// for event types the trigger doesn't care about.
-  private func routerEvent(type: CGEventType, event: CGEvent) -> DictationKeyRouter.Event? {
+  /// for event types the trigger doesn't care about. A `flagsChanged` carries
+  /// both keys' device-bit states; the router picks the one matching the
+  /// event's keycode.
+  private func routerEvent(type: CGEventType, event: CGEvent) -> DualTriggerRouter.Event? {
     let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
     switch type {
     case .flagsChanged:
-      return .flagsChanged(keyCode: keyCode, triggerFlagIsOn: event.flags.contains(triggerFlag))
+      return .flagsChanged(
+        keyCode: keyCode,
+        rawFlagIsOn: event.flags.contains(rawFlag),
+        cleanedFlagIsOn: event.flags.contains(cleanedFlag))
     case .keyDown:
       return .keyDown(keyCode: keyCode)
     default:
@@ -196,9 +216,11 @@ final class DictationKeyTap {
     }
   }
 
-  private func dispatch(_ action: DictationKeyGate.Action) {
-    switch action {
-    case .start: onStart()
+  private func dispatch(_ outcome: DualTriggerRouter.Outcome) {
+    switch outcome.action {
+    // `.start` carries the owning mode (raw vs cleaned); default to `.cleaned`
+    // for the impossible nil so the call site stays total.
+    case .start: onStart(outcome.mode ?? .cleaned)
     case .stop: onStop()
     case .cancel: onCancel()
     case .none: break
@@ -226,7 +248,9 @@ final class DictationKeyTap {
       _ = router.reset()
       dispatch(
         router.handle(
-          .flagsChanged(keyCode: router.triggerKeyCode, triggerFlagIsOn: true), at: .seconds(0)))
+          .flagsChanged(
+            keyCode: router.cleanedKeyCode, rawFlagIsOn: false, cleanedFlagIsOn: true),
+          at: .seconds(0)))
     }
 
     /// Completes the synthetic cycle as a hold (past the threshold), so the gate
@@ -234,7 +258,9 @@ final class DictationKeyTap {
     func simulateReleaseForTesting() {
       dispatch(
         router.handle(
-          .flagsChanged(keyCode: router.triggerKeyCode, triggerFlagIsOn: false), at: .seconds(2)))
+          .flagsChanged(
+            keyCode: router.cleanedKeyCode, rawFlagIsOn: false, cleanedFlagIsOn: false),
+          at: .seconds(2)))
     }
   #endif
 }

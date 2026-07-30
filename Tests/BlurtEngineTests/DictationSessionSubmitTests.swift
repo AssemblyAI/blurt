@@ -15,7 +15,7 @@ struct DictationSessionSubmitTests {
     let fixture = makeSession()
 
     let stream = await fixture.session.phaseStream()
-    fixture.session.submit(.press)
+    fixture.session.submit(.press(.cleaned))
     fixture.session.submit(.release)
 
     var seen: [PipelinePhase] = []
@@ -39,7 +39,7 @@ struct DictationSessionSubmitTests {
     // The exact shape of the race `submit` exists to prevent: were each of
     // these a separately spawned Task, the cancel could overtake the press,
     // no-op on a still-idle session, and strand the recording.
-    fixture.session.submit(.press)
+    fixture.session.submit(.press(.cleaned))
     fixture.session.submit(.cancel)
 
     for await phase in stream where phase == .cancelled { break }
@@ -54,7 +54,7 @@ struct DictationSessionSubmitTests {
     let fixture = makeSession(mode: .transcript("never"))
 
     let stream = await fixture.session.phaseStream()
-    fixture.session.submit(.press)
+    fixture.session.submit(.press(.raw))
     fixture.session.submit(.cancelRecording)
 
     for await phase in stream where phase == .cancelled { break }

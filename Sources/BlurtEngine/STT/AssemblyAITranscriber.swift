@@ -12,19 +12,26 @@ private let transcriberLog = Logger(subsystem: BlurtIdentity.subsystem, category
 /// A single `POST dictation.assemblyai.com/transcribe` carries the captured
 /// audio (raw S16LE PCM, exactly the bytes the mic recorded — there is no
 /// re-encoding pass) plus a JSON `config` part, and the response body carries
-/// both the verbatim transcript and — when the config requests one via its
-/// `llm` block (the "enhanced transcripts" setting, on by default) — an
-/// LLM-rewritten version with disfluencies removed and punctuation fixed.
-/// No upload step, no job submission, no polling — one
-/// request per utterance covers transcription *and* cleanup. The service picks
-/// the STT model server-side and handles audio from ~80 ms up to 120 s; the
-/// rewrite is best-effort with a ~5 s server-side deadline, so a rewrite
-/// failure still returns the verbatim transcript (`llm_response` null).
+/// both the verbatim transcript and — when the caller's `cleanup` flag requests
+/// one via the config's `llm` block — an LLM-rewritten version with
+/// disfluencies removed and punctuation fixed. No upload step, no job
+/// submission, no polling — one request per utterance covers transcription
+/// *and* cleanup. The service picks the STT model server-side and handles audio
+/// from ~80 ms up to 120 s; the rewrite is best-effort with a ~5 s server-side
+/// deadline, so a rewrite failure still returns the verbatim transcript
+/// (`llm_response` null).
+///
+/// Whether to request the rewrite is decided **per call** by `transcribe`'s
+/// `cleanup` flag (from the `DictationMode` that fired): the *cleaned* trigger
+/// asks for it, the *raw* trigger omits the `llm` block entirely. When it is
+/// requested, the block carries the user's editable cleanup instruction
+/// (`CleanupPromptStore`) as `llm.instruction`; an empty instruction selects the
+/// service's own default cleanup rewrite (the block encodes as `{}`).
 public struct AssemblyAITranscriber: TranscriberProtocol {
   private let apiKeyProvider: @Sendable () -> String?
   private let baseURL: URL
   private let transport: any HTTPTransport
-  private let enhancedTranscriptsEnabled: @Sendable () -> Bool
+  private let cleanupInstruction: @Sendable () -> String?
 
   /// Idle timeout for the transcribe round trip — `URLRequest.timeoutInterval` is
   /// reset each time data moves, so this bounds *stalls*, not total elapsed time.
@@ -35,34 +42,34 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// stuck on "Transcribing…" indefinitely.
   private static let requestTimeoutSeconds: TimeInterval = 90
 
-  /// `enhancedTranscripts` decides, per request, whether the config carries
-  /// the `llm` cleanup-rewrite block. Read at every `transcribe` so a settings
-  /// change applies to the next dictation without rebuilding the transcriber.
-  /// `nil` (the default) reads `EnhancedTranscriptsStore` — spelled as an
-  /// optional rather than a default closure because a public default argument
-  /// can't reference the store's internal `isEnabled`.
+  /// `cleanupInstruction` supplies the user's custom cleanup directive, read at
+  /// every *cleaned* `transcribe` so a Settings edit applies to the next
+  /// dictation without rebuilding the transcriber; nil/blank asks the service
+  /// for its default rewrite. `nil` (the default) reads `CleanupPromptStore` —
+  /// spelled as an optional rather than a default closure because a public
+  /// default argument can't reference the store's internal `instruction`.
   public init(
     apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.current },
     baseURL: URL = URL(staticString: "https://dictation.assemblyai.com"),
     transport: any HTTPTransport = URLSession.shared,
-    enhancedTranscripts: (@Sendable () -> Bool)? = nil
+    cleanupInstruction: (@Sendable () -> String?)? = nil
   ) {
     self.apiKeyProvider = apiKeyProvider
     self.baseURL = baseURL
     self.transport = transport
-    self.enhancedTranscriptsEnabled = enhancedTranscripts ?? { EnhancedTranscriptsStore().isEnabled }
+    self.cleanupInstruction = cleanupInstruction ?? { CleanupPromptStore().instruction }
   }
 
   // MARK: - Dictation request
 
   public func transcribe(
-    pcm: Data, sampleRate: Int, context: TranscriptionContext?
+    pcm: Data, sampleRate: Int, context: TranscriptionContext?, cleanup: Bool
   ) async throws -> String {
     guard let apiKey = apiKeyProvider(), !apiKey.isEmpty else {
       throw BlurtError.apiKeyMissing
     }
     let prompt = TranscriptionPrompt.build(context: context)
-    let config = try makeConfigData(sampleRate: sampleRate, prompt: prompt)
+    let config = try makeConfigData(sampleRate: sampleRate, prompt: prompt, cleanup: cleanup)
     let boundary = "blurt-\(UUID().uuidString)"
 
     var request = URLRequest(url: baseURL.appendingPathComponent("transcribe"))
@@ -118,19 +125,20 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// Builds the JSON `config` part sent alongside the audio. The context
   /// `prompt` is included only when non-empty; a nil or blank prompt omits the
   /// field so the server applies its default prompt. The `llm` block rides
-  /// along while enhanced transcripts are enabled (the default) and is omitted
-  /// entirely when the user has turned them off, so the service skips the
-  /// rewrite and the verbatim transcript is what gets pasted — see
-  /// `DictationConfig.llm`. Internal so tests can assert the
-  /// prompt wiring without inspecting the multipart upload body (which
-  /// `URLProtocol` mocks can't observe reliably for `upload(from:)`).
-  func makeConfigData(sampleRate: Int, prompt: String?) throws -> Data {
+  /// along only when `cleanup` is true (a *cleaned* dictation) and is omitted
+  /// entirely for a *raw* one, so the service skips the rewrite and the verbatim
+  /// transcript is what gets pasted — see `DictationConfig.llm`. When present it
+  /// carries the user's custom cleanup instruction (or none, encoding as `{}`,
+  /// to select the service default). Internal so tests can assert the prompt
+  /// wiring without inspecting the multipart upload body (which `URLProtocol`
+  /// mocks can't observe reliably for `upload(from:)`).
+  func makeConfigData(sampleRate: Int, prompt: String?, cleanup: Bool) throws -> Data {
     try JSONEncoder().encode(
       DictationConfig(
         sampleRate: sampleRate,
         channels: 1,
         prompt: prompt.trimmedNonEmpty(),
-        llm: enhancedTranscriptsEnabled() ? LLMRewrite() : nil
+        llm: cleanup ? LLMRewrite(instruction: cleanupInstruction().trimmedNonEmpty()) : nil
       )
     )
   }
@@ -216,13 +224,13 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     /// it falls back to the server's default prompt. Steers *transcription*;
     /// the cleanup rewrite is the `llm` block's job.
     let prompt: String?
-    /// The rewrite request, present only while enhanced transcripts are
-    /// enabled (nil — the synthesized `encode` omits it — asks for no rewrite,
-    /// so the response's `llm_response` is null and the verbatim `text` is
-    /// used). An empty object selects the service's default
-    /// cleanup instruction; per the API's `instruction`-mode rules, output
-    /// format and don't-answer-the-text safeguards are enforced server-side,
-    /// so nothing rides along here.
+    /// The rewrite request, present only for a *cleaned* dictation (nil — the
+    /// synthesized `encode` omits it — asks for no rewrite, so the response's
+    /// `llm_response` is null and the verbatim `text` is used). When present it
+    /// carries the user's custom `instruction` if they set one; an empty object
+    /// (`{}`) selects the service's default cleanup instruction. Per the API's
+    /// `instruction`-mode rules, output format and don't-answer-the-text
+    /// safeguards are enforced server-side.
     let llm: LLMRewrite?
     enum CodingKeys: String, CodingKey {
       case sampleRate = "sample_rate"
@@ -232,7 +240,14 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     }
   }
 
-  private struct LLMRewrite: Encodable {}
+  /// The `llm` config block. `instruction` is the user's editable cleanup
+  /// directive; nil (the synthesized `encode` uses `encodeIfPresent` for
+  /// optionals) omits the field, so the block encodes as `{}` and the service
+  /// applies its own default cleanup rewrite — byte-identical to the historical
+  /// empty-block request.
+  private struct LLMRewrite: Encodable {
+    let instruction: String?
+  }
 
   private struct DictationResponse: Decodable {
     /// The verbatim transcript — always present, never altered by the LLM.

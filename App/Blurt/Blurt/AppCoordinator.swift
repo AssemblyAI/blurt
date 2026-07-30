@@ -115,7 +115,7 @@ final class AppCoordinator {
   private func startDictationDriver() {
     let session = session
     keyTap = DictationKeyTap(
-      onStart: { session.submit(.press) },
+      onStart: { mode in session.submit(.press(mode)) },
       onStop: { session.submit(.release) },
       onCancel: { session.submit(.cancel) },
       // Recovery-only teardown; `cancelRecording()`'s doc owns the rationale.
