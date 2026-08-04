@@ -137,6 +137,26 @@ final class SettingsUITests: BlurtUITestCase {
       "Change… should re-open the sheet on the key field")
   }
 
+  /// The first-connect sheet carries the "Don't have a key?" link; once a key
+  /// is stored, the reopened sheet drops it.
+  func testGetKeyLinkShownOnlyBeforeFirstConnect() {
+    let settings = openSettingsWindow()
+    let sheet = openKeyEditor(settings)
+
+    XCTAssertTrue(
+      sheet.buttons[UITestIdentifiers.apiKeyGetKey].waitForExistence(timeout: 5),
+      "The first-connect sheet should offer the get-a-free-key link")
+    sheet.buttons[UITestIdentifiers.apiKeyCancel].click()
+    XCTAssertTrue(sheet.waitForNonExistence(timeout: 5), "Cancel should dismiss the sheet")
+
+    connectValidKey(settings)
+
+    let reopened = openKeyEditor(settings, via: UITestIdentifiers.apiKeyChange)
+    XCTAssertFalse(
+      reopened.buttons[UITestIdentifiers.apiKeyGetKey].exists,
+      "A stored key means the user has found the dashboard — no link on rotate")
+  }
+
   /// "Cancel" in the sheet discards the edit and leaves the stored key's row
   /// untouched instead of committing.
   func testCancelDiscardsKeyEditAndKeepsRow() {

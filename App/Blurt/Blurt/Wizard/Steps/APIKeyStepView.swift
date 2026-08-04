@@ -100,10 +100,11 @@ struct APIKeyStepView: View {
 /// a bare glyph toggle, and a footer that swaps the storage reassurance for a
 /// specific error.
 ///
-/// Button layout follows the sheet convention: the non-dismissing secondary
-/// action sits at the leading edge, clear of the Cancel / default-action pair at
-/// the trailing edge, and Return / Escape are scoped to the sheet rather than
-/// to the whole window.
+/// Button layout follows the sheet convention: the Cancel / default-action pair
+/// sits at the trailing edge, and Return / Escape are scoped to the sheet rather
+/// than to the whole window. A user with no key gets a link with the rationale
+/// text ("Don't have a key?") rather than a third button here — following it is
+/// reading-flow navigation, not one of the sheet's commit-or-cancel actions.
 private struct APIKeyEditorSheet: View {
   var apiKey: APIKeyModel
   /// The key already stored, empty on first run. Drives the first-connect vs.
@@ -176,6 +177,25 @@ private struct APIKeyEditorSheet: View {
         Text(display.rationale)
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
+        // The answer to "where do I get one?" sits with the sentence that
+        // raises the question, phrased as the question a keyless user is
+        // asking. Link-styled because it reads as part of the rationale, not
+        // as one of the sheet's actions: it opens the dashboard's key page in
+        // the browser and leaves the sheet open behind it, ready for the
+        // paste. Hidden once a key exists — that user has already found the
+        // dashboard, and the rotate wording above no longer asks the question.
+        if !display.isConnected {
+          HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text("Don’t have a key?")
+              .foregroundStyle(.secondary)
+            Button("Get a free one") { openURL(APIKeyStore.dashboardURL) }
+              .buttonStyle(.link)
+              // "one" has no referent when VoiceOver reads the button alone
+              // (rotor / Tab navigation skips the static text beside it).
+              .accessibilityLabel("Get a free API key")
+              .accessibilityIdentifier(UITestIdentifiers.apiKeyGetKey)
+          }
+        }
       }
 
       // A single credential field reads as more native left un-labelled and
@@ -254,14 +274,6 @@ private struct APIKeyEditorSheet: View {
 
   private var buttonRow: some View {
     HStack(spacing: 12) {
-      // The one action a user with no key can actually take, as a real button
-      // rather than caption-sized footer text. It doesn't dismiss the sheet, so
-      // it sits at the leading edge, away from Cancel / the default action —
-      // and the sheet stays open behind the browser, ready for the paste.
-      if !display.isConnected {
-        Button("Get a Free Key") { openURL(APIKeyStore.dashboardURL) }
-          .accessibilityIdentifier(UITestIdentifiers.apiKeyGetKey)
-      }
       Spacer(minLength: 12)
       if isValidating {
         ProgressView().controlSize(.small)
