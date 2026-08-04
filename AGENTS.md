@@ -197,7 +197,7 @@ Each was tried the other way and reverted. If a task seems to require one, stop 
 | Add an external SPM dependency to the engine              | Dependency-free by rule (biggest supply-chain risk); a `check.sh` guard fails on `.package(` in `Package.swift` or a `url:`/`github:` package in `project.yml`. Extend `BlurtEngine` instead.                                                                           |
 | Use `AVAudioEngine` / `installTap` for capture            | A long-lived engine bound its input graph to one device and went stale on a mic↔built-in switch — `-10868` (`kAudioUnitErr_FormatNotSupported`) or all-zero buffers. `MicCapture` uses a fresh `AVAudioRecorder` per session.                                           |
 | Add streaming STT                                         | The dictation API returns the full (already rewritten) text in one response; the overlay shows "Transcribing…" then the full text.                                                                                                                                      |
-| Add a client-side LLM cleanup pass                        | Cleanup is the dictation API's server-side rewrite, requested by the `llm` block on the same `/transcribe` call. No LLM Gateway client, no `StylerProtocol`, no styling stage, no second request — transcription steering belongs in `TranscriptionPrompt`.             |
+| Add a client-side LLM cleanup pass                        | Cleanup is the dictation API's server-side rewrite, requested by the `llm` block on the same `/v1/transcribe` call. No LLM Gateway client, no `StylerProtocol`, no styling stage, no second request — transcription steering belongs in `TranscriptionPrompt`.          |
 | Add local models or model downloads                       | Transcription is a remote AssemblyAI call: no on-device ASR/LLM, no model cache, no download UI.                                                                                                                                                                        |
 | Pin the prompt to English                                 | Hurt non-English transcription; language is left to the model's own detection.                                                                                                                                                                                          |
 | Send focus context to the API again                       | The transcription prompt is switched off at `TranscriptionPrompt.isEnabled`, so `config.prompt` is omitted and no window title, field label, surrounding text or key term leaves the machine. Keep the builder and its wiring — don't route context on by another path. |
@@ -247,7 +247,7 @@ framework, or notarization rejects the build; roll-forward-only for a bad releas
 ```text
 DictationKeyTap (CGEventTap + DictationKeyGate) → AppCoordinator → DictationSession (actor) → MicCapture
                        ↓
-              AssemblyAITranscriber  (STT + LLM cleanup, AssemblyAI dictation API: one POST /transcribe)
+              AssemblyAITranscriber  (STT + LLM cleanup, AssemblyAI dictation API: one POST /v1/transcribe)
                        ↓
               KeyInjector → focused app (clipboard paste via a synthesized ⌘V CGEvent)
 ```
@@ -275,7 +275,7 @@ the seam they inject.
 ### `AssemblyAITranscriber` — `Sources/BlurtEngine/STT/AssemblyAITranscriber.swift`
 
 Implements `TranscriberProtocol` against AssemblyAI's **dictation** API: a single
-`POST https://dictation.assemblyai.com/transcribe` with the captured audio as a raw S16LE PCM blob
+`POST https://dictation.assemblyai.com/v1/transcribe` with the captured audio as a raw S16LE PCM blob
 in the `audio` multipart part plus a JSON `config` part (`sample_rate`, `channels`, and an `llm`
 block). No model header — the service pins the STT model server-side. The config also has a `prompt`
 field for steering _transcription_, but nothing is put in it: `TranscriptionPrompt.build` returns

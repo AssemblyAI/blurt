@@ -7,7 +7,7 @@
 
 What this optimizes
 -------------------
-Blurt sends one `POST /transcribe` per utterance. The request's `config.prompt`
+Blurt sends one `POST /v1/transcribe` per utterance. The request's `config.prompt`
 steers *transcription*; the `config.llm` block asks the service to run an LLM
 rewrite over the verbatim transcript — that rewrite is what removes disfluencies
 and fixes punctuation before the text is pasted. Blurt sends `candidates.PRIOR_WINNER`

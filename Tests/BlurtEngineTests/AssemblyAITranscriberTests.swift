@@ -16,7 +16,7 @@ struct HTTPClientTests {
     let hits = Counter()
     let transport = FakeHTTPTransport { request in
       _ = hits.next()
-      guard request.url?.path.hasSuffix("/transcribe") == true,
+      guard request.url?.path == "/v1/transcribe",
         request.httpMethod == "POST"
       else { return (404, Data()) }
       return (200, json(["text": "um hello world", "llm_response": "Hello world."]))
@@ -55,7 +55,7 @@ struct HTTPClientTests {
   @Test("transcriber succeeds with a real context (which builds no prompt today)")
   func transcribeWithContext() async throws {
     let transport = FakeHTTPTransport { request in
-      guard request.url?.path.hasSuffix("/transcribe") == true else { return (404, Data()) }
+      guard request.url?.path == "/v1/transcribe" else { return (404, Data()) }
       return (200, json(["text": "hello world"]))
     }
 

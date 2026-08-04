@@ -8,7 +8,7 @@ harness was written, and until now there was nothing to do about it.
 
 There is something to do about it. The dictation API takes audio, so:
 
-    reference text -> `say` -> 16 kHz mono PCM -> POST /transcribe with the
+    reference text -> `say` -> 16 kHz mono PCM -> POST /v1/transcribe with the
     candidate as config.llm.instruction -> score `llm_response`
 
 The response carries both sides of the question. `text` is the verbatim transcript,
@@ -44,7 +44,7 @@ import metrics
 from corpus import Utterance
 
 #: The dictation endpoint. Same host `AssemblyAITranscriber` posts to.
-DICTATION_URL = "https://dictation.assemblyai.com/transcribe"
+DICTATION_URL = "https://dictation.assemblyai.com/v1/transcribe"
 
 #: What the service expects, and what `SyncSTTLimits` records on the Swift side.
 SAMPLE_RATE = 16_000
@@ -103,7 +103,7 @@ def _multipart(pcm: bytes, config: dict) -> tuple[bytes, str]:
 
 
 def transcribe(pcm: bytes, api_key: str, instruction: str | None, url: str = DICTATION_URL) -> dict:
-    """One `/transcribe` round trip. `instruction=None` asks for the service default.
+    """One `/v1/transcribe` round trip. `instruction=None` asks for the service default.
 
     That `None` is the comparison the text harness has never been able to make: an
     empty `llm` block selects the service's own default wording, so it is the real
