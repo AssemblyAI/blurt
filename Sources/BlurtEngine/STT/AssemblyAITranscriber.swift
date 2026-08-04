@@ -9,7 +9,7 @@ private let transcriberLog = Logger(subsystem: BlurtIdentity.subsystem, category
 
 /// `TranscriberProtocol` backed by AssemblyAI's **dictation** API.
 ///
-/// A single `POST dictation.assemblyai.com/transcribe` carries the captured
+/// A single `POST dictation.assemblyai.com/v1/transcribe` carries the captured
 /// audio (raw S16LE PCM, exactly the bytes the mic recorded — there is no
 /// re-encoding pass) plus a JSON `config` part, and the response body carries
 /// both the verbatim transcript and — when the config requests one via its
@@ -65,7 +65,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     let config = try makeConfigData(sampleRate: sampleRate, prompt: prompt)
     let boundary = "blurt-\(UUID().uuidString)"
 
-    var request = URLRequest(url: baseURL.appendingPathComponent("transcribe"))
+    var request = URLRequest(url: baseURL.appendingPathComponent("v1/transcribe"))
     request.httpMethod = "POST"
     // Bounds a stalled connection; see `requestTimeoutSeconds` for why an idle
     // timeout is the right shape here.
@@ -98,7 +98,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// `transcribe` reuses it instead of paying DNS+TCP+TLS on the hot path
   /// (~170 ms cold, more on mobile — measured). A throwaway GET to the host
   /// root is enough to establish the HTTP/2 connection `URLSession` then reuses
-  /// for the POST to `/transcribe`; the response (an auth-less 4xx) is
+  /// for the POST to `/v1/transcribe`; the response (an auth-less 4xx) is
   /// discarded. No key, so it never counts as a transcription. A short timeout
   /// keeps a dead network from leaving the task hanging. Fire-and-forget: any
   /// error is swallowed — a failed warm-up just means the next request pays
