@@ -319,7 +319,22 @@ class ModelSpec:
     #: it optimizes against noise. Nothing is paid for headroom left unused — the
     #: cost is in tokens generated — so the only reason to lower this is to bound a
     #: runaway, and 2048 (the previous default) was low enough that Opus 5 tripped it.
+    #:
+    #: Not raised further to match the reflection model: the default `--model` is a
+    #: 32k-context one, and an output ceiling has to leave room for the prompt inside
+    #: that window.
     max_tokens: int = 8192
+
+    #: Output ceiling for the reflection model, which needs far more than the task
+    #: model and for a different reason. It writes whole instructions, and it reasons
+    #: at length before doing so — extended thinking counts against this budget, and
+    #: on a frontier reflector it dominates the instruction it finally emits. 8192 was
+    #: enough for the task model and not remotely enough here.
+    #:
+    #: Separate rather than one ceiling for both because the two models are not the
+    #: same size: the task model is a small stand-in on a 32k context, so it cannot be
+    #: handed a ceiling sized for a frontier reflector's thinking.
+    reflection_max_tokens: int = 65536
 
     def lm(self, *, model: str | None = None, max_tokens: int | None = None) -> dspy.LM:
         """Build an LM, overriding the model or budget for a secondary role.
@@ -371,9 +386,13 @@ def optimize(
             metric=make_feedback_metric(axis, instruction_budget),
             auto=auto,
             # Never below the task model's ceiling: the reflector writes whole
-            # instructions, so it is the call most likely to need the room, and
-            # raising --max-tokens should never leave it as the tighter of the two.
-            reflection_lm=spec.lm(model=reflection_model, max_tokens=max(8192, spec.max_tokens)),
+            # instructions and thinks at length first, so it is the call most likely
+            # to need the room, and raising --max-tokens should never leave it as the
+            # tighter of the two.
+            reflection_lm=spec.lm(
+                model=reflection_model,
+                max_tokens=max(spec.reflection_max_tokens, spec.max_tokens),
+            ),
             num_threads=num_threads,
             instruction_proposer=proposer,
         ).compile(program, trainset=trainset, valset=valset)

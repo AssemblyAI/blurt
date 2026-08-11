@@ -719,6 +719,18 @@ def test_the_task_model_has_room_for_reasoning_tokens_by_default():
     assert cli.parse_args([]).max_tokens == 8192
 
 
+def test_the_reflection_model_gets_far_more_room_than_the_task_model():
+    """It thinks at length before writing an instruction, and thinking is billed here.
+
+    Separate ceilings because the models are different sizes: the default --model is a
+    small stand-in on a 32k context, so it cannot be handed a frontier reflector's
+    headroom, and the reflector cannot be held to the task model's.
+    """
+    args = cli.parse_args([])
+    assert args.reflection_max_tokens == 65536
+    assert args.reflection_max_tokens > args.max_tokens
+
+
 def test_overage_accepts_an_explicit_cap():
     assert candidates.overage("x" * 60, cap=50) == 10
     assert candidates.overage("x" * 40, cap=50) == 0

@@ -241,6 +241,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "rather than loud: see ModelSpec.max_tokens",
     )
     model.add_argument(
+        "--reflection-max-tokens",
+        type=int,
+        default=65536,
+        help="output ceiling for the reflection model (default: 65536). Much larger than "
+        "--max-tokens because this model thinks at length before writing an instruction, and "
+        "extended thinking counts against the same budget. Kept separate so a frontier "
+        "reflector's headroom is not demanded of a small task model on a 32k context",
+    )
+    model.add_argument(
         "--adapter",
         default="plain",
         choices=("plain", "chat"),
@@ -397,7 +406,12 @@ def main(argv: list[str] | None = None) -> int:
 
     import program  # noqa: PLC0415 — deferred so the dry-run path never imports DSPy
 
-    spec = program.ModelSpec(model=args.model, api_base=args.api_base, max_tokens=args.max_tokens)
+    spec = program.ModelSpec(
+        model=args.model,
+        api_base=args.api_base,
+        max_tokens=args.max_tokens,
+        reflection_max_tokens=args.reflection_max_tokens,
+    )
     program.configure(spec, adapter=args.adapter)
 
     scoring = resolve_candidates(args)
