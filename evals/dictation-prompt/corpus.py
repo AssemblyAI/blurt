@@ -446,10 +446,13 @@ def split(utterances: list[Utterance], seed: int, dev_fraction: float, test_frac
     return shuffled[n_test + n_dev :], shuffled[n_test : n_test + n_dev], shuffled[:n_test]
 
 
-def echo_floor(utterances: list[Utterance]) -> dict[str, float]:
-    """Score of doing nothing at all — pasting the verbatim transcript unchanged.
+def no_cleanup_floor(utterances: list[Utterance]) -> dict[str, float]:
+    """Score of the corpus's disfluent side against its own target.
 
-    This is the number any candidate instruction has to beat to be worth sending;
-    a prompt that scores below it is actively making the transcript worse.
+    Pure arithmetic — no request is made and no model is involved. It is the floor
+    of the *metric*, not of the product: with enhanced transcripts on the service
+    always applies some cleanup, so "paste the raw transcript" is not a state Blurt
+    can actually be in. Read it as "how much work is there to do on this corpus",
+    and treat a candidate scoring below it as actively harmful.
     """
     return metrics.mean([metrics.score(u.reference, u.disfluent) for u in utterances])

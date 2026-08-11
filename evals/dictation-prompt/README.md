@@ -119,18 +119,41 @@ Both optimizers run with few-shot demos disabled. `config.llm.instruction` is a 
 the service applies in one pass, so an optimized program that depended on bundled examples
 would score well here and be unshippable.
 
+## What this can and cannot establish
+
+The harness is deliberately text-only: a transcript goes in, an instruction transforms it, the
+output is scored against the target. That keeps it cheap, fast, and reproducible, and it is the
+right shape for ranking instructions against each other.
+
+It does not measure the thing we ship. Blurt sends `config.llm = {}`, which applies **the
+service's own default cleanup instruction, on the service's own rewrite model** — neither of
+which we know. The `guessed-default` candidate is a guess at the first and ignores the second,
+and is named that way on purpose. Treat a win over it as "this instruction is better than a
+terse one on our stand-in model", not as "this beats what we ship".
+
+Two consequences worth holding onto when reading a result:
+
+- A winner is only as transferable as `--model` is representative of the service's rewrite
+  model, which runs under a ~5s budget and is probably much smaller.
+- Confirming a win against the live default would mean sending real audio to
+  `dictation.assemblyai.com/transcribe` with an empty `llm` block and comparing. That is a
+  separate exercise, not this one.
+
 ## Reading the results
 
-Every run prints an **echo floor**: the score of pasting the transcript with no cleanup at
-all. That is the bar an instruction has to clear to be worth sending. It also prints what
+Every run prints a **no-cleanup floor**: the corpus's disfluent side scored against its own
+target, with no request made and no model involved. It is the floor of the _metric_, not of
+the product — with enhanced transcripts on, the service always cleans something, so "paste the
+raw transcript" isn't a state Blurt can be in. Read it as how much work the corpus contains.
+It also prints what
 fraction of pairs actually differ from their target — the rest are clean utterances, which
 test the opposite failure (over-editing text that needed nothing).
 
 All three axes are printed for every candidate, with the selecting one starred, so you can
 see whether a winner gained on wording or only on punctuation. The winner is chosen on a dev
-split and re-scored on a held-out test split alongside `default-proxy` — the stand-in for the
-service's default instruction — so the reported improvement is measured on data no selection
-decision touched.
+split and re-scored on a held-out test split alongside `guessed-default` — a guess at the
+service's default instruction, not the thing itself; see above — so the reported improvement is
+measured on data no selection decision touched.
 
 On a real corpus the numbers mean what they say. On `fleurs` and `builtin` the disfluencies
 are synthetic, so the **ranking** travels further than the absolute scores do: read those as

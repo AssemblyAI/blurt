@@ -6,9 +6,13 @@ They vary one thing at a time: how the task is framed, how explicitly the
 disfluency types are named, how hard the do-not-rewrite constraint is pushed, and
 whether formatting is called out.
 
-`default-proxy` stands in for the service's own default instruction — the empty
-`llm` block Blurt sends today — so every run answers "did we beat what we already
-ship", not just "which of these is best".
+`guessed-default` is exactly that: a **guess** at what the service's own default
+cleanup instruction might say. What we actually ship is `config.llm = {}`, which
+applies the service's own default wording on the service's own rewrite model —
+and we know neither. So this candidate is a sanity check that the harness can tell
+a terse instruction from a careful one; beating it is *not* evidence of beating
+what we ship. Establishing that would take real audio through the real endpoint,
+which is a different measurement than this text-only harness performs.
 
 Kept in its own module so a results notebook or a re-scoring script can import the
 instructions without pulling in argparse and DSPy.
@@ -17,7 +21,7 @@ instructions without pulling in argparse and DSPy.
 from __future__ import annotations
 
 CANDIDATES: dict[str, str] = {
-    "default-proxy": "Remove disfluencies and fix punctuation.",
+    "guessed-default": "Remove disfluencies and fix punctuation.",
     "verbatim-preserving": (
         "Rewrite this speech-to-text transcript as clean written text. Remove the "
         "artifacts of speaking aloud and keep every word the speaker meant to say, "
@@ -47,6 +51,5 @@ CANDIDATES: dict[str, str] = {
     ),
 }
 
-# The instruction every run measures against, and the one Blurt effectively sends
-# today by omitting `llm.instruction` entirely.
-BASELINE = "default-proxy"
+# The in-harness comparison point — not the shipped behaviour. See the module docstring.
+BASELINE = "guessed-default"

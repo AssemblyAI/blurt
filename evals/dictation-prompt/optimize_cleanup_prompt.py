@@ -216,10 +216,11 @@ def main(argv: list[str] | None = None) -> int:
         print_samples(loaded, args.show_samples)
 
     axis = resolve_axis(args.metric, loaded)
-    floors = {"dev": corpus.echo_floor(dev), "test": corpus.echo_floor(test)}
+    floors = {"dev": corpus.no_cleanup_floor(dev), "test": corpus.no_cleanup_floor(test)}
     print(
-        f"\nEcho floor ({axis}) — pasting the transcript uncleaned: "
-        f"dev {floors['dev'][axis]:.4f}, test {floors['test'][axis]:.4f}"
+        f"\nNo-cleanup floor ({axis}) — the corpus's disfluent side scored against its "
+        f"own target, no model involved: dev {floors['dev'][axis]:.4f}, "
+        f"test {floors['test'][axis]:.4f}"
     )
 
     if args.dry_run:
@@ -290,7 +291,7 @@ def main(argv: list[str] | None = None) -> int:
                 "formatting_is_measurable": loaded.formatting_is_measurable,
             },
             "split": {"train": len(train), "dev": len(dev), "test": len(test)},
-            "echo_floor": floors,
+            "no_cleanup_floor": floors,
             "dev": dict(dev_rows),
             "test": dict(test_rows),
             "winner": {"name": winner_name, "instruction": winner_instruction},

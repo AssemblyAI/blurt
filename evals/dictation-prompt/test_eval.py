@@ -289,9 +289,9 @@ def test_splitting_is_stable_for_a_seed():
     assert [u.reference for u in first[2]] == [u.reference for u in second[2]]
 
 
-def test_echo_floor_sits_below_a_perfect_cleanup():
+def test_no_cleanup_floor_sits_below_a_perfect_cleanup():
     loaded = corpus.load(source="builtin", limit=12, seed=6, severity=0.5)
-    floor = corpus.echo_floor(list(loaded.utterances))
+    floor = corpus.no_cleanup_floor(list(loaded.utterances))
     assert 0.0 < floor["blend"] < 1.0
 
 
@@ -331,6 +331,12 @@ def test_upstream_pair_reads_the_hand_annotated_columns():
 # --------------------------------------------------------------------------
 # Candidates and the offline guarantee
 # --------------------------------------------------------------------------
+
+
+def test_the_in_harness_baseline_is_labelled_as_a_guess():
+    """It guesses the server's wording and runs on our stand-in model — say so."""
+    assert candidates.BASELINE == "guessed-default"
+    assert "guess" in candidates.__doc__.lower()
 
 
 def test_every_candidate_instruction_is_shippable():
