@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import json
 import pathlib
 import re
 import sys
@@ -20,10 +21,13 @@ import pytest
 
 import candidates
 import corpus
+import live
 import metrics
 import optimize_cleanup_prompt as cli
 import progress
 from disfluency import inject
+
+CAP = candidates.INSTRUCTION_CHARACTER_CAP
 
 SENTENCE = (
     "The build failed because the signing certificate expired over the weekend "
@@ -161,7 +165,7 @@ def test_mean_of_no_scores_is_zero_on_every_axis():
 def test_feedback_names_a_leftover_word_that_came_from_the_input():
     reference, source = "Ship it on Friday.", "Um, ship it on Friday."
     hypothesis = "Um, ship it on Friday."
-    note = metrics.feedback(reference, hypothesis, source, metrics.score(reference, hypothesis))
+    note = metrics.feedback(reference, source, metrics.score(reference, hypothesis))
     assert "left disfluencies" in note
     assert "um" in note.lower()
 
@@ -170,7 +174,7 @@ def test_feedback_distinguishes_invented_words_from_leftover_ones():
     """A word in neither the input nor the target is a hallucination, not a leftover."""
     reference, source = "Ship it on Friday.", "Ship it on Friday."
     hypothesis = "Ship it on Friday urgently."
-    note = metrics.feedback(reference, hypothesis, source, metrics.score(reference, hypothesis))
+    note = metrics.feedback(reference, source, metrics.score(reference, hypothesis))
     assert "added words that were not in the transcript" in note
     assert "left disfluencies" not in note
 
@@ -180,19 +184,19 @@ def test_feedback_works_for_disfluencies_no_filler_list_would_contain():
     reference = "We should go on Thursday."
     source = "We should uhh go on go on Thursday."
     hypothesis = "We should uhh go on Thursday."
-    note = metrics.feedback(reference, hypothesis, source, metrics.score(reference, hypothesis))
+    note = metrics.feedback(reference, source, metrics.score(reference, hypothesis))
     assert "uhh" in note
 
 
 def test_feedback_names_dropped_content():
     reference, source = "Ship the revised build on Friday.", "Ship the revised build on Friday."
     hypothesis = "Ship on Friday."
-    note = metrics.feedback(reference, hypothesis, source, metrics.score(reference, hypothesis))
+    note = metrics.feedback(reference, source, metrics.score(reference, hypothesis))
     assert "dropped content words" in note
 
 
 def test_feedback_on_a_perfect_cleanup_is_not_empty():
-    note = metrics.feedback(SENTENCE, SENTENCE, SENTENCE, metrics.score(SENTENCE, SENTENCE))
+    note = metrics.feedback(SENTENCE, SENTENCE, metrics.score(SENTENCE, SENTENCE))
     assert note.strip()
 
 
@@ -600,8 +604,11 @@ def test_the_compressed_winner_kept_the_product_critical_safeguards():
     has to survive as spoken. These were asserted on the Swift constant before the
     revert; they live here now.
     """
-    for clause in ("answer the text", "translate", "rephrase"):
-        assert clause in candidates.PRIOR_WINNER, clause
+    # answer/translate are covered by `missing_safeguards` (by stem, so they survive
+    # rephrasing); "rephrase" is deliberately not in REQUIRED_SAFEGUARDS, so it is the
+    # one this has to assert itself.
+    assert candidates.missing_safeguards(candidates.PRIOR_WINNER) == []
+    assert "rephrase" in candidates.PRIOR_WINNER
 
 
 def test_the_stated_target_sits_below_the_cap_that_is_enforced():
@@ -667,7 +674,7 @@ def test_the_feedback_reports_only_the_axis_being_selected_on():
     to chase the artifact.
     """
     ref, hyp = "Ship it on Friday.", "Um, ship it on Monday."
-    note = metrics.feedback(ref, hyp, "Um, ship it on Friday.", metrics.score(ref, hyp), "content")
+    note = metrics.feedback(ref, "Um, ship it on Friday.", metrics.score(ref, hyp), "content")
     assert "(content)" in note
     assert "formatting score" not in note
 
@@ -680,13 +687,13 @@ def test_a_case_only_difference_is_perfect_on_the_content_axis():
     """
     ref, hyp = "Ship it on Friday.", "ship it on friday"
     assert metrics.score(ref, hyp).content == 1.0
-    assert "Perfect" in metrics.feedback(ref, hyp, ref, metrics.score(ref, hyp), axis="content")
+    assert "Perfect" in metrics.feedback(ref, ref, metrics.score(ref, hyp), axis="content")
 
 
 def test_the_feedback_does_not_repeat_what_gepa_already_shows():
     """ "Generated Outputs" carries the produced text; the reference is what is missing."""
     scored = metrics.score("ship it", "um ship it")
-    note = metrics.feedback("ship it", "um ship it", "um ship it", scored)
+    note = metrics.feedback("ship it", "um ship it", scored)
     assert "Reference: 'ship it'" in note
     assert "Produced:" not in note
     # The budget lives in the proposer preamble now, said once instead of per example.
@@ -702,13 +709,13 @@ def test_an_over_long_objection_states_the_arithmetic():
     """ "Too long" produces another over-long draft; "cut at least N" is checkable."""
     cap = candidates.INSTRUCTION_CHARACTER_CAP
     notes = candidates.objections(SAFE + "y" * (cap + 250 - len(SAFE)), fields=())
-    assert len(notes) == 1
-    assert f"{cap + 250} characters" in notes[0]
-    assert "250 characters over" in notes[0]
+    assert [n.code for n in notes] == ["length"]
+    assert f"{cap + 250} characters" in notes[0].message
+    assert "250 characters over" in notes[0].message
     # Stated in words as well: a reflector told "cut 638 characters" came back longer,
     # so the number it is asked to act on has to be in a unit it can count.
-    assert f"{candidates.word_budget(cap)}-word target" in notes[0]
-    assert f"at least {int(250 / candidates.CHARS_PER_WORD)} words" in notes[0]
+    assert f"{candidates.word_budget(cap)}-word target" in notes[0].message
+    assert f"at least {candidates.in_words(250)} words" in notes[0].message
 
 
 def test_naming_a_signature_field_is_an_objection():
@@ -717,10 +724,10 @@ def test_naming_a_signature_field_is_an_objection():
         f"{SAFE} Output the result as `cleaned_transcript`.",
         fields=("raw_transcript", "cleaned_transcript"),
     )
-    assert len(notes) == 1
-    assert "cleaned_transcript" in notes[0]
+    assert [n.code for n in notes] == ["fields"]
+    assert "cleaned_transcript" in notes[0].message
     # Only the field it actually named, so the re-ask isn't chasing a phantom.
-    assert "raw_transcript" not in notes[0]
+    assert "raw_transcript" not in notes[0].message
 
 
 def test_a_clean_proposal_draws_no_objections():
@@ -735,7 +742,7 @@ def test_both_faults_are_reported_together():
         SAFE + " raw_transcript " + "y" * candidates.INSTRUCTION_CHARACTER_CAP,
         fields=("raw_transcript",),
     )
-    assert len(notes) == 2
+    assert [n.code for n in notes] == ["length", "fields"]
 
 
 def test_dropping_a_safeguard_is_an_objection():
@@ -747,8 +754,7 @@ def test_dropping_a_safeguard_is_an_objection():
     well-behaved optimizer *should* do given what it can see.
     """
     notes = candidates.objections("Delete the disfluencies and nothing else.", fields=())
-    assert len(notes) == 1
-    assert "safeguard" in notes[0]
+    assert [n.code for n in notes] == ["safeguard"]
 
 
 def test_safeguards_match_on_stems_so_phrasing_stays_free():
@@ -797,23 +803,23 @@ def test_the_constraints_reach_the_reflector_before_its_first_attempt():
     instruction identical to the one it started with and logged "not better, skipping".
     """
     seed = candidates.PRIOR_WINNER
-    preamble = candidates.constraint_preamble(seed, cap=2048)
+    preamble = candidates.constraint_preamble(seed, cap=CAP)
     assert seed in preamble
     assert candidates.CONSTRAINT_MARKER in preamble
     # The headroom, not just the ceiling, and in words — a reflector told "at most 2048
     # characters" cannot check its own work, and one told to cut 638 came back longer.
-    budget = candidates.word_budget(2048)
+    budget = candidates.word_budget(CAP)
     # Bracketed: first line and last line, because the ask is weakly obeyed and a
     # constraint stated once in the middle of a long prompt is a constraint lost.
     assert preamble.startswith("BEFORE YOU BEGIN")
     assert f"aim for {budget} WORDS" in preamble
-    assert preamble.rstrip().endswith(f"Hard maximum {candidates.hard_word_limit(2048)} words.")
+    assert preamble.rstrip().endswith(f"Hard maximum {candidates.hard_word_limit(CAP)} words.")
     assert preamble.count(str(budget)) >= 3
     assert f"{len(seed.split())} words" in preamble
     # A target AND a ceiling, so the overshoot has somewhere to land that still fits.
-    assert candidates.word_budget(2048) < candidates.hard_word_limit(2048)
+    assert candidates.word_budget(CAP) < candidates.hard_word_limit(CAP)
     # Restated structurally, because a model cannot count its own words while writing.
-    assert f"{candidates.sentence_budget(2048)} sentences" in preamble
+    assert f"{candidates.sentence_budget(CAP)} sentences" in preamble
     assert "count the sentences in your draft" in preamble
     assert "forbid answering" in preamble
     assert "NO FIELD NAMES" in preamble
@@ -860,8 +866,7 @@ def test_copying_the_constraints_into_the_instruction_is_an_objection():
         f"Delete disfluencies. {SAFE} {candidates.CONSTRAINT_MARKER} on the instruction",
         fields=(),
     )
-    assert len(notes) == 1
-    assert "scaffolding" in notes[0]
+    assert [n.code for n in notes] == ["scaffolding"]
 
 
 def test_the_first_attempt_is_asked_with_the_constraints_attached(monkeypatch):
@@ -873,15 +878,21 @@ def test_the_first_attempt_is_asked_with_the_constraints_attached(monkeypatch):
 
 
 def test_the_revision_directive_carries_the_draft_and_every_objection():
-    directive = candidates.revision_directive("the draft", ["first problem", "second problem"])
+    notes = [candidates.Objection("a", "first problem"), candidates.Objection("b", "second")]
+    directive = candidates.revision_directive("the draft", notes)
     assert "the draft" in directive
     assert "- first problem" in directive
-    assert "- second problem" in directive
+    assert "- second" in directive
+    # The block the gate matches on, not a second spelling of it that could drift.
+    assert candidates.CONSTRAINT_MARKER in directive
 
 
 def test_the_shipped_winner_names_no_signature_field():
     """The gate is for new proposals; this is the one already in the table."""
-    for field in ("raw_transcript", "cleaned_transcript"):
+    pytest.importorskip("dspy")
+    import program as program_module
+
+    for field in (program_module.INPUT_FIELD, program_module.OUTPUT_FIELD):
         assert field not in candidates.PRIOR_WINNER, field
 
 
@@ -922,8 +933,8 @@ def _default_split(argv=()):
     train, dev, test = corpus.split(
         list(range(args.limit)), args.seed, args.dev_fraction, args.test_fraction
     )
-    n = corpus.slice_size(args.gepa_valset, len(train))
-    return train[n:], train[:n], dev, test
+    validation, train = corpus.carve_validation(train, args.gepa_valset)
+    return train, validation, dev, test
 
 
 def test_the_optimizers_valset_comes_off_train_not_out_of_dev():
@@ -1150,7 +1161,7 @@ def test_the_proposer_updates_every_requested_component(monkeypatch):
 def test_a_perfect_score_still_says_something():
     """An empty reflection prompt is worse than an uninformative one."""
     perfect = metrics.score("identical text", "identical text")
-    message = metrics.feedback("identical text", "identical text", "x", perfect)
+    message = metrics.feedback("identical text", "x", perfect)
     assert "Perfect" in message
 
 
@@ -1161,7 +1172,6 @@ def test_a_perfect_score_still_says_something():
 
 def test_the_multipart_body_matches_what_the_swift_client_sends():
     """A framing bug here would look like a bad instruction, not a bad request."""
-    import live
 
     body, boundary = live._multipart(b"\x01\x02", {"sample_rate": 16000})
     text = body.decode("latin-1")
@@ -1176,19 +1186,15 @@ def test_the_multipart_body_matches_what_the_swift_client_sends():
 
 def test_an_empty_instruction_asks_for_the_service_default():
     """`None` must send `llm: {}` — the wording Blurt ships, not a candidate's guess."""
-    import json as _json
-
-    import live
 
     for instruction, expected in ((None, {}), ("", {}), ("do x", {"instruction": "do x"})):
         body, _ = live._multipart(b"", {"llm": {"instruction": instruction} if instruction else {}})
-        config = _json.loads(body.decode("latin-1").split("\r\n\r\n")[-1].split("\r\n--")[0])
+        config = json.loads(body.decode("latin-1").split("\r\n\r\n")[-1].split("\r\n--")[0])
         assert config["llm"] == expected
 
 
 def test_the_live_summary_reports_the_gain_over_no_rewrite():
     """The floor is the verbatim transcript: what pasting without a rewrite would score."""
-    import live
 
     results = [
         live.LiveResult(
@@ -1207,7 +1213,6 @@ def test_the_live_summary_reports_the_gain_over_no_rewrite():
 
 def test_a_failed_rewrite_is_counted_not_dropped():
     """The service falls back to the verbatim transcript, so that is what the user saw."""
-    import live
 
     results = [
         live.LiveResult(
@@ -1221,8 +1226,6 @@ def test_a_failed_rewrite_is_counted_not_dropped():
 
 
 def test_summarizing_nothing_does_not_divide_by_zero():
-    import live
-
     assert live.summarize([])["gain"] == 0.0
 
 

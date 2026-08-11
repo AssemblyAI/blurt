@@ -58,7 +58,12 @@ enum CleanupInstruction {
   ///
   /// The tests make this unreachable, which is the point — this is the belt to
   /// their braces, for the edit that lands when nobody runs them.
-  static var sendable: String? { text.count <= characterCap ? text : nil }
+  ///
+  /// A stored `let`, not a computed `var`: both operands are compile-time constants,
+  /// so the answer cannot change, and Swift evaluates a static stored property once
+  /// per process. As a computed property this walked all \(text.count) characters on
+  /// every read, twice per dictation.
+  static let sendable: String? = text.count <= characterCap ? text : nil
 
   static let text = """
     TASK

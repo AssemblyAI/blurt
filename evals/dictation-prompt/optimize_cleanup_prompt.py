@@ -10,16 +10,16 @@ What this optimizes
 Blurt sends one `POST /transcribe` per utterance. The request's `config.prompt`
 steers *transcription*; the `config.llm` block asks the service to run an LLM
 rewrite over the verbatim transcript — that rewrite is what removes disfluencies
-and fixes punctuation before the text is pasted. Blurt currently sends `llm` as an
-empty object, which selects the service's default cleanup instruction. This script
-searches for an explicit instruction that beats that default, so `llm.instruction`
-can be set deliberately rather than left to the server.
+and fixes punctuation before the text is pasted. Blurt sends `candidates.PRIOR_WINNER`
+there (as `CleanupInstruction.text` on the Swift side); before that it sent an empty
+`llm` object, which selects the service's own default wording. This script searches
+for an instruction that beats the one shipping now.
 
 How it measures that
 --------------------
-By default it uses a **real paired corpus**: `amaai-lab/DisfluencySpeech`, which
-ships each utterance twice — as the speaker said it and as they meant it — from
-Switchboard conversations whose disfluencies trained annotators marked by hand.
+By default it uses a **real paired corpus**: `nyra`, which ships each utterance twice
+— as the speaker said it and as they meant it — from Switchboard conversations whose
+disfluencies trained annotators marked by hand.
 Candidates are scored on how closely their output restores the intended side
 (`metrics.py`). `--source builtin` swaps in a bundled sample made disfluent
 synthetically (`disfluency.py`) for the offline path. See `corpus.py` for what each
@@ -47,13 +47,12 @@ The length constraint
 ---------------------
 `config.llm.instruction` is capped at `candidates.INSTRUCTION_CHARACTER_CAP`
 characters and an instruction over it fails the whole request, so a winner that
-doesn't fit isn't a winner. Four places enforce that, because none is sufficient
-alone: the hand-written candidates are checked before any model call; the cap is
-stated to GEPA's reflector in the feedback text, which is guidance it can ignore;
-`program.CappedInstructionProposer` rejects and re-asks any over-cap proposal
-before GEPA scores it, which is what makes the cap a constraint on the *search*
-rather than a verdict on its output; and an over-cap result is refused at selection
-no matter how well it scored.
+doesn't fit isn't a winner. Three places enforce that, because none is sufficient
+alone: the hand-written candidates are checked before any model call;
+`program.CappedInstructionProposer` states the budget in its preamble and then
+rejects and re-asks any proposal that misses it, which is what makes the cap a
+constraint on the *search* rather than a verdict on its output; and an over-cap
+result is refused at selection no matter how well it scored.
 
 `--dry-run` and the tests need no third-party packages: everything that touches
 DSPy lives in `program.py`, which is imported only after the dry-run returns.
@@ -288,7 +287,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=("none", "gepa"),
         help="gepa (default) evolves a new instruction from --start; none only ranks the "
         "built-in candidates, which is the cheap way to sanity-check a corpus or a model "
-        "before paying for a search. mipro was offered and removed — see program.optimize",
+        "before paying for a search",
     )
     search.add_argument(
         "--auto",
@@ -324,9 +323,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     live_group.add_argument(
         "--verify-baseline",
         action="store_true",
-        help="also run the same audio with an empty llm block, which is what Blurt sends "
-        "today. This is the comparison the text harness cannot make: guessed-default only "
-        "ever guessed at the service's default wording, and this uses the wording itself",
+        help="also run the same audio with an empty llm block, which selects the service's "
+        "own default wording — what Blurt sent before it began sending an instruction. This "
+        "is the comparison the text harness cannot make: guessed-default only ever guessed "
+        "at that wording, and this uses the wording itself",
     )
 
     parser.add_argument("--out", default=None, help="write the full results as JSON to this path")
@@ -384,14 +384,14 @@ def resolve_candidates(args: argparse.Namespace) -> list[str]:
     not a ranking. That is the shape of `--optimizer none`: the cheap pass you make
     when you have changed the corpus or the model and want the ordering itself.
     """
-    if args.candidates == "all" or (args.candidates is None and args.optimizer == "none"):
-        return list(CANDIDATES)
-    # BASELINE first: it is the row every later comparison is stated against.
-    ordered = [BASELINE]
-    if args.start == "best-candidate":
+    if (
+        args.candidates == "all"
+        or (args.candidates is None and args.optimizer == "none")
         # Nothing has been scored yet, so "best" is unknowable without the sweep.
+        or args.start == "best-candidate"
+    ):
         return list(CANDIDATES)
-    return ordered
+    return [BASELINE]
 
 
 def run_live_verification(
@@ -424,16 +424,19 @@ def run_live_verification(
     sample = test[: args.verify_live]
     runs = [(winner_name, winner_instruction)]
     if args.verify_baseline:
-        # `None` sends an empty llm block — the service's own default wording, which is
-        # what Blurt ships today and what no text-only candidate can stand in for.
+        # `None` sends an empty llm block — the service's own default wording, which no
+        # text-only candidate can stand in for.
         runs.append(("service default (empty llm)", None))
 
     summaries: dict[str, dict[str, float]] = {}
     try:
+        # Synthesized once and replayed, so both runs hear byte-identical audio and the
+        # `say`/`afconvert` work is not repeated per candidate.
+        spoken = live.synthesize_all(sample)
         with Progress(len(runs) * len(sample), "Verifying against the real endpoint") as meter:
             for name, instruction in runs:
                 results = live.verify(
-                    sample, instruction, api_key, on_example=lambda n=name: meter.tick(n)
+                    spoken, instruction, api_key, on_example=lambda n=name: meter.tick(n)
                 )
                 summaries[name] = live.summarize(results)
     except live.Unavailable as error:
@@ -504,8 +507,7 @@ def main(argv: list[str] | None = None) -> int:
     # which is what this did until the sets were separated — leaves the set that
     # steered the search also judging it, and a search that overfits 50 rows then
     # reports its overfitting as a win.
-    n_validation = corpus.slice_size(args.gepa_valset, len(train))
-    validation, train = train[:n_validation], train[n_validation:]
+    validation, train = corpus.carve_validation(train, args.gepa_valset)
     print(
         f"Split: {len(train)} train / {len(validation)} optimizer valset / "
         f"{len(dev)} dev / {len(test)} test"
@@ -563,9 +565,6 @@ def main(argv: list[str] | None = None) -> int:
         seed_instruction = CANDIDATES[seed_name]
         seed_scores = dict(dev_rows)[seed_name]
 
-        # Only GEPA can be held to the cap during the search; MIPROv2 exposes no
-        # proposal hook, so say so rather than letting a run look constrained when the
-        # only thing standing between it and an unsendable winner is the final gate.
         proposer = program.CappedInstructionProposer(INSTRUCTION_CHARACTER_CAP)
 
         print(f"\nRunning {args.optimizer} from {seed_name} ({describe_length(seed_instruction)})…")
@@ -582,7 +581,7 @@ def main(argv: list[str] | None = None) -> int:
             reflection_minibatch_size=args.reflection_minibatch_size,
         )
         optimized_instruction = optimized.signature.instructions
-        if proposer is not None and proposer.rejected:
+        if proposer.rejected:
             # A search that spent itself fighting the cap should be visible, not
             # inferred from a disappointing score.
             print(
@@ -596,7 +595,8 @@ def main(argv: list[str] | None = None) -> int:
             optimized_scores = program.evaluate(
                 optimized, dev, args.num_threads, on_example=meter.tick
             )
-        dev_rows.append((f"{args.optimizer}-optimized", optimized_scores))
+        optimized_name = f"{args.optimizer}-optimized"
+        dev_rows.append((optimized_name, optimized_scores))
         print_table(dev_rows, f"With the optimized instruction, on dev ({axis})", axis)
         print(f"\nThe optimized instruction is {describe_length(optimized_instruction)}.")
         delta = optimized_scores[axis] - seed_scores[axis]
@@ -610,11 +610,12 @@ def main(argv: list[str] | None = None) -> int:
         # same `objections` the proposer re-asks on, applied once more at the end:
         # under GEPA they should already be satisfied, but the proposer gives up after
         # its retries and MIPROv2 has no proposal hook at all, so this is the guarantee.
-        final_objections = objections(
-            optimized_instruction, (program.INPUT_FIELD, program.OUTPUT_FIELD)
-        )
+        # The proposer's own configuration, so the in-search gate and this one cannot
+        # disagree — it previously respelled the fields and omitted the cap entirely,
+        # falling back to the module default rather than the cap the search ran under.
+        final_objections = objections(optimized_instruction, proposer.fields, proposer.cap)
         if final_objections:
-            listed = "\n".join(f"  - {note}" for note in final_objections)
+            listed = "\n".join(f"  - {note.message}" for note in final_objections)
             print(
                 f"\nRefusing to select it. Keeping {winner_name}.\n{listed}\n"
                 "The search is stochastic, so re-running is worth a try; --auto heavy buys "
@@ -622,7 +623,7 @@ def main(argv: list[str] | None = None) -> int:
                 "instead of asking the reflector to cut a long one down."
             )
         elif optimized_scores[axis] > winner_scores[axis]:
-            winner_name = f"{args.optimizer}-optimized"
+            winner_name = optimized_name
             winner_instruction = optimized_instruction
         else:
             print(
@@ -655,9 +656,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\nBest cleanup instruction ({describe_length(winner_instruction)}):\n")
     print(f"  {winner_instruction}\n")
     print(
-        "Send it as the dictation request's `config.llm.instruction` — see\n"
-        "  Sources/BlurtEngine/STT/AssemblyAITranscriber.swift (the `LLMRewrite` struct),\n"
-        "which today encodes an empty `llm` object and so selects the service default.\n"
+        "Ship it by replacing `CleanupInstruction.text` in\n"
+        "  Sources/BlurtEngine/STT/CleanupInstruction.swift, which is what\n"
+        "`AssemblyAITranscriber`'s `LLMRewrite` sends as `config.llm.instruction`.\n"
         "Store it verbatim: this harness scores instructions in the same envelope the\n"
         "service applies them in, so a hand-tidied copy is an unscored string."
     )

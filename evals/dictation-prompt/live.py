@@ -106,8 +106,8 @@ def transcribe(pcm: bytes, api_key: str, instruction: str | None, url: str = DIC
     """One `/transcribe` round trip. `instruction=None` asks for the service default.
 
     That `None` is the comparison the text harness has never been able to make: an
-    empty `llm` block is what Blurt ships today, so it is the real baseline rather
-    than `guessed-default`, which only ever guessed at its wording.
+    empty `llm` block selects the service's own default wording, so it is the real
+    baseline rather than `guessed-default`, which only ever guessed at it.
     """
     config: dict = {"sample_rate": SAMPLE_RATE, "channels": 1}
     config["llm"] = {"instruction": instruction} if instruction else {}
@@ -148,50 +148,62 @@ class LiveResult:
         return metrics.score(self.reference, self.rewritten)
 
 
+def synthesize_all(utterances: list[Utterance]) -> list[tuple[Utterance, bytes]]:
+    """Speak every utterance's *disfluent* side once, and hand back the audio.
+
+    The disfluent side, not the reference: the point is to give the rewrite model
+    something that needs cleaning up.
+
+    Separate from `verify` so a caller comparing several instructions synthesizes once
+    and replays the same bytes. That halves the `say`/`afconvert` subprocess work of a
+    `--verify-baseline` run, and it is what makes "the same audio for every candidate"
+    structurally true rather than true because `say` happens to be deterministic.
+    """
+    require_tools()
+    with tempfile.TemporaryDirectory(prefix="blurt-live-") as directory:
+        return [(u, synthesize(u.disfluent, Path(directory))) for u in utterances]
+
+
 def verify(
-    utterances: list[Utterance],
+    spoken: list[tuple[Utterance, bytes]],
     instruction: str | None,
     api_key: str,
     *,
     url: str = DICTATION_URL,
     on_example=None,
 ) -> list[LiveResult]:
-    """Run each utterance's *disfluent* side through synthesis and the real endpoint.
+    """Send already-synthesized audio through the real endpoint and score the rewrite.
 
-    The disfluent side, not the reference: the point is to hand the rewrite model
-    something that needs cleaning up. A rewrite that fails (`llm_error`) is recorded
-    rather than dropped — the service treats it as best-effort and falls back to the
-    verbatim transcript, so that is what the user would have seen, and a run where it
-    happens often is a finding rather than an error.
+    A rewrite that fails (`llm_error`) is recorded rather than dropped — the service
+    treats it as best-effort and falls back to the verbatim transcript, so that is what
+    the user would have seen, and a run where it happens often is a finding rather than
+    an error.
     """
-    require_tools()
     results = []
-    with tempfile.TemporaryDirectory(prefix="blurt-live-") as directory:
-        for utterance in utterances:
-            pcm = synthesize(utterance.disfluent, Path(directory))
-            response = transcribe(pcm, api_key, instruction, url)
-            results.append(
-                LiveResult(
-                    reference=utterance.reference,
-                    verbatim=response.get("text", ""),
-                    rewritten=response.get("llm_response") or response.get("text", ""),
-                    llm_error=response.get("llm_error"),
-                )
+    for utterance, pcm in spoken:
+        response = transcribe(pcm, api_key, instruction, url)
+        results.append(
+            LiveResult(
+                reference=utterance.reference,
+                verbatim=response.get("text", ""),
+                rewritten=response.get("llm_response") or response.get("text", ""),
+                llm_error=response.get("llm_error"),
             )
-            if on_example:
-                on_example()
+        )
+        if on_example:
+            on_example()
     return results
 
 
 def summarize(results: list[LiveResult]) -> dict[str, float]:
     """Mean scores plus how often the best-effort rewrite failed outright."""
-    if not results:
-        return {"floor_content": 0.0, "content": 0.0, "gain": 0.0, "llm_error_rate": 0.0}
     floor = metrics.mean([r.floor for r in results])["content"]
     scored = metrics.mean([r.scored for r in results])["content"]
     return {
         "floor_content": floor,
         "content": scored,
         "gain": scored - floor,
-        "llm_error_rate": sum(r.llm_error is not None for r in results) / len(results),
+        "llm_error_rate": (
+            sum(r.llm_error is not None for r in results) / len(results) if results else 0.0
+        ),
     }

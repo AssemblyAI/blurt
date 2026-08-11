@@ -178,16 +178,6 @@ struct HTTPClientTests {
     #expect(llm.keys.sorted() == ["instruction"])
   }
 
-  @Test("the instruction on the wire is short enough for the API to accept it")
-  func instructionFitsOnTheWire() throws {
-    // Asserted on the encoded request rather than the constant, because that is
-    // what the API measures. An over-cap instruction 400s the whole request before
-    // the audio is read, so this failing means every dictation fails.
-    let llm = try #require(try configObject(prompt: nil)["llm"] as? [String: Any])
-    let instruction = try #require(llm["instruction"] as? String)
-    #expect(instruction.count <= CleanupInstruction.characterCap)
-  }
-
   @Test("config part omits the llm block when enhanced transcripts are off")
   func configOmitsRewriteWhenDisabled() throws {
     // Omission — not an empty or null `llm` — is what tells the service to skip

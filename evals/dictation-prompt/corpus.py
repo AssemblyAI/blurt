@@ -311,7 +311,7 @@ def _rows_via_api(source: Source, limit: int):
         except urllib.error.URLError as error:
             raise RuntimeError(
                 f"could not reach {ROWS_API} ({error.reason}). "
-                "Use --loader datasets, or --jsonl / --source builtin to work offline."
+                "Use --jsonl or --source builtin to work offline."
             ) from error
 
         rows = payload.get("rows", [])
@@ -445,6 +445,17 @@ def slice_size(value: float, total: int) -> int:
     since clamping them independently is what strands one of them at zero.
     """
     return int(total * value) if value < 1 else int(value)
+
+
+def carve_validation(train: list[Utterance], size: float) -> tuple[list, list]:
+    """Take the optimizer's valset off the front of train, returning (validation, train).
+
+    Here rather than in the CLI so the tests exercise the carve the run performs
+    instead of a copy of it — reversing the slice order in one and not the other would
+    otherwise go unnoticed.
+    """
+    count = slice_size(size, len(train))
+    return train[:count], train[count:]
 
 
 def split(utterances: list[Utterance], seed: int, dev_size: float, test_size: float):

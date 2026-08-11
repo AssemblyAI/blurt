@@ -38,18 +38,11 @@ def build(instruction: str) -> dspy.Predict:
     A program whose quality depended on an extra reasoning field would not survive
     that trip.
 
-    The field descriptions are for `--adapter chat` only — `PlainChatAdapter` drops
-    everything but the instruction itself, so under the default adapter they are never
-    sent.
+    Carries no field descriptions. `PlainChatAdapter` sends the instruction and nothing
+    else, and it is now the only adapter — the descriptions existed for the marker
+    protocol that `--adapter chat` used, and went with it.
     """
-    signature = (
-        dspy.Signature(f"{INPUT_FIELD} -> {OUTPUT_FIELD}")
-        .with_instructions(instruction)
-        .with_updated_fields(
-            INPUT_FIELD, desc="Verbatim speech-to-text output for one dictated utterance."
-        )
-        .with_updated_fields(OUTPUT_FIELD, desc="The same utterance as finished written text.")
-    )
+    signature = dspy.Signature(f"{INPUT_FIELD} -> {OUTPUT_FIELD}").with_instructions(instruction)
     return dspy.Predict(signature)
 
 
@@ -76,8 +69,8 @@ class PlainChatAdapter(dspy.ChatAdapter):
     budget and is probably much smaller than the default `--model`, the models this
     unblocks are the *representative* ones — see the README on transferability.
 
-    Only the harness's own one-in/one-out string signature is handled this way. GEPA and
-    GEPA prompts its own multi-field signatures through the same globally configured
+    Only the harness's own one-in/one-out string signature is handled this way. GEPA
+    prompts its own multi-field signatures through the same globally configured
     adapter (`dspy.Predict` reads `settings.adapter`), so every other shape falls straight
     through to `ChatAdapter` — including its `JSONAdapter` fallback. That fall-through is
     why `_is_plain` exists rather than this class simply returning the instruction.
@@ -170,7 +163,6 @@ def make_feedback_metric(axis: str):
             score=scored.value(axis),
             feedback=metrics.feedback(
                 getattr(gold, OUTPUT_FIELD),
-                hypothesis,
                 getattr(gold, INPUT_FIELD),
                 scored,
                 axis=axis,
@@ -229,9 +221,9 @@ def evaluate(
 class CappedInstructionProposer:
     """GEPA `ProposalFn` that will not hand back an instruction that cannot ship.
 
-    Two things disqualify one, and neither is visible to the score: exceeding the
-    API's character cap, and naming a signature field that exists in no envelope. See
-    `candidates.objections` for both.
+    What disqualifies one is `candidates.objections`' to define — none of it visible to
+    the score — and this class only decides what to do about it, so that adding a check
+    there needs no change here.
 
     Why this exists rather than a penalty in the metric: GEPA's metric is handed one
     scored *example* and never sees the candidate instruction, so neither property can
@@ -306,7 +298,7 @@ class CappedInstructionProposer:
             # abandoning every iteration looks exactly like a search that has converged
             # — same score, "skipping" — and the run that hit that had no way to tell
             # the two apart until it finished.
-            reasons = "; ".join(note.split(".")[0] for note in notes)
+            reasons = ", ".join(note.code for note in notes)
             print(f"    proposal rejected (attempt {attempt}/{self.attempts}): {reasons}")
             # Re-ask against the rejected draft, not the original: the next round is a
             # revision of what it just wrote, which is a smaller ask than re-deriving
@@ -425,9 +417,8 @@ def optimize(
     validation: list[Utterance],
     auto: str,
     num_threads: int,
-    proposer: CappedInstructionProposer | None = None,
+    proposer: CappedInstructionProposer,
     reflection_minibatch_size: int = 8,
-    log_dir: str | None = None,
 ):
     """Evolve the instruction, returning the optimized program.
 

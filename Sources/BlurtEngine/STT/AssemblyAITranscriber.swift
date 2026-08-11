@@ -127,7 +127,8 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// `URLProtocol` mocks can't observe reliably for `upload(from:)`).
   func makeConfigData(sampleRate: Int, prompt: String?) throws -> Data {
     let enhanced = enhancedTranscriptsEnabled()
-    if enhanced, CleanupInstruction.sendable == nil {
+    let instruction = CleanupInstruction.sendable
+    if enhanced, instruction == nil {
       // Unreachable while the tests run: `CleanupInstructionTests` asserts the length.
       // Logged rather than trusted because the failure it guards against is silent —
       // the request would 400 and every dictation would error, so a line naming the
@@ -144,7 +145,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
         sampleRate: sampleRate,
         channels: 1,
         prompt: prompt.trimmedNonEmpty(),
-        llm: enhanced ? LLMRewrite() : nil
+        llm: enhanced ? LLMRewrite(instruction: instruction) : nil
       )
     )
   }
@@ -253,7 +254,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     /// Optional so an over-cap instruction encodes as `{}` rather than as a request
     /// the API will reject outright — see `CleanupInstruction.sendable`. The
     /// synthesized `encode` uses `encodeIfPresent`, so nil omits the key entirely.
-    let instruction = CleanupInstruction.sendable
+    let instruction: String?
   }
 
   private struct DictationResponse: Decodable {

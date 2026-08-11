@@ -28,6 +28,8 @@ instructions without pulling in argparse and DSPy.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 #: Hard cap the dictation API places on `config.llm.instruction`. Exceed it and the
 #: request fails outright — HTTP 400 `bad_request`, "llm.instruction: String should
 #: have at most 2048 characters" — before the audio is looked at. The failure is
@@ -90,17 +92,37 @@ def missing_safeguards(instruction: str) -> list[tuple[str, str]]:
     return [(stem, risk) for stem, risk in REQUIRED_SAFEGUARDS if stem not in lowered]
 
 
+@dataclass(frozen=True)
+class Objection:
+    """One reason a proposal cannot ship: a label to log, and prose to re-ask with.
+
+    Two audiences wanting different things. `revision_directive` and the CLI gate want
+    `message`, which is written for the reflection model. The proposer wants something
+    short for an operator log, and used to get it by splitting `message` on its first
+    period — which truncated every length objection at "…over the hard 2048-character
+    limit on config", because the prose names `config.llm.instruction`. A label the
+    producer chooses cannot be mangled that way, and adding a fifth check now means
+    adding a code rather than hoping its first sentence survives a split.
+    """
+
+    code: str
+    message: str
+
+
 def objections(
     proposal: str, fields: tuple[str, ...], cap: int = INSTRUCTION_CHARACTER_CAP
 ) -> list[str]:
     """Why `proposal` can't ship as-is, phrased for the reflector. Empty means it can.
 
-    Three things disqualify an instruction, and all are invisible to the score:
+    Four things disqualify an instruction, and all are invisible to the score:
 
     **Length.** Over `cap` the API rejects the whole request — see that constant.
 
     **Dropping a safeguard.** See `REQUIRED_SAFEGUARDS` for why the score cannot
     defend these and the search is rewarded for cutting them.
+
+    **Copying the constraints block** addressed to the reflector into the instruction
+    it writes, which would ship scaffolding to users.
 
     **Naming a signature field.** `fields` are the harness's own DSPy field names, and
     they appear in neither envelope: `PlainChatAdapter` sends the bare transcript, and
@@ -114,44 +136,59 @@ def objections(
     them, so it regenerates every run and has to be gated rather than fixed once.
     """
     found = [name for name in fields if name in proposal]
-    notes = []
+    notes: list[Objection] = []
     if excess := overage(proposal, cap):
+        over_by_words = max(1, in_words(excess))
+        to_target = max(1, in_words(len(proposal) - target_length(cap)))
+        sentences_over = max(
+            1, round(len(proposal.split()) / WORDS_PER_SENTENCE) - sentence_budget(cap)
+        )
         notes.append(
-            f"It is {len(proposal.split())} words ({len(proposal)} characters), which is "
-            f"{excess} characters over the hard {cap}-character limit on "
-            f"config.llm.instruction — the API would reject every request carrying it. "
-            f"You must delete at least {max(1, int(excess / CHARS_PER_WORD))} words to be "
-            f"legal, and {max(1, int((len(proposal) - target_length(cap)) / CHARS_PER_WORD))} "
-            f"to reach the {word_budget(cap)}-word target you were given. Aim for the target, "
-            "not the limit: this draft is the latest of several that overran, and every one "
-            f"was discarded unread. In a unit you can actually count, that is about "
-            f"{max(1, len(proposal.split()) // int(WORDS_PER_SENTENCE) - sentence_budget(cap))} "
-            f"sentences too many against a target of {sentence_budget(cap)}. Delete whole "
-            "sentences and whole examples — trimming a word here and there will not close a "
-            "gap this size. Keep every rule that changes what the model does; everything else "
-            "is expendable."
+            Objection(
+                "length",
+                f"It is {len(proposal.split())} words ({len(proposal)} characters), which is "
+                f"{excess} characters over the hard {cap}-character limit on "
+                "config.llm.instruction — the API would reject every request carrying it. "
+                f"You must delete at least {over_by_words} words to be legal, and "
+                f"{to_target} to reach the {word_budget(cap)}-word target you were given. "
+                "Aim for the target, not the limit: this draft is the latest of several that "
+                "overran, and every one was discarded unread. In a unit you can actually "
+                f"count, that is about {sentences_over} sentences too many against a target "
+                f"of {sentence_budget(cap)}. Delete whole sentences and whole examples — "
+                "trimming a word here and there will not close a gap this size. Keep every "
+                "rule that changes what the model does; everything else is expendable.",
+            )
         )
     if found:
         notes.append(
-            f"It names the field(s) {', '.join(found)}, which do not exist in the message "
-            "the model receives — the instruction is applied to a bare transcript with no "
-            "fields around it. Refer to 'the transcript' and 'your output' in prose, and "
-            "never instruct the model to label its output."
+            Objection(
+                "fields",
+                f"It names the field(s) {', '.join(found)}, which do not exist in the message "
+                "the model receives — the instruction is applied to a bare transcript with no "
+                "fields around it. Refer to 'the transcript' and 'your output' in prose, and "
+                "never instruct the model to label its output.",
+            )
         )
     if CONSTRAINT_MARKER in proposal:
         notes.append(
-            f"It copies the {CONSTRAINT_MARKER} block into the instruction. That block is "
-            "scaffolding addressed to you, not text for the model — write only the "
-            "instruction itself."
+            Objection(
+                "scaffolding",
+                f"It copies the {CONSTRAINT_MARKER} block into the instruction. That block is "
+                "scaffolding addressed to you, not text for the model — write only the "
+                "instruction itself.",
+            )
         )
     if absent := missing_safeguards(proposal):
         risks = "; ".join(f"without it, {risk}" for _, risk in absent)
         notes.append(
-            "It drops a required safeguard. The instruction must forbid answering the "
-            "transcript and must forbid translating it, in whatever words you like — "
-            f"{risks}. The scoring corpus is conversational English, so it cannot see "
-            "either failure and will not penalise you for removing the clause; say it "
-            "anyway."
+            Objection(
+                "safeguard",
+                "It drops a required safeguard. The instruction must forbid answering the "
+                "transcript and must forbid translating it, in whatever words you like — "
+                f"{risks}. The scoring corpus is conversational English, so it cannot see "
+                "either failure and will not penalise you for removing the clause; say it "
+                "anyway.",
+            )
         )
     return notes
 
@@ -200,13 +237,24 @@ def target_length(cap: int = INSTRUCTION_CHARACTER_CAP) -> int:
     return int(cap * SOFT_TARGET_RATIO)
 
 
+def in_words(characters: float) -> int:
+    """Characters expressed in words, at this instruction's measured density.
+
+    One derivation rather than the same division written at each site: `objections`
+    computed its own and reached for `int(WORDS_PER_SENTENCE)` where `sentence_budget`
+    used 13.3, so the reflector was quoted two different sentence counts for the same
+    draft.
+    """
+    return int(characters / CHARS_PER_WORD)
+
+
 def word_budget(cap: int = INSTRUCTION_CHARACTER_CAP) -> int:
     """The stated target in words — the unit a reflector can actually aim at.
 
     Words because characters are uncountable to a model, and the *target* rather than
     the cap because it aims at whatever figure it is handed.
     """
-    return int(target_length(cap) / CHARS_PER_WORD)
+    return in_words(target_length(cap))
 
 
 def hard_word_limit(cap: int = INSTRUCTION_CHARACTER_CAP) -> int:
@@ -215,7 +263,7 @@ def hard_word_limit(cap: int = INSTRUCTION_CHARACTER_CAP) -> int:
     A ceiling on its own gets treated as the destination. A target *and* a ceiling
     leaves the overshoot somewhere to land.
     """
-    return int(cap / CHARS_PER_WORD)
+    return in_words(cap)
 
 
 #: Words per sentence in an instruction of this kind, measured on `PRIOR_WINNER`
@@ -231,7 +279,7 @@ def sentence_budget(cap: int = INSTRUCTION_CHARACTER_CAP) -> int:
     Sentences and sections it *can* count, because they are structural rather than
     tallied. So the same budget is stated twice, once in words and once in a shape.
     """
-    return round(target_length(cap) / CHARS_PER_WORD / WORDS_PER_SENTENCE)
+    return round(word_budget(cap) / WORDS_PER_SENTENCE)
 
 
 def trim_to_fit(instruction: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> str | None:
@@ -255,12 +303,19 @@ def trim_to_fit(instruction: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> str |
     if len(blocks) < 3:
         return None
     while len("\n\n".join(blocks)) > cap:
-        removable = blocks[1:-1]
+        # Both protections are one predicate over candidate cuts: not the first or
+        # last block, and not a block the safeguards would leave with. Checking the
+        # safeguards only after the loop let the greedy pick take the safeguard block
+        # whenever it was the largest, and abandon a trim that was there to be made.
+        removable = [
+            b
+            for b in blocks[1:-1]
+            if not missing_safeguards("\n\n".join(x for x in blocks if x is not b))
+        ]
         if not removable:
             return None
         blocks.remove(max(removable, key=len))
-    trimmed = "\n\n".join(blocks)
-    return None if missing_safeguards(trimmed) else trimmed
+    return "\n\n".join(blocks)
 
 
 def constraint_preamble(current: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> str:
@@ -311,7 +366,7 @@ def constraint_preamble(current: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> s
     )
 
 
-def revision_directive(proposal: str, notes: list[str]) -> str:
+def revision_directive(proposal: str, notes: list[Objection]) -> str:
     """Hand a rejected proposal back to the reflector as something to revise.
 
     Used by `program.CappedInstructionProposer` as the next round's
@@ -320,9 +375,9 @@ def revision_directive(proposal: str, notes: list[str]) -> str:
     badly, so a bare complaint tends to produce another over-long draft while
     "cut at least N of these M" gives something checkable.
     """
-    listed = "\n".join(f"- {note}" for note in notes)
+    listed = "\n".join(f"- {note.message}" for note in notes)
     return (
-        f"{proposal}\n\n---\nHARD CONSTRAINTS: the instruction above cannot be used as "
+        f"{proposal}\n\n---\n{CONSTRAINT_MARKER}: the instruction above cannot be used as "
         f"written.\n{listed}\nRewrite it to fix every point above, keeping the meaning of "
         "its rules intact."
     )

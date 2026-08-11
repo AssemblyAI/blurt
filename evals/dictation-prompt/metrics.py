@@ -218,7 +218,6 @@ def mean(scores: list[Score]) -> dict[str, float]:
 
 def feedback(
     reference: str,
-    hypothesis: str,
     disfluent: str,
     scored: Score,
     axis: str = "content",
@@ -240,8 +239,9 @@ def feedback(
     or is misled by them:
 
     - **The produced text.** GEPA's reflective dataset carries it as "Generated
-      Outputs" next to the input, so repeating it is tokens for nothing. The reference
-      is the one thing GEPA does not show, which is why that stays.
+      Outputs" next to the input, so repeating it is tokens for nothing — which is why
+      this takes no `hypothesis` argument at all; `scored` already carries the diff.
+      The reference is the one thing GEPA does not show, which is why that stays.
     - **The length budget.** It belongs in `candidates.constraint_preamble`, said once
       with the real target, not repeated on all eight examples of a minibatch — and
       said there in words against a target *below* the cap, which is the opposite of
