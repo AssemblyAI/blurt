@@ -336,13 +336,36 @@ class ModelSpec:
     #: handed a ceiling sized for a frontier reflector's thinking.
     reflection_max_tokens: int = 65536
 
-    def lm(self, *, model: str | None = None, max_tokens: int | None = None) -> dspy.LM:
-        """Build an LM, overriding the model or budget for a secondary role.
+    #: Sampling temperature for the **task** model only, or None to let the provider
+    #: decide (the default, and what DSPy sends when the key is omitted).
+    #:
+    #: Exists for one failure mode: a small model falling into a repetition loop and
+    #: generating until it hits `max_tokens`. That is not a ceiling problem — a cleaned
+    #: transcript is a sentence or two — and raising the ceiling only makes each
+    #: degenerate call cost more. It is also not a harmless one: `PlainChatAdapter`
+    #: treats the whole completion as the answer, so the loop is scored as the cleanup.
+    #:
+    #: Scoped to the task model deliberately. Current Claude models reject an explicit
+    #: `temperature`, and the reflection model is normally a Claude one, so setting
+    #: this globally would break the reflector to fix the stand-in.
+    temperature: float | None = None
 
-        Sampling parameters are deliberately never set: current Claude models
-        reject `temperature`, and DSPy omits it when left unset.
+    def lm(
+        self,
+        *,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+    ) -> dspy.LM:
+        """Build an LM, overriding the model, budget, or sampling for a secondary role.
+
+        `temperature` is passed only when set, so the default call sends no sampling
+        parameters at all — which is what keeps this usable against models that reject
+        them.
         """
         kwargs: dict[str, object] = {"max_tokens": max_tokens or self.max_tokens}
+        if temperature is not None:
+            kwargs["temperature"] = temperature
         if self.api_base:
             kwargs["api_base"] = self.api_base
         return dspy.LM(model or self.model, **kwargs)
@@ -350,7 +373,7 @@ class ModelSpec:
 
 def configure(spec: ModelSpec, adapter: str = "plain") -> None:
     """Point DSPy at the model standing in for the service-side rewrite."""
-    dspy.configure(lm=spec.lm(), adapter=ADAPTERS[adapter]())
+    dspy.configure(lm=spec.lm(temperature=spec.temperature), adapter=ADAPTERS[adapter]())
 
 
 def optimize(

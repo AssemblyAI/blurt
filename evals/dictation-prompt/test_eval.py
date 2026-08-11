@@ -719,6 +719,23 @@ def test_the_task_model_has_room_for_reasoning_tokens_by_default():
     assert cli.parse_args([]).max_tokens == 8192
 
 
+def test_sampling_is_unset_by_default_and_never_reaches_the_reflection_model():
+    """Current Claude models reject an explicit temperature, and the reflector is one.
+
+    So the knob exists for the small task model's repetition loops and must not be
+    applied globally to fix them.
+    """
+    pytest.importorskip("dspy")
+    import program as program_module
+
+    assert cli.parse_args([]).temperature is None
+    spec = program_module.ModelSpec(model="openai/x", temperature=0.7)
+    # dspy.LM always carries a `temperature` key; None is what makes it omitted from
+    # the request, so "unset" means the value is None rather than the key being absent.
+    assert spec.lm().kwargs["temperature"] is None
+    assert spec.lm(temperature=spec.temperature).kwargs["temperature"] == 0.7
+
+
 def test_the_reflection_model_gets_far_more_room_than_the_task_model():
     """It thinks at length before writing an instruction, and thinking is billed here.
 

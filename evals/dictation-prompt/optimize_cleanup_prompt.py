@@ -241,6 +241,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "rather than loud: see ModelSpec.max_tokens",
     )
     model.add_argument(
+        "--temperature",
+        type=float,
+        default=None,
+        help="sampling temperature for the task model only (default: unset, provider "
+        "decides). Reach for it when the task model truncates at --max-tokens: a cleaned "
+        "transcript is a sentence or two, so hitting the ceiling means a repetition loop, "
+        "and the loop gets scored as the cleanup. Not applied to the reflection model, "
+        "which is normally a Claude one and rejects an explicit temperature",
+    )
+    model.add_argument(
         "--reflection-max-tokens",
         type=int,
         default=65536,
@@ -411,6 +421,7 @@ def main(argv: list[str] | None = None) -> int:
         api_base=args.api_base,
         max_tokens=args.max_tokens,
         reflection_max_tokens=args.reflection_max_tokens,
+        temperature=args.temperature,
     )
     program.configure(spec, adapter=args.adapter)
 
