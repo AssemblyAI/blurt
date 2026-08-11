@@ -25,3 +25,9 @@ docs/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Output of the dictation-prompt eval (evals/dictation-prompt). A run's --out JSON
+# and its tee'd log hold the corpus text and every model response, so they are
+# working notes rather than repo content — quote a number into the PR instead.
+results*.json
+*.log
