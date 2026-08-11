@@ -866,15 +866,18 @@ def test_the_shipped_winner_names_no_signature_field():
         assert field not in candidates.PRIOR_WINNER, field
 
 
-def test_the_default_corpus_is_the_one_with_room_to_improve():
-    """Switchboard is nearly saturated; a search there cannot resolve a real gain.
+def test_the_default_corpus_measures_the_task_the_product_does():
+    """Room to improve is not worth having if it comes from measuring something else.
 
-    Measured no-cleanup floors: disfluency-speech 0.834, nyra 0.789, disfl-qa 0.435.
-    The shipped instruction already scores 0.910 against Switchboard's 0.834 floor, so
-    at most 0.166 was ever available and it holds most of it — the difference between
-    good candidates falls under the noise. disfl-qa leaves 3.4x the room.
+    Median share of input words a corpus asks to be deleted, and how much of that is
+    filler: disfluency-speech 11% / 75% filler, nyra 13% / 67%, disfl-qa 31% / **0%**.
+    disfl-qa's floor is far lower (0.435 against 0.834) and that looks like headroom,
+    but it is a different task — discard the abandoned half of a self-corrected
+    question, deleting real content words. An instruction tuned there learns to throw
+    away the user's words, which is the one thing this one forbids.
     """
-    assert cli.parse_args([]).source == "disfl-qa"
+    assert cli.parse_args([]).source == "nyra"
+    assert cli.parse_args([]).source != "disfl-qa"
 
 
 def test_the_default_corpus_can_measure_formatting():

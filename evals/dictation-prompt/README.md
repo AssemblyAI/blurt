@@ -105,32 +105,37 @@ uv run evals/dictation-prompt/optimize_cleanup_prompt.py --auto light
 python3 evals/dictation-prompt/optimize_cleanup_prompt.py --source builtin --dry-run
 ```
 
-### Where the headroom is
+### Where the headroom is, and where it is a mirage
 
-The default corpus is chosen for **room to improve**, not for realism. Measured no-cleanup
-floors — the corpus's disfluent side scored against its own target, no model involved:
+The default corpus is chosen for **room to improve on the task the product actually does**.
+Those are two conditions, and the second one matters more. Measured with no model involved —
+the corpus's disfluent side against its own target, plus the median share of input words each
+corpus asks to be deleted and how much of that is filler:
 
-| `--source`          | no-cleanup floor | room to a perfect 1.0 |
-| ------------------- | ---------------- | --------------------- |
-| `disfluency-speech` | 0.834            | 0.166                 |
-| `nyra`              | 0.789            | 0.211                 |
-| **`disfl-qa`**      | **0.435**        | **0.565**             |
+| `--source`          | no-cleanup floor | words deleted | of those, fillers | task           |
+| ------------------- | ---------------- | ------------- | ----------------- | -------------- |
+| `disfluency-speech` | 0.834            | 11%           | 75%               | remove fillers |
+| **`nyra`**          | **0.789**        | 13%           | 67%               | remove fillers |
+| `disfl-qa`          | 0.435            | 31%           | **0%**            | something else |
 
 Switchboard is close to saturated. The shipped instruction scores 0.910 against its 0.834
 floor, so it is worth +0.077 and already holds about half of everything available — which is
-why two searches in a row could not beat it. The gap between a good instruction and a great
-one there is a few thousandths, and that is under the run-to-run noise. That is a property of
-the corpus, not a failure of the optimizer.
+why two searches in a row could not beat it. The remaining gap between a good instruction and
+a great one is a few thousandths, under the run-to-run noise. That is a property of the
+corpus, not a failure of the optimizer.
 
-`disfl-qa` is over 90% corrections and restarts, the hard cases Switchboard under-samples, and
-it leaves 3.4x the room. Differences between candidates are correspondingly larger than the
-noise. Its formatting is also measurable, so `--metric blend` uses both axes there instead of
-degrading to `content`.
+`disfl-qa`'s floor of 0.435 looks like the answer and is not. It deletes 31% of the input and
+**none of it is filler**: the task is to spot a self-correction and discard the abandoned first
+attempt, real content words and all — sometimes rewording what survives. An instruction tuned
+there learns to throw the user's words away, which is precisely what
+`CleanupInstruction` forbids. Headroom from measuring a different task is worth nothing.
 
-The tradeoff is realism: Blurt's traffic looks more like Switchboard, which is over half
-simple repetitions. An instruction that wins on the hard tail can over-edit the easy middle,
-so a run on `disfl-qa` prints a reminder to check the winner against `disfluency-speech`
-before shipping it.
+`nyra` is the same hand-annotated Switchboard data with casing repaired. It buys about 27% more
+room (floor 0.789 against 0.834) on the same task, and — the larger gain — its formatting is
+measurable, so `--metric blend` scores two axes instead of degrading to `content` as it must on
+`disfluency-speech`. It pays for that in fidelity: it keeps repetitions the hand annotation
+marked as reparanda and rewrites the verbatim side into its own conventions, so a run on it
+closes by printing the command to re-check the winner against the unmodified pairs.
 
 ### What the defaults do
 
