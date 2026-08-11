@@ -196,7 +196,7 @@ def test_builtin_corpus_loads_offline_and_injects():
 
 
 def test_paired_sources_are_registered_with_both_columns():
-    for key in ("nyra", "disfl-qa"):
+    for key in ("disfluency-speech", "nyra", "disfl-qa"):
         source = corpus.SOURCES[key]
         assert source.is_paired
         assert len(source.fields) == 2
@@ -268,21 +268,37 @@ def test_echo_floor_sits_below_a_perfect_cleanup():
     assert 0.0 < floor["blend"] < 1.0
 
 
+def _corpus(measurable: bool) -> corpus.Corpus:
+    return corpus.Corpus(
+        utterances=(), source="disfluency-speech", detail={}, formatting_is_measurable=measurable
+    )
+
+
 def test_unmeasurable_formatting_downgrades_blend_to_content():
-    unpunctuated = corpus.Corpus(utterances=(), source="nyra", detail={}, formatting_is_measurable=False)
-    assert cli.resolve_axis("blend", unpunctuated) == "content"
-    assert cli.resolve_axis("content", unpunctuated) == "content"
+    assert cli.resolve_axis("blend", _corpus(False)) == "content"
+    assert cli.resolve_axis("content", _corpus(False)) == "content"
 
 
 def test_explicit_format_axis_is_refused_when_it_cannot_be_measured():
-    unpunctuated = corpus.Corpus(utterances=(), source="nyra", detail={}, formatting_is_measurable=False)
     with pytest.raises(SystemExit):
-        cli.resolve_axis("format", unpunctuated)
+        cli.resolve_axis("format", _corpus(False))
 
 
 def test_measurable_formatting_keeps_the_requested_axis():
-    punctuated = corpus.Corpus(utterances=(), source="fleurs", detail={}, formatting_is_measurable=True)
-    assert all(cli.resolve_axis(axis, punctuated) == axis for axis in metrics.AXES)
+    assert all(cli.resolve_axis(axis, _corpus(True)) == axis for axis in metrics.AXES)
+
+
+def test_the_repaired_repackaging_can_measure_formatting():
+    """nyra recases its targets, which is the whole reason to prefer it over upstream."""
+    assert corpus.SOURCES["nyra"].formatting_is_measurable
+    assert not corpus.SOURCES["disfluency-speech"].formatting_is_measurable
+
+
+def test_upstream_pair_reads_the_hand_annotated_columns():
+    source = corpus.SOURCES["disfluency-speech"]
+    assert (source.input_field, source.target_field) == ("transcript_a", "transcript_c")
+    # transcript_a is already transcriber-shaped, so nothing needs undoing.
+    assert source.detag is None
 
 
 # --------------------------------------------------------------------------

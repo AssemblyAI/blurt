@@ -14,14 +14,16 @@ The Python here is offline decision support — it is not shipped, not built, an
 ## The corpora
 
 Each source supplies `(disfluent input, clean target)` pairs. The first two are **real**:
-the disfluencies are the ones actual speakers produced, not ones we thought to write down.
+the disfluencies are the ones actual speakers produced and human annotators labelled, not
+ones we thought to write down.
 
-| `--source`       | What it is                                                                                                                                                                                                                     | Measures         |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------- |
-| `nyra` (default) | [`nyralabs/disfluency_speech_english`][nyra] — ~5k utterances with `verbatim_transcript` / `intended_transcript`, repackaged from [`amaai-lab/DisfluencySpeech`][ds]: one speaker re-recording ~10h of real Switchboard calls. | content only     |
-| `disfl-qa`       | [`google-research-datasets/disfl_qa`][dq] — ~12k SQuAD questions with a human-written disfluent variant.                                                                                                                       | content + format |
-| `fleurs`         | [`google/fleurs`][fl] read speech, made disfluent by the injector in `disfluency.py`.                                                                                                                                          | content + format |
-| `builtin`        | A dozen bundled sentences plus injection. No network, no key — for smoke-testing.                                                                                                                                              | content + format |
+| `--source`                    | What it is                                                                                                                                                                                                                                  | Measures         |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `disfluency-speech` (default) | [`amaai-lab/DisfluencySpeech`][ds] — ~5k Switchboard utterances whose disfluencies trained annotators marked **by hand** under the LDC stylebook. Scores `transcript_a` (as spoken) against `transcript_c` (false starts and fillers gone). | content only     |
+| `nyra`                        | [`nyralabs/disfluency_speech_english`][nyra] — the same corpus repackaged with casing repaired, at some cost in fidelity.                                                                                                                   | content + format |
+| `disfl-qa`                    | [`google-research-datasets/disfl_qa`][dq] — ~12k SQuAD questions with a human-written disfluent variant.                                                                                                                                    | content + format |
+| `fleurs`                      | [`google/fleurs`][fl] read speech, made disfluent by the injector in `disfluency.py`.                                                                                                                                                       | content + format |
+| `builtin`                     | A dozen bundled sentences plus injection. No network, no key — for smoke-testing.                                                                                                                                                           | content + format |
 
 `--jsonl` reads a local file instead: objects with both `disfluent` and `reference` are used
 as-is; anything with only a reference goes through the injector.
@@ -36,17 +38,30 @@ punctuated alike); and an **offline path**.
 restarts — deliberately the hard cases. Switchboard is over half simple repetitions, and the
 injector is weighted the same way, so `disfl-qa` covers the tail the other two under-sample.
 
+### How the hand annotation reaches the eval
+
+`DisfluencySpeech`'s `transcript_annotated` column carries Switchboard's own markup —
+`{D}` discourse marker, `{F}` filled pause, `{E}` editing term, `[ reparandum + repair ]`,
+`<laughter>` — produced by trained annotators. Its `transcript_a`/`_b`/`_c` columns are that
+markup mechanically stripped at three levels, so **the judgment is human and the derivation is
+a rule**. We take `a` → `c`: every word as spoken (`bam-` cut-offs and all, exactly what a
+transcriber emits) against the fully cleaned version.
+
 ### What each corpus cannot tell you
 
-`nyra`'s two sides are both lowercase and unpunctuated, so the formatting axis would score
-noise. The harness refuses to let that pass silently: `--metric blend` degrades to `content`
-with a printed note, and an explicit `--metric format` is an error pointing at
-`--source fleurs --strip-formatting` instead. That is the only combination in the harness
-that genuinely poses punctuation restoration as a task.
+Mechanical stripping is why `disfluency-speech` cannot score formatting: removing a
+sentence-initial `{D Well, }` leaves the next word lowercase (`Yeah. rabbits are darling`), so
+a cleanup that correctly writes `Rabbits` would be marked wrong. The harness refuses to let
+that pass silently — `--metric blend` degrades to `content` with a note, and an explicit
+`--metric format` is an error pointing at the alternatives.
 
-`nyra`'s verbatim side is also written in annotation conventions (`[UH]`, `[laughter]`, `th*`)
-rather than as a transcriber would emit it, so the loader rewrites those into ordinary
-transcript text (`uh`, dropped, `th-`) before anything is scored.
+`nyra` is the same corpus with that casing repaired, which is what makes its formatting axis
+usable. It pays for it in fidelity: it retains repetitions the hand annotation marked as
+reparanda, and rewrites the verbatim side into its own conventions (`[UH]`, `[laughter]`,
+`th*`) that the loader has to undo. Prefer it when formatting matters more than exact recall.
+
+Neither poses punctuation _restoration_, since both sides are already punctuated. Only
+`--source fleurs --strip-formatting` does.
 
 [nyra]: https://huggingface.co/datasets/nyralabs/disfluency_speech_english
 [ds]: https://huggingface.co/datasets/amaai-lab/DisfluencySpeech
@@ -58,7 +73,7 @@ transcript text (`uh`, dropped, `th-`) before anything is scored.
 ```bash
 export ANTHROPIC_API_KEY=...
 
-# Rank the built-in candidate instructions on real paired speech.
+# Rank the built-in candidate instructions on hand-annotated Switchboard pairs.
 uv run evals/dictation-prompt/optimize_cleanup_prompt.py --limit 150 --out results.json
 
 # The hard disfluency types — corrections and restarts.
@@ -85,7 +100,7 @@ the dry-run returns, and a test asserts `dspy` never reaches `sys.modules`.
 
 | Flag                 | Default                   | What it changes                                                                              |
 | -------------------- | ------------------------- | -------------------------------------------------------------------------------------------- |
-| `--source`           | `nyra`                    | Which corpus to score against — see the table above.                                         |
+| `--source`           | `disfluency-speech`       | Which corpus to score against — see the table above.                                         |
 | `--model`            | `anthropic/claude-opus-5` | The LiteLLM model standing in for the service's rewrite model.                               |
 | `--api-base`         | —                         | Point at an OpenAI-compatible gateway instead of the provider's default endpoint.            |
 | `--metric`           | `blend`                   | `content` (words only), `format` (case and punctuation too), or 0.7/0.3 of both.             |

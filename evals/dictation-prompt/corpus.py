@@ -6,19 +6,32 @@ Two kinds of source, both yielding the same `Utterance`:
 prefer: the disfluencies are the ones real speakers produced, not the ones we
 thought to write down.
 
-- `nyra` (default) — `nyralabs/disfluency_speech_english`, ~5k utterances with
-  `verbatim_transcript` / `intended_transcript`. Repackaged from
-  `amaai-lab/DisfluencySpeech`, a single speaker re-recording ~10 hours of real
-  Switchboard telephone conversations, so the disfluency distribution is human.
-  Its verbatim side uses annotation conventions (`[UH]`, `[laughter]`, `th*`)
-  rather than what a transcriber emits, so `_detag_nyra` rewrites them into
-  ordinary words before scoring. **Neither side is punctuated or capitalized**, so
-  this corpus cannot measure formatting restoration — only disfluency removal.
+- `disfluency-speech` (default) — `amaai-lab/DisfluencySpeech`, ~5k utterances
+  from a single speaker re-recording ~10 hours of real Switchboard telephone
+  conversations. Its `transcript_annotated` column carries Switchboard's own
+  disfluency markup (`{D}` discourse marker, `{F}` filled pause, `{E}` editing
+  term, `[ reparandum + repair ]`), which trained annotators produced by hand
+  under the LDC stylebook; the `transcript_a`/`_b`/`_c` columns are that markup
+  mechanically stripped at three levels. We score `transcript_a` (every word as
+  spoken, non-speech events removed — exactly the shape a transcriber emits, with
+  cut-offs already written `bam-`) against `transcript_c` (filled pauses, editing
+  terms, discourse markers, and false starts all gone).
+
+  The catch is that stripping is mechanical, so a removed sentence-initial
+  discourse marker leaves the next word lowercase (`Yeah. rabbits are darling`).
+  Targets are therefore unreliable on capitalization and the formatting axis is
+  disabled here — a correct cleanup would be *penalized* for writing `Rabbits`.
+- `nyra` — `nyralabs/disfluency_speech_english`, the same corpus repackaged as
+  `verbatim_transcript` / `intended_transcript` with the casing repaired, which is
+  why formatting *is* measurable here. It costs some fidelity: it retains
+  repetitions the hand annotation marked as reparanda, and rewrites the verbatim
+  side into its own conventions (`[UH]`, `[laughter]`, `th*`), which `_detag_nyra`
+  has to undo. Use it when the formatting axis matters more than exact recall.
 - `disfl-qa` — `google-research-datasets/disfl_qa`, ~12k SQuAD questions with a
   human-written disfluent variant. Over 90% of its disfluencies are corrections
   and restarts, deliberately the *hard* cases (Switchboard is over half simple
-  repetitions), so it complements `nyra` rather than duplicating it. Both sides
-  are properly written, so the formatting axis is live but undemanding.
+  repetitions), so it complements the two above rather than duplicating them.
+  Both sides are properly written, so the formatting axis is live but undemanding.
 
 **Reference-only** — clean transcripts that the injector turns into pairs
 (`disfluency.py`). `fleurs` is `google/fleurs`, whose `raw_transcription` field
@@ -111,6 +124,22 @@ class Source:
 
 
 SOURCES: dict[str, Source] = {
+    "disfluency-speech": Source(
+        key="disfluency-speech",
+        dataset="amaai-lab/DisfluencySpeech",
+        split="test",
+        input_field="transcript_a",
+        target_field="transcript_c",
+        # transcript_a is already exactly what a transcriber emits — words as
+        # spoken, non-speech events dropped, cut-offs written `bam-`. No rewriting
+        # needed, unlike the nyra repackaging below.
+        formatting_is_measurable=False,
+        note=(
+            "hand-annotated Switchboard disfluencies; transcript_a (as spoken) -> "
+            "transcript_c (false starts removed). Targets carry mechanical casing "
+            "artifacts, so only content is scored"
+        ),
+    ),
     "nyra": Source(
         key="nyra",
         dataset="nyralabs/disfluency_speech_english",
@@ -118,8 +147,7 @@ SOURCES: dict[str, Source] = {
         input_field="verbatim_transcript",
         target_field="intended_transcript",
         detag=_detag_nyra,
-        formatting_is_measurable=False,
-        note="real speech pairs; neither side is punctuated, so only content is scored",
+        note="the same corpus recased and repunctuated, at the cost of some fidelity",
     ),
     "disfl-qa": Source(
         key="disfl-qa",

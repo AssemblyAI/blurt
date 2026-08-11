@@ -17,14 +17,14 @@ can be set deliberately rather than left to the server.
 
 How it measures that
 --------------------
-By default it uses a **real paired corpus**: `nyralabs/disfluency_speech_english`,
-which ships each utterance twice — as the speaker said it and as they meant it —
-derived from real Switchboard conversations. Candidate instructions are scored on
-how closely their output restores the intended side (`metrics.py`). `--source`
-selects other corpora, including `fleurs`, where clean read speech is made
-disfluent synthetically (`disfluency.py`) — the only mode with a severity dial and
-the only one that can pose punctuation restoration as a task. See `corpus.py` for
-what each source can and cannot measure.
+By default it uses a **real paired corpus**: `amaai-lab/DisfluencySpeech`, which
+ships each utterance twice — as the speaker said it and as they meant it — from
+Switchboard conversations whose disfluencies trained annotators marked by hand.
+Candidates are scored on how closely their output restores the intended side
+(`metrics.py`). `--source` selects other corpora, including `fleurs`, where clean
+read speech is made disfluent synthetically (`disfluency.py`) — the only mode with
+a severity dial and the only one that can pose punctuation restoration as a task.
+See `corpus.py` for what each source can and cannot measure.
 
 Usage
 -----
@@ -85,9 +85,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     data = parser.add_argument_group("corpus")
     data.add_argument(
         "--source",
-        default="nyra",
+        default="disfluency-speech",
         choices=(*corpus.SOURCES, "builtin"),
-        help="which corpus to score against (default: nyra, real paired speech)",
+        help="which corpus to score against (default: hand-annotated Switchboard pairs)",
     )
     data.add_argument(
         "--loader",
@@ -164,21 +164,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def resolve_axis(requested: str, loaded: corpus.Corpus) -> str:
     """Refuse to select on an axis the corpus cannot measure.
 
-    A corpus whose reference side is unpunctuated (real conversational transcripts,
-    typically) scores formatting against noise. Selecting a winner on that would
-    rank prompts by an accident of the corpus, so `blend` degrades to `content` and
+    Some corpora carry casing or punctuation their targets did not intend — most
+    often because the clean side was produced by mechanically deleting spans, which
+    strands the following word in lowercase. Scoring formatting against that
+    penalizes a *correct* cleanup, so `blend` degrades to `content` with a note and
     an explicit `--metric format` is an error rather than a meaningless number.
     """
     if loaded.formatting_is_measurable or requested == "content":
         return requested
     if requested == "format":
         raise SystemExit(
-            f"--metric format needs a corpus whose targets are punctuated; {loaded.source} is not. "
-            "Use --source fleurs --strip-formatting to pose formatting restoration as a task."
+            f"--metric format needs a corpus with trustworthy target formatting; "
+            f"{loaded.source} does not have it. Use --source nyra for repaired casing, or "
+            "--source fleurs --strip-formatting to pose formatting restoration as a task."
         )
     print(
-        f"\nNote: {loaded.source} targets carry no punctuation or capitalization, "
-        "so the formatting axis is not meaningful — selecting on content instead."
+        f"\nNote: {loaded.source} targets carry formatting artifacts from mechanical "
+        "cleanup, so the formatting axis would penalize a correct answer — selecting on content."
     )
     return "content"
 
