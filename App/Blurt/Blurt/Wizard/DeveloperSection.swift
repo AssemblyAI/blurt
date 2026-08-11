@@ -20,8 +20,9 @@ struct DeveloperSection: View {
     } footer: {
       // The home-abbreviated path is derived in the engine next to the URL the
       // writer appends to, so this label can never drift from where the log
-      // actually lands.
-      Text("Logs each dictation to \(DictationLog.defaultDisplayPath).")
+      // actually lands. No trailing period: the path ends the line so it can be
+      // selected and copied without picking up punctuation.
+      Text("Logs each dictation to \(DictationLog.defaultDisplayPath)")
         .textSelection(.enabled)
     }
   }
