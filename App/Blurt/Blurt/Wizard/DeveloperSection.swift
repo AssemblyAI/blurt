@@ -21,10 +21,12 @@ struct DeveloperSection: View {
     } footer: {
       // Both home-abbreviated paths are derived in the engine next to the URLs
       // the writers append to, so this label can never drift from where the logs
-      // actually land.
+      // actually land. No trailing period: a path ends the line, so it can be
+      // selected and copied without picking up punctuation — which is also why
+      // the first path is followed by a plain space rather than a comma.
       Text(
         "Logs each dictation to \(DictationLog.defaultDisplayPath) "
-          + "and each failure to \(DictationLog.defaultErrorDisplayPath).")
+          + "and each failure to \(DictationLog.defaultErrorDisplayPath)")
         .textSelection(.enabled)
     }
   }
