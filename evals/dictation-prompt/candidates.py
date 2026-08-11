@@ -426,13 +426,15 @@ CANDIDATES: dict[str, str] = {
 #: reflector's natural expansion lands inside the limit rather than outside it, which
 #: is what the seed before this one did not have.
 #:
-#: **It is the seed, not what ships.** `CleanupInstruction.text` on the Swift side is
-#: still the earlier 1240-character instruction, and deliberately so: this one won a
-#: search but has not been checked against the real rewrite model, and the eval scores
-#: a stand-in. Promote it only after `--verify-live` says it holds up there.
+#: **This is also what ships.** `CleanupInstruction.text` on the Swift side is the same
+#: string, byte for byte, so a new winner promoted here has to be copied there too —
+#: `CleanupInstructionTests` will not notice a divergence, only the cap and the
+#: safeguards. It went out without `--verify-live` having been run, so it is the best
+#: instruction the harness has produced rather than one shown to beat what the service
+#: does on its own.
 #:
 #: Two quirks came out of the run and are kept because editing them by hand would make
-#: this an unscored string, but they are worth knowing before promoting it:
+#: this an unscored string:
 #:
 #: - It lists `"just"` twice in the same clause ("Keep meaningful uses of 'just',
 #:   'like', and 'just' intact"), which is a duplication the reflector produced.
