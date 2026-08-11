@@ -80,17 +80,42 @@ def make_feedback_metric(axis: str):
     return scorer
 
 
-def evaluate(program, utterances: list[Utterance], num_threads: int) -> dict[str, float]:
+class _Ticking(dspy.Module):
+    """Wraps a program so each finished example reports back to a progress meter.
+
+    `dspy.Parallel` has no per-item callback and its own bar can't span more than
+    one call, so counting has to happen at the module boundary. The tick fires in
+    `finally`: an example that raised still consumed a slot, and a meter that
+    stalls on the first failure is worse than no meter.
+    """
+
+    def __init__(self, program, on_example):
+        super().__init__()
+        self.program = program
+        self.on_example = on_example
+
+    def forward(self, **kwargs):
+        try:
+            return self.program(**kwargs)
+        finally:
+            self.on_example()
+
+
+def evaluate(
+    program, utterances: list[Utterance], num_threads: int, on_example=None
+) -> dict[str, float]:
     """Run a program over a split and report every axis.
 
     Each pair is scored exactly once and all axes are read off that one result —
     `metrics.score` computes both alignments regardless, so averaging the axes
     separately would repeat the work per axis for nothing.
     """
-    # The caller prints one line per candidate; a nested per-example bar on top of
-    # that renders as interleaved carriage-return noise in a piped log.
+    # DSPy's own bar is disabled: it can only cover a single call, so on a sweep it
+    # would restart per candidate, and its carriage returns fight the caller's
+    # meter. `on_example` lets the caller show one bar across the whole run.
     runner = dspy.Parallel(num_threads=num_threads, provide_traceback=True, disable_progress_bar=True)
-    predictions = runner([(program, {"raw_transcript": u.disfluent}) for u in utterances])
+    counted = program if on_example is None else _Ticking(program, on_example)
+    predictions = runner([(counted, {"raw_transcript": u.disfluent}) for u in utterances])
     return metrics.mean(
         [
             metrics.score(utterance.reference, _cleaned(prediction))

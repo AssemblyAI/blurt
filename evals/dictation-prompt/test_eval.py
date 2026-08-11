@@ -10,6 +10,9 @@ transcript text, and that the splits are disjoint. Run with:
 
 from __future__ import annotations
 
+import io
+import pathlib
+import re
 import sys
 
 import pytest
@@ -18,6 +21,7 @@ import candidates
 import corpus
 import metrics
 import optimize_cleanup_prompt as cli
+import progress
 from disfluency import inject
 
 SENTENCE = (
@@ -329,6 +333,93 @@ def test_upstream_pair_reads_the_hand_annotated_columns():
 
 
 # --------------------------------------------------------------------------
+# Progress meter
+# --------------------------------------------------------------------------
+
+
+class _Pipe(io.StringIO):
+    """A stream that is explicitly not a terminal."""
+
+    def isatty(self) -> bool:
+        return False
+
+
+class _Terminal(io.StringIO):
+    def isatty(self) -> bool:
+        return True
+
+
+def test_piped_output_uses_newlines_not_carriage_returns():
+    """A log file full of \r is one unreadable line — the failure mode to avoid."""
+    stream = _Pipe()
+    meter = progress.Progress(20, "work", stream=stream)
+    for _ in range(20):
+        meter.tick()
+    meter.close()
+    assert "\r" not in stream.getvalue()
+    assert stream.getvalue().count("\n") > 1
+
+
+def test_piped_output_reports_deciles_not_every_tick():
+    stream = _Pipe()
+    meter = progress.Progress(100, "work", stream=stream)
+    for _ in range(100):
+        meter.tick()
+    # Ten deciles, not a hundred lines.
+    assert stream.getvalue().count("progress ") == 10
+
+
+def test_terminal_output_rewrites_one_line_in_place():
+    stream = _Terminal()
+    meter = progress.Progress(10, "work", stream=stream)
+    for _ in range(10):
+        meter.tick()
+    body = stream.getvalue()
+    assert body.count("\r") >= 10
+    assert "█" in body
+
+
+def test_meter_reaches_exactly_the_total_and_never_exceeds_it():
+    stream = _Pipe()
+    meter = progress.Progress(5, stream=stream)
+    for _ in range(9):  # more ticks than units, e.g. a retry
+        meter.tick()
+    assert meter.done == 5
+
+
+def test_zero_total_does_not_divide_by_zero():
+    meter = progress.Progress(0, stream=_Pipe())
+    meter.tick()
+    meter.close()
+
+
+def test_eta_is_unknown_before_the_first_tick():
+    assert progress.Progress(10, stream=_Pipe())._eta() == "—"
+
+
+def test_durations_read_at_a_glance():
+    assert progress._duration(18) == "18s"
+    assert progress._duration(262) == "4m22s"
+    assert progress._duration(3720) == "1h02m"
+
+
+def test_a_failing_example_still_advances_the_meter(monkeypatch):
+    """A meter that stalls on the first failure is worse than no meter."""
+    ticks = []
+
+    class Boom:
+        def __call__(self, **_):
+            raise RuntimeError("upstream refused")
+
+    import program as program_module
+
+    wrapped = program_module._Ticking(Boom(), lambda: ticks.append(1))
+    with pytest.raises(RuntimeError):
+        wrapped(raw_transcript="x")
+    assert ticks == [1]
+
+
+# --------------------------------------------------------------------------
 # Candidates and the offline guarantee
 # --------------------------------------------------------------------------
 
@@ -349,8 +440,26 @@ def test_every_candidate_instruction_is_shippable():
         assert len(instruction) < 1000, name
 
 
-def test_dry_run_completes_without_importing_dspy():
-    """The offline promise is structural: nothing on this path may pull in DSPy."""
+def test_dry_run_never_reaches_the_dspy_module():
+    """The offline promise is structural: the deferred import must not fire.
+
+    Asserting on `dspy` itself would be flaky — any other test that imports
+    `program` puts it in `sys.modules` for the whole session. The property that
+    actually matters is that the dry-run path never touches `program`, which is
+    the only module allowed to import DSPy (pinned by the test below).
+    """
     sys.modules.pop("program", None)
     assert cli.main(["--source", "builtin", "--dry-run", "--limit", "12", "--show-samples", "1"]) == 0
-    assert "dspy" not in sys.modules
+    assert "program" not in sys.modules
+
+
+def test_program_is_the_only_module_that_imports_dspy():
+    """Keeps the offline guarantee from eroding one convenience import at a time."""
+    here = pathlib.Path(__file__).parent
+    offenders = [
+        path.name
+        for path in sorted(here.glob("*.py"))
+        if path.name not in {"program.py", "test_eval.py"}
+        and re.search(r"^\s*(import dspy|from dspy)", path.read_text(), re.MULTILINE)
+    ]
+    assert offenders == []

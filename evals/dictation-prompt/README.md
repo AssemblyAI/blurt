@@ -98,7 +98,12 @@ environment. With plain `pip`, `pip install "dspy>=3.0"` is the only requirement
 
 The dry-run and the tests import nothing outside the standard library. That is structural, not
 a convention: everything touching DSPy lives in `program.py`, which the CLI imports only after
-the dry-run returns, and a test asserts `dspy` never reaches `sys.modules`.
+the dry-run returns. Two tests hold the line — one that the dry-run never reaches `program`,
+one that no other module imports `dspy` at all.
+
+A sweep is hundreds of paid calls, so it shows a progress meter across the whole run rather
+than going quiet between candidates. On a terminal it rewrites one line in place; piped to a
+log it prints a line per decile, since carriage returns in a file make one unreadable line.
 
 ## The knobs that matter
 

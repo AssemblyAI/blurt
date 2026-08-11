@@ -53,6 +53,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import corpus  # noqa: E402
 import metrics  # noqa: E402
 from candidates import BASELINE, CANDIDATES  # noqa: E402
+from progress import Progress  # noqa: E402
 
 
 def print_table(rows: list[tuple[str, dict[str, float]]], title: str, axis: str) -> None:
@@ -233,10 +234,13 @@ def main(argv: list[str] | None = None) -> int:
     program.configure(spec)
 
     dev_rows: list[tuple[str, dict[str, float]]] = []
-    for name, instruction in CANDIDATES.items():
-        scores = program.evaluate(program.build(instruction), dev, args.num_threads)
-        dev_rows.append((name, scores))
-        print(f"  scored {name:<22} dev {axis} {scores[axis]:.4f}")
+    with Progress(len(CANDIDATES) * len(dev), "Scoring candidates on dev") as meter:
+        for index, (name, instruction) in enumerate(CANDIDATES.items(), start=1):
+            note = f"{name} ({index}/{len(CANDIDATES)})"
+            scores = program.evaluate(
+                program.build(instruction), dev, args.num_threads, on_example=lambda n=note: meter.tick(n)
+            )
+            dev_rows.append((name, scores))
     print_table(dev_rows, f"Candidate instructions on dev, selecting on {axis}", axis)
 
     winner_name, winner_scores = max(dev_rows, key=lambda row: row[1][axis])
@@ -255,7 +259,10 @@ def main(argv: list[str] | None = None) -> int:
             auto=args.auto,
             num_threads=args.num_threads,
         )
-        optimized_scores = program.evaluate(optimized, dev, args.num_threads)
+        with Progress(len(dev), "Re-scoring the optimized instruction") as meter:
+            optimized_scores = program.evaluate(
+                optimized, dev, args.num_threads, on_example=meter.tick
+            )
         dev_rows.append((f"{args.optimizer}-optimized", optimized_scores))
         print_table(dev_rows, f"With the optimized instruction, on dev ({axis})", axis)
         if optimized_scores[axis] > winner_scores[axis]:
@@ -266,9 +273,23 @@ def main(argv: list[str] | None = None) -> int:
 
     # Held-out test scores for the winner and for the shipped-default proxy, so the
     # reported improvement is measured on data no selection decision saw.
-    test_rows = [(winner_name, program.evaluate(program.build(winner_instruction), test, args.num_threads))]
+    scored_on_test = [(winner_name, winner_instruction)]
     if winner_name != BASELINE:
-        test_rows.append((BASELINE, program.evaluate(program.build(CANDIDATES[BASELINE]), test, args.num_threads)))
+        scored_on_test.append((BASELINE, CANDIDATES[BASELINE]))
+    test_rows = []
+    with Progress(len(scored_on_test) * len(test), "Scoring on held-out test") as meter:
+        for name, instruction in scored_on_test:
+            test_rows.append(
+                (
+                    name,
+                    program.evaluate(
+                        program.build(instruction),
+                        test,
+                        args.num_threads,
+                        on_example=lambda n=name: meter.tick(n),
+                    ),
+                )
+            )
     print_table(test_rows, f"Held-out test ({axis})", axis)
 
     print("\nBest cleanup instruction:\n")
