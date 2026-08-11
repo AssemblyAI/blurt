@@ -24,7 +24,7 @@ ones we thought to write down.
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
 | `disfluency-speech` (default) | [`amaai-lab/DisfluencySpeech`][ds] — ~5k Switchboard utterances whose disfluencies trained annotators marked **by hand** under the LDC stylebook. Scores `transcript_a` (as spoken) against `transcript_c` (false starts and fillers gone). | content only     |
 | `nyra`                        | [`nyralabs/disfluency_speech_english`][nyra] — the same corpus repackaged with casing repaired, at some cost in fidelity.                                                                                                                   | content + format |
-| `disfl-qa`                    | [`google-research-datasets/disfl_qa`][dq] — ~12k SQuAD questions with a human-written disfluent variant.                                                                                                                                    | content + format |
+| `disfl-qa`                    | [`google-research-datasets/disfl_qa`][dq] — ~12k SQuAD-v2 questions with a human-inserted self-correction. A QA **robustness** benchmark, not a cleanup corpus — see the warning below before tuning on it.                                 | content + format |
 | `fleurs`                      | [`google/fleurs`][fl] read speech, made disfluent by the injector in `disfluency.py`.                                                                                                                                                       | content + format |
 | `builtin`                     | A dozen bundled sentences plus injection. No network, no key — for smoke-testing.                                                                                                                                                           | content + format |
 
@@ -126,9 +126,21 @@ corpus, not a failure of the optimizer.
 
 `disfl-qa`'s floor of 0.435 looks like the answer and is not. It deletes 31% of the input and
 **none of it is filler**: the task is to spot a self-correction and discard the abandoned first
-attempt, real content words and all — sometimes rewording what survives. An instruction tuned
-there learns to throw the user's words away, which is precisely what
-`CleanupInstruction` forbids. Headroom from measuring a different task is worth nothing.
+attempt, real content words and all — sometimes rewording what survives, since 11% of its
+targets contain words absent from the input and so cannot be reached by deletion at all.
+
+Its construction says why. Disfl-QA exists to "serve as a benchmark dataset for testing
+robustness of models against disfluent inputs": annotators took SQuAD-v2 questions and inserted
+a contextual disfluency "using the paragraph as a source of distractors", which is how you get
+_"the second level of territorial division in **Poland** no make that the basic unit of
+territorial division in **Warsaw**"_. "Poland" is not a speaker's slip — it is a semantic decoy
+harvested from the passage, planted to see whether a QA model is fooled. Over 90% of the
+disfluencies are corrections or restarts by design, because the point was a hard test set.
+
+None of that resembles someone dictating. An instruction tuned there learns to discard content
+words, which is precisely what `CleanupInstruction` forbids, and headroom from measuring a
+different task is worth nothing. It stays useful for the thing it was built for: a stress test
+of whether an instruction over-deletes when a restart appears.
 
 `nyra` is the same hand-annotated Switchboard data with casing repaired. It buys about 27% more
 room (floor 0.789 against 0.834) on the same task, and — the larger gain — its formatting is
