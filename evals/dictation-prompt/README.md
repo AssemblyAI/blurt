@@ -100,11 +100,11 @@ LDC-licensed sets. Two candidates were evaluated and rejected on measurement, no
 Measured with no model involved: the corpus's disfluent side against its own target, the
 median share of input words each asks to be deleted, and how much of that is filler.
 
-| source                                      | no-cleanup floor | words deleted | of those, fillers | task           |
-| ------------------------------------------- | ---------------- | ------------- | ----------------- | -------------- |
-| **`nyra`**                                  | **0.789**        | 13%           | 67%               | remove fillers |
-| `amaai-lab/DisfluencySpeech` (its upstream) | 0.834            | 11%           | 75%               | remove fillers |
-| `disfl-qa` — **removed**                    | 0.435            | 31%           | **0%**            | something else |
+| source                                        | no-cleanup floor | words deleted | of those, fillers | task           |
+| --------------------------------------------- | ---------------- | ------------- | ----------------- | -------------- |
+| **`nyra`**                                    | **0.789**        | 13%           | 67%               | remove fillers |
+| [`amaai-lab/DisfluencySpeech`][ds] (upstream) | 0.834            | 11%           | 75%               | remove fillers |
+| [`disfl-qa`][dq] — **removed**                | 0.435            | 31%           | **0%**            | something else |
 
 `disfl-qa`'s floor of 0.435 looks like 3.4x the headroom and is not. It deletes 31% of the
 input with **none of it filler**, and 11% of its targets contain words absent from the input,
