@@ -124,9 +124,12 @@ def objections(
             f"legal, and {max(1, int((len(proposal) - target_length(cap)) / CHARS_PER_WORD))} "
             f"to reach the {word_budget(cap)}-word target you were given. Aim for the target, "
             "not the limit: this draft is the latest of several that overran, and every one "
-            "was discarded unread. Delete whole sentences and whole examples — trimming a word "
-            "here and there will not close a gap this size. Keep every rule that changes what "
-            "the model does; everything else is expendable."
+            f"was discarded unread. In a unit you can actually count, that is about "
+            f"{max(1, len(proposal.split()) // int(WORDS_PER_SENTENCE) - sentence_budget(cap))} "
+            f"sentences too many against a target of {sentence_budget(cap)}. Delete whole "
+            "sentences and whole examples — trimming a word here and there will not close a "
+            "gap this size. Keep every rule that changes what the model does; everything else "
+            "is expendable."
         )
     if found:
         notes.append(
@@ -206,6 +209,31 @@ def word_budget(cap: int = INSTRUCTION_CHARACTER_CAP) -> int:
     return int(target_length(cap) / CHARS_PER_WORD)
 
 
+def hard_word_limit(cap: int = INSTRUCTION_CHARACTER_CAP) -> int:
+    """`cap` in words — quoted alongside the target so the buffer between them is visible.
+
+    A ceiling on its own gets treated as the destination. A target *and* a ceiling
+    leaves the overshoot somewhere to land.
+    """
+    return int(cap / CHARS_PER_WORD)
+
+
+#: Words per sentence in an instruction of this kind, measured on `PRIOR_WINNER`
+#: (199 words across ~15 sentences). Only used to restate the budget structurally.
+WORDS_PER_SENTENCE = 13.3
+
+
+def sentence_budget(cap: int = INSTRUCTION_CHARACTER_CAP) -> int:
+    """The target expressed in sentences — a unit the model can actually count.
+
+    A model cannot count its own words while generating, which is most of why the word
+    budget is obeyed so weakly: told 282 it returned ~340, told 333 it returned ~349.
+    Sentences and sections it *can* count, because they are structural rather than
+    tallied. So the same budget is stated twice, once in words and once in a shape.
+    """
+    return round(target_length(cap) / CHARS_PER_WORD / WORDS_PER_SENTENCE)
+
+
 def trim_to_fit(instruction: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> str | None:
     """Drop whole blocks until `instruction` fits, or None if that can't be done safely.
 
@@ -249,32 +277,37 @@ def constraint_preamble(current: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> s
     a budget it can plan in — and see `PRIOR_WINNER` for why the seed itself was cut
     down to leave some.
     """
-    budget = word_budget(cap)
-    hard = int(cap / CHARS_PER_WORD)
+    budget, hard = word_budget(cap), hard_word_limit(cap)
+    sentences = sentence_budget(cap)
+    have = len(current.split())
     return (
-        f"BEFORE YOU BEGIN: your reply must be AT MOST {budget} WORDS. This is the "
-        "constraint attempts at this task fail on, far more often than any other.\n\n"
+        f"BEFORE YOU BEGIN — the constraint attempts at this task fail on, far more often "
+        f"than any other: aim for {budget} WORDS, about {sentences} SENTENCES. The hard "
+        f"maximum is {hard} words; past that the API rejects the request and the attempt is "
+        "lost.\n\n"
         f"{current}\n\n---\n{CONSTRAINT_MARKER} on the instruction you write. These are "
-        "requirements of the API and the product. They are not preferences, and an "
-        "instruction that breaks any of them is discarded without being scored.\n"
-        f"1. LENGTH. AT MOST {budget} WORDS. The instruction above is "
-        f"{len(current.split())} words. Do not treat {budget} as a target to approach — "
-        "treat it as a line you must finish well short of. Recent attempts at this task "
-        f"averaged 340 words and EVERY ONE WAS THROWN AWAY UNREAD. Past {hard} words the "
-        "API rejects the request outright: no score, no feedback, the iteration is lost "
-        "and your work is wasted entirely.\n"
+        "requirements of the API and the product, not preferences. An instruction that "
+        "breaks any of them is discarded without being scored.\n"
+        f"1. LENGTH — target {budget} words, hard maximum {hard}. The instruction above is "
+        f"{have} words. Aim at the target and let the maximum be the margin you never "
+        "reach; attempts that aimed at the maximum averaged 340 words and every one of them "
+        "was thrown away unread.\n"
+        f"   Easier to hold than a word count: keep it to about {sentences} sentences across "
+        "at most 5 short sections. You cannot count your words while writing, but you can "
+        "count sentences and sections — use those.\n"
         "   Shorter is strictly better. An instruction half this length that performs the "
-        "same is the better answer — brevity is never penalised here, and length is what "
+        "same is the better answer; brevity is never penalised here, and length is what "
         "kills attempts. Add nothing without deleting something larger.\n"
-        f"   Before you reply: count the words of your draft. If it exceeds {budget}, "
-        "delete whole sentences — not a word here and there — and count again. Repeat "
-        "until you are under. Do not submit a draft you have not counted.\n"
+        f"   Before you reply, count the sentences in your draft. If it runs past "
+        f"{sentences}, delete whole sentences — not a word here and there — and count "
+        "again. Do not submit a draft you have not counted.\n"
         "2. SAFEGUARDS. It must forbid answering the transcript and forbid translating it, "
         "in whatever words you like. The scoring corpus cannot see either failure, so "
         "nothing will penalise you for dropping them; they still reach real users.\n"
         "3. NO FIELD NAMES. The model receives a bare transcript with no fields around it.\n"
         "4. Write only the instruction itself. Never repeat these constraints in it.\n"
-        f"\nTo repeat, because it is the one that fails: AT MOST {budget} WORDS."
+        f"\nTo repeat, because it is the one that fails: aim for {budget} words, about "
+        f"{sentences} sentences. Hard maximum {hard} words."
     )
 
 

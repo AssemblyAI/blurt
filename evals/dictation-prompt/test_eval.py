@@ -787,12 +787,18 @@ def test_the_constraints_reach_the_reflector_before_its_first_attempt():
     budget = candidates.word_budget(2048)
     # Bracketed: first line and last line, because the ask is weakly obeyed and a
     # constraint stated once in the middle of a long prompt is a constraint lost.
-    assert preamble.startswith(f"BEFORE YOU BEGIN: your reply must be AT MOST {budget} WORDS")
-    assert preamble.rstrip().endswith(f"AT MOST {budget} WORDS.")
-    assert preamble.count(f"{budget} WORDS") >= 3
+    assert preamble.startswith("BEFORE YOU BEGIN")
+    assert f"aim for {budget} WORDS" in preamble
+    assert preamble.rstrip().endswith(f"Hard maximum {candidates.hard_word_limit(2048)} words.")
+    assert preamble.count(str(budget)) >= 3
     assert f"{len(seed.split())} words" in preamble
+    # A target AND a ceiling, so the overshoot has somewhere to land that still fits.
+    assert candidates.word_budget(2048) < candidates.hard_word_limit(2048)
+    # Restated structurally, because a model cannot count its own words while writing.
+    assert f"{candidates.sentence_budget(2048)} sentences" in preamble
+    assert "count the sentences in your draft" in preamble
     assert "forbid answering" in preamble
-    assert "Do not name input or output fields" in preamble
+    assert "NO FIELD NAMES" in preamble
 
 
 def test_an_overlong_draft_is_trimmed_at_section_boundaries_not_mid_sentence():
