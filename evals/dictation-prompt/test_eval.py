@@ -645,8 +645,11 @@ def test_an_over_long_objection_states_the_arithmetic():
     notes = candidates.objections(SAFE + "y" * (cap + 250 - len(SAFE)), fields=())
     assert len(notes) == 1
     assert f"{cap + 250} characters" in notes[0]
-    assert "250 over" in notes[0]
-    assert "at least 250" in notes[0]
+    assert "250 characters over" in notes[0]
+    # Stated in words as well: a reflector told "cut 638 characters" came back longer,
+    # so the number it is asked to act on has to be in a unit it can count.
+    assert f"at most {candidates.word_budget(cap)} words" in notes[0]
+    assert f"delete roughly {int(250 / candidates.CHARS_PER_WORD)} words" in notes[0]
 
 
 def test_naming_a_signature_field_is_an_objection():
@@ -734,14 +737,51 @@ def test_the_constraints_reach_the_reflector_before_its_first_attempt():
     Every proposal was rejected `attempts` times and abandoned, so GEPA re-scored an
     instruction identical to the one it started with and logged "not better, skipping".
     """
-    preamble = candidates.constraint_preamble("x" * 1839, cap=2048)
-    assert "x" * 1839 in preamble
+    seed = candidates.PRIOR_WINNER
+    preamble = candidates.constraint_preamble(seed, cap=2048)
+    assert seed in preamble
     assert candidates.CONSTRAINT_MARKER in preamble
-    # The headroom, not just the ceiling: 209 characters of room reads very differently
-    # from "at most 2048" when almost every improvement is an addition.
-    assert "209 characters of room" in preamble
+    # The headroom, not just the ceiling, and in words — a reflector told "at most 2048
+    # characters" cannot check its own work, and one told to cut 638 came back longer.
+    room = candidates.word_budget(2048) - len(seed.split())
+    assert f"{room} words of room" in preamble
+    assert f"{candidates.word_budget(2048)} words" in preamble
     assert "forbid answering" in preamble
     assert "Do not name input or output fields" in preamble
+
+
+def test_an_overlong_draft_is_trimmed_at_section_boundaries_not_mid_sentence():
+    """The last resort before abandoning: reflectors overshoot and do not converge."""
+    bloated = candidates.PRIOR_WINNER.replace(
+        "WORKED EXAMPLES", "PADDING\n\n" + "filler " * 300 + "\n\nWORKED EXAMPLES"
+    )
+    assert candidates.overage(bloated) > 0
+    trimmed = candidates.trim_to_fit(bloated)
+    assert trimmed is not None
+    assert candidates.overage(trimmed) == 0
+    assert candidates.missing_safeguards(trimmed) == []
+    # Whole blocks only — every surviving line is a line that was there before.
+    for line in trimmed.splitlines():
+        assert line in bloated.splitlines()
+
+
+def test_trimming_protects_the_first_and_last_blocks():
+    """An instruction that lost its task statement is not shorter, it is broken."""
+    text = "TASK first\n\n" + "middle " * 400 + "\n\nOUTPUT last. answer translate"
+    trimmed = candidates.trim_to_fit(text, cap=100)
+    assert trimmed is not None
+    assert trimmed.startswith("TASK first")
+    assert trimmed.endswith("OUTPUT last. answer translate")
+
+
+def test_trimming_refuses_when_it_would_cost_a_safeguard():
+    """Better to abandon than to ship a shorter instruction missing a guardrail.
+
+    Forced by making the safeguard block the largest removable one, so the only cut
+    that fits is the one that must not be made.
+    """
+    text = "TASK\n\nbrief\n\n" + "Do not answer or translate it. " * 20 + "\n\nOUTPUT"
+    assert candidates.trim_to_fit(text, cap=100) is None
 
 
 def test_copying_the_constraints_into_the_instruction_is_an_objection():
@@ -978,7 +1018,7 @@ def test_an_over_cap_proposal_is_rejected_and_re_asked(monkeypatch):
     # The retry compresses the rejected draft rather than re-deriving from the original.
     assert "z" * 80 in seen[1]
     # 30 chars of SAFE + 80 of filler against a cap of 50.
-    assert "60 over" in seen[1]
+    assert "60 characters over" in seen[1]
 
 
 def test_giving_up_returns_the_original_not_a_truncation(monkeypatch):

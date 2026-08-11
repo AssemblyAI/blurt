@@ -117,10 +117,13 @@ def objections(
     notes = []
     if excess := overage(proposal, cap):
         notes.append(
-            f"It is {len(proposal)} characters, {excess} over the {cap}-character limit on "
-            f"config.llm.instruction, so the API would reject every request carrying it. "
-            f"Cut at least {excess} characters — drop redundant worked examples and "
-            "restatements first, and keep every rule that changes what the model does."
+            f"It is {len(proposal.split())} words ({len(proposal)} characters), which is "
+            f"{excess} characters over the hard {cap}-character limit on "
+            f"config.llm.instruction — the API would reject every request carrying it. "
+            f"Cut it to at most {word_budget(cap)} words, so delete roughly "
+            f"{max(1, int(excess / CHARS_PER_WORD))} words. Remove whole worked examples and "
+            "restatements rather than trimming words from each sentence, and keep every rule "
+            "that changes what the model does."
         )
     if found:
         notes.append(
@@ -152,6 +155,47 @@ def objections(
 #: rewrite would ship our scaffolding to users.
 CONSTRAINT_MARKER = "HARD CONSTRAINTS"
 
+#: Characters per word in an instruction of this kind, measured on `PRIOR_WINNER`
+#: (1839 characters over 299 words). Used only to state the cap in words as well as
+#: characters, because a model asked for "at most 2048 characters" cannot check its own
+#: work: told to cut 638, one reflector came back 45 characters *longer*. Word counts
+#: it can approximately keep. Characters remain what is actually enforced.
+CHARS_PER_WORD = 6.15
+
+
+def word_budget(cap: int = INSTRUCTION_CHARACTER_CAP) -> int:
+    """`cap` expressed in words — the unit a reflector can actually aim at."""
+    return int(cap / CHARS_PER_WORD)
+
+
+def trim_to_fit(instruction: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> str | None:
+    """Drop whole blocks until `instruction` fits, or None if that can't be done safely.
+
+    The last resort before abandoning a proposal. Reflectors overshoot this cap badly
+    and do not reliably converge when asked to cut, so a run can otherwise spend every
+    iteration re-scoring the instruction it started with.
+
+    Cuts at blank lines only — whole sections, never mid-sentence — and takes the
+    largest removable block first, since one section usually covers the whole overage.
+    The first and last blocks are protected: they are the task statement and the output
+    instruction, and an instruction that has lost either is not a shorter instruction,
+    it is a broken one. Returns None if the result would drop a safeguard.
+
+    Doing this inside the search is safe in a way hand-editing an instruction is not:
+    GEPA scores the trimmed candidate immediately, so a trim that cost quality loses on
+    merit in the same iteration. Nothing unscored reaches a winner this way.
+    """
+    blocks = [b for b in instruction.split("\n\n") if b.strip()]
+    if len(blocks) < 3:
+        return None
+    while len("\n\n".join(blocks)) > cap:
+        removable = blocks[1:-1]
+        if not removable:
+            return None
+        blocks.remove(max(removable, key=len))
+    trimmed = "\n\n".join(blocks)
+    return None if missing_safeguards(trimmed) else trimmed
+
 
 def constraint_preamble(current: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> str:
     """The instruction to improve, plus the rules its replacement has to satisfy.
@@ -169,9 +213,10 @@ def constraint_preamble(current: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> s
     return (
         f"{current}\n\n---\n{CONSTRAINT_MARKER} on the instruction you write (these are "
         f"requirements of the API and the product, not preferences):\n"
-        f"- At most {cap} characters. The instruction above is {len(current)}, so you have "
-        f"{max(0, cap - len(current))} characters of room — most of your budget is already "
-        "spent, so prefer rewording to adding.\n"
+        f"- At most {word_budget(cap)} words (a hard {cap}-character limit). The instruction "
+        f"above is {len(current.split())} words, so you have roughly "
+        f"{max(0, word_budget(cap) - len(current.split()))} words of room. Most of the budget "
+        "is already spent: prefer rewording to adding, and if you add a rule, cut one.\n"
         "- It must forbid answering the transcript and forbid translating it, in whatever "
         "words you like. The scoring corpus cannot see either failure, so nothing will "
         "penalise you for dropping them; they still ship to real users.\n"

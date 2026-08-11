@@ -16,7 +16,7 @@ import dspy
 from gepa.strategies.instruction_proposal import InstructionProposalSignature
 
 import metrics
-from candidates import constraint_preamble, objections, revision_directive
+from candidates import constraint_preamble, objections, revision_directive, trim_to_fit
 from corpus import Utterance
 
 #: The harness's own signature field names. They exist for DSPy's benefit and appear
@@ -273,6 +273,8 @@ class CappedInstructionProposer:
         self.rejected = 0
         #: Components the retries never got clean, left unchanged.
         self.abandoned = 0
+        #: Components rescued by cutting the last draft at section boundaries.
+        self.trimmed = 0
 
     def __call__(self, candidate, reflective_dataset, components_to_update) -> dict[str, str]:
         return {
@@ -298,6 +300,7 @@ class CappedInstructionProposer:
         # every proposal was rejected `attempts` times, abandoned, and GEPA spent the
         # iteration re-scoring an instruction identical to the one it started with.
         document = constraint_preamble(current, self.cap)
+        last = current
         for attempt in range(1, self.attempts + 1):
             proposed = InstructionProposalSignature.run(
                 lm=self._lm_call,
@@ -320,6 +323,25 @@ class CappedInstructionProposer:
             # revision of what it just wrote, which is a smaller ask than re-deriving
             # a compliant instruction from scratch.
             document = revision_directive(proposed, notes)
+            last = proposed
+
+        # Reflectors overshoot this cap badly and do not reliably converge when asked to
+        # cut — one run saw attempt 2 come back *longer* than attempt 1 despite being
+        # told to delete 638 characters. So rather than throw away five reflection calls
+        # and re-score the instruction we started with, cut the last draft down
+        # mechanically at section boundaries and let GEPA judge the result. If the trim
+        # cost quality, the candidate loses this iteration on merit; nothing unscored
+        # survives it.
+        if (trimmed := trim_to_fit(last, self.cap)) and not objections(
+            trimmed, self.fields, self.cap
+        ):
+            self.trimmed += 1
+            print(
+                f"    trimmed the last draft to fit: {len(last)} -> {len(trimmed)} chars "
+                "by dropping whole sections"
+            )
+            return trimmed
+
         self.abandoned += 1
         print("    giving up on this component; leaving the instruction unchanged")
         return current

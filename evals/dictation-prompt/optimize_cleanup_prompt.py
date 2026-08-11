@@ -606,9 +606,11 @@ def main(argv: list[str] | None = None) -> int:
             # A search that spent itself fighting the cap should be visible, not
             # inferred from a disappointing score.
             print(
-                f"\nThe proposer rejected {proposer.rejected} over-cap proposal(s); "
-                f"{proposer.abandoned} component update(s) were abandoned and left unchanged "
-                "after the retries."
+                f"\nThe proposer rejected {proposer.rejected} unshippable proposal(s): "
+                f"{proposer.trimmed} were rescued by trimming whole sections, "
+                f"{proposer.abandoned} were abandoned and left unchanged after the retries. "
+                "A high abandoned count means the search spent its iterations re-scoring the "
+                "instruction it started from."
             )
         with Progress(len(dev), "Re-scoring the optimized instruction") as meter:
             optimized_scores = program.evaluate(
