@@ -19,6 +19,27 @@ public enum BlurtError: Error, Sendable {
   case noEditableTarget
 }
 
+extension BlurtError {
+  /// Stable, machine-greppable case label for the developer-mode error log
+  /// (`DictationLog.appendError`). Distinct from `errorDescription`, which is
+  /// human-facing copy that carries a localized underlying description — fine to
+  /// read, useless to aggregate on, and free to be reworded. This is the field a
+  /// `grep '"kind":"sttFailed"' errors.jsonl` counts.
+  ///
+  /// Exhaustive for the same reason as `isSetupBlocker`: a new case must not
+  /// silently land in the log under a neighbour's name.
+  var diagnosticName: String {
+    switch self {
+    case .accessibilityPermissionMissing: "accessibilityPermissionMissing"
+    case .apiKeyMissing: "apiKeyMissing"
+    case .sttFailed: "sttFailed"
+    case .targetAppLost: "targetAppLost"
+    case .audioCaptureFailed: "audioCaptureFailed"
+    case .noEditableTarget: "noEditableTarget"
+    }
+  }
+}
+
 extension BlurtError: LocalizedError {
   public var errorDescription: String? {
     switch self {

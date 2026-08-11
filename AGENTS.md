@@ -435,8 +435,21 @@ History: **`RecentDictations`** is an in-memory, newest-first ring shown in the 
 written to disk). **`DictationLog`** appends each completed dictation with its context snapshot to
 `~/Library/Logs/Blurt/dictations.jsonl` (`DictationLog.defaultURL`, or `defaultDisplayPath` for the
 home-abbreviated form to show in UI — derived next to the URL so the label can't drift from the write
-target) — but **only** while developer mode is on; with it off, nothing is written. The Settings
-window's Developer section surfaces both the switch and the path.
+target) — but **only** while developer mode is on; with it off, nothing is written. Every dictation
+that ends in `.failed` is appended to a sibling `errors.jsonl` (`DictationLog+Errors.swift`:
+`appendError` / `defaultErrorURL` / `defaultErrorDisplayPath`), behind the same switch — one line per
+failure carrying `BlurtError.diagnosticName` (the stable label to aggregate on), the full description,
+and the focused app/window/field, but deliberately **no** prior text, selected text, or prompt: the
+surrounding text explains nothing about a failure and is the most sensitive part of the snapshot.
+Errors go to their own file so the dictations log stays a corpus whose every line has a `transcript`.
+The write is hooked in **`DictationSession.setPhase`**, not at the five `setPhase(.failed(…))` call
+sites, so a failure path added later is logged by construction; `.noTarget` and `.cancelled` aren't
+`.failed`, so the quiet "copied" notice stays out of the log. The one direct `appendError` call is
+`stopAndCancel`'s failing `mic.stop()`: a cancel must not flash red, so that fault is logged **without**
+a phase change rather than dropped. A failed append itself goes to `os_log` (never the entry, which
+would leak transcripts system-wide) — it's the one error that can't be reported through the error log,
+and it must never throw onto the dictation path. The Settings window's Developer section surfaces the
+switch and both paths, and `scripts/reset-install.sh` removes both files.
 
 API key: stored in the macOS Keychain via **`APIKeyStore`**, a thin static facade over
 **`MemoizedKeyStore`** (which takes its storage as `read`/`write` closures, so the memo-and-write rules
