@@ -76,6 +76,14 @@ final class OverlayWindowController {
     )
     panel.isMovable = true
     panel.isMovableByWindowBackground = true
+    // This controller owns the pill's fades (see `setVisible`), so AppKit must not
+    // add its own. Left at `.default`, AppKit infers `.utilityWindow` for an
+    // NSPanel — which fades on `orderOut` — so `dismissPanel()` ran a *second*
+    // fade after the alpha ramp had already finished, with full alpha restored and
+    // the content settled to `.idle`: the red "Try again" body faded out, then an
+    // empty capsule reappeared and faded out again. `.none` makes ordering out
+    // immediate, so the alpha ramp is the only fade the user sees.
+    panel.animationBehavior = .none
 
     // `queue: nil` so the block runs synchronously on the posting thread —
     // always main for window moves, hence the `assumeIsolated`. `queue: .main`
@@ -163,10 +171,12 @@ final class OverlayWindowController {
   func hide() {
     errorRevertTask?.cancel()
     errorRevertTask = nil
-    // Settle the content even when the panel is already off screen (the pill
-    // may have been hidden mid-notice).
-    bridge.state = .idle
-    guard panel.isVisible else { return }
+    guard panel.isVisible else {
+      // Still settle the content when the panel is already off screen (the pill
+      // may have been hidden mid-notice) — `dismissPanel` would have done it.
+      settleContent()
+      return
+    }
     dismissPanel()
   }
 
@@ -175,15 +185,28 @@ final class OverlayWindowController {
   private func dismissPanel() {
     panel.orderOut(nil)
     panel.alphaValue = 1
-    bridge.state = .idle
-    // Clear the level too, or the pill's next appearance renders its bars at the
-    // PREVIOUS dictation's loudness until the first new meter tick (~50 ms)
-    // replaces it — a one-frame "already talking" flash at the start of every
-    // dictation. `MicCapture.stop()` cancels the meter task without a final zero
-    // yield, so nothing else resets this. Reached by every dismiss that actually
-    // had a panel on screen; `hide()` returns early when the panel is already
-    // hidden, but it had to come through here to get hidden, so it's already zero.
-    bridge.level = 0
+    settleContent()
+  }
+
+  /// Resets the pill to its at-rest content — **without** animating.
+  ///
+  /// `OverlayView` carries an implicit `.animation(value: state)`, so a plain
+  /// assignment here would start a 0.15 s cross-fade (the notice content out, the
+  /// red error body back to the neutral fill) at the exact moment the pill leaves
+  /// the screen: an empty capsule still animating after the dismiss. The pill's
+  /// only fade is the alpha ramp in `setVisible`, so this settle is instantaneous.
+  private func settleContent() {
+    var transaction = Transaction()
+    transaction.disablesAnimations = true
+    withTransaction(transaction) {
+      bridge.state = .idle
+      // Clear the level too, or the pill's next appearance renders its bars at the
+      // PREVIOUS dictation's loudness until the first new meter tick (~50 ms)
+      // replaces it — a one-frame "already talking" flash at the start of every
+      // dictation. `MicCapture.stop()` cancels the meter task without a final zero
+      // yield, so nothing else resets this.
+      bridge.level = 0
+    }
   }
 
   /// Drives the pill on/off screen, fading unless Reduce Motion is on. Idempotent
