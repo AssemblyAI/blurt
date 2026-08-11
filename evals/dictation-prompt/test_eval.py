@@ -689,8 +689,8 @@ def test_an_over_long_objection_states_the_arithmetic():
     assert "250 characters over" in notes[0]
     # Stated in words as well: a reflector told "cut 638 characters" came back longer,
     # so the number it is asked to act on has to be in a unit it can count.
-    assert f"Cut it to {candidates.word_budget(cap)} words" in notes[0]
-    assert f"at least {int(250 / candidates.CHARS_PER_WORD)}" in notes[0]
+    assert f"{candidates.word_budget(cap)}-word target" in notes[0]
+    assert f"at least {int(250 / candidates.CHARS_PER_WORD)} words" in notes[0]
 
 
 def test_naming_a_signature_field_is_an_objection():
@@ -784,9 +784,13 @@ def test_the_constraints_reach_the_reflector_before_its_first_attempt():
     assert candidates.CONSTRAINT_MARKER in preamble
     # The headroom, not just the ceiling, and in words — a reflector told "at most 2048
     # characters" cannot check its own work, and one told to cut 638 came back longer.
-    room = candidates.word_budget(2048) - len(seed.split())
-    assert f"{room} words of room" in preamble
-    assert f"Aim for {candidates.word_budget(2048)} words" in preamble
+    budget = candidates.word_budget(2048)
+    # Bracketed: first line and last line, because the ask is weakly obeyed and a
+    # constraint stated once in the middle of a long prompt is a constraint lost.
+    assert preamble.startswith(f"BEFORE YOU BEGIN: your reply must be AT MOST {budget} WORDS")
+    assert preamble.rstrip().endswith(f"AT MOST {budget} WORDS.")
+    assert preamble.count(f"{budget} WORDS") >= 3
+    assert f"{len(seed.split())} words" in preamble
     assert "forbid answering" in preamble
     assert "Do not name input or output fields" in preamble
 

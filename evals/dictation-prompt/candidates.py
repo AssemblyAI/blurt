@@ -120,13 +120,13 @@ def objections(
             f"It is {len(proposal.split())} words ({len(proposal)} characters), which is "
             f"{excess} characters over the hard {cap}-character limit on "
             f"config.llm.instruction — the API would reject every request carrying it. "
-            f"Cut it to {word_budget(cap)} words, which means deleting at least "
-            f"{max(1, int(excess / CHARS_PER_WORD))} and preferably "
-            f"{max(1, int((len(proposal) - target_length(cap)) / CHARS_PER_WORD))} words — aim "
-            "below the limit rather than at it, since landing just over wastes the attempt "
-            "entirely. Remove whole worked examples and "
-            "restatements rather than trimming words from each sentence, and keep every rule "
-            "that changes what the model does."
+            f"You must delete at least {max(1, int(excess / CHARS_PER_WORD))} words to be "
+            f"legal, and {max(1, int((len(proposal) - target_length(cap)) / CHARS_PER_WORD))} "
+            f"to reach the {word_budget(cap)}-word target you were given. Aim for the target, "
+            "not the limit: this draft is the latest of several that overran, and every one "
+            "was discarded unread. Delete whole sentences and whole examples — trimming a word "
+            "here and there will not close a gap this size. Keep every rule that changes what "
+            "the model does; everything else is expendable."
         )
     if found:
         notes.append(
@@ -175,12 +175,21 @@ CHARS_PER_WORD = 6.15
 #: number it was given and landing about 5% past it, which is what asking a model for
 #: "at most N" reliably produces.
 #:
-#: So the number it is given is no longer the number that is enforced. At 0.85 the
-#: stated target is ~1740 characters, and the same +5% lands near 1840 — inside the
-#: cap with room to spare. The cap itself does not move: `overage` still measures
-#: against the real limit, so a proposal between the target and the cap is accepted
-#: rather than rejected for missing an advisory figure.
-SOFT_TARGET_RATIO = 0.85
+#: So the number it is given is no longer the number that is enforced. The cap itself
+#: does not move: `overage` still measures against the real limit, so a proposal
+#: between the target and the cap is accepted rather than rejected for missing an
+#: advisory figure.
+#:
+#: **0.85 was not enough, and the reason is worth recording.** Told 282 words, the
+#: reflector returned 329, 346, 353, 338 and 334 — about 120% of the ask. Told 333
+#: before that, it returned ~349. Moving the ask down by 51 words moved the output by
+#: 9: the length it writes is close to *invariant* under the number it is handed,
+#: settling near 340 words whatever it is told. That is why this ratio is low rather
+#: than merely lower — at 0.65 the ask is 216 words, and even a fifth over lands at
+#: ~260, comfortably inside the cap. It is also why `constraint_preamble` leads with
+#: the limit and repeats it, and why `program.CappedInstructionProposer`'s trim
+#: remains the actual guarantee: a number this weakly obeyed cannot be one.
+SOFT_TARGET_RATIO = 0.65
 
 
 def target_length(cap: int = INSTRUCTION_CHARACTER_CAP) -> int:
@@ -240,20 +249,32 @@ def constraint_preamble(current: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> s
     a budget it can plan in — and see `PRIOR_WINNER` for why the seed itself was cut
     down to leave some.
     """
+    budget = word_budget(cap)
+    hard = int(cap / CHARS_PER_WORD)
     return (
-        f"{current}\n\n---\n{CONSTRAINT_MARKER} on the instruction you write (these are "
-        f"requirements of the API and the product, not preferences):\n"
-        f"- Aim for {word_budget(cap)} words or fewer. The instruction above is "
-        f"{len(current.split())} words, so you have roughly "
-        f"{max(0, word_budget(cap) - len(current.split()))} words of room. Going slightly over "
-        f"is survivable; past {int(cap / CHARS_PER_WORD)} words the API rejects the request "
-        "outright and the attempt is wasted. Prefer rewording to adding, and if you add a "
-        "rule, cut one.\n"
-        "- It must forbid answering the transcript and forbid translating it, in whatever "
-        "words you like. The scoring corpus cannot see either failure, so nothing will "
-        "penalise you for dropping them; they still ship to real users.\n"
-        "- Do not name input or output fields. The model receives a bare transcript.\n"
-        "- Write only the instruction itself. Do not repeat these constraints in it."
+        f"BEFORE YOU BEGIN: your reply must be AT MOST {budget} WORDS. This is the "
+        "constraint attempts at this task fail on, far more often than any other.\n\n"
+        f"{current}\n\n---\n{CONSTRAINT_MARKER} on the instruction you write. These are "
+        "requirements of the API and the product. They are not preferences, and an "
+        "instruction that breaks any of them is discarded without being scored.\n"
+        f"1. LENGTH. AT MOST {budget} WORDS. The instruction above is "
+        f"{len(current.split())} words. Do not treat {budget} as a target to approach — "
+        "treat it as a line you must finish well short of. Recent attempts at this task "
+        f"averaged 340 words and EVERY ONE WAS THROWN AWAY UNREAD. Past {hard} words the "
+        "API rejects the request outright: no score, no feedback, the iteration is lost "
+        "and your work is wasted entirely.\n"
+        "   Shorter is strictly better. An instruction half this length that performs the "
+        "same is the better answer — brevity is never penalised here, and length is what "
+        "kills attempts. Add nothing without deleting something larger.\n"
+        f"   Before you reply: count the words of your draft. If it exceeds {budget}, "
+        "delete whole sentences — not a word here and there — and count again. Repeat "
+        "until you are under. Do not submit a draft you have not counted.\n"
+        "2. SAFEGUARDS. It must forbid answering the transcript and forbid translating it, "
+        "in whatever words you like. The scoring corpus cannot see either failure, so "
+        "nothing will penalise you for dropping them; they still reach real users.\n"
+        "3. NO FIELD NAMES. The model receives a bare transcript with no fields around it.\n"
+        "4. Write only the instruction itself. Never repeat these constraints in it.\n"
+        f"\nTo repeat, because it is the one that fails: AT MOST {budget} WORDS."
     )
 
 
