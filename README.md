@@ -156,8 +156,9 @@ swift test             # engine unit tests only
 `dev-build.sh` installs to `/Applications` on purpose: macOS won't register
 Accessibility/Input-Monitoring permissions for apps living in build
 directories, so the app needs a stable install path to be usable at all.
-[`AGENTS.md`](./AGENTS.md) has the architecture notes and full workflow;
-[`CONTRIBUTING.md`](./CONTRIBUTING.md) covers how changes land.
+[`CONTRIBUTING.md`](./CONTRIBUTING.md) has the full local setup — prerequisites,
+what each script does, signing — and how changes land;
+[`AGENTS.md`](./AGENTS.md) has the architecture notes.
 
 ## Architecture
 

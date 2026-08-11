@@ -101,6 +101,97 @@ jobs:
         working-directory: blurt
         run: scripts/check.sh
 
+  # Every PR gets an installable build of the change, so a reviewer can try it
+  # instead of reading the diff and imagining it. Deliberately NOT part of the
+  # required gate (`gate` below ignores it): it builds the same sources `check`
+  # already compiles, so a failure here is never the only signal.
+  #
+  # The download link is posted on the PR by the `pr-dev-build` workflow — a
+  # pull_request run from a fork gets a read-only token and cannot comment, so
+  # that step has to happen in a workflow_run job. This one only produces the
+  # artifact, and names it with the PR number so the follow-up knows where to
+  # post (github.event.workflow_run.pull_requests is empty for forks).
+  dev-build:
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
+    runs-on: macos-26
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          persist-credentials: false
+
+      - name: Build Blurt.app (Debug-Local, ad-hoc signed)
+        working-directory: blurt/App/Blurt
+        # Debug-Local is the configuration scripts/dev-build.sh uses: a debug
+        # build with UITEST_HOOKS off, so this is the real app rather than the
+        # test-harness variant. The committed .xcodeproj is used as-is — check's
+        # xcodegen drift check is what guarantees it matches project.yml.
+        #
+        # Ad-hoc signing (identity "-", signing ALLOWED), the same recipe
+        # uitest.sh uses: the Developer ID cert isn't on this runner, and the
+        # "Install to /Applications" post-build script skips itself under "-".
+        run: |
+          xcodebuild \
+            -project Blurt.xcodeproj \
+            -scheme Blurt \
+            -configuration Debug-Local \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath "$RUNNER_TEMP/devbuild" \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=YES \
+            build
+
+      - name: Package the app
+        env:
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          app="$RUNNER_TEMP/devbuild/Build/Products/Debug-Local/Blurt.app"
+          [ -d "$app" ] || { echo "::error::no app at $app"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/out"
+          # ditto, not zip: it preserves the bundle layout, symlinks, and the
+          # executable bit the way macOS expects when the zip is expanded again.
+          ditto -c -k --keepParent "$app" "$RUNNER_TEMP/out/Blurt-dev-${SHA:0:7}.zip"
+
+      - name: Upload the dev build
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          # The PR number in the name is how pr-dev-build.yml finds the PR.
+          name: blurt-dev-build-pr-${{ github.event.pull_request.number }}
+          path: ${{ runner.temp }}/out/*.zip
+          if-no-files-found: error
+          # A dev build is only interesting while the PR is open.
+          retention-days: 14
+
+      - name: Summarize
+        env:
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          {
+            echo "### Dev build"
+            echo
+            echo "Blurt.app from this PR (\`${SHA:0:7}\` merged into the base branch),"
+            echo "built \`Debug-Local\` and ad-hoc signed."
+            echo "Download it from the **Artifacts** section of this run, then:"
+            echo
+            echo '```sh'
+            echo "unzip ~/Downloads/blurt-dev-build-pr-*.zip -d ~/Downloads"
+            echo "unzip ~/Downloads/Blurt-dev-${SHA:0:7}.zip -d ~/Downloads"
+            echo "xattr -dr com.apple.quarantine ~/Downloads/Blurt.app"
+            echo "rm -rf /Applications/Blurt.app && cp -R ~/Downloads/Blurt.app /Applications/"
+            echo '```'
+            echo
+            echo "It is **ad-hoc signed and not notarized**, so Gatekeeper refuses it until"
+            echo "the quarantine flag is cleared, and macOS treats it as a different app from"
+            echo "a released Blurt — re-grant Microphone, Accessibility, and Input Monitoring,"
+            echo "and reinstall the release DMG when you're done reviewing."
+          } >>"$GITHUB_STEP_SUMMARY"
+
   # Always-runs summary job, so a *skipped* `check` can't be mistaken for a pass.
   # GitHub reports a skipped required check to branch protection as successful, so
   # anything that makes `check` skip — the `changes` filter erroring, a `needs`

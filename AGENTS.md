@@ -64,8 +64,9 @@ App/Blurt/
 Tests/BlurtEngineTests/      Swift Testing suites; Stubs/ holds the seam doubles
 scripts/                     check.sh, bootstrap.sh, dev-build.sh, uitest.sh, leaks.sh, release*.sh
 site/                        the GitHub Pages site (html/css, sitemap) — linted by check.sh
-.github/workflows/           check.yml (the gate, macos-26), release.yml (sign + publish),
-                             codeql.yml, pages.yml
+.github/workflows/           check.yml (the gate + per-PR dev build, macos-26),
+                             pr-dev-build.yml (links it on the PR),
+                             release.yml (sign + publish), codeql.yml, pages.yml
 .claude/                     Claude Code hooks, skills, subagents (see CLAUDE.md)
 ```
 
@@ -108,7 +109,11 @@ In order, on a Mac. Each optional linter prints `note: <tool> not installed; ski
    well-formedness, e.g. the sitemap) **/ markdownlint / shellcheck**.
 
 CI (`.github/workflows/check.yml`) installs all of these via Homebrew on `macos-26` and runs the same
-script, so a clean local `check.sh` matches CI by construction.
+script, so a clean local `check.sh` matches CI by construction. The same workflow's `dev-build` job
+builds an ad-hoc-signed `Debug-Local` app for every code PR and uploads it as an artifact;
+`pr-dev-build.yml` then comments the download link on the PR (a `workflow_run` job, because a
+fork's `pull_request` token is read-only and can't comment). It is **not** part of the required
+gate — it compiles the same sources `check` does, so it is never the only signal.
 
 Reporting rules: exit 0 with no `error:` lines is green. Anything else is not — quote the failing
 step verbatim, don't soften it, fix it, then re-run the **full** script (a `swift test --filter` pass
@@ -124,14 +129,17 @@ xcodebuild -project App/Blurt/Blurt.xcodeproj \
 ```
 
 The xcodebuild post-build script (`App/Blurt/project.yml`) copies the bundle to
-`/Applications/Blurt.app` (or `~/Applications/` fallback) and re-signs it with the Developer ID.
-This is deliberate: TCC refuses to register apps living in DerivedData or `/tmp`, so
-Accessibility/Input-Monitoring toggles never appear unless the app has a stable install path.
-**Don't bypass it.**
+`/Applications/Blurt.app` (or `~/Applications/` fallback) and re-signs it with the **Apple
+Development** cert (login keychain) under a team-based designated requirement — never the Developer
+ID release key, which lives in a locked keychain used only by releases. This is deliberate: TCC
+refuses to register apps living in DerivedData or `/tmp`, so Accessibility/Input-Monitoring toggles
+never appear unless the app has a stable install path. **Don't bypass it.**
 
-`scripts/dev-build.sh` wraps that for everyday local dev — it runs the **signed** Debug build (so the
-install step actually fires, unlike `check.sh`, which disables codesigning for CI) and pipes through
-`xcbeautify` when present. Signing needs the Developer ID cert in your keychain.
+`scripts/dev-build.sh` wraps that for everyday local dev — it runs the **signed** `Debug-Local` build
+(so the install step actually fires, unlike `check.sh`, which disables codesigning for CI) and pipes
+through `xcbeautify` when present. [`CONTRIBUTING.md`](./CONTRIBUTING.md) is the setup guide for
+someone starting from a clean Mac, including the ad-hoc build for contributors with no signing
+certificate.
 
 ### Working without a macOS toolchain (remote / Linux sandboxes)
 
