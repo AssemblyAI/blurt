@@ -76,6 +76,8 @@ from candidates import (  # noqa: E402
     BASELINE,
     CANDIDATES,
     INSTRUCTION_CHARACTER_CAP,
+    missing_safeguards,
+    objections,
     overage,
 )
 from progress import Progress  # noqa: E402
@@ -315,6 +317,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "hand-written candidate topped dev instead)",
     )
 
+    live_group = parser.add_argument_group("live verification (macOS, real endpoint)")
+    live_group.add_argument(
+        "--verify-live",
+        type=int,
+        default=0,
+        metavar="N",
+        help="after picking a winner, run N held-out utterances through the REAL dictation "
+        "API — synthesized to audio with `say`, then POSTed with the winner as "
+        "config.llm.instruction. The only measurement here that uses the rewrite model "
+        "the instruction actually ships to; everything else scores a stand-in. Needs "
+        "ASSEMBLYAI_API_KEY and a Mac. 0 disables",
+    )
+    live_group.add_argument(
+        "--verify-baseline",
+        action="store_true",
+        help="also run the same audio with an empty llm block, which is what Blurt sends "
+        "today. This is the comparison the text harness cannot make: guessed-default only "
+        "ever guessed at the service's default wording, and this uses the wording itself",
+    )
+
     parser.add_argument("--out", default=None, help="write the full results as JSON to this path")
     return parser.parse_args(argv)
 
@@ -328,23 +350,31 @@ def describe_length(instruction: str) -> str:
     return f"{len(instruction)} chars, {headroom} under the {INSTRUCTION_CHARACTER_CAP} cap"
 
 
-def check_candidate_lengths() -> None:
-    """Refuse to start if a hand-written candidate could never be sent.
+def check_candidates() -> None:
+    """Refuse to start if a hand-written candidate could never be shipped.
 
-    Before any model call, because this is a typo-class mistake and paying for a full
-    sweep to discover it is pure waste. Nothing is exempt, `prior-winner` included:
+    Before any model call, because these are typo-class mistakes and paying for a full
+    sweep to discover one is pure waste. Nothing is exempt, `prior-winner` included:
     it earned its place in the table by being compressed under the cap, and if a later
-    edit pushes it back over, this is what says so.
+    edit pushes it back over — or strips a safeguard — this is what says so.
+
+    Only `BASELINE` is held to the safeguard requirement. The other candidates are
+    deliberately terse one-liners whose job is to be *contrast* — `guessed-default` is
+    a floor, not something anyone would ship — and demanding the full safeguard set of
+    them would turn the comparison set into six copies of the same careful paragraph.
     """
-    offenders = [(name, text) for name, text in CANDIDATES.items() if overage(text)]
-    if not offenders:
-        return
-    detail = "\n".join(f"  {name}: {describe_length(text)}" for name, text in offenders)
-    raise SystemExit(
-        "These candidates.py instructions exceed the dictation API's "
-        f"{INSTRUCTION_CHARACTER_CAP}-character cap on config.llm.instruction, so the "
-        f"request would 400 before the audio is read:\n{detail}"
-    )
+    problems: list[str] = []
+    for name, text in CANDIDATES.items():
+        if overage(text):
+            problems.append(f"  {name}: {describe_length(text)}")
+        if name == BASELINE and (absent := missing_safeguards(text)):
+            stems = ", ".join(stem for stem, _ in absent)
+            problems.append(f"  {name}: BASELINE is missing safeguard(s): {stems}")
+    if problems:
+        raise SystemExit(
+            "These candidates.py instructions could not be shipped as written:\n"
+            + "\n".join(problems)
+        )
 
 
 def resolve_candidates(args: argparse.Namespace) -> list[str]:
@@ -370,6 +400,67 @@ def resolve_candidates(args: argparse.Namespace) -> list[str]:
         # Nothing has been scored yet, so "best" is unknowable without the sweep.
         return list(CANDIDATES)
     return ordered
+
+
+def run_live_verification(
+    args: argparse.Namespace,
+    winner_name: str,
+    winner_instruction: str,
+    test: list[corpus.Utterance],
+) -> dict[str, dict[str, float]] | None:
+    """Score the winner on the rewrite model it will actually ship to.
+
+    Held-out rows on purpose: this is a check on the result, not another selection
+    step, and running it on data the search saw would only re-report the search.
+
+    Deferred import and a caught `Unavailable` because this is the one part of the
+    harness that needs a Mac, a network and a key. A run that has already paid for a
+    search should report what it found rather than exit on a missing `say`.
+    """
+    if not args.verify_live:
+        return None
+
+    import os  # noqa: PLC0415 — only this path needs the environment
+
+    import live  # noqa: PLC0415 — subprocess + urllib, unused by every other path
+
+    api_key = os.environ.get("ASSEMBLYAI_API_KEY")
+    if not api_key:
+        print("\nSkipping --verify-live: ASSEMBLYAI_API_KEY is not set.")
+        return None
+
+    sample = test[: args.verify_live]
+    runs = [(winner_name, winner_instruction)]
+    if args.verify_baseline:
+        # `None` sends an empty llm block — the service's own default wording, which is
+        # what Blurt ships today and what no text-only candidate can stand in for.
+        runs.append(("service default (empty llm)", None))
+
+    summaries: dict[str, dict[str, float]] = {}
+    try:
+        with Progress(len(runs) * len(sample), "Verifying against the real endpoint") as meter:
+            for name, instruction in runs:
+                results = live.verify(
+                    sample, instruction, api_key, on_example=lambda n=name: meter.tick(n)
+                )
+                summaries[name] = live.summarize(results)
+    except live.Unavailable as error:
+        print(f"\nSkipping --verify-live: {error}")
+        return None
+
+    print(f"\nReal endpoint, {len(sample)} held-out utterances through synthesized audio")
+    print(f"  {'instruction':<30} {'no-rewrite':>11} {'delivered':>11} {'gain':>8} {'llm_err':>8}")
+    print(f"  {'-' * 30} {'-' * 11} {'-' * 11} {'-' * 8} {'-' * 8}")
+    for name, summary in summaries.items():
+        print(
+            f"  {name:<30} {summary['floor_content']:>11.4f} {summary['content']:>11.4f} "
+            f"{summary['gain']:>+8.4f} {summary['llm_error_rate']:>8.0%}"
+        )
+    print(
+        "  Synthesized speech is not dictated speech and the STT pass adds its own errors,\n"
+        "  so read the ranking, not the absolute scores. Same audio for every row."
+    )
+    return summaries
 
 
 def resolve_axis(requested: str, loaded: corpus.Corpus) -> str:
@@ -398,7 +489,7 @@ def resolve_axis(requested: str, loaded: corpus.Corpus) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    check_candidate_lengths()
+    check_candidates()
 
     loaded = corpus.load(
         source=args.source,
@@ -532,18 +623,21 @@ def main(argv: list[str] | None = None) -> int:
             f"({seed_scores[axis]:.4f} → {optimized_scores[axis]:.4f})."
         )
 
-        # The length gate comes before the score comparison, because a better score on
-        # an unsendable instruction is not a better instruction. Enforced here rather
-        # than inside the optimizer: the budget reaches GEPA only as feedback prose it
-        # is free to ignore, and reaches MIPROv2 not at all.
-        if overage(optimized_instruction):
+        # The shippability gate comes before the score comparison, because a better
+        # score on an instruction that cannot ship is not a better instruction. The
+        # same `objections` the proposer re-asks on, applied once more at the end:
+        # under GEPA they should already be satisfied, but the proposer gives up after
+        # its retries and MIPROv2 has no proposal hook at all, so this is the guarantee.
+        final_objections = objections(
+            optimized_instruction, (program.INPUT_FIELD, program.OUTPUT_FIELD)
+        )
+        if final_objections:
+            listed = "\n".join(f"  - {note}" for note in final_objections)
             print(
-                f"\nRefusing to select it: over the {INSTRUCTION_CHARACTER_CAP}-character cap on "
-                "config.llm.instruction, so every request carrying it would 400. Keeping "
-                f"{winner_name}. The search is stochastic, so re-running is worth a try; "
-                "--auto medium buys more of it, and --start best-candidate begins from a short "
-                "instruction instead of asking the reflector to cut a long one down. Do not "
-                "raise INSTRUCTION_CHARACTER_CAP — it is the API's limit, not a preference."
+                f"\nRefusing to select it. Keeping {winner_name}.\n{listed}\n"
+                "The search is stochastic, so re-running is worth a try; --auto heavy buys "
+                "more of it, and --start best-candidate begins from a short instruction "
+                "instead of asking the reflector to cut a long one down."
             )
         elif optimized_scores[axis] > winner_scores[axis]:
             winner_name = f"{args.optimizer}-optimized"
@@ -573,6 +667,8 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
     print_table(test_rows, f"Held-out test ({axis})", axis)
+
+    live_summary = run_live_verification(args, winner_name, winner_instruction, test)
 
     print(f"\nBest cleanup instruction ({describe_length(winner_instruction)}):\n")
     print(f"  {winner_instruction}\n")
@@ -605,6 +701,7 @@ def main(argv: list[str] | None = None) -> int:
                 "instruction": winner_instruction,
                 "length": len(winner_instruction),
             },
+            "live": live_summary,
             "candidates": CANDIDATES,
         }
         Path(args.out).write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")

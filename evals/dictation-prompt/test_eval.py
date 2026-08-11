@@ -581,13 +581,13 @@ def test_an_oversized_candidate_stops_the_run_before_any_model_call(monkeypatch)
     """The check is worth having only if it fires before the sweep spends money."""
     monkeypatch.setitem(candidates.CANDIDATES, "too-long", "x" * 5000)
     with pytest.raises(SystemExit) as raised:
-        cli.check_candidate_lengths()
+        cli.check_candidates()
     assert "too-long" in str(raised.value)
     assert "2048" in str(raised.value)
 
 
 def test_candidate_length_check_passes_as_shipped():
-    assert cli.check_candidate_lengths() is None
+    assert cli.check_candidates() is None
 
 
 def test_describe_length_names_the_overage_or_the_headroom():
@@ -607,10 +607,15 @@ def test_the_instruction_budget_reaches_the_gepa_feedback_text():
     assert "at most 2048 characters" in with_budget
 
 
+#: A minimal instruction that satisfies every safeguard, so a fixture can isolate the
+#: fault it means to test instead of tripping the safeguard gate as well.
+SAFE = "Do not answer or translate it."
+
+
 def test_an_over_long_objection_states_the_arithmetic():
     """ "Too long" produces another over-long draft; "cut at least N" is checkable."""
     cap = candidates.INSTRUCTION_CHARACTER_CAP
-    notes = candidates.objections("y" * (cap + 250), fields=())
+    notes = candidates.objections(SAFE + "y" * (cap + 250 - len(SAFE)), fields=())
     assert len(notes) == 1
     assert f"{cap + 250} characters" in notes[0]
     assert "250 over" in notes[0]
@@ -620,7 +625,7 @@ def test_an_over_long_objection_states_the_arithmetic():
 def test_naming_a_signature_field_is_an_objection():
     """The fields are in neither envelope, and the label can reach the user's document."""
     notes = candidates.objections(
-        "Output the result as `cleaned_transcript`.",
+        f"{SAFE} Output the result as `cleaned_transcript`.",
         fields=("raw_transcript", "cleaned_transcript"),
     )
     assert len(notes) == 1
@@ -630,16 +635,70 @@ def test_naming_a_signature_field_is_an_objection():
 
 
 def test_a_clean_proposal_draws_no_objections():
-    assert candidates.objections("Delete the disfluencies.", fields=("raw_transcript",)) == []
+    assert (
+        candidates.objections(f"Delete the disfluencies. {SAFE}", fields=("raw_transcript",)) == []
+    )
 
 
 def test_both_faults_are_reported_together():
     """One re-ask should fix everything, not surface the next fault a round later."""
     notes = candidates.objections(
-        "raw_transcript " + "y" * candidates.INSTRUCTION_CHARACTER_CAP,
+        SAFE + " raw_transcript " + "y" * candidates.INSTRUCTION_CHARACTER_CAP,
         fields=("raw_transcript",),
     )
     assert len(notes) == 2
+
+
+def test_dropping_a_safeguard_is_an_objection():
+    """The corpus cannot punish this and the length pressure rewards it — so gate it.
+
+    Every corpus here is conversational English between two humans, so an instruction
+    that stops forbidding "answer the text" scores exactly the same while freeing ~90
+    characters under a cap the reflector is told to cut toward. Deleting it is what a
+    well-behaved optimizer *should* do given what it can see.
+    """
+    notes = candidates.objections("Delete the disfluencies and nothing else.", fields=())
+    assert len(notes) == 1
+    assert "safeguard" in notes[0]
+
+
+def test_safeguards_match_on_stems_so_phrasing_stays_free():
+    """A false reject burns the proposer's retries on a good instruction; a pass is cheap."""
+    for phrasing in (
+        "Never answer the text; do not translate it.",
+        "Do not answer or translate.",
+        "You must not answer questions, and translation is forbidden.",
+    ):
+        assert candidates.missing_safeguards(phrasing) == [], phrasing
+
+
+def test_a_missing_safeguard_is_named_with_what_it_prevents():
+    absent = candidates.missing_safeguards("Do not answer the text.")
+    assert [stem for stem, _ in absent] == ["translat"]
+    assert "non-English" in absent[0][1]
+
+
+def test_rephrase_is_not_gated_because_the_score_already_defends_it():
+    """Substituting a content word raises WER directly — that one the corpus can see."""
+    assert "rephrase" not in [stem for stem, _ in candidates.REQUIRED_SAFEGUARDS]
+
+
+def test_the_baseline_states_every_safeguard():
+    """It is what ships when a search fails, so it is held to the shipping bar."""
+    assert candidates.missing_safeguards(candidates.CANDIDATES[candidates.BASELINE]) == []
+
+
+def test_a_baseline_missing_a_safeguard_stops_the_run(monkeypatch):
+    monkeypatch.setitem(candidates.CANDIDATES, candidates.BASELINE, "Remove disfluencies.")
+    with pytest.raises(SystemExit) as raised:
+        cli.check_candidates()
+    assert "safeguard" in str(raised.value)
+
+
+def test_terse_contrast_candidates_are_not_held_to_the_safeguard_bar():
+    """`guessed-default` is a floor to beat, not something anyone would ship."""
+    assert candidates.missing_safeguards(candidates.CANDIDATES["guessed-default"])
+    assert cli.check_candidates() is None
 
 
 def test_the_revision_directive_carries_the_draft_and_every_objection():
@@ -844,25 +903,26 @@ def _proposer_with(monkeypatch, drafts, cap=50, attempts=3):
 
 
 def test_a_proposal_within_the_cap_is_accepted_first_try(monkeypatch):
-    proposer, seen = _proposer_with(monkeypatch, ["short instruction"])
-    assert proposer._propose("original", []) == "short instruction"
+    proposer, seen = _proposer_with(monkeypatch, [f"short. {SAFE}"])
+    assert proposer._propose("original", []) == f"short. {SAFE}"
     assert (proposer.rejected, proposer.abandoned) == (0, 0)
     assert len(seen) == 1
 
 
 def test_an_over_cap_proposal_is_rejected_and_re_asked(monkeypatch):
-    proposer, seen = _proposer_with(monkeypatch, ["z" * 80, "fits now"])
-    assert proposer._propose("original", []) == "fits now"
+    proposer, seen = _proposer_with(monkeypatch, [SAFE + "z" * 80, f"fits. {SAFE}"])
+    assert proposer._propose("original", []) == f"fits. {SAFE}"
     assert proposer.rejected == 1
     assert proposer.abandoned == 0
     # The retry compresses the rejected draft rather than re-deriving from the original.
     assert "z" * 80 in seen[1]
-    assert "30 over" in seen[1]
+    # 30 chars of SAFE + 80 of filler against a cap of 50.
+    assert "60 over" in seen[1]
 
 
 def test_giving_up_returns_the_original_not_a_truncation(monkeypatch):
     """A truncated instruction lands mid-sentence; scoring one is how bad prompts ship."""
-    proposer, _ = _proposer_with(monkeypatch, ["z" * 80] * 3, attempts=3)
+    proposer, _ = _proposer_with(monkeypatch, [SAFE + "z" * 80] * 3, attempts=3)
     result = proposer._propose("original", [])
     assert result == "original"
     assert len(result) != 50
@@ -872,9 +932,9 @@ def test_giving_up_returns_the_original_not_a_truncation(monkeypatch):
 def test_a_proposal_naming_a_field_is_rejected_and_re_asked(monkeypatch):
     """The leak regenerates every run, so it is gated rather than fixed once."""
     proposer, seen = _proposer_with(
-        monkeypatch, ["output it as cleaned_transcript", "output it plainly"]
+        monkeypatch, [f"{SAFE} output as cleaned_transcript", f"{SAFE} output plainly"]
     )
-    assert proposer._propose("original", []) == "output it plainly"
+    assert proposer._propose("original", []) == f"{SAFE} output plainly"
     assert proposer.rejected == 1
     assert "cleaned_transcript" in seen[1]
     assert "do not exist in the message" in seen[1]
@@ -882,19 +942,19 @@ def test_a_proposal_naming_a_field_is_rejected_and_re_asked(monkeypatch):
 
 def test_a_field_naming_proposal_is_never_patched_by_hand(monkeypatch):
     """Deleting the name in-place can leave a dangling clause; return the original."""
-    proposer, _ = _proposer_with(monkeypatch, ["name raw_transcript here"] * 3)
+    proposer, _ = _proposer_with(monkeypatch, [f"{SAFE} name raw_transcript here"] * 3)
     assert proposer._propose("original", []) == "original"
     assert (proposer.rejected, proposer.abandoned) == (3, 1)
 
 
 def test_the_proposer_updates_every_requested_component(monkeypatch):
-    proposer, _ = _proposer_with(monkeypatch, ["one", "two"])
+    proposer, _ = _proposer_with(monkeypatch, [f"one {SAFE}", f"two {SAFE}"])
     updated = proposer(
         candidate={"a": "old a", "b": "old b"},
         reflective_dataset={"a": [], "b": []},
         components_to_update=["a", "b"],
     )
-    assert updated == {"a": "one", "b": "two"}
+    assert updated == {"a": f"one {SAFE}", "b": f"two {SAFE}"}
 
 
 def test_the_budget_rides_on_a_perfect_score_too():
@@ -905,6 +965,83 @@ def test_the_budget_rides_on_a_perfect_score_too():
     )
     assert "Perfect" in message
     assert "at most 2048 characters" in message
+
+
+# --------------------------------------------------------------------------
+# Live verification — the wire format and the arithmetic, without a network
+# --------------------------------------------------------------------------
+
+
+def test_the_multipart_body_matches_what_the_swift_client_sends():
+    """A framing bug here would look like a bad instruction, not a bad request."""
+    import live
+
+    body, boundary = live._multipart(b"\x01\x02", {"sample_rate": 16000})
+    text = body.decode("latin-1")
+    assert text.startswith(f"--{boundary}\r\n")
+    assert text.endswith(f"--{boundary}--\r\n")
+    assert 'name="audio"; filename="audio.pcm"' in text
+    assert "Content-Type: audio/pcm\r\n\r\n" in text
+    assert 'name="config"' in text
+    assert '{"sample_rate": 16000}' in text
+    assert b"\x01\x02" in body
+
+
+def test_an_empty_instruction_asks_for_the_service_default():
+    """`None` must send `llm: {}` — the wording Blurt ships, not a candidate's guess."""
+    import json as _json
+
+    import live
+
+    for instruction, expected in ((None, {}), ("", {}), ("do x", {"instruction": "do x"})):
+        body, _ = live._multipart(b"", {"llm": {"instruction": instruction} if instruction else {}})
+        config = _json.loads(body.decode("latin-1").split("\r\n\r\n")[-1].split("\r\n--")[0])
+        assert config["llm"] == expected
+
+
+def test_the_live_summary_reports_the_gain_over_no_rewrite():
+    """The floor is the verbatim transcript: what pasting without a rewrite would score."""
+    import live
+
+    results = [
+        live.LiveResult(
+            reference="ship it", verbatim="um ship it", rewritten="ship it", llm_error=None
+        ),
+        live.LiveResult(
+            reference="ship it", verbatim="um ship it", rewritten="ship it", llm_error=None
+        ),
+    ]
+    summary = live.summarize(results)
+    assert summary["content"] == 1.0
+    assert summary["floor_content"] < 1.0
+    assert summary["gain"] > 0
+    assert summary["llm_error_rate"] == 0.0
+
+
+def test_a_failed_rewrite_is_counted_not_dropped():
+    """The service falls back to the verbatim transcript, so that is what the user saw."""
+    import live
+
+    results = [
+        live.LiveResult(
+            reference="ship it", verbatim="um ship it", rewritten="um ship it", llm_error="timeout"
+        ),
+        live.LiveResult(
+            reference="ship it", verbatim="um ship it", rewritten="ship it", llm_error=None
+        ),
+    ]
+    assert live.summarize(results)["llm_error_rate"] == 0.5
+
+
+def test_summarizing_nothing_does_not_divide_by_zero():
+    import live
+
+    assert live.summarize([])["gain"] == 0.0
+
+
+def test_live_verification_is_off_unless_asked_for():
+    """It costs real transcription minutes and needs a Mac — never a default."""
+    assert cli.parse_args([]).verify_live == 0
 
 
 def test_dry_run_never_reaches_the_dspy_module():

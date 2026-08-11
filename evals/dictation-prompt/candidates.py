@@ -57,14 +57,50 @@ def overage(instruction: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> int:
     return max(0, len(instruction) - cap)
 
 
+#: Safeguards every shipped instruction must state, as `(stem, what it prevents)`.
+#:
+#: These are here because **the corpus cannot punish their removal, and the search is
+#: paid to remove them.** Every corpus in this harness is conversational English
+#: between two humans — Switchboard statements, not directives to an assistant — so an
+#: instruction that drops "do not answer the text" scores exactly the same, while
+#: freeing ~90 characters under a cap the reflector is actively told to cut toward.
+#: Deleting them is what a well-behaved optimizer *should* do given what it can see.
+#:
+#: What they prevent is not hypothetical: dictating "what time is it?" into a text
+#: field has to paste the question back, not an answer to it, and non-English speech
+#: has to survive as spoken. Both reach the user's document directly.
+#:
+#: Matched on stems rather than whole phrases so a reflector may rephrase them freely
+#: — "never answer" and "do not answer the text" both pass. A false pass is much
+#: cheaper here than a false reject, which would burn the proposer's retries on a
+#: perfectly good instruction.
+#:
+#: "Do not rephrase" is deliberately **not** listed. The corpus measures that one:
+#: substituting a content word raises WER directly, so the score already defends it.
+#: This list is only for the properties nothing else can see.
+REQUIRED_SAFEGUARDS: tuple[tuple[str, str], ...] = (
+    ("answer", "the model would answer a dictated question instead of transcribing it"),
+    ("translat", "non-English speech would come back in English"),
+)
+
+
+def missing_safeguards(instruction: str) -> list[tuple[str, str]]:
+    """Safeguards `instruction` does not state. Empty is what shipping requires."""
+    lowered = instruction.lower()
+    return [(stem, risk) for stem, risk in REQUIRED_SAFEGUARDS if stem not in lowered]
+
+
 def objections(
     proposal: str, fields: tuple[str, ...], cap: int = INSTRUCTION_CHARACTER_CAP
 ) -> list[str]:
     """Why `proposal` can't ship as-is, phrased for the reflector. Empty means it can.
 
-    Two things disqualify an instruction, and both are invisible to the score:
+    Three things disqualify an instruction, and all are invisible to the score:
 
     **Length.** Over `cap` the API rejects the whole request — see that constant.
+
+    **Dropping a safeguard.** See `REQUIRED_SAFEGUARDS` for why the score cannot
+    defend these and the search is rewarded for cutting them.
 
     **Naming a signature field.** `fields` are the harness's own DSPy field names, and
     they appear in neither envelope: `PlainChatAdapter` sends the bare transcript, and
@@ -92,6 +128,15 @@ def objections(
             "the model receives — the instruction is applied to a bare transcript with no "
             "fields around it. Refer to 'the transcript' and 'your output' in prose, and "
             "never instruct the model to label its output."
+        )
+    if absent := missing_safeguards(proposal):
+        risks = "; ".join(f"without it, {risk}" for _, risk in absent)
+        notes.append(
+            "It drops a required safeguard. The instruction must forbid answering the "
+            "transcript and must forbid translating it, in whatever words you like — "
+            f"{risks}. The scoring corpus is conversational English, so it cannot see "
+            "either failure and will not penalise you for removing the clause; say it "
+            "anyway."
         )
     return notes
 

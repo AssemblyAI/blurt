@@ -320,6 +320,23 @@ GEPA winner shipped and broke all dictation:
 - **Neither limit is in the published API reference.** Both were measured against the live
   endpoint on 2026-08-11. Re-probe before trusting them indefinitely.
 
+### The safeguards the corpus cannot defend
+
+`PRIOR_WINNER` forbids answering the transcript and forbids translating it. Those clauses are
+why dictating "what time is it?" pastes the question instead of an answer, and why non-English
+speech survives as spoken. **Nothing in the scoring can see either property**: every corpus
+here is conversational English between two humans, so an instruction that drops them scores
+exactly the same — while freeing ~90 characters under a cap the reflector is explicitly told to
+cut toward. Deleting them is what a well-behaved optimizer _should_ do given what it can see.
+
+So they are gated rather than measured, by the same `objections` mechanism as the length cap:
+the proposer rejects and re-asks, and selection refuses a winner without them. Matching is on
+stems (`answer`, `translat`), so any phrasing passes — a false accept is far cheaper than a
+false reject that burns retries on a good instruction.
+
+"Do not rephrase" is deliberately **not** gated. Substituting a content word raises WER
+directly, so the score already defends that one. The gate is only for what nothing else sees.
+
 The harness enforces the cap in three places, none of which is sufficient alone:
 
 | Where                                        | What it catches                                      | Strength                     |
@@ -409,6 +426,36 @@ Three things to keep straight, all settled decisions in
   only been shown to work in English; weigh that before shipping a long, English-shaped
   instruction.
 
+## Verifying on the model that actually runs it
+
+Everything above scores a **stand-in**. `--model` answers the prompt and the search
+optimises toward whatever it prefers, but the instruction ships to AssemblyAI's own rewrite
+model, which we neither know nor select. Beating a stand-in is not evidence of beating the
+real thing.
+
+`--verify-live N` closes that loop. After a winner is picked it takes N **held-out** rows,
+speaks the disfluent side with `say`, converts to 16 kHz mono PCM, and POSTs it to the real
+`/transcribe` with the winner as `config.llm.instruction`:
+
+```bash
+export ASSEMBLYAI_API_KEY=...
+uv run evals/dictation-prompt/optimize_cleanup_prompt.py --verify-live 25 --verify-baseline
+```
+
+The response answers both halves at once. `text` is the verbatim transcript, so
+`score(reference, text)` is the floor — what pasting with no rewrite would score.
+`llm_response` is that transcript after the **real** rewrite model applied the instruction. The
+gap is what the instruction bought.
+
+`--verify-baseline` runs the same audio again with an empty `llm` block. That is the wording
+Blurt ships today, so it is the comparison `guessed-default` could only ever guess at — the one
+the README has flagged as unanswerable since this harness was written.
+
+Read the **ranking, not the absolute scores**. Synthesised speech is not dictated speech,
+`say` pronounces "um" as a word rather than producing a real hesitation, and the STT pass adds
+its own errors before the rewrite runs. Every candidate hears the same audio, so comparisons
+between them hold. macOS only, and off by default — it costs real transcription.
+
 ## Files
 
 | File                         | What it holds                                                             |
@@ -418,6 +465,7 @@ Three things to keep straight, all settled decisions in
 | `corpus.py`                  | Sources, loading, de-tagging, splitting, the echo floor.                  |
 | `disfluency.py`              | The seeded, additive disfluency injector.                                 |
 | `metrics.py`                 | Token alignment, the two word-error-rate axes, GEPA feedback text.        |
+| `live.py`                    | Synthesis + the real `/transcribe` round trip, for `--verify-live`.       |
 | `program.py`                 | Everything that imports DSPy — the program, metrics adapters, optimizers. |
 | `test_eval.py`               | Offline tests for injection, scoring, de-tagging, loading, and splitting. |
 

@@ -144,23 +144,22 @@ def to_examples(utterances: list[Utterance]) -> list[dspy.Example]:
     """Wrap utterances as DSPy examples for the optimizers' train/val sets."""
     return [
         dspy.Example(
-            raw_transcript=u.disfluent,
-            cleaned_transcript=u.reference,
-        ).with_inputs("raw_transcript")
+            **{INPUT_FIELD: u.disfluent, OUTPUT_FIELD: u.reference},
+        ).with_inputs(INPUT_FIELD)
         for u in utterances
     ]
 
 
 def _cleaned(prediction) -> str:
     """The model's output, tolerating the `None` a failed parallel item yields."""
-    return getattr(prediction, "cleaned_transcript", "") or ""
+    return getattr(prediction, OUTPUT_FIELD, "") or ""
 
 
 def make_metric(axis: str):
     """Scalar metric for MIPROv2, which searches on a single number."""
 
     def scorer(gold, pred, trace=None, **_):
-        return metrics.score(gold.cleaned_transcript, _cleaned(pred)).value(axis)
+        return metrics.score(getattr(gold, OUTPUT_FIELD), _cleaned(pred)).value(axis)
 
     return scorer
 
@@ -177,13 +176,13 @@ def make_feedback_metric(axis: str, instruction_budget: int | None = None):
 
     def scorer(gold, pred, trace=None, pred_name=None, pred_trace=None, **_):
         hypothesis = _cleaned(pred)
-        scored = metrics.score(gold.cleaned_transcript, hypothesis)
+        scored = metrics.score(getattr(gold, OUTPUT_FIELD), hypothesis)
         return dspy.Prediction(
             score=scored.value(axis),
             feedback=metrics.feedback(
-                gold.cleaned_transcript,
+                getattr(gold, OUTPUT_FIELD),
                 hypothesis,
-                gold.raw_transcript,
+                getattr(gold, INPUT_FIELD),
                 scored,
                 instruction_budget=instruction_budget,
             ),
@@ -229,7 +228,7 @@ def evaluate(
         num_threads=num_threads, provide_traceback=True, disable_progress_bar=True
     )
     counted = program if on_example is None else _Ticking(program, on_example)
-    predictions = runner([(counted, {"raw_transcript": u.disfluent}) for u in utterances])
+    predictions = runner([(counted, {INPUT_FIELD: u.disfluent}) for u in utterances])
     return metrics.mean(
         [
             metrics.score(utterance.reference, _cleaned(prediction))
