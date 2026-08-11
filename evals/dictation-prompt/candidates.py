@@ -156,7 +156,8 @@ def objections(
 CONSTRAINT_MARKER = "HARD CONSTRAINTS"
 
 #: Characters per word in an instruction of this kind, measured on `PRIOR_WINNER`
-#: (1839 characters over 299 words). Used only to state the cap in words as well as
+#: (measured before it was trimmed for headroom: 1839 characters over 299 words). Used
+#: only to state the cap in words as well as
 #: characters, because a model asked for "at most 2048 characters" cannot check its own
 #: work: told to cut 638, one reflector came back 45 characters *longer*. Word counts
 #: it can approximately keep. Characters remain what is actually enforced.
@@ -205,10 +206,11 @@ def constraint_preamble(current: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> s
     rejected three times each and abandoned, so GEPA spent the iteration re-scoring an
     instruction identical to the one it started with.
 
-    The headroom is what makes it actionable. A seed of 1839 against a cap of 2048
-    leaves 209 characters, and almost every "improvement" a reflector reaches for is an
-    addition — so a bare "at most 2048 characters" reads as permission when it is
-    nearly a prohibition. Stating the arithmetic turns it into a budget it can plan in.
+    The headroom is what makes it actionable. Almost every "improvement" a reflector
+    reaches for is an addition, so a bare "at most 2048 characters" reads as permission
+    when the remaining room may be nearly nothing. Stating the arithmetic turns it into
+    a budget it can plan in — and see `PRIOR_WINNER` for why the seed itself was cut
+    down to leave some.
     """
     return (
         f"{current}\n\n---\n{CONSTRAINT_MARKER} on the instruction you write (these are "
@@ -299,7 +301,7 @@ CANDIDATES: dict[str, str] = {
 #:    the bullet that calls those removable filler. The disagreement was noted in the
 #:    original as load-bearing evidence from the reference targets; carrying a
 #:    self-contradicting example is still worse than carrying none.
-#: 5. Worked example 2 — the no-op case, which the surviving rule 3 states in one line.
+#: 5. Worked example 2 — the no-op case, which a surviving rule stated in one line.
 #: 6. The two clauses naming `raw_transcript` and `cleaned_transcript` — DSPy signature
 #:    field names that appear in neither envelope. `PlainChatAdapter` sends the bare
 #:    transcript and so does the service, so the instruction was describing a message
@@ -309,8 +311,28 @@ CANDIDATES: dict[str, str] = {
 #:    undersold them. `program.CappedInstructionProposer` now rejects any proposal
 #:    that names a field, because GEPA's reflective dataset is keyed by those names
 #:    and regenerates the habit every run.
+#: 7. The whole IMPORTANT RULES block — "never change a content word", "preserve order
+#:    and punctuation", "output an already-clean transcript unchanged". Every one of
+#:    those is a property the **score already enforces**: substituting or dropping a
+#:    word raises WER directly, and over-editing a clean utterance does too. They cost
+#:    597 characters to say what the metric says for free.
 #:
-#: **What this is not.** It has not been re-scored. Deletion cannot introduce wording
+#:    This one was cut for room rather than redundancy alone, and the arithmetic is
+#:    the reason. Reflectors in one run returned drafts 630-890 characters longer than
+#:    the 1839-character seed they were given, so almost every proposal broke the cap
+#:    and the search spent 8 of 9 iterations re-scoring the instruction it started
+#:    with. At 1240 there are 808 characters of room — enough that a reflector's
+#:    natural expansion lands inside the limit, which is the difference between a
+#:    search that runs and one that only appears to.
+#:
+#:    A seed that scores well and cannot be improved is worth less than a slightly
+#:    weaker one the search can build on. If any of those rules earn their place, GEPA
+#:    can put them back and the score will say so.
+#:
+#: **What this is not.** It has not been re-scored — and removal 7 is the one most
+#: likely to have cost something, since unlike the rest it was not purely redundant.
+#: The next run measures it immediately: this is `BASELINE`, so its dev score is the
+#: first number printed, and the seed scored 0.912 on a 50-row valset before the cut. Deletion cannot introduce wording
 #: the eval never saw, and the three product-critical safeguards (do not answer, do not
 #: translate, do not rephrase) are intact — but whether the cut cost any cleanup quality
 #: is an open measurement, and the run that answers it is the one that scores this as
@@ -325,11 +347,6 @@ Disfluencies are filler and hesitation elements that add no propositional conten
 - Discourse/filler phrases: "you know", "I mean", "I guess", "kind of" (when used as filler), "like" (when used as filler)
 - False starts / cut-off fragments: e.g., "we wouldn't ha-," should be removed entirely, keeping only the completed restart "we wouldn't have them"
 - Repeated/stammered words that are restarts (e.g., "of, uh, of Sacramento" → "of Sacramento")
-
-IMPORTANT RULES
-1. Never change a real content word into another word. Do NOT do things like "I" → "you" or "guess" → "know". Words that remain must be identical to what was spoken.
-2. Preserve all genuine content words, their order, capitalization of real words, and punctuation of the surviving text. If removing a leading filler like "Oh" leaves the next word starting the sentence, keep that word as it was spoken (do not re-capitalize or otherwise alter it beyond what deletion requires).
-3. Some transcripts contain no disfluencies at all. In that case, output the text completely unchanged.
 
 WORKED EXAMPLES
 - Input: "Oh yes. But, uh, we wouldn't ha-, we wouldn't have them, I mean, I don't see us without pets, without cats."

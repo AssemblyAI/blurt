@@ -401,7 +401,17 @@ that isn't a deletion is closing the gap in the rule numbering. Six removals, ea
 duplicate, a contradiction, or a reference to something that doesn't exist: a redundant
 taxonomy bullet, two rules that restated bullets above them, a worked example whose output
 contradicted one of those rules, the no-op example a surviving rule already states in a line,
-and the two clauses naming DSPy signature fields (see above). It now sits at 1839 characters.
+the two clauses naming DSPy signature fields (see above), and the whole IMPORTANT RULES block.
+It now sits at 1240 characters, leaving 808 of headroom.
+
+That last cut was for **room**, not redundancy. Reflectors returned drafts 630-890 characters
+longer than the 1839-character seed they were handed, so nearly every proposal broke the cap
+and one run spent 8 of its 9 iterations re-scoring the instruction it started with. The rules
+it dropped — never change a content word, preserve order and punctuation, leave a clean
+transcript alone — are all properties the **score already enforces**, so they cost 597
+characters to say what WER says for free. A seed that scores well and cannot be improved is
+worth less than a slightly weaker one the search can build on; if those rules earn their
+place, GEPA can put them back and the score will say so.
 
 It plays three roles at once, which is what makes the run cheap to read:
 

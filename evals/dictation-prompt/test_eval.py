@@ -590,18 +590,22 @@ def test_the_compressed_winner_kept_the_product_critical_safeguards():
         assert clause in candidates.PRIOR_WINNER, clause
 
 
-def test_the_compressed_winner_introduced_no_new_wording():
-    """The claim the docstring makes: this is the scored string minus redundancy.
+def test_the_seed_leaves_the_search_room_to_work():
+    """A seed that scores well and cannot be improved is worth less than a weaker one.
 
-    Compression was deletion, so every line must still appear in a candidate whose
-    provenance is a scored run — checked structurally rather than trusted, because a
-    paraphrase would quietly turn a measured artifact back into an unscored one.
+    Reflectors returned drafts 630-890 characters longer than an 1839-character seed,
+    so nearly every proposal broke the cap and one run spent 8 of 9 iterations
+    re-scoring what it started with. The headroom has to cover that natural expansion,
+    or the search only appears to run.
     """
+    headroom = candidates.INSTRUCTION_CHARACTER_CAP - len(candidates.PRIOR_WINNER)
+    assert headroom >= 600, f"only {headroom} characters of room for the search"
+
+
+def test_the_seed_carries_no_dangling_rule_numbering():
+    """The numbered block was dropped whole, so no orphaned "2." should survive."""
     body = [line for line in candidates.PRIOR_WINNER.split("\n") if line.strip()]
-    # The rule numbering was closed up after two rules were dropped; nothing else moved.
-    renumbered = [line for line in body if re.match(r"^[123]\. ", line)]
-    assert len(renumbered) == 3
-    assert not any(line.startswith(("4.", "5.")) for line in body)
+    assert not [line for line in body if re.match(r"^\d+\. ", line)]
 
 
 def test_an_oversized_candidate_stops_the_run_before_any_model_call(monkeypatch):
