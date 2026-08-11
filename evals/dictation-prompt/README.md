@@ -20,13 +20,11 @@ Each source supplies `(disfluent input, clean target)` pairs. The first two are 
 the disfluencies are the ones actual speakers produced and human annotators labelled, not
 ones we thought to write down.
 
-| `--source`                    | What it is                                                                                                                                                                                                                                  | Measures         |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `disfluency-speech` (default) | [`amaai-lab/DisfluencySpeech`][ds] — ~5k Switchboard utterances whose disfluencies trained annotators marked **by hand** under the LDC stylebook. Scores `transcript_a` (as spoken) against `transcript_c` (false starts and fillers gone). | content only     |
-| `nyra`                        | [`nyralabs/disfluency_speech_english`][nyra] — the same corpus repackaged with casing repaired, at some cost in fidelity.                                                                                                                   | content + format |
-| `disfl-qa`                    | [`google-research-datasets/disfl_qa`][dq] — ~12k SQuAD-v2 questions with a human-inserted self-correction. A QA **robustness** benchmark, not a cleanup corpus — see the warning below before tuning on it.                                 | content + format |
-| `fleurs`                      | [`google/fleurs`][fl] read speech, made disfluent by the injector in `disfluency.py`.                                                                                                                                                       | content + format |
-| `builtin`                     | A dozen bundled sentences plus injection. No network, no key — for smoke-testing.                                                                                                                                                           | content + format |
+| `--source`       | What it is                                                                                                                                                                                                                        | Measures         |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `nyra` (default) | [`nyralabs/disfluency_speech_english`][nyra] — ~5k Switchboard utterances whose disfluencies trained annotators marked **by hand**, repackaged with casing repaired so the formatting axis is live. Costs some fidelity for that. | content + format |
+| `fleurs`         | [`google/fleurs`][fl] read speech, made disfluent by the injector in `disfluency.py`.                                                                                                                                             | content + format |
+| `builtin`        | A dozen bundled sentences plus injection. No network, no key — for smoke-testing.                                                                                                                                                 | content + format |
 
 `--jsonl` reads a local file instead: objects with both `disfluent` and `reference` are used
 as-is; anything with only a reference goes through the injector.
@@ -107,47 +105,36 @@ python3 evals/dictation-prompt/optimize_cleanup_prompt.py --source builtin --dry
 
 ### Where the headroom is, and where it is a mirage
 
-The default corpus is chosen for **room to improve on the task the product actually does**.
-Those are two conditions, and the second one matters more. Measured with no model involved —
-the corpus's disfluent side against its own target, plus the median share of input words each
-corpus asks to be deleted and how much of that is filler:
+There is one paired source, and that is not for want of looking. What the field offers is
+mostly disfluency _detection_ corpora — per-token tags, not a clean rewrite — plus gated or
+LDC-licensed sets. Two candidates were evaluated and rejected on measurement, not vibes.
 
-| `--source`          | no-cleanup floor | words deleted | of those, fillers | task           |
-| ------------------- | ---------------- | ------------- | ----------------- | -------------- |
-| `disfluency-speech` | 0.834            | 11%           | 75%               | remove fillers |
-| **`nyra`**          | **0.789**        | 13%           | 67%               | remove fillers |
-| `disfl-qa`          | 0.435            | 31%           | **0%**            | something else |
+Measured with no model involved: the corpus's disfluent side against its own target, the
+median share of input words each asks to be deleted, and how much of that is filler.
 
-Switchboard is close to saturated. The shipped instruction scores 0.910 against its 0.834
-floor, so it is worth +0.077 and already holds about half of everything available — which is
-why two searches in a row could not beat it. The remaining gap between a good instruction and
-a great one is a few thousandths, under the run-to-run noise. That is a property of the
-corpus, not a failure of the optimizer.
+| source                                      | no-cleanup floor | words deleted | of those, fillers | task           |
+| ------------------------------------------- | ---------------- | ------------- | ----------------- | -------------- |
+| **`nyra`**                                  | **0.789**        | 13%           | 67%               | remove fillers |
+| `amaai-lab/DisfluencySpeech` (its upstream) | 0.834            | 11%           | 75%               | remove fillers |
+| `disfl-qa` — **removed**                    | 0.435            | 31%           | **0%**            | something else |
 
-`disfl-qa`'s floor of 0.435 looks like the answer and is not. It deletes 31% of the input and
-**none of it is filler**: the task is to spot a self-correction and discard the abandoned first
-attempt, real content words and all — sometimes rewording what survives, since 11% of its
-targets contain words absent from the input and so cannot be reached by deletion at all.
+`disfl-qa`'s floor of 0.435 looks like 3.4x the headroom and is not. It deletes 31% of the
+input with **none of it filler**, and 11% of its targets contain words absent from the input,
+so they cannot be reached by deletion at all. Its construction says why: Disfl-QA exists to
+"serve as a benchmark dataset for testing robustness of models against disfluent inputs", and
+annotators inserted a contextual disfluency into SQuAD questions "using the paragraph as a
+source of distractors". In _"the second level of territorial division in **Poland** no make
+that the basic unit of territorial division in **Warsaw**"_, "Poland" is not a speaker's slip —
+it is a semantic decoy planted to see whether a QA model takes the bait. Deleting it is reading
+comprehension. An instruction tuned there learns to discard content words, which is exactly
+what `CleanupInstruction` forbids, so the source was removed rather than left as a trap.
 
-Its construction says why. Disfl-QA exists to "serve as a benchmark dataset for testing
-robustness of models against disfluent inputs": annotators took SQuAD-v2 questions and inserted
-a contextual disfluency "using the paragraph as a source of distractors", which is how you get
-_"the second level of territorial division in **Poland** no make that the basic unit of
-territorial division in **Warsaw**"_. "Poland" is not a speaker's slip — it is a semantic decoy
-harvested from the passage, planted to see whether a QA model is fooled. Over 90% of the
-disfluencies are corrections or restarts by design, because the point was a hard test set.
-
-None of that resembles someone dictating. An instruction tuned there learns to discard content
-words, which is precisely what `CleanupInstruction` forbids, and headroom from measuring a
-different task is worth nothing. It stays useful for the thing it was built for: a stress test
-of whether an instruction over-deletes when a restart appears.
-
-`nyra` is the same hand-annotated Switchboard data with casing repaired. It buys about 27% more
-room (floor 0.789 against 0.834) on the same task, and — the larger gain — its formatting is
-measurable, so `--metric blend` scores two axes instead of degrading to `content` as it must on
-`disfluency-speech`. It pays for that in fidelity: it keeps repetitions the hand annotation
-marked as reparanda and rewrites the verbatim side into its own conventions, so a run on it
-closes by printing the command to re-check the winner against the unmodified pairs.
+What remains is close to saturated, and that is the honest ceiling on this harness. The shipped
+instruction scores ~0.91 against a floor near 0.79–0.83, so it is worth roughly +0.08 and holds
+about half of everything available. The gap between a good instruction and a great one is a few
+thousandths — under the run-to-run noise — which is why two searches in a row could not beat
+it. That is a property of the corpus, not a failure of the optimizer, and no search budget
+resolves a difference smaller than the measurement.
 
 ### What the defaults do
 

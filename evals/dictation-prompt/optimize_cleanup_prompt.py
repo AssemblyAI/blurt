@@ -116,12 +116,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="nyra",
         choices=(*corpus.SOURCES, "builtin"),
         help="which corpus to score against (default: nyra, the same hand-annotated "
-        "Switchboard pairs with casing repaired). Chosen over disfluency-speech for two "
-        "reasons: a slightly lower no-cleanup floor (0.789 vs 0.834, so ~27% more room for "
-        "instruction quality to show), and measurable formatting, which lets --metric blend "
-        "score two axes instead of degrading to content. NOT disfl-qa: its floor is far "
-        "lower (0.435) but only because it is a different task — 31% of words deleted, none "
-        "of them fillers — so tuning there teaches an instruction to discard real content",
+        "Switchboard pairs with casing repaired, so the formatting axis is live and "
+        "--metric blend scores two axes instead of degrading to content). fleurs is read "
+        "speech made disfluent by the injector — the only source with a severity dial, and "
+        "the only one that can pose punctuation restoration as a task",
     )
     data.add_argument(
         "--loader",
@@ -137,7 +135,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--test-fraction becomes train, and train rows are the free ones: GEPA draws a "
         "fixed number of fixed-size reflection minibatches however large the trainset is, "
         "so raising this buys more varied feedback at no extra model cost. The ceiling is "
-        "the corpus (disfluency-speech is ~5k utterances) and the datasets-server rate "
+        "the corpus (nyra is ~5k utterances) and the datasets-server rate "
         "limit, not the budget — set HF_TOKEN for a large load",
     )
     data.add_argument(
@@ -679,20 +677,6 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"\nBest cleanup instruction ({describe_length(winner_instruction)}):\n")
     print(f"  {winner_instruction}\n")
-    if args.source not in ("disfluency-speech", "builtin"):
-        # Tuning where the signal is and shipping from there are different things.
-        # disfl-qa is 90% corrections and restarts; Blurt's traffic looks more like
-        # Switchboard, which is over half simple repetitions. An instruction that wins
-        # on the hard tail can still over-edit the easy middle, and only the other
-        # corpus will say so.
-        print(
-            f"\nTuned on {args.source}. Its verbatim side is repackaged into other\n"
-            "conventions and it keeps repetitions the hand annotation marked as reparanda,\n"
-            "so before shipping, re-check the winner against the unmodified pairs:\n"
-            "  uv run evals/dictation-prompt/optimize_cleanup_prompt.py \\\n"
-            "    --source disfluency-speech --optimizer none --candidates all"
-        )
-
     print(
         "Send it as the dictation request's `config.llm.instruction` — see\n"
         "  Sources/BlurtEngine/STT/AssemblyAITranscriber.swift (the `LLMRewrite` struct),\n"

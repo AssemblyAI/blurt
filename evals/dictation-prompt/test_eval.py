@@ -228,7 +228,7 @@ def test_builtin_corpus_loads_offline_and_injects():
 
 
 def test_paired_sources_are_registered_with_both_columns():
-    for key in ("disfluency-speech", "nyra", "disfl-qa"):
+    for key in ("nyra",):
         source = corpus.SOURCES[key]
         assert source.is_paired
         assert len(source.fields) == 2
@@ -244,7 +244,7 @@ def test_split_override_reaches_the_loader(monkeypatch):
 
     monkeypatch.setattr(corpus, "_rows_via_api", fake_rows)
     with pytest.raises(RuntimeError):  # no rows, so the corpus is empty
-        corpus.load(source="disfluency-speech", limit=5, split="train")
+        corpus.load(source="nyra", limit=5, split="train")
     assert seen["split"] == "train"
 
 
@@ -257,8 +257,8 @@ def test_split_defaults_to_the_sources_own_choice(monkeypatch):
 
     monkeypatch.setattr(corpus, "_rows_via_api", fake_rows)
     with pytest.raises(RuntimeError):
-        corpus.load(source="disfluency-speech", limit=5)
-    assert seen["split"] == corpus.SOURCES["disfluency-speech"].split
+        corpus.load(source="nyra", limit=5)
+    assert seen["split"] == corpus.SOURCES["nyra"].split
 
 
 def test_fleurs_is_reference_only():
@@ -333,7 +333,7 @@ def test_no_cleanup_floor_sits_below_a_perfect_cleanup():
 
 def _corpus(measurable: bool) -> corpus.Corpus:
     return corpus.Corpus(
-        utterances=(), source="disfluency-speech", detail={}, formatting_is_measurable=measurable
+        utterances=(), source="a-corpus", detail={}, formatting_is_measurable=measurable
     )
 
 
@@ -352,16 +352,24 @@ def test_measurable_formatting_keeps_the_requested_axis():
 
 
 def test_the_repaired_repackaging_can_measure_formatting():
-    """nyra recases its targets, which is the whole reason to prefer it over upstream."""
+    """Recased targets are the whole reason this repackaging is the one kept.
+
+    Its upstream, `amaai-lab/DisfluencySpeech`, builds its clean side by stripping
+    markup mechanically, which leaves the word after a removed span lowercase — so
+    formatting there scores a correct cleanup as wrong.
+    """
     assert corpus.SOURCES["nyra"].formatting_is_measurable
-    assert not corpus.SOURCES["disfluency-speech"].formatting_is_measurable
 
 
-def test_upstream_pair_reads_the_hand_annotated_columns():
-    source = corpus.SOURCES["disfluency-speech"]
-    assert (source.input_field, source.target_field) == ("transcript_a", "transcript_c")
-    # transcript_a is already transcriber-shaped, so nothing needs undoing.
-    assert source.detag is None
+def test_the_paired_source_reads_both_repackaged_columns_and_undoes_its_markup():
+    source = corpus.SOURCES["nyra"]
+    assert (source.input_field, source.target_field) == (
+        "verbatim_transcript",
+        "intended_transcript",
+    )
+    # Unlike its upstream, this side is written in the corpus's own conventions
+    # (`[UH]`, `[laughter]`, `th*`), so it has to be rewritten as transcript text.
+    assert source.detag is corpus._detag_nyra
 
 
 # --------------------------------------------------------------------------
@@ -644,9 +652,9 @@ def test_describe_length_names_the_overage_or_the_headroom():
 def test_the_feedback_reports_only_the_axis_being_selected_on():
     """Naming an axis nobody selects on points the search at noise.
 
-    `disfluency-speech` targets carry mechanically-stripped casing, which is why the
-    harness degrades `blend` to `content` there — so telling the reflector a formatting
-    score invites it to chase an artifact.
+    A corpus whose target casing is a mechanical artifact makes the harness degrade
+    `blend` to `content` — so telling the reflector a formatting score there invites it
+    to chase the artifact.
     """
     ref, hyp = "Ship it on Friday.", "Um, ship it on Monday."
     note = metrics.feedback(ref, hyp, "Um, ship it on Friday.", metrics.score(ref, hyp), "content")
@@ -657,8 +665,8 @@ def test_the_feedback_reports_only_the_axis_being_selected_on():
 def test_a_case_only_difference_is_perfect_on_the_content_axis():
     """And must read that way, rather than nagging about an artifact of the targets.
 
-    `disfluency-speech` strips casing mechanically when it builds its clean side, so a
-    formatting complaint there is the harness pointing at its own corpus damage.
+    Where a corpus builds its clean side by stripping markup mechanically, a formatting
+    complaint is the harness pointing at its own corpus damage.
     """
     ref, hyp = "Ship it on Friday.", "ship it on friday"
     assert metrics.score(ref, hyp).content == 1.0
@@ -870,14 +878,13 @@ def test_the_default_corpus_measures_the_task_the_product_does():
     """Room to improve is not worth having if it comes from measuring something else.
 
     Median share of input words a corpus asks to be deleted, and how much of that is
-    filler: disfluency-speech 11% / 75% filler, nyra 13% / 67%, disfl-qa 31% / **0%**.
-    disfl-qa's floor is far lower (0.435 against 0.834) and that looks like headroom,
-    but it is a different task — discard the abandoned half of a self-corrected
-    question, deleting real content words. An instruction tuned there learns to throw
-    away the user's words, which is the one thing this one forbids.
+    filler: nyra 13% / 67% (its source, DisfluencySpeech, 11% / 75%). disfl-qa measured
+    31% / **0%** — a QA robustness benchmark whose "disfluency" is a distractor
+    harvested from the source paragraph — and was removed for that reason, so this
+    also guards against it being registered again.
     """
     assert cli.parse_args([]).source == "nyra"
-    assert cli.parse_args([]).source != "disfl-qa"
+    assert "disfl-qa" not in corpus.SOURCES
 
 
 def test_the_default_corpus_can_measure_formatting():

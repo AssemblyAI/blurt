@@ -249,7 +249,7 @@ def feedback(
       proposals had a median length of 2149 against that 2048.
     - **The axis nobody selected on.** Only `axis` is reported. Naming the formatting
       score on a corpus whose formatting the harness refuses to trust — `--metric
-      blend` degrades to `content` on `disfluency-speech` for exactly that reason —
+      blend` degrades to `content` on a corpus with unreliable target casing —
       invites the reflector to chase capitalization that is an artifact of how the
       targets were built.
     """

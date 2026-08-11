@@ -6,32 +6,31 @@ Two kinds of source, both yielding the same `Utterance`:
 prefer: the disfluencies are the ones real speakers produced, not the ones we
 thought to write down.
 
-- `disfluency-speech` (default) — `amaai-lab/DisfluencySpeech`, ~5k utterances
-  from a single speaker re-recording ~10 hours of real Switchboard telephone
-  conversations. Its `transcript_annotated` column carries Switchboard's own
-  disfluency markup (`{D}` discourse marker, `{F}` filled pause, `{E}` editing
-  term, `[ reparandum + repair ]`), which trained annotators produced by hand
-  under the LDC stylebook; the `transcript_a`/`_b`/`_c` columns are that markup
-  mechanically stripped at three levels. We score `transcript_a` (every word as
-  spoken, non-speech events removed — exactly the shape a transcriber emits, with
-  cut-offs already written `bam-`) against `transcript_c` (filled pauses, editing
-  terms, discourse markers, and false starts all gone).
-
-  The catch is that stripping is mechanical, so a removed sentence-initial
-  discourse marker leaves the next word lowercase (`Yeah. rabbits are darling`).
-  Targets are therefore unreliable on capitalization and the formatting axis is
-  disabled here — a correct cleanup would be *penalized* for writing `Rabbits`.
-- `nyra` — `nyralabs/disfluency_speech_english`, the same corpus repackaged as
+- `nyra` (default) — `nyralabs/disfluency_speech_english`, a repackaging of
+  `amaai-lab/DisfluencySpeech`: ~5k utterances from one speaker re-recording ~10
+  hours of real Switchboard telephone conversations, whose disfluencies trained
+  annotators marked by hand under the LDC stylebook. It ships them as
   `verbatim_transcript` / `intended_transcript` with the casing repaired, which is
-  why formatting *is* measurable here. It costs some fidelity: it retains
-  repetitions the hand annotation marked as reparanda, and rewrites the verbatim
-  side into its own conventions (`[UH]`, `[laughter]`, `th*`), which `_detag_nyra`
-  has to undo. Use it when the formatting axis matters more than exact recall.
-- `disfl-qa` — `google-research-datasets/disfl_qa`, ~12k SQuAD questions with a
-  human-written disfluent variant. Over 90% of its disfluencies are corrections
-  and restarts, deliberately the *hard* cases (Switchboard is over half simple
-  repetitions), so it complements the two above rather than duplicating them.
-  Both sides are properly written, so the formatting axis is live but undemanding.
+  why the formatting axis is live here.
+
+  It costs some fidelity for that: it retains repetitions the hand annotation
+  marked as reparanda, and rewrites the verbatim side into its own conventions
+  (`[UH]`, `[laughter]`, `th*`), which `_detag_nyra` has to undo.
+
+  `amaai-lab/DisfluencySpeech` itself was registered here and has been removed as a
+  duplicate — same recordings, same annotations, reached through unrepaired casing
+  that made its targets unreliable enough to disable the formatting axis. Re-add it
+  if the repackaging is ever suspected of costing accuracy, since it is the only
+  way to check nyra against the unmodified pairs.
+
+`google-research-datasets/disfl_qa` was registered here and has been removed. Its
+floor looked like headroom — 0.435 against Switchboard's 0.834 — but it is a QA
+*robustness* benchmark, not a cleanup corpus: annotators inserted a contextual
+disfluency into SQuAD questions "using the paragraph as a source of distractors",
+so the thing to delete is a semantic decoy rather than a speaker's slip. It asks
+for 31% of words to be deleted with **none** of them fillers, and 11% of its
+targets contain words absent from the input. Tuning a cleanup instruction there
+teaches it to discard content, which is what `CleanupInstruction` forbids.
 
 **Reference-only** — clean transcripts that the injector turns into pairs
 (`disfluency.py`). `fleurs` is `google/fleurs`, whose `raw_transcription` field
@@ -125,22 +124,6 @@ class Source:
 
 
 SOURCES: dict[str, Source] = {
-    "disfluency-speech": Source(
-        key="disfluency-speech",
-        dataset="amaai-lab/DisfluencySpeech",
-        split="test",
-        input_field="transcript_a",
-        target_field="transcript_c",
-        # transcript_a is already exactly what a transcriber emits — words as
-        # spoken, non-speech events dropped, cut-offs written `bam-`. No rewriting
-        # needed, unlike the nyra repackaging below.
-        formatting_is_measurable=False,
-        note=(
-            "hand-annotated Switchboard disfluencies; transcript_a (as spoken) -> "
-            "transcript_c (false starts removed). Targets carry mechanical casing "
-            "artifacts, so only content is scored"
-        ),
-    ),
     "nyra": Source(
         key="nyra",
         dataset="nyralabs/disfluency_speech_english",
@@ -149,14 +132,6 @@ SOURCES: dict[str, Source] = {
         target_field="intended_transcript",
         detag=_detag_nyra,
         note="the same corpus recased and repunctuated, at the cost of some fidelity",
-    ),
-    "disfl-qa": Source(
-        key="disfl-qa",
-        dataset="google-research-datasets/disfl_qa",
-        split="test",
-        input_field="disfluent question",
-        target_field="original question",
-        note="human-written disfluencies, mostly corrections and restarts",
     ),
     "fleurs": Source(
         key="fleurs",
@@ -399,7 +374,7 @@ def _pairs_from_jsonl(path: str):
 
 def load(
     *,
-    source: str = "disfluency-speech",
+    source: str = "nyra",
     loader: str = "datasets-server",
     limit: int = 120,
     split: str | None = None,
@@ -419,7 +394,7 @@ def load(
     elif source in SOURCES:
         spec = SOURCES[source]
         # Each source defaults to its held-out split, which is small (250 rows for
-        # disfluency-speech). A run large enough to separate close candidates has
+        # nyra). A run large enough to separate close candidates has
         # to reach into `train` — harmless here, since nothing is fine-tuned and
         # the harness makes its own train/dev/test partition of whatever it loads.
         if split:
