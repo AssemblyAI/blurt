@@ -2,7 +2,7 @@
 # Project health check: build + test the SPM engine and the macOS app.
 # Pipes xcodebuild through xcbeautify when available (brew install xcbeautify).
 # Runs swiftlint / periphery / actionlint / prettier / xmllint /
-# markdownlint / shellcheck when available.
+# markdownlint / shellcheck / shfmt / ruff / pytest when available.
 # Swift warnings are treated as errors everywhere; engine line coverage is gated.
 # `check.sh --portable` runs only the platform-independent subset (for Linux /
 # web sandboxes with no macOS toolchain) — see the flag parsing below.
@@ -13,7 +13,8 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_DIR="$REPO_ROOT/App/Blurt"
 
 # --portable: run only the platform-independent checks (actionlint / prettier /
-# xmllint / markdownlint / shellcheck / release.test.sh, plus swift-format and
+# xmllint / markdownlint / shellcheck / shfmt / ruff / pytest / release.test.sh,
+# plus swift-format and
 # swiftlint lint when their Linux builds happen to be present). For Linux / web
 # sandboxes where the macOS toolchain is absent. A green --portable run is NOT
 # "green" in the CI sense — the Swift build, tests, sanitizers, coverage gate,
@@ -48,6 +49,53 @@ export OS_ACTIVITY_MODE=disable
 die_check() {
   echo "error: $*" >&2
   exit 1
+}
+
+# Run one sanitizer pass of the engine suite ($1 = the --sanitize value, $2 = its
+# scratch directory under .build), retrying once if it dies inside the compiler
+# rather than in a test.
+#
+# A sanitizer scratch path outlives the toolchain that filled it. SwiftPM
+# invalidates its own artifacts when the compiler or SDK moves; the Clang
+# precompiled modules under `ModuleCache/` it leaves alone. A stale one then
+# fails to deserialize, and the frontend dies with SIGSEGV inside
+# `clang::ASTReader::finishPendingActions` while trying to diagnose the type it
+# could no longer import (seen as `while resolving type , AVAudioRecorder?`).
+# That failure is a convincing impostor: it reads as a compile error in engine
+# code, yet it survives every source change, reproduces on a pristine checkout,
+# and clears the moment that one directory goes away. It is also asymmetric —
+# only the pass whose scratch path is poisoned fails, so the same `swift test`
+# against the default `.build` passes and the crash looks like the sanitizer's
+# doing. Observed 2026-08-11: `.build/tsan` was weeks older than the installed
+# SDK, and `rm -rf` on its `ModuleCache` was the whole fix.
+#
+# Hence: drop just that path's module cache and run the pass again. Gated
+# narrowly on the crash signature, because a detected data race or a failing test
+# must never buy a silent second attempt at a multi-minute suite.
+run_sanitizer_pass() {
+  local sanitizer="$1"
+  local scratch="$REPO_ROOT/.build/$2"
+  local log status=0 crashed=0
+  log="$(mktemp -t "check-sanitize-$sanitizer")"
+
+  # tee, not capture-then-print: the pass takes minutes, and swallowing its
+  # output until it finished would leave the run looking hung.
+  swift test --sanitize="$sanitizer" --scratch-path "$scratch" \
+    -Xswiftc -warnings-as-errors 2>&1 | tee "$log" || status=$?
+  if [ "$status" -eq 0 ]; then
+    rm -f "$log"
+    return 0
+  fi
+  if grep -qE 'failed due to signal|Please submit a bug report' "$log"; then
+    crashed=1
+  fi
+  rm -f "$log"
+  [ "$crashed" -eq 1 ] || return "$status"
+
+  echo "note: the $sanitizer pass crashed inside the compiler; clearing its stale"
+  echo "      module cache ($scratch) and retrying once"
+  find "$scratch" -type d -name ModuleCache -prune -exec rm -rf {} +
+  swift test --sanitize="$sanitizer" --scratch-path "$scratch" -Xswiftc -warnings-as-errors
 }
 
 # Guard for the optional linters below: true when $1 is on PATH, otherwise emits
@@ -213,15 +261,16 @@ else
   # Each sanitizer gets its own --scratch-path: the three passes compile with
   # different swiftc flags, so sharing the default .build makes every pass
   # invalidate the previous one's artifacts (and leaves .build poisoned for the
-  # next run's plain pass). Separate paths keep three warm incremental caches.
-  swift test --sanitize=thread --scratch-path "$REPO_ROOT/.build/tsan" -Xswiftc -warnings-as-errors
+  # next run's plain pass). Separate paths keep three warm incremental caches —
+  # and `run_sanitizer_pass` handles the one way a long-lived one goes bad.
+  run_sanitizer_pass thread tsan
 
   echo "==> swift test --sanitize=address (memory-safety detection)"
   # AddressSanitizer catches use-after-free, buffer overflows, and other memory
   # corruption at runtime. (LeakSanitizer is unsupported on Darwin, so this does
   # NOT find retain-cycle leaks — those are covered by the weak-reference
   # assertions in MemoryLeakTests.swift.)
-  swift test --sanitize=address --scratch-path "$REPO_ROOT/.build/asan" -Xswiftc -warnings-as-errors
+  run_sanitizer_pass address asan
 
   echo "==> xcodegen (App/Blurt)"
   cd "$APP_DIR"
@@ -376,6 +425,42 @@ if tool_ready shellcheck 'brew install shellcheck'; then
   # Static analysis for the project's shell scripts (release-*, check.sh
   # itself) — catches quoting bugs, unset vars, and unsafe patterns.
   shellcheck scripts/*.sh
+fi
+
+if tool_ready shfmt 'brew install shfmt'; then
+  echo "==> shfmt --diff"
+  # Formatting authority for scripts/*.sh, the same division of labour swift-format
+  # and swiftlint have: shfmt owns layout, shellcheck owns correctness. --diff
+  # prints what it would change and exits non-zero, so an unformatted script fails
+  # here instead of drifting. No formatting flags on purpose — that is what lets
+  # shfmt read the [*.sh] block in .editorconfig, so editors and this check agree.
+  shfmt --diff scripts/*.sh
+fi
+
+# The evals (evals/) are the repo's only Python: offline decision support for the
+# dictation API's cleanup instruction, not shipped code. Linted, formatted, and
+# tested here anyway — a harness whose own correctness is unchecked is a bad
+# instrument, and all three tools are platform-independent, so they run in the
+# --portable subset too.
+if tool_ready ruff 'brew install ruff'; then
+  echo "==> ruff format --check (evals)"
+  # Formatting authority for the Python, config in evals/ruff.toml. --check is the
+  # non-mutating half; run `ruff format evals/` to fix.
+  ruff format --check evals/
+  echo "==> ruff check (evals)"
+  # Lint: pyflakes/pycodestyle correctness plus import order, pyupgrade, and
+  # bugbear. Line width is deliberately left to the formatter (see the config).
+  ruff check evals/
+fi
+
+if tool_ready pytest 'brew install pytest'; then
+  echo "==> pytest (evals/dictation-prompt)"
+  # The eval's offline suite: corpus construction, disfluency injection, the
+  # scoring metric, and the split disjointness. It needs no network, no API key,
+  # and no third-party packages beyond pytest itself — everything that imports
+  # DSPy lives in program.py, which these tests assert never gets imported. That
+  # property is why this is cheap enough to gate on.
+  pytest -q evals/dictation-prompt/test_eval.py
 fi
 
 echo "==> release.sh unit tests"

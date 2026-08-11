@@ -7,3 +7,20 @@ end_of_line = lf
 insert_final_newline = true
 trim_trailing_whitespace = true
 charset = utf-8
+
+# shfmt reads these — it is the formatting authority for scripts/*.sh in
+# check.sh, and it consults .editorconfig only when the command line carries no
+# formatting flags, so the invocation there stays bare and this block is the one
+# place the shell style is written down. The values describe the scripts as they
+# were already written: two-space indent, `case` bodies indented, and binary
+# operators (`&&`, `|`) leading the continuation line rather than trailing the
+# previous one.
+[*.sh]
+indent_style = space
+indent_size = 2
+switch_case_indent = true
+binary_next_line = true
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+charset = utf-8

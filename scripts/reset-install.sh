@@ -35,8 +35,8 @@ if [ -x "$LSREGISTER" ]; then
     | sed -n 's/^[[:space:]]*path:[[:space:]]*\(.*\/Blurt\.app\) (0x[0-9a-f]*)$/\1/p' \
     | sort -u \
     | while IFS= read -r app; do
-        "$LSREGISTER" -u "$app" >/dev/null 2>&1 && echo "    unregistered: $app" || true
-      done || echo "    note: lsregister dump failed; skipping unregister sweep"
+      "$LSREGISTER" -u "$app" >/dev/null 2>&1 && echo "    unregistered: $app" || true
+    done || echo "    note: lsregister dump failed; skipping unregister sweep"
   for dest in "/Applications/Blurt.app" "$HOME/Applications/Blurt.app"; do
     [ -d "$dest" ] && "$LSREGISTER" -f "$dest" >/dev/null 2>&1 && echo "    registered: $dest" || true
   done

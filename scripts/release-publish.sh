@@ -14,7 +14,10 @@ REPUBLISH=0
 for arg in "$@"; do
   case "$arg" in
     --republish) REPUBLISH=1 ;;
-    *) echo "unknown arg: $arg" >&2; exit 2 ;;
+    *)
+      echo "unknown arg: $arg" >&2
+      exit 2
+      ;;
   esac
 done
 
@@ -89,8 +92,11 @@ cat <<EOF
 EOF
 read -r -p "Continue? [y/N]: " ANS
 case "$ANS" in
-  y|Y) ;;
-  *) info "aborted"; exit 0 ;;
+  y | Y) ;;
+  *)
+    info "aborted"
+    exit 0
+    ;;
 esac
 
 if [ "$REPUBLISH" -eq 1 ]; then

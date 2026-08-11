@@ -25,7 +25,10 @@ for arg in "$@"; do
   case "$arg" in
     --skip-checks) SKIP_CHECKS=1 ;;
     --skip-smoke) SKIP_SMOKE=1 ;;
-    *) echo "unknown arg: $arg" >&2; exit 2 ;;
+    *)
+      echo "unknown arg: $arg" >&2
+      exit 2
+      ;;
   esac
 done
 
@@ -104,7 +107,10 @@ unlock_signing_keychain() {
 
   load_signing_keychain_password
   security unlock-keychain -p "$SIGNING_KEYCHAIN_PW" "$SIGNING_KEYCHAIN" \
-    || { SIGNING_KEYCHAIN_PW=""; die "failed to unlock signing keychain $SIGNING_KEYCHAIN"; }
+    || {
+      SIGNING_KEYCHAIN_PW=""
+      die "failed to unlock signing keychain $SIGNING_KEYCHAIN"
+    }
   SIGNING_KEYCHAIN_PW=""
   SIGNING_KEYCHAIN_UNLOCKED=1
   info "unlocked dedicated signing keychain: $SIGNING_KEYCHAIN"
@@ -128,13 +134,13 @@ notarize() {
     --keychain-profile "$NOTARY_PROFILE" \
     ${NOTARY_KEYCHAIN[@]+"${NOTARY_KEYCHAIN[@]}"} \
     --wait \
-    --output-format plist > "$result_plist"
+    --output-format plist >"$result_plist"
   local status id
   status="$(/usr/libexec/PlistBuddy -c 'Print :status' "$result_plist" 2>/dev/null || echo unknown)"
   id="$(/usr/libexec/PlistBuddy -c 'Print :id' "$result_plist" 2>/dev/null || echo unknown)"
   info "notary status ($tag): $status (id $id)"
   xcrun notarytool log "$id" --keychain-profile "$NOTARY_PROFILE" \
-    ${NOTARY_KEYCHAIN[@]+"${NOTARY_KEYCHAIN[@]}"} > "$log_json" 2>&1 || true
+    ${NOTARY_KEYCHAIN[@]+"${NOTARY_KEYCHAIN[@]}"} >"$log_json" 2>&1 || true
   if [ "$status" != "Accepted" ]; then
     step "Notary log ($tag)"
     cat "$log_json" 2>/dev/null || true
@@ -418,12 +424,12 @@ PROVENANCE="$BUILD_ROOT/build-info.txt"
   shasum -a 256 "$REPO_ROOT/App/Blurt/Blurt.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved" 2>/dev/null \
     || shasum -a 256 "$REPO_ROOT/Package.resolved" 2>/dev/null \
     || echo "  (Package.resolved not found)"
-} > "$PROVENANCE"
+} >"$PROVENANCE"
 info "provenance: $PROVENANCE"
 
 step "Checksums"
 CHECKSUMS="$BUILD_ROOT/SHA256SUMS"
-(cd "$BUILD_ROOT" && shasum -a 256 "$(basename "$DMG")" "$(basename "$DSYM_ZIP")") > "$CHECKSUMS"
+(cd "$BUILD_ROOT" && shasum -a 256 "$(basename "$DMG")" "$(basename "$DSYM_ZIP")") >"$CHECKSUMS"
 info "checksums: $CHECKSUMS"
 
 step "Summary"

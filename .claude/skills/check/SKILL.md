@@ -1,6 +1,6 @@
 ---
 name: check
-description: Verify the repo is green by running scripts/check.sh — the same full health check CI runs (swift test + coverage gate, sanitizers, xcodegen drift, app build, swift-format/swiftlint/periphery/prettier/markdownlint/shellcheck). Use before claiming a change builds, passes, or is ready to commit/PR. Bakes in the macOS-only guard so a Linux/web sandbox flags "verify on a Mac" instead of fabricating a green result; there, scripts/check.sh --portable runs the platform-independent subset (docs/site/scripts/workflows).
+description: Verify the repo is green by running scripts/check.sh — the same full health check CI runs (swift test + coverage gate, sanitizers, xcodegen drift, app build, swift-format/swiftlint/periphery/prettier/markdownlint/shellcheck/shfmt, ruff + pytest over evals/). Use before claiming a change builds, passes, or is ready to commit/PR. Bakes in the macOS-only guard so a Linux/web sandbox flags "verify on a Mac" instead of fabricating a green result; there, scripts/check.sh --portable runs the platform-independent subset (docs/site/scripts/workflows).
 ---
 
 # check — is this green?
@@ -27,10 +27,10 @@ What you CAN run there is the portable subset:
 scripts/check.sh --portable
 ```
 
-It runs actionlint / prettier / xmllint / markdownlint / shellcheck /
-`release.test.sh` (plus `swift-format lint` and `swiftlint lint` if Linux
+It runs actionlint / prettier / xmllint / markdownlint / shellcheck / shfmt /
+ruff (lint + format check) / pytest over `evals/` / `release.test.sh` (plus `swift-format lint` and `swiftlint lint` if Linux
 builds are on `PATH` — under the default web network policy they are not).
-That fully verifies docs, site, scripts, and workflow changes. It is **not**
+That fully verifies docs, site, scripts, eval, and workflow changes. It is **not**
 "green" in the CI sense: the entire Swift side is skipped, and the closing
 line says so. For Swift changes, push and watch `check.yml` instead. In
 Claude Code on the web, the `SessionStart` hook installs the portable
@@ -67,7 +67,10 @@ Mac they're all present, so don't treat a skip as a pass):
 8. `swift-format lint --strict`
 9. `swiftlint lint --strict` (warnings are failures), `swiftlint analyze`
    (unused imports), `periphery scan --strict`
-10. actionlint / prettier / xmllint / markdownlint / shellcheck
+10. actionlint / prettier / xmllint / markdownlint / shellcheck / shfmt --diff
+11. `ruff format --check` + `ruff check` over `evals/`, then `pytest`
+    over `evals/dictation-prompt/test_eval.py`
+12. `release.test.sh`
 
 ## Interpreting the result
 
