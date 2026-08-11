@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Single-command release orchestrator. Resumable; wraps the three release
-# scripts and bridges the protected-main bump PR.
+# Single-command release orchestrator. Resumable; opens the protected-main bump
+# PR, then hands the build off to CI.
 #
 # Usage: scripts/release.sh [X.Y.Z]
 #
@@ -10,8 +10,10 @@
 #   version (e.g. a minor/major bump).
 #
 #   Run 1 (bump not yet on main): opens a release/vX.Y.Z bump PR, then stops.
-#   Run 2 (bump merged):          builds + notarizes the DMG, then tags,
-#                                 pushes, and publishes the GitHub Release.
+#   Run 2 (bump merged):          dispatches .github/workflows/release.yml
+#                                 against origin/main and follows it. The build,
+#                                 signing, notarization, and publish all happen
+#                                 there — nothing is built on this machine.
 #
 # Re-run the same command after merging the PR to resume.
 
@@ -79,23 +81,13 @@ latest_release_tag() {
     | sort -V | tail -n1
 }
 
-# True if a complete, stapled release exists for $1 — i.e. everything
-# release-publish.sh requires (DMG + dSYM zip + checksums), not just the DMG.
-dmg_already_built() {
-  local dmg="$BUILD_ROOT/Blurt-$1.dmg"
-  local build_info="$BUILD_ROOT/build-info.txt"
-  [ -f "$dmg" ] || return 1
-  [ -f "$BUILD_ROOT/Blurt-$1.app.dSYM.zip" ] || return 1
-  [ -f "$BUILD_ROOT/SHA256SUMS" ] || return 1
-  [ -f "$build_info" ] || return 1
-
-  local built_sha head_sha
-  built_sha="$(parse_build_info_git_sha <"$build_info")"
-  [ -n "$built_sha" ] || return 1
-  head_sha="$(git -C "$REPO_ROOT" rev-parse HEAD)" || return 1
-  [ "$built_sha" = "$head_sha" ] || return 1
-
-  xcrun stapler validate "$dmg" >/dev/null 2>&1
+# Database id of the most recent run of the release workflow, empty if there is
+# none. Used to tell the run we just dispatched apart from earlier ones —
+# `gh workflow run` prints no id, and matching on head sha alone would latch
+# onto a previous run of the same commit.
+latest_release_run_id() {
+  (cd "$REPO_ROOT" && gh run list --workflow "$WORKFLOW" --limit 1 \
+    --json databaseId -q '.[0].databaseId' 2>/dev/null) || true
 }
 
 # Run 1: open the bump PR, then stop. Idempotent + resumable: keys on actual
@@ -156,39 +148,57 @@ run_bump_pr() {
   info "PR opened. Merge it, then re-run: scripts/release.sh $version"
 }
 
-# Run 2: build (skip if already built) + publish.
-run_build_publish() {
+# Run 2: dispatch the release workflow and follow it. The workflow pins itself to
+# the sha it was dispatched at, which is what keeps the old "a release must be
+# the exact reviewed main commit" invariant — the tag can only ever land on the
+# commit that was actually built.
+run_release_workflow() {
   local version="$1"
+  local sha short_sha before after url
 
-  step "Sync main"
-  git -C "$REPO_ROOT" checkout main
-  git -C "$REPO_ROOT" pull --ff-only
+  sha="$(git -C "$REPO_ROOT" rev-parse origin/main)"
+  short_sha="$(git -C "$REPO_ROOT" rev-parse --short origin/main)"
 
-  local main_v
-  main_v="$(parse_short_version <"$REPO_ROOT/App/Blurt/project.yml")"
-  [ "$main_v" = "$version" ] \
-    || die "main is at $main_v, expected $version after merge — pull main and retry"
+  step "Dispatch"
+  info "workflow: $WORKFLOW"
+  info "target:   v$version at origin/main ($short_sha)"
+  before="$(latest_release_run_id)"
+  (cd "$REPO_ROOT" && gh workflow run "$WORKFLOW" --ref main -f version="$version")
 
-  local head_sha origin_sha
-  head_sha="$(git -C "$REPO_ROOT" rev-parse HEAD)"
-  origin_sha="$(git -C "$REPO_ROOT" rev-parse origin/main)"
-  [ "$head_sha" = "$origin_sha" ] \
-    || die "HEAD ($head_sha) is not origin/main ($origin_sha) — a release must be the exact reviewed main commit; push/pull and retry"
+  step "Find the run"
+  # GitHub queues the run asynchronously, so poll until a run newer than the one
+  # that was latest before the dispatch shows up.
+  local waited=0
+  while :; do
+    after="$(latest_release_run_id)"
+    if [ -n "$after" ] && [ "$after" != "$before" ]; then break; fi
+    [ "$waited" -lt 60 ] \
+      || die "dispatched, but no new $WORKFLOW run appeared after ${waited}s — check the Actions tab"
+    sleep 3
+    waited=$((waited + 3))
+  done
+  url="$(cd "$REPO_ROOT" && gh run view "$after" --json url -q .url)"
+  info "run: $url"
 
-  step "Build"
-  if dmg_already_built "$version"; then
-    info "DMG for $version already built + stapled — skipping build"
-  else
-    "$REPO_ROOT/scripts/release-build.sh"
-  fi
+  step "Next"
+  cat <<EOF
 
-  # Install the notarized build locally so the publish prompt below doubles as
-  # a "tested it, ship it" gate — test the real artifact before it's published.
-  step "Install for local testing"
-  "$REPO_ROOT/scripts/release-install.sh"
+  CI is building, signing, and notarizing v$version from $short_sha.
 
-  step "Publish"
-  "$REPO_ROOT/scripts/release-publish.sh"
+  When the build job finishes, the publish job parks for approval on the
+  'release-publish' environment. That approval is the ship gate: download the
+  DMG from the run's artifacts, install it, confirm it works, and only then
+  approve. Nothing is rebuilt after you approve — you are testing the exact
+  bits that get published.
+
+    $url
+
+EOF
+
+  step "Watch"
+  (cd "$REPO_ROOT" && gh run watch "$after" --exit-status) \
+    || die "the release run did not succeed — see $url"
+  info "released: $sha -> v$version"
 }
 
 main() {
@@ -196,7 +206,7 @@ main() {
   # without inheriting set -e and aborting the test runner.
   set -euo pipefail
   REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-  BUILD_ROOT="$REPO_ROOT/build/release"
+  WORKFLOW="release.yml"
 
   [ $# -le 1 ] || die "usage: $(basename "$0") [X.Y.Z]"
   local version="${1:-}"
@@ -205,8 +215,6 @@ main() {
   fi
 
   require_tools git gh xcodegen awk
-
-  require_clean_tree "releasing"
 
   step "Fetch origin"
   git -C "$REPO_ROOT" fetch origin --tags --quiet
@@ -228,8 +236,13 @@ main() {
     || die "target $version is behind origin/main ($main_v)"
 
   case "$run" in
-    bump) run_bump_pr "$version" ;;
-    publish) run_build_publish "$version" ;;
+    # Only the bump touches the working tree; the release itself is built from
+    # origin/main on CI, so a dirty tree is irrelevant to it.
+    bump)
+      require_clean_tree "releasing"
+      run_bump_pr "$version"
+      ;;
+    publish) run_release_workflow "$version" ;;
   esac
 }
 

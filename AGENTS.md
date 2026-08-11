@@ -64,7 +64,8 @@ App/Blurt/
 Tests/BlurtEngineTests/      Swift Testing suites; Stubs/ holds the seam doubles
 scripts/                     check.sh, bootstrap.sh, dev-build.sh, uitest.sh, leaks.sh, release*.sh
 site/                        the GitHub Pages site (html/css, sitemap) — linted by check.sh
-.github/workflows/           check.yml (the gate, macos-26), codeql.yml, pages.yml
+.github/workflows/           check.yml (the gate, macos-26), release.yml (sign + publish),
+                             codeql.yml, pages.yml
 .claude/                     Claude Code hooks, skills, subagents (see CLAUDE.md)
 ```
 
@@ -566,6 +567,12 @@ matches `project.yml`.
 
 ## Releasing
 
-Releases are built, signed, notarized, and published locally via `scripts/release.sh`.
-Security-critical custody, certificate/notary rotation, and the roll-forward-only policy for a bad
-release are documented in [`RELEASE.md`](./RELEASE.md).
+Releases are built, signed, notarized, and published by the `release` GitHub Actions workflow
+(`.github/workflows/release.yml`), driven by `scripts/release.sh`: run 1 opens the version-bump PR,
+run 2 dispatches the workflow and follows it. The publish job parks on the `release-publish`
+environment until a human approves — that approval is the ship gate, so download and test the DMG
+from the build job's artifacts first. Nothing is rebuilt after approval.
+
+Signing-key custody (a base64 `.p12` secret imported into an ephemeral keychain, never a persistent
+one), the required environments and secrets, certificate/notary rotation, and the roll-forward-only
+policy for a bad release are documented in [`RELEASE.md`](./RELEASE.md).

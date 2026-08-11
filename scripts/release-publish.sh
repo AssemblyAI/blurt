@@ -3,6 +3,10 @@
 # Pass --republish to overwrite an existing tag + release with new artifacts
 # (useful when the published DMG turned out to be broken and needs a redo
 # without bumping the version).
+#
+# Pass --yes to skip the interactive confirmation. That is how the release
+# workflow's publish job runs it: the human gate has already happened there, as
+# the required approval on the `release-publish` environment.
 
 set -euo pipefail
 
@@ -11,9 +15,11 @@ APP_DIR="$REPO_ROOT/App/Blurt"
 BUILD_ROOT="$REPO_ROOT/build/release"
 
 REPUBLISH=0
+ASSUME_YES=0
 for arg in "$@"; do
   case "$arg" in
     --republish) REPUBLISH=1 ;;
+    --yes | -y) ASSUME_YES=1 ;;
     *) echo "unknown arg: $arg" >&2; exit 2 ;;
   esac
 done
@@ -87,11 +93,15 @@ cat <<EOF
   DMG: $DMG ($SIZE)
 
 EOF
-read -r -p "Continue? [y/N]: " ANS
-case "$ANS" in
-  y|Y) ;;
-  *) info "aborted"; exit 0 ;;
-esac
+if [ "$ASSUME_YES" -eq 1 ]; then
+  info "--yes given — proceeding without a prompt"
+else
+  read -r -p "Continue? [y/N]: " ANS
+  case "$ANS" in
+    y|Y) ;;
+    *) info "aborted"; exit 0 ;;
+  esac
+fi
 
 if [ "$REPUBLISH" -eq 1 ]; then
   step "Delete existing release + tag"

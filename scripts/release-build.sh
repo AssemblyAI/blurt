@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Build, sign, notarize, and staple a release DMG into build/release/.
 # Reproducible; safe to re-run. The publish step is a separate script.
+#
+# Normally runs on CI (.github/workflows/release.yml), where the signing key and
+# the notary credential arrive as secrets; still runnable on a Mac with the key
+# in a local keychain, for debugging a single stage. See RELEASE.md.
 
 set -euo pipefail
 
@@ -32,15 +36,22 @@ done
 # shellcheck source=scripts/release-lib.sh
 source "$REPO_ROOT/scripts/release-lib.sh"
 
-# --- Dedicated signing keychain (normally locked) -----------------------------
-# The Developer ID signing key lives in its own keychain that stays LOCKED at
-# rest instead of in the login keychain. Unlock it for the duration of the build
-# and re-lock on exit (see the EXIT trap wired up after the identity check). If
-# that keychain isn't present — a machine that still keeps the key in login, or
-# mid-migration — fall through to whatever's already on the search list so
-# releases keep working.
+# --- Where the signing key comes from -----------------------------------------
+# Two custody models, one build script:
+#
+#   CI    — BLURT_SIGNING_P12_BASE64 carries the Developer ID cert + key as a
+#           base64 .p12 secret. It is imported into an EPHEMERAL keychain that
+#           exists only for this run and is deleted on exit, so the key never
+#           lands in a persistent store on the runner.
+#   Local — a dedicated keychain that stays LOCKED at rest instead of living in
+#           login. Unlocked for the duration of the build and re-locked on exit.
+#           If that keychain isn't present — a machine that still keeps the key
+#           in login, or mid-migration — fall through to whatever's already on
+#           the search list so releases keep working.
 SIGNING_KEYCHAIN="${BLURT_SIGNING_KEYCHAIN:-$HOME/Library/Keychains/blurt-signing.keychain-db}"
 SIGNING_KEYCHAIN_UNLOCKED=0
+CI_KEYCHAIN=""
+CI_KEYCHAIN_DIR=""
 
 # notarytool --keychain args, populated once the signing keychain is unlocked so
 # every notary call resolves the profile from THAT keychain rather than from
@@ -51,6 +62,23 @@ SIGNING_KEYCHAIN_UNLOCKED=0
 # signing keychain, where we fall back to the search list.
 # shellcheck disable=SC2034  # expanded via ${NOTARY_KEYCHAIN[@]+...} below
 NOTARY_KEYCHAIN=()
+
+# Echo the user keychain search list, one unquoted path per line.
+keychain_search_list() {
+  security list-keychains -d user | sed -e 's/^[[:space:]]*//' -e 's/^"//' -e 's/"$//'
+}
+
+# Put keychain $1 at the front of the user search list, keeping the entries
+# already there (a bare `list-keychains -s <one>` would replace login + System).
+prepend_to_search_list() {
+  local target="$1" k present=0
+  local -a search=()
+  while IFS= read -r k; do
+    [ -n "$k" ] && search+=("$k")
+  done < <(keychain_search_list)
+  for k in "${search[@]}"; do [ "$k" = "$target" ] && present=1; done
+  [ "$present" -eq 1 ] || security list-keychains -d user -s "$target" "${search[@]}"
+}
 
 # Resolve the keychain password, in order:
 #   1. BLURT_SIGNING_KEYCHAIN_PASSWORD — env (a CI secret, or `op read` inline).
@@ -89,18 +117,7 @@ unlock_signing_keychain() {
     info "no dedicated signing keychain at $SIGNING_KEYCHAIN — using existing search list"
     return 0
   fi
-  # Ensure it's on the user search list without dropping the existing entries
-  # (a bare `list-keychains -s <one>` would replace login + System).
-  local -a search=()
-  local k present=0
-  while IFS= read -r k; do
-    k="${k#"${k%%[![:space:]]*}"}" # ltrim
-    k="${k%\"}"
-    k="${k#\"}" # strip surrounding quotes
-    [ -n "$k" ] && search+=("$k")
-  done < <(security list-keychains -d user)
-  for k in "${search[@]}"; do [ "$k" = "$SIGNING_KEYCHAIN" ] && present=1; done
-  [ "$present" -eq 1 ] || security list-keychains -d user -s "$SIGNING_KEYCHAIN" "${search[@]}"
+  prepend_to_search_list "$SIGNING_KEYCHAIN"
 
   load_signing_keychain_password
   security unlock-keychain -p "$SIGNING_KEYCHAIN_PW" "$SIGNING_KEYCHAIN" \
@@ -116,6 +133,107 @@ lock_signing_keychain() {
   SIGNING_KEYCHAIN_UNLOCKED=0
 }
 
+# Import the Developer ID cert + key from the BLURT_SIGNING_P12_BASE64 secret
+# into a keychain created for this build alone. Nothing persists: the keychain
+# file lives in a temp dir and `delete_ci_keychain` (wired into the EXIT trap)
+# removes it whether the build succeeds or dies.
+create_ci_keychain() {
+  local p12 kc_pw
+  [ -n "${BLURT_SIGNING_P12_PASSWORD:-}" ] \
+    || die "BLURT_SIGNING_P12_BASE64 is set but BLURT_SIGNING_P12_PASSWORD is not — the .p12 export password is required to import it"
+
+  CI_KEYCHAIN_DIR="$(mktemp -d /tmp/blurt-ci-keychain.XXXXXX)" || die "mktemp failed for the ephemeral keychain"
+  CI_KEYCHAIN="$CI_KEYCHAIN_DIR/blurt-signing.keychain-db"
+  # Random per-run password: it protects a keychain that outlives nothing, so
+  # it never has to be known outside this process.
+  kc_pw="$(openssl rand -base64 24)" || die "could not generate an ephemeral keychain password"
+  security create-keychain -p "$kc_pw" "$CI_KEYCHAIN" || die "could not create the ephemeral keychain"
+  # No auto-lock and no lock-on-sleep: a relock partway through would fail the
+  # signing steps, and the keychain is destroyed on exit regardless.
+  security set-keychain-settings "$CI_KEYCHAIN"
+  security unlock-keychain -p "$kc_pw" "$CI_KEYCHAIN" || die "could not unlock the ephemeral keychain"
+
+  p12="$(mktemp)" || die "mktemp failed for the signing .p12"
+  chmod 600 "$p12"
+  # openssl rather than base64(1): -A accepts the secret whether it arrives as
+  # one long line or wrapped, which the platform base64 flags do not agree on.
+  printf '%s' "$BLURT_SIGNING_P12_BASE64" | openssl base64 -d -A >"$p12" \
+    || { rm -f "$p12"; die "BLURT_SIGNING_P12_BASE64 is not valid base64"; }
+  # -T pre-authorizes those tools; set-key-partition-list below is what actually
+  # makes that stick on modern macOS (without it codesign blocks on a UI prompt
+  # that no CI runner can answer).
+  security import "$p12" -k "$CI_KEYCHAIN" -P "$BLURT_SIGNING_P12_PASSWORD" \
+    -f pkcs12 -T /usr/bin/codesign -T /usr/bin/security >/dev/null \
+    || { rm -f "$p12"; die "could not import the signing .p12 (wrong BLURT_SIGNING_P12_PASSWORD, or the secret isn't a PKCS#12 export?)"; }
+  rm -f "$p12"
+  security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$kc_pw" "$CI_KEYCHAIN" >/dev/null \
+    || die "could not set the partition list on the ephemeral keychain"
+
+  prepend_to_search_list "$CI_KEYCHAIN"
+  info "imported the signing identity into an ephemeral keychain: $CI_KEYCHAIN"
+}
+
+delete_ci_keychain() {
+  [ -n "$CI_KEYCHAIN" ] || return 0
+  security delete-keychain "$CI_KEYCHAIN" >/dev/null 2>&1 || true
+  rm -rf "$CI_KEYCHAIN_DIR"
+  CI_KEYCHAIN=""
+  CI_KEYCHAIN_DIR=""
+}
+
+# Build the notarytool credential arguments once, so the preflight below and
+# every submission authenticate identically. In order:
+#
+#   1. App Store Connect API key (issuer + key id + base64 .p8) — the CI path.
+#      Revocable on its own, unlike an Apple ID app-specific password, needs no
+#      keychain, and never appears in the process list.
+#   2. Apple ID + app-specific password — the CI fallback for a team without
+#      API-key access. NOTE: --password puts the secret on notarytool's command
+#      line, readable by other processes on the same host; fine on a throwaway
+#      runner, not something to adopt on a shared machine.
+#   3. The `blurt-notary` keychain profile — the local path, pinned to the
+#      dedicated signing keychain when there is one (see NOTARY_KEYCHAIN).
+NOTARY_AUTH=()
+NOTARY_KEY_FILE=""
+NOTARY_AUTH_KIND=""
+resolve_notary_auth() {
+  if [ -n "${BLURT_NOTARY_KEY_P8_BASE64:-}" ]; then
+    [ -n "${BLURT_NOTARY_KEY_ID:-}" ] || die "BLURT_NOTARY_KEY_P8_BASE64 is set but BLURT_NOTARY_KEY_ID is not"
+    [ -n "${BLURT_NOTARY_ISSUER_ID:-}" ] || die "BLURT_NOTARY_KEY_P8_BASE64 is set but BLURT_NOTARY_ISSUER_ID is not"
+    NOTARY_KEY_FILE="$(mktemp)" || die "mktemp failed for the notary API key"
+    chmod 600 "$NOTARY_KEY_FILE"
+    printf '%s' "$BLURT_NOTARY_KEY_P8_BASE64" | openssl base64 -d -A >"$NOTARY_KEY_FILE" \
+      || die "BLURT_NOTARY_KEY_P8_BASE64 is not valid base64"
+    NOTARY_AUTH=(--key "$NOTARY_KEY_FILE" --key-id "$BLURT_NOTARY_KEY_ID" --issuer "$BLURT_NOTARY_ISSUER_ID")
+    NOTARY_AUTH_KIND="App Store Connect API key $BLURT_NOTARY_KEY_ID"
+  elif [ -n "${BLURT_NOTARY_APPLE_ID:-}" ] && [ -n "${BLURT_NOTARY_PASSWORD:-}" ]; then
+    NOTARY_AUTH=(--apple-id "$BLURT_NOTARY_APPLE_ID" --team-id "$TEAM_ID" --password "$BLURT_NOTARY_PASSWORD")
+    NOTARY_AUTH_KIND="Apple ID $BLURT_NOTARY_APPLE_ID"
+  else
+    NOTARY_AUTH=(--keychain-profile "$NOTARY_PROFILE" ${NOTARY_KEYCHAIN[@]+"${NOTARY_KEYCHAIN[@]}"})
+    NOTARY_AUTH_KIND="keychain profile $NOTARY_PROFILE"
+  fi
+  info "notary auth: $NOTARY_AUTH_KIND"
+}
+
+# One cleanup, one trap: re-lock the local signing keychain, destroy the
+# ephemeral CI one, shred the decoded notary key, and unmount a DMG left
+# attached by a failure partway through the verify step.
+MOUNT_POINT=""
+cleanup() {
+  if [ -n "$MOUNT_POINT" ]; then
+    hdiutil detach "$MOUNT_POINT" >/dev/null 2>&1 || true
+    rmdir "$MOUNT_POINT" >/dev/null 2>&1 || true
+    MOUNT_POINT=""
+  fi
+  if [ -n "$NOTARY_KEY_FILE" ]; then
+    rm -f "$NOTARY_KEY_FILE"
+    NOTARY_KEY_FILE=""
+  fi
+  delete_ci_keychain
+  lock_signing_keychain
+}
+
 # Submit an artifact (app zip or DMG) to Apple's notary service, wait for the
 # result, and die on anything but Accepted. Writes per-artifact result + log
 # plists into BUILD_ROOT (keyed by $2) so failures stay inspectable. Sets the
@@ -125,16 +243,14 @@ notarize() {
   local result_plist="$BUILD_ROOT/notary-$tag-result.plist"
   local log_json="$BUILD_ROOT/notary-$tag-log.json"
   xcrun notarytool submit "$artifact" \
-    --keychain-profile "$NOTARY_PROFILE" \
-    ${NOTARY_KEYCHAIN[@]+"${NOTARY_KEYCHAIN[@]}"} \
+    "${NOTARY_AUTH[@]}" \
     --wait \
     --output-format plist > "$result_plist"
   local status id
   status="$(/usr/libexec/PlistBuddy -c 'Print :status' "$result_plist" 2>/dev/null || echo unknown)"
   id="$(/usr/libexec/PlistBuddy -c 'Print :id' "$result_plist" 2>/dev/null || echo unknown)"
   info "notary status ($tag): $status (id $id)"
-  xcrun notarytool log "$id" --keychain-profile "$NOTARY_PROFILE" \
-    ${NOTARY_KEYCHAIN[@]+"${NOTARY_KEYCHAIN[@]}"} > "$log_json" 2>&1 || true
+  xcrun notarytool log "$id" "${NOTARY_AUTH[@]}" > "$log_json" 2>&1 || true
   if [ "$status" != "Accepted" ]; then
     step "Notary log ($tag)"
     cat "$log_json" 2>/dev/null || true
@@ -191,27 +307,41 @@ pretty_xcodebuild
 
 step "Preflight"
 require_tools --hint='brew install create-dmg if needed' \
-  xcodegen xcodebuild xcrun hdiutil codesign spctl create-dmg awk shasum
+  xcodegen xcodebuild xcrun hdiutil codesign spctl create-dmg awk shasum openssl
 
-unlock_signing_keychain
-# Re-lock the dedicated signing keychain no matter how we exit (success, die, or
-# a mid-build failure). Lives here rather than in a dedicated cleanup because the
-# only other EXIT trap (the DMG mount, below) is set up much later.
-trap lock_signing_keychain EXIT
+# Destroy every credential this build materializes, no matter how we exit
+# (success, die, or a mid-build failure). Armed before the first one exists so
+# there is no window where a temp keychain or decoded key could outlive us.
+trap cleanup EXIT
 
-# Check the notary profile only AFTER unlocking the signing keychain: when a
-# dedicated signing keychain exists, the blurt-notary profile is expected to
-# live there, and we pin every notary call to it (see NOTARY_KEYCHAIN) so the
-# lookup is deterministic rather than at the mercy of the search list.
-[ "$SIGNING_KEYCHAIN_UNLOCKED" -eq 1 ] && NOTARY_KEYCHAIN=(--keychain "$SIGNING_KEYCHAIN")
+if [ -n "${BLURT_SIGNING_P12_BASE64:-}" ]; then
+  create_ci_keychain
+else
+  unlock_signing_keychain
+fi
 
-if ! xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" \
-  ${NOTARY_KEYCHAIN[@]+"${NOTARY_KEYCHAIN[@]}"} >/dev/null 2>&1; then
-  if [ "$SIGNING_KEYCHAIN_UNLOCKED" -eq 1 ]; then
-    die "notarytool profile '$NOTARY_PROFILE' not found in $SIGNING_KEYCHAIN. Store it there: xcrun notarytool store-credentials $NOTARY_PROFILE --keychain $SIGNING_KEYCHAIN --apple-id <you@example.com> --team-id $TEAM_ID --password <app-specific-password>"
-  else
-    die "notarytool profile '$NOTARY_PROFILE' not found. Run: xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <you@example.com> --team-id $TEAM_ID --password <app-specific-password>"
-  fi
+# Resolve the notary credential only AFTER the keychain work: on the local path,
+# the blurt-notary profile is expected to live in the dedicated signing keychain,
+# and we pin every notary call to it (see NOTARY_KEYCHAIN) so the lookup is
+# deterministic rather than at the mercy of the search list.
+if [ "$SIGNING_KEYCHAIN_UNLOCKED" -eq 1 ]; then
+  NOTARY_KEYCHAIN=(--keychain "$SIGNING_KEYCHAIN")
+fi
+resolve_notary_auth
+
+# A cheap authenticated call: proves the credential actually works before we
+# spend a full build getting to the first submission.
+if ! xcrun notarytool history "${NOTARY_AUTH[@]}" >/dev/null 2>&1; then
+  case "$NOTARY_AUTH_KIND" in
+    "keychain profile"*)
+      if [ "$SIGNING_KEYCHAIN_UNLOCKED" -eq 1 ]; then
+        die "notarytool profile '$NOTARY_PROFILE' not found in $SIGNING_KEYCHAIN. Store it there: xcrun notarytool store-credentials $NOTARY_PROFILE --keychain $SIGNING_KEYCHAIN --apple-id <you@example.com> --team-id $TEAM_ID --password <app-specific-password>"
+      else
+        die "notarytool profile '$NOTARY_PROFILE' not found. Run: xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <you@example.com> --team-id $TEAM_ID --password <app-specific-password>"
+      fi
+      ;;
+    *) die "the notary credential ($NOTARY_AUTH_KIND) was rejected by Apple — check the secret's value and that it is still valid for team $TEAM_ID" ;;
+  esac
 fi
 
 identity_listed "$IDENTITY" <<<"$(security find-identity -v -p codesigning)" \
@@ -390,8 +520,10 @@ step "Mount + verify DMG contents"
 # inside is signed and stapled, then eject. We pick our own mount point so
 # we don't have to parse hdiutil's output (which reports /private/tmp/...
 # rather than /tmp/... on macOS).
+# Assigning MOUNT_POINT is what arms the unmount: `cleanup` (already the EXIT
+# trap) detaches whatever it names, so a failure between here and the detach
+# below can't leave the image attached.
 MOUNT_POINT="$(mktemp -d /tmp/blurt-dmg.XXXXXX)"
-trap 'hdiutil detach "$MOUNT_POINT" >/dev/null 2>&1 || true; rmdir "$MOUNT_POINT" >/dev/null 2>&1 || true; lock_signing_keychain' EXIT
 hdiutil attach -nobrowse -noverify -mountpoint "$MOUNT_POINT" "$DMG" >/dev/null
 MOUNTED_APP="$MOUNT_POINT/Blurt.app"
 [ -d "$MOUNTED_APP" ] || die "mounted DMG missing Blurt.app"
@@ -401,7 +533,7 @@ MOUNTED_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString
 [ "$MOUNTED_VERSION" = "$VERSION" ] || die "version mismatch inside DMG: expected $VERSION, got $MOUNTED_VERSION"
 hdiutil detach "$MOUNT_POINT" >/dev/null
 rmdir "$MOUNT_POINT" >/dev/null 2>&1 || true
-trap lock_signing_keychain EXIT
+MOUNT_POINT=""
 info "dmg contents verified (Blurt.app $MOUNTED_VERSION, signed + stapled)"
 
 step "Provenance"
@@ -439,7 +571,8 @@ cat <<EOF
   Provenance: $PROVENANCE
   Notary log: $NOTARY_LOG
 
-  Install locally to test, then publish:
+  In CI the release workflow uploads these as run artifacts and the gated
+  publish job takes it from here. Running locally, install to test and publish:
     scripts/release-install.sh    # install the notarized build to /Applications
     scripts/release-publish.sh    # tag, push, publish the GitHub Release
 EOF
