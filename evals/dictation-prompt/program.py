@@ -77,9 +77,10 @@ class PlainChatAdapter(dspy.ChatAdapter):
     unblocks are the *representative* ones — see the README on transferability.
 
     Only the harness's own one-in/one-out string signature is handled this way. GEPA and
-    MIPROv2 prompt their own multi-field signatures through the same globally configured
+    GEPA prompts its own multi-field signatures through the same globally configured
     adapter (`dspy.Predict` reads `settings.adapter`), so every other shape falls straight
-    through to `ChatAdapter` — including its `JSONAdapter` fallback.
+    through to `ChatAdapter` — including its `JSONAdapter` fallback. That fall-through is
+    why `_is_plain` exists rather than this class simply returning the instruction.
     """
 
     @staticmethod
@@ -137,9 +138,6 @@ class PlainChatAdapter(dspy.ChatAdapter):
         return {field: completion.strip()}
 
 
-ADAPTERS = {"plain": PlainChatAdapter, "chat": dspy.ChatAdapter}
-
-
 def to_examples(utterances: list[Utterance]) -> list[dspy.Example]:
     """Wrap utterances as DSPy examples for the optimizers' train/val sets."""
     return [
@@ -153,15 +151,6 @@ def to_examples(utterances: list[Utterance]) -> list[dspy.Example]:
 def _cleaned(prediction) -> str:
     """The model's output, tolerating the `None` a failed parallel item yields."""
     return getattr(prediction, OUTPUT_FIELD, "") or ""
-
-
-def make_metric(axis: str):
-    """Scalar metric for MIPROv2, which searches on a single number."""
-
-    def scorer(gold, pred, trace=None, **_):
-        return metrics.score(getattr(gold, OUTPUT_FIELD), _cleaned(pred)).value(axis)
-
-    return scorer
 
 
 def make_feedback_metric(axis: str):
@@ -421,15 +410,14 @@ class ModelSpec:
         return dspy.LM(model or self.model, **kwargs)
 
 
-def configure(spec: ModelSpec, adapter: str = "plain") -> None:
+def configure(spec: ModelSpec) -> None:
     """Point DSPy at the model standing in for the service-side rewrite."""
-    dspy.configure(lm=spec.lm(temperature=spec.temperature), adapter=ADAPTERS[adapter]())
+    dspy.configure(lm=spec.lm(temperature=spec.temperature), adapter=PlainChatAdapter())
 
 
 def optimize(
     program,
     *,
-    optimizer: str,
     axis: str,
     spec: ModelSpec,
     reflection_model: str | None,
@@ -448,65 +436,53 @@ def optimize(
     decides which instruction ships, and a set that steered the search cannot also
     judge it without flattering whatever the search overfit.
 
-    The length cap reaches the two optimizers very differently, which is why the
-    caller length-checks either winner regardless:
+    The length cap reaches it twice: as prose in the proposer's preamble, which only
+    asks, and as `proposer`'s rejection of anything that does not fit, which does not.
+    The rejection is the constraint; the prose makes the first attempt likelier to
+    land and so saves retries. The caller length-checks the winner regardless.
 
-    - **GEPA** gets it twice — as prose in the proposer's preamble, which only asks,
-      and as `proposer`'s rejection of anything that does not fit, which does not.
-      The rejection is the constraint; the prose makes the first attempt likelier to
-      land and so saves retries.
-    - **MIPROv2** gets it not at all. It searches on a bare scalar and exposes no
-      proposal hook, so nothing here can stop it returning something unsendable.
+    MIPROv2 was offered alongside this and has been removed. It searches on a bare
+    scalar and exposes no proposal hook, so the cap could not constrain its search at
+    all — only refuse its output afterwards — and its multi-field proposal prompts go
+    through the configured adapter, which for a small `--model` means the marker
+    protocol that model cannot follow.
     """
     trainset, valset = to_examples(train), to_examples(validation)
-
-    if optimizer == "gepa":
-        return dspy.GEPA(
-            metric=make_feedback_metric(axis),
-            auto=auto,
-            # Never below the task model's ceiling: the reflector writes whole
-            # instructions and thinks at length first, so it is the call most likely
-            # to need the room, and raising --max-tokens should never leave it as the
-            # tighter of the two.
-            reflection_lm=spec.lm(
-                model=reflection_model,
-                max_tokens=max(spec.reflection_max_tokens, spec.max_tokens),
-            ),
-            num_threads=num_threads,
-            instruction_proposer=proposer,
-            # What a crashed rollout is worth. It has to sit at or below the worst a
-            # real output can reach, or a candidate that errors would outrank one that
-            # merely answered badly. GEPA's default is 0.0, which was right only while
-            # the score was floored there; now that a degenerate output can reach -1,
-            # a crash has to go with it.
-            failure_score=metrics.WORST_SCORE,
-            # Crossover needs components to cross over. This program has exactly one
-            # predictor, and merge recombines by taking, per predictor, whichever
-            # parent differs from the common ancestor — so with a single component the
-            # "merged" candidate is byte-identical to one of its parents. GEPA's
-            # default leaves it on, which buys up to `max_merge_invocations` duplicate
-            # programs, each scheduled and evaluated for nothing. Off, that budget goes
-            # to reflection trials instead.
-            #
-            # It was never a *correctness* risk: merge writes no text (it makes no LM
-            # call at all), so it can only copy instructions the proposer already
-            # cleared. Revisit if the program ever grows a second predictor.
-            use_merge=False,
-            # How many scored examples the reflector sees before rewriting. GEPA's
-            # own default is 3, which on a task this well-solved often means three
-            # near-perfect examples and almost no failure to generalise from — the
-            # reflector is then rewriting on the strength of one bad case, or none.
-            # These are cheap next to the periodic full-valset evals.
-            reflection_minibatch_size=reflection_minibatch_size,
-        ).compile(program, trainset=trainset, valset=valset)
-
-    # MIPROv2 with both demo budgets at zero: it then searches instructions only,
-    # which is what `config.llm.instruction` can actually carry. Few-shot demos
-    # would improve the DSPy program and be unshippable.
-    return dspy.MIPROv2(
-        metric=make_metric(axis),
+    return dspy.GEPA(
+        metric=make_feedback_metric(axis),
         auto=auto,
-        max_bootstrapped_demos=0,
-        max_labeled_demos=0,
+        # Never below the task model's ceiling: the reflector writes whole
+        # instructions and thinks at length first, so it is the call most likely
+        # to need the room, and raising --max-tokens should never leave it as the
+        # tighter of the two.
+        reflection_lm=spec.lm(
+            model=reflection_model,
+            max_tokens=max(spec.reflection_max_tokens, spec.max_tokens),
+        ),
         num_threads=num_threads,
-    ).compile(program, trainset=trainset, valset=valset, requires_permission_to_run=False)
+        instruction_proposer=proposer,
+        # What a crashed rollout is worth. It has to sit at or below the worst a
+        # real output can reach, or a candidate that errors would outrank one that
+        # merely answered badly. GEPA's default is 0.0, which was right only while
+        # the score was floored there; now that a degenerate output can reach -1,
+        # a crash has to go with it.
+        failure_score=metrics.WORST_SCORE,
+        # Crossover needs components to cross over. This program has exactly one
+        # predictor, and merge recombines by taking, per predictor, whichever
+        # parent differs from the common ancestor — so with a single component the
+        # "merged" candidate is byte-identical to one of its parents. GEPA's
+        # default leaves it on, which buys up to `max_merge_invocations` duplicate
+        # programs, each scheduled and evaluated for nothing. Off, that budget goes
+        # to reflection trials instead.
+        #
+        # It was never a *correctness* risk: merge writes no text (it makes no LM
+        # call at all), so it can only copy instructions the proposer already
+        # cleared. Revisit if the program ever grows a second predictor.
+        use_merge=False,
+        # How many scored examples the reflector sees before rewriting. GEPA's
+        # own default is 3, which on a task this well-solved often means three
+        # near-perfect examples and almost no failure to generalise from — the
+        # reflector is then rewriting on the strength of one bad case, or none.
+        # These are cheap next to the periodic full-valset evals.
+        reflection_minibatch_size=reflection_minibatch_size,
+    ).compile(program, trainset=trainset, valset=valset)

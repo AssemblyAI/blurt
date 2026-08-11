@@ -33,12 +33,15 @@ targets contain words absent from the input. Tuning a cleanup instruction there
 teaches it to discard content, which is what `CleanupInstruction` forbids.
 
 **Reference-only** — clean transcripts that the injector turns into pairs
-(`disfluency.py`). `fleurs` is `google/fleurs`, whose `raw_transcription` field
-keeps real casing and punctuation (the sibling `transcription` field is normalized
-to lowercase, which would make the formatting axis meaningless). Read speech, so
-it carries essentially no natural disfluencies of its own — which is the point:
-everything disfluent about it is under our control, including whether punctuation
-survives. `builtin` is a small bundled sample for the offline path.
+(`disfluency.py`). Only `builtin` now, a small bundled sample for the offline path.
+
+`google/fleurs` was registered here and has been removed. It is read speech with a
+single clean transcript and no disfluent side at all, so every disfluency it scored
+was one this repo wrote: the injector's filler list doubled as the answer key, which
+measures whether an instruction removes the disfluencies we thought of rather than
+the ones speakers produce. `nyra` does the same job with disfluencies trained
+annotators marked by hand. What went with it is the severity dial and punctuation
+*restoration* as a task, both of which now exist only on `builtin`.
 
 `--jsonl` reads a local file, accepting either shape: objects with both
 `disfluent` and `reference` are used as-is, anything with only a reference goes
@@ -46,8 +49,9 @@ through the injector.
 
 Dataset rows arrive over the Hugging Face datasets-server rows API, which returns
 audio columns as URLs rather than bytes — a few hundred transcripts cost a few
-hundred kilobytes and no extra dependency. `--loader datasets` switches to the
-library for gated sets where the rows API needs credentials it already has.
+hundred kilobytes and no extra dependency. A `--loader datasets` alternative that
+went through the library existed for gated sets and was removed: nothing registered
+here is gated, and it was the only thing pulling `datasets` into the import path.
 """
 
 from __future__ import annotations
@@ -132,14 +136,6 @@ SOURCES: dict[str, Source] = {
         target_field="intended_transcript",
         detag=_detag_nyra,
         note="the same corpus recased and repunctuated, at the cost of some fidelity",
-    ),
-    "fleurs": Source(
-        key="fleurs",
-        dataset="google/fleurs",
-        config="en_us",
-        split="test",
-        target_field="raw_transcription",
-        note="clean read speech; disfluencies are injected synthetically",
     ),
 }
 
@@ -326,25 +322,6 @@ def _rows_via_api(source: Source, limit: int):
         offset += page
 
 
-def _rows_via_datasets(source: Source, _limit: int):
-    """Stream the dataset with the `datasets` library, without decoding audio."""
-    try:
-        import datasets
-    except ImportError as error:  # pragma: no cover - depends on the local env
-        raise RuntimeError(
-            "--loader datasets needs the datasets library: pip install datasets"
-        ) from error
-
-    stream = datasets.load_dataset(
-        source.dataset, source.config, split=source.split, streaming=True
-    )
-    # Audio decoding is pure cost here — the eval never touches the waveform.
-    for column, feature in getattr(stream, "features", {}).items():
-        if isinstance(feature, datasets.Audio):
-            stream = stream.cast_column(column, datasets.Audio(decode=False))
-    yield from stream
-
-
 def _pairs_from_rows(rows, source: Source, where: str):
     """Project raw rows into (disfluent, reference), de-tagging where needed."""
     detag = source.detag or (lambda text: text)
@@ -375,7 +352,6 @@ def _pairs_from_jsonl(path: str):
 def load(
     *,
     source: str = "nyra",
-    loader: str = "datasets-server",
     limit: int = 120,
     split: str | None = None,
     jsonl: str | None = None,
@@ -400,7 +376,7 @@ def load(
         if split:
             spec = replace(spec, split=split)
         where = f"{spec.dataset}/{spec.split}"
-        rows = (_rows_via_api if loader == "datasets-server" else _rows_via_datasets)(spec, limit)
+        rows = _rows_via_api(spec, limit)
         pairs = _pairs_from_rows(rows, spec, where)
         formatted = spec.formatting_is_measurable
         detail = {

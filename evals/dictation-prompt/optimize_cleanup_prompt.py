@@ -21,10 +21,9 @@ By default it uses a **real paired corpus**: `amaai-lab/DisfluencySpeech`, which
 ships each utterance twice — as the speaker said it and as they meant it — from
 Switchboard conversations whose disfluencies trained annotators marked by hand.
 Candidates are scored on how closely their output restores the intended side
-(`metrics.py`). `--source` selects other corpora, including `fleurs`, where clean
-read speech is made disfluent synthetically (`disfluency.py`) — the only mode with
-a severity dial and the only one that can pose punctuation restoration as a task.
-See `corpus.py` for what each source can and cannot measure.
+(`metrics.py`). `--source builtin` swaps in a bundled sample made disfluent
+synthetically (`disfluency.py`) for the offline path. See `corpus.py` for what each
+source can and cannot measure.
 
 Usage
 -----
@@ -54,8 +53,7 @@ stated to GEPA's reflector in the feedback text, which is guidance it can ignore
 `program.CappedInstructionProposer` rejects and re-asks any over-cap proposal
 before GEPA scores it, which is what makes the cap a constraint on the *search*
 rather than a verdict on its output; and an over-cap result is refused at selection
-no matter how well it scored. Only GEPA has the proposal hook — under
-`--optimizer mipro` the search is unconstrained and only the last one applies.
+no matter how well it scored.
 
 `--dry-run` and the tests need no third-party packages: everything that touches
 DSPy lives in `program.py`, which is imported only after the dry-run returns.
@@ -117,15 +115,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=(*corpus.SOURCES, "builtin"),
         help="which corpus to score against (default: nyra, the same hand-annotated "
         "Switchboard pairs with casing repaired, so the formatting axis is live and "
-        "--metric blend scores two axes instead of degrading to content). fleurs is read "
-        "speech made disfluent by the injector — the only source with a severity dial, and "
-        "the only one that can pose punctuation restoration as a task",
-    )
-    data.add_argument(
-        "--loader",
-        default="datasets-server",
-        choices=("datasets-server", "datasets"),
-        help="datasets-server is the HTTP rows API; datasets uses the library (gated sets)",
+        "--metric blend scores two axes instead of degrading to content). builtin is a "
+        "bundled sample made disfluent by the injector, for the offline path",
     )
     data.add_argument(
         "--limit",
@@ -284,23 +275,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "extended thinking counts against the same budget. Kept separate so a frontier "
         "reflector's headroom is not demanded of a small task model on a 32k context",
     )
-    model.add_argument(
-        "--adapter",
-        default="plain",
-        choices=("plain", "chat"),
-        help="plain sends the instruction and transcript as a bare chat turn, the way the "
-        "service applies config.llm.instruction; chat uses DSPy's field-marker protocol, "
-        "which small models cannot follow",
-    )
-
     search = parser.add_argument_group("search")
     search.add_argument(
         "--optimizer",
         default="gepa",
-        choices=("none", "gepa", "mipro"),
+        choices=("none", "gepa"),
         help="gepa (default) evolves a new instruction from --start; none only ranks the "
         "built-in candidates, which is the cheap way to sanity-check a corpus or a model "
-        "before paying for a search",
+        "before paying for a search. mipro was offered and removed — see program.optimize",
     )
     search.add_argument(
         "--auto",
@@ -482,7 +464,7 @@ def resolve_axis(requested: str, loaded: corpus.Corpus) -> str:
         raise SystemExit(
             f"--metric format needs a corpus with trustworthy target formatting; "
             f"{loaded.source} does not have it. Use --source nyra for repaired casing, or "
-            "--source fleurs --strip-formatting to pose formatting restoration as a task."
+            "--source builtin --strip-formatting to pose formatting restoration as a task."
         )
     print(
         f"\nNote: {loaded.source} targets carry formatting artifacts from mechanical "
@@ -497,7 +479,6 @@ def main(argv: list[str] | None = None) -> int:
 
     loaded = corpus.load(
         source=args.source,
-        loader=args.loader,
         limit=args.limit,
         split=args.split,
         jsonl=args.jsonl,
@@ -548,7 +529,7 @@ def main(argv: list[str] | None = None) -> int:
         reflection_max_tokens=args.reflection_max_tokens,
         temperature=args.temperature,
     )
-    program.configure(spec, adapter=args.adapter)
+    program.configure(spec)
 
     scoring = resolve_candidates(args)
     dev_rows: list[tuple[str, dict[str, float]]] = []
@@ -579,21 +560,11 @@ def main(argv: list[str] | None = None) -> int:
         # Only GEPA can be held to the cap during the search; MIPROv2 exposes no
         # proposal hook, so say so rather than letting a run look constrained when the
         # only thing standing between it and an unsendable winner is the final gate.
-        proposer = (
-            program.CappedInstructionProposer(INSTRUCTION_CHARACTER_CAP)
-            if args.optimizer == "gepa"
-            else None
-        )
-        if proposer is None:
-            print(
-                f"\nNote: {args.optimizer} has no proposal hook, so its search is not held to "
-                f"the {INSTRUCTION_CHARACTER_CAP}-character cap — only the final selection is."
-            )
+        proposer = program.CappedInstructionProposer(INSTRUCTION_CHARACTER_CAP)
 
         print(f"\nRunning {args.optimizer} from {seed_name} ({describe_length(seed_instruction)})…")
         optimized = program.optimize(
             program.build(seed_instruction),
-            optimizer=args.optimizer,
             axis=axis,
             spec=spec,
             reflection_model=args.reflection_model,

@@ -23,21 +23,16 @@ ones we thought to write down.
 | `--source`       | What it is                                                                                                                                                                                                                        | Measures         |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
 | `nyra` (default) | [`nyralabs/disfluency_speech_english`][nyra] — ~5k Switchboard utterances whose disfluencies trained annotators marked **by hand**, repackaged with casing repaired so the formatting axis is live. Costs some fidelity for that. | content + format |
-| `fleurs`         | [`google/fleurs`][fl] read speech, made disfluent by the injector in `disfluency.py`.                                                                                                                                             | content + format |
 | `builtin`        | A dozen bundled sentences plus injection. No network, no key — for smoke-testing.                                                                                                                                                 | content + format |
 
 `--jsonl` reads a local file instead: objects with both `disfluent` and `reference` are used
 as-is; anything with only a reference goes through the injector.
 
-**Why keep synthetic injection at all**, now that real pairs exist? Three things it does that
-a fixed corpus can't: a **severity dial** (`--severity`) for checking whether a ranking
-survives more or less disfluent input; a **punctuation-restoration** task via
-`--strip-formatting`, which no real corpus here poses (their inputs and targets are
-punctuated alike); and an **offline path**.
-
-**Why `disfl-qa` alongside `nyra`**: over 90% of its disfluencies are corrections and
-restarts — deliberately the hard cases. Switchboard is over half simple repetitions, and the
-injector is weighted the same way, so `disfl-qa` covers the tail the other two under-sample.
+**Why keep synthetic injection at all**, now that real pairs exist? Mainly the **offline
+path** — `--source builtin` needs no network and no key, which is what lets the test suite and
+`--dry-run` verify the pipeline end to end. It also keeps a **severity dial** (`--severity`)
+and a **punctuation-restoration** task (`--strip-formatting`) that the real corpus cannot pose,
+though on a dozen bundled sentences those are smoke tests rather than measurements.
 
 ### How the hand annotation reaches the eval
 
@@ -61,13 +56,12 @@ usable. It pays for it in fidelity: it retains repetitions the hand annotation m
 reparanda, and rewrites the verbatim side into its own conventions (`[UH]`, `[laughter]`,
 `th*`) that the loader has to undo. Prefer it when formatting matters more than exact recall.
 
-Neither poses punctuation _restoration_, since both sides are already punctuated. Only
-`--source fleurs --strip-formatting` does.
+It does not pose punctuation _restoration_, since both sides are already punctuated. Only
+`--source builtin --strip-formatting` does, on a dozen bundled sentences.
 
 [nyra]: https://huggingface.co/datasets/nyralabs/disfluency_speech_english
 [ds]: https://huggingface.co/datasets/amaai-lab/DisfluencySpeech
 [dq]: https://huggingface.co/datasets/google-research-datasets/disfl_qa
-[fl]: https://huggingface.co/datasets/google/fleurs
 
 ## Running it
 
@@ -84,12 +78,6 @@ uv run evals/dictation-prompt/optimize_cleanup_prompt.py --optimizer none --limi
 
 # Evolve from the best hand-written candidate instead of the prior winner.
 uv run evals/dictation-prompt/optimize_cleanup_prompt.py --start best-candidate
-
-# The hard disfluency types — corrections and restarts.
-uv run evals/dictation-prompt/optimize_cleanup_prompt.py --source disfl-qa
-
-# Does it restore punctuation and capitalization? Only this combination asks.
-uv run evals/dictation-prompt/optimize_cleanup_prompt.py --source fleurs --strip-formatting
 
 # A frontier model on its own endpoint rather than the gateway. `--api-base ""` clears
 # the gateway; without it the anthropic/ id would be sent to the wrong host.
@@ -145,7 +133,6 @@ A bare invocation is a full paid GEPA run, so it is worth knowing what it commit
 | `--model openai/qwen3.5-4b-32k-fast`        | The service's own rewrite runs under a ~5 s budget and is probably small, so a small stand-in is the faithful one. An instruction tuned against a frontier model can lean on comprehension the real one lacks. `openai/` is the wire protocol, not the vendor.    |
 | `--api-base …llm-gateway.assemblyai.com/v1` | Where that model lives. Applies to the reflection model too. Pass `""` to use a provider's own endpoint.                                                                                                                                                          |
 | `--reflection-model openai/claude-opus-4-8` | Deliberately not `--model`: a 4B model writing its own instructions is the weakest link in the loop.                                                                                                                                                              |
-| `--adapter plain`                           | Sends the instruction as the system turn and the transcript as the user turn — the envelope the service applies `llm.instruction` in. Small models can't follow DSPy's marker protocol at all.                                                                    |
 | `--optimizer gepa` · `--start prior-winner` | Evolve from `candidates.PRIOR_WINNER` — the strongest instruction we have, and `BASELINE` — rather than restarting from a four-line candidate that knows none of what it learned. It fits the cap, so the search starts inside the feasible region.               |
 | `--auto heavy`                              | 27 reflection trials (light is 10, medium 18). This is the **only** knob that changes how many ideas get tried — corpus size does not. Merge is off: crossover needs more than one predictor, so it would only re-evaluate duplicates.                            |
 | `--split train --limit 2000`                | The sources' own held-out splits are only ~250 rows. Everything past dev and test becomes train, and train rows are free — see below.                                                                                                                             |
@@ -187,7 +174,7 @@ expensive slices along with it for nothing. The real ceilings on `--limit` are t
 (`disfluency-speech` is ~5k utterances) and the datasets-server rate limit — set `HF_TOKEN`
 before a large load.
 
-**Truncation poisons a run rather than failing it.** `--adapter plain` means the whole
+**Truncation poisons a run rather than failing it.** The plain adapter means the whole
 completion _is_ the answer — there are no field markers to parse. So a completion cut off at
 `--max-tokens` becomes a truncated "cleaned transcript", scores badly against its reference,
 and teaches GEPA that a perfectly good instruction produces bad cleanups. The symptom is a
@@ -224,12 +211,13 @@ log it prints a line per decile, since carriage returns in a file make one unrea
 
 ### What actually reaches the model
 
-`--adapter plain`, the default, sends the candidate instruction as the system message and the
+The plain adapter — now the only one — sends the candidate instruction as the system message and the
 transcript as the user message, and takes the whole reply as the cleaned text. That is the
 shape the service applies `config.llm.instruction` in: one instruction, one transcript, one
 pass, no envelope.
 
-DSPy's own `ChatAdapter` (`--adapter chat`) instead wraps both sides in `[[ ## field ## ]]`
+DSPy's own `ChatAdapter`, which was selectable as `--adapter chat` and has been removed,
+instead wraps both sides in `[[ ## field ## ]]`
 markers and restates the instruction as "In adhering to this structure, your objective is: …",
 so a score under it reflects the instruction _plus_ that scaffolding — and not even the
 instruction as written. Small models can't follow the protocol at all: `qwen3.5-4b-32k-fast`
@@ -261,14 +249,12 @@ is `--model`. Its proposal prompts are multi-field, so they keep DSPy's marker p
 | `--model`            | `openai/qwen3.5-4b-32k-fast` | The LiteLLM model standing in for the service's rewrite model.                                         |
 | `--reflection-model` | `openai/claude-opus-4-8`     | Writes the instructions during `--optimizer gepa`. Keep it stronger than `--model`.                    |
 | `--api-base`         | the AssemblyAI gateway       | Endpoint for both models. `""` falls back to the provider's own.                                       |
-| `--adapter`          | `plain`                      | `plain` sends instruction + transcript as one chat turn; `chat` uses DSPy's field markers.             |
 | `--metric`           | `blend`                      | `content` (words only), `format` (case and punctuation too), or 0.7/0.3 of both.                       |
 | `--severity`         | `0.35`                       | 0–1; how often a disfluency is injected. Reference-only sources only.                                  |
 | `--strip-formatting` | off                          | Also lowercase and unpunctuate, so restoring formatting is part of the task.                           |
 | `--optimizer`        | `gepa`                       | `none` only ranks the candidates; both optimizers search instructions only.                            |
 | `--start`            | `prior-winner`               | Which instruction GEPA evolves from — the compressed prior winner, or the best hand-written candidate. |
 | `--auto`             | `heavy`                      | Reflection trials: 10 / 18 / 27. The only knob that changes how many ideas get tried.                  |
-| `--loader`           | `datasets-server`            | `datasets` uses the library instead of the HTTP rows API, for gated sets.                              |
 | `--split`            | `train`                      | The sources' own held-out splits are only ~250 rows — too few for the default `--limit`.               |
 | `--limit`            | `2000`                       | Rows loaded, then sliced 1800 train / 50 dev / 150 test. Train rows cost nothing.                      |
 | `--dev-fraction`     | `150` (rows)                 | Fraction below 1, absolute count at 1 or above. Decides what ships; the search never sees it.          |
@@ -325,8 +311,8 @@ split and re-scored on a held-out test split alongside `BASELINE` — `prior-win
 instruction we already have — so the reported improvement is measured on data no selection
 decision touched, against the thing a new instruction would actually replace.
 
-On a real corpus the numbers mean what they say. On `fleurs` and `builtin` the disfluencies
-are synthetic, so the **ranking** travels further than the absolute scores do: read those as
+On `nyra` the numbers mean what they say. On `builtin` the disfluencies are synthetic, so the
+**ranking** travels further than the absolute scores do: read those as
 "this instruction beats that one on this disfluency distribution", and re-run at a couple of
 `--severity` values before trusting an ordering.
 
@@ -338,7 +324,7 @@ field that steers transcription. The Swift side is
 `Encodable` struct — encoding an empty `llm` object is what selects the service default today.
 
 Store it **verbatim**, exactly as the run emitted it. The harness scores instructions through
-the same envelope the service applies them in (see `--adapter plain`), so the string
+the same envelope the service applies them in (see the plain adapter), so the string
 as-emitted is the string that was measured; a hand-tidied copy is an unscored string that
 looks scored.
 
@@ -410,7 +396,7 @@ Those fields exist in neither envelope. `PlainChatAdapter` sends the bare transc
 user turn and the instruction as the system message, with no field scaffolding; the service
 does the same. So the instruction describes a message the model never receives — and worse, it
 invites the model to emit the label literally, which Blurt would paste into the user's
-document. The eval is structurally unable to catch that: under `--adapter plain` the whole
+document. The eval is structurally unable to catch that: under the plain adapter the whole
 completion is the answer, so if the small stand-in doesn't take the bait where the service's
 rewrite model does, the score looks fine.
 

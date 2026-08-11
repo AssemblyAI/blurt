@@ -261,8 +261,14 @@ def test_split_defaults_to_the_sources_own_choice(monkeypatch):
     assert seen["split"] == corpus.SOURCES["nyra"].split
 
 
-def test_fleurs_is_reference_only():
-    assert not corpus.SOURCES["fleurs"].is_paired
+def test_every_registered_source_is_paired():
+    """Reference-only sources score disfluencies this repo invented, not ones speakers made.
+
+    `google/fleurs` was the last of them and was removed: read speech has no disfluent
+    side, so the injector's filler list doubled as the answer key. Injection survives
+    only for `--source builtin`, the offline smoke path.
+    """
+    assert all(s.is_paired for s in corpus.SOURCES.values())
 
 
 def test_unknown_source_is_rejected():
@@ -896,10 +902,11 @@ def test_a_bare_invocation_is_the_recommended_gepa_run():
     """Running with no flags now spends money — pin what it spends it on."""
     args = cli.parse_args([])
     assert (args.optimizer, args.start, args.auto) == ("gepa", "prior-winner", "heavy")
-    # The service's rewrite runs under a ~5s budget, so the stand-in is small and the
-    # plain adapter is mandatory — small models cannot follow the field-marker protocol.
-    assert args.adapter == "plain"
     assert args.api_base == "https://llm-gateway.assemblyai.com/v1"
+    # The plain adapter is no longer selectable: the service's rewrite runs under a ~5s
+    # budget so the stand-in is small, and small models cannot follow the field-marker
+    # protocol at all. There was never a run that wanted the other one.
+    assert not hasattr(args, "adapter")
     # A 4B model writing its own instructions is the weakest link in the loop.
     assert args.reflection_model != args.model
 
