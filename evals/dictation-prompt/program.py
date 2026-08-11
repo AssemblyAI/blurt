@@ -402,13 +402,19 @@ def optimize(
     spec: ModelSpec,
     reflection_model: str | None,
     train: list[Utterance],
-    dev: list[Utterance],
+    validation: list[Utterance],
     auto: str,
     num_threads: int,
     instruction_budget: int | None = None,
     proposer: CappedInstructionProposer | None = None,
+    reflection_minibatch_size: int = 8,
 ):
     """Evolve the instruction, returning the optimized program.
+
+    `validation` is the optimizer's own valset — the set it tracks candidates
+    against while searching. It is deliberately **not** the caller's dev split: dev
+    decides which instruction ships, and a set that steered the search cannot also
+    judge it without flattering whatever the search overfit.
 
     The length cap reaches the two optimizers very differently, which is why the
     caller length-checks either winner regardless:
@@ -420,7 +426,7 @@ def optimize(
     - **MIPROv2** gets it not at all. It searches on a bare scalar and exposes no
       proposal hook, so nothing here can stop it returning something unsendable.
     """
-    trainset, valset = to_examples(train), to_examples(dev)
+    trainset, valset = to_examples(train), to_examples(validation)
 
     if optimizer == "gepa":
         return dspy.GEPA(
@@ -436,6 +442,12 @@ def optimize(
             ),
             num_threads=num_threads,
             instruction_proposer=proposer,
+            # How many scored examples the reflector sees before rewriting. GEPA's
+            # own default is 3, which on a task this well-solved often means three
+            # near-perfect examples and almost no failure to generalise from — the
+            # reflector is then rewriting on the strength of one bad case, or none.
+            # These are cheap next to the periodic full-valset evals.
+            reflection_minibatch_size=reflection_minibatch_size,
         ).compile(program, trainset=trainset, valset=valset)
 
     # MIPROv2 with both demo budgets at zero: it then searches instructions only,

@@ -667,31 +667,39 @@ def test_a_bare_invocation_is_the_recommended_gepa_run():
     assert args.reflection_model != args.model
 
 
-def test_the_default_split_gives_gepa_a_small_valset_and_a_large_trainset():
-    """Dev is GEPA's valset: its size multiplies cost, while --auto sets the exploration.
-
-    GEPA's own advice is the smallest valset that still matches the downstream
-    distribution, with as large a trainset as possible. Absolute dev/test sizes are
-    what let `--limit` grow only the free slice: the honest number still comes from
-    150 held-out rows, and dev stays at the 50 that GEPA and the candidate ranking
-    share, however large the corpus gets.
-    """
-    args = cli.parse_args([])
+def _default_split(argv=()):
+    """train / optimizer valset / dev / test, the way `main` carves them."""
+    args = cli.parse_args(list(argv))
     train, dev, test = corpus.split(
         list(range(args.limit)), args.seed, args.dev_fraction, args.test_fraction
     )
-    assert (len(dev), len(test)) == (50, 150)
-    assert len(train) == args.limit - 200
+    n = corpus.slice_size(args.gepa_valset, len(train))
+    return train[n:], train[:n], dev, test
+
+
+def test_the_optimizers_valset_comes_off_train_not_out_of_dev():
+    """Dev decides what ships, so it must not also be what steered the search.
+
+    Sharing them lets a search that overfits its valset report the overfitting as a
+    win, because the same rows then judge the result.
+    """
+    train, validation, dev, test = _default_split()
+    assert (len(validation), len(dev), len(test)) == (50, 150, 150)
+    assert len(train) == 2000 - 50 - 150 - 150
+    assert not (set(map(id, validation)) & set(map(id, dev)))
+    assert not (set(map(id, validation)) & set(map(id, train)))
 
 
 def test_raising_the_limit_grows_only_the_free_slice():
-    """The point of absolute sizes: dev and test are paid for, train is not."""
-    args = cli.parse_args(["--limit", "4000"])
-    train, dev, test = corpus.split(
-        list(range(args.limit)), args.seed, args.dev_fraction, args.test_fraction
-    )
-    assert (len(dev), len(test)) == (50, 150)
-    assert len(train) == 3800
+    """The point of absolute sizes: valset, dev and test are paid for, train is not."""
+    train, validation, dev, test = _default_split(["--limit", "4000"])
+    assert (len(validation), len(dev), len(test)) == (50, 150, 150)
+    assert len(train) == 4000 - 350
+
+
+def test_the_reflector_sees_more_than_gepas_default_three_examples():
+    """Three near-perfect examples give a reflector almost nothing to generalise from."""
+    assert cli.parse_args([]).reflection_minibatch_size == 8
 
 
 def test_slice_size_reads_below_one_as_a_fraction_and_above_as_a_count():

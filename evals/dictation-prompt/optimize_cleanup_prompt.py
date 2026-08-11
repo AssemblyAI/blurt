@@ -166,12 +166,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     evaluation.add_argument(
         "--dev-fraction",
         type=float,
+        default=150,
+        metavar="ROWS_OR_FRACTION",
+        help="dev rows, absolute at 1 or above and a fraction below (default: 150). Dev "
+        "decides which instruction ships — baseline versus the optimizer's result — and "
+        "the optimizer never sees it: its own valset is carved from train instead "
+        "(--gepa-valset). Sized for a decision you can trust rather than for the search",
+    )
+    evaluation.add_argument(
+        "--gepa-valset",
+        type=float,
         default=50,
         metavar="ROWS_OR_FRACTION",
-        help="dev rows, absolute at 1 or above and a fraction below (default: 50). Dev is "
-        "GEPA's valset AND the set that ranks every candidate, so each row is paid for "
-        "roughly eight times over plus GEPA's full evals — it is the most expensive slice "
-        "and buys no extra exploration, which depends only on --auto",
+        help="rows taken off train for the optimizer's own valset (default: 50). GEPA "
+        "scores every surviving candidate against all of it, so its size multiplies the "
+        "search's cost while buying no extra exploration — that depends only on --auto. "
+        "GEPA's own advice is the smallest set that still matches the task distribution",
     )
     evaluation.add_argument(
         "--test-fraction",
@@ -194,6 +204,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--dry-run",
         action="store_true",
         help="build and score the corpus without calling any model",
+    )
+    evaluation.add_argument(
+        "--reflection-minibatch-size",
+        type=int,
+        default=8,
+        help="scored examples the reflector sees before rewriting the instruction "
+        "(default: 8). GEPA's own default is 3, which on a task this well-solved is "
+        "often three near-perfect examples and almost no failure to generalise from. "
+        "Cheap next to the periodic full-valset evals",
     )
     evaluation.add_argument(
         "--candidates",
@@ -397,7 +416,18 @@ def main(argv: list[str] | None = None) -> int:
     train, dev, test = corpus.split(
         list(loaded.utterances), args.seed, args.dev_fraction, args.test_fraction
     )
-    print(f"Split: {len(train)} train / {len(dev)} dev / {len(test)} test")
+    # The optimizer's valset comes off train, not out of dev. Three sets, three jobs:
+    # the search tracks candidates against `validation`, dev decides which instruction
+    # ships, and test is the number reported. Carving the valset from dev instead —
+    # which is what this did until the sets were separated — leaves the set that
+    # steered the search also judging it, and a search that overfits 50 rows then
+    # reports its overfitting as a win.
+    n_validation = corpus.slice_size(args.gepa_valset, len(train))
+    validation, train = train[:n_validation], train[n_validation:]
+    print(
+        f"Split: {len(train)} train / {len(validation)} optimizer valset / "
+        f"{len(dev)} dev / {len(test)} test"
+    )
 
     if args.show_samples:
         print_samples(loaded, args.show_samples)
@@ -473,11 +503,12 @@ def main(argv: list[str] | None = None) -> int:
             spec=spec,
             reflection_model=args.reflection_model,
             train=train,
-            dev=dev,
+            validation=validation,
             auto=args.auto,
             num_threads=args.num_threads,
             instruction_budget=INSTRUCTION_CHARACTER_CAP,
             proposer=proposer,
+            reflection_minibatch_size=args.reflection_minibatch_size,
         )
         optimized_instruction = optimized.signature.instructions
         if proposer is not None and proposer.rejected:

@@ -118,15 +118,24 @@ A bare invocation is a full paid GEPA run, so it is worth knowing what it commit
 | `--optimizer gepa` · `--start prior-winner` | Evolve from `candidates.PRIOR_WINNER` — the strongest instruction we have, and `BASELINE` — rather than restarting from a four-line candidate that knows none of what it learned. It fits the cap, so the search starts inside the feasible region.               |
 | `--auto medium`                             | 18 reflection trials (light is 10, heavy 27). This is the **only** knob that changes how many ideas get tried — corpus size does not.                                                                                                                             |
 | `--split train --limit 2000`                | The sources' own held-out splits are only ~250 rows. Everything past dev and test becomes train, and train rows are free — see below.                                                                                                                             |
-| `--dev-fraction 50` (rows, not a fraction)  | Dev is GEPA's valset _and_ the set that ranks every candidate, so each row is paid for ~8 times plus GEPA's full evals. The most expensive slice, and it buys no exploration.                                                                                     |
+| `--dev-fraction 150` (rows, not a fraction) | Dev decides which instruction ships — `BASELINE` versus the optimizer's result — and the optimizer never sees it. Sized for a decision you can trust rather than for the search.                                                                                  |
+| `--gepa-valset 50` (rows)                   | The optimizer's own valset, carved off train. Every surviving candidate is scored against all of it, so its size multiplies search cost while buying no exploration — that is `--auto` alone.                                                                     |
+| `--reflection-minibatch-size 8`             | Scored examples the reflector sees before rewriting. GEPA's default is 3, which on a task this well-solved is often three near-perfect examples and almost no failure to generalise from.                                                                         |
 | `--test-fraction 150` (rows)                | The honest number, from data no selection step saw. Scored twice at the end.                                                                                                                                                                                      |
 | `--candidates baseline`                     | A search run scores only `BASELINE` on dev — it is the bar, the fallback and the seed at once, so the other six cost a dev sweep each to re-rank instructions the search never uses. `--optimizer none` scores all of them, since there the ranking is the point. |
 | `--num-threads 1`                           | The gateway rate-limits; a 429 storm mid-run costs more wall-clock than the concurrency saves. Raise it for a provider that tolerates it.                                                                                                                         |
 | `--max-tokens 8192`                         | Headroom for reasoning tokens, not for the answer. Truncation here is silently corrupting — see below.                                                                                                                                                            |
 
-That leaves **train 1800 / dev 50 / test 150**, for roughly 1,300 model calls: 50 to score
-`BASELINE`, ~940 for the search, 50 to re-score its result, and 300 for the two held-out
-scorings at the end.
+That leaves **train 1650 / optimizer valset 50 / dev 150 / test 150**, for roughly 1,500 model
+calls: 150 to score `BASELINE`, ~940 for the search, 150 to re-score its result, and 300 for
+the two held-out scorings at the end.
+
+**Three sets, three jobs, and no overlap.** The optimizer tracks candidates against its own
+valset (carved off train), dev decides which instruction ships, and test is the number
+reported. Until these were separated the optimizer's valset _was_ dev — so the rows that
+steered the search also judged its result, and a search that overfit 50 rows would report the
+overfitting as a win. Test still exists on top of that, because dev now makes a selection and a
+set that makes a selection cannot also be the honest number.
 
 Three of these are worth understanding rather than just accepting:
 
@@ -231,7 +240,8 @@ is `--model`. Its proposal prompts are multi-field, so they keep DSPy's marker p
 | `--loader`           | `datasets-server`            | `datasets` uses the library instead of the HTTP rows API, for gated sets.                              |
 | `--split`            | `train`                      | The sources' own held-out splits are only ~250 rows — too few for the default `--limit`.               |
 | `--limit`            | `2000`                       | Rows loaded, then sliced 1800 train / 50 dev / 150 test. Train rows cost nothing.                      |
-| `--dev-fraction`     | `50` (rows)                  | Fraction below 1, absolute count at 1 or above. The most expensive slice per row.                      |
+| `--dev-fraction`     | `150` (rows)                 | Fraction below 1, absolute count at 1 or above. Decides what ships; the search never sees it.          |
+| `--gepa-valset`      | `50` (rows)                  | The optimizer's valset, taken off train. Multiplies search cost, adds no exploration.                  |
 | `--test-fraction`    | `150` (rows)                 | Same convention. Scored twice, and by nothing that makes a selection.                                  |
 | `--num-threads`      | `1`                          | Serial by default — the gateway rate-limits.                                                           |
 | `--max-tokens`       | `8192`                       | Headroom for reasoning tokens. Too low silently corrupts a run rather than failing it.                 |
