@@ -149,6 +149,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     model.add_argument("--api-base", default=None, help="override the API base URL")
     model.add_argument("--max-tokens", type=int, default=2048)
+    model.add_argument(
+        "--adapter",
+        default="plain",
+        choices=("plain", "chat"),
+        help="plain sends the instruction and transcript as a bare chat turn, the way the "
+        "service applies config.llm.instruction; chat uses DSPy's field-marker protocol, "
+        "which small models cannot follow",
+    )
 
     search = parser.add_argument_group("search")
     search.add_argument(
@@ -231,7 +239,7 @@ def main(argv: list[str] | None = None) -> int:
     import program  # noqa: PLC0415 — deferred so the dry-run path never imports DSPy
 
     spec = program.ModelSpec(model=args.model, api_base=args.api_base, max_tokens=args.max_tokens)
-    program.configure(spec)
+    program.configure(spec, adapter=args.adapter)
 
     dev_rows: list[tuple[str, dict[str, float]]] = []
     with Progress(len(CANDIDATES) * len(dev), "Scoring candidates on dev") as meter:

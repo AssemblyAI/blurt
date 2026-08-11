@@ -39,6 +39,93 @@ def build(instruction: str) -> dspy.Predict:
     return dspy.Predict(signature)
 
 
+class PlainChatAdapter(dspy.ChatAdapter):
+    """Send the instruction as the system prompt and the transcript as the user turn.
+
+    DSPy's default `ChatAdapter` wraps every call in a field-marker protocol —
+    `[[ ## raw_transcript ## ]]` in, `[[ ## cleaned_transcript ## ]]` … `[[ ## completed ## ]]`
+    back — and parses the reply out of those markers. Two reasons that is the wrong
+    envelope for this harness:
+
+    **Fidelity.** What ships is `config.llm.instruction`: one string the service applies
+    to one transcript in one pass, with no scaffolding around it. Scoring an instruction
+    through the marker protocol measures the instruction *plus* the protocol, and the
+    winner has to travel without it. `ChatAdapter` also rewrites the instruction into
+    "In adhering to this structure, your objective is: …", so the string under test isn't
+    even the string that would ship.
+
+    **Reach.** Small models can't follow the protocol at all. `qwen3.5-4b-32k-fast` echoes
+    the user message back verbatim, so no output field parses; `ChatAdapter` then retries
+    through `JSONAdapter`, which sets `response_format`, which the AssemblyAI LLM Gateway
+    rejects with a 400 for models that don't advertise it. The visible error was that 400,
+    three layers below its cause. Since the service's own rewrite model runs under a ~5s
+    budget and is probably much smaller than the default `--model`, the models this
+    unblocks are the *representative* ones — see the README on transferability.
+
+    Only the harness's own one-in/one-out string signature is handled this way. GEPA and
+    MIPROv2 prompt their own multi-field signatures through the same globally configured
+    adapter (`dspy.Predict` reads `settings.adapter`), so every other shape falls straight
+    through to `ChatAdapter` — including its `JSONAdapter` fallback.
+    """
+
+    @staticmethod
+    def _is_plain(signature: type[dspy.Signature]) -> bool:
+        """Whether this is a lone string in, a lone string out — the shippable shape."""
+        fields = (*signature.input_fields.values(), *signature.output_fields.values())
+        return (
+            len(signature.input_fields) == 1
+            and len(signature.output_fields) == 1
+            and all(field.annotation is str for field in fields)
+        )
+
+    def format_system_message(self, signature: type[dspy.Signature]) -> str:
+        if not self._is_plain(signature):
+            return super().format_system_message(signature)
+        return signature.instructions
+
+    def format_user_message_content(
+        self,
+        signature: type[dspy.Signature],
+        inputs: dict,
+        prefix: str = "",
+        suffix: str = "",
+        main_request: bool = False,
+    ) -> str:
+        if not self._is_plain(signature):
+            return super().format_user_message_content(
+                signature, inputs, prefix, suffix, main_request
+            )
+        (field,) = signature.input_fields
+        return f"{prefix}{inputs[field]}{suffix}"
+
+    def format_assistant_message_content(
+        self,
+        signature: type[dspy.Signature],
+        outputs: dict,
+        missing_field_message: str | None = None,
+    ) -> str:
+        if not self._is_plain(signature):
+            return super().format_assistant_message_content(
+                signature, outputs, missing_field_message
+            )
+        (field,) = signature.output_fields
+        return outputs.get(field) or missing_field_message or ""
+
+    def parse(self, signature: type[dspy.Signature], completion: str) -> dict:
+        """The whole completion *is* the answer — which is why this can't fail to parse.
+
+        No markers to find means no `AdapterParseError`, so the eval's own program never
+        reaches the `JSONAdapter` fallback that the gateway 400s on.
+        """
+        if not self._is_plain(signature):
+            return super().parse(signature, completion)
+        (field,) = signature.output_fields
+        return {field: completion.strip()}
+
+
+ADAPTERS = {"plain": PlainChatAdapter, "chat": dspy.ChatAdapter}
+
+
 def to_examples(utterances: list[Utterance]) -> list[dspy.Example]:
     """Wrap utterances as DSPy examples for the optimizers' train/val sets."""
     return [
@@ -144,9 +231,9 @@ class ModelSpec:
         return dspy.LM(model or self.model, **kwargs)
 
 
-def configure(spec: ModelSpec) -> None:
+def configure(spec: ModelSpec, adapter: str = "plain") -> None:
     """Point DSPy at the model standing in for the service-side rewrite."""
-    dspy.configure(lm=spec.lm())
+    dspy.configure(lm=spec.lm(), adapter=ADAPTERS[adapter]())
 
 
 def optimize(

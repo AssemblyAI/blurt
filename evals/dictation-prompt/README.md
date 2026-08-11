@@ -89,6 +89,17 @@ uv run evals/dictation-prompt/optimize_cleanup_prompt.py \
 # Evolve a new instruction with GEPA (reflective prompt evolution).
 uv run evals/dictation-prompt/optimize_cleanup_prompt.py --optimizer gepa --split train --limit 400
 
+# A small model behind the AssemblyAI LLM Gateway, which is closer to what the service runs.
+# `openai/` selects the wire protocol, not the vendor — the gateway is OpenAI-compatible.
+OPENAI_API_KEY=$ASSEMBLYAI_API_KEY uv run evals/dictation-prompt/optimize_cleanup_prompt.py \
+  --model openai/qwen3.5-4b-32k-fast --api-base https://llm-gateway.assemblyai.com/v1 --limit 150
+
+# Same, evolving an instruction. `--reflection-model` matters here: it defaults to `--model`,
+# so without it the 4B model writes its own instructions instead of a strong model doing it.
+OPENAI_API_KEY=$ASSEMBLYAI_API_KEY uv run evals/dictation-prompt/optimize_cleanup_prompt.py \
+  --model openai/qwen3.5-4b-32k-fast --api-base https://llm-gateway.assemblyai.com/v1 \
+  --optimizer gepa --reflection-model openai/claude-opus-4-8 --split train --limit 400
+
 # No network, no API key: verify the corpus and scoring pipeline end to end.
 python3 evals/dictation-prompt/optimize_cleanup_prompt.py --source builtin --dry-run
 ```
@@ -105,6 +116,37 @@ A sweep is hundreds of paid calls, so it shows a progress meter across the whole
 than going quiet between candidates. On a terminal it rewrites one line in place; piped to a
 log it prints a line per decile, since carriage returns in a file make one unreadable line.
 
+### What actually reaches the model
+
+`--adapter plain`, the default, sends the candidate instruction as the system message and the
+transcript as the user message, and takes the whole reply as the cleaned text. That is the
+shape the service applies `config.llm.instruction` in: one instruction, one transcript, one
+pass, no envelope.
+
+DSPy's own `ChatAdapter` (`--adapter chat`) instead wraps both sides in `[[ ## field ## ]]`
+markers and restates the instruction as "In adhering to this structure, your objective is: …",
+so a score under it reflects the instruction _plus_ that scaffolding — and not even the
+instruction as written. Small models can't follow the protocol at all: `qwen3.5-4b-32k-fast`
+echoes the user message back verbatim, nothing parses, and DSPy's automatic retry in JSON mode
+then sets `response_format`, which the LLM Gateway rejects with a 400 for models that don't
+support it. Results recorded before `plain` became the default aren't comparable with results
+after it.
+
+### Which model does what
+
+Three roles, worth keeping apart when reading a result:
+
+| Role                                                | Set by                     | Notes                                                                                                        |
+| --------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Applies the instruction to a transcript             | `--model`                  | The only one standing in for the service's rewrite model — the thing under test.                             |
+| Scores the output                                   | nothing; no model involved | Deterministic word error rate against the reference. No LLM judge, so nothing can flatter a weak `--model`.  |
+| Proposes new instructions, under `--optimizer gepa` | `--reflection-model`       | **Defaults to `--model`.** Leave it unset with a small `--model` and that model writes its own instructions. |
+
+`--optimizer mipro` has no equivalent override: MIPROv2 proposes with `dspy.settings.lm`, which
+is `--model`. Its proposal prompts are multi-field, so they keep DSPy's marker protocol and the
+`response_format` retry behind it — which a small model on the gateway will reject. Prefer
+`gepa` when `--model` is small.
+
 ## The knobs that matter
 
 | Flag                 | Default                   | What it changes                                                                              |
@@ -112,6 +154,7 @@ log it prints a line per decile, since carriage returns in a file make one unrea
 | `--source`           | `disfluency-speech`       | Which corpus to score against — see the table above.                                         |
 | `--model`            | `anthropic/claude-opus-5` | The LiteLLM model standing in for the service's rewrite model.                               |
 | `--api-base`         | —                         | Point at an OpenAI-compatible gateway instead of the provider's default endpoint.            |
+| `--adapter`          | `plain`                   | `plain` sends instruction + transcript as one chat turn; `chat` uses DSPy's field markers.   |
 | `--metric`           | `blend`                   | `content` (words only), `format` (case and punctuation too), or 0.7/0.3 of both.             |
 | `--severity`         | `0.35`                    | 0–1; how often a disfluency is injected. Reference-only sources only.                        |
 | `--strip-formatting` | off                       | Also lowercase and unpunctuate, so restoring formatting is part of the task.                 |
