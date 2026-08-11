@@ -113,9 +113,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     data = parser.add_argument_group("corpus")
     data.add_argument(
         "--source",
-        default="disfluency-speech",
+        default="disfl-qa",
         choices=(*corpus.SOURCES, "builtin"),
-        help="which corpus to score against (default: hand-annotated Switchboard pairs)",
+        help="which corpus to score against (default: disfl-qa, the hard disfluency types). "
+        "Chosen for headroom, not realism: Switchboard's no-cleanup floor is 0.834, so an "
+        "instruction there can win at most 0.166 and the shipped one already holds 0.077 of "
+        "it — differences between good candidates fall below the noise. disfl-qa's floor is "
+        "0.435, leaving 3.4x the room for instruction quality to show. Use "
+        "--source disfluency-speech to measure on the distribution Blurt actually sees",
     )
     data.add_argument(
         "--loader",
@@ -673,6 +678,20 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"\nBest cleanup instruction ({describe_length(winner_instruction)}):\n")
     print(f"  {winner_instruction}\n")
+    if args.source != "disfluency-speech":
+        # Tuning where the signal is and shipping from there are different things.
+        # disfl-qa is 90% corrections and restarts; Blurt's traffic looks more like
+        # Switchboard, which is over half simple repetitions. An instruction that wins
+        # on the hard tail can still over-edit the easy middle, and only the other
+        # corpus will say so.
+        print(
+            f"\nTuned on {args.source}, which was chosen for headroom rather than realism.\n"
+            "Before shipping it, check it does not over-edit the distribution Blurt\n"
+            "actually sees:\n"
+            "  uv run evals/dictation-prompt/optimize_cleanup_prompt.py \\\n"
+            "    --source disfluency-speech --optimizer none --candidates all"
+        )
+
     print(
         "Send it as the dictation request's `config.llm.instruction` — see\n"
         "  Sources/BlurtEngine/STT/AssemblyAITranscriber.swift (the `LLMRewrite` struct),\n"

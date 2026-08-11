@@ -866,6 +866,22 @@ def test_the_shipped_winner_names_no_signature_field():
         assert field not in candidates.PRIOR_WINNER, field
 
 
+def test_the_default_corpus_is_the_one_with_room_to_improve():
+    """Switchboard is nearly saturated; a search there cannot resolve a real gain.
+
+    Measured no-cleanup floors: disfluency-speech 0.834, nyra 0.789, disfl-qa 0.435.
+    The shipped instruction already scores 0.910 against Switchboard's 0.834 floor, so
+    at most 0.166 was ever available and it holds most of it — the difference between
+    good candidates falls under the noise. disfl-qa leaves 3.4x the room.
+    """
+    assert cli.parse_args([]).source == "disfl-qa"
+
+
+def test_the_default_corpus_can_measure_formatting():
+    """So `blend` uses both axes instead of degrading to content, as it does on Switchboard."""
+    assert corpus.SOURCES[cli.parse_args([]).source].formatting_is_measurable
+
+
 def test_a_bare_invocation_is_the_recommended_gepa_run():
     """Running with no flags now spends money — pin what it spends it on."""
     args = cli.parse_args([])

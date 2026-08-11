@@ -105,6 +105,33 @@ uv run evals/dictation-prompt/optimize_cleanup_prompt.py --auto light
 python3 evals/dictation-prompt/optimize_cleanup_prompt.py --source builtin --dry-run
 ```
 
+### Where the headroom is
+
+The default corpus is chosen for **room to improve**, not for realism. Measured no-cleanup
+floors — the corpus's disfluent side scored against its own target, no model involved:
+
+| `--source`          | no-cleanup floor | room to a perfect 1.0 |
+| ------------------- | ---------------- | --------------------- |
+| `disfluency-speech` | 0.834            | 0.166                 |
+| `nyra`              | 0.789            | 0.211                 |
+| **`disfl-qa`**      | **0.435**        | **0.565**             |
+
+Switchboard is close to saturated. The shipped instruction scores 0.910 against its 0.834
+floor, so it is worth +0.077 and already holds about half of everything available — which is
+why two searches in a row could not beat it. The gap between a good instruction and a great
+one there is a few thousandths, and that is under the run-to-run noise. That is a property of
+the corpus, not a failure of the optimizer.
+
+`disfl-qa` is over 90% corrections and restarts, the hard cases Switchboard under-samples, and
+it leaves 3.4x the room. Differences between candidates are correspondingly larger than the
+noise. Its formatting is also measurable, so `--metric blend` uses both axes there instead of
+degrading to `content`.
+
+The tradeoff is realism: Blurt's traffic looks more like Switchboard, which is over half
+simple repetitions. An instruction that wins on the hard tail can over-edit the easy middle,
+so a run on `disfl-qa` prints a reminder to check the winner against `disfluency-speech`
+before shipping it.
+
 ### What the defaults do
 
 A bare invocation is a full paid GEPA run, so it is worth knowing what it commits to.
