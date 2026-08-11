@@ -74,43 +74,90 @@ Neither poses punctuation _restoration_, since both sides are already punctuated
 ## Running it
 
 ```bash
-export ANTHROPIC_API_KEY=...
+# The gateway is OpenAI-compatible, so the SDK reads OPENAI_API_KEY.
+export OPENAI_API_KEY=$ASSEMBLYAI_API_KEY
 
-# Rank the built-in candidate instructions on hand-annotated Switchboard pairs.
-uv run evals/dictation-prompt/optimize_cleanup_prompt.py --limit 150 --out results.json
+# The whole recommended run, with nothing to pass. See "What the defaults do" below.
+uv run evals/dictation-prompt/optimize_cleanup_prompt.py --out results.json
+
+# Cheap first: rank the hand-written candidates, no search. Do this when changing
+# corpus or model, so a bad setup shows up before a paid search runs on top of it.
+uv run evals/dictation-prompt/optimize_cleanup_prompt.py --optimizer none --limit 100
+
+# Evolve from the best hand-written candidate instead of the prior winner.
+uv run evals/dictation-prompt/optimize_cleanup_prompt.py --start best-candidate
 
 # The hard disfluency types — corrections and restarts.
-uv run evals/dictation-prompt/optimize_cleanup_prompt.py --source disfl-qa --limit 200
+uv run evals/dictation-prompt/optimize_cleanup_prompt.py --source disfl-qa
 
 # Does it restore punctuation and capitalization? Only this combination asks.
 uv run evals/dictation-prompt/optimize_cleanup_prompt.py --source fleurs --strip-formatting
 
-# A larger run: the held-out splits are only ~250 rows, so reach into train.
-uv run evals/dictation-prompt/optimize_cleanup_prompt.py \
-  --split train --limit 600 --dev-fraction 0.5 --test-fraction 0.5 --out results.json
+# A frontier model on its own endpoint rather than the gateway. `--api-base ""` clears
+# the gateway; without it the anthropic/ id would be sent to the wrong host.
+ANTHROPIC_API_KEY=... uv run evals/dictation-prompt/optimize_cleanup_prompt.py \
+  --model anthropic/claude-opus-5 --api-base "" --reflection-model anthropic/claude-opus-5
 
-# Evolve a new instruction with GEPA (reflective prompt evolution). Starts from
-# candidates.PRIOR_WINNER — an instruction an earlier run produced that scores well but is
-# 1009 characters too long to send, so the job is to prune it under the cap and improve it.
-uv run evals/dictation-prompt/optimize_cleanup_prompt.py --optimizer gepa --split train --limit 400
-
-# Evolve from the best hand-written candidate instead, ignoring the prior winner entirely.
-uv run evals/dictation-prompt/optimize_cleanup_prompt.py --optimizer gepa --start best-candidate
-
-# A small model behind the AssemblyAI LLM Gateway, which is closer to what the service runs.
-# `openai/` selects the wire protocol, not the vendor — the gateway is OpenAI-compatible.
-OPENAI_API_KEY=$ASSEMBLYAI_API_KEY uv run evals/dictation-prompt/optimize_cleanup_prompt.py \
-  --model openai/qwen3.5-4b-32k-fast --api-base https://llm-gateway.assemblyai.com/v1 --limit 150
-
-# Same, evolving an instruction. `--reflection-model` matters here: it defaults to `--model`,
-# so without it the 4B model writes its own instructions instead of a strong model doing it.
-OPENAI_API_KEY=$ASSEMBLYAI_API_KEY uv run evals/dictation-prompt/optimize_cleanup_prompt.py \
-  --model openai/qwen3.5-4b-32k-fast --api-base https://llm-gateway.assemblyai.com/v1 \
-  --optimizer gepa --reflection-model openai/claude-opus-4-8 --split train --limit 400
+# More search on the same corpus: --auto is the only knob that adds reflection trials.
+uv run evals/dictation-prompt/optimize_cleanup_prompt.py --auto heavy --num-threads 4
 
 # No network, no API key: verify the corpus and scoring pipeline end to end.
 python3 evals/dictation-prompt/optimize_cleanup_prompt.py --source builtin --dry-run
 ```
+
+### What the defaults do
+
+A bare invocation is a full paid GEPA run, so it is worth knowing what it commits to.
+
+| Default                                     | Why                                                                                                                                                                                                                                                            |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--model openai/qwen3.5-4b-32k-fast`        | The service's own rewrite runs under a ~5 s budget and is probably small, so a small stand-in is the faithful one. An instruction tuned against a frontier model can lean on comprehension the real one lacks. `openai/` is the wire protocol, not the vendor. |
+| `--api-base …llm-gateway.assemblyai.com/v1` | Where that model lives. Applies to the reflection model too. Pass `""` to use a provider's own endpoint.                                                                                                                                                       |
+| `--reflection-model openai/claude-opus-4-8` | Deliberately not `--model`: a 4B model writing its own instructions is the weakest link in the loop.                                                                                                                                                           |
+| `--adapter plain`                           | Sends the instruction as the system turn and the transcript as the user turn — the envelope the service applies `llm.instruction` in. Small models can't follow DSPy's marker protocol at all.                                                                 |
+| `--optimizer gepa` · `--start prior-winner` | Evolve from `candidates.PRIOR_WINNER` — the strongest instruction we have, and `BASELINE` — rather than restarting from a four-line candidate that knows none of what it learned. It fits the cap, so the search starts inside the feasible region.            |
+| `--auto medium`                             | 18 reflection trials (light is 10, heavy 27). This is the **only** knob that changes how many ideas get tried — corpus size does not.                                                                                                                          |
+| `--split train --limit 2000`                | The sources' own held-out splits are only ~250 rows. Everything past dev and test becomes train, and train rows are free — see below.                                                                                                                          |
+| `--dev-fraction 50` (rows, not a fraction)  | Dev is GEPA's valset _and_ the set that ranks every candidate, so each row is paid for ~8 times plus GEPA's full evals. The most expensive slice, and it buys no exploration.                                                                                  |
+| `--test-fraction 150` (rows)                | The honest number, from data no selection step saw. Scored twice at the end.                                                                                                                                                                                   |
+| `--num-threads 1`                           | The gateway rate-limits; a 429 storm mid-run costs more wall-clock than the concurrency saves. Raise it for a provider that tolerates it.                                                                                                                      |
+| `--max-tokens 8192`                         | Headroom for reasoning tokens, not for the answer. Truncation here is silently corrupting — see below.                                                                                                                                                         |
+
+That leaves **train 1800 / dev 50 / test 150**, for roughly 1,600 model calls.
+
+Three of these are worth understanding rather than just accepting:
+
+**Train rows are free; dev and test are not.** This is why `--dev-fraction` and
+`--test-fraction` default to absolute row counts (they read as fractions below 1, as counts at
+1 or above — the `train_test_split` convention). The three slices have very different costs:
+
+| Consumer                                     | Slice | Cost                                               |
+| -------------------------------------------- | ----- | -------------------------------------------------- |
+| GEPA reflection minibatches                  | train | 18 × 35 = 630 calls — **fixed, whatever train is** |
+| GEPA valset full evals                       | dev   | scales with dev                                    |
+| Ranking the candidates, the seed, re-scoring | dev   | **8 × dev**                                        |
+| Final held-out scoring                       | test  | 2 × test                                           |
+
+So raising `--limit` grows only the free slice and buys more varied reflection material at no
+extra model cost. Tying dev and test to `--limit` by fraction would have scaled the two
+expensive slices along with it for nothing. The real ceilings on `--limit` are the corpus
+(`disfluency-speech` is ~5k utterances) and the datasets-server rate limit — set `HF_TOKEN`
+before a large load.
+
+**Truncation poisons a run rather than failing it.** `--adapter plain` means the whole
+completion _is_ the answer — there are no field markers to parse. So a completion cut off at
+`--max-tokens` becomes a truncated "cleaned transcript", scores badly against its reference,
+and teaches GEPA that a perfectly good instruction produces bad cleanups. The symptom is a
+`WARNING dspy.clients.lm: LM response was truncated` line and a disappointing score, not an
+error. Reasoning tokens count against the same budget, which is why the default is far above
+what a one-sentence answer needs; unused headroom costs nothing.
+
+**Dev does double duty, and 50 rows is small for the second job.** It is GEPA's valset _and_
+the set that ranks the hand-written candidates, scores the seed, and decides whether the
+evolved instruction beats them — the decision that picks what ships. At 50 rows that decision
+is noticeably noisier. The held-out test scores are unaffected, so the risk is shipping a
+slightly worse instruction, not misreporting one. Raise `--dev-fraction` to 0.15–0.2 if you
+care more about a confident selection than about search cost.
 
 `uv run` reads the PEP 723 header at the top of the script and installs DSPy into a throwaway
 environment. With plain `pip`, `pip install "dspy>=3.0"` is the only requirement.
@@ -165,19 +212,27 @@ is `--model`. Its proposal prompts are multi-field, so they keep DSPy's marker p
 
 ## The knobs that matter
 
-| Flag                 | Default                   | What it changes                                                                              |
-| -------------------- | ------------------------- | -------------------------------------------------------------------------------------------- |
-| `--source`           | `disfluency-speech`       | Which corpus to score against — see the table above.                                         |
-| `--model`            | `anthropic/claude-opus-5` | The LiteLLM model standing in for the service's rewrite model.                               |
-| `--api-base`         | —                         | Point at an OpenAI-compatible gateway instead of the provider's default endpoint.            |
-| `--adapter`          | `plain`                   | `plain` sends instruction + transcript as one chat turn; `chat` uses DSPy's field markers.   |
-| `--metric`           | `blend`                   | `content` (words only), `format` (case and punctuation too), or 0.7/0.3 of both.             |
-| `--severity`         | `0.35`                    | 0–1; how often a disfluency is injected. Reference-only sources only.                        |
-| `--strip-formatting` | off                       | Also lowercase and unpunctuate, so restoring formatting is part of the task.                 |
-| `--optimizer`        | `none`                    | `gepa` or `mipro` to evolve an instruction; both are configured to search instructions only. |
-| `--loader`           | `datasets-server`         | `datasets` uses the library instead of the HTTP rows API, for gated sets.                    |
-| `--split`            | per source                | Each source defaults to its held-out split, which is small — `--split train` for large runs. |
-| `--seed`             | `7`                       | Seeds injection and the train/dev/test split.                                                |
+| Flag                 | Default                      | What it changes                                                                                        |
+| -------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `--source`           | `disfluency-speech`          | Which corpus to score against — see the table above.                                                   |
+| `--model`            | `openai/qwen3.5-4b-32k-fast` | The LiteLLM model standing in for the service's rewrite model.                                         |
+| `--reflection-model` | `openai/claude-opus-4-8`     | Writes the instructions during `--optimizer gepa`. Keep it stronger than `--model`.                    |
+| `--api-base`         | the AssemblyAI gateway       | Endpoint for both models. `""` falls back to the provider's own.                                       |
+| `--adapter`          | `plain`                      | `plain` sends instruction + transcript as one chat turn; `chat` uses DSPy's field markers.             |
+| `--metric`           | `blend`                      | `content` (words only), `format` (case and punctuation too), or 0.7/0.3 of both.                       |
+| `--severity`         | `0.35`                       | 0–1; how often a disfluency is injected. Reference-only sources only.                                  |
+| `--strip-formatting` | off                          | Also lowercase and unpunctuate, so restoring formatting is part of the task.                           |
+| `--optimizer`        | `gepa`                       | `none` only ranks the candidates; both optimizers search instructions only.                            |
+| `--start`            | `prior-winner`               | Which instruction GEPA evolves from — the compressed prior winner, or the best hand-written candidate. |
+| `--auto`             | `medium`                     | Reflection trials: 10 / 18 / 27. The only knob that changes how many ideas get tried.                  |
+| `--loader`           | `datasets-server`            | `datasets` uses the library instead of the HTTP rows API, for gated sets.                              |
+| `--split`            | `train`                      | The sources' own held-out splits are only ~250 rows — too few for the default `--limit`.               |
+| `--limit`            | `2000`                       | Rows loaded, then sliced 1800 train / 50 dev / 150 test. Train rows cost nothing.                      |
+| `--dev-fraction`     | `50` (rows)                  | Fraction below 1, absolute count at 1 or above. The most expensive slice per row.                      |
+| `--test-fraction`    | `150` (rows)                 | Same convention. Scored twice, and by nothing that makes a selection.                                  |
+| `--num-threads`      | `1`                          | Serial by default — the gateway rate-limits.                                                           |
+| `--max-tokens`       | `8192`                       | Headroom for reasoning tokens. Too low silently corrupts a run rather than failing it.                 |
+| `--seed`             | `7`                          | Seeds injection and the train/dev/test split.                                                          |
 
 Both optimizers run with few-shot demos disabled. `config.llm.instruction` is a single string
 the service applies in one pass, so an optimized program that depended on bundled examples
@@ -215,9 +270,9 @@ test the opposite failure (over-editing text that needed nothing).
 
 All three axes are printed for every candidate, with the selecting one starred, so you can
 see whether a winner gained on wording or only on punctuation. The winner is chosen on a dev
-split and re-scored on a held-out test split alongside `guessed-default` — a guess at the
-service's default instruction, not the thing itself; see above — so the reported improvement is
-measured on data no selection decision touched.
+split and re-scored on a held-out test split alongside `BASELINE` — `prior-winner`, the best
+instruction we already have — so the reported improvement is measured on data no selection
+decision touched, against the thing a new instruction would actually replace.
 
 On a real corpus the numbers mean what they say. On `fleurs` and `builtin` the disfluencies
 are synthetic, so the **ranking** travels further than the absolute scores do: read those as
@@ -258,17 +313,53 @@ The harness enforces the cap in three places, none of which is sufficient alone:
 | -------------------------------------------- | ---------------------------------------------------- | ---------------------------- |
 | `check_candidate_lengths()`, before any call | A hand-written candidate in `candidates.py`          | Hard — exits before spending |
 | GEPA feedback text (`--optimizer gepa`)      | Tells the reflector the ceiling as it rewrites       | Advisory — it can ignore it  |
+| `CappedInstructionProposer` (GEPA only)      | An over-cap proposal, before GEPA ever scores it     | Hard — rejects and re-asks   |
 | Selection, after the run                     | An over-cap optimizer result, however well it scored | Hard — refuses to report it  |
 
-The middle one is only guidance: GEPA's metric is handed one scored example and never sees the
-candidate instruction, so length cannot be enforced there, and models count characters badly.
-The refusal at selection time is the actual guarantee.
+The third row is the one that makes this a search constraint rather than a report. Length
+cannot enter the objective: GEPA's metric is handed one scored example and never sees the
+candidate instruction, and longer instructions tend to score better, so an unconstrained search
+drifts over the cap and the run ends with nothing sendable. `CappedInstructionProposer` is
+GEPA's documented `instruction_proposer` hook — it delegates to GEPA's own reflection prompt,
+then rejects any proposal over the cap and re-asks against the rejected draft with the overage
+spelled out (`candidates.shortening_directive`). After three tries it returns the instruction
+**unchanged** rather than a truncation: cutting at 2048 characters lands mid-sentence, and a
+mangled instruction that happens to score well is how bad prompts reach a build. The run
+reports how many proposals it rejected, so a search that spent itself fighting the cap is
+visible rather than inferred from a disappointing score.
 
-`candidates.PRIOR_WINNER` is exempt on purpose. It is the over-cap instruction from that
-earlier run, kept as the default GEPA seed (`--start prior-winner`) because its _content_ was
-never the problem — it scored well and was only ever too long. A pruning run also scores the
-seed on dev, so the report says whether the shortened instruction kept what the long one knew,
-not merely that it beat the hand-written candidates.
+**MIPROv2 gets none of this.** It searches on a bare scalar and exposes no proposal hook, so
+`--optimizer mipro` is constrained only by the final refusal; the CLI says so when you run it.
+
+**Nothing is exempt, `prior-winner` included.** That candidate is the instruction from the
+run that broke dictation, compressed under the cap — see below — so it passes the same
+pre-flight check as everything else, and if a later edit pushes it back over, the run stops
+before spending anything.
+
+### `prior-winner`, and how it got under the cap
+
+`candidates.PRIOR_WINNER` is the strongest instruction the harness has produced. The run that
+emitted it wrote 3057 characters, 1009 over the cap, and it shipped in that state once. It was
+compressed **by deletion only**: every sentence in it is verbatim from the string that was
+scored, and the one edit that isn't a deletion is closing the gap in the rule numbering. Five
+removals, each a duplicate or a contradiction rather than a judgement about what matters —
+a redundant taxonomy bullet, two rules that restated bullets above them, a worked example whose
+output contradicted one of those rules, and the no-op example that a surviving rule already
+states in a line. It now sits at 1918 characters.
+
+It plays three roles at once, which is what makes the run cheap to read:
+
+- **`BASELINE`** — the bar a new search has to clear to be worth shipping, and what the winner
+  is scored against on the held-out test split.
+- **The default `--start`** — GEPA evolves from it, and because it fits the cap the search
+  begins inside the feasible region rather than spending its first trials just getting legal.
+- **An ordinary candidate** — scored in the sweep like any other, so it may simply win, and a
+  run that fails to beat it costs nothing extra to discover.
+
+What it is **not** is re-scored. Deletion cannot introduce wording the eval never saw, and the
+three product-critical safeguards (don't answer, don't translate, don't rephrase) are asserted
+present by `test_eval.py` — but whether the cut cost any cleanup quality is exactly the open
+question the next run answers.
 
 Three things to keep straight, all settled decisions in
 [`AGENTS.md`](../../AGENTS.md#settled-decisions--dont-reintroduce-these):

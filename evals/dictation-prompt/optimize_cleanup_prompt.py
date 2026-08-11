@@ -28,25 +28,34 @@ See `corpus.py` for what each source can and cannot measure.
 
 Usage
 -----
-    export ANTHROPIC_API_KEY=...
-    uv run evals/dictation-prompt/optimize_cleanup_prompt.py --limit 150
+    # The defaults are a full GEPA run: 500 train rows through a small model behind
+    # the AssemblyAI LLM Gateway, pruning candidates.PRIOR_WINNER under the character
+    # cap, with a frontier model doing the reflection. Nothing needs passing.
+    export OPENAI_API_KEY=$ASSEMBLYAI_API_KEY
+    uv run evals/dictation-prompt/optimize_cleanup_prompt.py
+
+    # Cheap sanity check first: rank the hand-written candidates, no search.
+    uv run evals/dictation-prompt/optimize_cleanup_prompt.py --optimizer none --limit 100
 
     # No network and no API key — checks the pipeline end to end.
     python3 evals/dictation-prompt/optimize_cleanup_prompt.py --source builtin --dry-run
 
-    # Evolve a new instruction instead of only ranking the hand-written ones.
-    # Starts from candidates.PRIOR_WINNER by default — see --start.
-    uv run evals/dictation-prompt/optimize_cleanup_prompt.py --optimizer gepa
+    # Against a frontier model on its own endpoint instead of the gateway.
+    ANTHROPIC_API_KEY=... uv run evals/dictation-prompt/optimize_cleanup_prompt.py \
+      --model anthropic/claude-opus-5 --api-base "" --reflection-model anthropic/claude-opus-5
 
 The length constraint
 ---------------------
 `config.llm.instruction` is capped at `candidates.INSTRUCTION_CHARACTER_CAP`
 characters and an instruction over it fails the whole request, so a winner that
-doesn't fit isn't a winner. Three places enforce that, because none of them is
-sufficient alone: the hand-written candidates are checked before any model call;
-the cap is stated to GEPA's reflector through the feedback text, which is guidance
-it can ignore; and an over-cap optimizer result is refused at selection time no
-matter how well it scored. The last one is the actual guarantee.
+doesn't fit isn't a winner. Four places enforce that, because none is sufficient
+alone: the hand-written candidates are checked before any model call; the cap is
+stated to GEPA's reflector in the feedback text, which is guidance it can ignore;
+`program.CappedInstructionProposer` rejects and re-asks any over-cap proposal
+before GEPA scores it, which is what makes the cap a constraint on the *search*
+rather than a verdict on its output; and an over-cap result is refused at selection
+no matter how well it scored. Only GEPA has the proposal hook — under
+`--optimizer mipro` the search is unconstrained and only the last one applies.
 
 `--dry-run` and the tests need no third-party packages: everything that touches
 DSPy lives in `program.py`, which is imported only after the dry-run returns.
@@ -67,7 +76,6 @@ from candidates import (  # noqa: E402
     BASELINE,
     CANDIDATES,
     INSTRUCTION_CHARACTER_CAP,
-    PRIOR_WINNER,
     overage,
 )
 from progress import Progress  # noqa: E402
@@ -113,12 +121,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=("datasets-server", "datasets"),
         help="datasets-server is the HTTP rows API; datasets uses the library (gated sets)",
     )
-    data.add_argument("--limit", type=int, default=120, help="how many pairs to load")
+    data.add_argument(
+        "--limit",
+        type=int,
+        default=2000,
+        help="how many pairs to load (default: 2000). Everything past --dev-fraction and "
+        "--test-fraction becomes train, and train rows are the free ones: GEPA draws a "
+        "fixed number of fixed-size reflection minibatches however large the trainset is, "
+        "so raising this buys more varied feedback at no extra model cost. The ceiling is "
+        "the corpus (disfluency-speech is ~5k utterances) and the datasets-server rate "
+        "limit, not the budget — set HF_TOKEN for a large load",
+    )
     data.add_argument(
         "--split",
-        default=None,
-        help="override the dataset split; each source defaults to its (small) held-out "
-        "split, so large runs want --split train",
+        default="train",
+        help="dataset split to read (default: train). Each source's own default is its "
+        "held-out split, which is only ~250 rows — too few for the default --limit, and "
+        "too few to leave a large trainset after the dev/test slices. Pass --split test "
+        "to read a source's held-out rows instead",
     )
     data.add_argument("--jsonl", help="load pairs (or bare references) from a local .jsonl")
 
@@ -143,9 +163,33 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=metrics.AXES,
         help="which axis selects the winner (default: blend, 0.7 content / 0.3 format)",
     )
-    evaluation.add_argument("--dev-fraction", type=float, default=0.3)
-    evaluation.add_argument("--test-fraction", type=float, default=0.3)
-    evaluation.add_argument("--num-threads", type=int, default=8)
+    evaluation.add_argument(
+        "--dev-fraction",
+        type=float,
+        default=50,
+        metavar="ROWS_OR_FRACTION",
+        help="dev rows, absolute at 1 or above and a fraction below (default: 50). Dev is "
+        "GEPA's valset AND the set that ranks every candidate, so each row is paid for "
+        "roughly eight times over plus GEPA's full evals — it is the most expensive slice "
+        "and buys no extra exploration, which depends only on --auto",
+    )
+    evaluation.add_argument(
+        "--test-fraction",
+        type=float,
+        default=150,
+        metavar="ROWS_OR_FRACTION",
+        help="held-out rows, absolute at 1 or above and a fraction below (default: 150). "
+        "Scored twice at the end, for the winner and the baseline; no selection step sees "
+        "it, so this is the honest number",
+    )
+    evaluation.add_argument(
+        "--num-threads",
+        type=int,
+        default=1,
+        help="concurrent model calls (default: 1). Serial by default because the LLM "
+        "Gateway rate-limits, and a 429 storm mid-run costs more wall-clock than the "
+        "concurrency saves; raise it for a provider that tolerates the parallelism",
+    )
     evaluation.add_argument(
         "--dry-run",
         action="store_true",
@@ -156,16 +200,37 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     model = parser.add_argument_group("model")
     model.add_argument(
         "--model",
-        default="anthropic/claude-opus-5",
-        help="LiteLLM model id standing in for the service's rewrite model",
+        default="openai/qwen3.5-4b-32k-fast",
+        help="LiteLLM model id standing in for the service's rewrite model. Defaults to a "
+        "small model behind the AssemblyAI LLM Gateway because the service's own rewrite "
+        "runs under a ~5s budget and is probably small too — an instruction tuned against "
+        "a frontier model can rely on comprehension the real one lacks. `openai/` selects "
+        "the wire protocol, not the vendor: the gateway is OpenAI-compatible, so this "
+        "reads OPENAI_API_KEY (set it to your AssemblyAI key)",
     )
     model.add_argument(
         "--reflection-model",
-        default=None,
-        help="model that rewrites instructions during --optimizer gepa (default: --model)",
+        default="openai/claude-opus-4-8",
+        help="model that rewrites instructions during --optimizer gepa. Deliberately NOT "
+        "the default --model: a 4B model writing its own instructions is the weakest link "
+        "in the loop. Pass the same id as --model to collapse them",
     )
-    model.add_argument("--api-base", default=None, help="override the API base URL")
-    model.add_argument("--max-tokens", type=int, default=2048)
+    model.add_argument(
+        "--api-base",
+        default="https://llm-gateway.assemblyai.com/v1",
+        help="API base URL for both --model and --reflection-model (default: the "
+        "AssemblyAI LLM Gateway). Pass an empty string to use the provider's own endpoint, "
+        "e.g. with --model anthropic/claude-opus-5",
+    )
+    model.add_argument(
+        "--max-tokens",
+        type=int,
+        default=8192,
+        help="output ceiling for the task model (default: 8192). A cleaned transcript is a "
+        "sentence or two, so this is not sized for the answer — it is headroom for reasoning "
+        "tokens, which count against the same budget. Truncation here is silently corrupting "
+        "rather than loud: see ModelSpec.max_tokens",
+    )
     model.add_argument(
         "--adapter",
         default="plain",
@@ -178,15 +243,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     search = parser.add_argument_group("search")
     search.add_argument(
         "--optimizer",
-        default="none",
+        default="gepa",
         choices=("none", "gepa", "mipro"),
-        help="none ranks the built-in candidates; gepa/mipro also evolve a new instruction",
+        help="gepa (default) evolves a new instruction from --start; none only ranks the "
+        "built-in candidates, which is the cheap way to sanity-check a corpus or a model "
+        "before paying for a search",
     )
     search.add_argument(
         "--auto",
-        default="light",
+        default="medium",
         choices=("light", "medium", "heavy"),
-        help="optimizer search budget",
+        help="optimizer search budget (default: medium). This is the knob that decides how "
+        "many ideas get tried — 10 reflection trials at light, 18 at medium, 27 at heavy, "
+        "independent of corpus size. Shrinking --dev-fraction makes each trial cheaper; "
+        "only this makes there be more of them",
     )
     search.add_argument(
         "--start",
@@ -214,10 +284,10 @@ def describe_length(instruction: str) -> str:
 def check_candidate_lengths() -> None:
     """Refuse to start if a hand-written candidate could never be sent.
 
-    Before any model call, because this is a typo-class mistake and paying for a
-    full sweep to discover it is pure waste. `PRIOR_WINNER` is deliberately exempt —
-    being over the cap is the whole reason it exists as a seed rather than a
-    candidate.
+    Before any model call, because this is a typo-class mistake and paying for a full
+    sweep to discover it is pure waste. Nothing is exempt, `prior-winner` included:
+    it earned its place in the table by being compressed under the cap, and if a later
+    edit pushes it back over, this is what says so.
     """
     offenders = [(name, text) for name, text in CANDIDATES.items() if overage(text)]
     if not offenders:
@@ -313,26 +383,27 @@ def main(argv: list[str] | None = None) -> int:
     winner_instruction = CANDIDATES[winner_name]
 
     if args.optimizer != "none":
-        seed_scores: dict[str, float] | None = None
-        if args.start == "prior-winner":
-            seed_name, seed_instruction = "prior-winner", PRIOR_WINNER
-            # Score the seed on dev as well. A pruning run's real question is whether
-            # the shortened instruction held onto what the long one knew, and without
-            # this row the report can only say the winner beat the hand-written
-            # candidates — while quietly having lost ground against the very thing it
-            # was pruned from.
-            #
-            # It must never win, and what stops it is that `winner_name` was already
-            # settled above, before this row joins `dev_rows` — the table is a report
-            # from here on, not a selection input. Moving the `max(dev_rows, ...)`
-            # below this point would make an unsendable instruction selectable.
-            with Progress(len(dev), "Scoring the seed on dev") as meter:
-                seed_scores = program.evaluate(
-                    program.build(seed_instruction), dev, args.num_threads, on_example=meter.tick
-                )
-            dev_rows.append(("prior-winner (over cap)", seed_scores))
-        else:
-            seed_name, seed_instruction = winner_name, winner_instruction
+        # The seed is an ordinary candidate — it fits the cap, so it was scored in the
+        # sweep above and may legitimately win. Nothing to score separately, and no
+        # need to keep it out of the selection: unlike the over-cap instruction this
+        # replaced, shipping it is a real option.
+        seed_name = BASELINE if args.start == "prior-winner" else winner_name
+        seed_instruction = CANDIDATES[seed_name]
+        seed_scores = dict(dev_rows)[seed_name]
+
+        # Only GEPA can be held to the cap during the search; MIPROv2 exposes no
+        # proposal hook, so say so rather than letting a run look constrained when the
+        # only thing standing between it and an unsendable winner is the final gate.
+        proposer = (
+            program.CappedInstructionProposer(INSTRUCTION_CHARACTER_CAP)
+            if args.optimizer == "gepa"
+            else None
+        )
+        if proposer is None:
+            print(
+                f"\nNote: {args.optimizer} has no proposal hook, so its search is not held to "
+                f"the {INSTRUCTION_CHARACTER_CAP}-character cap — only the final selection is."
+            )
 
         print(f"\nRunning {args.optimizer} from {seed_name} ({describe_length(seed_instruction)})…")
         optimized = program.optimize(
@@ -346,8 +417,17 @@ def main(argv: list[str] | None = None) -> int:
             auto=args.auto,
             num_threads=args.num_threads,
             instruction_budget=INSTRUCTION_CHARACTER_CAP,
+            proposer=proposer,
         )
         optimized_instruction = optimized.signature.instructions
+        if proposer is not None and proposer.rejected:
+            # A search that spent itself fighting the cap should be visible, not
+            # inferred from a disappointing score.
+            print(
+                f"\nThe proposer rejected {proposer.rejected} over-cap proposal(s); "
+                f"{proposer.abandoned} component update(s) were abandoned and left unchanged "
+                "after the retries."
+            )
         with Progress(len(dev), "Re-scoring the optimized instruction") as meter:
             optimized_scores = program.evaluate(
                 optimized, dev, args.num_threads, on_example=meter.tick
@@ -355,12 +435,11 @@ def main(argv: list[str] | None = None) -> int:
         dev_rows.append((f"{args.optimizer}-optimized", optimized_scores))
         print_table(dev_rows, f"With the optimized instruction, on dev ({axis})", axis)
         print(f"\nThe optimized instruction is {describe_length(optimized_instruction)}.")
-        if seed_scores is not None:
-            delta = optimized_scores[axis] - seed_scores[axis]
-            print(
-                f"Against the seed it started from: {delta:+.4f} on {axis} "
-                f"({seed_scores[axis]:.4f} → {optimized_scores[axis]:.4f})."
-            )
+        delta = optimized_scores[axis] - seed_scores[axis]
+        print(
+            f"Against {seed_name}, the instruction it started from: {delta:+.4f} on {axis} "
+            f"({seed_scores[axis]:.4f} → {optimized_scores[axis]:.4f})."
+        )
 
         # The length gate comes before the score comparison, because a better score on
         # an unsendable instruction is not a better instruction. Enforced here rather

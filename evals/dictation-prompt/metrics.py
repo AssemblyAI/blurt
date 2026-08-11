@@ -205,9 +205,10 @@ def feedback(
     the perfect-score one, because the reflector only ever sees this channel — a
     constraint mentioned on failures alone would be invisible exactly when a run is
     going well and the instruction is growing. Note what this is: *guidance*, not
-    enforcement. A reflector can ignore it, and models count characters badly, so the
-    CLI still refuses to report an over-cap winner. Optimizing an instruction whose
-    length is unbounded is what produced one 1009 characters too long to send.
+    enforcement. A reflector can ignore it, and models count characters badly — the
+    enforcement is `program.CappedInstructionProposer`, which rejects an over-cap
+    proposal outright, and the CLI's final refusal behind it. What this buys is a
+    likelier first attempt, and so fewer of the proposer's retries.
     """
     budget = (
         ""

@@ -13,8 +13,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import dspy
+from gepa.strategies.instruction_proposal import InstructionProposalSignature
 
 import metrics
+from candidates import overage, shortening_directive
 from corpus import Utterance
 
 
@@ -224,13 +226,100 @@ def evaluate(
     )
 
 
+class CappedInstructionProposer:
+    """GEPA `ProposalFn` that will not hand back an instruction over the length cap.
+
+    Why this exists rather than a penalty in the metric: GEPA's metric is handed one
+    scored *example* and never sees the candidate instruction, so length cannot enter
+    the objective there. Stating the cap in feedback prose (`make_feedback_metric`)
+    only asks nicely, and longer instructions tend to score better — so an
+    unconstrained search drifts over the cap and the run ends with nothing sendable.
+    This is the documented hook for constraining what the search may even consider:
+    an over-cap proposal is rejected and re-asked before GEPA ever evaluates it, so
+    no search budget is spent scoring a candidate that could not ship.
+
+    Delegates to GEPA's own `InstructionProposalSignature` rather than reimplementing
+    the reflection prompt — the quality of that prompt is most of what GEPA is. Only
+    the accept/retry decision around it is ours.
+
+    On giving up after `attempts` tries it returns the instruction **unchanged**, not
+    a truncation. Cutting a proposal at 2048 characters lands mid-sentence, and a
+    mangled instruction that happens to score well is exactly the kind of thing that
+    reaches a build and breaks it. A no-op mutation costs GEPA one wasted step and
+    keeps the pool honest.
+    """
+
+    def __init__(self, cap: int, attempts: int = 3):
+        self.cap = cap
+        self.attempts = attempts
+        #: Proposals rejected for length, over the whole run — reported by the CLI so
+        #: a search that spent itself fighting the cap is visible rather than implied.
+        self.rejected = 0
+        #: Components the retries never got under the cap, left unchanged.
+        self.abandoned = 0
+
+    def __call__(self, candidate, reflective_dataset, components_to_update) -> dict[str, str]:
+        return {
+            name: self._propose(candidate[name], reflective_dataset[name])
+            for name in components_to_update
+        }
+
+    @staticmethod
+    def _lm_call(prompt: str) -> str:
+        """One reflection call, tolerating both output shapes the base LM may return.
+
+        Mirrors `DspyAdapter.stripped_lm_call`, which is not reachable from here: the
+        adapter builds it for its own default path. DSPy invokes a custom proposer
+        inside `dspy.context(lm=reflection_lm)`, so `settings.lm` is already the
+        reflection model — there is nothing to thread through.
+        """
+        raw = dspy.settings.lm(prompt)[0]
+        return raw["text"] if isinstance(raw, dict) else raw
+
+    def _propose(self, current: str, dataset_with_feedback) -> str:
+        document = current
+        for _ in range(self.attempts):
+            proposed = InstructionProposalSignature.run(
+                lm=self._lm_call,
+                input_dict={
+                    "current_instruction_doc": document,
+                    "dataset_with_feedback": dataset_with_feedback,
+                },
+            )["new_instruction"]
+            if not overage(proposed, self.cap):
+                return proposed
+            self.rejected += 1
+            # Re-ask against the rejected draft, not the original: the next round is a
+            # compression pass over what it just wrote, which is a smaller ask than
+            # re-deriving a shorter instruction from scratch.
+            document = shortening_directive(proposed, self.cap)
+        self.abandoned += 1
+        return current
+
+
 @dataclass(frozen=True)
 class ModelSpec:
     """How to reach the model standing in for the service's rewrite."""
 
     model: str
     api_base: str | None = None
-    max_tokens: int = 2048
+
+    #: Output ceiling for the task model, and the fallback for any GEPA call that
+    #: reaches for `dspy.settings.lm` instead of the reflection LM.
+    #:
+    #: Not sized for the answer — a cleaned transcript is a sentence or two. It is
+    #: headroom for reasoning tokens, which count against the same budget on current
+    #: models, and for the instruction-length proposals GEPA writes.
+    #:
+    #: Sized generously because truncation here is silently corrupting rather than
+    #: loud. `PlainChatAdapter.parse` treats the whole completion as the answer (it
+    #: has no markers to parse), so a truncated completion becomes a truncated
+    #: "cleaned transcript", scores badly against its reference, and teaches GEPA
+    #: that a perfectly good instruction produces bad cleanups. The run doesn't fail;
+    #: it optimizes against noise. Nothing is paid for headroom left unused — the
+    #: cost is in tokens generated — so the only reason to lower this is to bound a
+    #: runaway, and 2048 (the previous default) was low enough that Opus 5 tripped it.
+    max_tokens: int = 8192
 
     def lm(self, *, model: str | None = None, max_tokens: int | None = None) -> dspy.LM:
         """Build an LM, overriding the model or budget for a secondary role.
@@ -261,12 +350,19 @@ def optimize(
     auto: str,
     num_threads: int,
     instruction_budget: int | None = None,
+    proposer: CappedInstructionProposer | None = None,
 ):
     """Evolve the instruction, returning the optimized program.
 
-    `instruction_budget` reaches GEPA through the feedback text and MIPROv2 not at
-    all — it searches on a bare score with no channel to state a constraint on. Both
-    winners are length-checked by the caller for that reason.
+    The length cap reaches the two optimizers very differently, which is why the
+    caller length-checks either winner regardless:
+
+    - **GEPA** gets it twice — as prose in the feedback (`instruction_budget`, which
+      only asks) and as `proposer`, which refuses over-cap proposals outright. The
+      proposer is the constraint; the prose just makes the first attempt likelier to
+      land and so saves retries.
+    - **MIPROv2** gets it not at all. It searches on a bare scalar and exposes no
+      proposal hook, so nothing here can stop it returning something unsendable.
     """
     trainset, valset = to_examples(train), to_examples(dev)
 
@@ -274,8 +370,12 @@ def optimize(
         return dspy.GEPA(
             metric=make_feedback_metric(axis, instruction_budget),
             auto=auto,
-            reflection_lm=spec.lm(model=reflection_model, max_tokens=8192),
+            # Never below the task model's ceiling: the reflector writes whole
+            # instructions, so it is the call most likely to need the room, and
+            # raising --max-tokens should never leave it as the tighter of the two.
+            reflection_lm=spec.lm(model=reflection_model, max_tokens=max(8192, spec.max_tokens)),
             num_threads=num_threads,
+            instruction_proposer=proposer,
         ).compile(program, trainset=trainset, valset=valset)
 
     # MIPROv2 with both demo budgets at zero: it then searches instructions only,

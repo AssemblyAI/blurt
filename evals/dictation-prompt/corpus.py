@@ -479,17 +479,47 @@ def load(
     )
 
 
-def split(utterances: list[Utterance], seed: int, dev_fraction: float, test_fraction: float):
+def slice_size(value: float, total: int) -> int:
+    """A share of the corpus when below 1, an absolute row count at 1 or above.
+
+    The `train_test_split` convention, adopted here because the three slices have
+    very different costs and so should not be coupled to `--limit` together. Train
+    rows are effectively free — GEPA draws a fixed number of fixed-size reflection
+    minibatches however large the trainset is — while every dev row is paid for
+    roughly eight times over (each candidate, the seed, the re-score) plus GEPA's
+    full evals, and every test row twice. Absolute sizes let `--limit` grow the free
+    slice without dragging the expensive two along behind it.
+
+    Not clamped here — `split` reconciles the two slices against the corpus together,
+    since clamping them independently is what strands one of them at zero.
+    """
+    return int(total * value) if value < 1 else int(value)
+
+
+def split(utterances: list[Utterance], seed: int, dev_size: float, test_size: float):
     """Shuffle once with a fixed seed, then slice into train / dev / test.
 
     Shuffling matters because dataset splits are often ordered by speaker or
     source document; slicing an unshuffled corpus would put systematically
     different material in train and test.
+
+    `dev_size` and `test_size` are each a fraction or an absolute count — see
+    `slice_size`. When the two together ask for more than the corpus holds, both are
+    scaled down in proportion rather than being satisfied in order: taking `test`
+    first and giving `dev` the remainder leaves dev empty, which reads as a corpus
+    problem when it is really an arithmetic one. Scaling keeps the smoke path honest
+    — `--source builtin` is 12 rows against defaults sized for 2000. Train can still
+    end up empty, and deliberately so: `--optimizer none` needs only dev and test,
+    while a search that genuinely has no trainset should fail loudly rather than run
+    on a slice quietly borrowed from somewhere else.
     """
     shuffled = list(utterances)
     random.Random(seed).shuffle(shuffled)
-    n_test = int(len(shuffled) * test_fraction)
-    n_dev = int(len(shuffled) * dev_fraction)
+    total = len(shuffled)
+    n_dev, n_test = slice_size(dev_size, total), slice_size(test_size, total)
+    if n_dev + n_test > total:
+        scale = total / (n_dev + n_test)
+        n_dev, n_test = int(n_dev * scale), int(n_test * scale)
     return shuffled[n_test + n_dev :], shuffled[n_test : n_test + n_dev], shuffled[:n_test]
 
 

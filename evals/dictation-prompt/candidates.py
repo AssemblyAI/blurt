@@ -6,18 +6,21 @@ They vary one thing at a time: how the task is framed, how explicitly the
 disfluency types are named, how hard the do-not-rewrite constraint is pushed, and
 whether formatting is called out.
 
-`guessed-default` is exactly that: a **guess** at what the service's own default
-cleanup instruction might say. What we actually ship is `config.llm = {}`, which
-applies the service's own default wording on the service's own rewrite model —
-and we know neither. So this candidate is a sanity check that the harness can tell
-a terse instruction from a careful one; beating it is *not* evidence of beating
-what we ship. Establishing that would take real audio through the real endpoint,
-which is a different measurement than this text-only harness performs.
+`prior-winner` (`PRIOR_WINNER`) is the one that isn't a hypothesis: it is an evolved
+instruction a previous run produced, compressed under `INSTRUCTION_CHARACTER_CAP`.
+It is `BASELINE` — the bar a new search has to clear to be worth shipping — and the
+default seed GEPA evolves from.
 
-Two things live here that `CANDIDATES` does not contain: `INSTRUCTION_CHARACTER_CAP`,
-the length every shippable instruction has to fit, and `PRIOR_WINNER`, an evolved
-instruction that *doesn't* fit and is kept as a starting point for pruning rather
-than as something to ship.
+`guessed-default` is exactly that: a **guess** at what the service's own default
+cleanup instruction might say. What Blurt actually sends is `config.llm = {}`, which
+applies the service's own wording on the service's own rewrite model — and we know
+neither. So it is a floor, a check that the harness can tell a terse instruction from
+a careful one; beating it is *not* evidence of beating what ships today. Establishing
+that would take real audio through the real endpoint, which is a different
+measurement than this text-only harness performs.
+
+Every instruction here has to fit `INSTRUCTION_CHARACTER_CAP`, or the API rejects the
+whole request. That is checked before a run spends anything.
 
 Kept in its own module so a results notebook or a re-scoring script can import the
 instructions without pulling in argparse and DSPy.
@@ -44,14 +47,39 @@ from __future__ import annotations
 INSTRUCTION_CHARACTER_CAP = 2048
 
 
-def overage(instruction: str) -> int:
+def overage(instruction: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> int:
     """Characters `instruction` runs over the cap; 0 when it fits.
 
     Counted in characters, matching the API's own error wording — the server-side
     check is a character-length one, not a byte-length one, so an instruction full
     of em dashes and arrows isn't charged for their UTF-8 width.
     """
-    return max(0, len(instruction) - INSTRUCTION_CHARACTER_CAP)
+    return max(0, len(instruction) - cap)
+
+
+def shortening_directive(proposal: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> str:
+    """Hand an over-long proposal back to the reflector as something to compress.
+
+    Used by the GEPA proposer gate (`program.CappedInstructionProposer`) as the next
+    round's `current_instruction_doc`: the rejected text plus an explicit account of
+    by how much it missed. Naming the arithmetic is the point — models are poor at
+    counting characters, so "too long" alone tends to produce another over-long
+    draft, while "cut at least N of these M characters" gives something checkable.
+
+    What it asks to be cut is deliberate. Worked examples and restatements are the
+    compressible mass in a cleanup instruction; the rules are what change behaviour,
+    and an instruction that loses those scores worse and teaches the search nothing.
+    """
+    excess = overage(proposal, cap)
+    return (
+        f"{proposal}\n\n"
+        f"---\n"
+        f"HARD CONSTRAINT: the instruction above is {len(proposal)} characters, which is "
+        f"{excess} too many. It must be at most {cap} characters or the API rejects every "
+        f"request carrying it. Rewrite it shorter, cutting at least {excess} characters. "
+        "Drop redundant worked examples and restatements first; keep every rule that "
+        "changes what the model does, and keep the meaning of the rules intact."
+    )
 
 
 CANDIDATES: dict[str, str] = {
@@ -85,30 +113,39 @@ CANDIDATES: dict[str, str] = {
     ),
 }
 
-# The in-harness comparison point — not the shipped behaviour. See the module docstring.
-BASELINE = "guessed-default"
-
-
-#: An instruction a previous GEPA run produced, kept as a *starting point* — not as
-#: a candidate, and not as anything shippable. At 3057 characters it is 1009 over
-#: `INSTRUCTION_CHARACTER_CAP`, so sending it fails every request; it shipped in
-#: `AssemblyAITranscriber`'s `LLMRewrite` briefly and broke all dictation until the
-#: field went back to `{}` (the service's own default cleanup wording, which is
-#: what Blurt sends today).
+#: The strongest instruction we have, and the default seed for a new search.
 #:
-#: It is worth keeping because the *content* was never the problem. It scored well
-#: on hand-annotated Switchboard pairs, in the same one-instruction/one-transcript
-#: envelope the service applies it in (`--adapter plain`); it was only ever too
-#: long. So it is the natural seed for another round: `--start prior-winner` hands
-#: it to GEPA to prune under the cap and improve, rather than starting over from a
-#: four-line hand-written candidate that knows none of what this one learned.
+#: Provenance: the winner of a GEPA run of `optimize_cleanup_prompt.py`, scored on
+#: hand-annotated Switchboard disfluency pairs in the same one-instruction /
+#: one-transcript envelope the service applies it in (`--adapter plain`). That run
+#: emitted 3057 characters, which is 1009 over `INSTRUCTION_CHARACTER_CAP` — it
+#: shipped in that state once and broke every dictation until the Swift side went
+#: back to an empty `llm` block.
 #:
-#: Stored verbatim, exactly as that run emitted it, quirks included — the dangling
-#: `raw_transcript` / `cleaned_transcript` field names (the shipped envelope has no
-#: such fields; they were dangling during scoring too) and worked examples that
-#: disagree with rule 3 about whether "I guess" and "kind of" survive. Both came
-#: out of the reference targets the run optimized against. Hand-tidying either
-#: makes it an unscored string that looks scored; let the optimizer change it.
+#: **What was cut, and how.** By deletion only: every sentence below is verbatim from
+#: the string that was scored, and the sole edit that is not a deletion is closing the
+#: gap in the rule numbering. Nothing was paraphrased, so this is the measured string
+#: minus redundancy rather than a new draft of it. Five removals, each a duplicate or
+#: a contradiction rather than a judgement call about what matters:
+#:
+#: 1. The "Interjections used as fillers: oh" bullet — the filler-sounds bullet above
+#:    it already lists "oh".
+#: 2. Rule 1 ("Delete EVERY instance...") — the taxonomy already opens with "Remove ALL
+#:    of the following", and the rule's "common misses" list re-lists its bullets.
+#: 3. Rule 3 ("Treat I guess, you know, I mean, kind of, and like as removable
+#:    filler") — the same five phrases, in the same words, as the discourse-phrases
+#:    bullet.
+#: 4. Worked example 1 — its output *keeps* "I guess it's kind of like", contradicting
+#:    the bullet that calls those removable filler. The disagreement was noted in the
+#:    original as load-bearing evidence from the reference targets; carrying a
+#:    self-contradicting example is still worse than carrying none.
+#: 5. Worked example 2 — the no-op case, which the surviving rule 3 states in one line.
+#:
+#: **What this is not.** It has not been re-scored. Deletion cannot introduce wording
+#: the eval never saw, and the three product-critical safeguards (do not answer, do not
+#: translate, do not rephrase) are intact — but whether the cut cost any cleanup quality
+#: is an open measurement, and the run that answers it is the one that scores this as
+#: `BASELINE`. Treat a search that fails to beat it as the more likely outcome.
 PRIOR_WINNER = """\
 TASK
 You will be given a single dictated (spoken-language) transcript under the field `raw_transcript`. Your job is to remove disfluencies from it and output the result as `cleaned_transcript`. Every remaining word must stay exactly as it was spoken, in the same order. Do not summarize, rephrase, translate, expand, correct, or answer the text. Only delete disfluencies — never substitute or reword.
@@ -117,27 +154,25 @@ WHAT COUNTS AS A DISFLUENCY (DELETE THESE)
 Disfluencies are filler and hesitation elements that add no propositional content. Remove ALL of the following whenever they occur, including at the start, middle, or end of the transcript:
 - Filler sounds: "uh", "um", "er", "ah", "oh"
 - Discourse/filler phrases: "you know", "I mean", "I guess", "kind of" (when used as filler), "like" (when used as filler)
-- Interjections used as fillers: "oh" (e.g., "Oh yes." → "yes.")
 - False starts / cut-off fragments: e.g., "we wouldn't ha-," should be removed entirely, keeping only the completed restart "we wouldn't have them"
 - Repeated/stammered words that are restarts (e.g., "of, uh, of Sacramento" → "of Sacramento")
 
 IMPORTANT RULES
-1. Delete EVERY instance of a disfluency, not just some. Do a careful pass and make sure no filler words remain (common misses: leftover "you know", "uh", "I mean", "oh", "I guess").
-2. Never change a real content word into another word. Do NOT do things like "I" → "you" or "guess" → "know". Words that remain must be identical to what was spoken.
-3. Treat "I guess", "you know", "I mean", "kind of", and "like" as removable filler in most conversational contexts. When removing them, delete the whole phrase and stitch the surrounding words together naturally, preserving remaining punctuation.
-4. Preserve all genuine content words, their order, capitalization of real words, and punctuation of the surviving text. If removing a leading filler like "Oh" leaves the next word starting the sentence, keep that word as it was spoken (do not re-capitalize or otherwise alter it beyond what deletion requires).
-5. Some transcripts contain no disfluencies at all. In that case, output the text completely unchanged.
+1. Never change a real content word into another word. Do NOT do things like "I" → "you" or "guess" → "know". Words that remain must be identical to what was spoken.
+2. Preserve all genuine content words, their order, capitalization of real words, and punctuation of the surviving text. If removing a leading filler like "Oh" leaves the next word starting the sentence, keep that word as it was spoken (do not re-capitalize or otherwise alter it beyond what deletion requires).
+3. Some transcripts contain no disfluencies at all. In that case, output the text completely unchanged.
 
 WORKED EXAMPLES
-- Input: "Uh, you know, it's kind of, I guess it's kind of like, uh, there in the Bay area, you know, you don't find a whole lot of, uh, of Sacramento fans."
-  Output: "I guess it's kind of like, there in the Bay area, you don't find a whole lot of Sacramento fans."
-
-- Input: "for example, you test a chip. It can't last seven years but it can last five. I B M says let's throw it away. Leading Edge will say we'll buy it from you."
-  Output: "for example, you test a chip. It can't last seven years but it can last five. I B M says let's throw it away. Leading Edge will say we'll buy it from you."
-  (No disfluencies present — unchanged.)
-
 - Input: "Oh yes. But, uh, we wouldn't ha-, we wouldn't have them, I mean, I don't see us without pets, without cats."
   Output: "yes. But, we wouldn't have them, I don't see us without pets, without cats."
 
 OUTPUT
 Return only the cleaned transcript text."""
+
+CANDIDATES["prior-winner"] = PRIOR_WINNER
+
+#: What a run must beat to be worth shipping: the best instruction we already have.
+#: Was `guessed-default` — a guess at the service's own wording — back when nothing
+#: measured was available to compare against. That candidate is still in the table as
+#: a floor, but it is not the bar.
+BASELINE = "prior-winner"
