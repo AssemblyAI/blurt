@@ -195,6 +195,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="build and score the corpus without calling any model",
     )
+    evaluation.add_argument(
+        "--candidates",
+        default=None,
+        choices=("baseline", "all"),
+        help="which candidates to score on dev before searching. Default: baseline only "
+        "for a search run (it is the bar, the fallback, and the seed — the rest cost "
+        "len(CANDIDATES) x dev calls to re-rank instructions the search will not use), "
+        "and all of them under --optimizer none, where the ranking is the whole point",
+    )
     evaluation.add_argument("--show-samples", type=int, default=3)
 
     model = parser.add_argument_group("model")
@@ -300,6 +309,31 @@ def check_candidate_lengths() -> None:
     )
 
 
+def resolve_candidates(args: argparse.Namespace) -> list[str]:
+    """Which candidates get scored on dev before the search.
+
+    Sweeping all of them costs `len(CANDIDATES) × dev` calls to re-establish an
+    ordering that mostly does not change, so a search run scores only what it needs:
+    `BASELINE`, which is simultaneously the bar the optimized instruction must clear,
+    the fallback if it doesn't, and — under the default `--start` — the seed. Its
+    score against the no-cleanup floor is also the setup check the full sweep used to
+    provide: an instruction this strong landing near the floor means the model or the
+    corpus is wrong, not the instruction.
+
+    A run that isn't searching gets the full table, because ranking one candidate is
+    not a ranking. That is the shape of `--optimizer none`: the cheap pass you make
+    when you have changed the corpus or the model and want the ordering itself.
+    """
+    if args.candidates == "all" or (args.candidates is None and args.optimizer == "none"):
+        return list(CANDIDATES)
+    # BASELINE first: it is the row every later comparison is stated against.
+    ordered = [BASELINE]
+    if args.start == "best-candidate":
+        # Nothing has been scored yet, so "best" is unknowable without the sweep.
+        return list(CANDIDATES)
+    return ordered
+
+
 def resolve_axis(requested: str, loaded: corpus.Corpus) -> str:
     """Refuse to select on an axis the corpus cannot measure.
 
@@ -366,12 +400,13 @@ def main(argv: list[str] | None = None) -> int:
     spec = program.ModelSpec(model=args.model, api_base=args.api_base, max_tokens=args.max_tokens)
     program.configure(spec, adapter=args.adapter)
 
+    scoring = resolve_candidates(args)
     dev_rows: list[tuple[str, dict[str, float]]] = []
-    with Progress(len(CANDIDATES) * len(dev), "Scoring candidates on dev") as meter:
-        for index, (name, instruction) in enumerate(CANDIDATES.items(), start=1):
-            note = f"{name} ({index}/{len(CANDIDATES)})"
+    with Progress(len(scoring) * len(dev), "Scoring candidates on dev") as meter:
+        for index, name in enumerate(scoring, start=1):
+            note = f"{name} ({index}/{len(scoring)})"
             scores = program.evaluate(
-                program.build(instruction),
+                program.build(CANDIDATES[name]),
                 dev,
                 args.num_threads,
                 on_example=lambda n=note: meter.tick(n),

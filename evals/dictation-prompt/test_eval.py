@@ -683,6 +683,30 @@ def test_slices_that_already_fit_are_left_exactly_as_asked():
     assert (len(dev), len(test)) == (250, 250)
 
 
+def test_a_search_run_scores_only_the_baseline():
+    """The rest re-rank instructions the search will never use, at dev-sized cost each."""
+    assert cli.resolve_candidates(cli.parse_args([])) == [candidates.BASELINE]
+
+
+def test_a_ranking_run_scores_everything():
+    """`--optimizer none` exists to produce the ordering; one row is not an ordering."""
+    assert cli.resolve_candidates(cli.parse_args(["--optimizer", "none"])) == list(
+        candidates.CANDIDATES
+    )
+
+
+def test_seeding_from_the_best_candidate_needs_the_full_sweep():
+    """ "Best" is unknowable before anything has been scored."""
+    args = cli.parse_args(["--start", "best-candidate"])
+    assert cli.resolve_candidates(args) == list(candidates.CANDIDATES)
+
+
+def test_the_full_sweep_can_be_asked_for_explicitly():
+    assert cli.resolve_candidates(cli.parse_args(["--candidates", "all"])) == list(
+        candidates.CANDIDATES
+    )
+
+
 def test_the_task_model_has_room_for_reasoning_tokens_by_default():
     """A too-low ceiling doesn't fail the run, it poisons it.
 
