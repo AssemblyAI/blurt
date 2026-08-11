@@ -239,7 +239,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     model.add_argument(
         "--reflection-model",
-        default="openai/gpt-5.6-terra",
+        default="openai/claude-opus-4-8",
         help="model that rewrites instructions during --optimizer gepa. Deliberately NOT "
         "the default --model: a 4B model writing its own instructions is the weakest link "
         "in the loop. The `openai/` prefix is LiteLLM routing and is stripped before the "
