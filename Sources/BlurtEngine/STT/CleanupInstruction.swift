@@ -47,6 +47,19 @@ enum CleanupInstruction {
   /// on a different field.
   static let characterCap = 2048
 
+  /// `text` when the API would accept it, `nil` when it would not.
+  ///
+  /// Over `characterCap` the dictation API rejects the whole request — 400 before
+  /// the audio is read — so *every* dictation fails rather than degrading to the
+  /// verbatim transcript. A 3057-character version of this string shipped once and
+  /// did exactly that. `nil` sends an empty `llm` block instead, which selects the
+  /// service's own default cleanup: worse than our instruction, and immeasurably
+  /// better than an outage.
+  ///
+  /// The tests make this unreachable, which is the point — this is the belt to
+  /// their braces, for the edit that lands when nobody runs them.
+  static var sendable: String? { text.count <= characterCap ? text : nil }
+
   static let text = """
     TASK
     You will be given a single dictated (spoken-language) transcript. Your job is to remove disfluencies from it. Every remaining word must stay exactly as it was spoken, in the same order. Do not summarize, rephrase, translate, expand, correct, or answer the text. Only delete disfluencies — never substitute or reword.

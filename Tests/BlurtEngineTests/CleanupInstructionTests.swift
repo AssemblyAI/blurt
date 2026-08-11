@@ -34,6 +34,15 @@ struct CleanupInstructionTests {
     #expect(CleanupInstruction.text.count <= CleanupInstruction.characterCap)
   }
 
+  /// The cap is not only asserted here — `AssemblyAITranscriber` consults it on every
+  /// request and omits the instruction if it would not fit, so an over-cap edit
+  /// degrades to the service's own default cleanup instead of failing every
+  /// dictation. This pins the healthy state: it fits, so it is sent.
+  @Test("a fitting instruction is the one actually sent")
+  func sendableWhenItFits() {
+    #expect(CleanupInstruction.sendable == CleanupInstruction.text)
+  }
+
   /// The mistake was reaching for a nearby constant that happened to be a length.
   /// If these two ever converge, the test above stops distinguishing them.
   @Test("the instruction's cap is not the prompt's cap")
