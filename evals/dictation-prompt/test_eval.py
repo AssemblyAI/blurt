@@ -658,7 +658,7 @@ def test_the_shipped_winner_names_no_signature_field():
 def test_a_bare_invocation_is_the_recommended_gepa_run():
     """Running with no flags now spends money — pin what it spends it on."""
     args = cli.parse_args([])
-    assert (args.optimizer, args.start, args.auto) == ("gepa", "prior-winner", "medium")
+    assert (args.optimizer, args.start, args.auto) == ("gepa", "prior-winner", "heavy")
     # The service's rewrite runs under a ~5s budget, so the stand-in is small and the
     # plain adapter is mandatory — small models cannot follow the field-marker protocol.
     assert args.adapter == "plain"
@@ -700,6 +700,21 @@ def test_raising_the_limit_grows_only_the_free_slice():
 def test_the_reflector_sees_more_than_gepas_default_three_examples():
     """Three near-perfect examples give a reflector almost nothing to generalise from."""
     assert cli.parse_args([]).reflection_minibatch_size == 8
+
+
+def test_the_program_has_one_predictor_which_is_why_merge_is_off():
+    """Merge recombines across predictors; with one there is nothing to recombine.
+
+    It copies, per predictor, whichever parent differs from the common ancestor — so
+    on a single-component program every "merged" candidate is byte-identical to a
+    parent, scheduled and evaluated for no new information. Pinned here because the
+    reasoning stops holding the moment a second predictor appears, and the `use_merge`
+    argument that depends on it is three files away.
+    """
+    pytest.importorskip("dspy")
+    import program as program_module
+
+    assert len(program_module.build("x").named_predictors()) == 1
 
 
 def test_slice_size_reads_below_one_as_a_fraction_and_above_as_a_count():

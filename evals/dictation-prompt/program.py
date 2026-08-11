@@ -442,6 +442,18 @@ def optimize(
             ),
             num_threads=num_threads,
             instruction_proposer=proposer,
+            # Crossover needs components to cross over. This program has exactly one
+            # predictor, and merge recombines by taking, per predictor, whichever
+            # parent differs from the common ancestor — so with a single component the
+            # "merged" candidate is byte-identical to one of its parents. GEPA's
+            # default leaves it on, which buys up to `max_merge_invocations` duplicate
+            # programs, each scheduled and evaluated for nothing. Off, that budget goes
+            # to reflection trials instead.
+            #
+            # It was never a *correctness* risk: merge writes no text (it makes no LM
+            # call at all), so it can only copy instructions the proposer already
+            # cleared. Revisit if the program ever grows a second predictor.
+            use_merge=False,
             # How many scored examples the reflector sees before rewriting. GEPA's
             # own default is 3, which on a task this well-solved often means three
             # near-perfect examples and almost no failure to generalise from — the

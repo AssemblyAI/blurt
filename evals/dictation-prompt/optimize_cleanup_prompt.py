@@ -298,11 +298,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     search.add_argument(
         "--auto",
-        default="medium",
+        default="heavy",
         choices=("light", "medium", "heavy"),
-        help="optimizer search budget (default: medium). This is the knob that decides how "
+        help="optimizer search budget (default: heavy). This is the knob that decides how "
         "many ideas get tried — 10 reflection trials at light, 18 at medium, 27 at heavy, "
-        "independent of corpus size. Shrinking --dev-fraction makes each trial cheaper; "
+        "independent of corpus size. Shrinking --gepa-valset makes each trial cheaper; "
         "only this makes there be more of them",
     )
     search.add_argument(

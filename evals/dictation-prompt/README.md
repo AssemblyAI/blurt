@@ -98,8 +98,8 @@ uv run evals/dictation-prompt/optimize_cleanup_prompt.py --source fleurs --strip
 ANTHROPIC_API_KEY=... uv run evals/dictation-prompt/optimize_cleanup_prompt.py \
   --model anthropic/claude-opus-5 --api-base "" --reflection-model anthropic/claude-opus-5
 
-# More search on the same corpus: --auto is the only knob that adds reflection trials.
-uv run evals/dictation-prompt/optimize_cleanup_prompt.py --auto heavy --num-threads 4
+# Less search, for a cheaper look: --auto is the only knob that changes trial count.
+uv run evals/dictation-prompt/optimize_cleanup_prompt.py --auto light
 
 # No network, no API key: verify the corpus and scoring pipeline end to end.
 python3 evals/dictation-prompt/optimize_cleanup_prompt.py --source builtin --dry-run
@@ -116,7 +116,7 @@ A bare invocation is a full paid GEPA run, so it is worth knowing what it commit
 | `--reflection-model openai/claude-opus-4-8` | Deliberately not `--model`: a 4B model writing its own instructions is the weakest link in the loop.                                                                                                                                                              |
 | `--adapter plain`                           | Sends the instruction as the system turn and the transcript as the user turn — the envelope the service applies `llm.instruction` in. Small models can't follow DSPy's marker protocol at all.                                                                    |
 | `--optimizer gepa` · `--start prior-winner` | Evolve from `candidates.PRIOR_WINNER` — the strongest instruction we have, and `BASELINE` — rather than restarting from a four-line candidate that knows none of what it learned. It fits the cap, so the search starts inside the feasible region.               |
-| `--auto medium`                             | 18 reflection trials (light is 10, heavy 27). This is the **only** knob that changes how many ideas get tried — corpus size does not.                                                                                                                             |
+| `--auto heavy`                              | 27 reflection trials (light is 10, medium 18). This is the **only** knob that changes how many ideas get tried — corpus size does not. Merge is off: crossover needs more than one predictor, so it would only re-evaluate duplicates.                            |
 | `--split train --limit 2000`                | The sources' own held-out splits are only ~250 rows. Everything past dev and test becomes train, and train rows are free — see below.                                                                                                                             |
 | `--dev-fraction 150` (rows, not a fraction) | Dev decides which instruction ships — `BASELINE` versus the optimizer's result — and the optimizer never sees it. Sized for a decision you can trust rather than for the search.                                                                                  |
 | `--gepa-valset 50` (rows)                   | The optimizer's own valset, carved off train. Every surviving candidate is scored against all of it, so its size multiplies search cost while buying no exploration — that is `--auto` alone.                                                                     |
@@ -126,8 +126,8 @@ A bare invocation is a full paid GEPA run, so it is worth knowing what it commit
 | `--num-threads 1`                           | The gateway rate-limits; a 429 storm mid-run costs more wall-clock than the concurrency saves. Raise it for a provider that tolerates it.                                                                                                                         |
 | `--max-tokens 8192`                         | Headroom for reasoning tokens, not for the answer. Truncation here is silently corrupting — see below.                                                                                                                                                            |
 
-That leaves **train 1650 / optimizer valset 50 / dev 150 / test 150**, for roughly 1,500 model
-calls: 150 to score `BASELINE`, ~940 for the search, 150 to re-score its result, and 300 for
+That leaves **train 1650 / optimizer valset 50 / dev 150 / test 150**, for roughly 2,000 model
+calls: 150 to score `BASELINE`, ~1,385 for the search, 150 to re-score its result, and 300 for
 the two held-out scorings at the end.
 
 **Three sets, three jobs, and no overlap.** The optimizer tracks candidates against its own
@@ -236,7 +236,7 @@ is `--model`. Its proposal prompts are multi-field, so they keep DSPy's marker p
 | `--strip-formatting` | off                          | Also lowercase and unpunctuate, so restoring formatting is part of the task.                           |
 | `--optimizer`        | `gepa`                       | `none` only ranks the candidates; both optimizers search instructions only.                            |
 | `--start`            | `prior-winner`               | Which instruction GEPA evolves from — the compressed prior winner, or the best hand-written candidate. |
-| `--auto`             | `medium`                     | Reflection trials: 10 / 18 / 27. The only knob that changes how many ideas get tried.                  |
+| `--auto`             | `heavy`                      | Reflection trials: 10 / 18 / 27. The only knob that changes how many ideas get tried.                  |
 | `--loader`           | `datasets-server`            | `datasets` uses the library instead of the HTTP rows API, for gated sets.                              |
 | `--split`            | `train`                      | The sources' own held-out splits are only ~250 rows — too few for the default `--limit`.               |
 | `--limit`            | `2000`                       | Rows loaded, then sliced 1800 train / 50 dev / 150 test. Train rows cost nothing.                      |
