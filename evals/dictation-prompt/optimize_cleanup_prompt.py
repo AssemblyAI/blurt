@@ -597,7 +597,6 @@ def main(argv: list[str] | None = None) -> int:
             validation=validation,
             auto=args.auto,
             num_threads=args.num_threads,
-            instruction_budget=INSTRUCTION_CHARACTER_CAP,
             proposer=proposer,
             reflection_minibatch_size=args.reflection_minibatch_size,
         )

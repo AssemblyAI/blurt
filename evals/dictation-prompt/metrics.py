@@ -221,7 +221,7 @@ def feedback(
     hypothesis: str,
     disfluent: str,
     scored: Score,
-    instruction_budget: int | None = None,
+    axis: str = "content",
 ) -> str:
     """Plain-language diff for GEPA's reflection step.
 
@@ -236,23 +236,25 @@ def feedback(
     That reads the corpus rather than a fixed filler-word list, so it stays correct
     on real transcripts whose disfluencies nobody enumerated in advance.
 
-    `instruction_budget` appends the length ceiling the rewritten instruction has to
-    fit (`candidates.INSTRUCTION_CHARACTER_CAP`). It rides on every message, including
-    the perfect-score one, because the reflector only ever sees this channel — a
-    constraint mentioned on failures alone would be invisible exactly when a run is
-    going well and the instruction is growing. Note what this is: *guidance*, not
-    enforcement. A reflector can ignore it, and models count characters badly — the
-    enforcement is `program.CappedInstructionProposer`, which rejects an over-cap
-    proposal outright, and the CLI's final refusal behind it. What this buys is a
-    likelier first attempt, and so fewer of the proposer's retries.
+    Three things are deliberately **not** here, because the reflector already has them
+    or is misled by them:
+
+    - **The produced text.** GEPA's reflective dataset carries it as "Generated
+      Outputs" next to the input, so repeating it is tokens for nothing. The reference
+      is the one thing GEPA does not show, which is why that stays.
+    - **The length budget.** It belongs in `candidates.constraint_preamble`, said once
+      with the real target, not repeated on all eight examples of a minibatch — and
+      said there in words against a target *below* the cap, which is the opposite of
+      what a per-example "at most 2048 characters" was teaching. One run's rejected
+      proposals had a median length of 2149 against that 2048.
+    - **The axis nobody selected on.** Only `axis` is reported. Naming the formatting
+      score on a corpus whose formatting the harness refuses to trust — `--metric
+      blend` degrades to `content` on `disfluency-speech` for exactly that reason —
+      invites the reflector to chase capitalization that is an artifact of how the
+      targets were built.
     """
-    budget = (
-        ""
-        if instruction_budget is None
-        else f" Write the instruction itself in at most {instruction_budget} characters."
-    )
-    if scored.content >= 1.0 and scored.format >= 1.0:
-        return "Perfect: the cleaned text matches the reference exactly." + budget
+    if scored.value(axis) >= 1.0:
+        return "Perfect: the cleaned text matches the reference exactly."
 
     notes: list[str] = []
     content = scored.content_alignment
@@ -277,7 +279,5 @@ def feedback(
 
     detail = "; ".join(notes) if notes else "output differs from the reference"
     return (
-        f"Content score {scored.content:.2f}, formatting score {scored.format:.2f}. "
-        f"The cleanup {detail}. "
-        f"Reference: {reference!r}. Produced: {hypothesis!r}." + budget
+        f"Score {scored.value(axis):.2f} ({axis}). The cleanup {detail}. Reference: {reference!r}."
     )

@@ -164,14 +164,14 @@ def make_metric(axis: str):
     return scorer
 
 
-def make_feedback_metric(axis: str, instruction_budget: int | None = None):
+def make_feedback_metric(axis: str):
     """Metric for GEPA: the same score plus a diff its reflector can act on.
 
-    `instruction_budget` is carried through to the feedback text, which is the only
-    channel that reaches GEPA's reflection model — the metric sees one scored
-    example, never the candidate instruction, so the length ceiling cannot be
-    enforced here. It is stated, not imposed; `optimize_cleanup_prompt` does the
-    imposing once the run returns.
+    `axis` decides which score the reflector is shown, and it is shown only that one.
+    Reporting an axis nobody selected on points the search at noise — see
+    `metrics.feedback` for why the formatting score in particular is misleading on the
+    default corpus. The length budget is not here at all; it belongs in the proposer's
+    preamble, said once with the real target rather than eight times with the cap.
     """
 
     def scorer(gold, pred, trace=None, pred_name=None, pred_trace=None, **_):
@@ -184,7 +184,7 @@ def make_feedback_metric(axis: str, instruction_budget: int | None = None):
                 hypothesis,
                 getattr(gold, INPUT_FIELD),
                 scored,
-                instruction_budget=instruction_budget,
+                axis=axis,
             ),
         )
 
@@ -437,7 +437,6 @@ def optimize(
     validation: list[Utterance],
     auto: str,
     num_threads: int,
-    instruction_budget: int | None = None,
     proposer: CappedInstructionProposer | None = None,
     reflection_minibatch_size: int = 8,
     log_dir: str | None = None,
@@ -452,9 +451,9 @@ def optimize(
     The length cap reaches the two optimizers very differently, which is why the
     caller length-checks either winner regardless:
 
-    - **GEPA** gets it twice — as prose in the feedback (`instruction_budget`, which
-      only asks) and as `proposer`, which refuses over-cap proposals outright. The
-      proposer is the constraint; the prose just makes the first attempt likelier to
+    - **GEPA** gets it twice — as prose in the proposer's preamble, which only asks,
+      and as `proposer`'s rejection of anything that does not fit, which does not.
+      The rejection is the constraint; the prose makes the first attempt likelier to
       land and so saves retries.
     - **MIPROv2** gets it not at all. It searches on a bare scalar and exposes no
       proposal hook, so nothing here can stop it returning something unsendable.
@@ -463,7 +462,7 @@ def optimize(
 
     if optimizer == "gepa":
         return dspy.GEPA(
-            metric=make_feedback_metric(axis, instruction_budget),
+            metric=make_feedback_metric(axis),
             auto=auto,
             # Never below the task model's ceiling: the reflector writes whole
             # instructions and thinks at length first, so it is the call most likely

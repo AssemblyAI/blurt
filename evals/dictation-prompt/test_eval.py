@@ -641,15 +641,38 @@ def test_describe_length_names_the_overage_or_the_headroom():
     assert "9 under" in cli.describe_length("x" * (cap - 9))
 
 
-def test_the_instruction_budget_reaches_the_gepa_feedback_text():
-    """GEPA's reflector reads only this string, so an unstated cap is an invisible one."""
-    scored = metrics.score("the build failed", "the build, uh, failed")
-    without = metrics.feedback("the build failed", "the build, uh, failed", "x", scored)
-    with_budget = metrics.feedback(
-        "the build failed", "the build, uh, failed", "x", scored, instruction_budget=2048
-    )
-    assert "2048" not in without
-    assert "at most 2048 characters" in with_budget
+def test_the_feedback_reports_only_the_axis_being_selected_on():
+    """Naming an axis nobody selects on points the search at noise.
+
+    `disfluency-speech` targets carry mechanically-stripped casing, which is why the
+    harness degrades `blend` to `content` there — so telling the reflector a formatting
+    score invites it to chase an artifact.
+    """
+    ref, hyp = "Ship it on Friday.", "Um, ship it on Monday."
+    note = metrics.feedback(ref, hyp, "Um, ship it on Friday.", metrics.score(ref, hyp), "content")
+    assert "(content)" in note
+    assert "formatting score" not in note
+
+
+def test_a_case_only_difference_is_perfect_on_the_content_axis():
+    """And must read that way, rather than nagging about an artifact of the targets.
+
+    `disfluency-speech` strips casing mechanically when it builds its clean side, so a
+    formatting complaint there is the harness pointing at its own corpus damage.
+    """
+    ref, hyp = "Ship it on Friday.", "ship it on friday"
+    assert metrics.score(ref, hyp).content == 1.0
+    assert "Perfect" in metrics.feedback(ref, hyp, ref, metrics.score(ref, hyp), axis="content")
+
+
+def test_the_feedback_does_not_repeat_what_gepa_already_shows():
+    """ "Generated Outputs" carries the produced text; the reference is what is missing."""
+    scored = metrics.score("ship it", "um ship it")
+    note = metrics.feedback("ship it", "um ship it", "um ship it", scored)
+    assert "Reference: 'ship it'" in note
+    assert "Produced:" not in note
+    # The budget lives in the proposer preamble now, said once instead of per example.
+    assert "2048" not in note
 
 
 #: A minimal instruction that satisfies every safeguard, so a fixture can isolate the
@@ -1076,14 +1099,11 @@ def test_the_proposer_updates_every_requested_component(monkeypatch):
     assert updated == {"a": f"one {SAFE}", "b": f"two {SAFE}"}
 
 
-def test_the_budget_rides_on_a_perfect_score_too():
-    """The instruction can grow on a run where nothing is failing — say the cap anyway."""
+def test_a_perfect_score_still_says_something():
+    """An empty reflection prompt is worse than an uninformative one."""
     perfect = metrics.score("identical text", "identical text")
-    message = metrics.feedback(
-        "identical text", "identical text", "x", perfect, instruction_budget=2048
-    )
+    message = metrics.feedback("identical text", "identical text", "x", perfect)
     assert "Perfect" in message
-    assert "at most 2048 characters" in message
 
 
 # --------------------------------------------------------------------------
