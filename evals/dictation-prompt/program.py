@@ -16,7 +16,7 @@ import dspy
 from gepa.strategies.instruction_proposal import InstructionProposalSignature
 
 import metrics
-from candidates import objections, revision_directive
+from candidates import constraint_preamble, objections, revision_directive
 from corpus import Utterance
 
 #: The harness's own signature field names. They exist for DSPy's benefit and appear
@@ -264,7 +264,7 @@ class CappedInstructionProposer:
     no-op mutation costs GEPA one wasted step and keeps the pool honest.
     """
 
-    def __init__(self, cap: int, attempts: int = 3, fields: tuple[str, ...] = ()):
+    def __init__(self, cap: int, attempts: int = 5, fields: tuple[str, ...] = ()):
         self.cap = cap
         self.attempts = attempts
         self.fields = fields or (INPUT_FIELD, OUTPUT_FIELD)
@@ -293,8 +293,12 @@ class CappedInstructionProposer:
         return raw["text"] if isinstance(raw, dict) else raw
 
     def _propose(self, current: str, dataset_with_feedback) -> str:
-        document = current
-        for _ in range(self.attempts):
+        # The constraints ride along from the first attempt, not just after a
+        # rejection. Stating them only in retries cost one run 8 of its 9 iterations:
+        # every proposal was rejected `attempts` times, abandoned, and GEPA spent the
+        # iteration re-scoring an instruction identical to the one it started with.
+        document = constraint_preamble(current, self.cap)
+        for attempt in range(1, self.attempts + 1):
             proposed = InstructionProposalSignature.run(
                 lm=self._lm_call,
                 input_dict={
@@ -306,11 +310,18 @@ class CappedInstructionProposer:
             if not notes:
                 return proposed
             self.rejected += 1
+            # Logged as it happens, not tallied for the end. A proposer quietly
+            # abandoning every iteration looks exactly like a search that has converged
+            # — same score, "skipping" — and the run that hit that had no way to tell
+            # the two apart until it finished.
+            reasons = "; ".join(note.split(".")[0] for note in notes)
+            print(f"    proposal rejected (attempt {attempt}/{self.attempts}): {reasons}")
             # Re-ask against the rejected draft, not the original: the next round is a
             # revision of what it just wrote, which is a smaller ask than re-deriving
             # a compliant instruction from scratch.
             document = revision_directive(proposed, notes)
         self.abandoned += 1
+        print("    giving up on this component; leaving the instruction unchanged")
         return current
 
 
@@ -407,6 +418,7 @@ def optimize(
     instruction_budget: int | None = None,
     proposer: CappedInstructionProposer | None = None,
     reflection_minibatch_size: int = 8,
+    log_dir: str | None = None,
 ):
     """Evolve the instruction, returning the optimized program.
 

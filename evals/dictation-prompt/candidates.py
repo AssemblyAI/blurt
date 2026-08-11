@@ -129,6 +129,12 @@ def objections(
             "fields around it. Refer to 'the transcript' and 'your output' in prose, and "
             "never instruct the model to label its output."
         )
+    if CONSTRAINT_MARKER in proposal:
+        notes.append(
+            f"It copies the {CONSTRAINT_MARKER} block into the instruction. That block is "
+            "scaffolding addressed to you, not text for the model — write only the "
+            "instruction itself."
+        )
     if absent := missing_safeguards(proposal):
         risks = "; ".join(f"without it, {risk}" for _, risk in absent)
         notes.append(
@@ -139,6 +145,39 @@ def objections(
             "anyway."
         )
     return notes
+
+
+#: Marker opening the constraints block appended to what the reflector is shown. Also
+#: what `objections` watches for, since a reflector that copies the block into its
+#: rewrite would ship our scaffolding to users.
+CONSTRAINT_MARKER = "HARD CONSTRAINTS"
+
+
+def constraint_preamble(current: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> str:
+    """The instruction to improve, plus the rules its replacement has to satisfy.
+
+    Attached on the **first** attempt, not just after a rejection. Learned the hard
+    way: with the constraints stated only in retries, 8 of 9 proposals in one run were
+    rejected three times each and abandoned, so GEPA spent the iteration re-scoring an
+    instruction identical to the one it started with.
+
+    The headroom is what makes it actionable. A seed of 1839 against a cap of 2048
+    leaves 209 characters, and almost every "improvement" a reflector reaches for is an
+    addition — so a bare "at most 2048 characters" reads as permission when it is
+    nearly a prohibition. Stating the arithmetic turns it into a budget it can plan in.
+    """
+    return (
+        f"{current}\n\n---\n{CONSTRAINT_MARKER} on the instruction you write (these are "
+        f"requirements of the API and the product, not preferences):\n"
+        f"- At most {cap} characters. The instruction above is {len(current)}, so you have "
+        f"{max(0, cap - len(current))} characters of room — most of your budget is already "
+        "spent, so prefer rewording to adding.\n"
+        "- It must forbid answering the transcript and forbid translating it, in whatever "
+        "words you like. The scoring corpus cannot see either failure, so nothing will "
+        "penalise you for dropping them; they still ship to real users.\n"
+        "- Do not name input or output fields. The model receives a bare transcript.\n"
+        "- Write only the instruction itself. Do not repeat these constraints in it."
+    )
 
 
 def revision_directive(proposal: str, notes: list[str]) -> str:

@@ -728,6 +728,40 @@ def test_terse_contrast_candidates_are_not_held_to_the_safeguard_bar():
     assert cli.check_candidates() is None
 
 
+def test_the_constraints_reach_the_reflector_before_its_first_attempt():
+    """Stating them only in retries cost one run 8 of its 9 iterations.
+
+    Every proposal was rejected `attempts` times and abandoned, so GEPA re-scored an
+    instruction identical to the one it started with and logged "not better, skipping".
+    """
+    preamble = candidates.constraint_preamble("x" * 1839, cap=2048)
+    assert "x" * 1839 in preamble
+    assert candidates.CONSTRAINT_MARKER in preamble
+    # The headroom, not just the ceiling: 209 characters of room reads very differently
+    # from "at most 2048" when almost every improvement is an addition.
+    assert "209 characters of room" in preamble
+    assert "forbid answering" in preamble
+    assert "Do not name input or output fields" in preamble
+
+
+def test_copying_the_constraints_into_the_instruction_is_an_objection():
+    """The block is scaffolding for the reflector; shipping it would reach users."""
+    notes = candidates.objections(
+        f"Delete disfluencies. {SAFE} {candidates.CONSTRAINT_MARKER} on the instruction",
+        fields=(),
+    )
+    assert len(notes) == 1
+    assert "scaffolding" in notes[0]
+
+
+def test_the_first_attempt_is_asked_with_the_constraints_attached(monkeypatch):
+    """The regression itself: attempt one must already know the budget."""
+    proposer, seen = _proposer_with(monkeypatch, [f"short. {SAFE}"])
+    proposer._propose("the current instruction", [])
+    assert candidates.CONSTRAINT_MARKER in seen[0]
+    assert "the current instruction" in seen[0]
+
+
 def test_the_revision_directive_carries_the_draft_and_every_objection():
     directive = candidates.revision_directive("the draft", ["first problem", "second problem"])
     assert "the draft" in directive
