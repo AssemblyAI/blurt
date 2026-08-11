@@ -10,6 +10,7 @@ transcript text, and that the splits are disjoint. Run with:
 
 from __future__ import annotations
 
+import importlib.util
 import io
 import pathlib
 import re
@@ -333,6 +334,66 @@ def test_upstream_pair_reads_the_hand_annotated_columns():
 
 
 # --------------------------------------------------------------------------
+# Hugging Face auth
+# --------------------------------------------------------------------------
+
+
+def test_env_token_is_used(monkeypatch):
+    monkeypatch.setenv("HF_TOKEN", "hf_from_env")
+    assert corpus.hf_token() == "hf_from_env"
+
+
+def test_legacy_env_name_still_works(monkeypatch):
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.setenv("HUGGING_FACE_HUB_TOKEN", "hf_legacy")
+    assert corpus.hf_token() == "hf_legacy"
+
+
+def test_cli_login_token_file_is_read(monkeypatch, tmp_path):
+    """`hf auth login` writes a file, not a variable — the thing people actually run."""
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.delenv("HUGGING_FACE_HUB_TOKEN", raising=False)
+    monkeypatch.delenv("HF_TOKEN_PATH", raising=False)
+    monkeypatch.setenv("HF_HOME", str(tmp_path))
+    (tmp_path / "token").write_text("hf_from_login\n", encoding="utf-8")
+    assert corpus.hf_token() == "hf_from_login"
+
+
+def test_explicit_token_path_is_honoured(monkeypatch, tmp_path):
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.delenv("HUGGING_FACE_HUB_TOKEN", raising=False)
+    path = tmp_path / "elsewhere"
+    path.write_text("hf_explicit", encoding="utf-8")
+    monkeypatch.setenv("HF_TOKEN_PATH", str(path))
+    assert corpus.hf_token() == "hf_explicit"
+
+
+def test_env_token_wins_over_the_login_file(monkeypatch, tmp_path):
+    monkeypatch.setenv("HF_HOME", str(tmp_path))
+    (tmp_path / "token").write_text("hf_from_login", encoding="utf-8")
+    monkeypatch.setenv("HF_TOKEN", "hf_from_env")
+    assert corpus.hf_token() == "hf_from_env"
+
+
+def test_no_token_anywhere_is_not_an_error(monkeypatch, tmp_path):
+    """Anonymous access still works — it is only rate limited."""
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.delenv("HUGGING_FACE_HUB_TOKEN", raising=False)
+    monkeypatch.delenv("HF_TOKEN_PATH", raising=False)
+    monkeypatch.setenv("HF_HOME", str(tmp_path / "empty"))
+    assert corpus.hf_token() is None
+
+
+def test_blank_token_file_is_ignored(monkeypatch, tmp_path):
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.delenv("HUGGING_FACE_HUB_TOKEN", raising=False)
+    monkeypatch.delenv("HF_TOKEN_PATH", raising=False)
+    monkeypatch.setenv("HF_HOME", str(tmp_path))
+    (tmp_path / "token").write_text("   \n", encoding="utf-8")
+    assert corpus.hf_token() is None
+
+
+# --------------------------------------------------------------------------
 # Progress meter
 # --------------------------------------------------------------------------
 
@@ -403,7 +464,10 @@ def test_durations_read_at_a_glance():
     assert progress._duration(3720) == "1h02m"
 
 
-def test_a_failing_example_still_advances_the_meter(monkeypatch):
+@pytest.mark.skipif(
+    importlib.util.find_spec("dspy") is None, reason="the only test that needs DSPy installed"
+)
+def test_a_failing_example_still_advances_the_meter():
     """A meter that stalls on the first failure is worse than no meter."""
     ticks = []
 

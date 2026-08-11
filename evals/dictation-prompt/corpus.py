@@ -55,6 +55,7 @@ from __future__ import annotations
 
 import json
 import os
+import pathlib
 import random
 import re
 import urllib.error
@@ -267,9 +268,40 @@ def _field(row: dict, name: str, where: str) -> object:
     return row[name]
 
 
+def hf_token() -> str | None:
+    """The Hugging Face token, however the user happens to have supplied it.
+
+    Anonymous requests to the datasets-server are rate limited, so a long run —
+    or a few short ones in a row — will start getting 429s. Authenticating lifts
+    that.
+
+    `hf auth login` (and the older `huggingface-cli login`) writes a token to a
+    file rather than exporting a variable, so checking only the environment would
+    ignore the very thing someone reaches for when told to "log in". Resolution
+    order matches the `huggingface_hub` library's own, so both routes work and an
+    explicit env var still wins.
+    """
+    for name in ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"):
+        token = os.environ.get(name)
+        if token and token.strip():
+            return token.strip()
+
+    home = os.environ.get("HF_HOME") or os.path.join(os.path.expanduser("~"), ".cache", "huggingface")
+    for path in (os.environ.get("HF_TOKEN_PATH"), os.path.join(home, "token")):
+        if not path:
+            continue
+        try:
+            token = pathlib.Path(path).read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if token:
+            return token
+    return None
+
+
 def _rows_via_api(source: Source, limit: int):
     """Page the datasets-server rows API, yielding raw row dicts."""
-    token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+    token = hf_token()
     headers = {"Accept": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -293,6 +325,13 @@ def _rows_via_api(source: Source, limit: int):
                 payload = json.load(response)
         except urllib.error.HTTPError as error:
             body = error.read().decode("utf-8", "replace")[:400]
+            if error.code == 429 and not token:
+                raise RuntimeError(
+                    f"rate limited by {ROWS_API} while reading {source.dataset}, and no Hugging "
+                    "Face token was found. Authenticating raises the limit: run `hf auth login`, "
+                    "or set HF_TOKEN to a read token from "
+                    "https://huggingface.co/settings/tokens"
+                ) from error
             raise RuntimeError(
                 f"datasets-server returned HTTP {error.code} for {source.dataset}: {body}"
             ) from error

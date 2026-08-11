@@ -107,6 +107,14 @@ python3 evals/dictation-prompt/optimize_cleanup_prompt.py --source builtin --dry
 `uv run` reads the PEP 723 header at the top of the script and installs DSPy into a throwaway
 environment. With plain `pip`, `pip install "dspy>=3.0"` is the only requirement.
 
+Anonymous reads of the Hugging Face datasets-server are rate limited, so a long run — or a few
+short ones back to back — will start getting 429s. Authenticating lifts the limit: run
+`hf auth login` with a read token from [huggingface.co/settings/tokens][tok], or set `HF_TOKEN`
+in the environment. Either works; the loader resolves a token the same way `huggingface_hub`
+does, so whichever one you reach for is the one it reads.
+
+[tok]: https://huggingface.co/settings/tokens
+
 The dry-run and the tests import nothing outside the standard library. That is structural, not
 a convention: everything touching DSPy lives in `program.py`, which the CLI imports only after
 the dry-run returns. Two tests hold the line — one that the dry-run never reaches `program`,
