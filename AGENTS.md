@@ -53,7 +53,7 @@ Sources/BlurtEngine/         the engine (dependency-free Swift package)
   Injection/                 KeyInjector (clipboard paste), SystemClipboard
   Permissions/               PermissionsChecker (mic + Accessibility)
   Pipeline/                  DictationSession (actor) + phases, UI projections, geometry, log
-  STT/                       AssemblyAITranscriber, TranscriptionPrompt/Context, SyncSTTLimits
+  STT/                       AssemblyAITranscriber, TranscriptionPrompt/Context, CleanupInstruction, SyncSTTLimits
   Update/                    UpdateChecker (download-only) + the launch-check policy
 App/Blurt/
   project.yml                XcodeGen source of truth — Blurt.xcodeproj is GENERATED
@@ -266,20 +266,28 @@ response carries both `text` (verbatim) and
 `llm_response` is null — the rewrite is best-effort (5 s server-side budget), so a rewrite failure
 (`llm_error`) is a logged degradation, never a user-facing error.
 
-Sending `llm` empty selects the service's own default cleanup instruction rather than one of
-ours. Whether an explicit `llm.instruction` would beat that default is an open question, with
-an offline harness attached: `evals/dictation-prompt/` (see its README). Note what a winner
-there would and wouldn't establish — every corpus it scores against is English, while
-`llm.instruction` ships to every user, and pinning the _transcription_ prompt to English was
-reverted once already.
+The instruction is `CleanupInstruction.text`, the winner of a GEPA run of
+`evals/dictation-prompt/` (see its README), compressed to fit the cap. Two later searches
+failed to beat it — the most recent scored 0.9043 against its 0.9101 on a held-out split.
 
-If you do fill that field in, it is capped at **2048 characters** — a different, smaller limit
-than the 4096 on `config.prompt` (`TranscriptionPrompt.characterCap`), and neither is in the
-published API reference; both were measured against the live endpoint. Over the cap the API
-400s the whole request before reading the audio, so every dictation fails outright rather than
-degrading to the verbatim transcript. A 3057-character eval winner shipped this way once and
-broke all dictation; the test meant to catch it asserted the prompt's 4096. The harness now
-refuses to report an over-cap winner — see its README's "The 2048-character cap".
+Note what that does and does not establish. It is the best instruction the harness has
+produced, measured against other _text_ candidates on a _stand-in_ model; it has never been
+shown to beat the empty `llm` block, because the harness cannot score the service's own
+rewrite model. On the one live comparison so far — two utterances through the real endpoint —
+this instruction and the service default produced identical output. `--verify-live` settles
+that with real audio. And every corpus behind it is English while the string ships to every
+user in every language; pinning the _transcription_ prompt to English was reverted once
+already. A revert here is one line: drop `LLMRewrite`'s field and it encodes `{}` again.
+
+That field is capped at **2048 characters** (`CleanupInstruction.characterCap`) — a different,
+smaller limit than the 4096 on `config.prompt` (`TranscriptionPrompt.characterCap`), and
+neither is in the published API reference; both were measured against the live endpoint. Over
+the cap the API 400s the whole request before reading the audio, so every dictation fails
+outright rather than degrading to the verbatim transcript. A 3057-character eval winner
+shipped this way once and broke all dictation; the test meant to catch it asserted the
+prompt's 4096. `CleanupInstructionTests` now asserts the right constant and pins the two
+apart, and the harness refuses to report an over-cap winner — see its README's "The
+2048-character cap".
 
 The finished text arrives in the response body — no `/v2/upload`, no job submission, no polling.
 Truly synchronous: `transcribe(pcm:sampleRate:context:)` is a single `async throws -> String`

@@ -14,7 +14,8 @@ private let transcriberLog = Logger(subsystem: BlurtIdentity.subsystem, category
 /// re-encoding pass) plus a JSON `config` part, and the response body carries
 /// both the verbatim transcript and — when the config requests one via its
 /// `llm` block (the "enhanced transcripts" setting, on by default) — an
-/// LLM-rewritten version with disfluencies removed and punctuation fixed.
+/// LLM-rewritten version with disfluencies removed, produced by applying
+/// `CleanupInstruction.text` server-side.
 /// No upload step, no job submission, no polling — one
 /// request per utterance covers transcription *and* cleanup. The service picks
 /// the STT model server-side and handles audio from ~80 ms up to 120 s; the
@@ -219,10 +220,8 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     /// The rewrite request, present only while enhanced transcripts are
     /// enabled (nil — the synthesized `encode` omits it — asks for no rewrite,
     /// so the response's `llm_response` is null and the verbatim `text` is
-    /// used). An empty object selects the service's default
-    /// cleanup instruction; per the API's `instruction`-mode rules, output
-    /// format and don't-answer-the-text safeguards are enforced server-side,
-    /// so nothing rides along here.
+    /// used). It carries our own `instruction` (`CleanupInstruction`); an empty
+    /// object would instead select the service's default cleanup instruction.
     let llm: LLMRewrite?
     enum CodingKeys: String, CodingKey {
       case sampleRate = "sample_rate"
@@ -232,7 +231,14 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     }
   }
 
-  private struct LLMRewrite: Encodable {}
+  /// The cleanup-rewrite request. Its one field is the instruction the service
+  /// applies to the verbatim transcript — see `CleanupInstruction` for where the
+  /// wording came from, what the eval behind it does and doesn't establish, and
+  /// why its length is load-bearing. Dropping the field reverts to the service's
+  /// own default cleanup instruction, which is what shipped before.
+  private struct LLMRewrite: Encodable {
+    let instruction = CleanupInstruction.text
+  }
 
   private struct DictationResponse: Decodable {
     /// The verbatim transcript — always present, never altered by the LLM.

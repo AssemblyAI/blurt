@@ -164,14 +164,28 @@ struct HTTPClientTests {
   }
 
   @Test(
-    "config part requests the default cleanup rewrite while enhanced transcripts are on",
+    "config part carries our cleanup instruction while enhanced transcripts are on",
     arguments: ["CONTEXT. Transcribe.", nil])
-  func configRequestsDefaultRewrite(prompt: String?) throws {
-    // `llm` must be present and empty on every enhanced request: present so the
-    // service runs the rewrite at all, empty so the server-owned default cleanup
-    // instruction (and its guardrails) applies rather than a client-side copy.
-    // `isEmpty == true` also covers presence — it is false for a missing `llm`.
-    #expect((try configObject(prompt: prompt)["llm"] as? [String: Any])?.isEmpty == true)
+  func configRequestsRewrite(prompt: String?) throws {
+    // `llm` must be present on every enhanced request (else the service skips the
+    // rewrite) and must carry `instruction` under exactly that key — the field name
+    // is the contract, so a rename here degrades silently to the service default
+    // rather than failing anything.
+    let llm = try #require(try configObject(prompt: prompt)["llm"] as? [String: Any])
+    #expect(llm["instruction"] as? String == CleanupInstruction.text)
+    // Nothing else rides in the block: output format and the don't-answer-the-text
+    // safeguards are the instruction's job and the service's, not extra fields'.
+    #expect(llm.keys.sorted() == ["instruction"])
+  }
+
+  @Test("the instruction on the wire is short enough for the API to accept it")
+  func instructionFitsOnTheWire() throws {
+    // Asserted on the encoded request rather than the constant, because that is
+    // what the API measures. An over-cap instruction 400s the whole request before
+    // the audio is read, so this failing means every dictation fails.
+    let llm = try #require(try configObject(prompt: nil)["llm"] as? [String: Any])
+    let instruction = try #require(llm["instruction"] as? String)
+    #expect(instruction.count <= CleanupInstruction.characterCap)
   }
 
   @Test("config part omits the llm block when enhanced transcripts are off")
