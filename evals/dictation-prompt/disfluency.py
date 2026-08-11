@@ -1,30 +1,35 @@
-"""Seeded disfluency injection.
+"""Seeded disfluency injection — the synthetic corpus source.
 
 Turns a clean reference transcript into the kind of verbatim text a speech-to-text
 model returns when someone dictates off the cuff: fillers, repetitions, stutters,
 false starts, and restarts.
 
-The injector is **additive by construction** — every operator inserts tokens and
-none rewrites or deletes reference content — so the reference is exactly
-recoverable by deleting the inserted spans. That matters for the eval: it keeps
-the ceiling at a perfect score, so a candidate prompt that loses points really did
-lose them, rather than being charged for damage the injector did.
+Prefer a real paired corpus where one exists (see `corpus.py`) — real disfluencies
+come from real speakers and this injector only knows the ones it was taught. What
+injection buys that a fixed corpus can't:
 
-The one exception is opt-in: `strip_formatting` lowercases the utterance and drops
-sentence punctuation, which makes restoring capitalization and punctuation part of
-the task rather than a given. Every run is seeded, so a given (seed, index,
-severity) always produces the same utterance.
+- a **severity dial**, for checking whether a prompt's ranking survives more or
+  less disfluent input;
+- a **punctuation-restoration** task via `strip_formatting`, which no real paired
+  corpus in `corpus.py` supports (their inputs and targets are punctuated alike);
+- an **offline path**, so the pipeline is testable with no network.
+
+Injection is additive by construction — every operator inserts tokens and none
+rewrites or deletes reference content — so the reference is exactly recoverable by
+deleting the inserted spans, and the ceiling stays at a perfect score. A candidate
+that loses points really did lose them rather than being charged for damage the
+injector did. `strip_formatting` is the deliberate exception: it lowercases and
+unpunctuates, making formatting restoration part of the task.
 """
 
 from __future__ import annotations
 
 import random
-import re
-import string
-from dataclasses import dataclass, field
+
+import metrics
 
 # Fillers a dictation user actually produces. Single words first (most common),
-# then the multi-word hedges — `weights` below mirrors that ordering.
+# then the multi-word hedges — `weights` in `inject` mirrors that ordering.
 FILLERS: tuple[str, ...] = (
     "um",
     "uh",
@@ -47,25 +52,17 @@ OPENERS: tuple[str, ...] = ("so", "okay so", "yeah so", "well", "right so", "I m
 # Markers a speaker uses when abandoning a phrase and restarting it.
 CORRECTIONS: tuple[str, ...] = ("I mean", "sorry", "or rather", "no wait")
 
-_PUNCTUATION = str.maketrans("", "", string.punctuation + "—–…“”‘’")
-
-
-@dataclass(frozen=True)
-class Utterance:
-    """One eval example: the clean target, the messy input, and what was done to it."""
-
-    reference: str
-    disfluent: str
-    operations: tuple[str, ...] = field(default=())
-
-    @property
-    def is_modified(self) -> bool:
-        return self.disfluent != self.reference
+# Weighted toward fillers and repetitions because that is how spontaneous speech
+# is distributed — Switchboard is over half repetitions. Note the consequence:
+# corrections and restarts, the hard cases, are under-represented here relative to
+# a corpus like Disfl-QA that was built specifically to contain them.
+_OPERATIONS = ("filler", "repeat", "stutter", "false_start", "restart")
+_WEIGHTS = (46, 20, 14, 10, 10)
 
 
 def _word_shape(token: str) -> str:
     """The token stripped of surrounding punctuation, for building stutters/repeats."""
-    return token.strip(string.punctuation + "—–…“”‘’")
+    return token.strip(metrics.PUNCTUATION)
 
 
 def _stutter(word: str, rng: random.Random) -> str | None:
@@ -73,8 +70,7 @@ def _stutter(word: str, rng: random.Random) -> str | None:
     bare = _word_shape(word)
     if len(bare) < 4:
         return None
-    cut = rng.randint(1, 2)
-    return f"{bare[:cut].lower()}-"
+    return f"{bare[: rng.randint(1, 2)].lower()}-"
 
 
 def inject(
@@ -83,13 +79,14 @@ def inject(
     seed: int,
     severity: float = 0.35,
     strip_formatting: bool = False,
-) -> Utterance:
+) -> tuple[str, tuple[str, ...]]:
     """Render `reference` as spontaneous speech.
 
-    `severity` (0..1) scales the per-token-boundary chance of a disfluency; at the
-    0.35 default roughly one word in eight picks one up, which is in the range a
-    person dictating a paragraph without rehearsing it produces. 0 disables
-    injection entirely (useful as a control arm).
+    Returns the disfluent text and the operators that produced it. `severity`
+    (0..1) scales the per-token-boundary chance of a disfluency; at the 0.35
+    default roughly one word in eight picks one up, which is in the range a person
+    dictating a paragraph without rehearsing it produces. 0 disables injection
+    entirely, which is the control arm.
     """
     if not 0.0 <= severity <= 1.0:
         raise ValueError(f"severity must be in 0..1, got {severity}")
@@ -97,7 +94,7 @@ def inject(
     rng = random.Random(seed)
     tokens = reference.split()
     if not tokens:
-        return Utterance(reference=reference, disfluent=reference)
+        return reference, ()
 
     event_rate = 0.35 * severity
     out: list[str] = []
@@ -107,8 +104,7 @@ def inject(
     # before they have finished deciding what to say far more often than they
     # stumble mid-sentence.
     if rng.random() < min(0.9, severity * 1.2):
-        opener = rng.choice(OPENERS)
-        out.append(opener)
+        out.append(rng.choice(OPENERS))
         operations.append("opener")
         # The reference's first word carried the sentence capital; it is now
         # mid-utterance, so lowercase it unless it looks like a proper noun
@@ -117,12 +113,13 @@ def inject(
         if first[:1].isupper() and not first[1:2].isupper():
             tokens = [first[0].lower() + first[1:], *tokens[1:]]
 
+    # Loop-invariant: the pool a false start borrows its abandoned word from
+    # depends only on the (now final) token list.
+    borrowable = [shape for shape in map(_word_shape, tokens) if len(shape) > 3]
+
     for index, token in enumerate(tokens):
         if rng.random() < event_rate:
-            operation = rng.choices(
-                ("filler", "repeat", "stutter", "false_start", "restart"),
-                weights=(46, 20, 14, 10, 10),
-            )[0]
+            operation = rng.choices(_OPERATIONS, weights=_WEIGHTS)[0]
 
             if operation == "filler":
                 out.append(rng.choice(FILLERS))
@@ -143,17 +140,15 @@ def inject(
                 # correct back to the real one. The wrong word is always followed
                 # by an explicit correction marker, so the intended text is still
                 # unambiguous.
-                pool = [_word_shape(t) for t in tokens if len(_word_shape(t)) > 3]
-                if pool:
-                    out.append(f"{rng.choice(pool).lower()}—")
+                if borrowable:
+                    out.append(f"{rng.choice(borrowable).lower()}—")
                     out.append(rng.choice(CORRECTIONS))
                 else:
                     operation = "skipped"
             elif operation == "restart":
                 # Re-run the last couple of words, the way someone does after
                 # losing the thread mid-clause.
-                span = out[-rng.randint(2, 3) :]
-                restart = [_word_shape(t) for t in span if _word_shape(t)]
+                restart = [shape for shape in map(_word_shape, out[-rng.randint(2, 3) :]) if shape]
                 if restart:
                     out.extend(word.lower() for word in restart)
                 else:
@@ -166,27 +161,7 @@ def inject(
 
     disfluent = " ".join(out)
     if strip_formatting:
-        disfluent = disfluent.translate(_PUNCTUATION).lower()
-        disfluent = re.sub(r"\s+", " ", disfluent).strip()
+        disfluent = metrics.normalize_text(disfluent)
         operations.append("strip_formatting")
 
-    return Utterance(reference=reference, disfluent=disfluent, operations=tuple(operations))
-
-
-def inject_all(
-    references: list[str],
-    *,
-    seed: int,
-    severity: float = 0.35,
-    strip_formatting: bool = False,
-) -> list[Utterance]:
-    """`inject` over a corpus, deriving each example's seed from its position.
-
-    Per-example seeds (rather than one shared generator) keep an utterance's
-    disfluencies stable when the corpus around it changes — re-running with a
-    larger `--limit` doesn't reshuffle the examples you already looked at.
-    """
-    return [
-        inject(reference, seed=seed + index, severity=severity, strip_formatting=strip_formatting)
-        for index, reference in enumerate(references)
-    ]
+    return disfluent, tuple(operations)

@@ -4,14 +4,18 @@ Two word-error rates over the same alignment machinery:
 
 - **content** — casefolded, punctuation-stripped. Measures whether the words the
   speaker meant survived and the disfluencies didn't. This is the axis the prompt
-  is actually being tuned on.
-- **format** — tokens exactly as written. Adds capitalization and punctuation,
-  which is what `--strip-formatting` runs make the model responsible for.
+  is actually being tuned on, and the only one every corpus supports.
+- **format** — tokens exactly as written. Adds capitalization and punctuation.
+  Only meaningful on a corpus whose reference side carries them; `corpus.py`
+  marks which sources qualify.
 
 The default `blend` weights content 0.7 / format 0.3: punctuation differences are
 numerous and mostly cosmetic, so scoring them equally would drown out the signal
 about disfluency removal. `--metric content` or `--metric format` isolate either
 axis when that's what you want to see.
+
+This module is the bottom of the dependency chain — it imports nothing else in the
+harness, so nothing about how a corpus was built can leak into how it is scored.
 """
 
 from __future__ import annotations
@@ -20,24 +24,24 @@ import re
 import string
 from dataclasses import dataclass
 
-from disfluency import CORRECTIONS, FILLERS, OPENERS
+# The single definition of "punctuation" in the harness. The injector strips the
+# same set when `--strip-formatting` is on, so a character added here changes what
+# the input contains and what the content axis ignores in one edit — the two can't
+# drift into scoring characters the input no longer has.
+PUNCTUATION = string.punctuation + "—–…“”‘’"
+_STRIP_PUNCTUATION = str.maketrans("", "", PUNCTUATION)
 
-_PUNCTUATION = str.maketrans("", "", string.punctuation + "—–…“”‘’")
+AXES = ("content", "format", "blend")
 
-# Words that are *supposed* to disappear. Used only to phrase feedback ("left
-# filler words: um, like") — never to score, since a filler can legitimately be
-# reference content ("I like this").
-_DISFLUENCY_WORDS = frozenset(
-    word
-    for phrase in (*FILLERS, *OPENERS, *CORRECTIONS)
-    for word in phrase.lower().split()
-)
+
+def normalize_text(text: str) -> str:
+    """Casefold, drop punctuation, collapse whitespace — still a string."""
+    return re.sub(r"\s+", " ", text.translate(_STRIP_PUNCTUATION).lower()).strip()
 
 
 def normalize(text: str) -> list[str]:
-    """Content tokens: casefolded, punctuation removed, whitespace collapsed."""
-    stripped = text.translate(_PUNCTUATION).lower()
-    return re.sub(r"\s+", " ", stripped).strip().split()
+    """Content tokens: casefolded, punctuation removed."""
+    return normalize_text(text).split()
 
 
 def surface(text: str) -> list[str]:
@@ -47,15 +51,28 @@ def surface(text: str) -> list[str]:
 
 @dataclass(frozen=True)
 class Alignment:
-    """Edit counts plus the actual differing tokens, for feedback text."""
+    """The token-level diff between a reference and a hypothesis.
 
-    substitutions: int
-    deletions: int
-    insertions: int
+    Counts are derived from the token tuples rather than stored alongside them, so
+    a count can never disagree with the diff it is supposed to summarize.
+    """
+
     reference_length: int
     substituted: tuple[tuple[str, str], ...]
     deleted: tuple[str, ...]
     inserted: tuple[str, ...]
+
+    @property
+    def substitutions(self) -> int:
+        return len(self.substituted)
+
+    @property
+    def deletions(self) -> int:
+        return len(self.deleted)
+
+    @property
+    def insertions(self) -> int:
+        return len(self.inserted)
 
     @property
     def error_rate(self) -> float:
@@ -70,6 +87,10 @@ def align(reference: list[str], hypothesis: list[str]) -> Alignment:
 
     Full O(len(ref) * len(hyp)) DP table. Dictation utterances are a sentence or
     two, so the table is tiny and the readable implementation is the right one.
+    `difflib` is deliberately not used: `SequenceMatcher` maximizes contiguous
+    matching blocks rather than minimizing edits, so its output is not a word error
+    rate and its `replace` opcodes span unequal ranges that don't decompose into
+    substitution / deletion / insertion counts.
     """
     rows, cols = len(reference), len(hypothesis)
     cost = [[0] * (cols + 1) for _ in range(rows + 1)]
@@ -88,7 +109,6 @@ def align(reference: list[str], hypothesis: list[str]) -> Alignment:
                     cost[i][j - 1],  # insertion (hypothesis added a word)
                 )
 
-    substitutions = deletions = insertions = 0
     substituted: list[tuple[str, str]] = []
     deleted: list[str] = []
     inserted: list[str] = []
@@ -98,22 +118,16 @@ def align(reference: list[str], hypothesis: list[str]) -> Alignment:
         if i > 0 and j > 0 and reference[i - 1] == hypothesis[j - 1]:
             i, j = i - 1, j - 1
         elif i > 0 and j > 0 and cost[i][j] == cost[i - 1][j - 1] + 1:
-            substitutions += 1
             substituted.append((reference[i - 1], hypothesis[j - 1]))
             i, j = i - 1, j - 1
         elif i > 0 and cost[i][j] == cost[i - 1][j] + 1:
-            deletions += 1
             deleted.append(reference[i - 1])
             i -= 1
         else:
-            insertions += 1
             inserted.append(hypothesis[j - 1])
             j -= 1
 
     return Alignment(
-        substitutions=substitutions,
-        deletions=deletions,
-        insertions=insertions,
         reference_length=rows,
         # The backtrace walks right-to-left; reverse so the diffs read in
         # sentence order when they land in feedback text.
@@ -129,18 +143,17 @@ class Score:
 
     content: float
     format: float
-    blend: float
     content_alignment: Alignment
     format_alignment: Alignment
 
-    def value(self, metric: str) -> float:
-        if metric == "content":
-            return self.content
-        if metric == "format":
-            return self.format
-        if metric == "blend":
-            return self.blend
-        raise ValueError(f"unknown metric {metric!r}; expected content, format, or blend")
+    @property
+    def blend(self) -> float:
+        return 0.7 * self.content + 0.3 * self.format
+
+    def value(self, axis: str) -> float:
+        if axis not in AXES:
+            raise ValueError(f"unknown axis {axis!r}; expected one of {', '.join(AXES)}")
+        return getattr(self, axis)
 
 
 def score(reference: str, hypothesis: str) -> Score:
@@ -152,37 +165,48 @@ def score(reference: str, hypothesis: str) -> Score:
     """
     content_alignment = align(normalize(reference), normalize(hypothesis))
     format_alignment = align(surface(reference), surface(hypothesis))
-    content = max(0.0, 1.0 - content_alignment.error_rate)
-    formatting = max(0.0, 1.0 - format_alignment.error_rate)
     return Score(
-        content=content,
-        format=formatting,
-        blend=0.7 * content + 0.3 * formatting,
+        content=max(0.0, 1.0 - content_alignment.error_rate),
+        format=max(0.0, 1.0 - format_alignment.error_rate),
         content_alignment=content_alignment,
         format_alignment=format_alignment,
     )
 
 
-def feedback(reference: str, hypothesis: str, scored: Score) -> str:
+def mean(scores: list[Score]) -> dict[str, float]:
+    """Average every axis over a set of scored attempts; zeros for an empty set."""
+    if not scores:
+        return dict.fromkeys(AXES, 0.0)
+    return {axis: sum(s.value(axis) for s in scores) / len(scores) for axis in AXES}
+
+
+def feedback(reference: str, hypothesis: str, disfluent: str, scored: Score) -> str:
     """Plain-language diff for GEPA's reflection step.
 
     GEPA rewrites the instruction from this text, so it names the failure mode
-    ("left filler words") rather than reporting a number the reflector can't act
+    ("left disfluencies in") rather than reporting a number the reflector can't act
     on. A perfect score returns praise rather than an empty string — an empty
     reflection prompt is worse than an uninformative one.
+
+    Which extra words count as leftover disfluencies is decided by the pair itself:
+    a word the hypothesis added that was present in the input is something the
+    cleanup failed to remove, while a word in neither is something it invented.
+    That reads the corpus rather than a fixed filler-word list, so it stays correct
+    on real transcripts whose disfluencies nobody enumerated in advance.
     """
     if scored.content >= 1.0 and scored.format >= 1.0:
         return "Perfect: the cleaned text matches the reference exactly."
 
     notes: list[str] = []
     content = scored.content_alignment
+    spoken = set(normalize(disfluent))
 
-    leftover = [word for word in content.inserted if word in _DISFLUENCY_WORDS]
-    other_extra = [word for word in content.inserted if word not in _DISFLUENCY_WORDS]
+    leftover = [word for word in content.inserted if word in spoken]
+    invented = [word for word in content.inserted if word not in spoken]
     if leftover:
         notes.append(f"left disfluencies in the output: {', '.join(sorted(set(leftover)))}")
-    if other_extra:
-        notes.append(f"added words the speaker did not say: {', '.join(other_extra[:8])}")
+    if invented:
+        notes.append(f"added words that were not in the transcript: {', '.join(invented[:8])}")
     if content.deleted:
         notes.append(f"dropped content words: {', '.join(content.deleted[:8])}")
     if content.substituted:

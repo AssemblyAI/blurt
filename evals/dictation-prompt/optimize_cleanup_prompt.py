@@ -17,17 +17,14 @@ can be set deliberately rather than left to the server.
 
 How it measures that
 --------------------
-Reference transcripts come from a Hugging Face speech dataset — real sentences
-spoken into a microphone, hand-transcribed with true casing and punctuation.
-Disfluencies are then injected into them (`disfluency.py`), producing the messy
-verbatim text a speech-to-text model returns for spontaneous dictation. A cleanup
-prompt is scored on how closely its output restores the original reference
-(`metrics.py`). Injection is additive, so the reference is exactly recoverable and
-a perfect prompt would score 1.0.
-
-Because the injection is synthetic, the ranking transfers further than the
-absolute numbers do — treat a winning score as "this instruction beats that one on
-this disfluency distribution", not as a prediction of production quality.
+By default it uses a **real paired corpus**: `nyralabs/disfluency_speech_english`,
+which ships each utterance twice — as the speaker said it and as they meant it —
+derived from real Switchboard conversations. Candidate instructions are scored on
+how closely their output restores the intended side (`metrics.py`). `--source`
+selects other corpora, including `fleurs`, where clean read speech is made
+disfluent synthetically (`disfluency.py`) — the only mode with a severity dial and
+the only one that can pose punctuation restoration as a task. See `corpus.py` for
+what each source can and cannot measure.
 
 Usage
 -----
@@ -35,250 +32,48 @@ Usage
     uv run evals/dictation-prompt/optimize_cleanup_prompt.py --limit 150
 
     # No network and no API key — checks the pipeline end to end.
-    python evals/dictation-prompt/optimize_cleanup_prompt.py --source builtin --dry-run
+    python3 evals/dictation-prompt/optimize_cleanup_prompt.py --source builtin --dry-run
 
     # Evolve a new instruction instead of only ranking the hand-written ones.
     uv run evals/dictation-prompt/optimize_cleanup_prompt.py --optimizer gepa
 
-`--dry-run` and the tests need no third-party packages; DSPy is imported lazily so
-the data and scoring paths stay runnable on a bare interpreter.
+`--dry-run` and the tests need no third-party packages: everything that touches
+DSPy lives in `program.py`, which is imported only after the dry-run returns.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import random
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import corpus  # noqa: E402
 import metrics  # noqa: E402
-from disfluency import Utterance, inject_all  # noqa: E402
-
-# Candidate cleanup instructions, each a different hypothesis about what the
-# rewrite model needs to be told. `default-proxy` stands in for the service's own
-# default instruction (the empty `llm` block Blurt sends today) so every run has a
-# "did we beat what we already ship" comparison. The rest vary one thing each:
-# how the task is framed, how explicitly the disfluency types are named, how hard
-# the do-not-rewrite constraint is pushed, and whether formatting is called out.
-CANDIDATES: dict[str, str] = {
-    "default-proxy": "Remove disfluencies and fix punctuation.",
-    "verbatim-preserving": (
-        "Rewrite this speech-to-text transcript as clean written text. Remove the "
-        "artifacts of speaking aloud and keep every word the speaker meant to say, "
-        "using their own vocabulary and sentence structure."
-    ),
-    "dictation-intent": (
-        "This is a dictated message. Write out what the speaker intended to type. "
-        "Keep their wording and their meaning exactly; the only thing that changes "
-        "is that the false starts and hesitations of live speech are gone."
-    ),
-    "explicit-taxonomy": (
-        "Clean up this dictated transcript. Remove filler words, hesitation sounds, "
-        "repeated words, cut-off words, and abandoned false starts, keeping the "
-        "speaker's final choice of wording wherever they corrected themselves. "
-        "Leave the surviving words exactly as spoken and punctuate them properly."
-    ),
-    "minimal-edit": (
-        "Delete the disfluencies from this dictated transcript and change nothing "
-        "else. Every remaining word stays exactly as it was spoken, in the same "
-        "order. Do not summarize, rephrase, translate, expand, or answer the text."
-    ),
-    "format-restoring": (
-        "Turn this dictated transcript into the finished text the speaker meant to "
-        "write. Drop the hesitations, repetitions, and false starts of live speech, "
-        "keep the remaining wording untouched, and restore normal capitalization "
-        "and punctuation."
-    ),
-}
-
-# Field descriptions ride along with the instruction into the program's prompt.
-# They stay fixed across candidates so the only thing varying between arms is the
-# instruction itself — the string that would actually be shipped.
-FIELD_DESCRIPTIONS = {
-    "raw_transcript": "Verbatim speech-to-text output for one dictated utterance.",
-    "cleaned_transcript": "The same utterance as finished written text.",
-}
+from candidates import BASELINE, CANDIDATES  # noqa: E402
 
 
-@dataclass
-class Split:
-    """Train / dev / test partition of the injected examples."""
-
-    train: list[Utterance]
-    dev: list[Utterance]
-    test: list[Utterance]
-
-
-def split_examples(utterances: list[Utterance], seed: int, dev_fraction: float, test_fraction: float) -> Split:
-    """Shuffle once with a fixed seed, then slice.
-
-    Shuffling matters because HF splits are often ordered by speaker or source
-    document; slicing an unshuffled corpus would put systematically different
-    material in train and test.
-    """
-    shuffled = list(utterances)
-    random.Random(seed).shuffle(shuffled)
-    total = len(shuffled)
-    n_test = max(1, int(total * test_fraction)) if total > 2 else 0
-    n_dev = max(1, int(total * dev_fraction)) if total > 2 else 0
-    test = shuffled[:n_test]
-    dev = shuffled[n_test : n_test + n_dev]
-    train = shuffled[n_test + n_dev :]
-    return Split(train=train, dev=dev, test=test)
-
-
-# --------------------------------------------------------------------------
-# Scoring helpers that need no DSPy
-# --------------------------------------------------------------------------
-
-
-def mean_score(pairs: list[tuple[str, str]], metric: str) -> float:
-    """Average score over (reference, hypothesis) pairs; 0.0 for an empty set."""
-    if not pairs:
-        return 0.0
-    return sum(metrics.score(ref, hyp).value(metric) for ref, hyp in pairs) / len(pairs)
-
-
-def echo_floor(utterances: list[Utterance], metric: str) -> float:
-    """Score of doing nothing at all — pasting the verbatim transcript unchanged.
-
-    This is the number any candidate instruction has to beat to be worth sending;
-    a prompt that scores below it is actively making the transcript worse.
-    """
-    return mean_score([(u.reference, u.disfluent) for u in utterances], metric)
-
-
-# --------------------------------------------------------------------------
-# DSPy program
-# --------------------------------------------------------------------------
-
-
-def build_program(instruction: str):
-    """A single-step `Predict` whose instruction is the thing being optimized.
-
-    Deliberately not `ChainOfThought`: the winning instruction has to be portable
-    into `config.llm.instruction`, a lone string the service applies in one pass.
-    A program whose quality depended on an extra reasoning field would not survive
-    that trip.
-    """
-    import dspy
-
-    signature = (
-        dspy.Signature("raw_transcript -> cleaned_transcript")
-        .with_instructions(instruction)
-        .with_updated_fields("raw_transcript", desc=FIELD_DESCRIPTIONS["raw_transcript"])
-        .with_updated_fields("cleaned_transcript", desc=FIELD_DESCRIPTIONS["cleaned_transcript"])
-    )
-    return dspy.Predict(signature)
-
-
-def instruction_of(program) -> str:
-    """Read the (possibly optimized) instruction back out of a program."""
-    return program.signature.instructions
-
-
-def to_examples(utterances: list[Utterance]):
-    """Wrap utterances as DSPy examples keyed on the field names the program uses."""
-    import dspy
-
-    return [
-        dspy.Example(
-            raw_transcript=u.disfluent,
-            cleaned_transcript=u.reference,
-        ).with_inputs("raw_transcript")
-        for u in utterances
-    ]
-
-
-def make_metric(metric: str):
-    """Scalar metric for `Evaluate` and MIPROv2."""
-
-    def scorer(gold, pred, trace=None, **_):
-        hypothesis = getattr(pred, "cleaned_transcript", "") or ""
-        return metrics.score(gold.cleaned_transcript, hypothesis).value(metric)
-
-    return scorer
-
-
-def make_feedback_metric(metric: str):
-    """Metric for GEPA: the same score plus a diff its reflector can act on."""
-    import dspy
-
-    def scorer(gold, pred, trace=None, pred_name=None, pred_trace=None, **_):
-        hypothesis = getattr(pred, "cleaned_transcript", "") or ""
-        scored = metrics.score(gold.cleaned_transcript, hypothesis)
-        return dspy.Prediction(
-            score=scored.value(metric),
-            feedback=metrics.feedback(gold.cleaned_transcript, hypothesis, scored),
-        )
-
-    return scorer
-
-
-def evaluate(program, utterances: list[Utterance], metric: str, num_threads: int) -> dict[str, float]:
-    """Run a program over a split and report all three axes.
-
-    Reports content and format alongside the selected metric so a winner chosen on
-    `blend` can still be inspected for *why* it won — a prompt that gains on
-    punctuation while losing words is a bad trade the blended number would hide.
-    """
-    import dspy
-
-    examples = to_examples(utterances)
-    # The caller prints one line per candidate; a nested per-example bar on top of
-    # that renders as interleaved carriage-return noise in a piped log.
-    runner = dspy.Parallel(
-        num_threads=num_threads,
-        provide_traceback=True,
-        disable_progress_bar=True,
-    )
-    predictions = runner([(program, dict(example.inputs())) for example in examples])
-    pairs = [
-        (utterance.reference, getattr(prediction, "cleaned_transcript", "") or "")
-        for utterance, prediction in zip(utterances, predictions, strict=True)
-    ]
-    return {
-        "content": mean_score(pairs, "content"),
-        "format": mean_score(pairs, "format"),
-        "blend": mean_score(pairs, "blend"),
-        "selected": mean_score(pairs, metric),
-    }
-
-
-# --------------------------------------------------------------------------
-# Reporting
-# --------------------------------------------------------------------------
-
-
-def print_table(rows: list[tuple[str, dict[str, float]]], title: str) -> None:
+def print_table(rows: list[tuple[str, dict[str, float]]], title: str, axis: str) -> None:
+    """Every axis, with the selecting one marked so a blended winner stays legible."""
     print(f"\n{title}")
-    print(f"  {'candidate':<22} {'selected':>9} {'content':>9} {'format':>9}")
-    print(f"  {'-' * 22} {'-' * 9} {'-' * 9} {'-' * 9}")
-    for name, scores in rows:
-        print(
-            f"  {name:<22} {scores['selected']:>9.4f} "
-            f"{scores['content']:>9.4f} {scores['format']:>9.4f}"
-        )
+    header = "  ".join(f"{name + ' *' if name == axis else name:>9}" for name in metrics.AXES)
+    print(f"  {'candidate':<22} {header}")
+    print(f"  {'-' * 22} {'  '.join(['-' * 9] * len(metrics.AXES))}")
+    for name, scores in sorted(rows, key=lambda row: row[1][axis], reverse=True):
+        print(f"  {name:<22} " + "  ".join(f"{scores[a]:>9.4f}" for a in metrics.AXES))
 
 
-def print_samples(utterances: list[Utterance], count: int) -> None:
-    print(f"\nInjected examples (showing {min(count, len(utterances))} of {len(utterances)})")
-    for utterance in utterances[:count]:
+def print_samples(loaded: corpus.Corpus, count: int) -> None:
+    print(f"\nExamples (showing {min(count, len(loaded))} of {len(loaded)})")
+    for utterance in loaded.utterances[:count]:
         floor = metrics.score(utterance.reference, utterance.disfluent)
-        print(f"\n  reference : {utterance.reference}")
-        print(f"  disfluent : {utterance.disfluent}")
-        print(f"  operations: {', '.join(utterance.operations) or '(none)'}")
-        print(f"  echo score: content {floor.content:.3f} / format {floor.format:.3f}")
-
-
-# --------------------------------------------------------------------------
-# CLI
-# --------------------------------------------------------------------------
+        print(f"\n  input    : {utterance.disfluent}")
+        print(f"  target   : {utterance.reference}")
+        if utterance.operations:
+            print(f"  injected : {', '.join(utterance.operations)}")
+        print(f"  uncleaned: content {floor.content:.3f} / format {floor.format:.3f}")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -287,25 +82,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
-    data = parser.add_argument_group("data")
+    data = parser.add_argument_group("corpus")
     data.add_argument(
         "--source",
-        default="datasets-server",
-        choices=("datasets-server", "datasets", "builtin"),
-        help="where reference transcripts come from (default: the HF rows API)",
+        default="nyra",
+        choices=(*corpus.SOURCES, "builtin"),
+        help="which corpus to score against (default: nyra, real paired speech)",
     )
-    data.add_argument("--dataset", default=corpus.DEFAULT_DATASET)
-    data.add_argument("--config", default=corpus.DEFAULT_CONFIG)
-    data.add_argument("--split", default=corpus.DEFAULT_SPLIT)
     data.add_argument(
-        "--text-field",
-        default=corpus.DEFAULT_TEXT_FIELD,
-        help="dataset column holding the punctuated reference transcript",
+        "--loader",
+        default="datasets-server",
+        choices=("datasets-server", "datasets"),
+        help="datasets-server is the HTTP rows API; datasets uses the library (gated sets)",
     )
-    data.add_argument("--limit", type=int, default=120, help="how many references to load")
-    data.add_argument("--jsonl", help="load references from a local .jsonl instead of a dataset")
+    data.add_argument("--limit", type=int, default=120, help="how many pairs to load")
+    data.add_argument("--jsonl", help="load pairs (or bare references) from a local .jsonl")
 
-    injection = parser.add_argument_group("disfluency injection")
+    injection = parser.add_argument_group("synthetic injection (reference-only sources)")
     injection.add_argument("--seed", type=int, default=7)
     injection.add_argument(
         "--severity",
@@ -323,8 +116,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     evaluation.add_argument(
         "--metric",
         default="blend",
-        choices=("blend", "content", "format"),
-        help="which score selects the winner (default: blend, 0.7 content / 0.3 format)",
+        choices=metrics.AXES,
+        help="which axis selects the winner (default: blend, 0.7 content / 0.3 format)",
     )
     evaluation.add_argument("--dev-fraction", type=float, default=0.3)
     evaluation.add_argument("--test-fraction", type=float, default=0.3)
@@ -332,7 +125,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     evaluation.add_argument(
         "--dry-run",
         action="store_true",
-        help="build and score the dataset without calling any model",
+        help="build and score the corpus without calling any model",
     )
     evaluation.add_argument("--show-samples", type=int, default=3)
 
@@ -347,11 +140,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="model that rewrites instructions during --optimizer gepa (default: --model)",
     )
-    model.add_argument(
-        "--api-base",
-        default=None,
-        help="override the API base URL (e.g. an OpenAI-compatible gateway)",
-    )
+    model.add_argument("--api-base", default=None, help="override the API base URL")
     model.add_argument("--max-tokens", type=int, default=2048)
 
     search = parser.add_argument_group("search")
@@ -372,55 +161,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def configure_lm(args) -> None:
-    """Point DSPy at the model standing in for the service-side rewrite."""
-    import dspy
+def resolve_axis(requested: str, loaded: corpus.Corpus) -> str:
+    """Refuse to select on an axis the corpus cannot measure.
 
-    kwargs: dict[str, object] = {"max_tokens": args.max_tokens}
-    if args.api_base:
-        kwargs["api_base"] = args.api_base
-    # Sampling parameters are deliberately not set: current Claude models reject
-    # `temperature`, and DSPy omits it when left unset.
-    dspy.configure(lm=dspy.LM(args.model, **kwargs))
-
-
-def run_optimizer(args, program, split: Split, metric: str):
-    """Evolve the instruction, returning the optimized program."""
-    import dspy
-
-    train = to_examples(split.train)
-    dev = to_examples(split.dev)
-
-    if args.optimizer == "gepa":
-        reflection = dspy.LM(
-            args.reflection_model or args.model,
-            max_tokens=8192,
-            **({"api_base": args.api_base} if args.api_base else {}),
+    A corpus whose reference side is unpunctuated (real conversational transcripts,
+    typically) scores formatting against noise. Selecting a winner on that would
+    rank prompts by an accident of the corpus, so `blend` degrades to `content` and
+    an explicit `--metric format` is an error rather than a meaningless number.
+    """
+    if loaded.formatting_is_measurable or requested == "content":
+        return requested
+    if requested == "format":
+        raise SystemExit(
+            f"--metric format needs a corpus whose targets are punctuated; {loaded.source} is not. "
+            "Use --source fleurs --strip-formatting to pose formatting restoration as a task."
         )
-        optimizer = dspy.GEPA(
-            metric=make_feedback_metric(metric),
-            auto=args.auto,
-            reflection_lm=reflection,
-            num_threads=args.num_threads,
-        )
-        return optimizer.compile(program, trainset=train, valset=dev)
-
-    # MIPROv2 with both demo budgets at zero: it then searches instructions only,
-    # which is what `config.llm.instruction` can actually carry. Few-shot demos
-    # would improve the DSPy program and be unshippable.
-    optimizer = dspy.MIPROv2(
-        metric=make_metric(metric),
-        auto=args.auto,
-        max_bootstrapped_demos=0,
-        max_labeled_demos=0,
-        num_threads=args.num_threads,
+    print(
+        f"\nNote: {loaded.source} targets carry no punctuation or capitalization, "
+        "so the formatting axis is not meaningful — selecting on content instead."
     )
-    return optimizer.compile(
-        program,
-        trainset=train,
-        valset=dev,
-        requires_permission_to_run=False,
-    )
+    return "content"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -428,83 +188,78 @@ def main(argv: list[str] | None = None) -> int:
 
     loaded = corpus.load(
         source=args.source,
-        dataset=args.dataset,
-        config=args.config,
-        split=args.split,
-        text_field=args.text_field,
+        loader=args.loader,
         limit=args.limit,
         jsonl=args.jsonl,
-    )
-    print(f"Loaded {len(loaded)} reference transcripts from {loaded.source}: {loaded.detail}")
-
-    utterances = inject_all(
-        list(loaded.references),
         seed=args.seed,
         severity=args.severity,
         strip_formatting=args.strip_formatting,
     )
-    split = split_examples(utterances, args.seed, args.dev_fraction, args.test_fraction)
-    print(f"Split: {len(split.train)} train / {len(split.dev)} dev / {len(split.test)} test")
+    print(f"Loaded {len(loaded)} pairs from {loaded.source}: {loaded.detail}")
+    print(f"{loaded.disfluent_fraction:.0%} of pairs differ from their target")
+
+    train, dev, test = corpus.split(
+        list(loaded.utterances), args.seed, args.dev_fraction, args.test_fraction
+    )
+    print(f"Split: {len(train)} train / {len(dev)} dev / {len(test)} test")
 
     if args.show_samples:
-        print_samples(utterances, args.show_samples)
+        print_samples(loaded, args.show_samples)
 
-    floors = {
-        "dev": echo_floor(split.dev, args.metric),
-        "test": echo_floor(split.test, args.metric),
-    }
+    axis = resolve_axis(args.metric, loaded)
+    floors = {"dev": corpus.echo_floor(dev), "test": corpus.echo_floor(test)}
     print(
-        f"\nEcho floor ({args.metric}) — pasting the transcript uncleaned: "
-        f"dev {floors['dev']:.4f}, test {floors['test']:.4f}"
+        f"\nEcho floor ({axis}) — pasting the transcript uncleaned: "
+        f"dev {floors['dev'][axis]:.4f}, test {floors['test'][axis]:.4f}"
     )
 
     if args.dry_run:
-        print("\n--dry-run: dataset and scoring verified; no model was called.")
+        print("\n--dry-run: corpus and scoring verified; no model was called.")
         return 0
 
-    configure_lm(args)
+    import program  # noqa: PLC0415 — deferred so the dry-run path never imports DSPy
+
+    spec = program.ModelSpec(model=args.model, api_base=args.api_base, max_tokens=args.max_tokens)
+    program.configure(spec)
 
     dev_rows: list[tuple[str, dict[str, float]]] = []
     for name, instruction in CANDIDATES.items():
-        scores = evaluate(build_program(instruction), split.dev, args.metric, args.num_threads)
+        scores = program.evaluate(program.build(instruction), dev, args.num_threads)
         dev_rows.append((name, scores))
-        print(f"  scored {name:<22} dev {args.metric} {scores['selected']:.4f}")
-    dev_rows.sort(key=lambda row: row[1]["selected"], reverse=True)
-    print_table(dev_rows, f"Candidate instructions on dev ({args.metric})")
+        print(f"  scored {name:<22} dev {axis} {scores[axis]:.4f}")
+    print_table(dev_rows, f"Candidate instructions on dev, selecting on {axis}", axis)
 
-    best_name, _ = dev_rows[0]
-    winner_name = best_name
-    winner_instruction = CANDIDATES[best_name]
+    winner_name, winner_scores = max(dev_rows, key=lambda row: row[1][axis])
+    winner_instruction = CANDIDATES[winner_name]
 
     if args.optimizer != "none":
-        print(f"\nRunning {args.optimizer} from the best hand-written candidate ({best_name})…")
-        optimized = run_optimizer(args, build_program(winner_instruction), split, args.metric)
-        optimized_instruction = instruction_of(optimized)
-        optimized_dev = evaluate(optimized, split.dev, args.metric, args.num_threads)
-        dev_rows.append((f"{args.optimizer}-optimized", optimized_dev))
-        print_table(
-            sorted(dev_rows, key=lambda row: row[1]["selected"], reverse=True),
-            f"With the optimized instruction, on dev ({args.metric})",
+        print(f"\nRunning {args.optimizer} from the best hand-written candidate ({winner_name})…")
+        optimized = program.optimize(
+            program.build(winner_instruction),
+            optimizer=args.optimizer,
+            axis=axis,
+            spec=spec,
+            reflection_model=args.reflection_model,
+            train=train,
+            dev=dev,
+            auto=args.auto,
+            num_threads=args.num_threads,
         )
-        if optimized_dev["selected"] > dict(dev_rows)[best_name]["selected"]:
+        optimized_scores = program.evaluate(optimized, dev, args.num_threads)
+        dev_rows.append((f"{args.optimizer}-optimized", optimized_scores))
+        print_table(dev_rows, f"With the optimized instruction, on dev ({axis})", axis)
+        if optimized_scores[axis] > winner_scores[axis]:
             winner_name = f"{args.optimizer}-optimized"
-            winner_instruction = optimized_instruction
+            winner_instruction = optimized.signature.instructions
         else:
-            print(
-                f"\n{args.optimizer} did not beat {best_name} on dev; "
-                "keeping the hand-written instruction."
-            )
+            print(f"\n{args.optimizer} did not beat {winner_name} on dev; keeping the hand-written one.")
 
-    # Held-out test scores for the winner and for the shipped-default proxy, so
-    # the reported improvement is measured on data no selection decision saw.
-    test_rows = [
-        (winner_name, evaluate(build_program(winner_instruction), split.test, args.metric, args.num_threads)),
-    ]
-    if winner_name != "default-proxy":
-        test_rows.append(
-            ("default-proxy", evaluate(build_program(CANDIDATES["default-proxy"]), split.test, args.metric, args.num_threads))
-        )
-    print_table(test_rows, f"Held-out test ({args.metric})")
+    # Held-out test scores for the winner and for the shipped-default proxy, so the
+    # reported improvement is measured on data no selection decision saw.
+    test_rows = [(winner_name, program.evaluate(program.build(winner_instruction), test, args.num_threads))]
+    if winner_name != BASELINE:
+        test_rows.append((BASELINE, program.evaluate(program.build(CANDIDATES[BASELINE]), test, args.num_threads)))
+    print_table(test_rows, f"Held-out test ({axis})", axis)
 
     print("\nBest cleanup instruction:\n")
     print(f"  {winner_instruction}\n")
@@ -514,17 +269,24 @@ def main(argv: list[str] | None = None) -> int:
         "which today encodes an empty `llm` object and so selects the service default."
     )
 
-    results = {
-        "config": vars(args),
-        "corpus": {"source": loaded.source, "detail": loaded.detail, "count": len(loaded)},
-        "split": {"train": len(split.train), "dev": len(split.dev), "test": len(split.test)},
-        "echo_floor": floors,
-        "dev": {name: scores for name, scores in dev_rows},
-        "test": {name: scores for name, scores in test_rows},
-        "winner": {"name": winner_name, "instruction": winner_instruction},
-        "candidates": CANDIDATES,
-    }
     if args.out:
+        results = {
+            "config": vars(args),
+            "selected_axis": axis,
+            "corpus": {
+                "source": loaded.source,
+                "detail": loaded.detail,
+                "count": len(loaded),
+                "disfluent_fraction": loaded.disfluent_fraction,
+                "formatting_is_measurable": loaded.formatting_is_measurable,
+            },
+            "split": {"train": len(train), "dev": len(dev), "test": len(test)},
+            "echo_floor": floors,
+            "dev": dict(dev_rows),
+            "test": dict(test_rows),
+            "winner": {"name": winner_name, "instruction": winner_instruction},
+            "candidates": CANDIDATES,
+        }
         Path(args.out).write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
         print(f"\nWrote {args.out}")
 

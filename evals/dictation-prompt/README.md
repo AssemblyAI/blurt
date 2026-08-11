@@ -6,64 +6,93 @@ LLM rewrite — the `config.llm` block Blurt sends on every `/transcribe` reques
 Blurt sends `llm` as an empty object today, which selects the service's own default cleanup
 instruction. This harness answers the question that comes next: is there an explicit
 instruction that beats that default, and by how much? It scores candidate instructions on
-how well they turn disfluent speech back into the text the speaker meant to write.
+how well they turn a disfluent transcript back into the text the speaker meant to write.
 
-Nothing here ships in the app or runs in CI. It is offline tooling for deciding what string
-(if any) should go into `config.llm.instruction`.
+The Python here is offline decision support — it is not shipped, not built, and not run by
+`scripts/check.sh`. (Its Markdown _is_ linted, like every other `.md` in the repo.)
 
-## How it works
+## The corpora
 
-1. **References** — reference transcripts are pulled from a Hugging Face **speech** dataset
-   (default `google/fleurs`, `en_us`, `test`). These are hand-written transcriptions of
-   sentences people actually spoke into a microphone, with real capitalization and
-   punctuation, which makes them a fair target for "what did the user want on screen".
-2. **Disfluency injection** — each reference is rendered as spontaneous speech: filler words,
-   repeated words, cut-off stutters, false starts with a correction, clause restarts, and
-   opening hedges. That is the messy verbatim text a speech-to-text model returns for
-   off-the-cuff dictation. Injection is seeded, so a run is reproducible.
-3. **Cleanup** — each candidate instruction runs as a single-step DSPy program over the
-   disfluent text.
-4. **Scoring** — the output is compared against the original reference by word error rate.
-   Injection only ever _adds_ tokens, so the reference is exactly recoverable and a perfect
-   prompt would score 1.0.
-5. **Search** — with `--optimizer`, DSPy evolves a new instruction from the best hand-written
-   one instead of only ranking the fixed set.
+Each source supplies `(disfluent input, clean target)` pairs. The first two are **real**:
+the disfluencies are the ones actual speakers produced, not ones we thought to write down.
+
+| `--source`       | What it is                                                                                                                                                                                                                     | Measures         |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------- |
+| `nyra` (default) | [`nyralabs/disfluency_speech_english`][nyra] — ~5k utterances with `verbatim_transcript` / `intended_transcript`, repackaged from [`amaai-lab/DisfluencySpeech`][ds]: one speaker re-recording ~10h of real Switchboard calls. | content only     |
+| `disfl-qa`       | [`google-research-datasets/disfl_qa`][dq] — ~12k SQuAD questions with a human-written disfluent variant.                                                                                                                       | content + format |
+| `fleurs`         | [`google/fleurs`][fl] read speech, made disfluent by the injector in `disfluency.py`.                                                                                                                                          | content + format |
+| `builtin`        | A dozen bundled sentences plus injection. No network, no key — for smoke-testing.                                                                                                                                              | content + format |
+
+`--jsonl` reads a local file instead: objects with both `disfluent` and `reference` are used
+as-is; anything with only a reference goes through the injector.
+
+**Why keep synthetic injection at all**, now that real pairs exist? Three things it does that
+a fixed corpus can't: a **severity dial** (`--severity`) for checking whether a ranking
+survives more or less disfluent input; a **punctuation-restoration** task via
+`--strip-formatting`, which no real corpus here poses (their inputs and targets are
+punctuated alike); and an **offline path**.
+
+**Why `disfl-qa` alongside `nyra`**: over 90% of its disfluencies are corrections and
+restarts — deliberately the hard cases. Switchboard is over half simple repetitions, and the
+injector is weighted the same way, so `disfl-qa` covers the tail the other two under-sample.
+
+### What each corpus cannot tell you
+
+`nyra`'s two sides are both lowercase and unpunctuated, so the formatting axis would score
+noise. The harness refuses to let that pass silently: `--metric blend` degrades to `content`
+with a printed note, and an explicit `--metric format` is an error pointing at
+`--source fleurs --strip-formatting` instead. That is the only combination in the harness
+that genuinely poses punctuation restoration as a task.
+
+`nyra`'s verbatim side is also written in annotation conventions (`[UH]`, `[laughter]`, `th*`)
+rather than as a transcriber would emit it, so the loader rewrites those into ordinary
+transcript text (`uh`, dropped, `th-`) before anything is scored.
+
+[nyra]: https://huggingface.co/datasets/nyralabs/disfluency_speech_english
+[ds]: https://huggingface.co/datasets/amaai-lab/DisfluencySpeech
+[dq]: https://huggingface.co/datasets/google-research-datasets/disfl_qa
+[fl]: https://huggingface.co/datasets/google/fleurs
 
 ## Running it
 
 ```bash
 export ANTHROPIC_API_KEY=...
 
-# Rank the built-in candidate instructions on 150 utterances.
+# Rank the built-in candidate instructions on real paired speech.
 uv run evals/dictation-prompt/optimize_cleanup_prompt.py --limit 150 --out results.json
+
+# The hard disfluency types — corrections and restarts.
+uv run evals/dictation-prompt/optimize_cleanup_prompt.py --source disfl-qa --limit 200
+
+# Does it restore punctuation and capitalization? Only this combination asks.
+uv run evals/dictation-prompt/optimize_cleanup_prompt.py --source fleurs --strip-formatting
 
 # Evolve a new instruction with GEPA (reflective prompt evolution).
 uv run evals/dictation-prompt/optimize_cleanup_prompt.py --optimizer gepa --limit 200
 
-# Make punctuation and capitalization part of the job, not a given.
-uv run evals/dictation-prompt/optimize_cleanup_prompt.py --strip-formatting
-
-# No network, no API key: verify the data and scoring pipeline end to end.
+# No network, no API key: verify the corpus and scoring pipeline end to end.
 python3 evals/dictation-prompt/optimize_cleanup_prompt.py --source builtin --dry-run
 ```
 
 `uv run` reads the PEP 723 header at the top of the script and installs DSPy into a throwaway
 environment. With plain `pip`, `pip install "dspy>=3.0"` is the only requirement.
 
-The dry-run path imports nothing outside the standard library, which is why it works on a bare
-interpreter — DSPy is imported lazily, inside the functions that need a model.
+The dry-run and the tests import nothing outside the standard library. That is structural, not
+a convention: everything touching DSPy lives in `program.py`, which the CLI imports only after
+the dry-run returns, and a test asserts `dspy` never reaches `sys.modules`.
 
 ## The knobs that matter
 
 | Flag                 | Default                   | What it changes                                                                              |
 | -------------------- | ------------------------- | -------------------------------------------------------------------------------------------- |
+| `--source`           | `nyra`                    | Which corpus to score against — see the table above.                                         |
 | `--model`            | `anthropic/claude-opus-5` | The LiteLLM model standing in for the service's rewrite model.                               |
 | `--api-base`         | —                         | Point at an OpenAI-compatible gateway instead of the provider's default endpoint.            |
-| `--severity`         | `0.35`                    | 0–1; how often a disfluency is injected. Higher makes the task harder and noisier.           |
-| `--strip-formatting` | off                       | Also lowercase and unpunctuate, so restoring formatting is part of the task.                 |
 | `--metric`           | `blend`                   | `content` (words only), `format` (case and punctuation too), or 0.7/0.3 of both.             |
+| `--severity`         | `0.35`                    | 0–1; how often a disfluency is injected. Reference-only sources only.                        |
+| `--strip-formatting` | off                       | Also lowercase and unpunctuate, so restoring formatting is part of the task.                 |
 | `--optimizer`        | `none`                    | `gepa` or `mipro` to evolve an instruction; both are configured to search instructions only. |
-| `--source`           | `datasets-server`         | `datasets` uses the library (for gated sets); `builtin` uses the bundled sample.             |
+| `--loader`           | `datasets-server`         | `datasets` uses the library instead of the HTTP rows API, for gated sets.                    |
 | `--seed`             | `7`                       | Seeds injection and the train/dev/test split.                                                |
 
 Both optimizers run with few-shot demos disabled. `config.llm.instruction` is a single string
@@ -72,19 +101,21 @@ would score well here and be unshippable.
 
 ## Reading the results
 
-Every run prints an **echo floor**: the score of pasting the verbatim transcript with no
-cleanup at all. That is the bar an instruction has to clear to be worth sending. It prints
-`content` and `format` next to the selected metric, so you can see whether a winner gained on
-wording or only on punctuation.
+Every run prints an **echo floor**: the score of pasting the transcript with no cleanup at
+all. That is the bar an instruction has to clear to be worth sending. It also prints what
+fraction of pairs actually differ from their target — the rest are clean utterances, which
+test the opposite failure (over-editing text that needed nothing).
 
-The winner is chosen on a dev split and then re-scored on a held-out test split, alongside
-`default-proxy` — a stand-in for the service's default instruction — so the reported
-improvement is measured on data no selection decision touched.
+All three axes are printed for every candidate, with the selecting one starred, so you can
+see whether a winner gained on wording or only on punctuation. The winner is chosen on a dev
+split and re-scored on a held-out test split alongside `default-proxy` — the stand-in for the
+service's default instruction — so the reported improvement is measured on data no selection
+decision touched.
 
-Because the disfluencies are synthetic, the **ranking** travels further than the absolute
-numbers do. Read a result as "this instruction beats that one on this disfluency
-distribution", not as a prediction of production quality. Re-run at a couple of `--severity`
-values before trusting an ordering.
+On a real corpus the numbers mean what they say. On `fleurs` and `builtin` the disfluencies
+are synthetic, so the **ranking** travels further than the absolute scores do: read those as
+"this instruction beats that one on this disfluency distribution", and re-run at a couple of
+`--severity` values before trusting an ordering.
 
 ## Applying a winner
 
@@ -93,7 +124,7 @@ field that steers transcription. The Swift side is
 `Sources/BlurtEngine/STT/AssemblyAITranscriber.swift`, where `LLMRewrite` is an empty
 `Encodable` struct — encoding an empty `llm` object is what selects the service default today.
 
-Two things to keep straight, both settled decisions in
+Three things to keep straight, all settled decisions in
 [`AGENTS.md`](../../AGENTS.md#settled-decisions--dont-reintroduce-these):
 
 - This is the **server-side** rewrite instruction. It is not a client-side cleanup pass, and
@@ -103,16 +134,23 @@ Two things to keep straight, both settled decisions in
 - The positive-phrasing guidance in `TranscriptionPrompt` comes from AssemblyAI's Universal-3
   prompting reference and applies to the STT model. The cleanup instruction is read by an
   ordinary LLM, so the candidates here are phrased as plain instructions.
+- **Every corpus here is English, and the prompt is not.** `config.llm.instruction` ships to
+  every user in every language, and pinning the transcription prompt to English was reverted
+  once already for hurting non-English transcription. A winner selected on this harness has
+  only been shown to work in English; weigh that before shipping a long, English-shaped
+  instruction.
 
 ## Files
 
-| File                         | What it holds                                                           |
-| ---------------------------- | ----------------------------------------------------------------------- |
-| `optimize_cleanup_prompt.py` | CLI, candidate instructions, DSPy program, optimizer wiring, reporting. |
-| `disfluency.py`              | The seeded, additive disfluency injector.                               |
-| `corpus.py`                  | Reference loading — HF rows API, `datasets`, JSONL, or bundled sample.  |
-| `metrics.py`                 | Token alignment, the two word-error-rate axes, and GEPA feedback text.  |
-| `test_eval.py`               | Offline tests for injection, scoring, loading, and splitting.           |
+| File                         | What it holds                                                             |
+| ---------------------------- | ------------------------------------------------------------------------- |
+| `optimize_cleanup_prompt.py` | CLI, axis resolution, reporting.                                          |
+| `candidates.py`              | The cleanup instructions under test.                                      |
+| `corpus.py`                  | Sources, loading, de-tagging, splitting, the echo floor.                  |
+| `disfluency.py`              | The seeded, additive disfluency injector.                                 |
+| `metrics.py`                 | Token alignment, the two word-error-rate axes, GEPA feedback text.        |
+| `program.py`                 | Everything that imports DSPy — the program, metrics adapters, optimizers. |
+| `test_eval.py`               | Offline tests for injection, scoring, de-tagging, loading, and splitting. |
 
 ```bash
 python3 -m pytest evals/dictation-prompt/test_eval.py

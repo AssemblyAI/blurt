@@ -64,7 +64,8 @@ App/Blurt/
 Tests/BlurtEngineTests/      Swift Testing suites; Stubs/ holds the seam doubles
 scripts/                     check.sh, bootstrap.sh, dev-build.sh, uitest.sh, leaks.sh, release*.sh
 evals/dictation-prompt/      offline DSPy harness for tuning the dictation API's cleanup
-                             instruction (Python; not built, run, or linted by check.sh)
+                             instruction — its Python is not built, run, or linted by
+                             check.sh; its README is linted like any other Markdown
 site/                        the GitHub Pages site (html/css, sitemap) — linted by check.sh
 .github/workflows/           check.yml (the gate, macos-26), codeql.yml, pages.yml
 .claude/                     Claude Code hooks, skills, subagents (see CLAUDE.md)
@@ -257,12 +258,12 @@ response carries both `text` (verbatim) and
 `llm_response` is null — the rewrite is best-effort (5 s server-side budget), so a rewrite failure
 (`llm_error`) is a logged degradation, never a user-facing error.
 
-The `llm` block is sent empty, which selects the service's own default cleanup instruction
-rather than one of ours. Whether an explicit `llm.instruction` would beat that default is an
-open question with an offline harness attached: `evals/dictation-prompt/` injects disfluencies
-into transcripts from a Hugging Face speech dataset and scores candidate cleanup instructions
-on how well they restore the reference. It is decision support, not shipped code — nothing
-under `evals/` is built, run, or linted by `check.sh`.
+Sending `llm` empty selects the service's own default cleanup instruction rather than one of
+ours. Whether an explicit `llm.instruction` would beat that default is an open question, with
+an offline harness attached: `evals/dictation-prompt/` (see its README). Note what a winner
+there would and wouldn't establish — every corpus it scores against is English, while
+`llm.instruction` ships to every user, and pinning the _transcription_ prompt to English was
+reverted once already.
 
 The finished text arrives in the response body — no `/v2/upload`, no job submission, no polling.
 Truly synchronous: `transcribe(pcm:sampleRate:context:)` is a single `async throws -> String`
