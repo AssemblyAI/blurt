@@ -82,8 +82,12 @@ uv run evals/dictation-prompt/optimize_cleanup_prompt.py --source disfl-qa --lim
 # Does it restore punctuation and capitalization? Only this combination asks.
 uv run evals/dictation-prompt/optimize_cleanup_prompt.py --source fleurs --strip-formatting
 
+# A larger run: the held-out splits are only ~250 rows, so reach into train.
+uv run evals/dictation-prompt/optimize_cleanup_prompt.py \
+  --split train --limit 600 --dev-fraction 0.5 --test-fraction 0.5 --out results.json
+
 # Evolve a new instruction with GEPA (reflective prompt evolution).
-uv run evals/dictation-prompt/optimize_cleanup_prompt.py --optimizer gepa --limit 200
+uv run evals/dictation-prompt/optimize_cleanup_prompt.py --optimizer gepa --split train --limit 400
 
 # No network, no API key: verify the corpus and scoring pipeline end to end.
 python3 evals/dictation-prompt/optimize_cleanup_prompt.py --source builtin --dry-run
@@ -108,6 +112,7 @@ the dry-run returns, and a test asserts `dspy` never reaches `sys.modules`.
 | `--strip-formatting` | off                       | Also lowercase and unpunctuate, so restoring formatting is part of the task.                 |
 | `--optimizer`        | `none`                    | `gepa` or `mipro` to evolve an instruction; both are configured to search instructions only. |
 | `--loader`           | `datasets-server`         | `datasets` uses the library instead of the HTTP rows API, for gated sets.                    |
+| `--split`            | per source                | Each source defaults to its held-out split, which is small — `--split train` for large runs. |
 | `--seed`             | `7`                       | Seeds injection and the train/dev/test split.                                                |
 
 Both optimizers run with few-shot demos disabled. `config.llm.instruction` is a single string

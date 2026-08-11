@@ -96,6 +96,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="datasets-server is the HTTP rows API; datasets uses the library (gated sets)",
     )
     data.add_argument("--limit", type=int, default=120, help="how many pairs to load")
+    data.add_argument(
+        "--split",
+        default=None,
+        help="override the dataset split; each source defaults to its (small) held-out "
+        "split, so large runs want --split train",
+    )
     data.add_argument("--jsonl", help="load pairs (or bare references) from a local .jsonl")
 
     injection = parser.add_argument_group("synthetic injection (reference-only sources)")
@@ -192,6 +198,7 @@ def main(argv: list[str] | None = None) -> int:
         source=args.source,
         loader=args.loader,
         limit=args.limit,
+        split=args.split,
         jsonl=args.jsonl,
         seed=args.seed,
         severity=args.severity,

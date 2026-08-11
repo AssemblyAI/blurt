@@ -61,7 +61,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import disfluency
 import metrics
@@ -354,9 +354,10 @@ def _pairs_from_jsonl(path: str):
 
 def load(
     *,
-    source: str = "nyra",
+    source: str = "disfluency-speech",
     loader: str = "datasets-server",
     limit: int = 120,
+    split: str | None = None,
     jsonl: str | None = None,
     seed: int = 7,
     severity: float = 0.35,
@@ -372,6 +373,12 @@ def load(
         detail = {"note": "bundled sample; no dataset was downloaded"}
     elif source in SOURCES:
         spec = SOURCES[source]
+        # Each source defaults to its held-out split, which is small (250 rows for
+        # disfluency-speech). A run large enough to separate close candidates has
+        # to reach into `train` — harmless here, since nothing is fine-tuned and
+        # the harness makes its own train/dev/test partition of whatever it loads.
+        if split:
+            spec = replace(spec, split=split)
         where = f"{spec.dataset}/{spec.split}"
         rows = (_rows_via_api if loader == "datasets-server" else _rows_via_datasets)(spec, limit)
         pairs = _pairs_from_rows(rows, spec, where)

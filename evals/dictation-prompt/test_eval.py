@@ -202,6 +202,33 @@ def test_paired_sources_are_registered_with_both_columns():
         assert len(source.fields) == 2
 
 
+def test_split_override_reaches_the_loader(monkeypatch):
+    """Large runs need `train`; the held-out splits are only a few hundred rows."""
+    seen = {}
+
+    def fake_rows(spec, limit):
+        seen["split"] = spec.split
+        return iter(())
+
+    monkeypatch.setattr(corpus, "_rows_via_api", fake_rows)
+    with pytest.raises(RuntimeError):  # no rows, so the corpus is empty
+        corpus.load(source="disfluency-speech", limit=5, split="train")
+    assert seen["split"] == "train"
+
+
+def test_split_defaults_to_the_sources_own_choice(monkeypatch):
+    seen = {}
+
+    def fake_rows(spec, limit):
+        seen["split"] = spec.split
+        return iter(())
+
+    monkeypatch.setattr(corpus, "_rows_via_api", fake_rows)
+    with pytest.raises(RuntimeError):
+        corpus.load(source="disfluency-speech", limit=5)
+    assert seen["split"] == corpus.SOURCES["disfluency-speech"].split
+
+
 def test_fleurs_is_reference_only():
     assert not corpus.SOURCES["fleurs"].is_paired
 
