@@ -627,7 +627,11 @@ def test_the_seed_leaves_the_search_room_to_work():
     or the search only appears to run.
     """
     headroom = candidates.INSTRUCTION_CHARACTER_CAP - len(candidates.PRIOR_WINNER)
-    assert headroom >= 600, f"only {headroom} characters of room for the search"
+    # 400 rather than the 600 an earlier, shorter seed left. Each winning seed is
+    # longer than the one before, so this ratchets down; below ~400 a reflector's
+    # typical expansion lands outside the cap and the proposer spends the run
+    # rejecting and trimming instead of searching.
+    assert headroom >= 400, f"only {headroom} characters of room for the search"
 
 
 def test_the_seed_carries_no_dangling_rule_numbering():
@@ -817,9 +821,10 @@ def test_the_constraints_reach_the_reflector_before_its_first_attempt():
 
 def test_an_overlong_draft_is_trimmed_at_section_boundaries_not_mid_sentence():
     """The last resort before abandoning: reflectors overshoot and do not converge."""
-    bloated = candidates.PRIOR_WINNER.replace(
-        "WORKED EXAMPLES", "PADDING\n\n" + "filler " * 300 + "\n\nWORKED EXAMPLES"
-    )
+    # Built from the seed's own blocks rather than a substring of it, so the fixture
+    # survives the seed being replaced by each new winner.
+    blocks = candidates.PRIOR_WINNER.split("\n\n")
+    bloated = "\n\n".join([blocks[0], "filler " * 300, *blocks[1:]])
     assert candidates.overage(bloated) > 0
     trimmed = candidates.trim_to_fit(bloated)
     assert trimmed is not None
