@@ -180,7 +180,13 @@ def mean(scores: list[Score]) -> dict[str, float]:
     return {axis: sum(s.value(axis) for s in scores) / len(scores) for axis in AXES}
 
 
-def feedback(reference: str, hypothesis: str, disfluent: str, scored: Score) -> str:
+def feedback(
+    reference: str,
+    hypothesis: str,
+    disfluent: str,
+    scored: Score,
+    instruction_budget: int | None = None,
+) -> str:
     """Plain-language diff for GEPA's reflection step.
 
     GEPA rewrites the instruction from this text, so it names the failure mode
@@ -193,9 +199,23 @@ def feedback(reference: str, hypothesis: str, disfluent: str, scored: Score) -> 
     cleanup failed to remove, while a word in neither is something it invented.
     That reads the corpus rather than a fixed filler-word list, so it stays correct
     on real transcripts whose disfluencies nobody enumerated in advance.
+
+    `instruction_budget` appends the length ceiling the rewritten instruction has to
+    fit (`candidates.INSTRUCTION_CHARACTER_CAP`). It rides on every message, including
+    the perfect-score one, because the reflector only ever sees this channel — a
+    constraint mentioned on failures alone would be invisible exactly when a run is
+    going well and the instruction is growing. Note what this is: *guidance*, not
+    enforcement. A reflector can ignore it, and models count characters badly, so the
+    CLI still refuses to report an over-cap winner. Optimizing an instruction whose
+    length is unbounded is what produced one 1009 characters too long to send.
     """
+    budget = (
+        ""
+        if instruction_budget is None
+        else f" Write the instruction itself in at most {instruction_budget} characters."
+    )
     if scored.content >= 1.0 and scored.format >= 1.0:
-        return "Perfect: the cleaned text matches the reference exactly."
+        return "Perfect: the cleaned text matches the reference exactly." + budget
 
     notes: list[str] = []
     content = scored.content_alignment
@@ -214,11 +234,13 @@ def feedback(reference: str, hypothesis: str, disfluent: str, scored: Score) -> 
         notes.append(f"reworded content instead of only cleaning it: {rewrites}")
 
     if not notes and scored.format < 1.0:
-        notes.append("wording is correct but capitalization or punctuation differs from the reference")
+        notes.append(
+            "wording is correct but capitalization or punctuation differs from the reference"
+        )
 
     detail = "; ".join(notes) if notes else "output differs from the reference"
     return (
         f"Content score {scored.content:.2f}, formatting score {scored.format:.2f}. "
         f"The cleanup {detail}. "
-        f"Reference: {reference!r}. Produced: {hypothesis!r}."
+        f"Reference: {reference!r}. Produced: {hypothesis!r}." + budget
     )

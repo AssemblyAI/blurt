@@ -244,8 +244,12 @@ def test_unknown_source_is_rejected():
 
 
 def test_injection_sources_require_punctuated_references():
-    assert corpus._usable_reference("Long enough and ends properly right here now.", for_injection=True)
-    assert not corpus._usable_reference("no terminal punctuation on this one here", for_injection=True)
+    assert corpus._usable_reference(
+        "Long enough and ends properly right here now.", for_injection=True
+    )
+    assert not corpus._usable_reference(
+        "no terminal punctuation on this one here", for_injection=True
+    )
     assert not corpus._usable_reference("Too short.", for_injection=True)
 
 
@@ -469,6 +473,13 @@ def test_durations_read_at_a_glance():
 )
 def test_a_failing_example_still_advances_the_meter():
     """A meter that stalls on the first failure is worse than no meter."""
+    # The one test in this file that needs DSPy installed: `_Ticking` subclasses
+    # `dspy.Module` (that is what lets `dspy.Parallel` call it), so it can't move
+    # out of the DSPy-only module and be tested from a bare interpreter. Skip
+    # rather than fail where DSPy is absent — every other test here, and
+    # `--dry-run`, still run on the standard library alone, which is what lets
+    # scripts/check.sh gate on this suite.
+    pytest.importorskip("dspy")
     ticks = []
 
     class Boom:
@@ -498,10 +509,71 @@ def test_every_candidate_instruction_is_shippable():
     assert candidates.BASELINE in candidates.CANDIDATES
     for name, instruction in candidates.CANDIDATES.items():
         assert instruction.strip(), name
-        # Comfortably inside the request config's documented 4096-character cap
-        # (TranscriptionPrompt.characterCap on the Swift side) — this bound is the
-        # eval's own, to keep candidates readable as a single instruction.
+        # The API's cap on config.llm.instruction, not the 4096 one on config.prompt.
+        # Asserting the prompt's figure here is the bug this file now guards: it let a
+        # 3057-character instruction pass every test and 400 every real request.
+        assert candidates.overage(instruction) == 0, name
+        # A second, tighter bound that is the eval's own: hand-written candidates stay
+        # readable as a single instruction. The optimizer's output is not held to it.
         assert len(instruction) < 1000, name
+
+
+def test_the_cap_is_the_instruction_field_s_own_not_the_prompt_s():
+    """These two limits are different numbers on the same request; conflating them broke dictation."""
+    assert candidates.INSTRUCTION_CHARACTER_CAP == 2048
+
+
+def test_overage_reports_the_distance_past_the_cap():
+    cap = candidates.INSTRUCTION_CHARACTER_CAP
+    assert candidates.overage("x" * cap) == 0
+    assert candidates.overage("x" * (cap - 1)) == 0
+    assert candidates.overage("x" * (cap + 7)) == 7
+
+
+def test_the_prior_winner_is_a_seed_and_not_a_candidate():
+    """It is kept precisely because it doesn't fit — pruning it is what --start is for."""
+    assert candidates.PRIOR_WINNER not in candidates.CANDIDATES.values()
+    assert candidates.overage(candidates.PRIOR_WINNER) > 0
+
+
+def test_an_oversized_candidate_stops_the_run_before_any_model_call(monkeypatch):
+    """The check is worth having only if it fires before the sweep spends money."""
+    monkeypatch.setitem(candidates.CANDIDATES, "too-long", "x" * 5000)
+    with pytest.raises(SystemExit) as raised:
+        cli.check_candidate_lengths()
+    assert "too-long" in str(raised.value)
+    assert "2048" in str(raised.value)
+
+
+def test_candidate_length_check_passes_as_shipped():
+    assert cli.check_candidate_lengths() is None
+
+
+def test_describe_length_names_the_overage_or_the_headroom():
+    cap = candidates.INSTRUCTION_CHARACTER_CAP
+    assert "9 OVER" in cli.describe_length("x" * (cap + 9))
+    assert "9 under" in cli.describe_length("x" * (cap - 9))
+
+
+def test_the_instruction_budget_reaches_the_gepa_feedback_text():
+    """GEPA's reflector reads only this string, so an unstated cap is an invisible one."""
+    scored = metrics.score("the build failed", "the build, uh, failed")
+    without = metrics.feedback("the build failed", "the build, uh, failed", "x", scored)
+    with_budget = metrics.feedback(
+        "the build failed", "the build, uh, failed", "x", scored, instruction_budget=2048
+    )
+    assert "2048" not in without
+    assert "at most 2048 characters" in with_budget
+
+
+def test_the_budget_rides_on_a_perfect_score_too():
+    """The instruction can grow on a run where nothing is failing — say the cap anyway."""
+    perfect = metrics.score("identical text", "identical text")
+    message = metrics.feedback(
+        "identical text", "identical text", "x", perfect, instruction_budget=2048
+    )
+    assert "Perfect" in message
+    assert "at most 2048 characters" in message
 
 
 def test_dry_run_never_reaches_the_dspy_module():
@@ -513,7 +585,9 @@ def test_dry_run_never_reaches_the_dspy_module():
     the only module allowed to import DSPy (pinned by the test below).
     """
     sys.modules.pop("program", None)
-    assert cli.main(["--source", "builtin", "--dry-run", "--limit", "12", "--show-samples", "1"]) == 0
+    assert (
+        cli.main(["--source", "builtin", "--dry-run", "--limit", "12", "--show-samples", "1"]) == 0
+    )
     assert "program" not in sys.modules
 
 

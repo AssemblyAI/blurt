@@ -108,7 +108,10 @@ verify_signer() {
   tmp="$(mktemp -d)" || die "signer-pin: mktemp failed"
   # --extract-certificates writes <prefix>0 (leaf), <prefix>1, … as DER.
   codesign -d --extract-certificates="$tmp/cert" "$artifact" >/dev/null 2>&1 \
-    || { rm -rf "$tmp"; die "signer-pin: could not extract certificates from $artifact"; }
+    || {
+      rm -rf "$tmp"
+      die "signer-pin: could not extract certificates from $artifact"
+    }
   local got_sha
   got_sha="$(openssl x509 -inform DER -in "$tmp/cert0" -noout -fingerprint -sha256 2>/dev/null \
     | sed -n 's/.*Fingerprint=//p' | tr -d ': ' | tr '[:lower:]' '[:upper:]')"

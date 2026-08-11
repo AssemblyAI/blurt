@@ -64,8 +64,9 @@ App/Blurt/
 Tests/BlurtEngineTests/      Swift Testing suites; Stubs/ holds the seam doubles
 scripts/                     check.sh, bootstrap.sh, dev-build.sh, uitest.sh, leaks.sh, release*.sh
 evals/dictation-prompt/      offline DSPy harness for tuning the dictation API's cleanup
-                             instruction — its Python is not built, run, or linted by
-                             check.sh; its README is linted like any other Markdown
+                             instruction — nothing here ships in the app, but check.sh does
+                             lint (ruff), format-check (ruff format), and test (pytest) it
+evals/ruff.toml              ruff config for the above — the repo's only Python config
 site/                        the GitHub Pages site (html/css, sitemap) — linted by check.sh
 .github/workflows/           check.yml (the gate, macos-26), codeql.yml, pages.yml
 .claude/                     Claude Code hooks, skills, subagents (see CLAUDE.md)
@@ -107,7 +108,13 @@ In order, on a Mac. Each optional linter prints `note: <tool> not installed; ski
 8. **`swift-format lint --strict`**, then `swiftlint lint --strict`, `swiftlint analyze` (unused
    imports), `periphery scan --strict`.
 9. **actionlint / prettier** (yml/yaml/md plus the Pages site's html/css) **/ xmllint** (XML
-   well-formedness, e.g. the sitemap) **/ markdownlint / shellcheck**.
+   well-formedness, e.g. the sitemap) **/ markdownlint / shellcheck / shfmt --diff** (`scripts/*.sh`
+   formatting, style from the `[*.sh]` block in `.editorconfig`).
+10. **The evals** (`evals/`, the repo's only Python): `ruff format --check`, `ruff check`, and
+    `pytest evals/dictation-prompt/test_eval.py`. Config in `evals/ruff.toml`. The suite needs no
+    network, no API key, and nothing beyond pytest — the one test that needs DSPy skips itself when
+    it is absent.
+11. **`release.test.sh`** — pure-bash unit tests for the release orchestrator's decision helpers.
 
 CI (`.github/workflows/check.yml`) installs all of these via Homebrew on `macos-26` and runs the same
 script, so a clean local `check.sh` matches CI by construction.
@@ -147,9 +154,10 @@ Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `
   test passed. Say plainly that verification happens on a Mac — CI runs the full `check.sh` on
   `macos-26` and is the authority on green.
 - **The portable gate**: `scripts/check.sh --portable` runs actionlint, prettier, xmllint,
-  markdownlint, shellcheck, and `release.test.sh` (plus `swift-format`/`swiftlint lint` if Linux
-  builds happen to be on `PATH`). It fully verifies docs, site, scripts, and workflow changes. It
-  skips the entire Swift side, and its closing line says so.
+  markdownlint, shellcheck, shfmt, ruff (lint + format check), pytest over the evals, and
+  `release.test.sh` (plus `swift-format`/`swiftlint lint` if Linux
+  builds happen to be on `PATH`). It fully verifies docs, site, scripts, eval, and workflow changes.
+  It skips the entire Swift side, and its closing line says so.
 - **The loop for Swift changes**: commit, push, open or update the PR, then watch `check.yml`
   (subscribe to PR activity where available) and fix failures as CI reports them — rather than
   stopping at "verify on a Mac".
@@ -264,6 +272,14 @@ an offline harness attached: `evals/dictation-prompt/` (see its README). Note wh
 there would and wouldn't establish — every corpus it scores against is English, while
 `llm.instruction` ships to every user, and pinning the _transcription_ prompt to English was
 reverted once already.
+
+If you do fill that field in, it is capped at **2048 characters** — a different, smaller limit
+than the 4096 on `config.prompt` (`TranscriptionPrompt.characterCap`), and neither is in the
+published API reference; both were measured against the live endpoint. Over the cap the API
+400s the whole request before reading the audio, so every dictation fails outright rather than
+degrading to the verbatim transcript. A 3057-character eval winner shipped this way once and
+broke all dictation; the test meant to catch it asserted the prompt's 4096. The harness now
+refuses to report an over-cap winner — see its README's "The 2048-character cap".
 
 The finished text arrives in the response body — no `/v2/upload`, no job submission, no polling.
 Truly synchronous: `transcribe(pcm:sampleRate:context:)` is a single `async throws -> String`

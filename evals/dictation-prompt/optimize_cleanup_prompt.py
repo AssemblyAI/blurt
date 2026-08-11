@@ -35,7 +35,18 @@ Usage
     python3 evals/dictation-prompt/optimize_cleanup_prompt.py --source builtin --dry-run
 
     # Evolve a new instruction instead of only ranking the hand-written ones.
+    # Starts from candidates.PRIOR_WINNER by default — see --start.
     uv run evals/dictation-prompt/optimize_cleanup_prompt.py --optimizer gepa
+
+The length constraint
+---------------------
+`config.llm.instruction` is capped at `candidates.INSTRUCTION_CHARACTER_CAP`
+characters and an instruction over it fails the whole request, so a winner that
+doesn't fit isn't a winner. Three places enforce that, because none of them is
+sufficient alone: the hand-written candidates are checked before any model call;
+the cap is stated to GEPA's reflector through the feedback text, which is guidance
+it can ignore; and an over-cap optimizer result is refused at selection time no
+matter how well it scored. The last one is the actual guarantee.
 
 `--dry-run` and the tests need no third-party packages: everything that touches
 DSPy lives in `program.py`, which is imported only after the dry-run returns.
@@ -52,7 +63,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import corpus  # noqa: E402
 import metrics  # noqa: E402
-from candidates import BASELINE, CANDIDATES  # noqa: E402
+from candidates import (  # noqa: E402
+    BASELINE,
+    CANDIDATES,
+    INSTRUCTION_CHARACTER_CAP,
+    PRIOR_WINNER,
+    overage,
+)
 from progress import Progress  # noqa: E402
 
 
@@ -171,9 +188,46 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=("light", "medium", "heavy"),
         help="optimizer search budget",
     )
+    search.add_argument(
+        "--start",
+        default="prior-winner",
+        choices=("prior-winner", "best-candidate"),
+        help="which instruction the optimizer starts from (default: prior-winner, the "
+        "evolved instruction in candidates.py — it already scores well and only needs "
+        "pruning under the character cap; best-candidate starts from whichever "
+        "hand-written candidate topped dev instead)",
+    )
 
     parser.add_argument("--out", default=None, help="write the full results as JSON to this path")
     return parser.parse_args(argv)
+
+
+def describe_length(instruction: str) -> str:
+    """`2048 chars` plus how that sits against the cap — the line every report ends on."""
+    over = overage(instruction)
+    if over:
+        return f"{len(instruction)} chars — {over} OVER the {INSTRUCTION_CHARACTER_CAP} cap"
+    headroom = INSTRUCTION_CHARACTER_CAP - len(instruction)
+    return f"{len(instruction)} chars, {headroom} under the {INSTRUCTION_CHARACTER_CAP} cap"
+
+
+def check_candidate_lengths() -> None:
+    """Refuse to start if a hand-written candidate could never be sent.
+
+    Before any model call, because this is a typo-class mistake and paying for a
+    full sweep to discover it is pure waste. `PRIOR_WINNER` is deliberately exempt —
+    being over the cap is the whole reason it exists as a seed rather than a
+    candidate.
+    """
+    offenders = [(name, text) for name, text in CANDIDATES.items() if overage(text)]
+    if not offenders:
+        return
+    detail = "\n".join(f"  {name}: {describe_length(text)}" for name, text in offenders)
+    raise SystemExit(
+        "These candidates.py instructions exceed the dictation API's "
+        f"{INSTRUCTION_CHARACTER_CAP}-character cap on config.llm.instruction, so the "
+        f"request would 400 before the audio is read:\n{detail}"
+    )
 
 
 def resolve_axis(requested: str, loaded: corpus.Corpus) -> str:
@@ -202,6 +256,7 @@ def resolve_axis(requested: str, loaded: corpus.Corpus) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    check_candidate_lengths()
 
     loaded = corpus.load(
         source=args.source,
@@ -246,7 +301,10 @@ def main(argv: list[str] | None = None) -> int:
         for index, (name, instruction) in enumerate(CANDIDATES.items(), start=1):
             note = f"{name} ({index}/{len(CANDIDATES)})"
             scores = program.evaluate(
-                program.build(instruction), dev, args.num_threads, on_example=lambda n=note: meter.tick(n)
+                program.build(instruction),
+                dev,
+                args.num_threads,
+                on_example=lambda n=note: meter.tick(n),
             )
             dev_rows.append((name, scores))
     print_table(dev_rows, f"Candidate instructions on dev, selecting on {axis}", axis)
@@ -255,9 +313,30 @@ def main(argv: list[str] | None = None) -> int:
     winner_instruction = CANDIDATES[winner_name]
 
     if args.optimizer != "none":
-        print(f"\nRunning {args.optimizer} from the best hand-written candidate ({winner_name})…")
+        seed_scores: dict[str, float] | None = None
+        if args.start == "prior-winner":
+            seed_name, seed_instruction = "prior-winner", PRIOR_WINNER
+            # Score the seed on dev as well. A pruning run's real question is whether
+            # the shortened instruction held onto what the long one knew, and without
+            # this row the report can only say the winner beat the hand-written
+            # candidates — while quietly having lost ground against the very thing it
+            # was pruned from.
+            #
+            # It must never win, and what stops it is that `winner_name` was already
+            # settled above, before this row joins `dev_rows` — the table is a report
+            # from here on, not a selection input. Moving the `max(dev_rows, ...)`
+            # below this point would make an unsendable instruction selectable.
+            with Progress(len(dev), "Scoring the seed on dev") as meter:
+                seed_scores = program.evaluate(
+                    program.build(seed_instruction), dev, args.num_threads, on_example=meter.tick
+                )
+            dev_rows.append(("prior-winner (over cap)", seed_scores))
+        else:
+            seed_name, seed_instruction = winner_name, winner_instruction
+
+        print(f"\nRunning {args.optimizer} from {seed_name} ({describe_length(seed_instruction)})…")
         optimized = program.optimize(
-            program.build(winner_instruction),
+            program.build(seed_instruction),
             optimizer=args.optimizer,
             axis=axis,
             spec=spec,
@@ -266,18 +345,43 @@ def main(argv: list[str] | None = None) -> int:
             dev=dev,
             auto=args.auto,
             num_threads=args.num_threads,
+            instruction_budget=INSTRUCTION_CHARACTER_CAP,
         )
+        optimized_instruction = optimized.signature.instructions
         with Progress(len(dev), "Re-scoring the optimized instruction") as meter:
             optimized_scores = program.evaluate(
                 optimized, dev, args.num_threads, on_example=meter.tick
             )
         dev_rows.append((f"{args.optimizer}-optimized", optimized_scores))
         print_table(dev_rows, f"With the optimized instruction, on dev ({axis})", axis)
-        if optimized_scores[axis] > winner_scores[axis]:
+        print(f"\nThe optimized instruction is {describe_length(optimized_instruction)}.")
+        if seed_scores is not None:
+            delta = optimized_scores[axis] - seed_scores[axis]
+            print(
+                f"Against the seed it started from: {delta:+.4f} on {axis} "
+                f"({seed_scores[axis]:.4f} → {optimized_scores[axis]:.4f})."
+            )
+
+        # The length gate comes before the score comparison, because a better score on
+        # an unsendable instruction is not a better instruction. Enforced here rather
+        # than inside the optimizer: the budget reaches GEPA only as feedback prose it
+        # is free to ignore, and reaches MIPROv2 not at all.
+        if overage(optimized_instruction):
+            print(
+                f"\nRefusing to select it: over the {INSTRUCTION_CHARACTER_CAP}-character cap on "
+                "config.llm.instruction, so every request carrying it would 400. Keeping "
+                f"{winner_name}. The search is stochastic, so re-running is worth a try; "
+                "--auto medium buys more of it, and --start best-candidate begins from a short "
+                "instruction instead of asking the reflector to cut a long one down. Do not "
+                "raise INSTRUCTION_CHARACTER_CAP — it is the API's limit, not a preference."
+            )
+        elif optimized_scores[axis] > winner_scores[axis]:
             winner_name = f"{args.optimizer}-optimized"
-            winner_instruction = optimized.signature.instructions
+            winner_instruction = optimized_instruction
         else:
-            print(f"\n{args.optimizer} did not beat {winner_name} on dev; keeping the hand-written one.")
+            print(
+                f"\n{args.optimizer} did not beat {winner_name} on dev; keeping the hand-written one."
+            )
 
     # Held-out test scores for the winner and for the shipped-default proxy, so the
     # reported improvement is measured on data no selection decision saw.
@@ -300,18 +404,21 @@ def main(argv: list[str] | None = None) -> int:
             )
     print_table(test_rows, f"Held-out test ({axis})", axis)
 
-    print("\nBest cleanup instruction:\n")
+    print(f"\nBest cleanup instruction ({describe_length(winner_instruction)}):\n")
     print(f"  {winner_instruction}\n")
     print(
         "Send it as the dictation request's `config.llm.instruction` — see\n"
         "  Sources/BlurtEngine/STT/AssemblyAITranscriber.swift (the `LLMRewrite` struct),\n"
-        "which today encodes an empty `llm` object and so selects the service default."
+        "which today encodes an empty `llm` object and so selects the service default.\n"
+        "Store it verbatim: this harness scores instructions in the same envelope the\n"
+        "service applies them in, so a hand-tidied copy is an unscored string."
     )
 
     if args.out:
         results = {
             "config": vars(args),
             "selected_axis": axis,
+            "instruction_character_cap": INSTRUCTION_CHARACTER_CAP,
             "corpus": {
                 "source": loaded.source,
                 "detail": loaded.detail,
@@ -323,7 +430,11 @@ def main(argv: list[str] | None = None) -> int:
             "no_cleanup_floor": floors,
             "dev": dict(dev_rows),
             "test": dict(test_rows),
-            "winner": {"name": winner_name, "instruction": winner_instruction},
+            "winner": {
+                "name": winner_name,
+                "instruction": winner_instruction,
+                "length": len(winner_instruction),
+            },
             "candidates": CANDIDATES,
         }
         Path(args.out).write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")

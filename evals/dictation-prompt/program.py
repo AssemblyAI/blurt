@@ -151,8 +151,15 @@ def make_metric(axis: str):
     return scorer
 
 
-def make_feedback_metric(axis: str):
-    """Metric for GEPA: the same score plus a diff its reflector can act on."""
+def make_feedback_metric(axis: str, instruction_budget: int | None = None):
+    """Metric for GEPA: the same score plus a diff its reflector can act on.
+
+    `instruction_budget` is carried through to the feedback text, which is the only
+    channel that reaches GEPA's reflection model — the metric sees one scored
+    example, never the candidate instruction, so the length ceiling cannot be
+    enforced here. It is stated, not imposed; `optimize_cleanup_prompt` does the
+    imposing once the run returns.
+    """
 
     def scorer(gold, pred, trace=None, pred_name=None, pred_trace=None, **_):
         hypothesis = _cleaned(pred)
@@ -160,7 +167,11 @@ def make_feedback_metric(axis: str):
         return dspy.Prediction(
             score=scored.value(axis),
             feedback=metrics.feedback(
-                gold.cleaned_transcript, hypothesis, gold.raw_transcript, scored
+                gold.cleaned_transcript,
+                hypothesis,
+                gold.raw_transcript,
+                scored,
+                instruction_budget=instruction_budget,
             ),
         )
 
@@ -200,7 +211,9 @@ def evaluate(
     # DSPy's own bar is disabled: it can only cover a single call, so on a sweep it
     # would restart per candidate, and its carriage returns fight the caller's
     # meter. `on_example` lets the caller show one bar across the whole run.
-    runner = dspy.Parallel(num_threads=num_threads, provide_traceback=True, disable_progress_bar=True)
+    runner = dspy.Parallel(
+        num_threads=num_threads, provide_traceback=True, disable_progress_bar=True
+    )
     counted = program if on_example is None else _Ticking(program, on_example)
     predictions = runner([(counted, {"raw_transcript": u.disfluent}) for u in utterances])
     return metrics.mean(
@@ -247,13 +260,19 @@ def optimize(
     dev: list[Utterance],
     auto: str,
     num_threads: int,
+    instruction_budget: int | None = None,
 ):
-    """Evolve the instruction, returning the optimized program."""
+    """Evolve the instruction, returning the optimized program.
+
+    `instruction_budget` reaches GEPA through the feedback text and MIPROv2 not at
+    all — it searches on a bare score with no channel to state a constraint on. Both
+    winners are length-checked by the caller for that reason.
+    """
     trainset, valset = to_examples(train), to_examples(dev)
 
     if optimizer == "gepa":
         return dspy.GEPA(
-            metric=make_feedback_metric(axis),
+            metric=make_feedback_metric(axis, instruction_budget),
             auto=auto,
             reflection_lm=spec.lm(model=reflection_model, max_tokens=8192),
             num_threads=num_threads,

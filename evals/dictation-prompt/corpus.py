@@ -286,7 +286,9 @@ def hf_token() -> str | None:
         if token and token.strip():
             return token.strip()
 
-    home = os.environ.get("HF_HOME") or os.path.join(os.path.expanduser("~"), ".cache", "huggingface")
+    home = os.environ.get("HF_HOME") or os.path.join(
+        os.path.expanduser("~"), ".cache", "huggingface"
+    )
     for path in (os.environ.get("HF_TOKEN_PATH"), os.path.join(home, "token")):
         if not path:
             continue
@@ -354,9 +356,13 @@ def _rows_via_datasets(source: Source, _limit: int):
     try:
         import datasets
     except ImportError as error:  # pragma: no cover - depends on the local env
-        raise RuntimeError("--loader datasets needs the datasets library: pip install datasets") from error
+        raise RuntimeError(
+            "--loader datasets needs the datasets library: pip install datasets"
+        ) from error
 
-    stream = datasets.load_dataset(source.dataset, source.config, split=source.split, streaming=True)
+    stream = datasets.load_dataset(
+        source.dataset, source.config, split=source.split, streaming=True
+    )
     # Audio decoding is pure cost here — the eval never touches the waveform.
     for column, feature in getattr(stream, "features", {}).items():
         if isinstance(feature, datasets.Audio):
@@ -430,7 +436,9 @@ def load(
             "note": spec.note,
         }
     else:
-        raise ValueError(f"unknown source {source!r}; expected builtin or one of {', '.join(SOURCES)}")
+        raise ValueError(
+            f"unknown source {source!r}; expected builtin or one of {', '.join(SOURCES)}"
+        )
 
     # A reference-only source needs the injector to produce an input side, and
     # needs a reference long and well-punctuated enough to inject into. A jsonl

@@ -8,8 +8,11 @@ instruction. This harness answers the question that comes next: is there an expl
 instruction that beats that default, and by how much? It scores candidate instructions on
 how well they turn a disfluent transcript back into the text the speaker meant to write.
 
-The Python here is offline decision support — it is not shipped, not built, and not run by
-`scripts/check.sh`. (Its Markdown _is_ linted, like every other `.md` in the repo.)
+The Python here is offline decision support — nothing in it ships inside the app. It is still
+gated by `scripts/check.sh`, which runs `ruff format --check` and `ruff check` over `evals/`
+(config in [`../ruff.toml`](../ruff.toml)) and `pytest` over `test_eval.py`. All three are
+platform-independent, so they run in the `--portable` subset too — an eval change can be
+verified off-Mac. A harness whose own correctness is unchecked is a bad instrument.
 
 ## The corpora
 
@@ -86,8 +89,13 @@ uv run evals/dictation-prompt/optimize_cleanup_prompt.py --source fleurs --strip
 uv run evals/dictation-prompt/optimize_cleanup_prompt.py \
   --split train --limit 600 --dev-fraction 0.5 --test-fraction 0.5 --out results.json
 
-# Evolve a new instruction with GEPA (reflective prompt evolution).
+# Evolve a new instruction with GEPA (reflective prompt evolution). Starts from
+# candidates.PRIOR_WINNER — an instruction an earlier run produced that scores well but is
+# 1009 characters too long to send, so the job is to prune it under the cap and improve it.
 uv run evals/dictation-prompt/optimize_cleanup_prompt.py --optimizer gepa --split train --limit 400
+
+# Evolve from the best hand-written candidate instead, ignoring the prior winner entirely.
+uv run evals/dictation-prompt/optimize_cleanup_prompt.py --optimizer gepa --start best-candidate
 
 # A small model behind the AssemblyAI LLM Gateway, which is closer to what the service runs.
 # `openai/` selects the wire protocol, not the vendor — the gateway is OpenAI-compatible.
@@ -223,6 +231,45 @@ field that steers transcription. The Swift side is
 `Sources/BlurtEngine/STT/AssemblyAITranscriber.swift`, where `LLMRewrite` is an empty
 `Encodable` struct — encoding an empty `llm` object is what selects the service default today.
 
+Store it **verbatim**, exactly as the run emitted it. The harness scores instructions through
+the same envelope the service applies them in (see `--adapter plain`), so the string
+as-emitted is the string that was measured; a hand-tidied copy is an unscored string that
+looks scored.
+
+### The 2048-character cap
+
+`config.llm.instruction` accepts at most **2048 characters**. Over that, the API rejects the
+whole request — HTTP 400 `bad_request`, _"llm.instruction: String should have at most 2048
+characters"_ — before it looks at the audio. There is no degraded mode: no transcript comes
+back, so in the app every dictation fails with the overlay's "Try again".
+
+Two things make this easy to get wrong, and it has gone wrong once already — a 3057-character
+GEPA winner shipped and broke all dictation:
+
+- **It is not the same cap as `config.prompt`'s**, which is 4096 (`TranscriptionPrompt.characterCap`
+  on the Swift side). Borrowing the prompt's figure is what let the oversized instruction
+  through: the test that should have caught it asserted 4096.
+- **Neither limit is in the published API reference.** Both were measured against the live
+  endpoint on 2026-08-11. Re-probe before trusting them indefinitely.
+
+The harness enforces the cap in three places, none of which is sufficient alone:
+
+| Where                                        | What it catches                                      | Strength                     |
+| -------------------------------------------- | ---------------------------------------------------- | ---------------------------- |
+| `check_candidate_lengths()`, before any call | A hand-written candidate in `candidates.py`          | Hard — exits before spending |
+| GEPA feedback text (`--optimizer gepa`)      | Tells the reflector the ceiling as it rewrites       | Advisory — it can ignore it  |
+| Selection, after the run                     | An over-cap optimizer result, however well it scored | Hard — refuses to report it  |
+
+The middle one is only guidance: GEPA's metric is handed one scored example and never sees the
+candidate instruction, so length cannot be enforced there, and models count characters badly.
+The refusal at selection time is the actual guarantee.
+
+`candidates.PRIOR_WINNER` is exempt on purpose. It is the over-cap instruction from that
+earlier run, kept as the default GEPA seed (`--start prior-winner`) because its _content_ was
+never the problem — it scored well and was only ever too long. A pruning run also scores the
+seed on dev, so the report says whether the shortened instruction kept what the long one knew,
+not merely that it beat the hand-written candidates.
+
 Three things to keep straight, all settled decisions in
 [`AGENTS.md`](../../AGENTS.md#settled-decisions--dont-reintroduce-these):
 
@@ -244,7 +291,7 @@ Three things to keep straight, all settled decisions in
 | File                         | What it holds                                                             |
 | ---------------------------- | ------------------------------------------------------------------------- |
 | `optimize_cleanup_prompt.py` | CLI, axis resolution, reporting.                                          |
-| `candidates.py`              | The cleanup instructions under test.                                      |
+| `candidates.py`              | The instructions under test, the character cap, and the GEPA seed.        |
 | `corpus.py`                  | Sources, loading, de-tagging, splitting, the echo floor.                  |
 | `disfluency.py`              | The seeded, additive disfluency injector.                                 |
 | `metrics.py`                 | Token alignment, the two word-error-rate axes, GEPA feedback text.        |

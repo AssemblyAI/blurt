@@ -12,6 +12,11 @@ xcuserdata/
 !.claude/agents/
 !.claude/skills/
 .superpowers/
+# Per-developer agent scratch notes. A nested .remember/.gitignore is only ever
+# local, so name the directory here too — that way a fresh clone ignores it
+# without waiting for the tool to recreate it. Also in .prettierignore, so a
+# local `prettier --check` doesn't fail on notes CI never sees.
+.remember/
 build/
 docs/
 
