@@ -928,8 +928,8 @@ def test_the_optimizers_valset_comes_off_train_not_out_of_dev():
     win, because the same rows then judge the result.
     """
     train, validation, dev, test = _default_split()
-    assert (len(validation), len(dev), len(test)) == (50, 150, 150)
-    assert len(train) == 2000 - 50 - 150 - 150
+    assert (len(validation), len(dev), len(test)) == (150, 300, 150)
+    assert len(train) == 2000 - 150 - 300 - 150
     assert not (set(map(id, validation)) & set(map(id, dev)))
     assert not (set(map(id, validation)) & set(map(id, train)))
 
@@ -937,8 +937,8 @@ def test_the_optimizers_valset_comes_off_train_not_out_of_dev():
 def test_raising_the_limit_grows_only_the_free_slice():
     """The point of absolute sizes: valset, dev and test are paid for, train is not."""
     train, validation, dev, test = _default_split(["--limit", "4000"])
-    assert (len(validation), len(dev), len(test)) == (50, 150, 150)
-    assert len(train) == 4000 - 350
+    assert (len(validation), len(dev), len(test)) == (150, 300, 150)
+    assert len(train) == 4000 - 600
 
 
 def test_the_reflector_sees_more_than_gepas_default_three_examples():

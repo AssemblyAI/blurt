@@ -163,22 +163,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     evaluation.add_argument(
         "--dev-fraction",
         type=float,
-        default=150,
+        default=300,
         metavar="ROWS_OR_FRACTION",
-        help="dev rows, absolute at 1 or above and a fraction below (default: 150). Dev "
+        help="dev rows, absolute at 1 or above and a fraction below (default: 300). Dev "
         "decides which instruction ships — baseline versus the optimizer's result — and "
         "the optimizer never sees it: its own valset is carved from train instead "
-        "(--gepa-valset). Sized for a decision you can trust rather than for the search",
+        "(--gepa-valset). Sized for resolution: a search once won by +0.008 on 50 valset "
+        "rows and lost by 0.006 on 150 dev rows, both inside the noise, so the binding "
+        "constraint on finding a winner is how finely the difference can be measured",
     )
     evaluation.add_argument(
         "--gepa-valset",
         type=float,
-        default=50,
+        default=150,
         metavar="ROWS_OR_FRACTION",
-        help="rows taken off train for the optimizer's own valset (default: 50). GEPA "
+        help="rows taken off train for the optimizer's own valset (default: 150). GEPA "
         "scores every surviving candidate against all of it, so its size multiplies the "
-        "search's cost while buying no extra exploration — that depends only on --auto. "
-        "GEPA's own advice is the smallest set that still matches the task distribution",
+        "search's cost while buying no exploration — that depends only on --auto. GEPA's "
+        "own advice is the smallest set that still matches the task distribution, and 50 "
+        "was that; it was raised because at 50 the Pareto front was ranking candidates on "
+        "differences it could not resolve, and picking a winner that dev then rejected",
     )
     evaluation.add_argument(
         "--test-fraction",

@@ -136,17 +136,29 @@ A bare invocation is a full paid GEPA run, so it is worth knowing what it commit
 | `--optimizer gepa` · `--start prior-winner` | Evolve from `candidates.PRIOR_WINNER` — the strongest instruction we have, and `BASELINE` — rather than restarting from a four-line candidate that knows none of what it learned. It fits the cap, so the search starts inside the feasible region.               |
 | `--auto heavy`                              | 27 reflection trials (light is 10, medium 18). This is the **only** knob that changes how many ideas get tried — corpus size does not. Merge is off: crossover needs more than one predictor, so it would only re-evaluate duplicates.                            |
 | `--split train --limit 2000`                | The sources' own held-out splits are only ~250 rows. Everything past dev and test becomes train, and train rows are free — see below.                                                                                                                             |
-| `--dev-fraction 150` (rows, not a fraction) | Dev decides which instruction ships — `BASELINE` versus the optimizer's result — and the optimizer never sees it. Sized for a decision you can trust rather than for the search.                                                                                  |
-| `--gepa-valset 50` (rows)                   | The optimizer's own valset, carved off train. Every surviving candidate is scored against all of it, so its size multiplies search cost while buying no exploration — that is `--auto` alone.                                                                     |
+| `--dev-fraction 300` (rows, not a fraction) | Dev decides which instruction ships — `BASELINE` versus the optimizer's result — and the optimizer never sees it. Sized for **resolution**: see below.                                                                                                            |
+| `--gepa-valset 150` (rows)                  | The optimizer's own valset, carved off train. Every surviving candidate is scored against all of it, so its size multiplies search cost while buying no exploration — that is `--auto` alone. Raised for the same reason as dev.                                  |
 | `--reflection-minibatch-size 8`             | Scored examples the reflector sees before rewriting. GEPA's default is 3, which on a task this well-solved is often three near-perfect examples and almost no failure to generalise from.                                                                         |
 | `--test-fraction 150` (rows)                | The honest number, from data no selection step saw. Scored twice at the end.                                                                                                                                                                                      |
 | `--candidates baseline`                     | A search run scores only `BASELINE` on dev — it is the bar, the fallback and the seed at once, so the other six cost a dev sweep each to re-rank instructions the search never uses. `--optimizer none` scores all of them, since there the ranking is the point. |
 | `--num-threads 1`                           | The gateway rate-limits; a 429 storm mid-run costs more wall-clock than the concurrency saves. Raise it for a provider that tolerates it.                                                                                                                         |
 | `--max-tokens 8192`                         | Headroom for reasoning tokens, not for the answer. Truncation here is silently corrupting — see below.                                                                                                                                                            |
 
-That leaves **train 1650 / optimizer valset 50 / dev 150 / test 150**, for roughly 2,000 model
-calls: 150 to score `BASELINE`, ~1,385 for the search, 150 to re-score its result, and 300 for
+That leaves **train 1400 / optimizer valset 150 / dev 300 / test 150**, for roughly 3,000 model
+calls: 300 to score `BASELINE`, ~2,085 for the search, 300 to re-score its result, and 300 for
 the two held-out scorings at the end.
+
+**Why the two evaluation sets are this large.** The binding constraint on finding a winner is
+not search budget, it is measurement. A search once beat the seed by +0.008 on a 50-row valset
+and lost to it by 0.006 on a 150-row dev split — both differences inside the run-to-run noise,
+so the run spent 27 reflection trials producing a number that could not be trusted either way.
+More trials sample the same noise more often; more rows shrink it. Raising the valset also
+matters on its own, because GEPA's Pareto front ranks candidates per validation example, and at
+50 rows it was ordering them on differences it could not resolve — then handing dev a winner
+dev rejected.
+
+This does not make a winner exist. It makes a real one detectable and a spurious one rejected,
+which are the two outcomes worth paying for.
 
 **Three sets, three jobs, and no overlap.** The optimizer tracks candidates against its own
 valset (carved off train), dev decides which instruction ships, and test is the number
