@@ -590,6 +590,20 @@ def test_the_compressed_winner_kept_the_product_critical_safeguards():
         assert clause in candidates.PRIOR_WINNER, clause
 
 
+def test_the_stated_target_sits_below_the_cap_that_is_enforced():
+    """Told "at most 2048", one run's rejects had a median length of 2149.
+
+    A model aims at the number it is handed, so the number it is handed is no longer
+    the number enforced — but a proposal between the two is still accepted, since the
+    target is advice and only the cap is real.
+    """
+    cap = candidates.INSTRUCTION_CHARACTER_CAP
+    assert candidates.target_length(cap) < cap
+    assert candidates.word_budget(cap) < cap / candidates.CHARS_PER_WORD
+    between = "x " * ((candidates.target_length(cap) + cap) // 2 // 2)
+    assert candidates.overage(between) == 0
+
+
 def test_the_seed_leaves_the_search_room_to_work():
     """A seed that scores well and cannot be improved is worth less than a weaker one.
 
@@ -652,8 +666,8 @@ def test_an_over_long_objection_states_the_arithmetic():
     assert "250 characters over" in notes[0]
     # Stated in words as well: a reflector told "cut 638 characters" came back longer,
     # so the number it is asked to act on has to be in a unit it can count.
-    assert f"at most {candidates.word_budget(cap)} words" in notes[0]
-    assert f"delete roughly {int(250 / candidates.CHARS_PER_WORD)} words" in notes[0]
+    assert f"Cut it to {candidates.word_budget(cap)} words" in notes[0]
+    assert f"at least {int(250 / candidates.CHARS_PER_WORD)}" in notes[0]
 
 
 def test_naming_a_signature_field_is_an_objection():
@@ -749,7 +763,7 @@ def test_the_constraints_reach_the_reflector_before_its_first_attempt():
     # characters" cannot check its own work, and one told to cut 638 came back longer.
     room = candidates.word_budget(2048) - len(seed.split())
     assert f"{room} words of room" in preamble
-    assert f"{candidates.word_budget(2048)} words" in preamble
+    assert f"Aim for {candidates.word_budget(2048)} words" in preamble
     assert "forbid answering" in preamble
     assert "Do not name input or output fields" in preamble
 

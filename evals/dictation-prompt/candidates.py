@@ -120,8 +120,11 @@ def objections(
             f"It is {len(proposal.split())} words ({len(proposal)} characters), which is "
             f"{excess} characters over the hard {cap}-character limit on "
             f"config.llm.instruction — the API would reject every request carrying it. "
-            f"Cut it to at most {word_budget(cap)} words, so delete roughly "
-            f"{max(1, int(excess / CHARS_PER_WORD))} words. Remove whole worked examples and "
+            f"Cut it to {word_budget(cap)} words, which means deleting at least "
+            f"{max(1, int(excess / CHARS_PER_WORD))} and preferably "
+            f"{max(1, int((len(proposal) - target_length(cap)) / CHARS_PER_WORD))} words — aim "
+            "below the limit rather than at it, since landing just over wastes the attempt "
+            "entirely. Remove whole worked examples and "
             "restatements rather than trimming words from each sentence, and keep every rule "
             "that changes what the model does."
         )
@@ -164,9 +167,34 @@ CONSTRAINT_MARKER = "HARD CONSTRAINTS"
 CHARS_PER_WORD = 6.15
 
 
+#: Fraction of the hard cap the reflector is *told* to write to.
+#:
+#: Measured, not guessed. Told "at most 2048 characters", one run's 49 rejected
+#: proposals had a median length of 2149 and a median overage of 101 — one missed by a
+#: single character. The reflector was not overshooting wildly; it was aiming at the
+#: number it was given and landing about 5% past it, which is what asking a model for
+#: "at most N" reliably produces.
+#:
+#: So the number it is given is no longer the number that is enforced. At 0.85 the
+#: stated target is ~1740 characters, and the same +5% lands near 1840 — inside the
+#: cap with room to spare. The cap itself does not move: `overage` still measures
+#: against the real limit, so a proposal between the target and the cap is accepted
+#: rather than rejected for missing an advisory figure.
+SOFT_TARGET_RATIO = 0.85
+
+
+def target_length(cap: int = INSTRUCTION_CHARACTER_CAP) -> int:
+    """The length the reflector is asked for — below `cap`, to absorb its overshoot."""
+    return int(cap * SOFT_TARGET_RATIO)
+
+
 def word_budget(cap: int = INSTRUCTION_CHARACTER_CAP) -> int:
-    """`cap` expressed in words — the unit a reflector can actually aim at."""
-    return int(cap / CHARS_PER_WORD)
+    """The stated target in words — the unit a reflector can actually aim at.
+
+    Words because characters are uncountable to a model, and the *target* rather than
+    the cap because it aims at whatever figure it is handed.
+    """
+    return int(target_length(cap) / CHARS_PER_WORD)
 
 
 def trim_to_fit(instruction: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> str | None:
@@ -215,10 +243,12 @@ def constraint_preamble(current: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> s
     return (
         f"{current}\n\n---\n{CONSTRAINT_MARKER} on the instruction you write (these are "
         f"requirements of the API and the product, not preferences):\n"
-        f"- At most {word_budget(cap)} words (a hard {cap}-character limit). The instruction "
-        f"above is {len(current.split())} words, so you have roughly "
-        f"{max(0, word_budget(cap) - len(current.split()))} words of room. Most of the budget "
-        "is already spent: prefer rewording to adding, and if you add a rule, cut one.\n"
+        f"- Aim for {word_budget(cap)} words or fewer. The instruction above is "
+        f"{len(current.split())} words, so you have roughly "
+        f"{max(0, word_budget(cap) - len(current.split()))} words of room. Going slightly over "
+        f"is survivable; past {int(cap / CHARS_PER_WORD)} words the API rejects the request "
+        "outright and the attempt is wasted. Prefer rewording to adding, and if you add a "
+        "rule, cut one.\n"
         "- It must forbid answering the transcript and forbid translating it, in whatever "
         "words you like. The scoring corpus cannot see either failure, so nothing will "
         "penalise you for dropping them; they still ship to real users.\n"
