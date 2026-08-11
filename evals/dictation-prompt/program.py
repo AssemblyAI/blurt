@@ -16,8 +16,18 @@ import dspy
 from gepa.strategies.instruction_proposal import InstructionProposalSignature
 
 import metrics
-from candidates import overage, shortening_directive
+from candidates import objections, revision_directive
 from corpus import Utterance
+
+#: The harness's own signature field names. They exist for DSPy's benefit and appear
+#: in **neither** envelope the instruction is applied in: `PlainChatAdapter` sends the
+#: bare transcript as the user turn, and the service sends the bare transcript too.
+#:
+#: Named here rather than inline because the proposer has to reject instructions that
+#: mention them (see `CappedInstructionProposer`), and a gate spelling the names a
+#: second time would silently stop matching the day the signature is renamed.
+INPUT_FIELD = "raw_transcript"
+OUTPUT_FIELD = "cleaned_transcript"
 
 
 def build(instruction: str) -> dspy.Predict:
@@ -27,16 +37,18 @@ def build(instruction: str) -> dspy.Predict:
     into `config.llm.instruction`, a lone string the service applies in one pass.
     A program whose quality depended on an extra reasoning field would not survive
     that trip.
+
+    The field descriptions are for `--adapter chat` only — `PlainChatAdapter` drops
+    everything but the instruction itself, so under the default adapter they are never
+    sent.
     """
     signature = (
-        dspy.Signature("raw_transcript -> cleaned_transcript")
+        dspy.Signature(f"{INPUT_FIELD} -> {OUTPUT_FIELD}")
         .with_instructions(instruction)
         .with_updated_fields(
-            "raw_transcript", desc="Verbatim speech-to-text output for one dictated utterance."
+            INPUT_FIELD, desc="Verbatim speech-to-text output for one dictated utterance."
         )
-        .with_updated_fields(
-            "cleaned_transcript", desc="The same utterance as finished written text."
-        )
+        .with_updated_fields(OUTPUT_FIELD, desc="The same utterance as finished written text.")
     )
     return dspy.Predict(signature)
 
@@ -227,35 +239,40 @@ def evaluate(
 
 
 class CappedInstructionProposer:
-    """GEPA `ProposalFn` that will not hand back an instruction over the length cap.
+    """GEPA `ProposalFn` that will not hand back an instruction that cannot ship.
+
+    Two things disqualify one, and neither is visible to the score: exceeding the
+    API's character cap, and naming a signature field that exists in no envelope. See
+    `candidates.objections` for both.
 
     Why this exists rather than a penalty in the metric: GEPA's metric is handed one
-    scored *example* and never sees the candidate instruction, so length cannot enter
-    the objective there. Stating the cap in feedback prose (`make_feedback_metric`)
+    scored *example* and never sees the candidate instruction, so neither property can
+    enter the objective there. Stating them in feedback prose (`make_feedback_metric`)
     only asks nicely, and longer instructions tend to score better — so an
-    unconstrained search drifts over the cap and the run ends with nothing sendable.
-    This is the documented hook for constraining what the search may even consider:
-    an over-cap proposal is rejected and re-asked before GEPA ever evaluates it, so
-    no search budget is spent scoring a candidate that could not ship.
+    unconstrained search drifts and the run ends with nothing sendable. This is the
+    documented hook for constraining what the search may even consider: a bad proposal
+    is rejected and re-asked before GEPA ever evaluates it, so no search budget is
+    spent scoring a candidate that could not ship.
 
     Delegates to GEPA's own `InstructionProposalSignature` rather than reimplementing
     the reflection prompt — the quality of that prompt is most of what GEPA is. Only
     the accept/retry decision around it is ours.
 
     On giving up after `attempts` tries it returns the instruction **unchanged**, not
-    a truncation. Cutting a proposal at 2048 characters lands mid-sentence, and a
-    mangled instruction that happens to score well is exactly the kind of thing that
-    reaches a build and breaks it. A no-op mutation costs GEPA one wasted step and
-    keeps the pool honest.
+    a patched-up one. Truncating at the cap lands mid-sentence and deleting a field
+    name by hand can leave a dangling clause; a mangled instruction that happens to
+    score well is exactly the kind of thing that reaches a build and breaks it. A
+    no-op mutation costs GEPA one wasted step and keeps the pool honest.
     """
 
-    def __init__(self, cap: int, attempts: int = 3):
+    def __init__(self, cap: int, attempts: int = 3, fields: tuple[str, ...] = ()):
         self.cap = cap
         self.attempts = attempts
-        #: Proposals rejected for length, over the whole run — reported by the CLI so
-        #: a search that spent itself fighting the cap is visible rather than implied.
+        self.fields = fields or (INPUT_FIELD, OUTPUT_FIELD)
+        #: Proposals rejected, over the whole run — reported by the CLI so a search
+        #: that spent itself fighting the constraints is visible rather than implied.
         self.rejected = 0
-        #: Components the retries never got under the cap, left unchanged.
+        #: Components the retries never got clean, left unchanged.
         self.abandoned = 0
 
     def __call__(self, candidate, reflective_dataset, components_to_update) -> dict[str, str]:
@@ -286,13 +303,14 @@ class CappedInstructionProposer:
                     "dataset_with_feedback": dataset_with_feedback,
                 },
             )["new_instruction"]
-            if not overage(proposed, self.cap):
+            notes = objections(proposed, self.fields, self.cap)
+            if not notes:
                 return proposed
             self.rejected += 1
             # Re-ask against the rejected draft, not the original: the next round is a
-            # compression pass over what it just wrote, which is a smaller ask than
-            # re-deriving a shorter instruction from scratch.
-            document = shortening_directive(proposed, self.cap)
+            # revision of what it just wrote, which is a smaller ask than re-deriving
+            # a compliant instruction from scratch.
+            document = revision_directive(proposed, notes)
         self.abandoned += 1
         return current
 

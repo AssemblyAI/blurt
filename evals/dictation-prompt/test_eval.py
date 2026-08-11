@@ -607,15 +607,52 @@ def test_the_instruction_budget_reaches_the_gepa_feedback_text():
     assert "at most 2048 characters" in with_budget
 
 
-def test_the_shortening_directive_states_the_arithmetic():
+def test_an_over_long_objection_states_the_arithmetic():
     """ "Too long" produces another over-long draft; "cut at least N" is checkable."""
     cap = candidates.INSTRUCTION_CHARACTER_CAP
-    proposal = "y" * (cap + 250)
-    directive = candidates.shortening_directive(proposal)
-    assert proposal in directive
-    assert str(cap) in directive
-    assert "250 too many" in directive
-    assert "at least 250" in directive
+    notes = candidates.objections("y" * (cap + 250), fields=())
+    assert len(notes) == 1
+    assert f"{cap + 250} characters" in notes[0]
+    assert "250 over" in notes[0]
+    assert "at least 250" in notes[0]
+
+
+def test_naming_a_signature_field_is_an_objection():
+    """The fields are in neither envelope, and the label can reach the user's document."""
+    notes = candidates.objections(
+        "Output the result as `cleaned_transcript`.",
+        fields=("raw_transcript", "cleaned_transcript"),
+    )
+    assert len(notes) == 1
+    assert "cleaned_transcript" in notes[0]
+    # Only the field it actually named, so the re-ask isn't chasing a phantom.
+    assert "raw_transcript" not in notes[0]
+
+
+def test_a_clean_proposal_draws_no_objections():
+    assert candidates.objections("Delete the disfluencies.", fields=("raw_transcript",)) == []
+
+
+def test_both_faults_are_reported_together():
+    """One re-ask should fix everything, not surface the next fault a round later."""
+    notes = candidates.objections(
+        "raw_transcript " + "y" * candidates.INSTRUCTION_CHARACTER_CAP,
+        fields=("raw_transcript",),
+    )
+    assert len(notes) == 2
+
+
+def test_the_revision_directive_carries_the_draft_and_every_objection():
+    directive = candidates.revision_directive("the draft", ["first problem", "second problem"])
+    assert "the draft" in directive
+    assert "- first problem" in directive
+    assert "- second problem" in directive
+
+
+def test_the_shipped_winner_names_no_signature_field():
+    """The gate is for new proposals; this is the one already in the table."""
+    for field in ("raw_transcript", "cleaned_transcript"):
+        assert field not in candidates.PRIOR_WINNER, field
 
 
 def test_a_bare_invocation_is_the_recommended_gepa_run():
@@ -777,7 +814,10 @@ def _proposer_with(monkeypatch, drafts, cap=50, attempts=3):
             return {"new_instruction": drafts[len(seen) - 1]}
 
     monkeypatch.setattr(program_module, "InstructionProposalSignature", FakeSignature)
-    return program_module.CappedInstructionProposer(cap, attempts=attempts), seen
+    proposer = program_module.CappedInstructionProposer(
+        cap, attempts=attempts, fields=("raw_transcript", "cleaned_transcript")
+    )
+    return proposer, seen
 
 
 def test_a_proposal_within_the_cap_is_accepted_first_try(monkeypatch):
@@ -794,7 +834,7 @@ def test_an_over_cap_proposal_is_rejected_and_re_asked(monkeypatch):
     assert proposer.abandoned == 0
     # The retry compresses the rejected draft rather than re-deriving from the original.
     assert "z" * 80 in seen[1]
-    assert "30 too many" in seen[1]
+    assert "30 over" in seen[1]
 
 
 def test_giving_up_returns_the_original_not_a_truncation(monkeypatch):
@@ -803,6 +843,24 @@ def test_giving_up_returns_the_original_not_a_truncation(monkeypatch):
     result = proposer._propose("original", [])
     assert result == "original"
     assert len(result) != 50
+    assert (proposer.rejected, proposer.abandoned) == (3, 1)
+
+
+def test_a_proposal_naming_a_field_is_rejected_and_re_asked(monkeypatch):
+    """The leak regenerates every run, so it is gated rather than fixed once."""
+    proposer, seen = _proposer_with(
+        monkeypatch, ["output it as cleaned_transcript", "output it plainly"]
+    )
+    assert proposer._propose("original", []) == "output it plainly"
+    assert proposer.rejected == 1
+    assert "cleaned_transcript" in seen[1]
+    assert "do not exist in the message" in seen[1]
+
+
+def test_a_field_naming_proposal_is_never_patched_by_hand(monkeypatch):
+    """Deleting the name in-place can leave a dangling clause; return the original."""
+    proposer, _ = _proposer_with(monkeypatch, ["name raw_transcript here"] * 3)
+    assert proposer._propose("original", []) == "original"
     assert (proposer.rejected, proposer.abandoned) == (3, 1)
 
 

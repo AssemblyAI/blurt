@@ -317,6 +317,7 @@ The harness enforces the cap in three places, none of which is sufficient alone:
 | `check_candidate_lengths()`, before any call | A hand-written candidate in `candidates.py`          | Hard — exits before spending |
 | GEPA feedback text (`--optimizer gepa`)      | Tells the reflector the ceiling as it rewrites       | Advisory — it can ignore it  |
 | `CappedInstructionProposer` (GEPA only)      | An over-cap proposal, before GEPA ever scores it     | Hard — rejects and re-asks   |
+| `CappedInstructionProposer` (GEPA only)      | A proposal naming a DSPy signature field             | Hard — rejects and re-asks   |
 | Selection, after the run                     | An over-cap optimizer result, however well it scored | Hard — refuses to report it  |
 
 The third row is the one that makes this a search constraint rather than a report. Length
@@ -334,6 +335,24 @@ visible rather than inferred from a disappointing score.
 **MIPROv2 gets none of this.** It searches on a bare scalar and exposes no proposal hook, so
 `--optimizer mipro` is constrained only by the final refusal; the CLI says so when you run it.
 
+### Why the proposer also rejects field names
+
+The harness's DSPy signature is `raw_transcript -> cleaned_transcript`, and GEPA's reflective
+dataset is **keyed by those field names** — so the reflection model sees them as labels and
+writes instructions that refer to them ("output the result as `cleaned_transcript`").
+
+Those fields exist in neither envelope. `PlainChatAdapter` sends the bare transcript as the
+user turn and the instruction as the system message, with no field scaffolding; the service
+does the same. So the instruction describes a message the model never receives — and worse, it
+invites the model to emit the label literally, which Blurt would paste into the user's
+document. The eval is structurally unable to catch that: under `--adapter plain` the whole
+completion is the answer, so if the small stand-in doesn't take the bait where the service's
+rewrite model does, the score looks fine.
+
+The leak regenerates every run, which is why it is a gate rather than a one-time fix. Both
+faults are reported in the same re-ask, so one revision round fixes everything rather than
+surfacing the next fault a round later.
+
 **Nothing is exempt, `prior-winner` included.** That candidate is the instruction from the
 run that broke dictation, compressed under the cap — see below — so it passes the same
 pre-flight check as everything else, and if a later edit pushes it back over, the run stops
@@ -343,12 +362,12 @@ before spending anything.
 
 `candidates.PRIOR_WINNER` is the strongest instruction the harness has produced. The run that
 emitted it wrote 3057 characters, 1009 over the cap, and it shipped in that state once. It was
-compressed **by deletion only**: every sentence in it is verbatim from the string that was
-scored, and the one edit that isn't a deletion is closing the gap in the rule numbering. Five
-removals, each a duplicate or a contradiction rather than a judgement about what matters —
-a redundant taxonomy bullet, two rules that restated bullets above them, a worked example whose
-output contradicted one of those rules, and the no-op example that a surviving rule already
-states in a line. It now sits at 1918 characters.
+compressed **by deletion only** — no wording was introduced, only removed — and the one edit
+that isn't a deletion is closing the gap in the rule numbering. Six removals, each a
+duplicate, a contradiction, or a reference to something that doesn't exist: a redundant
+taxonomy bullet, two rules that restated bullets above them, a worked example whose output
+contradicted one of those rules, the no-op example a surviving rule already states in a line,
+and the two clauses naming DSPy signature fields (see above). It now sits at 1839 characters.
 
 It plays three roles at once, which is what makes the run cheap to read:
 

@@ -57,28 +57,59 @@ def overage(instruction: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> int:
     return max(0, len(instruction) - cap)
 
 
-def shortening_directive(proposal: str, cap: int = INSTRUCTION_CHARACTER_CAP) -> str:
-    """Hand an over-long proposal back to the reflector as something to compress.
+def objections(
+    proposal: str, fields: tuple[str, ...], cap: int = INSTRUCTION_CHARACTER_CAP
+) -> list[str]:
+    """Why `proposal` can't ship as-is, phrased for the reflector. Empty means it can.
 
-    Used by the GEPA proposer gate (`program.CappedInstructionProposer`) as the next
-    round's `current_instruction_doc`: the rejected text plus an explicit account of
-    by how much it missed. Naming the arithmetic is the point — models are poor at
-    counting characters, so "too long" alone tends to produce another over-long
-    draft, while "cut at least N of these M characters" gives something checkable.
+    Two things disqualify an instruction, and both are invisible to the score:
 
-    What it asks to be cut is deliberate. Worked examples and restatements are the
-    compressible mass in a cleanup instruction; the rules are what change behaviour,
-    and an instruction that loses those scores worse and teaches the search nothing.
+    **Length.** Over `cap` the API rejects the whole request — see that constant.
+
+    **Naming a signature field.** `fields` are the harness's own DSPy field names, and
+    they appear in neither envelope: `PlainChatAdapter` sends the bare transcript, and
+    so does the service. An instruction saying "output the result as
+    `cleaned_transcript`" is therefore describing a message the model never receives —
+    and worse, it invites the model to emit that label literally, which Blurt would
+    paste into the user's document. The eval is structurally unable to catch it: the
+    stand-in model may not take the bait where the service's rewrite model does.
+
+    The reflector acquires these names because GEPA's reflective dataset is keyed by
+    them, so it regenerates every run and has to be gated rather than fixed once.
     """
-    excess = overage(proposal, cap)
+    found = [name for name in fields if name in proposal]
+    notes = []
+    if excess := overage(proposal, cap):
+        notes.append(
+            f"It is {len(proposal)} characters, {excess} over the {cap}-character limit on "
+            f"config.llm.instruction, so the API would reject every request carrying it. "
+            f"Cut at least {excess} characters — drop redundant worked examples and "
+            "restatements first, and keep every rule that changes what the model does."
+        )
+    if found:
+        notes.append(
+            f"It names the field(s) {', '.join(found)}, which do not exist in the message "
+            "the model receives — the instruction is applied to a bare transcript with no "
+            "fields around it. Refer to 'the transcript' and 'your output' in prose, and "
+            "never instruct the model to label its output."
+        )
+    return notes
+
+
+def revision_directive(proposal: str, notes: list[str]) -> str:
+    """Hand a rejected proposal back to the reflector as something to revise.
+
+    Used by `program.CappedInstructionProposer` as the next round's
+    `current_instruction_doc`: the rejected text plus what was wrong with it. Stating
+    the arithmetic rather than "too long" is the point — models count characters
+    badly, so a bare complaint tends to produce another over-long draft while
+    "cut at least N of these M" gives something checkable.
+    """
+    listed = "\n".join(f"- {note}" for note in notes)
     return (
-        f"{proposal}\n\n"
-        f"---\n"
-        f"HARD CONSTRAINT: the instruction above is {len(proposal)} characters, which is "
-        f"{excess} too many. It must be at most {cap} characters or the API rejects every "
-        f"request carrying it. Rewrite it shorter, cutting at least {excess} characters. "
-        "Drop redundant worked examples and restatements first; keep every rule that "
-        "changes what the model does, and keep the meaning of the rules intact."
+        f"{proposal}\n\n---\nHARD CONSTRAINTS: the instruction above cannot be used as "
+        f"written.\n{listed}\nRewrite it to fix every point above, keeping the meaning of "
+        "its rules intact."
     )
 
 
@@ -122,11 +153,11 @@ CANDIDATES: dict[str, str] = {
 #: shipped in that state once and broke every dictation until the Swift side went
 #: back to an empty `llm` block.
 #:
-#: **What was cut, and how.** By deletion only: every sentence below is verbatim from
-#: the string that was scored, and the sole edit that is not a deletion is closing the
-#: gap in the rule numbering. Nothing was paraphrased, so this is the measured string
-#: minus redundancy rather than a new draft of it. Five removals, each a duplicate or
-#: a contradiction rather than a judgement call about what matters:
+#: **What was cut, and how.** By deletion only — no wording was introduced, only
+#: removed, so this is the measured string minus redundancy rather than a new draft of
+#: it. Most removals are whole sentences; two are clauses (see 6). The one edit that
+#: is not a deletion is closing the gap in the rule numbering. Six removals, each a
+#: duplicate, a contradiction, or a reference to something that does not exist:
 #:
 #: 1. The "Interjections used as fillers: oh" bullet — the filler-sounds bullet above
 #:    it already lists "oh".
@@ -140,6 +171,15 @@ CANDIDATES: dict[str, str] = {
 #:    original as load-bearing evidence from the reference targets; carrying a
 #:    self-contradicting example is still worse than carrying none.
 #: 5. Worked example 2 — the no-op case, which the surviving rule 3 states in one line.
+#: 6. The two clauses naming `raw_transcript` and `cleaned_transcript` — DSPy signature
+#:    field names that appear in neither envelope. `PlainChatAdapter` sends the bare
+#:    transcript and so does the service, so the instruction was describing a message
+#:    the model never receives; worse, "output the result as `cleaned_transcript`"
+#:    invites the model to emit that label, which Blurt would paste into the user's
+#:    document. The original noted the danglers as evidence to preserve — that
+#:    undersold them. `program.CappedInstructionProposer` now rejects any proposal
+#:    that names a field, because GEPA's reflective dataset is keyed by those names
+#:    and regenerates the habit every run.
 #:
 #: **What this is not.** It has not been re-scored. Deletion cannot introduce wording
 #: the eval never saw, and the three product-critical safeguards (do not answer, do not
@@ -148,7 +188,7 @@ CANDIDATES: dict[str, str] = {
 #: `BASELINE`. Treat a search that fails to beat it as the more likely outcome.
 PRIOR_WINNER = """\
 TASK
-You will be given a single dictated (spoken-language) transcript under the field `raw_transcript`. Your job is to remove disfluencies from it and output the result as `cleaned_transcript`. Every remaining word must stay exactly as it was spoken, in the same order. Do not summarize, rephrase, translate, expand, correct, or answer the text. Only delete disfluencies — never substitute or reword.
+You will be given a single dictated (spoken-language) transcript. Your job is to remove disfluencies from it. Every remaining word must stay exactly as it was spoken, in the same order. Do not summarize, rephrase, translate, expand, correct, or answer the text. Only delete disfluencies — never substitute or reword.
 
 WHAT COUNTS AS A DISFLUENCY (DELETE THESE)
 Disfluencies are filler and hesitation elements that add no propositional content. Remove ALL of the following whenever they occur, including at the start, middle, or end of the transcript:
