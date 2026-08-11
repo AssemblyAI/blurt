@@ -54,11 +54,12 @@ KEYCHAIN_ACCOUNT="AssemblyAIAPIKey"
 echo "==> Deleting AssemblyAI API key from Keychain ($KEYCHAIN_SERVICE / $KEYCHAIN_ACCOUNT)"
 security delete-generic-password -s "$KEYCHAIN_SERVICE" -a "$KEYCHAIN_ACCOUNT" >/dev/null 2>&1 || true
 
-# Developer mode appends transcript logs here (see DictationLog); a fresh
-# install has none, so clear it too.
+# Developer mode appends transcript and failure logs here (see DictationLog); a
+# fresh install has neither, so clear them too. The rmdir below only succeeds
+# once the directory is empty, so every file Blurt writes there must be listed.
 DICTATION_LOG_DIR="$HOME/Library/Logs/Blurt"
-echo "==> Removing dictation log ($DICTATION_LOG_DIR/dictations.jsonl)"
-rm -f "$DICTATION_LOG_DIR/dictations.jsonl"
+echo "==> Removing dictation logs ($DICTATION_LOG_DIR/{dictations,errors}.jsonl)"
+rm -f "$DICTATION_LOG_DIR/dictations.jsonl" "$DICTATION_LOG_DIR/errors.jsonl"
 rmdir "$DICTATION_LOG_DIR" 2>/dev/null || true
 
 echo "Done. Relaunch Blurt for permission prompts to reappear."

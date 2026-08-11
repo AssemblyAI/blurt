@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Append-only JSONL log of completed transcripts at
 /// `~/Library/Logs/Blurt/dictations.jsonl`. Used to build a real-world
@@ -6,6 +7,9 @@ import Foundation
 /// on (`DeveloperModeStore` — the Settings window's Developer section, which
 /// also displays this path), so a user who never opts in has no dictation
 /// text on disk.
+///
+/// Failed dictations go to a sibling `errors.jsonl` instead, behind the same
+/// switch — see `DictationLog+Errors.swift`.
 public enum DictationLog {
   struct Entry: Encodable {
     let transcript: String
@@ -93,18 +97,53 @@ public enum DictationLog {
       app: context?.appName, window: context?.windowTitle, field: context?.fieldLabel,
       prior: context?.priorText, selected: context?.selectedText,
       prompt: TranscriptionPrompt.build(context: context))
-    guard var line = try? makeEncoder().encode(entry) else { return }
-    line.append(0x0A)  // '\n'
+    appendLine(entry, to: url)
+  }
 
+  /// Encodes one entry and appends it as a JSONL line, creating the file (and
+  /// `~/Library/Logs/Blurt`) on first write. Shared by the transcript log above
+  /// and the error log (`DictationLog+Errors.swift`) so the two can't disagree
+  /// about encoding, line termination, or lazy file creation.
+  ///
+  /// Never throws onto the dictation path: a diagnostic aid must not be able to
+  /// break dictation. But it doesn't swallow the failure either — the write is
+  /// the one error in the app that can't be reported through the error log
+  /// (that's the thing that just failed), and an empty log with no explanation
+  /// is indistinguishable from "nothing was ever dictated", so a failed append
+  /// goes to `os_log`, the one channel that doesn't depend on this file.
+  static func appendLine(_ entry: some Encodable, to url: URL) {
+    do {
+      var line = try makeEncoder().encode(entry)
+      line.append(0x0A)  // '\n'
+      try append(line: line, to: url)
+    } catch {
+      // Only the file name and the error, never the entry: the log's whole point
+      // is that transcripts stay in an opt-in file, so they must not leak into a
+      // system-wide log — and the absolute path carries the user's account name.
+      let reason = error.localizedDescription
+      logger.error(
+        "append to \(url.lastPathComponent, privacy: .public) failed: \(reason, privacy: .public)")
+    }
+  }
+
+  /// The throwing half of `appendLine`: open-or-create, seek, write. Split out so
+  /// each step's error reaches the one `catch` above rather than being dropped by
+  /// a `try?` per line, which is how a broken log used to go unnoticed.
+  private static func append(line: Data, to url: URL) throws {
     let path = url.path(percentEncoded: false)
     if !FileManager.default.fileExists(atPath: path) {
-      try? FileManager.default.createDirectory(
+      try FileManager.default.createDirectory(
         at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
       FileManager.default.createFile(atPath: path, contents: nil)
     }
-    guard let handle = try? FileHandle(forWritingTo: url) else { return }
+    let handle = try FileHandle(forWritingTo: url)
+    // `close` throws too, but the bytes are already written by then — reporting a
+    // close failure as a lost entry would be a lie, so it stays a `try?`.
     defer { try? handle.close() }
-    _ = try? handle.seekToEnd()
-    try? handle.write(contentsOf: line)
+    _ = try handle.seekToEnd()
+    try handle.write(contentsOf: line)
   }
+
+  private static let logger = Logger(
+    subsystem: BlurtIdentity.subsystem, category: "DictationLog")
 }
