@@ -441,6 +441,12 @@ def optimize(
             ),
             num_threads=num_threads,
             instruction_proposer=proposer,
+            # What a crashed rollout is worth. It has to sit at or below the worst a
+            # real output can reach, or a candidate that errors would outrank one that
+            # merely answered badly. GEPA's default is 0.0, which was right only while
+            # the score was floored there; now that a degenerate output can reach -1,
+            # a crash has to go with it.
+            failure_score=metrics.WORST_SCORE,
             # Crossover needs components to cross over. This program has exactly one
             # predictor, and merge recombines by taking, per predictor, whichever
             # parent differs from the common ancestor — so with a single component the

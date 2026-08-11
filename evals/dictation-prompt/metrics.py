@@ -20,6 +20,7 @@ harness, so nothing about how a corpus was built can leak into how it is scored.
 
 from __future__ import annotations
 
+import math
 import re
 import string
 from dataclasses import dataclass
@@ -156,18 +157,53 @@ class Score:
         return getattr(self, axis)
 
 
-def score(reference: str, hypothesis: str) -> Score:
-    """Score a cleanup against its reference on both axes.
+#: Worst score any single attempt can reach, and what a crashed rollout is worth.
+#: See `from_error_rate` for why the bottom is bounded rather than open.
+WORST_SCORE = -1.0
 
-    Each axis is `1 - WER`, floored at 0: a hypothesis can be arbitrarily worse
-    than the reference (WER is unbounded above), but "worse than saying nothing"
-    is not a distinction the optimizer needs to rank.
+
+def from_error_rate(rate: float) -> float:
+    """Turn a word error rate into a score: `1 - WER`, with a bounded tail below zero.
+
+    WER is unbounded above — a hypothesis can add arbitrarily many words — so `1 - WER`
+    is unbounded below and something has to bound it. This used to be `max(0, ...)`,
+    which bounded it by **flattening** it: at WER 1.0, 2.9 and 4.3 the score was 0.000,
+    0.000 and 0.000. Three very different failures, one number.
+
+    That flattening lands exactly where it hurts. GEPA's Pareto front is per validation
+    example, so on any example where a candidate degenerates, "looped until it hit
+    max_tokens" and "reworded a clause badly" were indistinguishable — the front could
+    not prefer the near-miss, and the search got no gradient out of catastrophe.
+
+    So the tail decays instead of clipping:
+
+        WER <= 1   ->  1 - WER          exactly as before, in [0, 1]
+        WER >  1   ->  exp(1 - WER) - 1 strictly decreasing, approaching -1
+
+    Nothing in the normal range moves — a run that scored 0.848 still scores 0.848, so
+    every number measured before this change stays comparable. Only the region that was
+    previously one flat line gains an ordering.
+
+    The two pieces meet cleanly at WER 1: both give 0, and both have slope -1 there, so
+    there is no discontinuity for the optimizer to sit on. Zero keeps its meaning —
+    "as bad as saying nothing at all", since an empty hypothesis deletes every reference
+    word for a WER of exactly 1. Below zero now means what it says: worse than silence.
     """
+    if rate <= 1.0:
+        return 1.0 - rate
+    # Bounded rather than open-ended: GEPA scores a crashed rollout with a fixed
+    # `failure_score`, and a real output able to sink arbitrarily far would eventually
+    # rank *below* a crash, which is not an ordering anyone wants.
+    return math.exp(1.0 - rate) - 1.0
+
+
+def score(reference: str, hypothesis: str) -> Score:
+    """Score a cleanup against its reference on both axes — see `from_error_rate`."""
     content_alignment = align(normalize(reference), normalize(hypothesis))
     format_alignment = align(surface(reference), surface(hypothesis))
     return Score(
-        content=max(0.0, 1.0 - content_alignment.error_rate),
-        format=max(0.0, 1.0 - format_alignment.error_rate),
+        content=from_error_rate(content_alignment.error_rate),
+        format=from_error_rate(format_alignment.error_rate),
         content_alignment=content_alignment,
         format_alignment=format_alignment,
     )

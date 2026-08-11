@@ -100,13 +100,40 @@ def test_a_perfect_cleanup_beats_the_uncleaned_transcript():
     assert metrics.score(SENTENCE, SENTENCE).blend > metrics.score(SENTENCE, messy).blend
 
 
-def test_score_is_floored_at_zero():
-    scored = metrics.score("yes", "a completely unrelated sentence that rambles on and on")
-    assert scored.content == 0.0
-    assert scored.blend >= 0.0
+def test_worse_than_silence_scores_below_zero_and_stays_ordered():
+    """Flattening every catastrophe to 0.0 left GEPA's per-example front unable to rank them."""
+    mild = metrics.from_error_rate(1.2)
+    bad = metrics.from_error_rate(2.9)
+    catastrophic = metrics.from_error_rate(4.3)
+    assert 0.0 > mild > bad > catastrophic > metrics.WORST_SCORE
 
 
-def test_empty_hypothesis_loses_every_word():
+def test_the_normal_range_is_untouched_so_old_numbers_still_compare():
+    """The change may only add ordering below zero; a 0.848 run has to stay 0.848."""
+    for rate in (0.0, 0.15, 0.5, 0.99, 1.0):
+        assert metrics.from_error_rate(rate) == 1.0 - rate
+
+
+def test_the_two_pieces_meet_without_a_step():
+    """A discontinuity at WER 1 would be a ledge for the optimizer to sit on.
+
+    Both sides have slope -1 there, so across a 2e-of-nothing window the outputs may
+    differ by about that much and no more — a step would show as a constant offset
+    surviving however small the window gets.
+    """
+    assert metrics.from_error_rate(1.0) == 0.0
+    for epsilon in (1e-3, 1e-5, 1e-7):
+        gap = metrics.from_error_rate(1 - epsilon) - metrics.from_error_rate(1 + epsilon)
+        assert gap == pytest.approx(2 * epsilon, rel=1e-3), epsilon
+
+
+def test_the_tail_is_bounded_so_a_crash_can_still_be_the_worst_outcome():
+    """GEPA scores a failed rollout with a fixed value; real output must not sink past it."""
+    assert metrics.from_error_rate(1e6) >= metrics.WORST_SCORE
+
+
+def test_empty_hypothesis_is_exactly_zero():
+    """Zero keeps its meaning: as bad as saying nothing, which is a WER of exactly 1."""
     assert metrics.score(SENTENCE, "").content == 0.0
 
 

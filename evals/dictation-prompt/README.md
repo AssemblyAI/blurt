@@ -281,6 +281,13 @@ It also prints what
 fraction of pairs actually differ from their target — the rest are clean utterances, which
 test the opposite failure (over-editing text that needed nothing).
 
+Each axis is `1 - WER`. That is 1.0 for an exact match and **exactly 0 for "as bad as saying
+nothing"**, since an empty hypothesis deletes every reference word for a WER of 1. Below that
+the score keeps going, decaying toward -1 rather than clipping: a degenerate output (a
+repetition loop, a refusal) has to stay distinguishable from a merely bad one, or GEPA's
+per-example Pareto front cannot prefer the near-miss. Nothing in the normal range is affected —
+the piece above zero is plain `1 - WER`, so scores from before this change still compare.
+
 All three axes are printed for every candidate, with the selecting one starred, so you can
 see whether a winner gained on wording or only on punctuation. The winner is chosen on a dev
 split and re-scored on a held-out test split alongside `BASELINE` — `prior-winner`, the best
