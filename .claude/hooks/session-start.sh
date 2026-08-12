@@ -54,9 +54,19 @@ if ! command -v actionlint >/dev/null 2>&1 && command -v go >/dev/null 2>&1; the
     || note "actionlint install failed (go install)"
 fi
 
+# shfmt (go) — the formatting authority for scripts/*.sh, and the one portable
+# check that used to be missing here. Without it `check.sh --portable` skipped
+# shfmt with a note, so a shell script edited in a web session looked verified
+# and then failed CI on formatting alone. Same install route as actionlint: the
+# release binaries are blocked, the Go module proxy is not.
+if ! command -v shfmt >/dev/null 2>&1 && command -v go >/dev/null 2>&1; then
+  GOBIN=/usr/local/bin go install mvdan.cc/sh/v3/cmd/shfmt@latest >/dev/null 2>&1 \
+    || note "shfmt install failed (go install)"
+fi
+
 # Preflight summary — this lands in the session context.
 missing=""
-for tool in prettier xmllint markdownlint shellcheck actionlint; do
+for tool in prettier xmllint markdownlint shellcheck actionlint shfmt; do
   command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
 done
 echo "Blurt web sandbox: no macOS toolchain — Swift build/tests/format run on CI (macos-26), the authority on green."
