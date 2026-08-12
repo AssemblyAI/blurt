@@ -44,9 +44,9 @@ PATTERNS=(
   "base64[[:space:]]+-w"
   "xargs[[:space:]]+(-[a-zA-Z]+[[:space:]]+)*-r"
   "find[[:space:]]+.*-printf"
-  "(^|[[:space:]])timeout[[:space:]]"
-  "(^|[[:space:]])(md5sum|sha[0-9]+sum)([[:space:]]|$)"
-  "(^|[[:space:]])tac([[:space:]]|$)"
+  "(^|[^[:alnum:]_.-])timeout[[:space:]]"
+  "(^|[^[:alnum:]_.-])(md5sum|sha[0-9]+sum)([[:space:]]|$)"
+  "(^|[^[:alnum:]_.-])tac([[:space:]]|$)"
 )
 ADVICE=(
   "sed -i.bak (then rm), or a temp file"
@@ -72,18 +72,18 @@ ADVICE=(
 # matches its own probe, which is the property the first draft of this file
 # quietly lost: a rule that matches nothing looks identical to a clean tree.
 PROBES=(
-  "sed -i 's/a/b/' f"
-  "sed -r 's/(a)/\\1/' f"
-  "grep -P '\\\\d' f"
-  "readlink -f ./x"
-  "stat -c '%s' f"
-  "date -d '1 day ago'"
-  "base64 -w0 f"
-  "printf 'x' | xargs -r echo"
-  "find . -printf '%p'"
-  "timeout 5 sleep 1"
-  "md5sum f"
-  "tac f"
+  "sed -i 's/a/b/' f"          # portable-ok: probe
+  "sed -r 's/(a)/\\1/' f"      # portable-ok: probe
+  "grep -P '\\\\d' f"          # portable-ok: probe
+  "readlink -f ./x"            # portable-ok: probe
+  "stat -c '%s' f"             # portable-ok: probe
+  "date -d '1 day ago'"        # portable-ok: probe
+  "base64 -w0 f"               # portable-ok: probe
+  "printf 'x' | xargs -r echo" # portable-ok: probe
+  "find . -printf '%p'"        # portable-ok: probe
+  "timeout 5 sleep 1"          # portable-ok: probe
+  "md5sum f"                   # portable-ok: probe
+  "tac f"                      # portable-ok: probe
 )
 
 if [ "${1:-}" = "--self-test" ]; then
@@ -116,6 +116,18 @@ FILES=$(git ls-files 'scripts/*.sh' '.claude/hooks/*.sh')
   echo "error: no shell scripts matched — the file list broke" >&2
   exit 1
 }
+
+# git ls-files sees tracked files only, so a brand-new script is invisible here
+# until it is staged — and a scan that skips the file you just wrote reads exactly
+# like a scan that approved it. This gate learned that the hard way: its own probe
+# strings passed locally while the file was untracked, then failed CI the moment
+# the commit made it visible. Warn rather than fail, because an untracked script is
+# a normal state mid-edit; `git add -N` is enough to bring it into scope.
+UNTRACKED=$(git ls-files --others --exclude-standard 'scripts/*.sh' '.claude/hooks/*.sh')
+if [ -n "$UNTRACKED" ]; then
+  echo "note: untracked shell scripts are NOT scanned (git add -N to include them):"
+  printf '%s\n' "$UNTRACKED" | sed 's/^/  /'
+fi
 
 VIOLATION=0
 for i in "${!PATTERNS[@]}"; do

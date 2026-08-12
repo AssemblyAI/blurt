@@ -122,6 +122,13 @@ split `"pattern|advice"` on the first `|`, which truncated every pattern contain
 mid-expression; grep then exited 2, `|| true` swallowed it, and eight of the twelve rules passed
 everything. A gate that cannot fail is worse than no gate, because it reads as coverage.
 
+It then went red on CI a second time, for the sibling reason: the gate scans `git ls-files`, so while
+its own file was still untracked it never scanned itself, and its deliberately-bad probe strings only
+became visible once the commit tracked them. Both failures are the same shape — a scan whose input
+set is quietly empty looks identical to a scan that passed — so the script now warns about untracked
+shell scripts by name, and the probes carry the documented `# portable-ok:` escape rather than an
+exemption for the whole file.
+
 ### 6. Enable auto-merge; rebase instead of merging `main` — NOT LANDED
 
 `merge_group` is already wired into check.yml, but the 12 merge commits show branches being
