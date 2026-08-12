@@ -65,9 +65,7 @@ App/Blurt/
 Tests/BlurtEngineTests/      Swift Testing suites; Stubs/ holds the seam doubles
 scripts/                     check.sh, check-site.sh, bootstrap.sh, dev-build.sh, uitest.sh, leaks.sh,
                              release*.sh
-Brewfile                     Homebrew-managed check.sh tools — every one except html-proofer
-Gemfile / Gemfile.lock       html-proofer, the one check.sh tool with no brew formula; locked
-                             so CI and the sandbox check the site with the same version
+Brewfile                     Homebrew-managed check.sh tools — the whole toolchain
 evals/dictation-prompt/      offline DSPy harness for tuning the dictation API's cleanup
                              instruction — nothing here ships in the app, but check.sh does
                              lint (ruff), format-check (ruff format), and test (pytest) it
@@ -106,29 +104,22 @@ In order, on a Mac. Each optional linter prints `note: <tool> not installed; ski
    uploads `site/` verbatim with no build step, so a renamed asset, a stale absolute URL, or a
    missing `CNAME` produces no error in this repo — just a 404 on the live site.
 
-   It is a hybrid, split along what a general tool can know. **html-proofer** (a gem — the one
-   `check.sh` tool with no Homebrew formula, so it lives in the repo's `Gemfile` and is run via
-   `bundle exec`, pinned by `Gemfile.lock` so every environment gates the site with one version) covers links, images including `<source srcset>`, scripts, favicon, in-page
-   `#fragment`s, and Open Graph; its stricter defaults also flag a missing `alt`, an `<a>` without
-   `href`, and an empty `src`. Every check it offers is on — `--check-sri` is the one deliberate
-   omission, being a no-op under `--disable-external` and inapplicable to the one external
-   subresource here (the Google Fonts stylesheet is served per-user-agent, so no fixed integrity
-   hash exists). The script itself covers the repo-level invariants no HTML checker models: that the
-   Pages-required files exist, that `CNAME` agrees with `canonical`/`og:url`/the sitemap
-   `<loc>`s/robots `Sitemap:`, that CSS `url()` resolves (html-proofer only reads HTML), that no
-   `id` is duplicated and no attribute references plain `http://` — the two HTML gaps measured, not
-   assumed: html-proofer 5 dropped v3's HTML validation, and its `enforce_https` default only
-   inspects links it is fetching, so under `--disable-external` it never fires. And that nothing
-   under `site/assets/` ships unreferenced.
+   It checks the Pages-required files; that every local `src`/`href`/`srcset`/`poster` and CSS
+   `url()` resolves; that every `#fragment` has a matching `id`; that every absolute
+   `https://<CNAME>/` URL (canonical, `og:url`, `og:image`, JSON-LD, sitemap `<loc>`, robots
+   `Sitemap:`) names the domain in `CNAME` and points at a file that exists; per-element hygiene
+   (no duplicate `id`, no plain `http://`, no `<img>` without `alt`, no `<a>` without `href`, no
+   empty `src`/`href`); and that nothing under `site/assets/` ships unreferenced. Deliberately
+   offline — external links are never fetched, so the check stays deterministic and a third
+   party's outage is never this repo being red.
 
-   Two details worth not undoing. The domain is read from `CNAME` and handed to html-proofer as its
-   `--swap-urls` pattern rather than written into a config — otherwise the domain lives in two
-   places and drifts, which is the very thing the `CNAME` check catches. And the run asserts
-   html-proofer actually checked a nonzero number of links: under a non-UTF-8 locale it dies inside
-   Nokogiri on the page's em-dashes, checks nothing, prints "finished successfully" and exits 0, so
-   `LANG` is pinned _and_ the count is verified. Deliberately offline (`--disable-external`): a
-   third party's outage is never this repo being red, and external checking would test the
-   _currently deployed_ og:image rather than the one about to ship.
+   **Dependency-free on purpose, and it did not start that way.** This was briefly built on
+   html-proofer, to get a real HTML parser instead of greps. Aikido then flagged the licence on
+   `ttfunk` — GPL-2.0-only / GPL-3.0-only, reached via `html-proofer` → `pdf-reader` → `ttfunk` —
+   and bundler cannot drop a transitive gem, so keeping the parser meant keeping a GPL branch in an
+   MIT repo's lockfile and 20 gems of supply-chain surface for a one-page static site. Going back
+   cost no coverage: the audit of that tool is what surfaced the missing-`alt`, no-`href` and
+   empty-`src` checks, which are greps now. Don't reintroduce it without a licence answer.
 
 2. `swift test` with `-warnings-as-errors`, plus an engine **line-coverage gate** (≥ `MIN_COVERAGE`,
    80%, `Tests/` excluded — raise it as coverage grows).
@@ -209,7 +200,7 @@ Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `
   test passed. Say plainly that verification happens on a Mac — CI runs the full `check.sh` on
   `macos-26` and is the authority on green.
 - **The portable gate**: `scripts/check.sh --portable` runs the repo-integrity guards
-  (dependencies, sound catalog, site — the last using the html-proofer gem), then actionlint, zizmor, prettier, xmllint,
+  (dependencies, sound catalog, site), then actionlint, zizmor, prettier, xmllint,
   markdownlint, shellcheck, shfmt, ruff (lint + format check), pytest over the evals, and
   `release.test.sh` (plus `swift-format`/`swiftlint lint` if Linux
   builds happen to be on `PATH`). It fully verifies docs, site, scripts, eval, and workflow changes.

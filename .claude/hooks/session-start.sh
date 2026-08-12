@@ -3,7 +3,7 @@
 #
 # Blurt is macOS-only, so the Swift toolchain can't run here — but the portable
 # checks (prettier / xmllint / markdownlint / shellcheck / actionlint / zizmor /
-# shfmt / html-proofer / release.test.sh) can. This hook installs the missing portable linters so
+# shfmt / release.test.sh) can. This hook installs the missing portable linters so
 # `scripts/check.sh --portable` works, then prints a one-line preflight so the
 # session starts knowing CI (macos-26) is the authority on green.
 #
@@ -69,16 +69,6 @@ fi
 if ! command -v zizmor >/dev/null 2>&1 && command -v pip3 >/dev/null 2>&1; then
   pip3 install --quiet zizmor >/dev/null 2>&1 || true
   command -v zizmor >/dev/null 2>&1 || note "zizmor install failed (pip)"
-fi
-
-# html-proofer (Gemfile) — the Pages site's link/image/srcset/favicon/Open Graph
-# checker, used by scripts/check-site.sh. No Homebrew formula and no GitHub
-# release binary involved, so rubygems is reachable under the default policy.
-# `bundle install` so the sandbox gets the same pinned version CI does;
-# check-site.sh then finds it via `bundle exec`, no PATH plumbing needed.
-if command -v bundle >/dev/null 2>&1; then
-  (cd "${CLAUDE_PROJECT_DIR:-.}" && bundle install --quiet >/dev/null 2>&1) \
-    || note "bundle install failed (html-proofer unavailable)"
 fi
 
 # Preflight summary — this lands in the session context.

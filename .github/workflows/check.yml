@@ -92,16 +92,6 @@ jobs:
         working-directory: blurt
         run: brew bundle --file=Brewfile
 
-      # html-proofer has no Homebrew formula, so it can't ride along in the
-      # Brewfile — the repo's Gemfile carries it instead. check-site.sh skips its
-      # checks with a note when it is absent, and a skip is missing coverage
-      # rather than a pass, so install it explicitly. `bundle install` rather
-      # than `gem install`: Gemfile.lock pins the whole transitive set, so this
-      # job checks the site with the same tool version every run.
-      - name: Install html-proofer
-        working-directory: blurt
-        run: bundle install
-
       - name: Show toolchain
         run: |
           xcodebuild -version

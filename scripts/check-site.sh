@@ -8,41 +8,27 @@
 # site's *formatting* and the sitemap's well-formedness; prettier reformats a
 # broken src= as happily as a working one.
 #
-# Two halves, split along what a general tool can know:
+# No dependencies, by design and by measurement. This started bespoke, moved to
+# html-proofer to get a real HTML parser, and moved back when Aikido flagged the
+# licence on `ttfunk` — GPL-2.0-only / GPL-3.0-only, reached via
+# html-proofer -> pdf-reader -> ttfunk. Bundler cannot drop a transitive gem, so
+# keeping the parser meant keeping a GPL branch in an MIT repo's lockfile, and
+# 20 gems of supply-chain surface for a one-page static site.
 #
-#   html-proofer  — links, images (including <source srcset>), scripts, favicon,
-#                   in-page #fragments and Open Graph. Its defaults also flag a
-#                   missing alt, an <a> without href, and an empty src, so those
-#                   come along free. A mature checker parses HTML properly;
-#                   doing that with grep is the part most likely to rot.
-#   this script   — the repo-level invariants no HTML checker models: that CNAME
-#                   and every absolute URL agree, that the sitemap and robots
-#                   point at this domain, and that nothing under assets/ ships
-#                   unreferenced. Plus CSS url(), which html-proofer never reads
-#                   because it only looks at HTML, and the two HTML gaps in
-#                   section 4 that its checks were measured not to cover.
-#
-# Every check html-proofer offers is enabled: the five check classes it has
-# (Links, Images, Scripts, Favicon, OpenGraph) and its stricter defaults, none
-# of which are switched off here. --check-sri is the one deliberate omission —
-# it is a no-op under --disable-external, and the single external subresource
-# this site has is the Google Fonts stylesheet, which is served per-user-agent
-# and so cannot carry a fixed integrity hash.
-#
-# The domain is read from site/CNAME once and handed to html-proofer as its
-# --swap-urls pattern. That matters: og:image and friends are absolute URLs, so
-# html-proofer skips them as external unless told that https://<domain>/ IS this
-# directory. Writing that domain into a config file would be a second place it
-# is recorded and the exact drift section 3 exists to catch — deriving it from
-# CNAME keeps one source of truth.
+# Nothing was lost in the move back. The html-proofer audit is what surfaced the
+# four checks in section 5 (missing alt, <a> without href, empty src, and the
+# favicon, which section 2 covers as an ordinary href) — they are kept here as
+# greps. What went with it was its baggage: a Gemfile, bundler in CI, a pinned
+# locale to stop Nokogiri dying on this page's em-dashes, a --swap-urls hack to
+# convince it that https://<domain>/ was the directory it was already reading,
+# and a guard asserting it had actually run.
 #
 # Deliberately offline: external links (github.com, assemblyai.com, Google
-# Fonts) are NOT fetched, hence --disable-external. check.sh must be
-# deterministic and runnable with no network, and a third party's outage is not
-# this repo being broken. Note this is also why external checking cannot stand
-# in for the local og:image check: with --disable-external off, html-proofer
-# fetches the *currently deployed* card rather than the one about to ship, so a
-# deleted local file passes.
+# Fonts) are NOT fetched. check.sh must be deterministic and runnable with no
+# network, and a third party's outage is not this repo being broken. It is also
+# why a fetching checker cannot cover og:image: it would test the *currently
+# deployed* card rather than the one about to ship, so a deleted local file
+# would pass.
 #
 # Run standalone while editing the site:  bash scripts/check-site.sh
 
@@ -96,66 +82,92 @@ DOMAIN_RE="$(printf '%s' "$DOMAIN" | sed 's/\./\\./g')"
 HTML_FILES="$(find . -type f -name '*.html' | sed 's|^\./||' | sort)"
 [ -n "$HTML_FILES" ] || fail "site/ contains no .html files"
 
-# --- 2. html-proofer ---------------------------------------------------------
-# Links, images, srcset, scripts, favicon, in-page #fragments and Open Graph.
-#
-# Run through bundler when the locked bundle is installed, so the version that
-# gates the site is the one in Gemfile.lock rather than whatever happens to be
-# on PATH. This tool's behaviour decides what the gate checks — which flags
-# exist, which checks are default-on — so an incidental newer copy is a
-# different gate. Falls back to a bare htmlproofer for anyone who installed it
-# by hand, and to a skip note when there is none.
-export BUNDLE_GEMFILE="$REPO_ROOT/Gemfile"
-HP_CMD=()
-if command -v bundle >/dev/null 2>&1 && bundle check >/dev/null 2>&1; then
-  HP_CMD=(bundle exec htmlproofer)
-elif command -v htmlproofer >/dev/null 2>&1; then
-  HP_CMD=(htmlproofer)
-fi
+# --- 2. local references resolve --------------------------------------------
+# Resolve one reference taken from $2 (the file it appeared in) and complain if
+# it does not exist. Off-site schemes are skipped — see the offline note above.
+check_local_ref() {
+  local ref="$1" from="$2" base target
 
-if [ "${#HP_CMD[@]}" -gt 0 ]; then
-  echo "==> site: html-proofer (${HP_CMD[0]})"
+  case "$ref" in
+    http://* | https://* | //* | mailto:* | tel:* | data:* | '') return 0 ;;
+    '#'*) return 0 ;; # fragment-only links are handled in section 3
+  esac
 
-  # LANG/LC_ALL pinned, and not decoratively. Run under a non-UTF-8 locale,
-  # html-proofer dies inside Nokogiri on this page's em-dashes, checks zero
-  # links, prints "finished successfully" and exits 0 — a gate that passes
-  # because it never ran. The output assertion below is the belt to this
-  # braces: neither alone is enough.
-  #
-  # --swap-urls tells html-proofer that https://<domain>/ is this directory, so
-  # the absolute og:image / JSON-LD / canonical URLs resolve against site/
-  # instead of being skipped as external. Colons inside the pattern are
-  # \-escaped because html-proofer splits the argument on ':'.
-  HP_OUT=""
-  HP_STATUS=0
-  HP_OUT="$(
-    LANG=C.UTF-8 LC_ALL=C.UTF-8 "${HP_CMD[@]}" . \
-      --disable-external \
-      --checks Links,Images,Scripts,Favicon,OpenGraph \
-      --root-dir . \
-      --swap-urls "^https\\://$DOMAIN_RE/:/" 2>&1
-  )" || HP_STATUS=$?
+  # Drop the query and fragment: `styles.css?v=2#x` is still styles.css on disk.
+  ref="${ref%%\#*}"
+  ref="${ref%%\?*}"
+  [ -n "$ref" ] || return 0
 
-  # Drop html-proofer's structured async log lines; they are noise here.
-  printf '%s\n' "$HP_OUT" | grep -vE '^\{"time' | grep -vE '^\s*$' || true
+  case "$ref" in
+    /*) target="${ref#/}" ;; # root-relative: relative to site/
+    *)
+      base="$(dirname "$from")"
+      if [ "$base" = "." ]; then target="$ref"; else target="$base/$ref"; fi
+      ;;
+  esac
 
-  if [ "$HP_STATUS" -ne 0 ]; then
-    fail "html-proofer found problems in the site (above)"
+  # A directory URL (including the bare "/") serves that directory's index.html.
+  if [ -z "$target" ] || [ -d "$target" ]; then
+    target="${target:+$target/}index.html"
   fi
 
-  # Did it actually check anything? See the locale note above — this is the
-  # guard that turns a silent no-op into a failure. check.sh's coverage gate
-  # learned the same lesson (a missing profile used to print a note and exit 0).
-  HP_LINKS="$(printf '%s\n' "$HP_OUT" | sed -n 's/^Checking \([0-9][0-9]*\) internal links.*/\1/p' | head -1)"
-  if [ -z "${HP_LINKS:-}" ] || [ "$HP_LINKS" -eq 0 ]; then
-    fail "html-proofer checked 0 internal links — it did not actually run (locale? parse error?)"
-  fi
-else
-  echo "note: htmlproofer not installed; skipping link/image/og checks (run 'bundle install')"
-  echo "      the CNAME, sitemap, CSS and orphan checks below still run"
-fi
+  [ -e "$target" ] || fail "$from references '$1', but site/$target does not exist"
+}
 
-# --- 3. absolute self-URLs ---------------------------------------------------
+echo "==> site: local references"
+while IFS= read -r html; do
+  # src/href/poster carry one URL; srcset carries a comma-separated candidate
+  # list where each entry is "<url> <descriptor>" — so split on commas and keep
+  # the first token. Attribute values never span lines in prettier's output, so
+  # a line-oriented grep is enough here (the tag-level extraction in section 4,
+  # which does have to cope with wrapped tags, flattens the file first).
+  while IFS= read -r attr; do
+    value="${attr#*=\"}"
+    value="${value%\"}"
+    case "$attr" in
+      srcset=*)
+        # Process substitution, NOT `printf ... | while`: a pipeline runs its
+        # right-hand side in a subshell, so `fail`'s VIOLATION=1 would be set in
+        # that subshell and lost. This exact bug shipped once — a broken srcset
+        # printed `error:` and the script still exited 0, a gate that reports a
+        # failure and passes anyway. Keep the loop in the parent shell.
+        while IFS= read -r candidate; do
+          # shellcheck disable=SC2086 # deliberate split: "<url> <descriptor>"
+          set -- $candidate
+          [ "$#" -gt 0 ] && check_local_ref "$1" "$html"
+        done < <(printf '%s\n' "$value" | tr ',' '\n')
+        ;;
+      *) check_local_ref "$value" "$html" ;;
+    esac
+  done < <(grep -oE '(src|href|poster|srcset)="[^"]*"' "$html" || true)
+done <<<"$HTML_FILES"
+
+# CSS url(...) references. None today — the site's imagery all lives in the
+# html — but a background-image added later would otherwise ship unchecked.
+while IFS= read -r css; do
+  [ -n "$css" ] || continue
+  while IFS= read -r raw; do
+    value="${raw#url(}"
+    value="${value%)}"
+    value="${value#[\"\']}"
+    value="${value%[\"\']}"
+    check_local_ref "$value" "$css"
+  done < <(grep -oE 'url\([^)]*\)' "$css" || true)
+done < <(find . -type f -name '*.css' | sed 's|^\./||' | sort)
+
+# --- 3. in-page fragments ----------------------------------------------------
+# `href="#features"` with no `id="features"` is a nav link that scrolls nowhere.
+# Silent in every linter and in the browser console alike.
+echo "==> site: in-page anchors"
+while IFS= read -r html; do
+  while IFS= read -r frag; do
+    [ -n "$frag" ] || continue
+    grep -qE "id=\"$frag\"" "$html" \
+      || fail "$html links to '#$frag', but no element in it has id=\"$frag\""
+  done < <(grep -oE 'href="#[^"]+"' "$html" | sed 's/^href="#//;s/"$//' | sort -u || true)
+done <<<"$HTML_FILES"
+
+# --- 4. absolute self-URLs ---------------------------------------------------
 # Everything the site says about itself to a machine — canonical, Open Graph,
 # JSON-LD, sitemap, robots — is an absolute URL, so each is a copy of the domain
 # CNAME owns. Change the domain and they all go stale at once, pointing search
@@ -241,9 +253,12 @@ else
   done <<<"$SITEMAP_LOCS"
 fi
 
-# --- 4. HTML hygiene ---------------------------------------------------------
-# Two things html-proofer's defaults leave uncovered. Both were found by testing
-# its checks one at a time rather than assuming the tool's coverage.
+# --- 5. HTML hygiene ---------------------------------------------------------
+# The per-element checks. The first two came from auditing what html-proofer
+# left uncovered; the rest are the ones it did cover, kept as greps when it went
+# (see the header) so the move back cost no coverage. Line-oriented parsing is
+# safe here because check.sh runs `prettier --check` over site/*.html, so the
+# one-attribute-per-line shape these assume is itself gated.
 echo "==> site: HTML hygiene"
 while IFS= read -r html; do
   # Duplicate id. html-proofer 5 dropped the HTML validation v3 had, so nothing
@@ -257,23 +272,49 @@ while IFS= read -r html; do
     done <<<"$DUPE_IDS"
   fi
 
-  # Insecure references. html-proofer's enforce_https defaults on, but it only
-  # inspects links it is fetching, so under --disable-external (which this repo
-  # requires, see the header) it never fires — verified by adding an http:// link
-  # and watching it pass. Scoped to attribute values so an XML/XHTML namespace,
+  # Insecure references. Scoped to attribute values so an XML/XHTML namespace,
   # which is an identifier rather than a fetchable URL, isn't a false positive.
+  # (html-proofer had enforce_https on by default but only inspected links it was
+  # fetching, so with external checking off it never fired — measured, not
+  # assumed. Nothing was covering this even while the tool was here.)
   INSECURE="$(grep -oE '(href|src|srcset|content|poster)="http://[^"]*"' "$html" || true)"
   if [ -n "$INSECURE" ]; then
     while IFS= read -r ref; do
       fail "$html references $ref over plain http — the site is https-only"
     done <<<"$INSECURE"
   fi
+
+  # An <img> with no alt at all is unreadable to a screen reader. An empty
+  # alt="" is fine and deliberate — it marks an image as decorative, which is
+  # what the brand logo beside the "Blurt" wordmark is — so only a *missing*
+  # attribute is a failure, matching html-proofer's ignore_empty_alt default.
+  # Flattened per-tag, since prettier wraps a multi-attribute <img> across lines.
+  MISSING_ALT="$(tr '\n' ' ' <"$html" | grep -oE '<img[^>]*>' | grep -vE '[[:space:]]alt=' || true)"
+  if [ -n "$MISSING_ALT" ]; then
+    while IFS= read -r img; do
+      fail "$html has an <img> with no alt attribute: $(printf '%s' "$img" | cut -c1-70)"
+    done <<<"$MISSING_ALT"
+  fi
+
+  # An <a> with no href is not a link — it renders as inert text, silently.
+  NO_HREF="$(tr '\n' ' ' <"$html" | grep -oE '<a[[:space:]][^>]*>|<a>' | grep -vE '[[:space:]]href=' || true)"
+  if [ -n "$NO_HREF" ]; then
+    while IFS= read -r anchor; do
+      fail "$html has an <a> with no href: $(printf '%s' "$anchor" | cut -c1-70)"
+    done <<<"$NO_HREF"
+  fi
+
+  # An empty src=""/href="" resolves to the page itself: a browser re-requests
+  # the document, so a blank <img src=""> silently downloads the HTML again.
+  EMPTY_REF="$(grep -oE '(src|href)=""' "$html" || true)"
+  if [ -n "$EMPTY_REF" ]; then
+    fail "$html has an empty $(printf '%s' "$EMPTY_REF" | head -1) — it re-requests the page itself"
+  fi
 done <<<"$HTML_FILES"
 
-# --- 5. CSS url() ------------------------------------------------------------
-# html-proofer only reads HTML, so a background-image added to styles.css would
-# otherwise ship unchecked. None today — the site's imagery all lives in the
-# markup — which is exactly when a guard is cheap to add.
+# --- 6. CSS url() -----------------------------------------------------------
+# Stylesheets are not HTML, so nothing above reads them. None today — the site's
+# imagery all lives in the markup — which is exactly when a guard is cheap.
 echo "==> site: CSS references"
 while IFS= read -r css; do
   [ -n "$css" ] || continue
@@ -282,22 +323,11 @@ while IFS= read -r css; do
     value="${value%)}"
     value="${value#[\"\']}"
     value="${value%[\"\']}"
-    case "$value" in
-      http://* | https://* | //* | data:* | '') continue ;;
-    esac
-    # Relative to the stylesheet, unless rooted at the site.
-    case "$value" in
-      /*) target="$value" ;;
-      *)
-        base="$(dirname "$css")"
-        if [ "$base" = "." ]; then target="$value"; else target="$base/$value"; fi
-        ;;
-    esac
-    site_path_exists "$target" || fail "$css references '$value', but no such file exists under site/"
+    check_local_ref "$value" "$css"
   done < <(grep -oE 'url\([^)]*\)' "$css" || true)
 done < <(find . -type f -name '*.css' | sed 's|^\./||' | sort)
 
-# --- 6. no orphaned assets ---------------------------------------------------
+# --- 7. no orphaned assets ---------------------------------------------------
 # The Pages artifact is whatever is in site/, so an asset no page references is
 # still uploaded and served — dead weight in the deploy, and usually the trace
 # of a rename where the old file was left behind. Link checkers walk references
