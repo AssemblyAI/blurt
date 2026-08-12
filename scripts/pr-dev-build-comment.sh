@@ -62,7 +62,7 @@ ad-hoc signed. Expires in 14 days.
 cd ~/Downloads
 unzip -o $ARTIFACT_NAME.zip   # GitHub wraps every artifact in a zip
 unzip -o Blurt-dev-$short_sha.zip
-xattr -dr com.apple.quarantine Blurt.app
+find Blurt.app -exec xattr -c {} +   # clear quarantine: xattr lost -r in macOS 12.3
 rm -rf /Applications/Blurt.app && cp -R Blurt.app /Applications/
 open -a Blurt
 \`\`\`
@@ -72,6 +72,18 @@ the quarantine flag is cleared, and macOS treats it as a different app from a
 released Blurt, so you have to re-grant Microphone, Accessibility, and Input
 Monitoring. Reinstall the [release DMG](https://github.com/$REPO/releases/latest)
 when you are done reviewing.
+
+Expect that re-grant **once per dev build**, including a second build of this
+same PR. TCC pins an Accessibility grant to the signature that took it, and an
+ad-hoc signature is just a hash of the binary, so every build is a new app as far
+as \`tccd\` is concerned. Blurt clears the orphaned grant at launch, which is what
+keeps the Accessibility step from getting stuck on a Blurt row that is switched on
+and still denied. If you are coming from a build old enough to predate that,
+clear the grant yourself once:
+
+\`\`\`sh
+tccutil reset Accessibility dev.alex.blurt
+\`\`\`
 
 </details>
 EOF

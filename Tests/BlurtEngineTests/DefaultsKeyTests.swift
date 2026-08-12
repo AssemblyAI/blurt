@@ -28,6 +28,6 @@ struct DefaultsKeyTests {
     // the user chose, so it is neither a case here nor swept by `resetAll` —
     // clearing it would make the next launch re-run the `tccutil` reset. Its
     // unprefixed name is the visible half of that distinction.
-    #expect(!SigningIdentityMigration.lastSigningTeamDefaultsKey.hasPrefix("Blurt"))
+    #expect(!SigningIdentityMigration.lastSigningIdentityDefaultsKey.hasPrefix("Blurt"))
   }
 }

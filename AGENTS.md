@@ -170,7 +170,11 @@ script, so a clean local `check.sh` matches CI by construction. The same workflo
 builds an ad-hoc-signed `Debug-Local` app for every code PR and uploads it as an artifact;
 `pr-dev-build.yml` then comments the download link on the PR (a `workflow_run` job, because a
 fork's `pull_request` token is read-only and can't comment). It is **not** part of the required
-gate — it compiles the same sources `check` does, so it is never the only signal.
+gate — it compiles the same sources `check` does, so it is never the only signal. An ad-hoc
+signature is a hash of the binary, so each dev build is a distinct app to `tccd` and the reviewer
+re-grants Accessibility once per build; `runAccessibilityGrantMigration` (see
+[Permissions](#the-accessibility-grant-and-signing-identity)) is what keeps that from stranding
+them on the wizard's Accessibility step.
 
 Reporting rules: exit 0 with no `error:` lines is green. Anything else is not — quote the failing
 step verbatim, don't soften it, fix it, then re-run the **full** script (a `swift test --filter` pass
@@ -197,6 +201,37 @@ never appear unless the app has a stable install path. **Don't bypass it.**
 through `xcbeautify` when present. [`CONTRIBUTING.md`](./CONTRIBUTING.md) is the setup guide for
 someone starting from a clean Mac, including the ad-hoc build for contributors with no signing
 certificate.
+
+### The Accessibility grant and signing identity
+
+TCC pins an Accessibility grant to the app's **designated requirement**, and re-checks the running
+binary against the requirement it stored. When what that requirement pins changes, the grant is
+orphaned in the worst possible way: the Blurt row stays in System Settings, switched on, while
+`AXIsProcessTrusted()` keeps returning false — so the wizard's Accessibility step can never be
+satisfied and toggling the row does nothing. Two things move it:
+
+- **The signing team.** Handled at signing time: the post-build script above pins an explicit
+  team-based requirement (`leaf[subject.OU]`) instead of codesign's default, which names the leaf
+  cert's Common Name and would orphan the grant every time the Apple Development cert rotates.
+- **The cdhash.** Ad-hoc signatures (`CODE_SIGN_IDENTITY="-"` — the per-PR `dev-build` artifact)
+  have no team to pin, so codesign's default requirement pins the code hash and every rebuild is a
+  new app. Nothing at signing time can fix this: an identity stable across ad-hoc builds would have
+  to be one any binary could claim, and that is not a requirement worth writing into the TCC row of
+  an app that injects keystrokes.
+
+So the app self-heals at launch instead. `AppDelegate.runAccessibilityGrantMigration` compares
+`SigningIdentity.current(includingAdHoc:)` (Team ID when there is one, else `cdhash:<hex>`) against the identity
+recorded in `accessibility.lastSigningTeam`; if it changed and the app is untrusted, it runs
+`tccutil reset Accessibility` once so the wizard's normal grant flow captures a matching
+requirement, and records the new identity only when the reset succeeded. `SigningIdentityMigration`
+is the pure decision; `SigningIdentity` is the thin `Security`/`tccutil` adapter.
+
+The UI-test build opts out by passing `includingAdHoc: false` (`AppDelegate.adHocCountsAsIdentity`,
+the one `#if UITEST_HOOKS` involved): `uitest.sh` and `check.sh` sign ad-hoc under the shipping
+bundle id, so honouring a cdhash there would make every local test run wipe the developer's real
+Blurt grant. Keep that a **parameter**, not a `#if` around the call — periphery scans the app's
+Debug scheme, where `UITEST_HOOKS` is on, so a compiled-out call reads as dead engine code and
+fails `check.sh`.
 
 ### Working without a macOS toolchain (remote / Linux sandboxes)
 
@@ -560,9 +595,11 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
   user's setting, so rename cases freely and raw values never. The sweep lives next to the enum
   (not in the shell) so a reset needing more than a defaults removal has one place to grow and stays
   inside the test target; the roster itself is internal so no caller re-rolls its own sweep.
-  `SigningIdentityMigration.lastSigningTeamDefaultsKey` is deliberately **outside** the roster: it
-  records what the TCC migration already did, not a user setting, and clearing it would make the next
-  launch re-run the `tccutil` reset.
+  `SigningIdentityMigration.lastSigningIdentityDefaultsKey` is deliberately **outside** the roster:
+  it records what the TCC migration already did, not a user setting, and clearing it would make the
+  next launch re-run the `tccutil` reset. (Its string value, `accessibility.lastSigningTeam`, is
+  frozen — it predates the ad-hoc cdhash case, and renaming it would re-run the reset for every
+  installed user. See [the Accessibility grant](#the-accessibility-grant-and-signing-identity).)
 
 Record cues: **`SoundPack`** is a selectable start/stop chime voice (vintage synth samples;
 `id` doubles as the bundled stem `<id>-start.m4a` / `<id>-stop.m4a` under

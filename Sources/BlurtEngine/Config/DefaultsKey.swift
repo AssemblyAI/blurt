@@ -13,7 +13,7 @@
 /// missed once, and a UI-test run inherited them).
 ///
 /// A key that is *not* a user setting stays out of this enum on purpose — see
-/// `SigningIdentityMigration.lastSigningTeamDefaultsKey`, which records what the
+/// `SigningIdentityMigration.lastSigningIdentityDefaultsKey`, which records what the
 /// TCC migration already did. Those also don't carry the `Blurt` prefix every case
 /// here does, and `DefaultsKeyTests` pins that so the distinction stays visible.
 ///
