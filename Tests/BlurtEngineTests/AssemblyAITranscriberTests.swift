@@ -180,6 +180,27 @@ struct HTTPClientTests {
     #expect(llm.keys.sorted() == ["instruction"])
   }
 
+  @Test("config carries the custom style instructions appended to the cleanup instruction")
+  func configAppendsCustomStyle() throws {
+    let custom = "always write in lowercase"
+    let llm = try #require(try configObject(prompt: nil, customStyle: custom)["llm"] as? [String: Any])
+    let instruction = try #require(llm["instruction"] as? String)
+    // The exact combination rule lives in `CleanupInstructionTests`; what this pins
+    // is the wiring — the transcriber's per-request read lands on the request, with
+    // the base instruction still leading.
+    #expect(instruction == CleanupInstruction.sendable(appending: custom))
+    #expect(instruction.hasPrefix(CleanupInstruction.text))
+    #expect(instruction.hasSuffix(custom))
+  }
+
+  @Test(
+    "a blank custom style leaves the cleanup instruction exactly as shipped",
+    arguments: [nil, "   \n"])
+  func configIgnoresBlankCustomStyle(customStyle: String?) throws {
+    let llm = try #require(try configObject(prompt: nil, customStyle: customStyle)["llm"] as? [String: Any])
+    #expect(llm["instruction"] as? String == CleanupInstruction.text)
+  }
+
   @Test("config part omits the llm block when enhanced transcripts are off")
   func configOmitsRewriteWhenDisabled() throws {
     // Omission — not an empty or null `llm` — is what tells the service to skip
@@ -310,17 +331,19 @@ struct HTTPClientTests {
 
   /// Builds a transcriber wired to `transport`. The default transport answers
   /// every request with a 500, for the cases that must never reach the wire.
-  /// Enhanced transcripts are pinned (on unless a test opts out) rather than
-  /// left to the production default, which reads the process's real
-  /// `UserDefaults`.
+  /// Enhanced transcripts and the custom style are pinned (on / none unless a
+  /// test opts out) rather than left to the production defaults, which read the
+  /// process's real `UserDefaults`.
   private func makeTranscriber(
     apiKey: String?,
     transport: any HTTPTransport = FakeHTTPTransport { _ in (500, Data()) },
-    enhancedTranscripts: Bool = true
+    enhancedTranscripts: Bool = true,
+    customStyle: String? = nil
   ) -> AssemblyAITranscriber {
     AssemblyAITranscriber(
       apiKeyProvider: { apiKey }, transport: transport,
-      enhancedTranscripts: { enhancedTranscripts })
+      enhancedTranscripts: { enhancedTranscripts },
+      customStyle: { customStyle })
   }
 
   private func collectTranscript(_ transcriber: AssemblyAITranscriber) async throws -> String {
@@ -331,9 +354,13 @@ struct HTTPClientTests {
   /// config assertion below wants, since `makeConfigData` returns raw JSON.
   /// A part that isn't a JSON object at all fails here rather than turning every
   /// downstream assertion into a silent nil-compare.
-  private func configObject(prompt: String?, enhancedTranscripts: Bool = true) throws -> [String: Any] {
-    let config = try makeTranscriber(apiKey: "test-key", enhancedTranscripts: enhancedTranscripts)
-      .makeConfigData(sampleRate: 16_000, prompt: prompt)
+  private func configObject(
+    prompt: String?, enhancedTranscripts: Bool = true, customStyle: String? = nil
+  ) throws -> [String: Any] {
+    let config = try makeTranscriber(
+      apiKey: "test-key", enhancedTranscripts: enhancedTranscripts, customStyle: customStyle
+    )
+    .makeConfigData(sampleRate: 16_000, prompt: prompt)
     return try #require(JSONSerialization.jsonObject(with: config) as? [String: Any])
   }
 

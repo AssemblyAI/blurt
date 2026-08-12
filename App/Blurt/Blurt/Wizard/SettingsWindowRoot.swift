@@ -67,15 +67,16 @@ private struct GeneralSettingsTab: View {
   }
 }
 
-/// The occasional stuff: the enhanced-transcripts switch, checking for an
-/// update, and the developer-mode log toggle. Kept out of General so the
-/// common pane stays short.
+/// The occasional stuff: the enhanced-transcripts switch, the custom style
+/// instructions, checking for an update, and the developer-mode log toggle.
+/// Kept out of General so the common pane stays short.
 private struct AdvancedSettingsTab: View {
   let updateModel: UpdateCheckModel
 
   var body: some View {
     SettingsPane {
       TranscriptionSection()
+      CustomStyleSection()
       UpdateSection(model: updateModel)
       DeveloperSection()
     }
@@ -109,6 +110,62 @@ private struct TranscriptionSection: View {
       Text(
         "Polishes each dictation before pasting — removing filler words and fixing punctuation. "
           + "Turn off to paste your words exactly as spoken.")
+    }
+  }
+}
+
+/// The Custom Style section of the Settings window: free-text style
+/// instructions appended to the cleanup instruction on every dictation request
+/// (see `CleanupInstruction.sendable(appending:)` / `CustomStyleStore`), so the
+/// enhanced-transcript polish also applies the user's formatting preferences.
+/// Optional — empty means the request is exactly what ships today. Disabled
+/// while enhanced transcripts are off, since the instruction it extends is not
+/// sent at all then.
+private struct CustomStyleSection: View {
+  @AppStorage(EnhancedTranscriptsStore.defaultsKey)
+  private var enhancedTranscripts = EnhancedTranscriptsStore.defaultValue
+
+  /// `@AppStorage` is the only writer of this slot (the store exposes no
+  /// setter); trimming lives on the read side (`CustomStyleStore.instructions`)
+  /// for the reasons on `KeyTermsStepView.text`. The length cap is enforced
+  /// here, though: the dictation API rejects the whole request over its
+  /// instruction limit, so text past `characterLimit` must never be storable.
+  @AppStorage(CustomStyleStore.defaultsKey) private var text = ""
+
+  var body: some View {
+    Section {
+      TextField(
+        text: $text,
+        prompt: Text("e.g. add fitting emojis sparingly, or always write in lowercase"),
+        axis: .vertical
+      ) {
+        Text("Custom Style")
+      }
+      .labelsHidden()
+      .lineLimit(2...6)
+      .font(.body)
+      .disableAutocorrection(true)
+      .accessibilityIdentifier(UITestIdentifiers.customStyleField)
+      .onChange(of: text) {
+        if text.count > CustomStyleStore.characterLimit {
+          text = String(text.prefix(CustomStyleStore.characterLimit))
+        }
+      }
+      .disabled(!enhancedTranscripts)
+    } header: {
+      Text("Custom Style")
+    } footer: {
+      HStack(alignment: .top) {
+        Text(
+          enhancedTranscripts
+            ? "Style preferences applied when polishing each dictation — casing, tone, emoji use."
+            : "Style preferences need enhanced transcripts turned on.")
+        Spacer()
+        // The API caps the combined instruction, so the room left is finite —
+        // show it rather than truncating silently at the limit.
+        Text("\(text.count)/\(CustomStyleStore.characterLimit)")
+          .monospacedDigit()
+      }
     }
   }
 }

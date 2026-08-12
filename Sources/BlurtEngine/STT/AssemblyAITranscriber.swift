@@ -26,6 +26,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   private let baseURL: URL
   private let transport: any HTTPTransport
   private let enhancedTranscriptsEnabled: @Sendable () -> Bool
+  private let customStyle: @Sendable () -> String?
 
   /// Idle timeout for the transcribe round trip — `URLRequest.timeoutInterval` is
   /// reset each time data moves, so this bounds *stalls*, not total elapsed time.
@@ -37,21 +38,25 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   private static let requestTimeoutSeconds: TimeInterval = 90
 
   /// `enhancedTranscripts` decides, per request, whether the config carries
-  /// the `llm` cleanup-rewrite block. Read at every `transcribe` so a settings
-  /// change applies to the next dictation without rebuilding the transcriber.
-  /// `nil` (the default) reads `EnhancedTranscriptsStore` — spelled as an
-  /// optional rather than a default closure because a public default argument
-  /// can't reference the store's internal `isEnabled`.
+  /// the `llm` cleanup-rewrite block; `customStyle` supplies the user's custom
+  /// style instructions appended to that block's cleanup instruction. Both are
+  /// read at every `transcribe` so a settings change applies to the next
+  /// dictation without rebuilding the transcriber. `nil` (the default) reads
+  /// the corresponding store — spelled as optionals rather than default
+  /// closures because a public default argument can't reference a store's
+  /// internal member.
   public init(
     apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.current },
     baseURL: URL = URL(staticString: "https://dictation.assemblyai.com"),
     transport: any HTTPTransport = URLSession.shared,
-    enhancedTranscripts: (@Sendable () -> Bool)? = nil
+    enhancedTranscripts: (@Sendable () -> Bool)? = nil,
+    customStyle: (@Sendable () -> String?)? = nil
   ) {
     self.apiKeyProvider = apiKeyProvider
     self.baseURL = baseURL
     self.transport = transport
     self.enhancedTranscriptsEnabled = enhancedTranscripts ?? { EnhancedTranscriptsStore().isEnabled }
+    self.customStyle = customStyle ?? { CustomStyleStore().instructions }
   }
 
   // MARK: - Dictation request
@@ -131,7 +136,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// `URLProtocol` mocks can't observe reliably for `upload(from:)`).
   func makeConfigData(sampleRate: Int, prompt: String?) throws -> Data {
     let enhanced = enhancedTranscriptsEnabled()
-    let instruction = CleanupInstruction.sendable
+    let instruction = CleanupInstruction.sendable(appending: customStyle())
     if enhanced, instruction == nil {
       // Unreachable while the tests run: `CleanupInstructionTests` asserts the length.
       // Logged rather than trusted because the failure it guards against is silent —
