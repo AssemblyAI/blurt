@@ -25,6 +25,7 @@ enum DefaultsKey: String, CaseIterable {
   case keyTerms = "BlurtKeyTerms"
   case developerMode = "BlurtDeveloperMode"
   case enhancedTranscripts = "BlurtEnhancedTranscripts"
+  case customStyle = "BlurtCustomStyle"
   /// `OverlayOriginStore` persists a point, so it owns two keys rather than one.
   case overlayCustomOriginX = "BlurtOverlayCustomOriginX"
   case overlayCustomOriginY = "BlurtOverlayCustomOriginY"

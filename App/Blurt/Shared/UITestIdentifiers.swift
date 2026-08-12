@@ -64,6 +64,7 @@ enum UITestIdentifiers {
   static let soundPicker = "settings.sound.picker"
   static let developerToggle = "settings.developer.toggle"
   static let enhancedTranscriptsToggle = "settings.enhancedTranscripts.toggle"
+  static let customStyleField = "settings.customStyle.field"
   static let updateCheck = "settings.update.check"
 
   /// The dictation overlay pill (`OverlayView`).

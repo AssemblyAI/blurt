@@ -410,7 +410,13 @@ response carries both `text` (verbatim) and
 
 The instruction is `CleanupInstruction.text`, the winner of a GEPA run of
 `evals/dictation-prompt/` (see its README), compressed to fit the cap. Two later searches
-failed to beat it — the most recent scored 0.9043 against its 0.9101 on a held-out split.
+failed to beat it — the most recent scored 0.9043 against its 0.9101 on a held-out split. When the
+user has entered **custom style instructions** (`CustomStyleStore`, read per request via the
+transcriber's injected `customStyle` closure), `CleanupInstruction.sendable(appending:)` appends
+them after the base text with a bridging preamble, trimmed to the headroom the API's 2048
+instruction cap leaves (`customStyleBudget`, measured in UTF-8 bytes — the cap's own unit is
+unmeasured, and bytes are the conservative bound); empty or blank sends the base instruction
+unchanged.
 
 Note what that does and does not establish. It is the best instruction the harness has
 produced, measured against other _text_ candidates on a _stand-in_ model; it has never been
@@ -617,6 +623,10 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
   **`DeveloperModeStore`** (`BlurtDeveloperMode`, off by default),
   **`EnhancedTranscriptsStore`** (`BlurtEnhancedTranscripts`, **on** by default — unset reads as
   enabled; gates the dictation request's `llm` cleanup-rewrite block, re-read at every request),
+  **`CustomStyleStore`** (`BlurtCustomStyle`, the user's custom style instructions appended to the
+  cleanup instruction via `CleanupInstruction.sendable(appending:)`, re-read at every request; empty
+  sends the base instruction unchanged, and its `characterLimit` re-exports the headroom — in UTF-8
+  bytes — the API's 2048 instruction cap leaves),
   **`OverlayOriginStore`** (the pill's dragged origin, x/y), **`LastUpdateCheckStore`**
   (`BlurtLastUpdateCheck`, the stamp throttling the automatic launch update check).
 - **`DefaultsKey`** (`Config/DefaultsKey.swift`) defines every key those stores write, one case each,
