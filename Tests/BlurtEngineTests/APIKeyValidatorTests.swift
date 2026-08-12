@@ -56,6 +56,26 @@ extension HTTPClientTests {
     }
   }
 
+  @Test("the rest of the credential-rejecting statuses also report .invalid")
+  func validateRemainingRejectingStatuses() async {
+    // 401 and 400 have cases of their own above; these two were the members of the
+    // `.invalid` list with no test at all, so dropping either from it would have
+    // gone unnoticed — and the failure is a *misleading* one rather than a loud
+    // one. On `.unreachable` the sheet says "Couldn't reach AssemblyAI. Check your
+    // connection and try again" (`Outcome.failureReport`), sending the user to
+    // debug a connection that is working fine, about a key AssemblyAI actually
+    // rejected.
+    //
+    // 403 is a verdict on the credential: AssemblyAI answers an authenticated
+    // request it won't serve with it. 422 means the key itself is malformed.
+    for status in [403, 422] {
+      let transport = FakeHTTPTransport { _ in (status, json(["error": "rejected"])) }
+      #expect(
+        await makeValidator(transport).validate("bad-key") == .invalid,
+        "status \(status) must reject the key")
+    }
+  }
+
   @Test("validator treats 429 rate-limit as unreachable, not invalid")
   func validateRateLimitedIsUnreachable() async {
     let transport = FakeHTTPTransport { _ in (429, json(["error": "rate limited"])) }
