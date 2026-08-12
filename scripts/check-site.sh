@@ -209,7 +209,12 @@ fi
 
 # Every <loc> must be on this domain. (xmllint already proved the file parses;
 # that says nothing about where the URLs point, and no HTML checker reads it.)
-SITEMAP_LOCS="$(grep -oE '<loc>[^<]*</loc>' sitemap.xml | sed 's|</\?loc>||g' || true)"
+# Two explicit expressions rather than one `</\?loc>`: `\?` is a GNU sed
+# extension, so on macOS's BSD sed it matches a literal '?', the tags survive
+# the strip, and every <loc> then fails the comparison below against a domain it
+# actually matches. That is precisely how this first reached CI — green on Linux,
+# red on macos-26 — so keep anything here to POSIX BRE/ERE.
+SITEMAP_LOCS="$(grep -oE '<loc>[^<]*</loc>' sitemap.xml | sed -e 's|.*<loc>||' -e 's|</loc>.*||' || true)"
 if [ -z "$SITEMAP_LOCS" ]; then
   fail "sitemap.xml lists no <loc> entries"
 else
