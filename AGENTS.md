@@ -487,7 +487,12 @@ switch and both paths, and `scripts/reset-install.sh` removes both files.
 
 API key: stored in the macOS Keychain via **`APIKeyStore`**, a thin static facade over
 **`MemoizedKeyStore`** (which takes its storage as `read`/`write` closures, so the memo-and-write rules
-are unit-tested against a double instead of the real item). The injectable seam is **`APIKeyGateway`**
+are unit-tested against a double instead of the real item). The service is `BlurtIdentity.keychainService`
+(`"Blurt"`) — Keychain Access shows the service as the item's _name_, so it's the product name, not the
+reverse-DNS id — and **`MigratingKeychainStore`** adopts the key from the pre-rename service
+(`BlurtIdentity.legacyKeychainService`, the bundle id) on the first read that finds nothing, then deletes
+the old item. It also clears the legacy item on every successful write, or deleting the key would let the
+next read resurrect it. The injectable seam is **`APIKeyGateway`**
 — `ProductionAPIKeyStore` forwards to the Keychain, `InMemoryAPIKeyStore` keeps automated runs away
 from it. **`APIKeySubmission`** owns the validate-then-save flow (an unverified key never persists) and
 its `Outcome.failureReport` classifies a failure as `.inline` (recoverable, shown beside the field) or

@@ -41,8 +41,8 @@ final class MemoizedKeyStore: Sendable {
     self.write = write
   }
 
-  /// Memoizes over a keychain item.
-  convenience init(keychain: KeychainStore) {
+  /// Memoizes over the keychain item, legacy-service migration and all.
+  convenience init(keychain: MigratingKeychainStore) {
     self.init(read: { keychain.read() }, write: { keychain.write($0) })
   }
 

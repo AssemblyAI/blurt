@@ -14,12 +14,20 @@ public enum APIKeyStore {
   /// Where users go to create / copy their AssemblyAI API key.
   public static let dashboardURL = URL(staticString: "https://www.assemblyai.com/dashboard/api-keys")
 
-  /// The production keychain item, memoized. The service is the (lowercase) bundle
-  /// id, to match the macOS convention. Tests never reach this — they build their
-  /// own `MemoizedKeyStore`, and `KeychainStoreTests` uses an isolated
-  /// service/account — so the real key is never read or written by a test run.
+  /// The account every Blurt install stores the key under; it survived the
+  /// service rename, so it's shared by the current and legacy items.
+  private static let account = "AssemblyAIAPIKey"
+
+  /// The production keychain item, memoized. The service is the product name —
+  /// Keychain Access shows it as the item's name — and `MigratingKeychainStore`
+  /// carries over a key still saved under the old reverse-DNS service. Tests never
+  /// reach this: they build their own `MemoizedKeyStore`, and the keychain suites
+  /// use isolated services/accounts, so the real key is never read or written by a
+  /// test run.
   private static let memo = MemoizedKeyStore(
-    keychain: KeychainStore(service: BlurtIdentity.subsystem, account: "AssemblyAIAPIKey"))
+    keychain: MigratingKeychainStore(
+      current: KeychainStore(service: BlurtIdentity.keychainService, account: account),
+      legacy: KeychainStore(service: BlurtIdentity.legacyKeychainService, account: account)))
 
   /// The stored key, or `nil` if none has been saved (or it's empty).
   public static var current: String? { memo.current }

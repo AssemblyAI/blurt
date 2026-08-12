@@ -46,13 +46,19 @@ echo "==> Clearing UserDefaults for $BUNDLE_ID"
 defaults delete "$BUNDLE_ID" 2>/dev/null || true
 
 # AssemblyAI API key lives in the login keychain as a generic password. The
-# keychain service is `BlurtIdentity.subsystem` (used by APIKeyStore,
-# Sources/BlurtEngine/Config/APIKeyStore.swift) — the lowercase bundle id to
-# match macOS convention. Must match that constant.
-KEYCHAIN_SERVICE="$BUNDLE_ID"
+# service is `BlurtIdentity.keychainService` and the account is the one
+# `APIKeyStore` uses (Sources/BlurtEngine/Config/APIKeyStore.swift) — the product
+# name, since Keychain Access shows the service as the item's name. Must match
+# those constants. Builds before the rename stored the key under the bundle id
+# (`BlurtIdentity.legacyKeychainService`); the app migrates that item on first
+# read, but a reset has to clear it too, or the next launch adopts it back.
+KEYCHAIN_SERVICE="Blurt"
+LEGACY_KEYCHAIN_SERVICE="$BUNDLE_ID"
 KEYCHAIN_ACCOUNT="AssemblyAIAPIKey"
 echo "==> Deleting AssemblyAI API key from Keychain ($KEYCHAIN_SERVICE / $KEYCHAIN_ACCOUNT)"
-security delete-generic-password -s "$KEYCHAIN_SERVICE" -a "$KEYCHAIN_ACCOUNT" >/dev/null 2>&1 || true
+for service in "$KEYCHAIN_SERVICE" "$LEGACY_KEYCHAIN_SERVICE"; do
+  security delete-generic-password -s "$service" -a "$KEYCHAIN_ACCOUNT" >/dev/null 2>&1 || true
+done
 
 # Developer mode appends transcript and failure logs here (see DictationLog); a
 # fresh install has neither, so clear them too. The rmdir below only succeeds
