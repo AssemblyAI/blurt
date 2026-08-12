@@ -1,0 +1,204 @@
+name: release
+
+# Build, sign, notarize, and publish a Blurt release from CI rather than from
+# the maintainer's Mac. The Developer ID key and the notary credential live in
+# GitHub secrets (see RELEASE.md) instead of one laptop's keychain, so a release
+# no longer depends on who is at which desk.
+#
+# Dispatch-only on purpose: a release must be a deliberate act against a
+# specific reviewed commit of main, never a side effect of a push or a tag.
+# `scripts/release.sh` dispatches this after the version-bump PR merges.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (X.Y.Z) — must match project.yml on the dispatched ref"
+        required: true
+        type: string
+      republish:
+        description: "Overwrite an existing tag + release with fresh artifacts (never for a code bug — bump a patch)"
+        type: boolean
+        default: false
+      skip_checks:
+        description: "Skip scripts/check.sh (it already ran on this commit in the check workflow)"
+        type: boolean
+        default: false
+      skip_smoke:
+        description: "Skip the launch smoke test (use if the runner has no usable GUI session)"
+        type: boolean
+        default: false
+
+# One release at a time, and never cancel one in flight: a half-run that has
+# already notarized or tagged is worse than a queued one.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Build + sign + notarize + staple + DMG. Produces the exact artifacts the
+  # publish job uploads — nothing is rebuilt downstream, so what a human tests
+  # from this run's artifacts is byte-for-byte what ships.
+  build:
+    runs-on: macos-26
+    timeout-minutes: 120
+    # Holds the signing + notary secrets. Restrict this environment to the
+    # `main` branch in repo settings so a fork or a stray branch can't reach the
+    # Developer ID key.
+    environment: release-build
+
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          # Pin to the dispatched commit rather than the branch tip: the publish
+          # job checks out the same sha, so the tag can never land on a commit
+          # other than the one that was actually built.
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Guard the dispatched version
+        working-directory: blurt
+        env:
+          WANT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC1091  # sourced at runtime from the checkout
+          source scripts/release-lib.sh
+          GOT_VERSION="$(require_project_version App/Blurt/project.yml)"
+          is_semver "$WANT_VERSION" || die "version input must be X.Y.Z (got: $WANT_VERSION)"
+          [ "$GOT_VERSION" = "$WANT_VERSION" ] \
+            || die "dispatched version $WANT_VERSION but ${GITHUB_SHA:0:7} is at $GOT_VERSION — dispatch the commit that carries the bump"
+          info "releasing v$GOT_VERSION from $GITHUB_SHA"
+
+      - name: Check the signing secrets are configured
+        # Fail here rather than 25 minutes later at the signing step. Only
+        # presence is checked — the values are never echoed.
+        env:
+          P12: ${{ secrets.SIGNING_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.SIGNING_P12_PASSWORD }}
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+        run: |
+          set -euo pipefail
+          missing=""
+          [ -n "$P12" ] || missing="$missing SIGNING_P12_BASE64"
+          [ -n "$P12_PASSWORD" ] || missing="$missing SIGNING_P12_PASSWORD"
+          [ -n "$NOTARY_KEY_P8" ] || [ -n "$NOTARY_APPLE_ID" ] \
+            || missing="$missing NOTARY_KEY_P8_BASE64-or-NOTARY_APPLE_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::missing secret(s) on the release-build environment:$missing — see RELEASE.md"
+            exit 1
+          fi
+
+      - name: Note a build-only dry run
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::notice::Dispatched from ${GITHUB_REF}, not main — this is a build/sign/notarize dry run. The publish job will not run."
+
+      - name: Install build tools
+        working-directory: blurt
+        # create-dmg is release-only, so it is not in the Brewfile the check
+        # workflow installs on every PR.
+        run: |
+          brew bundle --file=Brewfile
+          brew install create-dmg
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Build, sign, notarize, staple
+        working-directory: blurt
+        env:
+          # Developer ID Application cert + key, exported as a .p12 and
+          # base64-encoded. Imported into an ephemeral keychain that is deleted
+          # when the script exits.
+          BLURT_SIGNING_P12_BASE64: ${{ secrets.SIGNING_P12_BASE64 }}
+          BLURT_SIGNING_P12_PASSWORD: ${{ secrets.SIGNING_P12_PASSWORD }}
+          # Notary credential. The App Store Connect API key is preferred (it is
+          # revocable on its own and never appears in a process list); the Apple
+          # ID pair below is the fallback for a team without API-key access.
+          BLURT_NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          BLURT_NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          BLURT_NOTARY_KEY_P8_BASE64: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
+          BLURT_NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          BLURT_NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          SKIP_CHECKS: ${{ inputs.skip_checks }}
+          SKIP_SMOKE: ${{ inputs.skip_smoke }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "$SKIP_CHECKS" = "true" ]; then args+=(--skip-checks); fi
+          if [ "$SKIP_SMOKE" = "true" ]; then args+=(--skip-smoke); fi
+          scripts/release-build.sh ${args[@]+"${args[@]}"}
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-${{ inputs.version }}
+          # Explicit paths, not the whole build/release tree: derived/ and
+          # stage/ are multi-GB build scratch that nothing downstream reads.
+          path: |
+            blurt/build/release/Blurt-*.dmg
+            blurt/build/release/Blurt-*.app.dSYM.zip
+            blurt/build/release/SHA256SUMS
+            blurt/build/release/build-info.txt
+            blurt/build/release/notary-*-log.json
+          if-no-files-found: error
+
+  # Tag, push, and publish the GitHub Release from the artifacts above.
+  #
+  # The `release-publish` environment is the ship gate that the local
+  # `release-install.sh` step used to be: configure it with required reviewers so
+  # this job parks until a human has downloaded the DMG from the build job's
+  # artifacts, installed it, and confirmed it works.
+  publish:
+    needs: build
+    # Releases ship from main. A dispatch from any other ref stops after the
+    # build job, which makes this workflow safe to exercise as a dry run.
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-26
+    timeout-minutes: 30
+    environment: release-publish
+    permissions:
+      # contents: write is what lets the tag push and the release create land.
+      contents: write
+      actions: read
+
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          ref: ${{ github.sha }}
+          # The publish step pushes the release tag, so keep the token on the
+          # origin remote (contents: write above is what makes the push land).
+          persist-credentials: true
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-${{ inputs.version }}
+          path: blurt/build/release
+
+      - name: Identify the tagger
+        working-directory: blurt
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Tag + publish
+        working-directory: blurt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPUBLISH: ${{ inputs.republish }}
+        run: |
+          set -euo pipefail
+          args=(--yes)
+          if [ "$REPUBLISH" = "true" ]; then args+=(--republish); fi
+          scripts/release-publish.sh "${args[@]}"

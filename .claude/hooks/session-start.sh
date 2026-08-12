@@ -2,8 +2,8 @@
 # SessionStart hook: prepare a Claude Code on the web (Linux) sandbox.
 #
 # Blurt is macOS-only, so the Swift toolchain can't run here — but the portable
-# checks (prettier / xmllint / markdownlint / shellcheck / actionlint /
-# release.test.sh) can. This hook installs the missing portable linters so
+# checks (prettier / xmllint / markdownlint / shellcheck / actionlint / zizmor /
+# shfmt / release.test.sh) can. This hook installs the missing portable linters so
 # `scripts/check.sh --portable` works, then prints a one-line preflight so the
 # session starts knowing CI (macos-26) is the authority on green.
 #
@@ -54,9 +54,26 @@ if ! command -v actionlint >/dev/null 2>&1 && command -v go >/dev/null 2>&1; the
     || note "actionlint install failed (go install)"
 fi
 
+# shfmt (go) — the formatting authority for scripts/*.sh, and a check.sh gate, so
+# without it a web session pushes shell edits that CI can still fail on layout.
+# Same channel as actionlint: GitHub release binaries are blocked, the Go module
+# proxy is not.
+if ! command -v shfmt >/dev/null 2>&1 && command -v go >/dev/null 2>&1; then
+  GOBIN=/usr/local/bin go install mvdan.cc/sh/v3/cmd/shfmt@latest >/dev/null 2>&1 \
+    || note "shfmt install failed (go install)"
+fi
+
+# zizmor (pip) — the security audit for .github/workflows. Published to PyPI as
+# well as Homebrew, so pip is the one channel that works here; its GitHub release
+# binaries are blocked by the same network policy that rules out actionlint's.
+if ! command -v zizmor >/dev/null 2>&1 && command -v pip3 >/dev/null 2>&1; then
+  pip3 install --quiet zizmor >/dev/null 2>&1 || true
+  command -v zizmor >/dev/null 2>&1 || note "zizmor install failed (pip)"
+fi
+
 # Preflight summary — this lands in the session context.
 missing=""
-for tool in prettier xmllint markdownlint shellcheck actionlint; do
+for tool in prettier xmllint markdownlint shellcheck actionlint zizmor shfmt; do
   command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
 done
 echo "Blurt web sandbox: no macOS toolchain — Swift build/tests/format run on CI (macos-26), the authority on green."
