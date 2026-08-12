@@ -122,9 +122,10 @@ struct DictationKeyGateTests {
     }
   }
 
-  /// `isIdle` is what the event tap's disabled-tap recovery reads to decide
-  /// whether its reset just discarded a live recording it must cancel upstream,
-  /// so it has to be true exactly when no dictation is in flight.
+  /// `isIdle` is what `DictationKeyRouter.reset()` reads to decide whether it just
+  /// discarded a live recording the host must cancel upstream (on a rebind, or the
+  /// disabled-tap recovery), so it has to be true exactly when no dictation is in
+  /// flight.
   @Test("isIdle tracks armed and latched recordings")
   func isIdleTracksLiveRecordings() {
     var g = DictationKeyGate(holdThreshold: .seconds(1))

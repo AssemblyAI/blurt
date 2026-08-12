@@ -100,4 +100,19 @@ struct BlurtErrorTests {
       BlurtError.sttFailed(underlying: NSError(domain: "Other", code: 9)).diagnosticName
         == BlurtError.sttFailed(underlying: underlying).diagnosticName)
   }
+
+  /// The classification the inject `catch` reads to choose the quiet "copied"
+  /// notice over the red flash. Pinned per case: getting one wrong is invisible in
+  /// review — it only shows up as a fault the user shouldn't have seen, or a real
+  /// failure silently swallowed as a degradation.
+  @Test("only the two copy-fallback errors are quiet degradations")
+  func quietDegradationsAreTheCopyFallbacks() {
+    let e = NSError(domain: "X", code: 1)
+    #expect(BlurtError.noEditableTarget.isQuietDegradation)
+    #expect(BlurtError.targetAppLost.isQuietDegradation)
+    #expect(!BlurtError.accessibilityPermissionMissing.isQuietDegradation)
+    #expect(!BlurtError.apiKeyMissing.isQuietDegradation)
+    #expect(!BlurtError.sttFailed(underlying: e).isQuietDegradation)
+    #expect(!BlurtError.audioCaptureFailed(underlying: e).isQuietDegradation)
+  }
 }

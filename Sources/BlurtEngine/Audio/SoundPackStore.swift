@@ -6,7 +6,7 @@ import Foundation
 public struct SoundPackStore {
   /// UserDefaults key holding the selected pack id. Public so SwiftUI views can
   /// observe it directly (e.g. `@AppStorage`) and re-render on change.
-  public static let defaultsKey = "BlurtSoundPack"
+  public static let defaultsKey = DefaultsKey.soundPack.rawValue
   private let defaults: UserDefaults
 
   public init(defaults: UserDefaults = .standard) {

@@ -16,7 +16,28 @@ This file adds only what is specific to Claude Code: the tooling wired up under 
 | `PostToolUse` → `swiftlint.sh`      | Lints edited Swift files and surfaces violations immediately rather than at `check.sh` time.                                                                                                                                                                                                                                                                                  |
 
 The two `PostToolUse` hooks are silent no-ops off-Mac, which is exactly when `check.sh --portable`
-also skips Swift lint — so on the web, Swift formatting and lint stay a CI concern.
+also skips Swift lint — so on the web, Swift formatting and lint are otherwise a pure CI concern.
+
+`.claude/hooks/swift-line-length.sh` narrows that gap: line width is the one `.swift-format` rule
+checkable with no toolchain, so it flags over-long lines (reading the limit from `.swift-format`) and
+stays quiet whenever `swift-format` is present and about to reflow the file anyway. It is
+**deliberately not registered** in `settings.json`, so it never runs as shipped — enable it by adding
+a third `PostToolUse` entry beside the other two:
+
+```json
+{
+  "type": "command",
+  "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/swift-line-length.sh"
+}
+```
+
+It is no substitute for `swift-format`: indentation, wrapping, and every other rule still need the
+real tool, and `swift-format lint --strict` on CI remains the authority.
+
+`check.sh`'s shellcheck step covers `.claude/hooks/*.sh` as well as `scripts/*.sh` — the hooks run on
+every edit, so a quoting bug there corrupts a source file rather than merely failing a build. Both
+globs go in one invocation so `hook-lib.sh` and `release-lib.sh` are in the input set and the
+`source` lines resolve instead of raising SC1091. (`shfmt` still covers only `scripts/*.sh`.)
 
 ## Skills (`.claude/skills/`)
 
@@ -34,6 +55,16 @@ also skips Swift lint — so on the web, Swift formatting and lint stay a CI con
 - **`swift6-concurrency-reviewer`** — run after editing engine or app code that touches actors,
   async, the mic capture path, or the dictation pipeline.
 - **`macos-hig-reviewer`** — run after editing views in `App/Blurt/` (wizard, settings, overlay).
+- **`cleanup-reviewer`** — quality-only review (reuse, simplification/dead code, efficiency,
+  altitude), one agent per angle. Use it for `/simplify`-style passes instead of writing the
+  guardrails into an ad-hoc prompt: it loads `project-guardrails` itself and already knows the
+  deliberately-dormant code.
+
+**When you spawn a review subagent, have it invoke the `project-guardrails` skill rather than
+restating the settled decisions in the prompt** — the skill is exactly that list, so a hand-written
+copy is both wasted tokens and a chance to leave something out. This matters most on a dead-code or
+simplification pass, which is precisely when an unbriefed agent proposes deleting the switched-off
+`TranscriptionPrompt` builder that is deliberately kept and tested.
 
 ## Permissions
 

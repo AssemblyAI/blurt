@@ -138,23 +138,19 @@ extension DictationSession {
       // including on a late non-cancellation error — rather than relabeling
       // the user's cancel as a failure.
       if error is CancellationError || Task.isCancelled { return }
-      switch error {
-      case BlurtError.noEditableTarget, BlurtError.targetAppLost:
-        // Not failures: transcription worked, the words just couldn't be pasted
-        // — nothing editable was focused, or the target app quit/refused
-        // activation. Either way the injector left the text on the clipboard —
-        // show the quiet "copied" notice rather than the red error flash (and
-        // don't report it).
-        setPhase(.noTarget)
-      case let err as BlurtError:
-        // Surface the injector's real error (e.g. `.accessibilityPermissionMissing`)
-        // rather than relabeling every failure as a lost target.
-        setPhase(.failed(err))
-      default:
+      guard let err = error as? BlurtError else {
         // An untyped injection error: nothing was left on the clipboard, so this
         // stays a genuine (reported) failure under the generic lost-target label.
         setPhase(.failed(.targetAppLost))
+        return
       }
+      // Which injector errors are a quiet "copied" notice rather than a fault is
+      // `BlurtError.isQuietDegradation` — an exhaustive switch over the cases, so a
+      // new error that leaves the transcript on the clipboard has to be classified
+      // there instead of silently flashing red here. Everything else surfaces its
+      // real error (e.g. `.accessibilityPermissionMissing`) rather than being
+      // relabeled as a lost target.
+      setPhase(err.isQuietDegradation ? .noTarget : .failed(err))
     }
   }
 }

@@ -94,6 +94,31 @@ public struct UpdateAlertContent: Equatable, Sendable {
     buttons: ["OK"],
     style: .warning)
 
+  /// The alert an **unprompted** check should show, or `nil` when the result isn't
+  /// worth interrupting for. Today only an available update speaks: "you're up to
+  /// date" answers a question nobody asked, and a modal saying it at launch is a
+  /// nuisance (offline, on a plane, GitHub down).
+  ///
+  /// Owned here, beside the wording and next to `AutomaticUpdateCheck.shouldRun`,
+  /// for the reason the rest of this type is: *whether to speak* is the same class
+  /// of rule as *whether to check*, and the shell that applies it has no test
+  /// target. It's also exhaustive over `UpdateCheckResult`, so a result added later
+  /// has to decide here — the shell previously did this with
+  /// `guard case .available = result else { return }`, where a new case would have
+  /// silently made the launch check go quiet.
+  ///
+  /// A check that *failed* never reaches this: it throws, and the caller returns
+  /// without a result rather than mapping to `checkFailed`.
+  public static func forUnpromptedCheck(
+    result: UpdateCheckResult, current: SemanticVersion
+  ) -> UpdateAlertContent? {
+    switch result {
+    case .upToDate: nil
+    case .available(let version, let dmgURL):
+      .available(current: current, latest: version, dmgURL: dmgURL)
+    }
+  }
+
   /// The alert for a completed check. The throwing paths map to `checkFailed`
   /// at the call site, where the error is caught.
   public init(result: UpdateCheckResult, current: SemanticVersion) {

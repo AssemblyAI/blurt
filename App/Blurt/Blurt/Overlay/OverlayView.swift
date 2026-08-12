@@ -5,7 +5,7 @@ struct OverlayView: View {
   // The single source of pill state. The live mic level is *not* read in this
   // body: that would rebuild the whole pill (capsule, shadow, REC tag) on
   // every ~20 Hz meter tick. Only `bridge.state` is read here (via `state`
-  // below); the leaf bar view (`WaveformBarsLevel`) reads `bridge.level`, so
+  // below); the leaf bar view (`WaveformBarsLevel`, under `WaveformMeter`) reads `bridge.level`, so
   // @Observable confines the per-tick invalidation to the bars — the rest of
   // the pill stays stable.
   let bridge: OverlayBridge
@@ -19,8 +19,7 @@ struct OverlayView: View {
   // there's no collapsed/hover resting state. The size is the panel's pill size
   // (the panel is sized off it plus the shadow margin) so the capsule fills the
   // window exactly — single source of truth lives on OverlayWindowController.
-  private var pillWidth: CGFloat { OverlayWindowController.pillSize.width }
-  private var pillHeight: CGFloat { OverlayWindowController.pillSize.height }
+  private var pillSize: CGSize { OverlayWindowController.pillSize }
 
   // The pill body is a solid, opaque capsule — not Liquid Glass. `.regular` glass
   // is an adaptive material that samples the backdrop to decide its light/dark
@@ -40,7 +39,7 @@ struct OverlayView: View {
 
   var body: some View {
     content
-      .frame(width: pillWidth, height: pillHeight)
+      .frame(width: pillSize.width, height: pillSize.height)
       // Solid, opaque capsule rather than Liquid Glass: a fixed fill never adapts
       // to the backdrop, so the pill fades in the same dark gray everywhere with
       // no first-frame flash (see `fillColor`). `.animation` below cross-fades the
@@ -90,7 +89,7 @@ struct OverlayView: View {
       // pill (magenta tag + bars). The bars fill the width left of the tag.
       HStack(spacing: 8) {
         RecordingTag(animated: !reduceMotion)
-        WaveformBarsLevel(bridge: bridge, animated: !reduceMotion, color: OverlayBrandPalette.cyan)
+        WaveformMeter(bridge: bridge, animated: !reduceMotion, color: OverlayBrandPalette.cyan)
       }
       .padding(.horizontal, 12)
       .transition(.opacity)
@@ -105,7 +104,7 @@ struct OverlayView: View {
       // "Try again" tells the user what to do; the full failure reason is too
       // long for the pill, so expose it on hover. The VoiceOver announcement
       // (OverlayWindowController) speaks the same message for non-sighted users.
-      noticePill(symbol: "arrow.clockwise", tint: .white, label: "Try again", help: message)
+      errorPill(help: message)
     case .pasted:
       // Quiet, informational notice confirming the transcript was typed into the
       // focused field. Styled exactly like "Transcribing…" (same type, tracking,
@@ -127,23 +126,23 @@ struct OverlayView: View {
     }
   }
 
-  /// A brief notice pill — an SF Symbol + short label — for the transient
-  /// `.error` state. `tint` colors both the glyph and the label. `help` is the
-  /// hover tooltip — pass the state's message so it stays the same string the
-  /// window controller announces to VoiceOver (the wording lives in one place,
-  /// `OverlayUIState`).
-  private func noticePill(
-    symbol: String, tint: Color, label: String, help: String
-  ) -> some View {
+  /// The transient `.error` notice: a ↻ glyph and "Try again". Spelled out rather
+  /// than parameterized because it's the only notice pill left — `.pasted` and
+  /// `.noTarget` moved to `StatusLineText`, and a symbol/tint/label knob for one
+  /// caller made the reader check three arguments to learn what the pill says.
+  /// `help` is the hover tooltip — pass the state's message so it stays the same
+  /// string the window controller announces to VoiceOver (the wording lives in one
+  /// place, `OverlayUIState`).
+  private func errorPill(help: String) -> some View {
     HStack(spacing: 6) {
-      Image(systemName: symbol)
+      Image(systemName: "arrow.clockwise")
         .font(.callout.weight(.semibold))
-        .foregroundStyle(tint)
-      Text(label)
+        .foregroundStyle(.white)
+      Text("Try again")
         .font(.callout.weight(.semibold))
         .lineLimit(1)
         .minimumScaleFactor(0.6)
-        .foregroundStyle(tint)
+        .foregroundStyle(.white)
     }
     .padding(.horizontal, 4)
     .transition(.opacity)

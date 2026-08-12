@@ -2,8 +2,8 @@ import CoreGraphics
 import Foundation
 
 /// Persists the overlay pill's user-dragged origin. Same shape as
-/// `TriggerKeyStore` / `SoundPackStore`, and registered in
-/// `PersistedSettings.allDefaultsKeys`.
+/// `TriggerKeyStore` / `SoundPackStore`; its two keys are `DefaultsKey` cases, which
+/// is what puts them in `PersistedSettings`' reset sweep.
 ///
 /// Owned by the engine rather than the AppKit controller for the reason the
 /// roster exists: these two keys used to be private to `OverlayWindowController`,
@@ -14,8 +14,8 @@ import Foundation
 /// persistence belongs next to it.
 public struct OverlayOriginStore {
   /// Public so the reset sweep and `@AppStorage`-style observers can name them.
-  public static let xDefaultsKey = "BlurtOverlayCustomOriginX"
-  public static let yDefaultsKey = "BlurtOverlayCustomOriginY"
+  public static let xDefaultsKey = DefaultsKey.overlayCustomOriginX.rawValue
+  public static let yDefaultsKey = DefaultsKey.overlayCustomOriginY.rawValue
 
   private let defaults: UserDefaults
 

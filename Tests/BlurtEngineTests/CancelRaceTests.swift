@@ -161,21 +161,16 @@ struct CancelRaceTests {
   /// and no transcript is produced.
   @Test("cancel of a live recording survives a failing mic.stop")
   func cancelDuringRecordingSurvivesFailingMicStop() async throws {
-    let mic = StubMicCapture()
-    await mic.setStopError(URLError(.unknown))
-    let stt = StubTranscriber(mode: .transcript("Hello world."))
-    let injector = StubInjector()
-    let session = DictationSession(
-      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
-      seams: .offline)
+    let fixture = makeSession()
+    await fixture.mic.setStopError(URLError(.unknown))
 
-    await session.press()
-    #expect(await session.phase == .recording)
-    await session.cancel()
+    await fixture.session.press()
+    #expect(await fixture.session.phase == .recording)
+    await fixture.session.cancel()
 
-    #expect(await session.phase == .cancelled)
-    #expect(await mic.stopCalls == 1)
-    #expect(await injector.inserted.isEmpty)
+    #expect(await fixture.session.phase == .cancelled)
+    #expect(await fixture.mic.stopCalls == 1)
+    #expect(await fixture.injector.inserted.isEmpty)
   }
 
   @Test("cancelRecording during transcribing leaves the pipeline alone")
@@ -207,19 +202,14 @@ struct CancelRaceTests {
 
   @Test("cancelRecording during recording cancels like cancel()")
   func cancelRecordingCancelsLiveRecording() async throws {
-    let mic = StubMicCapture()
-    let stt = StubTranscriber(mode: .transcript("Hello world."))
-    let injector = StubInjector()
-    let session = DictationSession(
-      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
-      seams: .offline)
+    let fixture = makeSession()
 
-    await session.press()
-    #expect(await session.phase == .recording)
-    await session.cancelRecording()
-    #expect(await session.phase == .cancelled)
-    #expect(await mic.stopCalls == 1)
-    #expect(await injector.inserted.isEmpty)
+    await fixture.session.press()
+    #expect(await fixture.session.phase == .recording)
+    await fixture.session.cancelRecording()
+    #expect(await fixture.session.phase == .cancelled)
+    #expect(await fixture.mic.stopCalls == 1)
+    #expect(await fixture.injector.inserted.isEmpty)
   }
 
   @Test("cancel landing in insert's non-cancellable tail stays .cancelled, not .pasted")
