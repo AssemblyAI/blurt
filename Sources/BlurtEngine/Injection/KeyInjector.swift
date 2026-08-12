@@ -16,11 +16,6 @@ public actor KeyInjector: InjectorProtocol {
   /// save/restore logic without posting a real Cmd-V into the focused app.
   private let postPaste: @Sendable () -> Bool
 
-  /// The exact text most recently pasted by `insert` (including any leading
-  /// separator space it added), so a following dictation into the same window
-  /// can recover its spacing (see `separatorBasis`).
-  private var lastInsertedText: String?
-
   /// Identifies a window by its app's pid plus its title — a pid alone isn't
   /// enough (one browser process hosts many unrelated tabs/documents), and a
   /// title alone isn't stable across apps, so both travel together as one
@@ -45,15 +40,19 @@ public actor KeyInjector: InjectorProtocol {
     }
   }
 
-  /// The window `lastInsertedText` was pasted into. Lets `insert` recover
-  /// spacing in Accessibility-opaque editors (Electron/Monaco, e.g. VS Code —
-  /// and, just as opaque, a browser tab like Google Docs) where no prior text
-  /// can be read: if the next dictation targets the same window, the text we
-  /// just pasted is what now precedes the caret, so it drives the separator
-  /// decision (see `separatorBasis`). A different window — a different tab, a
-  /// different file, or an unreadable title — means a different field, so the
-  /// fallback doesn't fire.
-  private var lastInsertedWindow: WindowIdentity?
+  /// The previous insert's resolution: the exact text it pasted (including any
+  /// leading separator it added) and the window it landed in. One value rather
+  /// than two optionals kept in sync by hand — the same reasoning as
+  /// `WindowIdentity` above, and they are only ever written together.
+  ///
+  /// Lets `insert` recover spacing in Accessibility-opaque editors
+  /// (Electron/Monaco, e.g. VS Code — and, just as opaque, a browser tab like
+  /// Google Docs) where no prior text can be read: if the next dictation targets
+  /// the same window, the text we just pasted is what now precedes the caret, so
+  /// it drives the separator decision (see `separatorBasis`). A different window
+  /// — a different tab, a different file, or an unreadable title — means a
+  /// different field, so the fallback doesn't fire.
+  private var lastInserted: ResolvedInsert?
 
   /// Tail of the paste chain: each insert links behind the previous insert's
   /// ENTIRE critical section — paste *plus* its backgrounded settle/restore — so
@@ -203,12 +202,12 @@ public actor KeyInjector: InjectorProtocol {
     // Snapshot the target at entry and use only the local below: this method
     // suspends (activation settle), the actor is reentrant, and a
     // setTargetApp() interleaving mid-insert must not make us activate one app
-    // while judging editability and recording `lastInsertedWindow` for another.
+    // while judging editability and recording `lastInserted` for another.
     let target = targetApp
     let resolved = KeyInjector.resolveInsert(
       text: text, priorText: priorText, windowTitle: windowTitle,
       targetPID: target?.processIdentifier,
-      lastInsertedText: lastInsertedText, lastInsertedWindow: lastInsertedWindow)
+      lastInserted: lastInserted)
     let finalText = resolved.text
     do {
       try await activateTargetApp(target)
@@ -253,14 +252,15 @@ public actor KeyInjector: InjectorProtocol {
     // deferred restore back to the chain link (see `insert`). `insert` returns
     // now — so the pipeline reaches `.idle` and re-arms without waiting out the
     // restore window — while the next paste still serializes behind the settle.
-    lastInsertedText = finalText
-    lastInsertedWindow = resolved.window
+    lastInserted = resolved
     return restore
   }
 
   /// What one insert resolves to before anything is activated or pasted: the
   /// exact text to write (any leading separator included) and the window
-  /// identity to remember it against for the next dictation.
+  /// identity to remember it against. Fed straight back in as the next insert's
+  /// `lastInserted` — a resolution and the memory it becomes are the same pair,
+  /// so there is one type for both.
   struct ResolvedInsert: Equatable {
     let text: String
     let window: WindowIdentity?
@@ -282,18 +282,17 @@ public actor KeyInjector: InjectorProtocol {
     priorText: String?,
     windowTitle: String?,
     targetPID: pid_t?,
-    lastInsertedText: String?,
-    lastInsertedWindow: WindowIdentity?
+    lastInserted: ResolvedInsert?
   ) -> ResolvedInsert {
     let currentWindow = targetPID.flatMap { pid in
       windowTitle.map { WindowIdentity(pid: pid, title: $0) }
     }
-    // `currentWindow.map { ... } ?? false` rather than `currentWindow == lastInsertedWindow`:
+    // `currentWindow.map { ... } ?? false` rather than `currentWindow == lastInserted?.window`:
     // both sides being nil (nothing readable this time, nothing pasted last time)
     // must not count as a match.
-    let sameWindow = currentWindow.map { $0 == lastInsertedWindow } ?? false
+    let sameWindow = currentWindow.map { $0 == lastInserted?.window } ?? false
     let basis = separatorBasis(
-      priorText: priorText, lastInserted: lastInsertedText, sameWindow: sameWindow)
+      priorText: priorText, lastInserted: lastInserted?.text, sameWindow: sameWindow)
     return ResolvedInsert(text: withLeadingSeparator(text, after: basis), window: currentWindow)
   }
 }

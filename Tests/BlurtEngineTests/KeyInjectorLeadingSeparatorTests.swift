@@ -97,7 +97,7 @@ struct KeyInjectorResolveInsertTests {
   ) -> KeyInjector.ResolvedInsert {
     KeyInjector.resolveInsert(
       text: "Second.", priorText: priorText, windowTitle: windowTitle, targetPID: targetPID,
-      lastInsertedText: "First.", lastInsertedWindow: editor)
+      lastInserted: KeyInjector.ResolvedInsert(text: "First.", window: editor))
   }
 
   @Test("opaque editor: the same pid and title recovers the spacing from the last paste")
@@ -156,7 +156,7 @@ struct KeyInjectorResolveInsertTests {
   func firstInsertHasNoBasis() {
     let resolved = KeyInjector.resolveInsert(
       text: "First.", priorText: nil, windowTitle: editor.title, targetPID: editor.pid,
-      lastInsertedText: nil, lastInsertedWindow: nil)
+      lastInserted: nil)
     #expect(resolved == KeyInjector.ResolvedInsert(text: "First.", window: editor))
   }
 }
