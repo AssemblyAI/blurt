@@ -9,6 +9,10 @@
 /// Sending it replaces an empty `llm` block, which selected the service's own
 /// default cleanup wording.
 ///
+/// With the transcription prompt switched off (`TranscriptionPrompt.isEnabled`)
+/// this is the only instruction on the request — and unaffected by that switch,
+/// since it is a fixed string that embeds no user context.
+///
 /// **Length is the thing to be careful about.** `config.llm.instruction` accepts
 /// at most `characterCap` characters, and over it the API rejects the whole
 /// request — 400, before the audio is read, so *every* dictation fails rather

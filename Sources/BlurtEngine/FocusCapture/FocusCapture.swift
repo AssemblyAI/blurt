@@ -49,8 +49,9 @@ enum FocusCapture {
   ///
   /// Secure text fields (password inputs) are detected by role **or** subrole and
   /// never have their contents read, so a typed password — selected or not — can't
-  /// leak into the STT prompt. The check fails closed: an unreadable role is
-  /// treated as secure, since it can't be shown not to be.
+  /// reach the developer-mode log, or the STT prompt when that is switched back on
+  /// (`TranscriptionPrompt.isEnabled`). The check fails closed: an unreadable role
+  /// is treated as secure, since it can't be shown not to be.
   ///
   /// Deliberately `nonisolated`: each read below is a synchronous cross-process
   /// IPC round trip into the frontmost app, and an unresponsive app blocks the

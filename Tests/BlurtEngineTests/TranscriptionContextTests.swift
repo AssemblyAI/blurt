@@ -4,8 +4,11 @@ import Testing
 
 /// `TranscriptionContext.isEmpty` is the gate `FocusCapture`/`DictationSession`
 /// use to decide whether a context is worth sending as priming. It mirrors the
-/// emptiness logic in `TranscriptionPrompt.build`, so the two must agree:
-/// `isEmpty == true` should always correspond to `build` returning `nil`.
+/// emptiness logic in `TranscriptionPrompt.assemble`, so the two must agree:
+/// `isEmpty == true` should always correspond to `assemble` returning `nil`.
+/// (`assemble`, not `build` — no prompt is sent at all while
+/// `TranscriptionPrompt.isEnabled` is off; the agreement still has to hold for
+/// the day it goes back on.)
 @Suite("TranscriptionContext")
 struct TranscriptionContextTests {
   @Test("both fields nil is empty")
@@ -38,22 +41,22 @@ struct TranscriptionContextTests {
     #expect(TranscriptionContext(appName: nil, priorText: nil, selectedText: "  \n").isEmpty)
   }
 
-  @Test("key terms alone make it non-empty (and produce a prompt)")
+  @Test("key terms alone make it non-empty (and would produce a prompt)")
   func keyTermsPresent() {
     let context = TranscriptionContext(appName: nil, priorText: nil, keyTerms: ["Blurt"])
     #expect(!context.isEmpty)
-    #expect(TranscriptionPrompt.build(context: context) != nil)
+    #expect(TranscriptionPrompt.assemble(context: context) != nil)
   }
 
-  @Test("emptiness agrees with TranscriptionPrompt.build returning nil")
-  func agreesWithPromptBuild() {
+  @Test("emptiness agrees with TranscriptionPrompt.assemble returning nil")
+  func agreesWithPromptAssembly() {
     let empties = [
       TranscriptionContext(appName: nil, priorText: nil),
       TranscriptionContext(appName: "  ", priorText: "\n"),
     ]
     for context in empties {
       #expect(context.isEmpty)
-      #expect(TranscriptionPrompt.build(context: context) == nil)
+      #expect(TranscriptionPrompt.assemble(context: context) == nil)
     }
 
     let nonEmpties = [
@@ -62,7 +65,7 @@ struct TranscriptionContextTests {
     ]
     for context in nonEmpties {
       #expect(!context.isEmpty)
-      #expect(TranscriptionPrompt.build(context: context) != nil)
+      #expect(TranscriptionPrompt.assemble(context: context) != nil)
     }
   }
 

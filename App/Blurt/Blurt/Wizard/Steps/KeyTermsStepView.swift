@@ -4,8 +4,15 @@ import SwiftUI
 /// The "Key Terms" section of the Settings window: a free-text
 /// area where the user lists comma-separated domain words (names, jargon, product
 /// names). These are folded into every transcription's prompt as spelling priming
-/// (see `KeyTermsStore` / `TranscriptionPrompt.build`), so the model favors those
+/// (see `KeyTermsStore` / `TranscriptionPrompt.assemble`), so the model favors those
 /// spellings. Optional — it never gates setup; an empty list just sends no terms.
+///
+/// **Inert while the transcription prompt is switched off**
+/// (`TranscriptionPrompt.isEnabled`): the terms are still stored and still read at
+/// press time, but the prompt they would ride on is never sent, so they currently
+/// change nothing. Left in place — with the field's wiring intact — because that
+/// switch is meant to flip back; if it doesn't, this section should go rather than
+/// keep promising an effect it doesn't have.
 struct KeyTermsStepView: View {
   /// Stored in UserDefaults so multiple settings windows/readers see edits live.
   ///

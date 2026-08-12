@@ -31,7 +31,8 @@ public actor DictationSession {
   let transcriber: TranscriberProtocol
   let injector: InjectorProtocol
   /// Supplies the user's key terms (domain vocabulary) at press time so each
-  /// utterance's prompt primes those spellings. A closure, rather than a stored
+  /// utterance's prompt primes those spellings — inert while that prompt is
+  /// switched off (`TranscriptionPrompt.isEnabled`). A closure, rather than a stored
   /// list, so edits in Settings take effect on the next dictation without
   /// rebuilding the session. Defaults to reading `KeyTermsStore`.
   private let keyTermsProvider: @Sendable () -> [String]

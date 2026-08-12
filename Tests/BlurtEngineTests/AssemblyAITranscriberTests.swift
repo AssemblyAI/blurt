@@ -52,7 +52,7 @@ struct HTTPClientTests {
     #expect(result == expected)
   }
 
-  @Test("transcriber succeeds with a real context (builds and sends a prompt)")
+  @Test("transcriber succeeds with a real context (which builds no prompt today)")
   func transcribeWithContext() async throws {
     let transport = FakeHTTPTransport { request in
       guard request.url?.path.hasSuffix("/transcribe") == true else { return (404, Data()) }
@@ -60,9 +60,11 @@ struct HTTPClientTests {
     }
 
     // A non-empty context exercises the TranscriptionPrompt.build path inside
-    // transcribe() that the nil-context happy path skips. The fake can't observe
-    // the multipart upload body, so this asserts the request still round-trips
-    // cleanly rather than the wire contents (covered directly by makeConfigData).
+    // transcribe() that the nil-context happy path skips — today that path is
+    // gated off and yields no prompt (see `TranscriptionPromptSwitchTests`), and
+    // the request still has to go out intact. The fake can't observe the
+    // multipart upload body, so this asserts the round trip rather than the wire
+    // contents (covered directly by makeConfigData).
     let result = try await makeTranscriber(apiKey: "test-key", transport: transport)
       .transcribe(
         pcm: Self.testPCM,

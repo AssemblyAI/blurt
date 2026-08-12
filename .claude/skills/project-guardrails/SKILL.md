@@ -23,11 +23,15 @@ one, stop and ask the user first. This is the fast "don't" list; AGENTS.md's
 
 - **No streaming STT.** The AssemblyAI Sync API returns the full transcript in
   one response. Overlay goes "Transcribing…" → full text.
-- **No separate LLM cleanup pass.** Cleanup rides in the Sync STT request's
-  `config.prompt` (`TranscriptionPrompt`). No LLM Gateway client, no
-  `StylerProtocol`, no post-transcription styling stage.
+- **No separate LLM cleanup pass.** Cleanup rides in the same dictation request,
+  as the `llm` block's `instruction` (`CleanupInstruction`). No LLM Gateway
+  client, no `StylerProtocol`, no post-transcription styling stage.
 - **No local models / model downloads.** Transcription is a remote AssemblyAI
   call. No on-device ASR/LLM, no model cache, no download UI.
+- **The transcription `prompt` is switched off** (`TranscriptionPrompt.isEnabled`
+  is `false`), so no focus context leaves the machine. Keep the builder and its
+  wiring intact — it's tested through `assemble` — and don't route the context
+  onto the request by another path.
 - Don't reintroduce a "remove filler words (um, uh, like)" directive in the
   prompt — `universal-3-5-pro` ignores it; it was deliberately dropped. Same for
   a language directive: pinning the prompt to English hurt non-English speech, so
