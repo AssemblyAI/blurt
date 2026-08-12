@@ -49,8 +49,9 @@ struct ContextWaitTests {
     async let got = DictationSession.firstValue(
       of: stream, within: .milliseconds(500), clock: clock)
     // Let the timeout racer park on the virtual clock before advancing past its
-    // deadline (the drain pattern the race suites use).
-    for _ in 0..<1000 { await Task.yield() }
+    // deadline — waiting on the clock's own state, not on a yield budget that
+    // drains this task while saying nothing about the racer.
+    await clock.waitUntilSleeping(for: .milliseconds(500))
     clock.advance(by: .milliseconds(500))
 
     #expect(await got == nil)

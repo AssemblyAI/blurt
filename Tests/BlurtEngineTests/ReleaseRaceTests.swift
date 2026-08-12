@@ -18,7 +18,9 @@ struct ReleaseRaceTests {
     let mic = GatedStopMic()
     let stt = StubTranscriber(mode: .transcript("hi"))
     let injector = StubInjector()
-    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+    let session = DictationSession(
+      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
+      seams: .offline)
 
     await session.press()
     #expect(await session.phase == .recording)
@@ -29,9 +31,11 @@ struct ReleaseRaceTests {
     let first = Task { await session.release() }
     await mic.waitUntilStopEntered()
     let second = Task { await session.release() }
-    // Let a (buggy) release #2 reach a second mic.stop() before we let stop
-    // finish; bounded so a regression fails the assertion, not the suite clock.
-    for _ in 0..<1000 where await mic.stopCalls < 2 { await Task.yield() }
+    // No drain between the two: release #2 chains behind release #1's queue op,
+    // so it cannot reach `mic.stop()` while #1 is parked inside one however long
+    // we spin. It runs after the gate opens, and a regression that dropped the
+    // `.recording` guard would stop the mic a second time *then* — caught by
+    // `stopCalls` below either way, whichever order the two tasks start in.
     await mic.allowStopToFinish()
     await first.value
     await second.value
@@ -51,7 +55,9 @@ struct ReleaseRaceTests {
     let mic = GatedStopMic()
     let stt = StubTranscriber(mode: .transcript("hi"))
     let injector = StubInjector()
-    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+    let session = DictationSession(
+      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
+      seams: .offline)
 
     await session.press()
     let release = Task { await session.release() }

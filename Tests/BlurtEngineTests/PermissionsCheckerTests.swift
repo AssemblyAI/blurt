@@ -24,21 +24,57 @@ struct PermissionsCheckerTests {
         != PermissionStatus(microphone: false, accessibility: false))
   }
 
-  @Test("check returns the current status without prompting")
-  func checkReturnsStatus() {
-    // We can't assert the actual grant state (it depends on the test host's TCC
-    // record), only that the read-only check runs and produces a consistent
-    // struct. This covers check(), micGranted(), and the AXIsProcessTrusted call.
-    let status = PermissionsChecker.check()
-    #expect(status.allGranted == (status.microphone && status.accessibility))
+  /// Every combination of the two probes, so the field each one feeds is pinned.
+  static let probeCases: [(mic: Bool, accessibility: Bool)] = [
+    (true, true), (true, false), (false, true), (false, false),
+  ]
+
+  @Test("check reports each probe in its own field", arguments: probeCases)
+  func checkWiresProbesToFields(mic: Bool, accessibility: Bool) {
+    // The one thing `check()` does that can be wrong: which probe feeds which
+    // field. Driving both probes pins it — swap them and half these rows fail.
+    #expect(
+      PermissionsChecker.check(micGranted: { mic }, axTrusted: { accessibility })
+        == PermissionStatus(microphone: mic, accessibility: accessibility))
   }
 
-  @Test("forceAccessibilityActivity runs without prompting")
-  @MainActor
-  func forceAccessibilityActivityRuns() {
-    // Best-effort, side-effect-light (a read-only AX query against another
-    // process); it must not throw or prompt. This is the no-prompt half of the
-    // Accessibility flow — `openAccessibilitySettings` adds the trust prompt.
-    PermissionsChecker.forceAccessibilityActivity()
+  @Test("check consults both probes exactly once")
+  func checkReadsEachProbeOnce() {
+    // Each real probe is a TCC read on the permission-poll timer; re-reading one
+    // per call would double that traffic for a struct with two fields.
+    let micReads = Counter()
+    let axReads = Counter()
+    _ = PermissionsChecker.check(
+      micGranted: {
+        _ = micReads.next()
+        return true
+      },
+      axTrusted: {
+        _ = axReads.next()
+        return true
+      })
+    #expect(micReads.value == 1)
+    #expect(axReads.value == 1)
+  }
+
+  /// Smoke tests, deliberately assertion-free: both entry points read
+  /// process-global TCC state this host can't set, so all they can establish is
+  /// that the real probes run without throwing or prompting. The behaviour they
+  /// compose is covered above, against injected probes.
+  @Suite("PermissionsChecker smoke")
+  struct SmokeTests {
+    @Test("the production check() runs against the real probes without prompting")
+    func productionCheckRuns() {
+      _ = PermissionsChecker.check()
+    }
+
+    @Test("forceAccessibilityActivity runs without prompting")
+    @MainActor
+    func forceAccessibilityActivityRuns() {
+      // Best-effort, side-effect-light (a read-only AX query against another
+      // process). This is the no-prompt half of the Accessibility flow —
+      // `openAccessibilitySettings` adds the trust prompt.
+      PermissionsChecker.forceAccessibilityActivity()
+    }
   }
 }

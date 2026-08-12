@@ -338,7 +338,13 @@ A host-supplied `readinessCheck` closure can refuse a press before any capture b
 passes a key-presence check, so a missing API key surfaces as `.failed(.apiKeyMissing)` at press
 time, never after the user has spoken. Its three collaborators are protocol-typed
 (`MicCaptureProtocol`, `TranscriberProtocol`, `InjectorProtocol`) so tests stub them; see
-`Tests/BlurtEngineTests/Stubs/`. STT errors that are already `BlurtError` surface verbatim; others
+`Tests/BlurtEngineTests/Stubs/`. The two that aren't protocols — the press-time focus capture and the
+developer-mode log — ride on **`DictationSession.Seams`** (`+Seams.swift`), a value the internal
+initializer takes and the public one fills with `.production`. Injectable for the reason the
+protocols are: called as statics, the captured context's _value_ was whatever app happened to be
+frontmost during a test run (so only its arrival could be asserted), every press paid a real AX
+round trip, and the log wrote to the user's real `~/Library/Logs/Blurt`. STT errors that are already
+`BlurtError` surface verbatim; others
 are wrapped in `.sttFailed`. The pipeline is just transcribe → inject, and an empty transcript
 returns to `.idle` without injecting.
 
@@ -482,9 +488,9 @@ regression-tested — no language directive and no filler-word clause; see
 Engine-side stores, all `UserDefaults`-backed value types with the same shape:
 
 - **`TriggerKeyStore`** (`BlurtTriggerKeyCode`), **`SoundPackStore`** (`BlurtSoundPack`),
-  **`KeyTermsStore`** (the user's domain vocabulary, re-read at every press via the session's
-  `keyTermsProvider` — it reaches only the prompt builder, so while the transcription prompt is
-  switched off the Settings field has no effect on transcription),
+  **`KeyTermsStore`** (`BlurtKeyTerms`, the user's domain vocabulary, re-read at every press via
+  the session's `keyTermsProvider` — it reaches only the prompt builder, so while the transcription
+  prompt is switched off the Settings field has no effect on transcription),
   **`DeveloperModeStore`** (`BlurtDeveloperMode`, off by default),
   **`EnhancedTranscriptsStore`** (`BlurtEnhancedTranscripts`, **on** by default — unset reads as
   enabled; gates the dictation request's `llm` cleanup-rewrite block, re-read at every request),
@@ -616,7 +622,12 @@ configured, at most once a day. Five pieces:
 
 **Engine unit tests** — `Tests/BlurtEngineTests/`, Swift Testing (`@Suite`/`@Test`/`#expect`). All
 three seams have stubs in `Stubs/` (`StubMicCapture`, `StubTranscriber`, `StubInjector`, plus
-`FakeHTTPTransport` for transport-level transcriber tests). Retain-cycle leaks are gated by
+`FakeHTTPTransport` for transport-level transcriber tests). Every session a test builds passes
+`seams:` — `.offline` for the suites that only need the window server, the Accessibility API and the
+real log kept out of it, or `testSeams(field:frontmost:log:)` to drive and then assert the captured
+context and what was logged. A test must never reach a production global: `swift test` on a machine
+with developer mode switched on used to append its fixtures to the user's own `dictations.jsonl`,
+which is the same rule as "don't touch the real Keychain in tests". Retain-cycle leaks are gated by
 weak-reference assertions in `MemoryLeakTests.swift` (`expectNoLeak`) — LeakSanitizer is unsupported
 on Darwin, so AddressSanitizer catches memory _corruption_ but not leaks; `scripts/leaks.sh` covers
 the whole app under the Darwin leak detector.

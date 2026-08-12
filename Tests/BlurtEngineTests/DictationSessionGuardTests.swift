@@ -54,7 +54,8 @@ struct DictationSessionGuardTests {
       keyTermsProvider: {
         _ = reads.next()
         return ["Blurt"]
-      })
+      },
+      seams: .offline)
 
     await session.press()
     await session.cancel()

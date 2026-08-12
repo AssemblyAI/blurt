@@ -68,19 +68,30 @@ extension DictationLog {
     }
   }
 
-  /// The unconditional writer, named distinctly from `appendError` for the same
-  /// reason `write` is: the gated entry point above must not be bypassable by
-  /// accidentally satisfying a different signature.
-  static func writeError(
-    _ error: BlurtError, context: TranscriptionContext? = nil, to url: URL, now: Date
-  ) {
-    let entry = ErrorEntry(
+  /// One error entry as a value — the diagnostics-only projection of a failure
+  /// plus its context. Split from `writeError` for the same reason as
+  /// `makeEntry`: this is where the privacy rule lives (no `prior`, `selected`
+  /// or `prompt` field exists to fill), and asserting it on the value proves the
+  /// text is absent, where the old `!line.contains("hunter2")` over a temp file
+  /// also passed when nothing had been written at all.
+  static func makeErrorEntry(
+    _ error: BlurtError, context: TranscriptionContext?, now: Date
+  ) -> ErrorEntry {
+    ErrorEntry(
       kind: error.diagnosticName,
       // Every `BlurtError` supplies an `errorDescription`; the fallback is only
       // so a future case that forgets one logs *something* rather than "".
       error: error.errorDescription ?? String(describing: error),
       ts: now.formatted(timestampFormat),
       app: context?.appName, window: context?.windowTitle, field: context?.fieldLabel)
-    appendLine(entry, to: url)
+  }
+
+  /// The unconditional writer, named distinctly from `appendError` for the same
+  /// reason `write` is: the gated entry point above must not be bypassable by
+  /// accidentally satisfying a different signature.
+  static func writeError(
+    _ error: BlurtError, context: TranscriptionContext? = nil, to url: URL, now: Date
+  ) {
+    appendLine(makeErrorEntry(error, context: context, now: now), to: url)
   }
 }

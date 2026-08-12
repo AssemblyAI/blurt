@@ -33,62 +33,54 @@ struct KeyTermsStoreTests {
   }
 }
 
-/// `get`/`terms` read `UserDefaults.standard`, so this suite is serialized and
-/// saves/restores the real key around each case — it must not leave the dev
-/// machine's stored terms changed.
-///
-/// Each case writes the defaults slot directly, which is exactly how production
-/// writes it: the store has no setter, and the Settings field's `@AppStorage`
-/// binding is the only writer. So these pin the contract that matters — whatever
-/// raw text the field happens to hold, the read side normalizes it.
-@Suite("KeyTermsStore.raw", .serialized)
+/// The read side, against an isolated defaults suite like every other store's
+/// suite (`freshDefaults()`). Each case writes the defaults slot directly, which
+/// is exactly how production writes it: the store has no setter, and the Settings
+/// field's `@AppStorage` binding is the only writer. So these pin the contract
+/// that matters — whatever raw text the field happens to hold, the read side
+/// normalizes it.
+@Suite("KeyTermsStore.raw")
 struct KeyTermsStoreGetTests {
-  private func withCleanStore(_ stored: String?, _ body: () -> Void) {
-    let key = KeyTermsStore.defaultsKey
-    let original = UserDefaults.standard.string(forKey: key)
-    defer {
-      if let original {
-        UserDefaults.standard.set(original, forKey: key)
-      } else {
-        UserDefaults.standard.removeObject(forKey: key)
-      }
-    }
-    if let stored {
-      UserDefaults.standard.set(stored, forKey: key)
-    } else {
-      UserDefaults.standard.removeObject(forKey: key)
-    }
-    body()
+  /// A store over a throwaway suite holding `stored` (or nothing). Isolated per
+  /// case, so this suite neither needs `.serialized` nor can leave the
+  /// developer's own key terms changed — which the previous save-and-restore
+  /// dance around `UserDefaults.standard` did whenever a case failed hard.
+  private func makeStore(_ stored: String?) -> KeyTermsStore {
+    let defaults = freshDefaults()
+    if let stored { defaults.set(stored, forKey: KeyTermsStore.defaultsKey) }
+    return KeyTermsStore(defaults: defaults)
   }
 
-  @Test("get trims the stored string; terms parses it")
-  func getAndTerms() {
-    withCleanStore("  AssemblyAI, Slack  ") {
-      #expect(KeyTermsStore.raw == "AssemblyAI, Slack")
-      #expect(KeyTermsStore.terms == ["AssemblyAI", "Slack"])
-    }
+  @Test("raw trims the stored string; terms parses it")
+  func rawAndTerms() {
+    let store = makeStore("  AssemblyAI, Slack  ")
+    #expect(store.raw == "AssemblyAI, Slack")
+    #expect(store.terms == ["AssemblyAI", "Slack"])
   }
 
   @Test("an unset key reads as no terms")
   func unsetReadsAsNil() {
-    withCleanStore(nil) {
-      #expect(KeyTermsStore.raw == nil)
-      #expect(KeyTermsStore.terms.isEmpty)
-    }
+    let store = makeStore(nil)
+    #expect(store.raw == nil)
+    #expect(store.terms.isEmpty)
   }
 
-  @Test("a blank field reads as no terms rather than an empty term")
-  func blankReadsAsNil() {
+  @Test("a blank field reads as no terms rather than an empty term", arguments: ["", "   \n"])
+  func blankReadsAsNil(stored: String) {
     // The field is cleared by emptying it, not by deleting the key, so the slot
     // genuinely holds "" (or whitespace mid-edit). That must read as "no terms",
     // otherwise the prompt would carry an empty vocabulary clause.
-    withCleanStore("   \n") {
-      #expect(KeyTermsStore.raw == nil)
-      #expect(KeyTermsStore.terms.isEmpty)
-    }
-    withCleanStore("") {
-      #expect(KeyTermsStore.raw == nil)
-      #expect(KeyTermsStore.terms.isEmpty)
-    }
+    let store = makeStore(stored)
+    #expect(store.raw == nil)
+    #expect(store.terms.isEmpty)
+  }
+
+  @Test("each store reads its own defaults, so a stored list can't leak between them")
+  func storesAreIndependent() {
+    // The reason the store takes its `UserDefaults`: the pipeline's provider and
+    // the Settings field must be able to read the same slot, while a test reads
+    // one nobody else can see.
+    #expect(makeStore("Blurt").terms == ["Blurt"])
+    #expect(makeStore(nil).terms.isEmpty)
   }
 }

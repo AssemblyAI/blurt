@@ -26,10 +26,21 @@ public struct PermissionStatus: Equatable, Sendable {
 }
 
 public enum PermissionsChecker {
+  /// The current grant state, read without prompting.
   public static func check() -> PermissionStatus {
+    check(micGranted: { micGranted() }, axTrusted: { AXIsProcessTrusted() })
+  }
+
+  /// The composition `check()` performs, with both probes injected. The probes
+  /// themselves read process-global TCC state the test host can't set, so with
+  /// them hard-coded the only assertable claim about `check()` was that it
+  /// doesn't crash — and the test that made it ended up restating `allGranted`'s
+  /// own definition instead. Injected, the wiring is assertable: each probe's
+  /// answer has to land in its own field, so a swapped pair fails.
+  static func check(micGranted: () -> Bool, axTrusted: () -> Bool) -> PermissionStatus {
     PermissionStatus(
       microphone: micGranted(),
-      accessibility: AXIsProcessTrusted()
+      accessibility: axTrusted()
     )
   }
 

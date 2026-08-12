@@ -29,9 +29,11 @@ extension DictationSessionTests {
 
     #expect(await fixture.session.phase == .pasted)
     #expect(await fixture.injector.inserted == ["Hello world."])
-    // The captured caret context rides along with the insert (its value is
-    // host-dependent in a test run, but the argument must be forwarded).
-    #expect(await fixture.injector.insertedPrior.count == 1)
+    // The captured caret context rides along with the insert. `makeSession`
+    // captures nothing by default, so nil is the whole expected value rather
+    // than an argument count — what the context actually threads through is
+    // `DictationSessionContextTests`.
+    #expect(await fixture.injector.insertedPrior == [nil])
   }
 
   @Test("a too-short clip is dropped as a silent no-op, not sent to STT")

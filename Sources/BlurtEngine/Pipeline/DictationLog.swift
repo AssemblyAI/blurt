@@ -86,18 +86,27 @@ public enum DictationLog {
     }
   }
 
+  /// One log entry as a value: which parts of the context are carried, how the
+  /// timestamp is formatted, and the prompt mirroring what the transcriber
+  /// actually sends. Split from `write` so all of that is assertable directly
+  /// rather than through a temp file and a substring search over the encoded
+  /// line — a search that read the same whether a field was correctly absent or
+  /// the write had failed outright.
+  static func makeEntry(transcript: String, context: TranscriptionContext?, now: Date) -> Entry {
+    Entry(
+      transcript: transcript, ts: now.formatted(timestampFormat),
+      app: context?.appName, window: context?.windowTitle, field: context?.fieldLabel,
+      prior: context?.priorText, selected: context?.selectedText,
+      prompt: TranscriptionPrompt.build(context: context))
+  }
+
   /// The unconditional writer: formats one entry and appends it. Distinct name
   /// rather than an `append` overload so the gated entry point above can't be
   /// bypassed by accidentally satisfying a different signature.
   static func write(
     transcript: String, context: TranscriptionContext? = nil, to url: URL, now: Date
   ) {
-    let entry = Entry(
-      transcript: transcript, ts: now.formatted(timestampFormat),
-      app: context?.appName, window: context?.windowTitle, field: context?.fieldLabel,
-      prior: context?.priorText, selected: context?.selectedText,
-      prompt: TranscriptionPrompt.build(context: context))
-    appendLine(entry, to: url)
+    appendLine(makeEntry(transcript: transcript, context: context, now: now), to: url)
   }
 
   /// Encodes one entry and appends it as a JSONL line, creating the file (and
