@@ -181,8 +181,7 @@ struct DictationErrorLogGateTests {
   @Test("with developer mode on, appendError writes the failure")
   func gateOpenWrites() {
     let url = makeTempErrorLogURL()
-    let store = DeveloperModeStore(defaults: freshDefaults())
-    store.isEnabled = true
+    let store = developerModeStore(enabled: true)
     DictationLog.appendError(.targetAppLost, store: store, to: url)
     DictationLog.queue.sync {}
     #expect(readLog(url).contains("targetAppLost"))
@@ -192,8 +191,8 @@ struct DictationErrorLogGateTests {
   /// neither half may read a different default.
   @Test("both logs answer to the same switch")
   func sharesTheDeveloperModeSwitch() {
-    let store = DeveloperModeStore(defaults: freshDefaults())
-    store.isEnabled = true
+    let defaults = freshDefaults()
+    let store = developerModeStore(enabled: true, defaults: defaults)
     let errorURL = makeTempErrorLogURL()
     let transcriptURL = makeTempErrorLogURL()
     DictationLog.appendError(.targetAppLost, store: store, to: errorURL)
@@ -202,7 +201,9 @@ struct DictationErrorLogGateTests {
     #expect(!readLog(errorURL).isEmpty)
     #expect(!readLog(transcriptURL).isEmpty)
 
-    store.isEnabled = false
+    // Flip the slot the Settings toggle owns. The store reads through to `defaults`
+    // on every access, so this same instance now gates both logs off.
+    defaults.set(false, forKey: DeveloperModeStore.defaultsKey)
     let offErrorURL = makeTempErrorLogURL()
     let offTranscriptURL = makeTempErrorLogURL()
     DictationLog.appendError(.targetAppLost, store: store, to: offErrorURL)

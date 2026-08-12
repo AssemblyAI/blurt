@@ -1,4 +1,4 @@
-/// Routes raw trigger-key events into `DictationKeyGate` and owns the two
+/// Routes raw trigger-key events into `DictationKeyGate` and owns the three
 /// decisions that would otherwise sit untested in the app's event-tap shim:
 ///
 /// - **Edge dedup.** `flagsChanged` deliveries re-report the bound key's flag
@@ -8,6 +8,9 @@
 /// - **Relevance.** Only the bound keycode's flag changes drive the modifier;
 ///   a `keyDown` for any *other* key marks a combo (e.g. ⌘C over the held
 ///   trigger), and the trigger's own keycode never counts as a combo.
+/// - **Dropped-event recovery.** After the host's tap is disabled and re-enabled,
+///   whether the gate's state survives depends on the trigger still being held —
+///   see `recoverFromDroppedEvents(triggerStillHeld:)`.
 ///
 /// Like the gate, the router reads no clock — callers pass monotonic timestamps
 /// — so every decision is deterministic and unit-testable. The app-side
@@ -63,6 +66,31 @@ public struct DictationKeyRouter: Sendable {
   @discardableResult
   public mutating func rebind(triggerKeyCode: Int) -> Bool {
     self.triggerKeyCode = triggerKeyCode
+    return reset()
+  }
+
+  /// Recovery after the host's event tap was disabled (by timeout, or by user input
+  /// while it was down) and re-enabled: events may have been dropped, so the gate's
+  /// state may no longer match the keyboard.
+  ///
+  /// `triggerStillHeld` is the caller's read of whether the trigger modifier is
+  /// physically down *right now* — `CGEventSource.flagsState` on the app side, the
+  /// one CoreGraphics-typed input, which is why it's passed in rather than read
+  /// here. If it is, nothing that matters was lost: the key-up is still coming and
+  /// the gate is coherent, so the state is kept — resetting would discard speech the
+  /// user is mid-sentence on. If it isn't, the trigger's key-up may have been among
+  /// the dropped events, so the gate is reset.
+  ///
+  /// Returns whether that reset discarded a live recording the caller must cancel
+  /// upstream, matching `reset()` and `rebind(triggerKeyCode:)`. This lived in the
+  /// shell as a bare `if`, where nothing could test it — the app target has no test
+  /// target and a `CGEventTap` can't be driven from XCUITest — while carrying the
+  /// worst failure of the three decisions here: a session left in `.recording` with
+  /// no key event able to end it, until the auto-release cap pastes an unprompted
+  /// transcript.
+  @discardableResult
+  public mutating func recoverFromDroppedEvents(triggerStillHeld: Bool) -> Bool {
+    guard !triggerStillHeld else { return false }
     return reset()
   }
 

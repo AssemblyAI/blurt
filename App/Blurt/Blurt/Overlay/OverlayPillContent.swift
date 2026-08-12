@@ -75,20 +75,17 @@ struct TranscribingLabel: View {
   private let minOpacity: Double = 0.55
 
   var body: some View {
-    label.pulsingOpacity(period: breathPeriod, minOpacity: minOpacity, animated: animated)
-  }
-
-  // Shared with the "Pasted" notice (OverlayView's `.pasted` case) so the
-  // processing → pasted hand-off reads as one status line.
-  private var label: some View {
+    // StatusLineText is shared with the "Pasted" notice (OverlayView's `.pasted`
+    // case) so the processing → pasted hand-off reads as one status line.
     StatusLineText("Transcribing…")
+      .pulsingOpacity(period: breathPeriod, minOpacity: minOpacity, animated: animated)
   }
 }
 
 /// The "● REC" recording tag: a pulsing magenta dot + "REC" caption, sitting to
 /// the left of the waveform — the native echo of the site demo's magenta pixel
 /// tag. Magenta (the brand --hot) stands in for the conventional red record dot;
-/// its slow pulse (see `dot`) carries the live-capture affordance while the cyan
+/// its slow pulse (see `pulsePeriod`) carries the live-capture affordance while the cyan
 /// bars carry the level.
 struct RecordingTag: View {
   /// Whether to pulse the dot (off under Reduce Motion).
@@ -104,7 +101,11 @@ struct RecordingTag: View {
 
   var body: some View {
     HStack(spacing: 4) {
-      dot
+      // The magenta record dot, breathing while recording.
+      Circle()
+        .fill(OverlayBrandPalette.magenta)
+        .frame(width: 5, height: 5)
+        .pulsingOpacity(period: pulsePeriod, minOpacity: minOpacity, animated: animated)
       Text("REC")
         .font(.system(size: 9, weight: .semibold))
         .tracking(1.2)
@@ -112,31 +113,50 @@ struct RecordingTag: View {
     }
     .fixedSize()
   }
-
-  /// The magenta record dot, breathing while recording.
-  private var dot: some View {
-    circle.pulsingOpacity(period: pulsePeriod, minOpacity: minOpacity, animated: animated)
-  }
-
-  private var circle: some View {
-    Circle()
-      .fill(OverlayBrandPalette.magenta)
-      .frame(width: 5, height: 5)
-  }
 }
 
-/// The only view that reads `bridge.level`, so @Observable scopes the ~20 Hz
-/// meter invalidation to this leaf (and its `WaveformBars` child) instead of the
-/// enclosing `OverlayView`. `WaveformBars` stays a pure value view — easy to
-/// reason about and drive from a fixed level — with the observation isolated
-/// here. See `OverlayView.bridge` for why the level isn't threaded as a value.
-struct WaveformBarsLevel: View {
+/// Resolves the bar-row geometry and hands it to the level-observing leaf.
+///
+/// The `GeometryReader` lives *above* the view that reads `bridge.level`, which is
+/// what makes `MeterBarRow` a per-layout cost instead of a per-tick one: nothing in
+/// this body touches the observable, so @Observable never invalidates it and the
+/// closure re-runs only on a real resize. Built inside `WaveformBars` (below
+/// `WaveformBarsLevel`) it was rebuilt on every ~20 Hz meter tick — an array plus a
+/// `sin()` per bar, exactly the per-bar-per-tick work `MeterBarGeometry` precomputes
+/// the row to avoid.
+struct WaveformMeter: View {
   let bridge: OverlayBridge
   let animated: Bool
   let color: Color
 
   var body: some View {
-    WaveformBars(level: bridge.level, animated: animated, color: color)
+    GeometryReader { geo in
+      // Bar count, heights, the envelope, and the idle wave are all engine geometry
+      // (unit-tested there); this view owns the frame, the color, and the cadence.
+      WaveformBarsLevel(
+        bridge: bridge, layout: MeterBarRow(availableSize: geo.size),
+        animated: animated, color: color
+      )
+      .frame(width: geo.size.width, height: geo.size.height)
+    }
+  }
+}
+
+/// The only view that reads `bridge.level`, so @Observable scopes the ~20 Hz
+/// meter invalidation to this leaf (and its `WaveformBars` child) instead of the
+/// enclosing `OverlayView` — or the `WaveformMeter` above, which is why the
+/// geometry it resolves survives a tick. `WaveformBars` stays a pure value view —
+/// easy to reason about and drive from a fixed level — with the observation
+/// isolated here. See `OverlayView.bridge` for why the level isn't threaded as a
+/// value.
+struct WaveformBarsLevel: View {
+  let bridge: OverlayBridge
+  let layout: MeterBarRow
+  let animated: Bool
+  let color: Color
+
+  var body: some View {
+    WaveformBars(level: bridge.level, layout: layout, animated: animated, color: color)
   }
 }
 
@@ -150,32 +170,26 @@ struct WaveformBarsLevel: View {
 private struct WaveformBars: View {
   /// Current loudness, 0...1 (MicCapture.linearLevel).
   let level: Float
+  /// The precomputed bar row for the current size, resolved once per layout by
+  /// `WaveformMeter` — see there for why it isn't built here.
+  let layout: MeterBarRow
   /// Whether to run the idle breathing motion (off under Reduce Motion).
   let animated: Bool
   let color: Color
 
   var body: some View {
-    GeometryReader { geo in
-      // Bar count, heights, the envelope, and the idle wave are all engine
-      // geometry (unit-tested there); this view owns the frame, the color, and the
-      // redraw cadence. Resolved once per layout, then shared by every bar.
-      let layout = MeterBarRow(availableSize: geo.size)
-      Group {
-        if animated {
-          // Continuous clock so the idle breathing is smooth and never depends
-          // on a one-shot state toggle; capped at `overlayAnimationInterval`.
-          TimelineView(.animation(minimumInterval: overlayAnimationInterval)) { timeline in
-            bars(layout, time: timeline.date.timeIntervalSinceReferenceDate)
-          }
-        } else {
-          bars(layout, time: 0)
-        }
+    if animated {
+      // Continuous clock so the idle breathing is smooth and never depends on a
+      // one-shot state toggle; capped at `overlayAnimationInterval`.
+      TimelineView(.animation(minimumInterval: overlayAnimationInterval)) { timeline in
+        bars(time: timeline.date.timeIntervalSinceReferenceDate)
       }
-      .frame(width: geo.size.width, height: geo.size.height)
+    } else {
+      bars(time: 0)
     }
   }
 
-  private func bars(_ layout: MeterBarRow, time: TimeInterval) -> some View {
+  private func bars(time: TimeInterval) -> some View {
     HStack(spacing: MeterBarGeometry.barSpacing) {
       ForEach(0..<layout.count, id: \.self) { index in
         Capsule()

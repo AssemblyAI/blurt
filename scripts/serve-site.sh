@@ -10,6 +10,12 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# For `require_tools` — the same tool preflight (and `✗ …` failure format) the
+# release steps, dev-build.sh, leaks.sh, and uitest.sh all open with.
+# shellcheck source=scripts/release-lib.sh
+source "$REPO_ROOT/scripts/release-lib.sh"
+
 SIMULATOR=0
 PORT=8000
 
@@ -33,10 +39,7 @@ if [ "$SIMULATOR" -eq 0 ]; then
   exec python3 -m http.server "$PORT"
 fi
 
-command -v xcrun >/dev/null 2>&1 || {
-  echo "error: --simulator needs Xcode (xcrun not found)." >&2
-  exit 1
-}
+require_tools --hint='--simulator needs Xcode' xcrun
 
 # Serve in the background so we can drive the simulator, then hand control back to
 # the server (Ctrl-C tears both down via the trap).

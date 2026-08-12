@@ -91,7 +91,11 @@ private struct AdvancedSettingsTab: View {
 /// the next dictation. Settings-only — not a wizard step, since it never
 /// gates setup.
 private struct TranscriptionSection: View {
-  @AppStorage(EnhancedTranscriptsStore.defaultsKey) private var enhancedTranscripts = true
+  // The unset default comes from the store, not a literal here: the transcriber
+  // reads the same slot per request, and two spellings of "unset means on" would let
+  // the toggle and the request disagree about an untouched install.
+  @AppStorage(EnhancedTranscriptsStore.defaultsKey)
+  private var enhancedTranscripts = EnhancedTranscriptsStore.defaultValue
 
   var body: some View {
     Section {

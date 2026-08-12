@@ -61,9 +61,7 @@ extension DictationLog {
     store: DeveloperModeStore = DeveloperModeStore(),
     to url: URL = defaultErrorURL
   ) {
-    guard store.isEnabled else { return }
-    let now = Date()
-    queue.async {
+    gated(store: store) { now in
       writeError(error, context: context, to: url, now: now)
     }
   }

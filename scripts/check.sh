@@ -344,7 +344,6 @@ else
   # the app and the engine package, so the log covers both.
   APP_BUILD_LOG="$(mktemp -t blurt-build)"
   trap 'rm -f "$APP_BUILD_LOG"' EXIT
-  set -o pipefail
   xcodebuild \
     -project Blurt.xcodeproj \
     -scheme Blurt \
@@ -387,6 +386,10 @@ else
     # scripts/uitest.sh so the ad-hoc signing the runner needs is defined in
     # exactly one place. It needs a GUI session (a windowserver), which the
     # macos-26 CI runner provides.
+    #
+    # This cd is the one that matters: the app build above left us in $APP_DIR.
+    # Both scripts run as `bash …`, i.e. in a child process that can't move this
+    # shell's cwd, so nothing needs to re-cd between them.
     cd "$REPO_ROOT"
     bash scripts/uitest.sh
 
@@ -394,7 +397,6 @@ else
     # leak detector and fails only on leaks attributable to Blurt's own code (the
     # fixed set of system-framework XPC leaks is filtered out). Like the UI suite
     # it needs the GUI session the macos-26 runner provides.
-    cd "$REPO_ROOT"
     bash scripts/leaks.sh
   else
     echo "==> skipping the UI suite and leak scan (they take over the machine)"
@@ -524,7 +526,14 @@ if tool_ready shellcheck 'brew install shellcheck'; then
   echo "==> shellcheck"
   # Static analysis for the project's shell scripts (release-*, check.sh
   # itself) — catches quoting bugs, unset vars, and unsafe patterns.
-  shellcheck scripts/*.sh
+  #
+  # The Claude Code hooks are included: they run on every file edit, so a quoting
+  # bug there corrupts a source file rather than just failing a build, and nothing
+  # else checked them. Both directories are passed as one invocation on purpose —
+  # that puts release-lib.sh and hook-lib.sh in the input set, so the `source` lines
+  # resolve instead of raising SC1091. (shfmt below deliberately still covers only
+  # scripts/*.sh: the hooks predate any formatting check and haven't been reflowed.)
+  shellcheck scripts/*.sh .claude/hooks/*.sh
 fi
 
 if tool_ready shfmt 'brew install shfmt'; then

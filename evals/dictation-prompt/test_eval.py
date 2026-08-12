@@ -1097,9 +1097,10 @@ def _proposer_with(monkeypatch, drafts, cap=50, attempts=3):
             return {"new_instruction": drafts[len(seen) - 1]}
 
     monkeypatch.setattr(program_module, "InstructionProposalSignature", FakeSignature)
-    proposer = program_module.CappedInstructionProposer(
-        cap, attempts=attempts, fields=("raw_transcript", "cleaned_transcript")
-    )
+    # No `fields=`: the constructor defaults to (INPUT_FIELD, OUTPUT_FIELD), so these
+    # tests gate on the same names a real run does. Spelling them here again would keep
+    # passing — while gating nothing — the day the signature's fields are renamed.
+    proposer = program_module.CappedInstructionProposer(cap, attempts=attempts)
     return proposer, seen
 
 

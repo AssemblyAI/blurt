@@ -177,8 +177,7 @@ struct DictationLogGateTests {
   @Test("with developer mode on, append writes the transcript")
   func gateOpenWrites() {
     let url = makeTempLogURL()
-    let store = DeveloperModeStore(defaults: freshDefaults())
-    store.isEnabled = true
+    let store = developerModeStore(enabled: true)
     DictationLog.append(transcript: "logged dictation", store: store, to: url)
     DictationLog.queue.sync {}
     #expect(readLog(url).contains("logged dictation"))
@@ -196,8 +195,7 @@ struct DictationLogGateTests {
       transcript: "p", context: context,
       store: DeveloperModeStore(defaults: freshDefaults()), to: offURL)
 
-    let onStore = DeveloperModeStore(defaults: freshDefaults())
-    onStore.isEnabled = true
+    let onStore = developerModeStore(enabled: true)
     let onURL = makeTempLogURL()
     DictationLog.append(transcript: "p", context: context, store: onStore, to: onURL)
 

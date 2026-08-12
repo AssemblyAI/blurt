@@ -79,11 +79,29 @@ public enum DictationLog {
     store: DeveloperModeStore = DeveloperModeStore(),
     to url: URL = defaultURL
   ) {
-    guard store.isEnabled else { return }
-    let now = Date()
-    queue.async {
+    gated(store: store) { now in
       write(transcript: transcript, context: context, to: url, now: now)
     }
+  }
+
+  /// The developer-mode gate plus the hop off the caller, shared by `append` and
+  /// `appendError` (`DictationLog+Errors.swift`). Both halves of the log need the
+  /// same two properties — the privacy switch and never blocking the
+  /// `DictationSession` actor — so they're stated once here rather than at each
+  /// entry point, for the reason `DictationSession.setPhase` hooks the error write
+  /// centrally: a third log added later gets both by construction instead of by
+  /// someone remembering.
+  ///
+  /// The timestamp is taken *before* the hop, so an entry is stamped when the
+  /// dictation actually ended rather than whenever the serial queue reached it.
+  ///
+  /// Internal rather than `private` only because `appendError` lives in another
+  /// file and Swift's `private` is file-scoped; nothing outside the two entry
+  /// points should call it.
+  static func gated(store: DeveloperModeStore, _ write: @escaping @Sendable (Date) -> Void) {
+    guard store.isEnabled else { return }
+    let now = Date()
+    queue.async { write(now) }
   }
 
   /// One log entry as a value: which parts of the context are carried, how the
