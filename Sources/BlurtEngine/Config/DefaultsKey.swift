@@ -1,4 +1,6 @@
-import Foundation
+// No `import Foundation`: this is a bare `String`-raw-value enum, so nothing here
+// needs it, and `swiftlint analyze`'s unused_import rule fails the build on one.
+// The stores that actually touch `UserDefaults` import it themselves.
 
 /// Every `UserDefaults` key an engine settings store persists, defined once.
 ///
