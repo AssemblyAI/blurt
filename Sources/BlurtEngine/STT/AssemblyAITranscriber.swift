@@ -136,7 +136,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// `URLProtocol` mocks can't observe reliably for `upload(from:)`).
   func makeConfigData(sampleRate: Int, prompt: String?) throws -> Data {
     let enhanced = enhancedTranscriptsEnabled()
-    let instruction = CleanupInstruction.sendable(appending: customStyle())
+    let instruction = enhanced ? CleanupInstruction.sendable(appending: customStyle()) : nil
     if enhanced, instruction == nil {
       // Unreachable while the tests run: `CleanupInstructionTests` asserts the length.
       // Logged rather than trusted because the failure it guards against is silent —
@@ -144,7 +144,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
       // real cause is worth the one comparison per request it costs.
       transcriberLog.error(
         """
-        cleanup instruction is \(CleanupInstruction.text.count, privacy: .public) characters, \
+        cleanup instruction is \(CleanupInstruction.text.utf8.count, privacy: .public) UTF-8 bytes, \
         over the \(CleanupInstruction.characterCap, privacy: .public) cap; \
         falling back to the service default
         """)

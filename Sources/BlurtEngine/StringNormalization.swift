@@ -18,4 +18,18 @@ extension String {
   public func trimmedNonEmpty() -> String? {
     Optional(self).trimmedNonEmpty()
   }
+
+  /// The longest prefix of whole `Character`s whose UTF-8 encoding fits
+  /// `maxUTF8Bytes` — the one truncation rule behind the custom style budget,
+  /// shared by the Settings field and the engine-side trim
+  /// (`CleanupInstruction.sendable(appending:)`). Drops graphemes from the end
+  /// rather than slicing bytes, so a multi-scalar emoji is removed whole, never
+  /// split into an invalid fragment.
+  public func prefix(maxUTF8Bytes: Int) -> String {
+    var result = self
+    while result.utf8.count > maxUTF8Bytes, !result.isEmpty {
+      result.removeLast()
+    }
+    return result
+  }
 }

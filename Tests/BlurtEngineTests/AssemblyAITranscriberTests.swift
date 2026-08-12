@@ -189,8 +189,6 @@ struct HTTPClientTests {
     // is the wiring — the transcriber's per-request read lands on the request, with
     // the base instruction still leading.
     #expect(instruction == CleanupInstruction.sendable(appending: custom))
-    #expect(instruction.hasPrefix(CleanupInstruction.text))
-    #expect(instruction.hasSuffix(custom))
   }
 
   @Test(

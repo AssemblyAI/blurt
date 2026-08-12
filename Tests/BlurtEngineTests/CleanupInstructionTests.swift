@@ -22,16 +22,17 @@ struct CleanupInstructionTests {
   }
 
   /// The one that matters, and the one that was wrong before. `config.llm.instruction`
-  /// is capped at 2048 characters and the API rejects the whole request above it —
-  /// a 400 before the audio is read, so every dictation fails outright rather than
-  /// degrading to the verbatim transcript. A 3057-character instruction shipped once
-  /// and did exactly that, past a version of this very test that asserted
+  /// is capped at 2048 (counted here in UTF-8 bytes — the conservative unit, see
+  /// `characterCap`) and the API rejects the whole request above it — a 400 before
+  /// the audio is read, so every dictation fails outright rather than degrading to
+  /// the verbatim transcript. A 3057-character instruction shipped once and did
+  /// exactly that, past a version of this very test that asserted
   /// `TranscriptionPrompt.characterCap` — the 4096 limit on the *other* field.
   ///
   /// So this asserts the instruction's own cap, and the next test pins the two apart.
   @Test("the instruction fits the API's cap on config.llm.instruction")
   func withinCap() {
-    #expect(CleanupInstruction.text.count <= CleanupInstruction.characterCap)
+    #expect(CleanupInstruction.text.utf8.count <= CleanupInstruction.characterCap)
   }
 
   /// The cap is not only asserted here — `AssemblyAITranscriber` consults it on every
@@ -77,7 +78,7 @@ struct CleanupInstructionTests {
     let combined = try #require(CleanupInstruction.sendable(appending: "  always write in lowercase \n"))
     #expect(combined.hasPrefix(CleanupInstruction.text + CleanupInstruction.customStylePreamble))
     #expect(combined.hasSuffix("always write in lowercase"))
-    #expect(combined.count <= CleanupInstruction.characterCap)
+    #expect(combined.utf8.count <= CleanupInstruction.characterCap)
   }
 
   /// Empty must mean "identical to today", not an empty suffix — a trailing
@@ -96,8 +97,27 @@ struct CleanupInstructionTests {
   func overBudgetCustomStyleIsTrimmed() throws {
     let oversized = String(repeating: "x", count: CleanupInstruction.customStyleBudget + 100)
     let combined = try #require(CleanupInstruction.sendable(appending: oversized))
-    #expect(combined.count == CleanupInstruction.characterCap)
+    #expect(combined.utf8.count == CleanupInstruction.characterCap)
     #expect(combined.hasPrefix(CleanupInstruction.text))
+  }
+
+  /// Emoji are the worst case the field's placeholder invites: one `Character`
+  /// can be many UTF-8 bytes, so a character-counted trim could pass every
+  /// client check while the encoded request still trips the server's cap. This
+  /// pins the byte-measured trim — and that it drops whole characters, so a
+  /// multi-scalar emoji is never split into an invalid fragment.
+  @Test("a multi-scalar emoji custom style is trimmed by bytes, on whole characters")
+  func emojiCustomStyleFitsTheCapInBytes() throws {
+    let emoji = "👩🏽‍💻"  // four scalars, 15 UTF-8 bytes, one Character
+    let oversized = String(repeating: emoji, count: CleanupInstruction.customStyleBudget)
+    let combined = try #require(CleanupInstruction.sendable(appending: oversized))
+    #expect(combined.utf8.count <= CleanupInstruction.characterCap)
+    let lead = CleanupInstruction.text + CleanupInstruction.customStylePreamble
+    #expect(combined.hasPrefix(lead))
+    // Something survived the trim, and only whole emoji did.
+    let appended = combined.dropFirst(lead.count)
+    #expect(appended.isEmpty == false)
+    #expect(appended.allSatisfy { String($0) == emoji })
   }
 
   /// The budget is derived, not restated — this pins the arithmetic that keeps a
@@ -106,7 +126,7 @@ struct CleanupInstructionTests {
   @Test("the custom style budget is the real headroom under the cap")
   func customStyleBudgetIsTheHeadroom() {
     #expect(
-      CleanupInstruction.text.count + CleanupInstruction.customStylePreamble.count
+      CleanupInstruction.text.utf8.count + CleanupInstruction.customStylePreamble.utf8.count
         + CleanupInstruction.customStyleBudget == CleanupInstruction.characterCap)
     #expect(CleanupInstruction.customStyleBudget >= 200)
     #expect(CustomStyleStore.characterLimit == CleanupInstruction.customStyleBudget)

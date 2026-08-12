@@ -19,9 +19,10 @@ public struct CustomStyleStore {
   /// field can bind `@AppStorage` to it.
   public static let defaultsKey = DefaultsKey.customStyle.rawValue
 
-  /// The most characters the Settings field accepts —
+  /// The most UTF-8 bytes the Settings field accepts —
   /// `CleanupInstruction.customStyleBudget`, the real headroom the dictation
-  /// API's 2048-character instruction cap leaves after the base instruction.
+  /// API's 2048 instruction cap leaves after the base instruction (see
+  /// `CleanupInstruction.characterCap` for why the unit is bytes).
   /// Re-exported here (the field's counter and the engine's trim have to agree)
   /// rather than restated, which is how the cap bug shipped once before.
   public static let characterLimit = CleanupInstruction.customStyleBudget

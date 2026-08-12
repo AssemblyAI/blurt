@@ -147,8 +147,8 @@ private struct CustomStyleSection: View {
       .disableAutocorrection(true)
       .accessibilityIdentifier(UITestIdentifiers.customStyleField)
       .onChange(of: text) {
-        if text.count > CustomStyleStore.characterLimit {
-          text = String(text.prefix(CustomStyleStore.characterLimit))
+        if text.utf8.count > CustomStyleStore.characterLimit {
+          text = text.prefix(maxUTF8Bytes: CustomStyleStore.characterLimit)
         }
       }
       .disabled(!enhancedTranscripts)
@@ -160,11 +160,16 @@ private struct CustomStyleSection: View {
           enhancedTranscripts
             ? "Style preferences applied when polishing each dictation — casing, tone, emoji use."
             : "Style preferences need enhanced transcripts turned on.")
-        Spacer()
-        // The API caps the combined instruction, so the room left is finite —
-        // show it rather than truncating silently at the limit.
-        Text("\(text.count)/\(CustomStyleStore.characterLimit)")
-          .monospacedDigit()
+        if enhancedTranscripts {
+          Spacer()
+          // The API caps the combined instruction, so the room left is finite —
+          // show it rather than truncating silently at the limit. Counted in
+          // UTF-8 bytes, the unit the limit is enforced in.
+          Text("\(text.utf8.count)/\(CustomStyleStore.characterLimit)")
+            .monospacedDigit()
+            .accessibilityLabel(
+              "\(text.utf8.count) of \(CustomStyleStore.characterLimit) characters used")
+        }
       }
     }
   }
