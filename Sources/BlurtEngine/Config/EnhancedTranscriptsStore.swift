@@ -29,8 +29,11 @@ public struct EnhancedTranscriptsStore {
   /// behavior, so only an explicit opt-out disables it. That inverts the
   /// usual `bool(forKey:)` shape (which reads a missing key as false), hence
   /// the presence check.
+  ///
+  /// Read-only for the same reason as `DeveloperModeStore.isEnabled`: the Settings
+  /// toggle writes the slot through `@AppStorage`, so a setter here had no
+  /// production caller. Seed the slot to change the switch.
   var isEnabled: Bool {
-    get { defaults.object(forKey: Self.defaultsKey) as? Bool ?? Self.defaultValue }
-    nonmutating set { defaults.set(newValue, forKey: Self.defaultsKey) }
+    defaults.object(forKey: Self.defaultsKey) as? Bool ?? Self.defaultValue
   }
 }
