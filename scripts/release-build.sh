@@ -205,6 +205,14 @@ delete_ci_keychain() {
 #      runner, not something to adopt on a shared machine.
 #   3. The `blurt-notary` keychain profile — the local path, pinned to the
 #      dedicated signing keychain when there is one (see NOTARY_KEYCHAIN).
+#
+# NOTARY_AUTH_KIND is the loggable label for whichever path was taken, and it
+# names the *method* rather than the operator. The Apple ID is deliberately kept
+# out of it: it is an email address, the logs of a public repo are public, and
+# Actions' automatic secret redaction only covers values that reach the runner
+# through `secrets.` — it would not save a local run or a copy that got
+# reformatted. The API Key ID stays because it identifies which key CI used
+# (worth having when a release fails) and is useless without the .p8.
 NOTARY_AUTH=()
 NOTARY_KEY_FILE=""
 NOTARY_AUTH_KIND=""
@@ -220,7 +228,7 @@ resolve_notary_auth() {
     NOTARY_AUTH_KIND="App Store Connect API key $BLURT_NOTARY_KEY_ID"
   elif [ -n "${BLURT_NOTARY_APPLE_ID:-}" ] && [ -n "${BLURT_NOTARY_PASSWORD:-}" ]; then
     NOTARY_AUTH=(--apple-id "$BLURT_NOTARY_APPLE_ID" --team-id "$TEAM_ID" --password "$BLURT_NOTARY_PASSWORD")
-    NOTARY_AUTH_KIND="Apple ID $BLURT_NOTARY_APPLE_ID"
+    NOTARY_AUTH_KIND="Apple ID + app-specific password"
   else
     NOTARY_AUTH=(--keychain-profile "$NOTARY_PROFILE" ${NOTARY_KEYCHAIN[@]+"${NOTARY_KEYCHAIN[@]}"})
     NOTARY_AUTH_KIND="keychain profile $NOTARY_PROFILE"
