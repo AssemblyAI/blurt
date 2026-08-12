@@ -99,6 +99,14 @@ jobs:
 
       - name: Run check.sh
         working-directory: blurt
+        # CI=true is what makes check.sh run the whole-app integration steps (the
+        # XCUITest suite and the leak scan). They take over the keyboard and
+        # screen of whatever machine they run on, so a local check.sh skips them
+        # and this job is the only place they run — don't unset it. Actions
+        # exports CI=true for every step anyway; it's set here so the dependency
+        # is visible at the call site rather than only in check.sh.
+        env:
+          CI: "true"
         run: scripts/check.sh
 
   # Every PR gets an installable build of the change, so a reviewer can try it

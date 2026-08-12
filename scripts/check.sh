@@ -6,6 +6,9 @@
 # Swift warnings are treated as errors everywhere; engine line coverage is gated.
 # `check.sh --portable` runs only the platform-independent subset (for Linux /
 # web sandboxes with no macOS toolchain) — see the flag parsing below.
+# The whole-app integration steps (the XCUITest suite and the leak scan) take
+# over the keyboard and screen, so they run on CI only; set
+# BLURT_INTEGRATION_TESTS=1 to include them locally — see the gate further down.
 
 set -euo pipefail
 
@@ -115,6 +118,18 @@ tool_ready() {
   # only on a machine where the tool is missing, the hardest path to notice.
   echo "note: $1 not installed; skipping (${2:-})"
   return 1
+}
+
+# True when this is an automated run rather than someone's desktop — the one
+# thing the whole-app integration steps below key off. GitHub Actions exports
+# CI=true; other runners use CI=1 or just export it empty, and a developer who
+# has CI=false in their shell means it. Anything else non-empty counts as CI,
+# because failing *toward* running the gate is the safe direction.
+is_ci() {
+  case "${CI:-}" in
+    "" | false | False | FALSE | 0) return 1 ;;
+    *) return 0 ;;
+  esac
 }
 
 # No-external-dependencies guard. The engine is dependency-free by rule and the
@@ -329,20 +344,53 @@ else
     CODE_SIGNING_ALLOWED=NO \
     build 2>&1 | tee "$APP_BUILD_LOG" | "${PRETTY[@]}"
 
-  # XCUITest integration suite (BlurtUITests). Part of the required gate: it drives
-  # the real app (settings flows, the menu bar item, and the record → transcribe →
-  # paste pipeline against offline stubs). Delegated to scripts/uitest.sh so the
-  # ad-hoc signing the runner needs is defined in exactly one place. It needs a GUI
-  # session (a windowserver), which the macos-26 CI runner provides.
-  cd "$REPO_ROOT"
-  bash scripts/uitest.sh
+  # Whole-app integration steps — CI-only by default. Both drive the *real* app,
+  # and they don't just need a GUI session, they take one over: the XCUITest
+  # runner steals keyboard focus and clicks for the length of the suite, and the
+  # leak run launches Blurt with BLURT_LEAK_EXERCISE=1, which cycles dictation
+  # through the key tap and pastes into whatever is frontmost. On a dev Mac that
+  # makes the machine unusable for the several minutes they take, which is enough
+  # reason on its own not to run them on every local `check.sh`.
+  #
+  # The gate is deliberately one-directional. Under CI they always run and there
+  # is no opt-out env var, because the whole point of the required `check` status
+  # is that it can't be talked out of a step — a skip flag CI honoured would be a
+  # green-looking bypass of the integration suite. Off CI they're skipped with a
+  # note unless BLURT_INTEGRATION_TESTS=1 asks for them; scripts/uitest.sh and
+  # scripts/leaks.sh also stay runnable directly, which is the same opt-in said
+  # another way. So a local run is no longer the authority on these two: CI is.
+  if is_ci; then
+    INTEGRATION=1
+  elif [ "${BLURT_INTEGRATION_TESTS:-}" = "1" ]; then
+    INTEGRATION=1
+    echo "note: BLURT_INTEGRATION_TESTS=1 — running the UI suite and leak scan;"
+    echo "      they drive the real app, so hands off the keyboard until they finish"
+  else
+    INTEGRATION=0
+  fi
 
-  # Whole-app leak check (scripts/leaks.sh). Drives the app under the Darwin leak
-  # detector and fails only on leaks attributable to Blurt's own code (the fixed
-  # set of system-framework XPC leaks is filtered out). Like the UI suite it needs
-  # the GUI session the macos-26 runner provides.
-  cd "$REPO_ROOT"
-  bash scripts/leaks.sh
+  if [ "$INTEGRATION" -eq 1 ]; then
+    # XCUITest integration suite (BlurtUITests). Part of the required gate: it
+    # drives the real app (settings flows, the menu bar item, and the record →
+    # transcribe → paste pipeline against offline stubs). Delegated to
+    # scripts/uitest.sh so the ad-hoc signing the runner needs is defined in
+    # exactly one place. It needs a GUI session (a windowserver), which the
+    # macos-26 CI runner provides.
+    cd "$REPO_ROOT"
+    bash scripts/uitest.sh
+
+    # Whole-app leak check (scripts/leaks.sh). Drives the app under the Darwin
+    # leak detector and fails only on leaks attributable to Blurt's own code (the
+    # fixed set of system-framework XPC leaks is filtered out). Like the UI suite
+    # it needs the GUI session the macos-26 runner provides.
+    cd "$REPO_ROOT"
+    bash scripts/leaks.sh
+  else
+    echo "==> skipping the UI suite and leak scan (they take over the machine)"
+    echo "    CI runs both on every PR and is the authority on them. To run them"
+    echo "    here anyway: BLURT_INTEGRATION_TESTS=1 scripts/check.sh, or"
+    echo "    scripts/uitest.sh / scripts/leaks.sh on their own."
+  fi
 fi
 
 # Apple's swift-format (bundled with Xcode 16+) is the project's FORMATTING
@@ -512,6 +560,10 @@ bash scripts/release.test.sh
 
 if [ "$PORTABLE" -eq 1 ]; then
   echo "==> ok (portable subset only — Swift build/tests NOT run; CI on macos-26 is the authority on green)"
+elif [ "${INTEGRATION:-0}" -eq 0 ]; then
+  # Say it at the end too, where the reader is deciding whether this run means
+  # "green": everything else passed, but the UI suite and leak scan did not run.
+  echo "==> ok (UI suite + leak scan NOT run — CI on macos-26 covers those)"
 else
   echo "==> ok"
 fi

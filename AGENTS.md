@@ -108,6 +108,15 @@ In order, on a Mac. Each optional linter prints `note: <tool> not installed; ski
 7. **`scripts/leaks.sh`** — whole-app leak check under the Darwin leak detector, failing only on
    leaks attributable to Blurt's own code. Like the UI suite it needs a GUI session (windowserver),
    which the `macos-26` runner provides.
+
+   **Steps 6 and 7 run on CI only.** Both drive the real app: the XCUITest runner takes over
+   keyboard focus and clicking, and the leak run cycles dictation through the key tap and pastes
+   into whatever is frontmost — so a local `check.sh` would make the machine unusable for the
+   minutes they last. Locally they're skipped with a note (and the closing `ok` line repeats it);
+   opt in with `BLURT_INTEGRATION_TESTS=1 scripts/check.sh`, or run `scripts/uitest.sh` /
+   `scripts/leaks.sh` directly. There is deliberately **no opt-out** under CI — a flag CI honoured
+   would be a green-looking bypass of the required gate.
+
 8. **`swift-format lint --strict`**, then `swiftlint lint --strict`, `swiftlint analyze` (unused
    imports), `periphery scan --strict`.
 9. **actionlint** (workflow correctness — and, via shellcheck, the inline `run:` bash) **/ zizmor**
@@ -614,8 +623,10 @@ the whole app under the Darwin leak detector.
 
 **Integration tests (XCUITest)** — `App/Blurt/BlurtUITests/`, a `bundle.ui-testing` target declared
 in `project.yml` and wired into the `Blurt` scheme's test action, so it runs via `xcodebuild test`.
-`scripts/uitest.sh` drives it and `scripts/check.sh` invokes that as part of the required gate, so it
-needs a GUI session and is skipped only by `--portable`.
+`scripts/uitest.sh` drives it and `scripts/check.sh` invokes that as part of the required gate — but
+**on CI only**: it needs a GUI session and commandeers it, so a local `check.sh` skips it (as it does
+the leak scan) unless `BLURT_INTEGRATION_TESTS=1`. Run `scripts/uitest.sh` directly to iterate on the
+suite; CI is the authority on whether it passes.
 
 The suite drives the **real app** against deterministic, offline doubles rather than mocking the UI.
 A `-BlurtUITest` launch argument flips on a Debug-only harness (`App/Blurt/Blurt/UITestSupport.swift`,

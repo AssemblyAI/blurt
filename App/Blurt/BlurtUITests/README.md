@@ -40,8 +40,13 @@ directly; the tap → `DictationKeyGate` wiring is covered by the engine unit te
 
 ```bash
 scripts/uitest.sh                 # just the UI suite (macOS + Xcode)
-scripts/check.sh                  # full health check; runs the UI suite too
+BLURT_INTEGRATION_TESTS=1 scripts/check.sh   # full health check, UI suite included
 ```
+
+The suite drives the real app, so while it runs it owns the keyboard, the mouse,
+and window focus — you can't use the Mac for anything else. That's why a plain
+`scripts/check.sh` skips it and CI runs it on every PR instead; the two commands
+above are how you ask for it deliberately.
 
 ## Maintenance
 
