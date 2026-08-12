@@ -14,6 +14,11 @@ version with the user before dispatching** — publishing is hard to undo.
 ## Preconditions (verify first)
 
 - `main` is up to date and green; releases ship from `main`.
+- The commit you are releasing has been **tried as an app**, not just reviewed:
+  every merge to `main` uploads `blurt-dev-build-main-<short-sha>` from the
+  `check` workflow's `dev-build` job (Actions → check → that commit's run, link
+  in the run summary, kept 30 days). Say which build was installed, or say it
+  wasn't.
 - `gh` is authenticated and can dispatch workflows on the repo.
 - The `release-build` environment has the signing + notary secrets, and
   `release-publish` has required reviewers. See

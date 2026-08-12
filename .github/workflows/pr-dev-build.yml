@@ -10,7 +10,7 @@ name: pr-dev-build
 # Forks are the normal path for outside contributors — exactly the people most
 # helped by a one-click build — so the extra workflow earns its keep.
 #
-# Both paths post the same marked comment via scripts/pr-dev-build-comment.sh,
+# Both paths post the same marked comment via scripts/dev-build-comment.sh,
 # so a PR ends up with exactly one link either way.
 #
 # That extra trust is why this job never checks out or executes PR code: the
@@ -61,7 +61,9 @@ jobs:
           set -euo pipefail
 
           # No artifact means the dev-build job didn't run (a docs-only PR) or
-          # didn't finish. Nothing to say — leave the PR alone.
+          # didn't finish. Nothing to say — leave the PR alone. The `-pr-` prefix
+          # is load-bearing now that check.yml also uploads blurt-dev-build-main-*
+          # artifacts, even though this job only ever sees pull_request runs.
           artifact="$(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" \
             --jq '[.artifacts[] | select(.expired == false)
                    | select(.name | startswith("blurt-dev-build-pr-"))] | first // empty')"
@@ -101,4 +103,5 @@ jobs:
           ARTIFACT_NAME: ${{ steps.resolve.outputs.artifact_name }}
           ARTIFACT_URL: ${{ steps.resolve.outputs.artifact_url }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-        run: scripts/pr-dev-build-comment.sh --post
+          KIND: pr
+        run: scripts/dev-build-comment.sh --post

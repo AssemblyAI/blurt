@@ -69,8 +69,8 @@ evals/dictation-prompt/      offline DSPy harness for tuning the dictation API's
                              lint (ruff), format-check (ruff format), and test (pytest) it
 evals/ruff.toml              ruff config for the above — the repo's only Python config
 site/                        the GitHub Pages site (html/css, sitemap) — linted by check.sh
-.github/workflows/           check.yml (the gate + per-PR dev build, macos-26),
-                             pr-dev-build.yml (links it on the PR),
+.github/workflows/           check.yml (the gate + a dev build per PR and per main merge,
+                             macos-26), pr-dev-build.yml (links it on the PR),
                              release.yml (sign + publish), codeql.yml, pages.yml
 .claude/                     Claude Code hooks, skills, subagents (see CLAUDE.md)
 ```
@@ -128,6 +128,11 @@ builds an ad-hoc-signed `Debug-Local` app for every code PR and uploads it as an
 `pr-dev-build.yml` then comments the download link on the PR (a `workflow_run` job, because a
 fork's `pull_request` token is read-only and can't comment). It is **not** part of the required
 gate — it compiles the same sources `check` does, so it is never the only signal.
+
+The same job also runs on every push to `main`, uploading `blurt-dev-build-main-<short-sha>`
+(30 days, link in the run summary — there is no PR to comment on). That is what makes
+"install the thing you are about to ship" a step you can actually take before dispatching a
+release; see [`RELEASE.md`](./RELEASE.md#trying-main-before-you-dispatch).
 
 Reporting rules: exit 0 with no `error:` lines is green. Anything else is not — quote the failing
 step verbatim, don't soften it, fix it, then re-run the **full** script (a `swift test --filter` pass

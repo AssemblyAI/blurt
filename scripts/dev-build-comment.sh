@@ -1,23 +1,27 @@
 #!/usr/bin/env bash
-# Render — and optionally post — the per-PR dev-build comment.
+# Render — and optionally post — the dev-build download blurb.
 #
-# One definition, three callers: check.yml writes it to the run's step summary
-# and posts it for same-repo PRs, and pr-dev-build.yml posts it for fork PRs
-# (see those files for why the fork case needs a separate workflow). The install
-# instructions have to stay identical across all three, so they live here rather
-# than in three heredocs that drift.
+# One definition, four callers: check.yml writes it to the step summary for both
+# the per-PR build and the per-merge `main` build and posts it for same-repo
+# PRs, and pr-dev-build.yml posts it for fork PRs (see those files for why the
+# fork case needs a separate workflow). The install instructions have to stay
+# identical across all of them, so they live here rather than in four heredocs
+# that drift.
 #
 # Usage:
-#   pr-dev-build-comment.sh --render     # markdown to stdout
-#   pr-dev-build-comment.sh --post       # upsert it as a PR comment (needs gh)
+#   dev-build-comment.sh --render     # markdown to stdout
+#   dev-build-comment.sh --post       # upsert it as a PR comment (needs gh)
 #
 # Inputs arrive as environment variables:
-#   REPO           owner/repo
-#   ARTIFACT_NAME  e.g. blurt-dev-build-pr-109
-#   ARTIFACT_URL   browser URL of the uploaded artifact
-#   HEAD_SHA       full sha of the PR head
-#   PR             pull request number (--post only)
-#   GH_TOKEN       token with pull-requests: write (--post only)
+#   REPO            owner/repo
+#   ARTIFACT_NAME   e.g. blurt-dev-build-pr-109
+#   ARTIFACT_URL    browser URL of the uploaded artifact
+#   HEAD_SHA        full sha of the commit that was built
+#   KIND            pr (default) or main — which build this describes
+#   RETENTION_DAYS  artifact lifetime; must match `retention-days` in check.yml
+#                   for this KIND (default 14, check.yml's PR value)
+#   PR              pull request number (--post only)
+#   GH_TOKEN        token with pull-requests: write (--post only)
 
 set -euo pipefail
 
@@ -42,13 +46,21 @@ require_env() {
 }
 
 render() {
-  local short_sha="${HEAD_SHA:0:7}"
+  local short_sha="${HEAD_SHA:0:7}" subject
+  case "${KIND:-pr}" in
+    pr) subject="this PR (\`$short_sha\`) merged into the base branch" ;;
+    main) subject="\`main\` at \`$short_sha\`" ;;
+    *)
+      echo "error: KIND must be 'pr' or 'main' (got: $KIND)" >&2
+      exit 1
+      ;;
+  esac
   cat <<EOF
 $MARKER
 ### Dev build
 
-[**Download Blurt.app**]($ARTIFACT_URL) — this PR (\`$short_sha\`) merged into the base
-branch, built \`Debug-Local\` and ad-hoc signed. Expires in 14 days.
+[**Download Blurt.app**]($ARTIFACT_URL) — $subject, built \`Debug-Local\` and
+ad-hoc signed. Expires in ${RETENTION_DAYS:-14} days.
 
 <details>
 <summary>Installing it</summary>
@@ -66,7 +78,7 @@ It is **ad-hoc signed and not notarized**: Gatekeeper refuses to open it until
 the quarantine flag is cleared, and macOS treats it as a different app from a
 released Blurt, so you have to re-grant Microphone, Accessibility, and Input
 Monitoring. Reinstall the [release DMG](https://github.com/$REPO/releases/latest)
-when you are done reviewing.
+when you are done with it.
 
 </details>
 EOF

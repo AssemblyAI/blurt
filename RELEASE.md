@@ -33,6 +33,29 @@ environment**: the publish job parks until someone approves it. Approve only
 after downloading the DMG from the build job's run artifacts and installing it.
 Nothing is rebuilt after approval, so what you test is byte-for-byte what ships.
 
+### Trying main before you dispatch
+
+The ship gate tests the artifact that is about to be published — late, and by
+then a bug means bumping a patch. So every merge to `main` also gets an
+installable build: the `check` workflow's `dev-build` job uploads
+`blurt-dev-build-main-<short-sha>` for each commit that lands, kept 30 days.
+Find it under Actions → **check** → the run for that commit; the run's summary
+carries the download link and the four commands that install it.
+
+Install and use that build before dispatching a release, and you are never
+deciding from the diff alone. Two caveats on what it proves:
+
+- It is a **`Debug-Local`, ad-hoc-signed** app, so it exercises behavior, not the
+  signing/notarization path. Only the `build` job's DMG does that — which is
+  exactly what the ship gate above still makes you install.
+- A docs-only merge produces no build (the `changes` filter skips it, same as it
+  skips `check`). Nothing that could alter the app changed, so the previous
+  main build is still the current one.
+- Merges that land back to back cancel each other's runs (`check` is
+  `cancel-in-progress` on a ref), so an intermediate commit can end up without
+  an artifact. The tip is what survives, which is the one you were going to
+  release anyway.
+
 ## Required repository configuration
 
 Two environments (Settings → Environments). They are what scope the secrets, so

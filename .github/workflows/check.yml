@@ -102,18 +102,31 @@ jobs:
         run: scripts/check.sh
 
   # Every PR gets an installable build of the change, so a reviewer can try it
-  # instead of reading the diff and imagining it. Deliberately NOT part of the
-  # required gate (`gate` below ignores it): it builds the same sources `check`
-  # already compiles, so a failure here is never the only signal.
+  # instead of reading the diff and imagining it — and so does every commit that
+  # lands on main, so the state you are about to release has always already been
+  # built and can be installed and exercised before `release` is dispatched
+  # (RELEASE.md leans on that). Deliberately NOT part of the required gate
+  # (`gate` below ignores it): it builds the same sources `check` already
+  # compiles, so a failure here is never the only signal.
+  #
+  # Both cases run the same steps; only the commit being built, the artifact
+  # name, and how long it is kept differ (see the `meta` step). merge_group is
+  # excluded — a queue candidate is not a merge, and the push that follows it
+  # builds the real thing. A docs-only merge is skipped by `changes` for the same
+  # reason it skips `check`: it cannot alter the app, so the previous main build
+  # is still the current one.
   #
   # The download link is posted by `dev-build-link` below for same-repo PRs, and
   # by the `pr-dev-build` workflow for fork PRs — a pull_request run from a fork
   # gets a read-only token no matter what `permissions:` says, so that case has
   # to happen in a workflow_run job. Both post the same marked comment, so
-  # whichever runs, a PR ends up with exactly one link.
+  # whichever runs, a PR ends up with exactly one link. A main build has no PR to
+  # comment on; its link lives in the run's step summary.
   dev-build:
     needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
+    if: >-
+      needs.changes.outputs.code == 'true' &&
+      (github.event_name == 'pull_request' || github.event_name == 'push')
     runs-on: macos-26
     timeout-minutes: 30
     outputs:
@@ -125,6 +138,35 @@ jobs:
         with:
           path: blurt
           persist-credentials: false
+
+      - name: Resolve what is being built
+        id: meta
+        env:
+          EVENT: ${{ github.event_name }}
+          # On a pull_request run, github.sha is the *merge* commit Actions
+          # synthesized, not the branch tip — the PR's own sha has to come from
+          # the event payload. On a push it is the commit that landed on main.
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "pull_request" ]; then
+            sha="$PR_HEAD_SHA"
+            # The PR number in the name is how pr-dev-build.yml finds the PR.
+            name="blurt-dev-build-pr-$PR_NUMBER"
+            # Quoted: bare `pr` reads as the pr(1) command to shellcheck (SC2209).
+            kind="pr"
+          else
+            sha="$PUSH_SHA"
+            name="blurt-dev-build-main-${PUSH_SHA:0:7}"
+            kind="main"
+          fi
+          {
+            echo "sha=$sha"
+            echo "artifact_name=$name"
+            echo "kind=$kind"
+          } >>"$GITHUB_OUTPUT"
 
       - name: Build Blurt.app (Debug-Local, ad-hoc signed)
         working-directory: blurt/App/Blurt
@@ -150,7 +192,7 @@ jobs:
 
       - name: Package the app
         env:
-          SHA: ${{ github.event.pull_request.head.sha }}
+          SHA: ${{ steps.meta.outputs.sha }}
         run: |
           set -euo pipefail
           app="$RUNNER_TEMP/devbuild/Build/Products/Debug-Local/Blurt.app"
@@ -164,21 +206,25 @@ jobs:
         id: upload
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          # The PR number in the name is how pr-dev-build.yml finds the PR.
-          name: blurt-dev-build-pr-${{ github.event.pull_request.number }}
+          name: ${{ steps.meta.outputs.artifact_name }}
           path: ${{ runner.temp }}/out/*.zip
           if-no-files-found: error
-          # A dev build is only interesting while the PR is open.
-          retention-days: 14
+          # A PR build is only interesting while the PR is open; a main build
+          # outlives that — it is what you install before dispatching a release,
+          # and what you bisect against when a regression shows up later.
+          # Keep these in step with dev-build-comment.sh's RETENTION_DAYS below.
+          retention-days: ${{ github.event_name == 'pull_request' && 14 || 30 }}
 
       - name: Summarize
         working-directory: blurt
         env:
           REPO: ${{ github.repository }}
-          ARTIFACT_NAME: blurt-dev-build-pr-${{ github.event.pull_request.number }}
+          ARTIFACT_NAME: ${{ steps.meta.outputs.artifact_name }}
           ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: scripts/pr-dev-build-comment.sh --render >>"$GITHUB_STEP_SUMMARY"
+          HEAD_SHA: ${{ steps.meta.outputs.sha }}
+          KIND: ${{ steps.meta.outputs.kind }}
+          RETENTION_DAYS: ${{ github.event_name == 'pull_request' && 14 || 30 }}
+        run: scripts/dev-build-comment.sh --render >>"$GITHUB_STEP_SUMMARY"
 
   # Post the link on same-repo PRs. A separate job on purpose: `dev-build` has
   # checked out and *built* PR code (project.yml runs post-build scripts), and a
@@ -187,10 +233,14 @@ jobs:
   #
   # Fork PRs are excluded because their token is read-only regardless of the
   # permissions block — the API call would just 403. `pr-dev-build.yml` covers
-  # them, posting the identical marked comment.
+  # them, posting the identical marked comment. Push-to-main builds are excluded
+  # by the same condition (there is no PR to comment on) — spelled out rather
+  # than left to an empty string comparing unequal.
   dev-build-link:
     needs: dev-build
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -212,7 +262,8 @@ jobs:
           ARTIFACT_NAME: blurt-dev-build-pr-${{ github.event.pull_request.number }}
           ARTIFACT_URL: ${{ needs.dev-build.outputs.artifact-url }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: scripts/pr-dev-build-comment.sh --post
+          KIND: pr
+        run: scripts/dev-build-comment.sh --post
 
   # Always-runs summary job, so a *skipped* `check` can't be mistaken for a pass.
   # GitHub reports a skipped required check to branch protection as successful, so

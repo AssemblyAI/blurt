@@ -106,6 +106,10 @@ can try the change rather than imagine it. The build is ad-hoc signed and not
 notarized, so it needs its quarantine flag cleared — the comment spells out the
 three commands.
 
+Every merge to `main` gets one too, as `blurt-dev-build-main-<short-sha>` on
+that commit's `check` run (link in the run summary, kept 30 days) — so the tip
+of `main` is always installable without building it yourself.
+
 ## Reporting bugs and ideas
 
 Open an [issue](https://github.com/AssemblyAI/blurt/issues) using one of the
