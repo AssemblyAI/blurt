@@ -552,7 +552,7 @@ if tool_ready pytest 'brew install pytest'; then
   pytest -q evals/dictation-prompt/test_eval.py
 fi
 
-echo "==> release.sh unit tests"
+echo "==> release-lib.sh unit tests"
 cd "$REPO_ROOT"
 # Pure-bash unit tests for the release orchestrator's decision helpers. No Mac
 # or network dependencies, so they run everywhere check.sh runs.

@@ -17,8 +17,8 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to bump to (X.Y.Z) — must be greater than the version on main"
-        required: true
+        description: "Version to bump to (X.Y.Z). Leave empty to take the next patch."
+        required: false
         type: string
 
 # One bump at a time; never cancel one mid-push.
@@ -58,6 +58,45 @@ jobs:
           echo "::error::release-bump must be dispatched from main (got ${GITHUB_REF})"
           exit 1
 
+      - name: Resolve the target version
+        id: target
+        working-directory: blurt
+        # Before the brew install, so a version problem costs seconds rather
+        # than minutes. release-bump.sh re-checks all of this; these are the
+        # same rules applied early enough to be useful.
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          REPO_ROOT="$PWD"
+          # shellcheck disable=SC1091  # sourced at runtime from the checkout
+          source scripts/release-lib.sh
+
+          main_v="$(require_project_version App/Blurt/project.yml)"
+          version="${INPUT_VERSION:-}"
+          if [ -z "$version" ]; then
+            version="$(default_target "$main_v" "$(latest_release_tag)")" \
+              || die "could not derive a default target from main ($main_v)"
+            info "no version given — defaulting to $version"
+          fi
+          is_semver "$version" || die "version must be X.Y.Z (got: $version)"
+
+          run="$(decide_run "$main_v" "$version")" \
+            || die "target $version is behind main ($main_v)"
+          [ "$run" = "bump" ] \
+            || die "main is already at $version and it has not been released — dispatch the 'release' workflow instead of bumping again"
+
+          # An abandoned release leaves a tag with no release behind it, which
+          # burns that version. default_target takes the next patch rather than
+          # the next unused one, deliberately: stopping here is better than
+          # silently renumbering the release someone asked for.
+          if tag_exists_on_origin "v$version"; then
+            die "tag v$version already exists on origin — that version is burned; dispatch again with an explicit higher version"
+          fi
+
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+          info "main is at $main_v; bumping to $version"
+
       - name: Install build tools
         working-directory: blurt
         run: brew bundle --file=Brewfile
@@ -71,7 +110,7 @@ jobs:
       - name: Bump the version
         working-directory: blurt
         env:
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ steps.target.outputs.version }}
         run: |
           set -euo pipefail
           branch="release/v$VERSION"
@@ -88,7 +127,7 @@ jobs:
       - name: Summarize
         env:
           REPO: ${{ github.repository }}
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ steps.target.outputs.version }}
         run: |
           {
             echo "### Bumped to v$VERSION"

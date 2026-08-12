@@ -31,9 +31,13 @@ against one reviewed commit, never a side effect of a push or a tag. Both jobs
 check out `github.sha` — the exact commit the workflow was dispatched at — so the
 tag cannot land on a commit other than the one that was built.
 
-`scripts/release.sh` still drives steps 1–3 from a Mac if you'd rather stay in a
-terminal, but the workflows are the canonical path and the only one that gets
-exercised on every release.
+Leave the version input empty and `release-bump` takes the next patch itself,
+using the same `default_target` / `decide_run` rules the release scripts have
+always used (`scripts/release-lib.sh`, unit-tested by `release.test.sh`). It
+refuses rather than guesses when the state is ambiguous: if `main` already
+carries an unreleased bump it tells you to dispatch `release` instead, and if the
+next patch number is already taken by a tag it stops and asks for an explicit
+version rather than silently renumbering your release.
 
 ### Dry-running the signing path
 
@@ -50,8 +54,16 @@ deployment-branch policy, because the `build` job declares that environment:
   branch matching that pattern, and the signing key stays unreachable from
   every other branch.
 
-Pick one deliberately; the second is worth it if you expect to change
-`release-build.sh`, and the first is right if you don't.
+**Recommended: `main` only.** The asymmetry decides it. Skipping a rehearsal
+costs you a failed build and a re-dispatch — the publish job still gates on
+approval, so a botched signing change cannot reach users. Standing access from a
+branch pattern costs you a permanent widening of who can reach the one credential
+whose compromise means someone signs malware as you and Gatekeeper accepts it:
+anyone who can push a branch could dispatch a workflow on it that prints the key.
+
+If you ever do need a rehearsal, add the pattern, run it, and remove it. That is
+a deliberate and auditable act, which is exactly what touching this key should
+be — unlike a standing grant nobody revisits.
 
 ### The ship gate
 
@@ -192,7 +204,8 @@ it cannot sign.
 Blurt does **not** yank published releases. The update check only ever offers
 users a strictly higher version (`UpdateChecker` compares `SemanticVersion` and
 reports `.available` only when the latest tag is greater), so the fix for any bad
-build is to **ship a new patch** via `scripts/release.sh`.
+build is to **ship a new patch**: dispatch `release-bump`, merge, dispatch
+`release`.
 
 The one exception is a fault caught **before announcing**, while the same version
 is still safe to overwrite (e.g. a corrupted upload flagged by the post-publish

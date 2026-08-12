@@ -666,7 +666,10 @@ The bump workflow deliberately does not open the PR — a PR created by `GITHUB_
 `check`, so it could never merge; opening it from outside Actions works fine. The publish job then
 parks on the `release-publish` environment until a human approves — that approval is the ship gate,
 so download and test the DMG from the build job's artifacts first. Nothing is rebuilt after approval.
-`scripts/release.sh` does the same from a Mac terminal; the workflows are canonical.
+Dispatching `release-bump` with an empty version takes the next patch, resolved by `default_target` /
+`decide_run` in `scripts/release-lib.sh` (unit-tested by `release.test.sh`, so it is verifiable off a
+Mac). There is no local orchestrator script — the workflows are the only path, so there is nothing to
+drift out of sync with them.
 
 Signing-key custody (a base64 `.p12` secret imported into an ephemeral keychain, never a persistent
 one), the required environments and secrets, certificate/notary rotation, and the roll-forward-only

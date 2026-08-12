@@ -46,8 +46,8 @@ working order; approving a build you dispatched is not a gate. If the user wants
 unattended releases, that is a deliberate change to the environment's reviewers,
 not something to route around.
 
-`scripts/release.sh` does steps 1–3 from a Mac terminal instead. Both work; the
-workflows are canonical.
+Dispatching `release-bump` with no version takes the next patch. There is no
+local orchestrator script — the workflows are the only path.
 
 ## Guardrails / gotchas
 
