@@ -74,9 +74,10 @@ final class TestClock: Clock, Sendable {
   /// fails as a timeout rather than quietly.
   func waitUntilSleeping(for duration: Duration) async {
     let deadline = now.advanced(by: duration)
-    while !state.withLock({ $0.sleepers.contains { $0.deadline == deadline } }) {
-      await Task.yield()
+    func isParked() -> Bool {
+      state.withLock { s in s.sleepers.contains { $0.deadline == deadline } }
     }
+    while !isParked() { await Task.yield() }
   }
 
   /// Advance virtual time, waking every sleeper whose deadline has now passed.
