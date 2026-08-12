@@ -158,6 +158,25 @@ struct MeterBarGeometryTests {
     #expect(Set(loudHeights).count == 1)
   }
 
+  @Test("a bar index outside the row falls back to full weight instead of trapping")
+  func barHeightOutOfRangeIndex() {
+    // `height(at:)` is driven by a `ForEach` over `0..<row.count`, so production
+    // can't reach this arm — which is exactly why nothing covered it. It is still
+    // the difference between a drawn bar and an index-out-of-range trap inside a
+    // SwiftUI view body, and the fallback is deliberately the *unweighted* 1
+    // (matching `envelopeWeight`'s count <= 1 case), not 0: a 0 weight would
+    // collapse the bar to the height floor and read as a dead meter.
+    #expect(row.height(at: row.count, level: 1, time: 0, animated: false) == row.maxBarHeight)
+    #expect(row.height(at: -1, level: 1, time: 0, animated: false) == row.maxBarHeight)
+    // Full weight, not merely "above the floor": the row's edge bar carries
+    // `envelopeEdge`, so at the same level an unweighted bar must be strictly
+    // taller than it.
+    let quiet: Float = 0.5
+    #expect(
+      row.height(at: row.count, level: quiet, time: 0, animated: false)
+        > row.height(at: 0, level: quiet, time: 0, animated: false))
+  }
+
   @Test("the wave is phase-shifted per bar, so a crest travels across the row")
   func idleWavePhaseShiftsPerBar() {
     // What makes the wave *travel* rather than pulse in unison is `wavePhaseStep`:
