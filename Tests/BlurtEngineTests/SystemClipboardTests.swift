@@ -129,6 +129,54 @@ struct SystemClipboardTests {
     }
   }
 
+  @Test("writeAndPrepareRestore writes the text and its restore puts the saved contents back")
+  func writeAndPrepareRestoreRoundTrips() {
+    // The entry point `KeyInjector` actually pastes through, and the one primitive
+    // in this type that no test reached: the injector suites drive `FakeClipboard`,
+    // which holds a string and a counter and deliberately does *not* re-derive the
+    // save-write-restore policy — the whole point of narrowing the
+    // `ClipboardAccess` seam. So the policy only exists here, and only here can it
+    // be checked.
+    withClipboardRestored {
+      let pb = NSPasteboard.general
+      let clip = SystemClipboard()
+
+      pb.clearContents()
+      pb.setString("original", forType: .string)
+
+      let restore = clip.writeAndPrepareRestore("transcript")
+      // The transcript is on the clipboard for the target app's ⌘V to read.
+      #expect(pb.string(forType: .string) == "transcript")
+
+      restore()
+      #expect(pb.string(forType: .string) == "original")
+    }
+  }
+
+  @Test("a clipboard changed after our paste is left alone rather than restored over")
+  func restoreSkipsAfterAnExternalWrite() {
+    // The change-count guard. The restore is deferred by `pasteSettleDuration`, and
+    // during that window the user may copy something new — restoring then would
+    // silently destroy what they just copied, which is a worse outcome than leaving
+    // the transcript behind. So a pasteboard that has moved on since our write is
+    // not touched.
+    withClipboardRestored {
+      let pb = NSPasteboard.general
+      let clip = SystemClipboard()
+
+      pb.clearContents()
+      pb.setString("original", forType: .string)
+      let restore = clip.writeAndPrepareRestore("transcript")
+
+      // Someone else copies inside the settle window.
+      pb.clearContents()
+      pb.setString("user copied this", forType: .string)
+
+      restore()
+      #expect(pb.string(forType: .string) == "user copied this")
+    }
+  }
+
   @Test("restore of an empty snapshot leaves the cleared pasteboard empty")
   func restoreEmptyIsNoOp() throws {
     try withClipboardRestored {

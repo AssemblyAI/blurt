@@ -27,7 +27,7 @@ What you CAN run there is the portable subset:
 scripts/check.sh --portable
 ```
 
-It runs actionlint / prettier / xmllint / markdownlint / shellcheck / shfmt /
+It runs actionlint / zizmor / prettier / xmllint / markdownlint / shellcheck / shfmt /
 ruff (lint + format check) / pytest over `evals/` / `release.test.sh` (plus `swift-format lint` and `swiftlint lint` if Linux
 builds are on `PATH` — under the default web network policy they are not).
 That fully verifies docs, site, scripts, eval, and workflow changes. It is **not**
@@ -62,12 +62,18 @@ Mac they're all present, so don't treat a skip as a pass):
 4. ThreadSanitizer + AddressSanitizer test passes
 5. xcodegen drift check (regenerating must not change the committed `.pbxproj`)
 6. codesign-skipped app build (warnings-as-errors)
-7. `scripts/uitest.sh` (the XCUITest bundle) and `scripts/leaks.sh` (whole-app
-   leak check) — both need a GUI session, which the `macos-26` runner provides
+7. **CI only:** `scripts/uitest.sh` (the XCUITest bundle) and `scripts/leaks.sh`
+   (whole-app leak check). Both drive the real app and seize the keyboard and
+   screen, so a local run skips them with a note and the closing line says
+   `ok (UI suite + leak scan NOT run …)`. That skip is by design — CI on
+   `macos-26` runs them on every PR and is the authority on them. To run them on
+   a Mac anyway: `BLURT_INTEGRATION_TESTS=1 scripts/check.sh`, or invoke the two
+   scripts directly. Expect to lose the machine for a few minutes if you do.
 8. `swift-format lint --strict`
 9. `swiftlint lint --strict` (warnings are failures), `swiftlint analyze`
    (unused imports), `periphery scan --strict`
-10. actionlint / prettier / xmllint / markdownlint / shellcheck / shfmt --diff
+10. actionlint / zizmor (workflow security) / prettier / xmllint / markdownlint /
+    shellcheck / shfmt --diff
 11. `ruff format --check` + `ruff check` over `evals/`, then `pytest`
     over `evals/dictation-prompt/test_eval.py`
 12. `release.test.sh`
@@ -81,3 +87,7 @@ Mac they're all present, so don't treat a skip as a pass):
 - A `note: <tool> not installed; skipping` line means coverage of that check is
   _missing_, not satisfied. On a dev Mac, run `scripts/bootstrap.sh` to install
   the toolchain rather than accepting skips.
+- The UI-suite / leak-scan skip is the one exception: it's deliberate, not a
+  missing tool. A local run that ends `ok (UI suite + leak scan NOT run …)` is
+  green for everything it covered — just don't claim the integration suite
+  passed. That answer comes from `check.yml` on the PR.

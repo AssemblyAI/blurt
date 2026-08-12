@@ -1,20 +1,23 @@
 #!/bin/bash
 # Project health check: build + test the SPM engine and the macOS app.
 # Pipes xcodebuild through xcbeautify when available (brew install xcbeautify).
-# Runs swiftlint / periphery / actionlint / prettier / xmllint /
+# Runs swiftlint / periphery / actionlint / zizmor / prettier / xmllint /
 # markdownlint / shellcheck / shfmt / ruff / pytest when available.
 # Swift warnings are treated as errors everywhere; engine line coverage is gated.
 # `check.sh --portable` runs only the platform-independent subset (for Linux /
 # web sandboxes with no macOS toolchain) — see the flag parsing below.
+# The whole-app integration steps (the XCUITest suite and the leak scan) take
+# over the keyboard and screen, so they run on CI only; set
+# BLURT_INTEGRATION_TESTS=1 to include them locally — see the gate further down.
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_DIR="$REPO_ROOT/App/Blurt"
 
-# --portable: run only the platform-independent checks (actionlint / prettier /
-# xmllint / markdownlint / shellcheck / shfmt / ruff / pytest / release.test.sh,
-# plus swift-format and
+# --portable: run only the platform-independent checks (actionlint / zizmor /
+# prettier / xmllint / markdownlint / shellcheck / shfmt / ruff / pytest /
+# release.test.sh, plus swift-format and
 # swiftlint lint when their Linux builds happen to be present). For Linux / web
 # sandboxes where the macOS toolchain is absent. A green --portable run is NOT
 # "green" in the CI sense — the Swift build, tests, sanitizers, coverage gate,
@@ -117,6 +120,18 @@ tool_ready() {
   return 1
 }
 
+# True when this is an automated run rather than someone's desktop — the one
+# thing the whole-app integration steps below key off. GitHub Actions exports
+# CI=true; other runners use CI=1 or just export it empty, and a developer who
+# has CI=false in their shell means it. Anything else non-empty counts as CI,
+# because failing *toward* running the gate is the safe direction.
+is_ci() {
+  case "${CI:-}" in
+    "" | false | False | FALSE | 0) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
 # No-external-dependencies guard. The engine is dependency-free by rule and the
 # app carries only the local BlurtEngine package (see AGENTS.md). A third-party
 # dependency is the single biggest supply-chain risk, so fail the moment one is
@@ -146,6 +161,23 @@ fi
 
 [ "$DEP_VIOLATION" -eq 0 ] || exit 1
 echo "no external dependencies (engine dependency-free; app carries only local BlurtEngine)"
+
+# Ignore rules must not shadow tracked files. A .gitignore pattern only suppresses
+# files that are *untracked* — one that also matches something already committed
+# leaves it tracked but invisible to `git status`, so later edits to it stop
+# showing up and quietly never get committed. That is the one way this file can be
+# wrong and not announce itself, and the broad globs it carries (`*.log`,
+# `results*.json`) are exactly the kind that drift into a collision. Pure git
+# plumbing, so it runs in --portable too.
+echo "==> ignore rules don't shadow tracked files"
+SHADOWED="$(git ls-files --ignored --exclude-standard --cached)"
+if [ -n "$SHADOWED" ]; then
+  echo "error: these tracked files match an ignore rule, so git status will not report changes to them:" >&2
+  printf '%s\n' "$SHADOWED" >&2
+  echo "       narrow the pattern in .gitignore, or 'git rm --cached' the file if it should not be tracked." >&2
+  exit 1
+fi
+echo "no tracked file is shadowed by an ignore rule"
 
 # Sound-catalog integrity. `SoundPackCatalog.swift` and the cue audio are both
 # emitted by scripts/generate-sounds.swift, but they land in different targets —
@@ -311,19 +343,56 @@ else
     CODE_SIGNING_ALLOWED=NO \
     build 2>&1 | tee "$APP_BUILD_LOG" | "${PRETTY[@]}"
 
-  # XCUITest integration suite (BlurtUITests). Part of the required gate: it drives
-  # the real app (settings flows, the menu bar item, and the record → transcribe →
-  # paste pipeline against offline stubs). Delegated to scripts/uitest.sh so the
-  # ad-hoc signing the runner needs is defined in exactly one place. It needs a GUI
-  # session (a windowserver), which the macos-26 CI runner provides.
-  cd "$REPO_ROOT"
-  bash scripts/uitest.sh
+  # Whole-app integration steps — CI-only by default. Both drive the *real* app,
+  # and they don't just need a GUI session, they take one over: the XCUITest
+  # runner steals keyboard focus and clicks for the length of the suite, and the
+  # leak run launches Blurt with BLURT_LEAK_EXERCISE=1, which cycles dictation
+  # through the key tap and pastes into whatever is frontmost. On a dev Mac that
+  # makes the machine unusable for the several minutes they take, which is enough
+  # reason on its own not to run them on every local `check.sh`.
+  #
+  # The gate is deliberately one-directional. Under CI they always run and there
+  # is no opt-out env var, because the whole point of the required `check` status
+  # is that it can't be talked out of a step — a skip flag CI honoured would be a
+  # green-looking bypass of the integration suite. Off CI they're skipped with a
+  # note unless BLURT_INTEGRATION_TESTS=1 asks for them; scripts/uitest.sh and
+  # scripts/leaks.sh also stay runnable directly, which is the same opt-in said
+  # another way. So a local run is no longer the authority on these two: CI is.
+  if is_ci; then
+    INTEGRATION=1
+  elif [ "${BLURT_INTEGRATION_TESTS:-}" = "1" ]; then
+    INTEGRATION=1
+    echo "note: BLURT_INTEGRATION_TESTS=1 — running the UI suite and leak scan;"
+    echo "      they drive the real app, so hands off the keyboard until they finish"
+  else
+    INTEGRATION=0
+  fi
 
-  # Whole-app leak check (scripts/leaks.sh). Drives the app under the Darwin leak
-  # detector and fails only on leaks attributable to Blurt's own code (the fixed
-  # set of system-framework XPC leaks is filtered out). Like the UI suite it needs
-  # the GUI session the macos-26 runner provides.
-  bash scripts/leaks.sh
+  if [ "$INTEGRATION" -eq 1 ]; then
+    # XCUITest integration suite (BlurtUITests). Part of the required gate: it
+    # drives the real app (settings flows, the menu bar item, and the record →
+    # transcribe → paste pipeline against offline stubs). Delegated to
+    # scripts/uitest.sh so the ad-hoc signing the runner needs is defined in
+    # exactly one place. It needs a GUI session (a windowserver), which the
+    # macos-26 CI runner provides.
+    #
+    # This cd is the one that matters: the app build above left us in $APP_DIR.
+    # Both scripts run as `bash …`, i.e. in a child process that can't move this
+    # shell's cwd, so nothing needs to re-cd between them.
+    cd "$REPO_ROOT"
+    bash scripts/uitest.sh
+
+    # Whole-app leak check (scripts/leaks.sh). Drives the app under the Darwin
+    # leak detector and fails only on leaks attributable to Blurt's own code (the
+    # fixed set of system-framework XPC leaks is filtered out). Like the UI suite
+    # it needs the GUI session the macos-26 runner provides.
+    bash scripts/leaks.sh
+  else
+    echo "==> skipping the UI suite and leak scan (they take over the machine)"
+    echo "    CI runs both on every PR and is the authority on them. To run them"
+    echo "    here anyway: BLURT_INTEGRATION_TESTS=1 scripts/check.sh, or"
+    echo "    scripts/uitest.sh / scripts/leaks.sh on their own."
+  fi
 fi
 
 # Apple's swift-format (bundled with Xcode 16+) is the project's FORMATTING
@@ -380,7 +449,31 @@ fi
 
 if tool_ready actionlint 'brew install actionlint'; then
   echo "==> actionlint"
+  # Auto-discovers .github/workflows, so no file list. It also pipes each `run:`
+  # block through shellcheck when shellcheck is on PATH (it is, via the Brewfile),
+  # which is what lint-checks the inline bash in release.yml and pr-dev-build.yml.
   actionlint
+fi
+
+if tool_ready zizmor 'brew install zizmor'; then
+  echo "==> zizmor"
+  # The security half of workflow lint, where actionlint is the correctness half:
+  # template-injection sinks in `run:` blocks, overbroad `permissions:`, unpinned
+  # action refs, credential-persistence hazards. It earns its place here because
+  # release.yml hands a Developer ID signing key to a runner — the one workflow in
+  # this repo where a scripting mistake costs more than a red build.
+  #
+  # Default persona on purpose. --persona=pedantic additionally wants a comment on
+  # every `permissions:` key and flags workflow-level grants that could be
+  # job-scoped; useful to run by hand, too noisy to gate on.
+  #
+  # --offline is already zizmor's default, but stating it keeps this check hermetic
+  # by contract: a future release that flips the default to online would otherwise
+  # start wanting a token and a network round-trip mid-gate. The audits it costs us
+  # are the ones resolving action refs upstream, which Dependabot already watches.
+  # -q drops the per-file progress chatter and the "defaulting to offline" warning,
+  # keeping findings — the only thing worth reading here.
+  zizmor -q --offline .github/workflows/
 fi
 
 if tool_ready prettier 'brew install prettier'; then
@@ -476,6 +569,10 @@ bash scripts/release.test.sh
 
 if [ "$PORTABLE" -eq 1 ]; then
   echo "==> ok (portable subset only — Swift build/tests NOT run; CI on macos-26 is the authority on green)"
+elif [ "${INTEGRATION:-0}" -eq 0 ]; then
+  # Say it at the end too, where the reader is deciding whether this run means
+  # "green": everything else passed, but the UI suite and leak scan did not run.
+  echo "==> ok (UI suite + leak scan NOT run — CI on macos-26 covers those)"
 else
   echo "==> ok"
 fi

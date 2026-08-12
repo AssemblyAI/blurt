@@ -60,6 +60,22 @@ struct UpdateCheckerTests {
     #expect(result == .upToDate)
   }
 
+  @Test("the DMG asset is matched case-insensitively")
+  func dmgAssetIgnoresAssetNameCase() async throws {
+    // `dmgAsset` lowercases the name before matching the suffix. Nothing the release
+    // pipeline publishes capitalizes the extension today, which is why the
+    // lowercasing was uncovered — but matching the literal `.dmg` only would turn a
+    // release asset renamed `Blurt.DMG` into a thrown `malformedResponse`, i.e.
+    // "Couldn't check for updates" for every user, from a release that is fine. The
+    // check has no way to report "I found the release but not its download".
+    let checker = checker(returning: releaseJSON(tag: "v0.2.0", assetName: "Blurt.DMG"))
+    let current = try currentVersion()
+    let result = try await checker.check(current: current)
+    let expectedVersion = try #require(SemanticVersion("0.2.0"))
+    let expectedURL = try #require(URL(string: "https://example.com/Blurt.DMG"))
+    #expect(result == .available(version: expectedVersion, dmgURL: expectedURL))
+  }
+
   @Test("throws when a newer release has no .dmg asset")
   func throwsWithoutDMG() async throws {
     let checker = checker(returning: releaseJSON(tag: "v0.2.0", assetName: "notes.txt"))

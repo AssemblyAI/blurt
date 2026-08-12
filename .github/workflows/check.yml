@@ -99,7 +99,128 @@ jobs:
 
       - name: Run check.sh
         working-directory: blurt
+        # CI=true is what makes check.sh run the whole-app integration steps (the
+        # XCUITest suite and the leak scan). They take over the keyboard and
+        # screen of whatever machine they run on, so a local check.sh skips them
+        # and this job is the only place they run — don't unset it. Actions
+        # exports CI=true for every step anyway; it's set here so the dependency
+        # is visible at the call site rather than only in check.sh.
+        env:
+          CI: "true"
         run: scripts/check.sh
+
+  # Every PR gets an installable build of the change, so a reviewer can try it
+  # instead of reading the diff and imagining it. Deliberately NOT part of the
+  # required gate (`gate` below ignores it): it builds the same sources `check`
+  # already compiles, so a failure here is never the only signal.
+  #
+  # The download link is posted by `dev-build-link` below for same-repo PRs, and
+  # by the `pr-dev-build` workflow for fork PRs — a pull_request run from a fork
+  # gets a read-only token no matter what `permissions:` says, so that case has
+  # to happen in a workflow_run job. Both post the same marked comment, so
+  # whichever runs, a PR ends up with exactly one link.
+  dev-build:
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
+    runs-on: macos-26
+    timeout-minutes: 30
+    outputs:
+      artifact-url: ${{ steps.upload.outputs.artifact-url }}
+
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          persist-credentials: false
+
+      - name: Build Blurt.app (Debug-Local, ad-hoc signed)
+        working-directory: blurt/App/Blurt
+        # Debug-Local is the configuration scripts/dev-build.sh uses: a debug
+        # build with UITEST_HOOKS off, so this is the real app rather than the
+        # test-harness variant. The committed .xcodeproj is used as-is — check's
+        # xcodegen drift check is what guarantees it matches project.yml.
+        #
+        # Ad-hoc signing (identity "-", signing ALLOWED), the same recipe
+        # uitest.sh uses: the Developer ID cert isn't on this runner, and the
+        # "Install to /Applications" post-build script skips itself under "-".
+        run: |
+          xcodebuild \
+            -project Blurt.xcodeproj \
+            -scheme Blurt \
+            -configuration Debug-Local \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath "$RUNNER_TEMP/devbuild" \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=YES \
+            build
+
+      - name: Package the app
+        env:
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          app="$RUNNER_TEMP/devbuild/Build/Products/Debug-Local/Blurt.app"
+          [ -d "$app" ] || { echo "::error::no app at $app"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/out"
+          # ditto, not zip: it preserves the bundle layout, symlinks, and the
+          # executable bit the way macOS expects when the zip is expanded again.
+          ditto -c -k --keepParent "$app" "$RUNNER_TEMP/out/Blurt-dev-${SHA:0:7}.zip"
+
+      - name: Upload the dev build
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          # The PR number in the name is how pr-dev-build.yml finds the PR.
+          name: blurt-dev-build-pr-${{ github.event.pull_request.number }}
+          path: ${{ runner.temp }}/out/*.zip
+          if-no-files-found: error
+          # A dev build is only interesting while the PR is open.
+          retention-days: 14
+
+      - name: Summarize
+        working-directory: blurt
+        env:
+          REPO: ${{ github.repository }}
+          ARTIFACT_NAME: blurt-dev-build-pr-${{ github.event.pull_request.number }}
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: scripts/pr-dev-build-comment.sh --render >>"$GITHUB_STEP_SUMMARY"
+
+  # Post the link on same-repo PRs. A separate job on purpose: `dev-build` has
+  # checked out and *built* PR code (project.yml runs post-build scripts), and a
+  # job that does that should not also hold a writable token. This one holds the
+  # token and touches nothing but the comment API.
+  #
+  # Fork PRs are excluded because their token is read-only regardless of the
+  # permissions block — the API call would just 403. `pr-dev-build.yml` covers
+  # them, posting the identical marked comment.
+  dev-build-link:
+    needs: dev-build
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          persist-credentials: false
+
+      - name: Comment the dev build link
+        working-directory: blurt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          ARTIFACT_NAME: blurt-dev-build-pr-${{ github.event.pull_request.number }}
+          ARTIFACT_URL: ${{ needs.dev-build.outputs.artifact-url }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: scripts/pr-dev-build-comment.sh --post
 
   # Always-runs summary job, so a *skipped* `check` can't be mistaken for a pass.
   # GitHub reports a skipped required check to branch protection as successful, so
