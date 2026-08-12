@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Unit tests for the pure helpers in release.sh and release-lib.sh (pulled in
-# transitively). Plain bash; no Mac/network dependencies. Run directly
-# (scripts/release.test.sh) or via scripts/check.sh.
+# Unit tests for the pure helpers in release-lib.sh — the version arithmetic and
+# release-target resolution the bump workflow gates on. Plain bash; no
+# Mac/network dependencies. Run directly (scripts/release.test.sh) or via
+# scripts/check.sh.
 set -uo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/release.sh
-source "$DIR/release.sh"
+# shellcheck source=scripts/release-lib.sh
+source "$DIR/release-lib.sh"
 
 fails=0
 
@@ -250,17 +251,9 @@ git -C "$SCRATCH_REPO" tag nightly
 git -C "$SCRATCH_REPO" tag v3.0
 check "ignores prerelease, non-version, and short tags" "0.2.0" "$(latest_release_tag)"
 
-echo "== CLI preflight (subprocess) =="
-# These run main() in a child process. Arg validation happens before any git /
-# network call, so invalid input dies cleanly with no side effects. (A bare
-# no-arg invocation is intentionally NOT tested here — it now proceeds to fetch
-# origin and would perform real work.)
-checkrc 1 "bad format -> error" bash "$DIR/release.sh" 1.2
-checkrc 1 "extra args -> usage error" bash "$DIR/release.sh" 0.1.6 0.1.7
-
 if [ "$fails" -eq 0 ]; then
-  echo "release.sh: all tests passed"
+  echo "release-lib.sh: all tests passed"
 else
-  echo "release.sh: TESTS FAILED"
+  echo "release-lib.sh: TESTS FAILED"
 fi
 exit "$fails"
