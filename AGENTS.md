@@ -170,7 +170,12 @@ Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `
   It skips the entire Swift side, and its closing line says so.
 - **The loop for Swift changes**: commit, push, open or update the PR, then watch `check.yml`
   (subscribe to PR activity where available) and fix failures as CI reports them — rather than
-  stopping at "verify on a Mac".
+  stopping at "verify on a Mac". **The PR is not optional**: `check.yml` triggers on
+  `pull_request`/`push` to `main` and `merge_group` only, so pushing a feature branch runs _no_ CI
+  and leaves Swift changes wholly unverified. A push is not a check.
+- **Diff against `origin/main`, not `main`**: a fresh remote clone checks out only the working
+  branch, so the local `main` ref lags behind the real default branch. `git diff main...HEAD` there
+  reports every commit merged since that stale ref as if it were yours.
 
 In Claude Code on the web, a `SessionStart` hook installs the portable linters automatically; see
 [`CLAUDE.md`](./CLAUDE.md).
@@ -220,6 +225,14 @@ framework, or notarization rejects the build; roll-forward-only for a bad releas
   isolation fails the build under `-warnings-as-errors` — prefer `static let`.
 - **Unit tests use Swift Testing** (`@Suite`/`@Test`/`#expect`), not XCTest. The XCUITest bundle is
   the one exception (XCTest, because XCUIAutomation requires it).
+- **A store setter with no production caller gets deleted.** The exception is a value that's
+  _encoded_ on write (`TriggerKeyStore`'s keycode, `SoundPackStore`'s id): there, give the setter a
+  production caller instead — see `HotkeyStepView`, where assigning the raw `@AppStorage` slot
+  directly left the setter test-only, so a change to the encoding would have kept `swift test` green
+  while the picker silently wrote the old form. For a plain `Bool` there is nothing to encode, so the
+  Settings toggle writing the slot through `@AppStorage` is the whole story and the store stays
+  read-only (`DeveloperModeStore`, `EnhancedTranscriptsStore`). Either way, no setter is left in the
+  engine that only tests exercise.
 - **Pure projections over shell logic**: phase→UI mapping (`OverlayUIState`, `MenuBarStatus`),
   chime edges (`RecordingCueGate`), geometry (`OverlayPlacement`, `MeterBarGeometry`), history
   (`RecentDictations`), alert wording (`UpdateAlertContent`, `APIKeySubmission.FailureReport`),

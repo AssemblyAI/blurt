@@ -422,7 +422,14 @@ if tool_ready shellcheck 'brew install shellcheck'; then
   echo "==> shellcheck"
   # Static analysis for the project's shell scripts (release-*, check.sh
   # itself) — catches quoting bugs, unset vars, and unsafe patterns.
-  shellcheck scripts/*.sh
+  #
+  # The Claude Code hooks are included: they run on every file edit, so a quoting
+  # bug there corrupts a source file rather than just failing a build, and nothing
+  # else checked them. Both directories are passed as one invocation on purpose —
+  # that puts release-lib.sh and hook-lib.sh in the input set, so the `source` lines
+  # resolve instead of raising SC1091. (shfmt below deliberately still covers only
+  # scripts/*.sh: the hooks predate any formatting check and haven't been reflowed.)
+  shellcheck scripts/*.sh .claude/hooks/*.sh
 fi
 
 if tool_ready shfmt 'brew install shfmt'; then
