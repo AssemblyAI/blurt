@@ -62,7 +62,7 @@ ad-hoc signed. Expires in 14 days.
 cd ~/Downloads
 unzip -o $ARTIFACT_NAME.zip   # GitHub wraps every artifact in a zip
 unzip -o Blurt-dev-$short_sha.zip
-xattr -dr com.apple.quarantine Blurt.app
+find Blurt.app -exec xattr -c {} +   # clear quarantine: xattr lost -r in macOS 12.3
 rm -rf /Applications/Blurt.app && cp -R Blurt.app /Applications/
 open -a Blurt
 \`\`\`
