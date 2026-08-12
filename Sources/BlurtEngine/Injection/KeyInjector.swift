@@ -29,7 +29,10 @@ public actor KeyInjector: InjectorProtocol {
   /// tabs can coincidentally share a title, or a title can change mid-session
   /// for reasons unrelated to the document, e.g. an unsaved-changes marker);
   /// accepted here because the safe failure mode is just a missing separator.
-  private struct WindowIdentity: Equatable {
+  ///
+  /// Internal rather than private so `resolveInsert` — the pure form of the
+  /// decision it feeds — can be driven from tests with plain pids and titles.
+  struct WindowIdentity: Equatable {
     let pid: pid_t
     let title: String
 
@@ -202,21 +205,11 @@ public actor KeyInjector: InjectorProtocol {
     // setTargetApp() interleaving mid-insert must not make us activate one app
     // while judging editability and recording `lastInsertedWindow` for another.
     let target = targetApp
-    // In Accessibility-opaque editors `priorText` is nil even mid-run; fall back
-    // to what we last pasted when this dictation targets the same window as last
-    // time (see `WindowIdentity`), so consecutive dictations there still get a
-    // separating space, but a tab switch or a file switch within one Electron
-    // window doesn't carry spacing across into an unrelated document.
-    let currentWindow = target.flatMap { app in
-      windowTitle.map { WindowIdentity(pid: app.processIdentifier, title: $0) }
-    }
-    // `currentWindow.map { ... } ?? false` rather than `currentWindow == lastInsertedWindow`:
-    // both sides being nil (nothing readable this time, nothing pasted last time)
-    // must not count as a match.
-    let sameWindow = currentWindow.map { $0 == lastInsertedWindow } ?? false
-    let basis = KeyInjector.separatorBasis(
-      priorText: priorText, lastInserted: lastInsertedText, sameWindow: sameWindow)
-    let finalText = KeyInjector.withLeadingSeparator(text, after: basis)
+    let resolved = KeyInjector.resolveInsert(
+      text: text, priorText: priorText, windowTitle: windowTitle,
+      targetPID: target?.processIdentifier,
+      lastInsertedText: lastInsertedText, lastInsertedWindow: lastInsertedWindow)
+    let finalText = resolved.text
     do {
       try await activateTargetApp(target)
     } catch {
@@ -261,8 +254,46 @@ public actor KeyInjector: InjectorProtocol {
     // now — so the pipeline reaches `.idle` and re-arms without waiting out the
     // restore window — while the next paste still serializes behind the settle.
     lastInsertedText = finalText
-    lastInsertedWindow = currentWindow
+    lastInsertedWindow = resolved.window
     return restore
   }
 
+  /// What one insert resolves to before anything is activated or pasted: the
+  /// exact text to write (any leading separator included) and the window
+  /// identity to remember it against for the next dictation.
+  struct ResolvedInsert: Equatable {
+    let text: String
+    let window: WindowIdentity?
+  }
+
+  /// Both of `performInsert`'s continuity decisions, as one pure function taking
+  /// the paste target as a plain pid rather than an `NSRunningApplication`:
+  /// which text to write, and which window to remember writing it into.
+  ///
+  /// A pid is all the decision ever needed. Computed inline in `performInsert`,
+  /// it could only be reached through a full `insert`, so its four cases were
+  /// covered by scraping `NSWorkspace` for live processes — one case required
+  /// the host to be running two — which activated the developer's foreground app
+  /// and failed whenever the unordered pick landed on a background-only process.
+  /// Here the same cases are plain values, and `insert` keeps one end-to-end test
+  /// for the wiring.
+  static func resolveInsert(
+    text: String,
+    priorText: String?,
+    windowTitle: String?,
+    targetPID: pid_t?,
+    lastInsertedText: String?,
+    lastInsertedWindow: WindowIdentity?
+  ) -> ResolvedInsert {
+    let currentWindow = targetPID.flatMap { pid in
+      windowTitle.map { WindowIdentity(pid: pid, title: $0) }
+    }
+    // `currentWindow.map { ... } ?? false` rather than `currentWindow == lastInsertedWindow`:
+    // both sides being nil (nothing readable this time, nothing pasted last time)
+    // must not count as a match.
+    let sameWindow = currentWindow.map { $0 == lastInsertedWindow } ?? false
+    let basis = separatorBasis(
+      priorText: priorText, lastInserted: lastInsertedText, sameWindow: sameWindow)
+    return ResolvedInsert(text: withLeadingSeparator(text, after: basis), window: currentWindow)
+  }
 }

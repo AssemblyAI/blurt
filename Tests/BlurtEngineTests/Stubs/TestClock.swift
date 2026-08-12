@@ -60,6 +60,25 @@ final class TestClock: Clock, Sendable {
     }
   }
 
+  /// Suspends until something is parked waiting exactly `duration` from now, so a
+  /// test can advance virtual time knowing the sleeper it means to wake has
+  /// actually registered. Waits on that condition rather than draining a fixed
+  /// number of `Task.yield()`s, which drains the calling task and says nothing
+  /// about whether the racer got as far as `sleep`.
+  ///
+  /// Matched on the deadline, not on a sleeper count: a session under test parks
+  /// its auto-release timer on this same clock, so "one sleeper exists" can be
+  /// satisfied by the wrong one — and then `advance(by:)` fires into a queue the
+  /// racer hasn't joined yet and the awaited work parks forever. Unbounded on
+  /// purpose: the suites carry a `.timeLimit`, so a sleeper that never arrives
+  /// fails as a timeout rather than quietly.
+  func waitUntilSleeping(for duration: Duration) async {
+    let deadline = now.advanced(by: duration)
+    while !state.withLock({ $0.sleepers.contains { $0.deadline == deadline } }) {
+      await Task.yield()
+    }
+  }
+
   /// Advance virtual time, waking every sleeper whose deadline has now passed.
   func advance(by duration: Duration) {
     let toWake = state.withLock { s -> [CheckedContinuation<Void, any Error>] in

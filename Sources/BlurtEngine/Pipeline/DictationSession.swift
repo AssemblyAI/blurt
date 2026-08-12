@@ -10,10 +10,12 @@ public actor DictationSession {
 
   public private(set) var phase: PipelinePhase = .idle
 
-  // Split for the lint file-length budget: `phaseStream()`/os_signpost live in
-  // `+Observation`; `submit(_:)` lives in `+Commands`; the post-release
-  // transcribe→inject pipeline lives in `+Pipeline`. Members those files reach
-  // are internal, not private (file-scoped access can't cross the split).
+  // Split for the lint file-length budget: `phaseStream()`/`setPhase`/os_signpost
+  // live in `+Observation`; `submit(_:)` lives in `+Commands`; the post-release
+  // transcribe→inject pipeline lives in `+Pipeline`; the non-protocol
+  // collaborators (focus capture, developer-mode log) live in `+Seams`. Members
+  // those files reach are internal, not private (file-scoped access can't cross
+  // the split).
 
   /// Live feeds of phase changes. Each `phaseStream()` call yields the current
   /// phase plus every subsequent transition, so the production renderer and
@@ -56,6 +58,11 @@ public actor DictationSession {
   /// injection, so pasted, copied, and failed-to-paste dictations all count.
   let onTranscriptDelivered: (@Sendable (String) -> Void)?
 
+  /// The focus capture and the developer-mode log, behind closures rather than
+  /// called as statics — see `Seams` in `DictationSession+Seams.swift` for why.
+  /// Internal so `+Pipeline` reaches it across the file split.
+  let seams: Seams
+
   /// Context captured at `press()` (focused app + prior text), stored so the
   /// transcriber, `inject`'s separator decision, and the log share one snapshot.
   var capturedContext: TranscriptionContext?
@@ -80,7 +87,13 @@ public actor DictationSession {
   /// `mic.stop()`, before any pipeline is spawned. (A release that already
   /// claimed `.transcribing` is handled by `cancel()`'s synchronous path
   /// instead.) `performCancel` clears it whether or not it was consumed early.
-  private var cancelRequested = false
+  ///
+  /// Internal, like `pipelineTask` and `autoReleaseTask`, because the moment the
+  /// request is recorded is otherwise unobservable: a test landing a cancel
+  /// against an in-flight press has to know it was recorded before it releases
+  /// that press, and the alternative — draining a fixed number of `Task.yield()`s
+  /// and hoping — is a budget that drains the calling task, not this actor.
+  var cancelRequested = false
 
   // Internal, like `pipelineTask`, so a test can witness the cancel teardown
   // *directly* — nil means disarmed. Asserting it through the timer's effects
@@ -99,24 +112,52 @@ public actor DictationSession {
   /// propagates is honored by `runTranscribeInject` and `KeyInjector.insert`.
   var pipelineTask: Task<Void, Never>?  // internal: joined by awaitPipeline()
 
+  /// The production entry point: the real focus capture and the real
+  /// developer-mode log. Delegates to the seam-carrying initializer below, which
+  /// can't be public because it names internal types.
   public init(
     mic: MicCaptureProtocol,
     transcriber: TranscriberProtocol,
     injector: InjectorProtocol,
     maxRecordingSeconds: Double = SyncSTTLimits.autoReleaseSeconds,
     clock: any Clock<Duration> = ContinuousClock(),
-    keyTermsProvider: @escaping @Sendable () -> [String] = { KeyTermsStore.terms },
+    keyTermsProvider: (@Sendable () -> [String])? = nil,
     readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
     onTranscriptDelivered: (@Sendable (String) -> Void)? = nil
+  ) {
+    self.init(
+      mic: mic, transcriber: transcriber, injector: injector,
+      maxRecordingSeconds: maxRecordingSeconds, clock: clock,
+      keyTermsProvider: keyTermsProvider, readinessCheck: readinessCheck,
+      onTranscriptDelivered: onTranscriptDelivered, seams: .production)
+  }
+
+  /// `seams` is deliberately required rather than defaulted: it's what keeps this
+  /// initializer distinct from the public one above, so an in-module call is never
+  /// ambiguous. `keyTermsProvider` is optional-and-resolved-here rather than
+  /// defaulted in the signature for the same reason `AssemblyAITranscriber`'s
+  /// `enhancedTranscripts` is — a public default argument can't reference the
+  /// store's internal members.
+  init(
+    mic: MicCaptureProtocol,
+    transcriber: TranscriberProtocol,
+    injector: InjectorProtocol,
+    maxRecordingSeconds: Double = SyncSTTLimits.autoReleaseSeconds,
+    clock: any Clock<Duration> = ContinuousClock(),
+    keyTermsProvider: (@Sendable () -> [String])? = nil,
+    readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
+    onTranscriptDelivered: (@Sendable (String) -> Void)? = nil,
+    seams: Seams
   ) {
     self.mic = mic
     self.transcriber = transcriber
     self.injector = injector
     self.maxRecordingSeconds = maxRecordingSeconds
     self.clock = clock
-    self.keyTermsProvider = keyTermsProvider
+    self.keyTermsProvider = keyTermsProvider ?? { KeyTermsStore().terms }
     self.readinessCheck = readinessCheck
     self.onTranscriptDelivered = onTranscriptDelivered
+    self.seams = seams
     let (commands, feed) = AsyncStream.makeStream(of: Command.self)
     self.commandFeed = feed
     // Consumes `submit(_:)`'s feed one command at a time, in emit order. Weakly
@@ -183,8 +224,11 @@ public actor DictationSession {
       // Capture the frontmost app (paste target) concurrently with mic startup —
       // a cheap in-process AppKit read on the main actor. The phase still flips
       // to .recording only after mic.start succeeds, so the UI never lies about
-      // whether audio is being captured.
-      async let frontmost = MainActor.run { FocusCapture.captureFrontmost() }
+      // whether audio is being captured. Lifted out of the actor first (like
+      // `transcriber` above) so the child task calls a Sendable closure rather
+      // than reading isolated state.
+      let captureFrontmost = seams.captureFrontmost
+      async let frontmost = captureFrontmost()
       try await mic.start()
       let captured = await frontmost
       await injector.setTargetApp(captured.flatMap { FocusCapture.runningApp(for: $0) })
@@ -212,8 +256,9 @@ public actor DictationSession {
       // `DictationLog`'s serial queue. Concurrent so a hung capture can't delay the
       // next press's. The body is fully synchronous and captures only Sendable
       // values, so it needs no task context.
+      let captureFieldContext = seams.captureFieldContext
       Self.contextQueue.async {
-        let field = FocusCapture.captureFieldContext()
+        let field = captureFieldContext()
         let context = TranscriptionContext(
           appName: captured?.processName,
           windowTitle: field.windowTitle,
@@ -340,7 +385,7 @@ public actor DictationSession {
       // indistinguishable from a clean one. Record it for developer mode without
       // touching the phase — the log is exactly the channel for a fault the user
       // shouldn't be shown.
-      DictationLog.appendError(.audioCaptureFailed(underlying: error), context: capturedContext)
+      seams.logFailure(.audioCaptureFailed(underlying: error), capturedContext)
     }
     setPhase(.cancelled)
   }
@@ -352,26 +397,7 @@ public actor DictationSession {
 
   // The post-release pipeline — `runTranscribeInject` and its transcribe/inject
   // halves, plus the bounded context wait — lives in
-  // `DictationSession+Pipeline.swift` (see the split note at the top).
-
-  func setPhase(_ newPhase: PipelinePhase) {
-    // Every failure route funnels through here — the press-time readiness
-    // refusal, both `mic` failures, the transcribe catch, and the injector's
-    // typed and untyped errors — so the developer-mode error log is written from
-    // this one place rather than at each `setPhase(.failed(…))` call site. A
-    // failure path added later is logged by construction instead of by someone
-    // remembering. The non-error outcomes stay out of it by the same token:
-    // `.noTarget` (the quiet "copied" notice, explicitly "don't report it") and
-    // `.cancelled` aren't `.failed`, so they never reach this branch.
-    //
-    // Gated on developer mode inside `appendError`, which also dispatches the
-    // file I/O off this actor — the log must not make a failure slower to show.
-    if case .failed(let error) = newPhase {
-      DictationLog.appendError(error, context: capturedContext)
-    }
-    phase = newPhase
-    for continuation in continuations.values {
-      continuation.yield(newPhase)
-    }
-  }
+  // `DictationSession+Pipeline.swift`, and `setPhase` (the one place a phase
+  // change is published and a failure logged) with the rest of the observation
+  // surface in `+Observation` (see the split note at the top).
 }

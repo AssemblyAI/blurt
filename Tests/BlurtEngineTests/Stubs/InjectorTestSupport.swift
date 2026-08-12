@@ -22,8 +22,9 @@ func liveTargetApp() throws -> NSRunningApplication {
 
 /// A `KeyInjector` wired to an in-memory clipboard, with `postPaste` recording
 /// each pasted string (captured after `setString`, before the deferred
-/// restore) into the returned box. Shared by the separator-fallback tests,
-/// which differ only in the target app(s)/`windowTitle`(s) they drive it with.
+/// restore) into the returned box — for the end-to-end case that pins `insert`
+/// threading its resolution through to the paste. (The continuity rules
+/// themselves are cases of `resolveInsert` and need no injector at all.)
 func makeRecordingInjector() -> (injector: KeyInjector, pasted: StringListBox) {
   let clip = FakeClipboard(string: nil)
   let pasted = StringListBox()
@@ -34,22 +35,29 @@ func makeRecordingInjector() -> (injector: KeyInjector, pasted: StringListBox) {
       return true
     },
     // Stub the activation. Omitting this defaulted to `KeyInjector.activate`, a
-    // REAL `NSRunningApplication.activate()` — so these tests yanked the
-    // developer's foreground app (twice, in the two-app case), and failed
-    // spuriously whenever `liveTargetApp()`'s unordered pick landed on a
-    // background-only process whose activate() returns false (the injector then
-    // throws `.targetAppLost` for reasons unrelated to separator logic). The
-    // separator tests only need a stable non-nil app identity, not activation.
+    // REAL `NSRunningApplication.activate()` — so this test yanked the
+    // developer's foreground app, and failed spuriously whenever
+    // `liveTargetApp()`'s unordered pick landed on a background-only process
+    // whose activate() returns false (the injector then throws `.targetAppLost`
+    // for reasons unrelated to separator logic). It needs a stable non-nil app
+    // identity, not activation.
     activateTarget: { _ in true },
     clipboard: clip)
   return (injector, pasted)
 }
 
 /// One-shot async gate: `wait()` suspends until `open()` is called. Tolerates
-/// `open()` racing ahead of `wait()` (the waiter then returns immediately).
+/// `open()` racing ahead of `wait()` (the waiter then returns immediately), and
+/// any number of concurrent waiters — `Gate`, which is built from a pair of
+/// these, needs that for the stubs whose blocked method is called twice by the
+/// regression under test.
+///
+/// `open()` is synchronous (a `Mutex`-guarded class, not an actor) because the
+/// seams that trip these gates are synchronous `@Sendable` closures like
+/// `KeyInjector.postPaste`.
 final class AsyncGate: Sendable {
   private struct State {
-    var continuation: CheckedContinuation<Void, Never>?
+    var waiters: [CheckedContinuation<Void, Never>] = []
     var opened = false
   }
   private let state = Mutex(State())
@@ -58,7 +66,7 @@ final class AsyncGate: Sendable {
     await withCheckedContinuation { cont in
       let openedAlready = state.withLock { s -> Bool in
         if s.opened { return true }
-        s.continuation = cont
+        s.waiters.append(cont)
         return false
       }
       if openedAlready { cont.resume() }
@@ -66,18 +74,20 @@ final class AsyncGate: Sendable {
   }
 
   func open() {
-    let cont = state.withLock { s -> CheckedContinuation<Void, Never>? in
+    let waiters = state.withLock { s -> [CheckedContinuation<Void, Never>] in
       s.opened = true
-      let waiter = s.continuation
-      s.continuation = nil
-      return waiter
+      let pending = s.waiters
+      s.waiters.removeAll()
+      return pending
     }
-    cont?.resume()
+    for waiter in waiters { waiter.resume() }
   }
 }
 
 /// Thread-safe ordered list of strings recorded inside a `@Sendable` closure,
-/// for asserting the sequence of texts a test observed being pasted.
+/// for asserting the sequence of texts a test observed being pasted. Not a
+/// `ValueBox<[String]>`: the atomic append is the point — appending through a
+/// get-then-set property would race two recorders against each other.
 final class StringListBox: Sendable {
   private let items = Mutex<[String]>([])
   func append(_ value: String?) {
@@ -89,7 +99,9 @@ final class StringListBox: Sendable {
 }
 
 /// Thread-safe single-value cell for capturing an arbitrary value written inside
-/// a `@Sendable` closure and reading it back after the awaited call returns.
+/// a `@Sendable` closure and reading it back after the awaited call returns —
+/// also how a closure holds the handle of the very task executing it, so it can
+/// cancel it (a `Task` is `Sendable`, so that needs no separate box).
 final class ValueBox<T: Sendable>: Sendable {
   private let stored: Mutex<T>
   init(_ initial: T) { stored = Mutex(initial) }
@@ -99,18 +111,5 @@ final class ValueBox<T: Sendable>: Sendable {
   var value: T {
     get { stored.withLock { $0 } }
     set { stored.withLock { $0 = newValue } }
-  }
-}
-
-/// Thread-safe holder for a task handle, so a `@Sendable` closure can cancel
-/// the very task that is executing it.
-final class TaskBox: Sendable {
-  private let task = Mutex<Task<Void, any Error>?>(nil)
-  func set(_ newTask: Task<Void, any Error>) {
-    task.withLock { $0 = newTask }
-  }
-  func cancel() {
-    let held = task.withLock { $0 }
-    held?.cancel()
   }
 }

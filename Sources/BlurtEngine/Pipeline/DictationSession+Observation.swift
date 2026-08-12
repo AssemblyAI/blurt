@@ -1,8 +1,9 @@
 import os
 
-// The session's observation surface — the phase stream the app renders from and
-// the os_signpost instrumentation Instruments reads — split from
-// `DictationSession.swift` to stay within the lint file-length budget.
+// The session's observation surface — the one place a phase change is published
+// (`setPhase`), the phase stream the app renders from, and the os_signpost
+// instrumentation Instruments reads — split from `DictationSession.swift` to stay
+// within the lint file-length budget.
 extension DictationSession {
   /// Signposter for the latency-sensitive segments of a dictation. Emitted as
   /// os_signpost intervals so Instruments can time the hand-tuned hot paths
@@ -35,5 +36,27 @@ extension DictationSession {
   /// Clears the continuation for a stream that ended.
   private func clearContinuation(_ id: Int) {
     continuations[id] = nil
+  }
+
+  func setPhase(_ newPhase: PipelinePhase) {
+    // Every failure route funnels through here — the press-time readiness
+    // refusal, both `mic` failures, the transcribe catch, and the injector's
+    // typed and untyped errors — so the developer-mode error log is written from
+    // this one place rather than at each `setPhase(.failed(…))` call site. A
+    // failure path added later is logged by construction instead of by someone
+    // remembering. The non-error outcomes stay out of it by the same token:
+    // `.noTarget` (the quiet "copied" notice, explicitly "don't report it") and
+    // `.cancelled` aren't `.failed`, so they never reach this branch.
+    //
+    // Gated on developer mode inside `DictationLog.appendError` behind the seam,
+    // which also dispatches the file I/O off this actor — the log must not make a
+    // failure slower to show.
+    if case .failed(let error) = newPhase {
+      seams.logFailure(error, capturedContext)
+    }
+    phase = newPhase
+    for continuation in continuations.values {
+      continuation.yield(newPhase)
+    }
   }
 }
