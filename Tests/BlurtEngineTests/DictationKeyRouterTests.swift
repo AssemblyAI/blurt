@@ -2,11 +2,12 @@ import Testing
 
 @testable import BlurtEngine
 
-/// The router's two jobs on top of `DictationKeyGate` (whose tap/hold semantics
+/// The router's three jobs on top of `DictationKeyGate` (whose tap/hold semantics
 /// have their own suites): only the bound keycode's flag *edges* reach the gate
 /// — `flagsChanged` deliveries re-report the bit whether or not it changed, so
-/// a repeat must not double-fire — and reset/rebind report whether they
-/// discarded a live recording the host has to cancel upstream.
+/// a repeat must not double-fire — reset/rebind report whether they
+/// discarded a live recording the host has to cancel upstream, and dropped-event
+/// recovery decides whether a disabled-then-re-enabled tap keeps the gate's state.
 @Suite("DictationKeyRouter")
 struct DictationKeyRouterTests {
   private let trigger = TriggerKey.rightCommand.keyCode
@@ -164,5 +165,61 @@ struct DictationKeyRouterTests {
     var router = DictationKeyRouter(triggerKeyCode: trigger)
     let discarded = router.rebind(triggerKeyCode: otherModifier)
     #expect(!discarded)
+  }
+
+  @Test("dropped-event recovery keeps a recording whose trigger is still held")
+  func recoveryWhileStillHeldKeepsTheRecording() {
+    // The tap was disabled mid-sentence. The key-up hasn't happened yet, so it is
+    // still coming and the gate is coherent — resetting here would throw away
+    // speech the user is in the middle of.
+    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    #expect(router.handle(downEvent(trigger), at: .zero) == .start)
+
+    #expect(!router.recoverFromDroppedEvents(triggerStillHeld: true))
+
+    // The gate kept its state, so the eventual release still stops this dictation
+    // rather than routing to `.none` as it would after a reset.
+    #expect(router.handle(upEvent(trigger), at: .seconds(2)) == .stop)
+  }
+
+  @Test("dropped-event recovery discards a recording whose key-up was lost")
+  func recoveryAfterReleaseDiscardsTheRecording() {
+    // The trigger is no longer held, so its key-up was among the dropped events and
+    // will never arrive. Left latched, the session would sit in `.recording` until
+    // the auto-release cap pasted an unprompted transcript — so the reset must
+    // report the discarded recording for the host to cancel upstream.
+    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    #expect(router.handle(downEvent(trigger), at: .zero) == .start)
+
+    #expect(router.recoverFromDroppedEvents(triggerStillHeld: false))
+
+    // The tracker was cleared with the gate, so a stale up can't emit a spurious
+    // `.stop`, and the next press starts cleanly.
+    #expect(router.handle(upEvent(trigger), at: .milliseconds(300)) == .none)
+    #expect(router.handle(downEvent(trigger), at: .seconds(2)) == .start)
+  }
+
+  @Test("dropped-event recovery over an idle gate discards nothing, either way")
+  func recoveryWhileIdleDiscardsNothing() {
+    // The common case: the tap times out with no dictation in flight. Neither
+    // branch may claim a recording was discarded, or the host cancels a session
+    // that was never recording.
+    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    #expect(!router.recoverFromDroppedEvents(triggerStillHeld: false))
+    #expect(!router.recoverFromDroppedEvents(triggerStillHeld: true))
+    // Still usable afterwards.
+    #expect(router.handle(downEvent(trigger), at: .seconds(1)) == .start)
+  }
+
+  @Test("dropped-event recovery discards a latched (tap-to-toggle) recording")
+  func recoveryDiscardsALatchedRecording() {
+    // A tapped recording has no key held by definition, so `triggerStillHeld` is
+    // false and the gate is latched — the state most at risk of being stranded,
+    // since nothing is coming to close it.
+    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    #expect(router.handle(downEvent(trigger), at: .zero) == .start)
+    #expect(router.handle(upEvent(trigger), at: .milliseconds(100)) == .none)  // latched
+
+    #expect(router.recoverFromDroppedEvents(triggerStillHeld: false))
   }
 }

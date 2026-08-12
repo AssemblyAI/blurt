@@ -3,11 +3,11 @@ import Foundation
 /// Persists when an update check last completed, so the automatic launch check
 /// can be throttled to `AutomaticUpdateCheck.minimumInterval` instead of
 /// fetching GitHub on every launch. Same shape as `TriggerKeyStore` /
-/// `OverlayOriginStore`, and registered in `PersistedSettings.allDefaultsKeys`
-/// so every "reset to a clean state" sweep clears it too.
+/// `OverlayOriginStore`; its key is a `DefaultsKey` case, so every "reset to a clean
+/// state" sweep clears it too.
 public struct LastUpdateCheckStore {
   /// Public so the reset sweep can name it.
-  public static let defaultsKey = "BlurtLastUpdateCheck"
+  public static let defaultsKey = DefaultsKey.lastUpdateCheck.rawValue
 
   private let defaults: UserDefaults
 

@@ -23,7 +23,7 @@ public enum KeyTermsStore {
   /// `UserDefaults` key for the raw, comma-separated string the user typed.
   /// Public so the app can clear it when resetting to a clean state under UI
   /// testing (matching `TriggerKeyStore`/`SoundPackStore`).
-  public static let defaultsKey = "BlurtKeyTerms"
+  public static let defaultsKey = DefaultsKey.keyTerms.rawValue
 
   private static var defaults: UserDefaults { .standard }
 

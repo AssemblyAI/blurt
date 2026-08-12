@@ -6,7 +6,7 @@ import Foundation
 public struct TriggerKeyStore {
   /// UserDefaults key holding the trigger keycode. Public so SwiftUI views can
   /// observe it directly (e.g. `@AppStorage`) and re-render on change.
-  public static let defaultsKey = "BlurtTriggerKeyCode"
+  public static let defaultsKey = DefaultsKey.triggerKeyCode.rawValue
   private let defaults: UserDefaults
 
   public init(defaults: UserDefaults = .standard) {

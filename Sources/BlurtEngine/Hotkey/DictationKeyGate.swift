@@ -34,10 +34,10 @@ public struct DictationKeyGate: Sendable {
   private var state: State = .idle
 
   /// Whether the gate holds no in-flight dictation (neither armed nor latched).
-  /// The event tap's disabled-tap recovery reads this before `reset()` to know
-  /// whether the reset is discarding a live recording that the caller must
-  /// cancel upstream — otherwise the session would stay `.recording` with no
-  /// key-up ever arriving.
+  /// `DictationKeyRouter.reset()` reads this to report whether it just discarded a
+  /// live recording that the caller must cancel upstream (rebinding, or the
+  /// disabled-tap recovery in `recoverFromDroppedEvents(triggerStillHeld:)`) —
+  /// otherwise the session would stay `.recording` with no key-up ever arriving.
   public var isIdle: Bool { state == .idle }
 
   public init(holdThreshold: Duration = .seconds(1)) {

@@ -11,7 +11,7 @@ import Foundation
 public struct EnhancedTranscriptsStore {
   /// UserDefaults key holding the switch. Public so SwiftUI views can observe
   /// it directly (e.g. `@AppStorage`) and re-render on change.
-  public static let defaultsKey = "BlurtEnhancedTranscripts"
+  public static let defaultsKey = DefaultsKey.enhancedTranscripts.rawValue
 
   /// The value an unset key reads as. Public so the Settings toggle's `@AppStorage`
   /// default comes from here instead of restating `true` — the view and the

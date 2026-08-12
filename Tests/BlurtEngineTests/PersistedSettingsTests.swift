@@ -38,6 +38,30 @@ struct PersistedSettingsTests {
     #expect(Set(PersistedSettings.allDefaultsKeys).count == PersistedSettings.allDefaultsKeys.count)
   }
 
+  /// The roster is `DefaultsKey.allCases`, so the interesting question is no longer
+  /// "did someone forget the roster" — it's whether the enum and the stores still
+  /// describe the same set. This fails in both directions: a case no store claims
+  /// (a key swept but never written, i.e. dead), and a store whose key isn't a case
+  /// (a reintroduced string literal, which would drop straight back out of the
+  /// sweep — the bug the enum exists to make impossible).
+  @Test("every DefaultsKey case is claimed by exactly one store")
+  func casesAndStoresDescribeTheSameSet() {
+    let storeKeys: Set<String> = [
+      TriggerKeyStore.defaultsKey,
+      SoundPackStore.defaultsKey,
+      KeyTermsStore.defaultsKey,
+      DeveloperModeStore.defaultsKey,
+      EnhancedTranscriptsStore.defaultsKey,
+      OverlayOriginStore.xDefaultsKey,
+      OverlayOriginStore.yDefaultsKey,
+      LastUpdateCheckStore.defaultsKey,
+    ]
+    #expect(storeKeys == Set(DefaultsKey.allCases.map(\.rawValue)))
+    // No two stores sharing a slot — the Set above would have quietly absorbed a
+    // collision, and two stores on one key means each overwrites the other.
+    #expect(storeKeys.count == 8)
+  }
+
   @Test("resetAll clears every roster key and leaves unrelated ones alone")
   func resetAllClearsTheRoster() {
     let defaults = freshDefaults()

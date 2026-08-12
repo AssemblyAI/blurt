@@ -176,15 +176,14 @@ final class DictationKeyTap {
   fileprivate func handle(type: CGEventType, event: CGEvent) {
     if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
       if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
-      // Events may have been dropped while the tap was down. If the trigger is
-      // still physically held, nothing that matters was lost: the key-up is
-      // still coming and the gate state is coherent, so keep both — resetting
-      // here would discard speech the user is mid-sentence on. Otherwise the
-      // trigger's key-up may have been missed; reset, and cancel a recording
-      // the reset discards rather than leaving the session in .recording until
-      // the auto-release cap fires and pastes an unprompted transcript.
-      if CGEventSource.flagsState(.combinedSessionState).contains(triggerFlag) { return }
-      if router.reset() { onRecordingDiscarded() }
+      // Events may have been dropped while the tap was down. Whether the gate's
+      // state survives that is the router's call (and unit-tested there); the only
+      // part that has to happen here is the CoreGraphics read of whether the
+      // trigger is physically held right now.
+      let triggerStillHeld = CGEventSource.flagsState(.combinedSessionState).contains(triggerFlag)
+      if router.recoverFromDroppedEvents(triggerStillHeld: triggerStillHeld) {
+        onRecordingDiscarded()
+      }
       return
     }
 

@@ -48,7 +48,8 @@ the design; BLURTENGINE.md covers the _what_ of the API surface.
 ```text
 Sources/BlurtEngine/         the engine (dependency-free Swift package)
   Audio/                     MicCapture (+meter), SoundPack/Catalog/Store — record cues
-  Config/                    Keychain-backed API key, key terms, developer mode, PersistedSettings
+  Config/                    Keychain-backed API key, key terms, developer mode, DefaultsKey +
+                             PersistedSettings (every defaults key, and the reset sweep over them)
   FocusCapture/              Accessibility reads of the frontmost app / focused field
   Hotkey/                    TriggerKey(+Store), DictationKeyGate, DictationKeyRouter
   Injection/                 KeyInjector (clipboard paste), SystemClipboard
@@ -402,7 +403,12 @@ in-house. Four pieces, three of them pure engine logic:
   changes drive the modifier, and only genuine down/up **edges** reach the gate (`flagsChanged`
   deliveries re-report the bit whether or not it changed, so a repeat must not double-fire).
   `reset()`/`rebind(triggerKeyCode:)` report whether they discarded a live recording the host must
-  cancel upstream.
+  cancel upstream, and so does **`recoverFromDroppedEvents(triggerStillHeld:)`** — the
+  disabled-tap rule: events may have been dropped, so the gate's state survives only while the
+  trigger is still physically held (its key-up is still coming); otherwise that key-up was among
+  the losses and the gate is reset. The host passes the `CGEventSource.flagsState` read in and
+  keeps no decision of its own, so the rule is unit-tested rather than living in an untestable
+  shell `if`.
 
 The app side, **`DictationKeyTap`** (`App/Blurt/Blurt/Hotkey/DictationKeyTap.swift`), reduces each
 `CGEventTap` delivery (watching `flagsChanged` for the bound modifier and `keyDown` for any other
@@ -477,10 +483,15 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
   enabled; gates the dictation request's `llm` cleanup-rewrite block, re-read at every request),
   **`OverlayOriginStore`** (the pill's dragged origin, x/y), **`LastUpdateCheckStore`**
   (`BlurtLastUpdateCheck`, the stamp throttling the automatic launch update check).
-- **`PersistedSettings.allDefaultsKeys`** is the roster of every key those stores write, and
+- **`DefaultsKey`** (`Config/DefaultsKey.swift`) defines every key those stores write, one case each,
+  and each store's `defaultsKey` reads its case from there rather than spelling a string literal.
+  **`PersistedSettings.allDefaultsKeys`** is therefore just `DefaultsKey.allCases`, and
   **`PersistedSettings.resetAll(in:)`** is the sweep over it — the public door, which the UI-test
-  launch reset calls. Adding a store and adding it to every "reset to a clean state" sweep must be the
-  same edit — that's why the roster exists, so keep it in sync. The sweep lives next to the roster
+  launch reset calls. So adding a store and adding it to every "reset to a clean state" sweep aren't
+  merely the same edit, they're the same line: there is no roster to keep in sync. (It used to be a
+  hand-maintained array, and the forgotten half of that edit happened twice — the overlay origin and
+  the update-check stamp.) Raw values are the on-disk contract: renaming one abandons every existing
+  user's setting, so rename cases freely and raw values never. The sweep lives next to the enum
   (not in the shell) so a reset needing more than a defaults removal has one place to grow and stays
   inside the test target; the roster itself is internal so no caller re-rolls its own sweep.
   `SigningIdentityMigration.lastSigningTeamDefaultsKey` is deliberately **outside** the roster: it
