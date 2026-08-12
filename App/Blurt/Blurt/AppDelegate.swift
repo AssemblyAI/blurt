@@ -211,30 +211,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let defaults = UserDefaults.standard
     let persist = SigningIdentityMigration.run(
       lastIdentity: defaults.string(forKey: key),
-      currentIdentity: Self.currentSigningIdentity(),
+      currentIdentity: SigningIdentity.current(includingAdHoc: Self.adHocCountsAsIdentity),
       isTrusted: AXIsProcessTrusted(),
       reset: { SigningIdentity.resetAccessibilityGrant(bundleID: BlurtIdentity.subsystem) }
     )
     if let persist { defaults.set(persist, forKey: key) }
   }
 
-  /// The identity `runAccessibilityGrantMigration` compares against the recorded
-  /// one. `SigningIdentity.current()` everywhere except the UI-test build, which
-  /// deliberately sees ad-hoc code as identity-less.
+  /// Whether an ad-hoc build's cdhash counts as this app's signing identity.
   ///
-  /// `uitest.sh` and `check.sh` sign the app ad-hoc, so treating a cdhash as an
-  /// identity there would make every local UI-test run spawn `tccutil` and wipe the
-  /// developer's real Blurt grant — the hooks build is the one place that regularly
-  /// launches a throwaway ad-hoc binary under the shipping bundle id. Team-signed
-  /// builds (Xcode's Debug) still migrate normally, and `Debug-Local` — both
-  /// `dev-build.sh` and the PR artifact — never compiles this branch.
-  private static func currentSigningIdentity() -> String? {
-    #if UITEST_HOOKS
-      return SigningIdentity.currentTeamIdentifier()
-    #else
-      return SigningIdentity.current()
-    #endif
-  }
+  /// False for the UI-test build only: `uitest.sh` and `check.sh` sign the app
+  /// ad-hoc under the shipping bundle id, so honouring a cdhash there would make
+  /// every local test run reset the developer's real Blurt grant — the hooks build
+  /// is the one place that regularly launches a throwaway ad-hoc binary. Xcode's
+  /// Debug builds are team-signed and migrate normally either way, and
+  /// `Debug-Local` — both `dev-build.sh` and the PR artifact — is always true.
+  #if UITEST_HOOKS
+    private static let adHocCountsAsIdentity = false
+  #else
+    private static let adHocCountsAsIdentity = true
+  #endif
 
   /// Builds the setup wizard's controller. Created before the run loop presents
   /// any scene, so `MainWindowRoot` always finds it; on a configured launch its

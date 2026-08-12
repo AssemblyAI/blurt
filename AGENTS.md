@@ -186,15 +186,18 @@ satisfied and toggling the row does nothing. Two things move it:
   an app that injects keystrokes.
 
 So the app self-heals at launch instead. `AppDelegate.runAccessibilityGrantMigration` compares
-`SigningIdentity.current()` (Team ID when there is one, else `cdhash:<hex>`) against the identity
+`SigningIdentity.current(includingAdHoc:)` (Team ID when there is one, else `cdhash:<hex>`) against the identity
 recorded in `accessibility.lastSigningTeam`; if it changed and the app is untrusted, it runs
 `tccutil reset Accessibility` once so the wizard's normal grant flow captures a matching
 requirement, and records the new identity only when the reset succeeded. `SigningIdentityMigration`
 is the pure decision; `SigningIdentity` is the thin `Security`/`tccutil` adapter.
 
-The UI-test build opts out (`#if UITEST_HOOKS` in `AppDelegate.currentSigningIdentity`): `uitest.sh`
-and `check.sh` sign ad-hoc under the shipping bundle id, so honouring a cdhash there would make
-every local test run wipe the developer's real Blurt grant.
+The UI-test build opts out by passing `includingAdHoc: false` (`AppDelegate.adHocCountsAsIdentity`,
+the one `#if UITEST_HOOKS` involved): `uitest.sh` and `check.sh` sign ad-hoc under the shipping
+bundle id, so honouring a cdhash there would make every local test run wipe the developer's real
+Blurt grant. Keep that a **parameter**, not a `#if` around the call — periphery scans the app's
+Debug scheme, where `UITEST_HOOKS` is on, so a compiled-out call reads as dead engine code and
+fails `check.sh`.
 
 ### Working without a macOS toolchain (remote / Linux sandboxes)
 

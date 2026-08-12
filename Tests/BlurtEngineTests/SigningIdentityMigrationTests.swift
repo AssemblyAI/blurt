@@ -5,9 +5,10 @@ import Testing
 @Suite struct SigningIdentityMigrationTests {
   private typealias Migration = SigningIdentityMigration
 
-  // The two identity shapes `SigningIdentity.current()` produces. The migration
-  // treats them alike — it only ever compares strings — but the ad-hoc one is the
-  // whole reason the cases below exist, so it is spelled out rather than implied.
+  // The two identity shapes `SigningIdentity.current(includingAdHoc:)` produces.
+  // The migration treats them alike — it only ever compares strings — but the
+  // ad-hoc one is the whole reason the cases below exist, so it is spelled out
+  // here rather than left implied.
   private static let team = "B2VQF7Q2QY"
   private static let adHoc = SigningIdentity.cdhashPrefix + String(repeating: "ab", count: 20)
   private static let nextAdHoc = SigningIdentity.cdhashPrefix + String(repeating: "cd", count: 20)

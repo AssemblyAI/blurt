@@ -30,22 +30,20 @@ public enum SigningIdentity {
   ///   different apps to `tccd`, which is what strands a reviewer in front of a
   ///   Blurt row that is switched on while `AXIsProcessTrusted()` keeps saying no.
   ///
-  /// `nil` only for code carrying no signature at all, which is the signal the
-  /// migration uses to no-op.
-  public static func current() -> String? {
+  /// `nil` for code carrying no signature at all — and, when `includingAdHoc` is
+  /// false, for any ad-hoc build. Both are the signal the migration uses to no-op.
+  ///
+  /// - Parameter includingAdHoc: whether a cdhash counts as an identity. The
+  ///   UI-test build passes `false`: `uitest.sh` and `check.sh` sign the app
+  ///   ad-hoc under the shipping bundle id, so honouring a cdhash there would make
+  ///   every local test run reset the developer's real Blurt grant.
+  public static func current(includingAdHoc: Bool) -> String? {
     let info = signingInformation()
     if let team = info[kSecCodeInfoTeamIdentifier as String] as? String { return team }
-    guard let cdhash = info[kSecCodeInfoUnique as String] as? Data else { return nil }
+    guard includingAdHoc, let cdhash = info[kSecCodeInfoUnique as String] as? Data else {
+      return nil
+    }
     return cdhashPrefix + cdhash.map { String(format: "%02x", $0) }.joined()
-  }
-
-  /// The running binary's Team ID (the `subject.OU` the designated requirement
-  /// pins), or `nil` for ad-hoc/unsigned code (local `swift build`, CI, UI-test
-  /// hosts). `current()` is what the migration reads; this narrower answer exists
-  /// for callers that must treat ad-hoc code as identity-less — see the UI-test
-  /// carve-out in `AppDelegate.currentSigningIdentity()`.
-  public static func currentTeamIdentifier() -> String? {
-    signingInformation()[kSecCodeInfoTeamIdentifier as String] as? String
   }
 
   /// This process's signing information — empty when it carries no signature, or

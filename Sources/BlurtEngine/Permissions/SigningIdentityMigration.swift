@@ -5,7 +5,7 @@
 /// describes the old binary.
 ///
 /// What counts as the identity depends on how the build is signed, and
-/// `SigningIdentity.current()` collapses both cases into one string:
+/// `SigningIdentity.current(includingAdHoc:)` collapses both cases into one string:
 ///
 /// - Team-signed builds pin `leaf[subject.OU]`, so the identity is the Team ID.
 ///   Cert rotation *within* a team does not orphan the grant, which is why the
