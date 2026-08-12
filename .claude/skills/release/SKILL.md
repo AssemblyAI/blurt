@@ -7,8 +7,9 @@ disable-model-invocation: true
 # Releasing Blurt
 
 Everything happens in GitHub Actions, not on this machine — so this works from a
-web or chat session with no terminal. **Confirm the target version with the user
-before dispatching** — publishing is hard to undo.
+web or chat session with no terminal, and without permission to dispatch a
+workflow. **Confirm the target version with the user before starting** —
+publishing is hard to undo.
 
 ## Preconditions (verify first)
 
@@ -23,17 +24,31 @@ before dispatching** — publishing is hard to undo.
 
 ## Steps
 
-1. **Dispatch `release-bump`** with the target version. It runs
+1. **Start `release-bump`.** You almost certainly can't dispatch a workflow (that
+   needs `actions: write`), so push a marker branch instead — it needs only the
+   push you already do:
+
+   ```sh
+   git push origin main:refs/heads/release/v0.1.37
+   ```
+
+   The branch name names the version, and it must carry nothing of its own: the
+   workflow refuses a marker that isn't an ancestor of `main`. It then runs
    `scripts/release-bump.sh` on `macos-26` (marketing version + build number in
-   `App/Blurt/project.yml`, regenerate the project, commit) and pushes
-   `release/vX.Y.Z`.
-2. **Open the PR** for that branch and merge it once green. The workflow does not
-   open it, on purpose: a PR created by `GITHUB_TOKEN` never triggers `check` and
-   so can never merge. Opening it from here works — an agent's own credentials
-   are not `GITHUB_TOKEN`.
-3. **Dispatch `release`** with the same version. The `build` job does the whole
-   Apple path (`xcodebuild` Release → sign nested code → notarize → staple → DMG
-   → verify) and uploads the artifacts.
+   `App/Blurt/project.yml`, regenerate the project, commit) and force-pushes the
+   bump onto that same branch. Dispatching still works if you do have the
+   permission, and only that path accepts an empty version (next patch).
+
+2. **Open the PR** for that branch and hand it to the user to merge. The workflow
+   does not open it, on purpose: a PR created by `GITHUB_TOKEN` never triggers
+   `check` and so can never merge. Opening it from here works — an agent's own
+   credentials are not `GITHUB_TOKEN`.
+3. **Merging it starts `release`** — no dispatch. `release.yml` triggers on a
+   push to `main` touching `project.yml`; its `resolve` job confirms the version
+   changed and isn't already tagged, then the `build` job does the whole Apple
+   path (`xcodebuild` Release → sign nested code → notarize → staple → DMG →
+   verify) and uploads the artifacts. Dispatch `release` by hand only to re-run
+   a failed build, to `republish`, or for a non-`main` dry run.
 4. **Hand the ship gate to the user** — the `publish` job parks on the
    `release-publish` environment. Tell them to download the DMG from the run's
    artifacts, install it, and approve once it works. Nothing is rebuilt after
@@ -42,17 +57,22 @@ before dispatching** — publishing is hard to undo.
 
 **Never approve the `release-publish` deployment yourself**, even though the API
 allows it. The gate exists so a human confirms the real artifact reached users in
-working order; approving a build you dispatched is not a gate. If the user wants
+working order; approving a build you started is not a gate. If the user wants
 unattended releases, that is a deliberate change to the environment's reviewers,
 not something to route around.
 
-Dispatching `release-bump` with no version takes the next patch. There is no
-local orchestrator script — the workflows are the only path.
+There is no local orchestrator script — the workflows are the only path.
 
 ## Guardrails / gotchas
 
-- The workflow is dispatch-only and both jobs pin `github.sha`, so a release can
-  only ever be the exact reviewed commit. Don't add a push/tag trigger.
+- `release.yml`'s only push trigger is `main` + `project.yml` changed, narrowed
+  further by `resolve` (version actually changed, no existing tag), and both jobs
+  pin `github.sha` — so a release can only ever be the exact reviewed commit that
+  carried the bump. Don't widen that trigger, and never add a tag trigger.
+- `release-bump.yml`'s marker trigger is safe only because of its ancestor check
+  (the branch carries nothing of its own) and because a `GITHUB_TOKEN` push
+  doesn't re-fire the trigger. Don't drop either, and don't move that job to a
+  PAT or app token without adding a loop guard.
 - Notarization rejects any nested mach-o/framework lacking a **secure
   timestamp**; the build re-signs frameworks for this reason — don't remove that.
 - The signer-pin (`verify_signer`) checks the produced artifacts against a
@@ -68,4 +88,5 @@ local orchestrator script — the workflows are the only path.
   ref — with the environment restricted to `main`, there is no branch dry run.
 
 Read the script or workflow you're about to run before running it, surface what
-it will do, and get a go-ahead before dispatching.
+it will do, and get a go-ahead before starting it. Pushing a marker branch is as
+consequential as dispatching was — it starts the same pipeline.

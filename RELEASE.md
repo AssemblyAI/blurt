@@ -1,35 +1,95 @@
 # Release runbook
 
 Blurt is built, signed, notarized, and published by GitHub Actions, not from a
-maintainer's Mac. Every step is a workflow dispatch or a web action, so a release
-can be driven from a browser, a phone, or a chat session with no terminal
+maintainer's Mac. Every step is a workflow run or a click in the GitHub UI, so a
+release can be driven from a browser, a phone, or a chat session with no terminal
 anywhere in the loop. This file covers the security-critical custody and policy
 decisions that aren't obvious from the scripts and the workflows.
 
 ## Shape of a release
 
-| Stage                                                 | Where                                                             | Gate                                                                |
-| ----------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Bump `CFBundleShortVersionString` + `CFBundleVersion` | `release-bump` workflow on `macos-26` (`scripts/release-bump.sh`) | Lands on `main` via PR: normal review + the `check` workflow        |
-| Build → sign → notarize → staple → DMG                | `release` workflow, `build` job (`scripts/release-build.sh`)      | Signer-pin, Gatekeeper assessment, mount-and-verify (all in-script) |
-| Tag, push, publish the GitHub Release                 | `release` workflow, `publish` job (`scripts/release-publish.sh`)  | **Required reviewer on the `release-publish` environment**          |
+| Stage                                                 | Where                                                             | Gate                                                                                         |
+| ----------------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Bump `CFBundleShortVersionString` + `CFBundleVersion` | `release-bump` workflow on `macos-26` (`scripts/release-bump.sh`) | Lands on `main` via PR: normal review + the `check` workflow — merging it starts the release |
+| Build → sign → notarize → staple → DMG                | `release` workflow, `build` job (`scripts/release-build.sh`)      | Signer-pin, Gatekeeper assessment, mount-and-verify (all in-script)                          |
+| Tag, push, publish the GitHub Release                 | `release` workflow, `publish` job (`scripts/release-publish.sh`)  | **Required reviewer on the `release-publish` environment**                                   |
 
 Start to finish:
 
-1. **Dispatch `release-bump`** with the target version. It bumps `project.yml`,
-   regenerates the project, and pushes `release/vX.Y.Z`. It deliberately does
-   **not** open the PR — events created by `GITHUB_TOKEN` don't trigger
+1. **Start `release-bump`**, either by pushing a marker branch `release/vX.Y.Z`
+   at `main` or by dispatching the workflow. It bumps `project.yml`, regenerates
+   the project, and leaves the bump commit on `release/vX.Y.Z`. It deliberately
+   does **not** open the PR — events created by `GITHUB_TOKEN` don't trigger
    workflows, so a PR opened from inside Actions would never get a `check` run
    and could never merge. The job summary links a one-click compare page.
 2. **Open that PR and merge it.** Opened from outside Actions — by a person or
-   by an agent with its own credentials — `check` runs normally.
-3. **Dispatch `release`** with the same version.
-4. **Approve the `release-publish` deployment** once you've tested the DMG.
+   by an agent with its own credentials — `check` runs normally. **Merging it
+   starts `release`**; there is nothing to dispatch.
+3. **Approve the `release-publish` deployment** once you've tested the DMG.
 
-The `release` workflow is **dispatch-only**: a release is a deliberate act
-against one reviewed commit, never a side effect of a push or a tag. Both jobs
-check out `github.sha` — the exact commit the workflow was dispatched at — so the
-tag cannot land on a commit other than the one that was built.
+So a release is two clicks on the maintainer's side: merge the bump PR, approve
+the ship gate. Everything between them is the workflow's, and step 1 needs no
+Actions permission — which is what lets an agent start the whole thing.
+
+### Starting a bump without a dispatch
+
+Dispatching a workflow needs the Actions UI or an API token with `actions:
+write`. Pushing a branch doesn't, and a chat or web session generally has the
+latter and not the former. So `release-bump` also triggers on a push of
+`release/v[0-9]*`:
+
+```sh
+git push origin main:refs/heads/release/v0.1.37   # names the version; carries nothing
+```
+
+The branch name **is** the request — it names the version, and there is no
+`default_target` guessing on this path. The workflow then checks out `main`,
+verifies the marker is an **ancestor of `main`** (so it carries no commits of
+its own), bumps on top of `main`'s tip, and force-pushes the result onto the
+same branch, with the lease pinned to the exact sha it vetted.
+
+That ancestor check is the security-relevant one. Without it, pushing a branch
+would be a way to get a bot-authored commit sitting on top of arbitrary content,
+and the PR that followed would quietly be about more than a version bump. With
+it, the marker is a signal and the only commit that ends up on the branch is the
+bump.
+
+This path leans on the `GITHUB_TOKEN` rule in the opposite direction from
+everywhere else here: the bump commit the job force-pushes does **not** re-fire
+the push trigger that started it, which is what keeps it from looping. Don't
+move this job to a PAT or an app token without adding a loop guard.
+
+Re-pushing a marker that already carries the bump commit fails the ancestor
+check with a message saying so — the job already ran; open the PR.
+
+### What starts a release
+
+A release is a deliberate act against one reviewed commit — never a side effect
+of an arbitrary push, and never a tag trigger. Two things qualify:
+
+- **The version-bump PR merging into `main`.** The push carries a changed
+  `CFBundleShortVersionString`, which is what `release.yml`'s path filter and its
+  `resolve` job look for. That merge is the deliberate act: the commit is
+  reviewed, it passed `check`, and it is one specific sha.
+- **A manual dispatch**, for re-running a release whose build failed, for
+  `republish`, and for the non-`main` build-only dry run.
+
+`resolve` runs first, on Linux, before any macOS minutes or the signing key are
+spent. On a push it releases only when the version actually changed (it diffs
+`project.yml` against the push's previous commit) **and** no `vX.Y.Z` tag exists
+yet; otherwise the run ends with the build and publish jobs skipped. So a
+project.yml edit that adds a source file doesn't build a release, and a re-merge
+after a shipped version doesn't republish one. Both jobs still check out
+`github.sha`, so the tag cannot land on a commit other than the one built.
+
+The merged-bump path never passes `skip_checks`, `skip_smoke`, or `republish` —
+those are dispatch-only, because nobody is standing there to judge whether
+skipping was safe.
+
+One `GITHUB_TOKEN` caveat, the mirror of the one that keeps `release-bump` from
+opening the PR: a merge performed **by** Actions with `GITHUB_TOKEN` doesn't
+raise a `push` event, so it wouldn't start `release` either. A person clicking
+Merge, GitHub's auto-merge, or an agent using its own credentials all work.
 
 Leave the version input empty and `release-bump` takes the next patch itself,
 using the same `default_target` / `decide_run` rules the release scripts have

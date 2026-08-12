@@ -13,6 +13,27 @@ name: release-bump
 # and would sit unmergeable. Opening it from outside Actions — a person, or an
 # agent with its own credentials — makes `check` run normally. The job summary
 # prints a one-click link for that.
+#
+# The same GITHUB_TOKEN rule applies at the other end: merging that PR is what
+# starts `release`, so the merge has to come from outside Actions too. A human
+# clicking Merge, auto-merge, or an agent's own credentials all qualify.
+#
+# Two ways in:
+#
+#  - **Push a marker branch** `release/vX.Y.Z` pointing at `main`, carrying no
+#    commits of its own. The branch name is the request — it names the version —
+#    and pushing a branch is something anyone with repo write can do from a web
+#    or chat session, unlike dispatching a workflow. This is what lets an agent
+#    start a release end to end, leaving the maintainer nothing but the two
+#    approvals (merge the PR, approve the ship gate).
+#  - **Dispatch it**, which additionally accepts an empty version and takes the
+#    next patch itself.
+#
+# The marker-branch path relies on the same GITHUB_TOKEN rule as everything else
+# here, in the opposite direction: the bump commit this job force-pushes onto
+# `release/vX.Y.Z` does NOT re-trigger the push event that started it. That is
+# what keeps this from looping. Don't switch this job to a PAT or an app token
+# without adding a loop guard.
 on:
   workflow_dispatch:
     inputs:
@@ -20,6 +41,11 @@ on:
         description: "Version to bump to (X.Y.Z). Leave empty to take the next patch."
         required: false
         type: string
+  push:
+    branches:
+      # The digit keeps a typo'd branch from spending a macOS runner just to
+      # fail the semver check; that check is still the authority.
+      - "release/v[0-9]*"
 
 # One bump at a time; never cancel one mid-push.
 concurrency:
@@ -43,7 +69,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: blurt
-          ref: ${{ github.sha }}
+          # `main`, not `github.sha`: a bump is always computed against main's
+          # current version, and on the marker-branch path `github.sha` is the
+          # marker, which is a signal rather than the base to bump from.
+          ref: main
           # Tags are what release-bump.sh checks the target version against, and
           # a shallow clone has none — it would miss an existing vX.Y.Z.
           fetch-depth: 0
@@ -53,10 +82,26 @@ jobs:
       - name: Guard the dispatch ref
         # Versions are bumped from main; a bump computed against any other ref
         # would be measured from the wrong current version.
-        if: github.ref != 'refs/heads/main'
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
         run: |
           echo "::error::release-bump must be dispatched from main (got ${GITHUB_REF})"
           exit 1
+
+      - name: Guard the marker branch
+        # The marker must carry nothing of its own. Otherwise pushing a branch
+        # would be a way to get a bot-authored commit sitting on top of
+        # arbitrary content, and the PR that follows would quietly be about
+        # more than a version bump.
+        if: github.event_name == 'push'
+        working-directory: blurt
+        run: |
+          set -euo pipefail
+          # HEAD is main, from the checkout above.
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" HEAD; then
+            echo "::error::$GITHUB_REF_NAME carries commits that are not on main. Push it at main's tip with nothing of its own. (If it already has the bump commit, this job already ran — open the pull request instead.)"
+            exit 1
+          fi
+          echo "marker $GITHUB_REF_NAME is clean (an ancestor of main)"
 
       - name: Resolve the target version
         id: target
@@ -65,7 +110,9 @@ jobs:
         # than minutes. release-bump.sh re-checks all of this; these are the
         # same rules applied early enough to be useful.
         env:
+          EVENT: ${{ github.event_name }}
           INPUT_VERSION: ${{ inputs.version }}
+          BRANCH: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           REPO_ROOT="$PWD"
@@ -73,25 +120,33 @@ jobs:
           source scripts/release-lib.sh
 
           main_v="$(require_project_version App/Blurt/project.yml)"
-          version="${INPUT_VERSION:-}"
-          if [ -z "$version" ]; then
-            version="$(default_target "$main_v" "$(latest_release_tag)")" \
-              || die "could not derive a default target from main ($main_v)"
-            info "no version given — defaulting to $version"
+          if [ "$EVENT" = "push" ]; then
+            # The branch name is the request. No default_target on this path:
+            # a marker branch that named no version would be asking the
+            # workflow to guess what its own name meant.
+            version="${BRANCH#release/v}"
+            info "marker branch $BRANCH asks for $version"
+          else
+            version="${INPUT_VERSION:-}"
+            if [ -z "$version" ]; then
+              version="$(default_target "$main_v" "$(latest_release_tag)")" \
+                || die "could not derive a default target from main ($main_v)"
+              info "no version given — defaulting to $version"
+            fi
           fi
           is_semver "$version" || die "version must be X.Y.Z (got: $version)"
 
           run="$(decide_run "$main_v" "$version")" \
             || die "target $version is behind main ($main_v)"
           [ "$run" = "bump" ] \
-            || die "main is already at $version and it has not been released — dispatch the 'release' workflow instead of bumping again"
+            || die "main is already at $version and it has not been released — that bump already landed, so the release has already started from it; check the 'release' workflow's runs rather than bumping again"
 
           # An abandoned release leaves a tag with no release behind it, which
           # burns that version. default_target takes the next patch rather than
           # the next unused one, deliberately: stopping here is better than
           # silently renumbering the release someone asked for.
           if tag_exists_on_origin "v$version"; then
-            die "tag v$version already exists on origin — that version is burned; dispatch again with an explicit higher version"
+            die "tag v$version already exists on origin — that version is burned; start again at an explicit higher version"
           fi
 
           echo "version=$version" >>"$GITHUB_OUTPUT"
@@ -110,19 +165,35 @@ jobs:
       - name: Bump the version
         working-directory: blurt
         env:
+          EVENT: ${{ github.event_name }}
           VERSION: ${{ steps.target.outputs.version }}
         run: |
           set -euo pipefail
           branch="release/v$VERSION"
-          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+
+          if [ "$EVENT" = "workflow_dispatch" ] \
+            && git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
             echo "::error::branch $branch already exists on origin — delete it or pick another version"
             exit 1
           fi
-          git checkout -b "$branch"
+
+          # -B, not -b: on the marker path the branch already exists on origin,
+          # and this puts the bump on top of main's tip rather than on top of
+          # wherever the marker was pointing.
+          git checkout -B "$branch"
           # Unmodified: it owns the semver / greater-than / tag-collision guards,
           # the project.yml edit, the xcodegen regeneration, and the commit.
           scripts/release-bump.sh "$VERSION"
-          git push -u origin "$branch"
+
+          if [ "$EVENT" = "push" ]; then
+            # The marker is at or behind main, so adding a commit on main's tip
+            # is not always a fast-forward. The lease is pinned to the exact sha
+            # the guard above vetted, so this can only ever overwrite the marker
+            # that started this run — never a commit that arrived since.
+            git push --force-with-lease="$branch:$GITHUB_SHA" origin "HEAD:refs/heads/$branch"
+          else
+            git push -u origin "$branch"
+          fi
 
       - name: Summarize
         env:
@@ -132,10 +203,12 @@ jobs:
           {
             echo "### Bumped to v$VERSION"
             echo
-            echo "Branch \`release/v$VERSION\` pushed. It has no pull request yet —"
-            echo "one opened from inside Actions would never run \`check\`."
+            echo "Branch \`release/v$VERSION\` now carries the bump commit. It has no pull"
+            echo "request yet — one opened from inside Actions would never run \`check\`."
             echo
             echo "[**Open the pull request**](https://github.com/$REPO/compare/main...release/v$VERSION?expand=1)"
             echo
-            echo "Then merge it and dispatch the \`release\` workflow with the same version."
+            echo "Merging it starts the \`release\` workflow by itself — the version landing on"
+            echo "\`main\` is the trigger, so there is nothing left to dispatch. Publishing then"
+            echo "waits on the \`release-publish\` approval once you've tested the DMG."
           } >>"$GITHUB_STEP_SUMMARY"
