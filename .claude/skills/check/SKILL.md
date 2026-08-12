@@ -59,7 +59,7 @@ It runs, in order (each tool skipped with a note if absent — but on a configur
 Mac they're all present, so don't treat a skip as a pass):
 
 Everything source-only runs first, then everything that builds. That ordering is
-deliberate (see `DX.md`): reversed, a compile error means the cheap checks are
+deliberate: reversed, a compile error means the cheap checks are
 never reached and their findings arrive on the next 11-minute run instead.
 
 1. repo-integrity guards: no external SPM dependencies; sound-catalog

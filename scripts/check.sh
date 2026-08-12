@@ -263,7 +263,7 @@ bash scripts/check-portability.sh
 # They cost seconds and need no toolchain state, while the block that follows
 # costs ten-plus minutes (engine tests, two sanitizer passes, the app build, and
 # on CI the UI suite and leak scan). Ordered the other way round — as this script
-# was until the closed-PR rework audit in DX.md — a compile error meant these
+# was until the rework audit of this repo's closed PRs — a compile error meant these
 # were never reached, so their findings arrived one red run at a time. PR #80's
 # own commit message records the cost: "the three SwiftLint violations behind the
 # earlier failures".

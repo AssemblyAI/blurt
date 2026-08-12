@@ -108,7 +108,7 @@ In order, on a Mac. Each optional linter prints `note: <tool> not installed; ski
 
 **The order is deliberate: everything source-only runs before anything that builds.** Steps 1–5 cost
 seconds and need no toolchain state; steps 6–11 cost ten-plus minutes. Run the other way round — as
-this script was until the closed-PR rework audit ([`DX.md`](./DX.md)) — a compile error means the
+this script was until a rework audit of this repo's closed PRs — a compile error means the
 cheap checks are never reached, so their findings arrive on the _next_ red run, one at a time. A
 green run does identical total work either way; what changes is how much a red run tells you. Only
 the two checks that genuinely need the build products stay behind them (step 12).
