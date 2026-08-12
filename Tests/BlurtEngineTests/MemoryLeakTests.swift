@@ -32,6 +32,10 @@ struct MemoryLeakTests {
       // graph checked for cycles here can't drift from the one they cover. The
       // fixture's own stub references die with this expression; the session holds
       // whatever it actually retains.
+      //
+      // Its seams are the offline set, which holds no reference back to the
+      // session — so it neither masks nor creates a cycle, it just keeps the leak
+      // check off the window server and out of the user's real log.
       let session = makeSession(mode: .transcript("Hello.")).session
       await session.press()
       await session.release()

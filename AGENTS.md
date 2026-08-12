@@ -64,7 +64,8 @@ App/Blurt/
   Shared/                    UITestIdentifiers.swift — compiled into BOTH app and UI-test targets
   BlurtUITests/              XCUITest bundle (see Tests)
 Tests/BlurtEngineTests/      Swift Testing suites; Stubs/ holds the seam doubles
-scripts/                     check.sh, bootstrap.sh, dev-build.sh, uitest.sh, leaks.sh, release*.sh
+scripts/                     check.sh, check-site.sh, bootstrap.sh, dev-build.sh, uitest.sh, leaks.sh,
+                             release*.sh
                              hand-run maintainer tools — no automated caller, invoked by a
                              human, so "nothing references it" here does NOT mean dead code:
                              serve-site.sh (preview site/ locally), screenshot.swift +
@@ -73,14 +74,17 @@ scripts/                     check.sh, bootstrap.sh, dev-build.sh, uitest.sh, le
                              assets were generated — provenance, not a renderer),
                              generate-sounds.swift (regenerates the cues AND
                              SoundPackCatalog.swift together)
+Brewfile                     Homebrew-managed check.sh tools — the whole toolchain
 evals/dictation-prompt/      offline DSPy harness for tuning the dictation API's cleanup
                              instruction — nothing here ships in the app, but check.sh does
                              lint (ruff), format-check (ruff format), and test (pytest) it
 evals/ruff.toml              ruff config for the above — the repo's only Python config
-site/                        the GitHub Pages site (html/css, sitemap) — linted by check.sh
+site/                        the GitHub Pages site (html/css, sitemap) — formatted by prettier and
+                             checked for deployability by scripts/check-site.sh
 .github/workflows/           check.yml (the gate + per-PR dev build, macos-26),
                              pr-dev-build.yml (links it on the PR),
-                             release.yml (sign + publish), codeql.yml, pages.yml
+                             release-bump.yml (version bump) + release.yml (sign +
+                             publish), codeql.yml, pages.yml
 .claude/                     Claude Code hooks, skills, subagents (see CLAUDE.md)
 ```
 
@@ -103,9 +107,30 @@ In order, on a Mac. Each optional linter prints `note: <tool> not installed; ski
 **a skip is missing coverage, not a pass**; run `scripts/bootstrap.sh` rather than accepting one.
 
 1. **Repo-integrity guards** — no external SPM dependencies; sound-catalog integrity (every
-   `SoundPackCatalog` voice has both cue files, no orphans, no duplicate or reserved ids). Both are
-   pure text/filesystem, so they run in `--portable` too. The catalog and the audio are generated
-   together but ship from different targets, so drift plays silence with nothing raising an error.
+   `SoundPackCatalog` voice has both cue files, no orphans, no duplicate or reserved ids); and
+   **site integrity** (`scripts/check-site.sh`). All three run in `--portable` too. The catalog and
+   the audio are generated together but ship from different targets, so drift plays silence with
+   nothing raising an error. The site guard exists for the same reason on the web: `pages.yml`
+   uploads `site/` verbatim with no build step, so a renamed asset, a stale absolute URL, or a
+   missing `CNAME` produces no error in this repo — just a 404 on the live site.
+
+   It checks the Pages-required files; that every local `src`/`href`/`srcset`/`poster` and CSS
+   `url()` resolves; that every `#fragment` has a matching `id`; that every absolute
+   `https://<CNAME>/` URL (canonical, `og:url`, `og:image`, JSON-LD, sitemap `<loc>`, robots
+   `Sitemap:`) names the domain in `CNAME` and points at a file that exists; per-element hygiene
+   (no duplicate `id`, no plain `http://`, no `<img>` without `alt`, no `<a>` without `href`, no
+   empty `src`/`href`); and that nothing under `site/assets/` ships unreferenced. Deliberately
+   offline — external links are never fetched, so the check stays deterministic and a third
+   party's outage is never this repo being red.
+
+   **Dependency-free on purpose, and it did not start that way.** This was briefly built on
+   html-proofer, to get a real HTML parser instead of greps. Aikido then flagged the licence on
+   `ttfunk` — GPL-2.0-only / GPL-3.0-only, reached via `html-proofer` → `pdf-reader` → `ttfunk` —
+   and bundler cannot drop a transitive gem, so keeping the parser meant keeping a GPL branch in an
+   MIT repo's lockfile and 20 gems of supply-chain surface for a one-page static site. Going back
+   cost no coverage: the audit of that tool is what surfaced the missing-`alt`, no-`href` and
+   empty-`src` checks, which are greps now. Don't reintroduce it without a licence answer.
+
 2. `swift test` with `-warnings-as-errors`, plus an engine **line-coverage gate** (≥ `MIN_COVERAGE`,
    80%, `Tests/` excluded — raise it as coverage grows).
 3. **ThreadSanitizer** and **AddressSanitizer** test passes.
@@ -184,7 +209,8 @@ Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `
 - **You must not**: run (or claim to have run) the full `scripts/check.sh`, or assert that a build or
   test passed. Say plainly that verification happens on a Mac — CI runs the full `check.sh` on
   `macos-26` and is the authority on green.
-- **The portable gate**: `scripts/check.sh --portable` runs actionlint, zizmor, prettier, xmllint,
+- **The portable gate**: `scripts/check.sh --portable` runs the repo-integrity guards
+  (dependencies, sound catalog, site), then actionlint, zizmor, prettier, xmllint,
   markdownlint, shellcheck, shfmt, ruff (lint + format check), pytest over the evals, and
   `release.test.sh` (plus `swift-format`/`swiftlint lint` if Linux
   builds happen to be on `PATH`). It fully verifies docs, site, scripts, eval, and workflow changes.
@@ -360,7 +386,13 @@ A host-supplied `readinessCheck` closure can refuse a press before any capture b
 passes a key-presence check, so a missing API key surfaces as `.failed(.apiKeyMissing)` at press
 time, never after the user has spoken. Its three collaborators are protocol-typed
 (`MicCaptureProtocol`, `TranscriberProtocol`, `InjectorProtocol`) so tests stub them; see
-`Tests/BlurtEngineTests/Stubs/`. STT errors that are already `BlurtError` surface verbatim; others
+`Tests/BlurtEngineTests/Stubs/`. The two that aren't protocols — the press-time focus capture and the
+developer-mode log — ride on **`DictationSession.Seams`** (`+Seams.swift`), a value the internal
+initializer takes and the public one fills with `.production`. Injectable for the reason the
+protocols are: called as statics, the captured context's _value_ was whatever app happened to be
+frontmost during a test run (so only its arrival could be asserted), every press paid a real AX
+round trip, and the log wrote to the user's real `~/Library/Logs/Blurt`. STT errors that are already
+`BlurtError` surface verbatim; others
 are wrapped in `.sttFailed`. The pipeline is just transcribe → inject, and an empty transcript
 returns to `.idle` without injecting.
 
@@ -509,9 +541,9 @@ regression-tested — no language directive and no filler-word clause; see
 Engine-side stores, all `UserDefaults`-backed value types with the same shape:
 
 - **`TriggerKeyStore`** (`BlurtTriggerKeyCode`), **`SoundPackStore`** (`BlurtSoundPack`),
-  **`KeyTermsStore`** (the user's domain vocabulary, re-read at every press via the session's
-  `keyTermsProvider` — it reaches only the prompt builder, so while the transcription prompt is
-  switched off the Settings field has no effect on transcription),
+  **`KeyTermsStore`** (`BlurtKeyTerms`, the user's domain vocabulary, re-read at every press via
+  the session's `keyTermsProvider` — it reaches only the prompt builder, so while the transcription
+  prompt is switched off the Settings field has no effect on transcription),
   **`DeveloperModeStore`** (`BlurtDeveloperMode`, off by default),
   **`EnhancedTranscriptsStore`** (`BlurtEnhancedTranscripts`, **on** by default — unset reads as
   enabled; gates the dictation request's `llm` cleanup-rewrite block, re-read at every request),
@@ -648,7 +680,12 @@ configured, at most once a day. Five pieces:
 
 **Engine unit tests** — `Tests/BlurtEngineTests/`, Swift Testing (`@Suite`/`@Test`/`#expect`). All
 three seams have stubs in `Stubs/` (`StubMicCapture`, `StubTranscriber`, `StubInjector`, plus
-`FakeHTTPTransport` for transport-level transcriber tests). Retain-cycle leaks are gated by
+`FakeHTTPTransport` for transport-level transcriber tests). Every session a test builds passes
+`seams:` — `.offline` for the suites that only need the window server, the Accessibility API and the
+real log kept out of it, or `testSeams(field:frontmost:log:)` to drive and then assert the captured
+context and what was logged. A test must never reach a production global: `swift test` on a machine
+with developer mode switched on used to append its fixtures to the user's own `dictations.jsonl`,
+which is the same rule as "don't touch the real Keychain in tests". Retain-cycle leaks are gated by
 weak-reference assertions in `MemoryLeakTests.swift` (`expectNoLeak`) — LeakSanitizer is unsupported
 on Darwin, so AddressSanitizer catches memory _corruption_ but not leaks; `scripts/leaks.sh` covers
 the whole app under the Darwin leak detector.
@@ -690,11 +727,23 @@ matches `project.yml`.
 
 ## Releasing
 
-Releases are built, signed, notarized, and published by the `release` GitHub Actions workflow
-(`.github/workflows/release.yml`), driven by `scripts/release.sh`: run 1 opens the version-bump PR,
-run 2 dispatches the workflow and follows it. The publish job parks on the `release-publish`
-environment until a human approves — that approval is the ship gate, so download and test the DMG
-from the build job's artifacts first. Nothing is rebuilt after approval.
+Releases run entirely in GitHub Actions, so they can be driven from a browser or a chat session with
+no terminal: dispatch `release-bump` with the target version (it bumps `project.yml`, regenerates the
+project on `macos-26`, and pushes `release/vX.Y.Z`), open and merge that PR, then dispatch `release`.
+The bump workflow deliberately does not open the PR — a PR created by `GITHUB_TOKEN` never triggers
+`check`, so it could never merge; opening it from outside Actions works fine. The publish job then
+parks on the `release-publish` environment until a human approves — that approval is the ship gate,
+so download and test the DMG from the build job's artifacts first. Nothing is rebuilt after approval.
+
+**If you are an agent: never approve that deployment yourself**, even though the API allows it and
+you may have the permission. The gate exists so a person confirms the real artifact works before it
+reaches users; approving a build you dispatched is not a gate. This rule is repeated in
+`.claude/skills/release` and lives here too because that skill is `disable-model-invocation: true` —
+it does _not_ load when someone just says "release", which is exactly when the rule matters.
+Dispatching `release-bump` with an empty version takes the next patch, resolved by `default_target` /
+`decide_run` in `scripts/release-lib.sh` (unit-tested by `release.test.sh`, so it is verifiable off a
+Mac). There is no local orchestrator script — the workflows are the only path, so there is nothing to
+drift out of sync with them.
 
 Signing-key custody (a base64 `.p12` secret imported into an ephemeral keychain, never a persistent
 one), the required environments and secrets, certificate/notary rotation, and the roll-forward-only

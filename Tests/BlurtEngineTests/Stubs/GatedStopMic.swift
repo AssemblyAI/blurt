@@ -29,5 +29,5 @@ actor GatedStopMic: MicCaptureProtocol {
   }
 
   func waitUntilStopEntered() async { await gate.waitUntilEntered() }
-  func allowStopToFinish() async { await gate.allowToFinish() }
+  func allowStopToFinish() async { gate.allowToFinish() }
 }

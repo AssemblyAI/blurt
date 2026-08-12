@@ -18,7 +18,9 @@ struct HotkeyRaceTests {
     let mic = GatedMicCapture()
     let stt = StubTranscriber(mode: .transcript("hi"))
     let injector = StubInjector()
-    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+    let session = DictationSession(
+      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
+      seams: .offline)
 
     let pressed = Task { await session.press() }
     await mic.waitUntilStartEntered()  // press() is now suspended inside mic.start()
@@ -41,7 +43,9 @@ struct HotkeyRaceTests {
     let mic = GatedMicCapture()
     let stt = StubTranscriber(mode: .transcript("hi"))
     let injector = StubInjector()
-    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+    let session = DictationSession(
+      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
+      seams: .offline)
 
     let pressed = Task { await session.press() }
     await mic.waitUntilStartEntered()  // press() is now suspended inside mic.start()
@@ -68,7 +72,9 @@ struct HotkeyRaceTests {
     let mic = GatedMicCapture()
     let stt = StubTranscriber(mode: .transcript("hi"))
     let injector = StubInjector()
-    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+    let session = DictationSession(
+      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
+      seams: .offline)
 
     let pressed = Task { await session.press() }
     await mic.waitUntilStartEntered()  // first press() is suspended inside mic.start()
@@ -95,16 +101,21 @@ struct HotkeyRaceTests {
     let mic = GatedMicCapture()
     let stt = StubTranscriber(mode: .transcript("hi"))
     let injector = StubInjector()
-    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+    let session = DictationSession(
+      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
+      seams: .offline)
 
     let pressed = Task { await session.press() }
     await mic.waitUntilStartEntered()
-    // Both queue behind the in-flight press. The drain lets cancel() record its
-    // request before the queued release runs, so the release deterministically
-    // consumes it after mic.stop() and spawns no pipeline.
+    // Both queue behind the in-flight press. Waiting until the cancel has
+    // *recorded* its request — the condition itself, rather than a fixed yield
+    // budget that drains this task and not the session — is what makes the rest
+    // deterministic: the queued release then consumes the request after
+    // mic.stop() and spawns no pipeline. Without it, a cancel whose first turn
+    // lands after the release's could let the transcript be pasted.
     let released = Task { await session.release() }
     let cancelled = Task { await session.cancel() }
-    for _ in 0..<1000 { await Task.yield() }
+    await session.awaitCancelRequest()
     await mic.allowStartToFinish()
     await pressed.value
     await released.value
@@ -132,7 +143,7 @@ private actor GatedMicCapture: MicCaptureProtocol {
   }
 
   func waitUntilStartEntered() async { await gate.waitUntilEntered() }
-  func allowStartToFinish() async { await gate.allowToFinish() }
+  func allowStartToFinish() async { gate.allowToFinish() }
 
   func stop() async throws -> Data {
     stopCalls += 1

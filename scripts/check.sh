@@ -236,6 +236,17 @@ fi
 [ "$SOUND_VIOLATION" -eq 0 ] || exit 1
 echo "$(printf '%s\n' "$CATALOG_IDS" | wc -l | tr -d ' ') voices, each with both cues, no orphans"
 
+# GitHub Pages site integrity. prettier and xmllint below cover the site's
+# *formatting* and the sitemap's well-formedness; neither asks whether the page
+# still works once deployed. pages.yml uploads site/ verbatim with no build
+# step, so a renamed asset, a stale absolute URL, or a missing CNAME produces no
+# error anywhere in this repo — just a 404 on the live site with check.sh green.
+# scripts/check-site.sh closes that gap. Pure text/filesystem and deliberately
+# offline (no external link fetching), so it runs in --portable too.
+echo "==> site integrity"
+cd "$REPO_ROOT"
+bash scripts/check-site.sh
+
 if [ "$PORTABLE" -eq 1 ]; then
   echo "==> portable mode: skipping swift test, coverage gate, sanitizers, xcodegen"
   echo "    drift check, app build, UI tests, leaks, swiftlint analyze, periphery"
@@ -561,7 +572,7 @@ if tool_ready pytest 'brew install pytest'; then
   pytest -q evals/dictation-prompt/test_eval.py
 fi
 
-echo "==> release.sh unit tests"
+echo "==> release-lib.sh unit tests"
 cd "$REPO_ROOT"
 # Pure-bash unit tests for the release orchestrator's decision helpers. No Mac
 # or network dependencies, so they run everywhere check.sh runs.

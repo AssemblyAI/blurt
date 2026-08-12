@@ -82,6 +82,15 @@ tag_exists_on_origin() {
   git -C "$REPO_ROOT" ls-remote --tags origin "refs/tags/$1" 2>/dev/null | grep -q .
 }
 
+# Highest published release tag (vX.Y.Z) with the leading "v" stripped; empty if
+# there are none. Assumes tags are fetched — a shallow clone has none, so a
+# caller that gates on this must check out with fetch-depth: 0.
+latest_release_tag() {
+  git -C "$REPO_ROOT" tag --list 'v[0-9]*' \
+    | sed -n 's/^v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$/\1/p' \
+    | sort -V | tail -n1
+}
+
 # True if codesigning identity $1 (a SHA-1 hash) appears in the
 # `security find-identity -v -p codesigning` output piped on stdin.
 identity_listed() {
@@ -121,6 +130,58 @@ verify_signer() {
   [ "$got_sha" = "$(printf '%s' "$want_sha256" | tr '[:lower:]' '[:upper:]')" ] \
     || die "signer-pin: $artifact leaf cert SHA-256 $got_sha != expected $want_sha256"
   info "signer-pin ok: $(basename "$artifact") — leaf sha256 $got_sha, team $got_team"
+}
+
+# --- release-target resolution (pure; unit-tested by scripts/release.test.sh) ---
+#
+# Which version a release is aiming at, and whether that means bumping or
+# publishing. `release-bump.yml` uses these to resolve an omitted version input,
+# so the same rules decide it whether a release is started from the workflow or
+# reasoned about by hand.
+
+# Decide the run given main's current version ($1) and the target ($2).
+# Echoes "publish" (target already on main) or "bump" (target is ahead).
+# Returns nonzero with no output when the target is behind main's version.
+decide_run() {
+  local main_v="$1" target="$2"
+  if [ "$target" = "$main_v" ]; then
+    echo publish
+    return 0
+  fi
+  if version_gt "$target" "$main_v"; then
+    echo bump
+    return 0
+  fi
+  return 1
+}
+
+# Echo the next patch version after $1 (X.Y.Z -> X.Y.(Z+1)).
+# Returns nonzero with no output if $1 is not X.Y.Z.
+next_patch() {
+  is_semver "$1" || return 1
+  local major minor patch
+  IFS=. read -r major minor patch <<<"$1"
+  printf '%s.%s.%s\n' "$major" "$minor" "$((patch + 1))"
+}
+
+# Echo the default release target when no version was given, derived from main's
+# current version ($1) and the latest release tag ($2, may be empty):
+#  - main ahead of the latest tag -> a bump already merged but isn't published
+#    yet, so target that same version (decide_run will pick "publish").
+#  - otherwise -> start the next patch (decide_run will pick "bump").
+# Returns nonzero if main's version is not X.Y.Z.
+#
+# Note it takes the next patch, not the next UNUSED patch: an abandoned release
+# can leave a tag with no release behind it, and that version is burned. The
+# caller is expected to fail loudly on the collision rather than silently
+# skipping ahead — quietly renumbering a release is worse than stopping.
+default_target() {
+  local main_v="$1" latest_tag="$2"
+  if [ -n "$latest_tag" ] && version_gt "$main_v" "$latest_tag"; then
+    echo "$main_v"
+  else
+    next_patch "$main_v"
+  fi
 }
 
 # --- pure version helpers (unit-tested by scripts/release.test.sh) ---

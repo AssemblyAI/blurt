@@ -1,6 +1,6 @@
 ---
 name: check
-description: Verify the repo is green by running scripts/check.sh — the same full health check CI runs (swift test + coverage gate, sanitizers, xcodegen drift, app build, swift-format/swiftlint/periphery/prettier/markdownlint/shellcheck/shfmt, ruff + pytest over evals/). Use before claiming a change builds, passes, or is ready to commit/PR. Bakes in the macOS-only guard so a Linux/web sandbox flags "verify on a Mac" instead of fabricating a green result; there, scripts/check.sh --portable runs the platform-independent subset (docs/site/scripts/workflows).
+description: Verify the repo is green by running scripts/check.sh — the same full health check CI runs (swift test + coverage gate, sanitizers, xcodegen drift, app build, swift-format/swiftlint/periphery/prettier/markdownlint/shellcheck/shfmt, site deployability, ruff + pytest over evals/). Use before claiming a change builds, passes, or is ready to commit/PR. Bakes in the macOS-only guard so a Linux/web sandbox flags "verify on a Mac" instead of fabricating a green result; there, scripts/check.sh --portable runs the platform-independent subset (docs/site/scripts/workflows).
 ---
 
 # check — is this green?
@@ -27,7 +27,8 @@ What you CAN run there is the portable subset:
 scripts/check.sh --portable
 ```
 
-It runs actionlint / zizmor / prettier / xmllint / markdownlint / shellcheck / shfmt /
+It runs the repo-integrity guards (dependencies, sound catalog, site) then
+actionlint / zizmor / prettier / xmllint / markdownlint / shellcheck / shfmt /
 ruff (lint + format check) / pytest over `evals/` / `release.test.sh` (plus `swift-format lint` and `swiftlint lint` if Linux
 builds are on `PATH` — under the default web network policy they are not).
 That fully verifies docs, site, scripts, eval, and workflow changes. It is **not**
@@ -53,10 +54,12 @@ scripts/check.sh
 It runs, in order (each tool skipped with a note if absent — but on a configured
 Mac they're all present, so don't treat a skip as a pass):
 
-1. repo-integrity guards: no external SPM dependencies, and sound-catalog
+1. repo-integrity guards: no external SPM dependencies; sound-catalog
    integrity (every `SoundPackCatalog` voice has both cue files, no orphans, no
-   duplicate or reserved ids) — pure text/filesystem, so they run in
-   `--portable` too
+   duplicate or reserved ids); and site integrity (`scripts/check-site.sh` —
+   the Pages site's local references, `#fragment`s, per-element hygiene,
+   `CNAME` agreement with canonical/og:url/sitemap/robots, CSS `url()`, and
+   no unreferenced assets). All run in `--portable` too
 2. `swift test` with `-warnings-as-errors`
 3. engine line-coverage gate (≥80%, `Tests/` excluded — see `MIN_COVERAGE`)
 4. ThreadSanitizer + AddressSanitizer test passes

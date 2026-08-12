@@ -15,7 +15,7 @@ struct KeyInjectorFallbackTests {
   func cancelDuringActivationSkipsPaste() async throws {
     let clip = FakeClipboard(string: "user-clipboard")
     let posted = ValueBox<Bool>(false)
-    let insertTask = TaskBox()
+    let insertTask = ValueBox<Task<Void, any Error>?>(nil)
     let injector = KeyInjector(
       pasteSettleDuration: .zero,
       postPaste: {
@@ -26,7 +26,7 @@ struct KeyInjectorFallbackTests {
         // The cancel lands while activation is in flight; activation itself
         // still succeeds, so only the post-activation cancellation gate stands
         // between the cancel and the irreversible ⌘V.
-        insertTask.cancel()
+        insertTask.value?.cancel()
         return true
       },
       clipboard: clip)
@@ -39,7 +39,7 @@ struct KeyInjectorFallbackTests {
       await gate.wait()
       try await injector.insert("text")
     }
-    insertTask.set(task)
+    insertTask.value = task
     gate.open()
 
     await #expect(throws: CancellationError.self) {

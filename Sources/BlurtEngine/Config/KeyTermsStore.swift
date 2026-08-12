@@ -10,38 +10,49 @@ import Foundation
 ///
 /// Unlike the API key these aren't secret, so they live in `UserDefaults` rather
 /// than the Keychain. The transcription pipeline reads the parsed list via
-/// `terms()`; the editor reads the raw string via `get()`.
+/// `terms`; the editor reads the raw string via `raw`. Same shape as
+/// `DeveloperModeStore` / `EnhancedTranscriptsStore` — a struct taking its
+/// `UserDefaults` — rather than the static-`.standard` enum it used to be: the
+/// read side could only be exercised against the process's real defaults, so its
+/// suite had to be `.serialized` and to save and restore the developer's own
+/// stored terms around every case, which a crash mid-test left overwritten.
 ///
 /// Read-only by design: the Settings field binds `@AppStorage` straight to
 /// `defaultsKey`, which is the sole writer. There is deliberately no setter —
 /// normalizing on write fought the text field, because the trimmed value was
 /// pushed back into the binding as an external change and a trailing space was
 /// deleted as the user typed it. Normalization lives on the read side instead
-/// (`get()` trims, `parse` trims and dedupes), so a blank field still reads back
+/// (`raw` trims, `parse` trims and dedupes), so a blank field still reads back
 /// as "no terms". See the note on `KeyTermsStepView.text`.
-public enum KeyTermsStore {
+public struct KeyTermsStore {
   /// `UserDefaults` key for the raw, comma-separated string the user typed.
-  /// Public so the app can clear it when resetting to a clean state under UI
-  /// testing (matching `TriggerKeyStore`/`SoundPackStore`).
+  /// Public so the Settings field can bind `@AppStorage` to it and so the app
+  /// can clear it when resetting to a clean state under UI testing (matching
+  /// `TriggerKeyStore`/`SoundPackStore`).
   public static let defaultsKey = DefaultsKey.keyTerms.rawValue
 
-  private static var defaults: UserDefaults { .standard }
+  private let defaults: UserDefaults
+
+  init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
+  }
 
   /// The raw comma-separated string exactly as the user entered it (preserving
   /// their spacing/order for round-tripping in the editor), or `nil` if unset.
-  public static var raw: String? {
-    defaults.string(forKey: defaultsKey).trimmedNonEmpty()
+  var raw: String? {
+    defaults.string(forKey: Self.defaultsKey).trimmedNonEmpty()
   }
 
   /// The stored terms parsed into a clean list: split on commas, trimmed, with
   /// blanks and duplicates removed (case-insensitively, keeping first spelling).
-  public static var terms: [String] {
-    parse(raw)
+  var terms: [String] {
+    Self.parse(raw)
   }
 
-  /// Pure parse of a comma-separated string into a clean term list. Exposed so
-  /// `TranscriptionPrompt` and tests can reuse the exact same rules.
-  public static func parse(_ text: String?) -> [String] {
+  /// Pure parse of a comma-separated string into a clean term list. Static so
+  /// `TranscriptionPrompt` and tests can reuse the exact same rules without a
+  /// `UserDefaults` in hand.
+  static func parse(_ text: String?) -> [String] {
     guard let text else { return [] }
     var seen = Set<String>()
     var result: [String] = []
