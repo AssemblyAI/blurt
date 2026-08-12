@@ -1,0 +1,102 @@
+name: release-bump
+
+# Run the version-bump half of a release without a Mac terminal.
+#
+# `scripts/release-bump.sh` needs `xcodegen`, which is macOS-only, so bumping
+# used to require the maintainer's laptop — the one step of the release that a
+# web or chat session could not do. This runs the same script unmodified on a
+# `macos-26` runner and pushes the branch.
+#
+# It deliberately stops at the push and does NOT open the pull request. Events
+# created by GITHUB_TOKEN do not trigger workflows, so a PR opened from here
+# would never get a `check` run, could never satisfy the required status check,
+# and would sit unmergeable. Opening it from outside Actions — a person, or an
+# agent with its own credentials — makes `check` run normally. The job summary
+# prints a one-click link for that.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to bump to (X.Y.Z) — must be greater than the version on main"
+        required: true
+        type: string
+
+# One bump at a time; never cancel one mid-push.
+concurrency:
+  group: release-bump
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  bump:
+    runs-on: macos-26
+    timeout-minutes: 30
+    permissions:
+      # Pushing the release/vX.Y.Z branch. Not enough to touch protected `main`,
+      # which is the point: the bump still lands through review like any change.
+      contents: write
+
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          ref: ${{ github.sha }}
+          # Tags are what release-bump.sh checks the target version against, and
+          # a shallow clone has none — it would miss an existing vX.Y.Z.
+          fetch-depth: 0
+          # The push below rides on the token this leaves on the origin remote.
+          persist-credentials: true
+
+      - name: Guard the dispatch ref
+        # Versions are bumped from main; a bump computed against any other ref
+        # would be measured from the wrong current version.
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::release-bump must be dispatched from main (got ${GITHUB_REF})"
+          exit 1
+
+      - name: Install build tools
+        working-directory: blurt
+        run: brew bundle --file=Brewfile
+
+      - name: Identify the committer
+        working-directory: blurt
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump the version
+        working-directory: blurt
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          branch="release/v$VERSION"
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            echo "::error::branch $branch already exists on origin — delete it or pick another version"
+            exit 1
+          fi
+          git checkout -b "$branch"
+          # Unmodified: it owns the semver / greater-than / tag-collision guards,
+          # the project.yml edit, the xcodegen regeneration, and the commit.
+          scripts/release-bump.sh "$VERSION"
+          git push -u origin "$branch"
+
+      - name: Summarize
+        env:
+          REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          {
+            echo "### Bumped to v$VERSION"
+            echo
+            echo "Branch \`release/v$VERSION\` pushed. It has no pull request yet —"
+            echo "one opened from inside Actions would never run \`check\`."
+            echo
+            echo "[**Open the pull request**](https://github.com/$REPO/compare/main...release/v$VERSION?expand=1)"
+            echo
+            echo "Then merge it and dispatch the \`release\` workflow with the same version."
+          } >>"$GITHUB_STEP_SUMMARY"

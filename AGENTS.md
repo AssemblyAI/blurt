@@ -71,7 +71,8 @@ evals/ruff.toml              ruff config for the above — the repo's only Pytho
 site/                        the GitHub Pages site (html/css, sitemap) — linted by check.sh
 .github/workflows/           check.yml (the gate + per-PR dev build, macos-26),
                              pr-dev-build.yml (links it on the PR),
-                             release.yml (sign + publish), codeql.yml, pages.yml
+                             release-bump.yml (version bump) + release.yml (sign +
+                             publish), codeql.yml, pages.yml
 .claude/                     Claude Code hooks, skills, subagents (see CLAUDE.md)
 ```
 
@@ -658,11 +659,14 @@ matches `project.yml`.
 
 ## Releasing
 
-Releases are built, signed, notarized, and published by the `release` GitHub Actions workflow
-(`.github/workflows/release.yml`), driven by `scripts/release.sh`: run 1 opens the version-bump PR,
-run 2 dispatches the workflow and follows it. The publish job parks on the `release-publish`
-environment until a human approves — that approval is the ship gate, so download and test the DMG
-from the build job's artifacts first. Nothing is rebuilt after approval.
+Releases run entirely in GitHub Actions, so they can be driven from a browser or a chat session with
+no terminal: dispatch `release-bump` with the target version (it bumps `project.yml`, regenerates the
+project on `macos-26`, and pushes `release/vX.Y.Z`), open and merge that PR, then dispatch `release`.
+The bump workflow deliberately does not open the PR — a PR created by `GITHUB_TOKEN` never triggers
+`check`, so it could never merge; opening it from outside Actions works fine. The publish job then
+parks on the `release-publish` environment until a human approves — that approval is the ship gate,
+so download and test the DMG from the build job's artifacts first. Nothing is rebuilt after approval.
+`scripts/release.sh` does the same from a Mac terminal; the workflows are canonical.
 
 Signing-key custody (a base64 `.p12` secret imported into an ephemeral keychain, never a persistent
 one), the required environments and secrets, certificate/notary rotation, and the roll-forward-only
