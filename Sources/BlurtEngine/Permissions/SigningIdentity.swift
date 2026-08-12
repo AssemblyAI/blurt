@@ -33,7 +33,7 @@ public enum SigningIdentity {
   /// `nil` only for code carrying no signature at all, which is the signal the
   /// migration uses to no-op.
   public static func current() -> String? {
-    guard let info = signingInformation() else { return nil }
+    let info = signingInformation()
     if let team = info[kSecCodeInfoTeamIdentifier as String] as? String { return team }
     guard let cdhash = info[kSecCodeInfoUnique as String] as? Data else { return nil }
     return cdhashPrefix + cdhash.map { String(format: "%02x", $0) }.joined()
@@ -45,22 +45,26 @@ public enum SigningIdentity {
   /// for callers that must treat ad-hoc code as identity-less — see the UI-test
   /// carve-out in `AppDelegate.currentSigningIdentity()`.
   public static func currentTeamIdentifier() -> String? {
-    signingInformation()?[kSecCodeInfoTeamIdentifier as String] as? String
+    signingInformation()[kSecCodeInfoTeamIdentifier as String] as? String
   }
 
-  /// This process's signing information, or `nil` if it carries no signature.
-  private static func signingInformation() -> [String: Any]? {
+  /// This process's signing information — empty when it carries no signature, or
+  /// when any step of the `Security` handshake fails. Empty rather than `nil`
+  /// because "no information" and "an absence of these keys" lead every caller to
+  /// the same answer, and an optional collection is two ways to say nothing (the
+  /// `discouraged_optional_collection` lint rule).
+  private static func signingInformation() -> [String: Any] {
     var code: SecCode?
-    guard SecCodeCopySelf(SecCSFlags(), &code) == errSecSuccess, let code else { return nil }
+    guard SecCodeCopySelf(SecCSFlags(), &code) == errSecSuccess, let code else { return [:] }
     var staticCode: SecStaticCode?
     guard SecCodeCopyStaticCode(code, SecCSFlags(), &staticCode) == errSecSuccess,
       let staticCode
-    else { return nil }
+    else { return [:] }
     var info: CFDictionary?
     let flags = SecCSFlags(rawValue: kSecCSSigningInformation)
     guard SecCodeCopySigningInformation(staticCode, flags, &info) == errSecSuccess,
       let dict = info as? [String: Any]
-    else { return nil }
+    else { return [:] }
     return dict
   }
 
