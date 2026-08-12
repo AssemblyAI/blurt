@@ -16,9 +16,10 @@ decisions that aren't obvious from the scripts and the workflows.
 
 Start to finish:
 
-1. **Dispatch `release-bump`** with the target version. It bumps `project.yml`,
-   regenerates the project, and pushes `release/vX.Y.Z`. It deliberately does
-   **not** open the PR — events created by `GITHUB_TOKEN` don't trigger
+1. **Start `release-bump`**, either by pushing a marker branch `release/vX.Y.Z`
+   at `main` or by dispatching the workflow. It bumps `project.yml`, regenerates
+   the project, and leaves the bump commit on `release/vX.Y.Z`. It deliberately
+   does **not** open the PR — events created by `GITHUB_TOKEN` don't trigger
    workflows, so a PR opened from inside Actions would never get a `check` run
    and could never merge. The job summary links a one-click compare page.
 2. **Open that PR and merge it.** Opened from outside Actions — by a person or
@@ -27,7 +28,39 @@ Start to finish:
 3. **Approve the `release-publish` deployment** once you've tested the DMG.
 
 So a release is two clicks on the maintainer's side: merge the bump PR, approve
-the ship gate. Everything between them is the workflow's.
+the ship gate. Everything between them is the workflow's, and step 1 needs no
+Actions permission — which is what lets an agent start the whole thing.
+
+### Starting a bump without a dispatch
+
+Dispatching a workflow needs the Actions UI or an API token with `actions:
+write`. Pushing a branch doesn't, and a chat or web session generally has the
+latter and not the former. So `release-bump` also triggers on a push of
+`release/v[0-9]*`:
+
+```sh
+git push origin main:refs/heads/release/v0.1.37   # names the version; carries nothing
+```
+
+The branch name **is** the request — it names the version, and there is no
+`default_target` guessing on this path. The workflow then checks out `main`,
+verifies the marker is an **ancestor of `main`** (so it carries no commits of
+its own), bumps on top of `main`'s tip, and force-pushes the result onto the
+same branch, with the lease pinned to the exact sha it vetted.
+
+That ancestor check is the security-relevant one. Without it, pushing a branch
+would be a way to get a bot-authored commit sitting on top of arbitrary content,
+and the PR that followed would quietly be about more than a version bump. With
+it, the marker is a signal and the only commit that ends up on the branch is the
+bump.
+
+This path leans on the `GITHUB_TOKEN` rule in the opposite direction from
+everywhere else here: the bump commit the job force-pushes does **not** re-fire
+the push trigger that started it, which is what keeps it from looping. Don't
+move this job to a PAT or an app token without adding a loop guard.
+
+Re-pushing a marker that already carries the bump commit fails the ancestor
+check with a message saying so — the job already ran; open the PR.
 
 ### What starts a release
 

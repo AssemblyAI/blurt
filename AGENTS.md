@@ -728,8 +728,12 @@ matches `project.yml`.
 ## Releasing
 
 Releases run entirely in GitHub Actions, so they can be driven from a browser or a chat session with
-no terminal: dispatch `release-bump` with the target version (it bumps `project.yml`, regenerates the
-project on `macos-26`, and pushes `release/vX.Y.Z`), then open and merge that PR. **Merging it starts
+no terminal, and without permission to dispatch a workflow. Start `release-bump` by pushing a marker
+branch at main — `git push origin main:refs/heads/release/v0.1.37`, which names the version and
+carries nothing else — or by dispatching it (that path also takes an empty version and derives the
+next patch). It bumps `project.yml`, regenerates the project on `macos-26`, and leaves the bump on
+`release/vX.Y.Z`; on the marker path it first checks the branch is an ancestor of `main`, so pushing
+a branch can't smuggle content under a bot-authored commit. Then open and merge that PR. **Merging it starts
 `release`** — `release.yml` also triggers on a push to `main` that changes `project.yml`, and its
 `resolve` job releases only when the version actually changed and no `vX.Y.Z` tag exists yet, so a
 project.yml edit that isn't a bump skips the build. Dispatching `release` by hand still works and is
@@ -748,7 +752,8 @@ reaches users; approving a build you started is not a gate. This rule is repeate
 it does _not_ load when someone just says "release", which is exactly when the rule matters.
 Dispatching `release-bump` with an empty version takes the next patch, resolved by `default_target` /
 `decide_run` in `scripts/release-lib.sh` (unit-tested by `release.test.sh`, so it is verifiable off a
-Mac). There is no local orchestrator script — the workflows are the only path, so there is nothing to
+Mac); the marker-branch path has no such default, because a branch that named no version would be
+asking the workflow to guess what its own name meant. There is no local orchestrator script — the workflows are the only path, so there is nothing to
 drift out of sync with them.
 
 Signing-key custody (a base64 `.p12` secret imported into an ephemeral keychain, never a persistent
