@@ -7,11 +7,12 @@ the Claude-Code-specific tooling under `.claude/` (hooks, skills, subagents).
 
 Blurt is a macOS dictation app powered by [AssemblyAI](https://www.assemblyai.com). Tap or hold a
 trigger key, speak, and polished text is pasted into the focused app. Transcription is **one remote
-AssemblyAI dictation API call**: a per-utterance `prompt` (a transcription directive plus contextual
-priming built from the focused app/window/field and the user's key terms) rides along with the
-request, and the same request asks the service for its server-side LLM cleanup rewrite
-(`config.llm`), so the text that comes back is already polished. The user supplies their own API
-key.
+AssemblyAI dictation API call**: the audio plus a request for the service's server-side LLM cleanup
+rewrite (`config.llm`), so the text that comes back is already polished. The user supplies their own
+API key. The request carries **no transcription `prompt`** — the per-utterance contextual priming
+built from the focused app/window/field and the user's key terms is switched off at
+`TranscriptionPrompt.isEnabled`, with the builder and all of its wiring kept intact behind it. See
+[Transcription prompt](#transcription-prompt).
 
 Four reflexes before you touch anything:
 
@@ -170,23 +171,24 @@ In Claude Code on the web, a `SessionStart` hook installs the portable linters a
 Each was tried the other way and reverted. If a task seems to require one, stop and ask first.
 (`.claude/skills/project-guardrails` is the compressed version of this list.)
 
-| Don't                                                     | Because                                                                                                                                                                                                                                                     |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Add an external SPM dependency to the engine              | Dependency-free by rule (biggest supply-chain risk); a `check.sh` guard fails on `.package(` in `Package.swift` or a `url:`/`github:` package in `project.yml`. Extend `BlurtEngine` instead.                                                               |
-| Use `AVAudioEngine` / `installTap` for capture            | A long-lived engine bound its input graph to one device and went stale on a mic↔built-in switch — `-10868` (`kAudioUnitErr_FormatNotSupported`) or all-zero buffers. `MicCapture` uses a fresh `AVAudioRecorder` per session.                               |
-| Add streaming STT                                         | The dictation API returns the full (already rewritten) text in one response; the overlay shows "Transcribing…" then the full text.                                                                                                                          |
-| Add a client-side LLM cleanup pass                        | Cleanup is the dictation API's server-side rewrite, requested by the `llm` block on the same `/transcribe` call. No LLM Gateway client, no `StylerProtocol`, no styling stage, no second request — transcription steering belongs in `TranscriptionPrompt`. |
-| Add local models or model downloads                       | Transcription is a remote AssemblyAI call: no on-device ASR/LLM, no model cache, no download UI.                                                                                                                                                            |
-| Pin the prompt to English                                 | Hurt non-English transcription; language is left to the model's own detection.                                                                                                                                                                              |
-| Add a "remove filler words (um, uh, like)" clause         | Not in the STT model's trained instruction set — a no-op, deliberately dropped; disfluency removal is the server-side LLM rewrite's job.                                                                                                                    |
-| Add a keystroke-typing paste path or a length threshold   | Injection is **always** clipboard paste (save → write → ⌘V → settle → restore), with the copied-to-clipboard degradation when the target is lost.                                                                                                           |
-| Add `LSUIElement` or a menu-bar-**only** mode             | Blurt is a Dock app first. The `MenuBarExtra` status item is convenience layered on the Dock icon; the notch can hide a status item, so nothing may depend on it. A menu-bar-only variant was reverted twice.                                               |
-| Add a `KeyboardShortcuts` package or a key+modifier chord | The trigger is a single lone modifier, home-grown (`CGEventTap` + `DictationKeyGate`), and swallows nothing.                                                                                                                                                |
-| Add a self-replacing install or background auto-updater   | Updates are download-only; `mxcl/AppUpdater` and its in-place updater were removed. The once-a-day launch _check_ (`AutomaticUpdateCheck`) is fine; installing for the user, or polling, is not. Extend `UpdateCheckModel`.                                 |
-| Hand-edit `Blurt.xcodeproj/project.pbxproj`               | Generated from `project.yml`; `check.sh`'s drift check fails on any manual edit (a Claude PreToolUse hook also blocks it).                                                                                                                                  |
-| Redirect the post-build install away from `/Applications` | TCC won't register apps in DerivedData/`/tmp`, so permission toggles never appear.                                                                                                                                                                          |
-| Touch the real Keychain in tests                          | `APIKeyStore` is the production item — a test that writes it triggers Keychain prompts and corrupts the real item's ACL. Use an isolated service (see `KeychainStoreTests`) or `InMemoryAPIKeyStore`.                                                       |
-| Add backwards-compat shims for removed types              | Deleted types stay deleted — no deprecated re-exports.                                                                                                                                                                                                      |
+| Don't                                                     | Because                                                                                                                                                                                                                                                                 |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Add an external SPM dependency to the engine              | Dependency-free by rule (biggest supply-chain risk); a `check.sh` guard fails on `.package(` in `Package.swift` or a `url:`/`github:` package in `project.yml`. Extend `BlurtEngine` instead.                                                                           |
+| Use `AVAudioEngine` / `installTap` for capture            | A long-lived engine bound its input graph to one device and went stale on a mic↔built-in switch — `-10868` (`kAudioUnitErr_FormatNotSupported`) or all-zero buffers. `MicCapture` uses a fresh `AVAudioRecorder` per session.                                           |
+| Add streaming STT                                         | The dictation API returns the full (already rewritten) text in one response; the overlay shows "Transcribing…" then the full text.                                                                                                                                      |
+| Add a client-side LLM cleanup pass                        | Cleanup is the dictation API's server-side rewrite, requested by the `llm` block on the same `/transcribe` call. No LLM Gateway client, no `StylerProtocol`, no styling stage, no second request — transcription steering belongs in `TranscriptionPrompt`.             |
+| Add local models or model downloads                       | Transcription is a remote AssemblyAI call: no on-device ASR/LLM, no model cache, no download UI.                                                                                                                                                                        |
+| Pin the prompt to English                                 | Hurt non-English transcription; language is left to the model's own detection.                                                                                                                                                                                          |
+| Send focus context to the API again                       | The transcription prompt is switched off at `TranscriptionPrompt.isEnabled`, so `config.prompt` is omitted and no window title, field label, surrounding text or key term leaves the machine. Keep the builder and its wiring — don't route context on by another path. |
+| Add a "remove filler words (um, uh, like)" clause         | Not in the STT model's trained instruction set — a no-op, deliberately dropped; disfluency removal is the server-side LLM rewrite's job.                                                                                                                                |
+| Add a keystroke-typing paste path or a length threshold   | Injection is **always** clipboard paste (save → write → ⌘V → settle → restore), with the copied-to-clipboard degradation when the target is lost.                                                                                                                       |
+| Add `LSUIElement` or a menu-bar-**only** mode             | Blurt is a Dock app first. The `MenuBarExtra` status item is convenience layered on the Dock icon; the notch can hide a status item, so nothing may depend on it. A menu-bar-only variant was reverted twice.                                                           |
+| Add a `KeyboardShortcuts` package or a key+modifier chord | The trigger is a single lone modifier, home-grown (`CGEventTap` + `DictationKeyGate`), and swallows nothing.                                                                                                                                                            |
+| Add a self-replacing install or background auto-updater   | Updates are download-only; `mxcl/AppUpdater` and its in-place updater were removed. The once-a-day launch _check_ (`AutomaticUpdateCheck`) is fine; installing for the user, or polling, is not. Extend `UpdateCheckModel`.                                             |
+| Hand-edit `Blurt.xcodeproj/project.pbxproj`               | Generated from `project.yml`; `check.sh`'s drift check fails on any manual edit (a Claude PreToolUse hook also blocks it).                                                                                                                                              |
+| Redirect the post-build install away from `/Applications` | TCC won't register apps in DerivedData/`/tmp`, so permission toggles never appear.                                                                                                                                                                                      |
+| Touch the real Keychain in tests                          | `APIKeyStore` is the production item — a test that writes it triggers Keychain prompts and corrupts the real item's ACL. Use an isolated service (see `KeychainStoreTests`) or `InMemoryAPIKeyStore`.                                                                   |
+| Add backwards-compat shims for removed types              | Deleted types stay deleted — no deprecated re-exports.                                                                                                                                                                                                                  |
 
 Release-side invariants (hardened runtime and a secure timestamp on every nested mach-o and embedded
 framework, or notarization rejects the build; roll-forward-only for a bad release) live in
@@ -253,9 +255,10 @@ the seam they inject.
 
 Implements `TranscriberProtocol` against AssemblyAI's **dictation** API: a single
 `POST https://dictation.assemblyai.com/transcribe` with the captured audio as a raw S16LE PCM blob
-in the `audio` multipart part plus a JSON `config` part (`sample_rate`, `channels`, `prompt`, and an
-empty `llm` block). No model header — the service pins the STT model server-side. The `prompt`
-(built per utterance by `TranscriptionPrompt`) steers _transcription_; the `llm` block asks the
+in the `audio` multipart part plus a JSON `config` part (`sample_rate`, `channels`, and an `llm`
+block). No model header — the service pins the STT model server-side. The config also has a `prompt`
+field for steering _transcription_, but nothing is put in it: `TranscriptionPrompt.build` returns
+`nil` while the prompt is switched off, and a nil prompt omits the field. The `llm` block asks the
 service to run its default LLM cleanup rewrite (remove disfluencies, fix punctuation) over the
 verbatim transcript, all inside the same request. The block rides along while **enhanced
 transcripts** are enabled (`EnhancedTranscriptsStore`, on by default, read per request via the
@@ -280,7 +283,8 @@ user in every language; pinning the _transcription_ prompt to English was revert
 already. A revert here is one line: drop `LLMRewrite`'s field and it encodes `{}` again.
 
 That field is capped at **2048 characters** (`CleanupInstruction.characterCap`) — a different,
-smaller limit than the 4096 on `config.prompt` (`TranscriptionPrompt.characterCap`), and
+smaller limit than the 4096 on `config.prompt` (`TranscriptionPrompt.characterCap`, still the cap
+the builder fits itself to for the day the prompt goes back on), and
 neither is in the published API reference; both were measured against the live endpoint. Over
 the cap the API 400s the whole request before reading the audio, so every dictation fails
 outright rather than degrading to the verbatim transcript. A 3057-character eval winner
@@ -413,16 +417,31 @@ to right ⌘), so views must not re-declare `TriggerKey.rightCommand.rawValue` t
 
 ## Transcription prompt
 
+**Switched off.** `TranscriptionPrompt.isEnabled` is `false`, so `build(context:)` returns `nil` for
+every context, `config.prompt` is omitted from every request, and no focus context — window title,
+field label, the text around the cursor, key terms — leaves the machine. The STT model runs on the
+service's own default prompt. The `llm` cleanup instruction is a separate field and is unaffected:
+it still ships on every request.
+
+Everything else about the prompt is still wired and still tested: focus capture and the key-terms
+read still run (the snapshot also drives paste spacing and the developer-mode log),
+`transcribe(pcm:sampleRate:context:)` still takes the context, and the tests drive the builder
+through `TranscriptionPrompt.assemble` so it can't rot. Turning contextual priming back on is
+flipping that one constant — and re-deciding what user text may leave the machine.
+
+The rest of this section describes the prompt as built when it is on.
+
 `Sources/BlurtEngine/STT/TranscriptionPrompt.swift` builds the instruction passed as the dictation
 request's `config.prompt` — it steers the _transcription_, not the LLM rewrite (that's the request's
-separate `llm` block). It's unit-tested in `Tests/BlurtEngineTests/TranscriptionPromptTests.swift`.
+separate `llm` block). It's unit-tested in `Tests/BlurtEngineTests/TranscriptionPromptTests.swift`,
+where a `TranscriptionPrompt switch` suite also pins the off state.
 
 Every built prompt opens with the fixed `baseInstruction` — _"Transcribe without speaker labels,
 audio event descriptions, or emotion markers."_ — a negative-exclusion clause that suppresses the
 annotation markers (`[Speaker]`, `[door creaks]`, `[laughing]`) the model would otherwise paste into
 the user's text.
 
-`build(context:)` wraps that pivot in _contextual priming_: prior-cursor text; the selected text (the
+`assemble(context:)` wraps that pivot in _contextual priming_: prior-cursor text; the selected text (the
 highlighted run the dictation will replace, so the model is primed on what's being rewritten — read
 via `kAXSelectedTextAttribute`, skipped in secure fields, detected by AX role **or** subrole and
 failing closed when the role can't be read, so a password can't reach the prompt); a topic hint from
@@ -431,8 +450,9 @@ user's key terms. It's phrased per AssemblyAI's Universal-3 Pro prompting guidan
 (positive/authoritative wording, no "Don't"/"Avoid"/"Never") and stays under the dictation API's
 documented 4096-character cap on `config.prompt` (`characterCap`).
 
-`build(context:)` returns `nil` when there's no usable context, and passing `prompt: nil` to the
-transcriber omits the field so the server applies its own default. Two omissions are deliberate and
+`assemble(context:)` returns `nil` when there's no usable context, and passing `prompt: nil` to the
+transcriber omits the field so the server applies its own default — which is what happens on every
+request today, since `build` returns `nil` regardless. Two omissions are deliberate and
 regression-tested — no language directive and no filler-word clause; see
 [Settled decisions](#settled-decisions--dont-reintroduce-these).
 
@@ -442,7 +462,9 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
 
 - **`TriggerKeyStore`** (`BlurtTriggerKeyCode`), **`SoundPackStore`** (`BlurtSoundPack`),
   **`KeyTermsStore`** (the user's domain vocabulary, re-read at every press via the session's
-  `keyTermsProvider`), **`DeveloperModeStore`** (`BlurtDeveloperMode`, off by default),
+  `keyTermsProvider` — it reaches only the prompt builder, so while the transcription prompt is
+  switched off the Settings field has no effect on transcription),
+  **`DeveloperModeStore`** (`BlurtDeveloperMode`, off by default),
   **`EnhancedTranscriptsStore`** (`BlurtEnhancedTranscripts`, **on** by default — unset reads as
   enabled; gates the dictation request's `llm` cleanup-rewrite block, re-read at every request),
   **`OverlayOriginStore`** (the pill's dragged origin, x/y), **`LastUpdateCheckStore`**

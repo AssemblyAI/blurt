@@ -3,7 +3,10 @@ import Foundation
 /// Storage for the user's dictation "key terms" — a comma-separated list of
 /// domain words (names, jargon, product names) that get folded into the dictation
 /// request `prompt` as vocabulary priming, so the model is more likely to spell
-/// them correctly (see `TranscriptionPrompt.build`).
+/// them correctly (see `TranscriptionPrompt.assemble`). That prompt is currently
+/// switched off (`TranscriptionPrompt.isEnabled`), so the terms are read at every
+/// press and then reach nothing — the storage stays wired for the day it flips
+/// back on.
 ///
 /// Unlike the API key these aren't secret, so they live in `UserDefaults` rather
 /// than the Keychain. The transcription pipeline reads the parsed list via

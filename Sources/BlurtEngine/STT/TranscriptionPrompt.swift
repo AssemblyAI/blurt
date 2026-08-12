@@ -2,6 +2,13 @@
 /// field of the request `config` (see `AssemblyAITranscriber`). The STT model
 /// prepends this to its own system prompt.
 ///
+/// **Currently switched off**: `isEnabled` is `false`, so `build` returns `nil`
+/// for every context and no `prompt` field goes on the wire — the STT model runs
+/// on the service's own default prompt. Everything below still runs in tests and
+/// the wiring around it is untouched (focus capture, key terms, the `config`
+/// field, the developer-mode log), so re-enabling is that one constant.
+/// The description that follows is of the prompt as built when it is on.
+///
 /// Every built prompt opens with a fixed `baseInstruction` — a plain-text
 /// exclusion clause (see below) — and wraps it in
 /// *contextual* priming: a topic hint built from the window title, a
@@ -33,6 +40,18 @@
 /// fitted to the remaining budget here. Exercised by
 /// `Tests/BlurtEngineTests/TranscriptionPromptTests.swift`.
 enum TranscriptionPrompt {
+  /// Whether a transcription prompt is sent at all.
+  ///
+  /// `false`: `build` yields `nil` for every context, `AssemblyAITranscriber`
+  /// omits `config.prompt`, and the request carries nothing but the audio, its
+  /// geometry, and the `llm` cleanup instruction — which is unaffected by this
+  /// switch and still shapes every transcript.
+  ///
+  /// The assembly below is deliberately kept whole rather than deleted, and its
+  /// tests still drive it through `assemble` — flipping this constant is the
+  /// entire cost of turning contextual priming back on.
+  static let isEnabled = false
+
   /// The standing dictation instruction prepended to the model's system prompt
   /// on every built prompt. A negative-exclusion clause (§5/§6) naming the
   /// annotation feature types the model is trained to emit, so it suppresses
@@ -43,15 +62,30 @@ enum TranscriptionPrompt {
     "Transcribe without speaker labels, audio event descriptions, or emotion markers."
 
   /// Hard cap the dictation API places on `config.prompt` ("max 4096 chars");
-  /// a longer prompt risks failing the whole request, so `build` must never
+  /// a longer prompt risks failing the whole request, so `assemble` must never
   /// exceed it. The contextual blocks are all clipped upstream in
   /// `FocusCapture`; the user's key terms are the one unbounded input, so
-  /// `build` fits them to whatever budget remains.
+  /// `assemble` fits them to whatever budget remains.
   static let characterCap = 4096
 
-  /// Renders `context` into a transcription prompt, or `nil` when there is no usable
-  /// context (the server then applies its own default prompt).
+  /// The prompt actually sent for `context`: `nil` while `isEnabled` is off (the
+  /// shipped state — the server then applies its own default prompt), otherwise
+  /// whatever `assemble` makes of the context.
+  ///
+  /// Every caller that reports or transmits the prompt goes through here rather
+  /// than through `assemble`, so the switch reaches the wire and the
+  /// developer-mode log together — the log can't claim a prompt that was never
+  /// sent.
   static func build(context: TranscriptionContext?) -> String? {
+    guard isEnabled else { return nil }
+    return assemble(context: context)
+  }
+
+  /// Renders `context` into a transcription prompt, or `nil` when there is no usable
+  /// context. Internal rather than private so `TranscriptionPromptTests` keeps
+  /// exercising the assembly while `isEnabled` is off — otherwise switching the
+  /// prompt back on would mean trusting untested code.
+  static func assemble(context: TranscriptionContext?) -> String? {
     // `isEmpty` is the context type's own "no usable content" rule — the same
     // predicate `DictationSession.performPress` gates on before yielding a
     // context. Asking it here (rather than re-deriving the field-by-field test)

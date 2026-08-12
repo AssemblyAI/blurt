@@ -118,7 +118,7 @@ struct DictationLogTests {
     #expect(!line.contains("selected"))
   }
 
-  @Test("logs the same assembled prompt the transcriber sends")
+  @Test("logs the same prompt the transcriber sends — none, while the prompt is off")
   func logsAssembledPrompt() {
     let url = makeTempLogURL()
     let context = TranscriptionContext(
@@ -127,7 +127,13 @@ struct DictationLogTests {
     DictationLog.write(transcript: "p", context: context, to: url, now: Date())
     let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
     let decoded = try? JSONDecoder().decode(DecodedContext.self, from: Data(line.utf8))
+    // The entry mirrors the request, whichever way `TranscriptionPrompt.isEnabled`
+    // is set — that's why the writer calls `build` rather than `assemble`.
     #expect(decoded?.prompt == TranscriptionPrompt.build(context: context))
+    // And with the switch off, that means no `prompt` key at all, even though
+    // this context is rich enough to assemble one.
+    #expect(TranscriptionPrompt.assemble(context: context) != nil)
+    #expect(!line.contains("\"prompt\""))
   }
 
   @Test("omits the prompt field when there is no context to build one")
