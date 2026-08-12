@@ -10,14 +10,24 @@
 #
 # Two halves, split along what a general tool can know:
 #
-#   html-proofer  — links, images (including <source srcset>), scripts, favicon
-#                   and Open Graph inside the HTML. A mature checker parses HTML
-#                   properly; doing it with grep is the part most likely to rot.
+#   html-proofer  — links, images (including <source srcset>), scripts, favicon,
+#                   in-page #fragments and Open Graph. Its defaults also flag a
+#                   missing alt, an <a> without href, and an empty src, so those
+#                   come along free. A mature checker parses HTML properly;
+#                   doing that with grep is the part most likely to rot.
 #   this script   — the repo-level invariants no HTML checker models: that CNAME
 #                   and every absolute URL agree, that the sitemap and robots
 #                   point at this domain, and that nothing under assets/ ships
 #                   unreferenced. Plus CSS url(), which html-proofer never reads
-#                   because it only looks at HTML.
+#                   because it only looks at HTML, and the two HTML gaps in
+#                   section 4 that its checks were measured not to cover.
+#
+# Every check html-proofer offers is enabled: the five check classes it has
+# (Links, Images, Scripts, Favicon, OpenGraph) and its stricter defaults, none
+# of which are switched off here. --check-sri is the one deliberate omission —
+# it is a no-op under --disable-external, and the single external subresource
+# this site has is the Google Fonts stylesheet, which is served per-user-agent
+# and so cannot carry a fixed integrity hash.
 #
 # The domain is read from site/CNAME once and handed to html-proofer as its
 # --swap-urls pattern. That matters: og:image and friends are absolute URLs, so
@@ -108,8 +118,7 @@ if command -v htmlproofer >/dev/null 2>&1; then
       --disable-external \
       --checks Links,Images,Scripts,Favicon,OpenGraph \
       --root-dir . \
-      --swap-urls "^https\\://$DOMAIN_RE/:/" \
-      --no-enforce-https 2>&1
+      --swap-urls "^https\\://$DOMAIN_RE/:/" 2>&1
   )" || HP_STATUS=$?
 
   # Drop html-proofer's structured async log lines; they are noise here.
@@ -212,7 +221,36 @@ else
   done <<<"$SITEMAP_LOCS"
 fi
 
-# --- 4. CSS url() ------------------------------------------------------------
+# --- 4. HTML hygiene ---------------------------------------------------------
+# Two things html-proofer's defaults leave uncovered. Both were found by testing
+# its checks one at a time rather than assuming the tool's coverage.
+echo "==> site: HTML hygiene"
+while IFS= read -r html; do
+  # Duplicate id. html-proofer 5 dropped the HTML validation v3 had, so nothing
+  # flags this — and it defeats the very check it does run: an ambiguous
+  # `#features` resolves to the first match, so the internal-hash check passes
+  # while the page is malformed and the browser's target is a coin flip.
+  DUPE_IDS="$(grep -oE 'id="[^"]+"' "$html" | sed 's/^id="//;s/"$//' | sort | uniq -d || true)"
+  if [ -n "$DUPE_IDS" ]; then
+    while IFS= read -r dupe; do
+      fail "$html has more than one element with id=\"$dupe\" — #$dupe targets whichever comes first"
+    done <<<"$DUPE_IDS"
+  fi
+
+  # Insecure references. html-proofer's enforce_https defaults on, but it only
+  # inspects links it is fetching, so under --disable-external (which this repo
+  # requires, see the header) it never fires — verified by adding an http:// link
+  # and watching it pass. Scoped to attribute values so an XML/XHTML namespace,
+  # which is an identifier rather than a fetchable URL, isn't a false positive.
+  INSECURE="$(grep -oE '(href|src|srcset|content|poster)="http://[^"]*"' "$html" || true)"
+  if [ -n "$INSECURE" ]; then
+    while IFS= read -r ref; do
+      fail "$html references $ref over plain http — the site is https-only"
+    done <<<"$INSECURE"
+  fi
+done <<<"$HTML_FILES"
+
+# --- 5. CSS url() ------------------------------------------------------------
 # html-proofer only reads HTML, so a background-image added to styles.css would
 # otherwise ship unchecked. None today — the site's imagery all lives in the
 # markup — which is exactly when a guard is cheap to add.
@@ -239,7 +277,7 @@ while IFS= read -r css; do
   done < <(grep -oE 'url\([^)]*\)' "$css" || true)
 done < <(find . -type f -name '*.css' | sed 's|^\./||' | sort)
 
-# --- 5. no orphaned assets ---------------------------------------------------
+# --- 6. no orphaned assets ---------------------------------------------------
 # The Pages artifact is whatever is in site/, so an asset no page references is
 # still uploaded and served — dead weight in the deploy, and usually the trace
 # of a rename where the old file was left behind. Link checkers walk references

@@ -106,10 +106,17 @@ In order, on a Mac. Each optional linter prints `note: <tool> not installed; ski
    It is a hybrid, split along what a general tool can know. **html-proofer** (a gem — the one
    `check.sh` tool with no Homebrew formula, so it is installed separately in `bootstrap.sh` and
    `check.yml`) covers links, images including `<source srcset>`, scripts, favicon, in-page
-   `#fragment`s, and Open Graph. The script itself covers the repo-level invariants no HTML checker
-   models: that the Pages-required files exist, that `CNAME` agrees with `canonical`/`og:url`/the
-   sitemap `<loc>`s/robots `Sitemap:`, that CSS `url()` resolves (html-proofer only reads HTML), and
-   that nothing under `site/assets/` ships unreferenced.
+   `#fragment`s, and Open Graph; its stricter defaults also flag a missing `alt`, an `<a>` without
+   `href`, and an empty `src`. Every check it offers is on — `--check-sri` is the one deliberate
+   omission, being a no-op under `--disable-external` and inapplicable to the one external
+   subresource here (the Google Fonts stylesheet is served per-user-agent, so no fixed integrity
+   hash exists). The script itself covers the repo-level invariants no HTML checker models: that the
+   Pages-required files exist, that `CNAME` agrees with `canonical`/`og:url`/the sitemap
+   `<loc>`s/robots `Sitemap:`, that CSS `url()` resolves (html-proofer only reads HTML), that no
+   `id` is duplicated and no attribute references plain `http://` — the two HTML gaps measured, not
+   assumed: html-proofer 5 dropped v3's HTML validation, and its `enforce_https` default only
+   inspects links it is fetching, so under `--disable-external` it never fires. And that nothing
+   under `site/assets/` ships unreferenced.
 
    Two details worth not undoing. The domain is read from `CNAME` and handed to html-proofer as its
    `--swap-urls` pattern rather than written into a config — otherwise the domain lives in two
