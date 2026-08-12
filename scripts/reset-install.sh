@@ -46,13 +46,18 @@ echo "==> Clearing UserDefaults for $BUNDLE_ID"
 defaults delete "$BUNDLE_ID" 2>/dev/null || true
 
 # AssemblyAI API key lives in the login keychain as a generic password. The
-# keychain service is `BlurtIdentity.subsystem` (used by APIKeyStore,
-# Sources/BlurtEngine/Config/APIKeyStore.swift) — the lowercase bundle id to
-# match macOS convention. Must match that constant.
-KEYCHAIN_SERVICE="$BUNDLE_ID"
+# keychain service is `BlurtIdentity.keychainService` (used by APIKeyStore,
+# Sources/BlurtEngine/Config/APIKeyStore.swift). Must match that constant.
+# The legacy service is the pre-rename home (`BlurtIdentity.legacyKeychainService`,
+# the lowercase bundle id); installs that predate the rename may still hold the
+# key there, so a full reset deletes both.
+KEYCHAIN_SERVICE="blurt"
+LEGACY_KEYCHAIN_SERVICE="$BUNDLE_ID"
 KEYCHAIN_ACCOUNT="AssemblyAIAPIKey"
 echo "==> Deleting AssemblyAI API key from Keychain ($KEYCHAIN_SERVICE / $KEYCHAIN_ACCOUNT)"
 security delete-generic-password -s "$KEYCHAIN_SERVICE" -a "$KEYCHAIN_ACCOUNT" >/dev/null 2>&1 || true
+echo "==> Deleting pre-rename AssemblyAI API key from Keychain ($LEGACY_KEYCHAIN_SERVICE / $KEYCHAIN_ACCOUNT)"
+security delete-generic-password -s "$LEGACY_KEYCHAIN_SERVICE" -a "$KEYCHAIN_ACCOUNT" >/dev/null 2>&1 || true
 
 # Developer mode appends transcript and failure logs here (see DictationLog); a
 # fresh install has neither, so clear them too. The rmdir below only succeeds

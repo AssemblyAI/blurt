@@ -41,11 +41,6 @@ final class MemoizedKeyStore: Sendable {
     self.write = write
   }
 
-  /// Memoizes over a keychain item.
-  convenience init(keychain: KeychainStore) {
-    self.init(read: { keychain.read() }, write: { keychain.write($0) })
-  }
-
   /// The stored key, or `nil` if none has been saved (or it's empty).
   ///
   /// Served from the memo after the first successful read. Every hot path funnels
