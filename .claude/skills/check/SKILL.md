@@ -27,13 +27,17 @@ What you CAN run there is the portable subset:
 scripts/check.sh --portable
 ```
 
-It runs the repo-integrity guards (dependencies, sound catalog, site) then
+It runs the repo-integrity guards (dependencies, sound catalog, site, shell
+portability) then
 actionlint / zizmor / prettier / xmllint / markdownlint / shellcheck / shfmt /
 ruff (lint + format check) / pytest over `evals/` / `release.test.sh` (plus `swift-format lint` and `swiftlint lint` if Linux
 builds are on `PATH` — under the default web network policy they are not).
 That fully verifies docs, site, scripts, eval, and workflow changes. It is **not**
 "green" in the CI sense: the entire Swift side is skipped, and the closing
-line says so. For Swift changes, push and watch `check.yml` instead. In
+line says so. For Swift changes, push and watch `check.yml` instead — its
+`compile` job reports a broken test build in ~2 minutes, and `format-patch`
+publishes the exact `swift-format` reflow as an artifact so you don't have to
+reproduce it by hand. In
 Claude Code on the web, the `SessionStart` hook installs the portable
 linters automatically.
 
@@ -54,32 +58,43 @@ scripts/check.sh
 It runs, in order (each tool skipped with a note if absent — but on a configured
 Mac they're all present, so don't treat a skip as a pass):
 
+Everything source-only runs first, then everything that builds. That ordering is
+deliberate (see `DX.md`): reversed, a compile error means the cheap checks are
+never reached and their findings arrive on the next 11-minute run instead.
+
 1. repo-integrity guards: no external SPM dependencies; sound-catalog
    integrity (every `SoundPackCatalog` voice has both cue files, no orphans, no
    duplicate or reserved ids); and site integrity (`scripts/check-site.sh` —
    the Pages site's local references, `#fragment`s, per-element hygiene,
    `CNAME` agreement with canonical/og:url/sitemap/robots, CSS `url()`, and
    no unreferenced assets). All run in `--portable` too
-2. `swift test` with `-warnings-as-errors`
-3. engine line-coverage gate (≥80%, `Tests/` excluded — see `MIN_COVERAGE`)
-4. ThreadSanitizer + AddressSanitizer test passes
-5. xcodegen drift check (regenerating must not change the committed `.pbxproj`)
-6. codesign-skipped app build (warnings-as-errors)
-7. **CI only:** `scripts/uitest.sh` (the XCUITest bundle) and `scripts/leaks.sh`
-   (whole-app leak check). Both drive the real app and seize the keyboard and
-   screen, so a local run skips them with a note and the closing line says
-   `ok (UI suite + leak scan NOT run …)`. That skip is by design — CI on
-   `macos-26` runs them on every PR and is the authority on them. To run them on
-   a Mac anyway: `BLURT_INTEGRATION_TESTS=1 scripts/check.sh`, or invoke the two
-   scripts directly. Expect to lose the machine for a few minutes if you do.
-8. `swift-format lint --strict`
-9. `swiftlint lint --strict` (warnings are failures), `swiftlint analyze`
-   (unused imports), `periphery scan --strict`
-10. actionlint / zizmor (workflow security) / prettier / xmllint / markdownlint /
-    shellcheck / shfmt --diff
-11. `ruff format --check` + `ruff check` over `evals/`, then `pytest`
-    over `evals/dictation-prompt/test_eval.py`
-12. `release.test.sh`
+2. shell portability (`scripts/check-portability.sh`): GNU-only idioms in
+   `scripts/*.sh` and `.claude/hooks/*.sh`, which run on BSD userland (Mac, CI)
+   as well as GNU (Linux sandbox). `--portable` too
+3. `swift-format lint --strict`, then `swiftlint lint --strict` (warnings are
+   failures) — both source-only
+4. actionlint / zizmor (workflow security) / prettier / xmllint / markdownlint /
+   shellcheck / shfmt --diff
+5. `ruff format --check` + `ruff check` over `evals/`, then `pytest`
+   over `evals/dictation-prompt/test_eval.py`, then `release.test.sh`
+
+   Steps 1–5 are the `--portable` subset. Everything below needs a macOS toolchain:
+
+6. `swift test` with `-warnings-as-errors`
+7. engine line-coverage gate (≥80%, `Tests/` excluded — see `MIN_COVERAGE`)
+8. ThreadSanitizer + AddressSanitizer test passes
+9. xcodegen drift check (regenerating must not change the committed `.pbxproj`)
+10. codesign-skipped app build (warnings-as-errors)
+11. **CI only:** `scripts/uitest.sh` (the XCUITest bundle) and `scripts/leaks.sh`
+    (whole-app leak check). Both drive the real app and seize the keyboard and
+    screen, so a local run skips them with a note and the closing line says
+    `ok (UI suite + leak scan NOT run …)`. That skip is by design — CI on
+    `macos-26` runs them on every PR and is the authority on them. To run them on
+    a Mac anyway: `BLURT_INTEGRATION_TESTS=1 scripts/check.sh`, or invoke the two
+    scripts directly. Expect to lose the machine for a few minutes if you do.
+12. `swiftlint analyze` (unused imports — needs the app build's compiler log) and
+    `periphery scan --strict` (unused declarations — runs its own xcodebuild).
+    The only two that can't move earlier.
 
 ## Interpreting the result
 

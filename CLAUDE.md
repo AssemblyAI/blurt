@@ -17,6 +17,9 @@ This file adds only what is specific to Claude Code: the tooling wired up under 
 
 The two `PostToolUse` hooks are silent no-ops off-Mac, which is exactly when `check.sh --portable`
 also skips Swift lint — so on the web, Swift formatting and lint are otherwise a pure CI concern.
+`check.yml`'s `format-patch` job softens that: it runs `swift-format` for real on every PR and
+publishes the resulting diff as a job summary and a `swift-format-patch` artifact, so the fix is
+`git apply` rather than a blind reflow.
 
 `.claude/hooks/swift-line-length.sh` narrows that gap: line width is the one `.swift-format` rule
 checkable with no toolchain, so it flags over-long lines (reading the limit from `.swift-format`) and

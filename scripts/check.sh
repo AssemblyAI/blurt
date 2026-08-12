@@ -247,6 +247,190 @@ echo "==> site integrity"
 cd "$REPO_ROOT"
 bash scripts/check-site.sh
 
+# Shell portability. scripts/ and .claude/hooks/ run against BSD userland on a Mac
+# and CI, and GNU userland in a Linux / web sandbox; shellcheck reads both as
+# correct shell, so a GNU-only idiom is written green and ships red (PR #116, the
+# BSD-sed sitemap strip). Pure text, so it runs in --portable — which is exactly
+# where the divergence gets introduced. --self-test first, because a pattern that
+# stops matching is indistinguishable from a clean tree.
+echo "==> shell portability (GNU-only idioms)"
+bash scripts/check-portability.sh --self-test >/dev/null
+bash scripts/check-portability.sh
+
+# ---------------------------------------------------------------------------
+# Source-only checks run BEFORE the Swift build below, not after it.
+#
+# They cost seconds and need no toolchain state, while the block that follows
+# costs ten-plus minutes (engine tests, two sanitizer passes, the app build, and
+# on CI the UI suite and leak scan). Ordered the other way round — as this script
+# was until the closed-PR rework audit in DX.md — a compile error meant these
+# were never reached, so their findings arrived one red run at a time. PR #80's
+# own commit message records the cost: "the three SwiftLint violations behind the
+# earlier failures".
+#
+# A green run does exactly the same total work in either order. What moves is
+# when a *red* run tells you, and how much it tells you at once.
+#
+# The two Swift checks that genuinely need the build stay behind it:
+# `swiftlint analyze` reads the compiler log the app build captures, and periphery
+# runs its own xcodebuild + index.
+# ---------------------------------------------------------------------------
+
+# Apple's swift-format (bundled with Xcode 16+) is the project's FORMATTING
+# authority. --strict makes any pending formatting a non-zero exit so this
+# check fails if someone forgot to run swift-format on their diff.
+# Lint every tracked .swift file (git ls-files) so a new source directory is
+# picked up automatically rather than silently skipped by a stale path list.
+# On a Mac it runs via xcrun; a bare swift-format on PATH (e.g. a Linux build)
+# works too. In portable mode a missing swift-format is a skip-note, matching
+# the other optional tools; on a Mac xcrun is always present so it still runs
+# unconditionally.
+cd "$REPO_ROOT"
+if command -v xcrun >/dev/null 2>&1; then
+  SWIFT_FORMAT=(xcrun swift-format)
+elif command -v swift-format >/dev/null 2>&1; then
+  SWIFT_FORMAT=(swift-format)
+else
+  SWIFT_FORMAT=()
+fi
+if [ "${#SWIFT_FORMAT[@]}" -gt 0 ]; then
+  echo "==> swift-format"
+  git ls-files -z -- '*.swift' \
+    | xargs -0 "${SWIFT_FORMAT[@]}" lint --strict
+else
+  echo "note: swift-format not installed; skipping (Swift formatting is checked on CI)"
+fi
+
+SWIFTLINT_READY=0
+if tool_ready swiftlint 'brew install swiftlint'; then
+  SWIFTLINT_READY=1
+  echo "==> swiftlint"
+  # Covers what swift-format can't: correctness smells and complexity limits
+  # (config in the sibling .swiftlint.yml). --strict promotes warnings to
+  # failures, so any lint violation fails the build — keep the tree lint-clean.
+  swiftlint lint --strict --quiet
+fi
+
+if tool_ready actionlint 'brew install actionlint'; then
+  echo "==> actionlint"
+  # Auto-discovers .github/workflows, so no file list. It also pipes each `run:`
+  # block through shellcheck when shellcheck is on PATH (it is, via the Brewfile),
+  # which is what lint-checks the inline bash in release.yml and pr-dev-build.yml.
+  actionlint
+fi
+
+if tool_ready zizmor 'brew install zizmor'; then
+  echo "==> zizmor"
+  # The security half of workflow lint, where actionlint is the correctness half:
+  # template-injection sinks in `run:` blocks, overbroad `permissions:`, unpinned
+  # action refs, credential-persistence hazards. It earns its place here because
+  # release.yml hands a Developer ID signing key to a runner — the one workflow in
+  # this repo where a scripting mistake costs more than a red build.
+  #
+  # Default persona on purpose. --persona=pedantic additionally wants a comment on
+  # every `permissions:` key and flags workflow-level grants that could be
+  # job-scoped; useful to run by hand, too noisy to gate on.
+  #
+  # --offline is already zizmor's default, but stating it keeps this check hermetic
+  # by contract: a future release that flips the default to online would otherwise
+  # start wanting a token and a network round-trip mid-gate. The audits it costs us
+  # are the ones resolving action refs upstream, which Dependabot already watches.
+  # -q drops the per-file progress chatter and the "defaulting to offline" warning,
+  # keeping findings — the only thing worth reading here.
+  zizmor -q --offline .github/workflows/
+fi
+
+if tool_ready prettier 'brew install prettier'; then
+  echo "==> prettier --check"
+  # Formatting authority for the repo's non-Swift text: CI/config (yml/yaml),
+  # docs (md), and the GitHub Pages site (html/css — which also covers the
+  # JSON-LD embedded in site/index.html). JSON is intentionally left out of the
+  # glob: the only non-conforming file is the Xcode-generated AppIcon icon.json,
+  # which must not be reformatted by hand.
+  prettier --check '**/*.{yml,yaml,md,html,css}'
+fi
+
+if tool_ready xmllint 'ships with libxml2'; then
+  # Prettier can't format XML without a plugin (and this repo has no JS toolchain
+  # to add one), so libxml2's xmllint validates well-formedness instead — covers
+  # the GitHub Pages sitemap. A parse error fails the check; --noout drops the
+  # reserialized output. xmllint ships with macOS, so CI has it without a Brewfile
+  # entry. Guard on an empty file list so xmllint never blocks reading stdin.
+  XML_FILES="$(git ls-files '*.xml')"
+  if [ -n "$XML_FILES" ]; then
+    echo "==> xmllint (XML well-formedness)"
+    # shellcheck disable=SC2086
+    xmllint --noout $XML_FILES
+  fi
+fi
+
+if tool_ready markdownlint 'brew install markdownlint-cli'; then
+  echo "==> markdownlint"
+  # Structural lint for the repo's Markdown (config in .markdownlint.jsonc;
+  # prose-wrapping rules are off there since prettier owns Markdown formatting).
+  # CLAUDE.md is a short compatibility shim that points agents at AGENTS.md, so
+  # lint the canonical doc once and skip the alias file. docs/ (plans + marketing
+  # drafts) is excluded too — prose, not shipped source (also in .markdownlintignore;
+  # filtered here as well since the file list is passed to markdownlint as args).
+  git ls-files '*.md' | grep -vx 'CLAUDE.md' | grep -vE '^docs/' | xargs markdownlint
+fi
+
+if tool_ready shellcheck 'brew install shellcheck'; then
+  echo "==> shellcheck"
+  # Static analysis for the project's shell scripts (release-*, check.sh
+  # itself) — catches quoting bugs, unset vars, and unsafe patterns.
+  #
+  # The Claude Code hooks are included: they run on every file edit, so a quoting
+  # bug there corrupts a source file rather than just failing a build, and nothing
+  # else checked them. Both directories are passed as one invocation on purpose —
+  # that puts release-lib.sh and hook-lib.sh in the input set, so the `source` lines
+  # resolve instead of raising SC1091. (shfmt below deliberately still covers only
+  # scripts/*.sh: the hooks predate any formatting check and haven't been reflowed.)
+  shellcheck scripts/*.sh .claude/hooks/*.sh
+fi
+
+if tool_ready shfmt 'brew install shfmt'; then
+  echo "==> shfmt --diff"
+  # Formatting authority for scripts/*.sh, the same division of labour swift-format
+  # and swiftlint have: shfmt owns layout, shellcheck owns correctness. --diff
+  # prints what it would change and exits non-zero, so an unformatted script fails
+  # here instead of drifting. No formatting flags on purpose — that is what lets
+  # shfmt read the [*.sh] block in .editorconfig, so editors and this check agree.
+  shfmt --diff scripts/*.sh
+fi
+
+# The evals (evals/) are the repo's only Python: offline decision support for the
+# dictation API's cleanup instruction, not shipped code. Linted, formatted, and
+# tested here anyway — a harness whose own correctness is unchecked is a bad
+# instrument, and all three tools are platform-independent, so they run in the
+# --portable subset too.
+if tool_ready ruff 'brew install ruff'; then
+  echo "==> ruff format --check (evals)"
+  # Formatting authority for the Python, config in evals/ruff.toml. --check is the
+  # non-mutating half; run `ruff format evals/` to fix.
+  ruff format --check evals/
+  echo "==> ruff check (evals)"
+  # Lint: pyflakes/pycodestyle correctness plus import order, pyupgrade, and
+  # bugbear. Line width is deliberately left to the formatter (see the config).
+  ruff check evals/
+fi
+
+if tool_ready pytest 'brew install pytest'; then
+  echo "==> pytest (evals/dictation-prompt)"
+  # The eval's offline suite: corpus construction, disfluency injection, the
+  # scoring metric, and the split disjointness. It needs no network, no API key,
+  # and no third-party packages beyond pytest itself — everything that imports
+  # DSPy lives in program.py, which these tests assert never gets imported. That
+  # property is why this is cheap enough to gate on.
+  pytest -q evals/dictation-prompt/test_eval.py
+fi
+
+echo "==> release-lib.sh unit tests"
+cd "$REPO_ROOT"
+# Pure-bash unit tests for the release orchestrator's decision helpers. No Mac
+# or network dependencies, so they run everywhere check.sh runs.
+bash scripts/release.test.sh
+
 if [ "$PORTABLE" -eq 1 ]; then
   echo "==> portable mode: skipping swift test, coverage gate, sanitizers, xcodegen"
   echo "    drift check, app build, UI tests, leaks, swiftlint analyze, periphery"
@@ -406,46 +590,15 @@ else
   fi
 fi
 
-# Apple's swift-format (bundled with Xcode 16+) is the project's FORMATTING
-# authority. --strict makes any pending formatting a non-zero exit so this
-# check fails if someone forgot to run swift-format on their diff.
-# Lint every tracked .swift file (git ls-files) so a new source directory is
-# picked up automatically rather than silently skipped by a stale path list.
-# On a Mac it runs via xcrun; a bare swift-format on PATH (e.g. a Linux build)
-# works too. In portable mode a missing swift-format is a skip-note, matching
-# the other optional tools; on a Mac xcrun is always present so it still runs
-# unconditionally.
-cd "$REPO_ROOT"
-if command -v xcrun >/dev/null 2>&1; then
-  SWIFT_FORMAT=(xcrun swift-format)
-elif command -v swift-format >/dev/null 2>&1; then
-  SWIFT_FORMAT=(swift-format)
-else
-  SWIFT_FORMAT=()
-fi
-if [ "${#SWIFT_FORMAT[@]}" -gt 0 ]; then
-  echo "==> swift-format"
-  git ls-files -z -- '*.swift' \
-    | xargs -0 "${SWIFT_FORMAT[@]}" lint --strict
-else
-  echo "note: swift-format not installed; skipping (Swift formatting is checked on CI)"
-fi
-
-if tool_ready swiftlint 'brew install swiftlint'; then
-  echo "==> swiftlint"
-  # Covers what swift-format can't: correctness smells and complexity limits
-  # (config in the sibling .swiftlint.yml). --strict promotes warnings to
-  # failures, so any lint violation fails the build — keep the tree lint-clean.
-  swiftlint lint --strict --quiet
-
-  if [ "$PORTABLE" -eq 0 ]; then
-    echo "==> swiftlint analyze (unused imports)"
-    # Analyzer rules need the compiler invocations, so feed them the build log
-    # captured above. Catches unused imports — the one dead-code gap periphery
-    # (which covers unused declarations) doesn't. False positives on AVFoundation/
-    # OSLog are suppressed via always_keep_imports in .swiftlint.yml.
-    swiftlint analyze --strict --quiet --compiler-log-path "$APP_BUILD_LOG"
-  fi
+if [ "$PORTABLE" -eq 0 ] && [ "$SWIFTLINT_READY" -eq 1 ]; then
+  # The app build above cds into App/Blurt; come back before reading the log.
+  cd "$REPO_ROOT"
+  echo "==> swiftlint analyze (unused imports)"
+  # Analyzer rules need the compiler invocations, so feed them the build log
+  # captured above. Catches unused imports — the one dead-code gap periphery
+  # (which covers unused declarations) doesn't. False positives on AVFoundation/
+  # OSLog are suppressed via always_keep_imports in .swiftlint.yml.
+  swiftlint analyze --strict --quiet --compiler-log-path "$APP_BUILD_LOG"
 fi
 
 if [ "$PORTABLE" -eq 0 ]; then
@@ -457,126 +610,6 @@ if [ "$PORTABLE" -eq 0 ]; then
     periphery scan --strict --quiet
   fi
 fi
-
-if tool_ready actionlint 'brew install actionlint'; then
-  echo "==> actionlint"
-  # Auto-discovers .github/workflows, so no file list. It also pipes each `run:`
-  # block through shellcheck when shellcheck is on PATH (it is, via the Brewfile),
-  # which is what lint-checks the inline bash in release.yml and pr-dev-build.yml.
-  actionlint
-fi
-
-if tool_ready zizmor 'brew install zizmor'; then
-  echo "==> zizmor"
-  # The security half of workflow lint, where actionlint is the correctness half:
-  # template-injection sinks in `run:` blocks, overbroad `permissions:`, unpinned
-  # action refs, credential-persistence hazards. It earns its place here because
-  # release.yml hands a Developer ID signing key to a runner — the one workflow in
-  # this repo where a scripting mistake costs more than a red build.
-  #
-  # Default persona on purpose. --persona=pedantic additionally wants a comment on
-  # every `permissions:` key and flags workflow-level grants that could be
-  # job-scoped; useful to run by hand, too noisy to gate on.
-  #
-  # --offline is already zizmor's default, but stating it keeps this check hermetic
-  # by contract: a future release that flips the default to online would otherwise
-  # start wanting a token and a network round-trip mid-gate. The audits it costs us
-  # are the ones resolving action refs upstream, which Dependabot already watches.
-  # -q drops the per-file progress chatter and the "defaulting to offline" warning,
-  # keeping findings — the only thing worth reading here.
-  zizmor -q --offline .github/workflows/
-fi
-
-if tool_ready prettier 'brew install prettier'; then
-  echo "==> prettier --check"
-  # Formatting authority for the repo's non-Swift text: CI/config (yml/yaml),
-  # docs (md), and the GitHub Pages site (html/css — which also covers the
-  # JSON-LD embedded in site/index.html). JSON is intentionally left out of the
-  # glob: the only non-conforming file is the Xcode-generated AppIcon icon.json,
-  # which must not be reformatted by hand.
-  prettier --check '**/*.{yml,yaml,md,html,css}'
-fi
-
-if tool_ready xmllint 'ships with libxml2'; then
-  # Prettier can't format XML without a plugin (and this repo has no JS toolchain
-  # to add one), so libxml2's xmllint validates well-formedness instead — covers
-  # the GitHub Pages sitemap. A parse error fails the check; --noout drops the
-  # reserialized output. xmllint ships with macOS, so CI has it without a Brewfile
-  # entry. Guard on an empty file list so xmllint never blocks reading stdin.
-  XML_FILES="$(git ls-files '*.xml')"
-  if [ -n "$XML_FILES" ]; then
-    echo "==> xmllint (XML well-formedness)"
-    # shellcheck disable=SC2086
-    xmllint --noout $XML_FILES
-  fi
-fi
-
-if tool_ready markdownlint 'brew install markdownlint-cli'; then
-  echo "==> markdownlint"
-  # Structural lint for the repo's Markdown (config in .markdownlint.jsonc;
-  # prose-wrapping rules are off there since prettier owns Markdown formatting).
-  # CLAUDE.md is a short compatibility shim that points agents at AGENTS.md, so
-  # lint the canonical doc once and skip the alias file. docs/ (plans + marketing
-  # drafts) is excluded too — prose, not shipped source (also in .markdownlintignore;
-  # filtered here as well since the file list is passed to markdownlint as args).
-  git ls-files '*.md' | grep -vx 'CLAUDE.md' | grep -vE '^docs/' | xargs markdownlint
-fi
-
-if tool_ready shellcheck 'brew install shellcheck'; then
-  echo "==> shellcheck"
-  # Static analysis for the project's shell scripts (release-*, check.sh
-  # itself) — catches quoting bugs, unset vars, and unsafe patterns.
-  #
-  # The Claude Code hooks are included: they run on every file edit, so a quoting
-  # bug there corrupts a source file rather than just failing a build, and nothing
-  # else checked them. Both directories are passed as one invocation on purpose —
-  # that puts release-lib.sh and hook-lib.sh in the input set, so the `source` lines
-  # resolve instead of raising SC1091. (shfmt below deliberately still covers only
-  # scripts/*.sh: the hooks predate any formatting check and haven't been reflowed.)
-  shellcheck scripts/*.sh .claude/hooks/*.sh
-fi
-
-if tool_ready shfmt 'brew install shfmt'; then
-  echo "==> shfmt --diff"
-  # Formatting authority for scripts/*.sh, the same division of labour swift-format
-  # and swiftlint have: shfmt owns layout, shellcheck owns correctness. --diff
-  # prints what it would change and exits non-zero, so an unformatted script fails
-  # here instead of drifting. No formatting flags on purpose — that is what lets
-  # shfmt read the [*.sh] block in .editorconfig, so editors and this check agree.
-  shfmt --diff scripts/*.sh
-fi
-
-# The evals (evals/) are the repo's only Python: offline decision support for the
-# dictation API's cleanup instruction, not shipped code. Linted, formatted, and
-# tested here anyway — a harness whose own correctness is unchecked is a bad
-# instrument, and all three tools are platform-independent, so they run in the
-# --portable subset too.
-if tool_ready ruff 'brew install ruff'; then
-  echo "==> ruff format --check (evals)"
-  # Formatting authority for the Python, config in evals/ruff.toml. --check is the
-  # non-mutating half; run `ruff format evals/` to fix.
-  ruff format --check evals/
-  echo "==> ruff check (evals)"
-  # Lint: pyflakes/pycodestyle correctness plus import order, pyupgrade, and
-  # bugbear. Line width is deliberately left to the formatter (see the config).
-  ruff check evals/
-fi
-
-if tool_ready pytest 'brew install pytest'; then
-  echo "==> pytest (evals/dictation-prompt)"
-  # The eval's offline suite: corpus construction, disfluency injection, the
-  # scoring metric, and the split disjointness. It needs no network, no API key,
-  # and no third-party packages beyond pytest itself — everything that imports
-  # DSPy lives in program.py, which these tests assert never gets imported. That
-  # property is why this is cheap enough to gate on.
-  pytest -q evals/dictation-prompt/test_eval.py
-fi
-
-echo "==> release-lib.sh unit tests"
-cd "$REPO_ROOT"
-# Pure-bash unit tests for the release orchestrator's decision helpers. No Mac
-# or network dependencies, so they run everywhere check.sh runs.
-bash scripts/release.test.sh
 
 if [ "$PORTABLE" -eq 1 ]; then
   echo "==> ok (portable subset only — Swift build/tests NOT run; CI on macos-26 is the authority on green)"
