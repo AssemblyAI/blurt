@@ -25,3 +25,11 @@ docs/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Prompt-optimizer run output. The GEPA/eval harness under evals/ writes a
+# transcript log and a scored-candidate dump per run, named after the model
+# under test (qwen-gepa.log, results-qwen-gepa.json). They are per-run scratch:
+# the prompt a run selects gets committed deliberately, the search that found
+# it does not.
+*.log
+results-*.json
