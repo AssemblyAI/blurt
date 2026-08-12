@@ -1,3 +1,6 @@
+// Foundation for `pid_t`: the resolve-insert suite below names it, and the two
+// pure text-rule suites this file started as needed no imports at all.
+import Foundation
 import Testing
 
 @testable import BlurtEngine
