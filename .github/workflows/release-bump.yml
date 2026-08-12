@@ -13,6 +13,10 @@ name: release-bump
 # and would sit unmergeable. Opening it from outside Actions — a person, or an
 # agent with its own credentials — makes `check` run normally. The job summary
 # prints a one-click link for that.
+#
+# The same GITHUB_TOKEN rule applies at the other end: merging that PR is what
+# starts `release`, so the merge has to come from outside Actions too. A human
+# clicking Merge, auto-merge, or an agent's own credentials all qualify.
 on:
   workflow_dispatch:
     inputs:
@@ -137,5 +141,7 @@ jobs:
             echo
             echo "[**Open the pull request**](https://github.com/$REPO/compare/main...release/v$VERSION?expand=1)"
             echo
-            echo "Then merge it and dispatch the \`release\` workflow with the same version."
+            echo "Merging it starts the \`release\` workflow by itself — the version landing on"
+            echo "\`main\` is the trigger, so there is nothing left to dispatch. Publishing then"
+            echo "waits on the \`release-publish\` approval once you've tested the DMG."
           } >>"$GITHUB_STEP_SUMMARY"

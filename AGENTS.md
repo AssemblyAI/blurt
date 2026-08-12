@@ -729,15 +729,21 @@ matches `project.yml`.
 
 Releases run entirely in GitHub Actions, so they can be driven from a browser or a chat session with
 no terminal: dispatch `release-bump` with the target version (it bumps `project.yml`, regenerates the
-project on `macos-26`, and pushes `release/vX.Y.Z`), open and merge that PR, then dispatch `release`.
-The bump workflow deliberately does not open the PR — a PR created by `GITHUB_TOKEN` never triggers
-`check`, so it could never merge; opening it from outside Actions works fine. The publish job then
-parks on the `release-publish` environment until a human approves — that approval is the ship gate,
-so download and test the DMG from the build job's artifacts first. Nothing is rebuilt after approval.
+project on `macos-26`, and pushes `release/vX.Y.Z`), then open and merge that PR. **Merging it starts
+`release`** — `release.yml` also triggers on a push to `main` that changes `project.yml`, and its
+`resolve` job releases only when the version actually changed and no `vX.Y.Z` tag exists yet, so a
+project.yml edit that isn't a bump skips the build. Dispatching `release` by hand still works and is
+what re-runs a failed build, `republish`, and the non-`main` dry run. The bump workflow deliberately
+does not open the PR — a PR created by `GITHUB_TOKEN` never triggers `check`, so it could never
+merge; opening it from outside Actions works fine, and the same rule applies to the merge (an Actions
+merge with `GITHUB_TOKEN` raises no `push` event, so it would not start `release`). The publish job
+then parks on the `release-publish` environment until a human approves — that approval is the ship
+gate, so download and test the DMG from the build job's artifacts first. Nothing is rebuilt after
+approval.
 
 **If you are an agent: never approve that deployment yourself**, even though the API allows it and
 you may have the permission. The gate exists so a person confirms the real artifact works before it
-reaches users; approving a build you dispatched is not a gate. This rule is repeated in
+reaches users; approving a build you started is not a gate. This rule is repeated in
 `.claude/skills/release` and lives here too because that skill is `disable-model-invocation: true` —
 it does _not_ load when someone just says "release", which is exactly when the rule matters.
 Dispatching `release-bump` with an empty version takes the next patch, resolved by `default_target` /

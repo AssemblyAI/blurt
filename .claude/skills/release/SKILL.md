@@ -27,13 +27,16 @@ before dispatching** — publishing is hard to undo.
    `scripts/release-bump.sh` on `macos-26` (marketing version + build number in
    `App/Blurt/project.yml`, regenerate the project, commit) and pushes
    `release/vX.Y.Z`.
-2. **Open the PR** for that branch and merge it once green. The workflow does not
-   open it, on purpose: a PR created by `GITHUB_TOKEN` never triggers `check` and
-   so can never merge. Opening it from here works — an agent's own credentials
-   are not `GITHUB_TOKEN`.
-3. **Dispatch `release`** with the same version. The `build` job does the whole
-   Apple path (`xcodebuild` Release → sign nested code → notarize → staple → DMG
-   → verify) and uploads the artifacts.
+2. **Open the PR** for that branch and hand it to the user to merge. The workflow
+   does not open it, on purpose: a PR created by `GITHUB_TOKEN` never triggers
+   `check` and so can never merge. Opening it from here works — an agent's own
+   credentials are not `GITHUB_TOKEN`.
+3. **Merging it starts `release`** — no dispatch. `release.yml` triggers on a
+   push to `main` touching `project.yml`; its `resolve` job confirms the version
+   changed and isn't already tagged, then the `build` job does the whole Apple
+   path (`xcodebuild` Release → sign nested code → notarize → staple → DMG →
+   verify) and uploads the artifacts. Dispatch `release` by hand only to re-run
+   a failed build, to `republish`, or for a non-`main` dry run.
 4. **Hand the ship gate to the user** — the `publish` job parks on the
    `release-publish` environment. Tell them to download the DMG from the run's
    artifacts, install it, and approve once it works. Nothing is rebuilt after
@@ -42,7 +45,7 @@ before dispatching** — publishing is hard to undo.
 
 **Never approve the `release-publish` deployment yourself**, even though the API
 allows it. The gate exists so a human confirms the real artifact reached users in
-working order; approving a build you dispatched is not a gate. If the user wants
+working order; approving a build you started is not a gate. If the user wants
 unattended releases, that is a deliberate change to the environment's reviewers,
 not something to route around.
 
@@ -51,8 +54,10 @@ local orchestrator script — the workflows are the only path.
 
 ## Guardrails / gotchas
 
-- The workflow is dispatch-only and both jobs pin `github.sha`, so a release can
-  only ever be the exact reviewed commit. Don't add a push/tag trigger.
+- The only push trigger is `main` + `project.yml` changed, narrowed further by
+  `resolve` (version actually changed, no existing tag), and both jobs pin
+  `github.sha` — so a release can only ever be the exact reviewed commit that
+  carried the bump. Don't widen that trigger, and never add a tag trigger.
 - Notarization rejects any nested mach-o/framework lacking a **secure
   timestamp**; the build re-signs frameworks for this reason — don't remove that.
 - The signer-pin (`verify_signer`) checks the produced artifacts against a
