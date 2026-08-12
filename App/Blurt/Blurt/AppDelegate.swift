@@ -140,9 +140,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // though no window is shown. `onNeedsForeground` fires when a configured app
     // loses a requirement (e.g. a revoked permission) so the user is pulled back
     // into onboarding even if every window was closed.
-    // Clear a stale Accessibility grant left by a signing-team change before the
-    // wizard's first permission check, so an updated user isn't stuck on a modal
-    // that never dismisses. See runAccessibilityGrantMigration().
+    // Clear a stale Accessibility grant left by a change of signing identity (a
+    // re-signed release, or the next ad-hoc dev build) before the wizard's first
+    // permission check, so the user isn't stuck on a modal that never dismisses.
+    // See runAccessibilityGrantMigration().
     runAccessibilityGrantMigration()
 
     let wizard = makeWizardController(coord: coord)
@@ -193,25 +194,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     #endif
   }
 
-  /// One-shot startup migration: if the signing team changed since the last launch
-  /// (or was never recorded — every currently-shipped build), a prior Accessibility
-  /// grant is pinned to the old team's designated requirement and `tccd` will keep
-  /// reporting the re-signed binary as untrusted ("toggle on, still denied"). Reset
-  /// the grant once so the normal wizard grant flow recaptures a matching
-  /// requirement. Runs before the wizard's first permission check. No-ops for
-  /// ad-hoc/unsigned builds (Team ID is nil), so CI, `swift build`, and UI-test runs
-  /// never spawn `tccutil`. Persists the new team only on a successful reset, so a
-  /// failed reset retries next launch instead of being masked.
+  /// One-shot startup migration: if the signing identity changed since the last
+  /// launch (or was never recorded — every build predating the marker), a prior
+  /// Accessibility grant is pinned to the old designated requirement and `tccd`
+  /// will keep reporting this binary as untrusted ("toggle on, still denied").
+  /// Reset the grant once so the normal wizard grant flow recaptures a matching
+  /// requirement. Runs before the wizard's first permission check. Persists the new
+  /// identity only on a successful reset, so a failed reset retries next launch
+  /// instead of being masked.
+  ///
+  /// Covers both ways the identity moves: a signing-team change (a re-signed
+  /// release), and a cdhash change between two ad-hoc-signed dev builds — the
+  /// per-PR artifact, where the requirement is rebuilt from scratch every time.
   private func runAccessibilityGrantMigration() {
-    let key = SigningIdentityMigration.lastSigningTeamDefaultsKey
+    let key = SigningIdentityMigration.lastSigningIdentityDefaultsKey
     let defaults = UserDefaults.standard
     let persist = SigningIdentityMigration.run(
-      lastTeam: defaults.string(forKey: key),
-      currentTeam: SigningIdentity.currentTeamIdentifier(),
+      lastIdentity: defaults.string(forKey: key),
+      currentIdentity: Self.currentSigningIdentity(),
       isTrusted: AXIsProcessTrusted(),
       reset: { SigningIdentity.resetAccessibilityGrant(bundleID: BlurtIdentity.subsystem) }
     )
     if let persist { defaults.set(persist, forKey: key) }
+  }
+
+  /// The identity `runAccessibilityGrantMigration` compares against the recorded
+  /// one. `SigningIdentity.current()` everywhere except the UI-test build, which
+  /// deliberately sees ad-hoc code as identity-less.
+  ///
+  /// `uitest.sh` and `check.sh` sign the app ad-hoc, so treating a cdhash as an
+  /// identity there would make every local UI-test run spawn `tccutil` and wipe the
+  /// developer's real Blurt grant — the hooks build is the one place that regularly
+  /// launches a throwaway ad-hoc binary under the shipping bundle id. Team-signed
+  /// builds (Xcode's Debug) still migrate normally, and `Debug-Local` — both
+  /// `dev-build.sh` and the PR artifact — never compiles this branch.
+  private static func currentSigningIdentity() -> String? {
+    #if UITEST_HOOKS
+      return SigningIdentity.currentTeamIdentifier()
+    #else
+      return SigningIdentity.current()
+    #endif
   }
 
   /// Builds the setup wizard's controller. Created before the run loop presents

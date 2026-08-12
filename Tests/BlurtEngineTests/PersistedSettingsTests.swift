@@ -44,15 +44,17 @@ struct PersistedSettingsTests {
     for key in PersistedSettings.allDefaultsKeys {
       defaults.set("stale", forKey: key)
     }
-    // The signing-team marker is deliberately outside the roster — it records what
-    // the TCC migration has already done, and clearing it would re-run the reset.
-    defaults.set("TEAMID", forKey: SigningIdentityMigration.lastSigningTeamDefaultsKey)
+    // The signing-identity marker is deliberately outside the roster — it records
+    // what the TCC migration has already done, and clearing it would re-run the
+    // reset.
+    defaults.set("TEAMID", forKey: SigningIdentityMigration.lastSigningIdentityDefaultsKey)
 
     PersistedSettings.resetAll(in: defaults)
 
     for key in PersistedSettings.allDefaultsKeys {
       #expect(defaults.object(forKey: key) == nil, "\(key) should have been cleared")
     }
-    #expect(defaults.string(forKey: SigningIdentityMigration.lastSigningTeamDefaultsKey) == "TEAMID")
+    #expect(
+      defaults.string(forKey: SigningIdentityMigration.lastSigningIdentityDefaultsKey) == "TEAMID")
   }
 }

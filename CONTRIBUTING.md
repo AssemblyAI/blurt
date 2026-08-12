@@ -75,8 +75,10 @@ xcodebuild -project App/Blurt/Blurt.xcodeproj -scheme Blurt \
 
 That skips the `/Applications` install, and an ad-hoc signature changes on every
 build — macOS keys the Accessibility grant to the signature, so you'd re-grant
-permissions after each rebuild. Fine for checking that a change compiles and
-launches; `dev-build.sh` is the better daily loop.
+permissions after each rebuild. (Blurt notices the signature changed and clears
+the orphaned grant at launch; without that the Blurt row stays switched on in
+System Settings while the app keeps reporting it as denied.) Fine for checking
+that a change compiles and launches; `dev-build.sh` is the better daily loop.
 
 ### After editing `App/Blurt/project.yml`
 
@@ -103,8 +105,8 @@ open the PR and let CI on `macos-26` answer that.
 Every PR that touches code gets an **installable dev build**: CI builds
 `Blurt.app` from your branch and a bot comments a download link, so a reviewer
 can try the change rather than imagine it. The build is ad-hoc signed and not
-notarized, so it needs its quarantine flag cleared — the comment spells out the
-three commands.
+notarized, so it needs its quarantine flag cleared, and its permissions granted
+once per build — the comment spells out the commands.
 
 ## Reporting bugs and ideas
 
