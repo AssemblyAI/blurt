@@ -123,8 +123,14 @@ final class UpdateCheckModel {
       isChecking = true
       defer { isChecking = false }
       guard let result = await runCheck(current: currentVersion) else { return }
-      guard case .available(let latest, let dmgURL) = result else { return }
-      await present(.available(current: currentVersion, latest: latest, dmgURL: dmgURL))
+      // Which results are worth interrupting an unprompted launch for is the
+      // engine's `forUnpromptedCheck` (nil = log only), so this path can't disagree
+      // with the wording — or quietly drop a result added later.
+      guard
+        let content = UpdateAlertContent.forUnpromptedCheck(
+          result: result, current: currentVersion)
+      else { return }
+      await present(content)
     }
   }
 

@@ -94,4 +94,18 @@ struct UpdateAlertContentTests {
     // itself still runs, it just can't name what's running.
     #expect(UpdateAlertContent.appVersionLabel(nil) == "Blurt")
   }
+
+  /// The launch check is deliberately quieter than the manual one: it interrupts
+  /// only for an available update. Pinned here because the app shell that applies
+  /// it has no test target.
+  @Test("an unprompted check speaks only for an available update")
+  func unpromptedCheckIsQuietUnlessAnUpdateExists() throws {
+    let current = try version("1.0.0")
+    let latest = try version("1.1.0")
+    #expect(UpdateAlertContent.forUnpromptedCheck(result: .upToDate, current: current) == nil)
+    #expect(
+      UpdateAlertContent.forUnpromptedCheck(
+        result: .available(version: latest, dmgURL: dmg), current: current)
+        == UpdateAlertContent.available(current: current, latest: latest, dmgURL: dmg))
+  }
 }

@@ -28,11 +28,11 @@ struct MemoryLeakTests {
   @Test("DictationSession deallocates after a full press → release → inject cycle")
   func dictationSessionNoLeak() async {
     await expectNoLeak("DictationSession") {
-      let session = DictationSession(
-        mic: StubMicCapture(),
-        transcriber: StubTranscriber(mode: .transcript("Hello.")),
-        injector: StubInjector()
-      )
+      // The same composition the session suites exercise (`makeSession`), so the
+      // graph checked for cycles here can't drift from the one they cover. The
+      // fixture's own stub references die with this expression; the session holds
+      // whatever it actually retains.
+      let session = makeSession(mode: .transcript("Hello.")).session
       await session.press()
       await session.release()
       await session.waitForIdle()

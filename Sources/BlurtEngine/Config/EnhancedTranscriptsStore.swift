@@ -12,6 +12,13 @@ public struct EnhancedTranscriptsStore {
   /// UserDefaults key holding the switch. Public so SwiftUI views can observe
   /// it directly (e.g. `@AppStorage`) and re-render on change.
   public static let defaultsKey = "BlurtEnhancedTranscripts"
+
+  /// The value an unset key reads as. Public so the Settings toggle's `@AppStorage`
+  /// default comes from here instead of restating `true` — the view and the
+  /// transcriber have to agree about the empty slot, and when both spelled it out
+  /// the view's answer drove the UI while this one drove the request.
+  public static let defaultValue = true
+
   private let defaults: UserDefaults
 
   init(defaults: UserDefaults = .standard) {
@@ -23,7 +30,7 @@ public struct EnhancedTranscriptsStore {
   /// usual `bool(forKey:)` shape (which reads a missing key as false), hence
   /// the presence check.
   var isEnabled: Bool {
-    get { defaults.object(forKey: Self.defaultsKey) as? Bool ?? true }
+    get { defaults.object(forKey: Self.defaultsKey) as? Bool ?? Self.defaultValue }
     nonmutating set { defaults.set(newValue, forKey: Self.defaultsKey) }
   }
 }

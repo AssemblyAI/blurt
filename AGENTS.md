@@ -64,6 +64,14 @@ App/Blurt/
   BlurtUITests/              XCUITest bundle (see Tests)
 Tests/BlurtEngineTests/      Swift Testing suites; Stubs/ holds the seam doubles
 scripts/                     check.sh, bootstrap.sh, dev-build.sh, uitest.sh, leaks.sh, release*.sh
+                             hand-run maintainer tools — no automated caller, invoked by a
+                             human, so "nothing references it" here does NOT mean dead code:
+                             serve-site.sh (preview site/ locally), screenshot.swift +
+                             beautify.swift (the site's window imagery, capture then
+                             composite), generate-branding-images.sh (records how the logo
+                             assets were generated — provenance, not a renderer),
+                             generate-sounds.swift (regenerates the cues AND
+                             SoundPackCatalog.swift together)
 evals/dictation-prompt/      offline DSPy harness for tuning the dictation API's cleanup
                              instruction — nothing here ships in the app, but check.sh does
                              lint (ruff), format-check (ruff format), and test (pytest) it

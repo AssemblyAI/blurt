@@ -14,7 +14,11 @@ public struct DictationKeyGate: Sendable {
 
   /// A release held at least this long counts as a hold (push-to-talk stop);
   /// shorter is a tap. 1 s is a good default when one key does both jobs.
-  public var holdThreshold: Duration
+  ///
+  /// `let`, not `var`: the gate's contract is that every decision follows from the
+  /// constructor arguments plus the timestamps callers pass, so a threshold that
+  /// could change mid-session would make the same event sequence non-deterministic.
+  public let holdThreshold: Duration
 
   private enum State: Sendable, Equatable {
     case idle

@@ -301,7 +301,6 @@ else
   # the app and the engine package, so the log covers both.
   APP_BUILD_LOG="$(mktemp -t blurt-build)"
   trap 'rm -f "$APP_BUILD_LOG"' EXIT
-  set -o pipefail
   xcodebuild \
     -project Blurt.xcodeproj \
     -scheme Blurt \
@@ -324,7 +323,6 @@ else
   # detector and fails only on leaks attributable to Blurt's own code (the fixed
   # set of system-framework XPC leaks is filtered out). Like the UI suite it needs
   # the GUI session the macos-26 runner provides.
-  cd "$REPO_ROOT"
   bash scripts/leaks.sh
 fi
 

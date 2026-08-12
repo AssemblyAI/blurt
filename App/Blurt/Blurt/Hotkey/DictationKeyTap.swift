@@ -42,10 +42,11 @@ final class DictationKeyTap {
 
   /// The engine-side event router (keycode relevance, down/up edge dedup, and
   /// the gate's tap/hold state machine — all unit-tested in BlurtEngine).
-  private var router = DictationKeyRouter(triggerKeyCode: TriggerKey.rightCommand.keyCode)
+  /// Seeded from the persisted binding in `init` — see the note there.
+  private var router: DictationKeyRouter
   /// The bound key's device-dependent `CGEventFlags` bit — the one CoreGraphics-
   /// typed piece of the binding, so it stays here rather than in the router.
-  private var triggerFlag = DictationKeyTap.flag(for: .rightCommand)
+  private var triggerFlag: CGEventFlags
 
   /// Monotonic reference; per-event timestamps are `reference.duration(to: now)`.
   private let reference = ContinuousClock.now
@@ -66,6 +67,16 @@ final class DictationKeyTap {
     self.onStop = onStop
     self.onCancel = onCancel
     self.onRecordingDiscarded = onRecordingDiscarded
+    // Both halves of the binding come from the store, not a hard-coded
+    // `.rightCommand`: `TriggerKey.fromPersisted` owns the unset default, and
+    // restating it here is the same mistake `BoundTriggerKey` and `HotkeyStepView`
+    // were each corrected away from — the tap would name the old key while the
+    // picker, ready screen, and menu bar all named the new one. `refreshBinding()`
+    // re-reads this, but nothing enforces that it runs before the first read of
+    // either property (`simulatePressForTesting` reads `router.triggerKeyCode`).
+    let key = TriggerKeyStore().triggerKey
+    self.router = DictationKeyRouter(triggerKeyCode: key.keyCode)
+    self.triggerFlag = Self.flag(for: key)
   }
 
   deinit {
