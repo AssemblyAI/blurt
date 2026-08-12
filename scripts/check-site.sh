@@ -98,8 +98,23 @@ HTML_FILES="$(find . -type f -name '*.html' | sed 's|^\./||' | sort)"
 
 # --- 2. html-proofer ---------------------------------------------------------
 # Links, images, srcset, scripts, favicon, in-page #fragments and Open Graph.
-if command -v htmlproofer >/dev/null 2>&1; then
-  echo "==> site: html-proofer"
+#
+# Run through bundler when the locked bundle is installed, so the version that
+# gates the site is the one in Gemfile.lock rather than whatever happens to be
+# on PATH. This tool's behaviour decides what the gate checks — which flags
+# exist, which checks are default-on — so an incidental newer copy is a
+# different gate. Falls back to a bare htmlproofer for anyone who installed it
+# by hand, and to a skip note when there is none.
+export BUNDLE_GEMFILE="$REPO_ROOT/Gemfile"
+HP_CMD=()
+if command -v bundle >/dev/null 2>&1 && bundle check >/dev/null 2>&1; then
+  HP_CMD=(bundle exec htmlproofer)
+elif command -v htmlproofer >/dev/null 2>&1; then
+  HP_CMD=(htmlproofer)
+fi
+
+if [ "${#HP_CMD[@]}" -gt 0 ]; then
+  echo "==> site: html-proofer (${HP_CMD[0]})"
 
   # LANG/LC_ALL pinned, and not decoratively. Run under a non-UTF-8 locale,
   # html-proofer dies inside Nokogiri on this page's em-dashes, checks zero
@@ -114,7 +129,7 @@ if command -v htmlproofer >/dev/null 2>&1; then
   HP_OUT=""
   HP_STATUS=0
   HP_OUT="$(
-    LANG=C.UTF-8 LC_ALL=C.UTF-8 htmlproofer . \
+    LANG=C.UTF-8 LC_ALL=C.UTF-8 "${HP_CMD[@]}" . \
       --disable-external \
       --checks Links,Images,Scripts,Favicon,OpenGraph \
       --root-dir . \
@@ -136,7 +151,7 @@ if command -v htmlproofer >/dev/null 2>&1; then
     fail "html-proofer checked 0 internal links — it did not actually run (locale? parse error?)"
   fi
 else
-  echo "note: htmlproofer not installed; skipping link/image/og checks (gem install html-proofer)"
+  echo "note: htmlproofer not installed; skipping link/image/og checks (run 'bundle install')"
   echo "      the CNAME, sitemap, CSS and orphan checks below still run"
 fi
 

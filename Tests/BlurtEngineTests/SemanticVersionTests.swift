@@ -77,4 +77,21 @@ struct SemanticVersionTests {
     #expect(SemanticVersion("-1.0") == nil)
     #expect(SemanticVersion("abc") == nil)
   }
+
+  @Test("a doubled or dangling separator is malformed, not silently collapsed")
+  func rejectsEmptyComponents() {
+    // The parse splits *keeping* empty subsequences, so an empty component is a
+    // component that isn't a number — malformed — rather than one that quietly
+    // disappears. Omitting them instead would read `v1.2.` as 1.2 and `v1..2` as
+    // 1.2, and `UpdateChecker` gates the entire update decision on the parsed
+    // tag: it would then compare the running build against a version the release
+    // never actually stated. A tag nobody can parse has one correct outcome, the
+    // `malformedResponse` throw that surfaces as "couldn't check for updates".
+    #expect(SemanticVersion("1..2") == nil)
+    #expect(SemanticVersion("1.2.") == nil)
+    #expect(SemanticVersion(".1.2") == nil)
+    #expect(SemanticVersion(".") == nil)
+    // A tag that is nothing but the `v` prefix leaves an empty string behind.
+    #expect(SemanticVersion("v") == nil)
+  }
 }

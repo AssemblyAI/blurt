@@ -65,15 +65,18 @@ App/Blurt/
 Tests/BlurtEngineTests/      Swift Testing suites; Stubs/ holds the seam doubles
 scripts/                     check.sh, check-site.sh, bootstrap.sh, dev-build.sh, uitest.sh, leaks.sh,
                              release*.sh
-Brewfile                     Homebrew-managed check.sh tools — every one except html-proofer,
-                             which is a gem (see bootstrap.sh / check.yml)
+Brewfile                     Homebrew-managed check.sh tools — every one except html-proofer
+Gemfile / Gemfile.lock       html-proofer, the one check.sh tool with no brew formula; locked
+                             so CI and the sandbox check the site with the same version
 evals/dictation-prompt/      offline DSPy harness for tuning the dictation API's cleanup
                              instruction — nothing here ships in the app, but check.sh does
                              lint (ruff), format-check (ruff format), and test (pytest) it
 evals/ruff.toml              ruff config for the above — the repo's only Python config
 site/                        the GitHub Pages site (html/css, sitemap) — formatted by prettier and
                              checked for deployability by scripts/check-site.sh
-.github/workflows/           check.yml (the gate, macos-26), codeql.yml, pages.yml
+.github/workflows/           check.yml (the gate + per-PR dev build, macos-26),
+                             pr-dev-build.yml (links it on the PR),
+                             release.yml (sign + publish), codeql.yml, pages.yml
 .claude/                     Claude Code hooks, skills, subagents (see CLAUDE.md)
 ```
 
@@ -104,8 +107,8 @@ In order, on a Mac. Each optional linter prints `note: <tool> not installed; ski
    missing `CNAME` produces no error in this repo — just a 404 on the live site.
 
    It is a hybrid, split along what a general tool can know. **html-proofer** (a gem — the one
-   `check.sh` tool with no Homebrew formula, so it is installed separately in `bootstrap.sh` and
-   `check.yml`) covers links, images including `<source srcset>`, scripts, favicon, in-page
+   `check.sh` tool with no Homebrew formula, so it lives in the repo's `Gemfile` and is run via
+   `bundle exec`, pinned by `Gemfile.lock` so every environment gates the site with one version) covers links, images including `<source srcset>`, scripts, favicon, in-page
    `#fragment`s, and Open Graph; its stricter defaults also flag a missing `alt`, an `<a>` without
    `href`, and an empty `src`. Every check it offers is on — `--check-sri` is the one deliberate
    omission, being a no-op under `--disable-external` and inapplicable to the one external
@@ -138,11 +141,23 @@ In order, on a Mac. Each optional linter prints `note: <tool> not installed; ski
 7. **`scripts/leaks.sh`** — whole-app leak check under the Darwin leak detector, failing only on
    leaks attributable to Blurt's own code. Like the UI suite it needs a GUI session (windowserver),
    which the `macos-26` runner provides.
+
+   **Steps 6 and 7 run on CI only.** Both drive the real app: the XCUITest runner takes over
+   keyboard focus and clicking, and the leak run cycles dictation through the key tap and pastes
+   into whatever is frontmost — so a local `check.sh` would make the machine unusable for the
+   minutes they last. Locally they're skipped with a note (and the closing `ok` line repeats it);
+   opt in with `BLURT_INTEGRATION_TESTS=1 scripts/check.sh`, or run `scripts/uitest.sh` /
+   `scripts/leaks.sh` directly. There is deliberately **no opt-out** under CI — a flag CI honoured
+   would be a green-looking bypass of the required gate.
+
 8. **`swift-format lint --strict`**, then `swiftlint lint --strict`, `swiftlint analyze` (unused
    imports), `periphery scan --strict`.
-9. **actionlint / prettier** (yml/yaml/md plus the Pages site's html/css) **/ xmllint** (XML
-   well-formedness, e.g. the sitemap) **/ markdownlint / shellcheck / shfmt --diff** (`scripts/*.sh`
-   formatting, style from the `[*.sh]` block in `.editorconfig`).
+9. **actionlint** (workflow correctness — and, via shellcheck, the inline `run:` bash) **/ zizmor**
+   (workflow _security_: template injection, overbroad `permissions:`, unpinned actions — it matters
+   most for `release.yml`, which hands the Developer ID key to a runner) **/ prettier** (yml/yaml/md
+   plus the Pages site's html/css) **/ xmllint** (XML well-formedness, e.g. the sitemap) **/
+   markdownlint / shellcheck / shfmt --diff** (`scripts/*.sh` formatting, style from the `[*.sh]`
+   block in `.editorconfig`).
 10. **The evals** (`evals/`, the repo's only Python): `ruff format --check`, `ruff check`, and
     `pytest evals/dictation-prompt/test_eval.py`. Config in `evals/ruff.toml`. The suite needs no
     network, no API key, and nothing beyond pytest — the one test that needs DSPy skips itself when
@@ -150,7 +165,11 @@ In order, on a Mac. Each optional linter prints `note: <tool> not installed; ski
 11. **`release.test.sh`** — pure-bash unit tests for the release orchestrator's decision helpers.
 
 CI (`.github/workflows/check.yml`) installs all of these via Homebrew on `macos-26` and runs the same
-script, so a clean local `check.sh` matches CI by construction.
+script, so a clean local `check.sh` matches CI by construction. The same workflow's `dev-build` job
+builds an ad-hoc-signed `Debug-Local` app for every code PR and uploads it as an artifact;
+`pr-dev-build.yml` then comments the download link on the PR (a `workflow_run` job, because a
+fork's `pull_request` token is read-only and can't comment). It is **not** part of the required
+gate — it compiles the same sources `check` does, so it is never the only signal.
 
 Reporting rules: exit 0 with no `error:` lines is green. Anything else is not — quote the failing
 step verbatim, don't soften it, fix it, then re-run the **full** script (a `swift test --filter` pass
@@ -166,14 +185,17 @@ xcodebuild -project App/Blurt/Blurt.xcodeproj \
 ```
 
 The xcodebuild post-build script (`App/Blurt/project.yml`) copies the bundle to
-`/Applications/Blurt.app` (or `~/Applications/` fallback) and re-signs it with the Developer ID.
-This is deliberate: TCC refuses to register apps living in DerivedData or `/tmp`, so
-Accessibility/Input-Monitoring toggles never appear unless the app has a stable install path.
-**Don't bypass it.**
+`/Applications/Blurt.app` (or `~/Applications/` fallback) and re-signs it with the **Apple
+Development** cert (login keychain) under a team-based designated requirement — never the Developer
+ID release key, which lives in a locked keychain used only by releases. This is deliberate: TCC
+refuses to register apps living in DerivedData or `/tmp`, so Accessibility/Input-Monitoring toggles
+never appear unless the app has a stable install path. **Don't bypass it.**
 
-`scripts/dev-build.sh` wraps that for everyday local dev — it runs the **signed** Debug build (so the
-install step actually fires, unlike `check.sh`, which disables codesigning for CI) and pipes through
-`xcbeautify` when present. Signing needs the Developer ID cert in your keychain.
+`scripts/dev-build.sh` wraps that for everyday local dev — it runs the **signed** `Debug-Local` build
+(so the install step actually fires, unlike `check.sh`, which disables codesigning for CI) and pipes
+through `xcbeautify` when present. [`CONTRIBUTING.md`](./CONTRIBUTING.md) is the setup guide for
+someone starting from a clean Mac, including the ad-hoc build for contributors with no signing
+certificate.
 
 ### Working without a macOS toolchain (remote / Linux sandboxes)
 
@@ -187,7 +209,7 @@ Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `
   test passed. Say plainly that verification happens on a Mac — CI runs the full `check.sh` on
   `macos-26` and is the authority on green.
 - **The portable gate**: `scripts/check.sh --portable` runs the repo-integrity guards
-  (dependencies, sound catalog, site — the last using the html-proofer gem), then actionlint, prettier, xmllint,
+  (dependencies, sound catalog, site — the last using the html-proofer gem), then actionlint, zizmor, prettier, xmllint,
   markdownlint, shellcheck, shfmt, ruff (lint + format check), pytest over the evals, and
   `release.test.sh` (plus `swift-format`/`swiftlint lint` if Linux
   builds happen to be on `PATH`). It fully verifies docs, site, scripts, eval, and workflow changes.
@@ -635,8 +657,10 @@ the whole app under the Darwin leak detector.
 
 **Integration tests (XCUITest)** — `App/Blurt/BlurtUITests/`, a `bundle.ui-testing` target declared
 in `project.yml` and wired into the `Blurt` scheme's test action, so it runs via `xcodebuild test`.
-`scripts/uitest.sh` drives it and `scripts/check.sh` invokes that as part of the required gate, so it
-needs a GUI session and is skipped only by `--portable`.
+`scripts/uitest.sh` drives it and `scripts/check.sh` invokes that as part of the required gate — but
+**on CI only**: it needs a GUI session and commandeers it, so a local `check.sh` skips it (as it does
+the leak scan) unless `BLURT_INTEGRATION_TESTS=1`. Run `scripts/uitest.sh` directly to iterate on the
+suite; CI is the authority on whether it passes.
 
 The suite drives the **real app** against deterministic, offline doubles rather than mocking the UI.
 A `-BlurtUITest` launch argument flips on a Debug-only harness (`App/Blurt/Blurt/UITestSupport.swift`,
@@ -668,6 +692,12 @@ matches `project.yml`.
 
 ## Releasing
 
-Releases are built, signed, notarized, and published locally via `scripts/release.sh`.
-Security-critical custody, certificate/notary rotation, and the roll-forward-only policy for a bad
-release are documented in [`RELEASE.md`](./RELEASE.md).
+Releases are built, signed, notarized, and published by the `release` GitHub Actions workflow
+(`.github/workflows/release.yml`), driven by `scripts/release.sh`: run 1 opens the version-bump PR,
+run 2 dispatches the workflow and follows it. The publish job parks on the `release-publish`
+environment until a human approves — that approval is the ship gate, so download and test the DMG
+from the build job's artifacts first. Nothing is rebuilt after approval.
+
+Signing-key custody (a base64 `.p12` secret imported into an ephemeral keychain, never a persistent
+one), the required environments and secrets, certificate/notary rotation, and the roll-forward-only
+policy for a bad release are documented in [`RELEASE.md`](./RELEASE.md).

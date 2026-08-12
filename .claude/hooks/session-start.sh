@@ -2,8 +2,8 @@
 # SessionStart hook: prepare a Claude Code on the web (Linux) sandbox.
 #
 # Blurt is macOS-only, so the Swift toolchain can't run here — but the portable
-# checks (prettier / xmllint / markdownlint / shellcheck / actionlint /
-# release.test.sh) can. This hook installs the missing portable linters so
+# checks (prettier / xmllint / markdownlint / shellcheck / actionlint / zizmor /
+# shfmt / html-proofer / release.test.sh) can. This hook installs the missing portable linters so
 # `scripts/check.sh --portable` works, then prints a one-line preflight so the
 # session starts knowing CI (macos-26) is the authority on green.
 #
@@ -54,31 +54,36 @@ if ! command -v actionlint >/dev/null 2>&1 && command -v go >/dev/null 2>&1; the
     || note "actionlint install failed (go install)"
 fi
 
-# shfmt (go) — the formatting authority for scripts/*.sh, and the one portable
-# check that used to be missing here. Without it `check.sh --portable` skipped
-# shfmt with a note, so a shell script edited in a web session looked verified
-# and then failed CI on formatting alone. Same install route as actionlint: the
-# release binaries are blocked, the Go module proxy is not.
+# shfmt (go) — the formatting authority for scripts/*.sh, and a check.sh gate, so
+# without it a web session pushes shell edits that CI can still fail on layout.
+# Same channel as actionlint: GitHub release binaries are blocked, the Go module
+# proxy is not.
 if ! command -v shfmt >/dev/null 2>&1 && command -v go >/dev/null 2>&1; then
   GOBIN=/usr/local/bin go install mvdan.cc/sh/v3/cmd/shfmt@latest >/dev/null 2>&1 \
     || note "shfmt install failed (go install)"
 fi
 
-# html-proofer (gem) — the Pages site's link/image/srcset/favicon/Open Graph
+# zizmor (pip) — the security audit for .github/workflows. Published to PyPI as
+# well as Homebrew, so pip is the one channel that works here; its GitHub release
+# binaries are blocked by the same network policy that rules out actionlint's.
+if ! command -v zizmor >/dev/null 2>&1 && command -v pip3 >/dev/null 2>&1; then
+  pip3 install --quiet zizmor >/dev/null 2>&1 || true
+  command -v zizmor >/dev/null 2>&1 || note "zizmor install failed (pip)"
+fi
+
+# html-proofer (Gemfile) — the Pages site's link/image/srcset/favicon/Open Graph
 # checker, used by scripts/check-site.sh. No Homebrew formula and no GitHub
 # release binary involved, so rubygems is reachable under the default policy.
-# The gem bindir is not on PATH here, hence the symlink.
-if ! command -v htmlproofer >/dev/null 2>&1 && command -v gem >/dev/null 2>&1; then
-  if gem install --no-document html-proofer >/dev/null 2>&1; then
-    gem_bin="$(gem environment | awk -F': ' '/EXECUTABLE DIRECTORY/{print $2}')"
-    [ -x "$gem_bin/htmlproofer" ] && ln -sf "$gem_bin/htmlproofer" /usr/local/bin/htmlproofer
-  fi
-  command -v htmlproofer >/dev/null 2>&1 || note "html-proofer install failed (gem)"
+# `bundle install` so the sandbox gets the same pinned version CI does;
+# check-site.sh then finds it via `bundle exec`, no PATH plumbing needed.
+if command -v bundle >/dev/null 2>&1; then
+  (cd "${CLAUDE_PROJECT_DIR:-.}" && bundle install --quiet >/dev/null 2>&1) \
+    || note "bundle install failed (html-proofer unavailable)"
 fi
 
 # Preflight summary — this lands in the session context.
 missing=""
-for tool in prettier xmllint markdownlint shellcheck actionlint shfmt htmlproofer; do
+for tool in prettier xmllint markdownlint shellcheck actionlint zizmor shfmt; do
   command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
 done
 echo "Blurt web sandbox: no macOS toolchain — Swift build/tests/format run on CI (macos-26), the authority on green."

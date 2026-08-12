@@ -1,0 +1,104 @@
+name: pr-dev-build
+
+# Post the dev-build download link on a PR that came from a **fork**.
+#
+# Same-repo PRs are handled inside `check` itself (the `dev-build-link` job) —
+# simpler, and the link lands as soon as the build finishes. A fork's
+# `pull_request` run gets a read-only GITHUB_TOKEN no matter what its
+# `permissions:` block says, so it cannot comment at all; only a `workflow_run`
+# job, which runs from the default branch with the repository's own token, can.
+# Forks are the normal path for outside contributors — exactly the people most
+# helped by a one-click build — so the extra workflow earns its keep.
+#
+# Both paths post the same marked comment via scripts/pr-dev-build-comment.sh,
+# so a PR ends up with exactly one link either way.
+#
+# That extra trust is why this job never checks out or executes PR code: the
+# checkout below is the default branch (what workflow_run runs from), not the
+# contributor's branch, and the only PR-influenced values are read over the API.
+# Note that `workflow_run` only fires for the copy of this file on the default
+# branch, so edits here take effect after they merge.
+#
+# zizmor flags `workflow_run` as fundamentally insecure, which is the right
+# default: the trigger is dangerous precisely because it pairs a writable token
+# with a run whose inputs an outside contributor influenced. It is suppressed
+# here because the two conditions that make it exploitable are both absent —
+# no PR code is fetched, let alone executed, and every attacker-influenced value
+# reaches the shell through `env:` rather than a `${{ }}` interpolation, so none
+# of it can be parsed as shell. Re-audit this suppression if either changes.
+on: # zizmor: ignore[dangerous-triggers]
+  workflow_run:
+    workflows: [check]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+
+jobs:
+  comment:
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No `ref:` — for workflow_run that is the default branch, i.e. this
+          # repo's own code. Never the fork's.
+          path: blurt
+          persist-credentials: false
+
+      - name: Resolve the artifact
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+
+          # No artifact means the dev-build job didn't run (a docs-only PR) or
+          # didn't finish. Nothing to say — leave the PR alone.
+          artifact="$(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" \
+            --jq '[.artifacts[] | select(.expired == false)
+                   | select(.name | startswith("blurt-dev-build-pr-"))] | first // empty')"
+          if [ -z "$artifact" ]; then
+            echo "no dev-build artifact on run $RUN_ID — nothing to post"
+            echo "found=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          artifact_id="$(printf '%s' "$artifact" | jq -r .id)"
+          artifact_name="$(printf '%s' "$artifact" | jq -r .name)"
+          # check.yml names the artifact blurt-dev-build-pr-<number> precisely so
+          # this is derivable: github.event.workflow_run.pull_requests is empty
+          # for a run that came from a fork.
+          pr="${artifact_name##*-}"
+          case "$pr" in
+            '' | *[!0-9]*)
+              echo "::error::could not read a PR number out of artifact name '$artifact_name'"
+              exit 1
+              ;;
+          esac
+
+          {
+            echo "found=true"
+            echo "pr=$pr"
+            echo "artifact_name=$artifact_name"
+            echo "artifact_url=https://github.com/$REPO/actions/runs/$RUN_ID/artifacts/$artifact_id"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Comment the dev build link
+        if: steps.resolve.outputs.found == 'true'
+        working-directory: blurt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ steps.resolve.outputs.pr }}
+          ARTIFACT_NAME: ${{ steps.resolve.outputs.artifact_name }}
+          ARTIFACT_URL: ${{ steps.resolve.outputs.artifact_url }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: scripts/pr-dev-build-comment.sh --post
