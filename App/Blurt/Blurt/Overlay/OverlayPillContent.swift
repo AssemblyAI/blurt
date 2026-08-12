@@ -135,8 +135,9 @@ struct WaveformMeter: View {
       // (unit-tested there); this view owns the frame, the color, and the cadence.
       WaveformBarsLevel(
         bridge: bridge, layout: MeterBarRow(availableSize: geo.size),
-        animated: animated, color: color)
-        .frame(width: geo.size.width, height: geo.size.height)
+        animated: animated, color: color
+      )
+      .frame(width: geo.size.width, height: geo.size.height)
     }
   }
 }
