@@ -24,31 +24,47 @@
 # network, and a third party's outage is not this repo being broken. Pure text
 # and filesystem work, so it runs in `check.sh --portable` too.
 #
-# Why this isn't an off-the-shelf link checker — the obvious question, so here
-# is the measurement rather than an assertion. htmltest (the closest fit, and
-# installable by the same `go install` route as actionlint) was run against this
-# site and against each failure mode above. It caught 3 of 8: the broken
-# stylesheet href, the broken <img src>, and the dangling #anchor. It missed the
-# <source srcset> candidate, the og:image, both CNAME cases, and the orphaned
-# asset — its check set (CheckImages/CheckLinks/CheckAnchors/CheckFavicon/
-# CheckDoctype/CheckMailto…) has no srcset and no Open Graph support at all. It
-# also flags the intentional alt="" on the decorative brand logo until told not
-# to. lychee and vnu are link-checking and HTML-validity respectively, so the
-# same gap; html-proofer covers og:image but would add a Ruby gem toolchain and
-# still not the CNAME or orphan checks.
+# Why this isn't an off-the-shelf link checker. Static-site checkers are a
+# mature category and the honest answer is that they do most of this — so here
+# are measured numbers, both tools run against this site and against every
+# failure mode above.
 #
-# That gap is structural, not a missing feature: link checkers check links,
-# whereas five of these eight are the site's *identity* invariants — that CNAME
-# and every absolute URL agree, and that nothing dead ships. No general tool
-# models "site/CNAME is the source of truth for the domain in canonical/og:url/
-# sitemap/robots", because that is a GitHub-Pages-plus-this-repo convention.
-# So the real choice was a tool *plus* a smaller script, not a tool instead of
-# one — and for a single prettier-formatted page that was not worth a config
-# file, a CI install step outside the Brewfile, and a second thing to reason
-# about. Revisit if the site grows past one page: at that point the parsing
-# robustness starts to earn its keep, and the split is htmltest for
-# links/anchors/images with this script kept for the CNAME, srcset, and orphan
-# checks. Do not swap wholesale — that silently drops five of the eight.
+#   html-proofer 5.2 (the GitHub-Pages-world standard) catches 5 of 8:
+#     the stylesheet href, the <img src>, the <source srcset> candidate, the
+#     dangling #anchor, and — only with --swap-urls — the og:image.
+#   htmltest catches 3 of 8: it has no srcset and no Open Graph support, and
+#     flags the intentional alt="" on the decorative brand logo until told not to.
+#
+# Neither catches the remaining three, and nor would lychee or vnu, because
+# those three aren't link problems: a CNAME that disagrees with the absolute
+# URLs, a missing CNAME, and an unreferenced file under assets/. An HTML checker
+# reads HTML; these are repo-level invariants about which files exist and which
+# domain owns them. The stale <loc> in sitemap.xml is outside all of them too —
+# it isn't HTML.
+#
+# The decisive detail is what it takes to make html-proofer see og:image at all.
+# That URL is absolute (https://<domain>/assets/og-card.png), so with external
+# checking off it is skipped as somebody else's problem, and with external
+# checking on it is fetched over the network — which tests the *currently
+# deployed* site, not the one about to ship, so a deleted local og-card passes.
+# The fix is --swap-urls '^https\://<domain>/:/', which hardcodes the domain in
+# the checker's config. That is a second place the domain is written down, and
+# it is exactly the duplication section 4 exists to catch: change CNAME, forget
+# the config, and the check keeps passing against a domain the site no longer
+# serves. Buying a link checker would mean re-deriving that guard anyway.
+#
+# One more measured caveat, seen here rather than theorised: run without a UTF-8
+# locale, html-proofer died on this page's em-dashes inside Nokogiri, checked
+# zero links, printed "finished successfully", and exited 0. A gate that passes
+# silently when it didn't run is the failure mode check.sh's coverage gate was
+# rewritten to prevent (see the die_check calls there).
+#
+# So: a tool *plus* a smaller script, never a tool instead of one. For a single
+# prettier-formatted page that wasn't worth a gem, a config file, a pinned
+# locale, and a duplicated domain. Revisit if the site grows past one page — the
+# split is html-proofer for links/anchors/images/og, this script kept for the
+# CNAME, sitemap, and orphan checks. Do not swap wholesale: that drops three
+# checks, and silently.
 #
 # The line-oriented attribute parsing below is safe for the same reason:
 # check.sh runs `prettier --check` over site/*.html, so the formatting this
