@@ -24,6 +24,11 @@ set -euo pipefail
 # The marker is how a later run finds this comment and edits it in place, so a
 # long-running PR carries one link that stays current rather than a stack of
 # stale ones. Both callers use it, so both converge on the same comment.
+#
+# The body says "built from <sha>" rather than naming it as the PR head: a
+# docs-only push skips the dev-build job (and this comment with it), so the
+# newest build can legitimately lag the branch tip. Stating what the build IS
+# stays true in that case; claiming it is the current head would not.
 readonly MARKER="<!-- blurt-dev-build -->"
 
 usage() {
@@ -47,8 +52,8 @@ render() {
 $MARKER
 ### Dev build
 
-[**Download Blurt.app**]($ARTIFACT_URL) — this PR (\`$short_sha\`) merged into the base
-branch, built \`Debug-Local\` and ad-hoc signed. Expires in 14 days.
+[**Download Blurt.app**]($ARTIFACT_URL) — built from \`$short_sha\`, \`Debug-Local\`,
+ad-hoc signed. Expires in 14 days.
 
 <details>
 <summary>Installing it</summary>

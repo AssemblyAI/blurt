@@ -16,8 +16,8 @@ struct DictationSessionReadinessTests {
     let stt = StubTranscriber(mode: .transcript("never"))
     let injector = StubInjector()
     let session = DictationSession(
-      mic: mic, transcriber: stt, injector: injector,
-      readinessCheck: { .apiKeyMissing }
+      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
+      readinessCheck: { .apiKeyMissing }, seams: .offline
     )
 
     await session.press()
@@ -34,8 +34,8 @@ struct DictationSessionReadinessTests {
     let injector = StubInjector()
     let ready = Mutex(false)
     let session = DictationSession(
-      mic: mic, transcriber: stt, injector: injector,
-      readinessCheck: { ready.withLock { $0 } ? nil : .apiKeyMissing }
+      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
+      readinessCheck: { ready.withLock { $0 } ? nil : .apiKeyMissing }, seams: .offline
     )
 
     await session.press()

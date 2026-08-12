@@ -12,8 +12,9 @@ private struct DecodedError: Decodable {
   let field: String?
 }
 
-/// Each test gets a fresh empty file in a unique temp directory so the host's real
-/// `~/Library/Logs/Blurt/errors.jsonl` is never touched.
+/// Each test that genuinely needs a file gets a fresh empty one in a unique temp
+/// directory so the host's real `~/Library/Logs/Blurt/errors.jsonl` is never
+/// touched.
 private func makeTempErrorLogURL() -> URL {
   let dir = FileManager.default.temporaryDirectory
     .appendingPathComponent("BlurtErrorLogTests-\(UUID().uuidString)", isDirectory: true)
@@ -30,8 +31,72 @@ private func firstEntry(in url: URL) -> DecodedError? {
   return try? JSONDecoder().decode(DecodedError.self, from: Data(line.utf8))
 }
 
-/// The unconditional writer: entry formatting and the on-disk JSONL shape. Whether
-/// any of it runs is the developer-mode gate, covered in the suite below.
+/// What one failure records. Driven through `makeErrorEntry`, because each of
+/// these is a question about the entry rather than the file — including the one
+/// that matters most: that the text the user was editing is nowhere in it. Asked
+/// of a written line, that was `!line.contains("hunter2")` against a helper that
+/// returns `""` on any read failure, so it also passed when nothing had been
+/// written.
+@Suite("DictationLog.makeErrorEntry")
+struct DictationErrorEntryTests {
+  private let context = TranscriptionContext(
+    appName: "1Password", windowTitle: "Vault", fieldLabel: "Password",
+    priorText: "hunter2", selectedText: "s3cret")
+
+  @Test("records the stable kind, the human description, and a timestamp")
+  func kindDescriptionAndTimestamp() {
+    let entry = DictationLog.makeErrorEntry(
+      .apiKeyMissing, context: nil, now: Date(timeIntervalSince1970: 1_700_000_000))
+    #expect(entry.kind == "apiKeyMissing")
+    #expect(entry.error == BlurtError.apiKeyMissing.errorDescription)
+    #expect(entry.ts.hasPrefix("2023-11-14"))
+  }
+
+  /// The reason `error` is recorded in full and not just `kind`: for a
+  /// transcription failure the underlying error carries the API status code and
+  /// server message, which is the whole diagnosis.
+  @Test("keeps the wrapped error's description for .sttFailed")
+  func keepsUnderlyingDescription() {
+    let underlying = NSError(
+      domain: "Test", code: 1, userInfo: [NSLocalizedDescriptionKey: "AssemblyAI error 429"])
+    let entry = DictationLog.makeErrorEntry(
+      .sttFailed(underlying: underlying), context: nil, now: Date())
+    #expect(entry.kind == "sttFailed")
+    #expect(entry.error.contains("AssemblyAI error 429"))
+  }
+
+  @Test("threads the focus context's app, window, and field")
+  func threadsDiagnosticContext() {
+    let entry = DictationLog.makeErrorEntry(.targetAppLost, context: context, now: Date())
+    #expect(entry.app == "1Password")
+    #expect(entry.window == "Vault")
+    #expect(entry.field == "Password")
+  }
+
+  /// The error log is diagnostics-only: the text the user was editing explains
+  /// nothing about a failure and is the most sensitive part of the snapshot, so
+  /// the entry has no field to put it in. Reflecting over the encoded keys says
+  /// so positively — a `prior` field added later fails this rather than silently
+  /// starting to log passwords.
+  @Test("has no field for prior text, selected text, or the assembled prompt")
+  func carriesNoSurroundingText() throws {
+    let entry = DictationLog.makeErrorEntry(.targetAppLost, context: context, now: Date())
+    let data = try DictationLog.makeEncoder().encode(entry)
+    let object = try JSONSerialization.jsonObject(with: data)
+    let encoded = try #require(object as? [String: Any])
+    #expect(encoded.keys.sorted() == ["app", "error", "field", "kind", "ts", "window"])
+  }
+
+  @Test("leaves the context fields nil when nothing was captured")
+  func noContextLeavesFieldsNil() {
+    let entry = DictationLog.makeErrorEntry(.apiKeyMissing, context: nil, now: Date())
+    #expect(entry.app == nil)
+    #expect(entry.window == nil)
+    #expect(entry.field == nil)
+  }
+}
+
+/// The on-disk format: what only a real file can answer.
 @Suite("DictationLog.writeError")
 struct DictationErrorLogTests {
   @Test("creates the file on first append")
@@ -45,15 +110,13 @@ struct DictationErrorLogTests {
   @Test("writes one JSON object per line, terminated by \\n")
   func writesOneJSONLine() throws {
     let url = makeTempErrorLogURL()
-    let now = Date(timeIntervalSince1970: 1_700_000_000)
-    DictationLog.writeError(.apiKeyMissing, to: url, now: now)
+    DictationLog.writeError(.apiKeyMissing, to: url, now: Date())
     let contents = readLog(url)
     #expect(contents.hasSuffix("\n"))
     // One data line + one trailing empty (from the \n).
     #expect(contents.split(separator: "\n", omittingEmptySubsequences: false).count == 2)
-    let decoded = try #require(firstEntry(in: url))
-    #expect(decoded.kind == "apiKeyMissing")
-    #expect(decoded.ts.contains("2023-11-14"))
+    let entry = try #require(firstEntry(in: url))
+    #expect(entry.kind == "apiKeyMissing")
   }
 
   @Test("appends in order, preserves existing entries")
@@ -69,64 +132,14 @@ struct DictationErrorLogTests {
     #expect(decoded.map(\.kind) == ["apiKeyMissing", "targetAppLost", "noEditableTarget"])
   }
 
-  @Test("records the human-facing description alongside the stable kind")
-  func recordsDescription() throws {
-    let url = makeTempErrorLogURL()
-    DictationLog.writeError(.apiKeyMissing, to: url, now: Date())
-    let decoded = try #require(firstEntry(in: url))
-    #expect(decoded.error == BlurtError.apiKeyMissing.errorDescription)
-  }
-
-  /// The reason `error` is logged in full and not just `kind`: for a transcription
-  /// failure the underlying error carries the API status code and server message,
-  /// which is the whole diagnosis.
-  @Test("keeps the wrapped error's description for .sttFailed")
-  func keepsUnderlyingDescription() throws {
-    let url = makeTempErrorLogURL()
-    let underlying = NSError(
-      domain: "Test", code: 1, userInfo: [NSLocalizedDescriptionKey: "AssemblyAI error 429"])
-    DictationLog.writeError(.sttFailed(underlying: underlying), to: url, now: Date())
-    let decoded = try #require(firstEntry(in: url))
-    #expect(decoded.kind == "sttFailed")
-    #expect(decoded.error.contains("AssemblyAI error 429"))
-  }
-
-  @Test("threads the focus context's app, window, and field onto disk")
-  func logsContext() throws {
-    let url = makeTempErrorLogURL()
-    let context = TranscriptionContext(
-      appName: "Mail", windowTitle: "Re: Q3 pricing", fieldLabel: "Body",
-      priorText: "Hi Sam,", selectedText: "the old plan")
-    DictationLog.writeError(.targetAppLost, context: context, to: url, now: Date())
-    let decoded = try #require(firstEntry(in: url))
-    #expect(decoded.app == "Mail")
-    #expect(decoded.window == "Re: Q3 pricing")
-    #expect(decoded.field == "Body")
-  }
-
-  /// The error log is diagnostics-only: the text the user was editing explains
-  /// nothing about a failure and is the most sensitive part of the snapshot, so it
-  /// must not be written even with developer mode on.
-  @Test("never writes prior text, selected text, or the assembled prompt")
-  func omitsSurroundingText() {
-    let url = makeTempErrorLogURL()
-    let context = TranscriptionContext(
-      appName: "1Password", windowTitle: "Vault", fieldLabel: "Password",
-      priorText: "hunter2", selectedText: "s3cret")
-    DictationLog.writeError(.targetAppLost, context: context, to: url, now: Date())
-    let line = readLog(url)
-    #expect(!line.contains("hunter2"))
-    #expect(!line.contains("s3cret"))
-    #expect(!line.contains("\"prompt\""))
-  }
-
-  @Test("omits the context fields when nothing was captured")
-  func omitsContextWhenAbsent() {
+  @Test("a nil entry field is omitted from the line, not written as null")
+  func nilFieldsAreOmitted() throws {
     let url = makeTempErrorLogURL()
     DictationLog.writeError(.apiKeyMissing, context: nil, to: url, now: Date())
+    // Require the entry landed first, so the missing keys below mean something.
+    let entry = try #require(firstEntry(in: url))
+    #expect(entry.kind == "apiKeyMissing")
     let line = readLog(url)
-    // `Encodable` synthesis uses `encodeIfPresent`, so a nil field is absent
-    // rather than `"app":null`.
     #expect(!line.contains("\"app\""))
     #expect(!line.contains("\"window\""))
     #expect(!line.contains("\"field\""))
@@ -142,25 +155,12 @@ struct DictationErrorLogTests {
     DictationLog.writeError(.targetAppLost, to: url, now: Date())
     #expect(!FileManager.default.fileExists(atPath: url.path))
   }
-
-  @Test("uses sorted JSON keys for deterministic on-disk format")
-  func sortedKeys() throws {
-    let url = makeTempErrorLogURL()
-    DictationLog.writeError(.apiKeyMissing, to: url, now: Date())
-    let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
-    // Sorted keys → error < kind < ts alphabetically.
-    let error = try #require(line.range(of: "\"error\"")).lowerBound
-    let kind = try #require(line.range(of: "\"kind\"")).lowerBound
-    let ts = try #require(line.range(of: "\"ts\"")).lowerBound
-    #expect(error < kind)
-    #expect(kind < ts)
-  }
 }
 
 /// The developer-mode gate on `appendError` — the same privacy guarantee the
 /// transcript log's gate carries: a user who never opts in has nothing on disk.
-/// Every case in the suite above drives `writeError` directly, so none of them
-/// cross this guard.
+/// Every case in the suites above drives `makeErrorEntry`/`writeError` directly,
+/// so none of them cross this guard.
 @Suite("DictationLog error-log developer-mode gate")
 struct DictationErrorLogGateTests {
   @Test("with developer mode off, appendError writes nothing to disk")
@@ -192,8 +192,7 @@ struct DictationErrorLogGateTests {
   /// neither half may read a different default.
   @Test("both logs answer to the same switch")
   func sharesTheDeveloperModeSwitch() {
-    let defaults = freshDefaults()
-    let store = DeveloperModeStore(defaults: defaults)
+    let store = DeveloperModeStore(defaults: freshDefaults())
     store.isEnabled = true
     let errorURL = makeTempErrorLogURL()
     let transcriptURL = makeTempErrorLogURL()

@@ -66,7 +66,7 @@ extension DictationSession {
       return
     }
 
-    DictationLog.append(transcript: text, context: capturedContext)
+    seams.logTranscript(text, capturedContext)
     // Record every produced transcript (trimmed for display) in "Recent" before
     // injection — pasted, copied, and failed-to-paste all count.
     onTranscriptDelivered?(trimmed)

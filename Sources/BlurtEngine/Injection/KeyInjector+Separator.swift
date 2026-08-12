@@ -4,6 +4,9 @@
 // tests already use — `KeyInjectorLeadingSeparatorTests` and the
 // `KeyInjector.separatorBasis` suite cover exactly these two functions, and
 // neither touches the pasteboard, the event system, or the actor's state.
+// `resolveInsert`, which composes them with the window-identity decision, stays
+// beside that state in `KeyInjector.swift` (it needs `pid_t`, and this file
+// deliberately imports nothing).
 extension KeyInjector {
   /// Joins `text` to whatever precedes the caret with exactly one separating space,
   /// so consecutive dictations don't run together. Prepends a *leading* space only

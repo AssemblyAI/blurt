@@ -1,28 +1,69 @@
 # Release runbook
 
-Blurt is built, signed, notarized, and published by the **`release` GitHub
-Actions workflow** (`.github/workflows/release.yml`), not from a maintainer's
-Mac. `scripts/release.sh` drives the whole thing: run 1 opens the version-bump
-PR, run 2 dispatches the workflow and follows it. This file covers the
-security-critical custody and policy decisions that aren't obvious from the
-scripts and the workflow.
+Blurt is built, signed, notarized, and published by GitHub Actions, not from a
+maintainer's Mac. Every step is a workflow dispatch or a web action, so a release
+can be driven from a browser, a phone, or a chat session with no terminal
+anywhere in the loop. This file covers the security-critical custody and policy
+decisions that aren't obvious from the scripts and the workflows.
 
 ## Shape of a release
 
-| Stage                                                 | Where                                                  | Gate                                                                |
-| ----------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------- |
-| Bump `CFBundleShortVersionString` + `CFBundleVersion` | Local (`scripts/release-bump.sh`), lands via PR        | Normal review + the `check` workflow                                |
-| Build → sign → notarize → staple → DMG                | `build` job on `macos-26` (`scripts/release-build.sh`) | Signer-pin, Gatekeeper assessment, mount-and-verify (all in-script) |
-| Tag, push, publish the GitHub Release                 | `publish` job (`scripts/release-publish.sh`)           | **Required reviewer on the `release-publish` environment**          |
+| Stage                                                 | Where                                                             | Gate                                                                |
+| ----------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Bump `CFBundleShortVersionString` + `CFBundleVersion` | `release-bump` workflow on `macos-26` (`scripts/release-bump.sh`) | Lands on `main` via PR: normal review + the `check` workflow        |
+| Build → sign → notarize → staple → DMG                | `release` workflow, `build` job (`scripts/release-build.sh`)      | Signer-pin, Gatekeeper assessment, mount-and-verify (all in-script) |
+| Tag, push, publish the GitHub Release                 | `release` workflow, `publish` job (`scripts/release-publish.sh`)  | **Required reviewer on the `release-publish` environment**          |
 
-The workflow is **dispatch-only**: a release is a deliberate act against one
-reviewed commit, never a side effect of a push or a tag. Both jobs check out
-`github.sha` — the exact commit the workflow was dispatched at — so the tag
-cannot land on a commit other than the one that was built.
+Start to finish:
 
-A dispatch from any ref other than `main` runs the build job and **stops**: the
-publish job is skipped. That makes the signing and notarization path safe to
-exercise as a dry run from a branch.
+1. **Dispatch `release-bump`** with the target version. It bumps `project.yml`,
+   regenerates the project, and pushes `release/vX.Y.Z`. It deliberately does
+   **not** open the PR — events created by `GITHUB_TOKEN` don't trigger
+   workflows, so a PR opened from inside Actions would never get a `check` run
+   and could never merge. The job summary links a one-click compare page.
+2. **Open that PR and merge it.** Opened from outside Actions — by a person or
+   by an agent with its own credentials — `check` runs normally.
+3. **Dispatch `release`** with the same version.
+4. **Approve the `release-publish` deployment** once you've tested the DMG.
+
+The `release` workflow is **dispatch-only**: a release is a deliberate act
+against one reviewed commit, never a side effect of a push or a tag. Both jobs
+check out `github.sha` — the exact commit the workflow was dispatched at — so the
+tag cannot land on a commit other than the one that was built.
+
+Leave the version input empty and `release-bump` takes the next patch itself,
+using the same `default_target` / `decide_run` rules the release scripts have
+always used (`scripts/release-lib.sh`, unit-tested by `release.test.sh`). It
+refuses rather than guesses when the state is ambiguous: if `main` already
+carries an unreleased bump it tells you to dispatch `release` instead, and if the
+next patch number is already taken by a tag it stops and asks for an explicit
+version rather than silently renumbering your release.
+
+### Dry-running the signing path
+
+A dispatch of `release` from any ref other than `main` runs the `build` job and
+**stops** — the `publish` job is skipped — so the signing and notarization path
+can be exercised without shipping anything.
+
+Whether that is actually available depends on the `release-build` environment's
+deployment-branch policy, because the `build` job declares that environment:
+
+- **`main` only** — the tightest setting, and the branch dry run is _not_
+  available: a dispatch from any other ref is blocked before the job starts.
+- **`main` plus a pattern like `release-dry-run*`** — rehearsals work from a
+  branch matching that pattern, and the signing key stays unreachable from
+  every other branch.
+
+**Recommended: `main` only.** The asymmetry decides it. Skipping a rehearsal
+costs you a failed build and a re-dispatch — the publish job still gates on
+approval, so a botched signing change cannot reach users. Standing access from a
+branch pattern costs you a permanent widening of who can reach the one credential
+whose compromise means someone signs malware as you and Gatekeeper accepts it:
+anyone who can push a branch could dispatch a workflow on it that prints the key.
+
+If you ever do need a rehearsal, add the pattern, run it, and remove it. That is
+a deliberate and auditable act, which is exactly what touching this key should
+be — unlike a standing grant nobody revisits.
 
 ### The ship gate
 
@@ -38,9 +79,10 @@ Nothing is rebuilt after approval, so what you test is byte-for-byte what ships.
 Two environments (Settings → Environments). They are what scope the secrets, so
 neither is optional.
 
-**`release-build`** — holds the signing and notary secrets. Restrict its
-deployment branches to `main` so a fork or a stray branch can never reach the
-Developer ID key.
+**`release-build`** — holds the signing and notary secrets. Set its deployment
+branches to `main` (optionally plus a `release-dry-run*` pattern — see
+[Dry-running the signing path](#dry-running-the-signing-path)) so a fork or a
+stray branch can never reach the Developer ID key.
 
 | Secret                 | What                                                                                  |
 | ---------------------- | ------------------------------------------------------------------------------------- |
@@ -162,7 +204,8 @@ it cannot sign.
 Blurt does **not** yank published releases. The update check only ever offers
 users a strictly higher version (`UpdateChecker` compares `SemanticVersion` and
 reports `.available` only when the latest tag is greater), so the fix for any bad
-build is to **ship a new patch** via `scripts/release.sh`.
+build is to **ship a new patch**: dispatch `release-bump`, merge, dispatch
+`release`.
 
 The one exception is a fault caught **before announcing**, while the same version
 is still safe to overwrite (e.g. a corrupted upload flagged by the post-publish

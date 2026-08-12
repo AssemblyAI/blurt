@@ -7,7 +7,7 @@ name: release
 #
 # Dispatch-only on purpose: a release must be a deliberate act against a
 # specific reviewed commit of main, never a side effect of a push or a tag.
-# `scripts/release.sh` dispatches this after the version-bump PR merges.
+# Dispatch it after the version-bump PR from `release-bump.yml` has merged.
 on:
   workflow_dispatch:
     inputs:

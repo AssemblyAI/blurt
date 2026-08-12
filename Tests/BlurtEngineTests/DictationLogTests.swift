@@ -8,20 +8,9 @@ private struct DecodedEntry: Decodable {
   let ts: String
 }
 
-/// Decodes the optional focus-context fields so tests can assert they're
-/// threaded from the `TranscriptionContext` onto disk.
-private struct DecodedContext: Decodable {
-  let app: String?
-  let window: String?
-  let field: String?
-  let prior: String?
-  let selected: String?
-  let prompt: String?
-}
-
-/// Each test gets a fresh empty file in a unique temp directory so the host's real
-/// `~/Library/Logs/Blurt/dictations.jsonl` is never touched. File-scoped so the
-/// gate suite below shares it.
+/// Each test that genuinely needs a file gets a fresh empty one in a unique temp
+/// directory so the host's real `~/Library/Logs/Blurt/dictations.jsonl` is never
+/// touched. File-scoped so the gate suite below shares it.
 private func makeTempLogURL() -> URL {
   let dir = FileManager.default.temporaryDirectory
     .appendingPathComponent("BlurtDictationLogTests-\(UUID().uuidString)", isDirectory: true)
@@ -33,8 +22,75 @@ private func readLog(_ url: URL) -> String {
   (try? String(contentsOf: url, encoding: .utf8)) ?? ""
 }
 
-/// The unconditional writer: entry formatting and the on-disk JSONL shape. Whether
-/// any of it runs at all is the developer-mode gate, covered in the suite below.
+/// The first written line decoded back, so a test can require the entry actually
+/// landed before asserting anything about what the line does *not* contain.
+private func firstEntry(in url: URL) -> DecodedEntry? {
+  guard let line = readLog(url).split(separator: "\n").first.map(String.init) else { return nil }
+  return try? JSONDecoder().decode(DecodedEntry.self, from: Data(line.utf8))
+}
+
+/// What one entry carries. These drive `makeEntry` and assert the value, because
+/// every one of them is a question about the entry rather than about the file:
+/// asked through `write` they needed a temp directory each, and the negative
+/// cases ("no `selected` key", "no `prompt` key") were substring searches that
+/// passed just as happily when nothing had been written.
+@Suite("DictationLog.makeEntry")
+struct DictationLogEntryTests {
+  private let context = TranscriptionContext(
+    appName: "Mail", windowTitle: "Re: Q3 pricing", fieldLabel: "Body",
+    priorText: "Hi Sam,", selectedText: "the old plan")
+
+  @Test("carries the transcript and an ISO-8601 timestamp")
+  func transcriptAndTimestamp() {
+    let entry = DictationLog.makeEntry(
+      transcript: "Polished.", context: nil, now: Date(timeIntervalSince1970: 1_700_000_000))
+    #expect(entry.transcript == "Polished.")
+    #expect(entry.ts.hasPrefix("2023-11-14"))
+  }
+
+  @Test("threads every focus-context field, including the selected text")
+  func threadsContext() {
+    let entry = DictationLog.makeEntry(transcript: "p", context: context, now: Date())
+    #expect(entry.app == "Mail")
+    #expect(entry.window == "Re: Q3 pricing")
+    #expect(entry.field == "Body")
+    #expect(entry.prior == "Hi Sam,")
+    #expect(entry.selected == "the old plan")
+  }
+
+  @Test("leaves every context field nil when nothing was captured")
+  func noContextLeavesFieldsNil() {
+    let entry = DictationLog.makeEntry(transcript: "p", context: nil, now: Date())
+    #expect(entry.app == nil)
+    #expect(entry.window == nil)
+    #expect(entry.field == nil)
+    #expect(entry.prior == nil)
+    #expect(entry.selected == nil)
+    #expect(entry.prompt == nil)
+  }
+
+  @Test("logs the same prompt the transcriber sends — none, while the prompt is off")
+  func logsWhatTheRequestCarries() {
+    let entry = DictationLog.makeEntry(transcript: "p", context: context, now: Date())
+    // The entry mirrors the request, whichever way `TranscriptionPrompt.isEnabled`
+    // is set — that's why the writer calls `build` rather than `assemble`.
+    #expect(entry.prompt == TranscriptionPrompt.build(context: context))
+    // And with the switch off, that means no prompt at all, even though this
+    // context is rich enough to assemble one.
+    #expect(TranscriptionPrompt.assemble(context: context) != nil)
+    #expect(entry.prompt == nil)
+  }
+
+  @Test("keeps a transcript verbatim, including non-ASCII")
+  func unicodeKeptVerbatim() {
+    let transcript = "Café — 北京 🎙️."
+    #expect(DictationLog.makeEntry(transcript: transcript, context: nil, now: Date()).transcript == transcript)
+  }
+}
+
+/// The on-disk format itself: what only a real file can answer — lazy creation,
+/// one-object-per-line framing, append order, and that a nil field is omitted
+/// rather than serialized as `null`.
 @Suite("DictationLog.write")
 struct DictationLogTests {
   @Test("creates the file on first append")
@@ -46,118 +102,64 @@ struct DictationLogTests {
   }
 
   @Test("writes one JSON object per line, terminated by \\n")
-  func writesOneJSONLine() {
+  func writesOneJSONLine() throws {
     let url = makeTempLogURL()
-    let now = Date(timeIntervalSince1970: 1_700_000_000)
-    DictationLog.write(transcript: "Polished.", to: url, now: now)
+    DictationLog.write(
+      transcript: "Polished.", to: url, now: Date(timeIntervalSince1970: 1_700_000_000))
     let contents = readLog(url)
     #expect(contents.hasSuffix("\n"))
-    let lines = contents.split(separator: "\n", omittingEmptySubsequences: false)
     // One data line + one trailing empty (from the \n).
-    #expect(lines.count == 2)
-    let decoded = try? JSONDecoder().decode(
-      DecodedEntry.self,
-      from: Data(lines[0].utf8))
-    #expect(decoded?.transcript == "Polished.")
-    #expect(decoded?.ts.contains("2023-11-14") == true)
+    #expect(contents.split(separator: "\n", omittingEmptySubsequences: false).count == 2)
+    let decoded = try #require(firstEntry(in: url))
+    #expect(decoded.transcript == "Polished.")
+    #expect(decoded.ts.contains("2023-11-14"))
   }
 
   @Test("appends in order, preserves existing entries")
   func appendsInOrder() {
     let url = makeTempLogURL()
     let t0 = Date(timeIntervalSince1970: 1_700_000_000)
-    let t1 = t0.addingTimeInterval(1)
-    let t2 = t1.addingTimeInterval(1)
     DictationLog.write(transcript: "A.", to: url, now: t0)
-    DictationLog.write(transcript: "B.", to: url, now: t1)
-    DictationLog.write(transcript: "C.", to: url, now: t2)
-    let lines = readLog(url)
+    DictationLog.write(transcript: "B.", to: url, now: t0.addingTimeInterval(1))
+    DictationLog.write(transcript: "C.", to: url, now: t0.addingTimeInterval(2))
+    let decoded = readLog(url)
       .split(separator: "\n", omittingEmptySubsequences: true)
-      .map(String.init)
-    #expect(lines.count == 3)
-    let decoded = lines.compactMap { line -> DecodedEntry? in
-      try? JSONDecoder().decode(DecodedEntry.self, from: Data(line.utf8))
-    }
+      .compactMap { try? JSONDecoder().decode(DecodedEntry.self, from: Data($0.utf8)) }
     #expect(decoded.map(\.transcript) == ["A.", "B.", "C."])
   }
 
-  @Test("uses sorted JSON keys for deterministic on-disk format")
-  func sortedKeys() throws {
-    let url = makeTempLogURL()
-    DictationLog.write(transcript: "p", to: url, now: Date())
-    let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
-    // Sorted keys → transcript < ts alphabetically.
-    let transcript = try #require(line.range(of: "\"transcript\"")).lowerBound
-    let ts = try #require(line.range(of: "\"ts\"")).lowerBound
-    #expect(transcript < ts)
-  }
-
-  @Test("threads focus context (incl. selected text) onto disk")
-  func logsContext() {
-    let url = makeTempLogURL()
-    let context = TranscriptionContext(
-      appName: "Mail", windowTitle: "Re: Q3 pricing", fieldLabel: "Body",
-      priorText: "Hi Sam,", selectedText: "the old plan")
-    DictationLog.write(transcript: "p", context: context, to: url, now: Date())
-    let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
-    let decoded = try? JSONDecoder().decode(DecodedContext.self, from: Data(line.utf8))
-    #expect(decoded?.app == "Mail")
-    #expect(decoded?.window == "Re: Q3 pricing")
-    #expect(decoded?.field == "Body")
-    #expect(decoded?.prior == "Hi Sam,")
-    #expect(decoded?.selected == "the old plan")
-  }
-
-  @Test("omits the selected field when nothing is selected")
-  func omitsSelectedWhenAbsent() {
+  @Test("a nil entry field is omitted from the line, not written as null")
+  func nilFieldsAreOmitted() throws {
     let url = makeTempLogURL()
     DictationLog.write(transcript: "p", context: nil, to: url, now: Date())
-    let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
+    // Non-vacuous: the line has to exist and carry the transcript before its
+    // *missing* keys mean anything.
+    let entry = try #require(firstEntry(in: url))
+    #expect(entry.transcript == "p")
     // `Encodable` synthesis uses `encodeIfPresent`, so a nil field is absent
     // rather than `"selected":null`.
+    let line = readLog(url)
     #expect(!line.contains("selected"))
-  }
-
-  @Test("logs the same prompt the transcriber sends — none, while the prompt is off")
-  func logsAssembledPrompt() {
-    let url = makeTempLogURL()
-    let context = TranscriptionContext(
-      appName: "Mail", windowTitle: "Re: Q3 pricing", fieldLabel: "Body",
-      priorText: "Hi Sam,", selectedText: "the old plan")
-    DictationLog.write(transcript: "p", context: context, to: url, now: Date())
-    let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
-    let decoded = try? JSONDecoder().decode(DecodedContext.self, from: Data(line.utf8))
-    // The entry mirrors the request, whichever way `TranscriptionPrompt.isEnabled`
-    // is set — that's why the writer calls `build` rather than `assemble`.
-    #expect(decoded?.prompt == TranscriptionPrompt.build(context: context))
-    // And with the switch off, that means no `prompt` key at all, even though
-    // this context is rich enough to assemble one.
-    #expect(TranscriptionPrompt.assemble(context: context) != nil)
     #expect(!line.contains("\"prompt\""))
   }
+}
 
-  @Test("omits the prompt field when there is no context to build one")
-  func omitsPromptWhenNoContext() {
-    let url = makeTempLogURL()
-    DictationLog.write(transcript: "p", context: nil, to: url, now: Date())
-    let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
-    #expect(!line.contains("\"prompt\""))
-  }
-
-  @Test("survives unicode in transcript field")
-  func unicodeRoundTrip() {
-    let url = makeTempLogURL()
-    let transcript = "Café — 北京 🎙️."
-    DictationLog.write(transcript: transcript, to: url, now: Date())
-    let line = readLog(url).split(separator: "\n").first.map(String.init) ?? ""
-    let decoded = try? JSONDecoder().decode(DecodedEntry.self, from: Data(line.utf8))
-    #expect(decoded?.transcript == transcript)
+/// The shared encoder both logs write through.
+@Suite("DictationLog.makeEncoder")
+struct DictationLogEncoderTests {
+  @Test("sorts keys, so the on-disk JSONL is byte-stable")
+  func sortsKeys() {
+    // Asserted on the encoder rather than by comparing where key names happen to
+    // land in a written line: a stable diff for post-hoc greps is a property of
+    // this configuration, and both logs share it.
+    #expect(DictationLog.makeEncoder().outputFormatting.contains(.sortedKeys))
   }
 }
 
 /// The developer-mode gate on `append` — the switch's entire privacy guarantee:
 /// "a user who never opts in has no dictation text on disk." Every case in the
-/// suite above drives `write` directly, so none of them cross this guard.
+/// suites above drives `makeEntry`/`write` directly, so none of them cross this
+/// guard.
 @Suite("DictationLog developer-mode gate")
 struct DictationLogGateTests {
   @Test("with developer mode off, append writes nothing to disk")

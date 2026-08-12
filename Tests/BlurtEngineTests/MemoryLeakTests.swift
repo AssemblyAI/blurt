@@ -31,7 +31,12 @@ struct MemoryLeakTests {
       let session = DictationSession(
         mic: StubMicCapture(),
         transcriber: StubTranscriber(mode: .transcript("Hello.")),
-        injector: StubInjector()
+        injector: StubInjector(),
+        keyTermsProvider: { [] },
+        // The seams hold no reference back to the session, so an offline set
+        // neither masks nor creates a cycle — it just keeps the leak check off
+        // the window server and out of the user's real log.
+        seams: .offline
       )
       await session.press()
       await session.release()

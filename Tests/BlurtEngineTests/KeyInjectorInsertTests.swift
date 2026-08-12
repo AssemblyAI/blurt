@@ -191,55 +191,13 @@ struct KeyInjectorInsertTests {
     // First paste lands as-is; the second is separated from it even though AX
     // gave us no prior text — the injector remembers what it just pasted into
     // this same window.
+    //
+    // The one end-to-end case: it pins that `insert` actually threads its
+    // resolution through (feeding the target's pid in, recording the resolved
+    // window after the paste). The rules themselves — a changed title, a missing
+    // title, a changed target — are cases of `resolveInsert` and live in
+    // `KeyInjectorResolveInsertTests`, which needs no live process at all.
     #expect(pasted.values == ["First.", " Second."])
-  }
-
-  @Test("opaque editor: no phantom space when the window title changes (a tab/file switch)")
-  func opaqueEditorDifferentWindowTitleNoSeparator() async throws {
-    let (injector, pasted) = makeRecordingInjector()
-    // Same target PID for both dictations (one browser process, or one Electron
-    // window), but the window title changes between them — a different browser
-    // tab (e.g. switching from Gmail to a fresh Google Docs tab) or a different
-    // file in the same editor. A shared PID alone must not be enough to carry a
-    // leading space into what is really a different field.
-    await injector.setTargetApp(try liveTargetApp())
-
-    try await injector.insert("First.", after: nil, windowTitle: "Inbox — Gmail")
-    try await injector.insert("Second.", after: nil, windowTitle: "Untitled document — Google Docs")
-
-    #expect(pasted.values == ["First.", "Second."])
-  }
-
-  @Test("opaque editor: no phantom space when no window title is available")
-  func opaqueEditorNoWindowTitleNoSeparator() async throws {
-    let (injector, pasted) = makeRecordingInjector()
-    // Same target PID, but neither dictation could read a window title — can't
-    // confirm it's really the same window, so the fallback stays off rather
-    // than guessing.
-    await injector.setTargetApp(try liveTargetApp())
-
-    try await injector.insert("First.", after: nil)
-    try await injector.insert("Second.", after: nil)
-
-    #expect(pasted.values == ["First.", "Second."])
-  }
-
-  @Test("opaque editor: no phantom space after the target app changes")
-  func opaqueEditorDifferentTargetNoSeparator() async throws {
-    let (injector, pasted) = makeRecordingInjector()
-    let apps = NSWorkspace.shared.runningApplications.filter {
-      $0.processIdentifier > 0 && !$0.isTerminated
-    }
-    try #require(apps.count >= 2)
-
-    await injector.setTargetApp(apps[0])
-    try await injector.insert("First.", after: nil)
-    await injector.setTargetApp(apps[1])
-    try await injector.insert("Second.", after: nil)
-
-    // The second paste targets a different app, so the remembered text from the
-    // first must not bleed across as a leading space.
-    #expect(pasted.values == ["First.", "Second."])
   }
 
   @Test("overlapping inserts still restore the user's original clipboard")

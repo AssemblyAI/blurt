@@ -22,7 +22,9 @@ struct CancelRaceTests {
     let mic = StubMicCapture()
     let stt = GatedTranscriber(text: "Hello world.")
     let injector = StubInjector()
-    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+    let session = DictationSession(
+      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
+      seams: .offline)
 
     await session.press()
     await session.release()  // -> .transcribing, spawns the pipeline task
@@ -51,7 +53,9 @@ struct CancelRaceTests {
     // reported as a fault) over the .cancelled the cancel() already claimed.
     let stt = GatedTranscriber(text: "Hello world.", throwsWhenCancelled: true)
     let injector = StubInjector()
-    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+    let session = DictationSession(
+      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
+      seams: .offline)
 
     await session.press()
     await session.release()
@@ -75,7 +79,9 @@ struct CancelRaceTests {
       let mic = StubMicCapture()
       let stt = StubTranscriber(mode: .transcript("Hello world."))
       let injector = GatedInjector(onRecord: { pasted() })
-      let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+      let session = DictationSession(
+        mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
+        seams: .offline)
 
       await session.press()
       await session.release()
@@ -98,7 +104,9 @@ struct CancelRaceTests {
     let mic = GatedStopMic()
     let stt = StubTranscriber(mode: .transcript("Hello world."))
     let injector = StubInjector()
-    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+    let session = DictationSession(
+      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
+      seams: .offline)
 
     await session.press()
     #expect(await session.phase == .recording)
@@ -125,7 +133,9 @@ struct CancelRaceTests {
     let mic = GatedStopMic(stopError: URLError(.unknown))
     let stt = StubTranscriber(mode: .transcript("Hello world."))
     let injector = StubInjector()
-    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+    let session = DictationSession(
+      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
+      seams: .offline)
 
     await session.press()
     let releaseTask = Task { await session.release() }
@@ -155,7 +165,9 @@ struct CancelRaceTests {
     await mic.setStopError(URLError(.unknown))
     let stt = StubTranscriber(mode: .transcript("Hello world."))
     let injector = StubInjector()
-    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+    let session = DictationSession(
+      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
+      seams: .offline)
 
     await session.press()
     #expect(await session.phase == .recording)
@@ -171,7 +183,9 @@ struct CancelRaceTests {
     let mic = StubMicCapture()
     let stt = GatedTranscriber(text: "Hello world.")
     let injector = StubInjector()
-    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+    let session = DictationSession(
+      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
+      seams: .offline)
 
     await session.press()
     await session.release()  // -> .transcribing, spawns the pipeline task
@@ -196,7 +210,9 @@ struct CancelRaceTests {
     let mic = StubMicCapture()
     let stt = StubTranscriber(mode: .transcript("Hello world."))
     let injector = StubInjector()
-    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+    let session = DictationSession(
+      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
+      seams: .offline)
 
     await session.press()
     #expect(await session.phase == .recording)
@@ -214,7 +230,9 @@ struct CancelRaceTests {
     // check, once the paste has landed): insert returns *normally* even though
     // the task was cancelled mid-flight.
     let injector = GatedInjector(honorsCancellation: false)
-    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+    let session = DictationSession(
+      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
+      seams: .offline)
 
     await session.press()
     await session.release()
@@ -242,7 +260,8 @@ struct CancelRaceTests {
     // the timer simply hasn't elapsed in wall-clock time.
     let clock = TestClock()
     let session = DictationSession(
-      mic: mic, transcriber: stt, injector: injector, maxRecordingSeconds: 0.05, clock: clock)
+      mic: mic, transcriber: stt, injector: injector, maxRecordingSeconds: 0.05, clock: clock,
+      keyTermsProvider: { [] }, seams: .offline)
 
     await session.press()
     #expect(await session.phase == .recording)
@@ -293,7 +312,7 @@ private actor GatedTranscriber: TranscriberProtocol {
   }
 
   func waitUntilStarted() async { await gate.waitUntilEntered() }
-  func allowToFinish() async { await gate.allowToFinish() }
+  func allowToFinish() async { gate.allowToFinish() }
 }
 
 /// Injector stub that honors task cancellation (like the real `KeyInjector`) and
@@ -324,5 +343,5 @@ private actor GatedInjector: InjectorProtocol {
   }
 
   func waitUntilInsertEntered() async { await gate.waitUntilEntered() }
-  func allowInsertToFinish() async { await gate.allowToFinish() }
+  func allowInsertToFinish() async { gate.allowToFinish() }
 }
