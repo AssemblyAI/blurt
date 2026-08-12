@@ -106,16 +106,18 @@ jobs:
   # required gate (`gate` below ignores it): it builds the same sources `check`
   # already compiles, so a failure here is never the only signal.
   #
-  # The download link is posted on the PR by the `pr-dev-build` workflow — a
-  # pull_request run from a fork gets a read-only token and cannot comment, so
-  # that step has to happen in a workflow_run job. This one only produces the
-  # artifact, and names it with the PR number so the follow-up knows where to
-  # post (github.event.workflow_run.pull_requests is empty for forks).
+  # The download link is posted by `dev-build-link` below for same-repo PRs, and
+  # by the `pr-dev-build` workflow for fork PRs — a pull_request run from a fork
+  # gets a read-only token no matter what `permissions:` says, so that case has
+  # to happen in a workflow_run job. Both post the same marked comment, so
+  # whichever runs, a PR ends up with exactly one link.
   dev-build:
     needs: changes
     if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
     runs-on: macos-26
     timeout-minutes: 30
+    outputs:
+      artifact-url: ${{ steps.upload.outputs.artifact-url }}
 
     steps:
       - name: Checkout blurt
@@ -159,6 +161,7 @@ jobs:
           ditto -c -k --keepParent "$app" "$RUNNER_TEMP/out/Blurt-dev-${SHA:0:7}.zip"
 
       - name: Upload the dev build
+        id: upload
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           # The PR number in the name is how pr-dev-build.yml finds the PR.
@@ -169,28 +172,47 @@ jobs:
           retention-days: 14
 
       - name: Summarize
+        working-directory: blurt
         env:
-          SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          {
-            echo "### Dev build"
-            echo
-            echo "Blurt.app from this PR (\`${SHA:0:7}\` merged into the base branch),"
-            echo "built \`Debug-Local\` and ad-hoc signed."
-            echo "Download it from the **Artifacts** section of this run, then:"
-            echo
-            echo '```sh'
-            echo "unzip ~/Downloads/blurt-dev-build-pr-*.zip -d ~/Downloads"
-            echo "unzip ~/Downloads/Blurt-dev-${SHA:0:7}.zip -d ~/Downloads"
-            echo "xattr -dr com.apple.quarantine ~/Downloads/Blurt.app"
-            echo "rm -rf /Applications/Blurt.app && cp -R ~/Downloads/Blurt.app /Applications/"
-            echo '```'
-            echo
-            echo "It is **ad-hoc signed and not notarized**, so Gatekeeper refuses it until"
-            echo "the quarantine flag is cleared, and macOS treats it as a different app from"
-            echo "a released Blurt — re-grant Microphone, Accessibility, and Input Monitoring,"
-            echo "and reinstall the release DMG when you're done reviewing."
-          } >>"$GITHUB_STEP_SUMMARY"
+          REPO: ${{ github.repository }}
+          ARTIFACT_NAME: blurt-dev-build-pr-${{ github.event.pull_request.number }}
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: scripts/pr-dev-build-comment.sh --render >>"$GITHUB_STEP_SUMMARY"
+
+  # Post the link on same-repo PRs. A separate job on purpose: `dev-build` has
+  # checked out and *built* PR code (project.yml runs post-build scripts), and a
+  # job that does that should not also hold a writable token. This one holds the
+  # token and touches nothing but the comment API.
+  #
+  # Fork PRs are excluded because their token is read-only regardless of the
+  # permissions block — the API call would just 403. `pr-dev-build.yml` covers
+  # them, posting the identical marked comment.
+  dev-build-link:
+    needs: dev-build
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          persist-credentials: false
+
+      - name: Comment the dev build link
+        working-directory: blurt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          ARTIFACT_NAME: blurt-dev-build-pr-${{ github.event.pull_request.number }}
+          ARTIFACT_URL: ${{ needs.dev-build.outputs.artifact-url }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: scripts/pr-dev-build-comment.sh --post
 
   # Always-runs summary job, so a *skipped* `check` can't be mistaken for a pass.
   # GitHub reports a skipped required check to branch protection as successful, so
