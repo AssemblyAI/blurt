@@ -1,75 +1,38 @@
 #!/bin/bash
 # GitHub Pages site integrity check for site/.
 #
-# What check.sh already does for the site is *formatting* — prettier owns the
-# html/css layout, xmllint owns the sitemap's well-formedness. Neither one looks
-# at whether the page it just formatted actually works once deployed:
 # `.github/workflows/pages.yml` uploads site/ verbatim with no build step, so a
 # renamed asset, a stale absolute URL, or a missing CNAME is not a build error
 # anywhere — it is a 404 (or an unbound custom domain) on the live site, and the
-# repo stays green the whole time. Prettier reformats a broken `src=` as happily
-# as a working one.
+# repo stays green the whole time. prettier and xmllint in check.sh cover the
+# site's *formatting* and the sitemap's well-formedness; prettier reformats a
+# broken src= as happily as a working one.
 #
-# So this script checks the things that decide whether site/ *deploys correctly*:
+# Two halves, split along what a general tool can know:
 #
-#   1. the files GitHub Pages needs are present;
-#   2. every local reference in the html/css resolves to a file that exists;
-#   3. every in-page `#fragment` link has a matching id;
-#   4. every absolute https://<domain>/ URL — canonical, og:image, JSON-LD,
-#      sitemap, robots — names the domain in CNAME and resolves to a real file;
-#   5. nothing under assets/ is shipped without being referenced.
+#   html-proofer  — links, images (including <source srcset>), scripts, favicon
+#                   and Open Graph inside the HTML. A mature checker parses HTML
+#                   properly; doing it with grep is the part most likely to rot.
+#   this script   — the repo-level invariants no HTML checker models: that CNAME
+#                   and every absolute URL agree, that the sitemap and robots
+#                   point at this domain, and that nothing under assets/ ships
+#                   unreferenced. Plus CSS url(), which html-proofer never reads
+#                   because it only looks at HTML.
+#
+# The domain is read from site/CNAME once and handed to html-proofer as its
+# --swap-urls pattern. That matters: og:image and friends are absolute URLs, so
+# html-proofer skips them as external unless told that https://<domain>/ IS this
+# directory. Writing that domain into a config file would be a second place it
+# is recorded and the exact drift section 3 exists to catch — deriving it from
+# CNAME keeps one source of truth.
 #
 # Deliberately offline: external links (github.com, assemblyai.com, Google
-# Fonts) are NOT fetched. check.sh must be deterministic and runnable with no
-# network, and a third party's outage is not this repo being broken. Pure text
-# and filesystem work, so it runs in `check.sh --portable` too.
-#
-# Why this isn't an off-the-shelf link checker. Static-site checkers are a
-# mature category and the honest answer is that they do most of this — so here
-# are measured numbers, both tools run against this site and against every
-# failure mode above.
-#
-#   html-proofer 5.2 (the GitHub-Pages-world standard) catches 5 of 8:
-#     the stylesheet href, the <img src>, the <source srcset> candidate, the
-#     dangling #anchor, and — only with --swap-urls — the og:image.
-#   htmltest catches 3 of 8: it has no srcset and no Open Graph support, and
-#     flags the intentional alt="" on the decorative brand logo until told not to.
-#
-# Neither catches the remaining three, and nor would lychee or vnu, because
-# those three aren't link problems: a CNAME that disagrees with the absolute
-# URLs, a missing CNAME, and an unreferenced file under assets/. An HTML checker
-# reads HTML; these are repo-level invariants about which files exist and which
-# domain owns them. The stale <loc> in sitemap.xml is outside all of them too —
-# it isn't HTML.
-#
-# The decisive detail is what it takes to make html-proofer see og:image at all.
-# That URL is absolute (https://<domain>/assets/og-card.png), so with external
-# checking off it is skipped as somebody else's problem, and with external
-# checking on it is fetched over the network — which tests the *currently
-# deployed* site, not the one about to ship, so a deleted local og-card passes.
-# The fix is --swap-urls '^https\://<domain>/:/', which hardcodes the domain in
-# the checker's config. That is a second place the domain is written down, and
-# it is exactly the duplication section 4 exists to catch: change CNAME, forget
-# the config, and the check keeps passing against a domain the site no longer
-# serves. Buying a link checker would mean re-deriving that guard anyway.
-#
-# One more measured caveat, seen here rather than theorised: run without a UTF-8
-# locale, html-proofer died on this page's em-dashes inside Nokogiri, checked
-# zero links, printed "finished successfully", and exited 0. A gate that passes
-# silently when it didn't run is the failure mode check.sh's coverage gate was
-# rewritten to prevent (see the die_check calls there).
-#
-# So: a tool *plus* a smaller script, never a tool instead of one. For a single
-# prettier-formatted page that wasn't worth a gem, a config file, a pinned
-# locale, and a duplicated domain. Revisit if the site grows past one page — the
-# split is html-proofer for links/anchors/images/og, this script kept for the
-# CNAME, sitemap, and orphan checks. Do not swap wholesale: that drops three
-# checks, and silently.
-#
-# The line-oriented attribute parsing below is safe for the same reason:
-# check.sh runs `prettier --check` over site/*.html, so the formatting this
-# script assumes is itself enforced. Section 4 still flattens the file, because
-# prettier *does* wrap long tags across lines.
+# Fonts) are NOT fetched, hence --disable-external. check.sh must be
+# deterministic and runnable with no network, and a third party's outage is not
+# this repo being broken. Note this is also why external checking cannot stand
+# in for the local og:image check: with --disable-external off, html-proofer
+# fetches the *currently deployed* card rather than the one about to ship, so a
+# deleted local file passes.
 #
 # Run standalone while editing the site:  bash scripts/check-site.sh
 
@@ -80,8 +43,8 @@ SITE="$REPO_ROOT/site"
 
 VIOLATION=0
 
-# Report a problem and mark the run failed. Every check below keeps going after
-# a failure so one run lists everything wrong with the site, rather than making
+# Report a problem and mark the run failed. Every check keeps going after a
+# failure so one run lists everything wrong with the site, rather than making
 # the author fix-and-rerun once per broken link.
 fail() {
   echo "error: $*" >&2
@@ -96,10 +59,10 @@ fail() {
 cd "$SITE"
 
 # --- 1. required files -------------------------------------------------------
-# Each of these is load-bearing for the deployed site, and each is invisible
-# when missing until someone visits: no CNAME and the custom domain unbinds (the
-# site falls back to the github.io path and every absolute URL below breaks); no
-# index.html and the root 404s; no robots/sitemap and the SEO surface goes away.
+# Each is load-bearing for the deployed site and invisible when missing until
+# someone visits: no CNAME and the custom domain unbinds (the site falls back to
+# the github.io path and every absolute URL below breaks); no index.html and the
+# root 404s; no robots/sitemap and the SEO surface goes away.
 for required in index.html CNAME robots.txt sitemap.xml; do
   [ -f "$required" ] || fail "site/$required is missing — the Pages deploy needs it"
 done
@@ -117,114 +80,89 @@ DOMAIN="$(tr -d '[:space:]' <CNAME)"
   echo "error: site/CNAME is empty" >&2
   exit 1
 }
-# Escaped for use inside the grep -E patterns further down.
-DOMAIN_RE="$(printf '%s' "$DOMAIN" | sed 's/[.[\*^$]/\\&/g')"
+# Dots escaped, for the grep -E and html-proofer regexes further down.
+DOMAIN_RE="$(printf '%s' "$DOMAIN" | sed 's/\./\\./g')"
 
 HTML_FILES="$(find . -type f -name '*.html' | sed 's|^\./||' | sort)"
 [ -n "$HTML_FILES" ] || fail "site/ contains no .html files"
 
-# --- 2. local references resolve --------------------------------------------
-# Resolve one reference taken from $2 (the file it appeared in) and complain if
-# it does not exist. Off-site schemes are skipped — see the offline note above.
-check_local_ref() {
-  local ref="$1" from="$2" base target
+# --- 2. html-proofer ---------------------------------------------------------
+# Links, images, srcset, scripts, favicon, in-page #fragments and Open Graph.
+if command -v htmlproofer >/dev/null 2>&1; then
+  echo "==> site: html-proofer"
 
-  case "$ref" in
-    http://* | https://* | //* | mailto:* | tel:* | data:* | '') return 0 ;;
-    '#'*) return 0 ;; # fragment-only links are handled in section 3
-  esac
+  # LANG/LC_ALL pinned, and not decoratively. Run under a non-UTF-8 locale,
+  # html-proofer dies inside Nokogiri on this page's em-dashes, checks zero
+  # links, prints "finished successfully" and exits 0 — a gate that passes
+  # because it never ran. The output assertion below is the belt to this
+  # braces: neither alone is enough.
+  #
+  # --swap-urls tells html-proofer that https://<domain>/ is this directory, so
+  # the absolute og:image / JSON-LD / canonical URLs resolve against site/
+  # instead of being skipped as external. Colons inside the pattern are
+  # \-escaped because html-proofer splits the argument on ':'.
+  HP_OUT=""
+  HP_STATUS=0
+  HP_OUT="$(
+    LANG=C.UTF-8 LC_ALL=C.UTF-8 htmlproofer . \
+      --disable-external \
+      --checks Links,Images,Scripts,Favicon,OpenGraph \
+      --root-dir . \
+      --swap-urls "^https\\://$DOMAIN_RE/:/" \
+      --no-enforce-https 2>&1
+  )" || HP_STATUS=$?
 
-  # Drop the query and fragment: `styles.css?v=2#x` is still styles.css on disk.
-  ref="${ref%%\#*}"
-  ref="${ref%%\?*}"
-  [ -n "$ref" ] || return 0
+  # Drop html-proofer's structured async log lines; they are noise here.
+  printf '%s\n' "$HP_OUT" | grep -vE '^\{"time' | grep -vE '^\s*$' || true
 
-  case "$ref" in
-    /*) target="${ref#/}" ;; # root-relative: relative to site/
-    *)
-      base="$(dirname "$from")"
-      if [ "$base" = "." ]; then target="$ref"; else target="$base/$ref"; fi
-      ;;
-  esac
-
-  # A directory URL (including the bare "/") serves that directory's index.html.
-  if [ -z "$target" ] || [ -d "$target" ]; then
-    target="${target:+$target/}index.html"
+  if [ "$HP_STATUS" -ne 0 ]; then
+    fail "html-proofer found problems in the site (above)"
   fi
 
-  [ -e "$target" ] || fail "$from references '$1', but site/$target does not exist"
-}
+  # Did it actually check anything? See the locale note above — this is the
+  # guard that turns a silent no-op into a failure. check.sh's coverage gate
+  # learned the same lesson (a missing profile used to print a note and exit 0).
+  HP_LINKS="$(printf '%s\n' "$HP_OUT" | sed -n 's/^Checking \([0-9][0-9]*\) internal links.*/\1/p' | head -1)"
+  if [ -z "${HP_LINKS:-}" ] || [ "$HP_LINKS" -eq 0 ]; then
+    fail "html-proofer checked 0 internal links — it did not actually run (locale? parse error?)"
+  fi
+else
+  echo "note: htmlproofer not installed; skipping link/image/og checks (gem install html-proofer)"
+  echo "      the CNAME, sitemap, CSS and orphan checks below still run"
+fi
 
-echo "==> site: local references"
-while IFS= read -r html; do
-  # src/href/poster carry one URL; srcset carries a comma-separated candidate
-  # list where each entry is "<url> <descriptor>" — so split on commas and keep
-  # the first token. Attribute values never span lines in prettier's output, so
-  # a line-oriented grep is enough here (the tag-level extraction in section 4,
-  # which does have to cope with wrapped tags, flattens the file first).
-  while IFS= read -r attr; do
-    value="${attr#*=\"}"
-    value="${value%\"}"
-    case "$attr" in
-      srcset=*)
-        printf '%s\n' "$value" | tr ',' '\n' | while IFS= read -r candidate; do
-          # shellcheck disable=SC2086 # deliberate split: "<url> <descriptor>"
-          set -- $candidate
-          [ "$#" -gt 0 ] && check_local_ref "$1" "$html"
-        done
-        ;;
-      *) check_local_ref "$value" "$html" ;;
-    esac
-  done < <(grep -oE '(src|href|poster|srcset)="[^"]*"' "$html" || true)
-done <<<"$HTML_FILES"
-
-# CSS url(...) references. None today — the site's imagery all lives in the
-# html — but a background-image added later would otherwise ship unchecked.
-while IFS= read -r css; do
-  [ -n "$css" ] || continue
-  while IFS= read -r raw; do
-    value="${raw#url(}"
-    value="${value%)}"
-    value="${value#[\"\']}"
-    value="${value%[\"\']}"
-    check_local_ref "$value" "$css"
-  done < <(grep -oE 'url\([^)]*\)' "$css" || true)
-done < <(find . -type f -name '*.css' | sed 's|^\./||' | sort)
-
-# --- 3. in-page fragments ----------------------------------------------------
-# `href="#features"` with no `id="features"` is a nav link that scrolls nowhere.
-# Silent in every linter and in the browser console alike.
-echo "==> site: in-page anchors"
-while IFS= read -r html; do
-  while IFS= read -r frag; do
-    [ -n "$frag" ] || continue
-    grep -qE "id=\"$frag\"" "$html" \
-      || fail "$html links to '#$frag', but no element in it has id=\"$frag\""
-  done < <(grep -oE 'href="#[^"]+"' "$html" | sed 's/^href="#//;s/"$//' | sort -u || true)
-done <<<"$HTML_FILES"
-
-# --- 4. absolute self-URLs ---------------------------------------------------
-# Everything the site says about itself to a machine — the canonical link, the
-# Open Graph card, the JSON-LD, the sitemap, robots.txt — is an absolute URL, so
-# each one is a copy of the domain that CNAME owns. Change the domain and they
-# all go stale at once, pointing search engines and social-card scrapers at a
-# host this repo no longer serves. Nothing else in the repo compares them.
+# --- 3. absolute self-URLs ---------------------------------------------------
+# Everything the site says about itself to a machine — canonical, Open Graph,
+# JSON-LD, sitemap, robots — is an absolute URL, so each is a copy of the domain
+# CNAME owns. Change the domain and they all go stale at once, pointing search
+# engines and social-card scrapers at a host this repo no longer serves.
+#
+# html-proofer covers the HTML ones now (via --swap-urls above) but only for
+# *existence*, and only inside HTML. It has no opinion on whether the domain is
+# the right one, and it never reads sitemap.xml or robots.txt, which are not
+# HTML. Both gaps are this section.
 echo "==> site: absolute URLs (domain $DOMAIN)"
 
-# Every https://<domain>/… in the site must resolve to a file we actually ship.
-# This is what catches the og:image and JSON-LD image paths, which are written
-# absolutely and so are invisible to the relative-reference pass above.
-while IFS= read -r url; do
-  [ -n "$url" ] || continue
-  # $DOMAIN quoted inside the expansion: unquoted it would be read as a glob.
-  path="${url#https://"$DOMAIN"}"
-  path="${path#/}"
+# Resolve a site-relative path and complain if it does not exist.
+site_path_exists() {
+  local path="$1"
   path="${path%%\#*}"
   path="${path%%\?*}"
+  path="${path#/}"
   if [ -z "$path" ] || [ -d "$path" ]; then
     path="${path:+$path/}index.html"
   fi
-  [ -e "$path" ] || fail "$url is served by this site, but site/$path does not exist"
+  [ -e "$path" ]
+}
+
+# Every https://<domain>/… in the non-HTML files must resolve to something we
+# ship. (The HTML ones are html-proofer's; sweeping them here too costs nothing
+# and keeps the check meaningful when html-proofer is absent.)
+while IFS= read -r url; do
+  [ -n "$url" ] || continue
+  # $DOMAIN quoted inside the expansion: unquoted it would be read as a glob.
+  site_path_exists "${url#https://"$DOMAIN"}" \
+    || fail "$url is served by this site, but no such file exists under site/"
 done < <(grep -rhoE "https://$DOMAIN_RE(/[^\"'[:space:]<>)]*)?" \
   --include='*.html' --include='*.css' --include='*.xml' --include='*.txt' . \
   | sort -u || true)
@@ -238,9 +176,6 @@ tag_value() {
     | grep -oE "$2=\"[^\"]*\"" | head -1 | sed "s/^$2=\"//;s/\"$//"
 }
 
-CANONICAL="$(tag_value '<link[^>]*rel="canonical"[^>]*>' href || true)"
-OG_URL="$(tag_value '<meta[^>]*property="og:url"[^>]*>' content || true)"
-
 # Both must name the site's own root. A canonical or og:url on a stale domain
 # splits the page's search identity and makes shared links resolve elsewhere.
 check_self_url() {
@@ -252,8 +187,8 @@ check_self_url() {
   fi
 }
 
-check_self_url "canonical link" "$CANONICAL"
-check_self_url "og:url" "$OG_URL"
+check_self_url "canonical link" "$(tag_value '<link[^>]*rel="canonical"[^>]*>' href || true)"
+check_self_url "og:url" "$(tag_value '<meta[^>]*property="og:url"[^>]*>' content || true)"
 
 # robots.txt must point crawlers at this domain's sitemap, not a previous one.
 ROBOTS_SITEMAP="$(grep -iE '^[[:space:]]*Sitemap:' robots.txt | head -1 | sed 's/^[[:space:]]*[Ss]itemap:[[:space:]]*//' | tr -d '[:space:]' || true)"
@@ -264,8 +199,7 @@ elif [ "$ROBOTS_SITEMAP" != "https://$DOMAIN/sitemap.xml" ]; then
 fi
 
 # Every <loc> must be on this domain. (xmllint already proved the file parses;
-# that says nothing about where the URLs point.) The existence of each one is
-# covered by the https://<domain>/ sweep above.
+# that says nothing about where the URLs point, and no HTML checker reads it.)
 SITEMAP_LOCS="$(grep -oE '<loc>[^<]*</loc>' sitemap.xml | sed 's|</\?loc>||g' || true)"
 if [ -z "$SITEMAP_LOCS" ]; then
   fail "sitemap.xml lists no <loc> entries"
@@ -278,16 +212,43 @@ else
   done <<<"$SITEMAP_LOCS"
 fi
 
+# --- 4. CSS url() ------------------------------------------------------------
+# html-proofer only reads HTML, so a background-image added to styles.css would
+# otherwise ship unchecked. None today — the site's imagery all lives in the
+# markup — which is exactly when a guard is cheap to add.
+echo "==> site: CSS references"
+while IFS= read -r css; do
+  [ -n "$css" ] || continue
+  while IFS= read -r raw; do
+    value="${raw#url(}"
+    value="${value%)}"
+    value="${value#[\"\']}"
+    value="${value%[\"\']}"
+    case "$value" in
+      http://* | https://* | //* | data:* | '') continue ;;
+    esac
+    # Relative to the stylesheet, unless rooted at the site.
+    case "$value" in
+      /*) target="$value" ;;
+      *)
+        base="$(dirname "$css")"
+        if [ "$base" = "." ]; then target="$value"; else target="$base/$value"; fi
+        ;;
+    esac
+    site_path_exists "$target" || fail "$css references '$value', but no such file exists under site/"
+  done < <(grep -oE 'url\([^)]*\)' "$css" || true)
+done < <(find . -type f -name '*.css' | sed 's|^\./||' | sort)
+
 # --- 5. no orphaned assets ---------------------------------------------------
 # The Pages artifact is whatever is in site/, so an asset no page references is
 # still uploaded and served — dead weight in the deploy, and usually the trace
-# of a rename where the old file was left behind. Same rule the sound-catalog
-# guard in check.sh applies to the cue audio.
+# of a rename where the old file was left behind. Link checkers walk references
+# to files; this is the other direction, which none of them do.
 #
 # Matched as the site-relative path ("assets/icon.png"), which finds both the
-# relative `src=` form and the absolute https://<domain>/assets/… form, and
-# can't be fooled by a longer filename that ends the same way
-# ("assets/blurt-b-icon.png" does not contain the string "assets/icon.png").
+# relative src= form and the absolute https://<domain>/assets/… form, and can't
+# be fooled by a longer filename ending the same way ("assets/blurt-b-icon.png"
+# does not contain the string "assets/icon.png").
 echo "==> site: asset references"
 if [ -d assets ]; then
   while IFS= read -r asset; do

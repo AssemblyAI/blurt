@@ -65,6 +65,8 @@ App/Blurt/
 Tests/BlurtEngineTests/      Swift Testing suites; Stubs/ holds the seam doubles
 scripts/                     check.sh, check-site.sh, bootstrap.sh, dev-build.sh, uitest.sh, leaks.sh,
                              release*.sh
+Brewfile                     Homebrew-managed check.sh tools — every one except html-proofer,
+                             which is a gem (see bootstrap.sh / check.yml)
 evals/dictation-prompt/      offline DSPy harness for tuning the dictation API's cleanup
                              instruction — nothing here ships in the app, but check.sh does
                              lint (ruff), format-check (ruff format), and test (pytest) it
@@ -95,17 +97,29 @@ In order, on a Mac. Each optional linter prints `note: <tool> not installed; ski
 
 1. **Repo-integrity guards** — no external SPM dependencies; sound-catalog integrity (every
    `SoundPackCatalog` voice has both cue files, no orphans, no duplicate or reserved ids); and
-   **site integrity** (`scripts/check-site.sh`). All three are pure text/filesystem, so they run in
-   `--portable` too. The catalog and the audio are generated together but ship from different
-   targets, so drift plays silence with nothing raising an error. The site guard exists for the same
-   reason on the web: `pages.yml` uploads `site/` verbatim with no build step, so a renamed asset, a
-   stale absolute URL, or a missing `CNAME` produces no error in this repo — just a 404 on the live
-   site. It checks that the Pages-required files are present, that every local `src`/`href`/`srcset`
-   and CSS `url()` resolves, that every `#fragment` link has a matching `id`, that every absolute
-   `https://<CNAME>/` URL (canonical, `og:url`, `og:image`, JSON-LD, sitemap `<loc>`, robots
-   `Sitemap:`) names the domain in `CNAME` and points at a file that exists, and that nothing under
-   `site/assets/` ships unreferenced. Deliberately offline — external links are never fetched, so
-   the check stays deterministic and a third party's outage is never this repo being red.
+   **site integrity** (`scripts/check-site.sh`). All three run in `--portable` too. The catalog and
+   the audio are generated together but ship from different targets, so drift plays silence with
+   nothing raising an error. The site guard exists for the same reason on the web: `pages.yml`
+   uploads `site/` verbatim with no build step, so a renamed asset, a stale absolute URL, or a
+   missing `CNAME` produces no error in this repo — just a 404 on the live site.
+
+   It is a hybrid, split along what a general tool can know. **html-proofer** (a gem — the one
+   `check.sh` tool with no Homebrew formula, so it is installed separately in `bootstrap.sh` and
+   `check.yml`) covers links, images including `<source srcset>`, scripts, favicon, in-page
+   `#fragment`s, and Open Graph. The script itself covers the repo-level invariants no HTML checker
+   models: that the Pages-required files exist, that `CNAME` agrees with `canonical`/`og:url`/the
+   sitemap `<loc>`s/robots `Sitemap:`, that CSS `url()` resolves (html-proofer only reads HTML), and
+   that nothing under `site/assets/` ships unreferenced.
+
+   Two details worth not undoing. The domain is read from `CNAME` and handed to html-proofer as its
+   `--swap-urls` pattern rather than written into a config — otherwise the domain lives in two
+   places and drifts, which is the very thing the `CNAME` check catches. And the run asserts
+   html-proofer actually checked a nonzero number of links: under a non-UTF-8 locale it dies inside
+   Nokogiri on the page's em-dashes, checks nothing, prints "finished successfully" and exits 0, so
+   `LANG` is pinned _and_ the count is verified. Deliberately offline (`--disable-external`): a
+   third party's outage is never this repo being red, and external checking would test the
+   _currently deployed_ og:image rather than the one about to ship.
+
 2. `swift test` with `-warnings-as-errors`, plus an engine **line-coverage gate** (≥ `MIN_COVERAGE`,
    80%, `Tests/` excluded — raise it as coverage grows).
 3. **ThreadSanitizer** and **AddressSanitizer** test passes.
@@ -166,7 +180,7 @@ Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `
   test passed. Say plainly that verification happens on a Mac — CI runs the full `check.sh` on
   `macos-26` and is the authority on green.
 - **The portable gate**: `scripts/check.sh --portable` runs the repo-integrity guards
-  (dependencies, sound catalog, site), then actionlint, prettier, xmllint,
+  (dependencies, sound catalog, site — the last using the html-proofer gem), then actionlint, prettier, xmllint,
   markdownlint, shellcheck, shfmt, ruff (lint + format check), pytest over the evals, and
   `release.test.sh` (plus `swift-format`/`swiftlint lint` if Linux
   builds happen to be on `PATH`). It fully verifies docs, site, scripts, eval, and workflow changes.

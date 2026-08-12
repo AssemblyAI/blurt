@@ -64,9 +64,21 @@ if ! command -v shfmt >/dev/null 2>&1 && command -v go >/dev/null 2>&1; then
     || note "shfmt install failed (go install)"
 fi
 
+# html-proofer (gem) — the Pages site's link/image/srcset/favicon/Open Graph
+# checker, used by scripts/check-site.sh. No Homebrew formula and no GitHub
+# release binary involved, so rubygems is reachable under the default policy.
+# The gem bindir is not on PATH here, hence the symlink.
+if ! command -v htmlproofer >/dev/null 2>&1 && command -v gem >/dev/null 2>&1; then
+  if gem install --no-document html-proofer >/dev/null 2>&1; then
+    gem_bin="$(gem environment | awk -F': ' '/EXECUTABLE DIRECTORY/{print $2}')"
+    [ -x "$gem_bin/htmlproofer" ] && ln -sf "$gem_bin/htmlproofer" /usr/local/bin/htmlproofer
+  fi
+  command -v htmlproofer >/dev/null 2>&1 || note "html-proofer install failed (gem)"
+fi
+
 # Preflight summary — this lands in the session context.
 missing=""
-for tool in prettier xmllint markdownlint shellcheck actionlint shfmt; do
+for tool in prettier xmllint markdownlint shellcheck actionlint shfmt htmlproofer; do
   command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
 done
 echo "Blurt web sandbox: no macOS toolchain — Swift build/tests/format run on CI (macos-26), the authority on green."

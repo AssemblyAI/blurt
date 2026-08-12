@@ -27,7 +27,8 @@ What you CAN run there is the portable subset:
 scripts/check.sh --portable
 ```
 
-It runs the repo-integrity guards (dependencies, sound catalog, site) then
+It runs the repo-integrity guards (dependencies, sound catalog, site — the
+last needs the html-proofer gem) then
 actionlint / prettier / xmllint / markdownlint / shellcheck / shfmt /
 ruff (lint + format check) / pytest over `evals/` / `release.test.sh` (plus `swift-format lint` and `swiftlint lint` if Linux
 builds are on `PATH` — under the default web network policy they are not).
@@ -57,10 +58,9 @@ Mac they're all present, so don't treat a skip as a pass):
 1. repo-integrity guards: no external SPM dependencies; sound-catalog
    integrity (every `SoundPackCatalog` voice has both cue files, no orphans, no
    duplicate or reserved ids); and site integrity (`scripts/check-site.sh` —
-   Pages-required files present, every local reference and `#fragment` resolves,
-   every absolute `https://<CNAME>/` URL matches `CNAME` and exists on disk, no
-   unreferenced assets). All pure text/filesystem, so they run in `--portable`
-   too
+   html-proofer for the Pages site's links/images/srcset/favicon/Open Graph,
+   plus `CNAME` agreement with canonical/og:url/sitemap/robots, CSS `url()`, and
+   no unreferenced assets). All run in `--portable` too
 2. `swift test` with `-warnings-as-errors`
 3. engine line-coverage gate (≥80%, `Tests/` excluded — see `MIN_COVERAGE`)
 4. ThreadSanitizer + AddressSanitizer test passes
