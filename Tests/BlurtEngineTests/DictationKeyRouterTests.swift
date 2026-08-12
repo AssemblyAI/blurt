@@ -175,7 +175,12 @@ struct DictationKeyRouterTests {
     var router = DictationKeyRouter(triggerKeyCode: trigger)
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
 
-    #expect(!router.recoverFromDroppedEvents(triggerStillHeld: true))
+    // Bound to a local rather than asserted inline: `#expect` rewrites a bare
+    // function call into a closure taking an *immutable* receiver, so a `mutating`
+    // method can't be called inside it — same reason the rebind cases above bind
+    // `discarded` first.
+    let discarded = router.recoverFromDroppedEvents(triggerStillHeld: true)
+    #expect(!discarded)
 
     // The gate kept its state, so the eventual release still stops this dictation
     // rather than routing to `.none` as it would after a reset.
@@ -191,7 +196,8 @@ struct DictationKeyRouterTests {
     var router = DictationKeyRouter(triggerKeyCode: trigger)
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
 
-    #expect(router.recoverFromDroppedEvents(triggerStillHeld: false))
+    let discarded = router.recoverFromDroppedEvents(triggerStillHeld: false)
+    #expect(discarded)
 
     // The tracker was cleared with the gate, so a stale up can't emit a spurious
     // `.stop`, and the next press starts cleanly.
@@ -205,8 +211,10 @@ struct DictationKeyRouterTests {
     // branch may claim a recording was discarded, or the host cancels a session
     // that was never recording.
     var router = DictationKeyRouter(triggerKeyCode: trigger)
-    #expect(!router.recoverFromDroppedEvents(triggerStillHeld: false))
-    #expect(!router.recoverFromDroppedEvents(triggerStillHeld: true))
+    let discardedAfterRelease = router.recoverFromDroppedEvents(triggerStillHeld: false)
+    #expect(!discardedAfterRelease)
+    let discardedWhileHeld = router.recoverFromDroppedEvents(triggerStillHeld: true)
+    #expect(!discardedWhileHeld)
     // Still usable afterwards.
     #expect(router.handle(downEvent(trigger), at: .seconds(1)) == .start)
   }
@@ -220,6 +228,7 @@ struct DictationKeyRouterTests {
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
     #expect(router.handle(upEvent(trigger), at: .milliseconds(100)) == .none)  // latched
 
-    #expect(router.recoverFromDroppedEvents(triggerStillHeld: false))
+    let discarded = router.recoverFromDroppedEvents(triggerStillHeld: false)
+    #expect(discarded)
   }
 }
