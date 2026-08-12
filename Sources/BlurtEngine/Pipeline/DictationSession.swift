@@ -8,14 +8,21 @@ public actor DictationSession {
     label: "\(BlurtIdentity.subsystem).FieldContext", qos: .userInitiated,
     attributes: .concurrent)
 
-  public private(set) var phase: PipelinePhase = .idle
+  /// `internal(set)`, not `private(set)`: `private` is file-scoped, and the one
+  /// writer — `setPhase` — lives in `+Observation` (see the split note below).
+  /// Hosts outside the module still can't assign it. **`setPhase` remains the
+  /// only place this is written**: it is what publishes the transition to every
+  /// `phaseStream()` observer and what writes the developer-mode error log, so a
+  /// bare `phase = …` anywhere else would strand the UI on a stale phase and drop
+  /// the failure from the log.
+  public internal(set) var phase: PipelinePhase = .idle
 
   // Split for the lint file-length budget: `phaseStream()`/`setPhase`/os_signpost
-  // live in `+Observation`; `submit(_:)` lives in `+Commands`; the post-release
-  // transcribe→inject pipeline lives in `+Pipeline`; the non-protocol
-  // collaborators (focus capture, developer-mode log) live in `+Seams`. Members
-  // those files reach are internal, not private (file-scoped access can't cross
-  // the split).
+  // live in `+Observation`; `submit(_:)` and both cancel commands live in
+  // `+Commands`; the post-release transcribe→inject pipeline lives in
+  // `+Pipeline`; the non-protocol collaborators (focus capture, developer-mode
+  // log) live in `+Seams`. Members those files reach are internal, not private
+  // (file-scoped access can't cross the split) — including `phase`'s setter.
 
   /// Live feeds of phase changes. Each `phaseStream()` call yields the current
   /// phase plus every subsequent transition, so the production renderer and
@@ -337,39 +344,9 @@ public actor DictationSession {
     return true
   }
 
-  public func cancel() async {
-    // A cancel that lands once `.transcribing` is claimed — while the release
-    // is still inside mic.stop(), or later with the transcribe→inject task in
-    // flight — tears the pipeline down (a nil or finished handle is a no-op)
-    // and claims the phase, so neither the release (which re-checks the phase
-    // after mic.stop()) nor the cancelled pipeline can overwrite it back to
-    // .idle. Synchronous (no suspension), so it acts immediately rather than
-    // queueing behind the pipeline's progress.
-    if phase == .transcribing || phase == .injecting {
-      // Cancel but keep the handle so `awaitPipeline()` can join the cancelled task.
-      pipelineTask?.cancel()
-      setPhase(.cancelled)
-      return
-    }
-    // Record the intent before taking a queue turn: a release queued ahead of
-    // our turn consumes it the moment its mic.stop() returns (no pipeline is
-    // ever spawned), and a press ahead in the queue is followed by our own
-    // turn, which ends the freshly started recording. Either way the cancel is
-    // honored in arrival order, never dropped.
-    cancelRequested = true
-    await enqueue { await self.performCancel() }
-  }
-
-  private func performCancel() async {
-    // Our turn is the cancel — clear the request whether or not an earlier
-    // release already consumed it.
-    cancelRequested = false
-    guard phase == .recording else { return }
-    await stopAndCancel()
-  }
-
-  // `cancelRecording()` — the narrow, state-recovery cancel — lives with the
-  // rest of the command surface in `DictationSession+Commands.swift`.
+  // `cancel()` and `performCancel()` — the user-intent cancel — live with the rest
+  // of the command surface in `DictationSession+Commands.swift`, beside the
+  // narrower `cancelRecording()`; both end up in `stopAndCancel` below.
 
   /// Shared tail of the cancel ops once the guards agree there is a live
   /// recording to tear down.
