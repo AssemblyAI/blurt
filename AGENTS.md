@@ -106,6 +106,13 @@ scripts/dev-build.sh                        # signed Debug build + install to /A
 In order, on a Mac. Each optional linter prints `note: <tool> not installed; skipping` when absent —
 **a skip is missing coverage, not a pass**; run `scripts/bootstrap.sh` rather than accepting one.
 
+**The order is deliberate: everything source-only runs before anything that builds.** Steps 1–5 cost
+seconds and need no toolchain state; steps 6–11 cost ten-plus minutes. Run the other way round — as
+this script was until a rework audit of this repo's closed PRs — a compile error means the
+cheap checks are never reached, so their findings arrive on the _next_ red run, one at a time. A
+green run does identical total work either way; what changes is how much a red run tells you. Only
+the two checks that genuinely need the build products stay behind them (step 12).
+
 1. **Repo-integrity guards** — no external SPM dependencies; sound-catalog integrity (every
    `SoundPackCatalog` voice has both cue files, no orphans, no duplicate or reserved ids); and
    **site integrity** (`scripts/check-site.sh`). All three run in `--portable` too. The catalog and
@@ -131,42 +138,70 @@ In order, on a Mac. Each optional linter prints `note: <tool> not installed; ski
    cost no coverage: the audit of that tool is what surfaced the missing-`alt`, no-`href` and
    empty-`src` checks, which are greps now. Don't reintroduce it without a licence answer.
 
-2. `swift test` with `-warnings-as-errors`, plus an engine **line-coverage gate** (≥ `MIN_COVERAGE`,
-   80%, `Tests/` excluded — raise it as coverage grows).
-3. **ThreadSanitizer** and **AddressSanitizer** test passes.
-4. **xcodegen drift check** — regenerating must not change the committed `.pbxproj`.
-5. **App build** with codesigning skipped (warnings-as-errors via `SWIFT_TREAT_WARNINGS_AS_ERRORS` in
-   `project.yml`, scoped to the app target so it doesn't collide with the `-suppress-warnings` Xcode
-   applies to SPM deps).
-6. **`scripts/uitest.sh`** — the XCUITest bundle, part of the required gate.
-7. **`scripts/leaks.sh`** — whole-app leak check under the Darwin leak detector, failing only on
-   leaks attributable to Blurt's own code. Like the UI suite it needs a GUI session (windowserver),
-   which the `macos-26` runner provides.
-
-   **Steps 6 and 7 run on CI only.** Both drive the real app: the XCUITest runner takes over
-   keyboard focus and clicking, and the leak run cycles dictation through the key tap and pastes
-   into whatever is frontmost — so a local `check.sh` would make the machine unusable for the
-   minutes they last. Locally they're skipped with a note (and the closing `ok` line repeats it);
-   opt in with `BLURT_INTEGRATION_TESTS=1 scripts/check.sh`, or run `scripts/uitest.sh` /
-   `scripts/leaks.sh` directly. There is deliberately **no opt-out** under CI — a flag CI honoured
-   would be a green-looking bypass of the required gate.
-
-8. **`swift-format lint --strict`**, then `swiftlint lint --strict`, `swiftlint analyze` (unused
-   imports), `periphery scan --strict`.
-9. **actionlint** (workflow correctness — and, via shellcheck, the inline `run:` bash) **/ zizmor**
+2. **Shell portability** (`scripts/check-portability.sh`) — GNU-only idioms in `scripts/*.sh` and
+   `.claude/hooks/*.sh`. Those run against BSD userland on a Mac and on CI, and GNU userland in a
+   Linux / web sandbox, and shellcheck reads both as correct shell — so `sed -i` without a suffix,
+   `grep -P`, `readlink -f`, `stat -c` and friends are written green and ship red (PR #116's
+   BSD-sed sitemap strip). Runs in `--portable`, which is where the divergence gets introduced.
+   Mark a false positive with a trailing `# portable-ok: <reason>`; `--self-test` asserts every rule
+   still matches its own probe, because a pattern that stops matching looks exactly like a clean
+   tree.
+3. **`swift-format lint --strict`**, then `swiftlint lint --strict`. Both are source-only, so they
+   sit here rather than after the build. `swiftlint analyze` and `periphery` are the two that need
+   build products; they're step 12.
+4. **actionlint** (workflow correctness — and, via shellcheck, the inline `run:` bash) **/ zizmor**
    (workflow _security_: template injection, overbroad `permissions:`, unpinned actions — it matters
    most for `release.yml`, which hands the Developer ID key to a runner) **/ prettier** (yml/yaml/md
    plus the Pages site's html/css) **/ xmllint** (XML well-formedness, e.g. the sitemap) **/
    markdownlint / shellcheck / shfmt --diff** (`scripts/*.sh` formatting, style from the `[*.sh]`
    block in `.editorconfig`).
-10. **The evals** (`evals/`, the repo's only Python): `ruff format --check`, `ruff check`, and
-    `pytest evals/dictation-prompt/test_eval.py`. Config in `evals/ruff.toml`. The suite needs no
-    network, no API key, and nothing beyond pytest — the one test that needs DSPy skips itself when
-    it is absent.
-11. **`release.test.sh`** — pure-bash unit tests for the release orchestrator's decision helpers.
+5. **The evals** (`evals/`, the repo's only Python): `ruff format --check`, `ruff check`, and
+   `pytest evals/dictation-prompt/test_eval.py`. Config in `evals/ruff.toml`. The suite needs no
+   network, no API key, and nothing beyond pytest — the one test that needs DSPy skips itself when
+   it is absent. Followed by **`release.test.sh`**, pure-bash unit tests for the release
+   orchestrator's decision helpers.
+
+   Everything above this line is the `--portable` subset. Everything below needs a macOS toolchain.
+
+6. `swift test` with `-warnings-as-errors`, plus an engine **line-coverage gate** (≥ `MIN_COVERAGE`,
+   80%, `Tests/` excluded — raise it as coverage grows).
+7. **ThreadSanitizer** and **AddressSanitizer** test passes.
+8. **xcodegen drift check** — regenerating must not change the committed `.pbxproj`.
+9. **App build** with codesigning skipped (warnings-as-errors via `SWIFT_TREAT_WARNINGS_AS_ERRORS` in
+   `project.yml`, scoped to the app target so it doesn't collide with the `-suppress-warnings` Xcode
+   applies to SPM deps).
+10. **`scripts/uitest.sh`** — the XCUITest bundle, part of the required gate.
+11. **`scripts/leaks.sh`** — whole-app leak check under the Darwin leak detector, failing only on
+    leaks attributable to Blurt's own code. Like the UI suite it needs a GUI session (windowserver),
+    which the `macos-26` runner provides.
+
+    **Steps 10 and 11 run on CI only.** Both drive the real app: the XCUITest runner takes over
+    keyboard focus and clicking, and the leak run cycles dictation through the key tap and pastes
+    into whatever is frontmost — so a local `check.sh` would make the machine unusable for the
+    minutes they last. Locally they're skipped with a note (and the closing `ok` line repeats it);
+    opt in with `BLURT_INTEGRATION_TESTS=1 scripts/check.sh`, or run `scripts/uitest.sh` /
+    `scripts/leaks.sh` directly. There is deliberately **no opt-out** under CI — a flag CI honoured
+    would be a green-looking bypass of the required gate.
+
+12. **`swiftlint analyze`** (unused imports — reads the compiler log the app build captured) and
+    **`periphery scan --strict`** (unused declarations — runs its own xcodebuild + index). The only
+    two checks that can't move earlier.
 
 CI (`.github/workflows/check.yml`) installs all of these via Homebrew on `macos-26` and runs the same
-script, so a clean local `check.sh` matches CI by construction. The same workflow's `dev-build` job
+script, so a clean local `check.sh` matches CI by construction. Two sibling jobs exist purely to
+shorten the loop for whoever is editing Swift without a toolchain, and **neither is a required
+check** — both can only go red where `check` would too:
+
+- **`compile`** — `swift build --build-tests -Xswiftc -warnings-as-errors` and nothing else. A test
+  target that doesn't build is the most common way a PR here goes red, and this reports it in ~2
+  minutes instead of ~11. `dev-build` waits on it, so a PR that doesn't compile doesn't also pay for
+  an app build to discover that.
+- **`format-patch`** — runs `swift-format` for real and publishes the resulting `git diff` as a job
+  summary and a `swift-format-patch` artifact. `check` can only tell you _that_ a file is
+  misformatted; this hands you the exact reflow, which matters when there's no formatter on the
+  machine you're editing from. Advisory and read-only: it never fails the build and never pushes.
+
+The same workflow's `dev-build` job
 builds an ad-hoc-signed `Debug-Local` app for every code PR and uploads it as an artifact;
 `pr-dev-build.yml` then comments the download link on the PR (a `workflow_run` job, because a
 fork's `pull_request` token is read-only and can't comment). It is **not** part of the required
@@ -245,7 +280,7 @@ Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `
   test passed. Say plainly that verification happens on a Mac — CI runs the full `check.sh` on
   `macos-26` and is the authority on green.
 - **The portable gate**: `scripts/check.sh --portable` runs the repo-integrity guards
-  (dependencies, sound catalog, site), then actionlint, zizmor, prettier, xmllint,
+  (dependencies, sound catalog, site, shell portability), then actionlint, zizmor, prettier, xmllint,
   markdownlint, shellcheck, shfmt, ruff (lint + format check), pytest over the evals, and
   `release.test.sh` (plus `swift-format`/`swiftlint lint` if Linux
   builds happen to be on `PATH`). It fully verifies docs, site, scripts, eval, and workflow changes.
@@ -726,6 +761,25 @@ which is the same rule as "don't touch the real Keychain in tests". Retain-cycle
 weak-reference assertions in `MemoryLeakTests.swift` (`expectNoLeak`) — LeakSanitizer is unsupported
 on Darwin, so AddressSanitizer catches memory _corruption_ but not leaks; `scripts/leaks.sh` covers
 the whole app under the Darwin leak detector.
+
+**Swift Testing traps that CI has caught more than once.** Nothing here can be typechecked without a
+macOS toolchain, so when you're writing tests from a Linux / web sandbox these are the ones that cost
+a red run. Check them by eye before pushing:
+
+- **`#expect` takes an autoclosure, so it cannot call a `mutating` method.** The value is captured
+  immutably and the compiler rejects the call. Bind to a `var`, mutate, then assert the result. (Cost
+  a round trip on both #118 and #122.)
+- **`#expect` around a `rethrows` call with a throwing argument needs `try`.**
+  `#expect(hex.allSatisfy(\.isHexDigit))` is the exact form that failed — `allSatisfy` is `rethrows`,
+  the key path can throw, and the macro expansion surfaces it as "call can throw, but it is not
+  marked with `try`". Write `try #expect(…)`, or hoist the computation above the assertion.
+- **A new test file needs its own imports.** `pid_t`, `Data`, `URL` and friends come from Foundation;
+  a file that only imports `Testing` and `BlurtEngine` won't see them (#122).
+- **Splitting a type across files breaks `private(set)`.** The other half is a different file, so it
+  needs `internal(set)` — and `@testable import` reaches internal, never private (#122, #80).
+
+The `compile` CI job exists for exactly this class: it reports a broken test build in ~2 minutes
+rather than behind the full suite.
 
 **Integration tests (XCUITest)** — `App/Blurt/BlurtUITests/`, a `bundle.ui-testing` target declared
 in `project.yml` and wired into the `Blurt` scheme's test action, so it runs via `xcodebuild test`.

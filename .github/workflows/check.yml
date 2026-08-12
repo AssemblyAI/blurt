@@ -109,6 +109,110 @@ jobs:
           CI: "true"
         run: scripts/check.sh
 
+  # Fast-fail typecheck. `check` above is the authority on green and this job can
+  # only go red where `check` would too — so it is deliberately NOT required, and
+  # `gate` ignores it.
+  #
+  # It exists for latency. The web sandbox has no Swift toolchain (macOS-only
+  # project; the Linux toolchain isn't reachable under the default network
+  # policy), so CI is the first compiler to see any Swift change, and a test
+  # target that doesn't build is the single most common way a PR here goes red —
+  # PRs #122 and #124 each burned three consecutive red runs on one compile error
+  # at a time. `check` reaches that error only after the engine suite starts, and
+  # a full run is ~11 minutes. Building just the engine and its tests reports the
+  # same error in ~2, which is the whole point.
+  compile:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: macos-26
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          persist-credentials: false
+
+      - name: Build the engine and its tests
+        working-directory: blurt
+        # --build-tests compiles the test targets without running them, so this is
+        # a typecheck of Tests/ as well as Sources/. -warnings-as-errors matches
+        # what check.sh passes, so a warning can't pass here and fail there. No
+        # xcodegen, no app build, no sanitizers, no coverage — those stay in
+        # `check`, and duplicating any of them here would spend the latency this
+        # job is meant to save.
+        run: swift build --build-tests -Xswiftc -warnings-as-errors
+
+  # What swift-format would change, as an applicable patch. Formatting is the
+  # other half of what CI is sole authority over here, and `check` can only say
+  # *that* a file is misformatted (`swift-format lint --strict`) — leaving the
+  # author to reproduce the reflow by hand, blind, with no formatter on the
+  # machine they're editing from. Several PRs paid for that in commits of the form
+  # "Format X the way swift-format wants".
+  #
+  # So: run the formatter for real and publish the diff. Read-only and advisory —
+  # it never fails the build (`check` already does that) and never pushes, which
+  # keeps this job free of a writable token while it holds PR code. Applying the
+  # patch stays a deliberate act by the author:
+  #   gh run download <id> -n swift-format-patch && git apply swift-format.patch
+  format-patch:
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
+    runs-on: macos-26
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          persist-credentials: false
+
+      - name: Format every tracked Swift file and diff the result
+        id: diff
+        working-directory: blurt
+        # Same file set and same tool as check.sh's lint step (xcrun swift-format,
+        # bundled with Xcode), so the patch is exactly what would make that step
+        # pass. `git diff` after an in-place format is the patch; an empty diff
+        # means the tree is already clean and there is nothing to publish.
+        run: |
+          set -euo pipefail
+          git ls-files -z -- '*.swift' | xargs -0 xcrun swift-format format --in-place
+          if git diff --quiet; then
+            echo "swift-format would change nothing." >>"$GITHUB_STEP_SUMMARY"
+            echo "dirty=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "dirty=true" >>"$GITHUB_OUTPUT"
+          git diff >"$RUNNER_TEMP/swift-format.patch"
+          {
+            echo "### swift-format would reformat these files"
+            echo
+            echo '```console'
+            git diff --stat
+            echo '```'
+            echo
+            echo "Apply with \`git apply swift-format.patch\` from the artifact below."
+            echo
+            echo "<details><summary>Full patch</summary>"
+            echo
+            echo '```diff'
+            cat "$RUNNER_TEMP/swift-format.patch"
+            echo '```'
+            echo
+            echo "</details>"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the patch
+        if: steps.diff.outputs.dirty == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: swift-format-patch
+          path: ${{ runner.temp }}/swift-format.patch
+          if-no-files-found: error
+          retention-days: 14
+
   # Every PR gets an installable build of the change, so a reviewer can try it
   # instead of reading the diff and imagining it. Deliberately NOT part of the
   # required gate (`gate` below ignores it): it builds the same sources `check`
@@ -119,8 +223,12 @@ jobs:
   # gets a read-only token no matter what `permissions:` says, so that case has
   # to happen in a workflow_run job. Both post the same marked comment, so
   # whichever runs, a PR ends up with exactly one link.
+  # `needs: compile` so a PR whose sources don't build doesn't also pay for a
+  # second macOS job to discover that. It costs the ~2 minutes `compile` takes on
+  # a green run, which is cheap against a 30-minute timeout spent on code that was
+  # never going to link.
   dev-build:
-    needs: changes
+    needs: [changes, compile]
     if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
     runs-on: macos-26
     timeout-minutes: 30
