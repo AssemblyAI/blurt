@@ -3,6 +3,10 @@
 build/
 .swiftpm/
 .superpowers/
+# Per-developer agent scratch notes (git-ignored, so CI never sees them — but a
+# local `prettier --check` globs them and fails the run before it reaches the
+# real checks).
+.remember/
 **/.DS_Store
 
 # Xcode-generated files

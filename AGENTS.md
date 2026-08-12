@@ -53,7 +53,7 @@ Sources/BlurtEngine/         the engine (dependency-free Swift package)
   Injection/                 KeyInjector (clipboard paste), SystemClipboard
   Permissions/               PermissionsChecker (mic + Accessibility)
   Pipeline/                  DictationSession (actor) + phases, UI projections, geometry, log
-  STT/                       AssemblyAITranscriber, TranscriptionPrompt/Context, SyncSTTLimits
+  STT/                       AssemblyAITranscriber, TranscriptionPrompt/Context, CleanupInstruction, SyncSTTLimits
   Update/                    UpdateChecker (download-only) + the launch-check policy
 App/Blurt/
   project.yml                XcodeGen source of truth — Blurt.xcodeproj is GENERATED
@@ -63,6 +63,10 @@ App/Blurt/
   BlurtUITests/              XCUITest bundle (see Tests)
 Tests/BlurtEngineTests/      Swift Testing suites; Stubs/ holds the seam doubles
 scripts/                     check.sh, bootstrap.sh, dev-build.sh, uitest.sh, leaks.sh, release*.sh
+evals/dictation-prompt/      offline DSPy harness for tuning the dictation API's cleanup
+                             instruction — nothing here ships in the app, but check.sh does
+                             lint (ruff), format-check (ruff format), and test (pytest) it
+evals/ruff.toml              ruff config for the above — the repo's only Python config
 site/                        the GitHub Pages site (html/css, sitemap) — linted by check.sh
 .github/workflows/           check.yml (the gate + per-PR dev build, macos-26),
                              pr-dev-build.yml (links it on the PR),
@@ -106,7 +110,13 @@ In order, on a Mac. Each optional linter prints `note: <tool> not installed; ski
 8. **`swift-format lint --strict`**, then `swiftlint lint --strict`, `swiftlint analyze` (unused
    imports), `periphery scan --strict`.
 9. **actionlint / prettier** (yml/yaml/md plus the Pages site's html/css) **/ xmllint** (XML
-   well-formedness, e.g. the sitemap) **/ markdownlint / shellcheck**.
+   well-formedness, e.g. the sitemap) **/ markdownlint / shellcheck / shfmt --diff** (`scripts/*.sh`
+   formatting, style from the `[*.sh]` block in `.editorconfig`).
+10. **The evals** (`evals/`, the repo's only Python): `ruff format --check`, `ruff check`, and
+    `pytest evals/dictation-prompt/test_eval.py`. Config in `evals/ruff.toml`. The suite needs no
+    network, no API key, and nothing beyond pytest — the one test that needs DSPy skips itself when
+    it is absent.
+11. **`release.test.sh`** — pure-bash unit tests for the release orchestrator's decision helpers.
 
 CI (`.github/workflows/check.yml`) installs all of these via Homebrew on `macos-26` and runs the same
 script, so a clean local `check.sh` matches CI by construction. The same workflow's `dev-build` job
@@ -153,9 +163,10 @@ Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `
   test passed. Say plainly that verification happens on a Mac — CI runs the full `check.sh` on
   `macos-26` and is the authority on green.
 - **The portable gate**: `scripts/check.sh --portable` runs actionlint, prettier, xmllint,
-  markdownlint, shellcheck, and `release.test.sh` (plus `swift-format`/`swiftlint lint` if Linux
-  builds happen to be on `PATH`). It fully verifies docs, site, scripts, and workflow changes. It
-  skips the entire Swift side, and its closing line says so.
+  markdownlint, shellcheck, shfmt, ruff (lint + format check), pytest over the evals, and
+  `release.test.sh` (plus `swift-format`/`swiftlint lint` if Linux
+  builds happen to be on `PATH`). It fully verifies docs, site, scripts, eval, and workflow changes.
+  It skips the entire Swift side, and its closing line says so.
 - **The loop for Swift changes**: commit, push, open or update the PR, then watch `check.yml`
   (subscribe to PR activity where available) and fix failures as CI reports them — rather than
   stopping at "verify on a Mac".
@@ -263,6 +274,29 @@ response carries both `text` (verbatim) and
 `llm_response` (the rewrite); the transcriber returns the rewrite and falls back to `text` when
 `llm_response` is null — the rewrite is best-effort (5 s server-side budget), so a rewrite failure
 (`llm_error`) is a logged degradation, never a user-facing error.
+
+The instruction is `CleanupInstruction.text`, the winner of a GEPA run of
+`evals/dictation-prompt/` (see its README), compressed to fit the cap. Two later searches
+failed to beat it — the most recent scored 0.9043 against its 0.9101 on a held-out split.
+
+Note what that does and does not establish. It is the best instruction the harness has
+produced, measured against other _text_ candidates on a _stand-in_ model; it has never been
+shown to beat the empty `llm` block, because the harness cannot score the service's own
+rewrite model. On the one live comparison so far — two utterances through the real endpoint —
+this instruction and the service default produced identical output. `--verify-live` settles
+that with real audio. And every corpus behind it is English while the string ships to every
+user in every language; pinning the _transcription_ prompt to English was reverted once
+already. A revert here is one line: drop `LLMRewrite`'s field and it encodes `{}` again.
+
+That field is capped at **2048 characters** (`CleanupInstruction.characterCap`) — a different,
+smaller limit than the 4096 on `config.prompt` (`TranscriptionPrompt.characterCap`), and
+neither is in the published API reference; both were measured against the live endpoint. Over
+the cap the API 400s the whole request before reading the audio, so every dictation fails
+outright rather than degrading to the verbatim transcript. A 3057-character eval winner
+shipped this way once and broke all dictation; the test meant to catch it asserted the
+prompt's 4096. `CleanupInstructionTests` now asserts the right constant and pins the two
+apart, and the harness refuses to report an over-cap winner — see its README's "The
+2048-character cap".
 
 The finished text arrives in the response body — no `/v2/upload`, no job submission, no polling.
 Truly synchronous: `transcribe(pcm:sampleRate:context:)` is a single `async throws -> String`
@@ -444,8 +478,21 @@ History: **`RecentDictations`** is an in-memory, newest-first ring shown in the 
 written to disk). **`DictationLog`** appends each completed dictation with its context snapshot to
 `~/Library/Logs/Blurt/dictations.jsonl` (`DictationLog.defaultURL`, or `defaultDisplayPath` for the
 home-abbreviated form to show in UI — derived next to the URL so the label can't drift from the write
-target) — but **only** while developer mode is on; with it off, nothing is written. The Settings
-window's Developer section surfaces both the switch and the path.
+target) — but **only** while developer mode is on; with it off, nothing is written. Every dictation
+that ends in `.failed` is appended to a sibling `errors.jsonl` (`DictationLog+Errors.swift`:
+`appendError` / `defaultErrorURL` / `defaultErrorDisplayPath`), behind the same switch — one line per
+failure carrying `BlurtError.diagnosticName` (the stable label to aggregate on), the full description,
+and the focused app/window/field, but deliberately **no** prior text, selected text, or prompt: the
+surrounding text explains nothing about a failure and is the most sensitive part of the snapshot.
+Errors go to their own file so the dictations log stays a corpus whose every line has a `transcript`.
+The write is hooked in **`DictationSession.setPhase`**, not at the five `setPhase(.failed(…))` call
+sites, so a failure path added later is logged by construction; `.noTarget` and `.cancelled` aren't
+`.failed`, so the quiet "copied" notice stays out of the log. The one direct `appendError` call is
+`stopAndCancel`'s failing `mic.stop()`: a cancel must not flash red, so that fault is logged **without**
+a phase change rather than dropped. A failed append itself goes to `os_log` (never the entry, which
+would leak transcripts system-wide) — it's the one error that can't be reported through the error log,
+and it must never throw onto the dictation path. The Settings window's Developer section surfaces the
+switch and both paths, and `scripts/reset-install.sh` removes both files.
 
 API key: stored in the macOS Keychain via **`APIKeyStore`**, a thin static facade over
 **`MemoizedKeyStore`** (which takes its storage as `read`/`write` closures, so the memo-and-write rules

@@ -29,7 +29,10 @@ for arg in "$@"; do
   case "$arg" in
     --skip-checks) SKIP_CHECKS=1 ;;
     --skip-smoke) SKIP_SMOKE=1 ;;
-    *) echo "unknown arg: $arg" >&2; exit 2 ;;
+    *)
+      echo "unknown arg: $arg" >&2
+      exit 2
+      ;;
   esac
 done
 
@@ -121,7 +124,10 @@ unlock_signing_keychain() {
 
   load_signing_keychain_password
   security unlock-keychain -p "$SIGNING_KEYCHAIN_PW" "$SIGNING_KEYCHAIN" \
-    || { SIGNING_KEYCHAIN_PW=""; die "failed to unlock signing keychain $SIGNING_KEYCHAIN"; }
+    || {
+      SIGNING_KEYCHAIN_PW=""
+      die "failed to unlock signing keychain $SIGNING_KEYCHAIN"
+    }
   SIGNING_KEYCHAIN_PW=""
   SIGNING_KEYCHAIN_UNLOCKED=1
   info "unlocked dedicated signing keychain: $SIGNING_KEYCHAIN"
@@ -158,13 +164,19 @@ create_ci_keychain() {
   # openssl rather than base64(1): -A accepts the secret whether it arrives as
   # one long line or wrapped, which the platform base64 flags do not agree on.
   printf '%s' "$BLURT_SIGNING_P12_BASE64" | openssl base64 -d -A >"$p12" \
-    || { rm -f "$p12"; die "BLURT_SIGNING_P12_BASE64 is not valid base64"; }
+    || {
+      rm -f "$p12"
+      die "BLURT_SIGNING_P12_BASE64 is not valid base64"
+    }
   # -T pre-authorizes those tools; set-key-partition-list below is what actually
   # makes that stick on modern macOS (without it codesign blocks on a UI prompt
   # that no CI runner can answer).
   security import "$p12" -k "$CI_KEYCHAIN" -P "$BLURT_SIGNING_P12_PASSWORD" \
     -f pkcs12 -T /usr/bin/codesign -T /usr/bin/security >/dev/null \
-    || { rm -f "$p12"; die "could not import the signing .p12 (wrong BLURT_SIGNING_P12_PASSWORD, or the secret isn't a PKCS#12 export?)"; }
+    || {
+      rm -f "$p12"
+      die "could not import the signing .p12 (wrong BLURT_SIGNING_P12_PASSWORD, or the secret isn't a PKCS#12 export?)"
+    }
   rm -f "$p12"
   security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$kc_pw" "$CI_KEYCHAIN" >/dev/null \
     || die "could not set the partition list on the ephemeral keychain"
@@ -245,12 +257,12 @@ notarize() {
   xcrun notarytool submit "$artifact" \
     "${NOTARY_AUTH[@]}" \
     --wait \
-    --output-format plist > "$result_plist"
+    --output-format plist >"$result_plist"
   local status id
   status="$(/usr/libexec/PlistBuddy -c 'Print :status' "$result_plist" 2>/dev/null || echo unknown)"
   id="$(/usr/libexec/PlistBuddy -c 'Print :id' "$result_plist" 2>/dev/null || echo unknown)"
   info "notary status ($tag): $status (id $id)"
-  xcrun notarytool log "$id" "${NOTARY_AUTH[@]}" > "$log_json" 2>&1 || true
+  xcrun notarytool log "$id" "${NOTARY_AUTH[@]}" >"$log_json" 2>&1 || true
   if [ "$status" != "Accepted" ]; then
     step "Notary log ($tag)"
     cat "$log_json" 2>/dev/null || true
@@ -550,12 +562,12 @@ PROVENANCE="$BUILD_ROOT/build-info.txt"
   shasum -a 256 "$REPO_ROOT/App/Blurt/Blurt.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved" 2>/dev/null \
     || shasum -a 256 "$REPO_ROOT/Package.resolved" 2>/dev/null \
     || echo "  (Package.resolved not found)"
-} > "$PROVENANCE"
+} >"$PROVENANCE"
 info "provenance: $PROVENANCE"
 
 step "Checksums"
 CHECKSUMS="$BUILD_ROOT/SHA256SUMS"
-(cd "$BUILD_ROOT" && shasum -a 256 "$(basename "$DMG")" "$(basename "$DSYM_ZIP")") > "$CHECKSUMS"
+(cd "$BUILD_ROOT" && shasum -a 256 "$(basename "$DMG")" "$(basename "$DSYM_ZIP")") >"$CHECKSUMS"
 info "checksums: $CHECKSUMS"
 
 step "Summary"

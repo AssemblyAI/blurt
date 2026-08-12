@@ -329,7 +329,18 @@ public actor DictationSession {
   /// recording to tear down.
   func stopAndCancel() async {
     cancelAutoRelease()
-    _ = try? await mic.stop()
+    do {
+      _ = try await mic.stop()
+    } catch {
+      // Stays out of the UI: the user asked for nothing to happen, and a cancel
+      // must not flash red (same rule as `performRelease`'s "a cancel wins over
+      // surfacing the audio error"). But a mic teardown that genuinely failed was
+      // reported nowhere at all, which made a recorder stuck mid-cancel
+      // indistinguishable from a clean one. Record it for developer mode without
+      // touching the phase — the log is exactly the channel for a fault the user
+      // shouldn't be shown.
+      DictationLog.appendError(.audioCaptureFailed(underlying: error), context: capturedContext)
+    }
     setPhase(.cancelled)
   }
 
@@ -343,6 +354,20 @@ public actor DictationSession {
   // `DictationSession+Pipeline.swift` (see the split note at the top).
 
   func setPhase(_ newPhase: PipelinePhase) {
+    // Every failure route funnels through here — the press-time readiness
+    // refusal, both `mic` failures, the transcribe catch, and the injector's
+    // typed and untyped errors — so the developer-mode error log is written from
+    // this one place rather than at each `setPhase(.failed(…))` call site. A
+    // failure path added later is logged by construction instead of by someone
+    // remembering. The non-error outcomes stay out of it by the same token:
+    // `.noTarget` (the quiet "copied" notice, explicitly "don't report it") and
+    // `.cancelled` aren't `.failed`, so they never reach this branch.
+    //
+    // Gated on developer mode inside `appendError`, which also dispatches the
+    // file I/O off this actor — the log must not make a failure slower to show.
+    if case .failed(let error) = newPhase {
+      DictationLog.appendError(error, context: capturedContext)
+    }
     phase = newPhase
     for continuation in continuations.values {
       continuation.yield(newPhase)

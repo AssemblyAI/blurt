@@ -68,4 +68,36 @@ struct BlurtErrorTests {
     let e = NSError(domain: "X", code: 1, userInfo: [NSLocalizedDescriptionKey: "same"])
     #expect(BlurtError.sttFailed(underlying: e) != .audioCaptureFailed(underlying: e))
   }
+
+  /// `diagnosticName` is the field the error log is aggregated on, so a duplicate
+  /// or empty label would silently merge two distinct failures into one bucket.
+  @Test("diagnosticName is unique and non-empty across every case")
+  func diagnosticNamesAreDistinct() {
+    let e = NSError(domain: "X", code: 1)
+    let all: [BlurtError] = [
+      .accessibilityPermissionMissing,
+      .apiKeyMissing,
+      .sttFailed(underlying: e),
+      .targetAppLost,
+      .audioCaptureFailed(underlying: e),
+      .noEditableTarget,
+    ]
+    let names = all.map(\.diagnosticName)
+    #expect(names.allSatisfy { !$0.isEmpty })
+    #expect(Set(names).count == all.count)
+  }
+
+  /// The label must survive rewording of the human-facing copy — that's the whole
+  /// reason it's a separate property rather than a slice of `errorDescription`.
+  @Test("diagnosticName is a stable case label, not derived from the description")
+  func diagnosticNamesAreCaseLabels() {
+    let underlying = NSError(
+      domain: "Test", code: 1, userInfo: [NSLocalizedDescriptionKey: "boom"])
+    #expect(BlurtError.apiKeyMissing.diagnosticName == "apiKeyMissing")
+    #expect(BlurtError.sttFailed(underlying: underlying).diagnosticName == "sttFailed")
+    // Two `.sttFailed`s with different underlying errors share one bucket.
+    #expect(
+      BlurtError.sttFailed(underlying: NSError(domain: "Other", code: 9)).diagnosticName
+        == BlurtError.sttFailed(underlying: underlying).diagnosticName)
+  }
 }

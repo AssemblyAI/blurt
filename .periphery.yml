@@ -7,8 +7,8 @@ schemes:
 # redundant-public and fails --strict. Keep engine internals `internal`; tests
 # see them through `@testable import`.
 retain_public: false
-# DictationLog.Entry's properties exist solely to be encoded by JSONEncoder;
-# Periphery can't see Codable's reflective key emission.
+# DictationLog.Entry's and .ErrorEntry's properties exist solely to be encoded by
+# JSONEncoder; Periphery can't see Codable's reflective key emission.
 retain_codable_properties: true
 # AppCoordinator stores a Task<Void, Never> to keep the phase-stream observer
 # alive for the lifetime of the coordinator — assignment IS the use.

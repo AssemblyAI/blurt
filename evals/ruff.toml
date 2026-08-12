@@ -1,0 +1,39 @@
+# Ruff config for the offline evals (`evals/`) — the repo's only Python.
+#
+# Scoped here rather than at the repo root on purpose: Blurt is a Swift project,
+# and this directory is decision-support tooling that happens to be Python.
+# Ruff discovers this by walking up from each file, so `ruff check evals/` and
+# `ruff format evals/` from the repo root both pick it up. Both run in
+# `scripts/check.sh`, including its `--portable` subset — nothing here needs the
+# macOS toolchain.
+
+# The eval's modules are prose-heavy: long explanatory docstrings wrapped just
+# under 100, and code hand-wrapped to match. 100 keeps that rhythm instead of
+# reflowing every module to fit Black's 88.
+line-length = 100
+
+# `evals/dictation-prompt` is an import root, not a package: the CLI inserts its
+# own directory on `sys.path` and the modules import each other by bare name
+# (`import corpus`). Telling ruff where that root is makes isort classify them as
+# first-party, so the existing stdlib / third-party / local grouping is what it
+# expects rather than something it wants to rewrite.
+src = ["dictation-prompt"]
+
+[lint]
+# Pyflakes + pycodestyle for correctness, then three additions that pay for
+# themselves on a codebase this size: `I` (import order — the analogue of
+# swift-format's OrderedImports rule), `UP` (keeps the modern syntax the modules
+# already use, e.g. `from __future__ import annotations` plus PEP 585 generics),
+# and `B` (bugbear's real-bug patterns, like mutable default arguments).
+#
+# NOT enabled: `PL`. Its complexity and magic-value rules would flag the argparse
+# CLI and the scoring thresholds, which are legible as written — the stray
+# `# noqa: PLC0415` in `optimize_cleanup_prompt.py` is documentation of intent
+# for whoever reads that deferred import, not a suppression this config needs.
+select = ["E", "W", "F", "I", "UP", "B"]
+
+# Line width is the formatter's job, exactly as `line_length` is disabled in
+# .swiftlint.yml because swift-format owns it. Two tools arguing over wrapping
+# is churn, and E501 would also fire on the long docstring lines `ruff format`
+# deliberately leaves alone.
+ignore = ["E501"]

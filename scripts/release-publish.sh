@@ -20,7 +20,10 @@ for arg in "$@"; do
   case "$arg" in
     --republish) REPUBLISH=1 ;;
     --yes | -y) ASSUME_YES=1 ;;
-    *) echo "unknown arg: $arg" >&2; exit 2 ;;
+    *)
+      echo "unknown arg: $arg" >&2
+      exit 2
+      ;;
   esac
 done
 
@@ -98,8 +101,11 @@ if [ "$ASSUME_YES" -eq 1 ]; then
 else
   read -r -p "Continue? [y/N]: " ANS
   case "$ANS" in
-    y|Y) ;;
-    *) info "aborted"; exit 0 ;;
+    y | Y) ;;
+    *)
+      info "aborted"
+      exit 0
+      ;;
   esac
 fi
 

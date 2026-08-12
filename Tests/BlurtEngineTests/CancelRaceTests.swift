@@ -144,6 +144,28 @@ struct CancelRaceTests {
     #expect(await injector.inserted.isEmpty)
   }
 
+  /// The other failing-stop route: cancelling a live recording, where
+  /// `stopAndCancel` tears the mic down. The error is recorded for developer mode
+  /// (`DictationLog.appendError`) rather than dropped, but it must stay out of the
+  /// UI — the user asked for nothing to happen, so the phase is still `.cancelled`
+  /// and no transcript is produced.
+  @Test("cancel of a live recording survives a failing mic.stop")
+  func cancelDuringRecordingSurvivesFailingMicStop() async throws {
+    let mic = StubMicCapture()
+    await mic.setStopError(URLError(.unknown))
+    let stt = StubTranscriber(mode: .transcript("Hello world."))
+    let injector = StubInjector()
+    let session = DictationSession(mic: mic, transcriber: stt, injector: injector)
+
+    await session.press()
+    #expect(await session.phase == .recording)
+    await session.cancel()
+
+    #expect(await session.phase == .cancelled)
+    #expect(await mic.stopCalls == 1)
+    #expect(await injector.inserted.isEmpty)
+  }
+
   @Test("cancelRecording during transcribing leaves the pipeline alone")
   func cancelRecordingDoesNotTearDownTranscribing() async throws {
     let mic = StubMicCapture()
