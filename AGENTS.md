@@ -666,6 +666,12 @@ The bump workflow deliberately does not open the PR — a PR created by `GITHUB_
 `check`, so it could never merge; opening it from outside Actions works fine. The publish job then
 parks on the `release-publish` environment until a human approves — that approval is the ship gate,
 so download and test the DMG from the build job's artifacts first. Nothing is rebuilt after approval.
+
+**If you are an agent: never approve that deployment yourself**, even though the API allows it and
+you may have the permission. The gate exists so a person confirms the real artifact works before it
+reaches users; approving a build you dispatched is not a gate. This rule is repeated in
+`.claude/skills/release` and lives here too because that skill is `disable-model-invocation: true` —
+it does _not_ load when someone just says "release", which is exactly when the rule matters.
 Dispatching `release-bump` with an empty version takes the next patch, resolved by `default_target` /
 `decide_run` in `scripts/release-lib.sh` (unit-tested by `release.test.sh`, so it is verifiable off a
 Mac). There is no local orchestrator script — the workflows are the only path, so there is nothing to
