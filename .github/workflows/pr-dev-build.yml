@@ -13,7 +13,16 @@ name: pr-dev-build
 # reads the triggering run's artifact list over the API and writes one comment,
 # nothing else. Note that `workflow_run` only fires for the copy of this file on
 # the default branch, so edits here take effect after they merge.
-on:
+#
+# zizmor flags `workflow_run` as fundamentally insecure, which is the right
+# default: the trigger is dangerous precisely because it pairs a writable token
+# with a run whose inputs an outside contributor influenced. It is suppressed
+# here because the two conditions that make it exploitable are both absent —
+# there is no `actions/checkout` in this file (so no PR code is fetched, let
+# alone executed), and every attacker-influenced value reaches the shell through
+# `env:` rather than a `${{ }}` interpolation, so none of it can be parsed as
+# shell. Re-audit this suppression if either ever changes.
+on: # zizmor: ignore[dangerous-triggers]
   workflow_run:
     workflows: [check]
     types: [completed]

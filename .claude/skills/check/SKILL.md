@@ -27,7 +27,7 @@ What you CAN run there is the portable subset:
 scripts/check.sh --portable
 ```
 
-It runs actionlint / prettier / xmllint / markdownlint / shellcheck / shfmt /
+It runs actionlint / zizmor / prettier / xmllint / markdownlint / shellcheck / shfmt /
 ruff (lint + format check) / pytest over `evals/` / `release.test.sh` (plus `swift-format lint` and `swiftlint lint` if Linux
 builds are on `PATH` — under the default web network policy they are not).
 That fully verifies docs, site, scripts, eval, and workflow changes. It is **not**
@@ -67,7 +67,8 @@ Mac they're all present, so don't treat a skip as a pass):
 8. `swift-format lint --strict`
 9. `swiftlint lint --strict` (warnings are failures), `swiftlint analyze`
    (unused imports), `periphery scan --strict`
-10. actionlint / prettier / xmllint / markdownlint / shellcheck / shfmt --diff
+10. actionlint / zizmor (workflow security) / prettier / xmllint / markdownlint /
+    shellcheck / shfmt --diff
 11. `ruff format --check` + `ruff check` over `evals/`, then `pytest`
     over `evals/dictation-prompt/test_eval.py`
 12. `release.test.sh`

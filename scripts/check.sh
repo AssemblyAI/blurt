@@ -1,7 +1,7 @@
 #!/bin/bash
 # Project health check: build + test the SPM engine and the macOS app.
 # Pipes xcodebuild through xcbeautify when available (brew install xcbeautify).
-# Runs swiftlint / periphery / actionlint / prettier / xmllint /
+# Runs swiftlint / periphery / actionlint / zizmor / prettier / xmllint /
 # markdownlint / shellcheck / shfmt / ruff / pytest when available.
 # Swift warnings are treated as errors everywhere; engine line coverage is gated.
 # `check.sh --portable` runs only the platform-independent subset (for Linux /
@@ -12,9 +12,9 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_DIR="$REPO_ROOT/App/Blurt"
 
-# --portable: run only the platform-independent checks (actionlint / prettier /
-# xmllint / markdownlint / shellcheck / shfmt / ruff / pytest / release.test.sh,
-# plus swift-format and
+# --portable: run only the platform-independent checks (actionlint / zizmor /
+# prettier / xmllint / markdownlint / shellcheck / shfmt / ruff / pytest /
+# release.test.sh, plus swift-format and
 # swiftlint lint when their Linux builds happen to be present). For Linux / web
 # sandboxes where the macOS toolchain is absent. A green --portable run is NOT
 # "green" in the CI sense — the Swift build, tests, sanitizers, coverage gate,
@@ -146,6 +146,23 @@ fi
 
 [ "$DEP_VIOLATION" -eq 0 ] || exit 1
 echo "no external dependencies (engine dependency-free; app carries only local BlurtEngine)"
+
+# Ignore rules must not shadow tracked files. A .gitignore pattern only suppresses
+# files that are *untracked* — one that also matches something already committed
+# leaves it tracked but invisible to `git status`, so later edits to it stop
+# showing up and quietly never get committed. That is the one way this file can be
+# wrong and not announce itself, and the broad globs it carries (`*.log`,
+# `results*.json`) are exactly the kind that drift into a collision. Pure git
+# plumbing, so it runs in --portable too.
+echo "==> ignore rules don't shadow tracked files"
+SHADOWED="$(git ls-files --ignored --exclude-standard --cached)"
+if [ -n "$SHADOWED" ]; then
+  echo "error: these tracked files match an ignore rule, so git status will not report changes to them:" >&2
+  printf '%s\n' "$SHADOWED" >&2
+  echo "       narrow the pattern in .gitignore, or 'git rm --cached' the file if it should not be tracked." >&2
+  exit 1
+fi
+echo "no tracked file is shadowed by an ignore rule"
 
 # Sound-catalog integrity. `SoundPackCatalog.swift` and the cue audio are both
 # emitted by scripts/generate-sounds.swift, but they land in different targets —
@@ -382,7 +399,31 @@ fi
 
 if tool_ready actionlint 'brew install actionlint'; then
   echo "==> actionlint"
+  # Auto-discovers .github/workflows, so no file list. It also pipes each `run:`
+  # block through shellcheck when shellcheck is on PATH (it is, via the Brewfile),
+  # which is what lint-checks the inline bash in release.yml and pr-dev-build.yml.
   actionlint
+fi
+
+if tool_ready zizmor 'brew install zizmor'; then
+  echo "==> zizmor"
+  # The security half of workflow lint, where actionlint is the correctness half:
+  # template-injection sinks in `run:` blocks, overbroad `permissions:`, unpinned
+  # action refs, credential-persistence hazards. It earns its place here because
+  # release.yml hands a Developer ID signing key to a runner — the one workflow in
+  # this repo where a scripting mistake costs more than a red build.
+  #
+  # Default persona on purpose. --persona=pedantic additionally wants a comment on
+  # every `permissions:` key and flags workflow-level grants that could be
+  # job-scoped; useful to run by hand, too noisy to gate on.
+  #
+  # --offline is already zizmor's default, but stating it keeps this check hermetic
+  # by contract: a future release that flips the default to online would otherwise
+  # start wanting a token and a network round-trip mid-gate. The audits it costs us
+  # are the ones resolving action refs upstream, which Dependabot already watches.
+  # -q drops the per-file progress chatter and the "defaulting to offline" warning,
+  # keeping findings — the only thing worth reading here.
+  zizmor -q --offline .github/workflows/
 fi
 
 if tool_ready prettier 'brew install prettier'; then

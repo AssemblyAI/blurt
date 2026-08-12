@@ -109,9 +109,12 @@ In order, on a Mac. Each optional linter prints `note: <tool> not installed; ski
    which the `macos-26` runner provides.
 8. **`swift-format lint --strict`**, then `swiftlint lint --strict`, `swiftlint analyze` (unused
    imports), `periphery scan --strict`.
-9. **actionlint / prettier** (yml/yaml/md plus the Pages site's html/css) **/ xmllint** (XML
-   well-formedness, e.g. the sitemap) **/ markdownlint / shellcheck / shfmt --diff** (`scripts/*.sh`
-   formatting, style from the `[*.sh]` block in `.editorconfig`).
+9. **actionlint** (workflow correctness — and, via shellcheck, the inline `run:` bash) **/ zizmor**
+   (workflow _security_: template injection, overbroad `permissions:`, unpinned actions — it matters
+   most for `release.yml`, which hands the Developer ID key to a runner) **/ prettier** (yml/yaml/md
+   plus the Pages site's html/css) **/ xmllint** (XML well-formedness, e.g. the sitemap) **/
+   markdownlint / shellcheck / shfmt --diff** (`scripts/*.sh` formatting, style from the `[*.sh]`
+   block in `.editorconfig`).
 10. **The evals** (`evals/`, the repo's only Python): `ruff format --check`, `ruff check`, and
     `pytest evals/dictation-prompt/test_eval.py`. Config in `evals/ruff.toml`. The suite needs no
     network, no API key, and nothing beyond pytest — the one test that needs DSPy skips itself when
@@ -162,7 +165,7 @@ Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `
 - **You must not**: run (or claim to have run) the full `scripts/check.sh`, or assert that a build or
   test passed. Say plainly that verification happens on a Mac — CI runs the full `check.sh` on
   `macos-26` and is the authority on green.
-- **The portable gate**: `scripts/check.sh --portable` runs actionlint, prettier, xmllint,
+- **The portable gate**: `scripts/check.sh --portable` runs actionlint, zizmor, prettier, xmllint,
   markdownlint, shellcheck, shfmt, ruff (lint + format check), pytest over the evals, and
   `release.test.sh` (plus `swift-format`/`swiftlint lint` if Linux
   builds happen to be on `PATH`). It fully verifies docs, site, scripts, eval, and workflow changes.
