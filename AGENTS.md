@@ -63,12 +63,15 @@ App/Blurt/
   Shared/                    UITestIdentifiers.swift — compiled into BOTH app and UI-test targets
   BlurtUITests/              XCUITest bundle (see Tests)
 Tests/BlurtEngineTests/      Swift Testing suites; Stubs/ holds the seam doubles
-scripts/                     check.sh, bootstrap.sh, dev-build.sh, uitest.sh, leaks.sh, release*.sh
+scripts/                     check.sh, check-site.sh, bootstrap.sh, dev-build.sh, uitest.sh, leaks.sh,
+                             release*.sh
+Brewfile                     Homebrew-managed check.sh tools — the whole toolchain
 evals/dictation-prompt/      offline DSPy harness for tuning the dictation API's cleanup
                              instruction — nothing here ships in the app, but check.sh does
                              lint (ruff), format-check (ruff format), and test (pytest) it
 evals/ruff.toml              ruff config for the above — the repo's only Python config
-site/                        the GitHub Pages site (html/css, sitemap) — linted by check.sh
+site/                        the GitHub Pages site (html/css, sitemap) — formatted by prettier and
+                             checked for deployability by scripts/check-site.sh
 .github/workflows/           check.yml (the gate + per-PR dev build, macos-26),
                              pr-dev-build.yml (links it on the PR),
                              release-bump.yml (version bump) + release.yml (sign +
@@ -95,9 +98,30 @@ In order, on a Mac. Each optional linter prints `note: <tool> not installed; ski
 **a skip is missing coverage, not a pass**; run `scripts/bootstrap.sh` rather than accepting one.
 
 1. **Repo-integrity guards** — no external SPM dependencies; sound-catalog integrity (every
-   `SoundPackCatalog` voice has both cue files, no orphans, no duplicate or reserved ids). Both are
-   pure text/filesystem, so they run in `--portable` too. The catalog and the audio are generated
-   together but ship from different targets, so drift plays silence with nothing raising an error.
+   `SoundPackCatalog` voice has both cue files, no orphans, no duplicate or reserved ids); and
+   **site integrity** (`scripts/check-site.sh`). All three run in `--portable` too. The catalog and
+   the audio are generated together but ship from different targets, so drift plays silence with
+   nothing raising an error. The site guard exists for the same reason on the web: `pages.yml`
+   uploads `site/` verbatim with no build step, so a renamed asset, a stale absolute URL, or a
+   missing `CNAME` produces no error in this repo — just a 404 on the live site.
+
+   It checks the Pages-required files; that every local `src`/`href`/`srcset`/`poster` and CSS
+   `url()` resolves; that every `#fragment` has a matching `id`; that every absolute
+   `https://<CNAME>/` URL (canonical, `og:url`, `og:image`, JSON-LD, sitemap `<loc>`, robots
+   `Sitemap:`) names the domain in `CNAME` and points at a file that exists; per-element hygiene
+   (no duplicate `id`, no plain `http://`, no `<img>` without `alt`, no `<a>` without `href`, no
+   empty `src`/`href`); and that nothing under `site/assets/` ships unreferenced. Deliberately
+   offline — external links are never fetched, so the check stays deterministic and a third
+   party's outage is never this repo being red.
+
+   **Dependency-free on purpose, and it did not start that way.** This was briefly built on
+   html-proofer, to get a real HTML parser instead of greps. Aikido then flagged the licence on
+   `ttfunk` — GPL-2.0-only / GPL-3.0-only, reached via `html-proofer` → `pdf-reader` → `ttfunk` —
+   and bundler cannot drop a transitive gem, so keeping the parser meant keeping a GPL branch in an
+   MIT repo's lockfile and 20 gems of supply-chain surface for a one-page static site. Going back
+   cost no coverage: the audit of that tool is what surfaced the missing-`alt`, no-`href` and
+   empty-`src` checks, which are greps now. Don't reintroduce it without a licence answer.
+
 2. `swift test` with `-warnings-as-errors`, plus an engine **line-coverage gate** (≥ `MIN_COVERAGE`,
    80%, `Tests/` excluded — raise it as coverage grows).
 3. **ThreadSanitizer** and **AddressSanitizer** test passes.
@@ -176,7 +200,8 @@ Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `
 - **You must not**: run (or claim to have run) the full `scripts/check.sh`, or assert that a build or
   test passed. Say plainly that verification happens on a Mac — CI runs the full `check.sh` on
   `macos-26` and is the authority on green.
-- **The portable gate**: `scripts/check.sh --portable` runs actionlint, zizmor, prettier, xmllint,
+- **The portable gate**: `scripts/check.sh --portable` runs the repo-integrity guards
+  (dependencies, sound catalog, site), then actionlint, zizmor, prettier, xmllint,
   markdownlint, shellcheck, shfmt, ruff (lint + format check), pytest over the evals, and
   `release.test.sh` (plus `swift-format`/`swiftlint lint` if Linux
   builds happen to be on `PATH`). It fully verifies docs, site, scripts, eval, and workflow changes.
