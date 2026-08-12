@@ -24,6 +24,37 @@
 # network, and a third party's outage is not this repo being broken. Pure text
 # and filesystem work, so it runs in `check.sh --portable` too.
 #
+# Why this isn't an off-the-shelf link checker — the obvious question, so here
+# is the measurement rather than an assertion. htmltest (the closest fit, and
+# installable by the same `go install` route as actionlint) was run against this
+# site and against each failure mode above. It caught 3 of 8: the broken
+# stylesheet href, the broken <img src>, and the dangling #anchor. It missed the
+# <source srcset> candidate, the og:image, both CNAME cases, and the orphaned
+# asset — its check set (CheckImages/CheckLinks/CheckAnchors/CheckFavicon/
+# CheckDoctype/CheckMailto…) has no srcset and no Open Graph support at all. It
+# also flags the intentional alt="" on the decorative brand logo until told not
+# to. lychee and vnu are link-checking and HTML-validity respectively, so the
+# same gap; html-proofer covers og:image but would add a Ruby gem toolchain and
+# still not the CNAME or orphan checks.
+#
+# That gap is structural, not a missing feature: link checkers check links,
+# whereas five of these eight are the site's *identity* invariants — that CNAME
+# and every absolute URL agree, and that nothing dead ships. No general tool
+# models "site/CNAME is the source of truth for the domain in canonical/og:url/
+# sitemap/robots", because that is a GitHub-Pages-plus-this-repo convention.
+# So the real choice was a tool *plus* a smaller script, not a tool instead of
+# one — and for a single prettier-formatted page that was not worth a config
+# file, a CI install step outside the Brewfile, and a second thing to reason
+# about. Revisit if the site grows past one page: at that point the parsing
+# robustness starts to earn its keep, and the split is htmltest for
+# links/anchors/images with this script kept for the CNAME, srcset, and orphan
+# checks. Do not swap wholesale — that silently drops five of the eight.
+#
+# The line-oriented attribute parsing below is safe for the same reason:
+# check.sh runs `prettier --check` over site/*.html, so the formatting this
+# script assumes is itself enforced. Section 4 still flattens the file, because
+# prettier *does* wrap long tags across lines.
+#
 # Run standalone while editing the site:  bash scripts/check-site.sh
 
 set -euo pipefail
