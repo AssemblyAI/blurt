@@ -12,10 +12,4 @@ public enum BlurtIdentity {
   /// entry appears as "blurt" in Keychain Access instead of a developer-domain
   /// string. Must match `KEYCHAIN_SERVICE` in `scripts/reset-install.sh`.
   public static let keychainService = "blurt"
-
-  /// The Keychain service the API key lived under before the rename to
-  /// `keychainService` (it reused `subsystem`). Only `APIKeyStore`'s one-shot
-  /// migration and `scripts/reset-install.sh` still reference it. Must match
-  /// `LEGACY_KEYCHAIN_SERVICE` in that script.
-  public static let legacyKeychainService = "dev.alex.blurt"
 }
