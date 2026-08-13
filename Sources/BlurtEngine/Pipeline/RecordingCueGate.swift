@@ -10,7 +10,8 @@ public enum RecordingCue: Equatable, Sendable {
 
 /// Edge-detector deciding when the record start/stop chimes fire. The host calls
 /// `cue(for:)` on *every* pipeline phase, so the gate fires `.start` only on the
-/// idle→recording edge and `.stop` only on the recording→not-recording edge,
+/// edge into `.recording` (in production, connecting→recording — audio actually
+/// flowing) and `.stop` only on the recording→not-recording edge,
 /// staying silent while a phase repeats and across transitions between two
 /// non-recording phases. Value type holding a single edge bit; the host owns one
 /// instance for the app's lifetime.

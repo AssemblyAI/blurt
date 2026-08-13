@@ -7,8 +7,12 @@ import Foundation
 /// same split as `MicCapture+Meter`) so the timeout policy and the wait's
 /// edge cases are unit-tested against an injected clock.
 enum MicLiveness {
-  /// How often the recorder's clock is re-checked while waiting.
-  static let pollInterval: Duration = .milliseconds(50)
+  /// How often the recorder's clock is re-checked while waiting. Every press
+  /// whose first read is still 0 pays at least one quantum before `.recording`
+  /// and the start chime, so keep it short — 10 ms, the same cadence as
+  /// `KeyInjector.waitUntilFrontmost`'s poll-until-deadline loop — rather than
+  /// taxing the common (wired/built-in) case to wait for the Bluetooth one.
+  static let pollInterval: Duration = .milliseconds(10)
 
   /// Wait cap for Bluetooth inputs: bringing an AirPods mic up means an
   /// A2DP→HFP profile switch that takes ~1–2 s, and macOS drops the link back

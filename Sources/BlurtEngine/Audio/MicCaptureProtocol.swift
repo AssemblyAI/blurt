@@ -2,6 +2,12 @@ import Foundation
 
 public protocol MicCaptureProtocol: Sendable {
   /// Begin capturing 16 kHz mono 16-bit PCM. Throws on permission/device failure.
+  /// May hold until the input device actually delivers frames — a Bluetooth
+  /// route spends up to ~2.5 s switching profiles (A2DP→HFP) before any audio
+  /// flows — and hosts render the whole in-flight call as a distinct
+  /// "connecting" state (the pipeline's `.connecting` phase), with the
+  /// "speak now" cues arriving only on return. A conformer that returns
+  /// before frames flow cues the user to speak into a dead mic.
   func start() async throws
   /// Stop capture and return the captured audio as raw S16LE PCM bytes — the
   /// exact encoding the dictation request uploads, so no conversion pass sits on

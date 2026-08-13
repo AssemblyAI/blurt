@@ -54,6 +54,15 @@ final class OverlayWindowController {
   // (`OverlayUIState.noticeDwellSeconds`, unit-tested there).
   private var errorRevertTask: Task<Void, Never>?
 
+  // Holds the `.connecting` VoiceOver announcement until the bring-up has
+  // persisted past `ConnectingLabel.revealDelay` — the same hold the label
+  // itself applies. A fast (wired/built-in) route resolves within the delay,
+  // cancels this, and stays silent all the way to the start chime; only a real
+  // (Bluetooth-length) wait gets spoken. Without it, VoiceOver users had no
+  // non-visual feedback at all during a bring-up: announcements fired only for
+  // the dwell notices, and this non-activating panel never takes focus.
+  private var connectingAnnounceTask: Task<Void, Never>?
+
   // The pill fades in fast — the appear is tied to the user's keypress, so a snappy
   // ramp reads as instant response — but fades out gently. Asymmetric on purpose.
   private static let appearFadeDuration: Double = 0.08
@@ -104,13 +113,14 @@ final class OverlayWindowController {
 
   /// OverlayWindowController lives for the whole app session, so this never runs
   /// in practice — but tearing the observer down (and cancelling any pending
-  /// error-flash revert) mirrors the `[weak self]` care above and documents that
-  /// the registrations are owned, not leaked.
+  /// error-flash revert or connecting announcement) mirrors the `[weak self]`
+  /// care above and documents that the registrations are owned, not leaked.
   deinit {
     if let didMoveObserver {
       NotificationCenter.default.removeObserver(didMoveObserver)
     }
     errorRevertTask?.cancel()
+    connectingAnnounceTask?.cancel()
   }
 
   func show(state: OverlayUIState) {
@@ -118,6 +128,11 @@ final class OverlayWindowController {
     // press while the red pill is up should win, not get stomped back to idle.
     errorRevertTask?.cancel()
     errorRevertTask = nil
+    // Likewise a pending connecting announcement: once the state has moved on
+    // (to `.recording`, or a failure), announcing "Connecting" would be stale —
+    // and on a fast bring-up this cancel is what keeps the pill silent.
+    connectingAnnounceTask?.cancel()
+    connectingAnnounceTask = nil
 
     // Idle means "no dictation happening" — the pill rides the pipeline and is
     // hidden at rest, so fade it out. The displayed state is left untouched so
@@ -136,6 +151,24 @@ final class OverlayWindowController {
     // a repeated notice still has to announce and re-arm its revert.
     if bridge.state != state {
       bridge.state = state
+    }
+    // The mic bring-up gets the same VoiceOver treatment as the dwell notices
+    // below — this panel never takes focus, so an announcement is the only
+    // non-visual channel — but held for the label's reveal delay first (see
+    // `connectingAnnounceTask`): a fast route flips to `.recording` within the
+    // delay and goes straight to the start chime.
+    if case .connecting = state {
+      connectingAnnounceTask = Task {
+        try? await Task.sleep(for: ConnectingLabel.revealDelay)
+        guard !Task.isCancelled else { return }
+        NSAccessibility.post(
+          element: NSApp as Any,
+          notification: .announcementRequested,
+          userInfo: [
+            .announcement: state.accessibilityLabel,
+            .priority: NSAccessibilityPriorityLevel.high.rawValue,
+          ])
+      }
     }
     // The red error flash and the neutral "copied" notice are both transient: the
     // pill is otherwise only up during active dictation, so they linger briefly to
@@ -171,6 +204,8 @@ final class OverlayWindowController {
   func hide() {
     errorRevertTask?.cancel()
     errorRevertTask = nil
+    connectingAnnounceTask?.cancel()
+    connectingAnnounceTask = nil
     guard panel.isVisible else {
       // Still settle the content when the panel is already off screen (the pill
       // may have been hidden mid-notice) — `dismissPanel` would have done it.

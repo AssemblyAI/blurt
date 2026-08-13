@@ -36,6 +36,15 @@ public actor MicCapture: MicCaptureProtocol {
   private var preparedRecorder: AVAudioRecorder?
   /// The recorder for the in-flight session; nil between `stop()` and `start()`.
   private var activeRecorder: AVAudioRecorder?
+  /// Incremented by every `stop()`. `start()` snapshots it before suspending in
+  /// the liveness wait — its one internal suspension — and re-checks after, so a
+  /// `stop()` that interleaves during the wait wins: without this, a reentrant
+  /// caller's stop saw `activeRecorder == nil`, returned an empty "clean stop",
+  /// and the not-yet-installed recorder kept capturing (mic indicator hot, temp
+  /// WAV leaked) until `start()` resumed. Unreachable through `DictationSession`
+  /// (its serial command queue runs release/cancel only after the press turn
+  /// completes), but this is a public actor — any host can call it unqueued.
+  private var stopGeneration = 0
   /// Polls the active recorder's meter and feeds `levels` while recording.
   private var meterTask: Task<Void, Never>?
   /// The last value `emitLevel` put on the stream, so an unchanged tick can be
@@ -106,13 +115,32 @@ public actor MicCapture: MicCaptureProtocol {
     // clock advances (frames are flowing), capped per transport; on timeout
     // proceed anyway (fail open), which is exactly the old behavior.
     let timeout = MicLiveness.timeout(forTransportType: Self.defaultInputTransportType())
+    let stopGenerationBeforeWait = stopGeneration
     let gap = await MicLiveness.waitUntilLive(timeout: timeout, clock: ContinuousClock()) {
+      // Off-actor read (`waitUntilLive` is nonisolated), safe by confinement:
+      // the polls run sequentially within one task, and nothing else references
+      // this recorder while `start()` is suspended in the wait — it isn't
+      // `activeRecorder` yet, `preparedRecorder` was cleared above, and the
+      // meter task hasn't started. (The `@Sendable` closure capturing the
+      // non-Sendable AVAudioRecorder is accepted only via the
+      // `@preconcurrency` import; the compiler can't re-check this argument.)
       recorder.currentTime
     }
+
+    // A stop() that landed while the wait was suspended wins: tear the recorder
+    // down instead of installing it, so the caller's stop stays a real stop
+    // (see `stopGeneration`).
+    guard stopGeneration == stopGenerationBeforeWait else {
+      recorder.stop()
+      Self.removeFile(at: recorder.url)
+      Self.logger.info("start aborted — stop() landed during the liveness wait")
+      throw CancellationError()
+    }
+
     if let gap {
-      Self.logger.info("input live after \(Int((gap / .milliseconds(1)).rounded())) ms")
+      Self.logger.info("input live after \(Int(gap.milliseconds.rounded())) ms")
     } else {
-      let capMs = Int((timeout / .milliseconds(1)).rounded())
+      let capMs = Int(timeout.milliseconds.rounded())
       Self.logger.error("input liveness unconfirmed after \(capMs) ms — proceeding")
     }
 
@@ -123,6 +151,7 @@ public actor MicCapture: MicCaptureProtocol {
   }
 
   public func stop() async throws -> Data {
+    stopGeneration += 1
     meterTask?.cancel()
     meterTask = nil
     guard let recorder = activeRecorder else { return Data() }

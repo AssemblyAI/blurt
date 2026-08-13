@@ -67,7 +67,7 @@ one, stop and ask the user first. This is the fast "don't" list; AGENTS.md's
   generated from `project.yml`; edit that and run `xcodegen generate`. check.sh
   fails on pbxproj drift (a PreToolUse hook also blocks edits to it).
 - The engine has **no external SPM dependencies** (Foundation/Security/
-  AVFoundation only). Don't add one to `Sources/BlurtEngine/`.
+  AVFoundation/CoreAudio only). Don't add one to `Sources/BlurtEngine/`.
 - Unit tests use **Swift Testing**, not XCTest (the `BlurtUITests` XCUITest
   bundle is the one exception — XCUIAutomation requires XCTest). **Never touch
   the real Keychain in tests** — `APIKeyStore` is the production item; use an

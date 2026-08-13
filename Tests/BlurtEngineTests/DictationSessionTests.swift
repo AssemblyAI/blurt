@@ -276,6 +276,7 @@ extension DictationSessionTests {
     await session.waitForIdle()
 
     #expect(await session.phase == .pasted)
+    #expect(await mic.startCalls == 1)
     #expect(await mic.stopCalls == 1)
   }
 

@@ -5,7 +5,8 @@ import Testing
 /// The record start/stop chimes fire on the *edges* of the recording phase, not
 /// on every phase tick. `AppCoordinator.render` calls the cue gate on every
 /// pipeline phase (idle, recording, transcribing, injecting, pasted, …), so the
-/// gate must fire `.start` only on the idle→recording edge and `.stop` only on
+/// gate must fire `.start` only on the edge into `.recording` (in production,
+/// connecting→recording) and `.stop` only on
 /// the recording→not-recording edge, staying silent on repeats and on
 /// transitions between two non-recording phases. Lifting that edge detection out
 /// of the AppKit `CueSoundPlayer` lets `swift test` cover it — the same split as
@@ -41,14 +42,6 @@ struct RecordingCueGateTests {
     #expect(gate.cue(for: .recording) == .start)
   }
 
-  @Test("a press that fails during .connecting never chimes")
-  func failedConnectingIsSilent() {
-    var gate = RecordingCueGate()
-    #expect(gate.cue(for: .connecting) == nil)
-    // mic.start() threw — no start cue was played, so no stop cue either.
-    #expect(gate.cue(for: .failed(.audioCaptureFailed(underlying: MicCaptureError.noInputDevice))) == nil)
-  }
-
   @Test("transitions between two non-recording phases are silent")
   func silentBetweenNonRecordingPhases() {
     var gate = RecordingCueGate()
@@ -58,6 +51,9 @@ struct RecordingCueGateTests {
     #expect(gate.cue(for: .transcribing) == nil)
     #expect(gate.cue(for: .injecting) == nil)
     #expect(gate.cue(for: .pasted) == nil)
+    #expect(gate.cue(for: .connecting) == nil)
+    // A press that fails during the mic bring-up (connecting→failed) played no
+    // start cue, so no stop cue either.
     #expect(gate.cue(for: .failed(.apiKeyMissing)) == nil)
   }
 

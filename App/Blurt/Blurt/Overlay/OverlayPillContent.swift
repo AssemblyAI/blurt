@@ -85,21 +85,44 @@ struct TranscribingLabel: View {
 /// The "Connecting…" status line shown while the mic route comes up (the
 /// engine's `.connecting` phase — a Bluetooth input takes ~1–2 s to switch
 /// A2DP→HFP). Styled as a status line like `TranscribingLabel`, but with a
-/// faster, deeper breath so it reads as "wait" rather than the calm
-/// transcribing heartbeat. Under Reduce Motion it holds steady at full opacity.
+/// faster breath so it reads as "wait" rather than the calm transcribing
+/// heartbeat. Under Reduce Motion it holds steady at full opacity.
+///
+/// The label holds off for `revealDelay` before appearing: a wired or built-in
+/// mic clears the liveness gate in well under 100 ms, so an immediate label
+/// flashed "Connecting…" mid fade-in on every fast press. A fast bring-up shows
+/// only the dark capsule; the label appears only once the wait is real.
 struct ConnectingLabel: View {
   /// Whether to run the breathing motion (off under Reduce Motion).
   let animated: Bool
 
-  // Roughly twice the tempo and twice the depth of TranscribingLabel's breath:
-  // busy enough to say "not ready yet, hold on" at a glance, while staying the
-  // same status-line idiom as the rest of the pill.
+  /// How long a bring-up must persist before the label appears — long enough
+  /// that fast (wired/built-in) routes never show it, short next to the ~1–2 s
+  /// Bluetooth wait it exists for. `OverlayWindowController` holds the
+  /// `.connecting` VoiceOver announcement for the same delay, so the visual and
+  /// spoken feedback agree on when a bring-up is worth mentioning.
+  static let revealDelay: Duration = .milliseconds(200)
+
+  // Twice the tempo of TranscribingLabel's breath: busy enough to say "not
+  // ready yet, hold on" at a glance, while staying the same status-line idiom
+  // as the rest of the pill. The trough stays at TranscribingLabel's ~55%
+  // floor — what keeps the 10 pt cyan legible against the dark tint — so the
+  // faster period alone carries the distinctness.
   private let breathPeriod: Double = 0.9
-  private let minOpacity: Double = 0.35
+  private let minOpacity: Double = 0.55
+
+  @State private var revealed = false
 
   var body: some View {
     StatusLineText("Connecting…")
       .pulsingOpacity(period: breathPeriod, minOpacity: minOpacity, animated: animated)
+      .opacity(revealed ? 1 : 0)
+      .animation(animated ? .easeInOut(duration: 0.15) : nil, value: revealed)
+      .task {
+        try? await Task.sleep(for: Self.revealDelay)
+        guard !Task.isCancelled else { return }
+        revealed = true
+      }
   }
 }
 
