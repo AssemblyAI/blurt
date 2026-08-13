@@ -60,11 +60,11 @@ public actor MicCapture: MicCaptureProtocol {
 
   /// The recorder for the in-flight session; nil between `stop()` and `start()`.
   var activeRecorder: AVAudioRecorder?
-  /// Whether the in-flight session's input is a Bluetooth device, sampled once
-  /// at `start()`. Read by `stop()` to decide on the tail linger — sampled at
-  /// start rather than re-read at stop so a device switch mid-utterance can't
-  /// make the two halves of one capture disagree.
-  private var activeInputIsBluetooth = false
+  /// The in-flight session's input transport, sampled once at `start()`. Read by
+  /// `stop()` to size the tail linger — sampled at start rather than re-read at
+  /// stop so a device switch mid-utterance can't make the two halves of one
+  /// capture disagree.
+  private var activeTransportType: UInt32?
 
   /// Incremented by every `stop()` / `cancelCapture()`. `start()` snapshots it
   /// before suspending in the liveness wait — its one internal suspension — and
@@ -84,7 +84,8 @@ public actor MicCapture: MicCaptureProtocol {
   /// `activeRecorder` isn't installed until the wait returns (the recorder stays
   /// confined to `start()` so nothing can touch it while the poll loop reads its
   /// clock off-actor), and the warm slot was consumed on the way in. Without
-  /// this, `rewarm()`/`warmUp()` read those two nils as "no capture in flight"
+  /// this, `warmUp()` (which every re-warm goes through) reads those two nils as
+  /// "no capture in flight"
   /// and prepare a *second* recorder onto the already-live input — which is very
   /// reachable, since `stop()` schedules a re-warm that can land inside the next
   /// press's bring-up.
@@ -110,22 +111,6 @@ public actor MicCapture: MicCaptureProtocol {
 
   /// `meterIntervalSeconds` as the `Duration` the meter task sleeps for.
   private static let meterInterval = Duration.seconds(meterIntervalSeconds)
-
-  /// How much longer capture runs after the key-up that ends it, when the input
-  /// is a Bluetooth device.
-  ///
-  /// A Bluetooth link buffers: audio the user has already spoken is still in
-  /// flight when `stop()` is called, and `recorder.stop()` drops it — which is
-  /// why the last word of a dictation goes missing on AirPods and the app reads
-  /// as running behind the speaker. The linger is deliberately shorter than a
-  /// typical link's worst case: it buys back the common tail without making
-  /// every dictation feel sluggish, and it costs nothing on a wired input, where
-  /// it is skipped entirely.
-  ///
-  /// The delay lands *after* `.transcribing` is claimed (see
-  /// `DictationSession.performRelease`), so it delays the transcript, never the
-  /// user's "it heard me" cue. Cancels skip it — see `cancelCapture()`.
-  static let bluetoothTailLinger = Duration.milliseconds(220)
 
   /// How long a prepared-but-unused recorder is held before being torn down.
   ///
@@ -225,26 +210,22 @@ public actor MicCapture: MicCaptureProtocol {
     }
 
     activeRecorder = recorder
-    activeInputIsBluetooth = AudioTransport.isBluetooth(input?.transportType)
+    activeTransportType = input?.transportType
     lastEmittedLevel = nil
     Self.logger.info("start recording to \(recorder.url.lastPathComponent, privacy: .public)")
     startMeterTimer()
   }
 
   public func stop() async throws -> Data {
-    stopGeneration += 1
-    meterTask?.cancel()
-    meterTask = nil
-    guard let recorder = activeRecorder else { return Data() }
-    activeRecorder = nil
     // Read before the suspension below, so this capture's decision can't be
     // rewritten by whatever a later `start()` sets.
-    let lingerForTail = activeInputIsBluetooth
-    if lingerForTail {
+    let linger = AudioTransport.tailLinger(forTransportType: activeTransportType)
+    guard let recorder = detachActiveRecorder() else { return Data() }
+    if linger > .zero {
       // Keep capturing for a moment past key-up so the audio still travelling
       // over the link lands in the file instead of being truncated. See
-      // `bluetoothTailLinger`.
-      try? await Task.sleep(for: Self.bluetoothTailLinger)
+      // `AudioTransport.tailLinger(forTransportType:)`.
+      try? await Task.sleep(for: linger)
     }
     recorder.stop()
 
@@ -261,7 +242,8 @@ public actor MicCapture: MicCaptureProtocol {
 
     let sampleCount = pcm.count / SyncSTTLimits.bytesPerSample
     let durationMs = SyncSTTLimits.durationMs(ofPCMBytes: pcm.count)
-    Self.logger.info("stop samples=\(sampleCount) durationMs=\(durationMs) linger=\(lingerForTail)")
+    let lingerMs = Int(linger.milliseconds.rounded())
+    Self.logger.info("stop samples=\(sampleCount) durationMs=\(durationMs) lingerMs=\(lingerMs)")
     return pcm
   }
 
@@ -280,15 +262,26 @@ public actor MicCapture: MicCaptureProtocol {
   /// (which can throw, via `stop()`) still conforms and `stopAndCancel`'s
   /// developer-mode failure log keeps working for hosts that take it.
   public func cancelCapture() {
-    stopGeneration += 1
-    meterTask?.cancel()
-    meterTask = nil
-    guard let recorder = activeRecorder else { return }
-    activeRecorder = nil
+    guard let recorder = detachActiveRecorder() else { return }
     recorder.stop()
     Self.removeFile(at: recorder.url)
     Self.logger.info("cancelled capture, discarded audio")
     scheduleRewarm()
+  }
+
+  /// Ends the current capture's claim on the actor's state and hands back the
+  /// recorder to dispose of, or nil when there was none.
+  ///
+  /// Shared by `stop()` and `cancelCapture()` because the two must not diverge:
+  /// the generation bump in particular is what `start()` re-checks across its
+  /// liveness wait to know a teardown landed, so a third exit that forgot it
+  /// would let an abandoned bring-up install itself and keep capturing.
+  private func detachActiveRecorder() -> AVAudioRecorder? {
+    stopGeneration += 1
+    meterTask?.cancel()
+    meterTask = nil
+    defer { activeRecorder = nil }
+    return activeRecorder
   }
 
   // MARK: - Recorder construction

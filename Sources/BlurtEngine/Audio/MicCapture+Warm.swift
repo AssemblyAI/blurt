@@ -18,7 +18,8 @@ extension MicCapture {
 
   /// Whether it is safe to open the input for a *warm* recorder right now:
   /// nothing is capturing, nothing is mid-bring-up, and no warm recorder is
-  /// already held.
+  /// already held. A scheduled re-warm that fails this has been overtaken —
+  /// a press got there first — and has nothing to do.
   ///
   /// `bringingUpCapture` is the load-bearing term. The two recorder slots are
   /// both nil across `start()`'s liveness wait, so testing them alone reads a
@@ -52,18 +53,15 @@ extension MicCapture {
 
   /// Queues a re-warm to run once the current actor turn finishes, so the caller
   /// (`stop()` / `cancelCapture()`) returns before the input is re-opened.
+  ///
+  /// `warmUp()` rather than a separate re-warm entry point: the two differ only
+  /// in when they are called, and both answer the same question — is it safe to
+  /// open the input for a warm recorder right now — so they share the guard
+  /// rather than each keeping a copy of it.
   func scheduleRewarm() {
     Task { [weak self] in
-      await self?.rewarm()
+      await self?.warmUp()
     }
-  }
-
-  /// Prepares the next session's recorder, unless a capture is running or coming
-  /// up, or a warm one is already held — all of which mean this re-warm has been
-  /// overtaken and has nothing to do.
-  func rewarm() {
-    guard canPrepareWarmRecorder else { return }
-    prepareWarmRecorder()
   }
 
   /// Builds a recorder, records the input it is bound to, and starts its idle

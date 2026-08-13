@@ -96,7 +96,7 @@ struct OverlayView: View {
       // pill's own 0.08 s fade-in, so it blends into the appearance rather than
       // flashing; on a Bluetooth route it holds for as long as the link takes,
       // which is the whole point.
-      ConnectingLabel(animated: !reduceMotion)
+      BreathingStatusLine(text: "Connecting…", animated: !reduceMotion)
         .transition(.opacity)
     case .recording:
       // "● REC" tag beside the live waveform, mirroring the site demo's recording
@@ -112,7 +112,7 @@ struct OverlayView: View {
       // Transcribing); cyan echoes the demo's --ice. Cross-fades like the bars.
       // The label breathes (slow opacity pulse) so the wait for the dictation API +
       // paste reads as active work rather than a frozen pill.
-      TranscribingLabel(animated: !reduceMotion)
+      BreathingStatusLine(text: "Transcribing…", animated: !reduceMotion)
         .transition(.opacity)
     case .error(let message):
       // "Try again" tells the user what to do; the full failure reason is too

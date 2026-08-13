@@ -457,7 +457,9 @@ The re-warm and the liveness gate are complements, not alternatives: the re-warm
 the profile switch is paid (a warm recorder has already held the route open), and the gate is what
 keeps the app honest on the presses that pay it anyway.
 
-`stop()` also waits out `bluetoothTailLinger` (220 ms) before ending the recording **when the
+`stop()` also waits out `AudioTransport.tailLinger(forTransportType:)` (220 ms on Bluetooth, `.zero`
+otherwise — the policy sits beside `MicLiveness`'s wait cap so both are unit-tested) before ending
+the recording **when the
 session's input is Bluetooth**, so speech still travelling over the link lands in the file instead of
 being truncated — the missing last word. It runs after `.transcribing` is claimed, so it delays the
 transcript, never the "it heard me" cue. Cancels take `cancelCapture()` instead, which skips both the

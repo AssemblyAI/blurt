@@ -88,6 +88,20 @@ struct AudioTransportTests {
     #expect(AudioTransport.isBluetooth(kAudioDeviceTransportTypeBluetoothLE))
   }
 
+  @Test("the tail linger is Bluetooth-only")
+  func tailLinger() {
+    // The other transport-conditional policy, here rather than in `MicCapture`
+    // so it is reachable by `swift test` at all — the capture actor needs real
+    // hardware and is excluded from the coverage gate.
+    #expect(
+      AudioTransport.tailLinger(forTransportType: kAudioDeviceTransportTypeBluetooth)
+        == AudioTransport.bluetoothTailLinger)
+    // `.zero`, not a small duration: `stop()` skips the sleep entirely on a
+    // wired input rather than awaiting a nominal one.
+    #expect(AudioTransport.tailLinger(forTransportType: kAudioDeviceTransportTypeBuiltIn) == .zero)
+    #expect(AudioTransport.tailLinger(forTransportType: nil) == .zero)
+  }
+
   @Test("wired, built-in, and unreadable transports do not")
   func nonBluetoothTransports() {
     #expect(!AudioTransport.isBluetooth(kAudioDeviceTransportTypeBuiltIn))

@@ -56,13 +56,21 @@ extension View {
   }
 }
 
-/// The "Transcribing…" status line with a slow breathing pulse — the processing
-/// counterpart of the recording bars' idle shimmer, so the pill keeps visibly
-/// working while the app waits on the dictation API and pastes the result. Driven by
-/// the same continuous-clock `TimelineView` pattern as `WaveformBars` (never a
-/// one-shot state toggle). Under Reduce Motion the label holds steady at full
-/// opacity — exactly the pre-animation rendering.
-struct TranscribingLabel: View {
+/// A status line that breathes — the pill's "working, hold on" treatment, used
+/// for both waits it has: "Connecting…" while `MicCapture`'s liveness gate waits
+/// for the input route to deliver frames, and "Transcribing…" while the app
+/// waits on the dictation API and pastes the result.
+///
+/// One view rather than two near-identical ones, so the heartbeat is shared by
+/// construction instead of by a comment asking two copies of the constants to
+/// stay equal. Driven by the same continuous-clock `TimelineView` pattern as
+/// `WaveformBars` (never a one-shot state toggle); under Reduce Motion it holds
+/// steady at full opacity, exactly the pre-animation rendering.
+///
+/// `StatusLineText` is shared with the "Pasted"/"Copied" notices, so every
+/// hand-off between these states reads as one continuous status line.
+struct BreathingStatusLine: View {
+  let text: String
   /// Whether to run the breathing motion (off under Reduce Motion).
   let animated: Bool
 
@@ -75,34 +83,7 @@ struct TranscribingLabel: View {
   private let minOpacity: Double = 0.55
 
   var body: some View {
-    // StatusLineText is shared with the "Pasted" notice (OverlayView's `.pasted`
-    // case) so the processing → pasted hand-off reads as one status line.
-    StatusLineText("Transcribing…")
-      .pulsingOpacity(period: breathPeriod, minOpacity: minOpacity, animated: animated)
-  }
-}
-
-/// The "Connecting…" status line shown while `MicCapture`'s liveness gate waits
-/// for the input route to deliver frames. Breathes on the same curve as
-/// `TranscribingLabel` (the pill's other "working, hold on" state) so the two
-/// waits read alike — this one can hold for a second or two on a Bluetooth
-/// route, and a frozen line would read as a hung app.
-///
-/// Deliberately *not* the `● REC` tag or the meter: those are the "speak now"
-/// cues, and audio spoken during the bring-up is unrecoverable — the OS receives
-/// nothing while the profile switch is in flight. The pill must not invite
-/// speech it cannot capture.
-struct ConnectingLabel: View {
-  /// Whether to run the breathing motion (off under Reduce Motion).
-  let animated: Bool
-
-  // Matched to `TranscribingLabel`: the two are the same kind of wait, so they
-  // share one heartbeat rather than each picking a rate.
-  private let breathPeriod: Double = 1.8
-  private let minOpacity: Double = 0.55
-
-  var body: some View {
-    StatusLineText("Connecting…")
+    StatusLineText(text)
       .pulsingOpacity(period: breathPeriod, minOpacity: minOpacity, animated: animated)
   }
 }
@@ -119,7 +100,7 @@ struct RecordingTag: View {
   // One pulse every ~1.2 s, dimming to 40% and back: the universal "recording,
   // right now" heartbeat. Since magenta stands in for the conventional red dot,
   // the pulse — not the hue — carries the live-capture cue. Driven by the same
-  // continuous-clock TimelineView as the waveform and TranscribingLabel (never a
+  // continuous-clock TimelineView as the waveform and BreathingStatusLine (never a
   // one-shot repeatForever toggle).
   private let pulsePeriod: Double = 1.2
   private let minOpacity: Double = 0.4

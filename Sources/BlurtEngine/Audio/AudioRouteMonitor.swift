@@ -90,12 +90,12 @@ public final class AudioRouteMonitor: @unchecked Sendable {
   deinit {
     continuation.finish()
     if let systemListener {
-      var address = Self.defaultOutputDeviceAddress
+      var address = AudioRoute.globalAddress(kAudioHardwarePropertyDefaultOutputDevice)
       _ = AudioObjectRemovePropertyListenerBlock(
-        Self.systemObject, &address, queue, systemListener)
+        AudioRoute.systemObject, &address, queue, systemListener)
     }
     if let deviceListener {
-      var address = Self.sampleRateAddress
+      var address = AudioRoute.globalAddress(kAudioDevicePropertyNominalSampleRate)
       _ = AudioObjectRemovePropertyListenerBlock(
         deviceListener.id, &address, queue, deviceListener.block)
     }
@@ -106,7 +106,7 @@ public final class AudioRouteMonitor: @unchecked Sendable {
   /// Watches for the default output device itself changing. Registered once and
   /// never re-targeted — the system object is always there.
   private func installDefaultDeviceListener() {
-    var address = Self.defaultOutputDeviceAddress
+    var address = AudioRoute.globalAddress(kAudioHardwarePropertyDefaultOutputDevice)
     // `[weak self]`, so CoreAudio's strong hold on the block doesn't keep the
     // monitor alive forever — and so a callback landing during teardown finds
     // nil rather than a half-destroyed object.
@@ -117,7 +117,7 @@ public final class AudioRouteMonitor: @unchecked Sendable {
       self.retargetFormatListener()
       self.continuation.yield()
     }
-    let status = AudioObjectAddPropertyListenerBlock(Self.systemObject, &address, queue, block)
+    let status = AudioObjectAddPropertyListenerBlock(AudioRoute.systemObject, &address, queue, block)
     guard status == noErr else {
       Self.logger.error("default-output listener failed: \(status)")
       return
@@ -133,7 +133,7 @@ public final class AudioRouteMonitor: @unchecked Sendable {
     let device = AudioRoute.defaultOutputDeviceID()
     if let existing = deviceListener {
       guard existing.id != device else { return }
-      var address = Self.sampleRateAddress
+      var address = AudioRoute.globalAddress(kAudioDevicePropertyNominalSampleRate)
       _ = AudioObjectRemovePropertyListenerBlock(existing.id, &address, queue, existing.block)
       deviceListener = nil
     }
@@ -141,35 +141,12 @@ public final class AudioRouteMonitor: @unchecked Sendable {
     let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
       self?.continuation.yield()
     }
-    var address = Self.sampleRateAddress
+    var address = AudioRoute.globalAddress(kAudioDevicePropertyNominalSampleRate)
     let status = AudioObjectAddPropertyListenerBlock(device, &address, queue, block)
     guard status == noErr else {
       Self.logger.error("output-format listener failed: \(status)")
       return
     }
     deviceListener = (id: device, block: block)
-  }
-
-  // MARK: - CoreAudio addressing
-
-  /// The system-wide audio object, which owns the default-device properties.
-  private static var systemObject: AudioObjectID { AudioObjectID(kAudioObjectSystemObject) }
-
-  // Computed, not stored: each caller needs its own mutable copy to pass `inout`
-  // to CoreAudio anyway, so a shared constant would only add a global whose
-  // `Sendable`-ness depends on how the C struct imports.
-
-  private static var defaultOutputDeviceAddress: AudioObjectPropertyAddress {
-    AudioObjectPropertyAddress(
-      mSelector: kAudioHardwarePropertyDefaultOutputDevice,
-      mScope: kAudioObjectPropertyScopeGlobal,
-      mElement: kAudioObjectPropertyElementMain)
-  }
-
-  private static var sampleRateAddress: AudioObjectPropertyAddress {
-    AudioObjectPropertyAddress(
-      mSelector: kAudioDevicePropertyNominalSampleRate,
-      mScope: kAudioObjectPropertyScopeGlobal,
-      mElement: kAudioObjectPropertyElementMain)
   }
 }

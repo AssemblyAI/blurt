@@ -67,23 +67,47 @@ enum AudioRoute {
     defaultDeviceID(for: kAudioHardwarePropertyDefaultOutputDevice)
   }
 
+  // MARK: - CoreAudio addressing
+
+  /// The system-wide audio object, which owns the default-device properties.
+  static var systemObject: AudioObjectID { AudioObjectID(kAudioObjectSystemObject) }
+
+  /// A global-scope address for `selector`. Returned fresh per call rather than
+  /// stored, because every caller needs its own copy to pass `inout` to
+  /// CoreAudio. Shared with `AudioRouteMonitor`, which addresses the same object
+  /// graph and would otherwise restate this three-field literal.
+  static func globalAddress(_ selector: AudioObjectPropertySelector) -> AudioObjectPropertyAddress {
+    AudioObjectPropertyAddress(
+      mSelector: selector,
+      mScope: kAudioObjectPropertyScopeGlobal,
+      mElement: kAudioObjectPropertyElementMain)
+  }
+
   // MARK: - CoreAudio reads
+
+  /// One `AudioObjectGetPropertyData` read of a fixed-size value, or nil when
+  /// CoreAudio refused. `initial` supplies both the type and the zero value, so
+  /// each caller states the property it wants and nothing else.
+  private static func read<T>(
+    _ selector: AudioObjectPropertySelector, from object: AudioObjectID, initial: T
+  ) -> T? {
+    var address = globalAddress(selector)
+    var value = initial
+    var size = UInt32(MemoryLayout<T>.size)
+    let status = AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value)
+    guard status == noErr else { return nil }
+    return value
+  }
 
   /// The device the system object reports for `selector` (a default-device
   /// property). Nil covers both a failed read and the "no such device" sentinel,
   /// which callers treat identically.
   private static func defaultDeviceID(for selector: AudioObjectPropertySelector) -> AudioDeviceID? {
-    var address = AudioObjectPropertyAddress(
-      mSelector: selector,
-      mScope: kAudioObjectPropertyScopeGlobal,
-      mElement: kAudioObjectPropertyElementMain)
-    var deviceID = AudioDeviceID(0)
-    var size = UInt32(MemoryLayout<AudioDeviceID>.size)
-    let system = AudioObjectID(kAudioObjectSystemObject)
-    let status = AudioObjectGetPropertyData(system, &address, 0, nil, &size, &deviceID)
     // 0 is `kAudioObjectUnknown` — "there is no such device" — spelled as the
     // literal so this doesn't depend on how the constant imports.
-    guard status == noErr, deviceID != 0 else { return nil }
+    guard let deviceID = read(selector, from: systemObject, initial: AudioDeviceID(0)),
+      deviceID != 0
+    else { return nil }
     return deviceID
   }
 
@@ -91,14 +115,6 @@ enum AudioRoute {
   /// `AudioTransport` and `MicLiveness` both treat nil as "not Bluetooth", which
   /// is the conservative direction for each.
   private static func transportType(of deviceID: AudioDeviceID) -> UInt32? {
-    var address = AudioObjectPropertyAddress(
-      mSelector: kAudioDevicePropertyTransportType,
-      mScope: kAudioObjectPropertyScopeGlobal,
-      mElement: kAudioObjectPropertyElementMain)
-    var transport = UInt32(0)
-    var size = UInt32(MemoryLayout<UInt32>.size)
-    let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &transport)
-    guard status == noErr else { return nil }
-    return transport
+    read(kAudioDevicePropertyTransportType, from: deviceID, initial: UInt32(0))
   }
 }

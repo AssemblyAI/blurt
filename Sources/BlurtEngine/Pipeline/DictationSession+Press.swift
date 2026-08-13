@@ -132,8 +132,15 @@ extension DictationSession {
       // rule `transcribe` and `inject` already follow. `.cancelled` rather than a
       // bare return, because `.connecting` is non-terminal — leaving it would
       // strand the trigger's gate and swallow the next press.
+      //
+      // Consumed the same way as the exit above, not just phase-set: the
+      // `.connecting` branch of `cancel()` claims the phase and returns
+      // *without* enqueueing `performCancel`, so this is the only place left
+      // that can clear the request it recorded. Leaving it set let the flag
+      // survive into the next press, which then read it after a perfectly good
+      // `mic.start()` and cancelled itself.
       if error is CancellationError {
-        setPhase(.cancelled)
+        if !consumeCancelRequest() { setPhase(.cancelled) }
         return
       }
       setPhase(.failed(.audioCaptureFailed(underlying: error)))

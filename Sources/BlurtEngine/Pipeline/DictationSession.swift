@@ -202,9 +202,8 @@ public actor DictationSession {
     }
   }
 
-  /// Appends `op` to the serial command queue and waits for it to run. The
-  /// synchronous read-then-write of `commandQueue` makes the chain order match
-  /// the order the public methods executed their first actor turn.
+  /// Appends `op` to the serial command queue and waits for it to run; the
+  /// ordering guarantee is `chain`'s.
   func enqueue(_ op: @escaping @Sendable () async -> Void) async {
     await chain(op).value
   }
@@ -236,7 +235,6 @@ public actor DictationSession {
   public func release() async {
     await enqueue { await self.performRelease() }
   }
-
 
   private func performRelease() async {
     guard phase == .recording else { return }

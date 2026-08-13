@@ -27,4 +27,26 @@ enum AudioTransport {
     return transportType == kAudioDeviceTransportTypeBluetooth
       || transportType == kAudioDeviceTransportTypeBluetoothLE
   }
+
+  /// How much longer capture runs past the key-up that ends it, for a device of
+  /// this transport. `.zero` for everything but Bluetooth, so the wired path
+  /// skips the wait entirely rather than testing a flag at the call site.
+  ///
+  /// A Bluetooth link buffers: audio the user has already spoken is still in
+  /// flight when `stop()` is called, and `recorder.stop()` drops it — which is
+  /// why the last word of a dictation goes missing on AirPods. The value is
+  /// deliberately shorter than a typical link's worst case: it buys back the
+  /// common tail without making every dictation feel sluggish.
+  ///
+  /// Lives here beside `MicLiveness.timeout(forTransportType:)` — the other
+  /// transport-conditional policy — rather than inside `MicCapture`, so both are
+  /// reachable by `swift test`. `MicCapture` needs real hardware and is excluded
+  /// from the coverage gate.
+  static func tailLinger(forTransportType transportType: UInt32?) -> Duration {
+    isBluetooth(transportType) ? bluetoothTailLinger : .zero
+  }
+
+  /// See `tailLinger(forTransportType:)`. Exposed so a test can name it rather
+  /// than restate the number.
+  static let bluetoothTailLinger = Duration.milliseconds(220)
 }

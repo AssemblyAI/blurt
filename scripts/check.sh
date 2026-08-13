@@ -470,7 +470,7 @@ else
   #                        MicCapture+Meter.swift, which IS covered. Keep this
   #                        list tight — exclude only code that genuinely cannot
   #                        be exercised without hardware.
-  #  - AudioRoute*.swift : the CoreAudio routing reads (AudioRoute) and the
+  #  - AudioRoute(Monitor).swift : the CoreAudio routing reads (AudioRoute) and the
   #                        property listeners (AudioRouteMonitor). Both answer
   #                        questions only real hardware can answer — which device
   #                        is default, whether its transport is Bluetooth, and
@@ -478,7 +478,7 @@ else
   #                        can only fire on an actual route change. Same
   #                        justification as MicCapture.swift above.
   COVERAGE="$(xcrun llvm-cov export -summary-only -instr-profile "$PROFDATA" "$XCTEST_BIN" \
-    -ignore-filename-regex='Tests/|Audio/MicCapture\.swift|Audio/AudioRoute' \
+    -ignore-filename-regex='Tests/|Audio/MicCapture\.swift|Audio/AudioRoute(Monitor)?\.swift' \
     | python3 -c 'import sys,json; print(round(json.load(sys.stdin)["data"][0]["totals"]["lines"]["percent"],2))')"
   echo "engine line coverage: ${COVERAGE}%"
   if ! awk -v c="$COVERAGE" -v min="$MIN_COVERAGE" 'BEGIN{ exit (c+0 < min+0) }'; then

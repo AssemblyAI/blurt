@@ -384,4 +384,33 @@ struct DictationSessionBringUpTests {
     #expect(!seen.contains(.recording))
     #expect(await mic.cancelCaptureCalls == 1)
   }
+
+  @Test("a cancel that aborts the bring-up doesn't leak its request into the next press")
+  func abortedBringUpLeavesNoStandingCancel() async throws {
+    // The route where `start()` actually throws — a cancel landing *inside* the
+    // liveness wait, which is what the real `MicCapture` does. `cancel()`'s
+    // `.connecting` branch claims the phase and returns without enqueueing
+    // `performCancel`, so the press's catch is the only place left that can
+    // consume the request it recorded. When it didn't, the flag survived, and the
+    // *next* press read it after a perfectly good `mic.start()` and cancelled
+    // itself — one dead dictation for every cancelled bring-up.
+    let mic = GatedStartMic()
+    await mic.setThrowsIfCancelled(true)
+    let session = DictationSession(
+      mic: mic, transcriber: StubTranscriber(mode: .transcript("Hello world.")),
+      injector: StubInjector(), seams: .offline)
+
+    let pressed = Task { await session.press() }
+    await mic.waitUntilStartEntered()
+    await session.cancel()
+    await mic.allowStartToFinish()
+    await pressed.value
+
+    #expect(await session.phase == .cancelled)
+    #expect(!session.cancelRequested)
+
+    // The proof that matters: the next press records normally.
+    await session.press()
+    #expect(await session.phase == .recording)
+  }
 }
