@@ -32,16 +32,32 @@ you don't have to be told them in the prompt. `AGENTS.md`'s "Settled decisions"
 table is the fuller reference and the source of truth — read it when a finding gets
 anywhere near architecture.
 
-The trap most specific to a cleanup pass: **the transcription prompt reads exactly one
-field of `TranscriptionContext` (`priorText`), and the other fields are captured on
-purpose for work that never reaches the API** — paste spacing, the injector's window
-identity, the developer-mode log. `appName`, `windowTitle`, `fieldLabel` and
-`selectedText` are not unused just because the prompt ignores them. The key-terms read
-is not unused either: it feeds `KeytermsBoost`, the request's separate
-`config.keyterms_prompt` word-boost list. Do not propose deleting any of them, folding
-the key terms back into the prompt as a `Keywords:` clause, collapsing `KeytermsBoost`
-into the deprecated `word_boost` (which the model family rejects outright), or dropping
-the `context:` parameter.
+The trap most specific to a cleanup pass: **the request's conversation context reads
+exactly two fields of `TranscriptionContext` (`recentTranscripts`, then `priorText`), and
+the other fields are captured on purpose for work that never reaches the API** — paste
+spacing, the injector's window identity, the developer-mode log. `appName`,
+`windowTitle`, `fieldLabel` and `selectedText` are not unused just because
+`ConversationContext` ignores them. Nor is `targetIsSecure`, which no request carries: it
+is what stops a password dictated into a secure field being remembered as history. The
+key-terms read is not unused either: it feeds `KeytermsBoost`, the request's separate
+`config.word_boost` list. Do not propose deleting any of them, folding the key terms back
+into the context as a `Keywords:` clause, or dropping the `context:` parameter.
+
+Two field names are load-bearing and were verified against the live endpoint — do not
+"correct" either. The boost list is **`config.word_boost`**, the name the dictation API's
+own reference documents (`keyterms_prompt` is the sibling Sync surface's name for the same
+feature; the aliases are mutually exclusive, so sending both is the bug). And there is
+**no `config.prompt`** — `config.conversation_context` replaced it, deliberately, because
+a custom prompt also displaces the service's managed default and makes the API ignore
+`config.language_code`.
+
+Two overlaps in the developer-mode log are intentional, not duplication:
+`DictationLog.Entry.prior` is the **raw** prior chunk while `turns.last` is the trimmed
+copy that went on the wire — the trailing whitespace only the raw one keeps is the entire
+input to `KeyInjector.withLeadingSeparator`, and a nil `prior` is what distinguishes
+"no text at the caret" from "the last turn is a recent dictation". Likewise
+`RecentDictations.capacity` (100, the history the request is built from) and
+`displayCapacity` (3, the rows the ready window shows) are deliberately different numbers.
 
 Other things that look removable and are not: protocol seams with one production
 conformer (they exist for the test doubles in `Tests/BlurtEngineTests/Stubs/`);

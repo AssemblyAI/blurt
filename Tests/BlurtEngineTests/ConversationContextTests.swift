@@ -66,6 +66,53 @@ struct ConversationContextTests {
     #expect(ConversationContext.turns(context: c.context) == c.expected)
   }
 
+  @Test("a history turn the prior chunk already carries is not sent twice")
+  func dedupesHistoryAlreadyInThePriorChunk() {
+    // The ordinary continuous-dictation case: dictation 1 pasted "Let's ship
+    // Friday." into the composer, so press 2 reads it back as the prior chunk while
+    // it is also the newest history turn. Sent as both, the model sees one
+    // utterance as two consecutive dialogue turns.
+    let context = TranscriptionContext(
+      appName: "Slack", priorText: "Let's ship Friday. ",
+      recentTranscripts: ["Morning all.", "Let's ship Friday."])
+    #expect(ConversationContext.turns(context: context) == ["Morning all.", "Let's ship Friday."])
+  }
+
+  @Test("a whole run of dictations into one field collapses, not just the last")
+  func dedupesEveryTurnThePriorChunkCarries() {
+    // Three dictations into the same composer: the prior chunk is all three, so all
+    // three history turns are already spoken for.
+    let context = TranscriptionContext(
+      appName: "Slack", priorText: "One. Two. Three.",
+      recentTranscripts: ["Older elsewhere.", "One.", "Two.", "Three."])
+    #expect(ConversationContext.turns(context: context) == ["Older elsewhere.", "One. Two. Three."])
+  }
+
+  @Test("dedupe stops at the first turn the prior chunk doesn't carry")
+  func dedupeStopsAtAnInterruptedRun() {
+    // The user typed, or moved to another field, between dictations: only the tail
+    // of the run is in the chunk, and everything before it is genuine history the
+    // chunk cannot speak for — including a turn that appears earlier in the text.
+    let context = TranscriptionContext(
+      appName: "Slack", priorText: "Two. typed by hand. Three.",
+      recentTranscripts: ["Two.", "Three."])
+    #expect(
+      ConversationContext.turns(context: context)
+        == ["Two.", "Two. typed by hand. Three."])
+  }
+
+  @Test("a history turn that merely resembles the prior chunk is still sent")
+  func keepsHistoryThatIsNotASuffix() {
+    // Suffix, not "contains": text the user dictated earlier and that happens to
+    // appear mid-field is not what this utterance continues from.
+    let context = TranscriptionContext(
+      appName: "Slack", priorText: "Ship it. Then follow up.",
+      recentTranscripts: ["Ship it."])
+    #expect(
+      ConversationContext.turns(context: context)
+        == ["Ship it.", "Ship it. Then follow up."])
+  }
+
   @Test("the newest recentTurnCap dictations are kept, the older ones dropped")
   func capsTheHistoryToTheTurnCap() {
     // One over the cap, so the oldest falls off and the count lands exactly on it.

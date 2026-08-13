@@ -69,11 +69,20 @@ extension DictationSession {
     seams.logTranscript(text, capturedContext)
     // Remember it as context for the *next* press before handing it on: the ring
     // is what supplies `conversation_context`'s leading turns, so a stretch of
-    // dictation continues itself.
-    recentDictations.record(trimmed, at: Date())
-    // Record every produced transcript (trimmed for display) in "Recent" before
-    // injection — pasted, copied, and failed-to-paste all count.
-    onTranscriptDelivered?(trimmed)
+    // dictation continues itself. Recorded here rather than by the host so the
+    // history the request is built from is the same value the "Recent" list shows.
+    //
+    // Unless this went into a password field. `FocusCapture` already refuses to
+    // *read* a secure field; remembering what was dictated *into* one would leak
+    // the same secret the other way — replayed as a context turn on every later
+    // dictation this launch, in unrelated apps. So a secure target is transcribed
+    // and pasted as normal, and simply not remembered.
+    if capturedContext?.targetIsSecure != true {
+      recentDictations.record(trimmed, at: Date())
+    }
+    // Report every produced transcript (trimmed for display), with the ring it
+    // just joined, before injection — pasted, copied, and failed-to-paste all count.
+    onTranscriptDelivered?(trimmed, recentDictations)
     await inject(text)
   }
 

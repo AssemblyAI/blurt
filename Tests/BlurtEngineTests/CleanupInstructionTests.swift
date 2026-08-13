@@ -27,7 +27,7 @@ struct CleanupInstructionTests {
   /// the audio is read, so every dictation fails outright rather than degrading to
   /// the verbatim transcript. A 3057-character instruction shipped once and did
   /// exactly that, past a version of this very test that asserted
-  /// `TranscriptionPrompt.characterCap` — the 4096 limit on the *other* field.
+  /// `ConversationContext.characterCap` — the 4096 limit on the *other* field.
   ///
   /// So this asserts the instruction's own cap, and the next test pins the two apart.
   @Test("the instruction fits the API's cap on config.llm.instruction")

@@ -40,10 +40,10 @@
 enum ConversationContext {
   /// How many of the user's recent dictations lead the turn list. One short of
   /// the API's 100-turn maximum, because `priorText` takes the last slot — so a
-  /// full history plus a prior chunk is exactly 100 turns and never one over.
-  /// The recents are capped even when there is no prior chunk to make room for:
-  /// one number to reason about, and the total can then never exceed the API's
-  /// whatever the focus capture returned.
+  /// full history plus a prior chunk is exactly 100 turns and never one over. The
+  /// recents are capped even when there is no prior chunk to make room for: one
+  /// number to reason about, and the total then can't exceed the maximum whatever
+  /// the focus capture returned.
   static let recentTurnCap = 99
 
   /// Cap the dictation API places on `config.conversation_context`: 4096
@@ -73,11 +73,39 @@ enum ConversationContext {
   /// what went on the wire, including the trimming.
   static func turns(context: TranscriptionContext?) -> [String] {
     guard let context else { return [] }
-    // Trim before capping, so a blank entry can't consume one of the 99 slots.
-    var turns = Array(
-      context.recentTranscripts.compactMap { $0.trimmedNonEmpty() }.suffix(recentTurnCap))
-    if let prior = context.priorText.trimmedNonEmpty() { turns.append(prior) }
-    return fitted(turns)
+    var recent = context.recentTranscripts.compactMap { $0.trimmedNonEmpty() }
+    guard let prior = context.priorText.trimmedNonEmpty() else {
+      // Trim before capping, so a blank entry can't consume one of the 99 slots.
+      return fitted(Array(recent.suffix(recentTurnCap)))
+    }
+    // Dedupe before capping: the prior chunk is the tail of the focused field, so
+    // after a dictation it *contains* what we just pasted — which is also the
+    // newest history turn. Sending both would show the model one utterance as two
+    // consecutive turns, and a run of dictations into one field as a stutter.
+    recent = withoutTurnsAlreadyEnding(prior, from: recent)
+    return fitted(Array(recent.suffix(recentTurnCap)) + [prior])
+  }
+
+  /// `recent` without the trailing turns the prior chunk already carries.
+  ///
+  /// Walks newest-first, peeling each matched turn off a working copy of the
+  /// chunk, so several dictations into the same field collapse rather than only
+  /// the last one: prior `"A. B. C."` against history `[A, B, C]` drops all three.
+  /// Stops at the first turn that doesn't match — an earlier turn that isn't in
+  /// the chunk means the run was interrupted (a different field, or the user typed),
+  /// and everything before it is genuine history the chunk cannot speak for.
+  ///
+  /// Matching is on the trimmed tail, since the paste inserts a leading separator
+  /// and the field may hold trailing whitespace of its own.
+  private static func withoutTurnsAlreadyEnding(_ prior: String, from recent: [String]) -> [String] {
+    var kept = recent
+    var tail = prior
+    while let newest = kept.last, tail.hasSuffix(newest) {
+      tail = String(tail.dropLast(newest.count))
+      while let last = tail.last, last.isWhitespace { tail.removeLast() }
+      kept.removeLast()
+    }
+    return kept
   }
 
   /// `turns` cut down to `characterCap`, keeping the newest.

@@ -1,10 +1,11 @@
 import Foundation
 
-/// The in-memory ring of the most recent dictations. A pure value type — owned
-/// by the app's `AppCoordinator` and projected into `ReadyView` — so the
-/// capacity and newest-first ordering are unit-testable here rather than in the
-/// AppKit shell (the same split as `OverlayUIState`). In-memory only: it starts
-/// empty each launch and is never written to disk.
+/// The in-memory ring of the most recent dictations. A pure value type — owned by
+/// `DictationSession` (see its `recentDictations`), pushed to the app through
+/// `onTranscriptDelivered`, and projected into `ReadyView` — so the capacity and
+/// newest-first ordering are unit-testable here rather than in the AppKit shell
+/// (the same split as `OverlayUIState`). In-memory only: it starts empty each
+/// launch and is never written to disk.
 ///
 /// **It holds far more than it shows.** `capacity` is the history depth;
 /// `displayCapacity` is how many rows the ready window's "Recent" list renders.

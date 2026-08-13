@@ -51,6 +51,15 @@ public struct TranscriptionContext: Sendable, Equatable {
   /// reads to the model as one continuing dialogue rather than N unrelated clips.
   public let recentTranscripts: [String]
 
+  /// Whether the capture **refused** to read the focused field — a password input,
+  /// or an element with an unreadable role (`FocusCapture.mustRedactContents` fails
+  /// closed). **Local only, not sent.** It exists to stop the *outgoing* half of
+  /// the same leak the read guard covers: a transcript dictated *into* a secure
+  /// field is the secret, so `DictationSession` declines to remember it as history
+  /// rather than replaying it as a `conversation_context` turn in every later
+  /// dictation. Nil focus signals mean "we read nothing"; this means "we refused".
+  public let targetIsSecure: Bool
+
   /// User-configured domain vocabulary (names, jargon, product names), sourced
   /// from `KeyTermsStore`. Like `recentTranscripts` this isn't per-utterance
   /// focus state — it's the same list every time. **Sent**, but not as context:
@@ -65,7 +74,8 @@ public struct TranscriptionContext: Sendable, Equatable {
     priorText: String?,
     selectedText: String? = nil,
     recentTranscripts: [String] = [],
-    keyTerms: [String] = []
+    keyTerms: [String] = [],
+    targetIsSecure: Bool = false
   ) {
     self.appName = appName
     self.windowTitle = windowTitle
@@ -74,15 +84,22 @@ public struct TranscriptionContext: Sendable, Equatable {
     self.selectedText = selectedText
     self.recentTranscripts = recentTranscripts
     self.keyTerms = keyTerms
+    self.targetIsSecure = targetIsSecure
   }
 
-  /// True when no focus field carries usable (non-whitespace) content and there
-  /// is no history and no key terms. Covers every signal, including the ones that
-  /// stay local, so it answers "is this snapshot worth carrying at all" — not
-  /// "will this send context", which only `recentTranscripts` and `priorText`
-  /// decide.
+  /// True when no focus field carries usable (non-whitespace) content, there is no
+  /// history, no key terms, and the target wasn't secure. Covers every signal,
+  /// including the ones that stay local, so it answers "is this snapshot worth
+  /// carrying at all" — not "will this send context", which only
+  /// `recentTranscripts` and `priorText` decide.
+  ///
+  /// `targetIsSecure` counts, even though it is a `Bool` rather than content: the
+  /// session collapses an empty snapshot to `nil`, and a secure target reduced to
+  /// `nil` would be indistinguishable from an ordinary one — so the transcript
+  /// would be remembered as history after all, which is the one thing the flag
+  /// exists to prevent.
   public var isEmpty: Bool {
-    keyTerms.isEmpty && recentTranscripts.isEmpty
+    !targetIsSecure && keyTerms.isEmpty && recentTranscripts.isEmpty
       && [appName, windowTitle, fieldLabel, priorText, selectedText].allSatisfy {
         $0.trimmedNonEmpty() == nil
       }

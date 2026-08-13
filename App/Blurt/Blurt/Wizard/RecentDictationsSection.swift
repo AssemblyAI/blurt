@@ -4,7 +4,7 @@ import SwiftUI
 
 /// The "Recent" list under the shortcut readout: the last few dictations, newest
 /// first, each a single truncated line with a live relative timestamp. The list
-/// area reserves a fixed height for `RecentDictations.capacity` rows so the
+/// area reserves a fixed height for `RecentDictations.displayCapacity` rows so the
 /// window never resizes and nothing above it moves as dictations arrive; unused
 /// slots are held open (empty → a muted placeholder fills the whole area).
 struct RecentDictationsSection: View {
@@ -17,9 +17,10 @@ struct RecentDictationsSection: View {
   /// window, so a row can't read as stale for longer than that window lasts —
   /// derived from the threshold rather than a bare `30` in case it changes.
   private static let timestampRefresh = RecentDictations.Entry.justNowThreshold / 2
-  /// Height of a full `capacity`-row list; the container is pinned to this whether
-  /// it holds 0, 1, or `capacity` rows. The row-count arithmetic is the engine's,
-  /// next to the `capacity` it depends on.
+  /// Height of a full `displayCapacity`-row list; the container is pinned to this
+  /// whether it holds 0, 1, or `displayCapacity` rows. The row-count arithmetic is
+  /// the engine's, next to the `displayCapacity` it depends on — which is the
+  /// *displayed* count, not the much deeper `capacity` the ring remembers.
   private var reservedHeight: CGFloat {
     RecentDictations.reservedHeight(
       rowHeight: Self.rowHeight, separatorThickness: Self.separatorThickness)

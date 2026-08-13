@@ -87,6 +87,35 @@ struct DictationLogEntryTests {
     #expect(!entry.turns.contains { $0.contains("the old plan") })
   }
 
+  @Test("keeps the prior chunk raw, where the context turn carrying it is trimmed")
+  func priorIsRawWhereTheTurnIsTrimmed() {
+    // Why `prior` isn't redundant with `turns.last`. The trailing space is the
+    // whole input to the paste's leading-separator decision
+    // (`KeyInjector.withLeadingSeparator` branches on `prior.last.isWhitespace`),
+    // and the wire copy has it trimmed off — so dropping `prior` for being a
+    // duplicate would take the only record of that bit with it.
+    let entry = DictationLog.makeEntry(
+      transcript: "p", context: TranscriptionContext(appName: "Mail", priorText: "Hi Sam, "),
+      now: Date())
+    #expect(entry.prior == "Hi Sam, ")
+    #expect(entry.turns == ["Hi Sam,"])
+    #expect(KeyInjector.withLeadingSeparator("p", after: entry.prior) == "p")
+    #expect(KeyInjector.withLeadingSeparator("p", after: entry.turns.last) == " p")
+  }
+
+  @Test("a nil prior tells a history-only turn list apart from a prior chunk")
+  func nilPriorDisambiguatesTheLastTurn() {
+    // The other half: `turns.last` is a recent dictation here, not text at the
+    // caret, and only `prior == nil` says so.
+    let entry = DictationLog.makeEntry(
+      transcript: "p",
+      context: TranscriptionContext(
+        appName: "Mail", priorText: nil, recentTranscripts: ["Said this before."]),
+      now: Date())
+    #expect(entry.prior == nil)
+    #expect(entry.turns == ["Said this before."])
+  }
+
   @Test("records the key terms the request boosts, fitted the same way")
   func logsTheKeytermsTheRequestCarries() {
     // Through `KeytermsBoost.fitted`, not the raw list: the log has to show the

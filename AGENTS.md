@@ -692,8 +692,15 @@ sound-catalog guard exists because a drift plays silence with no error. **`Recor
 pure edge detector deciding when the chimes fire; the AppKit `CueSoundPlayer` just plays what it
 resolves.
 
-History: **`RecentDictations`** is an in-memory, newest-first ring shown in the ready window (never
-written to disk). **`DictationLog`** appends each completed dictation with its context snapshot to
+History: **`RecentDictations`** is an in-memory, newest-first ring (never written to disk) holding
+`capacity` (100) dictations, of which the ready window lists `displayCapacity` (3). It is deep because
+the history is also request context — `ConversationContext` sends it as the leading
+`conversation_context` turns — so "how many do we remember" is a transcription-quality question, not a
+layout one. **`DictationSession` owns the one ring**, since it assembles each request inside its
+actor; the app's `AppCoordinator.recentDictations` is a projection pushed to it through
+`onTranscriptDelivered` (which hands over the updated ring alongside the transcript), so the list can
+never drift from the history that was actually sent, and nothing outside the session records into it.
+**`DictationLog`** appends each completed dictation with its context snapshot to
 `~/Library/Logs/Blurt/dictations.jsonl` (`DictationLog.defaultURL`, or `defaultDisplayPath` for the
 home-abbreviated form to show in UI — derived next to the URL so the label can't drift from the write
 target) — but **only** while developer mode is on; with it off, nothing is written. Every dictation

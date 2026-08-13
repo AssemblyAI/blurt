@@ -79,10 +79,13 @@ utterance.
   for push-to-talk. The event tap swallows nothing: a lone modifier types
   nothing anyway, and combos like ⌘C pass through untouched.
 - **Polished in one step** — each utterance rides to AssemblyAI's dictation API
-  as audio and nothing else; the same call runs a server-side LLM cleanup
-  (disfluencies out, punctuation fixed), so the text comes back already
-  polished. No second request, no model downloads, and nothing about what's on
-  your screen — window titles, the text around your cursor — is sent along.
+  with a little context and nothing more; the same call runs a server-side LLM
+  cleanup (disfluencies out, punctuation fixed), so the text comes back already
+  polished. No second request, no model downloads. The context is what makes the
+  transcript continue naturally — your recent dictations and the text just before
+  your cursor — and nothing else about your screen goes with it: not the app, not
+  the window title, not the field, not your selection. See
+  [Privacy](#privacy).
 - **Fast** — transcription and cleanup share one round trip that typically
   finishes in about a second. Blurt pre-warms the HTTPS connection while
   you're still speaking and flips to "transcribing" at key-up, so polished
@@ -132,14 +135,23 @@ From a fresh install to dictated text in your editor:
 ## Privacy
 
 Blurt stores your API key in the macOS Keychain. Audio is captured only while
-you are dictating, then sent over HTTPS to AssemblyAI for transcription. The
-request also carries a short run of the text immediately before your cursor, so
-the transcript continues from what is already there — never from a password
-field, which Blurt refuses to read — plus the key terms you entered in Settings,
-which bias spelling. Nothing else about your screen is sent: not the app you are
-in, not the window title, not the field you are typing in, not what you have
-selected. Blurt stores no audio and no transcripts, and sends no telemetry — no
-crash reporting, no analytics, no usage tracking.
+you are dictating, then sent over HTTPS to AssemblyAI for transcription.
+
+The request also carries context, so the transcript continues naturally from what
+came before: your recent dictations from this session, and a short run of the text
+immediately before your cursor — never the contents of a password field, which
+Blurt refuses to read. Anything you dictate _into_ a password field is likewise
+never kept as context. Your key terms from Settings ride along too, to bias
+spelling. Nothing else about your screen is sent: not the app you are in, not the
+window title, not the field you are typing in, not what you have selected.
+
+That recent-dictation history lives in memory only — it is never written to disk,
+it is cleared when you quit Blurt, and it is capped (100 dictations, and about
+4096 characters per request, oldest dropped first). Note what it means while Blurt
+is running: text you dictated in one app can be sent as context with a later
+dictation in another. Quit and reopen Blurt to clear it. Blurt stores no audio and
+no transcripts, and sends no telemetry — no crash reporting, no analytics, no
+usage tracking.
 
 Because transcription is processed by AssemblyAI, their
 [Privacy Policy](https://www.assemblyai.com/legal/privacy-policy) and
@@ -171,9 +183,10 @@ Sources/BlurtEngine/     Swift 6 package owning the pipeline — no external dep
   Audio/                 MicCapture: fresh AVAudioRecorder per session, 16 kHz mono PCM,
                          live level meter; DX7/Juno-106 sound packs
   STT/                   AssemblyAITranscriber: one POST to dictation.assemblyai.com/transcribe
-                         (STT + LLM rewrite); TranscriptionPrompt (contextual priming:
-                         the text before the cursor, and nothing else about your
-                         screen); KeytermsBoost (key terms as the word-boost list)
+                         (STT + LLM rewrite); ConversationContext (contextual priming:
+                         your recent dictations then the text before the cursor, and
+                         nothing else about your screen); KeytermsBoost (key terms as
+                         the word-boost list)
   Pipeline/              DictationSession actor: press/release/cancel commands, phase
                          stream, auto-release before the API's recording cap
   Hotkey/                DictationKeyGate/Router: pure, unit-tested state machine for the

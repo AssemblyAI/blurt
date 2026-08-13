@@ -21,9 +21,18 @@ public enum DictationLog {
     let window: String?
     /// Focused-field label, when one was captured. Local to this file.
     let field: String?
-    /// Text-before-cursor "prior chunk", the last context turn, when any was
-    /// captured. Lets you verify accessibility-tree prior-text reading actually
+    /// Text-before-cursor "prior chunk" exactly as the Accessibility read returned
+    /// it, when any was captured. Lets you verify prior-text reading actually
     /// fired.
+    ///
+    /// **This overlaps `turns.last` on purpose, and is not redundant with it.**
+    /// `turns` records what went on the wire, where the prior chunk is *trimmed*;
+    /// this records it raw. The difference is load-bearing twice over. Its trailing
+    /// whitespace is the entire input to the paste's leading-separator decision
+    /// (`KeyInjector.withLeadingSeparator` branches on `prior.last.isWhitespace`),
+    /// so a spacing bug is undiagnosable from a trimmed copy. And a nil here
+    /// distinguishes "no prior text was read" from "the last turn is the newest
+    /// recent dictation", which `turns` alone cannot say.
     let prior: String?
     /// Selected text (the dictation replaced it), when any. Local to this file:
     /// it is captured for the paste path and recorded here, never sent.
@@ -34,7 +43,8 @@ public enum DictationLog {
     /// transcriber) so the log always reflects what was actually sent, even for
     /// calls that construct an entry directly from a context. Worth recording
     /// separately from `prior` because it is the only record of how much history
-    /// the request carried, and of what the 4096-character fit dropped.
+    /// the request carried and of what the 4096-character fit dropped — and
+    /// because these turns are trimmed where `prior` is raw (see it).
     let turns: [String]
     /// The `config.word_boost` list sent for this utterance —
     /// the request's other steering field, so the log accounts for both. Built

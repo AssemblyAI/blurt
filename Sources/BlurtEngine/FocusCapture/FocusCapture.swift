@@ -34,6 +34,17 @@ enum FocusCapture {
     let windowTitle: String?
     /// A short label for the focused field ("To", "Search", "Message").
     let fieldLabel: String?
+    /// Whether `mustRedactContents` refused to read this field — a password input,
+    /// or an element whose role couldn't be read at all (that guard fails closed).
+    /// `priorText`/`selectedText` are always nil when this is true, but the flag is
+    /// carried separately because "we read nothing" and "we refused to read"
+    /// license different downstream behaviour: only the latter means the transcript
+    /// the user is about to dictate must not be remembered as history (see
+    /// `DictationSession.recentDictations`).
+    ///
+    /// Defaults to `false` so a test fixture describes an ordinary field without
+    /// restating it; the production capture always passes its real verdict.
+    var isSecure: Bool = false
 
     static let empty = FocusedFieldContext(
       priorText: nil, selectedText: nil, windowTitle: nil, fieldLabel: nil)
@@ -95,7 +106,8 @@ enum FocusCapture {
       priorText: prior,
       selectedText: selected,
       windowTitle: clip(windowTitle(of: element), to: 120),
-      fieldLabel: clip(fieldLabel(of: element), to: 80))
+      fieldLabel: clip(fieldLabel(of: element), to: 80),
+      isSecure: isSecure)
   }
 
   /// Cap on each cross-process AX round trip this process makes. An unresponsive
