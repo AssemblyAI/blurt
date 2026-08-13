@@ -51,6 +51,12 @@ public actor MicCapture: MicCaptureProtocol {
   /// `preparedRecorderLifetime`. See that constant for why holding one open
   /// forever is not an option.
   var preparedExpiry: Task<Void, Never>?
+  /// Bumped for each warm recorder prepared, and carried by that recorder's
+  /// expiry task, so an expiry whose recorder has since been consumed or
+  /// replaced can recognise itself as stale and do nothing. See
+  /// `releasePreparedRecorder(generation:)` for why cancelling the task isn't
+  /// sufficient on its own.
+  var preparedGeneration = 0
 
   /// The recorder for the in-flight session; nil between `stop()` and `start()`.
   var activeRecorder: AVAudioRecorder?
@@ -70,6 +76,19 @@ public actor MicCapture: MicCaptureProtocol {
   /// only after the press turn completes — but this is a public actor, and any
   /// host can call it unqueued.
   private var stopGeneration = 0
+
+  /// True from `record()` succeeding until the capture is installed or torn
+  /// down — i.e. across the liveness wait.
+  ///
+  /// Needed because during that window **both** recorder slots are nil:
+  /// `activeRecorder` isn't installed until the wait returns (the recorder stays
+  /// confined to `start()` so nothing can touch it while the poll loop reads its
+  /// clock off-actor), and the warm slot was consumed on the way in. Without
+  /// this, `rewarm()`/`warmUp()` read those two nils as "no capture in flight"
+  /// and prepare a *second* recorder onto the already-live input — which is very
+  /// reachable, since `stop()` schedules a re-warm that can land inside the next
+  /// press's bring-up.
+  var bringingUpCapture = false
 
   /// Polls the active recorder's meter and feeds `levels` while recording.
   private var meterTask: Task<Void, Never>?
@@ -150,6 +169,12 @@ public actor MicCapture: MicCaptureProtocol {
       Self.removeFile(at: recorder.url)
       throw BlurtError.audioCaptureFailed(underlying: MicCaptureError.noInputDevice)
     }
+
+    // The input is open from here, so claim the bring-up window before the first
+    // suspension — see `bringingUpCapture`. `defer` clears it on every exit,
+    // including the abort throw below.
+    bringingUpCapture = true
+    defer { bringingUpCapture = false }
 
     // `record()` returning true only means the AudioQueue started — not that the
     // input route is delivering frames. A Bluetooth mic spends up to a couple of

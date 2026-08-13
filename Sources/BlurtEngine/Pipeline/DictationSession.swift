@@ -304,6 +304,25 @@ public actor DictationSession {
         contextFeed.yield(context.isEmpty ? nil : context)
         contextFeed.finish()
       }
+      // A cancel that arrived during the bring-up. It couldn't act at the time —
+      // `cancel()` has no synchronous path for `.connecting`, so it recorded the
+      // intent and queued behind this press — and the mic is live by now, so
+      // honor it here rather than claiming `.recording` and chiming "speak now"
+      // for a capture the user has already abandoned. Without this the press
+      // completed normally and the queued `performCancel` only tore it down
+      // afterwards, so a cancel produced a full recording start (chime included)
+      // that was then immediately cancelled.
+      //
+      // Not a fix for the *latency*: the cancel is still not visible until the
+      // bring-up finishes, which on a Bluetooth route is up to
+      // `MicLiveness.bluetoothTimeout`. Interrupting the wait would mean making
+      // `mic.start()` cancellable from here, which is a larger change.
+      if cancelRequested {
+        try? await mic.cancelCapture()
+        _ = consumeCancelRequest()
+        Self.signposter.endInterval(Self.pressSignpostName, pressInterval)
+        return
+      }
       setPhase(.recording)
       Self.signposter.endInterval(Self.pressSignpostName, pressInterval)
       let timeout = maxRecordingSeconds
@@ -317,6 +336,19 @@ public actor DictationSession {
       }
     } catch {
       Self.signposter.endInterval(Self.pressSignpostName, pressInterval)
+      // `MicCapture.start()` throws `CancellationError` when a teardown landed
+      // during its liveness wait — an unqueued `cancelCapture()`, which its own
+      // doc anticipates for hosts that don't drive the mic through this session.
+      // That's the user's cancel arriving by another door, not a fault: reporting
+      // it as `.audioCaptureFailed` would flash the pill red *and* write a
+      // developer-mode error-log entry for something nothing went wrong in. Same
+      // rule `transcribe` and `inject` already follow. `.cancelled` rather than a
+      // bare return, because `.connecting` is non-terminal — leaving it would
+      // strand the trigger's gate and swallow the next press.
+      if error is CancellationError {
+        setPhase(.cancelled)
+        return
+      }
       setPhase(.failed(.audioCaptureFailed(underlying: error)))
     }
   }

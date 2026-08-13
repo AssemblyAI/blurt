@@ -402,7 +402,17 @@ in both directions. So:
   stops the app cueing the user to speak into a dead mic; audio spoken during the switch cannot be
   recovered by anything, because nothing ever receives it. `stopGeneration` covers the one suspension
   this introduces — a teardown landing mid-wait wins, and the recorder is torn down rather than
-  installed.
+  installed. `bringingUpCapture` covers the other consequence: across the wait **both** recorder
+  slots are nil, so the warm-up paths can't infer "no capture in flight" from them (see
+  `canPrepareWarmRecorder`) or they'd open a second recorder onto the live input.
+
+  **Known gap — a cancel during the bring-up isn't visible until it finishes.** `performPress`
+  consumes a recorded `cancelRequested` before claiming `.recording`, so the cancel is honored and
+  never leaves a phantom recording or chime behind — but it can't preempt the wait. Worse for the
+  app specifically: `submit(_:)`'s consumer is serial, so a submitted `.cancel` isn't even
+  _recorded_ until the press returns. Closing this needs either a preemptible `mic.start()` or a
+  command consumer that doesn't block on the press — both design changes, neither attempted yet.
+
 - **The warm recorder is re-armed after every capture**, not just at launch. The cost above is paid
   at `prepareToRecord()`, i.e. per session, so warming only the first one hid it for one dictation
   out of N. `stop()`/`cancelCapture()` schedule a re-warm; `start()` consumes it.

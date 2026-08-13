@@ -71,26 +71,33 @@ public final class AudioRouteMonitor: @unchecked Sendable {
   /// listener left behind outlives the monitor, since CoreAudio retains the block
   /// and nothing else would ever hand it back.
   ///
-  /// The `queue.sync` cannot deadlock: the listener blocks hold `self` weakly, so
-  /// `queue` never owns the last reference and this deinit never runs on it. The
-  /// registrations are lifted into locals first so the closure captures only
-  /// those, never a `self` that is already being torn down.
+  /// Removal happens **inline, with no hop onto `queue`** — deliberately.
+  ///
+  /// A `queue.sync` here can self-deadlock. The listener blocks capture `self`
+  /// weakly, but `guard let self` upgrades that to a strong reference for the
+  /// body's duration, so while a block is running `queue` *is* an owner. If the
+  /// last other reference is dropped in that window, the block's release is the
+  /// final one and this `deinit` runs **on `queue`** — where `queue.sync`
+  /// deadlocks against itself.
+  ///
+  /// Inline removal is also race-free without the hop. `deinit` only runs once
+  /// the last reference is gone, so no block can be *inside* its `guard let self`
+  /// concurrently with this — a block that starts now fails the upgrade and
+  /// touches nothing. That leaves these reads of the queue-confined
+  /// registrations unopposed. (`queue` is still passed to CoreAudio, because
+  /// removal matches on the queue the listener was added with; that's an argument,
+  /// not an execution context.)
   deinit {
     continuation.finish()
-    let system = systemListener
-    let device = deviceListener
-    let queue = queue
-    systemListener = nil
-    deviceListener = nil
-    queue.sync {
-      if let system {
-        var address = Self.defaultOutputDeviceAddress
-        _ = AudioObjectRemovePropertyListenerBlock(Self.systemObject, &address, queue, system)
-      }
-      if let device {
-        var address = Self.sampleRateAddress
-        _ = AudioObjectRemovePropertyListenerBlock(device.id, &address, queue, device.block)
-      }
+    if let systemListener {
+      var address = Self.defaultOutputDeviceAddress
+      _ = AudioObjectRemovePropertyListenerBlock(
+        Self.systemObject, &address, queue, systemListener)
+    }
+    if let deviceListener {
+      var address = Self.sampleRateAddress
+      _ = AudioObjectRemovePropertyListenerBlock(
+        deviceListener.id, &address, queue, deviceListener.block)
     }
   }
 

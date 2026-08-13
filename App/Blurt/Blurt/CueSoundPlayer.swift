@@ -11,6 +11,13 @@ final class CueSoundPlayer {
   /// The pack the current `startSound`/`stopSound` were decoded from, so `prime()`
   /// can skip re-decoding when nothing changed. `nil` until the first load.
   private var loadedPack: SoundPack?
+  /// Monotonic ticket for in-flight decodes: only the newest one installs its
+  /// players. This is the staleness check, **not** `loadedPack` equality — which
+  /// cannot discriminate two loads of the *same* pack, and a route change forces
+  /// exactly that. Without it, a decode already in flight when the route changed
+  /// could land after the re-prime and install players primed against the old
+  /// output route — the stall the re-prime exists to prevent.
+  private var loadGeneration = 0
   /// Edge-detector deciding when the start/stop chimes fire. The mapping from a
   /// pipeline phase to a cue lives in the engine (`RecordingCueGate`), where
   /// `swift test` covers it; this player just plays whatever it resolves to.
@@ -70,8 +77,9 @@ final class CueSoundPlayer {
     routeObserver = Task { [weak self] in
       for await _ in changes {
         guard let self else { return }
-        self.loadedPack = nil
-        await self.loadCurrentPack()
+        // `force`, because the pack hasn't changed — the *route* has, and the
+        // pre-roll is what went stale.
+        await self.loadCurrentPack(force: true)
       }
     }
   }
@@ -92,17 +100,22 @@ final class CueSoundPlayer {
   /// Decodes and installs the cue players for the current selection if they aren't
   /// already loaded. The `loadedPack` guard makes repeat calls cheap; the decode
   /// itself hops off the main actor. Returns once the players are assigned.
-  private func loadCurrentPack() async {
+  /// `force` skips the already-loaded short-circuit, for a re-prime where the
+  /// selection is unchanged and only the output route moved.
+  private func loadCurrentPack(force: Bool = false) async {
     let pack = SoundPackStore().soundPack
-    guard pack != loadedPack else { return }
+    guard force || pack != loadedPack else { return }
+    loadGeneration += 1
+    let generation = loadGeneration
     loadedPack = pack
     let players = await Self.decode(pack)
-    // Re-check after the off-actor decode: if a newer selection was claimed while
-    // we were decoding (rapid pack switches), its decode owns the players now —
-    // dropping this stale result avoids installing players that disagree with
-    // `loadedPack`. `loadedPack` is written synchronously above (no await between
-    // read and write), so only the newest-requested load passes this guard.
-    guard loadedPack == pack else { return }
+    // Re-check after the off-actor decode: whoever asked last owns the players.
+    // Both are written synchronously above (no await between read and write), so
+    // exactly one in-flight decode passes this guard — the newest. Ticketed
+    // rather than compared against `loadedPack`, so two loads of the same pack
+    // (a rapid pack switch back, or any forced route re-prime) can still tell
+    // each other apart.
+    guard generation == loadGeneration else { return }
     startSound = players.start
     stopSound = players.stop
   }

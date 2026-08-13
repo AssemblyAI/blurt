@@ -12,8 +12,19 @@ extension MicCapture {
   /// hardware route discovery. Does NOT begin capture — no mic indicator. Safe to
   /// call multiple times; a failure here just leaves `start()` to prepare lazily.
   public func warmUp() {
-    guard preparedRecorder == nil, activeRecorder == nil else { return }
+    guard canPrepareWarmRecorder else { return }
     prepareWarmRecorder()
+  }
+
+  /// Whether it is safe to open the input for a *warm* recorder right now:
+  /// nothing is capturing, nothing is mid-bring-up, and no warm recorder is
+  /// already held.
+  ///
+  /// `bringingUpCapture` is the load-bearing term. The two recorder slots are
+  /// both nil across `start()`'s liveness wait, so testing them alone reads a
+  /// live capture as "idle" and prepares a second recorder onto the open input.
+  var canPrepareWarmRecorder: Bool {
+    activeRecorder == nil && preparedRecorder == nil && !bringingUpCapture
   }
 
   /// The warm recorder if it is still bound to `input`, else nil — discarding
@@ -47,11 +58,11 @@ extension MicCapture {
     }
   }
 
-  /// Prepares the next session's recorder, unless a capture has already started
-  /// or a warm one is already held — both of which mean this re-warm has been
+  /// Prepares the next session's recorder, unless a capture is running or coming
+  /// up, or a warm one is already held — all of which mean this re-warm has been
   /// overtaken and has nothing to do.
   func rewarm() {
-    guard activeRecorder == nil, preparedRecorder == nil else { return }
+    guard canPrepareWarmRecorder else { return }
     prepareWarmRecorder()
   }
 
@@ -63,26 +74,38 @@ extension MicCapture {
       let recorder = try Self.makeRecorder()
       preparedRecorder = recorder
       preparedInput = AudioRoute.currentInput()
-      armPreparedRecorderExpiry()
+      preparedGeneration += 1
+      armPreparedRecorderExpiry(generation: preparedGeneration)
       Self.logger.info("prepared a warm recorder")
     } catch {
       Self.logger.error("warm-up failed: \(error.localizedDescription, privacy: .public)")
     }
   }
 
-  func armPreparedRecorderExpiry() {
+  /// Arms the idle countdown for the warm recorder identified by `generation`.
+  /// The ticket is what makes a stale expiry harmless — see
+  /// `releasePreparedRecorder(generation:)`.
+  func armPreparedRecorderExpiry(generation: Int) {
     preparedExpiry?.cancel()
     preparedExpiry = Task { [weak self] in
       try? await Task.sleep(for: Self.preparedRecorderLifetime)
       guard !Task.isCancelled else { return }
-      await self?.releasePreparedRecorder()
+      await self?.releasePreparedRecorder(generation: generation)
     }
   }
 
   /// Tears down an idle warm recorder, freeing the input device — which is what
   /// lets a Bluetooth output route return to its full-quality profile. See
   /// `preparedRecorderLifetime`.
-  func releasePreparedRecorder() {
+  ///
+  /// A stale expiry — one whose recorder was consumed by a press, or replaced by
+  /// a later re-warm — must do nothing at all, which is what `generation` buys.
+  /// Cancellation alone doesn't cover it: an expiry that already passed its
+  /// `!Task.isCancelled` check still gets its actor turn, and would otherwise nil
+  /// out the *live* expiry's handle (leaving the current warm recorder with no
+  /// countdown at all) and tear down a recorder prepared a moment ago.
+  func releasePreparedRecorder(generation: Int) {
+    guard generation == preparedGeneration else { return }
     preparedExpiry = nil
     guard let recorder = preparedRecorder else { return }
     preparedRecorder = nil

@@ -304,3 +304,49 @@ extension DictationSessionTests {
 // to stay within the lint file-length budget. The `onTranscriptDelivered`
 // side-channel tests live in `DictationSessionTranscriptTests.swift` for the
 // same reason.
+
+/// Behavior in the `.connecting` window — the up-to-2.5 s stretch
+/// `MicCapture.start()` holds while a Bluetooth route brings the mic up. Before
+/// the liveness gate, `start()` returned in microseconds and nothing could land
+/// mid-press; now things can, so pin what happens when they do.
+@Suite("DictationSession mic bring-up", .timeLimit(.minutes(1)))
+struct DictationSessionBringUpTests {
+  @Test("a cancel landing during the bring-up never reaches .recording")
+  func cancelDuringBringUpSkipsRecording() async throws {
+    // The regression this guards: the press used to finish the bring-up, claim
+    // `.recording` and fire the start chime — cueing "speak now" for a capture
+    // the user had already cancelled — and only then get torn down by the queued
+    // cancel. `.recording` must never be published on this path, because
+    // `RecordingCueGate` chimes on exactly that edge.
+    let mic = GatedStartMic()
+    let session = DictationSession(
+      mic: mic, transcriber: StubTranscriber(mode: .transcript("never")),
+      injector: StubInjector(), seams: .offline)
+
+    let stream = await session.phaseStream()
+    let pressed = Task { await session.press() }
+    await mic.waitUntilStartEntered()  // press() is suspended inside mic.start()
+    // Direct `cancel()`, not `submit(.cancel)`: `submit`'s consumer is serial, so
+    // a submitted cancel cannot even be *recorded* until the press returns. See
+    // the note in `performPress` — this covers callers that can `await`.
+    let cancelled = Task { await session.cancel() }
+    await session.awaitCancelRequest()
+    await mic.allowStartToFinish()
+    await pressed.value
+    await cancelled.value
+
+    var seen: [PipelinePhase] = []
+    for await phase in stream {
+      seen.append(phase)
+      if phase.isTerminal, phase != .idle { break }
+    }
+
+    #expect(seen == [.idle, .connecting, .cancelled])
+    // Spelled out separately so a failure names the actual regression rather
+    // than just an unequal array.
+    #expect(!seen.contains(.recording))
+    // The mic came up during the wait, so it has to have been torn down — and
+    // through the discarding teardown, not `stop()`.
+    #expect(await mic.cancelCaptureCalls == 1)
+  }
+}
