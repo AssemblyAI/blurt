@@ -58,7 +58,32 @@ targets:
         # Accessibility list. Keeping the canonical id lowercase makes tccd and
         # LaunchServices agree. Set explicitly to override XcodeGen's derived
         # `dev.alex.Blurt` (from `bundleIdPrefix` + target name).
-        PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt
+        #
+        # Debug builds carry a DIFFERENT id (and a different display name, and a
+        # different install path — see the post-build script) so a dev build is a
+        # separate app to macOS rather than a replacement for the release. TCC
+        # keys a permission on bundle id + designated requirement, so without the
+        # split, installing a dev build over /Applications/Blurt.app inherits the
+        # release's row while failing the requirement stored with it: the
+        # Accessibility toggle stays switched on and `AXIsProcessTrusted()` keeps
+        # returning false. Two ids means two rows, granted independently, and
+        # neither build can strand the other. (The launch-time self-heal in
+        # `AppDelegate.runAccessibilityGrantMigration` still covers what a split
+        # id cannot: an ad-hoc contributor build, whose requirement changes on
+        # every rebuild under one id, and a rotated release certificate.)
+        #
+        # The **debug** id is the default and `Release` opts in to the shipping
+        # one, not the other way round: a configuration added later then defaults
+        # to the id that cannot disturb a shipped install.
+        PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt.dev
+        # Drives CFBundleName/CFBundleDisplayName (see `info:` below) and the
+        # post-build install's destination bundle name, so the two apps are
+        # distinguishable everywhere they are listed side by side: the Dock, the
+        # menu bar, /Applications, and — the one that matters — the Privacy &
+        # Security rows the user has to toggle. PRODUCT_NAME deliberately stays
+        # `Blurt` in both: it names the executable and the built product, which
+        # every script and DerivedData path is written against.
+        BLURT_APP_NAME: Blurt Dev
         # Treat warnings as errors for our own app code. Scoped to this target
         # (not project base) so it doesn't collide with the -suppress-warnings
         # Xcode applies to SPM dependency packages (the engine package).
@@ -81,6 +106,10 @@ targets:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG UITEST_HOOKS
         Debug-Local:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+        # The shipping identity, opted into by the one configuration that ships.
+        Release:
+          PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt
+          BLURT_APP_NAME: Blurt
     sources:
       - path: Blurt
       # Shared with BlurtUITests: the single source of truth for UI-test
@@ -89,8 +118,10 @@ targets:
     info:
       path: Blurt/Info.plist
       properties:
-        CFBundleName: Blurt
-        CFBundleDisplayName: Blurt
+        # Both come from BLURT_APP_NAME (see settings above), so a debug build is
+        # "Blurt Dev" wherever macOS names it and the release stays "Blurt".
+        CFBundleName: $(BLURT_APP_NAME)
+        CFBundleDisplayName: $(BLURT_APP_NAME)
         CFBundleVersion: "39"
         CFBundleShortVersionString: "0.1.39"
         LSMinimumSystemVersion: "15.0"
@@ -139,10 +170,17 @@ targets:
           # macOS treats as transient and refuses to add to the Privacy
           # & Security toggle list.) Falls back to ~/Applications if the
           # system folder isn't writable on this machine.
+          #
+          # The destination is named for BLURT_APP_NAME, not PRODUCT_NAME, so a
+          # debug build lands at "/Applications/Blurt Dev.app" and leaves a
+          # released /Applications/Blurt.app in place. Nothing about the built
+          # product changes — PRODUCT_NAME still names the bundle in
+          # BUILT_PRODUCTS_DIR and the executable inside it — only where this
+          # copy goes and what Finder calls it.
           if [ -w /Applications ]; then
-            DEST="/Applications/${PRODUCT_NAME}.app"
+            DEST="/Applications/${BLURT_APP_NAME}.app"
           else
-            DEST="$HOME/Applications/${PRODUCT_NAME}.app"
+            DEST="$HOME/Applications/${BLURT_APP_NAME}.app"
             mkdir -p "$HOME/Applications"
           fi
           rm -rf "$DEST"
@@ -160,10 +198,12 @@ targets:
           # pins the specific leaf cert's Common Name ("Apple Development: … (ID)")
           # — which changes every time that cert rotates (they expire ~yearly and
           # Xcode reissues them), silently orphaning the grant ("toggle on, still
-          # denied"). A team-based DR stays stable across cert rotation AND is
-          # satisfied by both Apple Development and Developer ID signatures (both
-          # carry OU = the team id), so dev and release builds share one identity
-          # as far as TCC is concerned.
+          # denied"). A team-based DR stays stable across cert rotation, which is
+          # what keeps a dev build's own Accessibility row granted from one
+          # `dev-build.sh` run to the next. It does NOT make dev and release one
+          # identity to TCC — a release carries codesign's default Developer ID
+          # requirement, which this satisfies in neither direction — and it no
+          # longer needs to: the two are separate apps under separate ids.
           REQ='designated => identifier "'"${PRODUCT_BUNDLE_IDENTIFIER}"'" and anchor apple generic and certificate leaf[subject.OU] = "'"${DEVELOPMENT_TEAM}"'"'
           # Inside-out signing: Debug builds emit unsigned dylibs
           # (__preview.dylib, Blurt.debug.dylib). Signing the bundle

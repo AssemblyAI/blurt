@@ -4,17 +4,19 @@
 /// orphaned ("toggle on, still denied") because the stored code requirement still
 /// describes the old binary.
 ///
-/// What counts as the identity depends on how the build is signed, and
-/// `SigningIdentity.current(includingAdHoc:)` collapses both cases into one string:
-///
-/// - Team-signed builds pin `leaf[subject.OU]`, so the identity is the Team ID.
-///   Cert rotation *within* a team does not orphan the grant, which is why the
-///   team identifier — not the leaf — is the boundary to watch.
-/// - Ad-hoc builds (the per-PR dev build) pin the cdhash, so the identity is the
-///   cdhash and *every* build is a new one. Without this, a reviewer who installs
-///   a second dev build sees Blurt already switched on in System Settings and can
-///   never get past the wizard's Accessibility step, because that row belongs to
-///   the previous build's signature.
+/// The identity is therefore the designated requirement itself, serialized —
+/// `SigningIdentity.current()`. Anything coarser is a proxy that eventually
+/// disagrees with `tccd`: recording the *Team ID* did, because a release
+/// (Developer ID, codesign's default requirement) and a dev build (Apple
+/// Development, an explicit team-based requirement) share a team while pinning
+/// different requirements, so installing one over the other read as "unchanged"
+/// and stranded the user on the wizard's Accessibility step. Debug builds now
+/// carry their own bundle id, so that particular collision can't recur — but the
+/// requirement is still what `tccd` compares, and it still moves without warning
+/// when the **release** certificate is re-issued (`RELEASE.md`'s rotation
+/// procedure), orphaning the grant of every installed user at once. That is the
+/// case this exists for now, and nothing at signing time can pre-empt it: the
+/// requirement a shipped copy handed to `tccd` was written before the rotation.
 ///
 /// Pure and fully injectable: the caller supplies the persisted identity, the
 /// current identity, the live trust state, and the reset side effect.
@@ -28,7 +30,15 @@ public enum SigningIdentityMigration {
   /// user setting but a record of what the migration has already done. Clearing it
   /// would make every swept launch look like an identity change and re-run the
   /// `tccutil` reset. Renaming it would do the same for every installed user, so
-  /// the string is frozen — it predates the ad-hoc case and still says "Team".
+  /// the string is frozen — it predates both the ad-hoc case and the move to
+  /// recording the requirement, and still says "Team".
+  ///
+  /// The *value* shape is not frozen, and changed once when the recorded identity
+  /// became the designated requirement rather than the Team ID. That re-reads as
+  /// an identity change exactly once per install, which is safe by construction:
+  /// `decide` only resets when the app is **untrusted**, so a working grant is
+  /// merely re-recorded (`.record`), and an install that is already untrusted has
+  /// nothing a reset can take away.
   public static let lastSigningIdentityDefaultsKey = "accessibility.lastSigningTeam"
 
   public enum Decision: Equatable {

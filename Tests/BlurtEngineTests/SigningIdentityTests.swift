@@ -1,3 +1,5 @@
+import Foundation
+import Security
 import Testing
 
 @testable import BlurtEngine
@@ -5,59 +7,53 @@ import Testing
 @Suite("SigningIdentity")
 struct SigningIdentityTests {
 
-  // What the test host reports depends on how it was signed (ad-hoc under
-  // `swift test`, team-signed under Xcode), so these assert shape and stability
-  // rather than a literal. `includingAdHoc: false` is the narrower answer the
-  // UI-test build asks for: team identities only.
-  private static func identity() -> String? { SigningIdentity.current(includingAdHoc: true) }
-  private static func teamIdentity() -> String? { SigningIdentity.current(includingAdHoc: false) }
-
   // The value the migration compares must be a property of the *binary*, not of
   // the moment it was read — an identity that varied per call would reset the
   // Accessibility grant on every launch.
   @Test("current() is stable across reads")
   func currentIsStable() {
-    #expect(Self.identity() == Self.identity())
+    #expect(SigningIdentity.current() == SigningIdentity.current())
   }
 
-  @Test("a Team ID is the identity verbatim, ad-hoc or not")
-  func teamIdentityIsUnprefixed() {
-    // Frozen value shape: builds that predate the ad-hoc case recorded a bare Team
-    // ID, and a signed app must keep matching that marker rather than re-running
-    // the `tccutil` reset once on every installed machine. A team-signed build
-    // also answers the same either way — `includingAdHoc` only decides what
-    // happens when there is no team.
-    guard let team = Self.teamIdentity() else { return }
-    #expect(Self.identity() == team)
-  }
-
-  @Test("an ad-hoc identity is a namespaced hex cdhash")
-  func adHocIdentityIsAPrefixedCdhash() {
-    guard Self.teamIdentity() == nil, let identity = Self.identity() else {
-      return  // team-signed host, or code with no signature at all
+  // What the test host reports depends on how it was signed (ad-hoc under
+  // `swift test`, team-signed under Xcode), so this asserts the shape of whatever
+  // this host gives rather than a literal — including the shape of "nothing",
+  // which is the answer for the ad-hoc host and the one the migration reads as
+  // "no action".
+  @Test("current() is either absent or a namespaced requirement")
+  func currentIsNamespacedWhenPresent() {
+    guard let identity = SigningIdentity.current() else {
+      return  // ad-hoc or unsigned host: refusing to answer is the contract
     }
-    #expect(identity.hasPrefix(SigningIdentity.cdhashPrefix))
-    let hex = identity.dropFirst(SigningIdentity.cdhashPrefix.count)
-    // SHA-1-truncated cdhash: 20 bytes, so 40 hex digits (longer for other digest
-    // choices — the length floor is what matters, not the exact algorithm).
-    #expect(hex.count >= 40)
-    // Hoisted out of the macro on purpose: `#expect` rewrites a call into
-    // `__checkFunctionCall(hex.self, calling: { $0.allSatisfy($1) }, …)`, and that
-    // rewrite loses `allSatisfy`'s `rethrows`-ness — the expansion won't compile
-    // without a `try` it has no use for. Don't inline it back.
-    let isHex = hex.allSatisfy(\.isHexDigit)
-    #expect(isHex)
-    // …and the prefix keeps it out of the Team ID's namespace: a Team ID is 10
-    // alphanumerics, so a colon is what a recorded marker can be told apart by.
+    #expect(identity.hasPrefix(SigningIdentity.requirementPrefix))
+    // Never a bare Team ID (10 alphanumerics, no colon): the marker recorded by
+    // builds that predate this shape has to stay distinguishable from one
+    // recorded now, or an upgrade would read as steady state.
     #expect(identity.contains(":"))
+    #expect(identity.count > SigningIdentity.requirementPrefix.count)
   }
 
-  @Test("includingAdHoc: false never reports a cdhash")
-  func adHocIsIdentityLessWhenExcluded() {
-    // The UI-test build's carve-out. Under `swift test` the host is ad-hoc signed,
-    // so this is the case that matters: no identity at all, which the migration
-    // reads as "no action" and never spawns `tccutil` for.
-    guard let team = Self.teamIdentity() else { return }
-    #expect(!team.hasPrefix(SigningIdentity.cdhashPrefix))
+  // The `Security` handshake is the one part of this file that isn't pure logic,
+  // and the host's own signature can't exercise it (ad-hoc under `swift test`).
+  // `/bin/ls` can: it is present on every Mac and Apple-signed, so its designated
+  // requirement is both readable and known. If this returns nil the migration
+  // silently degrades to "never act" — a grant orphaned by a re-issued release
+  // certificate would then strand every user with no way past the wizard.
+  @Test("a designated requirement can actually be read")
+  func designatedRequirementIsReadable() throws {
+    var code: SecStaticCode?
+    let status = SecStaticCodeCreateWithPath(
+      URL(fileURLWithPath: "/bin/ls") as CFURL, SecCSFlags(), &code)
+    #expect(status == errSecSuccess)
+    let staticCode = try #require(code)
+    let requirement = try #require(SigningIdentity.designatedRequirement(of: staticCode))
+    #expect(requirement.contains("anchor apple"))
+  }
+
+  // The process's own code object has to resolve, or `current()` can only ever
+  // answer nil and the migration is dead weight in every build.
+  @Test("this process's code object resolves")
+  func selfStaticCodeResolves() throws {
+    _ = try #require(SigningIdentity.staticCodeForSelf())
   }
 }

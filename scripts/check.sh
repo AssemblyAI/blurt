@@ -315,7 +315,7 @@ if tool_ready actionlint 'brew install actionlint'; then
   echo "==> actionlint"
   # Auto-discovers .github/workflows, so no file list. It also pipes each `run:`
   # block through shellcheck when shellcheck is on PATH (it is, via the Brewfile),
-  # which is what lint-checks the inline bash in release.yml and pr-dev-build.yml.
+  # which is what lint-checks the inline bash in check.yml and release.yml.
   actionlint
 fi
 

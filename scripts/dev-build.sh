@@ -4,9 +4,14 @@
 # Unlike check.sh (which builds with codesigning DISABLED for CI), this runs a
 # fully signed build so the project.yml postBuildScripts "Install to
 # /Applications" step actually fires — copying the bundle to /Applications
-# (or ~/Applications fallback) and re-signing it with your Developer ID.
-# That stable install path is required for TCC to register Accessibility /
+# (or ~/Applications fallback) and re-signing it with your Apple Development
+# cert. That stable install path is required for TCC to register Accessibility /
 # Input-Monitoring / Microphone grants (DerivedData/tmp paths never do).
+#
+# It installs as "Blurt Dev.app" under the bundle id dev.alex.blurt.dev, so it
+# sits beside a released Blurt instead of replacing it: separate Privacy &
+# Security rows, separate settings, either one runnable. Grant the dev app its
+# own permissions once and they stick across rebuilds.
 #
 # Pipes xcodebuild through xcbeautify when available (brew install xcbeautify).
 # Safe to re-run.
@@ -54,4 +59,4 @@ xcodebuild \
   -derivedDataPath "$DERIVED" \
   clean build | "${PRETTY[@]}"
 
-info "Done. Launch with: open -a Blurt"
+info "Done. Launch with: open -a 'Blurt Dev'"

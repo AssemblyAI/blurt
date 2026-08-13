@@ -1,6 +1,6 @@
 # Building on BlurtEngine
 
-BlurtEngine is the Swift package that powers [Blurt](README.md)'s dictation pipeline: capture speech from the microphone, transcribe it in a single AssemblyAI dictation API call (transcription plus a server-side LLM cleanup rewrite; the request carries the audio and nothing about the user's screen), and paste the polished text into the focused app. This guide is for developers embedding the engine in their own macOS app or extending it inside this repository. For repo-wide conventions and agent workflow, see [AGENTS.md](AGENTS.md).
+BlurtEngine is the Swift package that powers [Blurt](../../README.md)'s dictation pipeline: capture speech from the microphone, transcribe it in a single AssemblyAI dictation API call (transcription plus a server-side LLM cleanup rewrite; the request carries the audio and nothing about the user's screen), and paste the polished text into the focused app. This guide is for developers embedding the engine in their own macOS app or extending it inside this repository. For repo-wide conventions and agent workflow, see [AGENTS.md](../../AGENTS.md).
 
 ## What you get
 
@@ -24,7 +24,7 @@ targets: [
 ]
 ```
 
-A local checkout works the same way with `.package(path: "../blurt")`. One thing to know before you pin a version: the tags are **Blurt's app releases**, minted by the DMG pipeline in [RELEASE.md](RELEASE.md), not independent engine releases — a patch bump says nothing about whether the engine changed. Read [Embedding outside Blurt](#embedding-outside-blurt) before shipping it inside another app.
+A local checkout works the same way with `.package(path: "../blurt")`. One thing to know before you pin a version: the tags are **Blurt's app releases**, minted by the DMG pipeline in [RELEASE.md](../../RELEASE.md), not independent engine releases — a patch bump says nothing about whether the engine changed. Read [Embedding outside Blurt](#embedding-outside-blurt) before shipping it inside another app.
 
 Then compose a session:
 
@@ -296,7 +296,7 @@ Two ways out, neither taken yet: drop it from the public product (its own target
 
 ## Invariants — don't break these
 
-Each of these was tried the other way and reverted; the longer stories are in [AGENTS.md](AGENTS.md) and the source comments:
+Each of these was tried the other way and reverted; the longer stories are in [AGENTS.md](../../AGENTS.md) and the source comments:
 
 - **No external SPM dependencies in the engine.** Foundation/Security/AVFoundation/CoreAudio only.
 - **No streaming STT, no local models, no client-side LLM cleanup pass.** One dictation request per utterance is the architecture; the cleanup rewrite is server-side (the request's `llm` block), and transcription steering belongs in `ConversationContext`.
