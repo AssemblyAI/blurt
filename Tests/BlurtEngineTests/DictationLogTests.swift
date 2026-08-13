@@ -69,16 +69,17 @@ struct DictationLogEntryTests {
     #expect(entry.prompt == nil)
   }
 
-  @Test("logs the same prompt the transcriber sends — none, while the prompt is off")
+  @Test("logs the same prompt the transcriber sends — the prior chunk and nothing else")
   func logsWhatTheRequestCarries() {
     let entry = DictationLog.makeEntry(transcript: "p", context: context, now: Date())
-    // The entry mirrors the request, whichever way `TranscriptionPrompt.isEnabled`
-    // is set — that's why the writer calls `build` rather than `assemble`.
+    // The entry mirrors the request because the writer calls the same builder.
     #expect(entry.prompt == TranscriptionPrompt.build(context: context))
-    // And with the switch off, that means no prompt at all, even though this
-    // context is rich enough to assemble one.
-    #expect(TranscriptionPrompt.assemble(context: context) != nil)
-    #expect(entry.prompt == nil)
+    // So the logged prompt shows the narrowing too: the prior chunk went on the
+    // wire, the window title and the selected text did not — even though the
+    // entry's own fields record all three.
+    #expect(entry.prompt?.contains("Hi Sam,") == true)
+    #expect(entry.prompt?.contains("Re: Q3 pricing") == false)
+    #expect(entry.prompt?.contains("the old plan") == false)
   }
 
   @Test("keeps a transcript verbatim, including non-ASCII")

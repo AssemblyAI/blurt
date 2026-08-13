@@ -9,9 +9,10 @@
 /// Sending it replaces an empty `llm` block, which selected the service's own
 /// default cleanup wording.
 ///
-/// With the transcription prompt switched off (`TranscriptionPrompt.isEnabled`)
-/// this is the only instruction on the request — and unaffected by that switch,
-/// since it is a fixed string that embeds no user context.
+/// It is one of two instruction-shaped fields on the request, and the only one
+/// that is the same on every request: `config.prompt` carries the user's prior
+/// chunk (see `TranscriptionPrompt`), while this string is fixed and embeds no
+/// user context at all.
 ///
 /// **Length is the thing to be careful about.** `config.llm.instruction` accepts
 /// at most `characterCap`, measured here in UTF-8 bytes (see that constant for

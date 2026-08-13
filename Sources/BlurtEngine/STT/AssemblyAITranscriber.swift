@@ -67,10 +67,11 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     guard let apiKey = apiKeyProvider(), !apiKey.isEmpty else {
       throw BlurtError.apiKeyMissing
     }
-    // Nil today: the transcription prompt is switched off at
-    // `TranscriptionPrompt.isEnabled`, so `config.prompt` is omitted and none of
-    // the captured context reaches the API. The call stays here so turning it
-    // back on needs no change on this path.
+    // The one piece of the captured context that goes on the wire: the text
+    // before the cursor, framed as prior context (nil when there is none, which
+    // omits the field). The app name, window title, field label and selected
+    // text stay on the machine — `TranscriptionPrompt` is where that line is
+    // drawn, so there is nothing to filter here.
     let prompt = TranscriptionPrompt.build(context: context)
     let config = try makeConfigData(sampleRate: sampleRate, prompt: prompt)
     let boundary = "blurt-\(UUID().uuidString)"
@@ -238,8 +239,9 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     /// Custom transcription instruction. Encoded only when non-nil (the
     /// synthesized `encode` uses `encodeIfPresent` for optionals), so omitting
     /// it falls back to the server's default prompt. Steers *transcription*;
-    /// the cleanup rewrite is the `llm` block's job. Currently always nil —
-    /// see `TranscriptionPrompt.isEnabled`.
+    /// the cleanup rewrite is the `llm` block's job. Carries the text before the
+    /// cursor and a fixed instruction, and nothing else about the user's screen
+    /// — see `TranscriptionPrompt`.
     let prompt: String?
     /// The rewrite request, present only while enhanced transcripts are
     /// enabled (nil — the synthesized `encode` omits it — asks for no rewrite,

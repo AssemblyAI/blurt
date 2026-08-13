@@ -28,10 +28,12 @@ one, stop and ask the user first. This is the fast "don't" list; AGENTS.md's
   client, no `StylerProtocol`, no post-transcription styling stage.
 - **No local models / model downloads.** Transcription is a remote AssemblyAI
   call. No on-device ASR/LLM, no model cache, no download UI.
-- **The transcription `prompt` is switched off** (`TranscriptionPrompt.isEnabled`
-  is `false`), so no focus context leaves the machine. Keep the builder and its
-  wiring intact — it's tested through `assemble` — and don't route the context
-  onto the request by another path.
+- **The transcription `prompt` carries the prior chunk and nothing else.**
+  `TranscriptionPrompt.build` reads exactly one field of `TranscriptionContext`
+  (`priorText`). The app name, window title, field label and selected text are
+  captured for the paste path and the developer-mode log and stay on the machine;
+  the hints that used to carry them were deleted, not gated. Don't widen the
+  prompt back out, and don't route that context onto the request by another path.
 - Don't reintroduce a "remove filler words (um, uh, like)" directive in the
   prompt — `universal-3-5-pro` ignores it; it was deliberately dropped. Same for
   a language directive: pinning the prompt to English hurt non-English speech, so

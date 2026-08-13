@@ -1,12 +1,12 @@
 import Foundation
 
 /// Storage for the user's dictation "key terms" — a comma-separated list of
-/// domain words (names, jargon, product names) that get folded into the dictation
-/// request `prompt` as vocabulary priming, so the model is more likely to spell
-/// them correctly (see `TranscriptionPrompt.assemble`). That prompt is currently
-/// switched off (`TranscriptionPrompt.isEnabled`), so the terms are read at every
-/// press and then reach nothing — the storage stays wired for the day it flips
-/// back on.
+/// domain words (names, jargon, product names) meant as vocabulary priming, so
+/// the model is more likely to spell them correctly. They used to be folded into
+/// the dictation request `prompt` as a `Keywords: a, b, c.` clause; that clause
+/// is gone, so the terms are read at every press and then reach nothing. The
+/// storage stays wired because the intent is right and only the transport was
+/// wrong.
 ///
 /// Unlike the API key these aren't secret, so they live in `UserDefaults` rather
 /// than the Keychain. The transcription pipeline reads the parsed list via
@@ -50,8 +50,8 @@ public struct KeyTermsStore {
   }
 
   /// Pure parse of a comma-separated string into a clean term list. Static so
-  /// `TranscriptionPrompt` and tests can reuse the exact same rules without a
-  /// `UserDefaults` in hand.
+  /// callers and tests can reuse the exact same rules without a `UserDefaults`
+  /// in hand.
   static func parse(_ text: String?) -> [String] {
     guard let text else { return [] }
     var seen = Set<String>()

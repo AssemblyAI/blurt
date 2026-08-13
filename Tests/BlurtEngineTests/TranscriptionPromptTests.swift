@@ -2,11 +2,9 @@ import Testing
 
 @testable import BlurtEngine
 
-/// The assembly cases below drive `assemble`, not `build`: no transcription
-/// prompt is sent while `TranscriptionPrompt.isEnabled` is off, and `build` is
-/// the gate that enforces that (pinned in `TranscriptionPromptSwitchTests`).
-/// They keep the builder covered so the switch stays a one-line decision rather
-/// than a leap onto code nothing has run in months.
+/// The context→prompt contract. `build` reads exactly one field of the context —
+/// `priorText` — so these cases are as much about what the prompt *omits* as
+/// what it carries; the scope suite below pins the omissions signal by signal.
 @Suite("TranscriptionPrompt")
 struct TranscriptionPromptTests {
   /// The standing plain-text exclusion clause that every built prompt carries
@@ -15,7 +13,7 @@ struct TranscriptionPromptTests {
   static let base =
     "Transcribe without speaker labels, audio event descriptions, or emotion markers."
 
-  /// One `assemble(context:)` → prompt expectation. Parameterizing these (rather
+  /// One `build(context:)` → prompt expectation. Parameterizing these (rather
   /// than a `@Test` apiece) keeps the whole context→prompt contract in one
   /// readable table and gives per-case failure output.
   struct Case: Sendable, CustomTestStringConvertible {
@@ -31,147 +29,74 @@ struct TranscriptionPromptTests {
       name: "empty context → no prompt",
       context: TranscriptionContext(appName: nil, priorText: nil), expected: nil),
     Case(
-      name: "whitespace-only context → no prompt",
-      context: TranscriptionContext(appName: "  ", priorText: "\n"), expected: nil),
+      name: "whitespace-only prior text → no prompt",
+      context: TranscriptionContext(appName: nil, priorText: "  \n\t"), expected: nil),
     Case(
-      name: "app only → destination sentence",
-      context: TranscriptionContext(appName: "Slack", priorText: nil),
-      expected: "Dictated into Slack. \(base)"),
-    Case(
-      name: "prior only → Previous transcript framing",
+      name: "prior text → Previous transcript framing",
       context: TranscriptionContext(appName: nil, priorText: "and then the build finished"),
       expected: "Previous transcript:\nand then the build finished\n\n\(base)"),
     Case(
-      name: "app + window → topic hint leads, destination trails",
-      context: TranscriptionContext(appName: "Mail", windowTitle: "Re: Q3 pricing", priorText: nil),
-      expected: "This is about \"Re: Q3 pricing\". Dictated into Mail. \(base)"),
+      name: "prior text is trimmed",
+      context: TranscriptionContext(appName: nil, priorText: "  hello  "),
+      expected: "Previous transcript:\nhello\n\n\(base)"),
     Case(
-      name: "window only → bare topic hint",
-      context: TranscriptionContext(appName: nil, windowTitle: "Untitled.txt", priorText: nil),
-      expected: "This is about \"Untitled.txt\". \(base)"),
+      name: "newlines inside the prior chunk are preserved",
+      context: TranscriptionContext(appName: nil, priorText: "Dear Sam,\n\nthanks for"),
+      expected: "Previous transcript:\nDear Sam,\n\nthanks for\n\n\(base)"),
     Case(
-      name: "field only → destination sentence",
-      context: TranscriptionContext(appName: nil, fieldLabel: "Search", priorText: nil),
-      expected: "Dictated in the \"Search\" field. \(base)"),
-    Case(
-      name: "app + field without window → destination names both",
-      context: TranscriptionContext(appName: "Slack", fieldLabel: "Message", priorText: nil),
-      expected: "Dictated into Slack, in the \"Message\" field. \(base)"),
-    Case(
-      name: "all four signals combine",
+      name: "every other signal, no prior text → no prompt",
       context: TranscriptionContext(
-        appName: "Slack", windowTitle: "#eng-backend", fieldLabel: "Message", priorText: "thanks for"),
-      expected:
-        "Previous transcript:\nthanks for\n\nThis is about \"#eng-backend\". Dictated into Slack, in the \"Message\" field. \(base)"
-    ),
-    Case(
-      name: "prior + app combine",
-      context: TranscriptionContext(appName: "Mail", priorText: "Dear Sam,"),
-      expected: "Previous transcript:\nDear Sam,\n\nDictated into Mail. \(base)"),
-    Case(
-      name: "prior + app are trimmed",
-      context: TranscriptionContext(appName: "  Notes  ", priorText: "  hello  "),
-      expected: "Previous transcript:\nhello\n\nDictated into Notes. \(base)"),
-    Case(
-      name: "selected only → Selected text framing",
-      context: TranscriptionContext(appName: nil, priorText: nil, selectedText: "the quarterly numbers"),
-      expected: "Selected text:\nthe quarterly numbers\n\n\(base)"),
-    Case(
-      name: "selected follows prior as its own block",
-      context: TranscriptionContext(appName: nil, priorText: "as we discussed,", selectedText: "the old plan"),
-      expected: "Previous transcript:\nas we discussed,\n\nSelected text:\nthe old plan\n\n\(base)"),
-    Case(
-      name: "selected + location + prior combine",
-      context: TranscriptionContext(
-        appName: "Mail", windowTitle: "Re: Q3 pricing", fieldLabel: "Body",
-        priorText: "Hi Sam,", selectedText: "let's push the date"),
-      expected:
-        "Previous transcript:\nHi Sam,\n\nSelected text:\nlet's push the date\n\nThis is about \"Re: Q3 pricing\". Dictated into Mail, in the \"Body\" field. \(base)"
-    ),
-    Case(
-      name: "blank selected adds no block",
-      context: TranscriptionContext(appName: "Notes", priorText: nil, selectedText: "   \n"),
-      expected: "Dictated into Notes. \(base)"),
-    Case(
-      name: "selected sits between prior and keyword boost",
-      context: TranscriptionContext(
-        appName: "Slack", priorText: "thanks for", selectedText: "the draft", keyTerms: ["Blurt"]),
-      expected:
-        "Previous transcript:\nthanks for\n\nSelected text:\nthe draft\n\nDictated into Slack. \(base) Keywords: Blurt."
-    ),
-    Case(
-      name: "key terms only → inline keyword boost",
-      context: TranscriptionContext(appName: nil, priorText: nil, keyTerms: ["AssemblyAI", "Kubernetes"]),
-      expected: "\(base) Keywords: AssemblyAI, Kubernetes."),
-    Case(
-      name: "key terms trail base alongside focus context",
-      context: TranscriptionContext(appName: "Slack", priorText: nil, keyTerms: ["Blurt"]),
-      expected: "Dictated into Slack. \(base) Keywords: Blurt."),
-    Case(
-      name: "empty key terms add no clause",
-      context: TranscriptionContext(appName: "Notes", priorText: nil, keyTerms: []),
-      expected: "Dictated into Notes. \(base)"),
+        appName: "Slack", windowTitle: "#eng-backend", fieldLabel: "Message",
+        priorText: nil, selectedText: "the draft", keyTerms: ["Blurt"]),
+      expected: nil),
   ]
 
-  @Test("assemble maps focus context to the transcription prompt", arguments: cases)
+  @Test("build maps the prior chunk to the transcription prompt", arguments: cases)
   func build(_ c: Case) {
-    #expect(TranscriptionPrompt.assemble(context: c.context) == c.expected)
+    #expect(TranscriptionPrompt.build(context: c.context) == c.expected)
   }
 
-  @Test("built prompt fits within the API's 4096-character cap for capped prior text")
-  func withinCap() {
-    let longPrior = String(repeating: "word ", count: 200)
-    let prompt = TranscriptionPrompt.assemble(
-      context: TranscriptionContext(appName: "Xcode", priorText: longPrior))
-    #expect((prompt?.count ?? 0) <= TranscriptionPrompt.characterCap)
-  }
-
-  @Test("the keyword clause is omitted entirely when not even the first term fits")
-  func keyTermsOmittedWhenNoneFit() {
-    // A single term longer than the whole cap leaves no budget for even one
-    // keyword: the clause (and its "Keywords:" scaffolding) must be dropped
-    // whole, not emitted empty or dangling.
-    let huge = String(repeating: "k", count: TranscriptionPrompt.characterCap)
-    let prompt = TranscriptionPrompt.assemble(
-      context: TranscriptionContext(appName: "Xcode", priorText: nil, keyTerms: [huge]))
-    #expect(prompt == "Dictated into Xcode. \(Self.base)")
-  }
-
-  @Test("an oversized key-terms list is fitted to the cap, keeping whole leading terms")
-  func keyTermsFittedToCap() throws {
-    // Key terms are the one input with no upstream length cap; a huge Settings
-    // list must not push the prompt over the API cap (which fails the request).
-    let terms = (0..<2000).map { "term\($0)" }
-    let prompt = TranscriptionPrompt.assemble(
-      context: TranscriptionContext(appName: "Xcode", priorText: nil, keyTerms: terms))
-    let built = try #require(prompt)
-    #expect(built.count <= TranscriptionPrompt.characterCap)
-    #expect(built.contains(" Keywords: term0, term1"))
-    #expect(built.hasSuffix("."))
+  @Test("an over-long prior chunk is clipped to the cap, keeping the tail")
+  func clipsPriorTextToCap() throws {
+    // `FocusCapture` clips far shorter than this, but the cap is enforced here
+    // rather than assumed of the caller — over the cap the API rejects the whole
+    // request. The *tail* is what survives: the utterance continues from the text
+    // nearest the cursor, so the oldest end is the part worth losing.
+    let longPrior = String(repeating: "word ", count: 2000)
+    let prompt = try #require(
+      TranscriptionPrompt.build(context: TranscriptionContext(appName: nil, priorText: longPrior)))
+    #expect(prompt.count <= TranscriptionPrompt.characterCap)
+    #expect(prompt.hasSuffix("word\n\n\(Self.base)"))
   }
 }
 
-/// The switch itself. `build` is the only door to the wire and the developer-mode
-/// log, so these are what stand between a context — window titles, the text
-/// around the cursor, the user's key terms — and AssemblyAI's servers.
-@Suite("TranscriptionPrompt switch")
-struct TranscriptionPromptSwitchTests {
-  @Test("the transcription prompt is off, so no context is sent")
-  func promptIsOff() {
-    // The shipped value, asserted rather than assumed: `AssemblyAITranscriber`
-    // omits `config.prompt` for a nil build, so this constant is what decides
-    // whether focus context leaves the machine.
-    #expect(TranscriptionPrompt.isEnabled == false)
+/// What the prompt is *not* allowed to carry. Every signal below is captured at
+/// press time and kept on the machine: the focus fields drive the paste path
+/// (the leading separator, the injector's window identity) and the developer-mode
+/// log, and the key terms ride their own request field (`KeytermsBoost`) rather
+/// than this one. `build` is the only door to the wire, so this suite is what
+/// stands between a captured context and AssemblyAI's servers.
+@Suite("TranscriptionPrompt scope")
+struct TranscriptionPromptScopeTests {
+  /// The richest context the capture path can produce — every signal populated.
+  private let context = TranscriptionContext(
+    appName: "Slack", windowTitle: "#eng-backend", fieldLabel: "Message",
+    priorText: "thanks for", selectedText: "the draft", keyTerms: ["Blurt"])
+
+  @Test(
+    "no captured signal but the prior chunk reaches the prompt",
+    arguments: ["Slack", "#eng-backend", "Message", "the draft", "Blurt"])
+  func signalStaysLocal(_ signal: String) throws {
+    let prompt = try #require(TranscriptionPrompt.build(context: context))
+    #expect(!prompt.contains(signal))
   }
 
-  @Test("build yields nothing while the switch is off, however rich the context")
-  func buildIsGatedByTheSwitch() {
-    // The richest context the capture path can produce — every signal populated,
-    // exactly the case `assemble` turns into a long prompt (see the suite above).
-    let context = TranscriptionContext(
-      appName: "Slack", windowTitle: "#eng-backend", fieldLabel: "Message",
-      priorText: "thanks for", selectedText: "the draft", keyTerms: ["Blurt"])
-    #expect(TranscriptionPrompt.assemble(context: context) != nil)
-    #expect(TranscriptionPrompt.build(context: context) == nil)
+  @Test("the built prompt is exactly the prior chunk and the fixed instruction")
+  func promptIsPriorChunkAndInstruction() {
+    // Pinned whole, not just signal by signal: a new field appended to the prompt
+    // would pass every containment check above and fail here.
+    #expect(
+      TranscriptionPrompt.build(context: context)
+        == "Previous transcript:\nthanks for\n\n\(TranscriptionPrompt.baseInstruction)")
   }
 }

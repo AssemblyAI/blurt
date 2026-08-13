@@ -32,12 +32,13 @@ you don't have to be told them in the prompt. `AGENTS.md`'s "Settled decisions"
 table is the fuller reference and the source of truth — read it when a finding gets
 anywhere near architecture.
 
-The trap most specific to a cleanup pass: **the transcription prompt is switched off
-at `TranscriptionPrompt.isEnabled = false`, and its entire builder plus wiring is
-deliberately kept intact and tested** so it can be turned back on by flipping one
-constant. It is not dead code. Do not propose deleting the builder, collapsing
-`build` to `return nil`, dropping the `context:` parameter, or removing the focus
-capture and key-terms reads that feed it.
+The trap most specific to a cleanup pass: **the transcription prompt reads exactly one
+field of `TranscriptionContext` (`priorText`), and the other fields are captured on
+purpose for work that never reaches the API** — paste spacing, the injector's window
+identity, the developer-mode log. `appName`, `windowTitle`, `fieldLabel` and
+`selectedText` are not unused just because the prompt ignores them; the key-terms read
+is deliberately kept too. Do not propose deleting them, folding them back into the
+prompt, or dropping the `context:` parameter.
 
 Other things that look removable and are not: protocol seams with one production
 conformer (they exist for the test doubles in `Tests/BlurtEngineTests/Stubs/`);

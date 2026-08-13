@@ -3,12 +3,11 @@ import Testing
 @testable import BlurtEngine
 
 /// `TranscriptionContext.isEmpty` is the gate `FocusCapture`/`DictationSession`
-/// use to decide whether a context is worth sending as priming. It mirrors the
-/// emptiness logic in `TranscriptionPrompt.assemble`, so the two must agree:
-/// `isEmpty == true` should always correspond to `assemble` returning `nil`.
-/// (`assemble`, not `build` — no prompt is sent at all while
-/// `TranscriptionPrompt.isEnabled` is off; the agreement still has to hold for
-/// the day it goes back on.)
+/// use to decide whether a captured context is worth carrying at all — it covers
+/// every signal, including the ones that never leave the machine. It is *not* a
+/// mirror of prompt emptiness: `TranscriptionPrompt.build` reads only
+/// `priorText`, so the implication runs one way. An empty context can never
+/// produce a prompt; a non-empty one usually doesn't either.
 @Suite("TranscriptionContext")
 struct TranscriptionContextTests {
   @Test("both fields nil is empty")
@@ -41,32 +40,41 @@ struct TranscriptionContextTests {
     #expect(TranscriptionContext(appName: nil, priorText: nil, selectedText: "  \n").isEmpty)
   }
 
-  @Test("key terms alone make it non-empty (and would produce a prompt)")
+  @Test("key terms alone make it non-empty (and produce no prompt)")
   func keyTermsPresent() {
     let context = TranscriptionContext(appName: nil, priorText: nil, keyTerms: ["Blurt"])
     #expect(!context.isEmpty)
-    #expect(TranscriptionPrompt.assemble(context: context) != nil)
+    #expect(TranscriptionPrompt.build(context: context) == nil)
   }
 
-  @Test("emptiness agrees with TranscriptionPrompt.assemble returning nil")
-  func agreesWithPromptAssembly() {
+  @Test("an empty context can never produce a prompt")
+  func emptyContextSendsNothing() {
     let empties = [
       TranscriptionContext(appName: nil, priorText: nil),
       TranscriptionContext(appName: "  ", priorText: "\n"),
     ]
     for context in empties {
       #expect(context.isEmpty)
-      #expect(TranscriptionPrompt.assemble(context: context) == nil)
+      #expect(TranscriptionPrompt.build(context: context) == nil)
     }
+  }
 
-    let nonEmpties = [
+  @Test("a non-empty context still sends nothing unless it has a prior chunk")
+  func nonEmptyContextSendsOnlyThePriorChunk() {
+    // The converse of the rule above does not hold, and that is the whole point
+    // of the narrowed prompt: these contexts are worth capturing (paste spacing,
+    // the developer-mode log) and carry nothing the request may have.
+    let withoutPrior = [
       TranscriptionContext(appName: "Mail", priorText: nil),
+      TranscriptionContext(appName: nil, windowTitle: "Re: Q3 pricing", priorText: nil),
       TranscriptionContext(appName: nil, priorText: nil, selectedText: "selected"),
     ]
-    for context in nonEmpties {
+    for context in withoutPrior {
       #expect(!context.isEmpty)
-      #expect(TranscriptionPrompt.assemble(context: context) != nil)
+      #expect(TranscriptionPrompt.build(context: context) == nil)
     }
+
+    #expect(TranscriptionPrompt.build(context: TranscriptionContext(appName: nil, priorText: "hello")) != nil)
   }
 
   @Test("Equatable compares every field")

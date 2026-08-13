@@ -66,8 +66,9 @@ globs go in one invocation so `hook-lib.sh` and `release-lib.sh` are in the inpu
 **When you spawn a review subagent, have it invoke the `project-guardrails` skill rather than
 restating the settled decisions in the prompt** — the skill is exactly that list, so a hand-written
 copy is both wasted tokens and a chance to leave something out. This matters most on a dead-code or
-simplification pass, which is precisely when an unbriefed agent proposes deleting the switched-off
-`TranscriptionPrompt` builder that is deliberately kept and tested.
+simplification pass, which is precisely when an unbriefed agent proposes deleting the
+`TranscriptionContext` fields the prompt deliberately ignores but the paste path and the
+developer-mode log rely on.
 
 ## Permissions
 

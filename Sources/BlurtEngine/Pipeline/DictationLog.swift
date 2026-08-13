@@ -14,16 +14,19 @@ public enum DictationLog {
   struct Entry: Encodable {
     let transcript: String
     let ts: String
-    /// Focused-app topic hint sent as context, when one was captured.
+    /// Focused-app name, when one was captured. Local to this file — it is not
+    /// part of the request.
     let app: String?
-    /// Focused-window title sent as a topic hint, when one was captured.
+    /// Focused-window title, when one was captured. Local to this file.
     let window: String?
-    /// Focused-field label sent as context, when one was captured.
+    /// Focused-field label, when one was captured. Local to this file.
     let field: String?
-    /// Text-before-cursor "prior chunk context" sent, when any was captured.
-    /// Lets you verify accessibility-tree prior-text reading actually fired.
+    /// Text-before-cursor "prior chunk context" sent as the request prompt, when
+    /// any was captured. Lets you verify accessibility-tree prior-text reading
+    /// actually fired.
     let prior: String?
-    /// Selected text sent as context (the dictation replaced it), when any.
+    /// Selected text (the dictation replaced it), when any. Local to this file:
+    /// it is captured for the paste path and recorded here, never sent.
     let selected: String?
     /// The fully-assembled `config.prompt` sent to AssemblyAI for this
     /// utterance. Built here from `context` (rather than threaded through from

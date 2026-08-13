@@ -2,20 +2,28 @@
 /// field of the request `config` (see `AssemblyAITranscriber`). The STT model
 /// prepends this to its own system prompt.
 ///
-/// **Currently switched off**: `isEnabled` is `false`, so `build` returns `nil`
-/// for every context and no `prompt` field goes on the wire — the STT model runs
-/// on the service's own default prompt. Everything below still runs in tests and
-/// the wiring around it is untouched (focus capture, key terms, the `config`
-/// field, the developer-mode log), so re-enabling is that one constant.
-/// The description that follows is of the prompt as built when it is on.
+/// **One context signal only: the text immediately before the cursor.** The
+/// prompt is back on after being switched off wholesale, but it is deliberately
+/// narrower than the version that was switched off: the frontmost app name, the
+/// window title, the focused field's label, and the selected text are captured
+/// for other purposes (paste spacing, the injector's window identity, the
+/// developer-mode log) and **none of them go on the wire**. What this field
+/// carries is the prior-chunk continuation and a fixed instruction with no user
+/// data in it — nothing about which app is frontmost or what its window is
+/// called.
 ///
-/// Every built prompt opens with a fixed `baseInstruction` — a plain-text
-/// exclusion clause (see below) — and wraps it in
-/// *contextual* priming: a topic hint built from the window title, a
-/// destination sentence built from the focused app and field label, "prior
-/// chunk context" (the text preceding the cursor), the selected text (which the
-/// dictation replaces), and keyword boosting, all of which the model is
-/// mid-trained to use for better recognition accuracy.
+/// The user's key terms aren't here either, but for a different reason: they are
+/// sent, as their own request field. Word boosting takes a flat list of strings
+/// (`config.keyterms_prompt` — see `KeytermsBoost`), which is what the Settings
+/// field collects; packing them into this prompt as a `Keywords: a, b, c.` clause
+/// was the older, worse shape for the same intent.
+///
+/// Every built prompt is the prior-chunk block followed by the fixed
+/// `baseInstruction` — a plain-text exclusion clause (see below). The prior
+/// chunk is *contextual* priming, which the model is mid-trained to use for
+/// better recognition accuracy: it continues the sentence the cursor is sitting
+/// in, so vocabulary, capitalization, and mid-sentence continuity carry over
+/// from what the user already typed.
 ///
 /// On the directives in `baseInstruction`: a "remove filler words"-style
 /// *content* reshaping is **not** in the model's trained instruction set, so it
@@ -31,134 +39,54 @@
 /// types (unclear-speech, censor, foreign-language, lyrics) are left out to keep
 /// the negative clause short, matching the doc's brief negative examples.
 ///
-/// Output follows the trained format with `baseInstruction` as its pivot: the
-/// prior-chunk context, the topic hint, and the destination sentence precede it
-/// as the `{context}. {baseInstruction}` shape, and keyword boosting trails it
-/// inline as `Keywords: a, b, c.` (per the mid-training instruction-type
-/// reference). It stays under the API's `characterCap`: the contextual
-/// blocks are clipped upstream in `FocusCapture`, and the key-terms clause is
-/// fitted to the remaining budget here. Exercised by
-/// `Tests/BlurtEngineTests/TranscriptionPromptTests.swift`.
+/// Output follows the trained `{context}\n\n{instruction}` shape: the prior
+/// chunk leads as its own paragraph, `baseInstruction` closes. It stays under
+/// the API's `characterCap` — `build` clips the prior chunk to whatever the
+/// instruction leaves, so the cap holds no matter what a caller passes in.
+/// Exercised by `Tests/BlurtEngineTests/TranscriptionPromptTests.swift`.
 enum TranscriptionPrompt {
-  /// Whether a transcription prompt is sent at all.
-  ///
-  /// `false`: `build` yields `nil` for every context, `AssemblyAITranscriber`
-  /// omits `config.prompt`, and the request carries nothing but the audio, its
-  /// geometry, and the `llm` cleanup instruction — which is unaffected by this
-  /// switch and still shapes every transcript.
-  ///
-  /// The assembly below is deliberately kept whole rather than deleted, and its
-  /// tests still drive it through `assemble` — flipping this constant is the
-  /// entire cost of turning contextual priming back on.
-  static let isEnabled = false
-
-  /// The standing dictation instruction prepended to the model's system prompt
-  /// on every built prompt. A negative-exclusion clause (§5/§6) naming the
-  /// annotation feature types the model is trained to emit, so it suppresses
-  /// them. No language directive: pinning the prompt to English degraded
-  /// transcription for non-English speech, so the model is left to detect the
-  /// spoken language itself.
+  /// The standing dictation instruction that closes every built prompt. A
+  /// negative-exclusion clause (§5/§6) naming the annotation feature types the
+  /// model is trained to emit, so it suppresses them. Fixed text: it carries no
+  /// user data, which is why it isn't part of what "context" means here. No
+  /// language directive: pinning the prompt to English degraded transcription
+  /// for non-English speech, so the model is left to detect the spoken language
+  /// itself.
   static let baseInstruction =
     "Transcribe without speaker labels, audio event descriptions, or emotion markers."
 
+  /// The label the prior chunk is filed under in the prompt.
+  static let priorHeading = "Previous transcript:"
+
   /// Hard cap the dictation API places on `config.prompt` ("max 4096 chars");
-  /// a longer prompt risks failing the whole request, so `assemble` must never
-  /// exceed it. The contextual blocks are all clipped upstream in
-  /// `FocusCapture`; the user's key terms are the one unbounded input, so
-  /// `assemble` fits them to whatever budget remains.
+  /// a longer prompt risks failing the whole request, so `build` must never
+  /// exceed it. `FocusCapture` already clips the prior chunk far shorter than
+  /// this, but the cap is enforced here rather than assumed of the caller —
+  /// this is the last place before the wire.
   static let characterCap = 4096
 
-  /// The prompt actually sent for `context`: `nil` while `isEnabled` is off (the
-  /// shipped state — the server then applies its own default prompt), otherwise
-  /// whatever `assemble` makes of the context.
+  /// The prompt sent for `context`: the text before the cursor framed as prior
+  /// context, closed by `baseInstruction` — or `nil` when there is no such text,
+  /// in which case `AssemblyAITranscriber` omits `config.prompt` and the server
+  /// applies its own default.
   ///
-  /// Every caller that reports or transmits the prompt goes through here rather
-  /// than through `assemble`, so the switch reaches the wire and the
-  /// developer-mode log together — the log can't claim a prompt that was never
-  /// sent.
+  /// Only `priorText` is read. The focus fields of `TranscriptionContext` are
+  /// captured for the paste path and the developer-mode log and stay on the
+  /// machine; adding one of them here is what it would take to send it, and that
+  /// is a deliberate decision, not an oversight (see the type's doc comment).
+  /// `keyTerms` is absent for the opposite reason — it has its own field on the
+  /// request (`KeytermsBoost`).
+  ///
+  /// Every caller that reports or transmits the prompt goes through here, so the
+  /// developer-mode log records exactly what went on the wire.
   static func build(context: TranscriptionContext?) -> String? {
-    guard isEnabled else { return nil }
-    return assemble(context: context)
-  }
-
-  /// Renders `context` into a transcription prompt, or `nil` when there is no usable
-  /// context. Internal rather than private so `TranscriptionPromptTests` keeps
-  /// exercising the assembly while `isEnabled` is off — otherwise switching the
-  /// prompt back on would mean trusting untested code.
-  static func assemble(context: TranscriptionContext?) -> String? {
-    // `isEmpty` is the context type's own "no usable content" rule — the same
-    // predicate `DictationSession.performPress` gates on before yielding a
-    // context. Asking it here (rather than re-deriving the field-by-field test)
-    // keeps a newly added context signal from being silently dropped.
-    guard let context, !context.isEmpty else { return nil }
-    let prior = context.priorText.trimmedNonEmpty() ?? ""
-    let selected = context.selectedText.trimmedNonEmpty() ?? ""
-    let app = context.appName.trimmedNonEmpty() ?? ""
-    let window = context.windowTitle.trimmedNonEmpty() ?? ""
-    let field = context.fieldLabel.trimmedNonEmpty() ?? ""
-    let keyTerms = context.keyTerms
-
-    // `baseInstruction` is the pivot of the trained format. Contextual priming
-    // sits *before* it; keyword boosting trails *after* it. The leading blocks,
-    // separated by blank lines, precede it:
-    //   1. the prior-chunk block (`Previous transcript:\n…`, its own paragraph),
-    //   2. the selected-text block (`Selected text:\n…`, what the dictation
-    //      replaces — primes vocabulary/topic of the text being rewritten),
-    //   3. the location clause (topic hint + destination sentence).
-    var blocks: [String] = []
-    if !prior.isEmpty {
-      blocks.append("Previous transcript:\n\(prior)")
-    }
-    if !selected.isEmpty {
-      blocks.append("Selected text:\n\(selected)")
-    }
-    let location = locationClause(app: app, window: window, field: field)
-    // The topic hint and `baseInstruction` share one line as the trained
-    // `{context}. {baseInstruction}` shape; with no topic it's the bare base.
-    let instruction = location.isEmpty ? baseInstruction : "\(location) \(baseInstruction)"
-    blocks.append(instruction)
-    var prompt = blocks.joined(separator: "\n\n")
-    if !keyTerms.isEmpty {
-      // Spelling priming: the user's domain vocabulary, boosted via the trained
-      // inline `Keywords: a, b, c.` form (Section 2.3) trailing the marker so the
-      // model favors these exact spellings for names/jargon it would guess at.
-      // The terms list is the one input with no upstream length cap, so include
-      // only as many whole terms as `characterCap` leaves room for, so a huge
-      // Settings list can't crowd out the instruction itself or balloon every
-      // request.
-      var included: [String] = []
-      var remaining = characterCap - prompt.count - " Keywords: .".count
-      for term in keyTerms {
-        let cost = term.count + (included.isEmpty ? 0 : ", ".count)
-        guard cost <= remaining else { break }
-        included.append(term)
-        remaining -= cost
-      }
-      if !included.isEmpty {
-        prompt += " Keywords: \(included.joined(separator: ", "))."
-      }
-    }
-    return prompt
-  }
-
-  /// The "where am I typing" priming clause, assembled from whichever of the
-  /// app / window / field signals are present (empty when none are). Two trained
-  /// shapes joined by a space: a topic hint built from the window title (the
-  /// richest vocabulary signal — `This is about "…".`, mid-training §2.1) leads,
-  /// and a destination sentence built from the app/field (`Dictated into …`)
-  /// trails it. Each sentence ends with a period so the clause joins cleanly
-  /// before `baseInstruction`.
-  private static func locationClause(app: String, window: String, field: String) -> String {
-    let topic = window.isEmpty ? "" : "This is about \"\(window)\"."
-
-    let destination: String
-    switch (app.isEmpty, field.isEmpty) {
-    case (false, false): destination = "Dictated into \(app), in the \"\(field)\" field."
-    case (false, true): destination = "Dictated into \(app)."
-    case (true, false): destination = "Dictated in the \"\(field)\" field."
-    case (true, true): destination = ""
-    }
-
-    return [topic, destination].filter { !$0.isEmpty }.joined(separator: " ")
+    guard let context, let prior = context.priorText.trimmedNonEmpty() else { return nil }
+    // Budget for the prior chunk: the cap less the heading, its newline, the
+    // blank-line separator, and the instruction. Clipping keeps the *tail* —
+    // the text nearest the cursor is what the utterance continues from, so an
+    // over-long chunk loses its oldest end, not its newest.
+    let budget = characterCap - (priorHeading.count + 1 + 2 + baseInstruction.count)
+    let clipped = prior.count <= budget ? prior : String(prior.suffix(budget))
+    return "\(priorHeading)\n\(clipped)\n\n\(baseInstruction)"
   }
 }
