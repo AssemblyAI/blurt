@@ -25,7 +25,10 @@ struct ReadyView: View {
         shortcutReadout
       }
 
-      RecentDictationsSection(entries: coordinator.recentDictations.entries)
+      // `displayed`, not `entries`: the ring remembers 100 dictations (they are
+      // also request context — see `ConversationContext`) and this list is three
+      // rows tall.
+      RecentDictationsSection(entries: coordinator.recentDictations.displayed)
 
       Button(action: openSettings) {
         Label("Settings", systemImage: "gearshape")

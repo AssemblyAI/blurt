@@ -2,26 +2,28 @@
 /// `AssemblyAITranscriber.DictationConfig`). The service applies it to the
 /// verbatim transcript with its own rewrite model, inside the same
 /// `/transcribe` call — this is the *server-side* rewrite instruction, not a
-/// client-side cleanup pass, and not a `TranscriptionPrompt` change (that
-/// prompt steers transcription and deliberately carries no filler-word clause,
-/// because disfluency removal is this rewrite's job).
+/// client-side cleanup pass, and not a `ConversationContext` change (that field
+/// steers transcription with the prior dialogue and carries no instructions at
+/// all, because disfluency removal is this rewrite's job).
 ///
 /// Sending it replaces an empty `llm` block, which selected the service's own
 /// default cleanup wording.
 ///
-/// It is one of two instruction-shaped fields on the request, and the only one
-/// that is the same on every request: `config.prompt` carries the user's prior
-/// chunk (see `TranscriptionPrompt`), while this string is fixed and embeds no
-/// user context at all.
+/// It is the **only** instruction-shaped field on the request, and the only one
+/// whose value is the same every time: `config.conversation_context` carries the
+/// user's recent dictations and prior chunk (see `ConversationContext`), while
+/// this string is fixed and embeds no user context at all. (There used to be a
+/// second, `config.prompt`; the context field replaced it.)
 ///
 /// **Length is the thing to be careful about.** `config.llm.instruction` accepts
 /// at most `characterCap`, measured here in UTF-8 bytes (see that constant for
 /// the unit), and over it the API rejects the whole request — 400, before the
 /// audio is read, so *every* dictation fails rather than degrading. A
 /// 3057-character version of this string shipped once and did exactly that. The
-/// cap is a different, smaller number than the 4096 on `config.prompt`
-/// (`TranscriptionPrompt.characterCap`); reusing the prompt's figure is how that
-/// bug got through the tests it should have failed.
+/// cap is a different, smaller number than the 4096 on
+/// `config.conversation_context` (`ConversationContext.characterCap`); reusing
+/// the other field's figure is how that bug got through the tests it should have
+/// failed.
 ///
 /// **Provenance.** The winner of a GEPA run of
 /// `evals/dictation-prompt/optimize_cleanup_prompt.py`, scored on hand-annotated
@@ -62,7 +64,7 @@ enum CleanupInstruction {
   /// (bytes ≥ UTF-16 units ≥ codepoints ≥ graphemes), and therefore
   /// conservative against whichever one the server uses. Asserted in
   /// `CleanupInstructionTests`, against this constant rather than
-  /// `TranscriptionPrompt.characterCap`, which is a different limit on a
+  /// `ConversationContext.characterCap`, which is a different limit on a
   /// different field.
   static let characterCap = 2048
 

@@ -59,11 +59,11 @@ struct KeytermsBoostTests {
     #expect(KeytermsBoost.fitted(["Blurt", huge, "LeMUR"]) == ["Blurt"])
   }
 
-  @Test("the keyterms cap is its own number, not the prompt's")
-  func capIsDistinctFromThePromptCap() {
+  @Test("the boost cap is its own number, not the conversation context's")
+  func capIsDistinctFromTheContextCap() {
     // Two caps on two fields of one request. Borrowing the other field's figure
     // is how an over-cap value shipped once before, so pin them apart.
     #expect(KeytermsBoost.characterCap == 2048)
-    #expect(KeytermsBoost.characterCap != TranscriptionPrompt.characterCap)
+    #expect(KeytermsBoost.characterCap != ConversationContext.characterCap)
   }
 }

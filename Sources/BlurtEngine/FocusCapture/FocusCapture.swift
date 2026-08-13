@@ -50,7 +50,8 @@ enum FocusCapture {
   /// Secure text fields (password inputs) are detected by role **or** subrole and
   /// never have their contents read. This guard is what keeps a typed password out
   /// of the developer-mode log and — since the text before the cursor is sent as
-  /// the STT prompt (`TranscriptionPrompt`) — off the wire entirely. The check
+  /// the request's context turns (`ConversationContext`) — off the wire
+  /// entirely. The check
   /// fails closed: an unreadable role is treated as secure, since it can't be
   /// shown not to be.
   ///
@@ -65,7 +66,7 @@ enum FocusCapture {
     guard AXIsProcessTrusted() else { return .empty }
     guard let element = systemFocusedElement() else { return .empty }
 
-    // Don't read the value of a password field into the prompt. The whole
+    // Don't read the value of a password field into the request. The whole
     // decision — including the fail-closed arm — lives in `mustRedactContents`,
     // where it is unit-tested; this function needs a live AX element, so anything
     // decided inline here would be covered by nothing.
@@ -87,7 +88,7 @@ enum FocusCapture {
       // U+200B before the caret) to nil so it can't masquerade as real prior text.
       prior = visibleTextOrNil(priorText(of: element, selection: selection, maxChars: maxPriorChars))
       // The selected range's text (empty when there's no selection). Capped like
-      // prior text so a huge highlight can't dominate the prompt budget.
+      // prior text so a huge highlight can't dominate the context budget.
       selected = visibleTextOrNil(selectedText(of: element, selection: selection, maxChars: maxSelectedChars))
     }
     return FocusedFieldContext(

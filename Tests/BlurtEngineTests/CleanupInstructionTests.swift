@@ -46,10 +46,10 @@ struct CleanupInstructionTests {
 
   /// The mistake was reaching for a nearby constant that happened to be a length.
   /// If these two ever converge, the test above stops distinguishing them.
-  @Test("the instruction's cap is not the prompt's cap")
+  @Test("the instruction's cap is not the conversation context's cap")
   func capsAreDistinct() {
     #expect(CleanupInstruction.characterCap == 2048)
-    #expect(CleanupInstruction.characterCap < TranscriptionPrompt.characterCap)
+    #expect(CleanupInstruction.characterCap < ConversationContext.characterCap)
   }
 
   /// The product-critical clauses, as opposed to the cleanup quality the eval

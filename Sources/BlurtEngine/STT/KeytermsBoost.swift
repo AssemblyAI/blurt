@@ -1,19 +1,24 @@
-/// The user's key terms as the dictation request's `config.keyterms_prompt` —
-/// word boosting, the other half of transcription steering next to
-/// `TranscriptionPrompt`.
+/// The user's key terms as the dictation request's `config.word_boost` — word
+/// boosting, the other half of transcription steering next to
+/// `ConversationContext`.
 ///
-/// The two fields do different jobs and ride the same request: `prompt` is prose
-/// context (here, the text before the cursor) that tells the model what the
-/// utterance continues; `keyterms_prompt` is a flat list of strings biasing
-/// recognition toward those exact spellings. Keyterms are the right tool for an
-/// explicit vocabulary list — names, product names, jargon — which is exactly
-/// what the Settings "Key Terms" field collects, and the wrong thing to pack
-/// into the prompt as prose (a `Keywords: a, b, c.` clause is what this
-/// replaces).
+/// The two fields do different jobs and ride the same request:
+/// `conversation_context` is the prior dialogue (the user's recent dictations,
+/// then the text before the cursor) that tells the model what this utterance
+/// continues; `word_boost` is a flat list of strings biasing recognition toward
+/// those exact spellings. Boosting is the right tool for an explicit vocabulary
+/// list — names, product names, jargon — which is exactly what the Settings
+/// "Key Terms" field collects, and the wrong thing to pack into prose context (a
+/// `Keywords: a, b, c.` clause is what this replaces).
 ///
-/// **Not `word_boost`.** That older field is deprecated and is *rejected* by the
-/// Universal-3 Pro family the dictation service runs, so sending it would fail
-/// the request rather than degrade. `keyterms_prompt` is its replacement.
+/// **`word_boost`, not `keyterms_prompt`.** The two names are the same feature on
+/// different surfaces, and the dictation API's own reference documents this one:
+/// `word_boost`, "terms to bias transcription toward (names, jargon; max 2048
+/// chars total)". `keyterms_prompt` is what the Sync STT surface calls it, and it
+/// only ever reached the dictation engine as one of the unknown fields that
+/// endpoint forwards as-is — a pass-through, not a documented parameter. Send one
+/// of the two, never both: the sibling surface documents the aliases as mutually
+/// exclusive ("provide only one of the three").
 ///
 /// The terms arrive already normalized — `KeyTermsStore.parse` splits on commas,
 /// trims, drops blanks, and dedupes case-insensitively — so the only thing left
@@ -21,16 +26,16 @@
 /// all terms, and the user's list is the one unbounded input in the request.
 /// Exercised by `Tests/BlurtEngineTests/KeytermsBoostTests.swift`.
 enum KeytermsBoost {
-  /// Cap the API places on `config.keyterms_prompt`: 2048 characters summed
-  /// across every term. Measured here in **UTF-8 bytes**, the conservative
-  /// reading — the documented unit is "characters", which is unmeasured against
-  /// the endpoint, and bytes can only overestimate a multi-byte term's cost.
-  /// Same conservative choice, and the same reasoning, as
-  /// `CleanupInstruction.characterCap`.
+  /// Cap the API places on `config.word_boost`: 2048 characters summed across
+  /// every term. Measured here in **UTF-8 bytes**, the conservative reading — the
+  /// documented unit is "characters", which is unmeasured against the endpoint,
+  /// and bytes can only overestimate a multi-byte term's cost. Same conservative
+  /// choice, and the same reasoning, as `CleanupInstruction.characterCap`.
   ///
-  /// Note this is the *keyterms* cap and a different number from the 4096 on
-  /// `config.prompt` (`TranscriptionPrompt.characterCap`). Reusing one cap's
-  /// figure for the other field is how a whole-request 400 shipped once before.
+  /// Note this is the *boost* cap and a different number from the 4096 on
+  /// `config.conversation_context` (`ConversationContext.characterCap`). Reusing
+  /// one cap's figure for the other field is how a whole-request 400 shipped once
+  /// before.
   static let characterCap = 2048
 
   /// The terms to send for `terms` — empty when there are none to send, which

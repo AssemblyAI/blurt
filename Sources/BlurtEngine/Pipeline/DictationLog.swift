@@ -21,19 +21,22 @@ public enum DictationLog {
     let window: String?
     /// Focused-field label, when one was captured. Local to this file.
     let field: String?
-    /// Text-before-cursor "prior chunk context" sent as the request prompt, when
-    /// any was captured. Lets you verify accessibility-tree prior-text reading
-    /// actually fired.
+    /// Text-before-cursor "prior chunk", the last context turn, when any was
+    /// captured. Lets you verify accessibility-tree prior-text reading actually
+    /// fired.
     let prior: String?
     /// Selected text (the dictation replaced it), when any. Local to this file:
     /// it is captured for the paste path and recorded here, never sent.
     let selected: String?
-    /// The fully-assembled `config.prompt` sent to AssemblyAI for this
-    /// utterance. Built here from `context` (rather than threaded through from
-    /// the transcriber) so the log always reflects what was actually sent,
-    /// even for calls that construct an entry directly from a context.
-    let prompt: String?
-    /// The `config.keyterms_prompt` word-boost list sent for this utterance —
+    /// The `config.conversation_context` turns sent to AssemblyAI for this
+    /// utterance, oldest first — the user's recent dictations, then `prior`.
+    /// Built here from `context` (rather than threaded through from the
+    /// transcriber) so the log always reflects what was actually sent, even for
+    /// calls that construct an entry directly from a context. Worth recording
+    /// separately from `prior` because it is the only record of how much history
+    /// the request carried, and of what the 4096-character fit dropped.
+    let turns: [String]
+    /// The `config.word_boost` list sent for this utterance —
     /// the request's other steering field, so the log accounts for both. Built
     /// through the same `KeytermsBoost.fitted` the request uses, so an
     /// over-long list is recorded as the terms that actually went out. Empty
@@ -46,12 +49,12 @@ public enum DictationLog {
     /// grepping or decoding the corpus, so they're stated rather than left to a
     /// synthesis that no longer happens.
     enum CodingKeys: String, CodingKey {
-      case transcript, ts, app, window, field, prior, selected, prompt, keyterms
+      case transcript, ts, app, window, field, prior, selected, turns, keyterms
     }
 
-    /// Hand-written for one field only: `keyterms` is a plain array (the repo
-    /// bans optional collections), so synthesis would write `"keyterms":[]` on
-    /// every line of a corpus where nothing else absent is written at all. The
+    /// Hand-written for two fields: `turns` and `keyterms` are plain arrays (the
+    /// repo bans optional collections), so synthesis would write `"keyterms":[]`
+    /// on every line of a corpus where nothing else absent is written at all. The
     /// optional fields keep exactly the `encodeIfPresent` behavior synthesis
     /// gave them. `DictationLogEntryTests` asserts every field, so a property
     /// added above and forgotten here fails there rather than quietly vanishing
@@ -65,7 +68,9 @@ public enum DictationLog {
       try container.encodeIfPresent(field, forKey: .field)
       try container.encodeIfPresent(prior, forKey: .prior)
       try container.encodeIfPresent(selected, forKey: .selected)
-      try container.encodeIfPresent(prompt, forKey: .prompt)
+      if !turns.isEmpty {
+        try container.encode(turns, forKey: .turns)
+      }
       if !keyterms.isEmpty {
         try container.encode(keyterms, forKey: .keyterms)
       }
@@ -145,18 +150,18 @@ public enum DictationLog {
   }
 
   /// One log entry as a value: which parts of the context are carried, how the
-  /// timestamp is formatted, and the two steering fields — prompt and keyterms —
-  /// mirroring what the transcriber actually sends, because both are built here
-  /// through the same builders the request uses. Split from `write` so all of
-  /// that is assertable directly rather than through a temp file and a substring
-  /// search over the encoded line — a search that read the same whether a field
-  /// was correctly absent or the write had failed outright.
+  /// timestamp is formatted, and the two steering fields — the context turns and
+  /// the boost list — mirroring what the transcriber actually sends, because both
+  /// are built here through the same builders the request uses. Split from `write`
+  /// so all of that is assertable directly rather than through a temp file and a
+  /// substring search over the encoded line — a search that read the same whether
+  /// a field was correctly absent or the write had failed outright.
   static func makeEntry(transcript: String, context: TranscriptionContext?, now: Date) -> Entry {
     Entry(
       transcript: transcript, ts: now.formatted(timestampFormat),
       app: context?.appName, window: context?.windowTitle, field: context?.fieldLabel,
       prior: context?.priorText, selected: context?.selectedText,
-      prompt: TranscriptionPrompt.build(context: context),
+      turns: ConversationContext.turns(context: context),
       keyterms: KeytermsBoost.fitted(context?.keyTerms ?? [])
     )
   }

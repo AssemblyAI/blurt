@@ -28,21 +28,28 @@ one, stop and ask the user first. This is the fast "don't" list; AGENTS.md's
   client, no `StylerProtocol`, no post-transcription styling stage.
 - **No local models / model downloads.** Transcription is a remote AssemblyAI
   call. No on-device ASR/LLM, no model cache, no download UI.
-- **The transcription `prompt` carries the prior chunk and nothing else.**
-  `TranscriptionPrompt.build` reads exactly one field of `TranscriptionContext`
-  (`priorText`). The app name, window title, field label and selected text are
-  captured for the paste path and the developer-mode log and stay on the machine;
-  the hints that used to carry them were deleted, not gated. Don't widen the
-  prompt back out, and don't route that context onto the request by another path.
-- **Key terms are word boosting, not prompt text.** They ride
-  `config.keyterms_prompt` as a flat list (`KeytermsBoost`), fitted to that
-  field's own 2048-character cap. Don't fold them back into the prompt as a
-  `Keywords: a, b, c.` clause, and don't send the deprecated `word_boost` — the
-  Universal-3 Pro family rejects it, so the whole request fails.
-- Don't reintroduce a "remove filler words (um, uh, like)" directive in the
-  prompt — `universal-3-5-pro` ignores it; it was deliberately dropped. Same for
-  a language directive: pinning the prompt to English hurt non-English speech, so
-  language is left to the model's own detection.
+- **There is no `config.prompt`.** `config.conversation_context`
+  (`ConversationContext.turns`) replaced it. Don't add a prompt back: a custom one
+  replaces the service's managed default _and_ makes the API ignore
+  `config.language_code`.
+- **The context turns carry the recent dictations + the prior chunk, and nothing
+  else.** `ConversationContext.turns` reads exactly two fields of
+  `TranscriptionContext` (`recentTranscripts`, then `priorText` last). The app
+  name, window title, field label and selected text are captured for the paste
+  path and the developer-mode log and stay on the machine; the hints that used to
+  carry them were deleted, not gated. Don't widen the context back out, and don't
+  route that context onto the request by another path.
+- **Key terms are word boosting, not context text.** They ride
+  `config.word_boost` as a flat array of strings (`KeytermsBoost`), fitted to that
+  field's own 2048-character cap. Don't fold them back into the context as a
+  `Keywords: a, b, c.` clause, and don't also send `keyterms_prompt` — the aliases
+  are mutually exclusive, and `word_boost` is the name the dictation API's
+  reference documents.
+- Don't reintroduce a "remove filler words (um, uh, like)" directive —
+  `universal-3-5-pro` ignores it; it was deliberately dropped, and there is no
+  prompt field to put it in now. Same for a language directive: pinning
+  transcription to English hurt non-English speech, so language is left to the
+  model's own detection.
 - **Injection is always a clipboard paste** (save → write → ⌘V → settle →
   restore), degrading to "left it on the clipboard" when the target is lost. No
   keystroke-by-keystroke typing path, no length threshold.

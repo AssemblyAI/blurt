@@ -32,7 +32,7 @@ private func firstEntry(in url: URL) -> DecodedEntry? {
 /// What one entry carries. These drive `makeEntry` and assert the value, because
 /// every one of them is a question about the entry rather than about the file:
 /// asked through `write` they needed a temp directory each, and the negative
-/// cases ("no `selected` key", "no `prompt` key") were substring searches that
+/// cases ("no `selected` key", "no `turns` key") were substring searches that
 /// passed just as happily when nothing had been written.
 @Suite("DictationLog.makeEntry")
 struct DictationLogEntryTests {
@@ -66,21 +66,25 @@ struct DictationLogEntryTests {
     #expect(entry.field == nil)
     #expect(entry.prior == nil)
     #expect(entry.selected == nil)
-    #expect(entry.prompt == nil)
+    #expect(entry.turns.isEmpty)
     #expect(entry.keyterms.isEmpty)
   }
 
-  @Test("logs the same prompt the transcriber sends — the prior chunk and nothing else")
+  @Test("logs the same context turns the transcriber sends, in order")
   func logsWhatTheRequestCarries() {
-    let entry = DictationLog.makeEntry(transcript: "p", context: context, now: Date())
+    let withHistory = TranscriptionContext(
+      appName: "Mail", windowTitle: "Re: Q3 pricing", fieldLabel: "Body",
+      priorText: "Hi Sam,", selectedText: "the old plan",
+      recentTranscripts: ["Sent the deck over."])
+    let entry = DictationLog.makeEntry(transcript: "p", context: withHistory, now: Date())
     // The entry mirrors the request because the writer calls the same builder.
-    #expect(entry.prompt == TranscriptionPrompt.build(context: context))
-    // So the logged prompt shows the narrowing too: the prior chunk went on the
-    // wire, the window title and the selected text did not — even though the
-    // entry's own fields record all three.
-    #expect(entry.prompt?.contains("Hi Sam,") == true)
-    #expect(entry.prompt?.contains("Re: Q3 pricing") == false)
-    #expect(entry.prompt?.contains("the old plan") == false)
+    #expect(entry.turns == ConversationContext.turns(context: withHistory))
+    // So the logged turns show the narrowing too: the history and the prior chunk
+    // went on the wire, the window title and the selected text did not — even
+    // though the entry's own fields record all three.
+    #expect(entry.turns == ["Sent the deck over.", "Hi Sam,"])
+    #expect(!entry.turns.contains { $0.contains("Re: Q3 pricing") })
+    #expect(!entry.turns.contains { $0.contains("the old plan") })
   }
 
   @Test("records the key terms the request boosts, fitted the same way")
@@ -158,7 +162,7 @@ struct DictationLogTests {
     // reason, since a plain array would otherwise encode as `[]` on every line.
     let line = readLog(url)
     #expect(!line.contains("selected"))
-    #expect(!line.contains("\"prompt\""))
+    #expect(!line.contains("turns"))
     #expect(!line.contains("keyterms"))
   }
 }
@@ -205,7 +209,7 @@ struct DictationLogGateTests {
   @Test("the gate is checked before the context is touched, for both settings")
   func gateAppliesToContextualEntries() {
     // The pipeline always passes the captured context, which is the part carrying
-    // prior text and the assembled prompt. Off must persist none of it.
+    // prior text and the assembled context turns. Off must persist none of it.
     let context = TranscriptionContext(
       appName: "1Password", windowTitle: "Vault", fieldLabel: "Password",
       priorText: "hunter2", selectedText: nil)

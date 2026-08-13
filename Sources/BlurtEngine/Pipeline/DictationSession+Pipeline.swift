@@ -39,10 +39,10 @@ extension DictationSession {
     // cancelled pipeline clear a *newer* press's stream: `cancel()` detaches this
     // task while it's parked in `firstValue`, a fresh `press()` installs its own
     // `contextStream`, and this task's resumption then nils that one out — so
-    // dictation #2 transcribes with `context: nil`, losing not just its priming but
-    // `baseInstruction`, and `[Speaker]`-style markers can reach the pasted text.
-    // The window is microseconds, but the invariant is now local instead of
-    // depending on scheduling.
+    // dictation #2 transcribes with `context: nil`, losing its whole
+    // `conversation_context` — the recent-dictation turns *and* the prior chunk —
+    // along with the key terms. The window is microseconds, but the invariant is
+    // now local instead of depending on scheduling.
     let stream = contextStream
     contextStream = nil
     if let stream {
@@ -67,6 +67,10 @@ extension DictationSession {
     }
 
     seams.logTranscript(text, capturedContext)
+    // Remember it as context for the *next* press before handing it on: the ring
+    // is what supplies `conversation_context`'s leading turns, so a stretch of
+    // dictation continues itself.
+    recentDictations.record(trimmed, at: Date())
     // Record every produced transcript (trimmed for display) in "Recent" before
     // injection — pasted, copied, and failed-to-paste all count.
     onTranscriptDelivered?(trimmed)

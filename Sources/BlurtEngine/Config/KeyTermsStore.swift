@@ -2,7 +2,7 @@ import Foundation
 
 /// Storage for the user's dictation "key terms" — a comma-separated list of
 /// domain words (names, jargon, product names) sent as the dictation request's
-/// word-boost list (`config.keyterms_prompt`, see `KeytermsBoost`), so the model
+/// word-boost list (`config.word_boost`, see `KeytermsBoost`), so the model
 /// favors those exact spellings. They used to ride the transcription `prompt` as
 /// a `Keywords: a, b, c.` clause instead; a flat list is the field the API
 /// provides for exactly this, so that is what they are now.
