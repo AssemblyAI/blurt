@@ -296,11 +296,4 @@ Two ways out, neither taken yet: drop it from the public product (its own target
 
 ## Invariants — don't break these
 
-Each of these was tried the other way and reverted; the longer stories are in [AGENTS.md](../../AGENTS.md) and the source comments:
-
-- **No external SPM dependencies in the engine.** Foundation/Security/AVFoundation/CoreAudio only.
-- **No streaming STT, no local models, no client-side LLM cleanup pass.** One dictation request per utterance is the architecture; the cleanup rewrite is server-side (the request's `llm` block), and transcription steering belongs in `ConversationContext`.
-- **No `AVAudioEngine`/`installTap` capture path.** Fresh `AVAudioRecorder` per session, resolved at record time.
-- **Paste is always clipboard-based** (save → write → ⌘V → settle → restore), with the copied-to-clipboard degradation for lost targets.
-- **No English-pinning or filler-word clauses**, no reviving `config.prompt`, and no widening the conversation context past the recent dictations and the prior chunk — the app name, window title, field label and selected text stay on the machine. Key terms go on `config.word_boost`, never back into the context turns.
-- **Actors own state** (`DictationSession`, `KeyInjector`, `MicCapture`); the stateless API client stays a `Sendable` struct. Keep new code Swift 6 strict-concurrency clean.
+Each was tried the other way and reverted, and they bind engine code as much as the app's. The list is deliberately not repeated here: it lives once, in [AGENTS.md's Settled decisions](../../AGENTS.md#settled-decisions--dont-reintroduce-these) table, alongside the engine conventions those rules rest on (dependency-free by rule; actors own state; the stateless API client stays a `Sendable` struct; new code Swift 6 strict-concurrency clean). `scripts/check-invariants.sh` mechanizes the subset a regex can decide and fails `check.sh` on them, so a good number are enforced rather than remembered — and it pins each rule to the table row it came from, which only works while there is one row to pin to.
