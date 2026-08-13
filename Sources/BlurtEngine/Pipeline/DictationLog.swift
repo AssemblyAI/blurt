@@ -14,22 +14,77 @@ public enum DictationLog {
   struct Entry: Encodable {
     let transcript: String
     let ts: String
-    /// Focused-app topic hint sent as context, when one was captured.
+    /// Focused-app name, when one was captured. Local to this file — it is not
+    /// part of the request.
     let app: String?
-    /// Focused-window title sent as a topic hint, when one was captured.
+    /// Focused-window title, when one was captured. Local to this file.
     let window: String?
-    /// Focused-field label sent as context, when one was captured.
+    /// Focused-field label, when one was captured. Local to this file.
     let field: String?
-    /// Text-before-cursor "prior chunk context" sent, when any was captured.
-    /// Lets you verify accessibility-tree prior-text reading actually fired.
+    /// Text-before-cursor "prior chunk" exactly as the Accessibility read returned
+    /// it, when any was captured. Lets you verify prior-text reading actually
+    /// fired.
+    ///
+    /// **This overlaps `turns.last` on purpose, and is not redundant with it.**
+    /// `turns` records what went on the wire, where the prior chunk is *trimmed*;
+    /// this records it raw. The difference is load-bearing twice over. Its trailing
+    /// whitespace is the entire input to the paste's leading-separator decision
+    /// (`KeyInjector.withLeadingSeparator` branches on `prior.last.isWhitespace`),
+    /// so a spacing bug is undiagnosable from a trimmed copy. And a nil here
+    /// distinguishes "no prior text was read" from "the last turn is the newest
+    /// recent dictation", which `turns` alone cannot say.
     let prior: String?
-    /// Selected text sent as context (the dictation replaced it), when any.
+    /// Selected text (the dictation replaced it), when any. Local to this file:
+    /// it is captured for the paste path and recorded here, never sent.
     let selected: String?
-    /// The fully-assembled `config.prompt` sent to AssemblyAI for this
-    /// utterance. Built here from `context` (rather than threaded through from
-    /// the transcriber) so the log always reflects what was actually sent,
-    /// even for calls that construct an entry directly from a context.
-    let prompt: String?
+    /// The `config.conversation_context` turns sent to AssemblyAI for this
+    /// utterance, oldest first — the user's recent dictations, then `prior`.
+    /// Built here from `context` (rather than threaded through from the
+    /// transcriber) so the log always reflects what was actually sent, even for
+    /// calls that construct an entry directly from a context. Worth recording
+    /// separately from `prior` because it is the only record of how much history
+    /// the request carried and of what the 4096-character fit dropped — and
+    /// because these turns are trimmed where `prior` is raw (see it).
+    let turns: [String]
+    /// The `config.word_boost` list sent for this utterance —
+    /// the request's other steering field, so the log accounts for both. Built
+    /// through the same `KeytermsBoost.fitted` the request uses, so an
+    /// over-long list is recorded as the terms that actually went out. Empty
+    /// when none were sent, and `encode(to:)` then omits the key, matching how
+    /// every absent field above is left out rather than written as `null`.
+    let keyterms: [String]
+
+    /// Spelled out because a hand-written `encode(to:)` means the compiler no
+    /// longer derives this — the key names are the on-disk contract for anything
+    /// grepping or decoding the corpus, so they're stated rather than left to a
+    /// synthesis that no longer happens.
+    enum CodingKeys: String, CodingKey {
+      case transcript, ts, app, window, field, prior, selected, turns, keyterms
+    }
+
+    /// Hand-written for two fields: `turns` and `keyterms` are plain arrays (the
+    /// repo bans optional collections), so synthesis would write `"keyterms":[]`
+    /// on every line of a corpus where nothing else absent is written at all. The
+    /// optional fields keep exactly the `encodeIfPresent` behavior synthesis
+    /// gave them. `DictationLogEntryTests` asserts every field, so a property
+    /// added above and forgotten here fails there rather than quietly vanishing
+    /// from the log.
+    func encode(to encoder: Encoder) throws {
+      var container = encoder.container(keyedBy: CodingKeys.self)
+      try container.encode(transcript, forKey: .transcript)
+      try container.encode(ts, forKey: .ts)
+      try container.encodeIfPresent(app, forKey: .app)
+      try container.encodeIfPresent(window, forKey: .window)
+      try container.encodeIfPresent(field, forKey: .field)
+      try container.encodeIfPresent(prior, forKey: .prior)
+      try container.encodeIfPresent(selected, forKey: .selected)
+      if !turns.isEmpty {
+        try container.encode(turns, forKey: .turns)
+      }
+      if !keyterms.isEmpty {
+        try container.encode(keyterms, forKey: .keyterms)
+      }
+    }
   }
 
   /// Where the log lives. Public so the Settings window's Developer section
@@ -105,17 +160,20 @@ public enum DictationLog {
   }
 
   /// One log entry as a value: which parts of the context are carried, how the
-  /// timestamp is formatted, and the prompt mirroring what the transcriber
-  /// actually sends. Split from `write` so all of that is assertable directly
-  /// rather than through a temp file and a substring search over the encoded
-  /// line — a search that read the same whether a field was correctly absent or
-  /// the write had failed outright.
+  /// timestamp is formatted, and the two steering fields — the context turns and
+  /// the boost list — mirroring what the transcriber actually sends, because both
+  /// are built here through the same builders the request uses. Split from `write`
+  /// so all of that is assertable directly rather than through a temp file and a
+  /// substring search over the encoded line — a search that read the same whether
+  /// a field was correctly absent or the write had failed outright.
   static func makeEntry(transcript: String, context: TranscriptionContext?, now: Date) -> Entry {
     Entry(
       transcript: transcript, ts: now.formatted(timestampFormat),
       app: context?.appName, window: context?.windowTitle, field: context?.fieldLabel,
       prior: context?.priorText, selected: context?.selectedText,
-      prompt: TranscriptionPrompt.build(context: context))
+      turns: ConversationContext.turns(context: context),
+      keyterms: KeytermsBoost.fitted(context?.keyTerms ?? [])
+    )
   }
 
   /// The unconditional writer: formats one entry and appends it. Distinct name

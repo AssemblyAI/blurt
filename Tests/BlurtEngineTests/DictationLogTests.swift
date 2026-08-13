@@ -32,7 +32,7 @@ private func firstEntry(in url: URL) -> DecodedEntry? {
 /// What one entry carries. These drive `makeEntry` and assert the value, because
 /// every one of them is a question about the entry rather than about the file:
 /// asked through `write` they needed a temp directory each, and the negative
-/// cases ("no `selected` key", "no `prompt` key") were substring searches that
+/// cases ("no `selected` key", "no `turns` key") were substring searches that
 /// passed just as happily when nothing had been written.
 @Suite("DictationLog.makeEntry")
 struct DictationLogEntryTests {
@@ -66,19 +66,69 @@ struct DictationLogEntryTests {
     #expect(entry.field == nil)
     #expect(entry.prior == nil)
     #expect(entry.selected == nil)
-    #expect(entry.prompt == nil)
+    #expect(entry.turns.isEmpty)
+    #expect(entry.keyterms.isEmpty)
   }
 
-  @Test("logs the same prompt the transcriber sends — none, while the prompt is off")
+  @Test("logs the same context turns the transcriber sends, in order")
   func logsWhatTheRequestCarries() {
-    let entry = DictationLog.makeEntry(transcript: "p", context: context, now: Date())
-    // The entry mirrors the request, whichever way `TranscriptionPrompt.isEnabled`
-    // is set — that's why the writer calls `build` rather than `assemble`.
-    #expect(entry.prompt == TranscriptionPrompt.build(context: context))
-    // And with the switch off, that means no prompt at all, even though this
-    // context is rich enough to assemble one.
-    #expect(TranscriptionPrompt.assemble(context: context) != nil)
-    #expect(entry.prompt == nil)
+    let withHistory = TranscriptionContext(
+      appName: "Mail", windowTitle: "Re: Q3 pricing", fieldLabel: "Body",
+      priorText: "Hi Sam,", selectedText: "the old plan",
+      recentTranscripts: ["Sent the deck over."])
+    let entry = DictationLog.makeEntry(transcript: "p", context: withHistory, now: Date())
+    // The entry mirrors the request because the writer calls the same builder.
+    #expect(entry.turns == ConversationContext.turns(context: withHistory))
+    // So the logged turns show the narrowing too: the history and the prior chunk
+    // went on the wire, the window title and the selected text did not — even
+    // though the entry's own fields record all three.
+    #expect(entry.turns == ["Sent the deck over.", "Hi Sam,"])
+    #expect(!entry.turns.contains { $0.contains("Re: Q3 pricing") })
+    #expect(!entry.turns.contains { $0.contains("the old plan") })
+  }
+
+  @Test("keeps the prior chunk raw, where the context turn carrying it is trimmed")
+  func priorIsRawWhereTheTurnIsTrimmed() {
+    // Why `prior` isn't redundant with `turns.last`. The trailing space is the
+    // whole input to the paste's leading-separator decision
+    // (`KeyInjector.withLeadingSeparator` branches on `prior.last.isWhitespace`),
+    // and the wire copy has it trimmed off — so dropping `prior` for being a
+    // duplicate would take the only record of that bit with it.
+    let entry = DictationLog.makeEntry(
+      transcript: "p", context: TranscriptionContext(appName: "Mail", priorText: "Hi Sam, "),
+      now: Date())
+    #expect(entry.prior == "Hi Sam, ")
+    #expect(entry.turns == ["Hi Sam,"])
+    #expect(KeyInjector.withLeadingSeparator("p", after: entry.prior) == "p")
+    #expect(KeyInjector.withLeadingSeparator("p", after: entry.turns.last) == " p")
+  }
+
+  @Test("a nil prior tells a history-only turn list apart from a prior chunk")
+  func nilPriorDisambiguatesTheLastTurn() {
+    // The other half: `turns.last` is a recent dictation here, not text at the
+    // caret, and only `prior == nil` says so.
+    let entry = DictationLog.makeEntry(
+      transcript: "p",
+      context: TranscriptionContext(
+        appName: "Mail", priorText: nil, recentTranscripts: ["Said this before."]),
+      now: Date())
+    #expect(entry.prior == nil)
+    #expect(entry.turns == ["Said this before."])
+  }
+
+  @Test("records the key terms the request boosts, fitted the same way")
+  func logsTheKeytermsTheRequestCarries() {
+    // Through `KeytermsBoost.fitted`, not the raw list: the log has to show the
+    // steering the API actually saw, so a blank entry is dropped here too.
+    let withTerms = TranscriptionContext(
+      appName: "Mail", priorText: "Hi Sam,", keyTerms: ["AssemblyAI", "  ", "LeMUR"])
+    let entry = DictationLog.makeEntry(transcript: "p", context: withTerms, now: Date())
+    #expect(entry.keyterms == ["AssemblyAI", "LeMUR"])
+  }
+
+  @Test("leaves the key terms empty when the context has none")
+  func noKeytermsLeavesTheFieldEmpty() {
+    #expect(DictationLog.makeEntry(transcript: "p", context: context, now: Date()).keyterms.isEmpty)
   }
 
   @Test("keeps a transcript verbatim, including non-ASCII")
@@ -136,11 +186,13 @@ struct DictationLogTests {
     // *missing* keys mean anything.
     let entry = try #require(firstEntry(in: url))
     #expect(entry.transcript == "p")
-    // `Encodable` synthesis uses `encodeIfPresent`, so a nil field is absent
-    // rather than `"selected":null`.
+    // `Entry.encode(to:)` uses `encodeIfPresent`, so a nil field is absent rather
+    // than `"selected":null` — and it skips an empty `keyterms` for the same
+    // reason, since a plain array would otherwise encode as `[]` on every line.
     let line = readLog(url)
     #expect(!line.contains("selected"))
-    #expect(!line.contains("\"prompt\""))
+    #expect(!line.contains("turns"))
+    #expect(!line.contains("keyterms"))
   }
 }
 
@@ -186,7 +238,7 @@ struct DictationLogGateTests {
   @Test("the gate is checked before the context is touched, for both settings")
   func gateAppliesToContextualEntries() {
     // The pipeline always passes the captured context, which is the part carrying
-    // prior text and the assembled prompt. Off must persist none of it.
+    // prior text and the assembled context turns. Off must persist none of it.
     let context = TranscriptionContext(
       appName: "1Password", windowTitle: "Vault", fieldLabel: "Password",
       priorText: "hunter2", selectedText: nil)

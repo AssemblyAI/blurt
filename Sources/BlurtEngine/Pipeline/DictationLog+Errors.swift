@@ -28,7 +28,7 @@ extension DictationLog {
     let window: String?
     /// Focused-field label at press time, when one was captured.
     let field: String?
-    // Deliberately no `prior`/`selected`/`prompt`: the surrounding text the user
+    // Deliberately no `prior`/`selected`/`turns`: the surrounding text the user
     // was editing does nothing to explain a failure, and it's the most sensitive
     // thing the context snapshot holds. Failures are logged from every route
     // (see `DictationSession.setPhase`), including press-time refusals that
@@ -69,7 +69,7 @@ extension DictationLog {
   /// One error entry as a value — the diagnostics-only projection of a failure
   /// plus its context. Split from `writeError` for the same reason as
   /// `makeEntry`: this is where the privacy rule lives (no `prior`, `selected`
-  /// or `prompt` field exists to fill), and asserting it on the value proves the
+  /// or `turns` field exists to fill), and asserting it on the value proves the
   /// text is absent, where the old `!line.contains("hunter2")` over a temp file
   /// also passed when nothing had been written at all.
   static func makeErrorEntry(

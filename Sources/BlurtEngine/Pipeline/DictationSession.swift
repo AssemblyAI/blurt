@@ -39,11 +39,11 @@ public actor DictationSession {
   private let mic: MicCaptureProtocol
   let transcriber: TranscriberProtocol
   let injector: InjectorProtocol
-  /// Supplies the user's key terms (domain vocabulary) at press time so each
-  /// utterance's prompt primes those spellings — inert while that prompt is
-  /// switched off (`TranscriptionPrompt.isEnabled`). A closure, rather than a stored
-  /// list, so edits in Settings take effect on the next dictation without
-  /// rebuilding the session. Defaults to reading `KeyTermsStore`.
+  /// Supplies the user's key terms (domain vocabulary) at press time, so each
+  /// utterance's request boosts those spellings — as its own `word_boost` field
+  /// (`KeytermsBoost`), not as part of the conversation context. A closure, rather
+  /// than a stored list, so edits in Settings take effect on the next dictation
+  /// without rebuilding the session. Defaults to reading `KeyTermsStore`.
   private let keyTermsProvider: @Sendable () -> [String]
   /// Auto-releases the hotkey after this long so a held key can't run forever.
   /// Defaults to just under the dictation API's audio cap (see
@@ -62,8 +62,10 @@ public actor DictationSession {
   /// read), so tests and keyless hosts are unaffected unless they opt in.
   private let readinessCheck: @Sendable () -> BlurtError?
   /// Fired once with the final transcript as soon as it's produced — before
-  /// injection, so pasted, copied, and failed-to-paste dictations all count.
-  let onTranscriptDelivered: (@Sendable (String) -> Void)?
+  /// injection, so pasted, copied, and failed-to-paste dictations all count. The
+  /// second argument is `recentDictations` as it stands, pushed from its one owner
+  /// so the "Recent" list is a projection rather than a second ring (see it).
+  let onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)?
 
   /// The focus capture and the developer-mode log, behind closures rather than
   /// called as statics — see `Seams` in `DictationSession+Seams.swift` for why.
@@ -73,6 +75,19 @@ public actor DictationSession {
   /// Context captured at `press()` (focused app + prior text), stored so the
   /// transcriber, `inject`'s separator decision, and the log share one snapshot.
   var capturedContext: TranscriptionContext?
+
+  /// The user's recent dictations, in memory for this launch only — and the **one**
+  /// copy of that history. Recorded in `runTranscribeInject` (`+Pipeline`) just
+  /// before `onTranscriptDelivered` fires, and read at press time into
+  /// `TranscriptionContext.recentTranscripts`, which sends them as the leading
+  /// `conversation_context` turns — so a run of dictations reads to the model as
+  /// one continuing dialogue rather than N unrelated clips.
+  ///
+  /// It lives here, not in the host, because the request is assembled inside this
+  /// actor: a ring held as MainActor UI state couldn't be read at press time
+  /// without a hop. The "Recent" list is pushed the updated value instead. Internal
+  /// so `+Pipeline` reaches it across the file split.
+  var recentDictations = RecentDictations()
 
   /// The in-flight AX field-context read, started by `press()` — that's when
   /// the target field still holds focus — but consumed only in
@@ -130,7 +145,7 @@ public actor DictationSession {
     clock: any Clock<Duration> = ContinuousClock(),
     keyTermsProvider: (@Sendable () -> [String])? = nil,
     readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
-    onTranscriptDelivered: (@Sendable (String) -> Void)? = nil
+    onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)? = nil
   ) {
     self.init(
       mic: mic, transcriber: transcriber, injector: injector,
@@ -153,7 +168,7 @@ public actor DictationSession {
     clock: any Clock<Duration> = ContinuousClock(),
     keyTermsProvider: (@Sendable () -> [String])? = nil,
     readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
-    onTranscriptDelivered: (@Sendable (String) -> Void)? = nil,
+    onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)? = nil,
     seams: Seams
   ) {
     self.mic = mic
@@ -242,6 +257,9 @@ public actor DictationSession {
       // Key terms are read synchronously at press (cheap UserDefaults read), so
       // each dictation observably re-reads Settings edits at press time.
       let keyTerms = keyTermsProvider()
+      // Session history, read on the actor for the same reason: the capture below
+      // runs off-actor, so what it carries has to be a value taken now.
+      let recentTranscripts = recentDictations.transcriptsOldestFirst
       // Kick off the AX field-context read now, while the target field still
       // holds focus, but don't await it here: it's cross-process IPC into the
       // frontmost app (detached — off the main actor, where it froze the
@@ -272,7 +290,9 @@ public actor DictationSession {
           fieldLabel: field.fieldLabel,
           priorText: field.priorText,
           selectedText: field.selectedText,
-          keyTerms: keyTerms)
+          recentTranscripts: recentTranscripts,
+          keyTerms: keyTerms,
+          targetIsSecure: field.isSecure)
         contextFeed.yield(context.isEmpty ? nil : context)
         contextFeed.finish()
       }

@@ -39,10 +39,10 @@ extension DictationSession {
     // cancelled pipeline clear a *newer* press's stream: `cancel()` detaches this
     // task while it's parked in `firstValue`, a fresh `press()` installs its own
     // `contextStream`, and this task's resumption then nils that one out — so
-    // dictation #2 transcribes with `context: nil`, losing not just its priming but
-    // `baseInstruction`, and `[Speaker]`-style markers can reach the pasted text.
-    // The window is microseconds, but the invariant is now local instead of
-    // depending on scheduling.
+    // dictation #2 transcribes with `context: nil`, losing its whole
+    // `conversation_context` — the recent-dictation turns *and* the prior chunk —
+    // along with the key terms. The window is microseconds, but the invariant is
+    // now local instead of depending on scheduling.
     let stream = contextStream
     contextStream = nil
     if let stream {
@@ -67,9 +67,22 @@ extension DictationSession {
     }
 
     seams.logTranscript(text, capturedContext)
-    // Record every produced transcript (trimmed for display) in "Recent" before
-    // injection — pasted, copied, and failed-to-paste all count.
-    onTranscriptDelivered?(trimmed)
+    // Remember it as context for the *next* press before handing it on: the ring
+    // is what supplies `conversation_context`'s leading turns, so a stretch of
+    // dictation continues itself. Recorded here rather than by the host so the
+    // history the request is built from is the same value the "Recent" list shows.
+    //
+    // Unless this went into a password field. `FocusCapture` already refuses to
+    // *read* a secure field; remembering what was dictated *into* one would leak
+    // the same secret the other way — replayed as a context turn on every later
+    // dictation this launch, in unrelated apps. So a secure target is transcribed
+    // and pasted as normal, and simply not remembered.
+    if capturedContext?.targetIsSecure != true {
+      recentDictations.record(trimmed, at: Date())
+    }
+    // Report every produced transcript (trimmed for display), with the ring it
+    // just joined, before injection — pasted, copied, and failed-to-paste all count.
+    onTranscriptDelivered?(trimmed, recentDictations)
     await inject(text)
   }
 

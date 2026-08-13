@@ -1,5 +1,4 @@
 import BlurtEngine
-import Foundation
 import Observation
 
 @Observable
@@ -30,13 +29,19 @@ final class AppCoordinator {
   @ObservationIgnored private var levelsObserver: Task<Void, Never>?
   @ObservationIgnored var keyTap: DictationKeyTap?
 
-  @ObservationIgnored private let transcriptStream: AsyncStream<(text: String, at: Date)>
+  @ObservationIgnored private let transcriptStream: AsyncStream<RecentDictations>
   @ObservationIgnored private var transcriptObserver: Task<Void, Never>?
 
-  /// The last few dictations that produced a transcript — pasted, copied, or
-  /// even failed-to-paste (the seam fires before injection) — newest first,
-  /// listed in the ready window's "Recent" section beneath the shortcut readout.
-  /// In-memory only — starts empty each launch and is never written to disk.
+  /// The dictations that produced a transcript — pasted, copied, or even
+  /// failed-to-paste (the seam fires before injection) — newest first, the first
+  /// `displayCapacity` of them listed in the ready window's "Recent" section
+  /// beneath the shortcut readout. In-memory only — starts empty each launch and
+  /// is never written to disk.
+  ///
+  /// A **projection**, not a second ring: `DictationSession` owns the history
+  /// (it builds each request's `conversation_context` from it, inside the actor)
+  /// and pushes the updated value here, so this can't drift from what was
+  /// actually sent. Nothing outside the session records into it.
   private(set) var recentDictations = RecentDictations()
 
   /// Live dictation status for the menu bar indicator (see `MenuBarLabel`).
@@ -58,11 +63,12 @@ final class AppCoordinator {
     self.onSetupBlocked = onSetupBlocked
     self.apiKey = apiKey
 
-    // Unbounded: the Recent list is append-only, so every transcript must survive
-    // until the MainActor observer drains it — dropping the oldest under
-    // contention would silently lose a dictation.
+    // Buffering the newest is enough: each element is the *whole* ring as of that
+    // delivery, not a delta, so a value dropped under contention is one the next
+    // one already contains. (An append-only feed of individual transcripts had to
+    // be unbounded, because there every dropped element was a lost dictation.)
     let (transcriptStream, transcriptContinuation) = AsyncStream.makeStream(
-      of: (text: String, at: Date).self, bufferingPolicy: .unbounded)
+      of: RecentDictations.self, bufferingPolicy: .bufferingNewest(1))
     self.transcriptStream = transcriptStream
 
     self.mic = components.mic
@@ -73,9 +79,10 @@ final class AppCoordinator {
       // A press with no key saved fails fast as .failed(.apiKeyMissing) —
       // before any capture — and render(_:) routes it to the settings window.
       readinessCheck: apiKey.readinessCheck(),
-      // Timestamped here, at delivery, so the Recent entry's time can't drift
-      // if the MainActor observer drains the buffer late under contention.
-      onTranscriptDelivered: { transcriptContinuation.yield(($0, Date())) }
+      // The session stamps and records each entry inside its own actor, so the
+      // Recent row's time can't drift if this observer drains the buffer late
+      // under contention — and the text needs no separate channel.
+      onTranscriptDelivered: { _, recents in transcriptContinuation.yield(recents) }
     )
   }
 
@@ -137,7 +144,7 @@ final class AppCoordinator {
   private func startPipelineObservers() {
     phaseObserver = observePhases()
     levelsObserver = observe(mic.levels) { $0.overlay?.pushLevel($1) }
-    transcriptObserver = observe(transcriptStream) { $0.recentDictations.record($1.text, at: $1.at) }
+    transcriptObserver = observe(transcriptStream) { $0.recentDictations = $1 }
   }
 
   private func observePhases() -> Task<Void, Never> {

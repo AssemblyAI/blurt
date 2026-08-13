@@ -17,12 +17,40 @@ struct RecentDictationsTests {
 
   @Test("caps at capacity, dropping the oldest")
   func capsAtCapacity() {
+    // One over the cap, so the oldest falls off and the count lands exactly on it.
+    var recent = RecentDictations()
+    let texts = (1...(RecentDictations.capacity + 1)).map { "u\($0)" }
+    for (offset, text) in texts.enumerated() {
+      recent.record(text, at: epoch.addingTimeInterval(Double(offset)))
+    }
+    #expect(recent.entries.count == RecentDictations.capacity)
+    #expect(recent.entries.first?.text == texts.last)  // newest kept
+    #expect(recent.entries.last?.text == "u2")  // "u1" was the oldest
+  }
+
+  @Test("shows only displayCapacity rows out of a much deeper history")
+  func displaysOnlyTheNewestFew() {
+    // The split the ready window depends on: the ring remembers 100 (they are
+    // request context — see `ConversationContext`) and the list is three rows tall,
+    // so `displayed` must not simply be `entries`.
     var recent = RecentDictations()
     for (offset, text) in ["a", "b", "c", "d", "e"].enumerated() {
       recent.record(text, at: epoch.addingTimeInterval(Double(offset)))
     }
-    #expect(recent.entries.count == RecentDictations.capacity)
-    #expect(recent.entries.map(\.text) == ["e", "d", "c"])
+    #expect(RecentDictations.displayCapacity < RecentDictations.capacity)
+    #expect(recent.entries.count == 5)
+    #expect(recent.displayed.map(\.text) == ["e", "d", "c"])
+  }
+
+  @Test("projects the history oldest-first for the request's context turns")
+  func transcriptsOldestFirst() {
+    // `entries` is newest-first for the UI; `conversation_context` wants the
+    // opposite. Reversing at this boundary is what keeps one storage order.
+    var recent = RecentDictations()
+    for (offset, text) in ["a", "b", "c"].enumerated() {
+      recent.record(text, at: epoch.addingTimeInterval(Double(offset)))
+    }
+    #expect(recent.transcriptsOldestFirst == ["a", "b", "c"])
   }
 
   @Test("entries keep a stable, unique id as newer ones push in")
@@ -50,13 +78,14 @@ struct RecentDictationsTests {
 
   @Test("reserved height counts separators between rows, not after every row")
   func reservedHeightCountsInteriorSeparators() {
-    // The off-by-one a capacity change is most likely to introduce: 3 rows have
+    // The off-by-one a row-count change is most likely to introduce: 3 rows have
     // 2 separators, not 3. Getting it wrong leaves the ready window's list area a
     // hair too tall and everything above it shifts when the first dictation lands.
-    // The ready window's real metrics: capacity 3 × 28 pt rows + 2 × 1 pt rules.
+    // The ready window's real metrics: displayCapacity 3 × 28 pt rows + 2 × 1 pt
+    // rules — the *display* count, not the 100-deep history.
     #expect(RecentDictations.reservedHeight(rowHeight: 28, separatorThickness: 1) == 86)
     // Each term isolated, so a wrong count shows up as which half is off. A change
-    // to `capacity` fails all three, which is what pins the two to each other.
+    // to `displayCapacity` fails all three, which is what pins the two together.
     #expect(RecentDictations.reservedHeight(rowHeight: 10, separatorThickness: 0) == 30)
     #expect(RecentDictations.reservedHeight(rowHeight: 0, separatorThickness: 2) == 4)
   }
