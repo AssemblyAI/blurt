@@ -11,13 +11,14 @@ import Testing
 struct KeytermsBoostTests {
   @Test("no terms sends no field")
   func emptyListSendsNothing() {
-    // nil, not `[]`: the field is omitted entirely, which asks for no boosting.
-    #expect(KeytermsBoost.fitted([]) == nil)
+    // Empty is the one "nothing to send" state, which the encoders turn into an
+    // absent `keyterms_prompt` rather than a `[]` asking to boost nothing.
+    #expect(KeytermsBoost.fitted([]).isEmpty)
   }
 
   @Test("an all-blank list sends no field")
   func blankTermsSendNothing() {
-    #expect(KeytermsBoost.fitted(["", "   ", "\n\t"]) == nil)
+    #expect(KeytermsBoost.fitted(["", "   ", "\n\t"]).isEmpty)
   }
 
   @Test("terms pass through trimmed, in the user's order")
@@ -34,9 +35,9 @@ struct KeytermsBoostTests {
   }
 
   @Test("an oversized list is fitted to the cap, keeping whole leading terms")
-  func oversizedListIsFitted() throws {
+  func oversizedListIsFitted() {
     let terms = (0..<2000).map { "term\($0)" }
-    let fitted = try #require(KeytermsBoost.fitted(terms))
+    let fitted = KeytermsBoost.fitted(terms)
     #expect(fitted.reduce(0) { $0 + $1.utf8.count } <= KeytermsBoost.characterCap)
     #expect(fitted.first == "term0")
     #expect(fitted.count < terms.count)
@@ -49,7 +50,7 @@ struct KeytermsBoostTests {
   func oneHugeTermSendsNothing() {
     // Not a clipped fragment: half a name is not the term the user asked to
     // boost, so the field is dropped whole.
-    #expect(KeytermsBoost.fitted([String(repeating: "k", count: KeytermsBoost.characterCap + 1)]) == nil)
+    #expect(KeytermsBoost.fitted([String(repeating: "k", count: KeytermsBoost.characterCap + 1)]).isEmpty)
   }
 
   @Test("a term that doesn't fit stops the list without dropping earlier ones")

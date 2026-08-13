@@ -36,8 +36,40 @@ public enum DictationLog {
     /// The `config.keyterms_prompt` word-boost list sent for this utterance —
     /// the request's other steering field, so the log accounts for both. Built
     /// through the same `KeytermsBoost.fitted` the request uses, so an
-    /// over-long list is recorded as the terms that actually went out.
-    let keyterms: [String]?
+    /// over-long list is recorded as the terms that actually went out. Empty
+    /// when none were sent, and `encode(to:)` then omits the key, matching how
+    /// every absent field above is left out rather than written as `null`.
+    let keyterms: [String]
+
+    /// Spelled out because a hand-written `encode(to:)` means the compiler no
+    /// longer derives this — the key names are the on-disk contract for anything
+    /// grepping or decoding the corpus, so they're stated rather than left to a
+    /// synthesis that no longer happens.
+    enum CodingKeys: String, CodingKey {
+      case transcript, ts, app, window, field, prior, selected, prompt, keyterms
+    }
+
+    /// Hand-written for one field only: `keyterms` is a plain array (the repo
+    /// bans optional collections), so synthesis would write `"keyterms":[]` on
+    /// every line of a corpus where nothing else absent is written at all. The
+    /// optional fields keep exactly the `encodeIfPresent` behavior synthesis
+    /// gave them. `DictationLogEntryTests` asserts every field, so a property
+    /// added above and forgotten here fails there rather than quietly vanishing
+    /// from the log.
+    func encode(to encoder: Encoder) throws {
+      var container = encoder.container(keyedBy: CodingKeys.self)
+      try container.encode(transcript, forKey: .transcript)
+      try container.encode(ts, forKey: .ts)
+      try container.encodeIfPresent(app, forKey: .app)
+      try container.encodeIfPresent(window, forKey: .window)
+      try container.encodeIfPresent(field, forKey: .field)
+      try container.encodeIfPresent(prior, forKey: .prior)
+      try container.encodeIfPresent(selected, forKey: .selected)
+      try container.encodeIfPresent(prompt, forKey: .prompt)
+      if !keyterms.isEmpty {
+        try container.encode(keyterms, forKey: .keyterms)
+      }
+    }
   }
 
   /// Where the log lives. Public so the Settings window's Developer section
@@ -125,7 +157,8 @@ public enum DictationLog {
       app: context?.appName, window: context?.windowTitle, field: context?.fieldLabel,
       prior: context?.priorText, selected: context?.selectedText,
       prompt: TranscriptionPrompt.build(context: context),
-      keyterms: KeytermsBoost.fitted(context?.keyTerms ?? []))
+      keyterms: KeytermsBoost.fitted(context?.keyTerms ?? [])
+    )
   }
 
   /// The unconditional writer: formats one entry and appends it. Distinct name

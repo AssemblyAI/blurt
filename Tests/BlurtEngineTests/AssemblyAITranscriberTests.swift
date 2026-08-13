@@ -164,34 +164,6 @@ struct HTTPClientTests {
     #expect(object["channels"] as? Int == 1)
   }
 
-  @Test("config part carries the key terms as the word-boost list")
-  func configIncludesKeyterms() throws {
-    // The key name is the contract, and the wrong one is worse than a rename
-    // elsewhere: `word_boost` is deprecated and *rejected* by the model family
-    // the service runs, so it would fail the whole request rather than degrade.
-    let object = try configObject(prompt: nil, keyterms: ["AssemblyAI", "LeMUR"])
-    #expect(object["keyterms_prompt"] as? [String] == ["AssemblyAI", "LeMUR"])
-    #expect(object.keys.contains("word_boost") == false)
-  }
-
-  @Test("prompt and key terms ride the same request")
-  func configCarriesPromptAndKeytermsTogether() throws {
-    // They are siblings, not alternatives — prose context and a vocabulary list
-    // steer transcription differently, and the API takes both at once.
-    let object = try configObject(prompt: "Previous transcript:\nthanks for", keyterms: ["Blurt"])
-    #expect(object["prompt"] as? String == "Previous transcript:\nthanks for")
-    #expect(object["keyterms_prompt"] as? [String] == ["Blurt"])
-  }
-
-  @Test(
-    "config part omits the keyterms field when there are no terms",
-    arguments: [nil, []] as [[String]?])
-  func configOmitsKeyterms(keyterms: [String]?) throws {
-    // Omission, not `[]`: an empty list on the wire asks for boosting with
-    // nothing to boost.
-    #expect(try configObject(prompt: nil, keyterms: keyterms).keys.contains("keyterms_prompt") == false)
-  }
-
   @Test(
     "config part carries our cleanup instruction while enhanced transcripts are on",
     arguments: ["CONTEXT. Transcribe.", nil])
@@ -380,7 +352,7 @@ struct HTTPClientTests {
   /// A part that isn't a JSON object at all fails here rather than turning every
   /// downstream assertion into a silent nil-compare.
   private func configObject(
-    prompt: String?, keyterms: [String]? = nil, enhancedTranscripts: Bool = true, customStyle: String? = nil
+    prompt: String?, keyterms: [String] = [], enhancedTranscripts: Bool = true, customStyle: String? = nil
   ) throws -> [String: Any] {
     let config = try makeTranscriber(
       apiKey: "test-key", enhancedTranscripts: enhancedTranscripts, customStyle: customStyle
@@ -392,4 +364,39 @@ struct HTTPClientTests {
   /// Three arbitrary S16LE samples — the raw blob shape `MicCapture.stop()`
   /// hands the transcriber.
   private static let testPCM = Data([0x00, 0x00, 0xCD, 0x0C, 0x33, 0xF3])
+}
+
+/// The word-boost half of the `config` contract (`KeytermsBoost` → the request's
+/// `keyterms_prompt`). An extension of the same suite, exactly as the
+/// `APIKeyValidator` cases are: it keeps the `configObject`/`makeTranscriber`
+/// helpers and the `FakeHTTPTransport` seam, while leaving the suite's own body
+/// inside SwiftLint's type-length limit.
+extension HTTPClientTests {
+
+  @Test("config part carries the key terms as the word-boost list")
+  func configIncludesKeyterms() throws {
+    // The key name is the contract, and the wrong one is worse than a rename
+    // elsewhere: `word_boost` is deprecated and *rejected* by the model family
+    // the service runs, so it would fail the whole request rather than degrade.
+    let object = try configObject(prompt: nil, keyterms: ["AssemblyAI", "LeMUR"])
+    #expect(object["keyterms_prompt"] as? [String] == ["AssemblyAI", "LeMUR"])
+    #expect(object.keys.contains("word_boost") == false)
+  }
+
+  @Test("prompt and key terms ride the same request")
+  func configCarriesPromptAndKeytermsTogether() throws {
+    // They are siblings, not alternatives — prose context and a vocabulary list
+    // steer transcription differently, and the API takes both at once.
+    let object = try configObject(prompt: "Previous transcript:\nthanks for", keyterms: ["Blurt"])
+    #expect(object["prompt"] as? String == "Previous transcript:\nthanks for")
+    #expect(object["keyterms_prompt"] as? [String] == ["Blurt"])
+  }
+
+  @Test("config part omits the keyterms field when there are no terms")
+  func configOmitsKeyterms() throws {
+    // Omission, not `[]`: an empty list on the wire asks for boosting with
+    // nothing to boost, so `DictationConfig.encode(to:)` drops the key. One
+    // empty state to test, because `KeytermsBoost.fitted` returns a plain array.
+    #expect(try configObject(prompt: nil, keyterms: []).keys.contains("keyterms_prompt") == false)
+  }
 }

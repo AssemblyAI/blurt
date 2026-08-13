@@ -608,7 +608,9 @@ request and they do different jobs (prose context versus a vocabulary list), whi
 service runs, so sending it fails the request rather than degrading. `KeytermsBoost.fitted` takes
 whole terms in the user's order while they fit the field's own 2048-character cap
 (`KeytermsBoost.characterCap`, measured in UTF-8 bytes — the conservative reading, as with
-`CleanupInstruction`) and returns `nil` for an empty result, which omits the field. Terms arrive
+`CleanupInstruction`). It returns a plain `[String]`, not an optional one — the repo bans optional
+collections, and "no terms" needs only one spelling — so the omit-vs-`[]` distinction that _does_
+matter to the API lives in `DictationConfig.encode(to:)`, which drops the key for an empty list. Terms arrive
 already trimmed and deduped from `KeyTermsStore.parse`, so length is the only thing enforced here.
 Unit-tested in `Tests/BlurtEngineTests/KeytermsBoostTests.swift`.
 

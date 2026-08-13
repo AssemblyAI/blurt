@@ -33,8 +33,12 @@ enum KeytermsBoost {
   /// figure for the other field is how a whole-request 400 shipped once before.
   static let characterCap = 2048
 
-  /// The terms to send for `terms`, or `nil` when there are none to send (which
-  /// omits the field, so the request asks for no boosting at all).
+  /// The terms to send for `terms` — empty when there are none to send, which
+  /// the encoders read as "omit the field", so the request asks for no boosting
+  /// at all. One empty state, not two: an `[String]?` here would make "no terms"
+  /// expressible twice over (the repo bans optional collections for exactly that
+  /// reason), and the omit-vs-`[]` distinction that does matter belongs to the
+  /// wire, where `DictationConfig.encode(to:)` states it once.
   ///
   /// Over-long lists are fitted rather than rejected: terms are taken in order
   /// while the running total fits `characterCap`, and the first one that doesn't
@@ -42,7 +46,7 @@ enum KeytermsBoost {
   /// order is the user's, so the terms they typed first are the ones that
   /// survive a list too long to send. A term is never split and a blank one is
   /// never sent, so a stray entry can't cost the request.
-  static func fitted(_ terms: [String]) -> [String]? {
+  static func fitted(_ terms: [String]) -> [String] {
     var included: [String] = []
     var remaining = characterCap
     for term in terms {
@@ -52,6 +56,6 @@ enum KeytermsBoost {
       included.append(term)
       remaining -= cost
     }
-    return included.isEmpty ? nil : included
+    return included
   }
 }

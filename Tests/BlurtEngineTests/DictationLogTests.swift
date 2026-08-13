@@ -67,7 +67,7 @@ struct DictationLogEntryTests {
     #expect(entry.prior == nil)
     #expect(entry.selected == nil)
     #expect(entry.prompt == nil)
-    #expect(entry.keyterms == nil)
+    #expect(entry.keyterms.isEmpty)
   }
 
   @Test("logs the same prompt the transcriber sends — the prior chunk and nothing else")
@@ -93,9 +93,9 @@ struct DictationLogEntryTests {
     #expect(entry.keyterms == ["AssemblyAI", "LeMUR"])
   }
 
-  @Test("leaves the key terms nil when the context has none")
-  func noKeytermsLeavesTheFieldNil() {
-    #expect(DictationLog.makeEntry(transcript: "p", context: context, now: Date()).keyterms == nil)
+  @Test("leaves the key terms empty when the context has none")
+  func noKeytermsLeavesTheFieldEmpty() {
+    #expect(DictationLog.makeEntry(transcript: "p", context: context, now: Date()).keyterms.isEmpty)
   }
 
   @Test("keeps a transcript verbatim, including non-ASCII")
@@ -153,8 +153,9 @@ struct DictationLogTests {
     // *missing* keys mean anything.
     let entry = try #require(firstEntry(in: url))
     #expect(entry.transcript == "p")
-    // `Encodable` synthesis uses `encodeIfPresent`, so a nil field is absent
-    // rather than `"selected":null`.
+    // `Entry.encode(to:)` uses `encodeIfPresent`, so a nil field is absent rather
+    // than `"selected":null` — and it skips an empty `keyterms` for the same
+    // reason, since a plain array would otherwise encode as `[]` on every line.
     let line = readLog(url)
     #expect(!line.contains("selected"))
     #expect(!line.contains("\"prompt\""))

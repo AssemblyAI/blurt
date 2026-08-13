@@ -132,7 +132,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// Builds the JSON `config` part sent alongside the audio. The context
   /// `prompt` is included only when non-empty; a nil or blank prompt omits the
   /// field so the server applies its default prompt. `keyterms` is included the
-  /// same way — nil or empty omits `keyterms_prompt`, which asks for no word
+  /// same way — an empty list omits `keyterms_prompt`, which asks for no word
   /// boosting at all. The `llm` block rides
   /// along while enhanced transcripts are enabled (the default) and is omitted
   /// entirely when the user has turned them off, so the service skips the
@@ -140,7 +140,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// `DictationConfig.llm`. Internal so tests can assert the
   /// prompt wiring without inspecting the multipart upload body (which
   /// `URLProtocol` mocks can't observe reliably for `upload(from:)`).
-  func makeConfigData(sampleRate: Int, prompt: String?, keyterms: [String]? = nil) throws -> Data {
+  func makeConfigData(sampleRate: Int, prompt: String?, keyterms: [String] = []) throws -> Data {
     let enhanced = enhancedTranscriptsEnabled()
     let instruction = enhanced ? CleanupInstruction.sendable(appending: customStyle()) : nil
     if enhanced, instruction == nil {
@@ -160,7 +160,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
         sampleRate: sampleRate,
         channels: 1,
         prompt: prompt.trimmedNonEmpty(),
-        keytermsPrompt: (keyterms?.isEmpty ?? true) ? nil : keyterms,
+        keytermsPrompt: keyterms,
         llm: enhanced ? LLMRewrite(instruction: instruction) : nil
       )
     )
@@ -254,10 +254,11 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     /// to it — the API takes both on the same request, and they do different
     /// jobs (prose context versus a vocabulary list). Fitted to its own
     /// 2048-character cap by `KeytermsBoost`, which is *not* the 4096 on
-    /// `prompt`. Encoded only when non-nil, so no terms means no boosting.
-    /// Deliberately not the deprecated `word_boost`, which the Universal-3 Pro
-    /// family rejects outright.
-    let keytermsPrompt: [String]?
+    /// `prompt`. Empty means no boosting was asked for, and `encode(to:)` drops
+    /// the key entirely rather than sending `[]`. Deliberately not the
+    /// deprecated `word_boost`, which the Universal-3 Pro family rejects
+    /// outright.
+    let keytermsPrompt: [String]
     /// The rewrite request, present only while enhanced transcripts are
     /// enabled (nil — the synthesized `encode` omits it — asks for no rewrite,
     /// so the response's `llm_response` is null and the verbatim `text` is
@@ -270,6 +271,24 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
       case prompt
       case keytermsPrompt = "keyterms_prompt"
       case llm
+    }
+
+    /// Hand-written because one field can't be expressed by synthesis: an empty
+    /// `keyterms_prompt` must be *absent*, not `[]`, and a non-optional array
+    /// always encodes. The optional fields keep the `encodeIfPresent` behavior
+    /// synthesis would have given them, spelled out here beside it. Every stored
+    /// property is written exactly once — a field added above and forgotten here
+    /// would silently never reach the wire, which is what the config assertions
+    /// in `AssemblyAITranscriberTests` are there to catch.
+    func encode(to encoder: Encoder) throws {
+      var container = encoder.container(keyedBy: CodingKeys.self)
+      try container.encode(sampleRate, forKey: .sampleRate)
+      try container.encode(channels, forKey: .channels)
+      try container.encodeIfPresent(prompt, forKey: .prompt)
+      if !keytermsPrompt.isEmpty {
+        try container.encode(keytermsPrompt, forKey: .keytermsPrompt)
+      }
+      try container.encodeIfPresent(llm, forKey: .llm)
     }
   }
 
