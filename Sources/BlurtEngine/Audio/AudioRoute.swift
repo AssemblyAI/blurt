@@ -9,9 +9,14 @@ import CoreAudio
 ///    `prepareToRecord()` time and never re-resolves it, so a recorder warmed
 ///    before the user connected their AirPods would silently record from the
 ///    built-in mic.
-/// 2. **Whether that device is a Bluetooth one**, whose link buffers audio for
-///    a couple of hundred milliseconds — the tail `MicCapture.stop()` waits for
-///    rather than truncating (see `bluetoothTailLinger`).
+/// 2. **What transport that device is on**, since a Bluetooth link is both slow
+///    to bring up (the wait `MicLiveness` caps) and buffered at the tail (the
+///    linger `MicCapture.stop()` grants rather than truncating).
+///
+/// Raw reads only — no policy. What a transport type *means* lives in
+/// `AudioTransport` and `MicLiveness`, which are pure and unit-tested; this file
+/// needs real hardware to answer anything, so it is excluded from the coverage
+/// gate and must not be where a decision hides.
 ///
 /// Internal, not public: the app never asks these directly (it observes route
 /// *changes* through `AudioRouteMonitor`), and `.periphery.yml` runs with
@@ -37,9 +42,11 @@ enum AudioRoute {
     /// into a file that otherwise needs only CoreAudio, to buy a distinction
     /// that changes a loud failure into a slightly louder one.
     let deviceID: AudioDeviceID
-    /// Whether the device's transport is Bluetooth, i.e. whether its capture
-    /// path carries link latency worth lingering for.
-    let isBluetooth: Bool
+    /// The device's CoreAudio transport type, or nil when the read failed.
+    /// Interpreted by `AudioTransport.isBluetooth` and
+    /// `MicLiveness.timeout(forTransportType:)` — kept raw here so the policy
+    /// stays in the files `swift test` can reach.
+    let transportType: UInt32?
   }
 
   /// The default input device as an `InputSnapshot`, or nil when there is no
@@ -51,7 +58,7 @@ enum AudioRoute {
     guard let deviceID = defaultDeviceID(for: kAudioHardwarePropertyDefaultInputDevice) else {
       return nil
     }
-    return InputSnapshot(deviceID: deviceID, isBluetooth: isBluetooth(deviceID))
+    return InputSnapshot(deviceID: deviceID, transportType: transportType(of: deviceID))
   }
 
   /// The system's current default *output* device — what `AudioRouteMonitor`
@@ -80,15 +87,10 @@ enum AudioRoute {
     return deviceID
   }
 
-  /// Whether the device is reached over Bluetooth. Both transport types count:
-  /// AirPods and other wireless headsets report the classic `bluetooth`
-  /// transport, and LE Audio devices report `bluetoothLE` — the link-latency
-  /// characteristic the callers care about is the same either way.
-  ///
-  /// A failed read answers `false`: the conservative default is "no linger",
-  /// since padding every wired capture with a delay would be a worse regression
-  /// than losing the tail on a device we couldn't classify.
-  private static func isBluetooth(_ deviceID: AudioDeviceID) -> Bool {
+  /// The device's transport type, or nil when the read failed —
+  /// `AudioTransport` and `MicLiveness` both treat nil as "not Bluetooth", which
+  /// is the conservative direction for each.
+  private static func transportType(of deviceID: AudioDeviceID) -> UInt32? {
     var address = AudioObjectPropertyAddress(
       mSelector: kAudioDevicePropertyTransportType,
       mScope: kAudioObjectPropertyScopeGlobal,
@@ -96,7 +98,7 @@ enum AudioRoute {
     var transport = UInt32(0)
     var size = UInt32(MemoryLayout<UInt32>.size)
     let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &transport)
-    guard status == noErr else { return false }
-    return transport == kAudioDeviceTransportTypeBluetooth || transport == kAudioDeviceTransportTypeBluetoothLE
+    guard status == noErr else { return nil }
+    return transport
   }
 }

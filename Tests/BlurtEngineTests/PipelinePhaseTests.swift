@@ -29,36 +29,13 @@ struct PipelinePhaseTests {
 
   @Test("active phases are not terminal")
   func activePhasesAreNotTerminal() {
-    // `.starting` included: the press guard keys off terminality, so a terminal
-    // `.starting` would let a second key-down start a second capture while the
-    // first is still opening the mic — the exact window it was added to cover.
-    #expect(!PipelinePhase.starting.isTerminal)
+    // `.connecting` included: the press guard keys off terminality, so a
+    // terminal `.connecting` would let a second key-down start a second capture
+    // while the first is still bringing the mic up — a window that lasts ~1–2 s
+    // on a Bluetooth route, so it is very reachable.
+    #expect(!PipelinePhase.connecting.isTerminal)
     #expect(!PipelinePhase.recording.isTerminal)
     #expect(!PipelinePhase.transcribing.isTerminal)
     #expect(!PipelinePhase.injecting.isTerminal)
-  }
-}
-
-/// `isCapturing` is the single definition of "a dictation is being captured
-/// right now" — the edge the start/stop chimes ride. Pinned per case: a phase
-/// wrongly reading as capturing would chime at the wrong moment, and `.starting`
-/// wrongly reading as *not* capturing would put the start chime back where it
-/// was, after the hardware route comes up.
-@Suite("PipelinePhase.isCapturing")
-struct PipelinePhaseCapturingTests {
-  @Test("the mic is open, or opening")
-  func capturingPhases() {
-    #expect(PipelinePhase.starting.isCapturing)
-    #expect(PipelinePhase.recording.isCapturing)
-  }
-
-  @Test("every other phase is not capturing")
-  func nonCapturingPhases() {
-    for phase: PipelinePhase in [
-      .idle, .transcribing, .injecting, .cancelled, .pasted, .noTarget,
-      .failed(.apiKeyMissing),
-    ] {
-      #expect(!phase.isCapturing, "\(phase) must not read as capturing")
-    }
   }
 }

@@ -3,13 +3,14 @@
 /// is unit-testable; the shell just renders whatever this resolves to.
 public enum OverlayUIState: Equatable, Sendable {
   case idle
-  /// The press landed and the mic is opening — the pill is up, but nothing is
-  /// being captured yet. A steady state, not a notice: it holds for exactly as
-  /// long as the hardware takes, which is a frame or two on the built-in mic and
-  /// noticeably longer on a Bluetooth input. The shell renders it as a plain
-  /// "Starting…" status line rather than the `● REC` tag, so the pill answers
-  /// the keypress without claiming to be recording.
-  case starting
+  /// The press landed but the mic isn't delivering audio yet (the pipeline's
+  /// `.connecting` phase — a Bluetooth route takes ~1–2 s to come up). A steady
+  /// state, not a notice: it holds for exactly as long as the hardware takes,
+  /// which is a frame or two on the built-in mic. The shell renders it as a
+  /// breathing "Connecting…" status line, deliberately *without* the `● REC`
+  /// tag or the meter — those are the "speak now" cues, and speech during the
+  /// bring-up is unrecoverable, so the pill must not invite it.
+  case connecting
   case recording
   case processing
   /// A dictation attempt failed. The shell shows this as a brief red flash on
@@ -34,7 +35,7 @@ public enum OverlayUIState: Equatable, Sendable {
   public var accessibilityLabel: String {
     switch self {
     case .idle: "Blurt."
-    case .starting: "Starting."
+    case .connecting: "Connecting to the microphone."
     case .recording: "Recording."
     case .processing: "Processing."
     case .error(let message): message
@@ -54,7 +55,7 @@ public enum OverlayUIState: Equatable, Sendable {
     switch self {
     case .pasted: 0.8
     case .error, .noTarget: 1.6
-    case .idle, .starting, .recording, .processing: nil
+    case .idle, .connecting, .recording, .processing: nil
     }
   }
 }
@@ -74,9 +75,9 @@ extension PipelinePhase {
     case .injecting: .processing
     // Its own pill state, NOT `.recording`: the phase exists precisely because
     // capture hasn't begun, so projecting it onto the recording pill would put
-    // the `● REC` tag and a live meter on screen over a mic that isn't open yet
-    // — the lie the split was made to avoid.
-    case .starting: .starting
+    // the `● REC` tag and a live meter on screen over a mic that isn't
+    // delivering yet — the "speak now" cue the whole gate exists to withhold.
+    case .connecting: .connecting
     case .recording: .recording
     case .transcribing: .processing
     // A setup blocker (a missing API key) is an expected state, not a fault: the

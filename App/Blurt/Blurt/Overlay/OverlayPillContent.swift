@@ -82,6 +82,31 @@ struct TranscribingLabel: View {
   }
 }
 
+/// The "Connecting…" status line shown while `MicCapture`'s liveness gate waits
+/// for the input route to deliver frames. Breathes on the same curve as
+/// `TranscribingLabel` (the pill's other "working, hold on" state) so the two
+/// waits read alike — this one can hold for a second or two on a Bluetooth
+/// route, and a frozen line would read as a hung app.
+///
+/// Deliberately *not* the `● REC` tag or the meter: those are the "speak now"
+/// cues, and audio spoken during the bring-up is unrecoverable — the OS receives
+/// nothing while the profile switch is in flight. The pill must not invite
+/// speech it cannot capture.
+struct ConnectingLabel: View {
+  /// Whether to run the breathing motion (off under Reduce Motion).
+  let animated: Bool
+
+  // Matched to `TranscribingLabel`: the two are the same kind of wait, so they
+  // share one heartbeat rather than each picking a rate.
+  private let breathPeriod: Double = 1.8
+  private let minOpacity: Double = 0.55
+
+  var body: some View {
+    StatusLineText("Connecting…")
+      .pulsingOpacity(period: breathPeriod, minOpacity: minOpacity, animated: animated)
+  }
+}
+
 /// The "● REC" recording tag: a pulsing magenta dot + "REC" caption, sitting to
 /// the left of the waveform — the native echo of the site demo's magenta pixel
 /// tag. Magenta (the brand --hot) stands in for the conventional red record dot;

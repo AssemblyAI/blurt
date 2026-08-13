@@ -221,16 +221,14 @@ public actor DictationSession {
     // the only throwing call, and it precedes `.recording`, so the two ends are
     // mutually exclusive).
     let pressInterval = Self.signposter.beginInterval(Self.pressSignpostName)
-    // Claim `.starting` before anything slow, so the overlay answers the
-    // keypress now rather than when the mic finishes opening. `mic.start()`
-    // below is the slow step — it resolves and activates the hardware route,
-    // which on a Bluetooth input means renegotiating the link into its
-    // mic-capable mode. Until this phase existed, all of that sat between the
-    // user's key-down and the first thing they could see or hear, and read as
-    // the app lagging behind them. `.starting` is presented as "starting", never
-    // as live capture, so the phase still flips to `.recording` only once audio
-    // is genuinely being recorded.
-    setPhase(.starting)
+    // Claim `.connecting` before `mic.start()`: its liveness gate holds until
+    // the input route actually delivers frames, which on a Bluetooth route is
+    // ~1–2 s. The press must be visibly acknowledged in that window without
+    // cueing the user to speak — the pill shows a warming-up state, and the
+    // start chime rides the connecting→recording edge (`RecordingCueGate`), so
+    // it fires only once audio is genuinely flowing. `.recording` therefore
+    // keeps meaning exactly what it says.
+    setPhase(.connecting)
     do {
       // Pre-open the dictation connection while the user speaks, so the first dictation after an idle
       // gap doesn't pay DNS+TCP+TLS on the transcribe hot path (~170 ms cold, measured). Detached

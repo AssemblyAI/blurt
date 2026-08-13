@@ -238,14 +238,14 @@ extension DictationSessionTests {
     #expect(await terminal == .pasted)
   }
 
-  @Test("press claims .starting before the mic opens, then .recording")
-  func pressPublishesStartingBeforeRecording() async throws {
-    // The whole point of the phase: the overlay gets something to show at
-    // key-down instead of at whatever moment `mic.start()` returns. On a
-    // Bluetooth input that gap is hundreds of milliseconds of a press that
-    // looked like it did nothing, so `.starting` must be *published*, not just
-    // passed through — a `setPhase` skipped here would put the pill back to
-    // appearing only once the hardware route was up.
+  @Test("press claims .connecting while the mic comes up, then .recording")
+  func pressPublishesConnectingBeforeRecording() async throws {
+    // The whole point of the phase: `mic.start()` now holds until the input
+    // route actually delivers frames (~1–2 s on a Bluetooth link), and the
+    // overlay needs something to show for that whole window — while the start
+    // chime deliberately waits for `.recording`. So `.connecting` must be
+    // *published*, not merely passed through: a `setPhase` skipped here leaves
+    // the pill absent for the entire bring-up, and the press looks ignored.
     let fixture = makeSession()
 
     let stream = await fixture.session.phaseStream()
@@ -259,7 +259,7 @@ extension DictationSessionTests {
 
     // The subscription's initial yield is the current phase (.idle), then the
     // press's two transitions in order.
-    #expect(seen == [.idle, .starting, .recording])
+    #expect(seen == [.idle, .connecting, .recording])
 
     await fixture.session.cancel()
   }

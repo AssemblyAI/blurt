@@ -2,18 +2,19 @@ import Foundation
 
 public enum PipelinePhase: Equatable, Sendable {
   case idle
-  /// The press was accepted and the mic is being opened, but no audio is being
-  /// captured yet. Claimed *before* `mic.start()` so the overlay answers the
-  /// keypress immediately instead of at whatever moment the hardware route
-  /// finishes coming up — on a Bluetooth input that is hundreds of milliseconds,
-  /// sometimes over a second, of a press that looked like it did nothing.
+  /// The press was accepted and the mic is being brought up: `MicCapture`'s
+  /// liveness gate is still waiting for the input route to deliver frames (a
+  /// Bluetooth profile switch takes ~1–2 s). Claimed *before* `mic.start()`, so
+  /// the overlay answers the keypress immediately instead of at whatever moment
+  /// the hardware finishes coming up.
   ///
-  /// Deliberately distinct from `.recording` rather than folded into it: the
-  /// projections below present it as "starting", never as live capture, which
-  /// keeps the rule that **the UI never claims audio is being recorded before it
-  /// is**. Non-terminal, so a second press during it is refused like one during
-  /// `.recording`.
-  case starting
+  /// Deliberately distinct from `.recording` rather than folded into it. The
+  /// projections below present it as a warming-up state, never as live capture,
+  /// and the start chime waits for `.recording` — so **the user is never cued to
+  /// speak into a mic that isn't delivering yet**, which is how the first words
+  /// of an utterance went missing on AirPods. Non-terminal, so a second press
+  /// during it is refused like one during `.recording`.
+  case connecting
   case recording
   case transcribing
   case injecting
@@ -38,25 +39,7 @@ public enum PipelinePhase: Equatable, Sendable {
   public var isTerminal: Bool {
     switch self {
     case .idle, .failed, .cancelled, .pasted, .noTarget: true
-    case .starting, .recording, .transcribing, .injecting: false
-    }
-  }
-
-  /// Whether this phase is part of a live capture attempt — the mic is open, or
-  /// on its way to being open.
-  ///
-  /// The single definition of "a dictation is being captured right now", so the
-  /// consumers that key off it can't drift apart. Today that's `RecordingCueGate`
-  /// (the start chime fires on the *press*, i.e. entering `.starting`, so the
-  /// user hears the app respond at key-down rather than after the route comes
-  /// up). Internal: nothing outside the engine asks, and `.periphery.yml` runs
-  /// with `retain_public: false`.
-  ///
-  /// Exhaustive for the same reason as `isTerminal`.
-  var isCapturing: Bool {
-    switch self {
-    case .starting, .recording: true
-    case .idle, .transcribing, .injecting, .failed, .cancelled, .pasted, .noTarget: false
+    case .connecting, .recording, .transcribing, .injecting: false
     }
   }
 
