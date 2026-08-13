@@ -1,5 +1,4 @@
 import CoreAudio
-import Foundation
 
 /// Read-only queries against the system's current audio routing — the two facts
 /// about the mic that `AVFoundation` doesn't expose but the capture path needs:
@@ -23,26 +22,36 @@ enum AudioRoute {
   /// one pass so the capture path makes a single trip through CoreAudio per
   /// session rather than one per question.
   struct InputSnapshot: Equatable, Sendable {
-    /// The device's persistent UID. Non-optional on purpose: an unreadable UID
-    /// means "we can't tell which device this is", which must not compare equal
-    /// to another unknown — so `currentInput()` returns nil instead, and callers
-    /// treat that as "assume it changed".
-    let uid: String
+    /// Which device this is.
+    ///
+    /// The `AudioDeviceID` rather than the device's persistent UID string, even
+    /// though IDs are in principle reusable across an unplug/replug while UIDs
+    /// are not. The only consumer is "is the warm recorder still bound to the
+    /// device about to be recorded from", and the two disagree in exactly one
+    /// case: the warmed device was removed and a new one took its ID inside the
+    /// 60 s warm window. That case fails *loudly* — the recorder is bound to a
+    /// device that no longer exists, so `record()` returns false and the press
+    /// surfaces `.audioCaptureFailed`. It cannot produce the failure the check
+    /// exists to prevent, which is silently recording the wrong mic. Reading the
+    /// UID instead would mean bridging a `CFString`, i.e. pulling Foundation
+    /// into a file that otherwise needs only CoreAudio, to buy a distinction
+    /// that changes a loud failure into a slightly louder one.
+    let deviceID: AudioDeviceID
     /// Whether the device's transport is Bluetooth, i.e. whether its capture
     /// path carries link latency worth lingering for.
     let isBluetooth: Bool
   }
 
   /// The default input device as an `InputSnapshot`, or nil when there is no
-  /// input device (all of them unplugged or asleep) or CoreAudio refused either
+  /// input device (all of them unplugged or asleep) or CoreAudio refused the
   /// read. Nil is the conservative answer everywhere it's consumed: an unknown
   /// input invalidates a warm recorder rather than silently keeping one bound to
   /// a device that may have gone away.
   static func currentInput() -> InputSnapshot? {
-    guard let deviceID = defaultDeviceID(for: kAudioHardwarePropertyDefaultInputDevice),
-      let uid = uid(of: deviceID)
-    else { return nil }
-    return InputSnapshot(uid: uid, isBluetooth: isBluetooth(deviceID))
+    guard let deviceID = defaultDeviceID(for: kAudioHardwarePropertyDefaultInputDevice) else {
+      return nil
+    }
+    return InputSnapshot(deviceID: deviceID, isBluetooth: isBluetooth(deviceID))
   }
 
   /// The system's current default *output* device — what `AudioRouteMonitor`
@@ -69,22 +78,6 @@ enum AudioRoute {
     // literal so this doesn't depend on how the constant imports.
     guard status == noErr, deviceID != 0 else { return nil }
     return deviceID
-  }
-
-  /// The device's persistent UID string. `Unmanaged<CFString>` rather than a
-  /// bridged `CFString?`: the property returns a +1 reference, so the ownership
-  /// transfer has to be spelled out (`takeRetainedValue`) instead of left to an
-  /// implicit bridge that would over-release it.
-  private static func uid(of deviceID: AudioDeviceID) -> String? {
-    var address = AudioObjectPropertyAddress(
-      mSelector: kAudioDevicePropertyDeviceUID,
-      mScope: kAudioObjectPropertyScopeGlobal,
-      mElement: kAudioObjectPropertyElementMain)
-    var value: Unmanaged<CFString>?
-    var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
-    let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &value)
-    guard status == noErr, let value else { return nil }
-    return value.takeRetainedValue() as String
   }
 
   /// Whether the device is reached over Bluetooth. Both transport types count:

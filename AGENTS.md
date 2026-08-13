@@ -392,7 +392,7 @@ directions. So:
   at `prepareToRecord()`, i.e. per session, so warming only the first one hid it for one dictation
   out of N. `stop()`/`cancelCapture()` schedule a re-warm; `start()` consumes it.
 - **A warm recorder is validated before reuse.** `AVAudioRecorder` resolves its device once and
-  never re-resolves, so `MicCapture` records the default input's UID (`AudioRoute.currentInput()`)
+  never re-resolves, so `MicCapture` records the default input's identity (`AudioRoute.currentInput()`)
   alongside the warm recorder and discards it when the device has changed — otherwise a recorder
   warmed before the user connected their AirPods would keep recording the built-in mic. Unknown
   counts as changed.
@@ -409,7 +409,7 @@ linger and the file read-back: the audio is being discarded, so neither is worth
 cancel for.
 
 The routing facts behind all of that live in **`AudioRoute`** (`Audio/AudioRoute.swift`, internal):
-which device is the default input, its UID, and whether its transport is Bluetooth. Its sibling
+which device is the default input and whether its transport is Bluetooth. Its sibling
 **`AudioRouteMonitor`** (public) publishes output-route changes for the cue players — see
 [Settings, persistence, and cues](#settings-persistence-and-cues). Both are excluded from the
 coverage gate for the same reason

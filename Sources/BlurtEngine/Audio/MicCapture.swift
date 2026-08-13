@@ -44,7 +44,8 @@ public actor MicCapture: MicCaptureProtocol {
   /// The default input `preparedRecorder` was built against. `AVAudioRecorder`
   /// resolves its device once, at `prepareToRecord()`, and never re-resolves —
   /// so without this a recorder warmed while the built-in mic was default would
-  /// keep recording from it after the user connected their AirPods.
+  /// keep recording from it after the user connected their AirPods. See
+  /// `AudioRoute.InputSnapshot.deviceID` for why identity is the device ID.
   private var preparedInput: AudioRoute.InputSnapshot?
   /// Releases `preparedRecorder` once it has gone unused for
   /// `preparedRecorderLifetime`. See that constant for why holding one open
@@ -229,7 +230,7 @@ public actor MicCapture: MicCaptureProtocol {
     let warmed = preparedInput
     preparedRecorder = nil
     preparedInput = nil
-    guard let warmed, let input, warmed.uid == input.uid else {
+    guard let warmed, let input, warmed.deviceID == input.deviceID else {
       Self.removeFile(at: recorder.url)
       Self.logger.info("discarded warm recorder — input device changed since warm-up")
       return nil

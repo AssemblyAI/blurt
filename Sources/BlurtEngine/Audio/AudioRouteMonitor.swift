@@ -1,5 +1,5 @@
 import CoreAudio
-import Foundation
+import Dispatch
 import os
 
 /// Ticks whenever the system's audio **output** route changes in a way that
