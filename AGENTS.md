@@ -68,8 +68,8 @@ App/Blurt/
   Shared/                    UITestIdentifiers.swift — compiled into BOTH app and UI-test targets
   BlurtUITests/              XCUITest bundle (see Tests)
 Tests/BlurtEngineTests/      Swift Testing suites; Stubs/ holds the seam doubles
-scripts/                     check.sh, check-site.sh, bootstrap.sh, dev-build.sh, uitest.sh, leaks.sh,
-                             release*.sh
+scripts/                     check.sh, check-site.sh, check-portability.sh, check-invariants.sh,
+                             bootstrap.sh, dev-build.sh, uitest.sh, leaks.sh, release*.sh
                              hand-run maintainer tools — no automated caller, invoked by a
                              human, so "nothing references it" here does NOT mean dead code:
                              serve-site.sh (preview site/ locally), screenshot.swift +
@@ -305,6 +305,17 @@ In Claude Code on the web, a `SessionStart` hook installs the portable linters a
 
 Each was tried the other way and reverted. If a task seems to require one, stop and ask first.
 (`.claude/skills/project-guardrails` is the compressed version of this list.)
+
+`scripts/check-invariants.sh` mechanizes the subset of this table a regex can decide, so those
+entries fail `check.sh` rather than relying on a reviewer's memory: `AVAudioEngine`/`installTap`
+capture, a streaming or on-device path, a client-side cleanup pass (`StylerProtocol`, an LLM
+Gateway/LeMUR client), `config.language_code`, `config.prompt`, a keystroke-typing injector,
+`LSUIElement`, a `KeyboardShortcuts` import, a self-replacing updater, the production Keychain
+under `Tests/`, and `@available(*, deprecated)` shims. The SPM-dependency row has its own guard in
+`check.sh` (it parses `project.yml`'s `packages:` block), and the `.pbxproj` row is covered by the
+xcodegen drift check plus a Claude `PreToolUse` hook. The rest — the filler-word clause, the
+context-widening rule, the `/Applications` install path — stay prose, because no pattern separates
+them from correct code that reads the same. Add a rule when you find one that can.
 
 | Don't                                                      | Because                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

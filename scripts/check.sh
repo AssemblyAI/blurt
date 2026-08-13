@@ -4,6 +4,8 @@
 # Runs swiftlint / periphery / actionlint / zizmor / prettier / xmllint /
 # markdownlint / shellcheck / shfmt / ruff / pytest when available.
 # Swift warnings are treated as errors everywhere; engine line coverage is gated.
+# The read-only checks run to completion and report together at the bottom rather
+# than stopping at the first failure — see `run_check` below.
 # `check.sh --portable` runs only the platform-independent subset (for Linux /
 # web sandboxes with no macOS toolchain) — see the flag parsing below.
 # The whole-app integration steps (the XCUITest suite and the leak scan) take
@@ -132,35 +134,111 @@ is_ci() {
   esac
 }
 
+# ---------------------------------------------------------------------------
+# Independent checks report together, rather than one per red run.
+#
+# Everything this script runs before `swift test` is read-only and independent:
+# no step's input is another step's output, so there is no ordering reason for
+# the first failure to hide the rest. Under a plain `set -e` it hid all of them —
+# a single pending swift-format reflow ended the run before swiftlint,
+# actionlint, zizmor, prettier, markdownlint, shellcheck, shfmt, ruff and pytest
+# had said anything. That is the same complaint the reordering comment further
+# down makes about the build ("their findings arrived one red run at a time"),
+# and reordering only fixed the half of it that was the build's fault.
+#
+# So: `run_check` records a failure and keeps going, and the run exits non-zero
+# at the very bottom with the whole list. It is the same shape the checks already
+# use internally — the dependency guard and the sound catalog each tally
+# violations and report them in one pass instead of exiting at the first.
+#
+# It stays scoped to the read-only checks. The Swift build, the coverage gate,
+# the sanitizers, the app build and the integration steps remain fail-fast,
+# because there the dependency is real: a failed build leaves nothing for the
+# next step to measure, and continuing would produce noise, not findings.
+FAILED_CHECKS=()
+
+# Set by the app build far below; declared here because the exit trap cleans it
+# up and must not trip over an unset variable when the run ends before then.
+APP_BUILD_LOG=""
+
+# Report the tally however the run ends — normal exit, a fail-fast abort, or ^C.
+# An exit trap rather than a block at the bottom of the file, because the
+# fail-fast region is between the two: `swift test` failing under errexit exits
+# immediately, and a summary printed at the end of the script would never run.
+# That would be the worst of both designs — the source-only checks would have
+# been collected and then thrown away, reporting only the build failure and
+# leaving the lint findings for the next run after all.
+report_failures() {
+  local status=$?
+  if [ -n "$APP_BUILD_LOG" ]; then
+    rm -f "$APP_BUILD_LOG"
+  fi
+  if [ "${#FAILED_CHECKS[@]}" -eq 0 ]; then
+    exit "$status"
+  fi
+  echo "" >&2
+  echo "error: ${#FAILED_CHECKS[@]} independent check(s) failed:" >&2
+  printf '         %s\n' "${FAILED_CHECKS[@]}" >&2
+  # A recorded failure must make the run red even when everything that could
+  # abort it succeeded — that is the whole point of not exiting at the first one.
+  if [ "$status" -eq 0 ]; then
+    exit 1
+  fi
+  exit "$status"
+}
+trap report_failures EXIT
+
+# Run one independent check: print its banner, run it, and record a failure
+# instead of aborting. Always returns 0 — a non-zero return would abort the
+# script under errexit, which is the behavior this exists to replace.
+#
+# Note that `"$@"` runs as the condition of an `if`, so errexit is suppressed for
+# the whole call. A check implemented as a function therefore has to return its
+# own failure explicitly; it will not die at the first failing command inside.
+run_check() {
+  local label="$1"
+  shift
+  echo "==> $label"
+  if "$@"; then
+    return 0
+  fi
+  FAILED_CHECKS+=("$label")
+  echo "error: '$label' failed — continuing, so the remaining independent checks still report" >&2
+  return 0
+}
+
 # No-external-dependencies guard. The engine is dependency-free by rule and the
 # app carries only the local BlurtEngine package (see AGENTS.md). A third-party
 # dependency is the single biggest supply-chain risk, so fail the moment one is
 # declared — in the engine's Package.swift or the app's project.yml. Extend
 # BlurtEngine rather than adding a package. Pure text parsing, so it runs in
 # both full and --portable modes and fails fast before the expensive steps.
-echo "==> no-external-dependencies guard"
-cd "$REPO_ROOT"
-DEP_VIOLATION=0
+check_no_external_deps() {
+  cd "$REPO_ROOT" || return 1
+  local violation=0
 
-# Engine: any SPM package dependency (.package(...)) is disallowed outright.
-if grep -nE '\.package\(' Package.swift >/dev/null 2>&1; then
-  echo "error: Package.swift declares an SPM dependency — the engine must stay dependency-free:" >&2
-  grep -nE '\.package\(' Package.swift >&2
-  DEP_VIOLATION=1
-fi
+  # Engine: any SPM package dependency (.package(...)) is disallowed outright.
+  if grep -nE '\.package\(' Package.swift >/dev/null 2>&1; then
+    echo "error: Package.swift declares an SPM dependency — the engine must stay dependency-free:" >&2
+    grep -nE '\.package\(' Package.swift >&2
+    violation=1
+  fi
 
-# App: only the local BlurtEngine (path:) package is allowed. A remote package
-# is declared with a url:/github: key inside project.yml's `packages:` block, so
-# extract that block and reject any such key.
-APP_PACKAGES="$(awk '/^packages:/{f=1;next} /^[^[:space:]]/{f=0} f' "$APP_DIR/project.yml")"
-if printf '%s\n' "$APP_PACKAGES" | grep -nE '(^|[[:space:]])(url|github):' >/dev/null 2>&1; then
-  echo "error: App/Blurt/project.yml declares a remote SPM package — the app must carry only the local BlurtEngine:" >&2
-  printf '%s\n' "$APP_PACKAGES" | grep -nE '(^|[[:space:]])(url|github):' >&2
-  DEP_VIOLATION=1
-fi
+  # App: only the local BlurtEngine (path:) package is allowed. A remote package
+  # is declared with a url:/github: key inside project.yml's `packages:` block, so
+  # extract that block and reject any such key.
+  local app_packages
+  app_packages="$(awk '/^packages:/{f=1;next} /^[^[:space:]]/{f=0} f' "$APP_DIR/project.yml")"
+  if printf '%s\n' "$app_packages" | grep -nE '(^|[[:space:]])(url|github):' >/dev/null 2>&1; then
+    echo "error: App/Blurt/project.yml declares a remote SPM package — the app must carry only the local BlurtEngine:" >&2
+    printf '%s\n' "$app_packages" | grep -nE '(^|[[:space:]])(url|github):' >&2
+    violation=1
+  fi
 
-[ "$DEP_VIOLATION" -eq 0 ] || exit 1
-echo "no external dependencies (engine dependency-free; app carries only local BlurtEngine)"
+  [ "$violation" -eq 0 ] || return 1
+  echo "no external dependencies (engine dependency-free; app carries only local BlurtEngine)"
+}
+run_check "no-external-dependencies guard" check_no_external_deps
 
 # Ignore rules must not shadow tracked files. A .gitignore pattern only suppresses
 # files that are *untracked* — one that also matches something already committed
@@ -169,15 +247,18 @@ echo "no external dependencies (engine dependency-free; app carries only local B
 # wrong and not announce itself, and the broad globs it carries (`*.log`,
 # `results*.json`) are exactly the kind that drift into a collision. Pure git
 # plumbing, so it runs in --portable too.
-echo "==> ignore rules don't shadow tracked files"
-SHADOWED="$(git ls-files --ignored --exclude-standard --cached)"
-if [ -n "$SHADOWED" ]; then
-  echo "error: these tracked files match an ignore rule, so git status will not report changes to them:" >&2
-  printf '%s\n' "$SHADOWED" >&2
-  echo "       narrow the pattern in .gitignore, or 'git rm --cached' the file if it should not be tracked." >&2
-  exit 1
-fi
-echo "no tracked file is shadowed by an ignore rule"
+check_ignore_rules() {
+  local shadowed
+  shadowed="$(git ls-files --ignored --exclude-standard --cached)"
+  if [ -n "$shadowed" ]; then
+    echo "error: these tracked files match an ignore rule, so git status will not report changes to them:" >&2
+    printf '%s\n' "$shadowed" >&2
+    echo "       narrow the pattern in .gitignore, or 'git rm --cached' the file if it should not be tracked." >&2
+    return 1
+  fi
+  echo "no tracked file is shadowed by an ignore rule"
+}
+run_check "ignore rules don't shadow tracked files" check_ignore_rules
 
 # Sound-catalog integrity. `SoundPackCatalog.swift` and the cue audio are both
 # emitted by scripts/generate-sounds.swift, but they land in different targets —
@@ -187,54 +268,63 @@ echo "no tracked file is shadowed by an ignore rule"
 # silent no-op, so the user picks that voice and simply hears nothing. Unit tests
 # can't cover it either — the engine deliberately ships no resources, so the two
 # halves only meet here. Pure text/filesystem, so it runs in --portable too.
-echo "==> sound catalog integrity"
-CATALOG="$REPO_ROOT/Sources/BlurtEngine/Audio/SoundPackCatalog.swift"
-SOUNDS_DIR="$APP_DIR/Blurt/Resources/Sounds"
-SOUND_VIOLATION=0
+check_sound_catalog() {
+  local catalog="$REPO_ROOT/Sources/BlurtEngine/Audio/SoundPackCatalog.swift"
+  local sounds_dir="$APP_DIR/Blurt/Resources/Sounds"
+  local violation=0
+  local catalog_ids duplicate_ids expected_sounds actual_sounds missing_sounds orphan_sounds
 
-CATALOG_IDS="$(sed -n 's/.*SoundPack(id: "\([^"]*\)".*/\1/p' "$CATALOG" | sort)"
-[ -n "$CATALOG_IDS" ] || die_check "parsed no SoundPack ids from $CATALOG — the id extraction broke"
+  catalog_ids="$(sed -n 's/.*SoundPack(id: "\([^"]*\)".*/\1/p' "$catalog" | sort)"
+  # A broken id extraction is reported like any other failure rather than via
+  # die_check: nothing above this line is fail-fast any more, and one check
+  # aborting the run would take the rest of the source-only block with it.
+  if [ -z "$catalog_ids" ]; then
+    echo "error: parsed no SoundPack ids from $catalog — the id extraction broke" >&2
+    return 1
+  fi
 
-DUPLICATE_IDS="$(printf '%s\n' "$CATALOG_IDS" | uniq -d)"
-if [ -n "$DUPLICATE_IDS" ]; then
-  echo "error: duplicate SoundPack ids in the catalog (find(id:) returns only the first," >&2
-  echo "       and the picker would list the same voice twice):" >&2
-  printf '%s\n' "$DUPLICATE_IDS" | sed 's/^/  /' >&2
-  SOUND_VIOLATION=1
-fi
+  duplicate_ids="$(printf '%s\n' "$catalog_ids" | uniq -d)"
+  if [ -n "$duplicate_ids" ]; then
+    echo "error: duplicate SoundPack ids in the catalog (find(id:) returns only the first," >&2
+    echo "       and the picker would list the same voice twice):" >&2
+    printf '%s\n' "$duplicate_ids" | sed 's/^/  /' >&2
+    violation=1
+  fi
 
-# `none` belongs to SoundPack.none; a catalog entry claiming it would shadow the
-# silent pack in `find(id:)`, so a user could never select "no sound" again.
-if printf '%s\n' "$CATALOG_IDS" | grep -qx 'none'; then
-  echo "error: a catalog entry uses the reserved id 'none' — it would shadow SoundPack.none" >&2
-  SOUND_VIOLATION=1
-fi
+  # `none` belongs to SoundPack.none; a catalog entry claiming it would shadow the
+  # silent pack in `find(id:)`, so a user could never select "no sound" again.
+  if printf '%s\n' "$catalog_ids" | grep -qx 'none'; then
+    echo "error: a catalog entry uses the reserved id 'none' — it would shadow SoundPack.none" >&2
+    violation=1
+  fi
 
-# Every voice needs both cues (`<id>-start.m4a` / `<id>-stop.m4a`), and every
-# shipped file needs a voice — an orphan is dead weight in the app bundle and a
-# sign the catalog lost an entry.
-# `sort -u` so a duplicate id (already reported above) can't also fake a missing
-# file here — `comm` mismatches on a repeated line and would name a file that
-# exists, sending the reader after the wrong problem.
-EXPECTED_SOUNDS="$(printf '%s\n' "$CATALOG_IDS" | sed -e 's/$/-start.m4a/' -e 'p' -e 's/-start\.m4a$/-stop.m4a/' | sort -u)"
-ACTUAL_SOUNDS="$(find "$SOUNDS_DIR" -maxdepth 1 -name '*.m4a' | sed 's|.*/||' | sort -u)"
+  # Every voice needs both cues (`<id>-start.m4a` / `<id>-stop.m4a`), and every
+  # shipped file needs a voice — an orphan is dead weight in the app bundle and a
+  # sign the catalog lost an entry.
+  # `sort -u` so a duplicate id (already reported above) can't also fake a missing
+  # file here — `comm` mismatches on a repeated line and would name a file that
+  # exists, sending the reader after the wrong problem.
+  expected_sounds="$(printf '%s\n' "$catalog_ids" | sed -e 's/$/-start.m4a/' -e 'p' -e 's/-start\.m4a$/-stop.m4a/' | sort -u)"
+  actual_sounds="$(find "$sounds_dir" -maxdepth 1 -name '*.m4a' | sed 's|.*/||' | sort -u)"
 
-MISSING_SOUNDS="$(comm -23 <(printf '%s\n' "$EXPECTED_SOUNDS") <(printf '%s\n' "$ACTUAL_SOUNDS"))"
-if [ -n "$MISSING_SOUNDS" ]; then
-  echo "error: catalog voices with no cue audio in $SOUNDS_DIR (they would play silently):" >&2
-  printf '%s\n' "$MISSING_SOUNDS" | sed 's/^/  /' >&2
-  SOUND_VIOLATION=1
-fi
+  missing_sounds="$(comm -23 <(printf '%s\n' "$expected_sounds") <(printf '%s\n' "$actual_sounds"))"
+  if [ -n "$missing_sounds" ]; then
+    echo "error: catalog voices with no cue audio in $sounds_dir (they would play silently):" >&2
+    printf '%s\n' "$missing_sounds" | sed 's/^/  /' >&2
+    violation=1
+  fi
 
-ORPHAN_SOUNDS="$(comm -13 <(printf '%s\n' "$EXPECTED_SOUNDS") <(printf '%s\n' "$ACTUAL_SOUNDS"))"
-if [ -n "$ORPHAN_SOUNDS" ]; then
-  echo "error: cue audio in $SOUNDS_DIR with no catalog voice (unreachable, and shipped anyway):" >&2
-  printf '%s\n' "$ORPHAN_SOUNDS" | sed 's/^/  /' >&2
-  SOUND_VIOLATION=1
-fi
+  orphan_sounds="$(comm -13 <(printf '%s\n' "$expected_sounds") <(printf '%s\n' "$actual_sounds"))"
+  if [ -n "$orphan_sounds" ]; then
+    echo "error: cue audio in $sounds_dir with no catalog voice (unreachable, and shipped anyway):" >&2
+    printf '%s\n' "$orphan_sounds" | sed 's/^/  /' >&2
+    violation=1
+  fi
 
-[ "$SOUND_VIOLATION" -eq 0 ] || exit 1
-echo "$(printf '%s\n' "$CATALOG_IDS" | wc -l | tr -d ' ') voices, each with both cues, no orphans"
+  [ "$violation" -eq 0 ] || return 1
+  echo "$(printf '%s\n' "$catalog_ids" | wc -l | tr -d ' ') voices, each with both cues, no orphans"
+}
+run_check "sound catalog integrity" check_sound_catalog
 
 # GitHub Pages site integrity. prettier and xmllint below cover the site's
 # *formatting* and the sitemap's well-formedness; neither asks whether the page
@@ -243,9 +333,8 @@ echo "$(printf '%s\n' "$CATALOG_IDS" | wc -l | tr -d ' ') voices, each with both
 # error anywhere in this repo — just a 404 on the live site with check.sh green.
 # scripts/check-site.sh closes that gap. Pure text/filesystem and deliberately
 # offline (no external link fetching), so it runs in --portable too.
-echo "==> site integrity"
 cd "$REPO_ROOT"
-bash scripts/check-site.sh
+run_check "site integrity" bash scripts/check-site.sh
 
 # Shell portability. scripts/ and .claude/hooks/ run against BSD userland on a Mac
 # and CI, and GNU userland in a Linux / web sandbox; shellcheck reads both as
@@ -253,9 +342,24 @@ bash scripts/check-site.sh
 # BSD-sed sitemap strip). Pure text, so it runs in --portable — which is exactly
 # where the divergence gets introduced. --self-test first, because a pattern that
 # stops matching is indistinguishable from a clean tree.
-echo "==> shell portability (GNU-only idioms)"
-bash scripts/check-portability.sh --self-test >/dev/null
-bash scripts/check-portability.sh
+check_portability() {
+  bash scripts/check-portability.sh --self-test >/dev/null || return 1
+  bash scripts/check-portability.sh
+}
+run_check "shell portability (GNU-only idioms)" check_portability
+
+# Settled decisions (AGENTS.md). The table there is prose, and prose is enforced
+# only for as long as a reviewer remembers it; check-invariants.sh carries the
+# subset a regex can decide — AVAudioEngine capture, a streaming or on-device
+# path, a client-side cleanup pass, `LSUIElement`, a keystroke-typing injector,
+# the production Keychain in tests. Same shape as check-portability.sh above
+# (rules table, per-rule probe, escape hatch), and same reason for the --self-test
+# first: a rule that stopped matching looks exactly like a tree that stayed clean.
+check_invariants() {
+  bash scripts/check-invariants.sh --self-test >/dev/null || return 1
+  bash scripts/check-invariants.sh
+}
+run_check "settled decisions (AGENTS.md invariants)" check_invariants
 
 # ---------------------------------------------------------------------------
 # Source-only checks run BEFORE the Swift build below, not after it.
@@ -269,7 +373,10 @@ bash scripts/check-portability.sh
 # earlier failures".
 #
 # A green run does exactly the same total work in either order. What moves is
-# when a *red* run tells you, and how much it tells you at once.
+# when a *red* run tells you, and how much it tells you at once. `run_check`
+# above is the other half of that same argument, applied within this block
+# instead of across it: ordering stopped the build from hiding these, and
+# aggregation stops them from hiding each other.
 #
 # The two Swift checks that genuinely need the build stay behind it:
 # `swiftlint analyze` reads the compiler log the app build captures, and periphery
@@ -293,10 +400,12 @@ elif command -v swift-format >/dev/null 2>&1; then
 else
   SWIFT_FORMAT=()
 fi
-if [ "${#SWIFT_FORMAT[@]}" -gt 0 ]; then
-  echo "==> swift-format"
+check_swift_format() {
   git ls-files -z -- '*.swift' \
     | xargs -0 "${SWIFT_FORMAT[@]}" lint --strict
+}
+if [ "${#SWIFT_FORMAT[@]}" -gt 0 ]; then
+  run_check "swift-format" check_swift_format
 else
   echo "note: swift-format not installed; skipping (Swift formatting is checked on CI)"
 fi
@@ -304,23 +413,20 @@ fi
 SWIFTLINT_READY=0
 if tool_ready swiftlint 'brew install swiftlint'; then
   SWIFTLINT_READY=1
-  echo "==> swiftlint"
   # Covers what swift-format can't: correctness smells and complexity limits
   # (config in the sibling .swiftlint.yml). --strict promotes warnings to
   # failures, so any lint violation fails the build — keep the tree lint-clean.
-  swiftlint lint --strict --quiet
+  run_check "swiftlint" swiftlint lint --strict --quiet
 fi
 
 if tool_ready actionlint 'brew install actionlint'; then
-  echo "==> actionlint"
   # Auto-discovers .github/workflows, so no file list. It also pipes each `run:`
   # block through shellcheck when shellcheck is on PATH (it is, via the Brewfile),
   # which is what lint-checks the inline bash in release.yml and pr-dev-build.yml.
-  actionlint
+  run_check "actionlint" actionlint
 fi
 
 if tool_ready zizmor 'brew install zizmor'; then
-  echo "==> zizmor"
   # The security half of workflow lint, where actionlint is the correctness half:
   # template-injection sinks in `run:` blocks, overbroad `permissions:`, unpinned
   # action refs, credential-persistence hazards. It earns its place here because
@@ -337,17 +443,16 @@ if tool_ready zizmor 'brew install zizmor'; then
   # are the ones resolving action refs upstream, which Dependabot already watches.
   # -q drops the per-file progress chatter and the "defaulting to offline" warning,
   # keeping findings — the only thing worth reading here.
-  zizmor -q --offline .github/workflows/
+  run_check "zizmor" zizmor -q --offline .github/workflows/
 fi
 
 if tool_ready prettier 'brew install prettier'; then
-  echo "==> prettier --check"
   # Formatting authority for the repo's non-Swift text: CI/config (yml/yaml),
   # docs (md), and the GitHub Pages site (html/css — which also covers the
   # JSON-LD embedded in site/index.html). JSON is intentionally left out of the
   # glob: the only non-conforming file is the Xcode-generated AppIcon icon.json,
   # which must not be reformatted by hand.
-  prettier --check '**/*.{yml,yaml,md,html,css}'
+  run_check "prettier --check" prettier --check '**/*.{yml,yaml,md,html,css}'
 fi
 
 if tool_ready xmllint 'ships with libxml2'; then
@@ -358,25 +463,25 @@ if tool_ready xmllint 'ships with libxml2'; then
   # entry. Guard on an empty file list so xmllint never blocks reading stdin.
   XML_FILES="$(git ls-files '*.xml')"
   if [ -n "$XML_FILES" ]; then
-    echo "==> xmllint (XML well-formedness)"
     # shellcheck disable=SC2086
-    xmllint --noout $XML_FILES
+    run_check "xmllint (XML well-formedness)" xmllint --noout $XML_FILES
   fi
 fi
 
-if tool_ready markdownlint 'brew install markdownlint-cli'; then
-  echo "==> markdownlint"
-  # Structural lint for the repo's Markdown (config in .markdownlint.jsonc;
-  # prose-wrapping rules are off there since prettier owns Markdown formatting).
-  # CLAUDE.md is a short compatibility shim that points agents at AGENTS.md, so
-  # lint the canonical doc once and skip the alias file. docs/ (plans + marketing
-  # drafts) is excluded too — prose, not shipped source (also in .markdownlintignore;
-  # filtered here as well since the file list is passed to markdownlint as args).
+# Structural lint for the repo's Markdown (config in .markdownlint.jsonc;
+# prose-wrapping rules are off there since prettier owns Markdown formatting).
+# CLAUDE.md is a short compatibility shim that points agents at AGENTS.md, so
+# lint the canonical doc once and skip the alias file. docs/ (plans + marketing
+# drafts) is excluded too — prose, not shipped source (also in .markdownlintignore;
+# filtered here as well since the file list is passed to markdownlint as args).
+check_markdownlint() {
   git ls-files '*.md' | grep -vx 'CLAUDE.md' | grep -vE '^docs/' | xargs markdownlint
+}
+if tool_ready markdownlint 'brew install markdownlint-cli'; then
+  run_check "markdownlint" check_markdownlint
 fi
 
 if tool_ready shellcheck 'brew install shellcheck'; then
-  echo "==> shellcheck"
   # Static analysis for the project's shell scripts (release-*, check.sh
   # itself) — catches quoting bugs, unset vars, and unsafe patterns.
   #
@@ -386,17 +491,16 @@ if tool_ready shellcheck 'brew install shellcheck'; then
   # that puts release-lib.sh and hook-lib.sh in the input set, so the `source` lines
   # resolve instead of raising SC1091. (shfmt below deliberately still covers only
   # scripts/*.sh: the hooks predate any formatting check and haven't been reflowed.)
-  shellcheck scripts/*.sh .claude/hooks/*.sh
+  run_check "shellcheck" shellcheck scripts/*.sh .claude/hooks/*.sh
 fi
 
 if tool_ready shfmt 'brew install shfmt'; then
-  echo "==> shfmt --diff"
   # Formatting authority for scripts/*.sh, the same division of labour swift-format
   # and swiftlint have: shfmt owns layout, shellcheck owns correctness. --diff
   # prints what it would change and exits non-zero, so an unformatted script fails
   # here instead of drifting. No formatting flags on purpose — that is what lets
   # shfmt read the [*.sh] block in .editorconfig, so editors and this check agree.
-  shfmt --diff scripts/*.sh
+  run_check "shfmt --diff" shfmt --diff scripts/*.sh
 fi
 
 # The evals (evals/) are the repo's only Python: offline decision support for the
@@ -405,32 +509,34 @@ fi
 # instrument, and all three tools are platform-independent, so they run in the
 # --portable subset too.
 if tool_ready ruff 'brew install ruff'; then
-  echo "==> ruff format --check (evals)"
   # Formatting authority for the Python, config in evals/ruff.toml. --check is the
   # non-mutating half; run `ruff format evals/` to fix.
-  ruff format --check evals/
-  echo "==> ruff check (evals)"
+  run_check "ruff format --check (evals)" ruff format --check evals/
   # Lint: pyflakes/pycodestyle correctness plus import order, pyupgrade, and
   # bugbear. Line width is deliberately left to the formatter (see the config).
-  ruff check evals/
+  run_check "ruff check (evals)" ruff check evals/
 fi
 
 if tool_ready pytest 'brew install pytest'; then
-  echo "==> pytest (evals/dictation-prompt)"
   # The eval's offline suite: corpus construction, disfluency injection, the
   # scoring metric, and the split disjointness. It needs no network, no API key,
   # and no third-party packages beyond pytest itself — everything that imports
   # DSPy lives in program.py, which these tests assert never gets imported. That
   # property is why this is cheap enough to gate on.
-  pytest -q evals/dictation-prompt/test_eval.py
+  run_check "pytest (evals/dictation-prompt)" pytest -q evals/dictation-prompt/test_eval.py
 fi
 
-echo "==> release-lib.sh unit tests"
 cd "$REPO_ROOT"
 # Pure-bash unit tests for the release orchestrator's decision helpers. No Mac
 # or network dependencies, so they run everywhere check.sh runs.
-bash scripts/release.test.sh
+run_check "release-lib.sh unit tests" bash scripts/release.test.sh
 
+# A failure above does NOT skip the block below, deliberately. A lint violation
+# and a failing test are independent facts about the branch, and stopping here
+# would put them back on separate runs — which is the thing this script's
+# aggregation and its check ordering both exist to avoid. The cost is a
+# ten-minute build on a run already known to be red; ^C is right there, and CI
+# wants both answers regardless.
 if [ "$PORTABLE" -eq 1 ]; then
   echo "==> portable mode: skipping swift test, coverage gate, sanitizers, xcodegen"
   echo "    drift check, app build, UI tests, leaks, swiftlint analyze, periphery"
@@ -526,8 +632,8 @@ else
   # The raw build log is tee'd to $APP_BUILD_LOG so `swiftlint analyze` (below) can
   # read the compiler invocations for its analyzer rules. This build compiles both
   # the app and the engine package, so the log covers both.
+  # Removed by the exit trap installed at the top, which owns every exit path.
   APP_BUILD_LOG="$(mktemp -t blurt-build)"
-  trap 'rm -f "$APP_BUILD_LOG"' EXIT
   xcodebuild \
     -project Blurt.xcodeproj \
     -scheme Blurt \
@@ -590,33 +696,41 @@ else
   fi
 fi
 
+# The last two checks are aggregated like the source-only ones above: they need
+# the build, but not each other. Each takes minutes — periphery runs its own
+# xcodebuild — so having a swiftlint-analyze finding hide every periphery finding
+# is the most expensive version of the one-red-run-at-a-time problem in this file.
 if [ "$PORTABLE" -eq 0 ] && [ "$SWIFTLINT_READY" -eq 1 ]; then
   # The app build above cds into App/Blurt; come back before reading the log.
   cd "$REPO_ROOT"
-  echo "==> swiftlint analyze (unused imports)"
   # Analyzer rules need the compiler invocations, so feed them the build log
   # captured above. Catches unused imports — the one dead-code gap periphery
   # (which covers unused declarations) doesn't. False positives on AVFoundation/
   # OSLog are suppressed via always_keep_imports in .swiftlint.yml.
-  swiftlint analyze --strict --quiet --compiler-log-path "$APP_BUILD_LOG"
+  run_check "swiftlint analyze (unused imports)" \
+    swiftlint analyze --strict --quiet --compiler-log-path "$APP_BUILD_LOG"
 fi
 
 if [ "$PORTABLE" -eq 0 ]; then
   if tool_ready periphery 'brew install periphery'; then
-    echo "==> periphery"
     # --strict promotes any unused-code finding to a non-zero exit.
     # Periphery does its own xcodebuild + index — separate from the build above
     # because reusing DerivedData reliably across machines is fragile.
-    periphery scan --strict --quiet
+    run_check "periphery" periphery scan --strict --quiet
   fi
 fi
 
-if [ "$PORTABLE" -eq 1 ]; then
-  echo "==> ok (portable subset only — Swift build/tests NOT run; CI on macos-26 is the authority on green)"
-elif [ "${INTEGRATION:-0}" -eq 0 ]; then
-  # Say it at the end too, where the reader is deciding whether this run means
-  # "green": everything else passed, but the UI suite and leak scan did not run.
-  echo "==> ok (UI suite + leak scan NOT run — CI on macos-26 covers those)"
-else
-  echo "==> ok"
+# The closing line, and only when there is nothing to report — otherwise the exit
+# trap has the last word. Printing "ok" above a list of failures would be worse
+# than printing nothing at all.
+if [ "${#FAILED_CHECKS[@]}" -eq 0 ]; then
+  if [ "$PORTABLE" -eq 1 ]; then
+    echo "==> ok (portable subset only — Swift build/tests NOT run; CI on macos-26 is the authority on green)"
+  elif [ "${INTEGRATION:-0}" -eq 0 ]; then
+    # Say it at the end too, where the reader is deciding whether this run means
+    # "green": everything else passed, but the UI suite and leak scan did not run.
+    echo "==> ok (UI suite + leak scan NOT run — CI on macos-26 covers those)"
+  else
+    echo "==> ok"
+  fi
 fi

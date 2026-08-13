@@ -10,6 +10,15 @@ These are settled decisions. Don't reintroduce them; if a task seems to require
 one, stop and ask the user first. This is the fast "don't" list; AGENTS.md's
 "Settled decisions" table is the fuller reference and the source of truth.
 
+Many of these are also enforced mechanically — `scripts/check-invariants.sh`
+(run by `check.sh`, including `--portable`) greps for the constructs that give
+each one away, so reintroducing one fails the health check rather than depending
+on this list being read. Treat that as a backstop, not the boundary: the rules
+it can't express are still here, still binding, and the reasons in this file are
+what let you tell an intended exception from a mistake. Never silence a finding
+with `// invariant-ok:` to get a build green — that marker is for a line that is
+genuinely correct, and reaching for it means it's time to stop and ask.
+
 ## Audio
 
 - **No `AVAudioEngine` / `installTap` capture path.** `MicCapture` uses
