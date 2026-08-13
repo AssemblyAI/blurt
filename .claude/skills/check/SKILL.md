@@ -27,19 +27,20 @@ What you CAN run there is the portable subset:
 scripts/check.sh --portable
 ```
 
-It runs the repo-integrity guards (dependencies, sound catalog, site, shell
-portability, settled decisions) then
-actionlint / zizmor / prettier / xmllint / markdownlint / shellcheck / shfmt /
-ruff (lint + format check) / pytest over `evals/` / `release.test.sh` (plus `swift-format lint` and `swiftlint lint` if Linux
-builds are on `PATH` — under the default web network policy they are not).
-That fully verifies docs, site, scripts, eval, and workflow changes. It is **not**
-"green" in the CI sense: the entire Swift side is skipped, and the closing
-line says so. For Swift changes, push and watch `check.yml` instead — its
-`compile` job reports a broken test build in ~2 minutes, and `format-patch`
+It runs the repo-integrity guards — dependencies, sound catalog, site, shell
+portability, and settled decisions — then actionlint, zizmor, prettier, xmllint,
+markdownlint, shellcheck, shfmt, ruff (lint + format check), pytest over
+`evals/`, and `release.test.sh`. `swift-format lint` and `swiftlint lint` join
+them when Linux builds are on `PATH`; under the default web network policy they
+are not.
+
+That fully verifies docs, site, scripts, eval, and workflow changes. It is
+**not** "green" in the CI sense: the entire Swift side is skipped, and the
+closing line says so. For Swift changes, push and watch `check.yml` instead —
+its `compile` job reports a broken test build in ~2 minutes, and `format-patch`
 publishes the exact `swift-format` reflow as an artifact so you don't have to
-reproduce it by hand. In
-Claude Code on the web, the `SessionStart` hook installs the portable
-linters automatically.
+reproduce it by hand. In Claude Code on the web, the `SessionStart` hook
+installs the portable linters automatically.
 
 Quick preflight:
 
