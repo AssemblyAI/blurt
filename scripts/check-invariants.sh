@@ -63,9 +63,19 @@ GUARDRAILS=".claude/skills/project-guardrails/SKILL.md"
 # The generated Xcode project is excluded everywhere: it is derived from
 # project.yml (check.sh fails on drift), so scanning it would report every
 # finding twice and invite a fix in the file that gets overwritten.
-ENGINE="Sources"
-APP="App/Blurt :!App/Blurt/Blurt.xcodeproj"
-TESTS="Tests App/Blurt/BlurtUITests"
+#
+# Scopes name file *types*, not just directories, because these rules are about
+# code and a directory holds more than code. `Sources` was all Swift until
+# PR #137 moved BLURTENGINE.md to Sources/BlurtEngine/README.md — a document
+# whose job is to explain these very decisions ("Do not replace this with a
+# long-lived AVAudioEngine/installTap graph"). Prose about a rule is not a
+# violation of it, and the whole-line-comment filter below can't help: a
+# Markdown paragraph isn't a comment in any language grep knows. Restricting to
+# code extensions also keeps the app scope off the .png and .m4a resources it
+# was otherwise grepping byte by byte.
+ENGINE="Sources/*.swift"
+APP="App/Blurt/*.swift App/Blurt/*.yml App/Blurt/*.plist :!App/Blurt/Blurt.xcodeproj"
+TESTS="Tests/*.swift App/Blurt/BlurtUITests/*.swift"
 
 # Four parallel arrays rather than one delimited list, for the reason
 # check-portability.sh gives: the patterns contain `|`, so splitting on it
