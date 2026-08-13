@@ -28,14 +28,30 @@
 # skipped, so prose *about* a settled decision — which the sources carry a lot of,
 # since each one documents why it is what it is — doesn't trip the gate.
 #
-# Adding a rule: put the pattern, the advice, the scope, and a known-bad probe at
-# the SAME index in the four arrays. The self-test and the length assertion below
-# are what keep a half-added rule from looking like a clean tree.
+# Every rule is also pinned to the prose it enforces, in both AGENTS.md's table
+# and the guardrails skill: `--self-test` fails if either row goes missing. The
+# rows move — PR #132 rewrote the `config.prompt` and language entries — and a
+# rule outliving its row is the one failure this file cannot survive. It would
+# still fire, still cite AGENTS.md, and still sound authoritative while enforcing
+# a decision the project had reversed, which is strictly worse than the prose it
+# replaced: prose that no longer reflects the design gets read and ignored, a
+# gate that no longer reflects the design blocks the change that reflects it.
+# Pinning both files also makes CLAUDE.md's "keep the two in agreement" — until
+# now enforced by nobody — cost one grep.
+#
+# Adding a rule: put the pattern, the scope, the advice, a known-bad probe, and
+# the two anchors at the SAME index in the six arrays. The self-test and the
+# length assertion below are what keep a half-added rule from looking like a
+# clean tree.
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
+
+# The prose each rule answers to. Anchors are matched against these.
+GUIDE="AGENTS.md"
+GUARDRAILS=".claude/skills/project-guardrails/SKILL.md"
 
 # Scopes are git pathspecs, word-split at use. They are load-bearing, not
 # decoration: most of these terms appear legitimately somewhere in the repo, and
@@ -117,11 +133,55 @@ PROBES=(
   "@available(*, deprecated, renamed: \"NewName\")"
 )
 
+# A verbatim slice of the row in AGENTS.md's "Settled decisions" table that each
+# rule mechanizes — its "Don't" cell, which is the one part of a row phrased to
+# be quoted. Matched with grep -F inside the table section only, so the pin is
+# "the row is still there", not the weaker "these words appear somewhere in the
+# guide". Rows are single lines (markdown tables cannot wrap), so a full cell is
+# safe to use as an anchor.
+TABLE_ANCHORS=(
+  "Use \`AVAudioEngine\` / \`installTap\` for capture"
+  "Add streaming STT"
+  "Add a client-side LLM cleanup pass"
+  "Add local models or model downloads"
+  "Pin transcription to English, or set a language at all"
+  "Bring back \`config.prompt\`"
+  "Add a keystroke-typing paste path or a length threshold"
+  "Add \`LSUIElement\` or a menu-bar-**only** mode"
+  "Add a \`KeyboardShortcuts\` package or a key+modifier chord"
+  "Add a self-replacing install or background auto-updater"
+  "Touch the real Keychain in tests"
+  "Add backwards-compat shims for removed types"
+)
+
+# The same rule as the guardrails skill words it. Deliberately not the table's
+# wording: the skill is prose the agent reads, so it says the same things
+# differently, and a pin that assumed identical text would only be checking that
+# someone had copy-pasted. These are shorter than the table anchors because the
+# skill's lines wrap and grep works a line at a time.
+SKILL_ANCHORS=(
+  "No \`AVAudioEngine\` / \`installTap\` capture path."
+  "No streaming STT."
+  "No separate LLM cleanup pass."
+  "No local models / model downloads."
+  "Don't set a language — not a directive, and not \`config.language_code\`."
+  "There is no \`config.prompt\`."
+  "Injection is always a clipboard paste"
+  "no \`LSUIElement\`, no menu-bar-_only_ mode"
+  "No \`KeyboardShortcuts\` package"
+  "Updates are download-only"
+  "the real Keychain in tests"
+  "Don't add backwards-compat shims for removed types."
+)
+
 if [ "${#SCOPES[@]}" -ne "${#PATTERNS[@]}" ] \
   || [ "${#ADVICE[@]}" -ne "${#PATTERNS[@]}" ] \
-  || [ "${#PROBES[@]}" -ne "${#PATTERNS[@]}" ]; then
+  || [ "${#PROBES[@]}" -ne "${#PATTERNS[@]}" ] \
+  || [ "${#TABLE_ANCHORS[@]}" -ne "${#PATTERNS[@]}" ] \
+  || [ "${#SKILL_ANCHORS[@]}" -ne "${#PATTERNS[@]}" ]; then
   echo "error: the rule arrays are not the same length — a rule is half-added" >&2
-  echo "       patterns=${#PATTERNS[@]} scopes=${#SCOPES[@]} advice=${#ADVICE[@]} probes=${#PROBES[@]}" >&2
+  echo "       patterns=${#PATTERNS[@]} scopes=${#SCOPES[@]} advice=${#ADVICE[@]}" >&2
+  echo "       probes=${#PROBES[@]} table_anchors=${#TABLE_ANCHORS[@]} skill_anchors=${#SKILL_ANCHORS[@]}" >&2
   exit 1
 fi
 
@@ -163,8 +223,46 @@ if [ "${1:-}" = "--self-test" ]; then
     fi
   done
 
-  [ "$failed" -eq 0 ] || exit 1
-  echo "check-invariants.sh: all ${#PATTERNS[@]} rules live"
+  # Every rule still answers to a documented decision. Scoped to the table
+  # section rather than the whole guide, so a row that was deleted can't keep
+  # its pin alive by being mentioned in passing somewhere else in AGENTS.md.
+  TABLE="$(sed -n '/^## Settled decisions/,/^Release-side invariants/p' "$GUIDE")"
+  # The extraction failing would report every rule as unpinned at once, which
+  # reads like a catastrophe and is really a renamed heading. Say so instead.
+  if [ -z "$TABLE" ]; then
+    echo "  FAIL could not find the 'Settled decisions' table in $GUIDE" >&2
+    echo "       (the heading or the closing 'Release-side invariants' paragraph moved;" >&2
+    echo "       fix the extraction here rather than the anchors below)" >&2
+    exit 1
+  fi
+
+  for i in "${!PATTERNS[@]}"; do
+    if printf '%s\n' "$TABLE" | grep -qF -- "${TABLE_ANCHORS[$i]}"; then
+      echo "  ok   rule $i is pinned to its $GUIDE row"
+    else
+      echo "  FAIL rule $i has no row in $GUIDE's settled-decisions table:" >&2
+      echo "       ${TABLE_ANCHORS[$i]}" >&2
+      failed=1
+    fi
+    if grep -qF -- "${SKILL_ANCHORS[$i]}" "$GUARDRAILS"; then
+      echo "  ok   rule $i is pinned to $GUARDRAILS"
+    else
+      echo "  FAIL rule $i has no entry in $GUARDRAILS:" >&2
+      echo "       ${SKILL_ANCHORS[$i]}" >&2
+      failed=1
+    fi
+  done
+
+  if [ "$failed" -ne 0 ]; then
+    echo "" >&2
+    echo "       A rule whose prose is gone is the one failure this gate can't survive:" >&2
+    echo "       it would keep firing, keep citing AGENTS.md, and keep sounding right" >&2
+    echo "       while enforcing something the project had already reversed. So decide," >&2
+    echo "       don't patch: if the row was only reworded, update the anchor; if the" >&2
+    echo "       decision was reversed, delete the rule with it." >&2
+    exit 1
+  fi
+  echo "check-invariants.sh: all ${#PATTERNS[@]} rules live and pinned to their prose"
   exit 0
 fi
 

@@ -13,7 +13,10 @@ one, stop and ask the user first. This is the fast "don't" list; AGENTS.md's
 Many of these are also enforced mechanically — `scripts/check-invariants.sh`
 (run by `check.sh`, including `--portable`) greps for the constructs that give
 each one away, so reintroducing one fails the health check rather than depending
-on this list being read. Treat that as a backstop, not the boundary: the rules
+on this list being read. Those rules also pin a verbatim slice of the bullet
+they come from in this file, so rewording or deleting one fails the gate until
+someone decides whether the rule survives the edit — edit these entries
+knowing that, and fix the anchor in the same change. Treat that as a backstop, not the boundary: the rules
 it can't express are still here, still binding, and the reasons in this file are
 what let you tell an intended exception from a mistake. Never silence a finding
 with `// invariant-ok:` to get a build green — that marker is for a line that is

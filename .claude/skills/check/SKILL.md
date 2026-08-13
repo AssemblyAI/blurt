@@ -80,7 +80,10 @@ hides every lint finding behind it — expect to fix a batch, not a queue.
    [Settled decisions](../../../AGENTS.md#settled-decisions--dont-reintroduce-these)
    table — `AVAudioEngine` capture, a streaming or on-device path, a client-side
    cleanup pass, `LSUIElement`, a keystroke-typing injector, the production
-   Keychain in tests. Both `--portable` too
+   Keychain in tests. Each rule is pinned to its table row and its
+   `project-guardrails` bullet, so editing the prose without revisiting the rule
+   fails here rather than leaving a gate that enforces a reversed decision. Both
+   `--portable` too
 3. `swift-format lint --strict`, then `swiftlint lint --strict` (warnings are
    failures) — both source-only
 4. actionlint / zizmor (workflow security) / prettier / xmllint / markdownlint /
