@@ -77,7 +77,12 @@ That skips the `/Applications` install, and an ad-hoc signature changes on every
 build — macOS keys the Accessibility grant to the signature, so you'd re-grant
 permissions after each rebuild. (Blurt notices the signature changed and clears
 the orphaned grant at launch; without that the Blurt row stays switched on in
-System Settings while the app keeps reporting it as denied.) Fine for checking
+System Settings while the app keeps reporting it as denied.)
+
+The same self-heal covers the everyday case: installing a dev build over a
+released Blurt re-grants microphone and Accessibility, because the release and
+your Apple Development cert pin different code requirements even though the
+bundle id, install path and signing team all match. Fine for checking
 that a change compiles and launches; `dev-build.sh` is the better daily loop.
 
 ### After editing `App/Blurt/project.yml`

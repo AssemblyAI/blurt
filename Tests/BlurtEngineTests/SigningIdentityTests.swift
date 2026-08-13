@@ -8,7 +8,7 @@ struct SigningIdentityTests {
   // What the test host reports depends on how it was signed (ad-hoc under
   // `swift test`, team-signed under Xcode), so these assert shape and stability
   // rather than a literal. `includingAdHoc: false` is the narrower answer the
-  // UI-test build asks for: team identities only.
+  // UI-test build asks for: team-signed hosts only.
   private static func identity() -> String? { SigningIdentity.current(includingAdHoc: true) }
   private static func teamIdentity() -> String? { SigningIdentity.current(includingAdHoc: false) }
 
@@ -20,44 +20,33 @@ struct SigningIdentityTests {
     #expect(Self.identity() == Self.identity())
   }
 
-  @Test("a Team ID is the identity verbatim, ad-hoc or not")
-  func teamIdentityIsUnprefixed() {
-    // Frozen value shape: builds that predate the ad-hoc case recorded a bare Team
-    // ID, and a signed app must keep matching that marker rather than re-running
-    // the `tccutil` reset once on every installed machine. A team-signed build
-    // also answers the same either way — `includingAdHoc` only decides what
-    // happens when there is no team.
-    guard let team = Self.teamIdentity() else { return }
-    #expect(Self.identity() == team)
-  }
-
-  @Test("an ad-hoc identity is a namespaced hex cdhash")
-  func adHocIdentityIsAPrefixedCdhash() {
-    guard Self.teamIdentity() == nil, let identity = Self.identity() else {
-      return  // team-signed host, or code with no signature at all
+  // Signed code always has a designated requirement, ad-hoc included — that is
+  // the claim the whole migration rests on, and the one thing here that is not
+  // pure logic. Under `swift test` the host is ad-hoc signed, so this covers the
+  // per-PR dev build's case (no team, a cdhash-pinned requirement) on the machine
+  // that runs it.
+  @Test("a signed host reports a namespaced designated requirement")
+  func identityIsANamespacedRequirement() {
+    guard let identity = Self.identity() else {
+      return  // code with no signature at all
     }
-    #expect(identity.hasPrefix(SigningIdentity.cdhashPrefix))
-    let hex = identity.dropFirst(SigningIdentity.cdhashPrefix.count)
-    // SHA-1-truncated cdhash: 20 bytes, so 40 hex digits (longer for other digest
-    // choices — the length floor is what matters, not the exact algorithm).
-    #expect(hex.count >= 40)
-    // Hoisted out of the macro on purpose: `#expect` rewrites a call into
-    // `__checkFunctionCall(hex.self, calling: { $0.allSatisfy($1) }, …)`, and that
-    // rewrite loses `allSatisfy`'s `rethrows`-ness — the expansion won't compile
-    // without a `try` it has no use for. Don't inline it back.
-    let isHex = hex.allSatisfy(\.isHexDigit)
-    #expect(isHex)
-    // …and the prefix keeps it out of the Team ID's namespace: a Team ID is 10
-    // alphanumerics, so a colon is what a recorded marker can be told apart by.
+    #expect(identity.hasPrefix(SigningIdentity.requirementPrefix))
+    let requirement = identity.dropFirst(SigningIdentity.requirementPrefix.count)
+    // A requirement expression is never empty, and never a bare Team ID (10
+    // alphanumerics): the marker recorded by builds that predate this shape has to
+    // stay distinguishable from one recorded now.
+    #expect(!requirement.isEmpty)
     #expect(identity.contains(":"))
   }
 
-  @Test("includingAdHoc: false never reports a cdhash")
+  // The UI-test build's carve-out. Under `swift test` the host is ad-hoc signed,
+  // so this is the case that matters: no identity at all, which the migration
+  // reads as "no action" and never spawns `tccutil` for. A team-signed host
+  // (Xcode) answers the same either way — `includingAdHoc` only decides what
+  // happens when there is no team.
+  @Test("includingAdHoc: false answers only for team-signed code")
   func adHocIsIdentityLessWhenExcluded() {
-    // The UI-test build's carve-out. Under `swift test` the host is ad-hoc signed,
-    // so this is the case that matters: no identity at all, which the migration
-    // reads as "no action" and never spawns `tccutil` for.
     guard let team = Self.teamIdentity() else { return }
-    #expect(!team.hasPrefix(SigningIdentity.cdhashPrefix))
+    #expect(Self.identity() == team)
   }
 }

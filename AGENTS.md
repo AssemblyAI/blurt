@@ -243,11 +243,19 @@ TCC pins an Accessibility grant to the app's **designated requirement**, and re-
 binary against the requirement it stored. When what that requirement pins changes, the grant is
 orphaned in the worst possible way: the Blurt row stays in System Settings, switched on, while
 `AXIsProcessTrusted()` keeps returning false — so the wizard's Accessibility step can never be
-satisfied and toggling the row does nothing. Two things move it:
+satisfied and toggling the row does nothing. Three things move it:
 
-- **The signing team.** Handled at signing time: the post-build script above pins an explicit
-  team-based requirement (`leaf[subject.OU]`) instead of codesign's default, which names the leaf
-  cert's Common Name and would orphan the grant every time the Apple Development cert rotates.
+- **The certificate kind.** A release (`Developer ID`, `release-build.sh`) carries codesign's
+  _default_ requirement, which pins the leaf cert's Common Name and the Developer ID marker OIDs. A
+  dev build (`Apple Development`) satisfies none of those, so **installing `dev-build.sh` over a
+  release orphans the release's grant** — same bundle id, same install path, same signing team, and
+  still a different requirement. This is the everyday case, and it is not fixable at signing time
+  from this side: the requirement a release already handed to `tccd` was written when that release
+  was signed.
+- **The leaf cert.** Handled at signing time on the dev side: the post-build script above pins an
+  explicit team-based requirement (`leaf[subject.OU]`) instead of codesign's default, so the grant
+  survives the yearly Apple Development cert rotation. Releases keep the default requirement, so a
+  rotated Developer ID cert does move it.
 - **The cdhash.** Ad-hoc signatures (`CODE_SIGN_IDENTITY="-"` — the per-PR `dev-build` artifact)
   have no team to pin, so codesign's default requirement pins the code hash and every rebuild is a
   new app. Nothing at signing time can fix this: an identity stable across ad-hoc builds would have
@@ -255,16 +263,24 @@ satisfied and toggling the row does nothing. Two things move it:
   an app that injects keystrokes.
 
 So the app self-heals at launch instead. `AppDelegate.runAccessibilityGrantMigration` compares
-`SigningIdentity.current(includingAdHoc:)` (Team ID when there is one, else `cdhash:<hex>`) against the identity
-recorded in `accessibility.lastSigningTeam`; if it changed and the app is untrusted, it runs
-`tccutil reset Accessibility` once so the wizard's normal grant flow captures a matching
-requirement, and records the new identity only when the reset succeeded. `SigningIdentityMigration`
-is the pure decision; `SigningIdentity` is the thin `Security`/`tccutil` adapter.
+`SigningIdentity.current(includingAdHoc:)` — the app's **designated requirement**, serialized and
+namespaced (`dr:<requirement>`) — against the identity recorded in `accessibility.lastSigningTeam`;
+if it changed and the app is untrusted, it runs `tccutil reset Accessibility` once so the wizard's
+normal grant flow captures a matching requirement, and records the new identity only when the reset
+succeeded. `SigningIdentityMigration` is the pure decision; `SigningIdentity` is the thin
+`Security`/`tccutil` adapter.
+
+Recording the requirement itself, rather than a proxy for it, is the point: this used to record the
+**Team ID**, which is stable across exactly the case above (release and dev builds share team
+`B2VQF7Q2QY`), so switching to a dev build read as "unchanged", no reset ran, and the wizard's
+Accessibility step became unpassable — the bug the `installingALocalDevBuildOverAReleaseResets` case
+pins. The requirement string moves when and only when `tccd`'s stored copy stops matching.
 
 The UI-test build opts out by passing `includingAdHoc: false` (`AppDelegate.adHocCountsAsIdentity`,
 the one `#if UITEST_HOOKS` involved): `uitest.sh` and `check.sh` sign ad-hoc under the shipping
-bundle id, so honouring a cdhash there would make every local test run wipe the developer's real
-Blurt grant. Keep that a **parameter**, not a `#if` around the call — periphery scans the app's
+bundle id, so honouring an ad-hoc requirement there would make every local test run wipe the
+developer's real Blurt grant. (The team identifier is the probe for "is this ad-hoc" — present
+exactly when the signature isn't — never the value recorded.) Keep that a **parameter**, not a `#if` around the call — periphery scans the app's
 Debug scheme, where `UITEST_HOOKS` is on, so a compiled-out call reads as dead engine code and
 fails `check.sh`.
 
@@ -643,8 +659,11 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
   `SigningIdentityMigration.lastSigningIdentityDefaultsKey` is deliberately **outside** the roster:
   it records what the TCC migration already did, not a user setting, and clearing it would make the
   next launch re-run the `tccutil` reset. (Its string value, `accessibility.lastSigningTeam`, is
-  frozen — it predates the ad-hoc cdhash case, and renaming it would re-run the reset for every
-  installed user. See [the Accessibility grant](#the-accessibility-grant-and-signing-identity).)
+  frozen — it predates both the ad-hoc case and the move to recording the designated requirement,
+  and renaming it would re-run the reset for every installed user. The _value_ shape is not frozen:
+  a shape change re-reads as one identity change per install, which is safe because a reset only
+  runs when the app is already untrusted. See
+  [the Accessibility grant](#the-accessibility-grant-and-signing-identity).)
 
 Record cues: **`SoundPack`** is a selectable start/stop chime voice (vintage synth samples;
 `id` doubles as the bundled stem `<id>-start.m4a` / `<id>-stop.m4a` under

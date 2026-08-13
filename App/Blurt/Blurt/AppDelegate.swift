@@ -203,9 +203,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// identity only on a successful reset, so a failed reset retries next launch
   /// instead of being masked.
   ///
-  /// Covers both ways the identity moves: a signing-team change (a re-signed
-  /// release), and a cdhash change between two ad-hoc-signed dev builds — the
-  /// per-PR artifact, where the requirement is rebuilt from scratch every time.
+  /// Covers every way the requirement moves: installing `scripts/dev-build.sh`
+  /// over a release (same bundle id, same team, different certificate kind — so
+  /// the two pin different requirements), a cdhash change between two
+  /// ad-hoc-signed dev builds (the per-PR artifact, where the requirement is
+  /// rebuilt from scratch every time), and a rotated or re-issued release cert.
   private func runAccessibilityGrantMigration() {
     let key = SigningIdentityMigration.lastSigningIdentityDefaultsKey
     let defaults = UserDefaults.standard

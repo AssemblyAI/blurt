@@ -5,13 +5,20 @@ import Testing
 @Suite struct SigningIdentityMigrationTests {
   private typealias Migration = SigningIdentityMigration
 
-  // The two identity shapes `SigningIdentity.current(includingAdHoc:)` produces.
-  // The migration treats them alike — it only ever compares strings — but the
-  // ad-hoc one is the whole reason the cases below exist, so it is spelled out
-  // here rather than left implied.
-  private static let team = "B2VQF7Q2QY"
-  private static let adHoc = SigningIdentity.cdhashPrefix + String(repeating: "ab", count: 20)
-  private static let nextAdHoc = SigningIdentity.cdhashPrefix + String(repeating: "cd", count: 20)
+  // The identities `SigningIdentity.current(includingAdHoc:)` produces, one per
+  // way Blurt is signed. The migration treats them alike — it only ever compares
+  // strings — but which pairs of them differ is the whole reason the cases below
+  // exist, so they are spelled out rather than left implied.
+  //
+  // `release` and `devBuild` share a team and still differ: a release carries
+  // codesign's default Developer ID requirement (leaf CN + marker OIDs), while the
+  // `project.yml` post-build install stamps an explicit team-based one.
+  private static let prefix = SigningIdentity.requirementPrefix
+  private static let anchor = "identifier \"dev.alex.blurt\" and anchor apple generic"
+  private static let devBuild = "\(prefix)\(anchor) and certificate leaf[subject.OU] = \"B2VQF7Q2QY\""
+  private static let release = "\(prefix)\(anchor) and certificate leaf[subject.CN] = \"Developer ID\""
+  private static let adHoc = "\(prefix)cdhash H\"\(String(repeating: "ab", count: 20))\""
+  private static let nextAdHoc = "\(prefix)cdhash H\"\(String(repeating: "cd", count: 20))\""
 
   // decide(): unsigned builds never act.
   @Test func unsignedNeverActs() {
@@ -65,16 +72,45 @@ import Testing
     #expect(untrusted == .noAction)
   }
 
-  // decide(): swapping between a release install and a dev build, in both
+  // decide(): swapping between a release install and the per-PR artifact, in both
   // directions — what a reviewer does when they drop the artifact over
   // /Applications/Blurt.app and then put the release DMG back.
   @Test func swappingBetweenReleaseAndDevBuildResets() {
     let toDevBuild = Migration.decide(
-      lastIdentity: Self.team, currentIdentity: Self.adHoc, isTrusted: false)
+      lastIdentity: Self.release, currentIdentity: Self.adHoc, isTrusted: false)
     let backToRelease = Migration.decide(
-      lastIdentity: Self.adHoc, currentIdentity: Self.team, isTrusted: false)
+      lastIdentity: Self.adHoc, currentIdentity: Self.release, isTrusted: false)
     #expect(toDevBuild == .resetThenRecord(Self.adHoc))
-    #expect(backToRelease == .resetThenRecord(Self.team))
+    #expect(backToRelease == .resetThenRecord(Self.release))
+  }
+
+  // decide(): the regression this whole file exists for. `scripts/dev-build.sh`
+  // over a release install keeps the bundle id, the install path AND the signing
+  // team — only the designated requirement moves (default Developer ID → explicit
+  // team-based). While the recorded identity was the Team ID this read as steady
+  // state, so nothing reset the grant TCC had pinned to the release's
+  // requirement: the Blurt row stayed switched on, `AXIsProcessTrusted()` kept
+  // returning false, and the wizard's Accessibility step could not be passed.
+  @Test func installingALocalDevBuildOverAReleaseResets() {
+    let toDevBuild = Migration.decide(
+      lastIdentity: Self.release, currentIdentity: Self.devBuild, isTrusted: false)
+    let backToRelease = Migration.decide(
+      lastIdentity: Self.devBuild, currentIdentity: Self.release, isTrusted: false)
+    #expect(toDevBuild == .resetThenRecord(Self.devBuild))
+    #expect(backToRelease == .resetThenRecord(Self.release))
+  }
+
+  // decide(): …and the flip side — the identity must still be *stable* for the
+  // loop that rebuilds the same way over and over. Two `dev-build.sh` runs pin the
+  // same team-based requirement, so a working grant survives a rebuild; nothing
+  // here may reset on every launch.
+  @Test func rebuildingTheSameWayIsNoAction() {
+    #expect(
+      Migration.decide(lastIdentity: Self.devBuild, currentIdentity: Self.devBuild, isTrusted: true)
+        == .noAction)
+    #expect(
+      Migration.decide(lastIdentity: Self.release, currentIdentity: Self.release, isTrusted: false)
+        == .noAction)
   }
 
   // run(): steady state / unsigned persist nothing and never reset.
