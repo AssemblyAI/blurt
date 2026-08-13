@@ -12,7 +12,21 @@ What the engine does **not** contain: windows, overlays, menus, or event taps. T
 
 ## Quick start
 
-Add the package (from a checkout or as a local path dependency — the library product is `BlurtEngine`), then compose a session:
+The library product is `BlurtEngine`, and `Package.swift` is at the repo root, so the engine is consumable as-is:
+
+```swift
+// Package.swift
+dependencies: [
+  .package(url: "https://github.com/AssemblyAI/blurt", from: "0.1.39")
+],
+targets: [
+  .target(name: "YourApp", dependencies: ["BlurtEngine"])
+]
+```
+
+A local checkout works the same way with `.package(path: "../blurt")`. One thing to know before you pin a version: the tags are **Blurt's app releases**, minted by the DMG pipeline in [RELEASE.md](RELEASE.md), not independent engine releases — a patch bump says nothing about whether the engine changed. Read [Embedding outside Blurt](#embedding-outside-blurt) before shipping it inside another app.
+
+Then compose a session:
 
 ```swift
 import BlurtEngine
@@ -91,7 +105,16 @@ idle → recording → transcribing → injecting → pasted | noTarget
 - `phaseStream()` yields the current phase immediately, then every transition. It is a **multi-observer** stream: every call gets its own continuation and all of them see later transitions, so an extra consumer (a diagnostic, a second window) is safe. Still, prefer one renderer that projects the phase into your own state over a fan-out of long-lived consumers — one source of UI truth is easier to reason about than several.
 - `.pasted` and `.noTarget` are terminal _success_ states, not errors. `.noTarget` means transcription worked but nothing editable was focused (or the target app quit), so the text was left on the clipboard — show a quiet "copied" notice, not a failure.
 - Two ready-made projections keep UI mapping out of your shell: `phase.overlayState` (`OverlayUIState`: idle / recording / processing / error(message:) / pasted / noTarget, with accessibility labels and — for the transient notices — `noticeDwellSeconds`, how long to hold one before reverting to idle) and `phase.menuBarStatus` (coarser: idle / recording / transcribing, never shows errors, with `symbolName`/`accessibilityLabel` presentation).
-- Pill geometry is available too, if you're drawing something like Blurt's overlay: `OverlayPlacement` resolves how big the panel is (`panelSize(pillSize:shadowMargin:)`, sized to hold the pill plus room for its shadow) and where it goes (clearance, clamping a dragged origin back on screen), and `MeterBarGeometry` gives the level meter its shape. Build a `MeterBarRow(availableSize:)` once per layout — it resolves how many bars fit and how tall they may be — then ask it for `height(at:level:time:animated:)` per bar; `MeterBarGeometry.breathingOpacity(time:period:minOpacity:)` is the pulse the record dot and status label share. All pure math; pass `animated: false` to honor Reduce Motion.
+- Pill geometry is available too, if you're drawing something like Blurt's overlay: `OverlayPlacement` resolves how big the panel is (`panelSize(pillSize:shadowMargin:)`, sized to hold the pill plus room for its shadow) and where it goes (clearance, clamping a dragged origin back on screen), and `MeterBarGeometry` gives the level meter its shape. Build a `MeterBarRow(availableSize:)` once per layout — it resolves how many bars fit and how tall they may be — then ask it for `height(at:level:time:animated:)` per bar; `MeterBarGeometry.breathingOpacity(time:period:minOpacity:)` is the pulse the record dot and status label share. All pure math; pass `animated: false` to honor Reduce Motion. `OverlayOriginStore` persists the origin the user drags the pill to — it lives here, beside the clamping it feeds, because two keys private to the AppKit controller escaped every reset sweep. Both components must be present to read back: `double(forKey:)` reports 0 for a missing key, so a half-written pair reads as "never moved" rather than pinning the pill to an implied origin.
+- A "recent dictations" list has a model too. `RecentDictations` is an in-memory, newest-first ring of the last `capacity` (3) transcripts — never written to disk, empty at every launch — whose `record(_:at:)` takes an injected timestamp so tests are deterministic. `Entry.relativeLabel(now:locale:)` renders "just now" for the first `justNowThreshold` (60 s, published so a view can pick a refresh cadence against it) and the system's relative phrasing after. `reservedHeight(rowHeight:separatorThickness:)` is the `capacity` arithmetic — rows plus the `capacity - 1` separators between them — for a list that holds its height whether it shows 0 entries or 3.
+
+### Record cues
+
+`RecordingCueGate` is the other phase projection, and the reason the chimes don't retrigger: call `cue(for:)` with **every** phase and it returns `.start` only on the idle→recording edge, `.stop` only on the recording→not-recording edge, and `nil` while a phase repeats or when two non-recording phases follow each other. It's a value type holding one edge bit — keep a single instance for the host's lifetime.
+
+Which chime plays is a `SoundPack`: an `id`, a display `label`, and the picker `group` it belongs to. `SoundPack.catalog` is generated by `scripts/generate-sounds.swift` from Yamaha DX7 (ROM1A/ROM1B) and Roland Juno-106 factory presets; `groups` and `voices(in:)` build a sectioned picker off stored indexes rather than rescanning all 192 entries per render, and `fromPersisted(_:)` is the one decode-with-default rule (mirroring `TriggerKey.fromPersisted`) so a view reading the raw id can't disagree with `SoundPackStore`. `startFileName` / `stopFileName` give the `<id>-start` / `<id>-stop` stems, or `nil` for the silent `SoundPack.none`.
+
+The cue audio itself is **not** in the package — the `.m4a` files live in the app bundle, so the engine hands you stems and a host supplies the files, or its own player entirely. See [`SoundPack` ships metadata without the audio](#soundpack-ships-metadata-without-the-audio) for what that costs a package consumer.
 
 ### Errors
 
@@ -161,7 +184,39 @@ For key storage, compose against **`APIKeyGateway`** — the injectable `current
 
 Setup gating has a projection too: **`SetupReadiness.isReady(permissions:hasAPIKey:)`** is the "fully configured" rule (deliberately excluding the trigger key, which has a default), `SetupReadiness.pollInterval(isReady:)` is the permission-poll cadence (brisk during setup, coasting once ready), and `PermissionStatus.lostGrant(since:)` detects a permission revoked out from under a configured app.
 
+Accessibility grants carry one more wrinkle worth inheriting rather than rediscovering. macOS keys the grant to the app's _designated requirement_, so when what that requirement pins changes, the grant is orphaned — the "toggle is on, still denied" state. **`SigningIdentityMigration`** is the pure decision (persisted identity, current identity, live trust state, and the reset side effect all injected) and **`SigningIdentity`** the thin adapter that reads what a grant taken right now would pin: the **Team ID** for team-signed builds, so certificate rotation inside a team keeps the grant, and the **cdhash** for ad-hoc ones, where every build is a new app to `tccd`. Without the migration, a reviewer installing a second ad-hoc dev build finds the app already switched on in System Settings and can never satisfy the wizard, because that row belongs to the previous build's signature. Its defaults key is deliberately _outside_ the settings roster below — it records what a migration already did, and a settings reset must not forget it.
+
 Each completed dictation is appended to **`DictationLog`** (a local JSONL history at `~/Library/Logs/Blurt/dictations.jsonl` — `DictationLog.defaultURL`, or `defaultDisplayPath` for the home-abbreviated form to show in UI) with its context snapshot — but only while developer mode is switched on. Each _failed_ dictation is appended to a sibling error log at `~/Library/Logs/Blurt/errors.jsonl` (`defaultErrorDisplayPath` for the UI form) behind the same switch: one line per failure with the stable `BlurtError` case label, the full description (which for `.sttFailed` carries the API status and server message), and the focused app/window/field — but no prior text, selected text, or prompt, since none of it explains a failure. The two logs are separate files so the dictations log stays a corpus whose every line carries a `transcript`. **`DeveloperModeStore`** persists that opt-in in `UserDefaults` (`BlurtDeveloperMode`, off by default); with it off, nothing is written to disk. Blurt surfaces the switch (and both log paths) in the Settings window's Developer section.
+
+## Settings and persistence
+
+Every user setting is a small `UserDefaults`-backed struct with the same shape: a public `defaultsKey` (so a SwiftUI view can bind `@AppStorage` straight to it and re-render live on a Settings change), an injected `UserDefaults`, and a decode-with-default rule owned by the store rather than restated in the views.
+
+| Store                      | Key                              | Unset means                       |
+| -------------------------- | -------------------------------- | --------------------------------- |
+| `TriggerKeyStore`          | `BlurtTriggerKeyCode`            | right ⌘                           |
+| `SoundPackStore`           | `BlurtSoundPack`                 | ORCHESTRA (DX7 ROM1A voice 6)     |
+| `KeyTermsStore`            | `BlurtKeyTerms`                  | no key terms                      |
+| `DeveloperModeStore`       | `BlurtDeveloperMode`             | off — nothing is logged to disk   |
+| `EnhancedTranscriptsStore` | `BlurtEnhancedTranscripts`       | **on** — the `llm` block is sent  |
+| `CustomStyleStore`         | `BlurtCustomStyle`               | no style instructions appended    |
+| `OverlayOriginStore`       | `BlurtOverlayCustomOriginX`/`…Y` | pill never dragged; default place |
+| `LastUpdateCheckStore`     | `BlurtLastUpdateCheck`           | never checked                     |
+
+Several are read-only by design (`KeyTermsStore`, `CustomStyleStore`, `DeveloperModeStore`, `EnhancedTranscriptsStore`): the Settings control binds `@AppStorage` to `defaultsKey` and is the sole writer, so normalization lives on the read side — a whitespace-only custom-style field reads back as "no instructions" — and a setter here would fight the text field. The four a host constructs itself (`TriggerKeyStore`, `SoundPackStore`, `OverlayOriginStore`, `LastUpdateCheckStore`) take a `UserDefaults` publicly; the rest keep that injection internal.
+
+The keys themselves are one internal `DefaultsKey` enum and each store reads its case from it, so **`PersistedSettings.resetAll(in:)`** sweeps `DefaultsKey.allCases` rather than a hand-maintained list — adding a store and adding it to the reset are not merely the same edit, they're the same line. That's not tidiness: it _was_ a hand-maintained array, and both times a store was copy-edited into existence the second half was forgotten (the overlay origin and the update-check stamp), so a pill dragged during a UI-test run survived `reset-install.sh`'s clean-install path into the next one. Raw values are the on-disk contract — rename a case freely, never its raw value, or every existing user's setting is silently abandoned.
+
+Two string helpers carry the "usable text" rule shared by focus capture, the context/prompt, and the stores: `trimmedNonEmpty()` (on both `String` and `String?` — trims surrounding whitespace, treats blank as absent) and `prefix(maxUTF8Bytes:)`, which drops whole `Character`s from the end so a multi-scalar emoji is removed intact rather than sliced into an invalid fragment. The latter is the single truncation rule behind the custom-style budget, shared by the Settings field's counter and `CleanupInstruction.sendable(appending:)` — the two disagreed once, and that shipped.
+
+## Update checking
+
+The engine carries the _decision_ half of Blurt's self-update, for the same reason `SetupReadiness` and `UpdateAlertContent` live here: these are rules and wording, and the AppKit shell that applies them has no test target. Nothing here installs anything — it reports whether a newer DMG exists and where to download it, and the user still installs it themselves.
+
+- **`UpdateChecker.check(current:)`** GETs the repo's latest GitHub release through the shared `HTTPTransport` seam (so tests substitute `FakeHTTPTransport` instead of the live API) and returns `.upToDate` or `.available(version:dmgURL:)`. It throws on network failure, malformed JSON, an unparseable tag, or a newer release with no DMG asset — the app maps every throw to one "couldn't check" caption.
+- **`SemanticVersion`** parses a dotted numeric version with an optional leading `v` (GitHub tags are `v0.1.39`; `CFBundleShortVersionString` is the bare form), comparing component-wise with missing trailing components as zero, so `1.2 == 1.2.0`. A malformed tag reads as "can't determine" rather than crashing.
+- **`AutomaticUpdateCheck.shouldRun(isConfigured:lastCheck:now:)`** gates the launch check: never over an unfinished wizard, at most once per `minimumInterval` (24 h, because the unauthenticated GitHub API is rate-limited per IP and five relaunches in an afternoon must not be five fetches), and treating a timestamp in the future — clock correction, a restored backup — as due rather than trusting it. `launchDelay` (3 s) keeps the fetch off the launch path and out of the window before the main `NSWindow` exists to host the result's sheet.
+- **`UpdateAlertContent`** owns the wording: title, body, buttons in presentation order, and the URL the _default_ button opens (`nil` when it only dismisses, so "which button downloads" is never re-derived by matching a button title). Its initializer is private, so every alert comes from one of the named results rather than being assembled ad hoc in the shell. `appVersionLabel(_:)` is the one phrasing of the running-version label the alerts and the Settings row share.
 
 ## Hotkey building blocks
 
@@ -190,6 +245,37 @@ await session.release()
 ```
 
 Run `swift test` for the engine suites (`--filter DictationSessionTests` for one suite). `scripts/check.sh` is the full health gate CI runs — tests with warnings-as-errors, a ≥80% engine coverage gate, TSan/ASan passes, and the linters. On a machine without a macOS toolchain, `scripts/check.sh --portable` verifies docs/scripts/site changes only; the Swift side needs a Mac or CI.
+
+## Embedding outside Blurt
+
+The dictation pipeline itself is clean — the three seams, `DictationSession`, the phase projections, and the transcriber carry nothing Blurt-specific. Three other things do, and none of them is a bug in the engine so much as the shape of a package that has only ever had one host. Know them before you ship this inside another app.
+
+### Blurt's identity is baked into engine defaults
+
+A third-party host embedding the engine today inherits these with **no opt-out**:
+
+| Constant                                      | Value                                                                    |
+| --------------------------------------------- | ------------------------------------------------------------------------ |
+| `BlurtIdentity.keychainService`               | `blurt` — so the API key writes into Blurt's own Keychain item           |
+| `BlurtIdentity.subsystem`                     | `dev.alex.blurt` — the `os_log` subsystem for every category             |
+| `DictationLog.defaultURL` / `defaultErrorURL` | `~/Library/Logs/Blurt/{dictations,errors}.jsonl`                         |
+| `DefaultsKey` raw values                      | `BlurtTriggerKeyCode`, `BlurtSoundPack`, … in the host's defaults domain |
+| `UpdateChecker`'s default `releaseURL`        | `api.github.com/repos/AssemblyAI/blurt/releases/latest`                  |
+| `UpdateAlertContent`'s product name           | `Blurt`, and `GitHubRelease.dmgAsset` expects a `Blurt.dmg`              |
+
+Only two of those have a seam. `UpdateChecker`'s `releaseURL` is an initializer parameter, and the log URLs are parameters on the writers — though those are _internal_, for tests, so from outside the module the log path is fixed too. The Keychain service, the logging subsystem, the defaults prefix, and the product name are hard constants.
+
+Closing this properly means a **host-supplied identity value** threaded through those types (or keeping the affected ones app-internal). Until then, a second app on the same machine shares Blurt's Keychain item, log directory, and defaults keys. The one gap you can work around today is the key: compose against `APIKeyGateway` with your own conformance instead of `ProductionAPIKeyStore`, and the Keychain service never comes up.
+
+### `Update/` isn't part of a dictation engine
+
+`UpdateChecker`, `AutomaticUpdateCheck`, `GitHubRelease`, `UpdateAlertContent`, and `LastUpdateCheckStore` are Blurt's own self-update feature, and they live in the engine for a concrete reason: the AppKit shell has **no unit-test target** (`App/Blurt` builds the app and an XCUITest bundle, nothing else), so a launch gate or an alert's wording written inline there would be covered by nothing. That reasoning is sound for this repo and wrong for a published package — as shipped, the dictation library contains a self-updater for a specific app.
+
+Two ways out, neither taken yet: drop it from the public product (its own target, so it keeps its Swift Testing coverage without riding inside `BlurtEngine`), or generalize it so the repo slug, asset name, and product name come from the host. Note the second is not free — `LastUpdateCheckStore` reads its key from the internal `DefaultsKey` enum, and that enum is deliberately the single roster `PersistedSettings.resetAll` sweeps, so a target split has to keep that invariant intact rather than stranding the update stamp outside the reset (which is exactly the bug the roster was created to prevent, twice).
+
+### `SoundPack` ships metadata without the audio
+
+`SoundPack.catalog` has 192 voices, and all 384 `.m4a` cues live in `App/Blurt/Blurt/Resources/Sounds/` — not in the package target. A package consumer therefore gets 192 ids and labels whose `startFileName` / `stopFileName` resolve to nothing at all. Either the resources move into the target (`resources: [.process("Resources/Sounds")]` in `Package.swift`, and the app loads them from `Bundle.module` instead of `Bundle.main`), or the cue catalog becomes app-side and leaves the engine holding only `RecordingCueGate`. Whichever way it goes, `scripts/generate-sounds.swift` writes both the audio and `SoundPackCatalog.swift` together and `check.sh` pins that they agree, so the generator and the integrity check move with the files.
 
 ## Invariants — don't break these
 
