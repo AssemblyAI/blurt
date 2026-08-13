@@ -42,8 +42,9 @@ public struct TranscriptionContext: Sendable, Equatable {
 
   /// User-configured domain vocabulary (names, jargon, product names), sourced
   /// from `KeyTermsStore`. Unlike the other fields this isn't per-utterance
-  /// focus state — it's the same list every time. Not part of the prompt: it is
-  /// sent as the request's own word-boost field.
+  /// focus state — it's the same list every time. **Sent**, but not in the
+  /// prompt: it goes as the request's own word-boost field, `keyterms_prompt`
+  /// (see `KeytermsBoost`).
   public let keyTerms: [String]
 
   public init(

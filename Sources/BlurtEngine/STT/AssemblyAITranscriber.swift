@@ -73,7 +73,10 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     // text stay on the machine — `TranscriptionPrompt` is where that line is
     // drawn, so there is nothing to filter here.
     let prompt = TranscriptionPrompt.build(context: context)
-    let config = try makeConfigData(sampleRate: sampleRate, prompt: prompt)
+    // The other steering field, and the other half of the Settings surface: the
+    // user's key terms as a word-boost list, fitted to its own (different) cap.
+    let keyterms = KeytermsBoost.fitted(context?.keyTerms ?? [])
+    let config = try makeConfigData(sampleRate: sampleRate, prompt: prompt, keyterms: keyterms)
     let boundary = "blurt-\(UUID().uuidString)"
 
     var request = URLRequest(url: baseURL.appendingPathComponent("transcribe"))
@@ -128,14 +131,16 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 
   /// Builds the JSON `config` part sent alongside the audio. The context
   /// `prompt` is included only when non-empty; a nil or blank prompt omits the
-  /// field so the server applies its default prompt. The `llm` block rides
+  /// field so the server applies its default prompt. `keyterms` is included the
+  /// same way — nil or empty omits `keyterms_prompt`, which asks for no word
+  /// boosting at all. The `llm` block rides
   /// along while enhanced transcripts are enabled (the default) and is omitted
   /// entirely when the user has turned them off, so the service skips the
   /// rewrite and the verbatim transcript is what gets pasted — see
   /// `DictationConfig.llm`. Internal so tests can assert the
   /// prompt wiring without inspecting the multipart upload body (which
   /// `URLProtocol` mocks can't observe reliably for `upload(from:)`).
-  func makeConfigData(sampleRate: Int, prompt: String?) throws -> Data {
+  func makeConfigData(sampleRate: Int, prompt: String?, keyterms: [String]? = nil) throws -> Data {
     let enhanced = enhancedTranscriptsEnabled()
     let instruction = enhanced ? CleanupInstruction.sendable(appending: customStyle()) : nil
     if enhanced, instruction == nil {
@@ -155,6 +160,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
         sampleRate: sampleRate,
         channels: 1,
         prompt: prompt.trimmedNonEmpty(),
+        keytermsPrompt: (keyterms?.isEmpty ?? true) ? nil : keyterms,
         llm: enhanced ? LLMRewrite(instruction: instruction) : nil
       )
     )
@@ -243,6 +249,15 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     /// cursor and a fixed instruction, and nothing else about the user's screen
     /// — see `TranscriptionPrompt`.
     let prompt: String?
+    /// Word boosting: the user's key terms as a flat list, biasing recognition
+    /// toward those exact spellings. A sibling of `prompt`, not an alternative
+    /// to it — the API takes both on the same request, and they do different
+    /// jobs (prose context versus a vocabulary list). Fitted to its own
+    /// 2048-character cap by `KeytermsBoost`, which is *not* the 4096 on
+    /// `prompt`. Encoded only when non-nil, so no terms means no boosting.
+    /// Deliberately not the deprecated `word_boost`, which the Universal-3 Pro
+    /// family rejects outright.
+    let keytermsPrompt: [String]?
     /// The rewrite request, present only while enhanced transcripts are
     /// enabled (nil — the synthesized `encode` omits it — asks for no rewrite,
     /// so the response's `llm_response` is null and the verbatim `text` is
@@ -253,6 +268,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
       case sampleRate = "sample_rate"
       case channels
       case prompt
+      case keytermsPrompt = "keyterms_prompt"
       case llm
     }
   }

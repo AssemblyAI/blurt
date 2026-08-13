@@ -33,6 +33,11 @@ public enum DictationLog {
     /// the transcriber) so the log always reflects what was actually sent,
     /// even for calls that construct an entry directly from a context.
     let prompt: String?
+    /// The `config.keyterms_prompt` word-boost list sent for this utterance —
+    /// the request's other steering field, so the log accounts for both. Built
+    /// through the same `KeytermsBoost.fitted` the request uses, so an
+    /// over-long list is recorded as the terms that actually went out.
+    let keyterms: [String]?
   }
 
   /// Where the log lives. Public so the Settings window's Developer section
@@ -108,17 +113,19 @@ public enum DictationLog {
   }
 
   /// One log entry as a value: which parts of the context are carried, how the
-  /// timestamp is formatted, and the prompt mirroring what the transcriber
-  /// actually sends. Split from `write` so all of that is assertable directly
-  /// rather than through a temp file and a substring search over the encoded
-  /// line — a search that read the same whether a field was correctly absent or
-  /// the write had failed outright.
+  /// timestamp is formatted, and the two steering fields — prompt and keyterms —
+  /// mirroring what the transcriber actually sends, because both are built here
+  /// through the same builders the request uses. Split from `write` so all of
+  /// that is assertable directly rather than through a temp file and a substring
+  /// search over the encoded line — a search that read the same whether a field
+  /// was correctly absent or the write had failed outright.
   static func makeEntry(transcript: String, context: TranscriptionContext?, now: Date) -> Entry {
     Entry(
       transcript: transcript, ts: now.formatted(timestampFormat),
       app: context?.appName, window: context?.windowTitle, field: context?.fieldLabel,
       prior: context?.priorText, selected: context?.selectedText,
-      prompt: TranscriptionPrompt.build(context: context))
+      prompt: TranscriptionPrompt.build(context: context),
+      keyterms: KeytermsBoost.fitted(context?.keyTerms ?? []))
   }
 
   /// The unconditional writer: formats one entry and appends it. Distinct name

@@ -36,9 +36,12 @@ The trap most specific to a cleanup pass: **the transcription prompt reads exact
 field of `TranscriptionContext` (`priorText`), and the other fields are captured on
 purpose for work that never reaches the API** — paste spacing, the injector's window
 identity, the developer-mode log. `appName`, `windowTitle`, `fieldLabel` and
-`selectedText` are not unused just because the prompt ignores them; the key-terms read
-is deliberately kept too. Do not propose deleting them, folding them back into the
-prompt, or dropping the `context:` parameter.
+`selectedText` are not unused just because the prompt ignores them. The key-terms read
+is not unused either: it feeds `KeytermsBoost`, the request's separate
+`config.keyterms_prompt` word-boost list. Do not propose deleting any of them, folding
+the key terms back into the prompt as a `Keywords:` clause, collapsing `KeytermsBoost`
+into the deprecated `word_boost` (which the model family rejects outright), or dropping
+the `context:` parameter.
 
 Other things that look removable and are not: protocol seams with one production
 conformer (they exist for the test doubles in `Tests/BlurtEngineTests/Stubs/`);

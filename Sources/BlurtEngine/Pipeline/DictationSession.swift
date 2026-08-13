@@ -39,11 +39,12 @@ public actor DictationSession {
   private let mic: MicCaptureProtocol
   let transcriber: TranscriberProtocol
   let injector: InjectorProtocol
-  /// Supplies the user's key terms (domain vocabulary) at press time. They no
-  /// longer ride the transcription prompt — `TranscriptionPrompt` carries only
-  /// the prior chunk — so today the terms reach nothing. A closure, rather than
-  /// a stored list, so edits in Settings take effect on the next dictation
-  /// without rebuilding the session. Defaults to reading `KeyTermsStore`.
+  /// Supplies the user's key terms (domain vocabulary) at press time, so each
+  /// utterance's request boosts those spellings — as its own `keyterms_prompt`
+  /// field (`KeytermsBoost`), not as part of the transcription prompt, which
+  /// carries only the prior chunk. A closure, rather than a stored list, so
+  /// edits in Settings take effect on the next dictation without rebuilding the
+  /// session. Defaults to reading `KeyTermsStore`.
   private let keyTermsProvider: @Sendable () -> [String]
   /// Auto-releases the hotkey after this long so a held key can't run forever.
   /// Defaults to just under the dictation API's audio cap (see

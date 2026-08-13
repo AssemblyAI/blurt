@@ -67,6 +67,7 @@ struct DictationLogEntryTests {
     #expect(entry.prior == nil)
     #expect(entry.selected == nil)
     #expect(entry.prompt == nil)
+    #expect(entry.keyterms == nil)
   }
 
   @Test("logs the same prompt the transcriber sends — the prior chunk and nothing else")
@@ -80,6 +81,21 @@ struct DictationLogEntryTests {
     #expect(entry.prompt?.contains("Hi Sam,") == true)
     #expect(entry.prompt?.contains("Re: Q3 pricing") == false)
     #expect(entry.prompt?.contains("the old plan") == false)
+  }
+
+  @Test("records the key terms the request boosts, fitted the same way")
+  func logsTheKeytermsTheRequestCarries() {
+    // Through `KeytermsBoost.fitted`, not the raw list: the log has to show the
+    // steering the API actually saw, so a blank entry is dropped here too.
+    let withTerms = TranscriptionContext(
+      appName: "Mail", priorText: "Hi Sam,", keyTerms: ["AssemblyAI", "  ", "LeMUR"])
+    let entry = DictationLog.makeEntry(transcript: "p", context: withTerms, now: Date())
+    #expect(entry.keyterms == ["AssemblyAI", "LeMUR"])
+  }
+
+  @Test("leaves the key terms nil when the context has none")
+  func noKeytermsLeavesTheFieldNil() {
+    #expect(DictationLog.makeEntry(transcript: "p", context: context, now: Date()).keyterms == nil)
   }
 
   @Test("keeps a transcript verbatim, including non-ASCII")
@@ -142,6 +158,7 @@ struct DictationLogTests {
     let line = readLog(url)
     #expect(!line.contains("selected"))
     #expect(!line.contains("\"prompt\""))
+    #expect(!line.contains("keyterms"))
   }
 }
 

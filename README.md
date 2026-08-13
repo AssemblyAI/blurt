@@ -135,11 +135,11 @@ Blurt stores your API key in the macOS Keychain. Audio is captured only while
 you are dictating, then sent over HTTPS to AssemblyAI for transcription. The
 request also carries a short run of the text immediately before your cursor, so
 the transcript continues from what is already there — never from a password
-field, which Blurt refuses to read. Nothing else about your screen is sent: not
-the app you are in, not the window title, not the field you are typing in, not
-what you have selected, and not the key terms you entered in Settings. Blurt
-stores no audio and no transcripts, and sends no telemetry — no crash
-reporting, no analytics, no usage tracking.
+field, which Blurt refuses to read — plus the key terms you entered in Settings,
+which bias spelling. Nothing else about your screen is sent: not the app you are
+in, not the window title, not the field you are typing in, not what you have
+selected. Blurt stores no audio and no transcripts, and sends no telemetry — no
+crash reporting, no analytics, no usage tracking.
 
 Because transcription is processed by AssemblyAI, their
 [Privacy Policy](https://www.assemblyai.com/legal/privacy-policy) and
@@ -172,7 +172,8 @@ Sources/BlurtEngine/     Swift 6 package owning the pipeline — no external dep
                          live level meter; DX7/Juno-106 sound packs
   STT/                   AssemblyAITranscriber: one POST to dictation.assemblyai.com/transcribe
                          (STT + LLM rewrite); TranscriptionPrompt (contextual priming:
-                         the text before the cursor, and nothing else about your screen)
+                         the text before the cursor, and nothing else about your
+                         screen); KeytermsBoost (key terms as the word-boost list)
   Pipeline/              DictationSession actor: press/release/cancel commands, phase
                          stream, auto-release before the API's recording cap
   Hotkey/                DictationKeyGate/Router: pure, unit-tested state machine for the

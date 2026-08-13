@@ -40,11 +40,14 @@ struct TranscriptionContextTests {
     #expect(TranscriptionContext(appName: nil, priorText: nil, selectedText: "  \n").isEmpty)
   }
 
-  @Test("key terms alone make it non-empty (and produce no prompt)")
+  @Test("key terms alone make it non-empty, and ride their own field")
   func keyTermsPresent() {
     let context = TranscriptionContext(appName: nil, priorText: nil, keyTerms: ["Blurt"])
     #expect(!context.isEmpty)
+    // Not in the prompt — they are sent as the request's word-boost list, which
+    // is why a key-terms-only context is still worth carrying.
     #expect(TranscriptionPrompt.build(context: context) == nil)
+    #expect(KeytermsBoost.fitted(context.keyTerms) == ["Blurt"])
   }
 
   @Test("an empty context can never produce a prompt")

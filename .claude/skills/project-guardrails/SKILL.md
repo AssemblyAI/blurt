@@ -34,6 +34,11 @@ one, stop and ask the user first. This is the fast "don't" list; AGENTS.md's
   captured for the paste path and the developer-mode log and stay on the machine;
   the hints that used to carry them were deleted, not gated. Don't widen the
   prompt back out, and don't route that context onto the request by another path.
+- **Key terms are word boosting, not prompt text.** They ride
+  `config.keyterms_prompt` as a flat list (`KeytermsBoost`), fitted to that
+  field's own 2048-character cap. Don't fold them back into the prompt as a
+  `Keywords: a, b, c.` clause, and don't send the deprecated `word_boost` — the
+  Universal-3 Pro family rejects it, so the whole request fails.
 - Don't reintroduce a "remove filler words (um, uh, like)" directive in the
   prompt — `universal-3-5-pro` ignores it; it was deliberately dropped. Same for
   a language directive: pinning the prompt to English hurt non-English speech, so
