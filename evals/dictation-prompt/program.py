@@ -146,7 +146,7 @@ def _cleaned(prediction) -> str:
     return getattr(prediction, OUTPUT_FIELD, "") or ""
 
 
-def make_feedback_metric(axis: str):
+def make_feedback_metric(axis: str, false_start_weight: float = 1.0):
     """Metric for GEPA: the same score plus a diff its reflector can act on.
 
     `axis` decides which score the reflector is shown, and it is shown only that one.
@@ -154,11 +154,21 @@ def make_feedback_metric(axis: str):
     `metrics.feedback` for why the formatting score in particular is misleading on the
     default corpus. The length budget is not here at all; it belongs in the proposer's
     preamble, said once with the real target rather than eight times with the cap.
+
+    `false_start_weight` reaches the search here and nowhere else, and this is the one
+    scoring site where it changes what gets *searched* rather than only what gets
+    reported: GEPA's Pareto front is per validation example, so charging a missed
+    false start more makes the front prefer a candidate that catches them.
     """
 
     def scorer(gold, pred, trace=None, pred_name=None, pred_trace=None, **_):
         hypothesis = _cleaned(pred)
-        scored = metrics.score(getattr(gold, OUTPUT_FIELD), hypothesis)
+        scored = metrics.score(
+            getattr(gold, OUTPUT_FIELD),
+            hypothesis,
+            spoken=getattr(gold, INPUT_FIELD),
+            false_start_weight=false_start_weight,
+        )
         return dspy.Prediction(
             score=scored.value(axis),
             feedback=metrics.feedback(
@@ -194,7 +204,11 @@ class _Ticking(dspy.Module):
 
 
 def evaluate(
-    program, utterances: list[Utterance], num_threads: int, on_example=None
+    program,
+    utterances: list[Utterance],
+    num_threads: int,
+    on_example=None,
+    false_start_weight: float = 1.0,
 ) -> dict[str, float]:
     """Run a program over a split and report every axis.
 
@@ -212,7 +226,12 @@ def evaluate(
     predictions = runner([(counted, {INPUT_FIELD: u.disfluent}) for u in utterances])
     return metrics.mean(
         [
-            metrics.score(utterance.reference, _cleaned(prediction))
+            metrics.score(
+                utterance.reference,
+                _cleaned(prediction),
+                spoken=utterance.disfluent,
+                false_start_weight=false_start_weight,
+            )
             for utterance, prediction in zip(utterances, predictions, strict=True)
         ]
     )
@@ -419,6 +438,7 @@ def optimize(
     num_threads: int,
     proposer: CappedInstructionProposer,
     reflection_minibatch_size: int = 8,
+    false_start_weight: float = 1.0,
 ):
     """Evolve the instruction, returning the optimized program.
 
@@ -440,7 +460,7 @@ def optimize(
     """
     trainset, valset = to_examples(train), to_examples(validation)
     return dspy.GEPA(
-        metric=make_feedback_metric(axis),
+        metric=make_feedback_metric(axis, false_start_weight),
         auto=auto,
         # Never below the task model's ceiling: the reflector writes whole
         # instructions and thinks at length first, so it is the call most likely

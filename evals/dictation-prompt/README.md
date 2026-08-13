@@ -255,26 +255,27 @@ is `--model`. Its proposal prompts are multi-field, so they keep DSPy's marker p
 
 ## The knobs that matter
 
-| Flag                 | Default                      | What it changes                                                                                        |
-| -------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `--source`           | `disfluency-speech`          | Which corpus to score against — see the table above.                                                   |
-| `--model`            | `openai/qwen3.5-4b-32k-fast` | The LiteLLM model standing in for the service's rewrite model.                                         |
-| `--reflection-model` | `openai/claude-opus-4-8`     | Writes the instructions during `--optimizer gepa`. Keep it stronger than `--model`.                    |
-| `--api-base`         | the AssemblyAI gateway       | Endpoint for both models. `""` falls back to the provider's own.                                       |
-| `--metric`           | `blend`                      | `content` (words only), `format` (case and punctuation too), or 0.7/0.3 of both.                       |
-| `--severity`         | `0.35`                       | 0–1; how often a disfluency is injected. Reference-only sources only.                                  |
-| `--strip-formatting` | off                          | Also lowercase and unpunctuate, so restoring formatting is part of the task.                           |
-| `--optimizer`        | `gepa`                       | `none` only ranks the candidates; both optimizers search instructions only.                            |
-| `--start`            | `prior-winner`               | Which instruction GEPA evolves from — the compressed prior winner, or the best hand-written candidate. |
-| `--auto`             | `heavy`                      | Reflection trials: 10 / 18 / 27. The only knob that changes how many ideas get tried.                  |
-| `--split`            | `train`                      | The sources' own held-out splits are only ~250 rows — too few for the default `--limit`.               |
-| `--limit`            | `2000`                       | Rows loaded, then sliced 1800 train / 50 dev / 150 test. Train rows cost nothing.                      |
-| `--dev-fraction`     | `150` (rows)                 | Fraction below 1, absolute count at 1 or above. Decides what ships; the search never sees it.          |
-| `--gepa-valset`      | `50` (rows)                  | The optimizer's valset, taken off train. Multiplies search cost, adds no exploration.                  |
-| `--test-fraction`    | `150` (rows)                 | Same convention. Scored twice, and by nothing that makes a selection.                                  |
-| `--num-threads`      | `1`                          | Serial by default — the gateway rate-limits.                                                           |
-| `--max-tokens`       | `8192`                       | Headroom for reasoning tokens. Too low silently corrupts a run rather than failing it.                 |
-| `--seed`             | `7`                          | Seeds injection and the train/dev/test split.                                                          |
+| Flag                   | Default                      | What it changes                                                                                        |
+| ---------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `--source`             | `disfluency-speech`          | Which corpus to score against — see the table above.                                                   |
+| `--model`              | `openai/qwen3.5-4b-32k-fast` | The LiteLLM model standing in for the service's rewrite model.                                         |
+| `--reflection-model`   | `openai/claude-opus-4-8`     | Writes the instructions during `--optimizer gepa`. Keep it stronger than `--model`.                    |
+| `--api-base`           | the AssemblyAI gateway       | Endpoint for both models. `""` falls back to the provider's own.                                       |
+| `--metric`             | `blend`                      | `content` (words only), `format` (case and punctuation too), or 0.7/0.3 of both.                       |
+| `--false-start-weight` | `1.0`                        | What a missed false start costs relative to any other error. See below.                                |
+| `--severity`           | `0.35`                       | 0–1; how often a disfluency is injected. Reference-only sources only.                                  |
+| `--strip-formatting`   | off                          | Also lowercase and unpunctuate, so restoring formatting is part of the task.                           |
+| `--optimizer`          | `gepa`                       | `none` only ranks the candidates; both optimizers search instructions only.                            |
+| `--start`              | `prior-winner`               | Which instruction GEPA evolves from — the compressed prior winner, or the best hand-written candidate. |
+| `--auto`               | `heavy`                      | Reflection trials: 10 / 18 / 27. The only knob that changes how many ideas get tried.                  |
+| `--split`              | `train`                      | The sources' own held-out splits are only ~250 rows — too few for the default `--limit`.               |
+| `--limit`              | `2000`                       | Rows loaded, then sliced 1800 train / 50 dev / 150 test. Train rows cost nothing.                      |
+| `--dev-fraction`       | `150` (rows)                 | Fraction below 1, absolute count at 1 or above. Decides what ships; the search never sees it.          |
+| `--gepa-valset`        | `50` (rows)                  | The optimizer's valset, taken off train. Multiplies search cost, adds no exploration.                  |
+| `--test-fraction`      | `150` (rows)                 | Same convention. Scored twice, and by nothing that makes a selection.                                  |
+| `--num-threads`        | `1`                          | Serial by default — the gateway rate-limits.                                                           |
+| `--max-tokens`         | `8192`                       | Headroom for reasoning tokens. Too low silently corrupts a run rather than failing it.                 |
+| `--seed`               | `7`                          | Seeds injection and the train/dev/test split.                                                          |
 
 Both optimizers run with few-shot demos disabled. `config.llm.instruction` is a single string
 the service applies in one pass, so an optimized program that depended on bundled examples
@@ -327,6 +328,59 @@ On `nyra` the numbers mean what they say. On `builtin` the disfluencies are synt
 **ranking** travels further than the absolute scores do: read those as
 "this instruction beats that one on this disfluency distribution", and re-run at a couple of
 `--severity` values before trusting an ordering.
+
+### Weighting one failure mode above the others
+
+Within an axis every error costs the same by default: a left-in "um" and a left-in abandoned
+false start are both one insertion against the same reference length. So an instruction that
+removes fillers reliably and misses false starts can score better than one that does the
+opposite, and a search told only "maximise the score" has no reason to prefer the second.
+
+`--false-start-weight` prices that difference. At `2.0`, every error the input marks as false-start
+residue is charged twice, on both axes; everything else is charged once. It reaches the search as
+well as the report — GEPA's Pareto front is per validation example, so a candidate that catches
+false starts starts winning examples it used to tie — which is what makes this a way to _ask for_
+better false-start handling rather than only a way to notice its absence.
+
+It defaults to `1.0`, which is arithmetically the metric as it was before the flag existed. That
+is deliberate: every score in this README, and in every `results.json` already written, was
+measured unweighted, and a default that reweighted them would orphan the lot. A weighted run
+prints a line saying so, and its scores compare only against other runs at the same weight.
+
+**What counts as a false start.** `metrics.false_start_residue` reads it off the pair, the same
+way the feedback text reads off leftover disfluencies. Two parts of a false start are visible
+without knowing where the abandoned span ended:
+
+| Signal                               | Looks like                                | Where it comes from                                             |
+| ------------------------------------ | ----------------------------------------- | --------------------------------------------------------------- |
+| A word the speaker cut off           | `th-`, `sec—`                             | `nyra`'s hand-annotated `th*`; the injector's `word—`           |
+| The editing term they restarted with | `I mean`, `sorry`, `or rather`, `no wait` | `metrics.EDITING_TERMS`, which is also what the injector writes |
+
+Both are things a correct cleanup deletes outright, so an output still containing one is a false
+start the instruction missed — as is the mirror-image failure, keeping the abandoned half and
+dropping the restart (`go to the store` for "go to the mall"), which lands as a substitution
+rather than an insertion and is weighted too. Tokens the reference itself contains are never
+residue, which is what stops the `I` in `I mean` from charging extra on every reference that
+happens to start with "I".
+
+**What it cannot see** is an abandoned whole content word with neither a cut-off nor a marker
+("go to the store the mall"). Telling that from a filler needs the enumerated filler list this
+harness deliberately does not keep, so it stays at weight 1.0: the weighting under-counts rather
+than guessing. Two consequences worth holding onto:
+
+- The floor is scored at the run's weight too, so a weighted candidate is compared against a
+  weighted floor rather than against a number from a different metric.
+- Every run prints **what share of dev and test carries a false start the scorer can see**, next
+  to the floor. Read that first. Doubling the price of a failure mode that appears in a small
+  slice of the split moves the mean by very little, and the honest answer to that is a corpus with
+  more false starts in it — not a bigger weight. `false_start_errors` on each `Score` counts the
+  misses at any weight, so "how often does this instruction miss one" is answerable from a default
+  run.
+
+The feedback GEPA reflects on names false starts separately whatever the weight is, because that
+part costs nothing and the score is not where the reflector reads. "Left disfluencies in the
+output: mean" reads as one more filler, and produces one more filler clause; "left a false start
+in the output — the speaker abandoned these and restarted" is a different instruction.
 
 ## Applying a winner
 
@@ -510,7 +564,7 @@ between them hold. macOS only, and off by default — it costs real transcriptio
 | `candidates.py`              | The instructions under test, the character cap, and the GEPA seed.        |
 | `corpus.py`                  | Sources, loading, de-tagging, splitting, the echo floor.                  |
 | `disfluency.py`              | The seeded, additive disfluency injector.                                 |
-| `metrics.py`                 | Token alignment, the two word-error-rate axes, GEPA feedback text.        |
+| `metrics.py`                 | Token alignment, the two axes, false-start weighting, GEPA feedback text. |
 | `live.py`                    | Synthesis + the real `/transcribe` round trip, for `--verify-live`.       |
 | `program.py`                 | Everything that imports DSPy — the program, metrics adapters, optimizers. |
 | `test_eval.py`               | Offline tests for injection, scoring, de-tagging, loading, and splitting. |

@@ -14,6 +14,13 @@ numerous and mostly cosmetic, so scoring them equally would drown out the signal
 about disfluency removal. `--metric content` or `--metric format` isolate either
 axis when that's what you want to see.
 
+Inside an axis, every error costs the same by default — a left-in "um" and a left-in
+abandoned false start are both one insertion. `--false-start-weight` breaks that tie:
+the errors `false_start_residue` can attribute to a false start are multiplied by it,
+so a run can be told that false starts matter more than fillers without changing what
+the axes mean. It defaults to 1.0, which is arithmetically the old metric, so every
+number recorded before it existed stays comparable.
+
 This module is the bottom of the dependency chain — it imports nothing else in the
 harness, so nothing about how a corpus was built can leak into how it is scored.
 """
@@ -34,6 +41,27 @@ _STRIP_PUNCTUATION = str.maketrans("", "", PUNCTUATION)
 
 AXES = ("content", "format", "blend")
 
+# Trailing marks a transcriber writes for a word the speaker cut off mid-word —
+# the one unambiguous orthographic signature of an abandoned start. `nyra` ships
+# them as `th*`, which `corpus._detag_nyra` rewrites to `th-`; the injector writes
+# `word—`. Matched against the *surface* token, because `normalize` strips exactly
+# these characters before the content axis ever sees them.
+CUTOFF_MARKS = ("-", "—", "–")
+
+# Editing terms — what a speaker says between abandoning a phrase and restarting
+# it, Switchboard's `{E}` class. Enumerated where fillers deliberately are not:
+# fillers are open-ended and the feedback path reads them off the pair instead
+# (see `feedback`), but a repair marker left in the output is false-start residue
+# by definition, and there are four of them worth naming.
+#
+# `disfluency.CORRECTIONS` *is* this tuple, so the markers the injector writes and
+# the markers scoring looks for cannot drift apart. The direction of that coupling
+# is the same as `PUNCTUATION`'s — scoring defines it, corpus construction consumes
+# it — but it does mean synthetic false starts are graded against a list the
+# injector also read. On `builtin` that is a smoke test; on `nyra` the cut-offs
+# come from hand annotation and no list of ours was involved.
+EDITING_TERMS = ("I mean", "sorry", "or rather", "no wait")
+
 
 def normalize_text(text: str) -> str:
     """Casefold, drop punctuation, collapse whitespace — still a string."""
@@ -48,6 +76,48 @@ def normalize(text: str) -> list[str]:
 def surface(text: str) -> list[str]:
     """Tokens exactly as written — capitalization and punctuation intact."""
     return text.split()
+
+
+def false_start_residue(disfluent: str, reference: str) -> frozenset[str]:
+    """Content tokens of `disfluent` that a false start left behind, if any survive.
+
+    A false start is a speaker abandoning a phrase and restarting it, and two parts
+    of one are visible without knowing where the reparandum ended:
+
+    - the **cut-off word** the speaker stopped inside (`th-`, `sec—`), and
+    - the **editing term** they restarted with (`I mean`, `sorry`).
+
+    Both are things a correct cleanup deletes outright, so an output that still
+    contains one is a false start the instruction did not catch. That is the
+    complaint `--false-start-weight` exists to price, and it is priced on tokens
+    rather than on whole utterances so that "solved the utterance but left the
+    false start in" is charged and "left an `um` in" is not.
+
+    A cut-off word covers the injector's `stutter` as well as its `false_start`, and
+    that grouping is deliberate: both are a word the speaker did not finish, both must
+    be deleted outright, and no transcript says which intention produced the fragment.
+
+    Tokens the reference itself contains are excluded: those are words the speaker
+    meant, so an error touching one is ordinary rewording, not leftover residue —
+    which matters most for the `i` in `I mean`, a word half the corpus's references
+    legitimately start with.
+
+    What this does **not** see is an abandoned *whole* content word with no cut-off
+    and no marker ("go to the store the mall"). Separating that from a filler needs
+    the filler list this harness refuses to keep, so it stays at weight 1.0 and the
+    weighting under-counts rather than guessing.
+    """
+    marked: set[str] = set()
+    for token in surface(disfluent):
+        if token.endswith(CUTOFF_MARKS):
+            marked.update(normalize(token))
+
+    padded = f" {normalize_text(disfluent)} "
+    for term in EDITING_TERMS:
+        if f" {normalize_text(term)} " in padded:
+            marked.update(normalize(term))
+
+    return frozenset(marked - set(normalize(reference)))
 
 
 @dataclass(frozen=True)
@@ -76,11 +146,49 @@ class Alignment:
         return len(self.inserted)
 
     @property
+    def hypothesis_side(self) -> tuple[str, ...]:
+        """Every token the cleanup emitted that the reference did not want there.
+
+        Insertions plus the incoming half of each substitution. These are the only
+        errors a residue set can classify, because they are the only ones carrying a
+        token the cleanup chose to keep.
+        """
+        return (*self.inserted, *(now for _, now in self.substituted))
+
+    @property
     def error_rate(self) -> float:
         """Word error rate. An empty reference scores 0 unless the hypothesis added words."""
+        return self.weighted_error_rate()
+
+    def weighted_error_rate(
+        self, residue: frozenset[str] = frozenset(), weight: float = 1.0
+    ) -> float:
+        """Word error rate charging `weight` for each error that is false-start residue.
+
+        Only the **hypothesis side** of an error can be residue: a token the cleanup
+        emitted that the input marked as abandoned (`residue`, from
+        `false_start_residue`). That covers both ways a missed false start shows up —
+        inserted next to the repair (`the store I mean the mall`), or substituted for
+        it when the repair is dropped instead (`the store`).
+
+        Deletions are charged flat. A dropped reference word is the cleanup deleting
+        something the speaker meant, and attributing that to a false start would need
+        to know where the reparandum ended, which nothing here does.
+
+        `weight=1.0` reproduces plain WER exactly, which is why the unweighted
+        `error_rate` is this method rather than a second formula beside it.
+        """
         if self.reference_length == 0:
+            # A flag, not a count — nothing to scale, and no reference to divide by.
             return 0.0 if self.insertions == 0 else 1.0
-        return (self.substitutions + self.deletions + self.insertions) / self.reference_length
+        charged = self.deletions + sum(
+            weight if normalize_text(token) in residue else 1.0 for token in self.hypothesis_side
+        )
+        return charged / self.reference_length
+
+    def residue_errors(self, residue: frozenset[str]) -> int:
+        """How many hypothesis-side errors `residue` accounts for — the weighted ones."""
+        return sum(normalize_text(token) in residue for token in self.hypothesis_side)
 
 
 def align(reference: list[str], hypothesis: list[str]) -> Alignment:
@@ -146,6 +254,10 @@ class Score:
     format: float
     content_alignment: Alignment
     format_alignment: Alignment
+    #: Content-axis errors attributed to a false start the cleanup missed. Counted
+    #: whatever the weight is, so "how often does this instruction miss a false
+    #: start" is answerable from a default run rather than only from a weighted one.
+    false_start_errors: int = 0
 
     @property
     def blend(self) -> float:
@@ -197,15 +309,38 @@ def from_error_rate(rate: float) -> float:
     return math.exp(1.0 - rate) - 1.0
 
 
-def score(reference: str, hypothesis: str) -> Score:
-    """Score a cleanup against its reference on both axes — see `from_error_rate`."""
+def score(
+    reference: str,
+    hypothesis: str,
+    *,
+    spoken: str | None = None,
+    false_start_weight: float = 1.0,
+) -> Score:
+    """Score a cleanup against its reference on both axes — see `from_error_rate`.
+
+    `spoken` is the disfluent input the cleanup was given. Only it can say which of
+    the output's errors are residue from a false start rather than words the model
+    invented, so weighting is unavailable without it — and asking for a weight
+    without one raises rather than quietly scoring flat. Passing it with the default
+    weight is free and fills in `false_start_errors`.
+    """
+    if false_start_weight < 0.0:
+        raise ValueError(f"false_start_weight must not be negative, got {false_start_weight}")
+    if spoken is None and false_start_weight != 1.0:
+        raise ValueError(
+            "false_start_weight needs the disfluent input to attribute errors to a "
+            "false start; pass spoken=<the text the cleanup was given>"
+        )
+
+    residue = frozenset() if spoken is None else false_start_residue(spoken, reference)
     content_alignment = align(normalize(reference), normalize(hypothesis))
     format_alignment = align(surface(reference), surface(hypothesis))
     return Score(
-        content=from_error_rate(content_alignment.error_rate),
-        format=from_error_rate(format_alignment.error_rate),
+        content=from_error_rate(content_alignment.weighted_error_rate(residue, false_start_weight)),
+        format=from_error_rate(format_alignment.weighted_error_rate(residue, false_start_weight)),
         content_alignment=content_alignment,
         format_alignment=format_alignment,
+        false_start_errors=content_alignment.residue_errors(residue),
     )
 
 
@@ -235,6 +370,12 @@ def feedback(
     That reads the corpus rather than a fixed filler-word list, so it stays correct
     on real transcripts whose disfluencies nobody enumerated in advance.
 
+    Leftovers `false_start_residue` can attribute to a false start are pulled out of
+    that line and reported first, as a false start. The scoring weight and this split
+    are independent on purpose: the weight decides what a miss *costs*, and this
+    decides whether the reflector can tell it apart from a filler it left in. A
+    reflector told only "left disfluencies in: mean" writes another filler clause.
+
     Three things are deliberately **not** here, because the reflector already has them
     or is misled by them:
 
@@ -259,17 +400,35 @@ def feedback(
     notes: list[str] = []
     content = scored.content_alignment
     spoken = set(normalize(disfluent))
+    residue = false_start_residue(disfluent, reference)
 
-    leftover = [word for word in content.inserted if word in spoken]
+    # False starts first, and named as what they are. "left disfluencies in: th-, mean"
+    # reads to the reflector as another filler it missed, so it writes another filler
+    # clause; the failure it should be writing about is that the speaker abandoned a
+    # phrase and the cleanup kept the abandoned half.
+    abandoned = sorted({word for word in content.inserted if word in residue})
+    kept_instead = [(was, now) for was, now in content.substituted if now in residue]
+    leftover = [word for word in content.inserted if word in spoken and word not in residue]
     invented = [word for word in content.inserted if word not in spoken]
+    if abandoned:
+        notes.append(
+            "left a false start in the output — the speaker abandoned these and restarted, "
+            f"so they should have been deleted with the words they replaced: {', '.join(abandoned)}"
+        )
+    if kept_instead:
+        pairs = ", ".join(f"{now!r} instead of {was!r}" for was, now in kept_instead[:6])
+        notes.append(f"kept the abandoned half of a false start rather than the restart: {pairs}")
     if leftover:
         notes.append(f"left disfluencies in the output: {', '.join(sorted(set(leftover)))}")
     if invented:
         notes.append(f"added words that were not in the transcript: {', '.join(invented[:8])}")
     if content.deleted:
         notes.append(f"dropped content words: {', '.join(content.deleted[:8])}")
-    if content.substituted:
-        rewrites = ", ".join(f"{was!r}->{now!r}" for was, now in content.substituted[:6])
+    # Whatever `kept_instead` already reported as a false start is not also a
+    # rewording — the reflector acting on one note per failure is the point.
+    reworded = [pair for pair in content.substituted if pair not in kept_instead]
+    if reworded:
+        rewrites = ", ".join(f"{was!r}->{now!r}" for was, now in reworded[:6])
         notes.append(f"reworded content instead of only cleaning it: {rewrites}")
 
     if not notes and scored.format < 1.0:

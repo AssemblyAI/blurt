@@ -201,6 +201,172 @@ def test_feedback_on_a_perfect_cleanup_is_not_empty():
 
 
 # --------------------------------------------------------------------------
+# False starts — the one failure mode the score can be told to weight
+# --------------------------------------------------------------------------
+
+#: A false start with both of its machine-visible parts: the word the speaker cut
+#: off, and the editing term they restarted with.
+FALSE_START_TARGET = "Go to the mall."
+FALSE_START_SOURCE = "Go to the store— I mean the mall."
+
+
+def test_a_cut_off_word_is_read_as_a_false_start():
+    """`th-` is what `nyra`'s hand-annotated `th*` becomes, and the clearest signal."""
+    residue = metrics.false_start_residue(
+        "we should go on th- Thursday", "We should go on Thursday."
+    )
+    assert residue == frozenset({"th"})
+
+
+def test_an_editing_term_left_in_the_output_is_false_start_residue():
+    assert "sorry" in metrics.false_start_residue(
+        "go to the store, sorry, the mall", "Go to the mall."
+    )
+
+
+def test_a_plain_filler_is_not_a_false_start():
+    """Otherwise the weight would price every disfluency and price nothing higher."""
+    assert (
+        metrics.false_start_residue("Um, ship it on Friday.", "Ship it on Friday.") == frozenset()
+    )
+
+
+def test_a_word_the_speaker_meant_is_never_residue():
+    """Matters for the `I` in `I mean`, which references legitimately start with."""
+    assert "i" not in metrics.false_start_residue("I mean I think so", "I think so.")
+
+
+def test_the_default_weight_is_arithmetically_the_old_metric():
+    """The flag defaults to changing nothing, so numbers recorded before it compare."""
+    hypothesis = "Go to the store I mean the mall."
+    assert (
+        metrics.score(FALSE_START_TARGET, hypothesis, spoken=FALSE_START_SOURCE).content
+        == metrics.score(FALSE_START_TARGET, hypothesis).content
+    )
+
+
+def test_weighting_charges_a_missed_false_start_more():
+    hypothesis = "Go to the store I mean the mall."
+    flat = metrics.score(FALSE_START_TARGET, hypothesis, spoken=FALSE_START_SOURCE)
+    weighted = metrics.score(
+        FALSE_START_TARGET, hypothesis, spoken=FALSE_START_SOURCE, false_start_weight=3.0
+    )
+    assert weighted.content < flat.content
+    assert weighted.format < flat.format
+
+
+def test_keeping_the_abandoned_half_of_a_false_start_is_weighted_too():
+    """The other way a missed false start lands: the repair dropped, not the reparandum.
+
+    "Go to the store" is a substitution rather than an insertion, and charging only
+    insertions would leave the worse of the two failures at full marks.
+    """
+    hypothesis = "Go to the store."
+    flat = metrics.score(FALSE_START_TARGET, hypothesis, spoken=FALSE_START_SOURCE)
+    weighted = metrics.score(
+        FALSE_START_TARGET, hypothesis, spoken=FALSE_START_SOURCE, false_start_weight=3.0
+    )
+    assert weighted.content < flat.content
+
+
+def test_weighting_leaves_a_leftover_filler_where_it_was():
+    """Only false starts move, or the weight is just a rescaling of the whole metric."""
+    reference, source = "Ship it on Friday.", "Um, ship it on Friday."
+    assert (
+        metrics.score(reference, source, spoken=source, false_start_weight=5.0).content
+        == metrics.score(reference, source, spoken=source).content
+    )
+
+
+def test_a_perfect_cleanup_is_worth_the_same_at_any_weight():
+    """No errors, nothing to weight — the ceiling stays at 1.0 however it is priced."""
+    for weight in (0.0, 1.0, 4.0):
+        scored = metrics.score(
+            FALSE_START_TARGET,
+            FALSE_START_TARGET,
+            spoken=FALSE_START_SOURCE,
+            false_start_weight=weight,
+        )
+        assert scored.content == scored.format == 1.0
+
+
+def test_weighting_without_the_input_is_an_error_rather_than_a_silent_no_op():
+    """Only the input can say which errors are residue, so a weight without one lies."""
+    with pytest.raises(ValueError):
+        metrics.score(SENTENCE, SENTENCE, false_start_weight=2.0)
+
+
+def test_a_negative_weight_is_rejected():
+    with pytest.raises(ValueError):
+        metrics.score(SENTENCE, SENTENCE, spoken=SENTENCE, false_start_weight=-1.0)
+
+
+def test_missed_false_starts_are_counted_even_at_the_default_weight():
+    """So "how often does this instruction miss one" is answerable from any run."""
+    scored = metrics.score(FALSE_START_TARGET, "Go to the store.", spoken=FALSE_START_SOURCE)
+    assert scored.false_start_errors == 1
+    assert metrics.score(FALSE_START_TARGET, FALSE_START_TARGET).false_start_errors == 0
+
+
+def test_feedback_names_a_false_start_instead_of_calling_it_a_filler():
+    """A reflector told "left disfluencies in: mean" writes another filler clause."""
+    note = metrics.feedback(
+        FALSE_START_TARGET,
+        FALSE_START_SOURCE,
+        metrics.score(
+            FALSE_START_TARGET, "Go to the store I mean the mall.", spoken=FALSE_START_SOURCE
+        ),
+    )
+    assert "false start" in note
+    assert "store" in note
+
+
+def test_feedback_reports_a_kept_reparandum_once_rather_than_as_a_rewording():
+    note = metrics.feedback(
+        FALSE_START_TARGET,
+        FALSE_START_SOURCE,
+        metrics.score(FALSE_START_TARGET, "Go to the store.", spoken=FALSE_START_SOURCE),
+    )
+    assert "abandoned half of a false start" in note
+    assert "reworded content" not in note
+
+
+def test_the_injector_and_the_scorer_share_one_repair_marker_list():
+    """Two copies drift, and the injector would then write markers scoring can't see."""
+    import disfluency
+
+    assert disfluency.CORRECTIONS is metrics.EDITING_TERMS
+
+
+def test_an_injected_false_start_is_visible_to_the_scorer():
+    for seed in range(60):
+        produced, operations = inject(SENTENCE, seed=seed, severity=0.6)
+        if "false_start" in operations:
+            assert metrics.false_start_residue(produced, SENTENCE), produced
+            return
+    pytest.fail("no seed produced a false start")
+
+
+def test_the_false_start_share_counts_pairs_and_stays_a_fraction():
+    """It is printed to say whether raising the weight can move anything at all."""
+    utterances = [
+        corpus.Utterance(reference=FALSE_START_TARGET, disfluent=FALSE_START_SOURCE),
+        corpus.Utterance(reference="Ship it on Friday.", disfluent="Um, ship it on Friday."),
+    ]
+    assert corpus.false_start_fraction(utterances) == 0.5
+    assert corpus.false_start_fraction([]) == 0.0
+
+
+def test_the_floor_is_scored_at_the_run_s_weight():
+    """A weighted candidate against an unweighted floor reads as a loss it never took."""
+    utterances = [corpus.Utterance(reference=FALSE_START_TARGET, disfluent=FALSE_START_SOURCE)]
+    assert (
+        corpus.no_cleanup_floor(utterances, 3.0)["content"]
+        < corpus.no_cleanup_floor(utterances)["content"]
+    )
+
+
+# --------------------------------------------------------------------------
 # De-tagging real corpus conventions
 # --------------------------------------------------------------------------
 
@@ -925,6 +1091,13 @@ def test_a_bare_invocation_is_the_recommended_gepa_run():
     assert not hasattr(args, "adapter")
     # A 4B model writing its own instructions is the weakest link in the loop.
     assert args.reflection_model != args.model
+
+
+def test_the_false_start_weight_defaults_to_the_unweighted_metric():
+    """Opt-in, because a default that reweighted the score would silently orphan every
+    number in the README and in every results.json already written."""
+    assert cli.parse_args([]).false_start_weight == 1.0
+    assert cli.parse_args(["--false-start-weight", "2"]).false_start_weight == 2.0
 
 
 def _default_split(argv=()):

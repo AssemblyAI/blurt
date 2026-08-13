@@ -136,16 +136,33 @@ class LiveResult:
     verbatim: str
     rewritten: str
     llm_error: str | None
+    #: The run's `--false-start-weight`, carried per result so the live numbers are
+    #: on the same scale as the offline ones they are read next to.
+    false_start_weight: float = 1.0
 
     @property
     def floor(self) -> metrics.Score:
         """What pasting the unrewritten transcript would have scored."""
-        return metrics.score(self.reference, self.verbatim)
+        return self._score(self.verbatim)
 
     @property
     def scored(self) -> metrics.Score:
         """What the instruction actually delivered."""
-        return metrics.score(self.reference, self.rewritten)
+        return self._score(self.rewritten)
+
+    def _score(self, hypothesis: str) -> metrics.Score:
+        """Both sides scored against the same input — the *verbatim* transcript.
+
+        Not the corpus's disfluent side: the rewrite model saw what the STT pass
+        produced from the synthesized audio, so that is the text whose false starts
+        it was given a chance to remove.
+        """
+        return metrics.score(
+            self.reference,
+            hypothesis,
+            spoken=self.verbatim,
+            false_start_weight=self.false_start_weight,
+        )
 
 
 def synthesize_all(utterances: list[Utterance]) -> list[tuple[Utterance, bytes]]:
@@ -171,6 +188,7 @@ def verify(
     *,
     url: str = DICTATION_URL,
     on_example=None,
+    false_start_weight: float = 1.0,
 ) -> list[LiveResult]:
     """Send already-synthesized audio through the real endpoint and score the rewrite.
 
@@ -188,6 +206,7 @@ def verify(
                 verbatim=response.get("text", ""),
                 rewritten=response.get("llm_response") or response.get("text", ""),
                 llm_error=response.get("llm_error"),
+                false_start_weight=false_start_weight,
             )
         )
         if on_example:

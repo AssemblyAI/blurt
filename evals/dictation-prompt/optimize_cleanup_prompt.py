@@ -93,11 +93,16 @@ def print_table(rows: list[tuple[str, dict[str, float]]], title: str, axis: str)
 def print_samples(loaded: corpus.Corpus, count: int) -> None:
     print(f"\nExamples (showing {min(count, len(loaded))} of {len(loaded)})")
     for utterance in loaded.utterances[:count]:
-        floor = metrics.score(utterance.reference, utterance.disfluent)
+        floor = metrics.score(utterance.reference, utterance.disfluent, spoken=utterance.disfluent)
         print(f"\n  input    : {utterance.disfluent}")
         print(f"  target   : {utterance.reference}")
         if utterance.operations:
             print(f"  injected : {', '.join(utterance.operations)}")
+        # What a false start costs is the run's business (--false-start-weight); what
+        # the input contains is the corpus's, so the sample shows the tokens rather
+        # than a weighted number that would not match the unweighted floor beside it.
+        if residue := metrics.false_start_residue(utterance.disfluent, utterance.reference):
+            print(f"  abandoned: {', '.join(sorted(residue))}")
         print(f"  uncleaned: content {floor.content:.3f} / format {floor.format:.3f}")
 
 
@@ -158,6 +163,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="blend",
         choices=metrics.AXES,
         help="which axis selects the winner (default: blend, 0.7 content / 0.3 format)",
+    )
+    evaluation.add_argument(
+        "--false-start-weight",
+        type=float,
+        default=1.0,
+        metavar="MULTIPLIER",
+        help="how much more a missed false start costs than any other error "
+        "(default: 1.0, every error equal — arithmetically the metric as it was "
+        "before this flag existed, so older results stay comparable). At 2.0 an "
+        "abandoned word or repair marker left in the output is charged twice, on both "
+        "axes, which is the setting for 'false starts matter more to us than fillers'. "
+        "It applies to the search as well as the report: GEPA's per-example front then "
+        "prefers candidates that catch them. Only errors the input marks as a false "
+        "start are affected — see metrics.false_start_residue for what that can and "
+        "cannot see — so check the corpus's false-start share, printed with the floor, "
+        "before reading much into a small change",
     )
     evaluation.add_argument(
         "--dev-fraction",
@@ -436,7 +457,11 @@ def run_live_verification(
         with Progress(len(runs) * len(sample), "Verifying against the real endpoint") as meter:
             for name, instruction in runs:
                 results = live.verify(
-                    spoken, instruction, api_key, on_example=lambda n=name: meter.tick(n)
+                    spoken,
+                    instruction,
+                    api_key,
+                    on_example=lambda n=name: meter.tick(n),
+                    false_start_weight=args.false_start_weight,
                 )
                 summaries[name] = live.summarize(results)
     except live.Unavailable as error:
@@ -517,12 +542,33 @@ def main(argv: list[str] | None = None) -> int:
         print_samples(loaded, args.show_samples)
 
     axis = resolve_axis(args.metric, loaded)
-    floors = {"dev": corpus.no_cleanup_floor(dev), "test": corpus.no_cleanup_floor(test)}
+    weight = args.false_start_weight
+    floors = {
+        "dev": corpus.no_cleanup_floor(dev, weight),
+        "test": corpus.no_cleanup_floor(test, weight),
+    }
     print(
         f"\nNo-cleanup floor ({axis}) — the corpus's disfluent side scored against its "
         f"own target, no model involved: dev {floors['dev'][axis]:.4f}, "
         f"test {floors['test'][axis]:.4f}"
     )
+    false_starts = {
+        "dev": corpus.false_start_fraction(dev),
+        "test": corpus.false_start_fraction(test),
+    }
+    print(
+        f"False starts the scorer can see: dev {false_starts['dev']:.0%}, "
+        f"test {false_starts['test']:.0%} of pairs"
+    )
+    if weight != 1.0:
+        # Said once, loudly: these numbers are on a different scale from every other
+        # run's, and a weighted score copied into a results table beside unweighted
+        # ones is a comparison nobody made on purpose.
+        print(
+            f"Scoring with --false-start-weight {weight:g}: an error the input marks as an "
+            "abandoned false start counts that many times over, on both axes. Scores from "
+            "this run compare only with other runs at the same weight."
+        )
 
     if args.dry_run:
         print("\n--dry-run: corpus and scoring verified; no model was called.")
@@ -549,6 +595,7 @@ def main(argv: list[str] | None = None) -> int:
                 dev,
                 args.num_threads,
                 on_example=lambda n=note: meter.tick(n),
+                false_start_weight=weight,
             )
             dev_rows.append((name, scores))
     print_table(dev_rows, f"Candidate instructions on dev, selecting on {axis}", axis)
@@ -579,6 +626,7 @@ def main(argv: list[str] | None = None) -> int:
             num_threads=args.num_threads,
             proposer=proposer,
             reflection_minibatch_size=args.reflection_minibatch_size,
+            false_start_weight=weight,
         )
         optimized_instruction = optimized.signature.instructions
         if proposer.rejected:
@@ -593,7 +641,11 @@ def main(argv: list[str] | None = None) -> int:
             )
         with Progress(len(dev), "Re-scoring the optimized instruction") as meter:
             optimized_scores = program.evaluate(
-                optimized, dev, args.num_threads, on_example=meter.tick
+                optimized,
+                dev,
+                args.num_threads,
+                on_example=meter.tick,
+                false_start_weight=weight,
             )
         optimized_name = f"{args.optimizer}-optimized"
         dev_rows.append((optimized_name, optimized_scores))
@@ -646,6 +698,7 @@ def main(argv: list[str] | None = None) -> int:
                         test,
                         args.num_threads,
                         on_example=lambda n=name: meter.tick(n),
+                        false_start_weight=weight,
                     ),
                 )
             )
@@ -677,6 +730,9 @@ def main(argv: list[str] | None = None) -> int:
             },
             "split": {"train": len(train), "dev": len(dev), "test": len(test)},
             "no_cleanup_floor": floors,
+            # Recorded next to the floor because `config.false_start_weight` alone does
+            # not say whether the weight had anything to act on in this split.
+            "false_start_fraction": false_starts,
             "dev": dict(dev_rows),
             "test": dict(test_rows),
             "winner": {

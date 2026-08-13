@@ -49,8 +49,10 @@ FILLERS: tuple[str, ...] = (
 # Clause-initial throat-clearing — "so, ...", "okay so, ...".
 OPENERS: tuple[str, ...] = ("so", "okay so", "yeah so", "well", "right so", "I mean", "let's see")
 
-# Markers a speaker uses when abandoning a phrase and restarting it.
-CORRECTIONS: tuple[str, ...] = ("I mean", "sorry", "or rather", "no wait")
+# Markers a speaker uses when abandoning a phrase and restarting it. Scoring owns
+# the definition (`metrics.EDITING_TERMS`) because it has to recognize one left in a
+# cleanup's output; the injector writes the same four, so the two cannot drift.
+CORRECTIONS: tuple[str, ...] = metrics.EDITING_TERMS
 
 # Weighted toward fillers and repetitions because that is how spontaneous speech
 # is distributed — Switchboard is over half repetitions. Note the consequence:

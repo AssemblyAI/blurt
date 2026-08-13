@@ -485,7 +485,9 @@ def split(utterances: list[Utterance], seed: int, dev_size: float, test_size: fl
     return shuffled[n_test + n_dev :], shuffled[n_test : n_test + n_dev], shuffled[:n_test]
 
 
-def no_cleanup_floor(utterances: list[Utterance]) -> dict[str, float]:
+def no_cleanup_floor(
+    utterances: list[Utterance], false_start_weight: float = 1.0
+) -> dict[str, float]:
     """Score of the corpus's disfluent side against its own target.
 
     Pure arithmetic — no request is made and no model is involved. It is the floor
@@ -493,5 +495,33 @@ def no_cleanup_floor(utterances: list[Utterance]) -> dict[str, float]:
     always applies some cleanup, so "paste the raw transcript" is not a state Blurt
     can actually be in. Read it as "how much work is there to do on this corpus",
     and treat a candidate scoring below it as actively harmful.
+
+    Takes the run's `false_start_weight` because the floor is only meaningful against
+    candidates scored the same way — a weighted run compared against an unweighted
+    floor would read as a candidate losing ground it never had.
     """
-    return metrics.mean([metrics.score(u.reference, u.disfluent) for u in utterances])
+    return metrics.mean(
+        [
+            metrics.score(
+                u.reference,
+                u.disfluent,
+                spoken=u.disfluent,
+                false_start_weight=false_start_weight,
+            )
+            for u in utterances
+        ]
+    )
+
+
+def false_start_fraction(utterances: list[Utterance]) -> float:
+    """Share of pairs whose input carries a false start the scorer can see.
+
+    Printed next to the floor because it is what says whether `--false-start-weight`
+    can do anything at all: raising the price of a failure mode that appears in 2% of
+    a split moves the mean by nothing, and the honest response to that is a corpus
+    with more false starts in it, not a bigger weight.
+    """
+    if not utterances:
+        return 0.0
+    marked = sum(bool(metrics.false_start_residue(u.disfluent, u.reference)) for u in utterances)
+    return marked / len(utterances)
