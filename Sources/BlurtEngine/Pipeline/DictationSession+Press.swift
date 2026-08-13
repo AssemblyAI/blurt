@@ -52,55 +52,7 @@ extension DictationSession {
       // cancellation, which is what `cancel()`'s `.connecting` branch relies on
       // to preempt the wait.
       async let started: Void = mic.start()
-      // Capture the frontmost app (paste target). A cheap in-process AppKit read
-      // on the main actor. Lifted out of the actor first (like `transcriber`
-      // above) so the call is a Sendable closure rather than isolated state.
-      let captureFrontmost = seams.captureFrontmost
-      let captured = await captureFrontmost()
-      await injector.setTargetApp(captured.flatMap { FocusCapture.runningApp(for: $0) })
-      // Key terms are read synchronously at press (cheap UserDefaults read), so
-      // each dictation observably re-reads Settings edits at press time.
-      let keyTerms = keyTermsProvider()
-      // Session history, read on the actor for the same reason: the capture below
-      // runs off-actor, so what it carries has to be a value taken now.
-      let recentTranscripts = recentDictations.transcriptsOldestFirst
-      // Kick off the AX field-context read now, while the target field still
-      // holds focus, but don't await it here: it's cross-process IPC into the
-      // frontmost app (detached — off the main actor, where it froze the
-      // overlay, and off this actor, where it would wedge release()/cancel()).
-      // runTranscribeInject consumes the result right before transcription,
-      // bounded by `contextWaitBudget` — so a slow AX target delays the
-      // transcript by at most the budget, never the recording indicator.
-      let (stream, contextFeed) = AsyncStream.makeStream(
-        of: TranscriptionContext?.self, bufferingPolicy: .bufferingNewest(1))
-      contextStream = stream
-      // A Dispatch queue, not `Task.detached`: `captureFieldContext` is documented
-      // as making ~6 synchronous cross-process AX round trips, each bounded only by
-      // the 1 s messaging timeout, so against a beachballing frontmost app one
-      // press can *block* a thread for seconds. The Swift cooperative pool is sized
-      // to the core count and does not overcommit, so a few press/cancel cycles
-      // against a hung app could park every cooperative thread and stall the whole
-      // non-main runtime — including this actor. Dispatch overcommits, so a blocked
-      // capture costs a thread instead of the pool. Same reasoning as
-      // `DictationLog`'s serial queue. Concurrent so a hung capture can't delay the
-      // next press's. The body is fully synchronous and captures only Sendable
-      // values, so it needs no task context.
-      let captureFieldContext = seams.captureFieldContext
-      Self.contextQueue.async {
-        let field = captureFieldContext()
-        let context = TranscriptionContext(
-          appName: captured?.processName,
-          windowTitle: field.windowTitle,
-          fieldLabel: field.fieldLabel,
-          priorText: field.priorText,
-          selectedText: field.selectedText,
-          recentTranscripts: recentTranscripts,
-          keyTerms: keyTerms,
-          targetIsSecure: field.isSecure)
-        contextFeed.yield(context.isEmpty ? nil : context)
-        contextFeed.finish()
-      }
-
+      await beginContextCapture()
       // Only now join the bring-up. Everything above ran while the mic was
       // coming up; the phase still flips to `.recording` only once `start()`
       // returns, so the UI never claims capture that isn't live. The cost of
@@ -161,6 +113,65 @@ extension DictationSession {
         return
       }
       setPhase(.failed(.audioCaptureFailed(underlying: error)))
+    }
+  }
+
+  /// Captures the paste target and kicks off the press-time AX field-context
+  /// read, leaving the result in `contextStream` for `runTranscribeInject` to
+  /// consume.
+  ///
+  /// Called *before* the bring-up is joined, so all of it — including the
+  /// cross-process AX read, the expensive part — overlaps the mic coming up
+  /// rather than queueing behind it. Split out of `performPress` for the lint
+  /// function-length budget; it is one phase of the press, not a reusable step.
+  private func beginContextCapture() async {
+    // Capture the frontmost app (paste target). A cheap in-process AppKit read
+    // on the main actor. Lifted out of the actor first (like `transcriber`
+    // above) so the call is a Sendable closure rather than isolated state.
+    let captureFrontmost = seams.captureFrontmost
+    let captured = await captureFrontmost()
+    await injector.setTargetApp(captured.flatMap { FocusCapture.runningApp(for: $0) })
+    // Key terms are read synchronously at press (cheap UserDefaults read), so
+    // each dictation observably re-reads Settings edits at press time.
+    let keyTerms = keyTermsProvider()
+    // Session history, read on the actor for the same reason: the capture below
+    // runs off-actor, so what it carries has to be a value taken now.
+    let recentTranscripts = recentDictations.transcriptsOldestFirst
+    // Kick off the AX field-context read now, while the target field still
+    // holds focus, but don't await it here: it's cross-process IPC into the
+    // frontmost app (detached — off the main actor, where it froze the
+    // overlay, and off this actor, where it would wedge release()/cancel()).
+    // runTranscribeInject consumes the result right before transcription,
+    // bounded by `contextWaitBudget` — so a slow AX target delays the
+    // transcript by at most the budget, never the recording indicator.
+    let (stream, contextFeed) = AsyncStream.makeStream(
+      of: TranscriptionContext?.self, bufferingPolicy: .bufferingNewest(1))
+    contextStream = stream
+    // A Dispatch queue, not `Task.detached`: `captureFieldContext` is documented
+    // as making ~6 synchronous cross-process AX round trips, each bounded only by
+    // the 1 s messaging timeout, so against a beachballing frontmost app one
+    // press can *block* a thread for seconds. The Swift cooperative pool is sized
+    // to the core count and does not overcommit, so a few press/cancel cycles
+    // against a hung app could park every cooperative thread and stall the whole
+    // non-main runtime — including this actor. Dispatch overcommits, so a blocked
+    // capture costs a thread instead of the pool. Same reasoning as
+    // `DictationLog`'s serial queue. Concurrent so a hung capture can't delay the
+    // next press's. The body is fully synchronous and captures only Sendable
+    // values, so it needs no task context.
+    let captureFieldContext = seams.captureFieldContext
+    Self.contextQueue.async {
+      let field = captureFieldContext()
+      let context = TranscriptionContext(
+        appName: captured?.processName,
+        windowTitle: field.windowTitle,
+        fieldLabel: field.fieldLabel,
+        priorText: field.priorText,
+        selectedText: field.selectedText,
+        recentTranscripts: recentTranscripts,
+        keyTerms: keyTerms,
+        targetIsSecure: field.isSecure)
+      contextFeed.yield(context.isEmpty ? nil : context)
+      contextFeed.finish()
     }
   }
 }

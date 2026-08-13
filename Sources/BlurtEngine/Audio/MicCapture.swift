@@ -68,7 +68,7 @@ public actor MicCapture: MicCaptureProtocol {
     /// Releases this recorder once it has gone unused for
     /// `preparedRecorderLifetime`. See that constant for why holding one open
     /// forever is not an option.
-    var expiry: Task<Void, Never>? = nil
+    var expiry: Task<Void, Never>?
     /// The ticket `expiry` carries, so a stale one can identify itself.
     let generation: Int
   }
