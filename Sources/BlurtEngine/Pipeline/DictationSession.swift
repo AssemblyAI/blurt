@@ -221,6 +221,16 @@ public actor DictationSession {
     // the only throwing call, and it precedes `.recording`, so the two ends are
     // mutually exclusive).
     let pressInterval = Self.signposter.beginInterval(Self.pressSignpostName)
+    // Claim `.starting` before anything slow, so the overlay answers the
+    // keypress now rather than when the mic finishes opening. `mic.start()`
+    // below is the slow step — it resolves and activates the hardware route,
+    // which on a Bluetooth input means renegotiating the link into its
+    // mic-capable mode. Until this phase existed, all of that sat between the
+    // user's key-down and the first thing they could see or hear, and read as
+    // the app lagging behind them. `.starting` is presented as "starting", never
+    // as live capture, so the phase still flips to `.recording` only once audio
+    // is genuinely being recorded.
+    setPhase(.starting)
     do {
       // Pre-open the dictation connection while the user speaks, so the first dictation after an idle
       // gap doesn't pay DNS+TCP+TLS on the transcribe hot path (~170 ms cold, measured). Detached
@@ -353,7 +363,10 @@ public actor DictationSession {
   func stopAndCancel() async {
     cancelAutoRelease()
     do {
-      _ = try await mic.stop()
+      // `cancelCapture`, not `stop`: the audio is being thrown away, so neither
+      // preserving it (the Bluetooth tail linger) nor reading it back off disk
+      // is worth delaying the user's cancel for.
+      try await mic.cancelCapture()
     } catch {
       // Stays out of the UI: the user asked for nothing to happen, and a cancel
       // must not flash red (same rule as `performRelease`'s "a cancel wins over

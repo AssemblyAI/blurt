@@ -60,7 +60,7 @@ Key properties of the design, which your integration can rely on:
 
 - **One request per utterance, no streaming.** The dictation API returns the complete transcript — and its LLM-rewritten form — in the response body: no upload step, no job polling, no incremental deltas, no second request for the cleanup. `TranscriberProtocol.transcribe` is a single `async throws -> String`. UIs should show a "transcribing…" state and then the whole result; there is nothing to stream.
 - **Cleanup happens server-side, and it's optional.** The request's `llm` block asks the service to apply our own cleanup instruction (`CleanupInstruction.text` — delete disfluencies, change nothing else) to the verbatim transcript inside the same call. It is the only instruction on the request: the separate `config.prompt` field, which primes the _transcription_, is switched off at `TranscriptionPrompt.isEnabled` and omitted from every request. The block is gated by the **enhanced transcripts** setting (`EnhancedTranscriptsStore`, on by default): turned off, the config omits `llm` and the verbatim transcript is pasted as spoken. The user's **custom style instructions** (`CustomStyleStore`, empty by default) are appended to that instruction via `CleanupInstruction.sendable(appending:)`, trimmed to the headroom the API's 2048 instruction cap leaves (measured in UTF-8 bytes, the conservative bound — the cap's own unit is unmeasured); blank means the base instruction goes out unchanged. The engine pastes `llm_response`, falling back to the verbatim `text` when the best-effort rewrite failed (`llm_error`) — a degradation, never a user-facing error. There is no client-side LLM pass, no styling stage, and deliberately no hook for one.
-- **Latency is pre-paid where possible.** `press()` fires a detached `warmUp()` at the transcriber (pre-opening the HTTPS connection while the user speaks, ~170 ms saved cold) and kicks off the cross-process accessibility read of the focused field without awaiting it — the read is then consumed at transcribe time with a bounded wait (`DictationSession.contextWaitBudget`, 500 ms), so an unresponsive frontmost app costs the transcript its priming, never a multi-second stall — and never delays the recording indicator. On the way out, `release()` flips the phase to `.transcribing` _before_ reading the recorded audio back, so a host's stop cue fires at key-up rather than after the disk read.
+- **Latency is pre-paid where possible.** `press()` claims `.starting` before it touches the mic, so a host's pill and start cue answer the keypress rather than the hardware route (which on a Bluetooth input is the slowest thing in the press path). `MicCapture` re-arms its prepared recorder after every capture so that route activation is paid between dictations rather than during one. `press()` fires a detached `warmUp()` at the transcriber (pre-opening the HTTPS connection while the user speaks, ~170 ms saved cold) and kicks off the cross-process accessibility read of the focused field without awaiting it — the read is then consumed at transcribe time with a bounded wait (`DictationSession.contextWaitBudget`, 500 ms), so an unresponsive frontmost app costs the transcript its priming, never a multi-second stall — and never delays the recording indicator. On the way out, `release()` flips the phase to `.transcribing` _before_ reading the recorded audio back, so a host's stop cue fires at key-up rather than after the disk read.
 - **A held trigger auto-releases.** `DictationSession` stops recording after `maxRecordingSeconds` (default `SyncSTTLimits.autoReleaseSeconds`, 115 s) so audio never exceeds what the endpoint accepts, and transcribes what it has. Clips shorter than `SyncSTTLimits.minPCMBytes` (~100 ms of audio — an accidental tap) are dropped as a silent no-op rather than sent to earn a 400.
 
 ## DictationSession
@@ -83,14 +83,20 @@ For callback-shaped hosts that can't `await` — an event tap, a button action �
 `phase` / `phaseStream()` expose the pipeline's `PipelinePhase`:
 
 ```text
-idle → recording → transcribing → injecting → pasted | noTarget
-                          │              │
-                          └── failed(BlurtError) / cancelled (from any stage)
+idle → starting → recording → transcribing → injecting → pasted | noTarget
+                                     │              │
+                                     └── failed(BlurtError) / cancelled (from any stage)
 ```
+
+`starting` is claimed the moment a press is accepted, _before_ the mic is opened, so your UI can
+answer the keypress instead of the hardware. It is not live capture — opening a Bluetooth input takes
+hundreds of milliseconds — so present it as "starting", never as recording; `recording` follows only
+once audio is genuinely being captured. `PipelinePhase.isCapturing` covers both if you want the
+"a dictation is in progress" bit rather than the distinction.
 
 - `phaseStream()` yields the current phase immediately, then every transition. It is a **multi-observer** stream: every call gets its own continuation and all of them see later transitions, so an extra consumer (a diagnostic, a second window) is safe. Still, prefer one renderer that projects the phase into your own state over a fan-out of long-lived consumers — one source of UI truth is easier to reason about than several.
 - `.pasted` and `.noTarget` are terminal _success_ states, not errors. `.noTarget` means transcription worked but nothing editable was focused (or the target app quit), so the text was left on the clipboard — show a quiet "copied" notice, not a failure.
-- Two ready-made projections keep UI mapping out of your shell: `phase.overlayState` (`OverlayUIState`: idle / recording / processing / error(message:) / pasted / noTarget, with accessibility labels and — for the transient notices — `noticeDwellSeconds`, how long to hold one before reverting to idle) and `phase.menuBarStatus` (coarser: idle / recording / transcribing, never shows errors, with `symbolName`/`accessibilityLabel` presentation).
+- Two ready-made projections keep UI mapping out of your shell: `phase.overlayState` (`OverlayUIState`: idle / starting / recording / processing / error(message:) / pasted / noTarget, with accessibility labels and — for the transient notices — `noticeDwellSeconds`, how long to hold one before reverting to idle) and `phase.menuBarStatus` (coarser: idle / recording / transcribing, never shows errors, with `symbolName`/`accessibilityLabel` presentation — `starting` rests at idle there rather than claiming a live mic).
 - Pill geometry is available too, if you're drawing something like Blurt's overlay: `OverlayPlacement` resolves how big the panel is (`panelSize(pillSize:shadowMargin:)`, sized to hold the pill plus room for its shadow) and where it goes (clearance, clamping a dragged origin back on screen), and `MeterBarGeometry` gives the level meter its shape. Build a `MeterBarRow(availableSize:)` once per layout — it resolves how many bars fit and how tall they may be — then ask it for `height(at:level:time:animated:)` per bar; `MeterBarGeometry.breathingOpacity(time:period:minOpacity:)` is the pulse the record dot and status label share. All pure math; pass `animated: false` to honor Reduce Motion.
 
 ### Errors
@@ -116,15 +122,20 @@ All cases are `LocalizedError` with user-ready `errorDescription` strings, and `
 ```swift
 func start() async throws
 func stop() async throws -> Data        // raw S16LE mono PCM, 16 kHz, in order
+func cancelCapture() async throws       // stop and discard; default: stop-and-drop
 var levels: AsyncStream<Float> { get }  // 0…1 meter; default: empty stream
 func warmUp() async                     // pre-open the device; default: no-op
 ```
 
-Only `start()`/`stop()` must be implemented — `levels` and `warmUp()` have defaults, so a stub or headless capture conforms for free while hosts still read the meter and warm the device through the same seam they inject.
+Only `start()`/`stop()` must be implemented — `cancelCapture()`, `levels` and `warmUp()` have defaults, so a stub or headless capture conforms for free while hosts still read the meter and warm the device through the same seam they inject.
+
+`cancelCapture()` is what the session calls when a dictation is cancelled, and it exists because the two teardowns want opposite things: `stop()` may legitimately spend time preserving the audio, while a cancel has nothing to preserve and must take effect at once. Override it only if stopping cheaply differs from stopping carefully in your capture.
 
 `MicCapture` records with `AVAudioRecorder` straight to a temp 16 kHz / mono / 16-bit PCM WAV — exactly the geometry the dictation API wants — and reads it back as raw S16LE bytes on `stop()` (no float detour; the blob uploads as-is). A **fresh recorder per session** resolves the current default input device at `record()` time, which is why device switches (headset ↔ built-in) just work. Do **not** replace this with a long-lived `AVAudioEngine`/`installTap` graph: that design was tried, bound itself to one device, and failed with `-10868` or all-zero buffers on device switches.
 
 `MicCapture`'s `levels` is a ~20 Hz meter of the recorder's dBFS power mapped to `0…1` (floored at −50 dBFS so room ambient reads as silence) — feed it to a voice-bars view; it costs nothing when unobserved. Its `warmUp()` pre-creates and prepares a recorder so the first `start()` skips hardware route discovery (Blurt calls it at launch, once mic permission is granted, so warming never triggers the permission prompt).
+
+**Bluetooth inputs get three accommodations**, because opening the mic on AirPods makes the system renegotiate the link into its mic-capable mode — hundreds of milliseconds — and that link then buffers audio. `MicCapture` re-arms the warm recorder after _every_ capture rather than only at launch (the cost is per session, paid at `prepareToRecord()`); it records the default input's UID alongside the warm recorder and discards it when the device has changed, since `AVAudioRecorder` resolves its device once and never re-resolves; and it releases an unused warm recorder after 60 s, because holding the input device open is what pins AirPods in the profile where output audio is degraded. On top of that, `stop()` keeps capturing for a further 220 ms when the input is Bluetooth, so speech still travelling over the link lands in the file instead of being truncated — the missing last word. `cancelCapture()` skips both that linger and the file read-back.
 
 ### `TranscriberProtocol` → `AssemblyAITranscriber`
 

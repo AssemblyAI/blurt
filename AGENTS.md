@@ -47,7 +47,8 @@ the design; BLURTENGINE.md covers the _what_ of the API surface.
 
 ```text
 Sources/BlurtEngine/         the engine (dependency-free Swift package)
-  Audio/                     MicCapture (+meter), SoundPack/Catalog/Store — record cues
+  Audio/                     MicCapture (+meter), AudioRoute(+Monitor) — CoreAudio routing facts,
+                             SoundPack/Catalog/Store — record cues
   Config/                    Keychain-backed API key, key terms, developer mode, DefaultsKey +
                              PersistedSettings (every defaults key, and the reset sweep over them)
   FocusCapture/              Accessibility reads of the frontmost app / focused field
@@ -382,13 +383,45 @@ A **fresh recorder per session** resolves the current default input device at `r
 is deliberate — see [Settled decisions](#settled-decisions--dont-reintroduce-these) for the
 `AVAudioEngine` failure it replaced.
 
+**Bluetooth inputs are the reason for three of this actor's moving parts.** Opening the mic on
+AirPods (or any Bluetooth headset) makes the system renegotiate the link into its mic-capable mode —
+hundreds of milliseconds, sometimes over a second — and that link then buffers audio in both
+directions. So:
+
+- **The warm recorder is re-armed after every capture**, not just at launch. The cost above is paid
+  at `prepareToRecord()`, i.e. per session, so warming only the first one hid it for one dictation
+  out of N. `stop()`/`cancelCapture()` schedule a re-warm; `start()` consumes it.
+- **A warm recorder is validated before reuse.** `AVAudioRecorder` resolves its device once and
+  never re-resolves, so `MicCapture` records the default input's UID (`AudioRoute.currentInput()`)
+  alongside the warm recorder and discards it when the device has changed — otherwise a recorder
+  warmed before the user connected their AirPods would keep recording the built-in mic. Unknown
+  counts as changed.
+- **The warm recorder expires** (`preparedRecorderLifetime`, 60 s). A prepared recorder holds the
+  input device open, which is exactly what pins AirPods in the profile where _output_ audio is
+  degraded — so it is not held indefinitely. Back-to-back dictations land inside the window; a press
+  past it just prepares lazily, which is the pre-re-warm behavior.
+
+`stop()` also waits out `bluetoothTailLinger` (220 ms) before ending the recording **when the
+session's input is Bluetooth**, so speech still travelling over the link lands in the file instead of
+being truncated — the missing last word. It runs after `.transcribing` is claimed, so it delays the
+transcript, never the "it heard me" cue. Cancels take `cancelCapture()` instead, which skips both the
+linger and the file read-back: the audio is being discarded, so neither is worth delaying the user's
+cancel for.
+
+The routing facts behind all of that live in **`AudioRoute`** (`Audio/AudioRoute.swift`, internal):
+which device is the default input, its UID, and whether its transport is Bluetooth. Its sibling
+**`AudioRouteMonitor`** (public) publishes output-route changes for the cue players — see
+[Settings, persistence, and cues](#settings-persistence-and-cues). Both are excluded from the
+coverage gate for the same reason
+`MicCapture` is: they answer questions only real hardware can answer.
+
 The overlay meter (`levels`) comes from the recorder's dBFS power on a ~20 Hz timer
 (`MicCapture.meterIntervalSeconds` — public because the pill caps its animation redraws to the same
 cadence and reads it from here rather than restating it), mapped to `0…1` by
 `linearLevel(fromPowerDB:)` and floored so room ambient reads as empty bars rather than a meter that
-never rests. `levels` and `warmUp()` are part of `MicCaptureProtocol` itself with an empty-stream /
-no-op default, so stubs conform with just `start()`/`stop()` while hosts still read the meter through
-the seam they inject.
+never rests. `levels`, `warmUp()` and `cancelCapture()` are part of `MicCaptureProtocol` itself with
+empty-stream / no-op / stop-and-discard defaults, so stubs conform with just `start()`/`stop()` while
+hosts still read the meter through the seam they inject.
 
 ### `AssemblyAITranscriber` — `Sources/BlurtEngine/STT/AssemblyAITranscriber.swift`
 
@@ -453,8 +486,9 @@ stream and signposts) and `+Pipeline.swift` (the post-release transcribe→injec
 It exposes `press()` / `release()` / `cancel()` / `cancelRecording()`, a synchronous
 fire-and-forget `submit(_: Command)` mirroring those four for callback-shaped hosts (commands run in
 exact emit order — the tap wires straight into it, no per-callback `Task` spawning), and a
-`phase: PipelinePhase` (`idle | recording | transcribing | injecting | failed | cancelled`, plus the
-terminal successes `pasted` / `noTarget`). `phaseStream()` yields the current phase immediately then
+`phase: PipelinePhase` (`idle | starting | recording | transcribing | injecting | failed |
+cancelled`, plus the terminal successes `pasted` / `noTarget`). `phaseStream()` yields the current
+phase immediately then
 every transition, and is **multi-observer** (one continuation per call), though hosts should still
 render from one consumer and project the phase into their own state.
 
@@ -472,14 +506,21 @@ round trip, and the log wrote to the user's real `~/Library/Logs/Blurt`. STT err
 are wrapped in `.sttFailed`. The pipeline is just transcribe → inject, and an empty transcript
 returns to `.idle` without injecting.
 
-Three perceived-latency choices to preserve:
+Four perceived-latency choices to preserve:
 
+- `press()` claims `.starting` _before_ `mic.start()`, so the pill and the start chime answer the
+  key-down rather than waiting on the hardware route. `.starting` is presented as "Starting…", never
+  as live capture — the rule that the UI must not claim audio is being recorded before it is holds,
+  and `.recording` is still only claimed once `mic.start()` has succeeded. `RecordingCueGate` rides
+  `PipelinePhase.isCapturing` (`.starting || .recording`) for the same reason, so the chime fires at
+  the press and stays silent across `.starting` → `.recording`.
 - `.injecting` projects to `OverlayUIState.processing`, **not** `.idle` — the shell reads an idle
   projection as "dismiss", so mapping this working phase to idle faded the pill out mid-dictation and
   blinked it back for "Pasted".
 - `release()` claims `.transcribing` _before_ `mic.stop()`, so the stop chime and pill switch fire at
   key-up rather than after the recording is read back. This ordering also closes the double-release
-  window `ReleaseRaceTests` pins.
+  window `ReleaseRaceTests` pins — and it is what lets `MicCapture`'s Bluetooth tail linger sit
+  inside `stop()` without the user ever waiting on it.
 - The press-time Accessibility context read is consumed with a bounded wait (`contextWaitBudget`,
   500 ms), so an unresponsive frontmost app costs the transcript its priming, never a multi-second
   stall.
@@ -651,8 +692,16 @@ Record cues: **`SoundPack`** is a selectable start/stop chime voice (vintage syn
 `App/Blurt/Blurt/Resources/Sounds/`), listed by **`SoundPackCatalog.swift`**, which is _generated_ by
 `scripts/generate-sounds.swift` alongside the audio. Regenerate both halves together — `check.sh`'s
 sound-catalog guard exists because a drift plays silence with no error. **`RecordingCueGate`** is the
-pure edge detector deciding when the chimes fire; the AppKit `CueSoundPlayer` just plays what it
-resolves.
+pure edge detector deciding when the chimes fire — on the _capture_ edge
+(`PipelinePhase.isCapturing`), so the start chime lands at the press rather than after the mic
+route comes up; the AppKit `CueSoundPlayer` just plays what it resolves.
+
+`CueSoundPlayer` decodes and pre-rolls the players once so the first chime never stalls the pill, and
+that pre-roll is bound to the output route it was made against. Blurt's own capture invalidates it:
+opening the mic flips AirPods out of their output-only profile, dropping the output format underneath
+the primed players. So the player observes **`AudioRouteMonitor.outputRouteChanges`** and reloads —
+the monitor watches both the default output _device_ (a user switch) and the current device's nominal
+sample rate (the profile flip), re-targeting the second listener whenever the first fires.
 
 History: **`RecentDictations`** is an in-memory, newest-first ring shown in the ready window (never
 written to disk). **`DictationLog`** appends each completed dictation with its context snapshot to

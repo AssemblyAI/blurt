@@ -238,6 +238,32 @@ extension DictationSessionTests {
     #expect(await terminal == .pasted)
   }
 
+  @Test("press claims .starting before the mic opens, then .recording")
+  func pressPublishesStartingBeforeRecording() async throws {
+    // The whole point of the phase: the overlay gets something to show at
+    // key-down instead of at whatever moment `mic.start()` returns. On a
+    // Bluetooth input that gap is hundreds of milliseconds of a press that
+    // looked like it did nothing, so `.starting` must be *published*, not just
+    // passed through — a `setPhase` skipped here would put the pill back to
+    // appearing only once the hardware route was up.
+    let fixture = makeSession()
+
+    let stream = await fixture.session.phaseStream()
+    fixture.session.submit(.press)
+
+    var seen: [PipelinePhase] = []
+    for await phase in stream {
+      seen.append(phase)
+      if phase == .recording { break }
+    }
+
+    // The subscription's initial yield is the current phase (.idle), then the
+    // press's two transitions in order.
+    #expect(seen == [.idle, .starting, .recording])
+
+    await fixture.session.cancel()
+  }
+
   @Test("cancel during active recording stops mic, discards audio, and transitions to .cancelled")
   func cancelDuringRecording() async throws {
     let fixture = makeSession(mode: .transcript("Hello"))
@@ -249,6 +275,27 @@ extension DictationSessionTests {
     #expect(await fixture.session.phase == .cancelled)
     #expect(await fixture.mic.stopCalls == 1)
     #expect(await fixture.injector.inserted.isEmpty)
+  }
+
+  @Test("a cancel tears the mic down through cancelCapture, a release through stop")
+  func cancelUsesTheDiscardingTeardown() async throws {
+    // The two teardowns want opposite things, so the session must not conflate
+    // them. `stop()` may legitimately spend time preserving the audio —
+    // `MicCapture` waits out a Bluetooth link's tail before ending the
+    // recording — while a cancel has nothing to preserve and must take effect at
+    // once. Routing a cancel through `stop()` would make the user's cancel pay
+    // that linger to save audio it is about to delete.
+    let cancelled = makeSession()
+    await cancelled.session.press()
+    await cancelled.session.cancel()
+    #expect(await cancelled.mic.cancelCaptureCalls == 1)
+
+    let released = makeSession()
+    await released.session.press()
+    await released.session.release()
+    await released.session.waitForIdle()
+    #expect(await released.mic.cancelCaptureCalls == 0)
+    #expect(await released.mic.stopCalls == 1)
   }
 }
 

@@ -16,6 +16,9 @@ struct MenuBarStatusTests {
     (.recording, .recording),
     (.transcribing, .transcribing),
     (.idle, .idle),
+    // The mic is still opening, so the coarse indicator rests at idle rather
+    // than claiming "recording" — the one thing `.starting` exists to prevent.
+    (.starting, .idle),
     // Injection happens silently; the indicator rests at idle through the brief
     // paste rather than showing a distinct state.
     (.injecting, .idle),

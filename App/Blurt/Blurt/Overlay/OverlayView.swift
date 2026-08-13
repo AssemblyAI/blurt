@@ -32,7 +32,7 @@ struct OverlayView: View {
     switch state {
     case .error:
       return Color(red: 0.62, green: 0.13, blue: 0.13)
-    case .recording, .processing, .pasted, .noTarget, .idle:
+    case .starting, .recording, .processing, .pasted, .noTarget, .idle:
       return Color(white: 0.16)
     }
   }
@@ -84,6 +84,19 @@ struct OverlayView: View {
       // background would collapse with it) keeps the pill's shape intact for
       // `hide()`'s pre-hide reset.
       Color.clear
+    case .starting:
+      // The mic is opening; nothing is being captured yet. Styled exactly like
+      // "Transcribing…"/"Pasted" (same status-line type, tracking, and cyan
+      // --ice) so the starting → recording hand-off reads as one status line
+      // rather than a new kind of alert — and deliberately *not* the `● REC`
+      // tag or the meter, which would claim live capture.
+      //
+      // On a built-in mic this is on screen for a frame or two, inside the
+      // pill's own 0.08 s fade-in, so it blends into the appearance rather than
+      // flashing; on a Bluetooth input it holds for as long as the link takes,
+      // which is the whole point.
+      StatusLineText("Starting…")
+        .transition(.opacity)
     case .recording:
       // "● REC" tag beside the live waveform, mirroring the site demo's recording
       // pill (magenta tag + bars). The bars fill the width left of the tag.

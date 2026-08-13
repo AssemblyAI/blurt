@@ -10,20 +10,27 @@ public enum RecordingCue: Equatable, Sendable {
 
 /// Edge-detector deciding when the record start/stop chimes fire. The host calls
 /// `cue(for:)` on *every* pipeline phase, so the gate fires `.start` only on the
-/// idle→recording edge and `.stop` only on the recording→not-recording edge,
-/// staying silent while a phase repeats and across transitions between two
-/// non-recording phases. Value type holding a single edge bit; the host owns one
-/// instance for the app's lifetime.
+/// edge into a capture and `.stop` only on the edge out of one, staying silent
+/// while a phase repeats and across transitions between two non-capturing
+/// phases. Value type holding a single edge bit; the host owns one instance for
+/// the app's lifetime.
+///
+/// The edge is `PipelinePhase.isCapturing`, not `== .recording`, so the start
+/// chime fires when the user presses the key (`.starting`) rather than when the
+/// mic finishes opening. On a Bluetooth input those are hundreds of milliseconds
+/// apart, and the chime is the fastest feedback the app has — holding it until
+/// the route is live wasted exactly the interval it was there to cover. The
+/// `.starting`→`.recording` step is inside one capture, so it stays silent.
 public struct RecordingCueGate: Sendable {
-  private var wasRecording = false
+  private var wasCapturing = false
 
   public init() {}
 
-  /// The cue to play for `phase`, or `nil` when the recording edge didn't move.
+  /// The cue to play for `phase`, or `nil` when the capture edge didn't move.
   public mutating func cue(for phase: PipelinePhase) -> RecordingCue? {
-    let isRecording = phase == .recording
-    defer { wasRecording = isRecording }
-    switch (wasRecording, isRecording) {
+    let isCapturing = phase.isCapturing
+    defer { wasCapturing = isCapturing }
+    switch (wasCapturing, isCapturing) {
     case (false, true): return .start
     case (true, false): return .stop
     default: return nil

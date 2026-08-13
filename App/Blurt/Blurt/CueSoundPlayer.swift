@@ -15,6 +15,15 @@ final class CueSoundPlayer {
   /// pipeline phase to a cue lives in the engine (`RecordingCueGate`), where
   /// `swift test` covers it; this player just plays whatever it resolves to.
   private var cueGate = RecordingCueGate()
+  /// Fires when the output route changes under the pre-rolled players. Blurt's
+  /// own capture is the usual cause: opening the mic flips AirPods out of their
+  /// output-only profile, which drops the output format the players were primed
+  /// against — so the very next chime is the one that stalls, and that's the
+  /// chime at the start of a dictation.
+  private let routeMonitor = AudioRouteMonitor()
+  /// Kept alive for the app's lifetime; assignment is the use. Nil until
+  /// `prime()` starts it, which is also what makes starting idempotent.
+  private var routeObserver: Task<Void, Never>?
 
   /// The cues are deliberate UI accents, not music — they are normalized to a
   /// hot peak, so play them well below full scale so they read as a soft chime
@@ -36,6 +45,35 @@ final class CueSoundPlayer {
   /// decode never sits on the main thread during startup.
   func prime() {
     Task { await loadCurrentPack() }
+    startObservingRoute()
+  }
+
+  /// The player is owned for the whole app session, so this never runs in
+  /// practice — but cancelling the observer mirrors the `[weak self]` care below
+  /// and documents that its lifetime is owned rather than leaked.
+  deinit {
+    routeObserver?.cancel()
+  }
+
+  /// Re-primes the players whenever the output route changes, so the pre-roll
+  /// `prime()` bought at launch survives a device switch or a profile flip.
+  /// Idempotent — `prime()` runs on every "app is ready" transition, and only
+  /// the first call installs the observer.
+  ///
+  /// A full reload rather than a bare `prepareToPlay()`: route changes are rare
+  /// (a handful an hour at most), the decode runs off the main actor like every
+  /// other load, and re-creating the players is the one thing guaranteed to
+  /// leave them primed against the *current* route.
+  private func startObservingRoute() {
+    guard routeObserver == nil else { return }
+    let changes = routeMonitor.outputRouteChanges
+    routeObserver = Task { [weak self] in
+      for await _ in changes {
+        guard let self else { return }
+        self.loadedPack = nil
+        await self.loadCurrentPack()
+      }
+    }
   }
 
   /// Reloads the players for a newly selected pack and previews the new voice

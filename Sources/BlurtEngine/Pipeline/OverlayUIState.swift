@@ -3,6 +3,13 @@
 /// is unit-testable; the shell just renders whatever this resolves to.
 public enum OverlayUIState: Equatable, Sendable {
   case idle
+  /// The press landed and the mic is opening — the pill is up, but nothing is
+  /// being captured yet. A steady state, not a notice: it holds for exactly as
+  /// long as the hardware takes, which is a frame or two on the built-in mic and
+  /// noticeably longer on a Bluetooth input. The shell renders it as a plain
+  /// "Starting…" status line rather than the `● REC` tag, so the pill answers
+  /// the keypress without claiming to be recording.
+  case starting
   case recording
   case processing
   /// A dictation attempt failed. The shell shows this as a brief red flash on
@@ -27,6 +34,7 @@ public enum OverlayUIState: Equatable, Sendable {
   public var accessibilityLabel: String {
     switch self {
     case .idle: "Blurt."
+    case .starting: "Starting."
     case .recording: "Recording."
     case .processing: "Processing."
     case .error(let message): message
@@ -46,7 +54,7 @@ public enum OverlayUIState: Equatable, Sendable {
     switch self {
     case .pasted: 0.8
     case .error, .noTarget: 1.6
-    case .idle, .recording, .processing: nil
+    case .idle, .starting, .recording, .processing: nil
     }
   }
 }
@@ -64,6 +72,11 @@ extension PipelinePhase {
     // content — then `.pasted` arrived and faded it back in. A visible blink at
     // the end of a dictation, worst when the user has switched apps mid-transcribe.
     case .injecting: .processing
+    // Its own pill state, NOT `.recording`: the phase exists precisely because
+    // capture hasn't begun, so projecting it onto the recording pill would put
+    // the `● REC` tag and a live meter on screen over a mic that isn't open yet
+    // — the lie the split was made to avoid.
+    case .starting: .starting
     case .recording: .recording
     case .transcribing: .processing
     // A setup blocker (a missing API key) is an expected state, not a fault: the
