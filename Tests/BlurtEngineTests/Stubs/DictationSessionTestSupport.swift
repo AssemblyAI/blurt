@@ -26,7 +26,7 @@ func makeSession(
   field: FocusCapture.FocusedFieldContext = .empty,
   frontmost: CapturedFocus? = nil,
   keyTerms: [String] = [],
-  onTranscriptDelivered: (@Sendable (String) -> Void)? = nil
+  onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)? = nil
 ) -> SessionFixture {
   let mic = StubMicCapture()
   let transcriber = StubTranscriber(mode: mode)

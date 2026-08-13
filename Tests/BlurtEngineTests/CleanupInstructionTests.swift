@@ -27,7 +27,7 @@ struct CleanupInstructionTests {
   /// the audio is read, so every dictation fails outright rather than degrading to
   /// the verbatim transcript. A 3057-character instruction shipped once and did
   /// exactly that, past a version of this very test that asserted
-  /// `TranscriptionPrompt.characterCap` — the 4096 limit on the *other* field.
+  /// `ConversationContext.characterCap` — the 4096 limit on the *other* field.
   ///
   /// So this asserts the instruction's own cap, and the next test pins the two apart.
   @Test("the instruction fits the API's cap on config.llm.instruction")
@@ -46,10 +46,10 @@ struct CleanupInstructionTests {
 
   /// The mistake was reaching for a nearby constant that happened to be a length.
   /// If these two ever converge, the test above stops distinguishing them.
-  @Test("the instruction's cap is not the prompt's cap")
+  @Test("the instruction's cap is not the conversation context's cap")
   func capsAreDistinct() {
     #expect(CleanupInstruction.characterCap == 2048)
-    #expect(CleanupInstruction.characterCap < TranscriptionPrompt.characterCap)
+    #expect(CleanupInstruction.characterCap < ConversationContext.characterCap)
   }
 
   /// The product-critical clauses, as opposed to the cleanup quality the eval

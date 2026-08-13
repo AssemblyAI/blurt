@@ -34,6 +34,17 @@ enum FocusCapture {
     let windowTitle: String?
     /// A short label for the focused field ("To", "Search", "Message").
     let fieldLabel: String?
+    /// Whether `mustRedactContents` refused to read this field — a password input,
+    /// or an element whose role couldn't be read at all (that guard fails closed).
+    /// `priorText`/`selectedText` are always nil when this is true, but the flag is
+    /// carried separately because "we read nothing" and "we refused to read"
+    /// license different downstream behaviour: only the latter means the transcript
+    /// the user is about to dictate must not be remembered as history (see
+    /// `DictationSession.recentDictations`).
+    ///
+    /// Defaults to `false` so a test fixture describes an ordinary field without
+    /// restating it; the production capture always passes its real verdict.
+    var isSecure: Bool = false
 
     static let empty = FocusedFieldContext(
       priorText: nil, selectedText: nil, windowTitle: nil, fieldLabel: nil)
@@ -48,10 +59,12 @@ enum FocusCapture {
   /// holds for paste injection, so it adds no new prompt.
   ///
   /// Secure text fields (password inputs) are detected by role **or** subrole and
-  /// never have their contents read, so a typed password — selected or not — can't
-  /// reach the developer-mode log, or the STT prompt when that is switched back on
-  /// (`TranscriptionPrompt.isEnabled`). The check fails closed: an unreadable role
-  /// is treated as secure, since it can't be shown not to be.
+  /// never have their contents read. This guard is what keeps a typed password out
+  /// of the developer-mode log and — since the text before the cursor is sent as
+  /// the request's context turns (`ConversationContext`) — off the wire
+  /// entirely. The check
+  /// fails closed: an unreadable role is treated as secure, since it can't be
+  /// shown not to be.
   ///
   /// Deliberately `nonisolated`: each read below is a synchronous cross-process
   /// IPC round trip into the frontmost app, and an unresponsive app blocks the
@@ -64,7 +77,7 @@ enum FocusCapture {
     guard AXIsProcessTrusted() else { return .empty }
     guard let element = systemFocusedElement() else { return .empty }
 
-    // Don't read the value of a password field into the prompt. The whole
+    // Don't read the value of a password field into the request. The whole
     // decision — including the fail-closed arm — lives in `mustRedactContents`,
     // where it is unit-tested; this function needs a live AX element, so anything
     // decided inline here would be covered by nothing.
@@ -86,14 +99,15 @@ enum FocusCapture {
       // U+200B before the caret) to nil so it can't masquerade as real prior text.
       prior = visibleTextOrNil(priorText(of: element, selection: selection, maxChars: maxPriorChars))
       // The selected range's text (empty when there's no selection). Capped like
-      // prior text so a huge highlight can't dominate the prompt budget.
+      // prior text so a huge highlight can't dominate the context budget.
       selected = visibleTextOrNil(selectedText(of: element, selection: selection, maxChars: maxSelectedChars))
     }
     return FocusedFieldContext(
       priorText: prior,
       selectedText: selected,
       windowTitle: clip(windowTitle(of: element), to: 120),
-      fieldLabel: clip(fieldLabel(of: element), to: 80))
+      fieldLabel: clip(fieldLabel(of: element), to: 80),
+      isSecure: isSecure)
   }
 
   /// Cap on each cross-process AX round trip this process makes. An unresponsive

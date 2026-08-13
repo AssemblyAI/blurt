@@ -43,7 +43,7 @@ struct DictationSessionContextTests {
   @Test("an empty capture transcribes with no context rather than an empty one")
   func emptyCaptureYieldsNilContext() async throws {
     // `TranscriptionContext.isEmpty` collapses a capture with nothing usable in
-    // it: passing the empty value on would put an empty prompt block on the wire
+    // it: passing the empty value on would put an empty turn list on the wire
     // instead of omitting the field.
     let fixture = makeSession(mode: .transcript("Hello world."))
 
@@ -71,6 +71,98 @@ struct DictationSessionContextTests {
     let contexts = await fixture.transcriber.receivedContexts
     #expect(contexts.count == 2)
     #expect(contexts.allSatisfy { $0?.priorText == "Hi Sam," })
+  }
+
+  @Test("each dictation becomes the next one's conversation-context history")
+  func historyCarriesForward() async throws {
+    let fixture = makeSession(mode: .transcript("First thought."), field: Self.field)
+
+    for _ in 1...3 {
+      await fixture.session.press()
+      await fixture.session.release()
+      await fixture.session.waitForIdle()
+    }
+
+    let contexts = await fixture.transcriber.receivedContexts
+    #expect(contexts.count == 3)
+    // #1 had nothing to go on; #2 carries #1; #3 carries both, oldest first. The
+    // repetition is the stub returning one fixed transcript, not the request
+    // double-sending: the prior chunk here ("Hi Sam,") is a field the dictations
+    // never landed in, so there is nothing to dedupe. The case where the chunk *is*
+    // the last transcript is `dedupesHistoryAlreadyInThePriorChunk`.
+    #expect(contexts[0]?.recentTranscripts == [])
+    #expect(contexts[1]?.recentTranscripts == ["First thought."])
+    #expect(contexts[2]?.recentTranscripts == ["First thought.", "First thought."])
+    // And that history is what the wire turns are built from, with the cursor's
+    // prior chunk last — the whole point of accumulating it.
+    #expect(
+      ConversationContext.turns(context: contexts[2])
+        == ["First thought.", "First thought.", "Hi Sam,"])
+  }
+
+  @Test("a dictation into a secure field is never remembered as history")
+  func secureTargetIsNotRecorded() async throws {
+    // The outgoing half of `FocusCapture`'s read guard. A password dictated into a
+    // secure field must not become a `conversation_context` turn on every later
+    // dictation — including in other apps — so it is transcribed, pasted, and
+    // deliberately not recorded.
+    let secure = FocusCapture.FocusedFieldContext(
+      priorText: nil, selectedText: nil, windowTitle: "1Password", fieldLabel: "Password",
+      isSecure: true)
+    let fixture = makeSession(mode: .transcript("hunter2"), field: secure)
+
+    for _ in 1...2 {
+      await fixture.session.press()
+      await fixture.session.release()
+      await fixture.session.waitForIdle()
+    }
+
+    // It still reached the user: transcribed and pasted, twice.
+    #expect(await fixture.injector.inserted == ["hunter2", "hunter2"])
+    // But nothing was remembered, so dictation #2 carried no history and the ring
+    // the "Recent" list projects stays empty.
+    #expect(await fixture.session.recentDictations.entries.isEmpty)
+    let contexts = await fixture.transcriber.receivedContexts
+    #expect(contexts.allSatisfy { $0?.recentTranscripts.isEmpty == true })
+    #expect(contexts.allSatisfy { ConversationContext.turns(context: $0).isEmpty })
+  }
+
+  @Test("a secure capture with no readable text is still carried, not collapsed to nil")
+  func secureCaptureSurvivesTheEmptyCollapse() async throws {
+    // `isEmpty` has to count `targetIsSecure`: a secure field yields no prior or
+    // selected text, so without that the snapshot would collapse to `nil` on the
+    // way through `contextStream` and the guard above would never see the flag.
+    let secure = FocusCapture.FocusedFieldContext(
+      priorText: nil, selectedText: nil, windowTitle: nil, fieldLabel: nil, isSecure: true)
+    #expect(!TranscriptionContext(appName: nil, priorText: nil, targetIsSecure: true).isEmpty)
+    let fixture = makeSession(mode: .transcript("hunter2"), field: secure, frontmost: nil)
+
+    await fixture.session.press()
+    await fixture.session.release()
+    await fixture.session.waitForIdle()
+
+    #expect(await fixture.transcriber.receivedContexts.first??.targetIsSecure == true)
+    #expect(await fixture.session.recentDictations.entries.isEmpty)
+  }
+
+  @Test("history alone keeps the context worth carrying when the capture is empty")
+  func historySurvivesAnEmptyCapture() async throws {
+    // `emptyCaptureYieldsNilContext` above holds only until something has been
+    // dictated: with no focus signal at all, the history is now the one thing that
+    // makes the snapshot non-empty, and dropping it to nil would silently lose the
+    // dialogue in exactly the apps that expose no accessible field.
+    let fixture = makeSession(mode: .transcript("Said this."))
+
+    for _ in 1...2 {
+      await fixture.session.press()
+      await fixture.session.release()
+      await fixture.session.waitForIdle()
+    }
+
+    let contexts = await fixture.transcriber.receivedContexts
+    #expect(contexts.first == nil as TranscriptionContext?)
+    #expect(contexts.last??.recentTranscripts == ["Said this."])
+    #expect(ConversationContext.turns(context: contexts[1]) == ["Said this."])
   }
 
   /// The bounded wait, driven through the pipeline rather than against

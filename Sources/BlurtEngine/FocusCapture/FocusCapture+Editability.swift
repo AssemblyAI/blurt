@@ -7,7 +7,7 @@ import ApplicationServices
 //
 // Cohesive as its own file: everything here serves `KeyInjector`'s pre-paste
 // "no beep" guard, whereas `FocusCapture.swift` proper serves the press-time
-// context capture that primes the STT prompt.
+// context capture that primes the STT request.
 extension FocusCapture {
   /// AX roles a focused element reports when it accepts typed/pasted text.
   /// Includes `secureFieldRole`: a password field is a valid *paste* target even

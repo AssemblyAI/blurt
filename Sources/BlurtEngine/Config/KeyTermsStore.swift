@@ -1,12 +1,11 @@
 import Foundation
 
 /// Storage for the user's dictation "key terms" — a comma-separated list of
-/// domain words (names, jargon, product names) that get folded into the dictation
-/// request `prompt` as vocabulary priming, so the model is more likely to spell
-/// them correctly (see `TranscriptionPrompt.assemble`). That prompt is currently
-/// switched off (`TranscriptionPrompt.isEnabled`), so the terms are read at every
-/// press and then reach nothing — the storage stays wired for the day it flips
-/// back on.
+/// domain words (names, jargon, product names) sent as the dictation request's
+/// word-boost list (`config.word_boost`, see `KeytermsBoost`), so the model
+/// favors those exact spellings. They used to ride the transcription `prompt` as
+/// a `Keywords: a, b, c.` clause instead; a flat list is the field the API
+/// provides for exactly this, so that is what they are now.
 ///
 /// Unlike the API key these aren't secret, so they live in `UserDefaults` rather
 /// than the Keychain. The transcription pipeline reads the parsed list via
@@ -50,8 +49,10 @@ public struct KeyTermsStore {
   }
 
   /// Pure parse of a comma-separated string into a clean term list. Static so
-  /// `TranscriptionPrompt` and tests can reuse the exact same rules without a
-  /// `UserDefaults` in hand.
+  /// callers and tests can reuse the exact same rules without a `UserDefaults`
+  /// in hand. This is the whole normalization the request gets: `KeytermsBoost`
+  /// assumes terms arrive trimmed, blank-free and deduped, and only enforces the
+  /// field's length cap on top.
   static func parse(_ text: String?) -> [String] {
     guard let text else { return [] }
     var seen = Set<String>()

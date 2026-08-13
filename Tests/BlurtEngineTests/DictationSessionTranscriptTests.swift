@@ -17,7 +17,7 @@ struct DictationSessionTranscriptTests {
   func transcriptDeliveredOnPaste() async throws {
     let spy = StringListBox()
     let session = makeSession(
-      mode: .transcript("Hello world."), onTranscriptDelivered: { spy.append($0) }
+      mode: .transcript("Hello world."), onTranscriptDelivered: { text, _ in spy.append(text) }
     ).session
 
     await session.press()
@@ -32,7 +32,7 @@ struct DictationSessionTranscriptTests {
   func transcriptDeliveredOnNoTarget() async throws {
     let spy = StringListBox()
     let fixture = makeSession(
-      mode: .transcript("Copied text."), onTranscriptDelivered: { spy.append($0) })
+      mode: .transcript("Copied text."), onTranscriptDelivered: { text, _ in spy.append(text) })
     await fixture.injector.setError(BlurtError.noEditableTarget)
 
     await fixture.session.press()
@@ -50,7 +50,7 @@ struct DictationSessionTranscriptTests {
     // .failed, but the transcript was still produced, so it must be delivered —
     // every dictation that yields text lands in the "Recent" list.
     let fixture = makeSession(
-      mode: .transcript("Spoken but unpasted."), onTranscriptDelivered: { spy.append($0) })
+      mode: .transcript("Spoken but unpasted."), onTranscriptDelivered: { text, _ in spy.append(text) })
     await fixture.injector.setError(BlurtError.accessibilityPermissionMissing)
 
     await fixture.session.press()
@@ -61,11 +61,41 @@ struct DictationSessionTranscriptTests {
     #expect(spy.values == ["Spoken but unpasted."])
   }
 
+  @Test("onTranscriptDelivered hands over the ring the transcript just joined")
+  func deliveryCarriesTheUpdatedRing() async throws {
+    // The property the app's "Recent" list depends on: it assigns this value
+    // wholesale rather than recording into a ring of its own, so the value must
+    // already include the transcript being reported — and must be the same history
+    // the *next* request's `conversation_context` is built from.
+    // Each push recorded as its ring's contents joined, so the growth across two
+    // dictations is one readable expectation (`StringListBox` is the existing
+    // thread-safe recorder; the ring itself is asserted on the session below).
+    let pushed = StringListBox()
+    let fixture = makeSession(
+      mode: .transcript("Hello world."),
+      onTranscriptDelivered: { _, recents in
+        pushed.append(recents.entries.map(\.text).joined(separator: " | "))
+      })
+
+    for _ in 1...2 {
+      await fixture.session.press()
+      await fixture.session.release()
+      await fixture.session.waitForIdle()
+    }
+
+    // The first push already contains the transcript it reported — an empty ring
+    // here would leave the "Recent" list one dictation behind forever.
+    #expect(pushed.values == ["Hello world.", "Hello world. | Hello world."])
+    // And what was pushed is the session's own history, not a copy built for the
+    // callback: this is the same ring the next request's turns come from.
+    #expect(await fixture.session.recentDictations.entries.count == 2)
+  }
+
   @Test("onTranscriptDelivered does not fire when STT fails")
   func transcriptNotDeliveredOnFailure() async throws {
     struct Boom: Error {}
     let spy = StringListBox()
-    let session = makeSession(mode: .throwError(Boom()), onTranscriptDelivered: { spy.append($0) })
+    let session = makeSession(mode: .throwError(Boom()), onTranscriptDelivered: { text, _ in spy.append(text) })
       .session
 
     await session.press()
@@ -80,7 +110,7 @@ struct DictationSessionTranscriptTests {
     let spy = StringListBox()
     // A normally-sized clip (StubMicCapture's default) so the too-short-clip
     // guard doesn't short-circuit before the transcribe step is reached.
-    let session = makeSession(mode: .transcript("   "), onTranscriptDelivered: { spy.append($0) })
+    let session = makeSession(mode: .transcript("   "), onTranscriptDelivered: { text, _ in spy.append(text) })
       .session
 
     await session.press()
@@ -95,7 +125,7 @@ struct DictationSessionTranscriptTests {
   func transcriptNotDeliveredOnCancel() async throws {
     let spy = StringListBox()
     let session = makeSession(
-      mode: .transcript("Hello world."), onTranscriptDelivered: { spy.append($0) }
+      mode: .transcript("Hello world."), onTranscriptDelivered: { text, _ in spy.append(text) }
     ).session
 
     // Cancel while still recording, before release() can hand off to

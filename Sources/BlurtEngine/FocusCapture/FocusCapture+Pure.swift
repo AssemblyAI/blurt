@@ -10,13 +10,13 @@
 // even `Foundation` would be an unused import.
 extension FocusCapture {
   /// The AX role password inputs report. `captureFieldContext` never reads the
-  /// prior/selected text of a field with this role into the STT prompt, so a
+  /// prior/selected text of a field with this role into the STT request, so a
   /// typed password can't leak. Independent of editability: the same role is in
   /// `editableRoles`, so a password field still *receives* the paste.
   static let secureFieldRole = "AXSecureTextField"
 
   /// The whole password-redaction decision `captureFieldContext` acts on: may this
-  /// focused element's contents be read into the STT prompt at all?
+  /// focused element's contents be read into the STT request at all?
   ///
   /// Fails **closed** on an unreadable role (an AX timeout against a busy app, a
   /// non-string value from a buggy one): we can't prove the field isn't secure, so
@@ -117,7 +117,7 @@ extension FocusCapture {
   }
 
   /// Caps `text` at `maxChars` characters (used to bound window titles / labels
-  /// so an oddly long one can't dominate the prompt budget).
+  /// so an oddly long one can't dominate the context budget).
   static func clip(_ text: String?, to maxChars: Int) -> String? {
     guard let text, text.count > maxChars else { return text }
     return String(text.prefix(maxChars))

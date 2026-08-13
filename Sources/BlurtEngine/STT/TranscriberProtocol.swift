@@ -7,7 +7,8 @@ public protocol TranscriberProtocol: Sendable {
   /// this returns that transcript in one shot (no incremental deltas).
   ///
   /// `context` carries per-utterance priming (focused app + text before the
-  /// cursor) rendered into the request prompt; pass `nil` for none.
+  /// cursor, the user's recent dictations) sent as the request's conversation
+  /// context; pass `nil` for none.
   func transcribe(pcm: Data, sampleRate: Int, context: TranscriptionContext?) async throws -> String
 
   /// Optionally pre-open the transcription connection so the next `transcribe`

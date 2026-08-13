@@ -350,9 +350,10 @@ back, so in the app every dictation fails with the overlay's "Try again".
 Two things make this easy to get wrong, and it has gone wrong once already — a 3057-character
 GEPA winner shipped and broke all dictation:
 
-- **It is not the same cap as `config.prompt`'s**, which is 4096 (`TranscriptionPrompt.characterCap`
-  on the Swift side). Borrowing the prompt's figure is what let the oversized instruction
-  through: the test that should have caught it asserted 4096.
+- **It is not the same cap as `config.conversation_context`'s**, which is 4096
+  (`ConversationContext.characterCap` on the Swift side). Borrowing the other field's figure is
+  what let the oversized instruction through: the test that should have caught it asserted 4096.
+  (That field was `config.prompt` at the time; the context field has since replaced it.)
 - **Neither limit is in the published API reference.** Both were measured against the live
   endpoint on 2026-08-11. Re-probe before trusting them indefinitely.
 
@@ -460,12 +461,14 @@ Three things to keep straight, all settled decisions in
 [`AGENTS.md`](../../AGENTS.md#settled-decisions--dont-reintroduce-these):
 
 - This is the **server-side** rewrite instruction. It is not a client-side cleanup pass, and
-  the winning string is not a `TranscriptionPrompt` change — that prompt steers transcription
-  and deliberately carries no filler-word clause, because disfluency removal is this rewrite's
-  job.
-- The positive-phrasing guidance in `TranscriptionPrompt` comes from AssemblyAI's Universal-3
-  prompting reference and applies to the STT model. The cleanup instruction is read by an
-  ordinary LLM, so the candidates here are phrased as plain instructions.
+  the winning string is not a transcription-steering change — `config.conversation_context`
+  (`ConversationContext`) steers transcription and carries no instructions at all, because
+  disfluency removal is this rewrite's job.
+- The positive-phrasing guidance that used to shape the transcription prompt comes from
+  AssemblyAI's Universal-3 prompting reference and applies to the STT model. That prompt no
+  longer exists — transcription context is now the structured `conversation_context` turn list
+  — while the cleanup instruction here is read by an ordinary LLM, so these candidates are
+  phrased as plain instructions.
 - **Every corpus here is English, and the prompt is not.** `config.llm.instruction` ships to
   every user in every language, and pinning the transcription prompt to English was reverted
   once already for hurting non-English transcription. A winner selected on this harness has
