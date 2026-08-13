@@ -29,6 +29,7 @@ struct PipelinePhaseTests {
 
   @Test("active phases are not terminal")
   func activePhasesAreNotTerminal() {
+    #expect(!PipelinePhase.connecting.isTerminal)
     #expect(!PipelinePhase.recording.isTerminal)
     #expect(!PipelinePhase.transcribing.isTerminal)
     #expect(!PipelinePhase.injecting.isTerminal)

@@ -3,6 +3,11 @@
 /// is unit-testable; the shell just renders whatever this resolves to.
 public enum OverlayUIState: Equatable, Sendable {
   case idle
+  /// The press landed but the mic isn't delivering audio yet (the pipeline's
+  /// `.connecting` phase — a Bluetooth route takes ~1–2 s to come up). The
+  /// shell shows a distinct warming-up treatment, deliberately without the
+  /// "speak now" recording cues.
+  case connecting
   case recording
   case processing
   /// A dictation attempt failed. The shell shows this as a brief red flash on
@@ -27,6 +32,7 @@ public enum OverlayUIState: Equatable, Sendable {
   public var accessibilityLabel: String {
     switch self {
     case .idle: "Blurt."
+    case .connecting: "Connecting to the microphone."
     case .recording: "Recording."
     case .processing: "Processing."
     case .error(let message): message
@@ -46,7 +52,7 @@ public enum OverlayUIState: Equatable, Sendable {
     switch self {
     case .pasted: 0.8
     case .error, .noTarget: 1.6
-    case .idle, .recording, .processing: nil
+    case .idle, .connecting, .recording, .processing: nil
     }
   }
 }
@@ -64,6 +70,7 @@ extension PipelinePhase {
     // content — then `.pasted` arrived and faded it back in. A visible blink at
     // the end of a dictation, worst when the user has switched apps mid-transcribe.
     case .injecting: .processing
+    case .connecting: .connecting
     case .recording: .recording
     case .transcribing: .processing
     // A setup blocker (a missing API key) is an expected state, not a fault: the

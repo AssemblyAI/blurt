@@ -238,6 +238,47 @@ extension DictationSessionTests {
     #expect(await terminal == .pasted)
   }
 
+  @Test("press claims .connecting before .recording")
+  func pressSequencesConnectingBeforeRecording() async throws {
+    let fixture = makeSession(mode: .transcript("Hi."))
+    let stream = await fixture.session.phaseStream()
+
+    await fixture.session.press()
+
+    // The pill's warming-up state must precede .recording — mic.start()'s
+    // liveness gate runs between the two, so the start chime (the
+    // connecting→recording edge) fires only once audio actually flows.
+    var seen: [PipelinePhase] = []
+    for await phase in stream {
+      seen.append(phase)
+      if phase == .recording { break }
+    }
+    #expect(seen == [.idle, .connecting, .recording])
+  }
+
+  @Test("release landed during the mic bring-up still finalizes cleanly")
+  func releaseDuringConnectingFinalizes() async throws {
+    // A start() that blocks until the test releases it — the liveness gate
+    // holding out for a Bluetooth route — with the key-up arriving mid-wait.
+    let mic = GatedStartMic()
+    let session = DictationSession(
+      mic: mic, transcriber: StubTranscriber(mode: .transcript("Hi.")),
+      injector: StubInjector(), keyTermsProvider: { [] }, seams: .offline)
+
+    session.submit(.press)
+    session.submit(.release)
+    await mic.waitUntilStartEntered()
+    #expect(await session.phase == .connecting)
+
+    // The queued release waits its turn, sees .recording once start() returns,
+    // and runs the normal stop→transcribe path — no stuck pill, no lost stop.
+    await mic.allowStartToFinish()
+    await session.waitForIdle()
+
+    #expect(await session.phase == .pasted)
+    #expect(await mic.stopCalls == 1)
+  }
+
   @Test("cancel during active recording stops mic, discards audio, and transitions to .cancelled")
   func cancelDuringRecording() async throws {
     let fixture = makeSession(mode: .transcript("Hello"))

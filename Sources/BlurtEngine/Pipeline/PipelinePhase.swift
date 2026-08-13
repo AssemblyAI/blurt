@@ -2,6 +2,13 @@ import Foundation
 
 public enum PipelinePhase: Equatable, Sendable {
   case idle
+  /// The press landed and the mic is being brought up: `MicCapture.start()`'s
+  /// liveness gate is still waiting for the input route to deliver frames (a
+  /// Bluetooth A2DP→HFP switch takes ~1–2 s). The pill shows a distinct
+  /// warming-up state and the start chime waits — `.recording` keeps meaning
+  /// "audio is actually being captured", so the user is never cued to speak
+  /// into a mic that isn't delivering yet.
+  case connecting
   case recording
   case transcribing
   case injecting
@@ -26,7 +33,7 @@ public enum PipelinePhase: Equatable, Sendable {
   public var isTerminal: Bool {
     switch self {
     case .idle, .failed, .cancelled, .pasted, .noTarget: true
-    case .recording, .transcribing, .injecting: false
+    case .connecting, .recording, .transcribing, .injecting: false
     }
   }
 

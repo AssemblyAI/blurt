@@ -215,6 +215,12 @@ public actor DictationSession {
       setPhase(.failed(blocker))
       return
     }
+    // Claimed before mic.start(): its liveness gate can hold recording for a
+    // couple of seconds on a Bluetooth route (A2DP→HFP), and the press must be
+    // visibly acknowledged without cueing the user to speak — the pill shows a
+    // warming-up state, and the start chime rides the connecting→recording
+    // edge (RecordingCueGate), so it fires only once audio actually flows.
+    setPhase(.connecting)
     // Times the startup path — the concurrent focus capture + mic.start (and the
     // detached connection warm-up kicked off below) — up to the moment recording
     // actually begins. Ended on both the success and failure exits (mic.start is

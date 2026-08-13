@@ -382,6 +382,14 @@ A **fresh recorder per session** resolves the current default input device at `r
 is deliberate — see [Settled decisions](#settled-decisions--dont-reintroduce-these) for the
 `AVAudioEngine` failure it replaced.
 
+`start()` returns only once the device is actually delivering frames: `record()` returning true just
+means the AudioQueue started, and a Bluetooth input (AirPods) spends ~1–2 s switching A2DP→HFP first,
+during which the OS captures nothing. `MicLiveness` polls the recorder's clock (which only advances
+once frames flow — unlike the meter, this distinguishes a still-switching route from a silent user)
+with a transport-aware cap (`kAudioDevicePropertyTransportType`: Bluetooth ~2.5 s, everything else
+~300 ms) and **fails open** on timeout, so a broken mic degrades to the old behavior instead of
+bricking the press. `DictationSession` shows this wait as the `.connecting` phase.
+
 The overlay meter (`levels`) comes from the recorder's dBFS power on a ~20 Hz timer
 (`MicCapture.meterIntervalSeconds` — public because the pill caps its animation redraws to the same
 cadence and reads it from here rather than restating it), mapped to `0…1` by
@@ -453,8 +461,8 @@ stream and signposts) and `+Pipeline.swift` (the post-release transcribe→injec
 It exposes `press()` / `release()` / `cancel()` / `cancelRecording()`, a synchronous
 fire-and-forget `submit(_: Command)` mirroring those four for callback-shaped hosts (commands run in
 exact emit order — the tap wires straight into it, no per-callback `Task` spawning), and a
-`phase: PipelinePhase` (`idle | recording | transcribing | injecting | failed | cancelled`, plus the
-terminal successes `pasted` / `noTarget`). `phaseStream()` yields the current phase immediately then
+`phase: PipelinePhase` (`idle | connecting | recording | transcribing | injecting | failed |
+cancelled`, plus the terminal successes `pasted` / `noTarget`). `phaseStream()` yields the current phase immediately then
 every transition, and is **multi-observer** (one continuation per call), though hosts should still
 render from one consumer and project the phase into their own state.
 
@@ -472,8 +480,12 @@ round trip, and the log wrote to the user's real `~/Library/Logs/Blurt`. STT err
 are wrapped in `.sttFailed`. The pipeline is just transcribe → inject, and an empty transcript
 returns to `.idle` without injecting.
 
-Three perceived-latency choices to preserve:
+Four perceived-latency choices to preserve:
 
+- `press()` claims `.connecting` _before_ `mic.start()`, and `.recording` only after it returns —
+  `start()` holds until the input device actually delivers frames (`MicLiveness`; a Bluetooth
+  A2DP→HFP switch takes ~1–2 s, capped per transport, failing open on timeout), so the pill
+  acknowledges the press immediately while the start chime keeps meaning "speak now".
 - `.injecting` projects to `OverlayUIState.processing`, **not** `.idle` — the shell reads an idle
   projection as "dismiss", so mapping this working phase to idle faded the pill out mid-dictation and
   blinked it back for "Pasted".

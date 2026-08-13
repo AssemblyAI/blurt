@@ -32,7 +32,7 @@ struct OverlayView: View {
     switch state {
     case .error:
       return Color(red: 0.62, green: 0.13, blue: 0.13)
-    case .recording, .processing, .pasted, .noTarget, .idle:
+    case .connecting, .recording, .processing, .pasted, .noTarget, .idle:
       return Color(white: 0.16)
     }
   }
@@ -84,6 +84,12 @@ struct OverlayView: View {
       // background would collapse with it) keeps the pill's shape intact for
       // `hide()`'s pre-hide reset.
       Color.clear
+    case .connecting:
+      // The mic route is still coming up (a Bluetooth input switching profiles):
+      // a breathing status line, deliberately without the REC tag or waveform —
+      // the "speak now" cues arrive with `.recording`, once audio actually flows.
+      ConnectingLabel(animated: !reduceMotion)
+        .transition(.opacity)
     case .recording:
       // "● REC" tag beside the live waveform, mirroring the site demo's recording
       // pill (magenta tag + bars). The bars fill the width left of the tag.

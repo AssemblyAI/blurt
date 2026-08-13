@@ -13,6 +13,10 @@ struct MenuBarStatusTests {
   /// which is how `.noTarget` went uncovered. `.failed` keeps its own test below,
   /// since its mapping encodes a deliberate policy rather than a coarser icon.
   static let projections: [(phase: PipelinePhase, expected: MenuBarStatus)] = [
+    // The mic bring-up stays at rest: the filled glyph means "audio is being
+    // captured", and during `.connecting` it isn't yet — the pill carries the
+    // warming-up state.
+    (.connecting, .idle),
     (.recording, .recording),
     (.transcribing, .transcribing),
     (.idle, .idle),

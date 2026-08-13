@@ -7,8 +7,8 @@ enum OverlayBrandPalette {
 }
 
 /// The shared type, tracking, and cyan color for the overlay's status-line
-/// text ("Transcribing…", "Pasted", and "Copied") so they can't drift out of
-/// sync.
+/// text ("Connecting…", "Transcribing…", "Pasted", and "Copied") so they can't
+/// drift out of sync.
 struct StatusLineText: View {
   let text: String
 
@@ -78,6 +78,27 @@ struct TranscribingLabel: View {
     // StatusLineText is shared with the "Pasted" notice (OverlayView's `.pasted`
     // case) so the processing → pasted hand-off reads as one status line.
     StatusLineText("Transcribing…")
+      .pulsingOpacity(period: breathPeriod, minOpacity: minOpacity, animated: animated)
+  }
+}
+
+/// The "Connecting…" status line shown while the mic route comes up (the
+/// engine's `.connecting` phase — a Bluetooth input takes ~1–2 s to switch
+/// A2DP→HFP). Styled as a status line like `TranscribingLabel`, but with a
+/// faster, deeper breath so it reads as "wait" rather than the calm
+/// transcribing heartbeat. Under Reduce Motion it holds steady at full opacity.
+struct ConnectingLabel: View {
+  /// Whether to run the breathing motion (off under Reduce Motion).
+  let animated: Bool
+
+  // Roughly twice the tempo and twice the depth of TranscribingLabel's breath:
+  // busy enough to say "not ready yet, hold on" at a glance, while staying the
+  // same status-line idiom as the rest of the pill.
+  private let breathPeriod: Double = 0.9
+  private let minOpacity: Double = 0.35
+
+  var body: some View {
+    StatusLineText("Connecting…")
       .pulsingOpacity(period: breathPeriod, minOpacity: minOpacity, animated: animated)
   }
 }

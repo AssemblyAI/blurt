@@ -1,4 +1,5 @@
 @preconcurrency import AVFoundation
+import CoreAudio
 import Foundation
 import os
 
@@ -97,6 +98,24 @@ public actor MicCapture: MicCaptureProtocol {
       throw BlurtError.audioCaptureFailed(underlying: MicCaptureError.noInputDevice)
     }
 
+    // record() returning true only means the AudioQueue started — not that the
+    // input route is delivering frames. A Bluetooth mic (AirPods) spends ~1–2 s
+    // switching A2DP→HFP first, and the OS captures nothing in that window, so
+    // returning here immediately cues the user to speak into a dead mic. Hold —
+    // DictationSession keeps the pill in `.connecting` — until the recorder's
+    // clock advances (frames are flowing), capped per transport; on timeout
+    // proceed anyway (fail open), which is exactly the old behavior.
+    let timeout = MicLiveness.timeout(forTransportType: Self.defaultInputTransportType())
+    let gap = await MicLiveness.waitUntilLive(timeout: timeout, clock: ContinuousClock()) {
+      recorder.currentTime
+    }
+    if let gap {
+      Self.logger.info("input live after \(Int((gap / .milliseconds(1)).rounded())) ms")
+    } else {
+      let capMs = Int((timeout / .milliseconds(1)).rounded())
+      Self.logger.error("input liveness unconfirmed after \(capMs) ms — proceeding")
+    }
+
     activeRecorder = recorder
     lastEmittedLevel = nil
     Self.logger.info("start recording to \(recorder.url.lastPathComponent, privacy: .public)")
@@ -140,6 +159,28 @@ public actor MicCapture: MicCaptureProtocol {
     recorder.isMeteringEnabled = true
     recorder.prepareToRecord()
     return recorder
+  }
+
+  /// The CoreAudio transport type of the current default input device
+  /// (`kAudioDevicePropertyTransportType`), or nil when either read fails —
+  /// which `MicLiveness.timeout` treats as the conservative non-Bluetooth cap.
+  private static func defaultInputTransportType() -> UInt32? {
+    var deviceID = AudioDeviceID(kAudioObjectUnknown)
+    var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+    var address = AudioObjectPropertyAddress(
+      mSelector: kAudioHardwarePropertyDefaultInputDevice,
+      mScope: kAudioObjectPropertyScopeGlobal,
+      mElement: kAudioObjectPropertyElementMain)
+    let systemObject = AudioObjectID(kAudioObjectSystemObject)
+    guard AudioObjectGetPropertyData(systemObject, &address, 0, nil, &size, &deviceID) == noErr,
+      deviceID != kAudioObjectUnknown
+    else { return nil }
+    var transport: UInt32 = 0
+    size = UInt32(MemoryLayout<UInt32>.size)
+    address.mSelector = kAudioDevicePropertyTransportType
+    guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &transport) == noErr
+    else { return nil }
+    return transport
   }
 
   // MARK: - Level metering

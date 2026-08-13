@@ -32,6 +32,23 @@ struct RecordingCueGateTests {
     #expect(gate.cue(for: .recording) == nil)
   }
 
+  @Test("the start cue waits out .connecting and fires on the edge into .recording")
+  func connectingDelaysStartCue() {
+    var gate = RecordingCueGate()
+    // The mic bring-up must not chime — the start cue is the "speak now"
+    // signal, and during `.connecting` the input isn't delivering audio yet.
+    #expect(gate.cue(for: .connecting) == nil)
+    #expect(gate.cue(for: .recording) == .start)
+  }
+
+  @Test("a press that fails during .connecting never chimes")
+  func failedConnectingIsSilent() {
+    var gate = RecordingCueGate()
+    #expect(gate.cue(for: .connecting) == nil)
+    // mic.start() threw — no start cue was played, so no stop cue either.
+    #expect(gate.cue(for: .failed(.audioCaptureFailed(underlying: MicCaptureError.noInputDevice))) == nil)
+  }
+
   @Test("transitions between two non-recording phases are silent")
   func silentBetweenNonRecordingPhases() {
     var gate = RecordingCueGate()

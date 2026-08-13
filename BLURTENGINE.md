@@ -83,14 +83,16 @@ For callback-shaped hosts that can't `await` — an event tap, a button action �
 `phase` / `phaseStream()` expose the pipeline's `PipelinePhase`:
 
 ```text
-idle → recording → transcribing → injecting → pasted | noTarget
-                          │              │
-                          └── failed(BlurtError) / cancelled (from any stage)
+idle → connecting → recording → transcribing → injecting → pasted | noTarget
+                                       │              │
+                                       └── failed(BlurtError) / cancelled (from any stage)
 ```
+
+`.connecting` is the mic bring-up: the press has been accepted but `MicCapture.start()` is still waiting for the input device to deliver frames (a Bluetooth route takes ~1–2 s to switch A2DP→HFP; wired inputs pass through near-instantly). Show it as a "warming up" state without your "speak now" cues — `.recording` still means audio is actually being captured, and a start chime should ride the `connecting → recording` edge (see `RecordingCueGate`).
 
 - `phaseStream()` yields the current phase immediately, then every transition. It is a **multi-observer** stream: every call gets its own continuation and all of them see later transitions, so an extra consumer (a diagnostic, a second window) is safe. Still, prefer one renderer that projects the phase into your own state over a fan-out of long-lived consumers — one source of UI truth is easier to reason about than several.
 - `.pasted` and `.noTarget` are terminal _success_ states, not errors. `.noTarget` means transcription worked but nothing editable was focused (or the target app quit), so the text was left on the clipboard — show a quiet "copied" notice, not a failure.
-- Two ready-made projections keep UI mapping out of your shell: `phase.overlayState` (`OverlayUIState`: idle / recording / processing / error(message:) / pasted / noTarget, with accessibility labels and — for the transient notices — `noticeDwellSeconds`, how long to hold one before reverting to idle) and `phase.menuBarStatus` (coarser: idle / recording / transcribing, never shows errors, with `symbolName`/`accessibilityLabel` presentation).
+- Two ready-made projections keep UI mapping out of your shell: `phase.overlayState` (`OverlayUIState`: idle / connecting / recording / processing / error(message:) / pasted / noTarget, with accessibility labels and — for the transient notices — `noticeDwellSeconds`, how long to hold one before reverting to idle) and `phase.menuBarStatus` (coarser: idle / recording / transcribing, never shows errors, with `symbolName`/`accessibilityLabel` presentation).
 - Pill geometry is available too, if you're drawing something like Blurt's overlay: `OverlayPlacement` resolves how big the panel is (`panelSize(pillSize:shadowMargin:)`, sized to hold the pill plus room for its shadow) and where it goes (clearance, clamping a dragged origin back on screen), and `MeterBarGeometry` gives the level meter its shape. Build a `MeterBarRow(availableSize:)` once per layout — it resolves how many bars fit and how tall they may be — then ask it for `height(at:level:time:animated:)` per bar; `MeterBarGeometry.breathingOpacity(time:period:minOpacity:)` is the pulse the record dot and status label share. All pure math; pass `animated: false` to honor Reduce Motion.
 
 ### Errors
@@ -122,7 +124,7 @@ func warmUp() async                     // pre-open the device; default: no-op
 
 Only `start()`/`stop()` must be implemented — `levels` and `warmUp()` have defaults, so a stub or headless capture conforms for free while hosts still read the meter and warm the device through the same seam they inject.
 
-`MicCapture` records with `AVAudioRecorder` straight to a temp 16 kHz / mono / 16-bit PCM WAV — exactly the geometry the dictation API wants — and reads it back as raw S16LE bytes on `stop()` (no float detour; the blob uploads as-is). A **fresh recorder per session** resolves the current default input device at `record()` time, which is why device switches (headset ↔ built-in) just work. Do **not** replace this with a long-lived `AVAudioEngine`/`installTap` graph: that design was tried, bound itself to one device, and failed with `-10868` or all-zero buffers on device switches.
+`MicCapture` records with `AVAudioRecorder` straight to a temp 16 kHz / mono / 16-bit PCM WAV — exactly the geometry the dictation API wants — and reads it back as raw S16LE bytes on `stop()` (no float detour; the blob uploads as-is). A **fresh recorder per session** resolves the current default input device at `record()` time, which is why device switches (headset ↔ built-in) just work. `start()` returns only once the device is actually delivering frames (`MicLiveness`: poll the recorder's clock, capped ~2.5 s for Bluetooth transports and ~300 ms otherwise, failing open on timeout), which is what backs the session's `.connecting` phase. Do **not** replace this with a long-lived `AVAudioEngine`/`installTap` graph: that design was tried, bound itself to one device, and failed with `-10868` or all-zero buffers on device switches.
 
 `MicCapture`'s `levels` is a ~20 Hz meter of the recorder's dBFS power mapped to `0…1` (floored at −50 dBFS so room ambient reads as silence) — feed it to a voice-bars view; it costs nothing when unobserved. Its `warmUp()` pre-creates and prepares a recorder so the first `start()` skips hardware route discovery (Blurt calls it at launch, once mic permission is granted, so warming never triggers the permission prompt).
 
