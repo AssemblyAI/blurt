@@ -143,8 +143,11 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// `DictationConfig.llm`. Internal so tests can assert the
   /// config wiring without inspecting the multipart upload body (which
   /// `URLProtocol` mocks can't observe reliably for `upload(from:)`).
+  /// Neither steering field is defaulted: every caller states both, so what a
+  /// given request does and does not steer with is readable at the call site
+  /// rather than inferred from which argument was left off.
   func makeConfigData(
-    sampleRate: Int, conversationContext: [String] = [], wordBoost: [String] = []
+    sampleRate: Int, conversationContext: [String], wordBoost: [String]
   ) throws -> Data {
     let enhanced = enhancedTranscriptsEnabled()
     let instruction = enhanced ? CleanupInstruction.sendable(appending: customStyle()) : nil
