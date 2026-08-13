@@ -67,14 +67,13 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     guard let apiKey = apiKeyProvider(), !apiKey.isEmpty else {
       throw BlurtError.apiKeyMissing
     }
-    // The one piece of the captured context that goes on the wire: the text
-    // before the cursor, framed as prior context (nil when there is none, which
-    // omits the field). The app name, window title, field label and selected
-    // text stay on the machine — `TranscriptionPrompt` is where that line is
-    // drawn, so there is nothing to filter here.
+    // The one focus signal that goes on the wire: the text before the cursor,
+    // framed as prior context (nil when there is none, which omits the field).
+    // App name, window title, field label and selected text stay on the machine
+    // — `TranscriptionPrompt` draws that line, so nothing is filtered here.
     let prompt = TranscriptionPrompt.build(context: context)
-    // The other steering field, and the other half of the Settings surface: the
-    // user's key terms as a word-boost list, fitted to its own (different) cap.
+    // The other steering field: the user's key terms as a word-boost list,
+    // fitted to its own (different) cap.
     let keyterms = KeytermsBoost.fitted(context?.keyTerms ?? [])
     let config = try makeConfigData(sampleRate: sampleRate, prompt: prompt, keyterms: keyterms)
     let boundary = "blurt-\(UUID().uuidString)"
@@ -250,14 +249,12 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     /// — see `TranscriptionPrompt`.
     let prompt: String?
     /// Word boosting: the user's key terms as a flat list, biasing recognition
-    /// toward those exact spellings. A sibling of `prompt`, not an alternative
-    /// to it — the API takes both on the same request, and they do different
-    /// jobs (prose context versus a vocabulary list). Fitted to its own
-    /// 2048-character cap by `KeytermsBoost`, which is *not* the 4096 on
-    /// `prompt`. Empty means no boosting was asked for, and `encode(to:)` drops
-    /// the key entirely rather than sending `[]`. Deliberately not the
-    /// deprecated `word_boost`, which the Universal-3 Pro family rejects
-    /// outright.
+    /// toward those exact spellings. A sibling of `prompt`, not an alternative —
+    /// the API takes both, for different jobs (prose context versus a vocabulary
+    /// list) — fitted by `KeytermsBoost` to its own 2048-character cap, *not*
+    /// the 4096 on `prompt`. Empty asks for no boosting, and `encode(to:)` then
+    /// drops the key rather than sending `[]`. Deliberately not the deprecated
+    /// `word_boost`, which the Universal-3 Pro family rejects outright.
     let keytermsPrompt: [String]
     /// The rewrite request, present only while enhanced transcripts are
     /// enabled (nil — the synthesized `encode` omits it — asks for no rewrite,
@@ -273,13 +270,11 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
       case llm
     }
 
-    /// Hand-written because one field can't be expressed by synthesis: an empty
+    /// Hand-written for the one field synthesis can't express: an empty
     /// `keyterms_prompt` must be *absent*, not `[]`, and a non-optional array
-    /// always encodes. The optional fields keep the `encodeIfPresent` behavior
-    /// synthesis would have given them, spelled out here beside it. Every stored
-    /// property is written exactly once — a field added above and forgotten here
-    /// would silently never reach the wire, which is what the config assertions
-    /// in `AssemblyAITranscriberTests` are there to catch.
+    /// always encodes. The optionals keep the `encodeIfPresent` behavior they had.
+    /// A property added above and forgotten here never reaches the wire — which
+    /// is what the config assertions in the tests catch.
     func encode(to encoder: Encoder) throws {
       var container = encoder.container(keyedBy: CodingKeys.self)
       try container.encode(sampleRate, forKey: .sampleRate)
