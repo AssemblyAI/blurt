@@ -56,6 +56,25 @@ extension HTTPClientTests {
     #expect(object["word_boost"] as? [String] == ["Blurt"])
   }
 
+  @Test("config part never sets a language, leaving detection to the model")
+  func configOmitsLanguageCode() throws {
+    // Absence is the decision, so it is asserted rather than assumed. The API
+    // documents `language_code` as defaulting to `en` and as ignored whenever a
+    // custom `prompt` is set — so dropping `config.prompt` un-ignored it, which
+    // looked like it might re-pin transcription to English (a settled decision:
+    // English-pinning was reverted once for hurting non-English speech).
+    //
+    // Measured against the live endpoint instead of reasoned about: with neither
+    // field set, Spanish, French, German and Japanese clips each came back
+    // correctly transcribed in their own language, and the cleanup rewrite left
+    // the language alone. So the managed default detects, and setting a language
+    // here would only take that away.
+    let object = try steeringConfig()
+    #expect(object.keys.contains("language_code") == false)
+    #expect(object.keys.contains("language_codes") == false)
+    #expect(object.keys.sorted() == ["channels", "llm", "sample_rate"])
+  }
+
   @Test("config part omits each steering field when it has nothing to say")
   func configOmitsEmptySteeringFields() throws {
     // Omission, not `[]`: an empty `word_boost` asks to boost nothing and an

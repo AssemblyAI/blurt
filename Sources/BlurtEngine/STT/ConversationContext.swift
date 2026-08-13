@@ -36,6 +36,14 @@
 /// it), and `config.language_code` is no longer ignored, which the API documents
 /// as happening whenever a custom prompt is set.
 ///
+/// That second one looked like a regression risk — the API documents
+/// `language_code` as defaulting to `en`, and pinning transcription to English was
+/// reverted once for hurting non-English speech. It isn't: with neither field set,
+/// Spanish, French, German and Japanese clips each transcribed correctly in their
+/// own language against the live endpoint. **So no language is sent at all**, and
+/// adding one would only remove the detection that already works (asserted in
+/// `KeytermsWireTests`).
+///
 /// Exercised by `Tests/BlurtEngineTests/ConversationContextTests.swift`.
 enum ConversationContext {
   /// How many of the user's recent dictations lead the turn list. One short of

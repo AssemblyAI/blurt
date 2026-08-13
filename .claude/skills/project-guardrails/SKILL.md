@@ -47,9 +47,13 @@ one, stop and ask the user first. This is the fast "don't" list; AGENTS.md's
   reference documents.
 - Don't reintroduce a "remove filler words (um, uh, like)" directive —
   `universal-3-5-pro` ignores it; it was deliberately dropped, and there is no
-  prompt field to put it in now. Same for a language directive: pinning
-  transcription to English hurt non-English speech, so language is left to the
-  model's own detection.
+  prompt field to put it in now.
+- **Don't set a language — not a directive, and not `config.language_code`.**
+  Pinning transcription to English hurt non-English speech. The API documents
+  `language_code` as defaulting to `en`, but detection was measured to work with
+  no language field and no prompt (Spanish, French, German and Japanese clips each
+  came back in their own language). Adding one removes working detection;
+  `KeytermsWireTests` asserts the config carries no language key.
 - **Injection is always a clipboard paste** (save → write → ⌘V → settle →
   restore), degrading to "left it on the clipboard" when the target is lost. No
   keystroke-by-keystroke typing path, no length threshold.
