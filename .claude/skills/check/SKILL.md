@@ -1,6 +1,6 @@
 ---
 name: check
-description: Verify the repo is green by running scripts/check.sh — the same full health check CI runs (swift test + coverage gate, sanitizers, xcodegen drift, app build, swift-format/swiftlint/periphery/prettier/markdownlint/shellcheck/shfmt, site deployability, ruff + pytest over evals/). Use before claiming a change builds, passes, or is ready to commit/PR. Bakes in the macOS-only guard so a Linux/web sandbox flags "verify on a Mac" instead of fabricating a green result; there, scripts/check.sh --portable runs the platform-independent subset (docs/site/scripts/workflows).
+description: Verify the repo is green by running scripts/check.sh — the same full health check CI runs (swift test + coverage gate, sanitizers, xcodegen drift, app build, swift-format/swiftlint/periphery/prettier/markdownlint/shellcheck/shfmt, site deployability, settled-decision invariants, ruff + pytest over evals/). Its read-only checks report together, so a red run names every failure at the bottom rather than stopping at the first. Use before claiming a change builds, passes, or is ready to commit/PR. Bakes in the macOS-only guard so a Linux/web sandbox flags "verify on a Mac" instead of fabricating a green result; there, scripts/check.sh --portable runs the platform-independent subset (docs/site/scripts/workflows).
 ---
 
 # check — is this green?
@@ -27,19 +27,20 @@ What you CAN run there is the portable subset:
 scripts/check.sh --portable
 ```
 
-It runs the repo-integrity guards (dependencies, sound catalog, site, shell
-portability) then
-actionlint / zizmor / prettier / xmllint / markdownlint / shellcheck / shfmt /
-ruff (lint + format check) / pytest over `evals/` / `release.test.sh` (plus `swift-format lint` and `swiftlint lint` if Linux
-builds are on `PATH` — under the default web network policy they are not).
-That fully verifies docs, site, scripts, eval, and workflow changes. It is **not**
-"green" in the CI sense: the entire Swift side is skipped, and the closing
-line says so. For Swift changes, push and watch `check.yml` instead — its
-`compile` job reports a broken test build in ~2 minutes, and `format-patch`
+It runs the repo-integrity guards — dependencies, sound catalog, site, shell
+portability, and settled decisions — then actionlint, zizmor, prettier, xmllint,
+markdownlint, shellcheck, shfmt, ruff (lint + format check), pytest over
+`evals/`, and `release.test.sh`. `swift-format lint` and `swiftlint lint` join
+them when Linux builds are on `PATH`; under the default web network policy they
+are not.
+
+That fully verifies docs, site, scripts, eval, and workflow changes. It is
+**not** "green" in the CI sense: the entire Swift side is skipped, and the
+closing line says so. For Swift changes, push and watch `check.yml` instead —
+its `compile` job reports a broken test build in ~2 minutes, and `format-patch`
 publishes the exact `swift-format` reflow as an artifact so you don't have to
-reproduce it by hand. In
-Claude Code on the web, the `SessionStart` hook installs the portable
-linters automatically.
+reproduce it by hand. In Claude Code on the web, the `SessionStart` hook
+installs the portable linters automatically.
 
 Quick preflight:
 
@@ -62,6 +63,11 @@ Everything source-only runs first, then everything that builds. That ordering is
 deliberate: reversed, a compile error means the cheap checks are
 never reached and their findings arrive on the next 11-minute run instead.
 
+The read-only checks (steps 1–5, plus 12) also don't stop each other: each one
+runs, failures are tallied, and the run ends with a single `error: N check(s)
+failed:` list naming all of them. So one pending `swift-format` reflow no longer
+hides every lint finding behind it — expect to fix a batch, not a queue.
+
 1. repo-integrity guards: no external SPM dependencies; sound-catalog
    integrity (every `SoundPackCatalog` voice has both cue files, no orphans, no
    duplicate or reserved ids); and site integrity (`scripts/check-site.sh` —
@@ -70,7 +76,15 @@ never reached and their findings arrive on the next 11-minute run instead.
    no unreferenced assets). All run in `--portable` too
 2. shell portability (`scripts/check-portability.sh`): GNU-only idioms in
    `scripts/*.sh` and `.claude/hooks/*.sh`, which run on BSD userland (Mac, CI)
-   as well as GNU (Linux sandbox). `--portable` too
+   as well as GNU (Linux sandbox). Then settled decisions
+   (`scripts/check-invariants.sh`): the grep-decidable subset of AGENTS.md's
+   [Settled decisions](../../../AGENTS.md#settled-decisions--dont-reintroduce-these)
+   table — `AVAudioEngine` capture, a streaming or on-device path, a client-side
+   cleanup pass, `LSUIElement`, a keystroke-typing injector, the production
+   Keychain in tests. Each rule is pinned to its table row and its
+   `project-guardrails` bullet, so editing the prose without revisiting the rule
+   fails here rather than leaving a gate that enforces a reversed decision. Both
+   `--portable` too
 3. `swift-format lint --strict`, then `swiftlint lint --strict` (warnings are
    failures) — both source-only
 4. actionlint / zizmor (workflow security) / prettier / xmllint / markdownlint /
@@ -102,6 +116,9 @@ never reached and their findings arrive on the next 11-minute run instead.
 - **Any non-zero exit** → not green. Report the failing step and its output
   verbatim; do not soften ("mostly passes") or claim success. Fix, then re-run
   the _full_ `check.sh` — a single-file `swift test --filter` is not green.
+  A red run reports every independent failure it found, so read the closing
+  `error: N check(s) failed:` list and fix all of them before re-running —
+  stopping at the first one wastes the aggregation.
 - A `note: <tool> not installed; skipping` line means coverage of that check is
   _missing_, not satisfied. On a dev Mac, run `scripts/bootstrap.sh` to install
   the toolchain rather than accepting skips.
