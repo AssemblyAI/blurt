@@ -43,13 +43,14 @@ and the rebindable dictation trigger is home-grown (`CGEventTap` over a pure sta
 package.
 
 For embedding or extending the engine's public API — seam contracts, error table, quick start —
-see [`BLURTENGINE.md`](./BLURTENGINE.md). This file covers repo-wide workflow and the _why_ behind
-the design; BLURTENGINE.md covers the _what_ of the API surface.
+see [`Sources/BlurtEngine/README.md`](./Sources/BlurtEngine/README.md). This file covers repo-wide
+workflow and the _why_ behind the design; the engine's README covers the _what_ of the API surface.
 
 ## Repository map
 
 ```text
 Sources/BlurtEngine/         the engine (dependency-free Swift package)
+  README.md                  the engine's developer guide (quick start, seams, error table)
   Audio/                     MicCapture (+meter), SoundPack/Catalog/Store — record cues
   Config/                    Keychain-backed API key, key terms, developer mode, DefaultsKey +
                              PersistedSettings (every defaults key, and the reset sweep over them)
@@ -79,10 +80,11 @@ scripts/                     check.sh, check-site.sh, bootstrap.sh, dev-build.sh
                              generate-sounds.swift (regenerates the cues AND
                              SoundPackCatalog.swift together)
 Brewfile                     Homebrew-managed check.sh tools — the whole toolchain
-evals/dictation-prompt/      offline DSPy harness for tuning the dictation API's cleanup
-                             instruction — nothing here ships in the app, but check.sh does
-                             lint (ruff), format-check (ruff format), and test (pytest) it
-evals/ruff.toml              ruff config for the above — the repo's only Python config
+evals/                       offline decision support — the repo's only Python, none of it
+                             shipped (see evals/README.md)
+  dictation-prompt/          DSPy harness for tuning the dictation API's cleanup instruction;
+                             check.sh lints (ruff), format-checks (ruff format), and tests it
+  ruff.toml                  ruff config for the above — the repo's only Python config
 site/                        the GitHub Pages site (html/css, sitemap) — formatted by prettier and
                              checked for deployability by scripts/check-site.sh
 .github/workflows/           check.yml (the gate + per-PR dev build, macos-26),
