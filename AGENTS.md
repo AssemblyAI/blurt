@@ -406,12 +406,18 @@ in both directions. So:
   slots are nil, so the warm-up paths can't infer "no capture in flight" from them (see
   `canPrepareWarmRecorder`) or they'd open a second recorder onto the live input.
 
-  **Known gap — a cancel during the bring-up isn't visible until it finishes.** `performPress`
-  consumes a recorded `cancelRequested` before claiming `.recording`, so the cancel is honored and
-  never leaves a phantom recording or chime behind — but it can't preempt the wait. Worse for the
-  app specifically: `submit(_:)`'s consumer is serial, so a submitted `.cancel` isn't even
-  _recorded_ until the press returns. Closing this needs either a preemptible `mic.start()` or a
-  command consumer that doesn't block on the press — both design changes, neither attempted yet.
+  **A cancel preempts the bring-up rather than queueing behind it**, which took two pieces. The
+  press publishes its task handle (`inFlightPress`) exactly as the pipeline publishes
+  `pipelineTask`, and `cancel()` treats `.connecting` like the other in-flight phases: cancel the
+  handle, claim `.cancelled`, return. `waitUntilLive` already honors task cancellation, so the wait
+  unblocks at once and `start()` throws `CancellationError` rather than installing the recorder.
+  The cancel flag then lives in a `Mutex` beside that handle rather than in actor state, so
+  **`submit(.cancel)` can record and preempt without waiting for a turn** — the app's cancel door is
+  `submit`, and its consumer is serial, so before this a submitted `.cancel` wasn't even _recorded_
+  until the press it meant to cancel had finished. `requestCancel()` is the single place both doors
+  funnel through. Commands are still yielded and executed in order; only the preemption is new.
+  `performPress` still consumes the flag before claiming `.recording`, for the narrow window where
+  the cancel lands after the wait returned and there is nothing left to interrupt.
 
 - **The warm recorder is re-armed after every capture**, not just at launch. The cost above is paid
   at `prepareToRecord()`, i.e. per session, so warming only the first one hid it for one dictation

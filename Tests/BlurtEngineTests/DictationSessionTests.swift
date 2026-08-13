@@ -349,4 +349,39 @@ struct DictationSessionBringUpTests {
     // through the discarding teardown, not `stop()`.
     #expect(await mic.cancelCaptureCalls == 1)
   }
+
+  @Test("a submitted cancel preempts the bring-up instead of queueing behind it")
+  func submittedCancelPreemptsBringUp() async throws {
+    // The app's cancel door is `submit`, and its consumer is serial — so a
+    // `.cancel` submitted during a press cannot reach `cancel()` until that press
+    // returns. With `MicCapture.start()` holding until the mic is live, that made
+    // Escape invisible for up to `MicLiveness.bluetoothTimeout`. `submit` now
+    // records the intent and cancels the in-flight press itself, without waiting
+    // for a turn on an actor the press is holding.
+    let mic = GatedStartMic()
+    let session = DictationSession(
+      mic: mic, transcriber: StubTranscriber(mode: .transcript("never")),
+      injector: StubInjector(), seams: .offline)
+
+    let stream = await session.phaseStream()
+    session.submit(.press)
+    await mic.waitUntilStartEntered()  // the consumer is now blocked inside this press
+
+    session.submit(.cancel)
+    // Both effects have to be observable *before* the press is released, which is
+    // the whole point — neither needs the consumer to get a turn.
+    #expect(session.cancelRequested)
+    #expect(session.inFlightPress?.isCancelled == true)
+
+    await mic.allowStartToFinish()
+
+    var seen: [PipelinePhase] = []
+    for await phase in stream {
+      seen.append(phase)
+      if phase.isTerminal, phase != .idle { break }
+    }
+    #expect(seen.last == .cancelled)
+    #expect(!seen.contains(.recording))
+    #expect(await mic.cancelCaptureCalls == 1)
+  }
 }

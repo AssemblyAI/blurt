@@ -199,13 +199,21 @@ public actor MicCapture: MicCaptureProtocol {
       recorder.currentTime
     }
 
-    // A teardown that landed while the wait was suspended wins: tear the
-    // recorder down instead of installing it, so the caller's stop stays a real
-    // stop (see `stopGeneration`).
-    guard stopGeneration == generationBeforeWait else {
+    // Two ways the bring-up can be abandoned while suspended, both ending the
+    // same way — tear the recorder down instead of installing it, so nothing is
+    // left capturing and no temp file is orphaned:
+    //
+    // - A teardown landed (`stopGeneration` moved), so the caller's stop has to
+    //   stay a real stop rather than returning an empty "clean" one.
+    // - The task was cancelled, which is how a cancel preempts the wait:
+    //   `waitUntilLive` returns as soon as it sees it, so this is the difference
+    //   between an Escape acting now and acting in `bluetoothTimeout`. It must be
+    //   distinguished from the timeout, which returns nil too but means "fail
+    //   open, proceed as if live".
+    guard stopGeneration == generationBeforeWait, !Task.isCancelled else {
       recorder.stop()
       Self.removeFile(at: recorder.url)
-      Self.logger.info("start aborted — teardown landed during the liveness wait")
+      Self.logger.info("start aborted — teardown or cancellation during the liveness wait")
       throw CancellationError()
     }
 
