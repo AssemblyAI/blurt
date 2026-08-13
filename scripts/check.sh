@@ -588,6 +588,21 @@ else
   #                        MicCapture+Meter.swift, which IS covered. Keep this
   #                        list tight — exclude only code that genuinely cannot
   #                        be exercised without hardware.
+  #  - MicCapture+Warm.swift : the same actor's warm-recorder lifecycle, split
+  #                        out of MicCapture.swift only for the lint file-length
+  #                        budget. Every path through it runs makeRecorder(),
+  #                        i.e. prepareToRecord() — the route-activation call, the
+  #                        one thing here that genuinely needs a device. Unlike
+  #                        +Meter (pure math, covered), splitting this out moved
+  #                        hardware-bound code onto the counted side by accident:
+  #                        the pattern above pins a literal filename. Trying to
+  #                        cover it in CI didn't merely fail, it deadlocked the
+  #                        whole test run — prepareToRecord blocks its thread
+  #                        instead of suspending, so concurrent attempts drained
+  #                        the cooperative pool. Its suite is env-gated alongside
+  #                        MicCaptureLevelsTests. The transport and liveness
+  #                        *policy* it consults stays covered, in AudioTransport
+  #                        and MicLiveness.
   #  - AudioRoute(Monitor).swift : the CoreAudio routing reads (AudioRoute) and the
   #                        property listeners (AudioRouteMonitor). Both answer
   #                        questions only real hardware can answer — which device
@@ -596,7 +611,7 @@ else
   #                        can only fire on an actual route change. Same
   #                        justification as MicCapture.swift above.
   COVERAGE="$(xcrun llvm-cov export -summary-only -instr-profile "$PROFDATA" "$XCTEST_BIN" \
-    -ignore-filename-regex='Tests/|Audio/MicCapture\.swift|Audio/AudioRoute(Monitor)?\.swift' \
+    -ignore-filename-regex='Tests/|Audio/MicCapture(\+Warm)?\.swift|Audio/AudioRoute(Monitor)?\.swift' \
     | python3 -c 'import sys,json; print(round(json.load(sys.stdin)["data"][0]["totals"]["lines"]["percent"],2))')"
   echo "engine line coverage: ${COVERAGE}%"
   if ! awk -v c="$COVERAGE" -v min="$MIN_COVERAGE" 'BEGIN{ exit (c+0 < min+0) }'; then

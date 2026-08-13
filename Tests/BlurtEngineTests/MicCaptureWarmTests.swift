@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import BlurtEngine
@@ -6,14 +7,26 @@ import Testing
 /// refuse to double-prepare, validate against the live input before reuse, and
 /// tear down on a stale expiry ticket.
 ///
-/// Runs without hardware: none of this begins capture — `warmUp()` only
-/// constructs and prepares a file-backed recorder, so unlike the capture
-/// lifecycle in `MicCapture.swift` (excluded from the coverage gate, exercised
-/// by the env-gated `MicCaptureLevelsTests`) the decisions here are reachable in
-/// CI. The device-identity checks are driven through
-/// `installWarmRecorder(boundTo:)` below rather than `warmUp()` itself, so what
-/// the test machine's `AudioRoute.currentInput()` answers never decides a test.
-@Suite("MicCapture warm recorder", .timeLimit(.minutes(1)))
+/// Gated on BLURT_LIVE_AUDIO_TESTS=1, like `MicCaptureLevelsTests`, because every
+/// test here goes through `MicCapture.makeRecorder()` — and that calls
+/// `prepareToRecord()`, which is *the* route-activation call this whole change is
+/// about. On a runner with no input device it is not merely unreliable, it is
+/// hostile: it blocks the calling thread rather than suspending, so several of
+/// these running concurrently occupy the cooperative pool and wedge the entire
+/// `swift test` run, not just this suite. That is not a hypothetical — an
+/// ungated first attempt failed three expectations here and then hung 171
+/// unrelated tests until the job's 30-minute timeout killed it.
+///
+/// So this suite documents and locks the warm lifecycle for a human running it
+/// on a real Mac with a real microphone; `MicCapture+Warm.swift` is excluded
+/// from the coverage gate for the same reason `MicCapture.swift` is.
+@Suite(
+  "MicCapture warm recorder (live)",
+  .enabled(
+    if: ProcessInfo.processInfo.environment["BLURT_LIVE_AUDIO_TESTS"] == "1",
+    "set BLURT_LIVE_AUDIO_TESTS=1 to run (needs a real microphone)"),
+  .tags(.liveAudio),
+  .timeLimit(.minutes(1)))
 struct MicCaptureWarmTests {
   private let builtIn = AudioRoute.InputSnapshot(deviceID: 7, transportType: nil)
   private let airPods = AudioRoute.InputSnapshot(deviceID: 8, transportType: nil)
@@ -115,12 +128,21 @@ struct MicCaptureWarmTests {
     // preparing re-opens the input — the slow part — and both sit on paths the
     // user is waiting behind. All this can pin deterministically is the other
     // half of that contract: the scheduled task does land, and prepares.
-    // Condition-waited rather than yield-budgeted (see `awaitCancelRequest`);
-    // the suite's time limit turns a re-warm that never lands into a failure.
+    // Polled on a deadline with a real sleep between reads, NOT a bare
+    // `Task.yield()` spin. `scheduleRewarm` hands the work to a child task that
+    // needs a cooperative thread to run on, and `warmUp()` then blocks that
+    // thread inside CoreAudio — so a hot spin here competes with the very task
+    // it is waiting for, and on a machine where the recorder never materialises
+    // it never terminates at all. Sleeping yields the thread outright, and the
+    // deadline turns "never landed" into a failed expectation rather than a hang
+    // the suite's time limit has to clean up.
     let mic = MicCapture()
     let before = await mic.preparedGeneration
     await mic.scheduleRewarm()
-    while await mic.preparedGeneration == before { await Task.yield() }
+    let deadline = ContinuousClock().now.advanced(by: .seconds(5))
+    while await mic.preparedGeneration == before, ContinuousClock().now < deadline {
+      try await Task.sleep(for: .milliseconds(10))
+    }
     #expect(await mic.hasWarmRecorder)
 
     await mic.discardWarmRecorder()
