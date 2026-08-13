@@ -6,6 +6,28 @@ import Testing
 private struct DecodedEntry: Decodable {
   let transcript: String
   let ts: String
+  /// `turns` and `keyterms` are the two fields `Entry.encode(to:)` writes only when
+  /// non-empty, so an omitted-key line has to decode rather than throw. Empty, not
+  /// optional — the repo bans optional collections, and it costs nothing here:
+  /// "omitted" vs "written as `[]`" is asserted on the raw line by
+  /// `nilFieldsAreOmitted`, which is the level that contract actually lives at.
+  let turns: [String]
+  let keyterms: [String]
+
+  /// Spelled out because the custom `init(from:)` below suppresses the synthesis
+  /// that would otherwise derive these — mirroring `DictationLog.Entry`, which
+  /// states its own keys for the same reason.
+  enum CodingKeys: String, CodingKey {
+    case transcript, ts, turns, keyterms
+  }
+
+  init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    transcript = try container.decode(String.self, forKey: .transcript)
+    ts = try container.decode(String.self, forKey: .ts)
+    turns = try container.decodeIfPresent([String].self, forKey: .turns) ?? []
+    keyterms = try container.decodeIfPresent([String].self, forKey: .keyterms) ?? []
+  }
 }
 
 /// Each test that genuinely needs a file gets a fresh empty one in a unique temp
@@ -193,6 +215,22 @@ struct DictationLogTests {
     #expect(!line.contains("selected"))
     #expect(!line.contains("turns"))
     #expect(!line.contains("keyterms"))
+  }
+
+  @Test("a non-empty turns/keyterms list is written, with its values intact")
+  func conditionalFieldsAreWrittenWhenPresent() throws {
+    // The other direction of the same contract. `nilFieldsAreOmitted` pins the
+    // conditional arms' *skip*; without this, `encode(to:)` could stop writing
+    // either field entirely and only the negative test would still pass — leaving
+    // the corpus with no record of what steering a request carried.
+    let url = makeTempLogURL()
+    let context = TranscriptionContext(
+      appName: "Mail", priorText: "Hi Sam,", keyTerms: ["AssemblyAI", "LeMUR"])
+    DictationLog.write(transcript: "p", context: context, to: url, now: Date())
+
+    let entry = try #require(firstEntry(in: url))
+    #expect(entry.keyterms == ["AssemblyAI", "LeMUR"])
+    #expect(entry.turns == ["Hi Sam,"])
   }
 }
 

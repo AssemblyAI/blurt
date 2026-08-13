@@ -240,4 +240,27 @@ struct MemoizedKeyStoreTests {
     #expect(store.current == storage.stored)
     #expect(store.current != nil)
   }
+
+  // MARK: - keychain wiring
+
+  @Test("the keychain convenience init memoizes over the item it was given")
+  func keychainInitWiresBothClosures() {
+    // The init `APIKeyStore` actually constructs. Its whole body is two closure
+    // wirings, and a swapped or dropped one is invisible to every test above (they
+    // pass their own closures) — so this drives it against an isolated keychain
+    // item, never the real `AssemblyAIAPIKey` one.
+    let keychain = KeychainStore(
+      service: "dev.alex.blurt.tests", account: "memo-\(UUID().uuidString)")
+    defer { keychain.write(nil) }
+    let store = MemoizedKeyStore(keychain: keychain)
+
+    // Read side: the item's value has to reach the memo.
+    #expect(keychain.write("sk-from-keychain"))
+    #expect(store.current == "sk-from-keychain")
+
+    // Write side: a save has to land in that same item, not just in the memo.
+    #expect(store.save("sk-replaced"))
+    #expect(keychain.read() == .value("sk-replaced"))
+    #expect(store.current == "sk-replaced")
+  }
 }

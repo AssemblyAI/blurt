@@ -177,6 +177,23 @@ struct SystemClipboardTests {
     }
   }
 
+  @Test("write overwrites the clipboard with just the text")
+  func writeOverwrites() {
+    withClipboardRestored {
+      let pb = NSPasteboard.general
+      let clip = SystemClipboard()
+
+      pb.clearContents()
+      pb.setString("previous", forType: .string)
+      // The `ClipboardAccess` half the degraded paste paths use: no restore is
+      // prepared, because the transcript is meant to *stay* on the clipboard for
+      // the user to paste by hand. So the previous contents must be gone.
+      clip.write("transcript")
+
+      #expect(pb.string(forType: .string) == "transcript")
+    }
+  }
+
   @Test("restore of an empty snapshot leaves the cleared pasteboard empty")
   func restoreEmptyIsNoOp() throws {
     try withClipboardRestored {

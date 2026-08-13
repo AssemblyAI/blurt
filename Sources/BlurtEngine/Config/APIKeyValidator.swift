@@ -38,7 +38,9 @@ public struct APIKeyValidator: Sendable {
 
     var components = URLComponents(
       url: baseURL.appendingPathComponent("v2/transcript"),
-      resolvingAgainstBaseURL: false
+      // `true` would behave identically here: the URL above is already absolute, so
+      // there is no base to resolve it against. Equivalent mutant, not a test gap.
+      resolvingAgainstBaseURL: false  // mutate-ok: absolute URL, nothing to resolve
     )
     components?.queryItems = [URLQueryItem(name: "limit", value: "1")]
     guard let url = components?.url else { return .unreachable }

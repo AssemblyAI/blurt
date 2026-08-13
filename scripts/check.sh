@@ -42,10 +42,22 @@ if [ "$PORTABLE" -eq 0 ] && ! command -v swift >/dev/null 2>&1; then
 fi
 
 # Engine line-coverage floor (percent). Raise as coverage grows.
-# Set to 80 to accommodate untestable syscall seams (e.g. the CGEvent paste
-# poster and the Accessibility reads, which the CI test process can't exercise —
-# it isn't Accessibility-trusted).
-MIN_COVERAGE=80
+#
+# The remaining uncovered engine code is almost entirely environment-bound rather
+# than untested: the live-AX-tree reads in FocusCapture (~160 lines needing
+# Accessibility trust *and* a focused text field), the TCC prompts in
+# PermissionsChecker, `tccutil` in SigningIdentity, `KeyInjector.activate` and the
+# two `CGEvent.post` calls, and two log-only paths that need a real
+# URLSessionTaskMetrics. None can run in a CI test process, so treat ~91% as the
+# practical ceiling and don't chase the last points by faking the OS — the useful
+# move is extracting pure logic out of a syscall wrapper so it becomes testable
+# (`MicCapture+Meter`, `FocusCapture.isBrowserBundleID` / `.isElectronBundle`,
+# `KeyInjector.cmdVEvents`), which raises this floor as a side effect.
+#
+# Past that point this number stops being the interesting one: it says a line ran,
+# not that anything asserted its result. `scripts/mutate.sh` (opt-in, not run here)
+# answers the second question.
+MIN_COVERAGE=88
 
 export OS_ACTIVITY_MODE=disable
 
