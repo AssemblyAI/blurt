@@ -41,10 +41,11 @@ echo "==> Removing duplicate LaunchServices registrations"
 # path.
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 if [ -x "$LSREGISTER" ]; then
-  # `Blurt[^/]*\.app` catches "Blurt Dev.app" alongside "Blurt.app" without
-  # reaching into a parent directory's name.
+  # Exactly the two bundle names, via an optional " Dev" (POSIX BRE interval, so
+  # BSD and GNU sed agree). A looser `Blurt[^/]*\.app` would also sweep
+  # BlurtUITests-Runner.app — a bundle this script neither owns nor re-registers.
   "$LSREGISTER" -dump 2>/dev/null \
-    | sed -n 's/^[[:space:]]*path:[[:space:]]*\(.*\/Blurt[^/]*\.app\) (0x[0-9a-f]*)$/\1/p' \
+    | sed -n 's/^[[:space:]]*path:[[:space:]]*\(.*\/Blurt\( Dev\)\{0,1\}\.app\) (0x[0-9a-f]*)$/\1/p' \
     | sort -u \
     | while IFS= read -r app; do
       "$LSREGISTER" -u "$app" >/dev/null 2>&1 && echo "    unregistered: $app" || true
