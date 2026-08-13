@@ -9,7 +9,11 @@ let package = Package(
   ],
   targets: [
     .target(
-      name: "BlurtEngine"
+      name: "BlurtEngine",
+      // The engine's developer guide lives next to the code it documents. SwiftPM
+      // has no rule for a stray .md inside a target, so declare it excluded rather
+      // than let it land in the target's unhandled-files list.
+      exclude: ["README.md"]
     ),
     .testTarget(
       name: "BlurtEngineTests",
