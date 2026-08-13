@@ -284,14 +284,10 @@ private final class MetricsLogger: NSObject, URLSessionTaskDelegate, @unchecked 
   }
 }
 
-extension Duration {
-  /// This duration in milliseconds as a Double (for latency logging). Expressed
-  /// as a ratio of two `Duration`s rather than reassembled from `components`,
-  /// which meant restating the attoseconds-per-millisecond constant by hand.
-  fileprivate var milliseconds: Double {
-    self / Duration.milliseconds(1)
-  }
-}
+// `Duration.milliseconds` — the latency-logging conversion this file's request
+// timing uses — moved to `Duration+Milliseconds.swift` when `MicCapture` needed
+// the same thing for its liveness-gap line. It was `fileprivate` here; a second
+// copy is an "invalid redeclaration", not a shadow.
 
 /// Errors specific to the AssemblyAI transport. These get wrapped in
 /// `BlurtError.sttFailed` before reaching the UI.

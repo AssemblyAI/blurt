@@ -29,6 +29,11 @@ struct PipelinePhaseTests {
 
   @Test("active phases are not terminal")
   func activePhasesAreNotTerminal() {
+    // `.connecting` included: the press guard keys off terminality, so a
+    // terminal `.connecting` would let a second key-down start a second capture
+    // while the first is still bringing the mic up — a window that lasts ~1–2 s
+    // on a Bluetooth route, so it is very reachable.
+    #expect(!PipelinePhase.connecting.isTerminal)
     #expect(!PipelinePhase.recording.isTerminal)
     #expect(!PipelinePhase.transcribing.isTerminal)
     #expect(!PipelinePhase.injecting.isTerminal)

@@ -15,7 +15,7 @@ struct HotkeyRaceTests {
 
   @Test("release during mic.start is honored, not dropped")
   func releaseDuringStartIsHonored() async throws {
-    let mic = GatedMicCapture()
+    let mic = GatedStartMic()
     let stt = StubTranscriber(mode: .transcript("hi"))
     let injector = StubInjector()
     let session = DictationSession(
@@ -40,7 +40,7 @@ struct HotkeyRaceTests {
 
   @Test("cancel during mic.start is honored, not dropped")
   func cancelDuringStartIsHonored() async throws {
-    let mic = GatedMicCapture()
+    let mic = GatedStartMic()
     let stt = StubTranscriber(mode: .transcript("hi"))
     let injector = StubInjector()
     let session = DictationSession(
@@ -69,7 +69,7 @@ struct HotkeyRaceTests {
   /// — the mic must never be started twice.
   @Test("a second press during mic.start is dropped, not double-started")
   func secondPressDuringStartIsDropped() async throws {
-    let mic = GatedMicCapture()
+    let mic = GatedStartMic()
     let stt = StubTranscriber(mode: .transcript("hi"))
     let injector = StubInjector()
     let session = DictationSession(
@@ -98,7 +98,7 @@ struct HotkeyRaceTests {
   /// transcribe→inject run.
   @Test("cancel overrides a pending release during mic.start")
   func cancelOverridesPendingReleaseDuringStart() async throws {
-    let mic = GatedMicCapture()
+    let mic = GatedStartMic()
     let stt = StubTranscriber(mode: .transcript("hi"))
     let injector = StubInjector()
     let session = DictationSession(
@@ -126,28 +126,5 @@ struct HotkeyRaceTests {
     #expect(await session.phase == .cancelled)
     #expect(await mic.stopCalls == 1)
     #expect(await injector.inserted.isEmpty)
-  }
-}
-
-/// Mic stub whose `start()` blocks until the test releases it, so `release()` can
-/// be landed deterministically while `press()` is suspended inside `mic.start()`.
-/// The entry/finish choreography lives in the shared `Gate`.
-private actor GatedMicCapture: MicCaptureProtocol {
-  private(set) var startCalls = 0
-  private(set) var stopCalls = 0
-  private let gate = Gate()
-
-  func start() async throws {
-    startCalls += 1
-    await gate.enter()
-  }
-
-  func waitUntilStartEntered() async { await gate.waitUntilEntered() }
-  func allowStartToFinish() async { gate.allowToFinish() }
-
-  func stop() async throws -> Data {
-    stopCalls += 1
-    // This suite exercises the press/release race, not the too-short guard.
-    return StubPCM.aboveMinimum
   }
 }

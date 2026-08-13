@@ -32,7 +32,7 @@ struct OverlayView: View {
     switch state {
     case .error:
       return Color(red: 0.62, green: 0.13, blue: 0.13)
-    case .recording, .processing, .pasted, .noTarget, .idle:
+    case .connecting, .recording, .processing, .pasted, .noTarget, .idle:
       return Color(white: 0.16)
     }
   }
@@ -84,6 +84,20 @@ struct OverlayView: View {
       // background would collapse with it) keeps the pill's shape intact for
       // `hide()`'s pre-hide reset.
       Color.clear
+    case .connecting:
+      // The mic is coming up; nothing is being captured yet. Styled like
+      // "Transcribing…" (same status-line type, tracking, cyan --ice, and
+      // breathing pulse) so the connecting → recording hand-off reads as one
+      // status line rather than a new kind of alert — and deliberately *not*
+      // the `● REC` tag or the meter, which would cue the user to speak into a
+      // mic that isn't delivering yet.
+      //
+      // On a built-in mic this is on screen for a frame or two, inside the
+      // pill's own 0.08 s fade-in, so it blends into the appearance rather than
+      // flashing; on a Bluetooth route it holds for as long as the link takes,
+      // which is the whole point.
+      BreathingStatusLine(text: "Connecting…", animated: !reduceMotion)
+        .transition(.opacity)
     case .recording:
       // "● REC" tag beside the live waveform, mirroring the site demo's recording
       // pill (magenta tag + bars). The bars fill the width left of the tag.
@@ -98,7 +112,7 @@ struct OverlayView: View {
       // Transcribing); cyan echoes the demo's --ice. Cross-fades like the bars.
       // The label breathes (slow opacity pulse) so the wait for the dictation API +
       // paste reads as active work rather than a frozen pill.
-      TranscribingLabel(animated: !reduceMotion)
+      BreathingStatusLine(text: "Transcribing…", animated: !reduceMotion)
         .transition(.opacity)
     case .error(let message):
       // "Try again" tells the user what to do; the full failure reason is too

@@ -11,10 +11,28 @@ final class CueSoundPlayer {
   /// The pack the current `startSound`/`stopSound` were decoded from, so `prime()`
   /// can skip re-decoding when nothing changed. `nil` until the first load.
   private var loadedPack: SoundPack?
+  /// Monotonic ticket for in-flight decodes: only the newest one installs its
+  /// players. This is the staleness check, **not** `loadedPack` equality — which
+  /// cannot discriminate two loads of the *same* pack, and a route change forces
+  /// exactly that. Without it, a decode already in flight when the route changed
+  /// could land after the re-prime and install players primed against the old
+  /// output route — the stall the re-prime exists to prevent.
+  private var loadGeneration = 0
   /// Edge-detector deciding when the start/stop chimes fire. The mapping from a
   /// pipeline phase to a cue lives in the engine (`RecordingCueGate`), where
   /// `swift test` covers it; this player just plays whatever it resolves to.
   private var cueGate = RecordingCueGate()
+  /// Fires when the output route changes under the pre-rolled players. Blurt's
+  /// own capture is the usual cause: opening the mic flips AirPods out of their
+  /// output-only profile, which drops the output format the players were primed
+  /// against — so the very next chime is the one that stalls, and that's the
+  /// chime at the start of a dictation.
+  /// Set when the output route changes, cleared when the re-prime actually runs.
+  /// See `transition(for:)` for why the reload waits.
+  private var needsReprime = false
+  /// Kept alive for the app's lifetime; assignment is the use. Nil until
+  /// `prime()` starts it, which is also what makes starting idempotent.
+  private var routeObserver: Task<Void, Never>?
 
   /// The cues are deliberate UI accents, not music — they are normalized to a
   /// hot peak, so play them well below full scale so they read as a soft chime
@@ -36,6 +54,54 @@ final class CueSoundPlayer {
   /// decode never sits on the main thread during startup.
   func prime() {
     Task { await loadCurrentPack() }
+    startObservingRoute()
+  }
+
+  /// The player is owned for the whole app session, so this never runs in
+  /// practice — but cancelling the observer mirrors the `[weak self]` care below
+  /// and documents that its lifetime is owned rather than leaked.
+  deinit {
+    routeObserver?.cancel()
+  }
+
+  /// Re-primes the players whenever the output route changes, so the pre-roll
+  /// `prime()` bought at launch survives a device switch or a profile flip.
+  /// Idempotent — `prime()` runs on every "app is ready" transition, and only
+  /// the first call installs the observer.
+  ///
+  /// A full reload rather than a bare `prepareToPlay()`: re-creating the players
+  /// is the one thing guaranteed to leave them primed against the *current*
+  /// route, and the decode runs off the main actor like every other load. Route
+  /// changes are not rare — on a Bluetooth output Blurt's own capture causes one
+  /// per dictation burst — which is exactly why the reload is deferred rather
+  /// than run on the tick; see `transition(for:)`.
+  private func startObservingRoute() {
+    guard routeObserver == nil else { return }
+    routeObserver = Task { [weak self] in
+      // The monitor is owned by this task, not stored: the local keeps it alive
+      // for as long as the loop runs, and dropping it when the task ends is what
+      // deregisters its CoreAudio listeners.
+      let monitor = await Self.makeRouteMonitor()
+      for await _ in monitor.outputRouteChanges {
+        // Rebound per tick rather than bound once above, so the observer never
+        // keeps the player alive — the same reason `MicCapture`'s meter task
+        // rebinds across its sleep.
+        guard let self else { return }
+        // Recorded, not acted on — see `transition(for:)`.
+        self.needsReprime = true
+      }
+    }
+  }
+
+  /// Constructs the monitor off the main actor. `nonisolated` + `async` for the
+  /// same reason `decode` is: this type defaults to `MainActor`, so a plain
+  /// initializer call would run on the main thread — and constructing it
+  /// registers two CoreAudio listeners and makes the process's *first* HAL call,
+  /// paying the client-side HAL init and the coreaudiod connection. As a stored
+  /// property that landed during launch, before the first frame, on every run
+  /// including onboarding and UI tests where no chime is ever played.
+  private nonisolated static func makeRouteMonitor() async -> AudioRouteMonitor {
+    AudioRouteMonitor()
   }
 
   /// Reloads the players for a newly selected pack and previews the new voice
@@ -54,17 +120,22 @@ final class CueSoundPlayer {
   /// Decodes and installs the cue players for the current selection if they aren't
   /// already loaded. The `loadedPack` guard makes repeat calls cheap; the decode
   /// itself hops off the main actor. Returns once the players are assigned.
-  private func loadCurrentPack() async {
+  /// `force` skips the already-loaded short-circuit, for a re-prime where the
+  /// selection is unchanged and only the output route moved.
+  private func loadCurrentPack(force: Bool = false) async {
     let pack = SoundPackStore().soundPack
-    guard pack != loadedPack else { return }
+    guard force || pack != loadedPack else { return }
+    loadGeneration += 1
+    let generation = loadGeneration
     loadedPack = pack
     let players = await Self.decode(pack)
-    // Re-check after the off-actor decode: if a newer selection was claimed while
-    // we were decoding (rapid pack switches), its decode owns the players now —
-    // dropping this stale result avoids installing players that disagree with
-    // `loadedPack`. `loadedPack` is written synchronously above (no await between
-    // read and write), so only the newest-requested load passes this guard.
-    guard loadedPack == pack else { return }
+    // Re-check after the off-actor decode: whoever asked last owns the players.
+    // Both are written synchronously above (no await between read and write), so
+    // exactly one in-flight decode passes this guard — the newest. Ticketed
+    // rather than compared against `loadedPack`, so two loads of the same pack
+    // (a rapid pack switch back, or any forced route re-prime) can still tell
+    // each other apart.
+    guard generation == loadGeneration else { return }
     startSound = players.start
     stopSound = players.stop
   }
@@ -78,6 +149,17 @@ final class CueSoundPlayer {
     case .stop: play(stopSound)
     case nil: break
     }
+    // A pending route re-prime waits for the dictation to finish. The usual
+    // cause of a route change is Blurt *opening the mic* — so the tick arrives
+    // during the press, and reloading there would put two AAC decodes and two
+    // `prepareToPlay()`s alongside the bring-up, then swap `startSound` out from
+    // under the very chime it is meant to protect (releasing an `AVAudioPlayer`
+    // that may be mid-play). Deferring to the next terminal phase puts the
+    // reload between dictations, where it costs nothing anyone is waiting on,
+    // and coalesces a burst of flips into one decode.
+    guard phase.isTerminal, needsReprime else { return }
+    needsReprime = false
+    Task { await loadCurrentPack(force: true) }
   }
 
   /// The decoded, pre-rolled players for a pack. Non-`Sendable` (holds

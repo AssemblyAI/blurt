@@ -40,7 +40,12 @@ extension PipelinePhase {
     switch self {
     case .recording: .recording
     case .transcribing: .transcribing
-    case .idle, .injecting, .cancelled, .failed, .pasted, .noTarget: .idle
+    // `.connecting` reads as idle: the filled glyph means "audio is being
+    // captured", and during the mic bring-up it isn't yet — the same honesty
+    // rule that holds the start chime. The pill carries the warming-up state,
+    // and a distinct fourth glyph isn't worth it for something usually gone
+    // within a frame on a wired mic.
+    case .idle, .connecting, .injecting, .cancelled, .failed, .pasted, .noTarget: .idle
     }
   }
 }

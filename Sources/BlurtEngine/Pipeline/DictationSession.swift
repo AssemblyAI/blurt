@@ -1,10 +1,10 @@
 import Foundation
-import os
+import Synchronization
 
 public actor DictationSession {
   /// Off-pool home for the press-time AX field read — see its use in
   /// `performPress` for why blocking IPC must not run on the cooperative pool.
-  private static let contextQueue = DispatchQueue(
+  static let contextQueue = DispatchQueue(
     label: "\(BlurtIdentity.subsystem).FieldContext", qos: .userInitiated,
     attributes: .concurrent)
 
@@ -17,12 +17,14 @@ public actor DictationSession {
   /// the failure from the log.
   public internal(set) var phase: PipelinePhase = .idle
 
-  // Split for the lint file-length budget: `phaseStream()`/`setPhase`/os_signpost
-  // live in `+Observation`; `submit(_:)` and both cancel commands live in
-  // `+Commands`; the post-release transcribe→inject pipeline lives in
-  // `+Pipeline`; the non-protocol collaborators (focus capture, developer-mode
-  // log) live in `+Seams`. Members those files reach are internal, not private
-  // (file-scoped access can't cross the split) — including `phase`'s setter.
+  // Split for the lint file-length budget: `performPress` — the whole press half,
+  // including the mic bring-up — lives in `+Press`, mirroring the post-release
+  // transcribe→inject pipeline in `+Pipeline`. `submit(_:)`, both cancel commands
+  // and the cancel-intent accessors over `cancelState` live in `+Commands`;
+  // `phaseStream()`/`setPhase`/os_signpost live in `+Observation`; the
+  // non-protocol collaborators (focus capture, developer-mode log) live in
+  // `+Seams`. Members those files reach are internal, not private (file-scoped
+  // access can't cross the split) — including `phase`'s setter.
 
   /// Live feeds of phase changes. Each `phaseStream()` call yields the current
   /// phase plus every subsequent transition, so the production renderer and
@@ -36,7 +38,7 @@ public actor DictationSession {
   /// one at a time by the task spawned in `init`.
   nonisolated let commandFeed: AsyncStream<Command>.Continuation
 
-  private let mic: MicCaptureProtocol
+  let mic: MicCaptureProtocol
   let transcriber: TranscriberProtocol
   let injector: InjectorProtocol
   /// Supplies the user's key terms (domain vocabulary) at press time, so each
@@ -44,12 +46,12 @@ public actor DictationSession {
   /// (`KeytermsBoost`), not as part of the conversation context. A closure, rather
   /// than a stored list, so edits in Settings take effect on the next dictation
   /// without rebuilding the session. Defaults to reading `KeyTermsStore`.
-  private let keyTermsProvider: @Sendable () -> [String]
+  let keyTermsProvider: @Sendable () -> [String]
   /// Auto-releases the hotkey after this long so a held key can't run forever.
   /// Defaults to just under the dictation API's audio cap (see
   /// `SyncSTTLimits`) — recording past it would only produce audio the
   /// endpoint rejects, so we stop early and transcribe what we have.
-  private let maxRecordingSeconds: Double
+  let maxRecordingSeconds: Double
   /// Clock the auto-release timer and the context-wait budget (`+Pipeline`)
   /// sleep on; injectable so tests advance it.
   let clock: any Clock<Duration>
@@ -60,7 +62,7 @@ public actor DictationSession {
   /// key-presence check so a missing API key fails at press time, not after the
   /// user has spoken a whole utterance. Defaults to always-ready (no Keychain
   /// read), so tests and keyless hosts are unaffected unless they opt in.
-  private let readinessCheck: @Sendable () -> BlurtError?
+  let readinessCheck: @Sendable () -> BlurtError?
   /// Fired once with the final transcript as soon as it's produced — before
   /// injection, so pasted, copied, and failed-to-paste dictations all count. The
   /// second argument is `recentDictations` as it stands, pushed from its one owner
@@ -103,19 +105,18 @@ public actor DictationSession {
   /// a time in arrival order — none observes another suspended mid-`mic` call.
   private var commandQueue: Task<Void, Never>?
 
-  /// Set synchronously by `cancel()` before it takes its queue turn, so a
-  /// cancel arriving while a queued release hasn't yet claimed `.transcribing`
-  /// deterministically wins: `performRelease` consumes the request after its
-  /// `mic.stop()`, before any pipeline is spawned. (A release that already
-  /// claimed `.transcribing` is handled by `cancel()`'s synchronous path
-  /// instead.) `performCancel` clears it whether or not it was consumed early.
-  ///
-  /// Internal, like `pipelineTask` and `autoReleaseTask`, because the moment the
-  /// request is recorded is otherwise unobservable: a test landing a cancel
-  /// against an in-flight press has to know it was recorded before it releases
-  /// that press, and the alternative — draining a fixed number of `Task.yield()`s
-  /// and hoping — is a budget that drains the calling task, not this actor.
-  var cancelRequested = false
+  /// Backing store for `cancelRequested` and `inFlightPress`. A `Mutex` rather
+  /// than actor state because **both doors into a cancel must record it
+  /// synchronously**, and one of them is `nonisolated`: `submit(.cancel)` can't
+  /// take an actor turn, and waiting for one is exactly the bug — the command
+  /// consumer is serial, so a submitted cancel sits unread in the feed until the
+  /// press it means to cancel has finished.
+  let cancelState = Mutex(CancelState())
+
+  struct CancelState {
+    var requested = false
+    var press: Task<Void, Never>?
+  }
 
   // Internal, like `pipelineTask`, so a test can witness the cancel teardown
   // *directly* — nil means disarmed. Asserting it through the timer's effects
@@ -200,117 +201,38 @@ public actor DictationSession {
     }
   }
 
-  /// Appends `op` to the serial command queue and waits for it to run. The
-  /// synchronous read-then-write of `commandQueue` makes the chain order match
-  /// the order the public methods executed their first actor turn.
+  /// Appends `op` to the serial command queue and waits for it to run; the
+  /// ordering guarantee is `chain`'s.
   func enqueue(_ op: @escaping @Sendable () async -> Void) async {
+    await chain(op).value
+  }
+
+  /// Appends `op` to the serial command queue and hands back its handle
+  /// *without* waiting — the half of `enqueue` a caller needs when something
+  /// else must be able to reach the task while it runs. The synchronous
+  /// read-then-write of `commandQueue` is what makes the chain order match the
+  /// order the public methods executed their first actor turn.
+  private func chain(_ op: @escaping @Sendable () async -> Void) -> Task<Void, Never> {
     let previous = commandQueue
     let task = Task {
       await previous?.value
       await op()
     }
     commandQueue = task
-    await task.value
+    return task
   }
 
   public func press() async {
-    await enqueue { await self.performPress() }
+    // Published before awaiting so a cancel can preempt the mic bring-up — see
+    // `inFlightPress`. Cleared on the way out, but only if it's still ours.
+    let task = chain { await self.performPress() }
+    inFlightPress = task
+    await task.value
+    clearInFlightPress(task)
   }
 
   public func release() async {
     await enqueue { await self.performRelease() }
-  }
-
-  private func performPress() async {
-    guard phase.isTerminal else { return }
-    // Refuse the press before any capture begins when the host reports a
-    // blocker (e.g. no API key saved): recording an utterance that can only
-    // fail at transcribe time would discard the user's words after the fact.
-    if let blocker = readinessCheck() {
-      setPhase(.failed(blocker))
-      return
-    }
-    // Times the startup path — the concurrent focus capture + mic.start (and the
-    // detached connection warm-up kicked off below) — up to the moment recording
-    // actually begins. Ended on both the success and failure exits (mic.start is
-    // the only throwing call, and it precedes `.recording`, so the two ends are
-    // mutually exclusive).
-    let pressInterval = Self.signposter.beginInterval(Self.pressSignpostName)
-    do {
-      // Pre-open the dictation connection while the user speaks, so the first dictation after an idle
-      // gap doesn't pay DNS+TCP+TLS on the transcribe hot path (~170 ms cold, measured). Detached
-      // + fire-and-forget: it must never delay recording, and a failure is harmless (the request
-      // just pays setup as before); warming every press is cheap since a hot pool just reuses it.
-      let transcriber = transcriber
-      Task.detached { await transcriber.warmUp() }
-      // Capture the frontmost app (paste target) concurrently with mic startup —
-      // a cheap in-process AppKit read on the main actor. The phase still flips
-      // to .recording only after mic.start succeeds, so the UI never lies about
-      // whether audio is being captured. Lifted out of the actor first (like
-      // `transcriber` above) so the child task calls a Sendable closure rather
-      // than reading isolated state.
-      let captureFrontmost = seams.captureFrontmost
-      async let frontmost = captureFrontmost()
-      try await mic.start()
-      let captured = await frontmost
-      await injector.setTargetApp(captured.flatMap { FocusCapture.runningApp(for: $0) })
-      // Key terms are read synchronously at press (cheap UserDefaults read), so
-      // each dictation observably re-reads Settings edits at press time.
-      let keyTerms = keyTermsProvider()
-      // Session history, read on the actor for the same reason: the capture below
-      // runs off-actor, so what it carries has to be a value taken now.
-      let recentTranscripts = recentDictations.transcriptsOldestFirst
-      // Kick off the AX field-context read now, while the target field still
-      // holds focus, but don't await it here: it's cross-process IPC into the
-      // frontmost app (detached — off the main actor, where it froze the
-      // overlay, and off this actor, where it would wedge release()/cancel()).
-      // runTranscribeInject consumes the result right before transcription,
-      // bounded by `contextWaitBudget` — so a slow AX target delays the
-      // transcript by at most the budget, never the recording indicator.
-      let (stream, contextFeed) = AsyncStream.makeStream(
-        of: TranscriptionContext?.self, bufferingPolicy: .bufferingNewest(1))
-      contextStream = stream
-      // A Dispatch queue, not `Task.detached`: `captureFieldContext` is documented
-      // as making ~6 synchronous cross-process AX round trips, each bounded only by
-      // the 1 s messaging timeout, so against a beachballing frontmost app one
-      // press can *block* a thread for seconds. The Swift cooperative pool is sized
-      // to the core count and does not overcommit, so a few press/cancel cycles
-      // against a hung app could park every cooperative thread and stall the whole
-      // non-main runtime — including this actor. Dispatch overcommits, so a blocked
-      // capture costs a thread instead of the pool. Same reasoning as
-      // `DictationLog`'s serial queue. Concurrent so a hung capture can't delay the
-      // next press's. The body is fully synchronous and captures only Sendable
-      // values, so it needs no task context.
-      let captureFieldContext = seams.captureFieldContext
-      Self.contextQueue.async {
-        let field = captureFieldContext()
-        let context = TranscriptionContext(
-          appName: captured?.processName,
-          windowTitle: field.windowTitle,
-          fieldLabel: field.fieldLabel,
-          priorText: field.priorText,
-          selectedText: field.selectedText,
-          recentTranscripts: recentTranscripts,
-          keyTerms: keyTerms,
-          targetIsSecure: field.isSecure)
-        contextFeed.yield(context.isEmpty ? nil : context)
-        contextFeed.finish()
-      }
-      setPhase(.recording)
-      Self.signposter.endInterval(Self.pressSignpostName, pressInterval)
-      let timeout = maxRecordingSeconds
-      let clock = clock
-      autoReleaseTask = Task { [weak self] in
-        try? await clock.sleep(for: .seconds(timeout))
-        guard let self, !Task.isCancelled else { return }
-        // Enqueues like a manual key-up. If a real release already ran, the
-        // queued performRelease sees a non-.recording phase and drops out.
-        await self.release()
-      }
-    } catch {
-      Self.signposter.endInterval(Self.pressSignpostName, pressInterval)
-      setPhase(.failed(.audioCaptureFailed(underlying: error)))
-    }
   }
 
   private func performRelease() async {
@@ -357,7 +279,7 @@ public actor DictationSession {
 
   /// Consumes a cancel requested while this release held the queue, claiming the
   /// phase for the user's cancel. Returns whether it fired.
-  private func consumeCancelRequest() -> Bool {
+  func consumeCancelRequest() -> Bool {
     guard cancelRequested else { return false }
     cancelRequested = false
     setPhase(.cancelled)
@@ -373,7 +295,10 @@ public actor DictationSession {
   func stopAndCancel() async {
     cancelAutoRelease()
     do {
-      _ = try await mic.stop()
+      // `cancelCapture`, not `stop`: the audio is being thrown away, so neither
+      // preserving it (the Bluetooth tail linger) nor reading it back off disk
+      // is worth delaying the user's cancel for.
+      try await mic.cancelCapture()
     } catch {
       // Stays out of the UI: the user asked for nothing to happen, and a cancel
       // must not flash red (same rule as `performRelease`'s "a cancel wins over

@@ -15,6 +15,10 @@ struct OverlayUIStateTests {
   /// carve-out — stay as their own tests below.
   static let projections: [(phase: PipelinePhase, expected: OverlayUIState)] = [
     (.idle, .idle),
+    // Its own pill state, not `.recording`: `.connecting` exists because capture
+    // hasn't begun, so projecting it onto the recording pill would show the
+    // `● REC` tag and a live meter over a mic that isn't open yet.
+    (.connecting, .connecting),
     (.recording, .recording),
     (.transcribing, .processing),
     // `.injecting` is a *working* phase, so it must not project to `.idle`: the
@@ -71,7 +75,9 @@ struct OverlayUIStateTests {
     // A genuine failure is not a setup state.
     #expect(PipelinePhase.failed(.targetAppLost).setupBlocker == nil)
     // Neither is any non-failed phase.
-    for phase in [PipelinePhase.idle, .recording, .transcribing, .injecting, .pasted, .noTarget] {
+    for phase in [
+      PipelinePhase.idle, .connecting, .recording, .transcribing, .injecting, .pasted, .noTarget,
+    ] {
       #expect(phase.setupBlocker == nil)
     }
     // And the pill projection agrees with the classification.
@@ -98,6 +104,7 @@ struct OverlayUIStateAccessibilityLabelTests {
   /// (echo the carried message verbatim), not a constant, so it keeps its own test.
   static let labels: [(state: OverlayUIState, spoken: String)] = [
     (.idle, "Blurt."),
+    (.connecting, "Connecting to the microphone."),
     (.recording, "Recording."),
     (.processing, "Processing."),
     (.pasted, "Your dictation was pasted."),
@@ -137,6 +144,9 @@ struct OverlayUIStateNoticeDwellTests {
   @Test func steadyStatesHaveNoDwell() {
     // Held for as long as the pipeline is in them — no auto-revert.
     #expect(OverlayUIState.idle.noticeDwellSeconds == nil)
+    // `.connecting` in particular: a dwell would auto-revert the pill to idle
+    // mid-press, dismissing it while the mic was still opening.
+    #expect(OverlayUIState.connecting.noticeDwellSeconds == nil)
     #expect(OverlayUIState.recording.noticeDwellSeconds == nil)
     #expect(OverlayUIState.processing.noticeDwellSeconds == nil)
   }

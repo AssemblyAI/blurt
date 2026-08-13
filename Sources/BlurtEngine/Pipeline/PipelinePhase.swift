@@ -2,6 +2,19 @@ import Foundation
 
 public enum PipelinePhase: Equatable, Sendable {
   case idle
+  /// The press was accepted and the mic is being brought up: `MicCapture`'s
+  /// liveness gate is still waiting for the input route to deliver frames (a
+  /// Bluetooth profile switch takes ~1–2 s). Claimed *before* `mic.start()`, so
+  /// the overlay answers the keypress immediately instead of at whatever moment
+  /// the hardware finishes coming up.
+  ///
+  /// Deliberately distinct from `.recording` rather than folded into it. The
+  /// projections below present it as a warming-up state, never as live capture,
+  /// and the start chime waits for `.recording` — so **the user is never cued to
+  /// speak into a mic that isn't delivering yet**, which is how the first words
+  /// of an utterance went missing on AirPods. Non-terminal, so a second press
+  /// during it is refused like one during `.recording`.
+  case connecting
   case recording
   case transcribing
   case injecting
@@ -26,7 +39,7 @@ public enum PipelinePhase: Equatable, Sendable {
   public var isTerminal: Bool {
     switch self {
     case .idle, .failed, .cancelled, .pasted, .noTarget: true
-    case .recording, .transcribing, .injecting: false
+    case .connecting, .recording, .transcribing, .injecting: false
     }
   }
 
