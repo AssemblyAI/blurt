@@ -52,8 +52,7 @@ public final class AudioRouteMonitor: @unchecked Sendable {
   /// recording it has been written). Dispatch's serial ordering supplies both the
   /// exclusion and the memory barriers a lock would.
   private nonisolated(unsafe) var systemListener: AudioObjectPropertyListenerBlock?
-  private nonisolated(unsafe) var deviceListener:
-    (id: AudioDeviceID, block: AudioObjectPropertyListenerBlock)?
+  private nonisolated(unsafe) var deviceListener: (id: AudioDeviceID, block: AudioObjectPropertyListenerBlock)?
 
   public init() {
     let (stream, continuation) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
@@ -73,22 +72,25 @@ public final class AudioRouteMonitor: @unchecked Sendable {
   /// and nothing else would ever hand it back.
   ///
   /// The `queue.sync` cannot deadlock: the listener blocks hold `self` weakly, so
-  /// `queue` never owns the last reference and this deinit never runs on it.
+  /// `queue` never owns the last reference and this deinit never runs on it. The
+  /// registrations are lifted into locals first so the closure captures only
+  /// those, never a `self` that is already being torn down.
   deinit {
     continuation.finish()
+    let system = systemListener
+    let device = deviceListener
+    let queue = queue
+    systemListener = nil
+    deviceListener = nil
     queue.sync {
-      if let systemListener {
+      if let system {
         var address = Self.defaultOutputDeviceAddress
-        _ = AudioObjectRemovePropertyListenerBlock(
-          AudioObjectID(kAudioObjectSystemObject), &address, queue, systemListener)
+        _ = AudioObjectRemovePropertyListenerBlock(Self.systemObject, &address, queue, system)
       }
-      if let deviceListener {
+      if let device {
         var address = Self.sampleRateAddress
-        _ = AudioObjectRemovePropertyListenerBlock(
-          deviceListener.id, &address, queue, deviceListener.block)
+        _ = AudioObjectRemovePropertyListenerBlock(device.id, &address, queue, device.block)
       }
-      systemListener = nil
-      deviceListener = nil
     }
   }
 
@@ -108,8 +110,7 @@ public final class AudioRouteMonitor: @unchecked Sendable {
       self.retargetFormatListener()
       self.continuation.yield()
     }
-    let status = AudioObjectAddPropertyListenerBlock(
-      AudioObjectID(kAudioObjectSystemObject), &address, queue, block)
+    let status = AudioObjectAddPropertyListenerBlock(Self.systemObject, &address, queue, block)
     guard status == noErr else {
       Self.logger.error("default-output listener failed: \(status)")
       return
@@ -142,7 +143,10 @@ public final class AudioRouteMonitor: @unchecked Sendable {
     deviceListener = (id: device, block: block)
   }
 
-  // MARK: - Property addresses
+  // MARK: - CoreAudio addressing
+
+  /// The system-wide audio object, which owns the default-device properties.
+  private static var systemObject: AudioObjectID { AudioObjectID(kAudioObjectSystemObject) }
 
   // Computed, not stored: each caller needs its own mutable copy to pass `inout`
   // to CoreAudio anyway, so a shared constant would only add a global whose

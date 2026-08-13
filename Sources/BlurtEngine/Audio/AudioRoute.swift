@@ -63,8 +63,8 @@ enum AudioRoute {
       mElement: kAudioObjectPropertyElementMain)
     var deviceID = AudioDeviceID(0)
     var size = UInt32(MemoryLayout<AudioDeviceID>.size)
-    let status = AudioObjectGetPropertyData(
-      AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &deviceID)
+    let system = AudioObjectID(kAudioObjectSystemObject)
+    let status = AudioObjectGetPropertyData(system, &address, 0, nil, &size, &deviceID)
     // 0 is `kAudioObjectUnknown` — "there is no such device" — spelled as the
     // literal so this doesn't depend on how the constant imports.
     guard status == noErr, deviceID != 0 else { return nil }
@@ -104,7 +104,6 @@ enum AudioRoute {
     var size = UInt32(MemoryLayout<UInt32>.size)
     let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &transport)
     guard status == noErr else { return false }
-    return transport == kAudioDeviceTransportTypeBluetooth
-      || transport == kAudioDeviceTransportTypeBluetoothLE
+    return transport == kAudioDeviceTransportTypeBluetooth || transport == kAudioDeviceTransportTypeBluetoothLE
   }
 }
