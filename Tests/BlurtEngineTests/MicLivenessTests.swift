@@ -42,23 +42,53 @@ struct MicLivenessTests {
     #expect(gap == .zero)
   }
 
-  @Test("a clock that advances after a few polls confirms with the elapsed gap")
-  func livenessAfterPolls() async {
+  @Test("the poll interval doubles, so a slow bring-up isn't hundreds of wakeups")
+  func livenessBacksOff() async {
     let clock = TestClock()
     let polls = Mutex(0)
     async let gap = MicLiveness.waitUntilLive(timeout: MicLiveness.bluetoothTimeout, clock: clock) {
-      // Stuck at 0 for the first two checks — the route still switching — then
+      // Stuck at 0 for the first three checks — the route still switching — then
       // the recorder clock starts moving.
       polls.withLock { polls in
         polls += 1
-        return polls < 3 ? 0 : 0.05
+        return polls < 4 ? 0 : 0.05
       }
     }
-    for _ in 1...2 {
-      await clock.waitUntilSleeping(for: MicLiveness.pollInterval)
-      clock.advance(by: MicLiveness.pollInterval)
+    // Each wait is twice the last: 1 ms, 2 ms, 4 ms. Driving the clock by the
+    // exact expected delay is also the assertion — `waitUntilSleeping` matches on
+    // the deadline, so a loop that slept a fixed quantum would hang here rather
+    // than quietly pass.
+    var expected = MicLiveness.initialPollInterval
+    var elapsed = Duration.zero
+    for _ in 1...3 {
+      await clock.waitUntilSleeping(for: expected)
+      clock.advance(by: expected)
+      elapsed += expected
+      expected = min(expected * 2, MicLiveness.maxPollInterval)
     }
-    #expect(await gap == MicLiveness.pollInterval * 2)
+    #expect(await gap == elapsed)
+  }
+
+  @Test("the backoff is capped rather than doubling without limit")
+  func backoffIsCapped() async {
+    // Otherwise a 2.5 s Bluetooth cap would end in multi-second sleeps and
+    // overshoot the deadline it is supposed to respect.
+    let clock = TestClock()
+    let polls = Mutex(0)
+    async let gap = MicLiveness.waitUntilLive(timeout: .seconds(30), clock: clock) {
+      polls.withLock { polls in
+        polls += 1
+        return polls < 12 ? 0 : 0.05
+      }
+    }
+    var expected = MicLiveness.initialPollInterval
+    for _ in 1...11 {
+      await clock.waitUntilSleeping(for: expected)
+      clock.advance(by: expected)
+      expected = min(expected * 2, MicLiveness.maxPollInterval)
+    }
+    #expect(expected == MicLiveness.maxPollInterval)
+    #expect(await gap != nil)
   }
 
   @Test("a clock that never advances times out with nil — the fail-open signal")
@@ -66,11 +96,13 @@ struct MicLivenessTests {
     // nil is what tells `MicCapture` to proceed anyway: a silent or broken mic
     // must degrade to the pre-gate behavior, never brick the press.
     let clock = TestClock()
-    let timeout = MicLiveness.pollInterval * 2
+    let timeout = MicLiveness.initialPollInterval * 3
     async let gap = MicLiveness.waitUntilLive(timeout: timeout, clock: clock) { 0 }
+    var expected = MicLiveness.initialPollInterval
     for _ in 1...2 {
-      await clock.waitUntilSleeping(for: MicLiveness.pollInterval)
-      clock.advance(by: MicLiveness.pollInterval)
+      await clock.waitUntilSleeping(for: expected)
+      clock.advance(by: expected)
+      expected = min(expected * 2, MicLiveness.maxPollInterval)
     }
     #expect(await gap == nil)
   }

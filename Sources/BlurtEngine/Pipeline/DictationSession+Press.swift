@@ -17,11 +17,11 @@ extension DictationSession {
       setPhase(.failed(blocker))
       return
     }
-    // Times the startup path — the concurrent focus capture + mic.start (and the
-    // detached connection warm-up kicked off below) — up to the moment recording
-    // actually begins. Ended on both the success and failure exits (mic.start is
-    // the only throwing call, and it precedes `.recording`, so the two ends are
-    // mutually exclusive).
+    // Times the startup path — the mic bring-up and the context capture that now
+    // runs alongside it (plus the detached connection warm-up) — up to the moment
+    // recording actually begins. Ended on both the success and failure exits
+    // (`mic.start()` is the only throwing call, and it precedes `.recording`, so
+    // the two ends are mutually exclusive).
     let pressInterval = Self.signposter.beginInterval(Self.pressSignpostName)
     // Claim `.connecting` before `mic.start()`: its liveness gate holds until
     // the input route actually delivers frames, which on a Bluetooth route is
@@ -38,16 +38,25 @@ extension DictationSession {
       // just pays setup as before); warming every press is cheap since a hot pool just reuses it.
       let transcriber = transcriber
       Task.detached { await transcriber.warmUp() }
-      // Capture the frontmost app (paste target) concurrently with mic startup —
-      // a cheap in-process AppKit read on the main actor. The phase still flips
-      // to .recording only after mic.start succeeds, so the UI never lies about
-      // whether audio is being captured. Lifted out of the actor first (like
-      // `transcriber` above) so the child task calls a Sendable closure rather
-      // than reading isolated state.
+      // The mic bring-up runs as a child task so the whole context-capture chain
+      // below overlaps it instead of queueing behind it. That ordering used to be
+      // free — `mic.start()` returned in microseconds — but the liveness gate can
+      // now hold it for `MicLiveness.bluetoothTimeout`, and every one of those
+      // milliseconds was dead time the AX read could have used. Sequenced after
+      // it, the read instead landed on the *release* path, where
+      // `runTranscribeInject` waits up to `contextWaitBudget` for it with the
+      // user watching. Now it is almost always finished before the mic is even
+      // live.
+      //
+      // `async let`, so a cancel still reaches it: the child inherits this task's
+      // cancellation, which is what `cancel()`'s `.connecting` branch relies on
+      // to preempt the wait.
+      async let started: Void = mic.start()
+      // Capture the frontmost app (paste target). A cheap in-process AppKit read
+      // on the main actor. Lifted out of the actor first (like `transcriber`
+      // above) so the call is a Sendable closure rather than isolated state.
       let captureFrontmost = seams.captureFrontmost
-      async let frontmost = captureFrontmost()
-      try await mic.start()
-      let captured = await frontmost
+      let captured = await captureFrontmost()
       await injector.setTargetApp(captured.flatMap { FocusCapture.runningApp(for: $0) })
       // Key terms are read synchronously at press (cheap UserDefaults read), so
       // each dictation observably re-reads Settings edits at press time.
@@ -91,6 +100,14 @@ extension DictationSession {
         contextFeed.yield(context.isEmpty ? nil : context)
         contextFeed.finish()
       }
+
+      // Only now join the bring-up. Everything above ran while the mic was
+      // coming up; the phase still flips to `.recording` only once `start()`
+      // returns, so the UI never claims capture that isn't live. The cost of
+      // starting the context work first is that a press whose mic fails has
+      // already set the injector's target and dispatched one AX read — both
+      // harmless and overwritten by the next press.
+      try await started
       // A cancel that arrived during the bring-up, on the path where `start()`
       // still returned normally — the cancel landed in the window between the
       // liveness wait finishing and `.recording` being claimed, so there was

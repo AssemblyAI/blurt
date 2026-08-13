@@ -6,12 +6,23 @@ import Foundation
 /// same split as `MicCapture+Meter`) so the timeout policy and the wait's edge
 /// cases are unit-tested against an injected clock.
 enum MicLiveness {
-  /// How often the recorder's clock is re-checked while waiting. Every press
-  /// whose first read is still 0 pays at least one quantum before `.recording`
-  /// and the start chime, so keep it short — 10 ms, the same cadence as
-  /// `KeyInjector.waitUntilFrontmost`'s poll-until-deadline loop — rather than
-  /// taxing the common (wired/built-in) case to wait for the Bluetooth one.
-  static let pollInterval: Duration = .milliseconds(10)
+  /// The first re-check delay, doubling up to `maxPollInterval`.
+  ///
+  /// Geometric rather than a fixed quantum because the two cases this loop
+  /// serves want opposite things. `AVAudioRecorder.currentTime` is 0 the instant
+  /// `record()` returns, so *every* press sleeps at least once before
+  /// `.recording`, the start chime and the meter — on a wired mic that quantum
+  /// is the entire wait, and it should be as small as possible. A real Bluetooth
+  /// bring-up, meanwhile, runs to seconds, where a small fixed quantum is
+  /// hundreds of timer wakeups each doing a clock read for an answer that hasn't
+  /// changed. Starting at 1 ms and doubling gives the common case a ~1 ms
+  /// acknowledgement and the slow case ~30 wakeups instead of 250, at the cost
+  /// of at most one `maxPollInterval` of detection granularity out of a 1–2 s
+  /// wait.
+  static let initialPollInterval: Duration = .milliseconds(1)
+
+  /// Ceiling for the backoff — the coarsest the loop ever gets.
+  static let maxPollInterval: Duration = .milliseconds(25)
 
   /// Wait cap for Bluetooth inputs: bringing an AirPods mic up means a profile
   /// switch into the mic-capable mode that takes ~1–2 s, and the link drops back
@@ -36,10 +47,11 @@ enum MicLiveness {
     AudioTransport.isBluetooth(transportType) ? bluetoothTimeout : defaultTimeout
   }
 
-  /// Polls `currentTime` every `pollInterval` until it advances past zero. The
-  /// recorder's clock only moves once the input device delivers frames, which is
-  /// what distinguishes "route still switching" (clock stuck at 0) from "user is
-  /// silent" (clock advancing over quiet audio) — a meter level can't.
+  /// Polls `currentTime` on a backoff (see `initialPollInterval`) until it
+  /// advances past zero. The recorder's clock only moves once the input device
+  /// delivers frames, which is what distinguishes "route still switching" (clock
+  /// stuck at 0) from "user is silent" (clock advancing over quiet audio) — a
+  /// meter level can't.
   ///
   /// Returns the elapsed wait once frames flow, or nil when `timeout` (or a task
   /// cancellation) won the race. The caller FAILS OPEN on nil — proceeding
@@ -52,9 +64,11 @@ enum MicLiveness {
   ) async -> Duration? {
     let start = clock.now
     let deadline = start.advanced(by: timeout)
+    var interval = initialPollInterval
     while currentTime() <= 0 {
       guard clock.now < deadline, !Task.isCancelled else { return nil }
-      try? await clock.sleep(for: pollInterval)
+      try? await clock.sleep(for: interval)
+      interval = min(interval * 2, maxPollInterval)
     }
     return start.duration(to: clock.now)
   }

@@ -4,7 +4,7 @@ import Foundation
 // The warm-recorder lifecycle — prepare ahead of the press, validate it still
 // matches the live input, and let it expire — split from `MicCapture.swift` to
 // stay within the lint file-length budget, like `MicCapture+Meter`. Members it
-// reaches (the prepared-recorder state, `logger`, `removeFile`, `makeRecorder`)
+// reaches (`warm`, `preparedGeneration`, `logger`, `removeFile`, `makeRecorder`)
 // are internal rather than private for that reason: `private` is file-scoped and
 // can't cross the split.
 extension MicCapture {
@@ -21,11 +21,11 @@ extension MicCapture {
   /// already held. A scheduled re-warm that fails this has been overtaken —
   /// a press got there first — and has nothing to do.
   ///
-  /// `bringingUpCapture` is the load-bearing term. The two recorder slots are
-  /// both nil across `start()`'s liveness wait, so testing them alone reads a
-  /// live capture as "idle" and prepares a second recorder onto the open input.
+  /// `bringingUpCapture` is the load-bearing term. Both `activeRecorder` and
+  /// `warm` are nil across `start()`'s liveness wait, so testing them alone reads
+  /// a live capture as "idle" and prepares a second recorder onto the open input.
   var canPrepareWarmRecorder: Bool {
-    activeRecorder == nil && preparedRecorder == nil && !bringingUpCapture
+    activeRecorder == nil && warm == nil && !bringingUpCapture
   }
 
   /// The warm recorder if it is still bound to `input`, else nil — discarding
@@ -37,18 +37,15 @@ extension MicCapture {
   /// silence. Paying route activation is the cheaper mistake, so unknown means
   /// discard.
   func takeWarmRecorder(matching input: AudioRoute.InputSnapshot?) -> AVAudioRecorder? {
-    preparedExpiry?.cancel()
-    preparedExpiry = nil
-    guard let recorder = preparedRecorder else { return nil }
-    let warmed = preparedInput
-    preparedRecorder = nil
-    preparedInput = nil
-    guard let warmed, let input, warmed.deviceID == input.deviceID else {
-      Self.removeFile(at: recorder.url)
+    guard let held = warm else { return nil }
+    held.expiry?.cancel()
+    warm = nil
+    guard let warmed = held.input, let input, warmed.deviceID == input.deviceID else {
+      Self.removeFile(at: held.recorder.url)
       Self.logger.info("discarded warm recorder — input device changed since warm-up")
       return nil
     }
-    return recorder
+    return held.recorder
   }
 
   /// Queues a re-warm to run once the current actor turn finishes, so the caller
@@ -69,10 +66,11 @@ extension MicCapture {
   /// as it did before any warm recorder existed.
   func prepareWarmRecorder() {
     do {
-      let recorder = try Self.makeRecorder()
-      preparedRecorder = recorder
-      preparedInput = AudioRoute.currentInput()
       preparedGeneration += 1
+      warm = WarmRecorder(
+        recorder: try Self.makeRecorder(),
+        input: AudioRoute.currentInput(),
+        generation: preparedGeneration)
       armPreparedRecorderExpiry(generation: preparedGeneration)
       Self.logger.info("prepared a warm recorder")
     } catch {
@@ -84,8 +82,8 @@ extension MicCapture {
   /// The ticket is what makes a stale expiry harmless — see
   /// `releasePreparedRecorder(generation:)`.
   func armPreparedRecorderExpiry(generation: Int) {
-    preparedExpiry?.cancel()
-    preparedExpiry = Task { [weak self] in
+    warm?.expiry?.cancel()
+    warm?.expiry = Task { [weak self] in
       try? await Task.sleep(for: Self.preparedRecorderLifetime)
       guard !Task.isCancelled else { return }
       await self?.releasePreparedRecorder(generation: generation)
@@ -103,12 +101,9 @@ extension MicCapture {
   /// out the *live* expiry's handle (leaving the current warm recorder with no
   /// countdown at all) and tear down a recorder prepared a moment ago.
   func releasePreparedRecorder(generation: Int) {
-    guard generation == preparedGeneration else { return }
-    preparedExpiry = nil
-    guard let recorder = preparedRecorder else { return }
-    preparedRecorder = nil
-    preparedInput = nil
-    Self.removeFile(at: recorder.url)
+    guard let held = warm, held.generation == generation else { return }
+    warm = nil
+    Self.removeFile(at: held.recorder.url)
     Self.logger.info("released idle warm recorder")
   }
 }

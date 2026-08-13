@@ -423,8 +423,8 @@ in both directions. So:
   stops the app cueing the user to speak into a dead mic; audio spoken during the switch cannot be
   recovered by anything, because nothing ever receives it. `stopGeneration` covers the one suspension
   this introduces — a teardown landing mid-wait wins, and the recorder is torn down rather than
-  installed. `bringingUpCapture` covers the other consequence: across the wait **both** recorder
-  slots are nil, so the warm-up paths can't infer "no capture in flight" from them (see
+  installed. `bringingUpCapture` covers the other consequence: across the wait both `activeRecorder`
+  and `warm` are nil, so the warm-up paths can't infer "no capture in flight" from them (see
   `canPrepareWarmRecorder`) or they'd open a second recorder onto the live input.
 
   **A cancel preempts the bring-up rather than queueing behind it**, which took two pieces. The

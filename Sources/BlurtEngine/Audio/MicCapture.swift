@@ -27,36 +27,51 @@ public actor MicCapture: MicCaptureProtocol {
   private static let targetSampleRate = Double(SyncSTTLimits.sampleRate)
 
   /// A recorder prepared ahead of the press so `start()` doesn't pay hardware
-  /// route activation on the hot path. Filled by `warmUp()` at launch and
-  /// **re-filled after every capture** (see `scheduleRewarm`), because that cost
-  /// is paid per session, not once: `prepareToRecord()` is where the route is
-  /// resolved and opened, and on a Bluetooth input that means renegotiating the
-  /// link into its mic-capable mode — hundreds of milliseconds, sometimes over a
-  /// second, during which the user has pressed the key and nothing has happened.
-  /// Warming only the first session (the previous behavior) hid that cost for one
-  /// dictation out of every N.
+  /// route activation on the hot path, together with everything that belongs to
+  /// *that* recorder: the input it is bound to, its idle countdown, and the
+  /// ticket that countdown carries.
+  ///
+  /// One optional rather than four parallel fields, so "a recorder without its
+  /// input snapshot" and "an expiry without its recorder" are unrepresentable
+  /// instead of merely never written.
+  ///
+  /// Filled by `warmUp()` at launch and **re-filled after every capture** (see
+  /// `scheduleRewarm`), because that cost is paid per session, not once:
+  /// `prepareToRecord()` is where the route is resolved and opened, and on a
+  /// Bluetooth input that means renegotiating the link into its mic-capable
+  /// mode — hundreds of milliseconds, sometimes over a second, during which the
+  /// user has pressed the key and nothing has happened. Warming only the first
+  /// session (the previous behavior) hid that cost for one dictation out of N.
   ///
   /// Still a *fresh recorder per session*, which is the invariant the
   /// `AVAudioEngine` rewrite bought: the warm recorder is validated against the
   /// live default input before it is used (`takeWarmRecorder`) and discarded
   /// rather than reused when the device has changed underneath it.
-  var preparedRecorder: AVAudioRecorder?
-  /// The default input `preparedRecorder` was built against. `AVAudioRecorder`
-  /// resolves its device once, at `prepareToRecord()`, and never re-resolves —
-  /// so without this a recorder warmed while the built-in mic was default would
-  /// keep recording from it after the user connected their AirPods. See
-  /// `AudioRoute.InputSnapshot.deviceID` for why identity is the device ID.
-  var preparedInput: AudioRoute.InputSnapshot?
-  /// Releases `preparedRecorder` once it has gone unused for
-  /// `preparedRecorderLifetime`. See that constant for why holding one open
-  /// forever is not an option.
-  var preparedExpiry: Task<Void, Never>?
-  /// Bumped for each warm recorder prepared, and carried by that recorder's
-  /// expiry task, so an expiry whose recorder has since been consumed or
-  /// replaced can recognise itself as stale and do nothing. See
+  var warm: WarmRecorder?
+
+  /// Bumped for each warm recorder prepared, so an expiry whose recorder has
+  /// since been consumed or replaced can recognise itself as stale. See
   /// `releasePreparedRecorder(generation:)` for why cancelling the task isn't
   /// sufficient on its own.
   var preparedGeneration = 0
+
+  /// A prepared-but-not-started recorder and the state that only makes sense
+  /// alongside it.
+  struct WarmRecorder {
+    let recorder: AVAudioRecorder
+    /// The default input it was built against. `AVAudioRecorder` resolves its
+    /// device once, at `prepareToRecord()`, and never re-resolves — so without
+    /// this a recorder warmed while the built-in mic was default would keep
+    /// recording from it after the user connected their AirPods. See
+    /// `AudioRoute.InputSnapshot.deviceID` for why identity is the device ID.
+    let input: AudioRoute.InputSnapshot?
+    /// Releases this recorder once it has gone unused for
+    /// `preparedRecorderLifetime`. See that constant for why holding one open
+    /// forever is not an option.
+    var expiry: Task<Void, Never>? = nil
+    /// The ticket `expiry` carries, so a stale one can identify itself.
+    let generation: Int
+  }
 
   /// The recorder for the in-flight session; nil between `stop()` and `start()`.
   var activeRecorder: AVAudioRecorder?
@@ -83,12 +98,11 @@ public actor MicCapture: MicCaptureProtocol {
   /// Needed because during that window **both** recorder slots are nil:
   /// `activeRecorder` isn't installed until the wait returns (the recorder stays
   /// confined to `start()` so nothing can touch it while the poll loop reads its
-  /// clock off-actor), and the warm slot was consumed on the way in. Without
-  /// this, `warmUp()` (which every re-warm goes through) reads those two nils as
-  /// "no capture in flight"
-  /// and prepare a *second* recorder onto the already-live input — which is very
-  /// reachable, since `stop()` schedules a re-warm that can land inside the next
-  /// press's bring-up.
+  /// clock off-actor), and `warm` was consumed on the way in. Without this,
+  /// `warmUp()` — which every re-warm goes through — reads those two nils as "no
+  /// capture in flight" and prepares a *second* recorder onto the already-live
+  /// input, which is very reachable since `stop()` schedules a re-warm that can
+  /// land inside the next press's bring-up.
   var bringingUpCapture = false
 
   /// Polls the active recorder's meter and feeds `levels` while recording.
