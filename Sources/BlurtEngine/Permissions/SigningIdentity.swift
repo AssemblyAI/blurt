@@ -10,10 +10,10 @@ public enum SigningIdentity {
   private static let log = Logger(subsystem: BlurtIdentity.subsystem, category: "SigningIdentity")
 
   /// Namespace marker on a recorded identity. Every build before this one recorded
-  /// a bare Team ID (10 alphanumerics, no colon) or a `cdhash:`-prefixed hash, so
-  /// the prefix keeps the three shapes disjoint — a marker left by an older build
-  /// can never accidentally compare equal to a requirement — and makes a dumped
-  /// `defaults read` value self-describing.
+  /// a bare Team ID (10 alphanumerics, no colon), so the prefix keeps the two
+  /// shapes disjoint — a marker left by an older build can never accidentally
+  /// compare equal to a requirement — and makes a dumped `defaults read` value
+  /// self-describing.
   static let requirementPrefix = "dr:"
 
   /// Whatever an Accessibility grant taken *right now* would be pinned to: this
@@ -22,7 +22,7 @@ public enum SigningIdentity {
   /// The DR is what `tccd` stores alongside a grant and re-checks the running
   /// binary against, so it is the identity — not a proxy for it. That distinction
   /// is the whole bug this used to have: it recorded the *Team ID*, and the two
-  /// ways Blurt is signed carry the same team while pinning different
+  /// ways Blurt is team-signed carry the same team while pinning different
   /// requirements.
   ///
   /// - **Dev builds** (`Apple Development`, re-signed by the `project.yml`
@@ -32,37 +32,29 @@ public enum SigningIdentity {
   ///   why the explicit requirement is stamped in the first place.
   /// - **Releases** (`Developer ID`, `scripts/release-build.sh`) carry codesign's
   ///   *default* requirement, which additionally pins the leaf cert's Common Name
-  ///   and the Developer ID marker OIDs. A dev build satisfies none of those.
-  ///   Same team, different requirement — so installing a dev build over a release
-  ///   orphans the release's Accessibility grant, and recording the Team ID made
-  ///   that read as "unchanged" and skipped the reset. The Blurt row stayed
-  ///   switched on in System Settings while `AXIsProcessTrusted()` kept saying no,
-  ///   and the wizard's Accessibility step could never be satisfied.
-  /// - **Ad-hoc** builds (`CODE_SIGN_IDENTITY="-"`, the per-PR `dev-build`
-  ///   artifact) have no team and no explicit requirement; codesign's default for
-  ///   ad-hoc code pins the cdhash, so every build is a new requirement and a
-  ///   reviewer installing a second dev build needs the same reset.
+  ///   and the Developer ID marker OIDs — so re-issuing that certificate moves the
+  ///   requirement and orphans every installed user's grant.
   ///
-  /// `nil` for code carrying no signature at all — and, when `includingAdHoc` is
-  /// false, for any ad-hoc build. Both are the signal the migration uses to no-op.
-  ///
-  /// - Parameter includingAdHoc: whether a team-less (ad-hoc) signature counts as
-  ///   an identity. The UI-test build passes `false`: `uitest.sh` and `check.sh`
-  ///   sign the app ad-hoc under the shipping bundle id, so honouring that
-  ///   requirement there would make every local test run reset the developer's
-  ///   real Blurt grant.
-  public static func current(includingAdHoc: Bool) -> String? {
+  /// `nil` for **unsigned or ad-hoc code**, which the migration reads as "no
+  /// action". Ad-hoc signatures pin a cdhash, so honouring them would mean every
+  /// `uitest.sh` / `check.sh` run — each one a throwaway ad-hoc binary under the
+  /// debug bundle id — resetting the developer's own Blurt Dev grant. Refusing
+  /// them here makes that structural rather than a flag the call site has to
+  /// remember to pass. The cost is a contributor who builds ad-hoc *and* copies
+  /// the result to /Applications by hand: they re-grant per rebuild, and
+  /// `tccutil reset Accessibility dev.alex.blurt.dev` is the way out.
+  public static func current() -> String? {
     guard let code = staticCodeForSelf() else { return nil }
     // A team identifier is present exactly when the signature isn't ad-hoc, so it
-    // is the probe for the carve-out above — never the recorded value.
-    guard includingAdHoc || teamIdentifier(of: code) != nil else { return nil }
+    // is the probe for that carve-out — never the recorded value.
+    guard teamIdentifier(of: code) != nil else { return nil }
     guard let requirement = designatedRequirement(of: code) else { return nil }
     return requirementPrefix + requirement
   }
 
   /// The on-disk code object backing this process, or `nil` when any step of the
   /// `Security` handshake fails.
-  private static func staticCodeForSelf() -> SecStaticCode? {
+  static func staticCodeForSelf() -> SecStaticCode? {
     var code: SecCode?
     guard SecCodeCopySelf(SecCSFlags(), &code) == errSecSuccess, let code else { return nil }
     var staticCode: SecStaticCode?
@@ -87,7 +79,12 @@ public enum SigningIdentity {
   /// dictionary: that dictionary is `[String: Any]`, and narrowing an `Any` back
   /// to a CoreFoundation type needs a cast the compiler flags as always-succeeding
   /// (or a banned force cast). This spelling is typed end to end.
-  private static func designatedRequirement(of code: SecStaticCode) -> String? {
+  ///
+  /// Takes the code object rather than reading `self` so the tests can point it at
+  /// a binary whose requirement is known — the whole `Security` handshake is the
+  /// one part of this file that isn't pure logic, and the test host's own
+  /// signature varies by how the suite was launched.
+  static func designatedRequirement(of code: SecStaticCode) -> String? {
     var requirement: SecRequirement?
     guard SecCodeCopyDesignatedRequirement(code, SecCSFlags(), &requirement) == errSecSuccess,
       let requirement

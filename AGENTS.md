@@ -81,8 +81,7 @@ evals/dictation-prompt/      offline DSPy harness for tuning the dictation API's
 evals/ruff.toml              ruff config for the above — the repo's only Python config
 site/                        the GitHub Pages site (html/css, sitemap) — formatted by prettier and
                              checked for deployability by scripts/check-site.sh
-.github/workflows/           check.yml (the gate + per-PR dev build, macos-26),
-                             pr-dev-build.yml (links it on the PR),
+.github/workflows/           check.yml (the gate, macos-26),
                              release-bump.yml (version bump) + release.yml (sign +
                              publish), codeql.yml, pages.yml
 .claude/                     Claude Code hooks, skills, subagents (see CLAUDE.md)
@@ -194,22 +193,21 @@ check** — both can only go red where `check` would too:
 
 - **`compile`** — `swift build --build-tests -Xswiftc -warnings-as-errors` and nothing else. A test
   target that doesn't build is the most common way a PR here goes red, and this reports it in ~2
-  minutes instead of ~11. `dev-build` waits on it, so a PR that doesn't compile doesn't also pay for
-  an app build to discover that.
+  minutes instead of ~11.
 - **`format-patch`** — runs `swift-format` for real and publishes the resulting `git diff` as a job
   summary and a `swift-format-patch` artifact. `check` can only tell you _that_ a file is
   misformatted; this hands you the exact reflow, which matters when there's no formatter on the
   machine you're editing from. Advisory and read-only: it never fails the build and never pushes.
 
-The same workflow's `dev-build` job
-builds an ad-hoc-signed `Debug-Local` app for every code PR and uploads it as an artifact;
-`pr-dev-build.yml` then comments the download link on the PR (a `workflow_run` job, because a
-fork's `pull_request` token is read-only and can't comment). It is **not** part of the required
-gate — it compiles the same sources `check` does, so it is never the only signal. An ad-hoc
-signature is a hash of the binary, so each dev build is a distinct app to `tccd` and the reviewer
-re-grants Accessibility once per build; `runAccessibilityGrantMigration` (see
-[Permissions](#the-accessibility-grant-and-signing-identity)) is what keeps that from stranding
-them on the wizard's Accessibility step.
+There is deliberately **no per-PR installable build**. One existed (a `dev-build` job plus
+`pr-dev-build.yml` posting the artifact link) and was removed: a hosted PR runner can reach no
+signing key — the Apple Development cert is per-developer, and the Developer ID key is scoped to
+`release.yml`'s protected environment — so the artifact was ad-hoc signed, which pins the cdhash
+into its designated requirement and makes every rebuild a different app to `tccd`. Reviewers hit a
+Blurt row switched on and still denied, and the machinery to work around it (a self-heal path, a
+`tccutil` line in the PR comment, a fork-only `workflow_run` job to post it at all) outweighed what
+it bought. Don't reintroduce it without solving the signing problem first. Reviewers build locally:
+`scripts/dev-build.sh`.
 
 Reporting rules: exit 0 with no `error:` lines is green. Anything else is not — quote the failing
 step verbatim, don't soften it, fix it, then re-run the **full** script (a `swift test --filter` pass
@@ -225,11 +223,20 @@ xcodebuild -project App/Blurt/Blurt.xcodeproj \
 ```
 
 The xcodebuild post-build script (`App/Blurt/project.yml`) copies the bundle to
-`/Applications/Blurt.app` (or `~/Applications/` fallback) and re-signs it with the **Apple
+`/Applications/Blurt Dev.app` (or `~/Applications/` fallback) and re-signs it with the **Apple
 Development** cert (login keychain) under a team-based designated requirement — never the Developer
 ID release key, which lives in a locked keychain used only by releases. This is deliberate: TCC
 refuses to register apps living in DerivedData or `/tmp`, so Accessibility/Input-Monitoring toggles
 never appear unless the app has a stable install path. **Don't bypass it.**
+
+**Debug builds are a separate app.** Every debug configuration builds as `dev.alex.blurt.dev` /
+"Blurt Dev"; only `Release` is `dev.alex.blurt` / "Blurt" (`PRODUCT_BUNDLE_IDENTIFIER` and
+`BLURT_APP_NAME` in `project.yml`, which also feed `CFBundleName`/`CFBundleDisplayName` and the
+install path). `PRODUCT_NAME` stays `Blurt` in both — it names the executable and the product in
+`BUILT_PRODUCTS_DIR`, which every script is written against. The split is what stops a dev build
+from inheriting a released Blurt's TCC rows while failing the requirement stored with them, and it
+means both can be installed and run side by side. The debug id is the _default_ and `Release` opts
+in to the shipping one, so a configuration added later can't accidentally ship under it.
 
 `scripts/dev-build.sh` wraps that for everyday local dev — it runs the **signed** `Debug-Local` build
 (so the install step actually fires, unlike `check.sh`, which disables codesigning for CI) and pipes
@@ -243,46 +250,42 @@ TCC pins an Accessibility grant to the app's **designated requirement**, and re-
 binary against the requirement it stored. When what that requirement pins changes, the grant is
 orphaned in the worst possible way: the Blurt row stays in System Settings, switched on, while
 `AXIsProcessTrusted()` keeps returning false — so the wizard's Accessibility step can never be
-satisfied and toggling the row does nothing. Three things move it:
+satisfied and toggling the row does nothing. Two defences, in this order:
 
-- **The certificate kind.** A release (`Developer ID`, `release-build.sh`) carries codesign's
-  _default_ requirement, which pins the leaf cert's Common Name and the Developer ID marker OIDs. A
-  dev build (`Apple Development`) satisfies none of those, so **installing `dev-build.sh` over a
-  release orphans the release's grant** — same bundle id, same install path, same signing team, and
-  still a different requirement. This is the everyday case, and it is not fixable at signing time
-  from this side: the requirement a release already handed to `tccd` was written when that release
-  was signed.
-- **The leaf cert.** Handled at signing time on the dev side: the post-build script above pins an
-  explicit team-based requirement (`leaf[subject.OU]`) instead of codesign's default, so the grant
-  survives the yearly Apple Development cert rotation. Releases keep the default requirement, so a
-  rotated Developer ID cert does move it.
-- **The cdhash.** Ad-hoc signatures (`CODE_SIGN_IDENTITY="-"` — the per-PR `dev-build` artifact)
-  have no team to pin, so codesign's default requirement pins the code hash and every rebuild is a
-  new app. Nothing at signing time can fix this: an identity stable across ad-hoc builds would have
-  to be one any binary could claim, and that is not a requirement worth writing into the TCC row of
-  an app that injects keystrokes.
+- **Separate bundle ids** stop the everyday case. A release carries codesign's _default_ Developer
+  ID requirement (leaf CN + marker OIDs) and a dev build an explicit team-based one, so the two
+  never satisfy each other — sharing a bundle id meant installing `dev-build.sh` over a release
+  inherited its rows and failed its requirement. `dev.alex.blurt` vs `dev.alex.blurt.dev` makes them
+  two apps with two sets of rows, and neither can strand the other.
+- **A launch-time self-heal** covers what a split id can't: a **re-issued Developer ID certificate**
+  ([`RELEASE.md`](./RELEASE.md)'s rotation procedure) changes the leaf that a release's default
+  requirement names, orphaning the grant of every installed user at once. Nothing at signing time
+  can pre-empt that — the requirement a shipped copy handed to `tccd` was written before the
+  rotation existed. (The dev side is already immune: the post-build script pins
+  `leaf[subject.OU]`, which survives the yearly Apple Development cert rotation.)
 
-So the app self-heals at launch instead. `AppDelegate.runAccessibilityGrantMigration` compares
-`SigningIdentity.current(includingAdHoc:)` — the app's **designated requirement**, serialized and
-namespaced (`dr:<requirement>`) — against the identity recorded in `accessibility.lastSigningTeam`;
-if it changed and the app is untrusted, it runs `tccutil reset Accessibility` once so the wizard's
-normal grant flow captures a matching requirement, and records the new identity only when the reset
-succeeded. `SigningIdentityMigration` is the pure decision; `SigningIdentity` is the thin
-`Security`/`tccutil` adapter.
+`AppDelegate.runAccessibilityGrantMigration` is the self-heal. It compares `SigningIdentity.current()`
+— the app's **designated requirement**, serialized and namespaced (`dr:<requirement>`) — against the
+identity recorded in `accessibility.lastSigningTeam`; if it changed and the app is untrusted, it runs
+`tccutil reset Accessibility` on **the running bundle id** (never `BlurtIdentity.subsystem`, which
+would have a dev build clearing the release's grant) so the wizard's normal grant flow captures a
+matching requirement, and records the new identity only when the reset succeeded.
+`SigningIdentityMigration` is the pure decision; `SigningIdentity` is the thin `Security`/`tccutil`
+adapter.
 
 Recording the requirement itself, rather than a proxy for it, is the point: this used to record the
-**Team ID**, which is stable across exactly the case above (release and dev builds share team
-`B2VQF7Q2QY`), so switching to a dev build read as "unchanged", no reset ran, and the wizard's
-Accessibility step became unpassable — the bug the `installingALocalDevBuildOverAReleaseResets` case
-pins. The requirement string moves when and only when `tccd`'s stored copy stops matching.
+**Team ID**, which is stable across exactly the collision above (release and dev builds share team
+`B2VQF7Q2QY`), so switching builds read as "unchanged", no reset ran, and the wizard's Accessibility
+step became unpassable. The requirement string moves when and only when `tccd`'s stored copy stops
+matching.
 
-The UI-test build opts out by passing `includingAdHoc: false` (`AppDelegate.adHocCountsAsIdentity`,
-the one `#if UITEST_HOOKS` involved): `uitest.sh` and `check.sh` sign ad-hoc under the shipping
-bundle id, so honouring an ad-hoc requirement there would make every local test run wipe the
-developer's real Blurt grant. (The team identifier is the probe for "is this ad-hoc" — present
-exactly when the signature isn't — never the value recorded.) Keep that a **parameter**, not a `#if` around the call — periphery scans the app's
-Debug scheme, where `UITEST_HOOKS` is on, so a compiled-out call reads as dead engine code and
-fails `check.sh`.
+`SigningIdentity.current()` answers **nil for ad-hoc and unsigned code**, which the migration reads
+as "no action". Ad-hoc signatures pin a cdhash, so honouring them would have every `uitest.sh` /
+`check.sh` run — each a throwaway ad-hoc binary under the debug bundle id — wiping the developer's
+own Blurt Dev grant. This used to be an `includingAdHoc:` parameter the call site had to pass
+correctly (`false` under `#if UITEST_HOOKS`); it is a property of the function now, which is both
+one fewer flag and one fewer way to get it wrong. The team identifier is the probe for "is this
+ad-hoc" — present exactly when the signature isn't — never the value recorded.
 
 ### Working without a macOS toolchain (remote / Linux sandboxes)
 

@@ -147,14 +147,16 @@ Blurt is MIT-licensed and needs only Xcode and Homebrew to build:
 
 ```bash
 scripts/bootstrap.sh   # install the local toolchain
-scripts/dev-build.sh   # build + install Blurt to /Applications
+scripts/dev-build.sh   # build + install "Blurt Dev" to /Applications
 scripts/check.sh       # full repo health check — the same script CI runs
 swift test             # engine unit tests only
 ```
 
 `dev-build.sh` installs to `/Applications` on purpose: macOS won't register
 Accessibility/Input-Monitoring permissions for apps living in build
-directories, so the app needs a stable install path to be usable at all.
+directories, so the app needs a stable install path to be usable at all. It
+installs as `Blurt Dev.app` under its own bundle id, so it sits beside a
+released Blurt instead of replacing it.
 [`CONTRIBUTING.md`](./CONTRIBUTING.md) has the full local setup — prerequisites,
 what each script does, signing — and how changes land;
 [`AGENTS.md`](./AGENTS.md) has the architecture notes.

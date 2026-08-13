@@ -36,7 +36,7 @@ git clone https://github.com/AssemblyAI/blurt.git
 cd blurt
 scripts/bootstrap.sh        # install the toolchain from Brewfile
 scripts/dev-build.sh        # build Blurt and install it to /Applications
-open -a Blurt
+open -a "Blurt Dev"
 ```
 
 That's the whole setup. Everything else is one of these scripts:
@@ -44,7 +44,7 @@ That's the whole setup. Everything else is one of these scripts:
 | Script                        | What it does                                                                                                   |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `scripts/bootstrap.sh`        | `brew bundle` from `Brewfile` — xcodegen, swiftlint, prettier, shellcheck, markdownlint, periphery, xcbeautify |
-| `scripts/dev-build.sh`        | Clean signed `Debug-Local` build, installed to `/Applications`. The everyday loop.                             |
+| `scripts/dev-build.sh`        | Clean signed `Debug-Local` build, installed as `/Applications/Blurt Dev.app`. The everyday loop.               |
 | `scripts/check.sh`            | The full health check CI runs. The source of truth for "is this green?"                                        |
 | `scripts/check.sh --portable` | Just the platform-independent subset (docs, site, scripts, workflows) — the part that runs off a Mac           |
 | `swift test`                  | Engine unit tests only (Swift Testing), no app build                                                           |
@@ -56,6 +56,20 @@ Accessibility and Input-Monitoring grants for an app living in a build
 directory, so Blurt is unusable from DerivedData. It builds the `Debug-Local`
 configuration — a debug build with the UI-test scaffolding compiled out, so it's
 the real app.
+
+### Dev builds are a separate app
+
+Every debug configuration builds under the bundle id `dev.alex.blurt.dev` and
+installs as **`/Applications/Blurt Dev.app`**; only `Release` is `dev.alex.blurt`
+/ `Blurt.app`. So a dev build sits beside a released Blurt rather than replacing
+it — you can run either, and each has its own Privacy & Security rows, its own
+settings, and its own Dock icon. Grant "Blurt Dev" microphone and Accessibility
+once; they stick across rebuilds.
+
+They do share the Keychain item holding your AssemblyAI key, so you won't be
+asked for it twice (macOS may ask once whether the other app may read it).
+
+`scripts/reset-install.sh` wipes both.
 
 ### A note on signing
 
@@ -76,13 +90,8 @@ xcodebuild -project App/Blurt/Blurt.xcodeproj -scheme Blurt \
 That skips the `/Applications` install, and an ad-hoc signature changes on every
 build — macOS keys the Accessibility grant to the signature, so you'd re-grant
 permissions after each rebuild. (Blurt notices the signature changed and clears
-the orphaned grant at launch; without that the Blurt row stays switched on in
-System Settings while the app keeps reporting it as denied.)
-
-The same self-heal covers the everyday case: installing a dev build over a
-released Blurt re-grants microphone and Accessibility, because the release and
-your Apple Development cert pin different code requirements even though the
-bundle id, install path and signing team all match. Fine for checking
+the orphaned grant at launch; without that the Blurt Dev row stays switched on in
+System Settings while the app keeps reporting it as denied.) Fine for checking
 that a change compiles and launches; `dev-build.sh` is the better daily loop.
 
 ### After editing `App/Blurt/project.yml`

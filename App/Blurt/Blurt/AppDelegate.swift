@@ -203,36 +203,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// identity only on a successful reset, so a failed reset retries next launch
   /// instead of being masked.
   ///
-  /// Covers every way the requirement moves: installing `scripts/dev-build.sh`
-  /// over a release (same bundle id, same team, different certificate kind — so
-  /// the two pin different requirements), a cdhash change between two
-  /// ad-hoc-signed dev builds (the per-PR artifact, where the requirement is
-  /// rebuilt from scratch every time), and a rotated or re-issued release cert.
+  /// What still moves the requirement, now that debug builds carry their own
+  /// bundle id and so can't inherit a release's rows: a **re-issued Developer ID
+  /// certificate**, which changes the leaf a release's default requirement names
+  /// and orphans every installed user's grant at once. Signing can't pre-empt it —
+  /// the requirement a shipped copy handed to `tccd` predates the rotation.
   private func runAccessibilityGrantMigration() {
     let key = SigningIdentityMigration.lastSigningIdentityDefaultsKey
     let defaults = UserDefaults.standard
     let persist = SigningIdentityMigration.run(
       lastIdentity: defaults.string(forKey: key),
-      currentIdentity: SigningIdentity.current(includingAdHoc: Self.adHocCountsAsIdentity),
+      currentIdentity: SigningIdentity.current(),
       isTrusted: AXIsProcessTrusted(),
-      reset: { SigningIdentity.resetAccessibilityGrant(bundleID: BlurtIdentity.subsystem) }
+      // The *running* bundle id, not `BlurtIdentity.subsystem`: debug builds ship
+      // under `dev.alex.blurt.dev` (see `project.yml`), and resetting the constant
+      // would clear the released Blurt's grant from a dev build — the one app
+      // whose permissions this process has no business touching. The constant is
+      // the fallback for the unreachable case of a bundle with no id at all.
+      reset: {
+        SigningIdentity.resetAccessibilityGrant(
+          bundleID: Bundle.main.bundleIdentifier ?? BlurtIdentity.subsystem)
+      }
     )
     if let persist { defaults.set(persist, forKey: key) }
   }
-
-  /// Whether an ad-hoc build's cdhash counts as this app's signing identity.
-  ///
-  /// False for the UI-test build only: `uitest.sh` and `check.sh` sign the app
-  /// ad-hoc under the shipping bundle id, so honouring a cdhash there would make
-  /// every local test run reset the developer's real Blurt grant — the hooks build
-  /// is the one place that regularly launches a throwaway ad-hoc binary. Xcode's
-  /// Debug builds are team-signed and migrate normally either way, and
-  /// `Debug-Local` — both `dev-build.sh` and the PR artifact — is always true.
-  #if UITEST_HOOKS
-    private static let adHocCountsAsIdentity = false
-  #else
-    private static let adHocCountsAsIdentity = true
-  #endif
 
   /// Builds the setup wizard's controller. Created before the run loop presents
   /// any scene, so `MainWindowRoot` always finds it; on a configured launch its

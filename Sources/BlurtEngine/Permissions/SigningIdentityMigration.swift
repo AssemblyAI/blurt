@@ -5,17 +5,18 @@
 /// describes the old binary.
 ///
 /// The identity is therefore the designated requirement itself, serialized —
-/// `SigningIdentity.current(includingAdHoc:)`. Anything coarser is a proxy that
-/// eventually disagrees with `tccd`: recording the *Team ID* did, because a
-/// release (Developer ID, codesign's default requirement) and a local dev build
-/// (Apple Development, an explicit team-based requirement) share a team while
-/// pinning different requirements, so switching between them read as "unchanged"
-/// and stranded the user on the wizard's Accessibility step. The requirement
-/// string covers every mover in one comparison: the certificate kind, the leaf
-/// cert a default requirement names, and the cdhash an ad-hoc build pins (the
-/// per-PR dev build, where every rebuild is a new app to `tccd`) — while staying
-/// byte-identical across the cert rotation that an explicit team-based
-/// requirement is stamped to survive.
+/// `SigningIdentity.current()`. Anything coarser is a proxy that eventually
+/// disagrees with `tccd`: recording the *Team ID* did, because a release
+/// (Developer ID, codesign's default requirement) and a dev build (Apple
+/// Development, an explicit team-based requirement) share a team while pinning
+/// different requirements, so installing one over the other read as "unchanged"
+/// and stranded the user on the wizard's Accessibility step. Debug builds now
+/// carry their own bundle id, so that particular collision can't recur — but the
+/// requirement is still what `tccd` compares, and it still moves without warning
+/// when the **release** certificate is re-issued (`RELEASE.md`'s rotation
+/// procedure), orphaning the grant of every installed user at once. That is the
+/// case this exists for now, and nothing at signing time can pre-empt it: the
+/// requirement a shipped copy handed to `tccd` was written before the rotation.
 ///
 /// Pure and fully injectable: the caller supplies the persisted identity, the
 /// current identity, the live trust state, and the reset side effect.
