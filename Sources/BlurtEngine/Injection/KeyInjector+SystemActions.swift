@@ -41,17 +41,32 @@ extension KeyInjector {
     AXIsProcessTrusted()
   }
 
-  /// Posts Cmd-V. Returns `false` if the events couldn't be built. The real side
-  /// effect (a keystroke into the focused app) is why this is the injectable seam
-  /// tests replace.
-  static func postCmdV() -> Bool {
+  /// The Cmd-V key-down/key-up pair, or `nil` when CoreGraphics refuses to build
+  /// them. Split from `postCmdV` because only the *posting* is untestable: building
+  /// an event needs no Accessibility trust, while posting one sends a live
+  /// keystroke into whatever app has focus — not something `swift test` may do to
+  /// the machine it runs on. So the part carrying an actual invariant (the ⌘ flag
+  /// on both events and the `kVK_ANSI_V` keycode, which is what makes the paste a
+  /// paste) is asserted in `KeyInjectorSystemActionsTests`, and only the two
+  /// `.post` calls below stay covered by running the app.
+  static func cmdVEvents() -> (down: CGEvent, up: CGEvent)? {
     let vKey: CGKeyCode = 0x09  // kVK_ANSI_V
     guard let source = CGEventSource(stateID: .combinedSessionState),
       let down = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: true),
       let up = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: false)
-    else { return false }
+    else { return nil }
+    // Set on both: a key-up carrying no ⌘ reads as the modifier having been
+    // released mid-chord, which some apps treat as cancelling the shortcut.
     down.flags = .maskCommand
     up.flags = .maskCommand
+    return (down, up)
+  }
+
+  /// Posts Cmd-V. Returns `false` if the events couldn't be built. The real side
+  /// effect (a keystroke into the focused app) is why this is the injectable seam
+  /// tests replace.
+  static func postCmdV() -> Bool {
+    guard let (down, up) = cmdVEvents() else { return false }
     // Post to the annotated session tap rather than the HID tap: the session tap
     // honors exactly the flags set above instead of OR-ing in the live hardware
     // modifier state, so a still-held hotkey modifier can't corrupt Cmd-V into a

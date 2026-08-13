@@ -45,7 +45,16 @@ extension FocusCapture {
   /// genuinely no editable focus bundles no such framework and correctly falls
   /// back to copy.
   static func isElectronApp(_ app: NSRunningApplication?) -> Bool {
-    guard let bundleURL = app?.bundleURL else { return false }
+    isElectronBundle(app?.bundleURL)
+  }
+
+  /// Pure decision behind `isElectronApp`: does the bundle at `bundleURL` ship the
+  /// Electron framework? Split from the `NSRunningApplication` wrapper for the same
+  /// reason as `isBrowserBundleID` — the detection is then unit-testable against a
+  /// fixture bundle, instead of requiring an Electron app to be installed *and*
+  /// running on the machine under test.
+  static func isElectronBundle(_ bundleURL: URL?) -> Bool {
+    guard let bundleURL else { return false }
     let electronFramework = bundleURL.appendingPathComponent(
       "Contents/Frameworks/Electron Framework.framework")
     return FileManager.default.fileExists(atPath: electronFramework.path)
