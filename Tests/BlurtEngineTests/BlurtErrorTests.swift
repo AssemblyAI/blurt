@@ -63,6 +63,22 @@ struct BlurtErrorTests {
     #expect(BlurtError.sttFailed(underlying: a) == .sttFailed(underlying: sameIdentityOtherMessage))
   }
 
+  @Test("wrapped equality requires both domain and code to match, not either")
+  func wrappedEqualityNeedsBothFields() {
+    // `wrappedEquality` above varies domain *and* code together, so it cannot tell
+    // `domain == … && code == …` from `||`: with `||` its unequal pair is still
+    // `false || false`. Varying one field at a time is what actually pins the
+    // conjunction. (Found by `scripts/mutate.sh` — the line was fully covered, and
+    // the mutation to `||` survived the whole suite.)
+    //
+    // Worth pinning rather than shrugging at: the engine tests assert error identity
+    // *through* this `==`, so a too-loose one wouldn't fail here — it would quietly
+    // weaken every `#expect(phase == .failed(.sttFailed(…)))` elsewhere.
+    let base = NSError(domain: "X", code: 1)
+    #expect(BlurtError.sttFailed(underlying: base) != .sttFailed(underlying: NSError(domain: "X", code: 2)))
+    #expect(BlurtError.sttFailed(underlying: base) != .sttFailed(underlying: NSError(domain: "Y", code: 1)))
+  }
+
   @Test("wrapping cases of different kinds never compare equal")
   func crossKindInequality() {
     let e = NSError(domain: "X", code: 1, userInfo: [NSLocalizedDescriptionKey: "same"])

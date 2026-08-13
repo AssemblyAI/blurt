@@ -63,6 +63,16 @@ struct APIKeyDisplayTests {
     }
   }
 
+  @Test("the not-connected row reads as prose, not as an identifier")
+  func notConnectedIsProse() {
+    // Every other `!rendersIdentifier` assertion here is about `.connected(nil)` — a
+    // short key that gets masked to bare "Connected" — so the `.notConnected` arm was
+    // unpinned, and flipping it to `true` survived the whole suite
+    // (`scripts/mutate.sh`). Monospacing "Not connected" would style a sentence as a
+    // value.
+    #expect(!APIKeyDisplay.notConnected.rendersIdentifier)
+  }
+
   @Test("the threshold keeps at least half of any masked key hidden")
   func thresholdIsTwiceTheTail() {
     #expect(APIKeyDisplay.minimumLengthToMask == APIKeyDisplay.revealedTailLength * 2)

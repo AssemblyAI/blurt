@@ -95,7 +95,7 @@ hides every lint finding behind it — expect to fix a batch, not a queue.
    Steps 1–5 are the `--portable` subset. Everything below needs a macOS toolchain:
 
 6. `swift test` with `-warnings-as-errors`
-7. engine line-coverage gate (≥80%, `Tests/` excluded — see `MIN_COVERAGE`)
+7. engine line-coverage gate (≥88%, `Tests/` excluded — see `MIN_COVERAGE`)
 8. ThreadSanitizer + AddressSanitizer test passes
 9. xcodegen drift check (regenerating must not change the committed `.pbxproj`)
 10. codesign-skipped app build (warnings-as-errors)

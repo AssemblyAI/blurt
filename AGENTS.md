@@ -169,7 +169,7 @@ the two checks that genuinely need the build products stay behind them (step 12)
    Everything above this line is the `--portable` subset. Everything below needs a macOS toolchain.
 
 6. `swift test` with `-warnings-as-errors`, plus an engine **line-coverage gate** (≥ `MIN_COVERAGE`,
-   80%, `Tests/` excluded — raise it as coverage grows).
+   88%, `Tests/` excluded — raise it as coverage grows; `check.sh` records why ~91% is the ceiling).
 7. **ThreadSanitizer** and **AddressSanitizer** test passes.
 8. **xcodegen drift check** — regenerating must not change the committed `.pbxproj`.
 9. **App build** with codesigning skipped (warnings-as-errors via `SWIFT_TREAT_WARNINGS_AS_ERRORS` in
@@ -858,6 +858,16 @@ which is the same rule as "don't touch the real Keychain in tests". Retain-cycle
 weak-reference assertions in `MemoryLeakTests.swift` (`expectNoLeak`) — LeakSanitizer is unsupported
 on Darwin, so AddressSanitizer catches memory _corruption_ but not leaks; `scripts/leaks.sh` covers
 the whole app under the Darwin leak detector.
+
+**Mutation testing** — `scripts/mutate.sh`, opt-in and **not** part of `check.sh`. It flips one
+operator in a source file, re-runs the suite, and reports whether anything noticed. Reach for it
+instead of chasing the coverage number: the engine is near its line-coverage ceiling (the remainder is
+Accessibility/TCC/CGEvent code no CI process can run), so the useful question is no longer "did this
+line execute?" but "is it _asserted_?" — a surviving mutant is a behaviour change no test objected
+to. Its default target list is the files already at or near 100% coverage, which is exactly where the
+coverage number has nothing left to say. It stays out of `check.sh` deliberately: a run is minutes,
+and survivors need judgement (an _equivalent_ mutant cannot change behaviour, so no test can catch
+it), and a required gate that reports unactionable failures is one people learn to skip.
 
 **Swift Testing traps that CI has caught more than once.** Nothing here can be typechecked without a
 macOS toolchain, so when you're writing tests from a Linux / web sandbox these are the ones that cost
