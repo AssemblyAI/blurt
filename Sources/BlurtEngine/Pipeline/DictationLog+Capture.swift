@@ -82,14 +82,31 @@ extension DictationLog {
   /// file I/O is dispatched onto `queue`, off the event-monitor callback.
   ///
   /// Public because the caller is the app's capture sheet — unlike the other two
-  /// logs, whose writers live inside the engine. `store` and `url` exist to be
-  /// overridden by tests, exactly as on `append`/`appendError`.
+  /// logs, whose writers live inside the engine. The real store and destination
+  /// are supplied in the body rather than as defaulted parameters: a public
+  /// function's default arguments may only reference public declarations, and
+  /// neither `DeveloperModeStore.init` nor `defaultCaptureURL` has a reason to
+  /// be public. Tests inject both through the internal overload below.
   public static func appendCaptureEvent(
     kind: String, outcome: String,
     button: Int? = nil, keyCode: Int? = nil,
+    flags: UInt64 = 0, isRepeat: Bool = false, binding: String? = nil
+  ) {
+    appendCaptureEvent(
+      kind: kind, outcome: outcome, button: button, keyCode: keyCode,
+      flags: flags, isRepeat: isRepeat, binding: binding,
+      store: DeveloperModeStore(), to: defaultCaptureURL)
+  }
+
+  /// The injectable overload behind the public entry point: `store` and `url`
+  /// exist to be overridden by tests, exactly as on `append`/`appendError` —
+  /// with both hard-coded, the gate could only be exercised by writing to the
+  /// real `~/Library/Logs`.
+  static func appendCaptureEvent(
+    kind: String, outcome: String,
+    button: Int? = nil, keyCode: Int? = nil,
     flags: UInt64 = 0, isRepeat: Bool = false, binding: String? = nil,
-    store: DeveloperModeStore = DeveloperModeStore(),
-    to url: URL = defaultCaptureURL
+    store: DeveloperModeStore, to url: URL
   ) {
     gated(store: store) { now in
       writeCaptureEvent(
