@@ -2,20 +2,20 @@
 /// decisions that would otherwise sit untested in the app's event-tap shim:
 ///
 /// - **Edge dedup.** `flagsChanged` deliveries re-report the bound key's flag
-///   bit whether or not it changed, and a held non-modifier key can re-report
-///   its down state (autorepeat), so the router tracks the trigger's current
-///   physical state and only a genuine down/up *edge* reaches the gate —
-///   repeated same-state deliveries must not double-fire a dictation.
+///   bit whether or not it changed, and a held mouse button can be re-reported,
+///   so the router tracks the trigger's current physical state and only a
+///   genuine down/up *edge* reaches the gate — repeated same-state deliveries
+///   must not double-fire a dictation.
 /// - **Relevance.** Only events for the bound trigger drive the gate, and which
 ///   event family that is follows the binding: a modifier binding listens to
-///   `flagsChanged`, a key binding to `keyDown`/`keyUp`, a mouse binding to
-///   `mouseDown`/`mouseUp`. For a **modifier** binding, a `keyDown` for any
-///   *other* key marks a combo (e.g. ⌘C over the held trigger) and cancels the
-///   fresh capture; the trigger's own keycode never counts as a combo. For a
-///   key or mouse binding there is no combo rule: a modifier+key press *is* a
-///   shortcut the user meant, but F5+K and Mouse4+K name nothing to macOS, so
-///   another key while the trigger is held is just typing — cancelling the
-///   dictation on it would punish exactly the input dictation produces.
+///   `flagsChanged`, a mouse binding to `mouseDown`/`mouseUp`. For a
+///   **modifier** binding, a `keyDown` for any *other* key marks a combo (e.g.
+///   ⌘C over the held trigger) and cancels the fresh capture; the trigger's own
+///   keycode never counts as a combo. For a mouse binding there is no combo
+///   rule: a modifier+key press *is* a shortcut the user meant, but Mouse4+K
+///   names nothing to macOS, so a key while the button is held is just typing —
+///   cancelling the dictation on it would punish exactly the input dictation
+///   produces.
 /// - **Dropped-event recovery.** After the host's tap is disabled and re-enabled,
 ///   whether the gate's state survives depends on the trigger still being held —
 ///   see `recoverFromDroppedEvents(triggerStillHeld:)`.
@@ -32,12 +32,8 @@ public struct DictationKeyRouter: Sendable {
     /// `TriggerKey.deviceModifierMask`). Only meaningful under a modifier
     /// binding; the flag argument is ignored otherwise.
     case flagsChanged(keyCode: Int, triggerFlagIsOn: Bool)
-    /// A non-autorepeat `keyDown` for `keyCode` (the host filters autorepeat
-    /// deliveries out — see `DictationKeyTap.routerEvent` — and the edge dedup
-    /// here backstops any that slip through).
+    /// A `keyDown` for `keyCode` — the combo probe for a modifier binding.
     case keyDown(keyCode: Int)
-    /// A `keyUp` for `keyCode`.
-    case keyUp(keyCode: Int)
     /// An `otherMouseDown` for the given `CGEvent` button number.
     case mouseDown(button: Int)
     /// An `otherMouseUp` for the given `CGEvent` button number.
@@ -49,8 +45,8 @@ public struct DictationKeyRouter: Sendable {
 
   private var gate: DictationKeyGate
   /// The bound trigger's current physical state, so repeated same-state
-  /// deliveries (an unchanged flag bit, an autorepeat keyDown) don't re-fire
-  /// the gate.
+  /// deliveries (an unchanged flag bit, a re-reported button-down) don't
+  /// re-fire the gate.
   private var triggerIsDown = false
 
   public init(binding: TriggerBinding, holdThreshold: Duration = .seconds(1)) {
@@ -64,8 +60,6 @@ public struct DictationKeyRouter: Sendable {
     switch binding {
     case .modifier(let key):
       return handleForModifier(key, event, at: now)
-    case .key(let code):
-      return handleForKey(code, event, at: now)
     case .mouseButton(let button):
       return handleForMouseButton(button, event, at: now)
     }
@@ -81,20 +75,7 @@ public struct DictationKeyRouter: Sendable {
     case .keyDown(let keyCode):
       // Another key over the held modifier is a combo (a real shortcut).
       return keyCode == key.keyCode ? .none : gate.otherKeyDown()
-    case .keyUp, .mouseDown, .mouseUp:
-      return .none
-    }
-  }
-
-  private mutating func handleForKey(
-    _ code: Int, _ event: Event, at now: Duration
-  ) -> DictationKeyGate.Action {
-    switch event {
-    case .keyDown(let keyCode):
-      return keyCode == code ? edge(isDown: true, at: now) : .none
-    case .keyUp(let keyCode):
-      return keyCode == code ? edge(isDown: false, at: now) : .none
-    case .flagsChanged, .mouseDown, .mouseUp:
+    case .mouseDown, .mouseUp:
       return .none
     }
   }
@@ -107,7 +88,7 @@ public struct DictationKeyRouter: Sendable {
       return button == boundButton ? edge(isDown: true, at: now) : .none
     case .mouseUp(let button):
       return button == boundButton ? edge(isDown: false, at: now) : .none
-    case .flagsChanged, .keyDown, .keyUp:
+    case .flagsChanged, .keyDown:
       return .none
     }
   }
@@ -140,12 +121,12 @@ public struct DictationKeyRouter: Sendable {
   /// state may no longer match the input device.
   ///
   /// `triggerStillHeld` is the caller's read of whether the trigger is physically
-  /// down *right now* — `CGEventSource.flagsState`/`keyState`/`buttonState` on the
-  /// app side, the one CoreGraphics-typed input, which is why it's passed in rather
-  /// than read here. If it is, nothing that matters was lost: the up-event is still
-  /// coming and the gate is coherent, so the state is kept — resetting would discard
-  /// speech the user is mid-sentence on. If it isn't, the trigger's up-event may
-  /// have been among the dropped events, so the gate is reset.
+  /// down *right now* — `CGEventSource.flagsState`/`buttonState` on the app side,
+  /// the one CoreGraphics-typed input, which is why it's passed in rather than read
+  /// here. If it is, nothing that matters was lost: the up-event is still coming and
+  /// the gate is coherent, so the state is kept — resetting would discard speech the
+  /// user is mid-sentence on. If it isn't, the trigger's up-event may have been
+  /// among the dropped events, so the gate is reset.
   ///
   /// Returns whether that reset discarded a live recording the caller must cancel
   /// upstream, matching `reset()` and `rebind(binding:)`. This lived in the

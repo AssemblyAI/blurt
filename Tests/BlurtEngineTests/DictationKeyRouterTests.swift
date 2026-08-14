@@ -74,14 +74,13 @@ struct DictationKeyRouterTests {
     #expect(router.handle(upEvent(trigger), at: .seconds(2)) == .stop)
   }
 
-  @Test("keyUp and mouse events never reach a modifier binding's gate")
+  @Test("mouse events never reach a modifier binding's gate")
   func modifierBindingIgnoresOtherFamilies() {
-    // The tap's mask now covers every family any binding might need, so a
-    // modifier binding sees keyUps and extra-button clicks too — none of which
-    // may drive or cancel its gate (only a keyDown marks a combo).
+    // The tap's mask covers every family any binding might need, so a modifier
+    // binding sees extra-button clicks too — which may neither drive nor cancel
+    // its gate (only a keyDown marks a combo).
     var router = modifierRouter()
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
-    #expect(router.handle(.keyUp(keyCode: 8), at: .milliseconds(50)) == .none)
     #expect(router.handle(.mouseDown(button: 3), at: .milliseconds(60)) == .none)
     #expect(router.handle(.mouseUp(button: 3), at: .milliseconds(70)) == .none)
     #expect(router.handle(upEvent(trigger), at: .seconds(2)) == .stop)

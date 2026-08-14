@@ -4,9 +4,8 @@ import SwiftUI
 
 /// The dictation-key section of the setup/settings screen. A menu picker lets
 /// the user choose which lone modifier triggers dictation — or "Custom…", which
-/// opens a press-to-capture sheet that binds a function key (F1–F20) or an
-/// extra mouse button instead. Changes are persisted and pushed to the event
-/// tap immediately.
+/// opens a press-to-capture sheet that binds an extra mouse button instead.
+/// Changes are persisted and pushed to the event tap immediately.
 struct HotkeyStepView: View {
   var coordinator: AppCoordinator
 
@@ -21,14 +20,14 @@ struct HotkeyStepView: View {
   @State private var isCapturing = false
 
   /// What the picker's menu rows are. A custom binding shows as its own row
-  /// (`bound`, e.g. "F5" or "Mouse 4") so the picker always names what's bound,
+  /// (`bound`, e.g. "Mouse 4") so the picker always names what's bound,
   /// while "Custom…" stays a separate, always-present row whose selection only
   /// opens the capture sheet — re-selecting an already-selected row fires
   /// nothing in a `Picker`, so folding the two into one row would make
-  /// "rebind my custom key to a different one" unreachable.
+  /// "rebind my custom button to a different one" unreachable.
   private enum Choice: Hashable {
     case modifier(TriggerKey)
-    /// The currently bound custom (key or mouse) binding — present only while
+    /// The currently bound custom (mouse-button) binding — present only while
     /// one is bound.
     case bound
     /// The "Custom…" row: selecting it opens the capture sheet. Never reads as
@@ -50,7 +49,7 @@ struct HotkeyStepView: View {
       get: {
         switch TriggerBinding.fromPersisted(triggerCode) {
         case .modifier(let key): return .modifier(key)
-        case .key, .mouseButton: return .bound
+        case .mouseButton: return .bound
         }
       },
       set: { choice in
@@ -106,34 +105,26 @@ struct HotkeyStepView: View {
 }
 
 /// The press-to-capture sheet behind the picker's "Custom…" row: it listens for
-/// the next function-key press or extra-mouse-button click and binds it as the
-/// dictation trigger. Esc (or Cancel) closes without changing the binding.
+/// the next extra-mouse-button click and binds it as the dictation trigger.
+/// Esc (or Cancel) closes without changing the binding.
 ///
-/// What it accepts is `TriggerBinding`'s policy, not this view's: F1–F20 and
-/// mouse buttons past left/right (`keyBinding(forKeyCode:)` /
-/// `mouseButtonBinding(forButton:)`). Everything else is refused with an
-/// explanation rather than silently ignored — the dictation tap is listen-only
-/// and swallows nothing, so a printable key would type into the focused app on
-/// every dictation, and the left/right buttons are how the user clicks at all.
-/// Modifiers, Caps Lock, and media keys never arrive here in the first place:
-/// they are `flagsChanged`/`systemDefined` events, not the `keyDown` this
-/// recorder watches, so they can't be captured by construction.
+/// What it accepts is `TriggerBinding`'s policy, not this view's: mouse buttons
+/// past left/right (`mouseButtonBinding(forButton:)`). Left/right clicks
+/// structurally never arrive (they aren't `.otherMouseDown`, and they're how
+/// the user clicks at all), and keyboard keys are refused with an explanation
+/// rather than silently ignored — the dictation tap is listen-only and swallows
+/// nothing, so a bound keyboard key would type into the focused app on every
+/// dictation. Modifiers, Caps Lock, and media keys never even reach the
+/// refusal: they are `flagsChanged`/`systemDefined` events, not the `keyDown`
+/// the Esc/refusal monitor watches.
 ///
-/// The media-key exclusion has a laptop-keyboard consequence the sheet spells
-/// out: with Apple's default "Use F1, F2, etc. keys as standard function keys"
-/// off, a bare top-row press IS a media event (brightness, volume…), so it
-/// never reaches the recorder — or, later, the trigger tap. Held with fn (or
-/// with that setting on, or on most external keyboards) the same key delivers
-/// a real F-key `keyDown`, which captures and triggers fine. The binding that
-/// results is by keycode, so it fires exactly when the keyboard produces the
-/// F-key — matching what the user physically did while capturing it.
-///
-/// Capture uses `NSEvent` monitors, not the dictation `CGEventTap`: local
-/// monitors for key presses and clicks inside the Settings window (returning
-/// nil so a captured press doesn't also beep or trigger a shortcut), plus a
-/// global monitor so a click landing outside the window still binds — mouse
-/// buttons don't focus-follow the way F-keys do. The global monitor needs the
-/// Accessibility grant, which the app required before Settings was reachable.
+/// Capture uses `NSEvent` monitors, not the dictation `CGEventTap`: a local
+/// monitor for clicks inside the Settings window plus a global one so a click
+/// landing outside the window still binds — mouse buttons don't focus-follow.
+/// The global monitor needs the Accessibility grant, which the app required
+/// before Settings was reachable. A local `keyDown` monitor handles Esc and
+/// the keyboard refusal (returning nil so the press doesn't also beep or
+/// trigger a shortcut).
 private struct CustomTriggerCaptureView: View {
   /// Called with the captured binding after the sheet dismisses itself.
   var onCapture: (TriggerBinding) -> Void
@@ -144,19 +135,10 @@ private struct CustomTriggerCaptureView: View {
 
   var body: some View {
     VStack(spacing: 12) {
-      Text("Set a custom dictation key")
+      Text("Set a custom dictation button")
         .font(.headline)
-      Text("Press a function key (F1–F20) or an extra mouse button…")
+      Text("Press a mouse button (Mouse 3 or higher)…")
         .foregroundStyle(.secondary)
-      Text(
-        "On a built-in keyboard, hold fn while pressing the top-row key — a bare press is a "
-          + "media key — or turn on \u{201C}Use F1, F2, etc. keys as standard function keys\u{201D} "
-          + "in System Settings > Keyboard."
-      )
-      .font(.caption)
-      .foregroundStyle(.tertiary)
-      .multilineTextAlignment(.center)
-      .frame(maxWidth: 280)
       if let refusal {
         Text(refusal)
           .font(.callout)
@@ -174,7 +156,7 @@ private struct CustomTriggerCaptureView: View {
   private func startListening() {
     let localKey = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
       handleKeyDown(event)
-      return nil  // consume: a captured/refused press must not also type or beep
+      return nil  // consume: a refused press must not also type or beep
     }
     let localClick = NSEvent.addLocalMonitorForEvents(matching: .otherMouseDown) { event in
       handleClick(event)
@@ -194,30 +176,44 @@ private struct CustomTriggerCaptureView: View {
   private func handleKeyDown(_ event: NSEvent) {
     let escapeKeyCode = 53
     if Int(event.keyCode) == escapeKeyCode {
+      log(event, kind: "keyDown", outcome: "cancelled")
       dismiss()
       return
     }
-    guard let captured = TriggerBinding.keyBinding(forKeyCode: Int(event.keyCode)) else {
-      refusal =
-        "That key can't be the trigger — it would type into whatever app is focused. "
-        + "Choose a function key (F1–F20) or an extra mouse button."
-      return
-    }
-    capture(captured)
+    // Keyboard keys aren't bindable: the dictation tap is listen-only, so a
+    // bound key would type into the focused app on every dictation.
+    log(event, kind: "keyDown", outcome: "refused-keyboard-key")
+    refusal = "Keyboard keys can't be the custom trigger. Press an extra mouse button, or Esc to cancel."
   }
 
   private func handleClick(_ event: NSEvent) {
     // Left/right clicks never arrive (they're not `.otherMouseDown`), so this
     // refusal covers only button numbers past what a binding can express.
     guard let captured = TriggerBinding.mouseButtonBinding(forButton: event.buttonNumber) else {
-      refusal = "That button can't be the trigger. Choose a function key (F1–F20) or an extra mouse button."
+      log(event, kind: "otherMouseDown", outcome: "refused-button")
+      refusal = "That button can't be the trigger. Press a mouse button other than left or right click."
       return
     }
-    capture(captured)
-  }
-
-  private func capture(_ captured: TriggerBinding) {
+    log(event, kind: "otherMouseDown", outcome: "captured", binding: captured.label)
     dismiss()
     onCapture(captured)
+  }
+
+  /// Developer-mode diagnostics: every event the recorder sees — accepted or
+  /// refused — lands in `capture-events.jsonl` with its raw facts (button
+  /// number, keycode, flags, autorepeat), so a misbehaving multi-button mouse
+  /// can be diagnosed from what it actually sent. Gated inside
+  /// `appendCaptureEvent` on the same developer-mode switch as the other logs;
+  /// with the switch off this writes nothing.
+  private func log(_ event: NSEvent, kind: String, outcome: String, binding: String? = nil) {
+    let isKeyEvent = kind == "keyDown"
+    DictationLog.appendCaptureEvent(
+      kind: kind, outcome: outcome,
+      button: isKeyEvent ? nil : event.buttonNumber,
+      keyCode: isKeyEvent ? Int(event.keyCode) : nil,
+      flags: UInt64(event.modifierFlags.rawValue),
+      // `isARepeat` raises on non-key events, so it's only read for key ones.
+      isRepeat: isKeyEvent && event.isARepeat,
+      binding: binding)
   }
 }

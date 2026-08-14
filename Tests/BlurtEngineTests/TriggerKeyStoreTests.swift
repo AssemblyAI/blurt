@@ -19,14 +19,6 @@ struct TriggerKeyStoreTests {
     #expect(TriggerKeyStore(defaults: defaults).triggerBinding == .modifier(.rightOption))
   }
 
-  @Test("persists and reads back a custom F-key binding")
-  func roundTripsAKeyBinding() {
-    let defaults = freshDefaults()
-    let store = TriggerKeyStore(defaults: defaults)
-    store.triggerBinding = .key(code: 96)  // F5
-    #expect(TriggerKeyStore(defaults: defaults).triggerBinding == .key(code: 96))
-  }
-
   @Test("persists and reads back a custom mouse-button binding")
   func roundTripsAMouseBinding() {
     let defaults = freshDefaults()

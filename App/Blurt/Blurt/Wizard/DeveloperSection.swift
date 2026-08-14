@@ -26,7 +26,8 @@ struct DeveloperSection: View {
       // the first path is followed by a plain space rather than a comma.
       Text(
         "Logs each dictation to \(DictationLog.defaultDisplayPath) "
-          + "and each failure to \(DictationLog.defaultErrorDisplayPath)"
+          + "each failure to \(DictationLog.defaultErrorDisplayPath) "
+          + "and Custom-capture input events to \(DictationLog.defaultCaptureDisplayPath)"
       )
       .textSelection(.enabled)
     }

@@ -80,11 +80,12 @@ genuinely correct, and reaching for it means it's time to stop and ask.
   (no Dock icon) was tried and reverted twice for that reason — don't drop the
   Dock icon or add `LSUIElement`.
 - The dictation trigger is a **single lone key** — a lone modifier (right ⌘
-  default), or a lone F-key / extra mouse button via the Custom option — home-
+  default), or an extra mouse button via the Custom option — home-
   grown via `CGEventTap` + `DictationKeyGate`. No `KeyboardShortcuts` package, no
-  key+modifier chord, and never a printable key or the left/right mouse button:
-  the tap is listen-only and swallows nothing, so those would type or click into
-  the focused app.
+  key+modifier chord, and never a keyboard key beyond the curated modifiers or
+  the left/right mouse button: the tap is listen-only and swallows nothing, so
+  those would type or click into the focused app. (F-keys were in the first cut
+  of Custom and removed by maintainer decision.)
 - **Updates are download-only** — check → open the DMG in the browser → the user
   installs it. The `mxcl/AppUpdater` dependency and its in-place self-updater
   were removed; don't reintroduce a self-replacing install path, a timer-driven

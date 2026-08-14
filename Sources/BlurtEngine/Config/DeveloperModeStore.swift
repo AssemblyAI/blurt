@@ -2,8 +2,9 @@ import Foundation
 
 /// Persists the developer-mode switch in `UserDefaults`. Off by default; the
 /// Settings window's Developer section flips it. While on, each completed
-/// dictation is appended to `DictationLog` — that gate is the switch's only
-/// effect, so a user who never opts in has no dictation text on disk.
+/// dictation, each failure, and each Custom-capture input event is appended to
+/// its `DictationLog` file — those gates are the switch's only effect, so a
+/// user who never opts in has nothing on disk.
 /// Same shape as `TriggerKeyStore` / `SoundPackStore`.
 public struct DeveloperModeStore {
   /// UserDefaults key holding the switch. Public so SwiftUI views can observe
