@@ -161,9 +161,9 @@ jobs:
   #     the second one is the reason the shell exists at all.
   #
   # Build-only on purpose: the engine's tests run under `check` on macOS, and
-  # the shell has no behaviour to test. Like `compile`, it is deliberately NOT
-  # required and `gate` ignores it — it can only go red where an iOS consumer
-  # of the package would too.
+  # the shell has no behaviour to test. It is a required check: `gate` treats an
+  # iOS failure exactly like a macOS one, so a break in an iOS consumer of the
+  # package blocks the merge.
   ios-build:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -301,17 +301,18 @@ jobs:
   # NOTE: this only protects the repo once branch protection requires `gate`
   # instead of (or as well as) `check` — that's a repo settings change.
   gate:
-    needs: [changes, check]
+    needs: [changes, check, ios-build]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Assert the macOS gate ran or was intentionally skipped
+      - name: Assert the macOS and iOS gates ran or were intentionally skipped
         env:
           CHECK_RESULT: ${{ needs.check.result }}
+          IOS_RESULT: ${{ needs.ios-build.result }}
           CHANGES_RESULT: ${{ needs.changes.result }}
           CODE_CHANGED: ${{ needs.changes.outputs.code }}
         run: |
-          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED check=$CHECK_RESULT"
+          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED check=$CHECK_RESULT ios-build=$IOS_RESULT"
           if [ "$CHANGES_RESULT" != "success" ]; then
             echo "error: the changes filter did not succeed, so the gate cannot be trusted" >&2
             exit 1
@@ -327,4 +328,16 @@ jobs:
               fi
               ;;
             *) echo "error: macOS gate result was '$CHECK_RESULT'" >&2; exit 1 ;;
+          esac
+          case "$IOS_RESULT" in
+            success) echo "iOS gate passed" ;;
+            skipped)
+              if [ "$CODE_CHANGED" = "false" ]; then
+                echo "docs-only change; iOS gate intentionally skipped"
+              else
+                echo "error: ios-build was skipped but code changed" >&2
+                exit 1
+              fi
+              ;;
+            *) echo "error: iOS gate result was '$IOS_RESULT'" >&2; exit 1 ;;
           esac
