@@ -207,13 +207,13 @@ private struct CustomTriggerCaptureView: View {
   /// with the switch off this writes nothing.
   private func log(_ event: NSEvent, kind: String, outcome: String, binding: String? = nil) {
     let isKeyEvent = kind == "keyDown"
-    DictationLog.appendCaptureEvent(
-      kind: kind, outcome: outcome,
+    let input = DictationLog.CapturedInput(
+      kind: kind,
       button: isKeyEvent ? nil : event.buttonNumber,
       keyCode: isKeyEvent ? Int(event.keyCode) : nil,
       flags: UInt64(event.modifierFlags.rawValue),
       // `isARepeat` raises on non-key events, so it's only read for key ones.
-      isRepeat: isKeyEvent && event.isARepeat,
-      binding: binding)
+      isRepeat: isKeyEvent && event.isARepeat)
+    DictationLog.appendCaptureEvent(input, outcome: outcome, binding: binding)
   }
 }

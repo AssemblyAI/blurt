@@ -14,13 +14,14 @@ import Foundation
 // each carry their own expected shape, and interleaving input rows would break
 // anything decoding them.
 extension DictationLog {
-  struct CaptureEventEntry: Encodable {
-    let ts: String
+  /// The raw facts of one event the capture recorder saw, exactly as the input
+  /// system reported them — one value rather than loose parameters, so every
+  /// layer from the sheet down to the entry builder hands the same bundle
+  /// along. What the recorder *decided* about the event (`outcome`, the bound
+  /// label) deliberately rides beside it, not in it.
+  public struct CapturedInput: Sendable {
     /// Which monitor delivered the event: `keyDown` or `otherMouseDown`.
     let kind: String
-    /// What the recorder did with it — a stable token to aggregate on:
-    /// `captured`, `refused-button`, `refused-keyboard-key`, or `cancelled`.
-    let outcome: String
     /// `CGEvent`/`NSEvent` button number, for mouse events (0 = left).
     let button: Int?
     /// macOS virtual keycode, for keyboard events.
@@ -30,6 +31,30 @@ extension DictationLog {
     /// kind of misbehavior this log exists to catch.
     let flags: UInt64
     /// Whether a keyboard event was an autorepeat delivery.
+    let isRepeat: Bool
+
+    public init(
+      kind: String, button: Int? = nil, keyCode: Int? = nil,
+      flags: UInt64 = 0, isRepeat: Bool = false
+    ) {
+      self.kind = kind
+      self.button = button
+      self.keyCode = keyCode
+      self.flags = flags
+      self.isRepeat = isRepeat
+    }
+  }
+
+  struct CaptureEventEntry: Encodable {
+    let ts: String
+    /// See `CapturedInput.kind`.
+    let kind: String
+    /// What the recorder did with the event — a stable token to aggregate on:
+    /// `captured`, `refused-button`, `refused-keyboard-key`, or `cancelled`.
+    let outcome: String
+    let button: Int?
+    let keyCode: Int?
+    let flags: UInt64
     let isRepeat: Bool
     /// The bound trigger's label ("Mouse 4") when `outcome` is `captured`.
     let binding: String?
@@ -88,13 +113,10 @@ extension DictationLog {
   /// neither `DeveloperModeStore.init` nor `defaultCaptureURL` has a reason to
   /// be public. Tests inject both through the internal overload below.
   public static func appendCaptureEvent(
-    kind: String, outcome: String,
-    button: Int? = nil, keyCode: Int? = nil,
-    flags: UInt64 = 0, isRepeat: Bool = false, binding: String? = nil
+    _ input: CapturedInput, outcome: String, binding: String? = nil
   ) {
     appendCaptureEvent(
-      kind: kind, outcome: outcome, button: button, keyCode: keyCode,
-      flags: flags, isRepeat: isRepeat, binding: binding,
+      input, outcome: outcome, binding: binding,
       store: DeveloperModeStore(), to: defaultCaptureURL)
   }
 
@@ -103,15 +125,11 @@ extension DictationLog {
   /// with both hard-coded, the gate could only be exercised by writing to the
   /// real `~/Library/Logs`.
   static func appendCaptureEvent(
-    kind: String, outcome: String,
-    button: Int? = nil, keyCode: Int? = nil,
-    flags: UInt64 = 0, isRepeat: Bool = false, binding: String? = nil,
+    _ input: CapturedInput, outcome: String, binding: String? = nil,
     store: DeveloperModeStore, to url: URL
   ) {
     gated(store: store) { now in
-      writeCaptureEvent(
-        kind: kind, outcome: outcome, button: button, keyCode: keyCode,
-        flags: flags, isRepeat: isRepeat, binding: binding, to: url, now: now)
+      writeCaptureEvent(input, outcome: outcome, binding: binding, to: url, now: now)
     }
   }
 
@@ -119,26 +137,20 @@ extension DictationLog {
   /// reason as `makeEntry`/`makeErrorEntry`: what a row carries is assertable
   /// directly rather than through a temp file and a substring search.
   static func makeCaptureEntry(
-    kind: String, outcome: String, button: Int?, keyCode: Int?,
-    flags: UInt64, isRepeat: Bool, binding: String?, now: Date
+    _ input: CapturedInput, outcome: String, binding: String?, now: Date
   ) -> CaptureEventEntry {
     CaptureEventEntry(
-      ts: now.formatted(timestampFormat), kind: kind, outcome: outcome,
-      button: button, keyCode: keyCode, flags: flags, isRepeat: isRepeat, binding: binding)
+      ts: now.formatted(timestampFormat), kind: input.kind, outcome: outcome,
+      button: input.button, keyCode: input.keyCode, flags: input.flags,
+      isRepeat: input.isRepeat, binding: binding)
   }
 
   /// The unconditional writer, named distinctly from `appendCaptureEvent` for
   /// the reason `write`/`writeError` are: the gated entry point above must not
   /// be bypassable by accidentally satisfying a different signature.
   static func writeCaptureEvent(
-    kind: String, outcome: String, button: Int? = nil, keyCode: Int? = nil,
-    flags: UInt64 = 0, isRepeat: Bool = false, binding: String? = nil,
-    to url: URL, now: Date
+    _ input: CapturedInput, outcome: String, binding: String? = nil, to url: URL, now: Date
   ) {
-    appendLine(
-      makeCaptureEntry(
-        kind: kind, outcome: outcome, button: button, keyCode: keyCode,
-        flags: flags, isRepeat: isRepeat, binding: binding, now: now),
-      to: url)
+    appendLine(makeCaptureEntry(input, outcome: outcome, binding: binding, now: now), to: url)
   }
 }

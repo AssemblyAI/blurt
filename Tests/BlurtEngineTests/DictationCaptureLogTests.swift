@@ -21,8 +21,8 @@ struct DictationCaptureEntryTests {
   @Test("records the event's raw facts and the outcome")
   func recordsRawFacts() {
     let entry = DictationLog.makeCaptureEntry(
-      kind: "otherMouseDown", outcome: "captured", button: 3, keyCode: nil,
-      flags: 0x100, isRepeat: false, binding: "Mouse 4",
+      DictationLog.CapturedInput(kind: "otherMouseDown", button: 3, flags: 0x100),
+      outcome: "captured", binding: "Mouse 4",
       now: Date(timeIntervalSince1970: 1_700_000_000))
     #expect(entry.kind == "otherMouseDown")
     #expect(entry.outcome == "captured")
@@ -38,8 +38,8 @@ struct DictationCaptureEntryTests {
     // The whole point of the log: the refusal text alone can't say what a
     // misbehaving button actually sent.
     let entry = DictationLog.makeCaptureEntry(
-      kind: "keyDown", outcome: "refused-keyboard-key", button: nil, keyCode: 96,
-      flags: 0, isRepeat: true, binding: nil, now: Date())
+      DictationLog.CapturedInput(kind: "keyDown", keyCode: 96, isRepeat: true),
+      outcome: "refused-keyboard-key", binding: nil, now: Date())
     #expect(entry.keyCode == 96)
     #expect(entry.isRepeat)
     #expect(entry.binding == nil)
@@ -51,8 +51,8 @@ struct DictationCaptureEntryTests {
   @Test("absent and default-valued fields are omitted from the line, not written as null")
   func defaultsAreOmitted() throws {
     let entry = DictationLog.makeCaptureEntry(
-      kind: "otherMouseDown", outcome: "refused-button", button: 1, keyCode: nil,
-      flags: 0, isRepeat: false, binding: nil, now: Date())
+      DictationLog.CapturedInput(kind: "otherMouseDown", button: 1),
+      outcome: "refused-button", binding: nil, now: Date())
     let data = try DictationLog.makeEncoder().encode(entry)
     let object = try JSONSerialization.jsonObject(with: data)
     let encoded = try #require(object as? [String: Any])
@@ -70,7 +70,8 @@ struct DictationCaptureLogGateTests {
     let url = makeTempCaptureLogURL()
     let store = DeveloperModeStore(defaults: freshDefaults())
     DictationLog.appendCaptureEvent(
-      kind: "otherMouseDown", outcome: "captured", button: 3, store: store, to: url)
+      DictationLog.CapturedInput(kind: "otherMouseDown", button: 3),
+      outcome: "captured", store: store, to: url)
     DictationLog.queue.sync {}
     #expect(!FileManager.default.fileExists(atPath: url.path))
   }
@@ -80,7 +81,8 @@ struct DictationCaptureLogGateTests {
     let url = makeTempCaptureLogURL()
     let store = developerModeStore(enabled: true)
     DictationLog.appendCaptureEvent(
-      kind: "otherMouseDown", outcome: "refused-button", button: 1, store: store, to: url)
+      DictationLog.CapturedInput(kind: "otherMouseDown", button: 1),
+      outcome: "refused-button", store: store, to: url)
     DictationLog.queue.sync {}
     let line = readLog(url)
     #expect(line.contains("\"outcome\":\"refused-button\""))
