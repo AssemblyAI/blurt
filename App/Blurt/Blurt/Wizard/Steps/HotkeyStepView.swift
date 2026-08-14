@@ -119,6 +119,15 @@ struct HotkeyStepView: View {
 /// they are `flagsChanged`/`systemDefined` events, not the `keyDown` this
 /// recorder watches, so they can't be captured by construction.
 ///
+/// The media-key exclusion has a laptop-keyboard consequence the sheet spells
+/// out: with Apple's default "Use F1, F2, etc. keys as standard function keys"
+/// off, a bare top-row press IS a media event (brightness, volume…), so it
+/// never reaches the recorder — or, later, the trigger tap. Held with fn (or
+/// with that setting on, or on most external keyboards) the same key delivers
+/// a real F-key `keyDown`, which captures and triggers fine. The binding that
+/// results is by keycode, so it fires exactly when the keyboard produces the
+/// F-key — matching what the user physically did while capturing it.
+///
 /// Capture uses `NSEvent` monitors, not the dictation `CGEventTap`: local
 /// monitors for key presses and clicks inside the Settings window (returning
 /// nil so a captured press doesn't also beep or trigger a shortcut), plus a
@@ -139,6 +148,15 @@ private struct CustomTriggerCaptureView: View {
         .font(.headline)
       Text("Press a function key (F1–F20) or an extra mouse button…")
         .foregroundStyle(.secondary)
+      Text(
+        "On a built-in keyboard, hold fn while pressing the top-row key — a bare press is a "
+          + "media key — or turn on \u{201C}Use F1, F2, etc. keys as standard function keys\u{201D} "
+          + "in System Settings > Keyboard."
+      )
+      .font(.caption)
+      .foregroundStyle(.tertiary)
+      .multilineTextAlignment(.center)
+      .frame(maxWidth: 280)
       if let refusal {
         Text(refusal)
           .font(.callout)

@@ -712,7 +712,12 @@ The trigger is editable in the Shortcut section of the setup/settings UI (`Hotke
 (`CustomTriggerCaptureView`, same file): local `NSEvent` monitors for key presses and clicks in the
 Settings window plus a global one for clicks landing elsewhere, Esc cancels, and disallowed inputs
 (printable keys; the left/right mouse button) are refused with an explanation. Modifiers, Caps Lock,
-and media keys never reach the recorder at all — they aren't `keyDown` events. Writes go through
+and media keys never reach the recorder at all — they aren't `keyDown` events. The media-key
+exclusion has one laptop consequence, which the sheet spells out: with Apple's default "Use F1, F2,
+etc. keys as standard function keys" off, a bare top-row press is a `systemDefined` media event
+(brightness, volume…), invisible to the recorder and to the trigger tap alike — held with fn, with
+that setting on, or on most external keyboards, the same key delivers a real F-key `keyDown` and
+both capture and trigger work. Writes go through
 `TriggerKeyStore`, after which `AppCoordinator.dictationBindingChanged()` re-reads the binding into
 the tap. For display strings, use `TriggerKeyStore().triggerBinding.label` for one-shot reads; in
 views that must re-render live on a Settings change, use **`@BoundTriggerBinding`** — a
