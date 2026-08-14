@@ -14,8 +14,12 @@ import CoreGraphics
 public enum DictationEventDecoder {
   /// The router event a tap delivery reduces to, or nil for event types the
   /// trigger doesn't care about. `triggerFlag` is the bound modifier's
-  /// device-dependent `CGEventFlags` bit (empty under a mouse binding, where
-  /// the router ignores `flagsChanged` events entirely).
+  /// device-dependent `CGEventFlags` bit, and is **empty under a chord or mouse
+  /// binding** — where the resulting `triggerFlagIsOn` is meaningless and must
+  /// not be read: `CGEventFlags.contains([])` is vacuously true, so an empty
+  /// trigger flag reports "on" for every delivery. The router honors that (only
+  /// `handleForModifier` looks at the field); `DictationEventDecoderTests` pins
+  /// it so it can't be mistaken for a bug later.
   public static func routerEvent(
     type: CGEventType, event: CGEvent, triggerFlag: CGEventFlags
   ) -> DictationKeyRouter.Event? {

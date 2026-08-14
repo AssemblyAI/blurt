@@ -145,13 +145,35 @@ struct DictationEventDecoderTests {
   func decodesPartialModifierRelease() throws {
     // ⌃⌥ held, then ⌃ released: the delivery reports ⌥ still down, which is what
     // tells the router the chord is no longer complete.
+    //
+    // A real `triggerFlag` is passed even though this is the chord path, because
+    // an **empty** flag set makes `CGEventFlags.contains` vacuously true — every
+    // set contains the empty set — so `triggerFlagIsOn` would read `true` for
+    // every delivery and assert nothing. Harmless in production (a chord binding
+    // ignores that field entirely; `handleForChord` reads only the modifier set),
+    // but worth not writing into a fixture that claims to check it.
     let event = try #require(
       CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(59), keyDown: false))  // left ⌃
     event.type = .flagsChanged
     event.flags = [.maskAlternate]
     let decoded = DictationEventDecoder.routerEvent(
-      type: .flagsChanged, event: event, triggerFlag: [])
+      type: .flagsChanged, event: event, triggerFlag: Self.rightCommandFlag)
     #expect(decoded == .flagsChanged(keyCode: 59, triggerFlagIsOn: false, modifiers: [.option]))
+  }
+
+  @Test("an empty trigger flag reads as always-on, which is why a chord ignores that field")
+  func emptyTriggerFlagIsVacuouslyOn() throws {
+    // Pins the sharp edge above rather than leaving it to be rediscovered: the
+    // tap passes `[]` as the trigger flag under a chord or mouse binding, so this
+    // field is meaningless there — and the router must never read it for those
+    // bindings (`DictationKeyRouterChordBindingTests` covers that side).
+    let event = try #require(
+      CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(59), keyDown: true))
+    event.type = .flagsChanged
+    event.flags = []
+    let decoded = DictationEventDecoder.routerEvent(
+      type: .flagsChanged, event: event, triggerFlag: [])
+    #expect(decoded == .flagsChanged(keyCode: 59, triggerFlagIsOn: true, modifiers: []))
   }
 
   @Test("a flagsChanged CGEvent decodes the keycode and the trigger flag, set and cleared")
