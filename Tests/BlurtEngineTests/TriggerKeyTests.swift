@@ -8,7 +8,6 @@ struct TriggerKeyTests {
   func keyCodes() {
     #expect(TriggerKey.rightCommand.keyCode == 54)
     #expect(TriggerKey.rightOption.keyCode == 61)
-    #expect(TriggerKey.function.keyCode == 63)
   }
 
   @Test("every case has a non-empty label")
@@ -25,13 +24,20 @@ struct TriggerKeyTests {
     #expect(TriggerKey(rawValue: 999) == nil)
   }
 
-  @Test("removed options (right ⌃, Caps Lock) are not modifiers")
+  @Test("removed options (right ⌃, Caps Lock, fn) are not modifiers")
   func removedOptionsDoNotDecode() {
-    // right ⌃ (keycode 62) and Caps Lock (57) were dropped as options; the
-    // persisted-slot fallback they decode to is `TriggerBinding.fromPersisted`'s
-    // job (see `TriggerBindingTests.removedOptionsFallBack`).
+    // right ⌃ (62) and Caps Lock (57) were never options, and `fn` (63) was
+    // removed as one; where each persisted keycode lands is
+    // `TriggerBinding.fromPersisted`'s job (see `TriggerBindingTests`).
     #expect(TriggerKey(rawValue: 62) == nil)
     #expect(TriggerKey(rawValue: 57) == nil)
+    #expect(TriggerKey(rawValue: 63) == nil)
+  }
+
+  @Test("only the two right-side modifiers are offered")
+  func curatedToRightSideModifiers() {
+    // The picker renders `allCases`, so this is what the user can choose from.
+    #expect(TriggerKey.allCases == [.rightCommand, .rightOption])
   }
 
   // The hotkey tap reads the *device-dependent* modifier bit (which physical
@@ -43,7 +49,6 @@ struct TriggerKeyTests {
   func deviceMasks() {
     #expect(TriggerKey.rightCommand.deviceModifierMask == 0x10)  // NX_DEVICERCMDKEYMASK
     #expect(TriggerKey.rightOption.deviceModifierMask == 0x40)  // NX_DEVICERALTKEYMASK
-    #expect(TriggerKey.function.deviceModifierMask == 0x80_0000)  // kCGEventFlagMaskSecondaryFn
   }
 
   @Test("right-⌘ mask does not collide with the left-⌘ or generic ⌘ bit")

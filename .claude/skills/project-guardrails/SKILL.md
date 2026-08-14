@@ -79,13 +79,17 @@ genuinely correct, and reaching for it means it's time to stop and ask.
   menu bar, so nothing may depend on it being visible. A menu-bar-_only_ variant
   (no Dock icon) was tried and reverted twice for that reason — don't drop the
   Dock icon or add `LSUIElement`.
-- The dictation trigger is a **single lone key** — a lone modifier (right ⌘
-  default), or an extra mouse button via the Custom option — home-
-  grown via `CGEventTap` + `DictationKeyGate`. No `KeyboardShortcuts` package, no
-  key+modifier chord, and never a keyboard key beyond the curated modifiers or
-  the left/right mouse button: the tap is listen-only and swallows nothing, so
-  those would type or click into the focused app. (F-keys were in the first cut
-  of Custom and removed by maintainer decision.)
+- The dictation trigger is a **single control** — a lone right-side modifier
+  (right ⌘ default, and `fn` is no longer an option), or a Custom **chord**
+  (⌃⌥D) or extra mouse button — home-grown via `CGEventTap` +
+  `DictationKeyRouter`/`DictationKeyGate`. No `KeyboardShortcuts` package, and no
+  SPM dependency for key handling: that ban is unchanged. Chords used to be
+  banned here too and are now supported (Alex Kroman reversed it in the PR #144
+  thread). What stays refused: a **bare** key and the left/right mouse button
+  (the tap is listen-only and swallows nothing, so they'd type or click into the
+  focused app), plus a short list of system chords like ⌘Q and ⌘⇥. A bound chord
+  or wheel click still reaches the app that owns it — say so in the UI
+  (`TriggerBinding.passThroughNote`) rather than switching to an active tap.
 - **Updates are download-only** — check → open the DMG in the browser → the user
   installs it. The `mxcl/AppUpdater` dependency and its in-place self-updater
   were removed; don't reintroduce a self-replacing install path, a timer-driven

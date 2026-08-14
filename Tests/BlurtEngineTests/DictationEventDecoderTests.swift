@@ -73,17 +73,85 @@ struct DictationEventDecoderTests {
   @Test("a real keyDown CGEvent decodes to the combo probe with its keycode")
   func decodesKeyDown() throws {
     let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 8, keyDown: true))  // C
+    event.flags = []
     let decoded = DictationEventDecoder.routerEvent(
       type: .keyDown, event: event, triggerFlag: Self.rightCommandFlag)
-    #expect(decoded == .keyDown(keyCode: 8))
+    #expect(decoded == .keyDown(keyCode: 8, modifiers: []))
   }
 
-  @Test("a keyUp CGEvent decodes to nothing — no binding consumes key-ups")
-  func ignoresKeyUp() throws {
+  @Test("a real keyUp CGEvent decodes to the chord's trigger-up")
+  func decodesKeyUp() throws {
     let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 8, keyDown: false))
     let decoded = DictationEventDecoder.routerEvent(
       type: .keyUp, event: event, triggerFlag: Self.rightCommandFlag)
-    #expect(decoded == nil)
+    #expect(decoded == .keyUp(keyCode: 8))
+  }
+
+  // MARK: - Chord decode
+
+  /// One replayed chord keyDown: the flags the event carries and the modifier set
+  /// they must decode to. Rows are data, so a keyboard or driver that reports
+  /// flags oddly can be added as a fixture rather than as new code.
+  struct ChordFixture: Sendable {
+    let flags: CGEventFlags
+    let expected: TriggerBinding.ChordModifiers
+  }
+
+  static let chordFixtures: [ChordFixture] = [
+    ChordFixture(flags: [], expected: []),
+    ChordFixture(flags: [.maskControl], expected: [.control]),
+    ChordFixture(flags: [.maskAlternate], expected: [.option]),
+    ChordFixture(flags: [.maskShift], expected: [.shift]),
+    ChordFixture(flags: [.maskCommand], expected: [.command]),
+    // The everyday ⌃⌥D shape, and the full house.
+    ChordFixture(flags: [.maskControl, .maskAlternate], expected: [.control, .option]),
+    ChordFixture(
+      flags: [.maskControl, .maskAlternate, .maskShift, .maskCommand],
+      expected: [.control, .option, .shift, .command]),
+    // The device-dependent side bits ride along with the generic mask on a real
+    // press; a chord is side-agnostic, so they must not change the decode.
+    ChordFixture(
+      flags: [.maskControl, CGEventFlags(rawValue: 0x2000)], expected: [.control]),
+    // Caps Lock and fn are deliberately not chord modifiers.
+    ChordFixture(flags: [.maskAlphaShift], expected: []),
+    ChordFixture(flags: [.maskSecondaryFn], expected: []),
+    ChordFixture(flags: [.maskAlphaShift, .maskCommand], expected: [.command]),
+  ]
+
+  @Test("a chord keyDown decodes its modifier set from the event's flags", arguments: chordFixtures)
+  func decodesChordModifiers(fixture: ChordFixture) throws {
+    let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 2, keyDown: true))  // D
+    event.flags = fixture.flags
+    let decoded = DictationEventDecoder.routerEvent(
+      type: .keyDown, event: event, triggerFlag: [])
+    #expect(decoded == .keyDown(keyCode: 2, modifiers: fixture.expected))
+  }
+
+  @Test("an autorepeat keyDown decodes to nothing — a repeat is not an edge")
+  func dropsAutorepeatKeyDown() throws {
+    let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 2, keyDown: true))
+    event.flags = [.maskControl, .maskAlternate]
+    event.setIntegerValueField(.keyboardEventAutorepeat, value: 1)
+    #expect(DictationEventDecoder.routerEvent(type: .keyDown, event: event, triggerFlag: []) == nil)
+
+    // The same event without the repeat flag is the real trigger-down.
+    event.setIntegerValueField(.keyboardEventAutorepeat, value: 0)
+    #expect(
+      DictationEventDecoder.routerEvent(type: .keyDown, event: event, triggerFlag: [])
+        == .keyDown(keyCode: 2, modifiers: [.control, .option]))
+  }
+
+  @Test("a partial-modifier release decodes to the flags event a chord ends on")
+  func decodesPartialModifierRelease() throws {
+    // ⌃⌥ held, then ⌃ released: the delivery reports ⌥ still down, which is what
+    // tells the router the chord is no longer complete.
+    let event = try #require(
+      CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(59), keyDown: false))  // left ⌃
+    event.type = .flagsChanged
+    event.flags = [.maskAlternate]
+    let decoded = DictationEventDecoder.routerEvent(
+      type: .flagsChanged, event: event, triggerFlag: [])
+    #expect(decoded == .flagsChanged(keyCode: 59, triggerFlagIsOn: false, modifiers: [.option]))
   }
 
   @Test("a flagsChanged CGEvent decodes the keycode and the trigger flag, set and cleared")
@@ -94,12 +162,12 @@ struct DictationEventDecoderTests {
     event.flags = [.maskCommand, Self.rightCommandFlag]
     let down = DictationEventDecoder.routerEvent(
       type: .flagsChanged, event: event, triggerFlag: Self.rightCommandFlag)
-    #expect(down == .flagsChanged(keyCode: 54, triggerFlagIsOn: true))
+    #expect(down == .flagsChanged(keyCode: 54, triggerFlagIsOn: true, modifiers: [.command]))
 
     event.flags = []
     let up = DictationEventDecoder.routerEvent(
       type: .flagsChanged, event: event, triggerFlag: Self.rightCommandFlag)
-    #expect(up == .flagsChanged(keyCode: 54, triggerFlagIsOn: false))
+    #expect(up == .flagsChanged(keyCode: 54, triggerFlagIsOn: false, modifiers: []))
   }
 
   @Test("a flagsChanged delivery for another modifier still reports its own keycode")
@@ -113,7 +181,7 @@ struct DictationEventDecoderTests {
     event.flags = [.maskCommand]
     let decoded = DictationEventDecoder.routerEvent(
       type: .flagsChanged, event: event, triggerFlag: Self.rightCommandFlag)
-    #expect(decoded == .flagsChanged(keyCode: 55, triggerFlagIsOn: false))
+    #expect(decoded == .flagsChanged(keyCode: 55, triggerFlagIsOn: false, modifiers: [.command]))
   }
 
   @Test("event types outside the tap's interest decode to nothing")

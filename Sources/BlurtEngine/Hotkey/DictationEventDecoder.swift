@@ -23,9 +23,18 @@ public enum DictationEventDecoder {
     case .flagsChanged:
       return .flagsChanged(
         keyCode: Int(event.getIntegerValueField(.keyboardEventKeycode)),
-        triggerFlagIsOn: event.flags.contains(triggerFlag))
+        triggerFlagIsOn: event.flags.contains(triggerFlag),
+        modifiers: modifiers(from: event.flags))
     case .keyDown:
-      return .keyDown(keyCode: Int(event.getIntegerValueField(.keyboardEventKeycode)))
+      // Autorepeat is not an edge: a held chord key repeats at the system rate,
+      // and every repeat would otherwise walk the router's dedup. Dropped here so
+      // the repeat storm never reaches the engine at all.
+      guard event.getIntegerValueField(.keyboardEventAutorepeat) == 0 else { return nil }
+      return .keyDown(
+        keyCode: Int(event.getIntegerValueField(.keyboardEventKeycode)),
+        modifiers: modifiers(from: event.flags))
+    case .keyUp:
+      return .keyUp(keyCode: Int(event.getIntegerValueField(.keyboardEventKeycode)))
     case .otherMouseDown:
       return .mouseDown(button: Int(event.getIntegerValueField(.mouseEventButtonNumber)))
     case .otherMouseUp:
@@ -33,5 +42,19 @@ public enum DictationEventDecoder {
     default:
       return nil
     }
+  }
+
+  /// The side-agnostic chord modifier set a `CGEvent`'s flags carry. Reads the
+  /// **generic** masks (`maskControl` etc.), not the per-side device bits
+  /// `TriggerKey` uses: a chord is a shortcut, so ⌃ is ⌃ whichever one is held.
+  /// Caps Lock and `fn` are deliberately not chord modifiers — Caps Lock is a
+  /// latch rather than a held key, and `fn` is macOS's own.
+  public static func modifiers(from flags: CGEventFlags) -> TriggerBinding.ChordModifiers {
+    var modifiers: TriggerBinding.ChordModifiers = []
+    if flags.contains(.maskControl) { modifiers.insert(.control) }
+    if flags.contains(.maskAlternate) { modifiers.insert(.option) }
+    if flags.contains(.maskShift) { modifiers.insert(.shift) }
+    if flags.contains(.maskCommand) { modifiers.insert(.command) }
+    return modifiers
   }
 }

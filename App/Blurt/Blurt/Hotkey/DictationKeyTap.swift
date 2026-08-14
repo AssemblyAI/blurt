@@ -5,9 +5,10 @@ import os
 /// Drives the single-key dictation trigger from a `CGEventTap`.
 ///
 /// The bound trigger is a `TriggerBinding`: a lone modifier (e.g. right ⌘,
-/// keycode 54) watched via `flagsChanged`, or an extra mouse button watched via
-/// `otherMouseDown`/`otherMouseUp`. `keyDown` is watched for any *other*
-/// key to spot a modifier combo (⌘C, ⌘V…). The per-event decision lives in the
+/// keycode 54) watched via `flagsChanged`, a keyboard chord (⌃⌥D) watched via
+/// `keyDown`/`keyUp` plus the modifier set each event reports, or an extra mouse
+/// button watched via `otherMouseDown`/`otherMouseUp`. `keyDown` is also watched
+/// for any *other* key to spot a modifier combo (⌘C, ⌘V…). The per-event decision lives in the
 /// engine — `DictationKeyRouter` (binding relevance + down/up edge dedup) over
 /// `DictationKeyGate` (tap/hold semantics) — so this type only reduces each
 /// `CGEvent` to a router event and owns the tap lifecycle. The mask covers
@@ -15,14 +16,16 @@ import os
 /// (a tap's mask is fixed at creation, and the router ignores irrelevant
 /// events), so rebinding never has to recreate the tap.
 ///
-/// Unlike the old chord trigger, this **swallows nothing**: a lone modifier or
-/// extra mouse button types and clicks nothing into the focused app,
-/// and combos must pass through so normal shortcuts keep working. The tap is
+/// This **swallows nothing**, by design: a lone modifier or extra mouse button
+/// types and clicks nothing into the focused app, and combos must pass through
+/// so normal shortcuts keep working. The tap is
 /// therefore created `.listenOnly` — an active (`.defaultTap`) tap would make
 /// macOS synchronously wait on this process before delivering every keystroke
 /// system-wide, so any main-thread stall in Blurt would add typing latency in
-/// *other* apps. (This is also why the Custom recorder binds no keyboard keys:
-/// a listen-only tap could never stop a bound letter key from typing.)
+/// *other* apps. Two consequences the UI states rather than hides: the Custom
+/// recorder refuses a **bare** key (it would type on every dictation), and a
+/// bound **chord** still reaches an app that already owns it — see
+/// `TriggerBinding.passThroughNote`.
 ///
 /// Main-actor (via the app target's default isolation) because everything here
 /// already runs on the main thread: the tap's run-loop source is added to the
@@ -52,9 +55,9 @@ final class DictationKeyTap {
   private var router: DictationKeyRouter
   /// The bound modifier's device-dependent `CGEventFlags` bit — the one
   /// CoreGraphics-typed piece of the binding, so it stays here rather than in
-  /// the router. Empty for mouse bindings, whose down/up state rides their
-  /// own event types rather than a flag bit (the router ignores `flagsChanged`
-  /// under those bindings, so the value is never consulted).
+  /// the router. Empty for chord and mouse bindings, whose down/up state rides
+  /// their own event types rather than one device bit (a chord reads the generic
+  /// modifier masks, which the decoder resolves per event).
   private var triggerFlag: CGEventFlags
 
   /// Monotonic reference; per-event timestamps are `reference.duration(to: now)`.
@@ -112,7 +115,8 @@ final class DictationKeyTap {
       return true
     }
     let mask =
-      (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.flagsChanged.rawValue)
+      (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue)
+      | (1 << CGEventType.flagsChanged.rawValue)
       | (1 << CGEventType.otherMouseDown.rawValue) | (1 << CGEventType.otherMouseUp.rawValue)
     guard
       let created = CGEvent.tapCreate(
@@ -214,6 +218,13 @@ final class DictationKeyTap {
     switch router.binding {
     case .modifier:
       return CGEventSource.flagsState(.combinedSessionState).contains(triggerFlag)
+    case .chord(let keyCode, let modifiers):
+      // Both halves have to still be down for the press to be live: the key
+      // itself, and every modifier the chord requires.
+      let held = DictationEventDecoder.modifiers(
+        from: CGEventSource.flagsState(.combinedSessionState))
+      return CGEventSource.keyState(.combinedSessionState, key: CGKeyCode(keyCode))
+        && held.isSuperset(of: modifiers)
     case .mouseButton(let button):
       // `CGMouseButton` is an open C enum, so any button number constructs; a
       // nil (out-of-range) read degrades to "not held", which resets the gate —
@@ -269,6 +280,9 @@ final class DictationKeyTap {
       switch router.binding {
       case .modifier(let key):
         return .flagsChanged(keyCode: key.keyCode, triggerFlagIsOn: down)
+      case .chord(let keyCode, let modifiers):
+        return down
+          ? .keyDown(keyCode: keyCode, modifiers: modifiers) : .keyUp(keyCode: keyCode)
       case .mouseButton(let button):
         return down ? .mouseDown(button: button) : .mouseUp(button: button)
       }
