@@ -68,6 +68,7 @@ enum AudioRoute {
       }
       return InputSnapshot(deviceID: deviceID, transportType: transportType(of: deviceID))
     }
+
     /// The system's current default *output* device — what `AudioRouteMonitor`
     /// hangs its format listener on. Nil when there is none, or the read failed.
     static func defaultOutputDeviceID() -> AudioDeviceID? {
