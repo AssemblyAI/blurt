@@ -3,29 +3,35 @@
   import AppKit
   import ApplicationServices
   import Foundation
+#endif
 
-  public struct PermissionStatus: Equatable, Sendable {
-    public let microphone: Bool
-    public let accessibility: Bool
+/// Outside the `os(macOS)` fence on purpose: a pure value type (two Bools and
+/// their derivations) with no framework dependency, consumed by the portable
+/// `SetupReadiness` policy. Only *reading* the grants (`PermissionsChecker`,
+/// below) needs the mac-only TCC probes.
+public struct PermissionStatus: Equatable, Sendable {
+  public let microphone: Bool
+  public let accessibility: Bool
 
-    public init(microphone: Bool, accessibility: Bool) {
-      self.microphone = microphone
-      self.accessibility = accessibility
-    }
-
-    public var allGranted: Bool { microphone && accessibility }
-
-    /// True when `previous` had every permission and this reading no longer does —
-    /// i.e. the user revoked one in System Settings, possibly while no window was
-    /// open. The shell reacts by pulling them back into onboarding rather than
-    /// leaving a dead overlay, so this is a behavioural edge worth a test; it lives
-    /// next to `allGranted`, the derivation it's built from, rather than being
-    /// spelled out at the one call site that watches for it.
-    public func lostGrant(since previous: PermissionStatus) -> Bool {
-      previous.allGranted && !allGranted
-    }
+  public init(microphone: Bool, accessibility: Bool) {
+    self.microphone = microphone
+    self.accessibility = accessibility
   }
 
+  public var allGranted: Bool { microphone && accessibility }
+
+  /// True when `previous` had every permission and this reading no longer does —
+  /// i.e. the user revoked one in System Settings, possibly while no window was
+  /// open. The shell reacts by pulling them back into onboarding rather than
+  /// leaving a dead overlay, so this is a behavioural edge worth a test; it lives
+  /// next to `allGranted`, the derivation it's built from, rather than being
+  /// spelled out at the one call site that watches for it.
+  public func lostGrant(since previous: PermissionStatus) -> Bool {
+    previous.allGranted && !allGranted
+  }
+}
+
+#if os(macOS)
   public enum PermissionsChecker {
     /// The current grant state, read without prompting.
     public static func check() -> PermissionStatus {
