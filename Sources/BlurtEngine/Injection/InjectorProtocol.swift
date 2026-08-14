@@ -1,7 +1,14 @@
-import AppKit
+#if os(macOS)
+  import AppKit
+#endif
 
 public protocol InjectorProtocol: Sendable {
-  func setTargetApp(_ app: NSRunningApplication?) async
+  #if os(macOS)
+    /// Pins the paste target captured at press time. macOS-only because the
+    /// target's identity is an AppKit process handle; on other platforms the
+    /// host's injector owns its own notion of where text lands.
+    func setTargetApp(_ app: NSRunningApplication?) async
+  #endif
   /// Insert text into whatever the OS currently treats as the focus target.
   /// `priorText` is the text immediately before the caret (captured at press time),
   /// used to decide whether a separating space is needed so consecutive dictations

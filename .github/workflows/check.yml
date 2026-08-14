@@ -144,6 +144,42 @@ jobs:
         # job is meant to save.
         run: swift build --build-tests -Xswiftc -warnings-as-errors
 
+  # The engine's iOS slice. `check` and `compile` build BlurtEngine for macOS
+  # only, so without this nothing would catch a change that reaches for an
+  # unfenced AppKit/CoreAudio/AX symbol and silently breaks the package's
+  # declared iOS platform. Build-only on purpose: the engine's tests run under
+  # `check` on macOS, and there is no iOS app target to exercise. Like
+  # `compile`, it is deliberately NOT required and `gate` ignores it — it can
+  # only go red where an iOS consumer of the package would too.
+  ios-build:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: macos-26
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          persist-credentials: false
+
+      - name: Build BlurtEngine for iOS
+        working-directory: blurt
+        # xcodebuild rather than `swift build`: SwiftPM builds for the host, and
+        # cross-compiling to iOS needs the SDK/destination handling xcodebuild
+        # owns (it resolves the package straight from the checkout — no project
+        # needed). `generic/platform=iOS Simulator` builds against the runner's
+        # default — i.e. latest installed — simulator SDK without naming a
+        # device or pinning an iOS version. The scheme is the package's own
+        # `BlurtEngine` product scheme, so only the library builds; the test
+        # target stays a macOS (`swift test`) concern.
+        run: |
+          xcodebuild -scheme BlurtEngine \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/BlurtEngine-iOS" \
+            build
+
   # What swift-format would change, as an applicable patch. Formatting is the
   # other half of what CI is sole authority over here, and `check` can only say
   # *that* a file is misformatted (`swift-format lint --strict`) — leaving the

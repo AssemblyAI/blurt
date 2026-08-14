@@ -1,115 +1,117 @@
-import AVFoundation
-import AppKit
-import ApplicationServices
-import Foundation
+#if os(macOS)
+  import AVFoundation
+  import AppKit
+  import ApplicationServices
+  import Foundation
 
-public struct PermissionStatus: Equatable, Sendable {
-  public let microphone: Bool
-  public let accessibility: Bool
+  public struct PermissionStatus: Equatable, Sendable {
+    public let microphone: Bool
+    public let accessibility: Bool
 
-  public init(microphone: Bool, accessibility: Bool) {
-    self.microphone = microphone
-    self.accessibility = accessibility
-  }
-
-  public var allGranted: Bool { microphone && accessibility }
-
-  /// True when `previous` had every permission and this reading no longer does —
-  /// i.e. the user revoked one in System Settings, possibly while no window was
-  /// open. The shell reacts by pulling them back into onboarding rather than
-  /// leaving a dead overlay, so this is a behavioural edge worth a test; it lives
-  /// next to `allGranted`, the derivation it's built from, rather than being
-  /// spelled out at the one call site that watches for it.
-  public func lostGrant(since previous: PermissionStatus) -> Bool {
-    previous.allGranted && !allGranted
-  }
-}
-
-public enum PermissionsChecker {
-  /// The current grant state, read without prompting.
-  public static func check() -> PermissionStatus {
-    check(micGranted: { micGranted() }, axTrusted: { AXIsProcessTrusted() })
-  }
-
-  /// The composition `check()` performs, with both probes injected. The probes
-  /// themselves read process-global TCC state the test host can't set, so with
-  /// them hard-coded the only assertable claim about `check()` was that it
-  /// doesn't crash — and the test that made it ended up restating `allGranted`'s
-  /// own definition instead. Injected, the wiring is assertable: each probe's
-  /// answer has to land in its own field, so a swapped pair fails.
-  static func check(micGranted: () -> Bool, axTrusted: () -> Bool) -> PermissionStatus {
-    PermissionStatus(
-      microphone: micGranted(),
-      accessibility: axTrusted()
-    )
-  }
-
-  private static func micGranted() -> Bool {
-    AVAudioApplication.shared.recordPermission == .granted
-  }
-
-  public static func requestMicrophone() async -> Bool {
-    await AVAudioApplication.requestRecordPermission()
-  }
-
-  /// Opens System Settings to Privacy › Microphone. The fallback when the in-app
-  /// `requestMicrophone()` prompt can't grant access — the user declined it, or
-  /// the system won't re-present it once the status is determined — so the
-  /// Microphone row still has a way forward, mirroring the Accessibility row's
-  /// "open Settings" flow rather than being a dead-end button.
-  @MainActor
-  public static func openMicrophoneSettings() {
-    guard
-      let url = URL(
-        string:
-          "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Microphone")
-    else { return }
-    NSWorkspace.shared.open(url)
-  }
-
-  /// Trigger the Accessibility permission flow:
-  /// 1. Make a *real* AX-protected call against another app's UI tree —
-  ///    this is what reliably registers Blurt in TCC on macOS 26.
-  ///    `AXIsProcessTrustedWithOptions` and the system-wide query don't
-  ///    appear to count as "activity" for registration purposes.
-  /// 2. Show the trust prompt with an "Open System Settings" button.
-  @MainActor
-  public static func openAccessibilitySettings() {
-    forceAccessibilityActivity()
-    // The literal spells out `kAXTrustedCheckOptionPrompt`'s value: the SDK
-    // header declares the constant as a non-const `extern CFStringRef`, so it
-    // imports into Swift as a global `var` that strict concurrency refuses to
-    // reference ("shared mutable state") — the framework constant cannot be
-    // used here.
-    let prompt: NSDictionary = ["AXTrustedCheckOptionPrompt": true]
-    _ = AXIsProcessTrustedWithOptions(prompt)
-  }
-
-  /// Makes a *real* AX-protected call against another app's UI tree — what
-  /// reliably registers Blurt in TCC on macOS 26, and the no-prompt first step
-  /// of `openAccessibilitySettings`. Internal rather than private so the engine
-  /// tests can exercise it directly, without the trust prompt that
-  /// `openAccessibilitySettings` adds on top.
-  @MainActor
-  static func forceAccessibilityActivity() {
-    // AX reads against our own pid are NOT TCC-protected — apps can always
-    // read their own UI. We must target a different process so tccd sees
-    // a denied request and registers Blurt in the Accessibility list.
-    // `frontmostApplication` is Blurt itself when this runs from a
-    // button in our own window, which is why prior versions never worked.
-    let myPid = ProcessInfo.processInfo.processIdentifier
-    let others = NSWorkspace.shared.runningApplications.filter {
-      $0.processIdentifier > 0 && $0.processIdentifier != myPid
+    public init(microphone: Bool, accessibility: Bool) {
+      self.microphone = microphone
+      self.accessibility = accessibility
     }
-    let target =
-      others.first(where: { $0.bundleIdentifier == "com.apple.finder" })
-      ?? others.first(where: { $0.activationPolicy == .regular })
-      ?? others.first
-    guard let pid = target?.processIdentifier else { return }
-    let element = AXUIElementCreateApplication(pid)
-    var value: CFTypeRef?
-    _ = AXUIElementCopyAttributeValue(
-      element, kAXFocusedUIElementAttribute as CFString, &value)
+
+    public var allGranted: Bool { microphone && accessibility }
+
+    /// True when `previous` had every permission and this reading no longer does —
+    /// i.e. the user revoked one in System Settings, possibly while no window was
+    /// open. The shell reacts by pulling them back into onboarding rather than
+    /// leaving a dead overlay, so this is a behavioural edge worth a test; it lives
+    /// next to `allGranted`, the derivation it's built from, rather than being
+    /// spelled out at the one call site that watches for it.
+    public func lostGrant(since previous: PermissionStatus) -> Bool {
+      previous.allGranted && !allGranted
+    }
   }
 
-}
+  public enum PermissionsChecker {
+    /// The current grant state, read without prompting.
+    public static func check() -> PermissionStatus {
+      check(micGranted: { micGranted() }, axTrusted: { AXIsProcessTrusted() })
+    }
+
+    /// The composition `check()` performs, with both probes injected. The probes
+    /// themselves read process-global TCC state the test host can't set, so with
+    /// them hard-coded the only assertable claim about `check()` was that it
+    /// doesn't crash — and the test that made it ended up restating `allGranted`'s
+    /// own definition instead. Injected, the wiring is assertable: each probe's
+    /// answer has to land in its own field, so a swapped pair fails.
+    static func check(micGranted: () -> Bool, axTrusted: () -> Bool) -> PermissionStatus {
+      PermissionStatus(
+        microphone: micGranted(),
+        accessibility: axTrusted()
+      )
+    }
+
+    private static func micGranted() -> Bool {
+      AVAudioApplication.shared.recordPermission == .granted
+    }
+
+    public static func requestMicrophone() async -> Bool {
+      await AVAudioApplication.requestRecordPermission()
+    }
+
+    /// Opens System Settings to Privacy › Microphone. The fallback when the in-app
+    /// `requestMicrophone()` prompt can't grant access — the user declined it, or
+    /// the system won't re-present it once the status is determined — so the
+    /// Microphone row still has a way forward, mirroring the Accessibility row's
+    /// "open Settings" flow rather than being a dead-end button.
+    @MainActor
+    public static func openMicrophoneSettings() {
+      guard
+        let url = URL(
+          string:
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Microphone")
+      else { return }
+      NSWorkspace.shared.open(url)
+    }
+
+    /// Trigger the Accessibility permission flow:
+    /// 1. Make a *real* AX-protected call against another app's UI tree —
+    ///    this is what reliably registers Blurt in TCC on macOS 26.
+    ///    `AXIsProcessTrustedWithOptions` and the system-wide query don't
+    ///    appear to count as "activity" for registration purposes.
+    /// 2. Show the trust prompt with an "Open System Settings" button.
+    @MainActor
+    public static func openAccessibilitySettings() {
+      forceAccessibilityActivity()
+      // The literal spells out `kAXTrustedCheckOptionPrompt`'s value: the SDK
+      // header declares the constant as a non-const `extern CFStringRef`, so it
+      // imports into Swift as a global `var` that strict concurrency refuses to
+      // reference ("shared mutable state") — the framework constant cannot be
+      // used here.
+      let prompt: NSDictionary = ["AXTrustedCheckOptionPrompt": true]
+      _ = AXIsProcessTrustedWithOptions(prompt)
+    }
+
+    /// Makes a *real* AX-protected call against another app's UI tree — what
+    /// reliably registers Blurt in TCC on macOS 26, and the no-prompt first step
+    /// of `openAccessibilitySettings`. Internal rather than private so the engine
+    /// tests can exercise it directly, without the trust prompt that
+    /// `openAccessibilitySettings` adds on top.
+    @MainActor
+    static func forceAccessibilityActivity() {
+      // AX reads against our own pid are NOT TCC-protected — apps can always
+      // read their own UI. We must target a different process so tccd sees
+      // a denied request and registers Blurt in the Accessibility list.
+      // `frontmostApplication` is Blurt itself when this runs from a
+      // button in our own window, which is why prior versions never worked.
+      let myPid = ProcessInfo.processInfo.processIdentifier
+      let others = NSWorkspace.shared.runningApplications.filter {
+        $0.processIdentifier > 0 && $0.processIdentifier != myPid
+      }
+      let target =
+        others.first(where: { $0.bundleIdentifier == "com.apple.finder" })
+        ?? others.first(where: { $0.activationPolicy == .regular })
+        ?? others.first
+      guard let pid = target?.processIdentifier else { return }
+      let element = AXUIElementCreateApplication(pid)
+      var value: CFTypeRef?
+      _ = AXUIElementCopyAttributeValue(
+        element, kAXFocusedUIElementAttribute as CFString, &value)
+    }
+
+  }
+#endif

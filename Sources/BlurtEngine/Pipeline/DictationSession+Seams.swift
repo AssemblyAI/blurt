@@ -22,9 +22,15 @@ extension DictationSession {
   /// session stores one and never writes to it.
   struct Seams: Sendable {
     /// Captures the frontmost application — the paste target, and the context's
-    /// app name. On the main actor because it's an AppKit read.
+    /// app name. On the main actor because it's an AppKit read. Off macOS there
+    /// is no AX capture to run, so the default reports nothing and a host that
+    /// has real context supplies its own seam.
     var captureFrontmost: @Sendable () async -> CapturedFocus? = {
-      await MainActor.run { FocusCapture.captureFrontmost() }
+      #if os(macOS)
+        return await MainActor.run { FocusCapture.captureFrontmost() }
+      #else
+        return nil
+      #endif
     }
 
     /// Reads the focused field's Accessibility context. Deliberately
@@ -32,7 +38,11 @@ extension DictationSession {
     /// it blocks a thread against an unresponsive app (see its call site), and
     /// that stays true of the production capture behind this seam.
     var captureFieldContext: @Sendable () -> FocusCapture.FocusedFieldContext = {
-      FocusCapture.captureFieldContext()
+      #if os(macOS)
+        return FocusCapture.captureFieldContext()
+      #else
+        return .empty
+      #endif
     }
 
     /// Records a completed dictation in the developer-mode log. Gated on the

@@ -1,8 +1,11 @@
-import AppKit
 import Foundation
 import Testing
 
 @testable import BlurtEngine
+
+#if os(macOS)
+  import AppKit
+#endif
 
 /// Cancel arriving after recording has already stopped — i.e. while the pipeline
 /// is in `.transcribing` or `.injecting`. The transcribe→inject work runs in a
@@ -324,7 +327,9 @@ private actor GatedInjector: InjectorProtocol {
     self.onRecord = onRecord
   }
 
-  func setTargetApp(_ app: NSRunningApplication?) async {}
+  #if os(macOS)
+    func setTargetApp(_ app: NSRunningApplication?) async {}
+  #endif
 
   func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws {
     await gate.enter()

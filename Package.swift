@@ -3,7 +3,11 @@ import PackageDescription
 
 let package = Package(
   name: "BlurtEngine",
-  platforms: [.macOS(.v15)],
+  // iOS 18 is the era-matching floor for macOS 15: the engine's `Synchronization`
+  // imports (Mutex) need it, and nothing portable here wants anything newer. The
+  // mac-only capture/injection/AX files are fenced behind `#if os(macOS)`; the
+  // pipeline, STT client, and settings stores compile for both platforms.
+  platforms: [.macOS(.v15), .iOS(.v18)],
   products: [
     .library(name: "BlurtEngine", targets: ["BlurtEngine"])
   ],

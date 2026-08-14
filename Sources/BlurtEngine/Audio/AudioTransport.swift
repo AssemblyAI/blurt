@@ -1,4 +1,6 @@
-import CoreAudio
+#if os(macOS)
+  import CoreAudio
+#endif
 
 /// Classification of a CoreAudio device's transport type
 /// (`kAudioDevicePropertyTransportType`).
@@ -23,9 +25,16 @@ enum AudioTransport {
   /// and no linger. Padding every wired capture with a delay would be a worse
   /// regression than losing the tail on a device we couldn't classify.
   static func isBluetooth(_ transportType: UInt32?) -> Bool {
-    guard let transportType else { return false }
-    return transportType == kAudioDeviceTransportTypeBluetooth
-      || transportType == kAudioDeviceTransportTypeBluetoothLE
+    #if os(macOS)
+      guard let transportType else { return false }
+      return transportType == kAudioDeviceTransportTypeBluetooth
+        || transportType == kAudioDeviceTransportTypeBluetoothLE
+    #else
+      // The transport constants are HAL (macOS-only) symbols, and iOS never
+      // produces a transport type anyway — `AudioRoute.currentInput()` is nil
+      // there — so nothing classifies as Bluetooth.
+      return false
+    #endif
   }
 
   /// How much longer capture runs past the key-up that ends it, for a device of

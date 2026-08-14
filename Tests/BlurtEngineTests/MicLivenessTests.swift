@@ -1,9 +1,12 @@
-import CoreAudio
 import Foundation
 import Synchronization
 import Testing
 
 @testable import BlurtEngine
+
+#if os(macOS)
+  import CoreAudio
+#endif
 
 /// The pure half of `MicCapture.start()`'s liveness gate: the transport-aware
 /// wait cap and the poll-until-the-recorder's-clock-advances loop. Driven
@@ -11,27 +14,30 @@ import Testing
 /// seconds.
 @Suite("MicLiveness", .timeLimit(.minutes(1)))
 struct MicLivenessTests {
-  @Test("Bluetooth transports get the long cap; everything else the short one")
-  func transportTimeouts() {
-    // The profile switch is the whole reason the gate exists — both Bluetooth
-    // transport types must get the multi-second budget.
-    #expect(
-      MicLiveness.timeout(forTransportType: kAudioDeviceTransportTypeBluetooth)
-        == MicLiveness.bluetoothTimeout)
-    #expect(
-      MicLiveness.timeout(forTransportType: kAudioDeviceTransportTypeBluetoothLE)
-        == MicLiveness.bluetoothTimeout)
-    // Wired/built-in inputs deliver frames near-instantly; a long cap there
-    // would make a genuinely broken mic feel like a hang.
-    #expect(
-      MicLiveness.timeout(forTransportType: kAudioDeviceTransportTypeBuiltIn)
-        == MicLiveness.defaultTimeout)
-    #expect(
-      MicLiveness.timeout(forTransportType: kAudioDeviceTransportTypeUSB)
-        == MicLiveness.defaultTimeout)
-    // An unreadable transport must not be treated as Bluetooth.
-    #expect(MicLiveness.timeout(forTransportType: nil) == MicLiveness.defaultTimeout)
-  }
+  #if os(macOS)
+    @Test("Bluetooth transports get the long cap; everything else the short one")
+    func transportTimeouts() {
+      // The profile switch is the whole reason the gate exists — both Bluetooth
+      // transport types must get the multi-second budget. (macOS-only: the
+      // transport constants are HAL symbols, and iOS never reads a transport.)
+      #expect(
+        MicLiveness.timeout(forTransportType: kAudioDeviceTransportTypeBluetooth)
+          == MicLiveness.bluetoothTimeout)
+      #expect(
+        MicLiveness.timeout(forTransportType: kAudioDeviceTransportTypeBluetoothLE)
+          == MicLiveness.bluetoothTimeout)
+      // Wired/built-in inputs deliver frames near-instantly; a long cap there
+      // would make a genuinely broken mic feel like a hang.
+      #expect(
+        MicLiveness.timeout(forTransportType: kAudioDeviceTransportTypeBuiltIn)
+          == MicLiveness.defaultTimeout)
+      #expect(
+        MicLiveness.timeout(forTransportType: kAudioDeviceTransportTypeUSB)
+          == MicLiveness.defaultTimeout)
+      // An unreadable transport must not be treated as Bluetooth.
+      #expect(MicLiveness.timeout(forTransportType: nil) == MicLiveness.defaultTimeout)
+    }
+  #endif
 
   @Test("already-advancing recorder clock confirms immediately, without sleeping")
   func immediateLiveness() async {
@@ -108,43 +114,45 @@ struct MicLivenessTests {
   }
 }
 
-/// The transport classification both the liveness cap and `MicCapture`'s tail
-/// linger hang off. Pure and pinned here because `AudioRoute`, which reads the
-/// raw value, needs real hardware and is excluded from the coverage gate — so
-/// this is the only place the decision can be tested.
-@Suite("AudioTransport")
-struct AudioTransportTests {
-  @Test("both Bluetooth transport types count")
-  func bluetoothTransports() {
-    #expect(AudioTransport.isBluetooth(kAudioDeviceTransportTypeBluetooth))
-    #expect(AudioTransport.isBluetooth(kAudioDeviceTransportTypeBluetoothLE))
-  }
+#if os(macOS)
+  /// The transport classification both the liveness cap and `MicCapture`'s tail
+  /// linger hang off. Pure and pinned here because `AudioRoute`, which reads the
+  /// raw value, needs real hardware and is excluded from the coverage gate — so
+  /// this is the only place the decision can be tested.
+  @Suite("AudioTransport")
+  struct AudioTransportTests {
+    @Test("both Bluetooth transport types count")
+    func bluetoothTransports() {
+      #expect(AudioTransport.isBluetooth(kAudioDeviceTransportTypeBluetooth))
+      #expect(AudioTransport.isBluetooth(kAudioDeviceTransportTypeBluetoothLE))
+    }
 
-  @Test("the tail linger is Bluetooth-only")
-  func tailLinger() {
-    // The other transport-conditional policy, here rather than in `MicCapture`
-    // so it is reachable by `swift test` at all — the capture actor needs real
-    // hardware and is excluded from the coverage gate.
-    #expect(
-      AudioTransport.tailLinger(forTransportType: kAudioDeviceTransportTypeBluetooth)
-        == AudioTransport.bluetoothTailLinger)
-    // `.zero`, not a small duration: `stop()` skips the sleep entirely on a
-    // wired input rather than awaiting a nominal one.
-    #expect(AudioTransport.tailLinger(forTransportType: kAudioDeviceTransportTypeBuiltIn) == .zero)
-    #expect(AudioTransport.tailLinger(forTransportType: nil) == .zero)
-  }
+    @Test("the tail linger is Bluetooth-only")
+    func tailLinger() {
+      // The other transport-conditional policy, here rather than in `MicCapture`
+      // so it is reachable by `swift test` at all — the capture actor needs real
+      // hardware and is excluded from the coverage gate.
+      #expect(
+        AudioTransport.tailLinger(forTransportType: kAudioDeviceTransportTypeBluetooth)
+          == AudioTransport.bluetoothTailLinger)
+      // `.zero`, not a small duration: `stop()` skips the sleep entirely on a
+      // wired input rather than awaiting a nominal one.
+      #expect(AudioTransport.tailLinger(forTransportType: kAudioDeviceTransportTypeBuiltIn) == .zero)
+      #expect(AudioTransport.tailLinger(forTransportType: nil) == .zero)
+    }
 
-  @Test("wired, built-in, and unreadable transports do not")
-  func nonBluetoothTransports() {
-    #expect(!AudioTransport.isBluetooth(kAudioDeviceTransportTypeBuiltIn))
-    #expect(!AudioTransport.isBluetooth(kAudioDeviceTransportTypeUSB))
-    #expect(!AudioTransport.isBluetooth(kAudioDeviceTransportTypeAggregate))
-    // nil is the conservative answer for both consumers: the short wait cap and
-    // no tail linger. Padding every wired capture with a delay would be a worse
-    // regression than losing the tail on a device we couldn't classify.
-    #expect(!AudioTransport.isBluetooth(nil))
+    @Test("wired, built-in, and unreadable transports do not")
+    func nonBluetoothTransports() {
+      #expect(!AudioTransport.isBluetooth(kAudioDeviceTransportTypeBuiltIn))
+      #expect(!AudioTransport.isBluetooth(kAudioDeviceTransportTypeUSB))
+      #expect(!AudioTransport.isBluetooth(kAudioDeviceTransportTypeAggregate))
+      // nil is the conservative answer for both consumers: the short wait cap and
+      // no tail linger. Padding every wired capture with a delay would be a worse
+      // regression than losing the tail on a device we couldn't classify.
+      #expect(!AudioTransport.isBluetooth(nil))
+    }
   }
-}
+#endif
 
 /// `Duration.milliseconds` backs the latency lines `MicCapture` logs for the
 /// liveness gap — the field evidence for whether the gate is doing anything —

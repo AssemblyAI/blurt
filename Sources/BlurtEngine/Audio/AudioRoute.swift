@@ -1,4 +1,11 @@
-import CoreAudio
+#if os(macOS)
+  import CoreAudio
+#else
+  /// CoreAudio's HAL — and with it `AudioDeviceID` — is macOS-only. Restating the
+  /// underlying type (`AudioObjectID` is a `UInt32`) keeps `InputSnapshot` one
+  /// shape on every platform, so `MicCapture` compiles unchanged.
+  typealias AudioDeviceID = UInt32
+#endif
 
 /// Read-only queries against the system's current audio routing — the two facts
 /// about the mic that `AVFoundation` doesn't expose but the capture path needs:
@@ -49,73 +56,81 @@ enum AudioRoute {
     let transportType: UInt32?
   }
 
-  /// The default input device as an `InputSnapshot`, or nil when there is no
-  /// input device (all of them unplugged or asleep) or CoreAudio refused the
-  /// read. Nil is the conservative answer everywhere it's consumed: an unknown
-  /// input invalidates a warm recorder rather than silently keeping one bound to
-  /// a device that may have gone away.
-  static func currentInput() -> InputSnapshot? {
-    guard let deviceID = defaultDeviceID(for: kAudioHardwarePropertyDefaultInputDevice) else {
-      return nil
+  #if os(macOS)
+    /// The default input device as an `InputSnapshot`, or nil when there is no
+    /// input device (all of them unplugged or asleep) or CoreAudio refused the
+    /// read. Nil is the conservative answer everywhere it's consumed: an unknown
+    /// input invalidates a warm recorder rather than silently keeping one bound to
+    /// a device that may have gone away.
+    static func currentInput() -> InputSnapshot? {
+      guard let deviceID = defaultDeviceID(for: kAudioHardwarePropertyDefaultInputDevice) else {
+        return nil
+      }
+      return InputSnapshot(deviceID: deviceID, transportType: transportType(of: deviceID))
     }
-    return InputSnapshot(deviceID: deviceID, transportType: transportType(of: deviceID))
-  }
+    /// The system's current default *output* device — what `AudioRouteMonitor`
+    /// hangs its format listener on. Nil when there is none, or the read failed.
+    static func defaultOutputDeviceID() -> AudioDeviceID? {
+      defaultDeviceID(for: kAudioHardwarePropertyDefaultOutputDevice)
+    }
 
-  /// The system's current default *output* device — what `AudioRouteMonitor`
-  /// hangs its format listener on. Nil when there is none, or the read failed.
-  static func defaultOutputDeviceID() -> AudioDeviceID? {
-    defaultDeviceID(for: kAudioHardwarePropertyDefaultOutputDevice)
-  }
+    // MARK: - CoreAudio addressing
 
-  // MARK: - CoreAudio addressing
+    /// The system-wide audio object, which owns the default-device properties.
+    static var systemObject: AudioObjectID { AudioObjectID(kAudioObjectSystemObject) }
 
-  /// The system-wide audio object, which owns the default-device properties.
-  static var systemObject: AudioObjectID { AudioObjectID(kAudioObjectSystemObject) }
+    /// A global-scope address for `selector`. Returned fresh per call rather than
+    /// stored, because every caller needs its own copy to pass `inout` to
+    /// CoreAudio. Shared with `AudioRouteMonitor`, which addresses the same object
+    /// graph and would otherwise restate this three-field literal.
+    static func globalAddress(_ selector: AudioObjectPropertySelector) -> AudioObjectPropertyAddress {
+      AudioObjectPropertyAddress(
+        mSelector: selector,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain)
+    }
 
-  /// A global-scope address for `selector`. Returned fresh per call rather than
-  /// stored, because every caller needs its own copy to pass `inout` to
-  /// CoreAudio. Shared with `AudioRouteMonitor`, which addresses the same object
-  /// graph and would otherwise restate this three-field literal.
-  static func globalAddress(_ selector: AudioObjectPropertySelector) -> AudioObjectPropertyAddress {
-    AudioObjectPropertyAddress(
-      mSelector: selector,
-      mScope: kAudioObjectPropertyScopeGlobal,
-      mElement: kAudioObjectPropertyElementMain)
-  }
+    // MARK: - CoreAudio reads
 
-  // MARK: - CoreAudio reads
+    // Spelled out per property rather than shared behind a generic
+    // `read<T>(_:from:initial:)`. That reads better but doesn't compile: `&value`
+    // on an unconstrained `T` is "forming 'UnsafeMutableRawPointer' to a variable
+    // of type 'T'; this is likely incorrect because 'T' may contain an object
+    // reference". Making it work means constraining to `BitwiseCopyable` and going
+    // through `withUnsafeMutableBytes` — more machinery than two five-line reads
+    // are worth, in a file the coverage gate can't check anyway.
 
-  // Spelled out per property rather than shared behind a generic
-  // `read<T>(_:from:initial:)`. That reads better but doesn't compile: `&value`
-  // on an unconstrained `T` is "forming 'UnsafeMutableRawPointer' to a variable
-  // of type 'T'; this is likely incorrect because 'T' may contain an object
-  // reference". Making it work means constraining to `BitwiseCopyable` and going
-  // through `withUnsafeMutableBytes` — more machinery than two five-line reads
-  // are worth, in a file the coverage gate can't check anyway.
+    /// The device the system object reports for `selector` (a default-device
+    /// property). Nil covers both a failed read and the "no such device" sentinel,
+    /// which callers treat identically.
+    private static func defaultDeviceID(for selector: AudioObjectPropertySelector) -> AudioDeviceID? {
+      var address = globalAddress(selector)
+      var deviceID = AudioDeviceID(0)
+      var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+      let status = AudioObjectGetPropertyData(systemObject, &address, 0, nil, &size, &deviceID)
+      // 0 is `kAudioObjectUnknown` — "there is no such device" — spelled as the
+      // literal so this doesn't depend on how the constant imports.
+      guard status == noErr, deviceID != 0 else { return nil }
+      return deviceID
+    }
 
-  /// The device the system object reports for `selector` (a default-device
-  /// property). Nil covers both a failed read and the "no such device" sentinel,
-  /// which callers treat identically.
-  private static func defaultDeviceID(for selector: AudioObjectPropertySelector) -> AudioDeviceID? {
-    var address = globalAddress(selector)
-    var deviceID = AudioDeviceID(0)
-    var size = UInt32(MemoryLayout<AudioDeviceID>.size)
-    let status = AudioObjectGetPropertyData(systemObject, &address, 0, nil, &size, &deviceID)
-    // 0 is `kAudioObjectUnknown` — "there is no such device" — spelled as the
-    // literal so this doesn't depend on how the constant imports.
-    guard status == noErr, deviceID != 0 else { return nil }
-    return deviceID
-  }
-
-  /// The device's transport type, or nil when the read failed —
-  /// `AudioTransport` and `MicLiveness` both treat nil as "not Bluetooth", which
-  /// is the conservative direction for each.
-  private static func transportType(of deviceID: AudioDeviceID) -> UInt32? {
-    var address = globalAddress(kAudioDevicePropertyTransportType)
-    var transport = UInt32(0)
-    var size = UInt32(MemoryLayout<UInt32>.size)
-    let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &transport)
-    guard status == noErr else { return nil }
-    return transport
-  }
+    /// The device's transport type, or nil when the read failed —
+    /// `AudioTransport` and `MicLiveness` both treat nil as "not Bluetooth", which
+    /// is the conservative direction for each.
+    private static func transportType(of deviceID: AudioDeviceID) -> UInt32? {
+      var address = globalAddress(kAudioDevicePropertyTransportType)
+      var transport = UInt32(0)
+      var size = UInt32(MemoryLayout<UInt32>.size)
+      let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &transport)
+      guard status == noErr else { return nil }
+      return transport
+    }
+  #else
+    /// iOS has no HAL to ask; route identity there is an `AVAudioSession` question
+    /// this engine doesn't wire up yet. Always-nil is the conservative answer the
+    /// consumers already take for an unreadable route: `MicCapture` discards warm
+    /// recorders rather than trusting one, and `AudioTransport`/`MicLiveness`
+    /// treat the missing transport as not-Bluetooth (short wait cap, no linger).
+    static func currentInput() -> InputSnapshot? { nil }
+  #endif
 }

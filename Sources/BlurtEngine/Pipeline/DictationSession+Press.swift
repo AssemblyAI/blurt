@@ -130,7 +130,9 @@ extension DictationSession {
     // above) so the call is a Sendable closure rather than isolated state.
     let captureFrontmost = seams.captureFrontmost
     let captured = await captureFrontmost()
-    await injector.setTargetApp(captured.flatMap { FocusCapture.runningApp(for: $0) })
+    #if os(macOS)
+      await injector.setTargetApp(captured.flatMap { FocusCapture.runningApp(for: $0) })
+    #endif
     // Key terms are read synchronously at press (cheap UserDefaults read), so
     // each dictation observably re-reads Settings edits at press time.
     let keyTerms = keyTermsProvider()

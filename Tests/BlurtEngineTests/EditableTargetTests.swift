@@ -1,76 +1,78 @@
-import Testing
+#if os(macOS)
+  import Testing
 
-@testable import BlurtEngine
+  @testable import BlurtEngine
 
-@Suite("FocusCapture.isEditableTarget")
-struct EditableTargetTests {
-  @Test("a known text role is editable")
-  func textRole() {
-    #expect(
-      FocusCapture.isEditableTarget(
-        role: "AXTextArea", valueSettable: false, hasInsertionPoint: false))
+  @Suite("FocusCapture.isEditableTarget")
+  struct EditableTargetTests {
+    @Test("a known text role is editable")
+    func textRole() {
+      #expect(
+        FocusCapture.isEditableTarget(
+          role: "AXTextArea", valueSettable: false, hasInsertionPoint: false))
+    }
+
+    @Test("a secure (password) field is still a paste target despite prompt redaction")
+    func secureFieldIsEditable() {
+      // Redaction (never read a password into the STT prompt) and editability
+      // (the paste may land there) are independent: dictating into a password
+      // field must type, even though its contents are never captured.
+      #expect(
+        FocusCapture.isEditableTarget(
+          role: FocusCapture.secureFieldRole, valueSettable: false, hasInsertionPoint: false))
+    }
+
+    @Test("a settable value is editable even with an unknown role")
+    func settableValue() {
+      #expect(
+        FocusCapture.isEditableTarget(
+          role: "AXUnknown", valueSettable: true, hasInsertionPoint: false))
+    }
+
+    @Test("an insertion point is editable even with an unknown role")
+    func insertionPoint() {
+      #expect(
+        FocusCapture.isEditableTarget(
+          role: nil, valueSettable: false, hasInsertionPoint: true))
+    }
+
+    @Test("a non-text control with no editable signal is not editable")
+    func nonEditableControl() {
+      #expect(
+        !FocusCapture.isEditableTarget(
+          role: "AXButton", valueSettable: false, hasInsertionPoint: false))
+    }
+
+    @Test("an unknown role with no editable signal is not editable (copy, don't beep)")
+    func unknownRoleWithoutSignalCopies() {
+      // A focused element that reports an unrecognized role and exposes no settable
+      // value or insertion point isn't a text target — copy rather than beep a ⌘V
+      // into it. (AX-opaque apps — Electron editors and browsers — also land here,
+      // but are pasted into via the injector's separate app-identity check, not
+      // this signal test.)
+      #expect(
+        !FocusCapture.isEditableTarget(
+          role: "AXWebArea", valueSettable: false, hasInsertionPoint: false))
+    }
+
+    @Test("a focused element with an unreadable role is not editable (copy, don't beep)")
+    func nilRoleWithoutSignalCopies() {
+      #expect(
+        !FocusCapture.isEditableTarget(
+          role: nil, valueSettable: false, hasInsertionPoint: false))
+    }
   }
 
-  @Test("a secure (password) field is still a paste target despite prompt redaction")
-  func secureFieldIsEditable() {
-    // Redaction (never read a password into the STT prompt) and editability
-    // (the paste may land there) are independent: dictating into a password
-    // field must type, even though its contents are never captured.
-    #expect(
-      FocusCapture.isEditableTarget(
-        role: FocusCapture.secureFieldRole, valueSettable: false, hasInsertionPoint: false))
-  }
+  @Suite("noTarget phase + overlay mapping")
+  struct NoTargetPhaseTests {
+    @Test("noTarget is terminal")
+    func terminal() {
+      #expect(PipelinePhase.noTarget.isTerminal)
+    }
 
-  @Test("a settable value is editable even with an unknown role")
-  func settableValue() {
-    #expect(
-      FocusCapture.isEditableTarget(
-        role: "AXUnknown", valueSettable: true, hasInsertionPoint: false))
+    @Test("noTarget maps to the quiet overlay state, not an error")
+    func overlayMapping() {
+      #expect(PipelinePhase.noTarget.overlayState == .noTarget)
+    }
   }
-
-  @Test("an insertion point is editable even with an unknown role")
-  func insertionPoint() {
-    #expect(
-      FocusCapture.isEditableTarget(
-        role: nil, valueSettable: false, hasInsertionPoint: true))
-  }
-
-  @Test("a non-text control with no editable signal is not editable")
-  func nonEditableControl() {
-    #expect(
-      !FocusCapture.isEditableTarget(
-        role: "AXButton", valueSettable: false, hasInsertionPoint: false))
-  }
-
-  @Test("an unknown role with no editable signal is not editable (copy, don't beep)")
-  func unknownRoleWithoutSignalCopies() {
-    // A focused element that reports an unrecognized role and exposes no settable
-    // value or insertion point isn't a text target — copy rather than beep a ⌘V
-    // into it. (AX-opaque apps — Electron editors and browsers — also land here,
-    // but are pasted into via the injector's separate app-identity check, not
-    // this signal test.)
-    #expect(
-      !FocusCapture.isEditableTarget(
-        role: "AXWebArea", valueSettable: false, hasInsertionPoint: false))
-  }
-
-  @Test("a focused element with an unreadable role is not editable (copy, don't beep)")
-  func nilRoleWithoutSignalCopies() {
-    #expect(
-      !FocusCapture.isEditableTarget(
-        role: nil, valueSettable: false, hasInsertionPoint: false))
-  }
-}
-
-@Suite("noTarget phase + overlay mapping")
-struct NoTargetPhaseTests {
-  @Test("noTarget is terminal")
-  func terminal() {
-    #expect(PipelinePhase.noTarget.isTerminal)
-  }
-
-  @Test("noTarget maps to the quiet overlay state, not an error")
-  func overlayMapping() {
-    #expect(PipelinePhase.noTarget.overlayState == .noTarget)
-  }
-}
+#endif

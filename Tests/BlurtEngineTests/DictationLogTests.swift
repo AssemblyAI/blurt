@@ -121,8 +121,10 @@ struct DictationLogEntryTests {
       now: Date())
     #expect(entry.prior == "Hi Sam, ")
     #expect(entry.turns == ["Hi Sam,"])
-    #expect(KeyInjector.withLeadingSeparator("p", after: entry.prior) == "p")
-    #expect(KeyInjector.withLeadingSeparator("p", after: entry.turns.last) == " p")
+    #if os(macOS)
+      #expect(KeyInjector.withLeadingSeparator("p", after: entry.prior) == "p")
+      #expect(KeyInjector.withLeadingSeparator("p", after: entry.turns.last) == " p")
+    #endif
   }
 
   @Test("a nil prior tells a history-only turn list apart from a prior chunk")

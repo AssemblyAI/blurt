@@ -1,7 +1,10 @@
-import AppKit
 import Foundation
 
 @testable import BlurtEngine
+
+#if os(macOS)
+  import AppKit
+#endif
 
 actor StubInjector: InjectorProtocol {
   var inserted: [String] = []
@@ -20,6 +23,8 @@ actor StubInjector: InjectorProtocol {
     insertedPrior.append(priorText)
     insertedWindowTitles.append(windowTitle)
   }
-  func setTargetApp(_ app: NSRunningApplication?) async {}
+  #if os(macOS)
+    func setTargetApp(_ app: NSRunningApplication?) async {}
+  #endif
   func setError(_ error: (any Error & Sendable)?) { self.error = error }
 }
