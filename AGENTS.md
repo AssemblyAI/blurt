@@ -359,7 +359,7 @@ rule along with the row.
 | Add a "remove filler words (um, uh, like)" clause          | Not in the STT model's trained instruction set — a no-op, deliberately dropped; disfluency removal is the server-side LLM rewrite's job.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Add a keystroke-typing paste path or a length threshold    | Injection is **always** clipboard paste (save → write → ⌘V → settle → restore), with the copied-to-clipboard degradation when the target is lost.                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | Add `LSUIElement` or a menu-bar-**only** mode              | Blurt is a Dock app first. The `MenuBarExtra` status item is convenience layered on the Dock icon; the notch can hide a status item, so nothing may depend on it. A menu-bar-only variant was reverted twice.                                                                                                                                                                                                                                                                                                                                                                                                                |
-| Add a `KeyboardShortcuts` package or a key+modifier chord  | The trigger is a single lone modifier, home-grown (`CGEventTap` + `DictationKeyGate`), and swallows nothing.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Add a `KeyboardShortcuts` package or a key+modifier chord  | The trigger is a single lone key — a lone modifier by default, optionally a lone F-key or extra mouse button via the Custom option — home-grown (`CGEventTap` + `DictationKeyGate`), and swallows nothing. Never a chord, and never a printable key or the left/right mouse button: the listen-only tap can't stop a bound key from typing or clicking into the focused app.                                                                                                                                                                                                                                                 |
 | Add a self-replacing install or background auto-updater    | Updates are download-only; `mxcl/AppUpdater` and its in-place updater were removed. The once-a-day launch _check_ (`AutomaticUpdateCheck`) is fine; installing for the user, or polling, is not. Extend `UpdateCheckModel`.                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Hand-edit `Blurt.xcodeproj/project.pbxproj`                | Generated from `project.yml`; `check.sh`'s drift check fails on any manual edit (a Claude PreToolUse hook also blocks it).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Redirect the post-build install away from `/Applications`  | TCC won't register apps in DerivedData/`/tmp`, so permission toggles never appear.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
@@ -652,50 +652,73 @@ user picks a different trigger key.
 
 ## Hotkey
 
-The dictation trigger is a **single lone modifier key** (tap-to-toggle or hold-to-talk), implemented
-in-house. Four pieces, three of them pure engine logic:
+The dictation trigger is a **single lone key** (tap-to-toggle or hold-to-talk), implemented
+in-house: a lone modifier by default, or — via the Shortcut picker's Custom option — a lone function
+key (F1–F20) or an extra mouse button. Never a chord, and never a printable key or the left/right
+mouse button: the tap is listen-only and swallows nothing, so a bound letter key would type into the
+focused app on every dictation. Five pieces, four of them pure engine logic:
 
 - **`TriggerKey`** (`Hotkey/TriggerKey.swift`) — enum of the curated lone momentary modifiers usable
   as the trigger (right ⌘, right ⌥, `fn`), `rawValue` = the macOS virtual keycode, plus `label`
   ("right ⌘") and the device-modifier masks the event source needs. Right-side modifiers are chosen
   because a solo press rarely collides with app shortcuts.
-- **`TriggerKeyStore`** — persists the chosen keycode in `UserDefaults` (`BlurtTriggerKeyCode`),
+- **`TriggerBinding`** (`Hotkey/TriggerBinding.swift`) — what's actually bound:
+  `.modifier(TriggerKey)`, `.key(code:)` (F1–F20), or `.mouseButton(_:)` (button number 2, "Mouse
+  3", and up). Every binding encodes into the **single `Int` slot the store has always used** —
+  modifiers as their bare keycode (so existing installs migrate with no data change), F-keys as
+  their raw keycode (disjoint from the modifier keycodes), mouse buttons as `0x10000 + button` (a
+  namespace no 16-bit keycode can reach). `fromPersisted` is the one decode-with-default rule
+  (garbage → right ⌘), and `keyBinding(forKeyCode:)`/`mouseButtonBinding(forButton:)` are the
+  capture policy — which inputs are bindable is engine logic with tests, not a view's private list.
+- **`TriggerKeyStore`** — persists the encoded binding in `UserDefaults` (`BlurtTriggerKeyCode`),
   defaulting to **right ⌘**.
 - **`DictationKeyGate`** — pure, clock-free state machine (`idle`/`armed`/`latched`) turning
-  modifier-down/up and other-key-down into `start`/`stop`/`cancel`/`none`. Recording starts the
-  instant the modifier goes down; on key-up a release ≥ `holdThreshold` (default 1 s) is a **hold**
+  trigger-down/up and other-key-down into `start`/`stop`/`cancel`/`none`. Recording starts the
+  instant the trigger goes down; on key-up a release ≥ `holdThreshold` (default 1 s) is a **hold**
   (push-to-talk → stop) while a shorter release **latches** (tap-to-toggle; next tap stops). A combo
   (modifier + another key, e.g. ⌘C) from idle cancels the fresh capture; over a latched recording it
   passes through as a normal shortcut. Callers pass monotonic timestamps, so every decision is
   deterministic and unit-tested.
-- **`DictationKeyRouter`** — the event-routing layer over the gate: only the bound keycode's flag
-  changes drive the modifier, and only genuine down/up **edges** reach the gate (`flagsChanged`
-  deliveries re-report the bit whether or not it changed, so a repeat must not double-fire).
-  `reset()`/`rebind(triggerKeyCode:)` report whether they discarded a live recording the host must
+- **`DictationKeyRouter`** — the event-routing layer over the gate: only events for the bound
+  trigger drive it (`flagsChanged` for a modifier binding, `keyDown`/`keyUp` for an F-key,
+  `mouseDown`/`mouseUp` for a button), and only genuine down/up **edges** reach the gate
+  (`flagsChanged` deliveries re-report the bit whether or not it changed, and a held key
+  autorepeats, so a repeat must not double-fire). The combo rule applies to **modifier bindings
+  only**: ⌘C over the held trigger is a real shortcut, but F5+K and Mouse4+K name nothing to macOS,
+  so under a key or mouse binding another key is just typing and must not cancel the dictation.
+  `reset()`/`rebind(binding:)` report whether they discarded a live recording the host must
   cancel upstream, and so does **`recoverFromDroppedEvents(triggerStillHeld:)`** — the
   disabled-tap rule: events may have been dropped, so the gate's state survives only while the
-  trigger is still physically held (its key-up is still coming); otherwise that key-up was among
-  the losses and the gate is reset. The host passes the `CGEventSource.flagsState` read in and
-  keeps no decision of its own, so the rule is unit-tested rather than living in an untestable
-  shell `if`.
+  trigger is still physically held (its up-event is still coming); otherwise that up-event was among
+  the losses and the gate is reset. The host passes the `CGEventSource` read
+  (`flagsState`/`keyState`/`buttonState`, per binding family) in and keeps no decision of its own,
+  so the rule is unit-tested rather than living in an untestable shell `if`.
 
 The app side, **`DictationKeyTap`** (`App/Blurt/Blurt/Hotkey/DictationKeyTap.swift`), reduces each
-`CGEventTap` delivery (watching `flagsChanged` for the bound modifier and `keyDown` for any other
-key) to a `DictationKeyRouter.Event` and owns the tap lifecycle. `AppCoordinator` calls its
+`CGEventTap` delivery to a `DictationKeyRouter.Event` and owns the tap lifecycle. The tap's mask
+covers every family any binding might need (`flagsChanged`, `keyDown`+`keyUp` — autorepeat
+deliveries filtered out — and `otherMouseDown`/`otherMouseUp`), because a tap's mask is fixed at
+creation and the router ignores what the current binding doesn't care about — so rebinding never
+recreates the tap. `AppCoordinator` calls its
 `syncAfterTerminalPhase()` on every terminal phase: a dictation can end with no key event to close
 the gate (the auto-release cap, or a refused/failed press), which would leave the gate `.latched`
 and silently swallow the user's next press — a latched `modifierDown` returns `.none`, and the
 `modifierUp` after it returns `.stop`, which no-ops on an already-terminal session. The tap
-**swallows nothing**: a lone modifier types nothing, and combos pass through so normal shortcuts keep
-working.
+**swallows nothing**: a lone modifier, F-key, or extra button types and clicks nothing, and combos
+pass through so normal shortcuts keep working.
 
 The trigger is editable in the Shortcut section of the setup/settings UI (`HotkeyStepView`) — a
-`Picker` over `TriggerKey.allCases` that writes `TriggerKeyStore`, after which
-`AppCoordinator.dictationBindingChanged()` re-reads it into the tap. For display strings, use
-`TriggerKeyStore().triggerKey.label` for one-shot reads; in views that must re-render live on a
-Settings change, use **`@BoundTriggerKey`** — a `DynamicProperty` in `Wizard/BoundTriggerKey.swift` wrapping
-the `@AppStorage(TriggerKeyStore.defaultsKey)` + `TriggerKey.fromPersisted` pair — rather than
-restating that pairing per view. The unset default belongs to `fromPersisted` (an absent keycode maps
+`Picker` over `TriggerKey.allCases` plus a **Custom…** row that opens a press-to-capture sheet
+(`CustomTriggerCaptureView`, same file): local `NSEvent` monitors for key presses and clicks in the
+Settings window plus a global one for clicks landing elsewhere, Esc cancels, and disallowed inputs
+(printable keys; the left/right mouse button) are refused with an explanation. Modifiers, Caps Lock,
+and media keys never reach the recorder at all — they aren't `keyDown` events. Writes go through
+`TriggerKeyStore`, after which `AppCoordinator.dictationBindingChanged()` re-reads the binding into
+the tap. For display strings, use `TriggerKeyStore().triggerBinding.label` for one-shot reads; in
+views that must re-render live on a Settings change, use **`@BoundTriggerBinding`** — a
+`DynamicProperty` in `Wizard/BoundTriggerKey.swift` wrapping the
+`@AppStorage(TriggerKeyStore.defaultsKey)` + `TriggerBinding.fromPersisted` pair — rather than
+restating that pairing per view. The unset default belongs to `fromPersisted` (an absent code maps
 to right ⌘), so views must not re-declare `TriggerKey.rightCommand.rawValue` themselves.
 
 ## Conversation context and key terms

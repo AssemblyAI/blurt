@@ -25,18 +25,13 @@ struct TriggerKeyTests {
     #expect(TriggerKey(rawValue: 999) == nil)
   }
 
-  @Test("a persisted right-⌃ keycode (a removed option) falls back to right ⌘")
-  func removedRightControlFallsBack() {
-    // right ⌃ (keycode 62) was dropped as an option; anyone who had it saved must
-    // decode to the default rather than an invalid selection.
+  @Test("removed options (right ⌃, Caps Lock) are not modifiers")
+  func removedOptionsDoNotDecode() {
+    // right ⌃ (keycode 62) and Caps Lock (57) were dropped as options; the
+    // persisted-slot fallback they decode to is `TriggerBinding.fromPersisted`'s
+    // job (see `TriggerBindingTests.removedOptionsFallBack`).
     #expect(TriggerKey(rawValue: 62) == nil)
-    #expect(TriggerKey.fromPersisted(62) == .rightCommand)
-  }
-
-  @Test("a persisted Caps Lock keycode (a removed option) falls back to right ⌘")
-  func removedCapsLockFallsBack() {
     #expect(TriggerKey(rawValue: 57) == nil)
-    #expect(TriggerKey.fromPersisted(57) == .rightCommand)
   }
 
   // The hotkey tap reads the *device-dependent* modifier bit (which physical

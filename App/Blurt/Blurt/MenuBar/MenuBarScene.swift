@@ -30,13 +30,13 @@ struct MenuBarContent: View {
   @Environment(\.openSettings) private var openSettings
 
   // Observed (as the ready screen does) so the reminder line updates live when
-  // the dictation key is rebound in Settings — see `BoundTriggerKey`.
-  @BoundTriggerKey private var triggerKey
+  // the dictation key is rebound in Settings — see `BoundTriggerBinding`.
+  @BoundTriggerBinding private var trigger
 
   var body: some View {
     // Disabled informational row: the dictation trigger is an invisible lone
-    // modifier, so spell it out here as the menu bar's discoverability anchor.
-    Text("Tap or hold \(triggerKey.label) to dictate and paste")
+    // key, so spell it out here as the menu bar's discoverability anchor.
+    Text("Tap or hold \(trigger.label) to dictate and paste")
 
     Divider()
 

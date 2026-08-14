@@ -58,7 +58,7 @@ public struct SoundPack: Sendable, Hashable, Identifiable {
   /// unset or names no known pack. The single decode-with-default rule shared by
   /// `SoundPackStore` and the `@AppStorage` views that read the raw id directly
   /// (so they re-render live on a Settings change) — mirroring
-  /// `TriggerKey.fromPersisted`.
+  /// `TriggerBinding.fromPersisted`.
   public static func fromPersisted(_ id: String?) -> SoundPack {
     guard let id, let pack = find(id: id) else { return .defaultPack }
     return pack

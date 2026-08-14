@@ -8,8 +8,9 @@ struct ReadyView: View {
   var coordinator: AppCoordinator
   var openSettings: () -> Void
   // Observed (not read once) so changing the dictation key in the separate
-  // Settings window re-renders this window's keycap live — see `BoundTriggerKey`.
-  @BoundTriggerKey private var triggerKey
+  // Settings window re-renders this window's keycap live — see
+  // `BoundTriggerBinding`.
+  @BoundTriggerBinding private var trigger
 
   var body: some View {
     // Sections sit 20 pt apart; the logo and shortcut readout are one idea,
@@ -53,7 +54,7 @@ struct ReadyView: View {
     HStack(spacing: 6) {
       Text("Tap or hold")
         .foregroundStyle(.secondary)
-      KeyCap(label: triggerKey.label)
+      KeyCap(label: trigger.label)
       Text("to blurt")
         .foregroundStyle(.secondary)
     }

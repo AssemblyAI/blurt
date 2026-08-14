@@ -1,21 +1,15 @@
-/// A lone momentary modifier key usable as the single dictation trigger. The raw
-/// value is the macOS virtual key code, so `TriggerKey(rawValue:)` decodes a
-/// persisted keycode directly. Curated to right-side modifiers (rarely used in
-/// app shortcuts, so a solo press maps cleanly to "dictate") and `fn`.
+/// A lone momentary modifier key usable as the dictation trigger — the default
+/// family of `TriggerBinding`, which owns decoding the persisted slot
+/// (`TriggerBinding.fromPersisted`). The raw value is the macOS virtual key
+/// code, so `TriggerKey(rawValue:)` decodes a persisted keycode directly.
+/// Curated to right-side modifiers (rarely used in app shortcuts, so a solo
+/// press maps cleanly to "dictate") and `fn`.
 public enum TriggerKey: Int, CaseIterable, Sendable, Hashable {
   case rightCommand = 54
   case rightOption = 61
   case function = 63
 
   public var keyCode: Int { rawValue }
-
-  /// Decodes a persisted keycode into a `TriggerKey`, falling back to right ⌘
-  /// when the value isn't one of the curated options. The single decode-with-
-  /// default rule shared by `TriggerKeyStore` and the `@AppStorage` views that
-  /// read the raw keycode directly (so they re-render live on a Settings change).
-  public static func fromPersisted(_ code: Int) -> TriggerKey {
-    TriggerKey(rawValue: code) ?? .rightCommand
-  }
 
   /// The **device-dependent** modifier flag bit this key toggles, as a raw
   /// `CGEventFlags`/IOKit value (the app wraps it in `CGEventFlags(rawValue:)`).
