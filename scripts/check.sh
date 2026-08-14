@@ -236,16 +236,23 @@ check_no_external_deps() {
     violation=1
   fi
 
-  # App: only the local BlurtEngine (path:) package is allowed. A remote package
+  # Apps: only the local BlurtEngine (path:) package is allowed. A remote package
   # is declared with a url:/github: key inside project.yml's `packages:` block, so
   # extract that block and reject any such key.
-  local app_packages
-  app_packages="$(awk '/^packages:/{f=1;next} /^[^[:space:]]/{f=0} f' "$APP_DIR/project.yml")"
-  if printf '%s\n' "$app_packages" | grep -nE '(^|[[:space:]])(url|github):' >/dev/null 2>&1; then
-    echo "error: App/Blurt/project.yml declares a remote SPM package — the app must carry only the local BlurtEngine:" >&2
-    printf '%s\n' "$app_packages" | grep -nE '(^|[[:space:]])(url|github):' >&2
-    violation=1
-  fi
+  #
+  # Every App/*/project.yml, not just the mac app's: App/BlurtiOSShell carries its
+  # own spec with its own `packages:` block, and a guard that names one file is a
+  # guard the next app walks around without anyone noticing.
+  local spec spec_path app_packages
+  for spec in "$REPO_ROOT"/App/*/project.yml; do
+    spec_path="${spec#"$REPO_ROOT"/}"
+    app_packages="$(awk '/^packages:/{f=1;next} /^[^[:space:]]/{f=0} f' "$spec")"
+    if printf '%s\n' "$app_packages" | grep -nE '(^|[[:space:]])(url|github):' >/dev/null 2>&1; then
+      echo "error: $spec_path declares a remote SPM package — the app must carry only the local BlurtEngine:" >&2
+      printf '%s\n' "$app_packages" | grep -nE '(^|[[:space:]])(url|github):' >&2
+      violation=1
+    fi
+  done
 
   [ "$violation" -eq 0 ] || return 1
   echo "no external dependencies (engine dependency-free; app carries only local BlurtEngine)"

@@ -3,6 +3,12 @@
 DerivedData/
 *.xcuserdatad/
 xcuserdata/
+# XcodeGen output for the iOS link probe. App/Blurt/Blurt.xcodeproj is committed
+# (people open it) and drift-checked against its project.yml; this one has no
+# human user — CI generates it from App/BlurtiOSShell/project.yml right before it
+# builds — so there is nothing to commit and nothing to drift. Named exactly, not
+# as a `*.xcodeproj/` glob, which would shadow the tracked mac project.
+App/BlurtiOSShell/BlurtiOSShell.xcodeproj/
 .DS_Store
 .claude/*
 !.claude/settings.json

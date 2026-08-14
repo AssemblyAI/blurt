@@ -147,10 +147,23 @@ jobs:
   # The engine's iOS slice. `check` and `compile` build BlurtEngine for macOS
   # only, so without this nothing would catch a change that reaches for an
   # unfenced AppKit/CoreAudio/AX symbol and silently breaks the package's
-  # declared iOS platform. Build-only on purpose: the engine's tests run under
-  # `check` on macOS, and there is no iOS app target to exercise. Like
-  # `compile`, it is deliberately NOT required and `gate` ignores it — it can
-  # only go red where an iOS consumer of the package would too.
+  # declared iOS platform.
+  #
+  # Two steps, answering two different questions:
+  #
+  #  1. The library on its own, straight from the package — the narrow, fast
+  #     signal, and the one that needs no project and no extra tooling.
+  #  2. App/BlurtiOSShell, a one-view SwiftUI app that imports BlurtEngine and
+  #     calls into it. Compiling the library says the source is iOS-clean;
+  #     linking it into an application bundle is what says an iOS *consumer*
+  #     can resolve the symbols it reaches for. Those are different failures —
+  #     a library slice can compile while an app that links it does not — and
+  #     the second one is the reason the shell exists at all.
+  #
+  # Build-only on purpose: the engine's tests run under `check` on macOS, and
+  # the shell has no behaviour to test. Like `compile`, it is deliberately NOT
+  # required and `gate` ignores it — it can only go red where an iOS consumer
+  # of the package would too.
   ios-build:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -178,6 +191,35 @@ jobs:
           xcodebuild -scheme BlurtEngine \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$RUNNER_TEMP/BlurtEngine-iOS" \
+            build
+
+      - name: Install XcodeGen
+        # Just the one formula, not `brew bundle --file=Brewfile`: the shell's
+        # project is the only thing this job generates, and installing the other
+        # eleven tools would cost more than the build it precedes. xcodegen is in
+        # the Brewfile too, so the version here is the version check.sh uses.
+        run: brew install xcodegen
+
+      - name: Generate the iOS shell project
+        working-directory: blurt/App/BlurtiOSShell
+        # Generated here rather than committed, unlike App/Blurt/Blurt.xcodeproj.
+        # That project is committed because people open it; this one has no human
+        # user, so generating it a second before the build is strictly better than
+        # a checked-in copy plus a drift check to keep it honest.
+        run: xcodegen generate --quiet
+
+      - name: Build the iOS shell app
+        working-directory: blurt
+        # The same destination as the library step above, so the two steps differ
+        # only in what is being built. CODE_SIGNING_ALLOWED=NO because a hosted
+        # runner has no signing identity and this build needs none — nothing is
+        # installed, run, or distributed; the link is the whole result.
+        run: |
+          xcodebuild -project App/BlurtiOSShell/BlurtiOSShell.xcodeproj \
+            -scheme BlurtiOSShell \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/BlurtiOSShell" \
+            CODE_SIGNING_ALLOWED=NO \
             build
 
   # What swift-format would change, as an applicable patch. Formatting is the

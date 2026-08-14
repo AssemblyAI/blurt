@@ -1,0 +1,62 @@
+# XcodeGen spec for the iOS link probe — the smallest real iOS application that
+# consumes BlurtEngine. It exists for one job: give CI something that has to
+# *link* the engine, not merely compile it. See check.yml's `ios-build`.
+#
+# Unlike App/Blurt, the generated project is NOT committed (it's in .gitignore)
+# and there is no drift check for it. Nobody opens this project in Xcode; CI
+# runs `xcodegen generate` here immediately before it builds, so the .pbxproj
+# has no chance to go stale against this file.
+name: BlurtiOSShell
+options:
+  bundleIdPrefix: dev.alex
+  deploymentTarget:
+    # Matches Package.swift's `.iOS(.v18)`. An app deployment target below the
+    # package's floor fails to resolve the dependency at all, which would make
+    # this job red for a reason that has nothing to do with the engine's source.
+    iOS: "18.0"
+  developmentLanguage: en
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "18.0"
+packages:
+  # The same local package the mac app carries, reached from App/BlurtiOSShell.
+  # No remote packages here either — check.sh's dependency guard reads every
+  # App/*/project.yml, this one included.
+  BlurtEngine:
+    path: ../..
+targets:
+  BlurtiOSShell:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt.iosshell
+        # No Info.plist of its own: the shell declares no permissions, no
+        # background modes, and no document types, so the keys Xcode synthesizes
+        # are the entire correct set. Adding a plist would be somewhere for a
+        # capability to accrete that this probe has no business asking for.
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        # Warnings are failures for the shell's own code, the same as the mac app
+        # target. Scoped to the target rather than the project base for the reason
+        # App/Blurt/project.yml gives: at base it collides with the
+        # -suppress-warnings Xcode applies to SPM dependency packages.
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        # Load-bearing, not inherited boilerplate. The probe's whole claim is that
+        # the linker keeps the engine, so leave the stripper switched on and make
+        # the app reference symbols it cannot remove (see BlurtiOSShellApp.swift).
+        DEAD_CODE_STRIPPING: YES
+    dependencies:
+      - package: BlurtEngine
+        product: BlurtEngine
+# XcodeGen emits a scheme only where one is declared, and `xcodebuild -scheme`
+# needs a shared one. Build only — there is nothing here to run or test.
+schemes:
+  BlurtiOSShell:
+    build:
+      targets:
+        BlurtiOSShell: all

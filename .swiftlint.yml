@@ -13,6 +13,10 @@ included:
   - Tests
   - App/Blurt/Blurt
   - App/Blurt/BlurtUITests
+  # The iOS link probe. Tiny, but swift-format already lints every tracked
+  # .swift file by construction (git ls-files), so leaving this one out of
+  # SwiftLint would make it the only Swift in the repo with no correctness lint.
+  - App/BlurtiOSShell/Sources
 
 excluded:
   - .build
