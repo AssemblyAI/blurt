@@ -58,7 +58,7 @@ struct PersistedSettingsTests {
       OverlayOriginStore.yDefaultsKey,
       LastUpdateCheckStore.defaultsKey,
     ]
-    #expect(storeKeys == Set(DefaultsKey.allCases.map(\.rawValue)))
+    #expect(storeKeys == Set(DefaultsKey.allCases.map(\.key)))
     // No two stores sharing a slot — the Set above would have quietly absorbed a
     // collision, and two stores on one key means each overwrites the other.
     #expect(storeKeys.count == 9)

@@ -17,9 +17,11 @@ public struct UpdateChecker: Sendable {
   private let releaseURL: URL
   private let transport: any HTTPTransport
 
+  /// `releaseURL` defaults to the configured host identity's, so a host that
+  /// called `HostIdentity.configure(_:)` checks *its* repo without passing one;
+  /// tests still substitute a local URL here.
   public init(
-    releaseURL: URL = URL(
-      staticString: "https://api.github.com/repos/AssemblyAI/blurt/releases/latest"),
+    releaseURL: URL = HostIdentity.current.releaseURL,
     transport: any HTTPTransport = URLSession.shared
   ) {
     self.releaseURL = releaseURL

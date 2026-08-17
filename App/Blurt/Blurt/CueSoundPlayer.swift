@@ -123,7 +123,7 @@ final class CueSoundPlayer {
   /// `force` skips the already-loaded short-circuit, for a re-prime where the
   /// selection is unchanged and only the output route moved.
   private func loadCurrentPack(force: Bool = false) async {
-    let pack = SoundPackStore().soundPack
+    let pack = SoundPackStore(catalog: .blurt).soundPack
     guard force || pack != loadedPack else { return }
     loadGeneration += 1
     let generation = loadGeneration

@@ -7,7 +7,7 @@ import os
 /// Accessibility grant. Kept separate from the pure `SigningIdentityMigration`
 /// so the decision logic stays testable and these system calls stay thin.
 public enum SigningIdentity {
-  private static let log = Logger(subsystem: BlurtIdentity.subsystem, category: "SigningIdentity")
+  private static let log = HostIdentity.current.logger("SigningIdentity")
 
   /// Namespace marker on a recorded identity. Every build before this one recorded
   /// a bare Team ID (10 alphanumerics, no colon), so the prefix keeps the two

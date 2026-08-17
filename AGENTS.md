@@ -53,6 +53,9 @@ Sources/BlurtEngine/         the engine (dependency-free Swift package)
   README.md                  the engine's developer guide (quick start, seams, error table)
   Audio/                     MicCapture (+meter/+warm), MicLiveness (mic bring-up gate), AudioRoute
                              (+Monitor)/AudioTransport — CoreAudio routing, SoundPack/Catalog/Store
+                             (the voice *descriptors*; the voices themselves are app-side)
+  HostIdentity.swift         the host's Keychain service, log subsystem, defaults prefix, log
+                             directory, product name and release feed — one overridable value
   Config/                    Keychain-backed API key, key terms, developer mode, DefaultsKey +
                              PersistedSettings (every defaults key, and the reset sweep over them)
   FocusCapture/              Accessibility reads of the frontmost app / focused field
@@ -66,7 +69,9 @@ Sources/BlurtEngine/         the engine (dependency-free Swift package)
 App/Blurt/
   project.yml                XcodeGen source of truth — Blurt.xcodeproj is GENERATED
   Blurt/                     the shell: App.swift scenes, AppCoordinator, Wizard/, Overlay/,
-                             MenuBar/, Hotkey/DictationKeyTap, Update/, CueSoundPlayer
+                             MenuBar/, Hotkey/DictationKeyTap, Update/, CueSoundPlayer,
+                             SoundPackCatalog.swift (GENERATED — the cue voices, beside the
+                             Resources/Sounds/ audio they name)
   Shared/                    UITestIdentifiers.swift — compiled into BOTH app and UI-test targets
   BlurtUITests/              XCUITest bundle (see Tests)
 Tests/BlurtEngineTests/      Swift Testing suites; Stubs/ holds the seam doubles
@@ -78,7 +83,7 @@ scripts/                     check.sh, check-site.sh, check-portability.sh, chec
                              beautify.swift (the site's window imagery, capture then
                              composite), generate-branding-images.sh (records how the logo
                              assets were generated — provenance, not a renderer),
-                             generate-sounds.swift (regenerates the cues AND
+                             generate-sounds.swift (regenerates the cues AND the app's
                              SoundPackCatalog.swift together)
 Brewfile                     Homebrew-managed check.sh tools — the whole toolchain
 evals/                       offline decision support — the repo's only Python, none of it
@@ -122,8 +127,8 @@ the two checks that genuinely need the build products stay behind them (step 12)
 1. **Repo-integrity guards** — no external SPM dependencies; sound-catalog integrity (every
    `SoundPackCatalog` voice has both cue files, no orphans, no duplicate or reserved ids); and
    **site integrity** (`scripts/check-site.sh`). All three run in `--portable` too. The catalog and
-   the audio are generated together but ship from different targets, so drift plays silence with
-   nothing raising an error. The site guard exists for the same reason on the web: `pages.yml`
+   the audio are generated together — both into the app target, one as source and one as
+   resources — so drift plays silence with nothing raising an error. The site guard exists for the same reason on the web: `pages.yml`
    uploads `site/` verbatim with no build step, so a renamed asset, a stale absolute URL, or a
    missing `CNAME` produces no error in this repo — just a 404 on the live site.
 
@@ -274,7 +279,7 @@ satisfied and toggling the row does nothing. Two defences, in this order:
 `AppDelegate.runAccessibilityGrantMigration` is the self-heal. It compares `SigningIdentity.current()`
 — the app's **designated requirement**, serialized and namespaced (`dr:<requirement>`) — against the
 identity recorded in `accessibility.lastSigningTeam`; if it changed and the app is untrusted, it runs
-`tccutil reset Accessibility` on **the running bundle id** (never `BlurtIdentity.subsystem`, which
+`tccutil reset Accessibility` on **the running bundle id** (never `HostIdentity.current.subsystem`, which
 would have a dev build clearing the release's grant) so the wizard's normal grant flow captures a
 matching requirement, and records the new identity only when the reset succeeded.
 `SigningIdentityMigration` is the pure decision; `SigningIdentity` is the thin `Security`/`tccutil`
@@ -769,6 +774,20 @@ the omit-vs-`[]` rule live; `KeytermsWireTests` pins both.
 
 ## Settings, persistence, and cues
 
+**`HostIdentity`** comes first, because most of what follows is namespaced by it: the Keychain
+service the API key lands in, the `os_log` subsystem (and the engine's dispatch-queue labels), the
+`UserDefaults` prefix every `DefaultsKey` composes with, the `~/Library/Logs` directory the
+developer-mode logs go to, the product name update alerts say, and the GitHub release the update
+check reads. These were hard constants, which made them Blurt's with no opt-out — a second app
+embedding the engine wrote into _Blurt's_ Keychain item, log directory and defaults keys. They are
+one value now; `HostIdentity.current` is what the engine reads, `.blurt` is what an unconfigured host
+inherits (so nothing about this app changed), and `BlurtApp.init` calls `HostIdentity.configure(_:)`
+with it because the identity belongs to the host, not the engine. It is process-wide rather than
+injected for the obvious reason: its readers are `static let` loggers, an enum of defaults keys and a
+Keychain facade, none of which a caller constructs. The derivations are pure functions of the value
+(`defaultsKey(_:)`, `logURL(_:)`, `queueLabel(_:)`, `logger(_:)`) so the tests exercise them against
+a constructed identity instead of mutating the shared one, which every suite reads in parallel.
+
 Engine-side stores, all `UserDefaults`-backed value types with the same shape:
 
 - **`TriggerKeyStore`** (`BlurtTriggerKeyCode`), **`SoundPackStore`** (`BlurtSoundPack`),
@@ -791,8 +810,11 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
   launch reset calls. So adding a store and adding it to every "reset to a clean state" sweep aren't
   merely the same edit, they're the same line: there is no roster to keep in sync. (It used to be a
   hand-maintained array, and the forgotten half of that edit happened twice — the overlay origin and
-  the update-check stamp.) Raw values are the on-disk contract: renaming one abandons every existing
-  user's setting, so rename cases freely and raw values never. The sweep lives next to the enum
+  the update-check stamp.) A case's raw value is the _unprefixed_ half of the key: the key actually
+  written is `HostIdentity.current.defaultsPrefix` + the raw value, which under Blurt's identity is
+  the `Blurt…` names above and under a third-party host is that host's own namespace. Both halves are
+  the on-disk contract: changing either abandons every existing user's setting, so rename cases freely
+  and raw values never. The sweep lives next to the enum
   (not in the shell) so a reset needing more than a defaults removal has one place to grow and stays
   inside the test target; the roster itself is internal so no caller re-rolls its own sweep.
   `SigningIdentityMigration.lastSigningIdentityDefaultsKey` is deliberately **outside** the roster:
@@ -806,9 +828,14 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
 
 Record cues: **`SoundPack`** is a selectable start/stop chime voice (vintage synth samples;
 `id` doubles as the bundled stem `<id>-start.m4a` / `<id>-stop.m4a` under
-`App/Blurt/Blurt/Resources/Sounds/`), listed by **`SoundPackCatalog.swift`**, which is _generated_ by
-`scripts/generate-sounds.swift` alongside the audio. Regenerate both halves together — `check.sh`'s
-sound-catalog guard exists because a drift plays silence with no error. **`RecordingCueGate`** is the
+`App/Blurt/Blurt/Resources/Sounds/`), and **`SoundPackCatalog`** is the set of them a host supplies —
+picker sections, lookup, and the decode-with-default rule `SoundPackStore` and the `@AppStorage`
+views share. The engine ships **no voices and no audio**: Blurt's 192 are generated into the app
+target (`App/Blurt/Blurt/SoundPackCatalog.swift`) by `scripts/generate-sounds.swift` alongside the
+`.m4a` files they name, because a voice list whose cues live in someone else's bundle is a picker in
+which every choice plays silence. Regenerate both halves together — `check.sh`'s sound-catalog guard
+exists because a drift plays silence with no error — and note that adding or removing a voice changes
+the app target's file list, so `xcodegen generate` and a committed `.pbxproj` are part of that edit. **`RecordingCueGate`** is the
 pure edge detector deciding when the chimes fire — on the `.recording` edge, i.e. once audio is
 actually flowing, never at the press (see the latency notes above for why that ordering is
 load-bearing); the AppKit `CueSoundPlayer` just plays what it resolves.

@@ -5,7 +5,7 @@ public actor DictationSession {
   /// Off-pool home for the press-time AX field read — see its use in
   /// `performPress` for why blocking IPC must not run on the cooperative pool.
   static let contextQueue = DispatchQueue(
-    label: "\(BlurtIdentity.subsystem).FieldContext", qos: .userInitiated,
+    label: HostIdentity.current.queueLabel("FieldContext"), qos: .userInitiated,
     attributes: .concurrent)
 
   /// `internal(set)`, not `private(set)`: `private` is file-scoped, and the one

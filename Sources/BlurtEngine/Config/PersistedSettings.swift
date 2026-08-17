@@ -20,7 +20,7 @@ public enum PersistedSettings {
   /// through `@testable`. Exporting the list as well would invite a caller to walk
   /// it and do its own sweep — which is what `resetAll` replaced — and would trip
   /// periphery's redundant-public check besides.
-  static let allDefaultsKeys: [String] = DefaultsKey.allCases.map(\.rawValue)
+  static var allDefaultsKeys: [String] { DefaultsKey.allCases.map(\.key) }
 
   /// Clears every key in the roster, returning the engine's settings to their
   /// unset defaults. The operation lives beside `DefaultsKey` so a reset

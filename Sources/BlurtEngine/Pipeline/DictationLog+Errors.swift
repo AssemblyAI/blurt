@@ -37,7 +37,7 @@ extension DictationLog {
 
   /// Where failures land. Sibling of `defaultURL` in the same directory, so the
   /// one "delete my logs" gesture (`scripts/reset-install.sh`) covers both.
-  static let defaultErrorURL = URL.libraryDirectory.appending(path: "Logs/Blurt/errors.jsonl")
+  static var defaultErrorURL: URL { HostIdentity.current.logURL("errors.jsonl") }
 
   /// `defaultErrorURL` as a home-abbreviated path, for the Developer section's
   /// footer. Derived here next to the URL the writer uses, for the same reason

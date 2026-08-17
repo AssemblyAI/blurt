@@ -17,7 +17,7 @@ import Foundation
 public struct CustomStyleStore {
   /// `UserDefaults` key for the raw text the user typed. Public so the Settings
   /// field can bind `@AppStorage` to it.
-  public static let defaultsKey = DefaultsKey.customStyle.rawValue
+  public static var defaultsKey: String { DefaultsKey.customStyle.key }
 
   /// The most UTF-8 bytes the Settings field accepts —
   /// `CleanupInstruction.customStyleBudget`, the real headroom the dictation

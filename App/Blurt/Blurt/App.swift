@@ -1,8 +1,22 @@
+import BlurtEngine
 import SwiftUI
 
 @main
 struct BlurtApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
+  /// Tell the engine which app it is running inside — the Keychain item, the
+  /// logging subsystem, the `UserDefaults` prefix, the log directory, the product
+  /// name in update alerts, and the release feed the update check reads.
+  ///
+  /// `.blurt` *is* the engine's default, so this call changes nothing about how
+  /// Blurt behaves. It is here because it is the composition root: the identity
+  /// belongs to the host, and a fork or a second embedder replaces exactly this
+  /// one line rather than hunting constants through the engine. Earliest hook a
+  /// SwiftUI `App` has, which is what `HostIdentity.configure(_:)` asks for.
+  init() {
+    HostIdentity.configure(.blurt)
+  }
 
   var body: some Scene {
     // Primary window: the setup wizard until the app is fully configured, then

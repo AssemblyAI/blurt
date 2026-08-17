@@ -215,14 +215,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       lastIdentity: defaults.string(forKey: key),
       currentIdentity: SigningIdentity.current(),
       isTrusted: AXIsProcessTrusted(),
-      // The *running* bundle id, not `BlurtIdentity.subsystem`: debug builds ship
+      // The *running* bundle id, not `HostIdentity.current.subsystem`: debug builds ship
       // under `dev.alex.blurt.dev` (see `project.yml`), and resetting the constant
       // would clear the released Blurt's grant from a dev build — the one app
       // whose permissions this process has no business touching. The constant is
       // the fallback for the unreachable case of a bundle with no id at all.
       reset: {
         SigningIdentity.resetAccessibilityGrant(
-          bundleID: Bundle.main.bundleIdentifier ?? BlurtIdentity.subsystem)
+          bundleID: Bundle.main.bundleIdentifier ?? HostIdentity.current.subsystem)
       }
     )
     if let persist { defaults.set(persist, forKey: key) }

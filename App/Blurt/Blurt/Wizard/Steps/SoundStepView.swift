@@ -8,20 +8,20 @@ struct SoundStepView: View {
   var coordinator: AppCoordinator
 
   // Empty means "no pack persisted" — the unset default belongs to
-  // `SoundPack.fromPersisted` (below), which names no known pack for `""` and so
-  // resolves `defaultPack`. See `HotkeyStepView` for why the view must not restate
-  // it.
+  // `SoundPackCatalog.fromPersisted` (below), which names no known voice for `""`
+  // and so resolves the catalog's default. See `HotkeyStepView` for why the view
+  // must not restate it.
   @AppStorage(SoundPackStore.defaultsKey) private var soundPackID = ""
 
   private var selection: Binding<SoundPack> {
     Binding(
       get: {
-        SoundPack.fromPersisted(soundPackID)
+        SoundPackCatalog.blurt.fromPersisted(soundPackID)
       },
       set: { newValue in
         // Write through the store (see `HotkeyStepView` for why): the store owns the
         // encoding, `@AppStorage` observes the key to re-render.
-        SoundPackStore().soundPack = newValue
+        SoundPackStore(catalog: .blurt).soundPack = newValue
         coordinator.soundPackChanged()
       })
   }
@@ -33,9 +33,9 @@ struct SoundStepView: View {
         accessibilityID: UITestIdentifiers.soundPicker, selection: selection
       ) {
         Text(SoundPack.none.label).tag(SoundPack.none)
-        ForEach(SoundPack.groups, id: \.self) { group in
+        ForEach(SoundPackCatalog.blurt.groups, id: \.self) { group in
           Section(group) {
-            ForEach(SoundPack.voices(in: group)) { pack in
+            ForEach(SoundPackCatalog.blurt.voices(in: group)) { pack in
               Text(pack.label).tag(pack)
             }
           }
