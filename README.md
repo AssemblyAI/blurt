@@ -75,7 +75,7 @@ utterance.
   restored around it. If the target app quit while you were speaking, the text
   stays on the clipboard instead of vanishing.
 - **One key, no chords** — dictation is triggered by a single lone modifier
-  (right ⌘ by default; right ⌥ and `fn` also available). Tap to toggle, hold
+  (right ⌘ by default; right ⌥ also available). Tap to toggle, hold
   for push-to-talk. The event tap swallows nothing: a lone modifier types
   nothing anyway, and combos like ⌘C pass through untouched.
 - **Polished in one step** — each utterance rides to AssemblyAI's dictation API

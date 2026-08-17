@@ -1,11 +1,10 @@
 /// A lone momentary modifier key usable as the single dictation trigger. The raw
 /// value is the macOS virtual key code, so `TriggerKey(rawValue:)` decodes a
-/// persisted keycode directly. Curated to right-side modifiers (rarely used in
-/// app shortcuts, so a solo press maps cleanly to "dictate") and `fn`.
+/// persisted keycode directly. Curated to right-side modifiers, which are rarely
+/// used in app shortcuts, so a solo press maps cleanly to "dictate".
 public enum TriggerKey: Int, CaseIterable, Sendable, Hashable {
   case rightCommand = 54
   case rightOption = 61
-  case function = 63
 
   public var keyCode: Int { rawValue }
 
@@ -27,12 +26,11 @@ public enum TriggerKey: Int, CaseIterable, Sendable, Hashable {
   /// tap's down/up tracking on keyboards where both keys are in play (a leading
   /// suspect for the duplicate-paste reports on third-party keyboards). The
   /// device bit names exactly one physical side, so the bound key's own state is
-  /// unambiguous. `fn` has no left/right split, so it uses the secondary-fn bit.
+  /// unambiguous — which is also why every option here is a right-side key.
   public var deviceModifierMask: UInt64 {
     switch self {
     case .rightCommand: return 0x10  // NX_DEVICERCMDKEYMASK
     case .rightOption: return 0x40  // NX_DEVICERALTKEYMASK
-    case .function: return 0x80_0000  // kCGEventFlagMaskSecondaryFn
     }
   }
 
@@ -41,7 +39,6 @@ public enum TriggerKey: Int, CaseIterable, Sendable, Hashable {
     switch self {
     case .rightCommand: return "right ⌘"
     case .rightOption: return "right ⌥"
-    case .function: return "fn"
     }
   }
 }

@@ -656,7 +656,7 @@ The dictation trigger is a **single lone modifier key** (tap-to-toggle or hold-t
 in-house. Four pieces, three of them pure engine logic:
 
 - **`TriggerKey`** (`Hotkey/TriggerKey.swift`) — enum of the curated lone momentary modifiers usable
-  as the trigger (right ⌘, right ⌥, `fn`), `rawValue` = the macOS virtual keycode, plus `label`
+  as the trigger (right ⌘, right ⌥), `rawValue` = the macOS virtual keycode, plus `label`
   ("right ⌘") and the device-modifier masks the event source needs. Right-side modifiers are chosen
   because a solo press rarely collides with app shortcuts.
 - **`TriggerKeyStore`** — persists the chosen keycode in `UserDefaults` (`BlurtTriggerKeyCode`),

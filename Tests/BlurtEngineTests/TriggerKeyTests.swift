@@ -8,7 +8,6 @@ struct TriggerKeyTests {
   func keyCodes() {
     #expect(TriggerKey.rightCommand.keyCode == 54)
     #expect(TriggerKey.rightOption.keyCode == 61)
-    #expect(TriggerKey.function.keyCode == 63)
   }
 
   @Test("every case has a non-empty label")
@@ -39,6 +38,14 @@ struct TriggerKeyTests {
     #expect(TriggerKey.fromPersisted(57) == .rightCommand)
   }
 
+  @Test("a persisted fn keycode (a removed option) falls back to right ⌘")
+  func removedFunctionFallsBack() {
+    // `fn` (keycode 63) was dropped as an option; anyone who had it saved must
+    // decode to the default rather than an invalid selection.
+    #expect(TriggerKey(rawValue: 63) == nil)
+    #expect(TriggerKey.fromPersisted(63) == .rightCommand)
+  }
+
   // The hotkey tap reads the *device-dependent* modifier bit (which physical
   // side toggled) rather than the generic command/option/control mask, which is
   // shared by both the left and right keys. Reading the shared mask can't tell a
@@ -48,7 +55,6 @@ struct TriggerKeyTests {
   func deviceMasks() {
     #expect(TriggerKey.rightCommand.deviceModifierMask == 0x10)  // NX_DEVICERCMDKEYMASK
     #expect(TriggerKey.rightOption.deviceModifierMask == 0x40)  // NX_DEVICERALTKEYMASK
-    #expect(TriggerKey.function.deviceModifierMask == 0x80_0000)  // kCGEventFlagMaskSecondaryFn
   }
 
   @Test("right-⌘ mask does not collide with the left-⌘ or generic ⌘ bit")
