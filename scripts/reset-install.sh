@@ -6,8 +6,8 @@ set -euo pipefail
 # App/Blurt/project.yml), where the split is also explained: releases are
 # `dev.alex.blurt`, every debug configuration is `dev.alex.blurt.dev`, so a dev
 # build is a separate app with its own permissions, defaults and install path.
-# The first must match `BlurtIdentity.subsystem`
-# (Sources/BlurtEngine/BlurtIdentity.swift) — the code's single definition of
+# The first must match `HostIdentity.blurt.subsystem`
+# (Sources/BlurtEngine/HostIdentity.swift) — the code's single definition of
 # this string. A full reset means both: this script exists to get back to a
 # clean preinstall state, and leaving half the state behind is how you end up
 # debugging the other build's leftovers.
@@ -62,7 +62,7 @@ for bundle_id in "${BUNDLE_IDS[@]}"; do
 done
 
 # AssemblyAI API key lives in the login keychain as a generic password. The
-# keychain service is `BlurtIdentity.keychainService` (used by APIKeyStore,
+# keychain service is `HostIdentity.blurt.keychainService` (used by APIKeyStore,
 # Sources/BlurtEngine/Config/APIKeyStore.swift). Must match that constant.
 # Installs that predate the service rename may still hold the key under the
 # old service (the lowercase bundle id), so a full reset deletes both.

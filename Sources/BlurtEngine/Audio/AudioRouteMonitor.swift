@@ -29,7 +29,7 @@ import os
 /// `@unchecked Sendable` because the listener registrations below are confined
 /// to `queue` rather than protected by a lock — see their declarations.
 public final class AudioRouteMonitor: @unchecked Sendable {
-  private static let logger = Logger(subsystem: BlurtIdentity.subsystem, category: "AudioRoute")
+  private static let logger = HostIdentity.current.logger("AudioRoute")
 
   /// Fires once per observed route change. `.bufferingNewest(1)` because this is
   /// an invalidation signal, not a log: a consumer that was busy through three
@@ -58,7 +58,7 @@ public final class AudioRouteMonitor: @unchecked Sendable {
     let (stream, continuation) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
     self.outputRouteChanges = stream
     self.continuation = continuation
-    self.queue = DispatchQueue(label: "\(BlurtIdentity.subsystem).AudioRoute")
+    self.queue = DispatchQueue(label: HostIdentity.current.queueLabel("AudioRoute"))
     queue.sync {
       installDefaultDeviceListener()
       retargetFormatListener()

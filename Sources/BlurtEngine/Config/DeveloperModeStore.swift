@@ -8,7 +8,7 @@ import Foundation
 public struct DeveloperModeStore {
   /// UserDefaults key holding the switch. Public so SwiftUI views can observe
   /// it directly (e.g. `@AppStorage`) and re-render on change.
-  public static let defaultsKey = DefaultsKey.developerMode.rawValue
+  public static var defaultsKey: String { DefaultsKey.developerMode.key }
   private let defaults: UserDefaults
 
   init(defaults: UserDefaults = .standard) {

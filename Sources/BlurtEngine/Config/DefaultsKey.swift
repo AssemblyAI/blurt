@@ -14,20 +14,36 @@
 ///
 /// A key that is *not* a user setting stays out of this enum on purpose — see
 /// `SigningIdentityMigration.lastSigningIdentityDefaultsKey`, which records what the
-/// TCC migration already did. Those also don't carry the `Blurt` prefix every case
+/// TCC migration already did. Those also don't carry the host prefix every case
 /// here does, and `DefaultsKeyTests` pins that so the distinction stays visible.
 ///
-/// Raw values are the on-disk contract: **renaming one silently abandons every
-/// existing user's setting**, so change a case name freely and its raw value never.
+/// Raw values are the **unprefixed** half of the on-disk contract: the key actually
+/// written is `key`, the host identity's `defaultsPrefix` followed by the raw value,
+/// so Blurt still writes `BlurtSoundPack` and a host that configures its own prefix
+/// gets its own namespace instead of writing into Blurt's. **Renaming a raw value
+/// silently abandons every existing user's setting**, so change a case name freely
+/// and its raw value never — and see `HostIdentity.defaultsPrefix` for why the
+/// prefix carries the same warning.
 enum DefaultsKey: String, CaseIterable {
-  case triggerKeyCode = "BlurtTriggerKeyCode"
-  case soundPack = "BlurtSoundPack"
-  case keyTerms = "BlurtKeyTerms"
-  case developerMode = "BlurtDeveloperMode"
-  case enhancedTranscripts = "BlurtEnhancedTranscripts"
-  case customStyle = "BlurtCustomStyle"
+  case triggerKeyCode = "TriggerKeyCode"
+  case soundPack = "SoundPack"
+  case keyTerms = "KeyTerms"
+  case developerMode = "DeveloperMode"
+  case enhancedTranscripts = "EnhancedTranscripts"
+  case customStyle = "CustomStyle"
   /// `OverlayOriginStore` persists a point, so it owns two keys rather than one.
-  case overlayCustomOriginX = "BlurtOverlayCustomOriginX"
-  case overlayCustomOriginY = "BlurtOverlayCustomOriginY"
-  case lastUpdateCheck = "BlurtLastUpdateCheck"
+  case overlayCustomOriginX = "OverlayCustomOriginX"
+  case overlayCustomOriginY = "OverlayCustomOriginY"
+  case lastUpdateCheck = "LastUpdateCheck"
+
+  /// The key this case actually reads and writes, under the configured host
+  /// identity. A computed property rather than a stored string because the
+  /// identity is only known once the host has configured it — and because it is
+  /// then fixed for the process, so this resolves to the same value every time.
+  var key: String { key(in: .current) }
+
+  /// The key this case would write under `identity`. Split out so the tests can
+  /// pin the composition against a value instead of the process-wide identity,
+  /// which every other suite is reading concurrently.
+  func key(in identity: HostIdentity) -> String { identity.defaultsKey(rawValue) }
 }

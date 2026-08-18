@@ -28,7 +28,7 @@ public struct KeyTermsStore {
   /// Public so the Settings field can bind `@AppStorage` to it and so the app
   /// can clear it when resetting to a clean state under UI testing (matching
   /// `TriggerKeyStore`/`SoundPackStore`).
-  public static let defaultsKey = DefaultsKey.keyTerms.rawValue
+  public static var defaultsKey: String { DefaultsKey.keyTerms.key }
 
   private let defaults: UserDefaults
 

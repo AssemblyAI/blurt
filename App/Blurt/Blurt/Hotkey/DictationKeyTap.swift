@@ -25,8 +25,7 @@ import os
 /// prove single-threaded access to the router state instead of guarding it with
 /// a hand-held lock.
 final class DictationKeyTap {
-  private static let logger = Logger(
-    subsystem: BlurtIdentity.subsystem, category: "DictationKeyTap")
+  private static let logger = HostIdentity.current.logger("DictationKeyTap")
 
   private let onStart: @Sendable () -> Void
   private let onStop: @Sendable () -> Void

@@ -7,7 +7,7 @@ import Foundation
 /// state" sweep clears it too.
 public struct LastUpdateCheckStore {
   /// Public so the reset sweep can name it.
-  public static let defaultsKey = DefaultsKey.lastUpdateCheck.rawValue
+  public static var defaultsKey: String { DefaultsKey.lastUpdateCheck.key }
 
   private let defaults: UserDefaults
 

@@ -273,18 +273,20 @@ check_ignore_rules() {
 run_check "ignore rules don't shadow tracked files" check_ignore_rules
 
 # Sound-catalog integrity. `SoundPackCatalog.swift` and the cue audio are both
-# emitted by scripts/generate-sounds.swift, but they land in different targets —
-# engine source vs. app resources — so a partial regeneration or commit can leave
-# them disagreeing. Nothing at runtime notices: `SoundPack.startFileName` names a
+# emitted by scripts/generate-sounds.swift into the app target, but as source and
+# as resources — so a partial regeneration or commit can still leave them
+# disagreeing. Nothing at runtime notices: `SoundPack.startFileName` names a
 # stem, `Bundle.main.url(forResource:)` returns nil for it, and the cue play is a
 # silent no-op, so the user picks that voice and simply hears nothing. Unit tests
-# can't cover it either — the engine deliberately ships no resources, so the two
+# can't cover it either — the engine ships neither the voices nor the audio (see
+# `SoundPackCatalog`), and the app target has no unit-test bundle, so the two
 # halves only meet here. Pure text/filesystem, so it runs in --portable too.
 check_sound_catalog() {
-  local catalog="$REPO_ROOT/Sources/BlurtEngine/Audio/SoundPackCatalog.swift"
+  local catalog="$APP_DIR/Blurt/SoundPackCatalog.swift"
   local sounds_dir="$APP_DIR/Blurt/Resources/Sounds"
   local violation=0
   local catalog_ids duplicate_ids expected_sounds actual_sounds missing_sounds orphan_sounds
+  local default_voice_id
 
   catalog_ids="$(sed -n 's/.*SoundPack(id: "\([^"]*\)".*/\1/p' "$catalog" | sort)"
   # A broken id extraction is reported like any other failure rather than via
@@ -303,10 +305,27 @@ check_sound_catalog() {
     violation=1
   fi
 
-  # `none` belongs to SoundPack.none; a catalog entry claiming it would shadow the
-  # silent pack in `find(id:)`, so a user could never select "no sound" again.
+  # `none` belongs to SoundPack.none, which `SoundPackCatalog` keeps reachable
+  # whatever it is handed — so an entry claiming that id loses its own slot and
+  # ships two unreachable cue files rather than costing the user "no sound".
+  # Still a generator bug: it means a voice silently vanished from the picker.
   if printf '%s\n' "$catalog_ids" | grep -qx 'none'; then
-    echo "error: a catalog entry uses the reserved id 'none' — it would shadow SoundPack.none" >&2
+    echo "error: a catalog entry uses the reserved id 'none' — SoundPack.none wins the" >&2
+    echo "       lookup, so that voice is unreachable and its two cues ship for nothing" >&2
+    violation=1
+  fi
+
+  # The default voice is the app's to name now that the catalog is host-supplied
+  # (`SoundPackCatalog(voices:defaultVoiceID:)`), and a default naming no voice
+  # falls back to `.none` — i.e. a fresh install would ship with the cues off,
+  # which reads as "the chimes are broken" rather than as a bad id.
+  default_voice_id="$(sed -n 's/.*defaultVoiceID: "\([^"]*\)".*/\1/p' "$catalog" | head -1)"
+  if [ -z "$default_voice_id" ]; then
+    echo "error: no defaultVoiceID found in $catalog — the catalog names no default voice" >&2
+    violation=1
+  elif ! printf '%s\n' "$catalog_ids" | grep -qx -- "$default_voice_id"; then
+    echo "error: defaultVoiceID '$default_voice_id' names no voice in the catalog —" >&2
+    echo "       a fresh install would resolve to SoundPack.none and play no cues" >&2
     violation=1
   fi
 

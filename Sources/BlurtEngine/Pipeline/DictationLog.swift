@@ -2,7 +2,8 @@ import Foundation
 import os
 
 /// Append-only JSONL log of completed transcripts at
-/// `~/Library/Logs/Blurt/dictations.jsonl`. Used to build a real-world
+/// `~/Library/Logs/<host>/dictations.jsonl` (`~/Library/Logs/Blurt/…` under the
+/// default `HostIdentity`). Used to build a real-world
 /// corpus for prompt iteration. Written only while developer mode is switched
 /// on (`DeveloperModeStore` — the Settings window's Developer section, which
 /// also displays this path), so a user who never opts in has no dictation
@@ -91,7 +92,11 @@ public enum DictationLog {
   /// can display the path next to the switch that enables writing to it. The
   /// file (and its directory) are only created when the first entry is
   /// appended, so reading this never touches the disk.
-  public static let defaultURL = URL.libraryDirectory.appending(path: "Logs/Blurt/dictations.jsonl")
+  ///
+  /// The directory is the host identity's (`~/Library/Logs/Blurt` for Blurt), so
+  /// a second app embedding the engine writes its own corpus rather than
+  /// interleaving lines into Blurt's.
+  public static var defaultURL: URL { HostIdentity.current.logURL("dictations.jsonl") }
 
   /// `defaultURL` as a home-abbreviated path (`~/Library/Logs/…`) for the label
   /// beside the developer-mode switch. Derived here, next to the URL the writer
@@ -118,7 +123,7 @@ public enum DictationLog {
   //
   // Internal so a test can `sync {}` on it to drain a dispatched write, rather
   // than polling the filesystem and hoping.
-  static let queue = DispatchQueue(label: "\(BlurtIdentity.subsystem).DictationLog")
+  static let queue = DispatchQueue(label: HostIdentity.current.queueLabel("DictationLog"))
 
   /// Append a completed transcript to the JSONL log. **Gated on developer mode:**
   /// with the switch off (the default) this returns without touching the disk, so
@@ -229,6 +234,5 @@ public enum DictationLog {
     try handle.write(contentsOf: line)
   }
 
-  private static let logger = Logger(
-    subsystem: BlurtIdentity.subsystem, category: "DictationLog")
+  private static let logger = HostIdentity.current.logger("DictationLog")
 }

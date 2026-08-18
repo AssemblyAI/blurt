@@ -92,7 +92,7 @@ PATTERNS=(
   "LSUIElement"
   "import KeyboardShortcuts"
   "AppUpdater|Sparkle|SPUUpdater"
-  "KeychainStore\\(service: *(BlurtIdentity\\.keychainService|\"blurt\")"
+  "KeychainStore\\(service: *(HostIdentity\\.current\\.keychainService|\"blurt\")"
   "@available\\(\\*, *deprecated"
 )
 SCOPES=(
@@ -139,7 +139,7 @@ PROBES=(
   "    LSUIElement: true"
   "import KeyboardShortcuts"
   "let updater = AppUpdater(owner: \"assemblyai\", repo: \"blurt\")"
-  "let store = KeychainStore(service: BlurtIdentity.keychainService, account: \"AssemblyAIAPIKey\")"
+  "let store = KeychainStore(service: HostIdentity.current.keychainService, account: \"AssemblyAIAPIKey\")"
   "@available(*, deprecated, renamed: \"NewName\")"
 )
 

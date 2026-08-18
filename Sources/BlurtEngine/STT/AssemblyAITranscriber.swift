@@ -5,7 +5,7 @@ import os
 ///   log show --predicate 'subsystem == "dev.alex.blurt" && category == "Transcriber"' --last 1h
 /// File-scoped so both `send(_:body:audioDurationMs:)` (wall-clock) and
 /// `MetricsLogger` (the DNS/TCP/TLS/TTFB split) can write to it.
-private let transcriberLog = Logger(subsystem: BlurtIdentity.subsystem, category: "Transcriber")
+private let transcriberLog = HostIdentity.current.logger("Transcriber")
 
 /// `TranscriberProtocol` backed by AssemblyAI's **dictation** API.
 ///

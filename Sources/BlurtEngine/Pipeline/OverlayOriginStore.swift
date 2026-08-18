@@ -14,8 +14,8 @@ import Foundation
 /// persistence belongs next to it.
 public struct OverlayOriginStore {
   /// Public so the reset sweep and `@AppStorage`-style observers can name them.
-  public static let xDefaultsKey = DefaultsKey.overlayCustomOriginX.rawValue
-  public static let yDefaultsKey = DefaultsKey.overlayCustomOriginY.rawValue
+  public static var xDefaultsKey: String { DefaultsKey.overlayCustomOriginX.key }
+  public static var yDefaultsKey: String { DefaultsKey.overlayCustomOriginY.key }
 
   private let defaults: UserDefaults
 

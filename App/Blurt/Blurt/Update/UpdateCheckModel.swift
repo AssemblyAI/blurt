@@ -38,7 +38,7 @@ final class UpdateCheckModel {
   /// The clock, injected alongside the store so the throttle is drivable in a
   /// test without waiting a day.
   private let now: () -> Date
-  private let log = Logger(subsystem: BlurtIdentity.subsystem, category: "update")
+  private let log = HostIdentity.current.logger("update")
 
   /// Guards against a second check while one is in flight (double-click, or the
   /// button and menu both fired), so we never stack two result alerts. Observable

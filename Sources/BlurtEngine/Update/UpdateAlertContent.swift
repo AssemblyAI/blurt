@@ -58,9 +58,10 @@ public struct UpdateAlertContent: Equatable, Sendable {
     return "\(productName) \(version)"
   }
 
-  /// The product name as it appears in user-facing copy — distinct from
-  /// `BlurtIdentity.subsystem`, which is the reverse-DNS identity.
-  private static let productName = "Blurt"
+  /// The product name as it appears in user-facing copy — the host identity's,
+  /// so an embedding app's alerts name *it* rather than Blurt. Distinct from
+  /// `HostIdentity.subsystem`, which is the reverse-DNS identity.
+  private static var productName: String { HostIdentity.current.productName }
 
   /// The reassuring result a user-initiated check always shows, so pressing
   /// "Check for Updates" visibly confirms it ran.
