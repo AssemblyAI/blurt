@@ -49,10 +49,11 @@ public actor DictationSession {
   let keyTermsProvider: @Sendable () -> [String]
   /// Names the style a completed dictation was made with, recorded onto its
   /// `RecentDictations.Entry` (the "Casual · just now" subtitle). `nil` means no
-  /// styling applied and the entry shows only its timestamp. A closure for the
-  /// same live-read reason as `keyTermsProvider`; the default reads the stores —
-  /// the active profile's name, the base styling's name with none active, and
-  /// nil while enhanced transcripts are off (no rewrite, so no style either).
+  /// *custom* style shaped it — enhanced transcripts off, or the base Cleaned
+  /// Up styling with no profile active — and the entry shows only its
+  /// timestamp: the base treatment is every row's default, so naming it on
+  /// each would be noise. A closure for the same live-read reason as
+  /// `keyTermsProvider`; the default reads the stores.
   let styleNameProvider: @Sendable () -> String?
   /// Auto-releases the hotkey after this long so a held key can't run forever.
   /// Defaults to just under the dictation API's audio cap (see
@@ -192,9 +193,11 @@ public actor DictationSession {
       styleNameProvider
       ?? {
         // No rewrite means no style was applied — matching the transcriber's
-        // own per-request read of the same store.
+        // own per-request read of the same store. `active` is nil for the
+        // Cleaned Up sentinel as well as for an empty list, which is exactly
+        // the rule: only a *custom* style is worth naming on the row.
         guard EnhancedTranscriptsStore().isEnabled else { return nil }
-        return StyleProfileStore().active?.name ?? StyleProfileStore.defaultStyleName
+        return StyleProfileStore().active?.name
       }
     self.readinessCheck = readinessCheck
     self.onTranscriptDelivered = onTranscriptDelivered

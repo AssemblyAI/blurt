@@ -30,11 +30,11 @@ public struct RecentDictations: Equatable, Sendable {
     public let id = UUID()
     public let text: String
     public let timestamp: Date
-    /// Display name of the style this dictation was made with — the active
-    /// profile's name, or the base styling's (`StyleProfileStore
-    /// .defaultStyleName`) when no profile was active. `nil` when no styling
-    /// applied at all (enhanced transcripts off, or a host that supplies no
-    /// style), which renders as just the timestamp — never an invented value.
+    /// Display name of the **custom** style this dictation was made with (the
+    /// active profile's name). `nil` otherwise — the base Cleaned Up styling,
+    /// enhanced transcripts off, or a host that supplies no style — which
+    /// renders as just the timestamp: the base treatment is every row's
+    /// default, so naming it on each would be noise.
     public let style: String?
   }
 

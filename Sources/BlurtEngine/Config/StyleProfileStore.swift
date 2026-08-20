@@ -74,10 +74,10 @@ public struct StyleProfileStore {
   /// migration note above) and never writes.
   static var legacyDefaultsKey: String { DefaultsKey.customStyle.key }
 
-  /// The base styling's user-facing name — the switcher's first segment, and
-  /// what a recent dictation made with no profile records as its style. Defined
-  /// once here so the segment, its shortcut, and the recents subtitle can't
-  /// drift apart.
+  /// The base styling's user-facing name — the switcher's first segment and
+  /// its hidden ⌘1 shortcut button. Defined once here so the two can't drift
+  /// apart. Deliberately *not* recorded onto recent dictations: a row only
+  /// names a custom style, base-styled rows show just their time.
   public static let defaultStyleName = "Cleaned Up"
 
   /// What the active-id slot holds when the user has clicked **Cleaned Up**

@@ -14,11 +14,13 @@ final class ReadyViewUITests: BlurtUITestCase {
   func testReadyScreenShowsShortcutAndRecent() {
     mainWindow()
 
-    // The shortcut readout: "Tap or hold <key> to blurt".
+    // The shortcut readout: the tap line with the default key spelled out,
+    // over the hold line. One static text apiece — the key name is bolded
+    // inline, not a separate element.
     XCTAssertTrue(
-      app.staticTexts["Tap or hold"].waitForExistence(timeout: 10),
+      app.staticTexts["Tap Right Command (⌘) to start and stop."].waitForExistence(timeout: 10),
       "Ready screen should state the dictation shortcut")
-    XCTAssertTrue(app.staticTexts["to blurt"].exists)
+    XCTAssertTrue(app.staticTexts["Or hold it to talk, then release."].exists)
 
     // The Recent section, empty on a fresh launch, shows its header and the
     // placeholder that fills the reserved list area.

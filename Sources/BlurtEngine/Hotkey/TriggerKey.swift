@@ -41,4 +41,14 @@ public enum TriggerKey: Int, CaseIterable, Sendable, Hashable {
     case .rightOption: return "right ⌥"
     }
   }
+
+  /// Spelled-out form with the symbol in parentheses, e.g.
+  /// "Right Command (⌘)" — the ready screen's readout bolds this inline, where
+  /// the bare symbol alone assumes the reader already knows the glyph.
+  public var fullName: String {
+    switch self {
+    case .rightCommand: return "Right Command (⌘)"
+    case .rightOption: return "Right Option (⌥)"
+    }
+  }
 }

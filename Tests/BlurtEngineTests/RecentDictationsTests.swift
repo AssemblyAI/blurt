@@ -80,8 +80,9 @@ struct RecentDictationsTests {
   func preservesStyle() {
     var recent = RecentDictations()
     recent.record("styled", style: "Casual", at: Date(timeIntervalSinceReferenceDate: 0))
-    // No styling applied (enhanced transcripts off, or a host that supplies no
-    // style) records nil, which the subtitle renders as the bare timestamp.
+    // No *custom* style (the base Cleaned Up treatment, enhanced transcripts
+    // off, or a host that supplies no style) records nil, which the subtitle
+    // renders as the bare timestamp.
     recent.record("unstyled", at: Date(timeIntervalSinceReferenceDate: 1))
     #expect(recent.entries[0].style == nil)
     #expect(recent.entries[1].style == "Casual")

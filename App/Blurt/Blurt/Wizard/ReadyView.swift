@@ -94,23 +94,29 @@ struct ReadyView: View {
     }
   }
 
-  /// Tall enough for the block's taller occupant, the two-line listening state;
-  /// the one-line readout centers in the same slot.
+  /// Both faces are two text lines on the shared tiers, so this is simply
+  /// enough for either with breathing room; each centers in the same slot and
+  /// nothing below moves on the swap.
   private static let statusBlockHeight: CGFloat = 44
 
-  /// "Tap or hold ⌘ to blurt", with the key drawn as a rounded keycap. Static
-  /// on purpose: which style is in effect is the Style row's job to say — its
-  /// selected segment is always visible right below — so repeating it here
-  /// would be two readouts to keep in agreement.
+  /// The idle readout: "Tap **Right Command (⌘)** to start and stop." over
+  /// "Or hold it to talk, then release." — the key spelled out and bolded
+  /// inline (`TriggerKey.fullName`), no keycap chip. Static on purpose: which
+  /// style is in effect is the Style row's job to say — its selected segment
+  /// is always visible right below — so repeating it here would be two
+  /// readouts to keep in agreement. Both lines take their ideal size: inside
+  /// the fixed-height slot a squeezed line can't fall back to wrapping, so
+  /// without this the slightest width shortfall rendered as a truncated key
+  /// name ("right…").
   private var shortcutReadout: some View {
-    HStack(spacing: 6) {
-      Text("Tap or hold")
-        .foregroundStyle(.secondary)
-      KeyCap(label: triggerKey.label)
-      Text("to blurt")
-        .foregroundStyle(.secondary)
+    VStack(spacing: 2) {
+      (Text("Tap ") + Text(triggerKey.fullName).bold() + Text(" to start and stop."))
+        .statusPrimaryLine()
+        .fixedSize()
+      Text("Or hold it to talk, then release.")
+        .statusSecondaryLine()
+        .fixedSize()
     }
-    .font(.title3)
   }
 
   /// The capture-in-progress face of the top block: the pill's waveform cue in
@@ -127,11 +133,20 @@ struct ReadyView: View {
         // stilled under Reduce Motion the same way.
         .pulsingOpacity(period: 1.2, minOpacity: 0.4, animated: !reduceMotion)
       VStack(alignment: .leading, spacing: 2) {
+        // Bold as inline emphasis, the same role the key name's bold plays on
+        // the idle face — the tier itself (size, color) comes from the shared
+        // style, so the swap reads as one surface changing words.
         Text("Listening…")
-          .font(.title3.weight(.semibold))
+          .bold()
+          .statusPrimaryLine()
+          .fixedSize()
         Text(listeningSubtitle(activeStyleName: activeStyleName))
-          .font(.caption)
-          .foregroundStyle(.secondary)
+          .statusSecondaryLine()
+          // One line, tail-truncated if a long style name pushes it past the
+          // content width: at the slot's fixed height a wrap would clip mid
+          // letter, and the sentence's load-bearing halves ("Blurting in
+          // <style>", Esc) front-load ahead of the cut.
+          .lineLimit(1)
       }
     }
     // One element, phrased once — the glyph is decoration and the ellipsis is
@@ -252,28 +267,20 @@ private struct StyleRow: View {
   }
 }
 
-/// A single rounded key-cap, e.g. "⌃" or "D". A quiet semantic chip, not
-/// Liquid Glass: over the ready window's flat background a glass chip has
-/// nothing to refract and reads as bare floating text, and the HIG reserves
-/// glass for the floating control layer rather than in-window content.
-/// `.quinary` + `.separator` adapt to light/dark and Increase Contrast for
-/// free, and match the Recent card's container fill above.
-private struct KeyCap: View {
-  var label: String
+/// The status block's two line tiers, shared by its idle and Listening faces so
+/// the swap can't drift into two designs trading places: identical size and
+/// color per tier, with weight left to inline emphasis (the idle face bolds the
+/// key name, the Listening face its "Listening…"). Private to this file — these
+/// name the top block's tiers, not an app-wide type ramp.
+extension View {
+  /// Tier 1: the sentence that says what to do (or what is happening).
+  fileprivate func statusPrimaryLine() -> some View {
+    font(.body)
+  }
 
-  var body: some View {
-    Text(label)
-      .font(.title3.weight(.medium).monospaced())
-      .foregroundStyle(.primary)
-      .padding(.horizontal, 10)
-      .padding(.vertical, 6)
-      .background(
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-          .fill(.quinary)
-      )
-      .overlay(
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-          .strokeBorder(.separator, lineWidth: 1)
-      )
+  /// Tier 2: the supporting line beneath it, quieter in size and color.
+  fileprivate func statusSecondaryLine() -> some View {
+    font(.subheadline)
+      .foregroundStyle(.secondary)
   }
 }
