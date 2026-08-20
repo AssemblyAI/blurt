@@ -145,6 +145,33 @@ private struct StyleProfilePicker: View {
     .pickerStyle(.segmented)
     .labelsHidden()
     .accessibilityIdentifier(UITestIdentifiers.styleProfilePicker)
+    .background(shortcuts)
+  }
+
+  /// Keyboard shortcuts for the segments: ⌘1 selects Default, ⌘2…⌘5 the
+  /// profiles in row order. Hidden buttons rather than a `Commands` menu block,
+  /// because the scoping is the point: a menu command fires while *any* of the
+  /// app's windows is key (Settings included), whereas a button's shortcut is
+  /// resolved through the window that hosts it — so these fire exactly while
+  /// the main window is key, and not at all while it shows the wizard or has no
+  /// styles (this view doesn't exist then). `.hidden()` keeps the buttons out
+  /// of sight, layout (they're parked in `background`) and accessibility while
+  /// leaving their shortcuts registered; the writes go through the same store
+  /// calls as the picker's binding. A "Style" submenu naming the shortcuts —
+  /// menu-bar discoverability — is a possible follow-up; the segments
+  /// themselves are always visible, so nothing here is *only* reachable by
+  /// shortcut.
+  private var shortcuts: some View {
+    Group {
+      Button("Default") { StyleProfileStore().activateDefault() }
+        .keyboardShortcut("1", modifiers: .command)
+      // The store caps the list at `profileLimit` (4), so the digits end at ⌘5.
+      ForEach(Array(profiles.enumerated()), id: \.element.id) { index, profile in
+        Button(profile.name) { StyleProfileStore().activate(profile) }
+          .keyboardShortcut(KeyEquivalent(Character("\(index + 2)")), modifiers: .command)
+      }
+    }
+    .hidden()
   }
 }
 

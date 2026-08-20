@@ -914,9 +914,9 @@ restating them.
 
 - **Main window** (`MainWindowRoot`) — the setup wizard until the app is fully configured, then the
   "ready" screen (`ReadyView`, with the segmented style switcher — Default plus up to 4 profiles,
-  absent entirely until a profile exists — and the Recent list; while a named style is active the
-  shortcut readout says so). Hidden titlebar, body-draggable, always
-  presented at launch.
+  absent entirely until a profile exists, selectable by ⌘1–⌘5 while this window is key — and the
+  Recent list; while a named style is active the shortcut readout says so). Hidden titlebar,
+  body-draggable, always presented at launch.
 - **Settings** (`SettingsWindowRoot`) — a `TabView` reached via ⌘, / the ready screen / the menu bar,
   never at launch. Note macOS titles a preference window after its selected pane, which is why the
   UI-test suite aliases the window title to the first tab's label.
