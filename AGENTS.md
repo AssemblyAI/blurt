@@ -401,8 +401,9 @@ framework, or notarization rejects the build; roll-forward-only for a bad releas
   read-only (`DeveloperModeStore`, `EnhancedTranscriptsStore`). Either way, no setter is left in the
   engine that only tests exercise.
 - **Pure projections over shell logic**: phase→UI mapping (`OverlayUIState`, `MenuBarStatus`),
-  chime edges (`RecordingCueGate`), geometry (`OverlayPlacement`, `MeterBarGeometry`), history
-  (`RecentDictations`), alert wording (`UpdateAlertContent`, `APIKeySubmission.FailureReport`),
+  chime edges (`RecordingCueGate`) and chime re-prime timing (`CueReprimeGate`), geometry
+  (`OverlayPlacement`, `MeterBarGeometry`), history (`RecentDictations`), alert wording
+  (`UpdateAlertContent`, `APIKeySubmission.FailureReport`),
   credential display (`APIKeyDisplay`) and setup policy (`SetupReadiness`) live in the engine as value
   types so they're unit-testable; the AppKit side just renders whatever they resolve to. Keep new logic
   on that side of the line — the shell has no test target, so wording and classification assembled at
@@ -846,6 +847,19 @@ opening the mic flips AirPods out of their output-only profile, dropping the out
 the primed players. So the player observes **`AudioRouteMonitor.outputRouteChanges`** and reloads —
 the monitor watches both the default output _device_ (a user switch) and the current device's nominal
 sample rate (the profile flip), re-targeting the second listener whenever the first fires.
+
+_When_ that reload runs is **`CueReprimeGate`** (engine-side, so `swift test` covers it), and the rule
+is: re-prime immediately unless the in-flight dictation's start chime has already fired. Idle and
+`.connecting` re-prime on the spot — nothing is waiting on the players and the chime at risk is still
+ahead; from `.recording` onwards the reload is held to the next terminal phase, where it can't displace
+a player mid-sound and a burst of flips coalesces into one decode. Deferring _every_ reload (the
+original behaviour) meant the one chime the machinery never protected was the **first** one: the
+launch-time `warmUp()` flips the route, and the only thing that consumed the pending re-prime was a
+terminal phase, which cannot arrive before the first dictation's start chime. Two smaller pieces close
+the same hole — the observer treats "listeners now registered" as a tick, since `AudioRouteMonitor` is
+constructed across an `await` and a flip landing in that window is never notified at all; and a reload
+parks a displaced-but-still-sounding player rather than releasing it, because dropping its last
+reference cuts the chime off.
 
 History: **`RecentDictations`** is an in-memory, newest-first ring (never written to disk) holding
 `capacity` (100) dictations, of which the ready window lists `displayCapacity` (3). It is deep because

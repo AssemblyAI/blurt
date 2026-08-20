@@ -2,9 +2,10 @@ import AVFoundation
 import BlurtEngine
 
 /// Owns the record start/stop cue chimes: loading the selected pack, pre-rolling
-/// so the first chime never stalls the recording pill, previewing on a pack
-/// change, and firing on the recording edge. Kept out of `AppCoordinator`'s body
-/// so chime behavior can change without churning the session↔UI wiring.
+/// so the first chime never stalls the recording pill, re-pre-rolling when the
+/// output route moves out from under that work, previewing on a pack change, and
+/// firing on the recording edge. Kept out of `AppCoordinator`'s body so chime
+/// behavior can change without churning the session↔UI wiring.
 final class CueSoundPlayer {
   private var startSound: AVAudioPlayer?
   private var stopSound: AVAudioPlayer?
@@ -22,14 +23,20 @@ final class CueSoundPlayer {
   /// pipeline phase to a cue lives in the engine (`RecordingCueGate`), where
   /// `swift test` covers it; this player just plays whatever it resolves to.
   private var cueGate = RecordingCueGate()
-  /// Fires when the output route changes under the pre-rolled players. Blurt's
-  /// own capture is the usual cause: opening the mic flips AirPods out of their
-  /// output-only profile, which drops the output format the players were primed
-  /// against — so the very next chime is the one that stalls, and that's the
-  /// chime at the start of a dictation.
-  /// Set when the output route changes, cleared when the re-prime actually runs.
-  /// See `transition(for:)` for why the reload waits.
-  private var needsReprime = false
+  /// Decides whether a route change re-primes the players now or waits for the
+  /// dictation to finish. Blurt's own capture is the usual cause of such a
+  /// change: opening the mic flips AirPods out of their output-only profile,
+  /// which drops the output format the players were primed against — so the very
+  /// next chime is the one that stalls, and that's the chime at the start of a
+  /// dictation. Which makes *when* the reload runs the whole question, and the
+  /// answer lives in the engine (`CueReprimeGate`) where `swift test` covers it.
+  private var reprimeGate = CueReprimeGate()
+  /// Players displaced by a reload while they were still sounding. Dropping the
+  /// last reference to a playing `AVAudioPlayer` cuts its chime off mid-sound, so
+  /// a displaced-but-playing player is parked here and released at the next
+  /// reload, by which point it has long finished. Holds at most the two players
+  /// one reload can displace, and only across the few hundred ms a cue lasts.
+  private var retired: [AVAudioPlayer] = []
   /// Kept alive for the app's lifetime; assignment is the use. Nil until
   /// `prime()` starts it, which is also what makes starting idempotent.
   private var routeObserver: Task<Void, Never>?
@@ -73,8 +80,8 @@ final class CueSoundPlayer {
   /// is the one thing guaranteed to leave them primed against the *current*
   /// route, and the decode runs off the main actor like every other load. Route
   /// changes are not rare — on a Bluetooth output Blurt's own capture causes one
-  /// per dictation burst — which is exactly why the reload is deferred rather
-  /// than run on the tick; see `transition(for:)`.
+  /// per dictation burst — which is why a tick arriving mid-capture is held
+  /// rather than run on the spot; `CueReprimeGate` owns that rule.
   private func startObservingRoute() {
     guard routeObserver == nil else { return }
     routeObserver = Task { [weak self] in
@@ -82,15 +89,42 @@ final class CueSoundPlayer {
       // for as long as the loop runs, and dropping it when the task ends is what
       // deregisters its CoreAudio listeners.
       let monitor = await Self.makeRouteMonitor()
+      // "Now watching" counts as a tick. The listeners only exist from this line
+      // on, and `makeRouteMonitor` is an `await` — so a route change between
+      // `prime()` and here produced no notification and would never be noticed.
+      // That window is not hypothetical: `AppCoordinator.start()` warms the mic
+      // before the wizard's ready transition calls `prime()`, and on AirPods that
+      // warm-up *is* an output-route change. A reload here costs one off-main
+      // decode at launch and guarantees the players are primed against the route
+      // as it actually stands once we can see it change. Scoped rebind so it
+      // doesn't hold `self` across the loop below.
+      if let self { self.routeChanged() }
       for await _ in monitor.outputRouteChanges {
         // Rebound per tick rather than bound once above, so the observer never
         // keeps the player alive — the same reason `MicCapture`'s meter task
         // rebinds across its sleep.
         guard let self else { return }
-        // Recorded, not acted on — see `transition(for:)`.
-        self.needsReprime = true
+        self.routeChanged()
       }
     }
+  }
+
+  /// Handles one output-route change: reload now, or leave it owed to the next
+  /// terminal phase. The rule is `CueReprimeGate`'s — reload unless the in-flight
+  /// dictation's start chime has already fired — and the point of acting now
+  /// while idle or still connecting is that those are precisely the moments the
+  /// *next* chime is the one at risk and nothing is waiting on the players.
+  private func routeChanged() {
+    guard reprimeGate.routeChanged() else { return }
+    reload()
+  }
+
+  /// Re-decodes and re-pre-rolls the current pack against the live output route.
+  /// Fire-and-forget by design: the decode runs off the main actor and no chime
+  /// waits on it — a reload that lands after the chime it was meant to protect
+  /// simply leaves that chime as it would have been anyway.
+  private func reload() {
+    Task { await loadCurrentPack(force: true) }
   }
 
   /// Constructs the monitor off the main actor. `nonisolated` + `async` for the
@@ -136,6 +170,15 @@ final class CueSoundPlayer {
     // (a rapid pack switch back, or any forced route re-prime) can still tell
     // each other apart.
     guard generation == loadGeneration else { return }
+    // Park a player that is mid-sound instead of releasing it on assignment: the
+    // displaced object is the one currently rendering the chime, and dropping its
+    // last reference cuts the sound off. Pruning first is what keeps `retired`
+    // from growing — by the next reload the previous occupants have finished.
+    retired.removeAll { !$0.isPlaying }
+    for displaced in [startSound, stopSound] {
+      guard let displaced, displaced.isPlaying else { continue }
+      retired.append(displaced)
+    }
     startSound = players.start
     stopSound = players.stop
   }
@@ -149,17 +192,13 @@ final class CueSoundPlayer {
     case .stop: play(stopSound)
     case nil: break
     }
-    // A pending route re-prime waits for the dictation to finish. The usual
-    // cause of a route change is Blurt *opening the mic* — so the tick arrives
-    // during the press, and reloading there would put two AAC decodes and two
-    // `prepareToPlay()`s alongside the bring-up, then swap `startSound` out from
-    // under the very chime it is meant to protect (releasing an `AVAudioPlayer`
-    // that may be mid-play). Deferring to the next terminal phase puts the
-    // reload between dictations, where it costs nothing anyone is waiting on,
-    // and coalesces a burst of flips into one decode.
-    guard phase.isTerminal, needsReprime else { return }
-    needsReprime = false
-    Task { await loadCurrentPack(force: true) }
+    // Then let the gate see the phase — after the cue, never before, so the
+    // bookkeeping can't preempt the chime. It returns true when a route change
+    // held during live capture has come due: that reload lands between
+    // dictations, where it costs nothing anyone is waiting on, and a burst of
+    // flips has coalesced into one decode.
+    guard reprimeGate.phaseChanged(to: phase) else { return }
+    reload()
   }
 
   /// The decoded, pre-rolled players for a pack. Non-`Sendable` (holds
