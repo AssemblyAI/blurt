@@ -125,9 +125,9 @@ private struct TranscriptionSection: View {
 ///
 /// Each row is a name and a way in: all editing happens in the sheet below, for
 /// the reasons on `APIKeyStepView`'s. Which style is *active* is deliberately
-/// not set here — the main window's buttons own that (see `ReadyView`), so
-/// switching is one click instead of a trip through Settings, and a picker here
-/// would be a second control writing the same slot.
+/// not set here — the main window's switcher owns that (see `ReadyView`), so
+/// switching is one click instead of a trip through Settings, and a second
+/// control here would be two writers on the same slot.
 private struct StyleProfilesSection: View {
   @AppStorage(EnhancedTranscriptsStore.defaultsKey)
   private var enhancedTranscripts = EnhancedTranscriptsStore.defaultValue
@@ -208,8 +208,8 @@ private struct StyleProfileEditorSheet: View {
   }
 
   /// Both fields must say something. A nameless profile would render a blank
-  /// button in the main window, and one with no instructions would be a button
-  /// that changes nothing about the dictation it is selected for.
+  /// segment in the main window's switcher, and one with no instructions would
+  /// be a segment that changes nothing about the dictation it selects.
   private var canSave: Bool {
     name.trimmedNonEmpty() != nil && instructions.trimmedNonEmpty() != nil
   }
@@ -248,8 +248,8 @@ private struct StyleProfileEditorSheet: View {
         .focused($nameFocused)
         .accessibilityLabel("Style name")
         .accessibilityIdentifier(UITestIdentifiers.styleProfileName)
-        // Capped because the main window's buttons are a fixed width; counted in
-        // characters, which is what that width is a bound on.
+        // Capped because the name labels a segment of the main window's
+        // switcher; counted in characters, which is what that width bounds.
         .onChange(of: name) {
           if name.count > StyleProfileStore.nameLimit {
             name = String(name.prefix(StyleProfileStore.nameLimit))

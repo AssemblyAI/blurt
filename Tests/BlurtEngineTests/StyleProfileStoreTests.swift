@@ -157,6 +157,41 @@ struct StyleProfileStoreTests {
     #expect(store.activeInstructions == "no contractions")
   }
 
+  /// Clicking Default selects the base styling: no profile is active and nothing
+  /// is appended — distinct from "never chose", which falls back to the first
+  /// profile. As sticky as a profile choice, and reversible by one.
+  @Test("Default sends no instructions until another style is clicked")
+  func defaultChoiceSendsNothingAndSticks() {
+    let store = makeStore()
+    let profiles = [
+      StyleProfile(name: "Casual", instructions: "keep it breezy"),
+      StyleProfile(name: "Formal", instructions: "no contractions"),
+    ]
+    store.profiles = profiles
+    store.activate(profiles[1])
+    store.activateDefault()
+    #expect(store.active == nil)
+    #expect(store.activeInstructions == nil)
+    // Sticky: an unrelated list edit doesn't un-choose it...
+    store.profiles = profiles + [StyleProfile(name: "Terse", instructions: "cut adjectives")]
+    #expect(store.activeInstructions == nil)
+    // ...and only clicking a style does.
+    store.activate(profiles[0])
+    #expect(store.activeInstructions == "keep it breezy")
+  }
+
+  /// The upgrade path and the Default button together: a legacy user's migrated
+  /// "Custom" profile is active because their pointer is *unset*, so unset and
+  /// the Default sentinel must stay two different states — reading unset as
+  /// Default would switch every upgrading user's styling off silently.
+  @Test("Default is an explicit choice, not what a migrated install starts on")
+  func defaultIsDistinctFromUnsetOnALegacyInstall() {
+    let store = makeLegacyStore("always write in lowercase")
+    #expect(store.activeInstructions == "always write in lowercase")
+    store.activateDefault()
+    #expect(store.activeInstructions == nil)
+  }
+
   /// Never chosen, or naming a profile the user has since deleted: fall back to
   /// the first defined one rather than silently sending no style at all.
   @Test("an unset or stale active pointer falls back to the first profile")

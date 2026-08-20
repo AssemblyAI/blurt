@@ -5,9 +5,9 @@ import Foundation
 /// server-side rewrite applies on top of the base cleanup instruction (see
 /// `CleanupInstruction.sendable(appending:)`).
 ///
-/// The `id` is what the active-profile pointer and the main window's buttons are
-/// keyed on, so it is assigned once at creation and never re-derived from the
-/// name: renaming a profile must not silently deactivate it.
+/// The `id` is what the active-profile pointer and the main window's switcher
+/// are keyed on, so it is assigned once at creation and never re-derived from
+/// the name: renaming a profile must not silently deactivate it.
 public struct StyleProfile: Codable, Identifiable, Hashable, Sendable {
   public let id: UUID
   public var name: String
@@ -27,13 +27,15 @@ public struct StyleProfile: Codable, Identifiable, Hashable, Sendable {
   }
 }
 
-/// Storage for the user's style profiles and which one is active.
+/// Storage for the user's style profiles and which one is active — possibly
+/// none of them: the main window's switcher leads with a **Default** segment
+/// that selects the base styling, i.e. no profile instructions appended at all.
 ///
 /// Optional: with no profiles the request is exactly what ships with no style
 /// set at all. Inert while enhanced transcripts are off, since the `llm` block
 /// the instruction rides on is omitted entirely. `AssemblyAITranscriber` reads
 /// `activeInstructions` at each request, so an edit — or a click on the main
-/// window's buttons — applies to the very next dictation.
+/// window's switcher — applies to the very next dictation.
 ///
 /// **Only the active profile is ever sent.** Concatenating them would be the
 /// obvious-looking generalization and is the one thing this must not do: the
@@ -72,9 +74,20 @@ public struct StyleProfileStore {
   /// migration note above) and never writes.
   static var legacyDefaultsKey: String { DefaultsKey.customStyle.key }
 
-  /// How many profiles the user may define. Four fits the main window's button
-  /// row at a legible width; past that the row would have to wrap or scroll,
-  /// which is a lot of chrome for a switch that is one click either way.
+  /// What the active-id slot holds when the user has clicked **Default**: base
+  /// styling, no profile's instructions appended. A sentinel *distinct from
+  /// unset* on purpose — an empty slot means "never chose", which resolves to
+  /// the first profile (see `active(in:id:)`), and the two must not collapse: a
+  /// legacy user's migrated "Custom" profile stays active through the upgrade
+  /// precisely because their pointer is unset, and reading unset as Default
+  /// would silently switch their styling off. Not a UUID, so it can never
+  /// collide with a real profile's id.
+  public static let defaultStyleID = "default"
+
+  /// How many profiles the user may define. With the leading Default segment
+  /// that is five, the most the main window's switcher can hold at a legible
+  /// width; past that it would have to scroll or become a menu, which is a lot
+  /// of chrome for a switch that is one click either way.
   public static let profileLimit = 4
 
   /// The most UTF-8 bytes one profile's instructions may hold —
@@ -88,13 +101,14 @@ public struct StyleProfileStore {
 
   /// The most `Character`s a profile name may hold. Counted in characters, not
   /// the UTF-8 bytes `characterLimit` uses, because this limit exists for a
-  /// different reason: the main window's buttons are a fixed width, so this is a
-  /// layout bound rather than a wire one.
+  /// different reason: the name labels a segment of the main window's switcher
+  /// (and the shortcut readout under the keycap), so this is a layout bound
+  /// rather than a wire one.
   public static let nameLimit = 24
 
   /// The name a profile falls back to when its own is blank. Reachable only from
   /// a hand-edited or corrupt defaults value — the editor won't save a nameless
-  /// profile — but a button with no label is not something to render.
+  /// profile — but a segment with no label is not something to render.
   static let fallbackName = "Style"
 
   /// The name the migrated legacy field takes. "Custom" because that is what the
@@ -104,7 +118,7 @@ public struct StyleProfileStore {
   /// The id the migrated legacy profile carries. Fixed (the ASCII of
   /// "blurtstylelegacy") rather than freshly generated, so every read of an
   /// unmigrated install names the *same* profile — a new UUID per read would
-  /// make the active pointer unmatchable and the button identity flicker.
+  /// make the active pointer unmatchable and the segment identity flicker.
   /// Spelled as bytes because `UUID(uuidString:)` is optional and force-unwraps
   /// are banned repo-wide.
   static let legacyProfileID = UUID(
@@ -147,6 +161,12 @@ public struct StyleProfileStore {
     defaults.set(profile.id.uuidString, forKey: Self.activeDefaultsKey)
   }
 
+  /// Makes **Default** — the base styling, no profile appended — the choice.
+  /// As sticky as `activate(_:)`: it holds until another segment is selected.
+  public func activateDefault() {
+    defaults.set(Self.defaultStyleID, forKey: Self.activeDefaultsKey)
+  }
+
   /// The profile the next request's instruction comes from — see
   /// `active(in:id:)`, which is the same resolution over the stored pointer.
   /// Internal: the app resolves the profiles it has already observed through
@@ -177,23 +197,28 @@ public struct StyleProfileStore {
     return Self.normalized(decoded)
   }
 
-  /// Which of `profiles` a raw active-id slot selects: the one it names, or the
-  /// first defined one when it names nothing (never set, or a profile since
-  /// deleted). Falling back rather than answering `nil` keeps a defined style in
-  /// effect after its neighbour is deleted, and means the first profile a user
-  /// adds is active without a second write. Static, and taking the raw string,
-  /// for the same reason as `profiles(decoding:)` — the button row observes that
+  /// Which of `profiles` a raw active-id slot selects. `defaultStyleID` — the
+  /// user clicked **Default** — selects none of them, deliberately. Otherwise
+  /// it is the profile the slot names, or the first defined one when it names
+  /// nothing (never set, or a profile since deleted): falling back rather than
+  /// answering `nil` keeps a defined style in effect after its neighbour is
+  /// deleted, means the first profile a user adds is active without a second
+  /// write, and — load-bearing — keeps a migrated legacy profile active, since
+  /// an upgrading user's pointer is unset. Static, and taking the raw string,
+  /// for the same reason as `profiles(decoding:)` — the switcher observes that
   /// slot and resolves it through this.
   public static func active(in profiles: [StyleProfile], id raw: String) -> StyleProfile? {
+    guard raw != defaultStyleID else { return nil }
     guard let id = UUID(uuidString: raw), let match = profiles.first(where: { $0.id == id })
     else { return profiles.first }
     return match
   }
 
   /// The instructions to append to the cleanup instruction, or `nil` when there
-  /// is no profile or its text is blank — blank must mean "send the base
-  /// instruction untouched", not an empty suffix. **The active profile's text
-  /// alone**, never a join of every profile; see the type's note on the cap.
+  /// is no profile, **Default** is selected, or the active text is blank — all
+  /// three must mean "send the base instruction untouched", not an empty
+  /// suffix. **The active profile's text alone**, never a join of every
+  /// profile; see the type's note on the cap.
   var activeInstructions: String? {
     active?.instructions.trimmedNonEmpty()
   }
