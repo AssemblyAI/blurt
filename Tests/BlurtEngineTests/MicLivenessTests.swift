@@ -136,7 +136,8 @@ struct MicLivenessTests {
     // silence advance the recorder's clock exactly like real audio, so the wait
     // was satisfied on the first ~1 ms poll while the AirPods link was still
     // renegotiating: the "Connecting…" pill flashed past and the start chime
-    // fired over a dead mic. With the power term the wait holds instead.
+    // fired over a dead mic. With the power term the wait holds, and a device
+    // that never delivers ends in nil — which `MicCapture` fails the press on.
     #expect(await waitToCap(powerDB: { digitalSilencePowerDB }) == nil)
   }
 
@@ -145,8 +146,8 @@ struct MicLivenessTests {
     // At the floor, not above it.
     #expect(await waitToCap(powerDB: { MicLiveness.silenceFloorDB }) == nil)
     // NaN fails both comparisons; -infinity is what a truly muted device can
-    // report. Both must read as not-live, so they land on the fail-open path
-    // rather than confirming a route that is delivering nothing.
+    // report. Both must read as not-live, so the press fails rather than
+    // confirming a route that is delivering nothing.
     #expect(await waitToCap(powerDB: { Float.nan }) == nil)
     #expect(await waitToCap(powerDB: { -Float.infinity }) == nil)
   }
@@ -156,7 +157,7 @@ struct MicLivenessTests {
     // The other half of the floor's job: it must not become voice-activity
     // detection. A live mic in a silent room reads its own self-noise, well above
     // the floor, so a user who presses and says nothing is confirmed immediately
-    // instead of waiting out the cap — no grace period needed. The clock is never
+    // instead of failing at the cap — no grace period needed. The clock is never
     // advanced here, so a sleep would park forever and the suite's time limit
     // would fail this rather than let it pass slowly.
     let clock = TestClock()
@@ -178,7 +179,7 @@ struct MicLivenessTests {
     #expect(confirmed.contains("transport=\(kAudioDeviceTransportTypeBluetooth)"))
     #expect(confirmed.contains("powerDB=-37.5"))
 
-    // Fail-open reports the cap it waited out. An unreadable transport has to
+    // A timeout reports the cap it waited out. An unreadable transport has to
     // stay distinguishable from `kAudioDeviceTransportTypeUnknown`, which is 0.
     let failedOpen = MicLiveness.logSummary(
       gap: nil, timeout: MicLiveness.unknownTransportTimeout, transportType: nil,
@@ -188,10 +189,12 @@ struct MicLivenessTests {
     #expect(failedOpen.contains("powerDB=-160.0"))
   }
 
-  @Test("a clock that never advances times out with nil — the fail-open signal")
-  func timeoutFailsOpen() async {
-    // nil is what tells `MicCapture` to proceed anyway: a silent or broken mic
-    // must degrade to the pre-gate behavior, never brick the press.
+  @Test("a clock that never advances times out with nil — the not-live verdict")
+  func timeoutReturnsNil() async {
+    // nil is pure information — the *caller* decides what it means, and
+    // `MicCapture.start()` fails the press closed on it (tears the recorder
+    // down, throws `.audioCaptureFailed`, the error pill). What is pinned here
+    // is only that the deadline actually produces the verdict.
     let clock = TestClock()
     let timeout = MicLiveness.initialPollInterval * 3
     async let gap = MicLiveness.waitUntilLive(

@@ -447,10 +447,11 @@ in both directions. So:
   its own self-noise, far above it); it is deliberately **not** a speech threshold, which would hang
   every press in a quiet room instead. Capped per transport by **`MicLiveness`** (2.5 s Bluetooth,
   300 ms on a recognised local transport, 1 s for anything else — an aggregate or virtual device can
-  have AirPods switching underneath it) and **failing open** on timeout,
-  so a broken or silent mic degrades to the old behavior rather than bricking the press. This is what
-  stops the app cueing the user to speak into a dead mic; audio spoken during the switch cannot be
-  recovered by anything, because nothing ever receives it. `stopGeneration` covers the one suspension
+  have AirPods switching underneath it) and **failing closed** on timeout: the recorder is torn down
+  and `start()` throws `.audioCaptureFailed`, so the press ends in the same error pill as any other
+  capture failure rather than recording an utterance the mic never heard. (The gate originally failed
+  open, proceeding as if live — which cued the user to speak into a dead mic anyway.) Audio spoken
+  during the switch cannot be recovered by anything, because nothing ever receives it. `stopGeneration` covers the one suspension
   this introduces — a teardown landing mid-wait wins, and the recorder is torn down rather than
   installed. `bringingUpCapture` covers the other consequence: across the wait both `activeRecorder`
   and `warm` are nil, so the warm-up paths can't infer "no capture in flight" from them (see

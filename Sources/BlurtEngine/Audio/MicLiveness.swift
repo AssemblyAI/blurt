@@ -36,8 +36,8 @@ enum MicLiveness {
 
   /// Wait cap for a transport known to be wired or on-board
   /// (`AudioTransport.isLocal`): those inputs deliver frames near-instantly, so
-  /// a route that hasn't within this budget is broken and the gate fails open
-  /// without ever making a healthy mic feel laggy.
+  /// a route that hasn't within this budget is broken and the caller fails the
+  /// press without ever making a healthy mic feel laggy.
   static let defaultTimeout: Duration = .milliseconds(300)
 
   /// Wait cap for a transport that is neither Bluetooth nor recognisably local:
@@ -51,8 +51,8 @@ enum MicLiveness {
   /// so the gate returned before the link was up and the first words were lost
   /// anyway. `bluetoothTimeout` would be the other error: a genuinely dead
   /// virtual device would feel like a 2.5 s hang on every press. This splits
-  /// them — long enough to cover most of a profile switch, short enough that the
-  /// fail-open path still feels like a stutter rather than a stall.
+  /// them — long enough to cover most of a profile switch, short enough that a
+  /// genuinely dead input is reported as a failure promptly rather than a stall.
   static let unknownTransportTimeout: Duration = .milliseconds(1000)
 
   /// The dBFS meter reading at or below which a poll counts as *digital*
@@ -69,10 +69,11 @@ enum MicLiveness {
   /// between the two.
   ///
   /// A speech-level floor (`MicCapture.meterFloorDB` is -50) would turn this
-  /// gate into voice-activity detection and hang every press in a quiet room
-  /// until the cap, which is the same bug in the other direction. It also means
-  /// no grace period is needed for the quiet user: a live mic clears this
-  /// immediately whether or not anyone is talking.
+  /// gate into voice-activity detection and fail every press in a quiet room
+  /// at the cap, which is the same bug in the other direction — worse now that
+  /// the caller fails closed on timeout. No grace period is needed for the
+  /// quiet user: a live mic clears this immediately whether or not anyone is
+  /// talking.
   static let silenceFloorDB: Float = -115
 
   /// The wait cap for an input device of the given CoreAudio transport type
@@ -94,8 +95,8 @@ enum MicLiveness {
   /// classification, so a device that landed in `unknownTransportTimeout` can be
   /// identified), how long the gate actually held, and what the meter read when
   /// it returned — a value near -160 on a confirmed start is the all-zero-buffer
-  /// premise showing itself. `gap == nil` is the fail-open outcome, which the
-  /// caller logs at `.error` and a confirmed one at `.info`.
+  /// premise showing itself. `gap == nil` is the timed-out outcome the caller
+  /// fails the press on, logged at `.error`; a confirmed one logs at `.info`.
   static func logSummary(
     gap: Duration?,
     timeout: Duration,
@@ -121,7 +122,7 @@ enum MicLiveness {
   /// `AVAudioEngine` capture path — see `MicCapture`'s header), and frames of
   /// digital silence advance `currentTime` exactly like real audio does. So the
   /// clock term was satisfied on the first ~1 ms poll while the link was still
-  /// renegotiating, the gate returned immediately, and the "Connecting…" pill
+  /// renegotiating, the wait returned immediately, and the "Connecting…" pill
   /// flashed past instead of holding.
   ///
   /// The power term is a *device is delivering real samples* test, not a
@@ -129,11 +130,14 @@ enum MicLiveness {
   /// whose clock hasn't moved is never metered.
   ///
   /// Returns the elapsed wait once the input is live, or nil when `timeout` (or
-  /// a task cancellation) won the race. The caller FAILS OPEN on nil —
-  /// proceeding exactly as if live — because a silent or broken mic must degrade
-  /// to the old behavior, never brick the press. That remains the only escape
-  /// hatch: a non-finite or `-infinity` reading counts as not-live and lands
-  /// here, which is the conservative direction.
+  /// a task cancellation) won the race. Nil is pure information — this function
+  /// decides nothing about what happens next. The caller FAILS CLOSED on it:
+  /// `MicCapture.start()` tears the recorder down and throws
+  /// `.audioCaptureFailed`, so the press ends in the error pill rather than a
+  /// recording the mic never heard. (The gate originally failed open — proceeded
+  /// as if live — which cued the user to speak into a dead mic anyway.) A
+  /// non-finite or `-infinity` reading counts as not-live and lands here too,
+  /// which is the conservative direction.
   static func waitUntilLive(
     timeout: Duration,
     clock: some Clock<Duration>,

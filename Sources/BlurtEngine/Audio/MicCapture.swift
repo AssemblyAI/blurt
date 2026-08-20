@@ -182,10 +182,10 @@ public actor MicCapture: MicCaptureProtocol {
     // speak into a dead mic and the first words never reach the transcript. Hold
     // — `DictationSession` keeps the pill in `.connecting` and the start chime
     // waits — until the recorder is clocking *and* metering real samples, capped
-    // per transport and failing open on timeout. `MicLiveness` owns both
-    // policies and the reasoning, including why the clock alone was not enough.
-    // The re-warm above is what usually makes this return at once; the gate is
-    // what makes it correct when it doesn't.
+    // per transport and FAILING CLOSED on timeout (the throw below). `MicLiveness`
+    // owns both policies and the reasoning, including why the clock alone was
+    // not enough. The re-warm above is what usually makes this return at once;
+    // the gate is what makes it correct when it doesn't.
     let timeout = MicLiveness.timeout(forTransportType: input?.transportType)
     let generationBeforeWait = stopGeneration
     // Both probes read off-actor (`waitUntilLive` is nonisolated), safe by
@@ -210,8 +210,8 @@ public actor MicCapture: MicCaptureProtocol {
     // - The task was cancelled, which is how a cancel preempts the wait:
     //   `waitUntilLive` returns as soon as it sees it, so this is the difference
     //   between an Escape acting now and acting in `bluetoothTimeout`. It must be
-    //   distinguished from the timeout, which returns nil too but means "fail
-    //   open, proceed as if live".
+    //   distinguished from the timeout, which returns nil too but is a reported
+    //   *failure* (the throw below) — a cancel is the user's own act, not a fault.
     guard stopGeneration == generationBeforeWait, !Task.isCancelled else {
       recorder.stop()
       Self.removeFile(at: recorder.url)
@@ -226,6 +226,18 @@ public actor MicCapture: MicCaptureProtocol {
       gap: gap, timeout: timeout, transportType: input?.transportType,
       powerDB: recorder.averagePower(forChannel: 0))
     Self.logger.log(level: gap == nil ? .error : .info, "\(summary, privacy: .public)")
+    // No confirmed signal within the cap: fail CLOSED — tear the capture down and
+    // surface the same `.audioCaptureFailed` presentation as the record()-false
+    // path above (the error pill), instead of claiming `.recording` and chiming
+    // "speak now" over a mic delivering nothing; a recording made anyway would
+    // discard the user's words after the fact. The recorder was never installed,
+    // so no stopGeneration bump — a concurrent stop() correctly sees no active
+    // capture — and `bringingUpCapture` is cleared by the defer above.
+    guard gap != nil else {
+      recorder.stop()
+      Self.removeFile(at: recorder.url)
+      throw BlurtError.audioCaptureFailed(underlying: MicCaptureError.inputNeverDelivered)
+    }
 
     activeRecorder = recorder
     activeTransportType = input?.transportType
@@ -383,16 +395,5 @@ public actor MicCapture: MicCaptureProtocol {
 
   static func removeFile(at url: URL) {
     try? FileManager.default.removeItem(at: url)
-  }
-}
-
-enum MicCaptureError: LocalizedError {
-  /// The active audio route reported no usable input device.
-  case noInputDevice
-
-  var errorDescription: String? {
-    switch self {
-    case .noInputDevice: "No microphone is available."
-    }
   }
 }
