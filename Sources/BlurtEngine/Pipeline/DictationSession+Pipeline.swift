@@ -78,7 +78,7 @@ extension DictationSession {
     // dictation this launch, in unrelated apps. So a secure target is transcribed
     // and pasted as normal, and simply not remembered.
     if capturedContext?.targetIsSecure != true {
-      recentDictations.record(trimmed, at: Date())
+      recentDictations.record(trimmed, style: styleNameProvider(), at: Date())
     }
     // Report every produced transcript (trimmed for display), with the ring it
     // just joined, before injection — pasted, copied, and failed-to-paste all count.

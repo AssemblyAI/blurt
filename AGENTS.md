@@ -913,11 +913,13 @@ restating them.
 `App/Blurt/Blurt/App.swift` declares four scenes (five in Debug):
 
 - **Main window** (`MainWindowRoot`) — the setup wizard until the app is fully configured, then the
-  "ready" screen (`ReadyView`, with the segmented style switcher — Cleaned Up plus up to 4
-  profiles, absent entirely until a profile exists, selectable by ⌘1–⌘5 while this window is key —
-  and the Recent list; while a named style is active the shortcut readout says so). Hidden
-  titlebar, body-draggable, always presented at launch.
-- **Settings** (`SettingsWindowRoot`) — a `TabView` reached via ⌘, / the ready screen / the menu bar,
+  "ready" screen (`ReadyView`: the shortcut readout, swapped for a "Listening…" state while audio
+  is captured — driven by the same phase stream the pill renders, with Esc cancelling while this
+  window is key; the labeled Style row — a segmented switcher, Cleaned Up plus up to 4 profiles,
+  absent entirely until a profile exists, selectable by ⌘1–⌘5, locked during capture; and the
+  Recent list, each row subtitled with the style it was made with). Standard titlebar, always
+  presented at launch.
+- **Settings** (`SettingsWindowRoot`) — a `TabView` reached via ⌘, / the menu bar,
   never at launch. Note macOS titles a preference window after its selected pane, which is why the
   UI-test suite aliases the window title to the first tab's label.
 - **`MenuBarExtra`** (`MenuBar/MenuBarScene.swift`) — live dictation indicator plus a

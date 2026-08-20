@@ -58,13 +58,9 @@ struct WizardView: View {
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.horizontal, 20)
-    // The window's titlebar is hidden (`.windowStyle(.hiddenTitleBar)` on the
-    // main scene), so content extends up behind the traffic-light controls.
-    // This leading-aligned header
-    // sits exactly under them — inset the top so "Set Up Blurt" clears the
-    // controls rather than colliding with them. (ReadyView is centered, so it
-    // doesn't need this.)
-    .padding(.top, 28)
+    // The standard titlebar provides the traffic-light clearance, so the top
+    // inset is just breathing room between the bar and the header.
+    .padding(.top, 12)
     .padding(.bottom, 4)
   }
 }

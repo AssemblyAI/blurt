@@ -74,6 +74,12 @@ public struct StyleProfileStore {
   /// migration note above) and never writes.
   static var legacyDefaultsKey: String { DefaultsKey.customStyle.key }
 
+  /// The base styling's user-facing name — the switcher's first segment, and
+  /// what a recent dictation made with no profile records as its style. Defined
+  /// once here so the segment, its shortcut, and the recents subtitle can't
+  /// drift apart.
+  public static let defaultStyleName = "Cleaned Up"
+
   /// What the active-id slot holds when the user has clicked **Cleaned Up**
   /// (this API keeps the internal name Default): base styling, no profile's
   /// instructions appended. A sentinel *distinct from unset* on purpose — an
@@ -102,9 +108,8 @@ public struct StyleProfileStore {
 
   /// The most `Character`s a profile name may hold. Counted in characters, not
   /// the UTF-8 bytes `characterLimit` uses, because this limit exists for a
-  /// different reason: the name labels a segment of the main window's switcher
-  /// (and the shortcut readout under the keycap), so this is a layout bound
-  /// rather than a wire one.
+  /// different reason: the name labels a segment of the main window's switcher,
+  /// so this is a layout bound rather than a wire one.
   public static let nameLimit = 24
 
   /// The name a profile falls back to when its own is blank. Reachable only from

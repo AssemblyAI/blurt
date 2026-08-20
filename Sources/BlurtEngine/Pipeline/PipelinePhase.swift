@@ -43,6 +43,18 @@ public enum PipelinePhase: Equatable, Sendable {
     }
   }
 
+  /// Whether audio capture is in progress or being brought up — `.connecting`
+  /// (the mic is opening, nothing recorded yet) or `.recording`. The window the
+  /// style switch is locked for: a style clicked mid-utterance would make the
+  /// request's instruction disagree with what the switcher showed at press time.
+  /// Exhaustive for the same reason as `isTerminal`.
+  public var isCapturing: Bool {
+    switch self {
+    case .connecting, .recording: true
+    case .idle, .transcribing, .injecting, .failed, .cancelled, .pasted, .noTarget: false
+    }
+  }
+
   /// The blocker behind this phase when it represents an unfinished **setup**
   /// step rather than a fault — something the user must go and fix, not a
   /// dictation that broke. Nil for every other phase and every genuine failure.

@@ -11,7 +11,7 @@ import SwiftUI
 //   wizard; once it is, it shows `ReadyView` (the shortcut readout).
 // - Settings (`SettingsWindowRoot`): change the API key or dictation shortcut. A
 //   `Settings` scene, so ⌘, comes wired for free; opened programmatically via the
-//   `openSettings` environment action (the ready screen's link and menu bar item).
+//   `openSettings` environment action (the menu bar item).
 
 enum MainWindow {
   /// Scene identifier for `openWindow(id:)` / the `Window(id:)` scene.
@@ -36,13 +36,12 @@ enum MainWindow {
 struct MainWindowRoot: View {
   var appDelegate: AppDelegate
   @Environment(\.openWindow) private var openWindow
-  @Environment(\.openSettings) private var openSettings
 
   var body: some View {
     if let controller = appDelegate.wizardController, let coordinator = appDelegate.coordinator {
       Group {
         if controller.isReady {
-          ReadyView(coordinator: coordinator, openSettings: { openSettings() })
+          ReadyView(coordinator: coordinator)
         } else {
           WizardView(controller: controller, coordinator: coordinator)
         }
@@ -72,9 +71,6 @@ struct MainWindowRoot: View {
         // because the window doesn't exist yet then.
         appDelegate.activateAtLaunchIfNeeded()
       }
-      // The splash-style titlebar treatment lives on the scene — see
-      // `.windowStyle(.hiddenTitleBar)` / `.windowBackgroundDragBehavior` in
-      // `BlurtApp`.
       // Tag the window so `surfaceMainWindow()` can find and raise this exact
       // window (the menu bar's "Open Blurt" needs to deminiaturize/front it when
       // the app is already running).

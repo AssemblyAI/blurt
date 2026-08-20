@@ -2,11 +2,13 @@ import BlurtEngine
 import SwiftUI
 
 /// The "you're all set" screen shown in the main window once setup is complete.
-/// It just states the dictation shortcut and offers a native-feeling link to the
-/// Settings window — there's nothing to configure here.
+/// It states the dictation shortcut, the style in effect, and the recent
+/// dictations — there's nothing to configure here, and deliberately no Settings
+/// control: the standard app-menu "Settings…" (⌘,) and the menu-bar item are
+/// the routes, so the window stays a status surface rather than growing a
+/// second door to the same place.
 struct ReadyView: View {
   var coordinator: AppCoordinator
-  var openSettings: () -> Void
   // Observed (not read once) so changing the dictation key in the separate
   // Settings window re-renders this window's keycap live — see `BoundTriggerKey`.
   @BoundTriggerKey private var triggerKey
@@ -15,10 +17,11 @@ struct ReadyView: View {
   /// not to write: the store owns the decoding and the active-vs-Default rule
   /// (see `StyleProfileStore`), and `@AppStorage` is what re-renders this window
   /// when the settings sheet adds a style or the switcher changes the active
-  /// one. Hoisted here rather than into the switcher because the shortcut
-  /// readout names the active style too.
+  /// one. Hoisted here rather than into the switcher because this view decides
+  /// whether the row renders at all.
   @AppStorage(StyleProfileStore.defaultsKey) private var rawProfiles = ""
   @AppStorage(StyleProfileStore.activeDefaultsKey) private var rawActiveID = ""
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     // Decoded and resolved once per render: `body` re-runs on every dictation
@@ -28,86 +31,139 @@ struct ReadyView: View {
     // second reading here.
     let profiles = StyleProfileStore().profiles(decoding: rawProfiles)
     let active = StyleProfileStore.active(in: profiles, id: rawActiveID)
-    // Sections sit 20 pt apart; the logo and shortcut readout are one idea,
-    // so they nest in a tighter 14 pt group rather than spreading to match.
     VStack(spacing: 20) {
-      VStack(spacing: 14) {
-        ReadyBrandingView()
-          // The logo PNG carries ~16% transparent margin top & bottom. The top
-          // margin gives welcome clearance from the traffic lights; cancel the
-          // bottom one so the gap to the text is the VStack spacing, not ~2x it.
-          .padding(.bottom, -16)
+      statusBlock(activeStyleName: active?.name)
 
-        shortcutReadout(styleName: active?.name)
-      }
-
-      // No profiles, no switcher: an `if` with no `else` contributes no view
-      // and no stack spacing, so the window is byte-identical to one without
-      // styles — deliberately not an empty-state control inviting the user to
-      // make one, which would be a permanent advert for an optional feature.
+      // No profiles, no row: an `if` with no `else` contributes no view and no
+      // stack spacing, so the window is byte-identical to one without styles —
+      // deliberately not an empty-state control inviting the user to make one,
+      // which would be a permanent advert for an optional feature.
       if !profiles.isEmpty {
-        StyleProfilePicker(profiles: profiles, activeID: active?.id)
+        StyleRow(profiles: profiles, activeID: active?.id)
+          // Locked while the mic is opening or capturing: a style clicked
+          // mid-utterance would disagree with what the request was built with.
+          // `.disabled` propagates to the picker and the hidden ⌘1–⌘5 buttons,
+          // whose shortcuts don't fire while disabled.
+          .disabled(coordinator.isCapturing)
       }
 
       // `displayed`, not `entries`: the ring remembers 100 dictations (they are
       // also request context — see `ConversationContext`) and this list is three
       // rows tall.
       RecentDictationsSection(entries: coordinator.recentDictations.displayed)
-
-      Button(action: openSettings) {
-        Label("Settings", systemImage: "gearshape")
-          .labelStyle(.titleAndIcon)
-          .symbolRenderingMode(.hierarchical)
-      }
-      // The system Liquid Glass button — hover/press chrome, edge highlights,
-      // and accessibility fallbacks come from the style, not hand-rolled fills.
-      // Falls back to `.bordered` on macOS 15–25 (see glassButtonStyleCompat).
-      .glassButtonStyleCompat()
     }
     .frame(maxWidth: .infinity)
     .padding(.horizontal, 32)
-    .padding(.top, 4)
+    // The standard titlebar supplies the top clearance now (the logo's
+    // transparent margin used to); match the section spacing top and bottom so
+    // the readout and the Recent card sit in an evenly-padded window.
+    .padding(.top, 20)
     .padding(.bottom, 20)
     .frame(width: MainWindow.contentWidth)
     .fixedSize(horizontal: false, vertical: true)
   }
 
-  /// "Tap or hold ⌘ to blurt", with the key drawn as a rounded keycap — and,
-  /// while a named style is active, "… to blurt in Casual style", so the window
-  /// says what the next dictation will actually do. The Cleaned Up segment
-  /// keeps exactly the pre-styles line: it *is* the pre-styles behaviour, and
-  /// naming it would suggest a "Cleaned Up style" exists to edit somewhere.
-  private func shortcutReadout(styleName: String?) -> some View {
+  /// The window's top block: the shortcut readout at rest, swapped for the
+  /// listening state while audio is actually being captured. Both render into
+  /// one fixed-height slot (the `RecentDictationsSection` reservation trick) so
+  /// the Style row and Recent list below never move on the swap. The swap is
+  /// gated on the same phase stream the overlay pill renders
+  /// (`coordinator.menuBarStatus`, whose `.recording` deliberately excludes the
+  /// mic bring-up) — during "Connecting…" nothing is captured yet, so claiming
+  /// "Listening" would invite unrecoverable speech; the readout stays put and
+  /// the pill carries the warming-up state.
+  private func statusBlock(activeStyleName: String?) -> some View {
+    ZStack {
+      if coordinator.menuBarStatus == .recording {
+        listeningState(activeStyleName: activeStyleName)
+      } else {
+        shortcutReadout
+      }
+    }
+    .frame(height: Self.statusBlockHeight)
+    // Esc cancels the in-flight dictation — same command the overlay's owner
+    // submits (`.cancel`), scoped to this window by living on a button in it.
+    // Present through all of capture (not just `.recording`), so Esc during
+    // the mic bring-up also cancels rather than beeping.
+    .background {
+      if coordinator.isCapturing {
+        Button("Cancel Dictation") { coordinator.session.submit(.cancel) }
+          .keyboardShortcut(.cancelAction)
+          .hidden()
+      }
+    }
+  }
+
+  /// Tall enough for the block's taller occupant, the two-line listening state;
+  /// the one-line readout centers in the same slot.
+  private static let statusBlockHeight: CGFloat = 44
+
+  /// "Tap or hold ⌘ to blurt", with the key drawn as a rounded keycap. Static
+  /// on purpose: which style is in effect is the Style row's job to say — its
+  /// selected segment is always visible right below — so repeating it here
+  /// would be two readouts to keep in agreement.
+  private var shortcutReadout: some View {
     HStack(spacing: 6) {
       Text("Tap or hold")
         .foregroundStyle(.secondary)
       KeyCap(label: triggerKey.label)
-      Text(styleName.map { "to blurt in \($0) style" } ?? "to blurt")
+      Text("to blurt")
         .foregroundStyle(.secondary)
-        // Names are capped (`StyleProfileStore.nameLimit`) but the cap is sized
-        // for the switcher's segments, so a long one could still outgrow this
-        // line: truncate the tail rather than wrapping the readout to two lines
-        // and shifting everything below it.
-        .lineLimit(1)
-        .truncationMode(.tail)
     }
     .font(.title3)
   }
+
+  /// The capture-in-progress face of the top block: the pill's waveform cue in
+  /// its color (`OverlayBrandPalette.cyan` — the tint `WaveformMeter` uses while
+  /// recording), a bold "Listening…", and the way out. The style clause names
+  /// the active profile; with none active the sentence starts at "Release" —
+  /// "Blurting in Cleaned Up." reads as if a profile by that name existed.
+  private func listeningState(activeStyleName: String?) -> some View {
+    HStack(spacing: 10) {
+      Image(systemName: "waveform")
+        .font(.title2)
+        .foregroundStyle(OverlayBrandPalette.cyan)
+        // The pill's live-capture heartbeat (`RecordingTag`), same cadence,
+        // stilled under Reduce Motion the same way.
+        .pulsingOpacity(period: 1.2, minOpacity: 0.4, animated: !reduceMotion)
+      VStack(alignment: .leading, spacing: 2) {
+        Text("Listening…")
+          .font(.title3.weight(.semibold))
+        Text(listeningSubtitle(activeStyleName: activeStyleName))
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+    }
+    // One element, phrased once — the glyph is decoration and the ellipsis is
+    // not worth hearing.
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(
+      "Listening. \(listeningSubtitle(activeStyleName: activeStyleName))")
+  }
+
+  private func listeningSubtitle(activeStyleName: String?) -> String {
+    let escape = "Release to finish, or press Esc to cancel."
+    guard let activeStyleName else { return escape }
+    return "Blurting in \(activeStyleName). \(escape)"
+  }
 }
 
-/// The style switcher: a native segmented control whose first segment,
-/// **Cleaned Up**, is the base styling (no profile instructions appended) and
-/// the rest are the user's profiles — the HIG control for a small, always-visible
-/// set of mutually exclusive options, so selection chrome, sizing and
-/// accessibility come from AppKit rather than hand-rolled buttons. It sits
-/// between the shortcut readout and the Recent list because which style is in
-/// effect is the one dictation setting worth changing mid-flow — Settings owns
-/// creating and editing profiles (see `SettingsWindowRoot`'s Styles section),
-/// this owns which one is in effect. The choice is **sticky**: a selection
-/// holds until the user makes another, so a switch is not something to redo
-/// before every dictation. `ReadyView` renders it only while at least one
-/// profile exists — a lone Cleaned Up segment would have nothing to switch to.
-private struct StyleProfilePicker: View {
+/// The style switcher: a System Settings–style labeled row — leading "Style"
+/// label, trailing segmented control — in the same rounded `.quinary` card as
+/// the Recent list below it, so the window's two in-content surfaces match.
+/// The control's first segment, **Cleaned Up**, is the base styling (no
+/// profile instructions appended) and the rest are the user's profiles — the
+/// HIG control for a small, always-visible set of mutually exclusive options,
+/// so selection chrome, sizing and accessibility come from AppKit rather than
+/// hand-rolled buttons. It sits between the shortcut readout and the Recent
+/// list because which style is in effect is the one dictation setting worth
+/// changing mid-flow — Settings owns creating and editing profiles (see
+/// `SettingsWindowRoot`'s Styles section), this owns which one is in effect.
+/// The choice is **sticky**: a selection holds until the user makes another,
+/// so a switch is not something to redo before every dictation. `ReadyView`
+/// renders it only while at least one profile exists — a lone Cleaned Up
+/// segment would have nothing to switch to.
+private struct StyleRow: View {
   /// Already decoded and resolved by `ReadyView`, which observes the slots —
   /// this view is pure render-and-write.
   let profiles: [StyleProfile]
@@ -134,19 +190,39 @@ private struct StyleProfilePicker: View {
   }
 
   var body: some View {
-    // The picker keeps its own (hidden) title so VoiceOver reads a meaningful
-    // name for the control rather than an empty string — the same pattern as
-    // `PickerSettingRow`.
-    Picker("Dictation style", selection: selection) {
-      Text("Cleaned Up").tag(StyleProfile.ID?.none)
-      ForEach(profiles) { profile in
-        Text(profile.name).tag(StyleProfile.ID?.some(profile.id))
+    // The row shape is `SettingRow`'s (leading label, trailing control, center
+    // alignment) but built inline — `SettingRow` would wrap the title in an
+    // icon-bearing `Label`. The visible "Style" text and the picker's title
+    // are one element to VoiceOver, not two: a hidden picker label is still
+    // its accessibility name (the `PickerSettingRow` pattern), so the visible
+    // text is marked decorative rather than announced twice.
+    HStack {
+      Text("Style")
+        .accessibilityHidden(true)
+      Spacer(minLength: 12)
+      Picker("Style", selection: selection) {
+        Text(StyleProfileStore.defaultStyleName).tag(StyleProfile.ID?.none)
+        ForEach(profiles) { profile in
+          Text(profile.name).tag(StyleProfile.ID?.some(profile.id))
+        }
       }
+      .pickerStyle(.segmented)
+      .labelsHidden()
+      .fixedSize()
+      .accessibilityIdentifier(UITestIdentifiers.styleProfilePicker)
+      .background(shortcuts)
     }
-    .pickerStyle(.segmented)
-    .labelsHidden()
-    .accessibilityIdentifier(UITestIdentifiers.styleProfilePicker)
-    .background(shortcuts)
+    .padding(.horizontal, 12)
+    .padding(.vertical, 8)
+    // Full width, like the Recent card below: both stretch to the one content
+    // width `ReadyView`'s horizontal padding leaves, so the two cards' edges
+    // align by construction rather than by matching numbers.
+    .frame(maxWidth: .infinity)
+    // The Recent card's container, so the two surfaces read as one family.
+    .background(
+      RoundedRectangle(cornerRadius: 10, style: .continuous)
+        .fill(.quinary)
+    )
   }
 
   /// Keyboard shortcuts for the segments: ⌘1 selects Cleaned Up, ⌘2…⌘5 the
@@ -164,7 +240,7 @@ private struct StyleProfilePicker: View {
   /// shortcut.
   private var shortcuts: some View {
     Group {
-      Button("Cleaned Up") { StyleProfileStore().activateDefault() }
+      Button(StyleProfileStore.defaultStyleName) { StyleProfileStore().activateDefault() }
         .keyboardShortcut("1", modifiers: .command)
       // The store caps the list at `profileLimit` (4), so the digits end at ⌘5.
       ForEach(Array(profiles.enumerated()), id: \.element.id) { index, profile in
@@ -173,45 +249,6 @@ private struct StyleProfilePicker: View {
       }
     }
     .hidden()
-  }
-}
-
-private struct ReadyBrandingView: View {
-  /// Loaded once for the process rather than per `body` evaluation: this view
-  /// sits in `ReadyView`, whose body re-runs on every new dictation
-  /// (`recentDictations.entries`), and a bundle lookup plus a PNG decode is not
-  /// something to re-do on the main thread each time.
-  ///
-  /// Left to the target's `SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor` default
-  /// rather than spelled `nonisolated(unsafe)`: `body` reads it on the main actor
-  /// either way, and this can't then break if a future SDK marks `NSImage`
-  /// `Sendable` (which would make the attribute an "unnecessary" warning, and the
-  /// app target builds with warnings-as-errors).
-  private static let logo: NSImage? = Bundle.main
-    .url(forResource: "blurt-ready-logo", withExtension: "png")
-    .flatMap(NSImage.init(contentsOf:))
-
-  var body: some View {
-    if let image = Self.logo {
-      Image(nsImage: image)
-        .interpolation(.none)
-        .resizable()
-        .scaledToFit()
-        .frame(maxWidth: 280)
-        .accessibilityLabel("Blurt logo")
-    } else {
-      // Fallback if the bundled logo can't be loaded — keep the ready screen's
-      // identity (icon + name) rather than rendering an empty, contextless view.
-      VStack(spacing: 8) {
-        Image(systemName: "mic.fill")
-          .font(.system(size: 44))
-          .foregroundStyle(.secondary)
-        Text("Blurt is ready")
-          .font(.title2.weight(.semibold))
-      }
-      .accessibilityElement(children: .combine)
-      .accessibilityLabel("Blurt is ready")
-    }
   }
 }
 

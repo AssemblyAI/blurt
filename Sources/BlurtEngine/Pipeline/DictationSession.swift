@@ -47,6 +47,13 @@ public actor DictationSession {
   /// than a stored list, so edits in Settings take effect on the next dictation
   /// without rebuilding the session. Defaults to reading `KeyTermsStore`.
   let keyTermsProvider: @Sendable () -> [String]
+  /// Names the style a completed dictation was made with, recorded onto its
+  /// `RecentDictations.Entry` (the "Casual · just now" subtitle). `nil` means no
+  /// styling applied and the entry shows only its timestamp. A closure for the
+  /// same live-read reason as `keyTermsProvider`; the default reads the stores —
+  /// the active profile's name, the base styling's name with none active, and
+  /// nil while enhanced transcripts are off (no rewrite, so no style either).
+  let styleNameProvider: @Sendable () -> String?
   /// Auto-releases the hotkey after this long so a held key can't run forever.
   /// Defaults to just under the dictation API's audio cap (see
   /// `SyncSTTLimits`) — recording past it would only produce audio the
@@ -145,13 +152,15 @@ public actor DictationSession {
     maxRecordingSeconds: Double = SyncSTTLimits.autoReleaseSeconds,
     clock: any Clock<Duration> = ContinuousClock(),
     keyTermsProvider: (@Sendable () -> [String])? = nil,
+    styleNameProvider: (@Sendable () -> String?)? = nil,
     readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
     onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)? = nil
   ) {
     self.init(
       mic: mic, transcriber: transcriber, injector: injector,
       maxRecordingSeconds: maxRecordingSeconds, clock: clock,
-      keyTermsProvider: keyTermsProvider, readinessCheck: readinessCheck,
+      keyTermsProvider: keyTermsProvider, styleNameProvider: styleNameProvider,
+      readinessCheck: readinessCheck,
       onTranscriptDelivered: onTranscriptDelivered, seams: .production)
   }
 
@@ -168,6 +177,7 @@ public actor DictationSession {
     maxRecordingSeconds: Double = SyncSTTLimits.autoReleaseSeconds,
     clock: any Clock<Duration> = ContinuousClock(),
     keyTermsProvider: (@Sendable () -> [String])? = nil,
+    styleNameProvider: (@Sendable () -> String?)? = nil,
     readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
     onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)? = nil,
     seams: Seams
@@ -178,6 +188,14 @@ public actor DictationSession {
     self.maxRecordingSeconds = maxRecordingSeconds
     self.clock = clock
     self.keyTermsProvider = keyTermsProvider ?? { KeyTermsStore().terms }
+    self.styleNameProvider =
+      styleNameProvider
+      ?? {
+        // No rewrite means no style was applied — matching the transcriber's
+        // own per-request read of the same store.
+        guard EnhancedTranscriptsStore().isEnabled else { return nil }
+        return StyleProfileStore().active?.name ?? StyleProfileStore.defaultStyleName
+      }
     self.readinessCheck = readinessCheck
     self.onTranscriptDelivered = onTranscriptDelivered
     self.seams = seams
