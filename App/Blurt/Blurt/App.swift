@@ -25,12 +25,10 @@ struct BlurtApp: App {
       MainWindowRoot(appDelegate: appDelegate)
     }
     .windowResizability(.contentSize)
-    // Welcome-window chrome: the wizard and ready screen are splash-style
-    // surfaces, not document/preferences windows — hide the titlebar (keeping
-    // the traffic lights) and let the window drag from its body, since there's
-    // no longer a visible bar to grab.
-    .windowStyle(.hiddenTitleBar)
-    .windowBackgroundDragBehavior(.enabled)
+    // Standard window chrome: the titlebar names the app ("Blurt") and gives
+    // the window its drag handle, so no hidden-titlebar splash treatment and no
+    // body-drag behaviour (which only earned its place while there was no bar
+    // to grab).
     // Always present the main window at launch — both first-run onboarding and a
     // configured launch (the "ready" screen) come up front, rather than the app
     // launching silently to just the overlay pill. (`AppDelegate` activates the

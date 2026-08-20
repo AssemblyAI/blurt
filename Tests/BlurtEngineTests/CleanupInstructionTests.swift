@@ -129,7 +129,7 @@ struct CleanupInstructionTests {
       CleanupInstruction.text.utf8.count + CleanupInstruction.customStylePreamble.utf8.count
         + CleanupInstruction.customStyleBudget == CleanupInstruction.characterCap)
     #expect(CleanupInstruction.customStyleBudget >= 200)
-    #expect(CustomStyleStore.characterLimit == CleanupInstruction.customStyleBudget)
+    #expect(StyleProfileStore.characterLimit == CleanupInstruction.customStyleBudget)
   }
 
   /// It travels as one JSON string. The instruction is full of quotes, backticks,

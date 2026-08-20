@@ -3,14 +3,18 @@ import BlurtEngine
 import SwiftUI
 
 /// The "Recent" list under the shortcut readout: the last few dictations, newest
-/// first, each a single truncated line with a live relative timestamp. The list
+/// first, each a truncated transcript line over a live "style · relative time"
+/// subtitle. The list
 /// area reserves a fixed height for `RecentDictations.displayCapacity` rows so the
 /// window never resizes and nothing above it moves as dictations arrive; unused
 /// slots are held open (empty → a muted placeholder fills the whole area).
 struct RecentDictationsSection: View {
   let entries: [RecentDictations.Entry]
 
-  private static let rowHeight: CGFloat = 28
+  /// Two lines now — transcript over the "<Style> · <time>" subtitle — so the
+  /// row is taller than the old single-line 28. The reservation math in
+  /// `RecentDictations.reservedHeight` is unchanged; only this input moves.
+  private static let rowHeight: CGFloat = 44
   private static let separatorThickness: CGFloat = 1
 
   /// How often the relative timestamps re-render. Half the engine's "just now"
@@ -76,12 +80,13 @@ struct RecentDictationsSection: View {
   }
 }
 
-/// A single recent-dictation row: the transcript (one truncated line) with a
-/// relative timestamp trailing it, formatted against `now` (supplied by the
-/// enclosing `TimelineView` so it advances over time), and a copy affordance.
+/// A single recent-dictation row: the transcript (one truncated line) over a
+/// gray subtitle — "Casual · just now", the style the dictation was made with
+/// and its relative time (the engine's `Entry.subtitle`, formatted against
+/// `now`, which the enclosing `TimelineView` advances) — and a copy affordance.
 ///
 /// Copy follows the standard macOS list-row shape: on hover (or keyboard focus,
-/// for Full Keyboard Access) a "Copy" button takes the timestamp's place; the
+/// for Full Keyboard Access) a "Copy" button appears in the trailing slot; the
 /// same command is in the row's contextual menu and a VoiceOver custom action,
 /// so it's never reachable through hover alone. Copying briefly shows "Copied"
 /// (and announces it), since a pasteboard write has no visible effect.
@@ -96,10 +101,12 @@ private struct RecentDictationRow: View {
   @State private var copyCount = 0
   @FocusState private var copyButtonFocused: Bool
 
-  /// The three things the trailing slot can show. Deriving the visible one
-  /// from a single value keeps the exclusivity structural rather than spread
-  /// across per-layer boolean conditions.
-  private enum TrailingSlot { case timestamp, copyButton, copiedConfirmation }
+  /// The things the trailing slot can show. Deriving the visible one from a
+  /// single value keeps the exclusivity structural rather than spread across
+  /// per-layer boolean conditions. (The timestamp used to live here; it moved
+  /// into the subtitle when the style name joined it, so at rest the slot is
+  /// empty.)
+  private enum TrailingSlot { case empty, copyButton, copiedConfirmation }
 
   /// Keyboard focus counts as well as hover for revealing the copy button, so
   /// Full Keyboard Access users tabbing to the (otherwise invisible) button
@@ -107,21 +114,28 @@ private struct RecentDictationRow: View {
   private var trailingSlot: TrailingSlot {
     if showsCopyConfirmation { return .copiedConfirmation }
     if isHovered || copyButtonFocused { return .copyButton }
-    return .timestamp
+    return .empty
   }
 
   var body: some View {
-    // Formatted once per render; feeds the trailing text and VoiceOver label.
-    // The "just now"/relative-phrasing rule is the engine's (unit-tested there).
-    let timestamp = entry.relativeLabel(now: now)
+    // Formatted once per render; feeds the subtitle and VoiceOver label. The
+    // wording — "just now", the style · time join, the no-style fallback to the
+    // bare time — is the engine's (unit-tested there).
+    let subtitle = entry.subtitle(now: now)
     HStack(spacing: 10) {
-      Text(entry.text)
-        .font(.callout)
-        .foregroundStyle(.primary)
-        .lineLimit(1)
-        .truncationMode(.tail)
-        .frame(maxWidth: .infinity, alignment: .leading)
-      trailingAccessory(timestamp: timestamp)
+      VStack(alignment: .leading, spacing: 1) {
+        Text(entry.text)
+          .font(.callout)
+          .foregroundStyle(.primary)
+          .lineLimit(1)
+          .truncationMode(.tail)
+        Text(subtitle)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      trailingAccessory
     }
     .padding(.horizontal, 12)
     .frame(maxHeight: .infinity)
@@ -138,7 +152,7 @@ private struct RecentDictationRow: View {
     // so ignore the children rather than merge. Copy is re-exposed as a custom
     // action since the hover button is ignored with the rest of the children.
     .accessibilityElement(children: .ignore)
-    .accessibilityLabel("\(entry.text), \(timestamp)")
+    .accessibilityLabel(voiceOverLabel)
     .accessibilityAction(named: "Copy") { copyTranscript() }
     // Reverts the "Copied" confirmation after a beat. The cancelled-sleep guard
     // keeps a superseded timer from clearing the newer copy's confirmation.
@@ -149,15 +163,13 @@ private struct RecentDictationRow: View {
     }
   }
 
-  /// The row's trailing slot: the relative timestamp, swapped for the "Copy"
-  /// button on hover/focus and a transient "Copied" confirmation after a copy.
-  /// All three are layered (faded, not swapped out of the hierarchy) so the
-  /// button never loses keyboard focus mid-confirmation, and the slot sizes to
-  /// the widest so nothing shifts as they trade places.
-  private func trailingAccessory(timestamp: String) -> some View {
+  /// The row's trailing slot: empty at rest, the "Copy" button on hover/focus,
+  /// and a transient "Copied" confirmation after a copy. The layers are faded,
+  /// not swapped out of the hierarchy, so the button never loses keyboard focus
+  /// mid-confirmation, and the slot sizes to the widest so nothing shifts as
+  /// they trade places.
+  private var trailingAccessory: some View {
     ZStack(alignment: .trailing) {
-      Text(timestamp)
-        .opacity(trailingSlot == .timestamp ? 1 : 0)
       Button(action: copyTranscript) {
         // Hand-rolled label: `Label`'s default icon–title gap reads as two
         // separate items at this size; pull the glyph in tight.
@@ -182,6 +194,16 @@ private struct RecentDictationRow: View {
     .foregroundStyle(.secondary)
     .fixedSize()
     .animation(.easeOut(duration: 0.12), value: trailingSlot)
+  }
+
+  /// The row's one VoiceOver phrase: transcript, style (when the entry has
+  /// one), relative time — joined with commas rather than the subtitle's visual
+  /// "·", which VoiceOver would read out.
+  private var voiceOverLabel: String {
+    var parts = [entry.text]
+    if let style = entry.style { parts.append(style) }
+    parts.append(entry.relativeLabel(now: now))
+    return parts.joined(separator: ", ")
   }
 
   private func copyTranscript() {

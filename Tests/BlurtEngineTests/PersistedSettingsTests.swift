@@ -18,7 +18,13 @@ struct PersistedSettingsTests {
     // the other direction too: a stray `false` surviving a reset would leave a
     // "clean" install pasting verbatim transcripts.
     #expect(PersistedSettings.allDefaultsKeys.contains(EnhancedTranscriptsStore.defaultsKey))
-    #expect(PersistedSettings.allDefaultsKeys.contains(CustomStyleStore.defaultsKey))
+    // Three keys for the style profiles: the list, the active pointer, and the
+    // pre-profiles single field `StyleProfileStore` still reads. The legacy one
+    // belongs to the sweep too — a reset that left it behind would have a
+    // "clean" install migrate yesterday's text back into a Custom profile.
+    #expect(PersistedSettings.allDefaultsKeys.contains(StyleProfileStore.defaultsKey))
+    #expect(PersistedSettings.allDefaultsKeys.contains(StyleProfileStore.activeDefaultsKey))
+    #expect(PersistedSettings.allDefaultsKeys.contains(StyleProfileStore.legacyDefaultsKey))
     // OverlayOriginStore persists a point, so it contributes two keys rather
     // than one. Both belong to the sweep: while they were private to
     // `OverlayWindowController`, no reset knew about them and a pill dragged
@@ -32,10 +38,10 @@ struct PersistedSettingsTests {
 
   @Test("the roster carries no stale or duplicate keys")
   func rosterHasNoStrays() {
-    // Exactly the eight known stores' keys (OverlayOriginStore contributes two):
-    // a removed store must leave the roster in the same change, and a key listed
-    // twice would hint at a copy-paste slip.
-    #expect(PersistedSettings.allDefaultsKeys.count == 9)
+    // Exactly the eight known stores' keys (OverlayOriginStore contributes two,
+    // StyleProfileStore three): a removed store must leave the roster in the same
+    // change, and a key listed twice would hint at a copy-paste slip.
+    #expect(PersistedSettings.allDefaultsKeys.count == 11)
     #expect(Set(PersistedSettings.allDefaultsKeys).count == PersistedSettings.allDefaultsKeys.count)
   }
 
@@ -53,7 +59,9 @@ struct PersistedSettingsTests {
       KeyTermsStore.defaultsKey,
       DeveloperModeStore.defaultsKey,
       EnhancedTranscriptsStore.defaultsKey,
-      CustomStyleStore.defaultsKey,
+      StyleProfileStore.defaultsKey,
+      StyleProfileStore.activeDefaultsKey,
+      StyleProfileStore.legacyDefaultsKey,
       OverlayOriginStore.xDefaultsKey,
       OverlayOriginStore.yDefaultsKey,
       LastUpdateCheckStore.defaultsKey,
@@ -61,7 +69,7 @@ struct PersistedSettingsTests {
     #expect(storeKeys == Set(DefaultsKey.allCases.map(\.key)))
     // No two stores sharing a slot — the Set above would have quietly absorbed a
     // collision, and two stores on one key means each overwrites the other.
-    #expect(storeKeys.count == 9)
+    #expect(storeKeys.count == 11)
   }
 
   @Test("resetAll clears every roster key and leaves unrelated ones alone")

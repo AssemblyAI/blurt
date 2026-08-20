@@ -64,8 +64,24 @@ enum UITestIdentifiers {
   static let soundPicker = "settings.sound.picker"
   static let developerToggle = "settings.developer.toggle"
   static let enhancedTranscriptsToggle = "settings.enhancedTranscripts.toggle"
-  static let customStyleField = "settings.customStyle.field"
   static let updateCheck = "settings.update.check"
+  // The Styles section and the sheet it opens (`SettingsWindowRoot`). The Edit
+  // buttons are per-profile, so they are indexed by row rather than named one
+  // by one — the identifier has to be distinct per control, and the profiles
+  // themselves are user-named.
+  static let styleProfileAdd = "settings.styleProfiles.add"
+  static let styleProfileName = "settings.styleProfiles.name"
+  static let styleProfileInstructions = "settings.styleProfiles.instructions"
+  static let styleProfileSave = "settings.styleProfiles.save"
+  static let styleProfileCancel = "settings.styleProfiles.cancel"
+  static let styleProfileDelete = "settings.styleProfiles.delete"
+  static func styleProfileEdit(_ index: Int) -> String { "settings.styleProfiles.edit.\(index)" }
+
+  /// The main window's style switcher (`ReadyView`): a segmented control whose
+  /// first segment is Default, then one segment per defined profile. Segments
+  /// are addressed by their (user-chosen) labels, so only the picker itself
+  /// carries an identifier.
+  static let styleProfilePicker = "ready.styleProfile.picker"
 
   /// The dictation overlay pill (`OverlayView`).
   static let overlayPill = "overlay.pill"

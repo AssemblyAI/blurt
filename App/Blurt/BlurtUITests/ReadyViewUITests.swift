@@ -11,14 +11,16 @@ import XCTest
 final class ReadyViewUITests: BlurtUITestCase {
   override var extraLaunchArguments: [String] { [UITestIdentifiers.readyLaunchArgument] }
 
-  func testReadyScreenShowsShortcutRecentAndSettings() {
+  func testReadyScreenShowsShortcutAndRecent() {
     mainWindow()
 
-    // The shortcut readout: "Tap or hold <key> to blurt".
+    // The shortcut readout: the tap line with the default key spelled out,
+    // over the hold line. One static text apiece — the key name is bolded
+    // inline, not a separate element.
     XCTAssertTrue(
-      app.staticTexts["Tap or hold"].waitForExistence(timeout: 10),
+      app.staticTexts["Tap Right Command (⌘) to start and stop."].waitForExistence(timeout: 10),
       "Ready screen should state the dictation shortcut")
-    XCTAssertTrue(app.staticTexts["to blurt"].exists)
+    XCTAssertTrue(app.staticTexts["Or hold it to talk, then release."].exists)
 
     // The Recent section, empty on a fresh launch, shows its header and the
     // placeholder that fills the reserved list area.
@@ -27,20 +29,12 @@ final class ReadyViewUITests: BlurtUITestCase {
       app.staticTexts["Your recent blurts will appear here"].exists,
       "An empty Recent list should show its placeholder")
 
-    // The link back to Settings — the only actionable control on the screen.
-    XCTAssertTrue(app.buttons["Settings"].exists, "Ready screen should offer a Settings link")
-  }
-
-  func testSettingsLinkOpensSettingsWindow() {
-    mainWindow()
-
-    let settingsButton = app.buttons["Settings"]
-    XCTAssertTrue(settingsButton.waitForExistence(timeout: 10), "Settings link not found")
-    settingsButton.click()
-
-    XCTAssertTrue(
-      app.windows[UITestIdentifiers.settingsWindowTitle].waitForExistence(timeout: 10),
-      "Clicking the ready screen's Settings link should open the Settings window")
+    // Deliberately no Settings control here: the app menu's standard
+    // "Settings…" (⌘,, exercised by `openSettingsWindow` across the settings
+    // suites) and the menu-bar item are the routes.
+    XCTAssertFalse(
+      app.windows[UITestIdentifiers.mainWindowTitle].buttons["Settings"].exists,
+      "Ready screen should not offer its own Settings control")
   }
 
   func testCompletedDictationPopulatesRecentList() {

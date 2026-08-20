@@ -49,6 +49,10 @@ final class AppCoordinator {
   /// convenience layered on the Dock app and can be hidden behind the notch on a
   /// crowded menu bar, so nothing here is relied on for correctness.
   private(set) var menuBarStatus: MenuBarStatus = .idle
+  /// Whether the mic is being brought up or capturing (`PipelinePhase
+  /// .isCapturing`) — the ready screen disables the style switcher on it, and
+  /// its `.recording` half (via `menuBarStatus`) drives the listening state.
+  private(set) var isCapturing = false
 
   /// `components` defaults to the production pipeline; `apiKey` defaults to the
   /// production Keychain-backed model. Tests/UI-tests inject deterministic
@@ -235,6 +239,9 @@ final class AppCoordinator {
     // Mirror the phase onto the menu bar indicator (mapping lives in the engine,
     // unit-tested alongside `overlayState`).
     menuBarStatus = phase.menuBarStatus
+    // And onto the ready screen: the listening state and the style-switch lock
+    // both follow the same stream the pill renders, never a second source.
+    isCapturing = phase.isCapturing
 
     cues.transition(for: phase)
 

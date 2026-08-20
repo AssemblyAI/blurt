@@ -38,8 +38,9 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   private static let requestTimeoutSeconds: TimeInterval = 90
 
   /// `enhancedTranscripts` decides, per request, whether the config carries
-  /// the `llm` cleanup-rewrite block; `customStyle` supplies the user's custom
-  /// style instructions appended to that block's cleanup instruction. Both are
+  /// the `llm` cleanup-rewrite block; `customStyle` supplies the *active* style
+  /// profile's instructions, appended to that block's cleanup instruction — one
+  /// profile's text, never a join of several (see `StyleProfileStore`). Both are
   /// read at every `transcribe` so a settings change applies to the next
   /// dictation without rebuilding the transcriber. `nil` (the default) reads
   /// the corresponding store — spelled as optionals rather than default
@@ -56,7 +57,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     self.baseURL = baseURL
     self.transport = transport
     self.enhancedTranscriptsEnabled = enhancedTranscripts ?? { EnhancedTranscriptsStore().isEnabled }
-    self.customStyle = customStyle ?? { CustomStyleStore().instructions }
+    self.customStyle = customStyle ?? { StyleProfileStore().activeInstructions }
   }
 
   // MARK: - Dictation request

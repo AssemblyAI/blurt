@@ -18,6 +18,15 @@ struct TriggerKeyTests {
     #expect(TriggerKey.rightCommand.label == "right ⌘")
   }
 
+  @Test("every case has a spelled-out full name carrying its symbol")
+  func fullNames() {
+    // The readout bolds this inline, so it must name the key in words *and*
+    // show the glyph the keyboard prints — either alone strands one kind of
+    // reader.
+    #expect(TriggerKey.rightCommand.fullName == "Right Command (⌘)")
+    #expect(TriggerKey.rightOption.fullName == "Right Option (⌥)")
+  }
+
   @Test("raw value round-trips through keyCode")
   func roundTrip() {
     #expect(TriggerKey(rawValue: 54) == .rightCommand)
