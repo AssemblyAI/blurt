@@ -149,15 +149,27 @@ final class CueSoundPlayer {
     case .stop: play(stopSound)
     case nil: break
     }
-    // A pending route re-prime waits for the dictation to finish. The usual
-    // cause of a route change is Blurt *opening the mic* — so the tick arrives
-    // during the press, and reloading there would put two AAC decodes and two
-    // `prepareToPlay()`s alongside the bring-up, then swap `startSound` out from
-    // under the very chime it is meant to protect (releasing an `AVAudioPlayer`
-    // that may be mid-play). Deferring to the next terminal phase puts the
-    // reload between dictations, where it costs nothing anyone is waiting on,
-    // and coalesces a burst of flips into one decode.
-    guard phase.isTerminal, needsReprime else { return }
+    // A pending route re-prime is acted on at exactly two points.
+    //
+    // `.connecting` covers the re-prime that is *already pending when a press
+    // arrives*, which is the one the user hears: `MicCapture.warmUp()` opens the
+    // input at launch, flipping AirPods out of their output-only profile well
+    // before the first dictation, so the players `prime()` pre-rolled are stale
+    // and the very first start chime is the one that stalls or clips. Waiting for
+    // a terminal phase meant that reload landed *after* the dictation it should
+    // have protected. Reloading here is safe where reloading mid-press was not:
+    // no cue is in flight in this phase (the start chime rides the
+    // connecting→recording edge), so nothing is swapped out from under a playing
+    // `AVAudioPlayer`; the decode runs off the main actor, so it isn't competing
+    // with the bring-up for the main thread; and the liveness gate holds
+    // `.connecting` for up to `MicLiveness.bluetoothTimeout` on the route that
+    // needs this most, which is real time for the reload to land in.
+    //
+    // Terminal phases stay a trigger for everything else. A flip caused by *this*
+    // press arrives mid-bring-up, too late for this dictation's chime either way,
+    // and between dictations the reload costs nothing anyone is waiting on and
+    // coalesces a burst of flips into one decode.
+    guard phase == .connecting || phase.isTerminal, needsReprime else { return }
     needsReprime = false
     Task { await loadCurrentPack(force: true) }
   }

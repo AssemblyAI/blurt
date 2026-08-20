@@ -438,10 +438,16 @@ one to two seconds, during which the OS receives no audio at all — and that li
 in both directions. So:
 
 - **`start()` does not return until the input is live.** `record()` returning `true` only means the
-  AudioQueue started, not that frames are arriving, so `start()` polls `recorder.currentTime` until
-  it advances past 0 — the recorder's clock only moves once the device delivers audio, which is what
-  distinguishes "route still switching" from "user is silent" (a level meter can't). Capped per
-  transport by **`MicLiveness`** (2.5 s Bluetooth, 300 ms otherwise) and **failing open** on timeout,
+  AudioQueue started, not that frames are arriving, so `start()` polls the recorder until **both**
+  its clock has advanced past 0 **and** its meter reads above `MicLiveness.silenceFloorDB`. The
+  clock alone is not enough: macOS can deliver all-zero buffers from a stale or not-yet-switched
+  device, and frames of digital silence advance the clock exactly like real audio — so the gate was
+  satisfied on its first ~1 ms poll while the AirPods link was still renegotiating. The floor
+  discriminates _digital_ silence from any real analog input (a live mic in a quiet room still reads
+  its own self-noise, far above it); it is deliberately **not** a speech threshold, which would hang
+  every press in a quiet room instead. Capped per transport by **`MicLiveness`** (2.5 s Bluetooth,
+  300 ms on a recognised local transport, 1 s for anything else — an aggregate or virtual device can
+  have AirPods switching underneath it) and **failing open** on timeout,
   so a broken or silent mic degrades to the old behavior rather than bricking the press. This is what
   stops the app cueing the user to speak into a dead mic; audio spoken during the switch cannot be
   recovered by anything, because nothing ever receives it. `stopGeneration` covers the one suspension
