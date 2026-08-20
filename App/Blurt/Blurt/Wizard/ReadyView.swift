@@ -31,8 +31,20 @@ struct ReadyView: View {
     // second reading here.
     let profiles = StyleProfileStore().profiles(decoding: rawProfiles)
     let active = StyleProfileStore.active(in: profiles, id: rawActiveID)
+    // Sections sit 20 pt apart; the wordmark and the status block are one
+    // idea, so they nest in a tighter 14 pt group rather than spreading to
+    // match.
     VStack(spacing: 20) {
-      statusBlock(activeStyleName: active?.name)
+      VStack(spacing: 14) {
+        ReadyBrandingView()
+          // The logo PNG carries ~16% transparent margin top and bottom;
+          // cancel the bottom one (scaled to today's 180 pt render, where the
+          // old 280 pt cancelled 16) so the gap to the readout is the VStack
+          // spacing, not ~2x it.
+          .padding(.bottom, -10)
+
+        statusBlock(activeStyleName: active?.name)
+      }
 
       // No profiles, no row: an `if` with no `else` contributes no view and no
       // stack spacing, so the window is byte-identical to one without styles —
@@ -163,6 +175,37 @@ struct ReadyView: View {
     let escape = "Tap again or release to finish — Esc cancels."
     guard let activeStyleName else { return escape }
     return "Blurting in \(activeStyleName). \(escape)"
+  }
+}
+
+/// The BLURT wordmark over the status block. A header mark now, not the
+/// window's identity — the standard titlebar names the app — which is why it
+/// renders well under its old 280 pt and simply omits itself if the PNG can't
+/// load rather than swapping in a fallback identity view.
+private struct ReadyBrandingView: View {
+  /// Loaded once for the process rather than per `body` evaluation: this view
+  /// sits in `ReadyView`, whose body re-runs on every new dictation
+  /// (`recentDictations.entries`), and a bundle lookup plus a PNG decode is not
+  /// something to re-do on the main thread each time.
+  ///
+  /// Left to the target's `SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor` default
+  /// rather than spelled `nonisolated(unsafe)`: `body` reads it on the main actor
+  /// either way, and this can't then break if a future SDK marks `NSImage`
+  /// `Sendable` (which would make the attribute an "unnecessary" warning, and the
+  /// app target builds with warnings-as-errors).
+  private static let logo: NSImage? = Bundle.main
+    .url(forResource: "blurt-ready-logo", withExtension: "png")
+    .flatMap(NSImage.init(contentsOf:))
+
+  var body: some View {
+    if let image = Self.logo {
+      Image(nsImage: image)
+        .interpolation(.none)
+        .resizable()
+        .scaledToFit()
+        .frame(maxWidth: 180)
+        .accessibilityLabel("Blurt logo")
+    }
   }
 }
 
