@@ -125,10 +125,15 @@ public struct StyleProfileStore {
   public var profiles: [StyleProfile] {
     get { profiles(decoding: defaults.string(forKey: Self.defaultsKey) ?? "") }
     nonmutating set {
-      // A list of strings cannot fail to encode; `try?` is the belt to that
-      // brace, and dropping the write beats trapping in a settings sheet.
-      guard let data = try? JSONEncoder().encode(Self.normalized(newValue)) else { return }
-      defaults.set(String(decoding: data, as: UTF8.self), forKey: Self.defaultsKey)
+      // A list of strings cannot fail to encode, and `JSONEncoder` emits UTF-8
+      // by definition, so neither step can realistically fail. Both are spelled
+      // failably anyway: dropping the write beats trapping in a settings sheet,
+      // and the non-failable `String(decoding:as:)` would quietly substitute
+      // U+FFFD for a malformed byte instead of saying so.
+      guard let data = try? JSONEncoder().encode(Self.normalized(newValue)),
+        let json = String(data: data, encoding: .utf8)
+      else { return }
+      defaults.set(json, forKey: Self.defaultsKey)
     }
   }
 
