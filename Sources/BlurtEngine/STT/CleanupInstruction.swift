@@ -86,10 +86,12 @@ enum CleanupInstruction {
   /// read, twice per dictation.
   static let sendable: String? = text.utf8.count <= characterCap ? text : nil
 
-  /// `sendable` with the user's custom style instructions (`CustomStyleStore`)
-  /// appended. A nil or blank `custom` returns `sendable` unchanged, so an empty
+  /// `sendable` with the active style profile's instructions appended (see
+  /// `StyleProfileStore`, whose *active* profile is the only one that ever
+  /// reaches here — a join of several would blow the cap and 400 the request).
+  /// A nil or blank `custom` returns `sendable` unchanged, so an empty
   /// setting sends exactly what shipped before. The appended text is capped at
-  /// `customStyleBudget` UTF-8 bytes — the Settings field enforces the same
+  /// `customStyleBudget` UTF-8 bytes — the style editor enforces the same
   /// limit, so the trim here is the belt to that brace — which keeps the
   /// combined string under `characterCap` by construction; the final check
   /// guards the arithmetic the same way `sendable` guards the base length.
@@ -112,7 +114,8 @@ enum CleanupInstruction {
   /// instruction and the preamble have spent theirs — derived from the actual
   /// lengths, not restated, so a re-optimized base instruction moves this
   /// automatically instead of silently overflowing `characterCap`.
-  /// `CustomStyleStore.characterLimit` re-exports it to the Settings field.
+  /// `StyleProfileStore.characterLimit` re-exports it as the per-profile cap the
+  /// style editor enforces.
   static let customStyleBudget = characterCap - text.utf8.count - customStylePreamble.utf8.count
 
   static let text = """

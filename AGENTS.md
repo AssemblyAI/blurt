@@ -56,8 +56,9 @@ Sources/BlurtEngine/         the engine (dependency-free Swift package)
                              (the voice *descriptors*; the voices themselves are app-side)
   HostIdentity.swift         the host's Keychain service, log subsystem, defaults prefix, log
                              directory, product name and release feed — one overridable value
-  Config/                    Keychain-backed API key, key terms, developer mode, DefaultsKey +
-                             PersistedSettings (every defaults key, and the reset sweep over them)
+  Config/                    Keychain-backed API key, key terms, developer mode, style profiles,
+                             DefaultsKey + PersistedSettings (every defaults key, and the reset
+                             sweep over them)
   FocusCapture/              Accessibility reads of the frontmost app / focused field
   Hotkey/                    TriggerKey(+Store), DictationKeyGate, DictationKeyRouter
   Injection/                 KeyInjector (clipboard paste), SystemClipboard
@@ -393,8 +394,8 @@ framework, or notarization rejects the build; roll-forward-only for a bad releas
 - **Unit tests use Swift Testing** (`@Suite`/`@Test`/`#expect`), not XCTest. The XCUITest bundle is
   the one exception (XCTest, because XCUIAutomation requires it).
 - **A store setter with no production caller gets deleted.** The exception is a value that's
-  _encoded_ on write (`TriggerKeyStore`'s keycode, `SoundPackStore`'s id): there, give the setter a
-  production caller instead — see `HotkeyStepView`, where assigning the raw `@AppStorage` slot
+  _encoded_ on write (`TriggerKeyStore`'s keycode, `SoundPackStore`'s id, `StyleProfileStore`'s JSON
+  profile list): there, give the setter a production caller instead — see `HotkeyStepView`, where assigning the raw `@AppStorage` slot
   directly left the setter test-only, so a change to the encoding would have kept `swift test` green
   while the picker silently wrote the old form. For a plain `Bool` there is nothing to encode, so the
   Settings toggle writing the slot through `@AppStorage` is the whole story and the store stays
@@ -529,12 +530,15 @@ response carries both `text` (verbatim) and
 The instruction is `CleanupInstruction.text`, the winner of a GEPA run of
 `evals/dictation-prompt/` (see its README), compressed to fit the cap. Two later searches
 failed to beat it — the most recent scored 0.9043 against its 0.9101 on a held-out split. When the
-user has entered **custom style instructions** (`CustomStyleStore`, read per request via the
-transcriber's injected `customStyle` closure), `CleanupInstruction.sendable(appending:)` appends
-them after the base text with a bridging preamble, trimmed to the headroom the API's 2048
+user has defined a **style profile** (`StyleProfileStore`, read per request via the transcriber's
+injected `customStyle` closure), `CleanupInstruction.sendable(appending:)` appends
+the **active** profile's instructions after the base text with a bridging preamble, trimmed to the
+headroom the API's 2048
 instruction cap leaves (`customStyleBudget`, measured in UTF-8 bytes — the cap's own unit is
-unmeasured, and bytes are the conservative bound); empty or blank sends the base instruction
-unchanged.
+unmeasured, and bytes are the conservative bound); no profile, or blank instructions, sends the base
+instruction unchanged. **Only the active profile's text ever goes on the wire** — never a
+concatenation of all of them, which is the obvious-looking generalization and the one that fails
+every dictation, since over-cap is a 400 on the whole request.
 
 Note what that does and does not establish. It is the best instruction the harness has
 produced, measured against other _text_ candidates on a _stand-in_ model; it has never been
@@ -797,10 +801,18 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
   **`DeveloperModeStore`** (`BlurtDeveloperMode`, off by default),
   **`EnhancedTranscriptsStore`** (`BlurtEnhancedTranscripts`, **on** by default — unset reads as
   enabled; gates the dictation request's `llm` cleanup-rewrite block, re-read at every request),
-  **`CustomStyleStore`** (`BlurtCustomStyle`, the user's custom style instructions appended to the
-  cleanup instruction via `CleanupInstruction.sendable(appending:)`, re-read at every request; empty
-  sends the base instruction unchanged, and its `characterLimit` re-exports the headroom — in UTF-8
-  bytes — the API's 2048 instruction cap leaves),
+  **`StyleProfileStore`** (three keys: `BlurtStyleProfiles`, the JSON list of up to
+  `profileLimit` (4) named `StyleProfile`s; `BlurtActiveStyleProfile`, the id of the one in
+  effect; and `BlurtCustomStyle`, the pre-profiles single field it still **reads and never
+  writes** — an install with text there and no list reads back as one active profile named
+  "Custom", so the migration is a read-side fallback with no launch hook to order. The active
+  profile's instructions are appended to the cleanup instruction via
+  `CleanupInstruction.sendable(appending:)`, re-read at every request; no profile, or blank
+  instructions, sends the base instruction unchanged, and its `characterLimit` re-exports the
+  headroom — in UTF-8 bytes — the API's 2048 instruction cap leaves as the **per-profile** cap.
+  Only the active profile is ever sent, so that budget is not divided between them. One of the
+  three stores with a setter, for the encoded-on-write reason below: the settings sheet and the
+  main window's switcher write through it rather than binding the raw slots),
   **`OverlayOriginStore`** (the pill's dragged origin, x/y), **`LastUpdateCheckStore`**
   (`BlurtLastUpdateCheck`, the stamp throttling the automatic launch update check).
 - **`DefaultsKey`** (`Config/DefaultsKey.swift`) defines every key those stores write, one case each,
@@ -898,7 +910,8 @@ restating them.
 `App/Blurt/Blurt/App.swift` declares four scenes (five in Debug):
 
 - **Main window** (`MainWindowRoot`) — the setup wizard until the app is fully configured, then the
-  "ready" screen (`ReadyView`, with the Recent list). Hidden titlebar, body-draggable, always
+  "ready" screen (`ReadyView`, with the style switcher — absent entirely until a style profile
+  exists — and the Recent list). Hidden titlebar, body-draggable, always
   presented at launch.
 - **Settings** (`SettingsWindowRoot`) — a `TabView` reached via ⌘, / the ready screen / the menu bar,
   never at launch. Note macOS titles a preference window after its selected pane, which is why the

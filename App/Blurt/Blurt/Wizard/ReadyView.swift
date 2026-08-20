@@ -25,6 +25,8 @@ struct ReadyView: View {
         shortcutReadout
       }
 
+      StyleProfileRow()
+
       // `displayed`, not `entries`: the ring remembers 100 dictations (they are
       // also request context — see `ConversationContext`) and this list is three
       // rows tall.
@@ -58,6 +60,60 @@ struct ReadyView: View {
         .foregroundStyle(.secondary)
     }
     .font(.title3)
+  }
+}
+
+/// The style switcher: one button per defined style profile, the active one
+/// drawn as selected. It sits between the shortcut readout and the Recent list
+/// because which style is in effect is the one dictation setting worth changing
+/// mid-flow — Settings owns creating and editing them (see
+/// `SettingsWindowRoot`'s Styles section), this owns which one is in effect.
+/// The choice is **sticky**: clicking a style leaves it active until another is
+/// clicked, so a switch is not something to redo before every dictation.
+///
+/// **Renders nothing at all when no styles are defined**, which is every user
+/// who has never opened that section: the window then looks exactly as it did
+/// before styles existed. Deliberately not an empty-state chip inviting the
+/// user to make one — a permanent advert for an optional feature.
+private struct StyleProfileRow: View {
+  /// Bound to observe: the store decodes and resolves both slots (see
+  /// `StyleProfileStore`), and `@AppStorage` is what re-renders this row when
+  /// the settings sheet adds a style or a click here changes the active one.
+  @AppStorage(StyleProfileStore.defaultsKey) private var rawProfiles = ""
+  @AppStorage(StyleProfileStore.activeDefaultsKey) private var rawActiveID = ""
+
+  /// One fixed width for every button, so the row's size — and everything below
+  /// it — can't shift with the length of a name. `StyleProfileStore.nameLimit`
+  /// is the other half of that: a name too long to fit is capped, not wrapped.
+  private static let buttonWidth: CGFloat = 96
+
+  var body: some View {
+    // Decoded and resolved once per render: `body` re-runs on every dictation
+    // (the Recent list above is live), and both answers cost a JSON decode.
+    // Which one reads as selected is the engine's rule — the stored pointer, or
+    // the first profile when it names nothing — not a second one here.
+    let defined = StyleProfileStore().profiles(decoding: rawProfiles)
+    let activeID = StyleProfileStore.active(in: defined, id: rawActiveID)?.id
+    // No profiles, no row: an `if` with no `else` contributes no view and no
+    // stack spacing, so the window is byte-identical to one without styles.
+    if !defined.isEmpty {
+      HStack(spacing: 8) {
+        // Enumerated for the accessibility identifier only; identity stays the
+        // profile's own id so a rename doesn't rebuild the button.
+        ForEach(Array(defined.enumerated()), id: \.element.id) { index, profile in
+          Button(profile.name) { StyleProfileStore().activate(profile) }
+            .lineLimit(1)
+            // Style first, then the frame, so the button's own chrome fills the
+            // fixed width rather than sitting centered inside it.
+            .glassButtonStyleCompat(prominent: profile.id == activeID)
+            .frame(width: Self.buttonWidth)
+            // The prominent fill is the only visual cue, so state the selection
+            // for VoiceOver too rather than leaving four identical buttons.
+            .accessibilityAddTraits(profile.id == activeID ? [.isSelected] : [])
+            .accessibilityIdentifier(UITestIdentifiers.styleProfileButton(index))
+        }
+      }
+    }
   }
 }
 
