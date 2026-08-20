@@ -131,35 +131,38 @@ struct ReadyView: View {
     }
   }
 
-  /// The capture-in-progress face of the top block: the pill's waveform cue in
-  /// its color (`OverlayBrandPalette.cyan` — the tint `WaveformMeter` uses while
-  /// recording), a bold "Listening…", and the way out. The style clause names
-  /// the active profile; with none active the sentence starts at "Tap again" —
-  /// "Blurting in Cleaned Up." reads as if a profile by that name existed.
+  /// The capture-in-progress face of the top block, mirroring the idle face's
+  /// shape exactly — two centered lines on the shared tiers — so the swap
+  /// reads as the same surface changing words: the pill's waveform cue in its
+  /// color (`OverlayBrandPalette.cyan` — the tint `WaveformMeter` uses while
+  /// recording) inline with a bold "Listening…", then the way out. The style
+  /// clause names the active profile; with none active the sentence starts at
+  /// "Tap again" — "Blurting in Cleaned Up." reads as if a profile by that
+  /// name existed.
   private func listeningState(activeStyleName: String?) -> some View {
-    HStack(spacing: 10) {
-      Image(systemName: "waveform")
-        .font(.title2)
-        .foregroundStyle(OverlayBrandPalette.cyan)
-        // The pill's live-capture heartbeat (`RecordingTag`), same cadence,
-        // stilled under Reduce Motion the same way.
-        .pulsingOpacity(period: 1.2, minOpacity: 0.4, animated: !reduceMotion)
-      VStack(alignment: .leading, spacing: 2) {
+    VStack(spacing: 2) {
+      HStack(spacing: 6) {
+        Image(systemName: "waveform")
+          .foregroundStyle(OverlayBrandPalette.cyan)
+          // The pill's live-capture heartbeat (`RecordingTag`), same cadence,
+          // stilled under Reduce Motion the same way.
+          .pulsingOpacity(period: 1.2, minOpacity: 0.4, animated: !reduceMotion)
         // Bold as inline emphasis, the same role the key name's bold plays on
-        // the idle face — the tier itself (size, color) comes from the shared
-        // style, so the swap reads as one surface changing words.
+        // the idle face.
         Text("Listening…")
           .bold()
-          .statusPrimaryLine()
-          .fixedSize()
-        Text(listeningSubtitle(activeStyleName: activeStyleName))
-          .statusSecondaryLine()
-          // One line, tail-truncated if a long style name pushes it past the
-          // content width: at the slot's fixed height a wrap would clip mid
-          // letter, and the sentence's load-bearing halves ("Blurting in
-          // <style>", Esc) front-load ahead of the cut.
-          .lineLimit(1)
       }
+      // The tier on the line, not the text, so the SF Symbol scales with the
+      // words it sits beside instead of carrying its own size.
+      .statusPrimaryLine()
+      .fixedSize()
+      Text(listeningSubtitle(activeStyleName: activeStyleName))
+        .statusSecondaryLine()
+        // One line, tail-truncated if a long style name pushes it past the
+        // content width: at the slot's fixed height a wrap would clip mid
+        // letter, and the sentence's load-bearing halves ("Blurting in
+        // <style>", Esc) front-load ahead of the cut.
+        .lineLimit(1)
     }
     // One element, phrased once — the glyph is decoration and the ellipsis is
     // not worth hearing.
