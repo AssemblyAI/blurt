@@ -122,7 +122,7 @@ struct ReadyView: View {
   /// The capture-in-progress face of the top block: the pill's waveform cue in
   /// its color (`OverlayBrandPalette.cyan` — the tint `WaveformMeter` uses while
   /// recording), a bold "Listening…", and the way out. The style clause names
-  /// the active profile; with none active the sentence starts at "Release" —
+  /// the active profile; with none active the sentence starts at "Tap again" —
   /// "Blurting in Cleaned Up." reads as if a profile by that name existed.
   private func listeningState(activeStyleName: String?) -> some View {
     HStack(spacing: 10) {
@@ -156,8 +156,11 @@ struct ReadyView: View {
       "Listening. \(listeningSubtitle(activeStyleName: activeStyleName))")
   }
 
+  /// The escape clause covers both end mechanisms honestly: a tap-mode
+  /// dictation ends with another tap, a held key ends on release — the block
+  /// can't know which started this one, so it names both.
   private func listeningSubtitle(activeStyleName: String?) -> String {
-    let escape = "Release to finish, or press Esc to cancel."
+    let escape = "Tap again or release to finish — Esc cancels."
     guard let activeStyleName else { return escape }
     return "Blurting in \(activeStyleName). \(escape)"
   }
