@@ -803,9 +803,9 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
   enabled; gates the dictation request's `llm` cleanup-rewrite block, re-read at every request),
   **`StyleProfileStore`** (three keys: `BlurtStyleProfiles`, the JSON list of up to
   `profileLimit` (4) named `StyleProfile`s; `BlurtActiveStyleProfile`, the id of the one in
-  effect, or the `defaultStyleID` sentinel when the user has selected **Default** — base styling,
-  no profile appended — which is deliberately distinct from _unset_, so a migrated legacy profile
-  stays active through the upgrade; and `BlurtCustomStyle`, the pre-profiles single field it
+  effect, or the `defaultStyleID` sentinel when the user has selected **Cleaned Up** — base
+  styling, no profile appended — which is deliberately distinct from _unset_, so a migrated legacy
+  profile stays active through the upgrade; and `BlurtCustomStyle`, the pre-profiles single field it
   still **reads and never
   writes** — an install with text there and no list reads back as one active profile named
   "Custom", so the migration is a read-side fallback with no launch hook to order. The active
@@ -913,10 +913,10 @@ restating them.
 `App/Blurt/Blurt/App.swift` declares four scenes (five in Debug):
 
 - **Main window** (`MainWindowRoot`) — the setup wizard until the app is fully configured, then the
-  "ready" screen (`ReadyView`, with the segmented style switcher — Default plus up to 4 profiles,
-  absent entirely until a profile exists, selectable by ⌘1–⌘5 while this window is key — and the
-  Recent list; while a named style is active the shortcut readout says so). Hidden titlebar,
-  body-draggable, always presented at launch.
+  "ready" screen (`ReadyView`, with the segmented style switcher — Cleaned Up plus up to 4
+  profiles, absent entirely until a profile exists, selectable by ⌘1–⌘5 while this window is key —
+  and the Recent list; while a named style is active the shortcut readout says so). Hidden
+  titlebar, body-draggable, always presented at launch.
 - **Settings** (`SettingsWindowRoot`) — a `TabView` reached via ⌘, / the ready screen / the menu bar,
   never at launch. Note macOS titles a preference window after its selected pane, which is why the
   UI-test suite aliases the window title to the first tab's label.

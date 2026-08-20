@@ -74,9 +74,9 @@ struct ReadyView: View {
 
   /// "Tap or hold ⌘ to blurt", with the key drawn as a rounded keycap — and,
   /// while a named style is active, "… to blurt in Casual style", so the window
-  /// says what the next dictation will actually do. Default keeps exactly the
-  /// pre-styles line: it *is* the pre-styles behaviour, and naming it would
-  /// suggest a "Default style" exists to edit somewhere.
+  /// says what the next dictation will actually do. The Cleaned Up segment
+  /// keeps exactly the pre-styles line: it *is* the pre-styles behaviour, and
+  /// naming it would suggest a "Cleaned Up style" exists to edit somewhere.
   private func shortcutReadout(styleName: String?) -> some View {
     HStack(spacing: 6) {
       Text("Tap or hold")
@@ -96,8 +96,8 @@ struct ReadyView: View {
 }
 
 /// The style switcher: a native segmented control whose first segment,
-/// **Default**, is the base styling (no profile instructions appended) and the
-/// rest are the user's profiles — the HIG control for a small, always-visible
+/// **Cleaned Up**, is the base styling (no profile instructions appended) and
+/// the rest are the user's profiles — the HIG control for a small, always-visible
 /// set of mutually exclusive options, so selection chrome, sizing and
 /// accessibility come from AppKit rather than hand-rolled buttons. It sits
 /// between the shortcut readout and the Recent list because which style is in
@@ -106,19 +106,20 @@ struct ReadyView: View {
 /// this owns which one is in effect. The choice is **sticky**: a selection
 /// holds until the user makes another, so a switch is not something to redo
 /// before every dictation. `ReadyView` renders it only while at least one
-/// profile exists — a lone Default segment would have nothing to switch to.
+/// profile exists — a lone Cleaned Up segment would have nothing to switch to.
 private struct StyleProfilePicker: View {
   /// Already decoded and resolved by `ReadyView`, which observes the slots —
   /// this view is pure render-and-write.
   let profiles: [StyleProfile]
-  /// The active profile's id, or `nil` for Default. `nil` is safe to *mean*
-  /// Default here even though an empty store also resolves to it, because this
-  /// view only exists while `profiles` is non-empty.
+  /// The active profile's id, or `nil` for Cleaned Up. `nil` is safe to *mean*
+  /// Cleaned Up here even though an empty store also resolves to it, because
+  /// this view only exists while `profiles` is non-empty.
   let activeID: StyleProfile.ID?
 
   /// Selection writes go through the store — never the raw slot — so the store
-  /// keeps owning how a choice is encoded (a profile's id, or the Default
-  /// sentinel; see `HotkeyStepView.selection` for the precedent).
+  /// keeps owning how a choice is encoded (a profile's id, or the store's
+  /// "default" sentinel for Cleaned Up; see `HotkeyStepView.selection` for the
+  /// precedent).
   private var selection: Binding<StyleProfile.ID?> {
     Binding(
       get: { activeID },
@@ -137,7 +138,7 @@ private struct StyleProfilePicker: View {
     // name for the control rather than an empty string — the same pattern as
     // `PickerSettingRow`.
     Picker("Dictation style", selection: selection) {
-      Text("Default").tag(StyleProfile.ID?.none)
+      Text("Cleaned Up").tag(StyleProfile.ID?.none)
       ForEach(profiles) { profile in
         Text(profile.name).tag(StyleProfile.ID?.some(profile.id))
       }
@@ -148,7 +149,7 @@ private struct StyleProfilePicker: View {
     .background(shortcuts)
   }
 
-  /// Keyboard shortcuts for the segments: ⌘1 selects Default, ⌘2…⌘5 the
+  /// Keyboard shortcuts for the segments: ⌘1 selects Cleaned Up, ⌘2…⌘5 the
   /// profiles in row order. Hidden buttons rather than a `Commands` menu block,
   /// because the scoping is the point: a menu command fires while *any* of the
   /// app's windows is key (Settings included), whereas a button's shortcut is
@@ -163,7 +164,7 @@ private struct StyleProfilePicker: View {
   /// shortcut.
   private var shortcuts: some View {
     Group {
-      Button("Default") { StyleProfileStore().activateDefault() }
+      Button("Cleaned Up") { StyleProfileStore().activateDefault() }
         .keyboardShortcut("1", modifiers: .command)
       // The store caps the list at `profileLimit` (4), so the digits end at ⌘5.
       ForEach(Array(profiles.enumerated()), id: \.element.id) { index, profile in

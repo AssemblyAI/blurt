@@ -28,7 +28,7 @@ public struct StyleProfile: Codable, Identifiable, Hashable, Sendable {
 }
 
 /// Storage for the user's style profiles and which one is active — possibly
-/// none of them: the main window's switcher leads with a **Default** segment
+/// none of them: the main window's switcher leads with a **Cleaned Up** segment
 /// that selects the base styling, i.e. no profile instructions appended at all.
 ///
 /// Optional: with no profiles the request is exactly what ships with no style
@@ -74,17 +74,18 @@ public struct StyleProfileStore {
   /// migration note above) and never writes.
   static var legacyDefaultsKey: String { DefaultsKey.customStyle.key }
 
-  /// What the active-id slot holds when the user has clicked **Default**: base
-  /// styling, no profile's instructions appended. A sentinel *distinct from
-  /// unset* on purpose — an empty slot means "never chose", which resolves to
-  /// the first profile (see `active(in:id:)`), and the two must not collapse: a
-  /// legacy user's migrated "Custom" profile stays active through the upgrade
-  /// precisely because their pointer is unset, and reading unset as Default
-  /// would silently switch their styling off. Not a UUID, so it can never
-  /// collide with a real profile's id.
+  /// What the active-id slot holds when the user has clicked **Cleaned Up**
+  /// (this API keeps the internal name Default): base styling, no profile's
+  /// instructions appended. A sentinel *distinct from unset* on purpose — an
+  /// empty slot means "never chose", which resolves to the first profile (see
+  /// `active(in:id:)`), and the two must not collapse: a legacy user's migrated
+  /// "Custom" profile stays active through the upgrade precisely because their
+  /// pointer is unset, and reading unset as the sentinel would silently switch
+  /// their styling off. Not a UUID, so it can never collide with a real
+  /// profile's id.
   public static let defaultStyleID = "default"
 
-  /// How many profiles the user may define. With the leading Default segment
+  /// How many profiles the user may define. With the leading Cleaned Up segment
   /// that is five, the most the main window's switcher can hold at a legible
   /// width; past that it would have to scroll or become a menu, which is a lot
   /// of chrome for a switch that is one click either way.
@@ -161,8 +162,9 @@ public struct StyleProfileStore {
     defaults.set(profile.id.uuidString, forKey: Self.activeDefaultsKey)
   }
 
-  /// Makes **Default** — the base styling, no profile appended — the choice.
-  /// As sticky as `activate(_:)`: it holds until another segment is selected.
+  /// Makes **Cleaned Up** — the base styling, no profile appended — the choice
+  /// (the API keeps the internal name Default). As sticky as `activate(_:)`:
+  /// it holds until another segment is selected.
   public func activateDefault() {
     defaults.set(Self.defaultStyleID, forKey: Self.activeDefaultsKey)
   }
@@ -198,7 +200,7 @@ public struct StyleProfileStore {
   }
 
   /// Which of `profiles` a raw active-id slot selects. `defaultStyleID` — the
-  /// user clicked **Default** — selects none of them, deliberately. Otherwise
+  /// user clicked **Cleaned Up** — selects none of them, deliberately. Otherwise
   /// it is the profile the slot names, or the first defined one when it names
   /// nothing (never set, or a profile since deleted): falling back rather than
   /// answering `nil` keeps a defined style in effect after its neighbour is
@@ -215,8 +217,8 @@ public struct StyleProfileStore {
   }
 
   /// The instructions to append to the cleanup instruction, or `nil` when there
-  /// is no profile, **Default** is selected, or the active text is blank — all
-  /// three must mean "send the base instruction untouched", not an empty
+  /// is no profile, **Cleaned Up** is selected, or the active text is blank —
+  /// all three must mean "send the base instruction untouched", not an empty
   /// suffix. **The active profile's text alone**, never a join of every
   /// profile; see the type's note on the cap.
   var activeInstructions: String? {
