@@ -3,7 +3,8 @@ import BlurtEngine
 import SwiftUI
 
 /// The "Recent" list under the shortcut readout: the last few dictations, newest
-/// first, each a single truncated line with a live relative timestamp. The list
+/// first, each a truncated transcript line over a live "style · relative time"
+/// subtitle. The list
 /// area reserves a fixed height for `RecentDictations.displayCapacity` rows so the
 /// window never resizes and nothing above it moves as dictations arrive; unused
 /// slots are held open (empty → a muted placeholder fills the whole area).
@@ -151,10 +152,7 @@ private struct RecentDictationRow: View {
     // so ignore the children rather than merge. Copy is re-exposed as a custom
     // action since the hover button is ignored with the rest of the children.
     .accessibilityElement(children: .ignore)
-    // The subtitle joins with a comma rather than its visual "·", which
-    // VoiceOver would read out.
-    .accessibilityLabel(
-      "\(entry.text), \(entry.style.map { "\($0), " } ?? "")\(entry.relativeLabel(now: now))")
+    .accessibilityLabel(voiceOverLabel)
     .accessibilityAction(named: "Copy") { copyTranscript() }
     // Reverts the "Copied" confirmation after a beat. The cancelled-sleep guard
     // keeps a superseded timer from clearing the newer copy's confirmation.
@@ -196,6 +194,16 @@ private struct RecentDictationRow: View {
     .foregroundStyle(.secondary)
     .fixedSize()
     .animation(.easeOut(duration: 0.12), value: trailingSlot)
+  }
+
+  /// The row's one VoiceOver phrase: transcript, style (when the entry has
+  /// one), relative time — joined with commas rather than the subtitle's visual
+  /// "·", which VoiceOver would read out.
+  private var voiceOverLabel: String {
+    var parts = [entry.text]
+    if let style = entry.style { parts.append(style) }
+    parts.append(entry.relativeLabel(now: now))
+    return parts.joined(separator: ", ")
   }
 
   private func copyTranscript() {
