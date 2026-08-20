@@ -66,6 +66,13 @@ struct MicCaptureFormatTests {
     #expect(MicCaptureError.noInputDevice.errorDescription == "No microphone is available.")
   }
 
+  @Test func inputNeverDeliveredHasHumanReadableMessage() {
+    // The liveness gate's fail-closed outcome — same route to the pill as
+    // noInputDevice above, and the same sentence requirement. Together the two
+    // also keep MicCaptureError.swift's errorDescription fully covered.
+    #expect(MicCaptureError.inputNeverDelivered.errorDescription == "The microphone didn't start.")
+  }
+
   // MARK: - Helpers
 
   /// Little-endian Int16 at `offset` — decodes the raw S16LE blob under test.

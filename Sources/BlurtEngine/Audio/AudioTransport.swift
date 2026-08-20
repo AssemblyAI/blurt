@@ -28,6 +28,38 @@ enum AudioTransport {
       || transportType == kAudioDeviceTransportTypeBluetoothLE
   }
 
+  /// Whether the transport is a wired or on-board one — a device that begins
+  /// delivering frames as soon as it is opened, so the short wait cap is right.
+  ///
+  /// This is deliberately **not** `!isBluetooth`. The complement of the two is a
+  /// third answer, not a fallback into either: an aggregate or virtual input
+  /// (Krisp, BlackHole, Loopback, a conferencing app's device), a type this enum
+  /// doesn't name, and a failed property read can each have real AirPods
+  /// underneath, and the wrapper reports its own transport rather than the
+  /// link's. A wired budget cannot cover the HFP switch happening below it.
+  /// `MicLiveness.timeout(forTransportType:)` is the only caller; the tail
+  /// linger stays keyed on `isBluetooth` alone.
+  ///
+  /// Named exhaustively rather than by exclusion, because naming it by exclusion
+  /// is exactly what routed those cases into the wired cap. Anything absent gets
+  /// the middle cap, which is the safe direction — a slightly longer wait on an
+  /// exotic input, never a truncated one.
+  static func isLocal(_ transportType: UInt32?) -> Bool {
+    guard let transportType else { return false }
+    switch transportType {
+    case kAudioDeviceTransportTypeBuiltIn,
+      kAudioDeviceTransportTypeUSB,
+      kAudioDeviceTransportTypePCI,
+      kAudioDeviceTransportTypeFireWire,
+      kAudioDeviceTransportTypeThunderbolt,
+      kAudioDeviceTransportTypeDisplayPort,
+      kAudioDeviceTransportTypeHDMI:
+      return true
+    default:
+      return false
+    }
+  }
+
   /// How much longer capture runs past the key-up that ends it, for a device of
   /// this transport. `.zero` for everything but Bluetooth, so the wired path
   /// skips the wait entirely rather than testing a flag at the call site.

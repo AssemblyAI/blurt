@@ -179,24 +179,27 @@ public actor MicCapture: MicCaptureProtocol {
     // input route is delivering frames. A Bluetooth mic spends up to a couple of
     // seconds switching into its mic-capable profile first, and the OS captures
     // nothing in that window, so returning here immediately cues the user to
-    // speak into a dead mic and the first words never reach the transcript.
-    // Hold — `DictationSession` keeps the pill in `.connecting` and the start
-    // chime waits — until the recorder's clock advances, capped per transport;
-    // on timeout proceed anyway (fail open), which is exactly the old behavior.
-    //
-    // The re-warm above is what makes this cheap in the common case: a warm
-    // recorder has already held the route open, so the wait usually returns
-    // immediately. This gate is what makes it *correct* when it hasn't.
+    // speak into a dead mic and the first words never reach the transcript. Hold
+    // — `DictationSession` keeps the pill in `.connecting` and the start chime
+    // waits — until the recorder is clocking *and* metering real samples, capped
+    // per transport and FAILING CLOSED on timeout (the throw below). `MicLiveness`
+    // owns both policies and the reasoning, including why the clock alone was
+    // not enough. The re-warm above is what usually makes this return at once;
+    // the gate is what makes it correct when it doesn't.
     let timeout = MicLiveness.timeout(forTransportType: input?.transportType)
     let generationBeforeWait = stopGeneration
-    let gap = await MicLiveness.waitUntilLive(timeout: timeout, clock: ContinuousClock()) {
-      // Off-actor read (`waitUntilLive` is nonisolated), safe by confinement:
-      // the polls run sequentially within one task, and nothing else references
-      // this recorder while `start()` is suspended in the wait — it isn't
-      // `activeRecorder` yet, the warm slot was cleared above, and the meter
-      // task hasn't started.
-      recorder.currentTime
-    }
+    // Both probes read off-actor (`waitUntilLive` is nonisolated), safe by
+    // confinement: the polls run sequentially in one task and nothing else
+    // references this recorder while `start()` is suspended — it isn't
+    // `activeRecorder` yet, the warm slot was cleared above, and the meter task
+    // hasn't started. Meters read stale until refreshed, exactly as in `emitLevel`.
+    let gap = await MicLiveness.waitUntilLive(
+      timeout: timeout, clock: ContinuousClock(),
+      currentTime: { recorder.currentTime },
+      inputPowerDB: {
+        recorder.updateMeters()
+        return recorder.averagePower(forChannel: 0)
+      })
 
     // Two ways the bring-up can be abandoned while suspended, both ending the
     // same way — tear the recorder down instead of installing it, so nothing is
@@ -207,8 +210,8 @@ public actor MicCapture: MicCaptureProtocol {
     // - The task was cancelled, which is how a cancel preempts the wait:
     //   `waitUntilLive` returns as soon as it sees it, so this is the difference
     //   between an Escape acting now and acting in `bluetoothTimeout`. It must be
-    //   distinguished from the timeout, which returns nil too but means "fail
-    //   open, proceed as if live".
+    //   distinguished from the timeout, which returns nil too but is a reported
+    //   *failure* (the throw below) — a cancel is the user's own act, not a fault.
     guard stopGeneration == generationBeforeWait, !Task.isCancelled else {
       recorder.stop()
       Self.removeFile(at: recorder.url)
@@ -216,11 +219,24 @@ public actor MicCapture: MicCaptureProtocol {
       throw CancellationError()
     }
 
-    if let gap {
-      Self.logger.info("input live after \(Int(gap.milliseconds.rounded())) ms")
-    } else {
-      Self.logger.error(
-        "input liveness unconfirmed after \(Int(timeout.milliseconds.rounded())) ms — proceeding")
+    // The gate's outcome, worded in `MicLiveness` so the line a field report is
+    // read off is unit-tested. See `logSummary` for what it has to carry.
+    recorder.updateMeters()
+    let summary = MicLiveness.logSummary(
+      gap: gap, timeout: timeout, transportType: input?.transportType,
+      powerDB: recorder.averagePower(forChannel: 0))
+    Self.logger.log(level: gap == nil ? .error : .info, "\(summary, privacy: .public)")
+    // No confirmed signal within the cap: fail CLOSED — tear the capture down and
+    // surface the same `.audioCaptureFailed` presentation as the record()-false
+    // path above (the error pill), instead of claiming `.recording` and chiming
+    // "speak now" over a mic delivering nothing; a recording made anyway would
+    // discard the user's words after the fact. The recorder was never installed,
+    // so no stopGeneration bump — a concurrent stop() correctly sees no active
+    // capture — and `bringingUpCapture` is cleared by the defer above.
+    guard gap != nil else {
+      recorder.stop()
+      Self.removeFile(at: recorder.url)
+      throw BlurtError.audioCaptureFailed(underlying: MicCaptureError.inputNeverDelivered)
     }
 
     activeRecorder = recorder
@@ -379,16 +395,5 @@ public actor MicCapture: MicCaptureProtocol {
 
   static func removeFile(at url: URL) {
     try? FileManager.default.removeItem(at: url)
-  }
-}
-
-enum MicCaptureError: LocalizedError {
-  /// The active audio route reported no usable input device.
-  case noInputDevice
-
-  var errorDescription: String? {
-    switch self {
-    case .noInputDevice: "No microphone is available."
-    }
   }
 }
