@@ -11,11 +11,12 @@ import SwiftUI
 struct RecentDictationsSection: View {
   let entries: [RecentDictations.Entry]
 
-  /// One transcript line beside the trailing style-chip/time slot. Kept at the
-  /// two-line era's 44 so the reserved list area — and with it the window —
-  /// doesn't move; the reservation math in `RecentDictations.reservedHeight`
-  /// is unchanged.
-  private static let rowHeight: CGFloat = 44
+  /// One transcript line beside the trailing style-chip/time slot. Back to the
+  /// single-line era's 28 — macOS-list density — now that the subtitle line is
+  /// gone; the hover Copy swap happens inside this same slot, so revealing it
+  /// never changes the row height. The reservation math in
+  /// `RecentDictations.reservedHeight` is unchanged; only this input moves.
+  private static let rowHeight: CGFloat = 28
   private static let separatorThickness: CGFloat = 1
 
   /// How often the relative timestamps re-render. Half the engine's "just now"
