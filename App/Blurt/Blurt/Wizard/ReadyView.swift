@@ -48,12 +48,21 @@ struct ReadyView: View {
       // Always present, even with no custom styles: the lone Default button
       // plus the trailing "+" is the row's empty state, so the feature is
       // discoverable from the main window rather than only from Settings.
-      StyleRow(profiles: profiles, activeID: active?.id, addStyle: addStyle)
-        // Locked while the mic is opening or capturing: a style clicked
-        // mid-utterance would disagree with what the request was built with.
-        // `.disabled` propagates to the buttons and the hidden ⌘1–⌘5 buttons,
-        // whose shortcuts don't fire while disabled.
-        .disabled(coordinator.isCapturing)
+      // The caption under the card says what a "style" is in one line, in the
+      // Recent header's 6 pt card gap and the app's caption tier.
+      VStack(alignment: .leading, spacing: 6) {
+        StyleRow(profiles: profiles, activeID: active?.id, addStyle: addStyle)
+          // Locked while the mic is opening or capturing: a style clicked
+          // mid-utterance would disagree with what the request was built with.
+          // `.disabled` propagates to the buttons and the hidden ⌘1–⌘5 buttons,
+          // whose shortcuts don't fire while disabled.
+          .disabled(coordinator.isCapturing)
+
+        Text("How Blurt cleans up your raw transcript")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity, alignment: .leading)
+      }
 
       // `displayed`, not `entries`: the ring remembers 100 dictations (they are
       // also request context — see `ConversationContext`) and this list is three
