@@ -77,11 +77,11 @@ enum UITestIdentifiers {
   static let styleProfileDelete = "settings.styleProfiles.delete"
   static func styleProfileEdit(_ index: Int) -> String { "settings.styleProfiles.edit.\(index)" }
 
-  /// The main window's style switcher (`ReadyView`): a segmented control whose
-  /// first segment is Default, then one segment per defined profile. Segments
-  /// are addressed by their (user-chosen) labels, so only the picker itself
-  /// carries an identifier.
-  static let styleProfilePicker = "ready.styleProfile.picker"
+  /// The main window's style switcher (`ReadyView`): one button per style —
+  /// Default first, then each defined profile, addressed by their (user-chosen)
+  /// labels — plus a trailing "+" that opens Settings. Only the "+" needs an
+  /// identifier: its visible face is a bare SF Symbol.
+  static let styleProfileAddFromMain = "ready.styleProfile.add"
 
   /// The dictation overlay pill (`OverlayView`).
   static let overlayPill = "overlay.pill"

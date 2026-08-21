@@ -194,7 +194,7 @@ public actor DictationSession {
       ?? {
         // No rewrite means no style was applied — matching the transcriber's
         // own per-request read of the same store. `active` is nil for the
-        // Cleaned Up sentinel as well as for an empty list, which is exactly
+        // Default sentinel as well as for an empty list, which is exactly
         // the rule: only a *custom* style is worth naming on the row.
         guard EnhancedTranscriptsStore().isEnabled else { return nil }
         return StyleProfileStore().active?.name

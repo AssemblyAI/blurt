@@ -31,7 +31,7 @@ public struct RecentDictations: Equatable, Sendable {
     public let text: String
     public let timestamp: Date
     /// Display name of the **custom** style this dictation was made with (the
-    /// active profile's name). `nil` otherwise — the base Cleaned Up styling,
+    /// active profile's name). `nil` otherwise — the base Default styling,
     /// enhanced transcripts off, or a host that supplies no style — which
     /// renders as just the timestamp: the base treatment is every row's
     /// default, so naming it on each would be noise.
