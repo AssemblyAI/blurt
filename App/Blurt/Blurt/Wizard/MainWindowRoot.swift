@@ -43,7 +43,16 @@ struct MainWindowRoot: View {
     if let controller = appDelegate.wizardController, let coordinator = appDelegate.coordinator {
       Group {
         if controller.isReady {
-          ReadyView(coordinator: coordinator, openSettings: { openSettings() })
+          ReadyView(
+            coordinator: coordinator,
+            openSettings: { openSettings() },
+            addStyle: {
+              // The "+" deep-links: flag the Advanced pane (where styles are
+              // edited) before opening, so the user lands on the Styles
+              // section instead of General — see `SettingsWindowRoot`.
+              appDelegate.settingsOpensOnAdvanced = true
+              openSettings()
+            })
         } else {
           WizardView(controller: controller, coordinator: coordinator)
         }

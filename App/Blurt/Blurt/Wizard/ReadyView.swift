@@ -9,6 +9,10 @@ import SwiftUI
 struct ReadyView: View {
   var coordinator: AppCoordinator
   var openSettings: () -> Void
+  /// The style row's "+": opens Settings deep-linked to the Advanced pane,
+  /// where styles are edited — a separate closure from `openSettings` so the
+  /// plain Settings button keeps opening on General (see `MainWindowRoot`).
+  var addStyle: () -> Void
   // Observed (not read once) so changing the dictation key in the separate
   // Settings window re-renders this window's keycap live — see `BoundTriggerKey`.
   @BoundTriggerKey private var triggerKey
@@ -44,7 +48,7 @@ struct ReadyView: View {
       // Always present, even with no custom styles: the lone Default button
       // plus the trailing "+" is the row's empty state, so the feature is
       // discoverable from the main window rather than only from Settings.
-      StyleRow(profiles: profiles, activeID: active?.id, openSettings: openSettings)
+      StyleRow(profiles: profiles, activeID: active?.id, addStyle: addStyle)
         // Locked while the mic is opening or capturing: a style clicked
         // mid-utterance would disagree with what the request was built with.
         // `.disabled` propagates to the buttons and the hidden ⌘1–⌘5 buttons,
@@ -223,8 +227,9 @@ private struct ReadyBrandingView: View {
 /// profile instructions appended) and the rest are the user's profiles; the
 /// active one is drawn prominent (accent fill), the others bordered, so each
 /// style is a distinct button rather than a segment. A trailing "+" opens
-/// Settings, where profiles are created and edited (see `SettingsWindowRoot`'s
-/// Styles section) — this row owns only which one is in effect. It sits
+/// Settings deep-linked to the Advanced pane, where profiles are created and
+/// edited (see `SettingsWindowRoot`'s Styles section) — this row owns only
+/// which one is in effect. It sits
 /// between the shortcut readout and the Recent list because which style is in
 /// effect is the one dictation setting worth changing mid-flow. The choice is
 /// **sticky**: a selection holds until the user makes another, so a switch is
@@ -237,9 +242,11 @@ private struct StyleRow: View {
   /// the store resolves to the same base styling, so `nil` always draws the
   /// Default button selected.
   let activeID: StyleProfile.ID?
-  /// The "+" button's action — the `openSettings` environment action, handed
-  /// down from the scene root like `ReadyView`'s own Settings button.
-  var openSettings: () -> Void
+  /// The "+" button's action — opens Settings deep-linked to the Advanced
+  /// pane, where styles are edited. Handed down from `MainWindowRoot`, which
+  /// sets `AppDelegate.settingsOpensOnAdvanced` before calling the
+  /// `openSettings` environment action.
+  var addStyle: () -> Void
 
   var body: some View {
     // The row shape is `SettingRow`'s (leading label, trailing control, center
@@ -266,7 +273,7 @@ private struct StyleRow: View {
         // Hidden at the cap rather than disabled: a permanently-grey control
         // reads as broken, and the style buttons already fill the row then.
         if profiles.count < StyleProfileStore.profileLimit {
-          Button(action: openSettings) {
+          Button(action: addStyle) {
             Image(systemName: "plus")
           }
           .glassButtonStyleCompat()
