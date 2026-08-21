@@ -107,15 +107,4 @@ extension RecentDictations.Entry {
     formatter.locale = locale
     return formatter.localizedString(for: timestamp, relativeTo: now)
   }
-
-  /// The row's gray second line: "Casual · just now" — the style this dictation
-  /// was made with, then the relative timestamp — or the timestamp alone for an
-  /// entry with no style (see `style` for when that happens): no separator dot
-  /// with nothing on its left. Owned here beside `relativeLabel` so the wording
-  /// stays unit-tested (the shell has no test target).
-  public func subtitle(now: Date, locale: Locale = .autoupdatingCurrent) -> String {
-    let time = relativeLabel(now: now, locale: locale)
-    guard let style else { return time }
-    return "\(style) · \(time)"
-  }
 }

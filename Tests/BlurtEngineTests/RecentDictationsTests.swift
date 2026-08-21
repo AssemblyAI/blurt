@@ -81,8 +81,8 @@ struct RecentDictationsTests {
     var recent = RecentDictations()
     recent.record("styled", style: "Casual", at: Date(timeIntervalSinceReferenceDate: 0))
     // No *custom* style (the base Default treatment, enhanced transcripts
-    // off, or a host that supplies no style) records nil, which the subtitle
-    // renders as the bare timestamp.
+    // off, or a host that supplies no style) records nil, which the row
+    // renders as the bare timestamp with no style chip.
     recent.record("unstyled", at: Date(timeIntervalSinceReferenceDate: 1))
     #expect(recent.entries[0].style == nil)
     #expect(recent.entries[1].style == "Casual")
@@ -93,9 +93,9 @@ struct RecentDictationsTests {
     // The off-by-one a row-count change is most likely to introduce: 3 rows have
     // 2 separators, not 3. Getting it wrong leaves the ready window's list area a
     // hair too tall and everything above it shifts when the first dictation lands.
-    // The ready window's real metrics: displayCapacity 3 × 44 pt rows (two-line
-    // rows — transcript over the style · time subtitle) + 2 × 1 pt rules — the
-    // *display* count, not the 100-deep history.
+    // The ready window's real metrics: displayCapacity 3 × 44 pt rows
+    // (transcript beside the trailing style-chip/time slot) + 2 × 1 pt rules —
+    // the *display* count, not the 100-deep history.
     #expect(RecentDictations.reservedHeight(rowHeight: 44, separatorThickness: 1) == 134)
     // Each term isolated, so a wrong count shows up as which half is off. A change
     // to `displayCapacity` fails all three, which is what pins the two together.
@@ -139,23 +139,5 @@ struct RecentDictationsRelativeLabelTests {
     let entry = entry(at: recorded)
     #expect(entry.relativeLabel(now: recorded + 60, locale: english) == "1 minute ago")
     #expect(entry.relativeLabel(now: recorded + 120, locale: english) == "2 minutes ago")
-  }
-
-  /// The row's second line: style · time with a style, the bare time without —
-  /// no separator dot with nothing on its left, and never an invented style.
-  @Test("the subtitle names the style ahead of the time, when there is one")
-  func subtitleJoinsStyleAndTime() {
-    let recorded = Date(timeIntervalSinceReferenceDate: 0)
-    var recent = RecentDictations()
-    recent.record("hi", style: "Casual", at: recorded)
-    let styled = recent.entries[0]
-    #expect(styled.subtitle(now: recorded + 30, locale: english) == "Casual · just now")
-    #expect(styled.subtitle(now: recorded + 60, locale: english) == "Casual · 1 minute ago")
-  }
-
-  @Test("with no style the subtitle is the bare relative time")
-  func subtitleWithoutStyleIsTheTime() {
-    let recorded = Date(timeIntervalSinceReferenceDate: 0)
-    #expect(entry(at: recorded).subtitle(now: recorded, locale: english) == "just now")
   }
 }

@@ -924,8 +924,9 @@ restating them.
   is captured — driven by the same phase stream the pill renders, with Esc cancelling while this
   window is key; the labeled Output Style row — one button per style, Default plus up to 4
   profiles with the active one drawn prominent, always visible, selectable by ⌘1–⌘5, locked
-  during capture, plus a "+" that opens Settings while under the profile cap; the
-  Recent list, each row subtitled with the style it was made with; and a Settings button at the
+  during capture, plus a "+" that opens Settings on its Advanced pane while under the profile cap;
+  the Recent list, each row trailing a chip naming the style it was made with and the relative
+  time, swapped for a Copy affordance on hover; and a Settings button at the
   foot). Standard titlebar, always presented at launch.
 - **Settings** (`SettingsWindowRoot`) — a `TabView` reached via ⌘, / the menu bar,
   never at launch. Note macOS titles a preference window after its selected pane, which is why the

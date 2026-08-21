@@ -48,7 +48,7 @@ public actor DictationSession {
   /// without rebuilding the session. Defaults to reading `KeyTermsStore`.
   let keyTermsProvider: @Sendable () -> [String]
   /// Names the style a completed dictation was made with, recorded onto its
-  /// `RecentDictations.Entry` (the "Casual · just now" subtitle). `nil` means no
+  /// `RecentDictations.Entry` (the row's trailing style chip). `nil` means no
   /// *custom* style shaped it — enhanced transcripts off, or the base Cleaned
   /// Up styling with no profile active — and the entry shows only its
   /// timestamp: the base treatment is every row's default, so naming it on
