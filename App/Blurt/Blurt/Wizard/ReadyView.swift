@@ -3,12 +3,16 @@ import SwiftUI
 
 /// The "you're all set" screen shown in the main window once setup is complete.
 /// It states the dictation shortcut, the style in effect, and the recent
-/// dictations — there's nothing to configure here, and deliberately no Settings
-/// control: the standard app-menu "Settings…" (⌘,) and the menu-bar item are
-/// the routes, so the window stays a status surface rather than growing a
-/// second door to the same place.
+/// dictations, and closes with a Settings button at the foot — the window's
+/// own door to the Settings scene, alongside the standard app-menu
+/// "Settings…" (⌘,) and the menu-bar item.
 struct ReadyView: View {
   var coordinator: AppCoordinator
+  var openSettings: () -> Void
+  /// The style row's "+": opens Settings deep-linked to the Advanced pane,
+  /// where styles are edited — a separate closure from `openSettings` so the
+  /// plain Settings button keeps opening on General (see `MainWindowRoot`).
+  var addStyle: () -> Void
   // Observed (not read once) so changing the dictation key in the separate
   // Settings window re-renders this window's keycap live — see `BoundTriggerKey`.
   @BoundTriggerKey private var triggerKey
@@ -17,8 +21,8 @@ struct ReadyView: View {
   /// not to write: the store owns the decoding and the active-vs-Default rule
   /// (see `StyleProfileStore`), and `@AppStorage` is what re-renders this window
   /// when the settings sheet adds a style or the switcher changes the active
-  /// one. Hoisted here rather than into the switcher because this view decides
-  /// whether the row renders at all.
+  /// one. Hoisted here rather than into the switcher because the status block
+  /// needs the active style's name too.
   @AppStorage(StyleProfileStore.defaultsKey) private var rawProfiles = ""
   @AppStorage(StyleProfileStore.activeDefaultsKey) private var rawActiveID = ""
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -37,32 +41,34 @@ struct ReadyView: View {
     VStack(spacing: 20) {
       VStack(spacing: 14) {
         ReadyBrandingView()
-          // The logo PNG carries ~16% transparent margin top and bottom;
-          // cancel the bottom one (scaled to today's 180 pt render, where the
-          // old 280 pt cancelled 16) so the gap to the readout is the VStack
-          // spacing, not ~2x it.
-          .padding(.bottom, -10)
 
         statusBlock(activeStyleName: active?.name)
       }
 
-      // No profiles, no row: an `if` with no `else` contributes no view and no
-      // stack spacing, so the window is byte-identical to one without styles —
-      // deliberately not an empty-state control inviting the user to make one,
-      // which would be a permanent advert for an optional feature.
-      if !profiles.isEmpty {
-        StyleRow(profiles: profiles, activeID: active?.id)
-          // Locked while the mic is opening or capturing: a style clicked
-          // mid-utterance would disagree with what the request was built with.
-          // `.disabled` propagates to the picker and the hidden ⌘1–⌘5 buttons,
-          // whose shortcuts don't fire while disabled.
-          .disabled(coordinator.isCapturing)
-      }
+      // Always present, even with no custom styles: the lone Default button
+      // plus the trailing "+" is the row's empty state, so the feature is
+      // discoverable from the main window rather than only from Settings.
+      StyleRow(profiles: profiles, activeID: active?.id, addStyle: addStyle)
+        // Locked while the mic is opening or capturing: a style clicked
+        // mid-utterance would disagree with what the request was built with.
+        // `.disabled` propagates to the buttons and the hidden ⌘1–⌘5 buttons,
+        // whose shortcuts don't fire while disabled.
+        .disabled(coordinator.isCapturing)
 
       // `displayed`, not `entries`: the ring remembers 100 dictations (they are
       // also request context — see `ConversationContext`) and this list is three
       // rows tall.
       RecentDictationsSection(entries: coordinator.recentDictations.displayed)
+
+      Button(action: openSettings) {
+        Label("Settings", systemImage: "gearshape")
+          .labelStyle(.titleAndIcon)
+          .symbolRenderingMode(.hierarchical)
+      }
+      // The system Liquid Glass button — hover/press chrome, edge highlights,
+      // and accessibility fallbacks come from the style, not hand-rolled fills.
+      // Falls back to `.bordered` on macOS 15–25 (see glassButtonStyleCompat).
+      .glassButtonStyleCompat()
     }
     .frame(maxWidth: .infinity)
     .padding(.horizontal, 32)
@@ -114,7 +120,7 @@ struct ReadyView: View {
   /// The idle readout: "Tap **Right Command (⌘)** to start and stop." over
   /// "Or hold it to talk, then release." — the key spelled out and bolded
   /// inline (`TriggerKey.fullName`), no keycap chip. Static on purpose: which
-  /// style is in effect is the Style row's job to say — its selected segment
+  /// style is in effect is the Style row's job to say — its selected button
   /// is always visible right below — so repeating it here would be two
   /// readouts to keep in agreement. Both lines take their ideal size: inside
   /// the fixed-height slot a squeezed line can't fall back to wrapping, so
@@ -137,7 +143,7 @@ struct ReadyView: View {
   /// color (`OverlayBrandPalette.cyan` — the tint `WaveformMeter` uses while
   /// recording) inline with a bold "Listening…", then the way out. The style
   /// clause names the active profile; with none active the sentence starts at
-  /// "Tap again" — "Blurting in Cleaned Up." reads as if a profile by that
+  /// "Tap again" — "Blurting in Default." reads as if a profile by that
   /// name existed.
   private func listeningState(activeStyleName: String?) -> some View {
     VStack(spacing: 2) {
@@ -181,10 +187,12 @@ struct ReadyView: View {
   }
 }
 
-/// The BLURT wordmark over the status block. A header mark now, not the
-/// window's identity — the standard titlebar names the app — which is why it
-/// renders well under its old 280 pt and simply omits itself if the PNG can't
-/// load rather than swapping in a fallback identity view.
+/// The BLURT wordmark over the status block: the pink pixel-art mark
+/// (`Branding/blurt-ready-logo.png`, a 720×180 render of its 180×45 pt slot,
+/// so the nearest-neighbor downscale is an even 2× on Retina and the pixels
+/// stay square). A header mark, not the window's identity — the standard
+/// titlebar names the app — which is why it simply omits itself if the PNG
+/// can't load rather than swapping in a fallback identity view.
 private struct ReadyBrandingView: View {
   /// Loaded once for the process rather than per `body` evaluation: this view
   /// sits in `ReadyView`, whose body re-runs on every new dictation
@@ -212,68 +220,67 @@ private struct ReadyBrandingView: View {
   }
 }
 
-/// The style switcher: a System Settings–style labeled row — leading "Style"
-/// label, trailing segmented control — in the same rounded `.quinary` card as
-/// the Recent list below it, so the window's two in-content surfaces match.
-/// The control's first segment, **Cleaned Up**, is the base styling (no
-/// profile instructions appended) and the rest are the user's profiles — the
-/// HIG control for a small, always-visible set of mutually exclusive options,
-/// so selection chrome, sizing and accessibility come from AppKit rather than
-/// hand-rolled buttons. It sits between the shortcut readout and the Recent
-/// list because which style is in effect is the one dictation setting worth
-/// changing mid-flow — Settings owns creating and editing profiles (see
-/// `SettingsWindowRoot`'s Styles section), this owns which one is in effect.
-/// The choice is **sticky**: a selection holds until the user makes another,
-/// so a switch is not something to redo before every dictation. `ReadyView`
-/// renders it only while at least one profile exists — a lone Cleaned Up
-/// segment would have nothing to switch to.
+/// The style switcher: a System Settings–style labeled row — leading
+/// "Output Style" label, trailing row of buttons — in the same rounded
+/// `.quinary` card as the Recent list below it, so the window's two in-content
+/// surfaces match. The first button, **Default**, is the base styling (no
+/// profile instructions appended) and the rest are the user's profiles; the
+/// active one is drawn prominent (accent fill), the others bordered, so each
+/// style is a distinct button rather than a segment. A trailing "+" opens
+/// Settings deep-linked to the Advanced pane, where profiles are created and
+/// edited (see `SettingsWindowRoot`'s Styles section) — this row owns only
+/// which one is in effect. It sits
+/// between the shortcut readout and the Recent list because which style is in
+/// effect is the one dictation setting worth changing mid-flow. The choice is
+/// **sticky**: a selection holds until the user makes another, so a switch is
+/// not something to redo before every dictation.
 private struct StyleRow: View {
   /// Already decoded and resolved by `ReadyView`, which observes the slots —
   /// this view is pure render-and-write.
   let profiles: [StyleProfile]
-  /// The active profile's id, or `nil` for Cleaned Up. `nil` is safe to *mean*
-  /// Cleaned Up here even though an empty store also resolves to it, because
-  /// this view only exists while `profiles` is non-empty.
+  /// The active profile's id, or `nil` for Default — with no profiles defined
+  /// the store resolves to the same base styling, so `nil` always draws the
+  /// Default button selected.
   let activeID: StyleProfile.ID?
-
-  /// Selection writes go through the store — never the raw slot — so the store
-  /// keeps owning how a choice is encoded (a profile's id, or the store's
-  /// "default" sentinel for Cleaned Up; see `HotkeyStepView.selection` for the
-  /// precedent).
-  private var selection: Binding<StyleProfile.ID?> {
-    Binding(
-      get: { activeID },
-      set: { newValue in
-        let store = StyleProfileStore()
-        if let profile = profiles.first(where: { $0.id == newValue }) {
-          store.activate(profile)
-        } else {
-          store.activateDefault()
-        }
-      })
-  }
+  /// The "+" button's action — opens Settings deep-linked to the Advanced
+  /// pane, where styles are edited. Handed down from `MainWindowRoot`, which
+  /// sets `AppDelegate.settingsOpensOnAdvanced` before calling the
+  /// `openSettings` environment action.
+  var addStyle: () -> Void
 
   var body: some View {
     // The row shape is `SettingRow`'s (leading label, trailing control, center
     // alignment) but built inline — `SettingRow` would wrap the title in an
-    // icon-bearing `Label`. The visible "Style" text and the picker's title
-    // are one element to VoiceOver, not two: a hidden picker label is still
-    // its accessibility name (the `PickerSettingRow` pattern), so the visible
-    // text is marked decorative rather than announced twice.
+    // icon-bearing `Label`. Each style button carries its own name, so the
+    // row label is ordinary static text (no picker to lend it to).
     HStack {
-      Text("Style")
-        .accessibilityHidden(true)
+      Text("Output Style")
       Spacer(minLength: 12)
-      Picker("Style", selection: selection) {
-        Text(StyleProfileStore.defaultStyleName).tag(StyleProfile.ID?.none)
+      HStack(spacing: 8) {
+        // Writes go through the store — never the raw slot — so the store
+        // keeps owning how a choice is encoded (a profile's id, or the
+        // store's "default" sentinel; see `HotkeyStepView.selection` for the
+        // precedent).
+        styleButton(StyleProfileStore.defaultStyleName, isActive: activeID == nil) {
+          StyleProfileStore().activateDefault()
+        }
         ForEach(profiles) { profile in
-          Text(profile.name).tag(StyleProfile.ID?.some(profile.id))
+          styleButton(profile.name, isActive: activeID == profile.id) {
+            StyleProfileStore().activate(profile)
+          }
+        }
+        // Room for another profile? Offer the door to where they're made.
+        // Hidden at the cap rather than disabled: a permanently-grey control
+        // reads as broken, and the style buttons already fill the row then.
+        if profiles.count < StyleProfileStore.profileLimit {
+          Button(action: addStyle) {
+            Image(systemName: "plus")
+          }
+          .glassButtonStyleCompat()
+          .accessibilityLabel("Add Style")
+          .accessibilityIdentifier(UITestIdentifiers.styleProfileAddFromMain)
         }
       }
-      .pickerStyle(.segmented)
-      .labelsHidden()
-      .fixedSize()
-      .accessibilityIdentifier(UITestIdentifiers.styleProfilePicker)
       .background(shortcuts)
     }
     .padding(.horizontal, 12)
@@ -289,17 +296,31 @@ private struct StyleRow: View {
     )
   }
 
-  /// Keyboard shortcuts for the segments: ⌘1 selects Cleaned Up, ⌘2…⌘5 the
+  /// One style's button. The active one is the prominent (accent-filled)
+  /// system button, the rest plain bordered — Liquid Glass variants on
+  /// macOS 26+ (see `glassButtonStyleCompat`) — so selection chrome, sizing
+  /// and accessibility come from the system styles rather than hand-drawn
+  /// fills. `.isSelected` says what the fill shows, so VoiceOver reads the
+  /// active style without color.
+  private func styleButton(
+    _ name: String, isActive: Bool, activate: @escaping () -> Void
+  ) -> some View {
+    Button(name, action: activate)
+      .glassButtonStyleCompat(prominent: isActive)
+      .accessibilityAddTraits(isActive ? .isSelected : [])
+  }
+
+  /// Keyboard shortcuts for the style buttons: ⌘1 selects Default, ⌘2…⌘5 the
   /// profiles in row order. Hidden buttons rather than a `Commands` menu block,
   /// because the scoping is the point: a menu command fires while *any* of the
   /// app's windows is key (Settings included), whereas a button's shortcut is
   /// resolved through the window that hosts it — so these fire exactly while
-  /// the main window is key, and not at all while it shows the wizard or has no
-  /// styles (this view doesn't exist then). `.hidden()` keeps the buttons out
+  /// the main window is key, and not at all while it shows the wizard (this
+  /// view doesn't exist then). `.hidden()` keeps the buttons out
   /// of sight, layout (they're parked in `background`) and accessibility while
   /// leaving their shortcuts registered; the writes go through the same store
-  /// calls as the picker's binding. A "Style" submenu naming the shortcuts —
-  /// menu-bar discoverability — is a possible follow-up; the segments
+  /// calls as the visible buttons. A "Style" submenu naming the shortcuts —
+  /// menu-bar discoverability — is a possible follow-up; the buttons
   /// themselves are always visible, so nothing here is *only* reachable by
   /// shortcut.
   private var shortcuts: some View {

@@ -22,6 +22,21 @@ final class ReadyViewUITests: BlurtUITestCase {
       "Ready screen should state the dictation shortcut")
     XCTAssertTrue(app.staticTexts["Or hold it to talk, then release."].exists)
 
+    // The Output Style row is always present — with no custom styles yet it
+    // shows the selected Default button plus the "+" that leads to Settings,
+    // where styles are made.
+    XCTAssertTrue(
+      app.staticTexts["Output Style"].exists, "Ready screen should have an Output Style row")
+    // The label is `StyleProfileStore.defaultStyleName`, spelled out because
+    // this bundle can't import the engine.
+    let main = app.windows[UITestIdentifiers.mainWindowTitle]
+    XCTAssertTrue(
+      main.buttons["Default"].exists,
+      "The style row should offer the Default style")
+    XCTAssertTrue(
+      main.buttons[UITestIdentifiers.styleProfileAddFromMain].exists,
+      "The style row should offer the add-style shortcut while under the cap")
+
     // The Recent section, empty on a fresh launch, shows its header and the
     // placeholder that fills the reserved list area.
     XCTAssertTrue(app.staticTexts["Recent"].exists, "Ready screen should have a Recent section")
@@ -29,12 +44,11 @@ final class ReadyViewUITests: BlurtUITestCase {
       app.staticTexts["Your recent blurts will appear here"].exists,
       "An empty Recent list should show its placeholder")
 
-    // Deliberately no Settings control here: the app menu's standard
-    // "Settings…" (⌘,, exercised by `openSettingsWindow` across the settings
-    // suites) and the menu-bar item are the routes.
-    XCTAssertFalse(
-      app.windows[UITestIdentifiers.mainWindowTitle].buttons["Settings"].exists,
-      "Ready screen should not offer its own Settings control")
+    // The Settings button at the window's foot — the main window's own route
+    // to the Settings scene, alongside ⌘, and the menu-bar item.
+    XCTAssertTrue(
+      main.buttons["Settings"].exists,
+      "Ready screen should offer its Settings button")
   }
 
   func testCompletedDictationPopulatesRecentList() {

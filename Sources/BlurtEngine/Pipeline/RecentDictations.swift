@@ -31,7 +31,7 @@ public struct RecentDictations: Equatable, Sendable {
     public let text: String
     public let timestamp: Date
     /// Display name of the **custom** style this dictation was made with (the
-    /// active profile's name). `nil` otherwise — the base Cleaned Up styling,
+    /// active profile's name). `nil` otherwise — the base Default styling,
     /// enhanced transcripts off, or a host that supplies no style — which
     /// renders as just the timestamp: the base treatment is every row's
     /// default, so naming it on each would be noise.
@@ -106,16 +106,5 @@ extension RecentDictations.Entry {
     formatter.unitsStyle = .full  // e.g. "2 minutes ago"
     formatter.locale = locale
     return formatter.localizedString(for: timestamp, relativeTo: now)
-  }
-
-  /// The row's gray second line: "Casual · just now" — the style this dictation
-  /// was made with, then the relative timestamp — or the timestamp alone for an
-  /// entry with no style (see `style` for when that happens): no separator dot
-  /// with nothing on its left. Owned here beside `relativeLabel` so the wording
-  /// stays unit-tested (the shell has no test target).
-  public func subtitle(now: Date, locale: Locale = .autoupdatingCurrent) -> String {
-    let time = relativeLabel(now: now, locale: locale)
-    guard let style else { return time }
-    return "\(style) · \(time)"
   }
 }

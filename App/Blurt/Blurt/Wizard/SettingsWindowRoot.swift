@@ -18,7 +18,8 @@ struct SettingsWindowRoot: View {
   /// tab), so the window always opens on General. Without an explicit binding
   /// macOS restores the last-used pane across launches, which retitles the
   /// window ("General" → "Advanced") and made the settings window unfindable in
-  /// UI tests from one run to the next.
+  /// UI tests from one run to the next. The one exception is the main window's
+  /// "+" (add style) deep-link, consumed below.
   @State private var tab: Tab = .general
 
   var body: some View {
@@ -32,6 +33,17 @@ struct SettingsWindowRoot: View {
           .tag(Tab.advanced)
       }
       .frame(width: MainWindow.contentWidth)
+      // Consumes the "+" deep-link (`AppDelegate.settingsOpensOnAdvanced`):
+      // switch to Advanced, then reset the flag so it's one-shot — every other
+      // route into Settings (⌘,, the Settings buttons, the menu-bar item)
+      // still opens on General. `initial: true` covers the window being
+      // (re)created after the flag was set; the observed change covers an
+      // already-open Settings window, which switches panes in place.
+      .onChange(of: appDelegate.settingsOpensOnAdvanced, initial: true) {
+        guard appDelegate.settingsOpensOnAdvanced else { return }
+        tab = .advanced
+        appDelegate.settingsOpensOnAdvanced = false
+      }
     } else {
       Color.clear.frame(width: MainWindow.contentWidth, height: 240)
     }

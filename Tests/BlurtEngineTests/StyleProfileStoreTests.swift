@@ -157,11 +157,11 @@ struct StyleProfileStoreTests {
     #expect(store.activeInstructions == "no contractions")
   }
 
-  /// Selecting Cleaned Up (`activateDefault` — the API keeps the internal name)
+  /// Selecting Default (`activateDefault`)
   /// is the base styling: no profile is active and nothing is appended —
   /// distinct from "never chose", which falls back to the first profile. As
   /// sticky as a profile choice, and reversible by one.
-  @Test("Cleaned Up sends no instructions until another style is clicked")
+  @Test("Default sends no instructions until another style is clicked")
   func defaultChoiceSendsNothingAndSticks() {
     let store = makeStore()
     let profiles = [
@@ -181,12 +181,12 @@ struct StyleProfileStoreTests {
     #expect(store.activeInstructions == "keep it breezy")
   }
 
-  /// The upgrade path and the Cleaned Up segment together: a legacy user's
+  /// The upgrade path and the Default button together: a legacy user's
   /// migrated "Custom" profile is active because their pointer is *unset*, so
   /// unset and the Default sentinel must stay two different states — reading
   /// unset as the sentinel would switch every upgrading user's styling off
   /// silently.
-  @Test("Cleaned Up is an explicit choice, not what a migrated install starts on")
+  @Test("Default is an explicit choice, not what a migrated install starts on")
   func defaultIsDistinctFromUnsetOnALegacyInstall() {
     let store = makeLegacyStore("always write in lowercase")
     #expect(store.activeInstructions == "always write in lowercase")

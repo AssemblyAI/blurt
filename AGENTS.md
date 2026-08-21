@@ -810,7 +810,7 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
   enabled; gates the dictation request's `llm` cleanup-rewrite block, re-read at every request),
   **`StyleProfileStore`** (three keys: `BlurtStyleProfiles`, the JSON list of up to
   `profileLimit` (4) named `StyleProfile`s; `BlurtActiveStyleProfile`, the id of the one in
-  effect, or the `defaultStyleID` sentinel when the user has selected **Cleaned Up** — base
+  effect, or the `defaultStyleID` sentinel when the user has selected **Default** — base
   styling, no profile appended — which is deliberately distinct from _unset_, so a migrated legacy
   profile stays active through the upgrade; and `BlurtCustomStyle`, the pre-profiles single field it
   still **reads and never
@@ -922,10 +922,12 @@ restating them.
 - **Main window** (`MainWindowRoot`) — the setup wizard until the app is fully configured, then the
   "ready" screen (`ReadyView`: the shortcut readout, swapped for a "Listening…" state while audio
   is captured — driven by the same phase stream the pill renders, with Esc cancelling while this
-  window is key; the labeled Style row — a segmented switcher, Cleaned Up plus up to 4 profiles,
-  absent entirely until a profile exists, selectable by ⌘1–⌘5, locked during capture; and the
-  Recent list, each row subtitled with the style it was made with). Standard titlebar, always
-  presented at launch.
+  window is key; the labeled Output Style row — one button per style, Default plus up to 4
+  profiles with the active one drawn prominent, always visible, selectable by ⌘1–⌘5, locked
+  during capture, plus a "+" that opens Settings on its Advanced pane while under the profile cap;
+  the Recent list, each row trailing a chip naming the style it was made with and the relative
+  time, swapped for a Copy affordance on hover; and a Settings button at the
+  foot). Standard titlebar, always presented at launch.
 - **Settings** (`SettingsWindowRoot`) — a `TabView` reached via ⌘, / the menu bar,
   never at launch. Note macOS titles a preference window after its selected pane, which is why the
   UI-test suite aliases the window title to the first tab's label.

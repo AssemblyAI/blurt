@@ -11,7 +11,8 @@ import SwiftUI
 //   wizard; once it is, it shows `ReadyView` (the shortcut readout).
 // - Settings (`SettingsWindowRoot`): change the API key or dictation shortcut. A
 //   `Settings` scene, so ⌘, comes wired for free; opened programmatically via the
-//   `openSettings` environment action (the menu bar item).
+//   `openSettings` environment action (the ready screen's buttons and the menu
+//   bar item).
 
 enum MainWindow {
   /// Scene identifier for `openWindow(id:)` / the `Window(id:)` scene.
@@ -36,12 +37,22 @@ enum MainWindow {
 struct MainWindowRoot: View {
   var appDelegate: AppDelegate
   @Environment(\.openWindow) private var openWindow
+  @Environment(\.openSettings) private var openSettings
 
   var body: some View {
     if let controller = appDelegate.wizardController, let coordinator = appDelegate.coordinator {
       Group {
         if controller.isReady {
-          ReadyView(coordinator: coordinator)
+          ReadyView(
+            coordinator: coordinator,
+            openSettings: { openSettings() },
+            addStyle: {
+              // The "+" deep-links: flag the Advanced pane (where styles are
+              // edited) before opening, so the user lands on the Styles
+              // section instead of General — see `SettingsWindowRoot`.
+              appDelegate.settingsOpensOnAdvanced = true
+              openSettings()
+            })
         } else {
           WizardView(controller: controller, coordinator: coordinator)
         }
