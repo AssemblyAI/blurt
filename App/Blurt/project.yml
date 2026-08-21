@@ -122,8 +122,8 @@ targets:
         # "Blurt Dev" wherever macOS names it and the release stays "Blurt".
         CFBundleName: $(BLURT_APP_NAME)
         CFBundleDisplayName: $(BLURT_APP_NAME)
-        CFBundleVersion: "43"
-        CFBundleShortVersionString: "0.1.43"
+        CFBundleVersion: "44"
+        CFBundleShortVersionString: "0.1.44"
         LSMinimumSystemVersion: "15.0"
         LSApplicationCategoryType: public.app-category.productivity
         NSMicrophoneUsageDescription: Blurt uses your microphone to transcribe your dictation with AssemblyAI.
