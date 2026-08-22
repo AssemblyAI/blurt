@@ -172,7 +172,7 @@ private struct StyleProfilesSection: View {
         .disabled(profiles.count >= StyleProfileStore.profileLimit)
         .accessibilityIdentifier(UITestIdentifiers.styleProfileAdd)
     } header: {
-      Text("Styles")
+      Text("Custom Styles")
     } footer: {
       // The caveat *replaces* the help sentence rather than joining it: with the
       // rewrite switched off there is nothing for a style to apply to, so
