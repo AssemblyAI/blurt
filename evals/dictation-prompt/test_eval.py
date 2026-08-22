@@ -1100,17 +1100,42 @@ def test_the_optimizers_valset_comes_off_train_not_out_of_dev():
     win, because the same rows then judge the result.
     """
     train, validation, dev, test = _default_split()
-    assert (len(validation), len(dev), len(test)) == (150, 300, 150)
-    assert len(train) == 2000 - 150 - 300 - 150
+    assert (len(validation), len(dev), len(test)) == (450, 900, 450)
+    assert len(train) == 4000 - 450 - 900 - 450
     assert not (set(map(id, validation)) & set(map(id, dev)))
     assert not (set(map(id, validation)) & set(map(id, train)))
 
 
 def test_raising_the_limit_grows_only_the_free_slice():
     """The point of absolute sizes: valset, dev and test are paid for, train is not."""
-    train, validation, dev, test = _default_split(["--limit", "4000"])
-    assert (len(validation), len(dev), len(test)) == (150, 300, 150)
-    assert len(train) == 4000 - 600
+    train, validation, dev, test = _default_split(["--limit", "6000"])
+    assert (len(validation), len(dev), len(test)) == (450, 900, 450)
+    assert len(train) == 6000 - 1800
+
+
+def test_the_paid_slices_are_sized_for_a_verdict_that_can_be_trusted():
+    """A --auto heavy search once landed 0.001 behind its seed on 300 dev rows.
+
+    That is not a result, it is a coin flip that cost 27 reflection trials, and more
+    trials only sample the same noise again — noise falls with the square root of rows,
+    so only the rows fix it. Tripled together: dev decides what ships, the valset
+    decides what the search chases, and a winner is worth nothing if either is guessing.
+    """
+    args = cli.parse_args([])
+    assert (args.dev_fraction, args.gepa_valset, args.test_fraction) == (900, 450, 450)
+    # Still inside the corpus: nyra's train split is 4458 rows before filtering.
+    assert args.limit == 4000
+    assert args.dev_fraction + args.gepa_valset + args.test_fraction < args.limit
+
+
+def test_the_hard_disfluency_outweighs_the_easy_one_by_a_measured_margin():
+    """Not a round number someone liked: 5 is where the metric holds the most resolution.
+
+    Higher keeps sharpening the gradient between a good cleanup and a nearly-good one,
+    but pushes wholly-failed rows into `from_error_rate`'s flattening tail, where they
+    stop being rankable against each other. See the sweep in the constant's own docs.
+    """
+    assert metrics.FALSE_START_WEIGHT == 5.0
 
 
 def test_the_reflector_sees_more_than_gepas_default_three_examples():

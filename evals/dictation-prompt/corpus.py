@@ -61,6 +61,7 @@ import os
 import pathlib
 import random
 import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -284,6 +285,18 @@ def hf_token() -> str | None:
     return None
 
 
+#: Attempts per page against a 429, and the base of the backoff between them.
+#:
+#: The rows API rate-limits by volume, not just by anonymity: a 4000-row load is ~40
+#: pages, and a token raises the ceiling without removing it. Failing the whole load on
+#: one 429 wastes the pages already fetched and, worse, fails *before* the first model
+#: call — so a run set up to take an hour dies at second zero. Bounded, because a rate
+#: limit that has not lifted in a minute of waiting is a quota rather than a burst, and
+#: the error already says what to do about it.
+_RATE_LIMIT_ATTEMPTS = 5
+_RATE_LIMIT_BACKOFF = 4.0
+
+
 def _rows_via_api(source: Source, limit: int):
     """Page the datasets-server rows API, yielding raw row dicts."""
     token = hf_token()
@@ -304,27 +317,7 @@ def _rows_via_api(source: Source, limit: int):
                 "length": page,
             }
         )
-        request = urllib.request.Request(f"{ROWS_API}?{query}", headers=headers)
-        try:
-            with urllib.request.urlopen(request, timeout=60) as response:
-                payload = json.load(response)
-        except urllib.error.HTTPError as error:
-            body = error.read().decode("utf-8", "replace")[:400]
-            if error.code == 429 and not token:
-                raise RuntimeError(
-                    f"rate limited by {ROWS_API} while reading {source.dataset}, and no Hugging "
-                    "Face token was found. Authenticating raises the limit: run `hf auth login`, "
-                    "or set HF_TOKEN to a read token from "
-                    "https://huggingface.co/settings/tokens"
-                ) from error
-            raise RuntimeError(
-                f"datasets-server returned HTTP {error.code} for {source.dataset}: {body}"
-            ) from error
-        except urllib.error.URLError as error:
-            raise RuntimeError(
-                f"could not reach {ROWS_API} ({error.reason}). "
-                "Use --jsonl or --source builtin to work offline."
-            ) from error
+        payload = _fetch_page(f"{ROWS_API}?{query}", headers, source, token)
 
         rows = payload.get("rows", [])
         if not rows:
@@ -332,6 +325,50 @@ def _rows_via_api(source: Source, limit: int):
         for entry in rows:
             yield entry.get("row", {})
         offset += page
+
+
+def _fetch_page(url: str, headers: dict, source: Source, token: str | None) -> dict:
+    """One page of rows, waiting out a rate limit rather than failing the load.
+
+    Retries only 429. Every other HTTP status is a fact about the request or the
+    dataset that waiting will not change, and the 500s the server intermittently
+    returns are worth surfacing rather than papering over — a load that silently took
+    four minutes to work around a broken upstream is harder to diagnose than one that
+    said so.
+    """
+    for attempt in range(1, _RATE_LIMIT_ATTEMPTS + 1):
+        try:
+            with urllib.request.urlopen(  # noqa: S310 — fixed https endpoint
+                urllib.request.Request(url, headers=headers), timeout=60
+            ) as response:
+                return json.load(response)
+        except urllib.error.HTTPError as error:
+            body = error.read().decode("utf-8", "replace")[:400]
+            if error.code != 429:
+                raise RuntimeError(
+                    f"datasets-server returned HTTP {error.code} for {source.dataset}: {body}"
+                ) from error
+            if attempt == _RATE_LIMIT_ATTEMPTS:
+                advice = (
+                    "Authenticating raises the limit: run `hf auth login`, or set HF_TOKEN to a "
+                    "read token from https://huggingface.co/settings/tokens"
+                    if not token
+                    else "A token is already in use, so this is the authenticated ceiling — wait "
+                    "a few minutes, or lower --limit"
+                )
+                raise RuntimeError(
+                    f"rate limited by {ROWS_API} while reading {source.dataset}, still after "
+                    f"{_RATE_LIMIT_ATTEMPTS} attempts. {advice}."
+                ) from error
+            delay = _RATE_LIMIT_BACKOFF * 2 ** (attempt - 1)
+            print(f"  rate limited; retrying in {delay:.0f}s ({attempt}/{_RATE_LIMIT_ATTEMPTS})")
+            time.sleep(delay)
+        except urllib.error.URLError as error:
+            raise RuntimeError(
+                f"could not reach {ROWS_API} ({error.reason}). "
+                "Use --jsonl or --source builtin to work offline."
+            ) from error
+    raise AssertionError("unreachable: the loop either returns or raises")
 
 
 def _pairs_from_rows(rows, source: Source, where: str):

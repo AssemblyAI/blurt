@@ -80,16 +80,35 @@ HESITATIONS = frozenset(
 #:
 #: The hard case is also the one that shows. A leftover "um" reads as a typo; "we
 #: wouldn't ha-" left standing in front of "we wouldn't have them" pastes a sentence the
-#: user never said. At 3.0 those 3.7% of words carry roughly as much of the score as
-#: every other kind of mistake put together — on the same 400 rows the no-cleanup floor
-#: moves from 0.793 to 0.706 — which is well clear of the noise candidates are separated
-#: by, without a two-digit weight's habit of letting one bad example decide a mean.
+#: user never said.
+#:
+#: **Why 5 and not more.** Swept over 1200 `nyra` rows, against hypotheses that leave a
+#: fixed share of each abandoned span dangling in front of an otherwise perfect cleanup.
+#: The number that matters is how far apart the metric can hold a good cleanup and a
+#: nearly-good one — the gap between 0% and 25% residue, since that is the region a
+#: search actually operates in:
+#:
+#:     weight     0%     25%     50%     75%    100%    gap 0->25%
+#:          3  1.000   0.778   0.579   0.435   0.284         0.222
+#:          5  1.000   0.650   0.361   0.160  -0.026         0.350
+#:          8  1.000   0.487   0.114  -0.128  -0.330         0.513
+#:
+#: The gradient keeps growing, so that column alone argues for any weight at all. The
+#: other end is what bounds it: `from_error_rate` decays past WER 1 rather than clipping,
+#: and that decay flattens, so a row whose uncorrected span alone clears WER 2 stops being
+#: rankable against its neighbours. At 3 that is 16 of the 232 false-start rows, at 5 it is
+#: 45, at 8 it is 81 — and the 10th-to-90th-percentile spread across those rows peaks at 5
+#: (1.403) before falling back to 1.281 at 8. Five buys the most resolution the metric can
+#: hold: the strongest gradient where candidates differ, with total failure landing near
+#: zero ("as bad as saying nothing") rather than deep in the flat tail.
+#:
+#: Corpus-level, the no-cleanup floor moves from 0.797 unweighted to 0.658 at 5.
 #:
 #: Charged per abandoned **word**, so a three-word abandoned span costs nine errors
 #: rather than three. Deliberate — the length of what was left in is the size of the
 #: mistake. Note that raising this changes what every axis reports, so numbers either
 #: side of a change to it are not comparable.
-FALSE_START_WEIGHT = 3.0
+FALSE_START_WEIGHT = 5.0
 
 
 def normalize_text(text: str) -> str:

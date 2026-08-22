@@ -120,8 +120,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     data.add_argument(
         "--limit",
         type=int,
-        default=2000,
-        help="how many pairs to load (default: 2000). Everything past --dev-fraction and "
+        default=4000,
+        help="how many pairs to load (default: 4000, most of nyra's 4458-row train split). "
+        "Everything past --dev-fraction and "
         "--test-fraction becomes train, and train rows are the free ones: GEPA draws a "
         "fixed number of fixed-size reflection minibatches however large the trainset is, "
         "so raising this buys more varied feedback at no extra model cost. The ceiling is "
@@ -162,33 +163,37 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     evaluation.add_argument(
         "--dev-fraction",
         type=float,
-        default=300,
+        default=900,
         metavar="ROWS_OR_FRACTION",
-        help="dev rows, absolute at 1 or above and a fraction below (default: 300). Dev "
+        help="dev rows, absolute at 1 or above and a fraction below (default: 900). Dev "
         "decides which instruction ships — baseline versus the optimizer's result — and "
         "the optimizer never sees it: its own valset is carved from train instead "
         "(--gepa-valset). Sized for resolution: a search once won by +0.008 on 50 valset "
         "rows and lost by 0.006 on 150 dev rows, both inside the noise, so the binding "
-        "constraint on finding a winner is how finely the difference can be measured",
+        "constraint on finding a winner is how finely the difference can be measured. Tripled "
+        "from 300 after a --auto heavy search came in 0.001 behind its seed — a verdict that "
+        "cost 27 reflection trials and could not be trusted either way",
     )
     evaluation.add_argument(
         "--gepa-valset",
         type=float,
-        default=150,
+        default=450,
         metavar="ROWS_OR_FRACTION",
-        help="rows taken off train for the optimizer's own valset (default: 150). GEPA "
+        help="rows taken off train for the optimizer's own valset (default: 450). GEPA "
         "scores every surviving candidate against all of it, so its size multiplies the "
         "search's cost while buying no exploration — that depends only on --auto. GEPA's "
         "own advice is the smallest set that still matches the task distribution, and 50 "
-        "was that; it was raised because at 50 the Pareto front was ranking candidates on "
-        "differences it could not resolve, and picking a winner that dev then rejected",
+        "was that; it was raised to 150 because at 50 the Pareto front was ranking candidates "
+        "on differences it could not resolve, and picking a winner that dev then rejected, and "
+        "tripled again alongside dev. Noise falls as the square root, so 3x the rows is ~42% "
+        "less of it — nothing cheaper buys that",
     )
     evaluation.add_argument(
         "--test-fraction",
         type=float,
-        default=150,
+        default=450,
         metavar="ROWS_OR_FRACTION",
-        help="held-out rows, absolute at 1 or above and a fraction below (default: 150). "
+        help="held-out rows, absolute at 1 or above and a fraction below (default: 450). "
         "Scored twice at the end, for the winner and the baseline; no selection step sees "
         "it, so this is the honest number",
     )

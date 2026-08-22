@@ -135,24 +135,28 @@ A bare invocation is a full paid GEPA run, so it is worth knowing what it commit
 | `--reflection-model openai/claude-opus-4-8` | Deliberately not `--model`: a 4B model writing its own instructions is the weakest link in the loop. The `openai/` prefix is LiteLLM routing, stripped before the gateway sees it.                                                                                |
 | `--optimizer gepa` · `--start prior-winner` | Evolve from `candidates.PRIOR_WINNER` — the strongest instruction we have, and `BASELINE` — rather than restarting from a four-line candidate that knows none of what it learned. It fits the cap, so the search starts inside the feasible region.               |
 | `--auto heavy`                              | 27 reflection trials (light is 10, medium 18). This is the **only** knob that changes how many ideas get tried — corpus size does not. Merge is off: crossover needs more than one predictor, so it would only re-evaluate duplicates.                            |
-| `--split train --limit 2000`                | The sources' own held-out splits are only ~250 rows. Everything past dev and test becomes train, and train rows are free — see below.                                                                                                                             |
-| `--dev-fraction 300` (rows, not a fraction) | Dev decides which instruction ships — `BASELINE` versus the optimizer's result — and the optimizer never sees it. Sized for **resolution**: see below.                                                                                                            |
-| `--gepa-valset 150` (rows)                  | The optimizer's own valset, carved off train. Every surviving candidate is scored against all of it, so its size multiplies search cost while buying no exploration — that is `--auto` alone. Raised for the same reason as dev.                                  |
+| `--split train --limit 4000`                | The sources' own held-out splits are only ~250 rows; nyra's `train` is 4458. Everything past dev and test becomes train, and train rows are free — see below.                                                                                                     |
+| `--dev-fraction 900` (rows, not a fraction) | Dev decides which instruction ships — `BASELINE` versus the optimizer's result — and the optimizer never sees it. Sized for **resolution**: see below.                                                                                                            |
+| `--gepa-valset 450` (rows)                  | The optimizer's own valset, carved off train. Every surviving candidate is scored against all of it, so its size multiplies search cost while buying no exploration — that is `--auto` alone. Raised for the same reason as dev.                                  |
 | `--reflection-minibatch-size 8`             | Scored examples the reflector sees before rewriting. GEPA's default is 3, which on a task this well-solved is often three near-perfect examples and almost no failure to generalise from.                                                                         |
-| `--test-fraction 150` (rows)                | The honest number, from data no selection step saw. Scored twice at the end.                                                                                                                                                                                      |
+| `--test-fraction 450` (rows)                | The honest number, from data no selection step saw. Scored twice at the end.                                                                                                                                                                                      |
 | `--candidates baseline`                     | A search run scores only `BASELINE` on dev — it is the bar, the fallback and the seed at once, so the other six cost a dev sweep each to re-rank instructions the search never uses. `--optimizer none` scores all of them, since there the ranking is the point. |
 | `--num-threads 1`                           | The gateway rate-limits; a 429 storm mid-run costs more wall-clock than the concurrency saves. Raise it for a provider that tolerates it.                                                                                                                         |
 | `--max-tokens 8192`                         | Headroom for reasoning tokens, not for the answer. Truncation here is silently corrupting — see below.                                                                                                                                                            |
 
-That leaves **train 1400 / optimizer valset 150 / dev 300 / test 150**, for roughly 3,000 model
-calls: 300 to score `BASELINE`, ~2,085 for the search, 300 to re-score its result, and 300 for
-the two held-out scorings at the end.
+That leaves **train 2200 / optimizer valset 450 / dev 900 / test 450**, for roughly 8,700 model
+calls: 900 to score `BASELINE`, ~6,000 for the search, 900 to re-score its result, and 900 for
+the two held-out scorings at the end. At `--num-threads 1` that is a few hours; raise it if the
+gateway tolerates the parallelism.
 
 **Why the two evaluation sets are this large.** The binding constraint on finding a winner is
 not search budget, it is measurement. A search once beat the seed by +0.008 on a 50-row valset
 and lost to it by 0.006 on a 150-row dev split — both differences inside the run-to-run noise,
 so the run spent 27 reflection trials producing a number that could not be trusted either way.
-More trials sample the same noise more often; more rows shrink it. Raising the valset also
+A later `--auto heavy` run landed 0.001 behind its seed on 300 dev rows, which is the same
+non-answer at three times the cost. More trials sample the same noise more often; more rows
+shrink it — as the square root, so the 3x here is worth about 42% of it, and nothing cheaper
+buys any. Raising the valset also
 matters on its own, because GEPA's Pareto front ranks candidates per validation example, and at
 50 rows it was ordering them on differences it could not resolve — then handing dev a winner
 dev rejected.
@@ -321,7 +325,7 @@ the piece above zero is plain `1 - WER`, so scores from before this change still
 
 One departure from plain WER, and the reason a run reports what share of its rows contain a
 false start. **A word of an abandoned span left in the output costs
-`metrics.FALSE_START_WEIGHT` errors (3) rather than one.**
+`metrics.FALSE_START_WEIGHT` errors (5) rather than one.**
 
 Flat WER made "um" and an abandoned clause worth the same, and the arithmetic then told the
 search to ignore the abandoned clause. Over 400 `nyra` rows, 15.0% of the input words have to
@@ -341,7 +345,7 @@ aren't a verbatim echo of the span beside them. So `it was it was really bad` st
 `you know` and `okay so` stay hedges, and `and they th- their tax deal` is charged at three.
 The cut-off signal is free: `_detag_nyra` already rewrites Switchboard's `th*` convention into
 `th-`, and the injector emits the same shape. On those 400 rows the rule fires on 80, and the
-no-cleanup floor moves from 0.793 to 0.706.
+no-cleanup floor moves from 0.797 to 0.658.
 
 Two consequences worth keeping in mind. `metrics.score` needs the **input** as well as the
 target, since nothing about a leftover word says whether it was abandoned — `corpus.Utterance`
