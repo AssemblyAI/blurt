@@ -300,9 +300,11 @@ Two consequences worth holding onto when reading a result:
 
 - A winner is only as transferable as `--model` is representative of the service's rewrite
   model, which runs under a ~5s budget and is probably much smaller.
-- Confirming a win against the live default would mean sending real audio to
-  `dictation.assemblyai.com/transcribe` with an empty `llm` block and comparing. That is a
-  separate exercise, not this one.
+- Confirming a win against the live default means sending real audio to
+  `dictation.assemblyai.com/transcribe` with an empty `llm` block and comparing. That is
+  `--verify-live --verify-baseline`, and for the current winner it has been done — see
+  [Verifying on the model that actually runs it](#verifying-on-the-model-that-actually-runs-it).
+  It is a separate measurement from everything above, not a property of these scores.
 
 ## Reading the results
 
@@ -530,6 +532,32 @@ The response answers both halves at once. `text` is the verbatim transcript, so
 `score(reference, text)` is the floor — what pasting with no rewrite would score.
 `llm_response` is that transcript after the **real** rewrite model applied the instruction. The
 gap is what the instruction bought.
+
+### What it said about the shipped instruction
+
+Twenty held-out utterances, same synthesized audio for every arm, no rewrite failures:
+
+| instruction                            | delivered  | gain over no rewrite |
+| -------------------------------------- | ---------- | -------------------- |
+| _(no rewrite at all — the floor)_      | 0.3365     | —                    |
+| service default (empty `llm` block)    | 0.3561     | +0.0196              |
+| the instruction before the current one | 0.3608     | +0.0243              |
+| **`prior-winner` as it ships today**   | **0.4107** | **+0.0742**          |
+
+That settles the question this section exists to ask, in both directions. Read the **gain**
+column, not the delivered score: the transcript is already there, so the instruction's whole job
+is the delta above the floor, and both arms start from a byte-identical transcript. On that
+measure the shipped instruction adds **+0.0498 more than its predecessor** — 3.1x as much
+improvement, though a ratio of two small numbers on twenty rows is the fragile way to say it.
+It is also the first instruction here measured **above the service's own default wording**
+rather than assumed to be — the harness had never been able to say that. Note the ordering also survived the trip from
+the stand-in, where the same pair differed by only +0.0134: a text-harness win of that size did
+transfer, and grew.
+
+It is twenty rows of synthesized speech, so read the ranking rather than the numbers. The
+sampled outputs are worth reading too — they are what showed that the instruction's aggressive
+deletion of a leading "yeah" / "well" is _earning_ the gain rather than over-editing, which is
+the opposite of what was expected of that clause and is not visible in a mean.
 
 `--verify-baseline` runs the same audio again with an empty `llm` block. That is the wording
 Blurt ships today, so it is the comparison `guessed-default` could only ever guess at — the one
