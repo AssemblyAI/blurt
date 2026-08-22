@@ -158,6 +158,128 @@ def test_mean_of_no_scores_is_zero_on_every_axis():
 
 
 # --------------------------------------------------------------------------
+# False starts — the one disfluency the score charges more than one error for
+# --------------------------------------------------------------------------
+
+#: A pair carrying one abandoned phrase and one hedge, far enough apart to be separate
+#: runs, so a hypothesis can leave exactly one surplus word of either kind in and the
+#: two be compared directly. "we walked-" is abandoned (the cut-off says so); the "um"
+#: later in the sentence is a run of its own and stays a plain leftover.
+ABANDONED = ("we drove to the coast on friday", "we walked- we drove to the um coast on friday")
+
+
+def test_an_abandoned_word_left_in_costs_more_than_a_hedge_left_in():
+    """The whole point: one leftover word, two very different mistakes.
+
+    Both hypotheses add exactly one token the reference does not have, so plain WER
+    scores them identically — which is what left the search free to spend its
+    instruction budget on filler and ignore the hard case.
+    """
+    reference, spoken = ABANDONED
+    hedge = metrics.score(reference, "um we drove to the coast on friday", spoken)
+    abandoned = metrics.score(reference, "walked we drove to the coast on friday", spoken)
+    assert hedge.content_alignment.insertions == abandoned.content_alignment.insertions == 1
+    assert not hedge.uncorrected_false_starts
+    assert abandoned.uncorrected_false_starts == ("walked",)
+    # Exactly the surcharge, over the reference's five words — the arithmetic, not
+    # merely the direction, since the direction would survive any weight above 1.
+    extra = (metrics.FALSE_START_WEIGHT - 1) / len(reference.split())
+    assert hedge.content - abandoned.content == pytest.approx(extra)
+
+
+def test_the_surcharge_reaches_both_axes():
+    """Exempting formatting would dilute the weighting by 30% under the default blend."""
+    reference, spoken = ABANDONED
+    left_in = metrics.score(reference, "walked we drove to the coast on friday", spoken)
+    removed = metrics.score(reference, reference, spoken)
+    assert left_in.content < removed.content
+    assert left_in.format < removed.format
+    assert left_in.blend < removed.blend
+
+
+def test_without_the_input_the_score_is_plain_wer():
+    """Which leftovers were abandoned is a fact about what was said, not about the pair.
+
+    So a two-argument call cannot know it, and must not guess: it scores the way the
+    harness scored everything before this weighting existed.
+    """
+    reference, spoken = ABANDONED
+    hypothesis = "walked we drove to the coast on friday"
+    assert (
+        metrics.score(reference, hypothesis).content
+        > metrics.score(reference, hypothesis, spoken).content
+    )
+    assert metrics.score(reference, hypothesis).uncorrected_false_starts == ()
+
+
+def test_a_clean_cleanup_is_still_perfect_with_the_input_supplied():
+    """The surcharge may only punish what was left in; removing it all is still 1.0."""
+    reference, spoken = ABANDONED
+    assert metrics.score(reference, reference, spoken).content == 1.0
+    assert metrics.score(reference, reference, spoken).uncorrected_false_starts == ()
+
+
+def test_a_cut_off_word_condemns_the_whole_span_it_sits_in():
+    """ "we wouldn't" is only recognizable as abandoned by the "ha-" beside it.
+
+    Which is why the classifier works in runs: charging the fragment alone would price
+    a three-word abandoned clause as a one-word slip.
+    """
+    tokens = metrics.false_start_tokens(
+        "we wouldn't ha- we wouldn't have them", "we wouldn't have them"
+    )
+    assert set(tokens) == {"we", "wouldnt", "ha"}
+
+
+def test_the_corpus_own_cut_off_convention_is_recognized():
+    """nyra ships `th*`, which the loader rewrites to `th-` — the same signal."""
+    verbatim = corpus._detag_nyra("we should go on th* Thursday")
+    assert metrics.false_start_tokens(verbatim, "we should go on Thursday") == ("th",)
+
+
+def test_a_repeated_phrase_is_a_stammer_not_an_abandonment():
+    """The speaker said it again rather than changing course, so it is not triple-charged."""
+    assert metrics.false_start_tokens("it was it was really really bad", "it was really bad") == ()
+
+
+def test_hesitation_is_never_an_abandonment_however_many_words_it_runs_to():
+    """Otherwise "you know" and "okay so" would be charged as abandoned phrases."""
+    for spoken in (
+        "um ship it on friday",
+        "you know ship it on friday",
+        "okay so ship it on friday",
+        "ship it on, I mean, friday",
+    ):
+        assert metrics.false_start_tokens(spoken, "ship it on friday") == (), spoken
+
+
+def test_the_injectors_palette_is_all_known_hesitation():
+    """A filler the scorer does not know as one reads as an abandoned phrase.
+
+    Two words of unrecognized hedging is exactly the shape `_is_abandoned` treats as a
+    false start, so adding "at the end of the day" to the injector without telling
+    `metrics.HESITATIONS` would triple the weight of its own filler.
+    """
+    from disfluency import FILLERS, OPENERS
+
+    unknown = {
+        word
+        for phrase in (*FILLERS, *OPENERS)
+        for word in metrics.normalize(phrase)
+        if word not in metrics.HESITATIONS
+    }
+    assert unknown == set()
+
+
+def test_insertion_positions_line_up_with_the_inserted_tokens():
+    """The classifier indexes the spoken side with these; an off-by-one mislabels spans."""
+    hypothesis = ["um", "ship", "it", "later", "on", "friday"]
+    alignment = metrics.align(["ship", "it", "on", "friday"], hypothesis)
+    assert len(alignment.inserted_positions) == alignment.insertions
+    assert [hypothesis[i] for i in alignment.inserted_positions] == list(alignment.inserted)
+
+
+# --------------------------------------------------------------------------
 # Feedback — derived from the pair, not from a fixed filler list
 # --------------------------------------------------------------------------
 
@@ -186,6 +308,20 @@ def test_feedback_works_for_disfluencies_no_filler_list_would_contain():
     hypothesis = "We should uhh go on Thursday."
     note = metrics.feedback(reference, source, metrics.score(reference, hypothesis))
     assert "uhh" in note
+
+
+def test_feedback_names_an_abandoned_span_apart_from_ordinary_leftovers():
+    """A reflector shown one undifferentiated list cannot tell which words cost triple."""
+    reference, spoken = ABANDONED
+    note = metrics.feedback(
+        reference,
+        spoken,
+        metrics.score(reference, "walked we drove to the um coast on friday", spoken),
+    )
+    assert "abandoned false start" in note
+    assert "walked" in note.split("left disfluencies")[0]
+    # The hedge is still reported, and still reported as the cheaper mistake.
+    assert "left disfluencies in the output: um" in note
 
 
 def test_feedback_names_dropped_content():
@@ -339,6 +475,26 @@ def test_no_cleanup_floor_sits_below_a_perfect_cleanup():
     loaded = corpus.load(source="builtin", limit=12, seed=6, severity=0.5)
     floor = corpus.no_cleanup_floor(list(loaded.utterances))
     assert 0.0 < floor["blend"] < 1.0
+
+
+def test_the_no_cleanup_floor_is_charged_the_surcharge_like_everything_else():
+    """The floor is a candidate that deleted nothing, so it keeps every false start.
+
+    It has to be measured on the same objective the candidates are, or "how much work
+    is there to do" is answering a different question than the score does.
+    """
+    rows = list(corpus.load(source="builtin", limit=12, seed=6, severity=0.5).utterances)
+    unweighted = metrics.mean([metrics.score(u.reference, u.disfluent) for u in rows])
+    assert corpus.no_cleanup_floor(rows)["content"] < unweighted["content"]
+
+
+def test_the_utterance_carries_both_sides_into_the_score():
+    """The helper exists so no call site has to remember the input; check it passes it."""
+    reference, spoken = ABANDONED
+    utterance = corpus.Utterance(reference=reference, disfluent=spoken)
+    hypothesis = "walked we drove to the coast on friday"
+    assert utterance.scored(hypothesis) == metrics.score(reference, hypothesis, spoken)
+    assert utterance.scored(hypothesis).uncorrected_false_starts == ("walked",)
 
 
 def _corpus(measurable: bool) -> corpus.Corpus:

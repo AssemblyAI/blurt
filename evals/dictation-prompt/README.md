@@ -317,6 +317,37 @@ repetition loop, a refusal) has to stay distinguishable from a merely bad one, o
 per-example Pareto front cannot prefer the near-miss. Nothing in the normal range is affected —
 the piece above zero is plain `1 - WER`, so scores from before this change still compare.
 
+### False starts are not charged like fillers
+
+One departure from plain WER, and the reason a run reports what share of its rows contain a
+false start. **A word of an abandoned span left in the output costs
+`metrics.FALSE_START_WEIGHT` errors (3) rather than one.**
+
+Flat WER made "um" and an abandoned clause worth the same, and the arithmetic then told the
+search to ignore the abandoned clause. Over 400 `nyra` rows, 15.0% of the input words have to
+be deleted, and only 3.7% of them are abandoned spans — a quarter of the surplus, sitting in
+20% of the rows at a mean of 4.1 words each. Ignoring false starts entirely cost about 0.04 of
+content score; rival instructions are separated by nearer 0.01. So the cheapest way to win was
+to polish filler removal, which is the disfluency the rewrite models already handle, and to
+leave alone the one they don't. The failures also aren't comparable: a leftover "um" reads as a
+typo, while `we wouldn't ha-` surviving in front of `we wouldn't have them` pastes a sentence
+the user never said.
+
+An abandoned span is found from the pair, not from an annotation — no corpus here labels
+reparanda. Align what was spoken against what was intended, and whatever the speaker said that
+the target does not contain is surplus; a _run_ of surplus counts as abandoned when it holds a
+**cut-off word** (`th-`, `ha-`, `store—`) or is **two or more non-hesitation words** that
+aren't a verbatim echo of the span beside them. So `it was it was really bad` stays a stammer,
+`you know` and `okay so` stay hedges, and `and they th- their tax deal` is charged at three.
+The cut-off signal is free: `_detag_nyra` already rewrites Switchboard's `th*` convention into
+`th-`, and the injector emits the same shape. On those 400 rows the rule fires on 80, and the
+no-cleanup floor moves from 0.793 to 0.706.
+
+Two consequences worth keeping in mind. `metrics.score` needs the **input** as well as the
+target, since nothing about a leftover word says whether it was abandoned — `corpus.Utterance`
+carries both sides for exactly that reason. And numbers either side of a change to
+`FALSE_START_WEIGHT` are not comparable; 1.0 restores plain WER.
+
 All three axes are printed for every candidate, with the selecting one starred, so you can
 see whether a winner gained on wording or only on punctuation. The winner is chosen on a dev
 split and re-scored on a held-out test split alongside `BASELINE` — `prior-winner`, the best
@@ -507,16 +538,16 @@ between them hold. macOS only, and off by default — it costs real transcriptio
 
 ## Files
 
-| File                         | What it holds                                                             |
-| ---------------------------- | ------------------------------------------------------------------------- |
-| `optimize_cleanup_prompt.py` | CLI, axis resolution, reporting.                                          |
-| `candidates.py`              | The instructions under test, the character cap, and the GEPA seed.        |
-| `corpus.py`                  | Sources, loading, de-tagging, splitting, the echo floor.                  |
-| `disfluency.py`              | The seeded, additive disfluency injector.                                 |
-| `metrics.py`                 | Token alignment, the two word-error-rate axes, GEPA feedback text.        |
-| `live.py`                    | Synthesis + the real `/transcribe` round trip, for `--verify-live`.       |
-| `program.py`                 | Everything that imports DSPy — the program, metrics adapters, optimizers. |
-| `test_eval.py`               | Offline tests for injection, scoring, de-tagging, loading, and splitting. |
+| File                         | What it holds                                                                                 |
+| ---------------------------- | --------------------------------------------------------------------------------------------- |
+| `optimize_cleanup_prompt.py` | CLI, axis resolution, reporting.                                                              |
+| `candidates.py`              | The instructions under test, the character cap, and the GEPA seed.                            |
+| `corpus.py`                  | Sources, loading, de-tagging, splitting, the echo floor.                                      |
+| `disfluency.py`              | The seeded, additive disfluency injector.                                                     |
+| `metrics.py`                 | Token alignment, the two word-error-rate axes, the false-start surcharge, GEPA feedback text. |
+| `live.py`                    | Synthesis + the real `/transcribe` round trip, for `--verify-live`.                           |
+| `program.py`                 | Everything that imports DSPy — the program, metrics adapters, optimizers.                     |
+| `test_eval.py`               | Offline tests for injection, scoring, de-tagging, loading, and splitting.                     |
 
 ```bash
 python3 -m pytest evals/dictation-prompt/test_eval.py

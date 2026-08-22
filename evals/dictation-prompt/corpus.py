@@ -171,6 +171,18 @@ class Utterance:
         """False when input and target already match — a don't-over-edit example."""
         return metrics.normalize(self.disfluent) != metrics.normalize(self.reference)
 
+    def scored(self, hypothesis: str) -> metrics.Score:
+        """Score a cleanup of this utterance, both sides of the pair supplied.
+
+        Here rather than at each call site because `metrics.score` needs the input as
+        well as the target — a leftover word is only recognizable as an abandoned false
+        start, and chargeable at `metrics.FALSE_START_WEIGHT`, by looking at what was
+        spoken. Omitting it is silent: the score comes back as plain WER and looks
+        entirely reasonable. An utterance holds both sides already, so let it be the
+        thing that remembers.
+        """
+        return metrics.score(self.reference, hypothesis, self.disfluent)
+
 
 @dataclass(frozen=True)
 class Corpus:
@@ -485,6 +497,19 @@ def split(utterances: list[Utterance], seed: int, dev_size: float, test_size: fl
     return shuffled[n_test + n_dev :], shuffled[n_test : n_test + n_dev], shuffled[:n_test]
 
 
+def false_start_fraction(utterances: list[Utterance]) -> float:
+    """Share of pairs containing an abandoned span — what the surcharge can reach.
+
+    Printed next to the floor because `metrics.FALSE_START_WEIGHT` only bites on these
+    rows, so it is the number that says whether the weighting is shaping the search or
+    is a rounding error on this corpus. Pure arithmetic; no model is involved.
+    """
+    if not utterances:
+        return 0.0
+    carrying = sum(bool(metrics.false_start_tokens(u.disfluent, u.reference)) for u in utterances)
+    return carrying / len(utterances)
+
+
 def no_cleanup_floor(utterances: list[Utterance]) -> dict[str, float]:
     """Score of the corpus's disfluent side against its own target.
 
@@ -494,4 +519,4 @@ def no_cleanup_floor(utterances: list[Utterance]) -> dict[str, float]:
     can actually be in. Read it as "how much work is there to do on this corpus",
     and treat a candidate scoring below it as actively harmful.
     """
-    return metrics.mean([metrics.score(u.reference, u.disfluent) for u in utterances])
+    return metrics.mean([u.scored(u.disfluent) for u in utterances])

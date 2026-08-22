@@ -93,7 +93,7 @@ def print_table(rows: list[tuple[str, dict[str, float]]], title: str, axis: str)
 def print_samples(loaded: corpus.Corpus, count: int) -> None:
     print(f"\nExamples (showing {min(count, len(loaded))} of {len(loaded)})")
     for utterance in loaded.utterances[:count]:
-        floor = metrics.score(utterance.reference, utterance.disfluent)
+        floor = utterance.scored(utterance.disfluent)
         print(f"\n  input    : {utterance.disfluent}")
         print(f"  target   : {utterance.reference}")
         if utterance.operations:
@@ -522,6 +522,11 @@ def main(argv: list[str] | None = None) -> int:
         f"\nNo-cleanup floor ({axis}) — the corpus's disfluent side scored against its "
         f"own target, no model involved: dev {floors['dev'][axis]:.4f}, "
         f"test {floors['test'][axis]:.4f}"
+    )
+    print(
+        f"A false start left uncorrected costs {metrics.FALSE_START_WEIGHT:g} errors per word "
+        f"rather than one; {corpus.false_start_fraction(dev):.0%} of dev rows and "
+        f"{corpus.false_start_fraction(test):.0%} of test rows contain one"
     )
 
     if args.dry_run:
