@@ -135,24 +135,28 @@ A bare invocation is a full paid GEPA run, so it is worth knowing what it commit
 | `--reflection-model openai/claude-opus-4-8` | Deliberately not `--model`: a 4B model writing its own instructions is the weakest link in the loop. The `openai/` prefix is LiteLLM routing, stripped before the gateway sees it.                                                                                |
 | `--optimizer gepa` · `--start prior-winner` | Evolve from `candidates.PRIOR_WINNER` — the strongest instruction we have, and `BASELINE` — rather than restarting from a four-line candidate that knows none of what it learned. It fits the cap, so the search starts inside the feasible region.               |
 | `--auto heavy`                              | 27 reflection trials (light is 10, medium 18). This is the **only** knob that changes how many ideas get tried — corpus size does not. Merge is off: crossover needs more than one predictor, so it would only re-evaluate duplicates.                            |
-| `--split train --limit 2000`                | The sources' own held-out splits are only ~250 rows. Everything past dev and test becomes train, and train rows are free — see below.                                                                                                                             |
-| `--dev-fraction 300` (rows, not a fraction) | Dev decides which instruction ships — `BASELINE` versus the optimizer's result — and the optimizer never sees it. Sized for **resolution**: see below.                                                                                                            |
-| `--gepa-valset 150` (rows)                  | The optimizer's own valset, carved off train. Every surviving candidate is scored against all of it, so its size multiplies search cost while buying no exploration — that is `--auto` alone. Raised for the same reason as dev.                                  |
+| `--split train --limit 4000`                | The sources' own held-out splits are only ~250 rows; nyra's `train` is 4458. Everything past dev and test becomes train, and train rows are free — see below.                                                                                                     |
+| `--dev-fraction 900` (rows, not a fraction) | Dev decides which instruction ships — `BASELINE` versus the optimizer's result — and the optimizer never sees it. Sized for **resolution**: see below.                                                                                                            |
+| `--gepa-valset 450` (rows)                  | The optimizer's own valset, carved off train. Every surviving candidate is scored against all of it, so its size multiplies search cost while buying no exploration — that is `--auto` alone. Raised for the same reason as dev.                                  |
 | `--reflection-minibatch-size 8`             | Scored examples the reflector sees before rewriting. GEPA's default is 3, which on a task this well-solved is often three near-perfect examples and almost no failure to generalise from.                                                                         |
-| `--test-fraction 150` (rows)                | The honest number, from data no selection step saw. Scored twice at the end.                                                                                                                                                                                      |
+| `--test-fraction 450` (rows)                | The honest number, from data no selection step saw. Scored twice at the end.                                                                                                                                                                                      |
 | `--candidates baseline`                     | A search run scores only `BASELINE` on dev — it is the bar, the fallback and the seed at once, so the other six cost a dev sweep each to re-rank instructions the search never uses. `--optimizer none` scores all of them, since there the ranking is the point. |
 | `--num-threads 1`                           | The gateway rate-limits; a 429 storm mid-run costs more wall-clock than the concurrency saves. Raise it for a provider that tolerates it.                                                                                                                         |
 | `--max-tokens 8192`                         | Headroom for reasoning tokens, not for the answer. Truncation here is silently corrupting — see below.                                                                                                                                                            |
 
-That leaves **train 1400 / optimizer valset 150 / dev 300 / test 150**, for roughly 3,000 model
-calls: 300 to score `BASELINE`, ~2,085 for the search, 300 to re-score its result, and 300 for
-the two held-out scorings at the end.
+That leaves **train 2200 / optimizer valset 450 / dev 900 / test 450**, for roughly 8,700 model
+calls: 900 to score `BASELINE`, ~6,000 for the search, 900 to re-score its result, and 900 for
+the two held-out scorings at the end. At `--num-threads 1` that is a few hours; raise it if the
+gateway tolerates the parallelism.
 
 **Why the two evaluation sets are this large.** The binding constraint on finding a winner is
 not search budget, it is measurement. A search once beat the seed by +0.008 on a 50-row valset
 and lost to it by 0.006 on a 150-row dev split — both differences inside the run-to-run noise,
 so the run spent 27 reflection trials producing a number that could not be trusted either way.
-More trials sample the same noise more often; more rows shrink it. Raising the valset also
+A later `--auto heavy` run landed 0.001 behind its seed on 300 dev rows, which is the same
+non-answer at three times the cost. More trials sample the same noise more often; more rows
+shrink it — as the square root, so the 3x here is worth about 42% of it, and nothing cheaper
+buys any. Raising the valset also
 matters on its own, because GEPA's Pareto front ranks candidates per validation example, and at
 50 rows it was ordering them on differences it could not resolve — then handing dev a winner
 dev rejected.
@@ -296,9 +300,11 @@ Two consequences worth holding onto when reading a result:
 
 - A winner is only as transferable as `--model` is representative of the service's rewrite
   model, which runs under a ~5s budget and is probably much smaller.
-- Confirming a win against the live default would mean sending real audio to
-  `dictation.assemblyai.com/transcribe` with an empty `llm` block and comparing. That is a
-  separate exercise, not this one.
+- Confirming a win against the live default means sending real audio to
+  `dictation.assemblyai.com/transcribe` with an empty `llm` block and comparing. That is
+  `--verify-live --verify-baseline`, and for the current winner it has been done — see
+  [Verifying on the model that actually runs it](#verifying-on-the-model-that-actually-runs-it).
+  It is a separate measurement from everything above, not a property of these scores.
 
 ## Reading the results
 
@@ -316,6 +322,37 @@ the score keeps going, decaying toward -1 rather than clipping: a degenerate out
 repetition loop, a refusal) has to stay distinguishable from a merely bad one, or GEPA's
 per-example Pareto front cannot prefer the near-miss. Nothing in the normal range is affected —
 the piece above zero is plain `1 - WER`, so scores from before this change still compare.
+
+### False starts are not charged like fillers
+
+One departure from plain WER, and the reason a run reports what share of its rows contain a
+false start. **A word of an abandoned span left in the output costs
+`metrics.FALSE_START_WEIGHT` errors (5) rather than one.**
+
+Flat WER made "um" and an abandoned clause worth the same, and the arithmetic then told the
+search to ignore the abandoned clause. Over 400 `nyra` rows, 15.0% of the input words have to
+be deleted, and only 3.7% of them are abandoned spans — a quarter of the surplus, sitting in
+20% of the rows at a mean of 4.1 words each. Ignoring false starts entirely cost about 0.04 of
+content score; rival instructions are separated by nearer 0.01. So the cheapest way to win was
+to polish filler removal, which is the disfluency the rewrite models already handle, and to
+leave alone the one they don't. The failures also aren't comparable: a leftover "um" reads as a
+typo, while `we wouldn't ha-` surviving in front of `we wouldn't have them` pastes a sentence
+the user never said.
+
+An abandoned span is found from the pair, not from an annotation — no corpus here labels
+reparanda. Align what was spoken against what was intended, and whatever the speaker said that
+the target does not contain is surplus; a _run_ of surplus counts as abandoned when it holds a
+**cut-off word** (`th-`, `ha-`, `store—`) or is **two or more non-hesitation words** that
+aren't a verbatim echo of the span beside them. So `it was it was really bad` stays a stammer,
+`you know` and `okay so` stay hedges, and `and they th- their tax deal` is charged at three.
+The cut-off signal is free: `_detag_nyra` already rewrites Switchboard's `th*` convention into
+`th-`, and the injector emits the same shape. On those 400 rows the rule fires on 80, and the
+no-cleanup floor moves from 0.797 to 0.658.
+
+Two consequences worth keeping in mind. `metrics.score` needs the **input** as well as the
+target, since nothing about a leftover word says whether it was abandoned — `corpus.Utterance`
+carries both sides for exactly that reason. And numbers either side of a change to
+`FALSE_START_WEIGHT` are not comparable; 1.0 restores plain WER.
 
 All three axes are printed for every candidate, with the selecting one starred, so you can
 see whether a winner gained on wording or only on punctuation. The winner is chosen on a dev
@@ -496,6 +533,32 @@ The response answers both halves at once. `text` is the verbatim transcript, so
 `llm_response` is that transcript after the **real** rewrite model applied the instruction. The
 gap is what the instruction bought.
 
+### What it said about the shipped instruction
+
+Twenty held-out utterances, same synthesized audio for every arm, no rewrite failures:
+
+| instruction                            | delivered  | gain over no rewrite |
+| -------------------------------------- | ---------- | -------------------- |
+| _(no rewrite at all — the floor)_      | 0.3365     | —                    |
+| service default (empty `llm` block)    | 0.3561     | +0.0196              |
+| the instruction before the current one | 0.3608     | +0.0243              |
+| **`prior-winner` as it ships today**   | **0.4107** | **+0.0742**          |
+
+That settles the question this section exists to ask, in both directions. Read the **gain**
+column, not the delivered score: the transcript is already there, so the instruction's whole job
+is the delta above the floor, and both arms start from a byte-identical transcript. On that
+measure the shipped instruction adds **+0.0498 more than its predecessor** — 3.1x as much
+improvement, though a ratio of two small numbers on twenty rows is the fragile way to say it.
+It is also the first instruction here measured **above the service's own default wording**
+rather than assumed to be — the harness had never been able to say that. Note the ordering also survived the trip from
+the stand-in, where the same pair differed by only +0.0134: a text-harness win of that size did
+transfer, and grew.
+
+It is twenty rows of synthesized speech, so read the ranking rather than the numbers. The
+sampled outputs are worth reading too — they are what showed that the instruction's aggressive
+deletion of a leading "yeah" / "well" is _earning_ the gain rather than over-editing, which is
+the opposite of what was expected of that clause and is not visible in a mean.
+
 `--verify-baseline` runs the same audio again with an empty `llm` block. That is the wording
 Blurt ships today, so it is the comparison `guessed-default` could only ever guess at — the one
 the README has flagged as unanswerable since this harness was written.
@@ -507,16 +570,16 @@ between them hold. macOS only, and off by default — it costs real transcriptio
 
 ## Files
 
-| File                         | What it holds                                                             |
-| ---------------------------- | ------------------------------------------------------------------------- |
-| `optimize_cleanup_prompt.py` | CLI, axis resolution, reporting.                                          |
-| `candidates.py`              | The instructions under test, the character cap, and the GEPA seed.        |
-| `corpus.py`                  | Sources, loading, de-tagging, splitting, the echo floor.                  |
-| `disfluency.py`              | The seeded, additive disfluency injector.                                 |
-| `metrics.py`                 | Token alignment, the two word-error-rate axes, GEPA feedback text.        |
-| `live.py`                    | Synthesis + the real `/transcribe` round trip, for `--verify-live`.       |
-| `program.py`                 | Everything that imports DSPy — the program, metrics adapters, optimizers. |
-| `test_eval.py`               | Offline tests for injection, scoring, de-tagging, loading, and splitting. |
+| File                         | What it holds                                                                                 |
+| ---------------------------- | --------------------------------------------------------------------------------------------- |
+| `optimize_cleanup_prompt.py` | CLI, axis resolution, reporting.                                                              |
+| `candidates.py`              | The instructions under test, the character cap, and the GEPA seed.                            |
+| `corpus.py`                  | Sources, loading, de-tagging, splitting, the echo floor.                                      |
+| `disfluency.py`              | The seeded, additive disfluency injector.                                                     |
+| `metrics.py`                 | Token alignment, the two word-error-rate axes, the false-start surcharge, GEPA feedback text. |
+| `live.py`                    | Synthesis + the real `/transcribe` round trip, for `--verify-live`.                           |
+| `program.py`                 | Everything that imports DSPy — the program, metrics adapters, optimizers.                     |
+| `test_eval.py`               | Offline tests for injection, scoring, de-tagging, loading, and splitting.                     |
 
 ```bash
 python3 -m pytest evals/dictation-prompt/test_eval.py

@@ -158,7 +158,10 @@ def make_feedback_metric(axis: str):
 
     def scorer(gold, pred, trace=None, pred_name=None, pred_trace=None, **_):
         hypothesis = _cleaned(pred)
-        scored = metrics.score(getattr(gold, OUTPUT_FIELD), hypothesis)
+        # The input as well as the target: `metrics.score` charges a leftover false
+        # start `FALSE_START_WEIGHT` errors, and only the spoken side says which
+        # leftovers were abandoned.
+        scored = metrics.score(getattr(gold, OUTPUT_FIELD), hypothesis, getattr(gold, INPUT_FIELD))
         return dspy.Prediction(
             score=scored.value(axis),
             feedback=metrics.feedback(
@@ -212,7 +215,7 @@ def evaluate(
     predictions = runner([(counted, {INPUT_FIELD: u.disfluent}) for u in utterances])
     return metrics.mean(
         [
-            metrics.score(utterance.reference, _cleaned(prediction))
+            utterance.scored(_cleaned(prediction))
             for utterance, prediction in zip(utterances, predictions, strict=True)
         ]
     )
