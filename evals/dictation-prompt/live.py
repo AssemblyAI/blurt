@@ -17,6 +17,13 @@ score. `llm_response` is that transcript after the real rewrite model applied th
 real instruction, so `score(reference, llm_response)` is the number the product
 actually delivers. The gap between them is what the instruction bought.
 
+The verbatim transcript is also what the false-start surcharge is measured against here
+(`metrics.FALSE_START_WEIGHT`), since it is what the rewrite model was handed. It is a
+noisier input than a corpus row: `say` produces no cut-off words at all, so the abandoned
+spans the classifier finds are whatever the STT pass and the annotation-free heuristic
+agree on. Same transcript for every candidate, so the comparison holds; the absolute
+figure carries even less meaning here than the rest of this file's do.
+
 **What this does and does not establish.** The same audio is used for every candidate,
 so the *ranking* is sound. The absolute numbers are not comparable to the text
 harness's: synthesized speech is not dictated speech, `say` reads "um" as a word
@@ -140,12 +147,12 @@ class LiveResult:
     @property
     def floor(self) -> metrics.Score:
         """What pasting the unrewritten transcript would have scored."""
-        return metrics.score(self.reference, self.verbatim)
+        return metrics.score(self.reference, self.verbatim, self.verbatim)
 
     @property
     def scored(self) -> metrics.Score:
         """What the instruction actually delivered."""
-        return metrics.score(self.reference, self.rewritten)
+        return metrics.score(self.reference, self.rewritten, self.verbatim)
 
 
 def synthesize_all(utterances: list[Utterance]) -> list[tuple[Utterance, bytes]]:
