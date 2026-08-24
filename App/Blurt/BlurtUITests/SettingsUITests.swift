@@ -126,8 +126,16 @@ final class SettingsUITests: BlurtUITestCase {
     alert.buttons["OK"].click()
   }
 
-  /// The Advanced pane's reset button asks first, and Cancel leaves the install
-  /// exactly as it was — the stored key is still connected afterwards.
+  /// The Advanced pane's reset button asks first, and dismissing the
+  /// confirmation leaves the install exactly as it was.
+  ///
+  /// Everything happens on the Advanced pane, against the developer-mode switch
+  /// — one of the settings `PersistedSettings.resetAll` clears — so "nothing was
+  /// reset" is observable without switching tabs or opening the API-key sheet.
+  /// That isn't tidiness: the sheet leaves its own "Cancel" in the accessibility
+  /// tree, which made an app-level query for the alert's Cancel ambiguous, and
+  /// dismissing with Escape instead closed the settings window along with the
+  /// alert and took the follow-up assertions with it.
   ///
   /// The *confirming* path is deliberately not exercised: it revokes the app's
   /// TCC grants and restarts Blurt, so an automated click of it would take the
@@ -136,17 +144,23 @@ final class SettingsUITests: BlurtUITestCase {
   /// `InstallResetTests`.
   func testResetAsksBeforeDoingAnything() {
     let settings = openSettingsWindow()
-    connectValidKey(settings)
     let advanced = selectSettingsTab(settings, named: UITestIdentifiers.advancedSettingsTab)
 
-    let button = advanced.anyDescendant(identified: UITestIdentifiers.installReset)
-    XCTAssertTrue(button.waitForExistence(timeout: 10), "Reset button not found")
-    button.click()
+    // Switch on a setting the sweep would clear, so a reset that ran anyway is
+    // visible in the same pane. (The UI-test launch resets persisted settings,
+    // so this starts off.)
+    let developerMode = advanced.anyDescendant(identified: UITestIdentifiers.developerToggle)
+    XCTAssertTrue(developerMode.waitForExistence(timeout: 10), "Developer mode toggle not found")
+    developerMode.click()
+    XCTAssertEqual("\(developerMode.value ?? "")", "1", "Clicking should switch developer mode on")
+
+    let reset = advanced.anyDescendant(identified: UITestIdentifiers.installReset)
+    XCTAssertTrue(reset.waitForExistence(timeout: 10), "Reset button not found")
+    reset.click()
 
     // Queried off `app`, not off the settings window: a SwiftUI `.alert` isn't
-    // necessarily a sheet of the window it was declared in (the API-key
-    // `.sheet` above is), so the confirmation is identified by the words on it
-    // wherever AppKit chose to put it.
+    // necessarily a sheet of the window it was declared in, so the confirmation
+    // is identified by the words on it wherever AppKit chose to put it.
     let confirmationTitle = app.staticTexts["Reset Blurt?"]
     XCTAssertTrue(
       confirmationTitle.waitForExistence(timeout: 10),
@@ -154,24 +168,16 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertTrue(
       app.buttons["Reset and Restart"].exists,
       "The confirmation should say that Blurt restarts when the reset finishes")
-    // Dismissed with Escape, not by clicking "Cancel": this test opened the
-    // API-key sheet earlier and its own Cancel is still in the accessibility
-    // tree, so an app-level query for that title matches more than one element.
-    // Escape is what the `.cancel` role binds, so it exercises the same button.
-    app.typeKey(.escape, modifierFlags: [])
+
+    // `.firstMatch` so the query resolves to an element rather than erroring out
+    // if anything else on screen ever carries the same title.
+    app.buttons["Cancel"].firstMatch.click()
 
     XCTAssertTrue(
-      confirmationTitle.waitForNonExistence(timeout: 5),
-      "Escape should dismiss the confirmation without resetting anything")
-
-    // Reopened rather than reused: an unmodified Escape falls through to the
-    // window behind the alert, so the settings window may have closed with it.
-    // What this assertion is about is the stored key, not which window survived
-    // the keystroke — and `openSettingsWindow` no-ops when one is still up.
-    let general = selectSettingsTab(openSettingsWindow(), named: UITestIdentifiers.generalSettingsTab)
-    XCTAssertTrue(
-      general.staticTexts[UITestIdentifiers.apiKeySavedStatus].waitForExistence(timeout: 5),
-      "Dismissing the confirmation should leave the stored key alone")
+      confirmationTitle.waitForNonExistence(timeout: 5), "Cancel should dismiss the confirmation")
+    XCTAssertEqual(
+      "\(developerMode.value ?? "")", "1",
+      "Cancelling the confirmation should leave the settings alone")
   }
 
   /// After a key is stored, "Change…" re-opens the sheet so it can be rotated.
