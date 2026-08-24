@@ -163,10 +163,15 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertTrue(
       confirmationTitle.waitForNonExistence(timeout: 5),
       "Escape should dismiss the confirmation without resetting anything")
-    let general = selectSettingsTab(settings, named: UITestIdentifiers.generalSettingsTab)
+
+    // Reopened rather than reused: an unmodified Escape falls through to the
+    // window behind the alert, so the settings window may have closed with it.
+    // What this assertion is about is the stored key, not which window survived
+    // the keystroke — and `openSettingsWindow` no-ops when one is still up.
+    let general = selectSettingsTab(openSettingsWindow(), named: UITestIdentifiers.generalSettingsTab)
     XCTAssertTrue(
       general.staticTexts[UITestIdentifiers.apiKeySavedStatus].waitForExistence(timeout: 5),
-      "Cancelling the reset should leave the stored key alone")
+      "Dismissing the confirmation should leave the stored key alone")
   }
 
   /// After a key is stored, "Change…" re-opens the sheet so it can be rotated.
