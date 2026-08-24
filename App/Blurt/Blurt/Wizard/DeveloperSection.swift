@@ -54,23 +54,48 @@ struct DeveloperSection: View {
 /// step — two Blurts running at once would mean two event taps racing for the
 /// trigger key.
 struct ResetSection: View {
+  /// What the section is asking or telling, or nil while it's silent.
+  ///
+  /// **One piece of state and one `.alert` modifier**, because two `.alert`s on
+  /// the same view is the classic SwiftUI conflict where only one of them ever
+  /// presents — with the report attached second, the confirmation never opened
+  /// at all, which is how `SettingsUITests` caught it.
+  private enum Prompt {
+    /// Asked before anything happens. A reset is irreversible and machine-wide,
+    /// so the button opens this rather than acting on the click.
+    case confirm
+    /// Only shown when part of the sweep survived. A clean reset says nothing:
+    /// the app quitting is the confirmation.
+    case failed(InstallReset.AlertContent)
+
+    var title: String {
+      switch self {
+      case .confirm: "Reset Blurt?"
+      case .failed(let content): content.title
+      }
+    }
+
+    var message: String {
+      switch self {
+      case .confirm:
+        "This can’t be undone. Your AssemblyAI API key, every setting, the dictation logs, and "
+          + "Blurt’s microphone, accessibility and input-monitoring permissions are all removed.\n\n"
+          + "Blurt then quits. Open it again to set up from scratch."
+      case .failed(let content): content.message
+      }
+    }
+  }
+
   let coordinator: AppCoordinator
 
-  /// Drives the confirmation. A reset is irreversible and machine-wide, so the
-  /// button asks first — and the alert's default action is Cancel (the
-  /// destructive button never takes Return).
-  @State private var isConfirming = false
-  /// The partial-reset alert's content, or nil when there's nothing to report.
-  /// Set only when a step failed; a clean reset says nothing, because the app
-  /// quitting is the confirmation.
-  @State private var failure: InstallReset.AlertContent?
+  @State private var prompt: Prompt?
 
   var body: some View {
     Section {
       // Ellipsis for the same reason as "Connect…" and "Add Style…": the button
       // opens something rather than completing the action.
       SettingRow(title: "Reset Blurt", systemImage: "arrow.counterclockwise") {
-        Button("Reset…", role: .destructive) { isConfirming = true }
+        Button("Reset…", role: .destructive) { prompt = .confirm }
           .accessibilityIdentifier(UITestIdentifiers.installReset)
       }
     } header: {
@@ -80,33 +105,30 @@ struct ResetSection: View {
         "Deletes your AssemblyAI API key, clears every setting, removes the dictation logs, and "
           + "revokes Blurt’s microphone, accessibility and input-monitoring permissions.")
     }
-    .alert("Reset Blurt?", isPresented: $isConfirming) {
-      // Matched by title in the UI suite, like the update alert's "OK": alert
-      // buttons are addressed by the words on them, and an identifier here
-      // wouldn't survive AppKit's alert bridging anyway.
-      Button("Reset and Quit", role: .destructive, action: reset)
-      Button("Cancel", role: .cancel) {}
-    } message: {
-      Text(
-        "This can’t be undone. Your AssemblyAI API key, every setting, the dictation logs, and "
-          + "Blurt’s microphone, accessibility and input-monitoring permissions are all removed.\n\n"
-          + "Blurt then quits. Open it again to set up from scratch.")
-    }
-    // Only a *partial* reset is reported, and as an alert rather than inline:
-    // the app is still running with some of its old state, which is a fault the
-    // user has to know about — retrying the button is the only thing that can
-    // fix it.
-    .alert(failure?.title ?? "", isPresented: isReportingFailure, presenting: failure) { _ in
-      Button("OK") {}
-    } message: { content in
-      Text(content.message)
+    // Alert buttons are addressed by the words on them in the UI suite, like the
+    // update alert's "OK" — an identifier here wouldn't survive AppKit's alert
+    // bridging. Cancel stays the default action; the destructive one never takes
+    // Return.
+    .alert(prompt?.title ?? "", isPresented: isPrompting, presenting: prompt) { prompt in
+      switch prompt {
+      case .confirm:
+        // Deferred a turn: setting `prompt` straight from an alert action
+        // re-enters presentation while this alert is still dismissing, and
+        // SwiftUI swallows it — so the failure report would never appear.
+        Button("Reset and Quit", role: .destructive) { Task { @MainActor in reset() } }
+        Button("Cancel", role: .cancel) {}
+      case .failed:
+        Button("OK", role: .cancel) {}
+      }
+    } message: { prompt in
+      Text(prompt.message)
     }
   }
 
-  /// Presentation binding for the failure alert, derived from the content so
-  /// there's one piece of state rather than a bool that can disagree with it.
-  private var isReportingFailure: Binding<Bool> {
-    Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })
+  /// Presentation binding derived from `prompt`, so there's one piece of state
+  /// rather than a bool that can disagree with it.
+  private var isPrompting: Binding<Bool> {
+    Binding(get: { prompt != nil }, set: { if !$0 { prompt = nil } })
   }
 
   /// Runs the sweep, then quits — or reports what survived and stays put.
@@ -118,7 +140,7 @@ struct ResetSection: View {
   /// through the model's own storage seam, so a UI-test run sweeps its in-memory
   /// store instead of the developer's Keychain item.
   private func reset() {
-    let alert = InstallReset(
+    let report = InstallReset(
       bundleID: Bundle.main.bundleIdentifier ?? HostIdentity.current.subsystem,
       keyStore: coordinator.apiKey.storage
     ).run()
@@ -129,10 +151,10 @@ struct ResetSection: View {
     // Nothing to report means the install is clean; the app quitting is the
     // whole confirmation, so a success alert would only be one more click
     // between the user and the relaunch they need.
-    guard let alert else {
+    guard let report else {
       NSApp.terminate(nil)
       return
     }
-    failure = alert
+    prompt = .failed(report)
   }
 }

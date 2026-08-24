@@ -143,15 +143,21 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertTrue(button.waitForExistence(timeout: 10), "Reset button not found")
     button.click()
 
-    let confirmation = settings.sheets.firstMatch
+    // Queried off `app`, not off the settings window: a SwiftUI `.alert` isn't
+    // necessarily a sheet of the window it was declared in (the API-key
+    // `.sheet` above is), so the confirmation is identified by the words on it
+    // wherever AppKit chose to put it.
+    let confirmationTitle = app.staticTexts["Reset Blurt?"]
     XCTAssertTrue(
-      confirmation.waitForExistence(timeout: 10),
+      confirmationTitle.waitForExistence(timeout: 10),
       "Reset should ask for confirmation rather than acting on the click")
-    XCTAssertTrue(confirmation.staticTexts["Reset Blurt?"].exists)
-    confirmation.buttons["Cancel"].click()
+    XCTAssertTrue(
+      app.buttons["Reset and Quit"].exists,
+      "The confirmation should say that Blurt quits when the reset finishes")
+    app.buttons["Cancel"].click()
 
     XCTAssertTrue(
-      confirmation.waitForNonExistence(timeout: 5), "Cancel should dismiss the confirmation")
+      confirmationTitle.waitForNonExistence(timeout: 5), "Cancel should dismiss the confirmation")
     let general = selectSettingsTab(settings, named: UITestIdentifiers.generalSettingsTab)
     XCTAssertTrue(
       general.staticTexts[UITestIdentifiers.apiKeySavedStatus].waitForExistence(timeout: 5),
