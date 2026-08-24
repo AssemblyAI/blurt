@@ -251,6 +251,17 @@ from inheriting a released Blurt's TCC rows while failing the requirement stored
 means both can be installed and run side by side. The debug id is the _default_ and `Release` opts
 in to the shipping one, so a configuration added later can't accidentally ship under it.
 
+**The Keychain is the one store the id split doesn't separate for you.** Keychain items are per
+_login keychain_, not per app, so both builds resolved the same `blurt` generic-password item however
+different their bundle ids were — a dev build read the shipping app's API key, could overwrite it,
+and (once Settings grew a Reset) could delete it. `HostIdentity.blurtDev` gives the debug build its
+own `blurt-dev` item, and `BlurtApp.init` picks between the two identities by the **running bundle
+id** — which follows `PRODUCT_BUNDLE_IDENTIFIER`, so a new configuration inherits the dev identity
+rather than reaching for the shipping key because someone forgot a `#if DEBUG`. Only that one field
+differs: the log subsystem stays shared (the documented `log show` predicates have to work whichever
+build is running) and so does the defaults prefix (defaults are per-app already). The cost is one
+extra trip through the wizard the first time you run a dev build after this landed.
+
 `scripts/dev-build.sh` wraps that for everyday local dev — it runs the **signed** `Debug-Local` build
 (so the install step actually fires, unlike `check.sh`, which disables codesigning for CI) and pipes
 through `xcbeautify` when present. [`CONTRIBUTING.md`](./CONTRIBUTING.md) is the setup guide for
@@ -793,8 +804,10 @@ developer-mode logs go to, the product name update alerts say, and the GitHub re
 check reads. These were hard constants, which made them Blurt's with no opt-out — a second app
 embedding the engine wrote into _Blurt's_ Keychain item, log directory and defaults keys. They are
 one value now; `HostIdentity.current` is what the engine reads, `.blurt` is what an unconfigured host
-inherits (so nothing about this app changed), and `BlurtApp.init` calls `HostIdentity.configure(_:)`
-with it because the identity belongs to the host, not the engine. It is process-wide rather than
+inherits, and `BlurtApp.init` calls `HostIdentity.configure(_:)` because the identity belongs to the
+host, not the engine — with `.blurt` or `.blurtDev` depending on the running bundle id, the two
+differing only in the Keychain service (see
+[Dev builds are a separate app](#regenerating-and-installing-the-app)). It is process-wide rather than
 injected for the obvious reason: its readers are `static let` loggers, an enum of defaults keys and a
 Keychain facade, none of which a caller constructs. The derivations are pure functions of the value
 (`defaultsKey(_:)`, `logURL(_:)`, `queueLabel(_:)`, `logger(_:)`) so the tests exercise them against

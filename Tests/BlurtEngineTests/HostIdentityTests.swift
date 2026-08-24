@@ -35,6 +35,30 @@ struct HostIdentityTests {
     #expect(HostIdentity.blurt.keychainService == "blurt")
   }
 
+  @Test("the debug build's Keychain service matches the value scripts hard-code")
+  func devKeychainServicePinned() {
+    // Same contract as the shipping service above: `scripts/reset-install.sh`
+    // lists this string in `KEYCHAIN_SERVICES`, and bash can't read the
+    // constant. Renaming it here means renaming it there in the same change.
+    #expect(HostIdentity.blurtDev.keychainService == "blurt-dev")
+  }
+
+  /// The whole point of the debug identity, stated as an invariant: a dev build
+  /// must not reach the shipping app's Keychain item, and must not gain a second
+  /// log subsystem, defaults namespace or log directory in the process — one
+  /// subsystem across both builds is what keeps the documented `log show`
+  /// predicates valid, and a different defaults prefix would abandon every dev
+  /// install's settings for nothing.
+  @Test("the debug identity differs from the shipping one only in the Keychain service")
+  func devDiffersOnlyInTheKeychainService() {
+    #expect(HostIdentity.blurtDev.keychainService != HostIdentity.blurt.keychainService)
+    #expect(HostIdentity.blurtDev.subsystem == HostIdentity.blurt.subsystem)
+    #expect(HostIdentity.blurtDev.defaultsPrefix == HostIdentity.blurt.defaultsPrefix)
+    #expect(HostIdentity.blurtDev.logDirectoryName == HostIdentity.blurt.logDirectoryName)
+    #expect(HostIdentity.blurtDev.productName == HostIdentity.blurt.productName)
+    #expect(HostIdentity.blurtDev.releaseURL == HostIdentity.blurt.releaseURL)
+  }
+
   @Test("an unconfigured engine is Blurt")
   func defaultsToBlurt() {
     // The whole compatibility claim of making these host-supplied: a host that

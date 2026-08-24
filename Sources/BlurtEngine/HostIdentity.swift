@@ -45,8 +45,16 @@ public struct HostIdentity: Sendable, Equatable {
 
   /// The Keychain service for the API key item. Blurt uses the plain app name,
   /// so the entry appears as "blurt" in Keychain Access instead of a
-  /// developer-domain string; it must match `KEYCHAIN_SERVICE` in
+  /// developer-domain string; it must match one of the `KEYCHAIN_SERVICES` in
   /// `scripts/reset-install.sh`.
+  ///
+  /// **This is the one store the debug/release split doesn't separate for
+  /// free.** Keychain items are per *login keychain*, not per app, so both
+  /// builds resolved the same `blurt` item however different their bundle ids
+  /// were: a dev build read the shipping app's key, could overwrite it, and — once
+  /// Settings grew a Reset — could delete it. `.blurtDev` gives the debug build
+  /// its own item; `BlurtApp.init` picks between the two by the running bundle
+  /// id.
   ///
   /// This is the one gap a host could already work around before the identity
   /// existed — compose against `APIKeyGateway` with your own conformance instead
@@ -103,6 +111,35 @@ public struct HostIdentity: Sendable, Equatable {
     logDirectoryName: "Blurt",
     releaseURL: URL(
       staticString: "https://api.github.com/repos/AssemblyAI/blurt/releases/latest"))
+
+  /// The identity a **debug build** of Blurt runs under — "Blurt Dev", which
+  /// macOS already treats as a separate app (its own bundle id, TCC rows and
+  /// defaults domain). Only `keychainService` differs from `.blurt`, because the
+  /// Keychain is the only store that isn't separated by the bundle id already
+  /// (see that property).
+  ///
+  /// The log subsystem is deliberately *not* changed: one subsystem across both
+  /// builds is what keeps the documented `log show` predicates valid whichever
+  /// one is running (see `subsystem`). Nor is `defaultsPrefix` — defaults are
+  /// per-app already, and changing the prefix would abandon every dev install's
+  /// settings for nothing.
+  ///
+  /// `scripts/reset-install.sh` hard-codes this service alongside the shipping
+  /// one (bash can't read this constant); `HostIdentityTests` pins both.
+  public static let blurtDev = blurt.withKeychainService("blurt-dev")
+
+  /// This identity with a different Keychain service. Private: the two values
+  /// Blurt ships are the two above, and a host that wants a third builds it with
+  /// the initializer rather than deriving one from Blurt's.
+  private func withKeychainService(_ service: String) -> HostIdentity {
+    HostIdentity(
+      productName: productName,
+      subsystem: subsystem,
+      keychainService: service,
+      defaultsPrefix: defaultsPrefix,
+      logDirectoryName: logDirectoryName,
+      releaseURL: releaseURL)
+  }
 
   /// The identity every engine component reads. `.blurt` until a host calls
   /// `configure(_:)`.
