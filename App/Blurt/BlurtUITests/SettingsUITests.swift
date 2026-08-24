@@ -165,13 +165,25 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertTrue(
       confirmationTitle.waitForExistence(timeout: 10),
       "Reset should ask for confirmation rather than acting on the click")
+
+    // Every button query below is scoped to the alert rather than to `app`:
+    // the runner mirrors an alert's buttons into a simulated Touch Bar, so an
+    // app-level "Cancel" matches twice and resolves to the Touch Bar copy,
+    // which XCUITest refuses to click ("cannot be called with Touch Bar
+    // elements"). AppKit decides whether a SwiftUI alert is a sheet on its
+    // window or a free-standing dialog, so accept either.
+    guard let confirmation = [app.sheets.firstMatch, app.dialogs.firstMatch].first(where: { $0.exists })
+    else {
+      // Dump the tree rather than just failing: which element the alert is, is
+      // the one thing this test can't find out from a red CI run.
+      XCTFail("The confirmation is neither a sheet nor a dialog:\n\(app.debugDescription)")
+      return
+    }
     XCTAssertTrue(
-      app.buttons["Reset and Restart"].exists,
+      confirmation.buttons["Reset and Restart"].exists,
       "The confirmation should say that Blurt restarts when the reset finishes")
 
-    // `.firstMatch` so the query resolves to an element rather than erroring out
-    // if anything else on screen ever carries the same title.
-    app.buttons["Cancel"].firstMatch.click()
+    confirmation.buttons["Cancel"].click()
 
     XCTAssertTrue(
       confirmationTitle.waitForNonExistence(timeout: 5), "Cancel should dismiss the confirmation")
