@@ -1,4 +1,3 @@
-import Foundation
 import Security
 
 /// The integration adapter for the signing-identity migration: reads the
