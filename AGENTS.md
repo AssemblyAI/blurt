@@ -251,6 +251,17 @@ from inheriting a released Blurt's TCC rows while failing the requirement stored
 means both can be installed and run side by side. The debug id is the _default_ and `Release` opts
 in to the shipping one, so a configuration added later can't accidentally ship under it.
 
+**The Keychain is the one store the id split doesn't separate for you.** Keychain items are per
+_login keychain_, not per app, so both builds resolved the same `blurt` generic-password item however
+different their bundle ids were — a dev build read the shipping app's API key, could overwrite it,
+and (once Settings grew a Reset) could delete it. `HostIdentity.blurtDev` gives the debug build its
+own `blurt-dev` item, and `BlurtApp.init` picks between the two identities by the **running bundle
+id** — which follows `PRODUCT_BUNDLE_IDENTIFIER`, so a new configuration inherits the dev identity
+rather than reaching for the shipping key because someone forgot a `#if DEBUG`. Only that one field
+differs: the log subsystem stays shared (the documented `log show` predicates have to work whichever
+build is running) and so does the defaults prefix (defaults are per-app already). The cost is one
+extra trip through the wizard the first time you run a dev build after this landed.
+
 `scripts/dev-build.sh` wraps that for everyday local dev — it runs the **signed** `Debug-Local` build
 (so the install step actually fires, unlike `check.sh`, which disables codesigning for CI) and pipes
 through `xcbeautify` when present. [`CONTRIBUTING.md`](./CONTRIBUTING.md) is the setup guide for
@@ -283,8 +294,9 @@ identity recorded in `accessibility.lastSigningTeam`; if it changed and the app 
 `tccutil reset Accessibility` on **the running bundle id** (never `HostIdentity.current.subsystem`, which
 would have a dev build clearing the release's grant) so the wizard's normal grant flow captures a
 matching requirement, and records the new identity only when the reset succeeded.
-`SigningIdentityMigration` is the pure decision; `SigningIdentity` is the thin `Security`/`tccutil`
-adapter.
+`SigningIdentityMigration` is the pure decision; `SigningIdentity` reads the requirement (the thin
+`Security` adapter) and `PermissionsReset` runs the `tccutil` call — the same adapter the Settings
+window's reset button sweeps every grant through.
 
 Recording the requirement itself, rather than a proxy for it, is the point: this used to record the
 **Team ID**, which is stable across exactly the collision above (release and dev builds share team
@@ -792,8 +804,10 @@ developer-mode logs go to, the product name update alerts say, and the GitHub re
 check reads. These were hard constants, which made them Blurt's with no opt-out — a second app
 embedding the engine wrote into _Blurt's_ Keychain item, log directory and defaults keys. They are
 one value now; `HostIdentity.current` is what the engine reads, `.blurt` is what an unconfigured host
-inherits (so nothing about this app changed), and `BlurtApp.init` calls `HostIdentity.configure(_:)`
-with it because the identity belongs to the host, not the engine. It is process-wide rather than
+inherits, and `BlurtApp.init` calls `HostIdentity.configure(_:)` because the identity belongs to the
+host, not the engine — with `.blurt` or `.blurtDev` depending on the running bundle id, the two
+differing only in the Keychain service (see
+[Dev builds are a separate app](#regenerating-and-installing-the-app)). It is process-wide rather than
 injected for the obvious reason: its readers are `static let` loggers, an enum of defaults keys and a
 Keychain facade, none of which a caller constructs. The derivations are pure functions of the value
 (`defaultsKey(_:)`, `logURL(_:)`, `queueLabel(_:)`, `logger(_:)`) so the tests exercise them against
@@ -894,7 +908,9 @@ sites, so a failure path added later is logged by construction; `.noTarget` and 
 a phase change rather than dropped. A failed append itself goes to `os_log` (never the entry, which
 would leak transcripts system-wide) — it's the one error that can't be reported through the error log,
 and it must never throw onto the dictation path. The Settings window's Developer section surfaces the
-switch and both paths, and `scripts/reset-install.sh` removes both files.
+switch and both paths, and both `scripts/reset-install.sh` and the in-app reset
+(`DictationLog.removeStoredLogs()`, via `InstallReset`) remove both files — plus the directory, once
+it holds nothing else.
 
 API key: stored in the macOS Keychain via **`APIKeyStore`**, a thin static facade over
 **`MemoizedKeyStore`** (which takes its storage as `read`/`write` closures, so the memo-and-write rules
@@ -929,8 +945,18 @@ restating them.
   time, swapped for a Copy affordance on hover; and a Settings button at the
   foot). Standard titlebar, always presented at launch.
 - **Settings** (`SettingsWindowRoot`) — a `TabView` reached via ⌘, / the menu bar,
-  never at launch. Note macOS titles a preference window after its selected pane, which is why the
-  UI-test suite aliases the window title to the first tab's label.
+  never at launch. General holds the everyday setup (key, shortcut, cue, key terms); Advanced holds
+  the enhanced-transcripts switch, the style profiles, the update check, the developer-mode toggle,
+  and the **reset** — one destructive button running the engine's `InstallReset` (the same sweep as
+  `scripts/reset-install.sh`: settings, Keychain key, TCC grants, dictation logs), which confirms
+  first and then **restarts the app** (a detached `sh -c 'sleep 1; open -n <bundle>'`, since whatever
+  reopens Blurt has to outlive it). The restart is load-bearing, not a courtesy: macOS prompts for a
+  TCC grant once per process, so only a process started after the sweep gets the prompts back — and
+  the fresh one, having no key and no grants, opens on the setup wizard by the same
+  `SetupReadiness` gate as a first run. A _partial_ reset skips the restart and reports what
+  survived instead. Note macOS titles a preference window
+  after its selected pane, which is why the UI-test suite aliases the window title to the first
+  tab's label.
 - **`MenuBarExtra`** (`MenuBar/MenuBarScene.swift`) — live dictation indicator plus a
   discoverability menu for the otherwise-invisible hotkey. Convenience layered on the Dock icon.
 - **Overlay** (`Overlay/OverlayWindowController` + `OverlayView`) — the floating pill: meter, phase

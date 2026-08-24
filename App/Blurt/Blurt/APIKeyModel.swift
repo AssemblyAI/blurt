@@ -48,6 +48,14 @@ final class APIKeyModel {
   /// run sees the injected in-memory store instead of the real Keychain.
   var current: String? { keyStore.current }
 
+  /// The storage seam itself, handed to the Settings window's full-install reset
+  /// (`InstallReset`) so the sweep deletes the key from the *injected* store —
+  /// the in-memory one under UI testing — rather than reaching past this model
+  /// to the production Keychain item. Exposed rather than wrapped in a `clear()`
+  /// here because the reset owns the sweep; what this model owns is
+  /// `refreshStatus()`, which is how `hasAPIKey` catches up afterwards.
+  var storage: any APIKeyGateway { keyStore }
+
   /// A `@Sendable` snapshot of the readiness gate for `DictationSession`: a press
   /// with no key saved fails fast as `.failed(.apiKeyMissing)` before any capture.
   /// Captures the (Sendable) store, not this main-actor model, so it can cross

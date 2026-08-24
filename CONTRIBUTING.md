@@ -66,10 +66,15 @@ it — you can run either, and each has its own Privacy & Security rows, its own
 settings, and its own Dock icon. Grant "Blurt Dev" microphone and Accessibility
 once; they stick across rebuilds.
 
-They do share the Keychain item holding your AssemblyAI key, so you won't be
-asked for it twice (macOS may ask once whether the other app may read it).
+Each keeps its own AssemblyAI key in the Keychain — `blurt` for the release,
+`blurt-dev` for the dev build — so a dev build can't read, overwrite or (through
+Settings → Advanced → Reset) delete the key you dictate with. You'll enter the
+key once in each, and neither one triggers the "another app wants to use your
+confidential information" prompt the shared item used to.
 
-`scripts/reset-install.sh` wipes both.
+`scripts/reset-install.sh` wipes both. Settings → Advanced → **Reset** does the same from
+inside the app, for whichever build you're running — and restarts it, so the
+permission prompts come back.
 
 ### A note on signing
 

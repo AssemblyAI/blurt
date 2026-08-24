@@ -1,4 +1,5 @@
 import BlurtEngine
+import Foundation
 import SwiftUI
 
 @main
@@ -9,13 +10,29 @@ struct BlurtApp: App {
   /// logging subsystem, the `UserDefaults` prefix, the log directory, the product
   /// name in update alerts, and the release feed the update check reads.
   ///
-  /// `.blurt` *is* the engine's default, so this call changes nothing about how
-  /// Blurt behaves. It is here because it is the composition root: the identity
-  /// belongs to the host, and a fork or a second embedder replaces exactly this
-  /// one line rather than hunting constants through the engine. Earliest hook a
-  /// SwiftUI `App` has, which is what `HostIdentity.configure(_:)` asks for.
+  /// This is the composition root: the identity belongs to the host, and a fork
+  /// or a second embedder replaces exactly these lines rather than hunting
+  /// constants through the engine. Earliest hook a SwiftUI `App` has, which is
+  /// what `HostIdentity.configure(_:)` asks for.
+  ///
+  /// **Which** identity depends on which app this is. Debug builds ship as
+  /// `dev.alex.blurt.dev` / "Blurt Dev" (see `project.yml`), which macOS already
+  /// treats as a separate app — its own TCC rows, its own defaults domain — but
+  /// *not* its own Keychain item, since Keychain items are per login keychain
+  /// rather than per app. Shared, a dev build read the shipping app's API key,
+  /// could overwrite it, and could delete it outright through Settings → Reset.
+  /// `.blurtDev` differs from `.blurt` in exactly that one field.
+  ///
+  /// Decided from the **running bundle id** rather than `#if DEBUG`: the id is
+  /// what actually makes these two apps to macOS, and it follows
+  /// `PRODUCT_BUNDLE_IDENTIFIER`, so a configuration added later gets the dev
+  /// identity by default (the same reasoning that made the debug id the default
+  /// in `project.yml`) instead of silently reaching for the shipping key because
+  /// someone forgot a compilation condition. `HostIdentity.blurt.subsystem` is
+  /// the shipping id — the one place that string is written down.
   init() {
-    HostIdentity.configure(.blurt)
+    let isShippingBuild = Bundle.main.bundleIdentifier == HostIdentity.blurt.subsystem
+    HostIdentity.configure(isShippingBuild ? .blurt : .blurtDev)
   }
 
   var body: some Scene {

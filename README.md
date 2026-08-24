@@ -101,7 +101,10 @@ utterance.
   Roland Juno-106 sounds, or turned off.
 - **Guided setup** — a first-run wizard walks through Microphone permission,
   Accessibility trust, and your API key; the same window later hosts settings
-  for the trigger key, key terms, and sound pack.
+  for the trigger key, key terms, and sound pack. Settings → Advanced also has a
+  **Reset** that deletes the key, the settings and the permission grants, then
+  restarts Blurt into first-run setup — so an install whose permissions have got
+  stuck can start clean.
 - **No surprises** — installing an update is always yours to do: Blurt looks for
   a newer release once a day (and whenever you ask) and, if there is one, offers
   to open the DMG — it never replaces itself. There's no telemetry of any kind.

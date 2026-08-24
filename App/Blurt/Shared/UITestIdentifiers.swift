@@ -65,6 +65,10 @@ enum UITestIdentifiers {
   static let developerToggle = "settings.developer.toggle"
   static let enhancedTranscriptsToggle = "settings.enhancedTranscripts.toggle"
   static let updateCheck = "settings.update.check"
+  /// The Advanced pane's "Reset…" button (`SettingsWindowRoot`'s reset section).
+  /// Only the row button is identified: the confirmation it opens is an alert,
+  /// whose buttons the suite addresses by title.
+  static let installReset = "settings.reset.button"
   // The Styles section and the sheet it opens (`SettingsWindowRoot`). The Edit
   // buttons are per-profile, so they are indexed by row rather than named one
   // by one — the identifier has to be distinct per control, and the profiles

@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# The terminal half of a full reset. Blurt ships the same sweep in-app —
+# Settings > Advanced > Reset, the engine's `InstallReset` — for the user who
+# shouldn't have to run a shell script; keep the two in step. This script stays
+# the fuller one: it covers *both* bundle ids (a running copy can only reset its
+# own) and unregisters stale app copies from LaunchServices, neither of which an
+# app can meaningfully do to itself.
+
 # Both bundle ids Blurt ships under. Lowercase to match how macOS records the
 # Accessibility TCC client (see the PRODUCT_BUNDLE_IDENTIFIER note in
 # App/Blurt/project.yml), where the split is also explained: releases are
@@ -61,20 +68,24 @@ for bundle_id in "${BUNDLE_IDS[@]}"; do
   defaults delete "$bundle_id" 2>/dev/null || true
 done
 
-# AssemblyAI API key lives in the login keychain as a generic password. The
-# keychain service is `HostIdentity.blurt.keychainService` (used by APIKeyStore,
-# Sources/BlurtEngine/Config/APIKeyStore.swift). Must match that constant.
-# Installs that predate the service rename may still hold the key under the
-# old service (the lowercase bundle id), so a full reset deletes both.
-KEYCHAIN_SERVICE="blurt"
-# The shipping id, always — the pre-rename service predates the debug/release id
-# split, so there was only ever one value to have used.
-LEGACY_KEYCHAIN_SERVICE="${BUNDLE_IDS[0]}"
+# AssemblyAI API key lives in the login keychain as a generic password. Keychain
+# items are per login keychain rather than per app, so the two builds are NOT
+# separated by their bundle ids the way their defaults and TCC rows are: each one
+# names its own service. These must match `HostIdentity.blurt.keychainService`
+# and `HostIdentity.blurtDev.keychainService` (Sources/BlurtEngine/HostIdentity.swift,
+# used by APIKeyStore); `HostIdentityTests` pins both, so a rename there fails
+# `swift test` until this list is updated with it.
+KEYCHAIN_SERVICES=("blurt" "blurt-dev")
+# Installs that predate the service rename may still hold the key under the old
+# service (the lowercase bundle id) — the shipping id, always, since that rename
+# predates the debug/release id split, so there was only ever one value to have
+# used. A full reset deletes it too.
+KEYCHAIN_SERVICES+=("${BUNDLE_IDS[0]}")
 KEYCHAIN_ACCOUNT="AssemblyAIAPIKey"
-echo "==> Deleting AssemblyAI API key from Keychain ($KEYCHAIN_SERVICE / $KEYCHAIN_ACCOUNT)"
-security delete-generic-password -s "$KEYCHAIN_SERVICE" -a "$KEYCHAIN_ACCOUNT" >/dev/null 2>&1 || true
-echo "==> Deleting pre-rename AssemblyAI API key from Keychain ($LEGACY_KEYCHAIN_SERVICE / $KEYCHAIN_ACCOUNT)"
-security delete-generic-password -s "$LEGACY_KEYCHAIN_SERVICE" -a "$KEYCHAIN_ACCOUNT" >/dev/null 2>&1 || true
+for keychain_service in "${KEYCHAIN_SERVICES[@]}"; do
+  echo "==> Deleting AssemblyAI API key from Keychain ($keychain_service / $KEYCHAIN_ACCOUNT)"
+  security delete-generic-password -s "$keychain_service" -a "$KEYCHAIN_ACCOUNT" >/dev/null 2>&1 || true
+done
 
 # Developer mode appends transcript and failure logs here (see DictationLog); a
 # fresh install has neither, so clear them too. The rmdir below only succeeds
