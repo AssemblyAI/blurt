@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# The terminal half of a full reset. Blurt ships the same sweep in-app —
+# Settings > Advanced > Reset, the engine's `InstallReset` — for the user who
+# shouldn't have to run a shell script; keep the two in step. This script stays
+# the fuller one: it covers *both* bundle ids (a running copy can only reset its
+# own) and unregisters stale app copies from LaunchServices, neither of which an
+# app can meaningfully do to itself.
+
 # Both bundle ids Blurt ships under. Lowercase to match how macOS records the
 # Accessibility TCC client (see the PRODUCT_BUNDLE_IDENTIFIER note in
 # App/Blurt/project.yml), where the split is also explained: releases are

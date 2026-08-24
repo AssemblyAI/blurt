@@ -283,8 +283,9 @@ identity recorded in `accessibility.lastSigningTeam`; if it changed and the app 
 `tccutil reset Accessibility` on **the running bundle id** (never `HostIdentity.current.subsystem`, which
 would have a dev build clearing the release's grant) so the wizard's normal grant flow captures a
 matching requirement, and records the new identity only when the reset succeeded.
-`SigningIdentityMigration` is the pure decision; `SigningIdentity` is the thin `Security`/`tccutil`
-adapter.
+`SigningIdentityMigration` is the pure decision; `SigningIdentity` reads the requirement (the thin
+`Security` adapter) and `PermissionsReset` runs the `tccutil` call — the same adapter the Settings
+window's reset button sweeps every grant through.
 
 Recording the requirement itself, rather than a proxy for it, is the point: this used to record the
 **Team ID**, which is stable across exactly the collision above (release and dev builds share team
@@ -894,7 +895,9 @@ sites, so a failure path added later is logged by construction; `.noTarget` and 
 a phase change rather than dropped. A failed append itself goes to `os_log` (never the entry, which
 would leak transcripts system-wide) — it's the one error that can't be reported through the error log,
 and it must never throw onto the dictation path. The Settings window's Developer section surfaces the
-switch and both paths, and `scripts/reset-install.sh` removes both files.
+switch and both paths, and both `scripts/reset-install.sh` and the in-app reset
+(`DictationLog.removeStoredLogs()`, via `InstallReset`) remove both files — plus the directory, once
+it holds nothing else.
 
 API key: stored in the macOS Keychain via **`APIKeyStore`**, a thin static facade over
 **`MemoizedKeyStore`** (which takes its storage as `read`/`write` closures, so the memo-and-write rules
@@ -929,8 +932,14 @@ restating them.
   time, swapped for a Copy affordance on hover; and a Settings button at the
   foot). Standard titlebar, always presented at launch.
 - **Settings** (`SettingsWindowRoot`) — a `TabView` reached via ⌘, / the menu bar,
-  never at launch. Note macOS titles a preference window after its selected pane, which is why the
-  UI-test suite aliases the window title to the first tab's label.
+  never at launch. General holds the everyday setup (key, shortcut, cue, key terms); Advanced holds
+  the enhanced-transcripts switch, the style profiles, the update check, the developer-mode toggle,
+  and the **reset** — one destructive button running the engine's `InstallReset` (the same sweep as
+  `scripts/reset-install.sh`: settings, Keychain key, TCC grants, dictation logs), which confirms
+  first and quits the app afterwards, since the process holding the grants that were just revoked is
+  the one that has to be replaced for the prompts to reappear. Note macOS titles a preference window
+  after its selected pane, which is why the UI-test suite aliases the window title to the first
+  tab's label.
 - **`MenuBarExtra`** (`MenuBar/MenuBarScene.swift`) — live dictation indicator plus a
   discoverability menu for the otherwise-invisible hotkey. Convenience layered on the Dock icon.
 - **Overlay** (`Overlay/OverlayWindowController` + `OverlayView`) — the floating pill: meter, phase

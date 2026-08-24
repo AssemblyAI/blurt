@@ -230,8 +230,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       // whose permissions this process has no business touching. The constant is
       // the fallback for the unreachable case of a bundle with no id at all.
       reset: {
-        SigningIdentity.resetAccessibilityGrant(
-          bundleID: Bundle.main.bundleIdentifier ?? HostIdentity.current.subsystem)
+        PermissionsReset.reset(
+          .accessibility, bundleID: Bundle.main.bundleIdentifier ?? HostIdentity.current.subsystem)
       }
     )
     if let persist { defaults.set(persist, forKey: key) }

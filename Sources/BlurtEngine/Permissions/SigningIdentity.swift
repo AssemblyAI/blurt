@@ -1,14 +1,12 @@
 import Foundation
 import Security
-import os
 
-/// Integration adapters for the signing-identity migration: read the identity
-/// this process's signature pins into its designated requirement, and clear its
-/// Accessibility grant. Kept separate from the pure `SigningIdentityMigration`
-/// so the decision logic stays testable and these system calls stay thin.
+/// The integration adapter for the signing-identity migration: reads the
+/// identity this process's signature pins into its designated requirement. Kept
+/// separate from the pure `SigningIdentityMigration` so the decision logic stays
+/// testable and this `Security` handshake stays thin. Clearing the stale grant
+/// the migration decides on is `PermissionsReset`'s half.
 public enum SigningIdentity {
-  private static let log = HostIdentity.current.logger("SigningIdentity")
-
   /// Namespace marker on a recorded identity. Every build before this one recorded
   /// a bare Team ID (10 alphanumerics, no colon), so the prefix keeps the two
   /// shapes disjoint — a marker left by an older build can never accidentally
@@ -93,25 +91,5 @@ public enum SigningIdentity {
     guard SecRequirementCopyString(requirement, SecCSFlags(), &text) == errSecSuccess, let text
     else { return nil }
     return text as String
-  }
-
-  /// Clears Blurt's Accessibility TCC grant so the next authorization recaptures a
-  /// code requirement matching the current signature. Resetting a bundle's own
-  /// grant needs no admin rights. Returns whether `tccutil` exited 0.
-  @discardableResult
-  public static func resetAccessibilityGrant(bundleID: String) -> Bool {
-    let proc = Process()
-    proc.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
-    proc.arguments = ["reset", "Accessibility", bundleID]
-    do {
-      try proc.run()
-      proc.waitUntilExit()
-      let ok = proc.terminationStatus == 0
-      if !ok { log.warning("tccutil reset Accessibility exited \(proc.terminationStatus)") }
-      return ok
-    } catch {
-      log.error("tccutil reset Accessibility failed to launch: \(error.localizedDescription)")
-      return false
-    }
   }
 }

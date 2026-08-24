@@ -126,6 +126,38 @@ final class SettingsUITests: BlurtUITestCase {
     alert.buttons["OK"].click()
   }
 
+  /// The Advanced pane's reset button asks first, and Cancel leaves the install
+  /// exactly as it was — the stored key is still connected afterwards.
+  ///
+  /// The *confirming* path is deliberately not exercised: it revokes the app's
+  /// TCC grants and quits Blurt, so an automated click of it would take the
+  /// runner's machine (and the rest of the suite) with it. What a confirmed
+  /// reset does is covered where it lives, over doubles — the engine's
+  /// `InstallResetTests`.
+  func testResetAsksBeforeDoingAnything() {
+    let settings = openSettingsWindow()
+    connectValidKey(settings)
+    let advanced = selectSettingsTab(settings, named: UITestIdentifiers.advancedSettingsTab)
+
+    let button = advanced.anyDescendant(identified: UITestIdentifiers.installReset)
+    XCTAssertTrue(button.waitForExistence(timeout: 10), "Reset button not found")
+    button.click()
+
+    let confirmation = settings.sheets.firstMatch
+    XCTAssertTrue(
+      confirmation.waitForExistence(timeout: 10),
+      "Reset should ask for confirmation rather than acting on the click")
+    XCTAssertTrue(confirmation.staticTexts["Reset Blurt?"].exists)
+    confirmation.buttons["Cancel"].click()
+
+    XCTAssertTrue(
+      confirmation.waitForNonExistence(timeout: 5), "Cancel should dismiss the confirmation")
+    let general = selectSettingsTab(settings, named: UITestIdentifiers.generalSettingsTab)
+    XCTAssertTrue(
+      general.staticTexts[UITestIdentifiers.apiKeySavedStatus].waitForExistence(timeout: 5),
+      "Cancelling the reset should leave the stored key alone")
+  }
+
   /// After a key is stored, "Change…" re-opens the sheet so it can be rotated.
   func testChangeReopensEditorAfterConnecting() {
     let settings = openSettingsWindow()
