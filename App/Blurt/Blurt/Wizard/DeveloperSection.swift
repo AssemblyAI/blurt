@@ -1,5 +1,6 @@
 import AppKit
 import BlurtEngine
+import OSLog
 import SwiftUI
 
 // The Advanced pane's two standalone sections: the developer-mode switch and
@@ -47,12 +48,15 @@ struct DeveloperSection: View {
 /// `scripts/reset-install.sh` performs, so someone who can't (or shouldn't have
 /// to) run a shell script has the same way out.
 ///
-/// **Blurt quits when it finishes**, which the confirmation says up front: the
-/// running process is what holds the TCC grants that were just revoked, so the
-/// permission prompts only reappear for a process started after the reset.
-/// Quitting rather than relaunching itself keeps that a single, predictable
-/// step — two Blurts running at once would mean two event taps racing for the
-/// trigger key.
+/// **Blurt restarts itself when it finishes**, which the confirmation says up
+/// front. That isn't politeness: the running process is the one holding the TCC
+/// grants the sweep just revoked, and macOS re-prompts per process — so only a
+/// process started *after* the reset gets the permission prompts back. The new
+/// one comes up with no key and no grants, which is exactly the state
+/// `SetupReadiness` reads as "not configured", so it opens on the setup wizard
+/// (`MainWindowRoot`) rather than the ready screen. Restarting rather than
+/// merely quitting is what makes the button finish the job the user asked for
+/// instead of leaving them at a closed app.
 struct ResetSection: View {
   /// What the section is asking or telling, or nil while it's silent.
   ///
@@ -65,7 +69,7 @@ struct ResetSection: View {
     /// so the button opens this rather than acting on the click.
     case confirm
     /// Only shown when part of the sweep survived. A clean reset says nothing:
-    /// the app quitting is the confirmation.
+    /// the app restarting into setup is the confirmation.
     case failed(InstallReset.AlertContent)
 
     var title: String {
@@ -80,7 +84,7 @@ struct ResetSection: View {
       case .confirm:
         "This can’t be undone. Your AssemblyAI API key, every setting, the dictation logs, and "
           + "Blurt’s microphone, accessibility and input-monitoring permissions are all removed.\n\n"
-          + "Blurt then quits. Open it again to set up from scratch."
+          + "Blurt then restarts and takes you back through setup."
       case .failed(let content): content.message
       }
     }
@@ -115,7 +119,7 @@ struct ResetSection: View {
         // Deferred a turn: setting `prompt` straight from an alert action
         // re-enters presentation while this alert is still dismissing, and
         // SwiftUI swallows it — so the failure report would never appear.
-        Button("Reset and Quit", role: .destructive) { Task { @MainActor in reset() } }
+        Button("Reset and Restart", role: .destructive) { Task { @MainActor in reset() } }
         Button("Cancel", role: .cancel) {}
       case .failed:
         Button("OK", role: .cancel) {}
@@ -131,7 +135,7 @@ struct ResetSection: View {
     Binding(get: { prompt != nil }, set: { if !$0 { prompt = nil } })
   }
 
-  /// Runs the sweep, then quits — or reports what survived and stays put.
+  /// Runs the sweep, then restarts — or reports what survived and stays put.
   ///
   /// The bundle id is the **running** one, never `HostIdentity.current.subsystem`:
   /// debug builds ship under `dev.alex.blurt.dev`, and the constant would have a
@@ -148,13 +152,45 @@ struct ResetSection: View {
     // re-read for the wizard to see the key go — which matters on the failure
     // path, where the app stays running.
     coordinator.apiKey.refreshStatus()
-    // Nothing to report means the install is clean; the app quitting is the
-    // whole confirmation, so a success alert would only be one more click
-    // between the user and the relaunch they need.
+    // Nothing to report means the install is clean, and the fresh copy opening
+    // on the setup wizard is the whole confirmation — a success alert would only
+    // be one more click between the user and the setup they came for.
     guard let report else {
-      NSApp.terminate(nil)
+      restart()
       return
     }
     prompt = .failed(report)
+  }
+
+  /// Replaces this process with a fresh one, so the permission prompts come back
+  /// (macOS asks once per process, and this one has already been asked).
+  ///
+  /// A detached `sh` does the launching because *we* can't: whatever reopens
+  /// Blurt has to outlive Blurt. It sleeps first so `open` runs against a bundle
+  /// with no live instance, and takes `-n` so that if the old process is somehow
+  /// still shutting down, LaunchServices starts a new copy rather than
+  /// re-activating the dying one and leaving the user with nothing. The overlap
+  /// that `-n` risks is harmless here: a just-reset copy has no key and no
+  /// grants, so it installs no event tap and shows no pill — it opens the wizard
+  /// and waits.
+  ///
+  /// The bundle path is passed as an argument rather than interpolated into the
+  /// script, so a path with spaces (`/Applications/Blurt Dev.app`) can't split
+  /// into two words.
+  ///
+  /// A failed launch is not worth an alert: the sweep itself already succeeded,
+  /// and the recovery — open Blurt again — is the thing the user was about to do
+  /// anyway.
+  private func restart() {
+    let relauncher = Process()
+    relauncher.executableURL = URL(fileURLWithPath: "/bin/sh")
+    relauncher.arguments = ["-c", "sleep 1; /usr/bin/open -n \"$0\"", Bundle.main.bundlePath]
+    do {
+      try relauncher.run()
+    } catch {
+      HostIdentity.current.logger("reset").error(
+        "relaunch after reset failed to spawn: \(error.localizedDescription, privacy: .public)")
+    }
+    NSApp.terminate(nil)
   }
 }

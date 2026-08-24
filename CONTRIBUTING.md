@@ -70,8 +70,8 @@ They do share the Keychain item holding your AssemblyAI key, so you won't be
 asked for it twice (macOS may ask once whether the other app may read it).
 
 `scripts/reset-install.sh` wipes both. Settings → Advanced → **Reset** does the same from
-inside the app, for whichever build you're running (it quits afterwards, so the permission
-prompts come back on the next launch).
+inside the app, for whichever build you're running — and restarts it, so the
+permission prompts come back.
 
 ### A note on signing
 

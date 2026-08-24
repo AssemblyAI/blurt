@@ -130,7 +130,7 @@ final class SettingsUITests: BlurtUITestCase {
   /// exactly as it was — the stored key is still connected afterwards.
   ///
   /// The *confirming* path is deliberately not exercised: it revokes the app's
-  /// TCC grants and quits Blurt, so an automated click of it would take the
+  /// TCC grants and restarts Blurt, so an automated click of it would take the
   /// runner's machine (and the rest of the suite) with it. What a confirmed
   /// reset does is covered where it lives, over doubles — the engine's
   /// `InstallResetTests`.
@@ -152,12 +152,17 @@ final class SettingsUITests: BlurtUITestCase {
       confirmationTitle.waitForExistence(timeout: 10),
       "Reset should ask for confirmation rather than acting on the click")
     XCTAssertTrue(
-      app.buttons["Reset and Quit"].exists,
-      "The confirmation should say that Blurt quits when the reset finishes")
-    app.buttons["Cancel"].click()
+      app.buttons["Reset and Restart"].exists,
+      "The confirmation should say that Blurt restarts when the reset finishes")
+    // Dismissed with Escape, not by clicking "Cancel": this test opened the
+    // API-key sheet earlier and its own Cancel is still in the accessibility
+    // tree, so an app-level query for that title matches more than one element.
+    // Escape is what the `.cancel` role binds, so it exercises the same button.
+    app.typeKey(.escape, modifierFlags: [])
 
     XCTAssertTrue(
-      confirmationTitle.waitForNonExistence(timeout: 5), "Cancel should dismiss the confirmation")
+      confirmationTitle.waitForNonExistence(timeout: 5),
+      "Escape should dismiss the confirmation without resetting anything")
     let general = selectSettingsTab(settings, named: UITestIdentifiers.generalSettingsTab)
     XCTAssertTrue(
       general.staticTexts[UITestIdentifiers.apiKeySavedStatus].waitForExistence(timeout: 5),

@@ -936,8 +936,12 @@ restating them.
   the enhanced-transcripts switch, the style profiles, the update check, the developer-mode toggle,
   and the **reset** — one destructive button running the engine's `InstallReset` (the same sweep as
   `scripts/reset-install.sh`: settings, Keychain key, TCC grants, dictation logs), which confirms
-  first and quits the app afterwards, since the process holding the grants that were just revoked is
-  the one that has to be replaced for the prompts to reappear. Note macOS titles a preference window
+  first and then **restarts the app** (a detached `sh -c 'sleep 1; open -n <bundle>'`, since whatever
+  reopens Blurt has to outlive it). The restart is load-bearing, not a courtesy: macOS prompts for a
+  TCC grant once per process, so only a process started after the sweep gets the prompts back — and
+  the fresh one, having no key and no grants, opens on the setup wizard by the same
+  `SetupReadiness` gate as a first run. A _partial_ reset skips the restart and reports what
+  survived instead. Note macOS titles a preference window
   after its selected pane, which is why the UI-test suite aliases the window title to the first
   tab's label.
 - **`MenuBarExtra`** (`MenuBar/MenuBarScene.swift`) — live dictation indicator plus a
