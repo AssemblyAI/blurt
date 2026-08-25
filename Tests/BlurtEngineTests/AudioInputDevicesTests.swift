@@ -27,8 +27,11 @@ struct AudioInputDevicesTests {
     try #require(!devices.isEmpty, "a machine running this suite needs at least one input device")
 
     // Every entry must be renderable in the picker and pinnable by the store.
+    // Closures rather than key paths inside the macros — the rethrows + key-path
+    // combination is the documented `#expect` trap (see AGENTS.md's testing notes).
     #expect(devices.allSatisfy { !$0.uid.isEmpty && !$0.name.isEmpty })
-    #expect(Set(devices.map(\.uid)).count == devices.count, "device UIDs must be unique")
+    let uids = devices.map { $0.uid }
+    #expect(Set(uids).count == uids.count, "device UIDs must be unique")
 
     // The default input has a name for the "Same as system (…)" label.
     #expect(AudioInputDevices.systemDefaultInputName() != nil)

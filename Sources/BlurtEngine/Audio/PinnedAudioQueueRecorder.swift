@@ -79,13 +79,20 @@ final class PinnedAudioQueueRecorder: CaptureRecorder, @unchecked Sendable {
     do {
       // The pin itself. Must land before the queue starts; a UID that no longer
       // resolves is refused here, which `MicCapture.resolveInput` pre-empts by
-      // falling back to the system default when the device is absent.
+      // falling back to the system default when the device is absent. The
+      // property's value is the CFString reference itself, handed over through
+      // `withUnsafeMutablePointer` — a bare `&uid` is refused ("forming
+      // 'UnsafeRawPointer' to a variable of type 'CFString'") because the type
+      // carries an object reference; same pattern as `AudioInputDevices`'
+      // UID-translation qualifier.
       var uid = deviceUID as CFString
-      try Self.check(
-        AudioQueueSetProperty(
-          created, kAudioQueueProperty_CurrentDevice, &uid,
-          UInt32(MemoryLayout<CFString>.size)),
-        "AudioQueueSetProperty(CurrentDevice)")
+      try withUnsafeMutablePointer(to: &uid) { pointer in
+        try Self.check(
+          AudioQueueSetProperty(
+            created, kAudioQueueProperty_CurrentDevice, pointer,
+            UInt32(MemoryLayout<CFString>.size)),
+          "AudioQueueSetProperty(CurrentDevice)")
+      }
       var meteringEnabled: UInt32 = 1
       try Self.check(
         AudioQueueSetProperty(
