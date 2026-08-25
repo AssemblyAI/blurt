@@ -310,6 +310,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 // MARK: - Siri / Shortcuts
 
+// periphery:ignore - instantiated reflectively by the AppIntents framework, never from app code.
 /// The "Toggle Dictation" action for Shortcuts and Siri: a tap of the hotkey, by
 /// voice. Starts a dictation when nothing is being captured and stops the one in
 /// flight, through the same command feed the key tap drives (see
@@ -320,7 +321,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 /// `nonisolated`: the AppIntents framework reads the conformance from arbitrary
 /// contexts, so the type opts out of the app target's MainActor default; only
 /// `perform()` hops back to the main actor, which its async requirement allows.
-// periphery:ignore - instantiated reflectively by the AppIntents framework, never from app code.
 nonisolated struct ToggleDictationIntent: AppIntent {
   static let title: LocalizedStringResource = "Toggle Dictation"
   static let openAppWhenRun = false
@@ -334,10 +334,10 @@ nonisolated struct ToggleDictationIntent: AppIntent {
   }
 }
 
+// periphery:ignore - discovered reflectively by the AppIntents framework, never from app code.
 /// Registers the built-in Siri/Spotlight phrases so the intent works with no
 /// setup. Apple requires the app's name in every phrase; for a custom wake
 /// phrase ("start blurting"), wrap the intent in a Shortcut named that.
-// periphery:ignore - discovered reflectively by the AppIntents framework, never from app code.
 nonisolated struct BlurtAppShortcuts: AppShortcutsProvider {
   static var appShortcuts: [AppShortcut] {
     AppShortcut(
