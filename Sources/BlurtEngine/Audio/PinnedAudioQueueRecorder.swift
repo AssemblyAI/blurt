@@ -58,9 +58,19 @@ final class PinnedAudioQueueRecorder: CaptureRecorder, @unchecked Sendable {
     var format = Self.captureFormat
     let shared = SharedState()
     var created: AudioQueueRef?
+    // A literal closure, not a `Self.handleInput` reference: a C function
+    // pointer can only be formed from a top-level `func` or a capture-free
+    // closure literal — a static-method *reference* is rejected — so the
+    // literal forwards to the static implementation (calling it is fine;
+    // naming the type is not a capture). It drops the packet timing/description
+    // arguments on the way: raw LPCM never needs them.
     try Self.check(
       AudioQueueNewInput(
-        &format, Self.handleInput, Unmanaged.passUnretained(shared).toOpaque(),
+        &format,
+        { userData, queue, buffer, _, _, _ in
+          PinnedAudioQueueRecorder.handleInput(userData: userData, queue: queue, buffer: buffer)
+        },
+        Unmanaged.passUnretained(shared).toOpaque(),
         nil, nil, 0, &created),
       "AudioQueueNewInput")
     guard let created else {
@@ -172,14 +182,10 @@ final class PinnedAudioQueueRecorder: CaptureRecorder, @unchecked Sendable {
 
   /// The capture callback, on a CoreAudio-owned thread: append what the buffer
   /// carries and hand the buffer back while the session is still running. It
-  /// touches nothing but `SharedState`, under its lock.
+  /// touches nothing but `SharedState`, under its lock. Called through the
+  /// closure literal in `init` (see there for why it can't be passed directly).
   private static func handleInput(
-    userData: UnsafeMutableRawPointer?,
-    queue: AudioQueueRef,
-    buffer: AudioQueueBufferRef,
-    startTime: UnsafePointer<AudioTimeStamp>,
-    packetCount: UInt32,
-    packetDescriptions: UnsafePointer<AudioStreamPacketDescription>?
+    userData: UnsafeMutableRawPointer?, queue: AudioQueueRef, buffer: AudioQueueBufferRef
   ) {
     guard let userData else { return }
     let shared = Unmanaged<SharedState>.fromOpaque(userData).takeUnretainedValue()

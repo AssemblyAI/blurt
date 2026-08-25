@@ -176,7 +176,8 @@ public actor MicCapture: MicCaptureProtocol {
     // Reuse the warm recorder when it is still bound to the resolved input;
     // otherwise build a fresh one. `??` only evaluates `makeBackend` when
     // nothing usable was warmed.
-    let recorder = try takeWarmRecorder(matching: resolved)
+    let recorder =
+      try takeWarmRecorder(matching: resolved)
       ?? Self.makeBackend(pinnedUID: resolved.pinnedUID)
 
     // record() returns false when no usable input device is available (unplugged,
