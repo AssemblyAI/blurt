@@ -1,3 +1,4 @@
+import AppIntents
 import AppKit
 import ApplicationServices
 import BlurtEngine
@@ -304,5 +305,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     NSApp.activate()
     if !flag { openMainWindow() }
     return true
+  }
+}
+
+// MARK: - Siri / Shortcuts
+
+/// The "Toggle Dictation" action for Shortcuts and Siri: a tap of the hotkey, by
+/// voice. Starts a dictation when nothing is being captured and stops the one in
+/// flight, through the same command feed the key tap drives (see
+/// `AppCoordinator.toggleDictation`). `openAppWhenRun` stays false so Siri —
+/// e.g. from AirPods — runs it without foregrounding Blurt, which would steal
+/// focus from the very app the user is dictating into.
+///
+/// `nonisolated`: the AppIntents framework reads the conformance from arbitrary
+/// contexts, so the type opts out of the app target's MainActor default; only
+/// `perform()` hops back to the main actor, which its async requirement allows.
+// periphery:ignore - instantiated reflectively by the AppIntents framework, never from app code.
+nonisolated struct ToggleDictationIntent: AppIntent {
+  static let title: LocalizedStringResource = "Toggle Dictation"
+  static let openAppWhenRun = false
+
+  @MainActor
+  func perform() async throws -> some IntentResult {
+    // Before the coordinator exists (mid-launch) there is nothing to toggle, so
+    // the intent quietly no-ops rather than erroring at the user.
+    (NSApp.delegate as? AppDelegate)?.coordinator?.toggleDictation()
+    return .result()
+  }
+}
+
+/// Registers the built-in Siri/Spotlight phrases so the intent works with no
+/// setup. Apple requires the app's name in every phrase; for a custom wake
+/// phrase ("start blurting"), wrap the intent in a Shortcut named that.
+// periphery:ignore - discovered reflectively by the AppIntents framework, never from app code.
+nonisolated struct BlurtAppShortcuts: AppShortcutsProvider {
+  static var appShortcuts: [AppShortcut] {
+    AppShortcut(
+      intent: ToggleDictationIntent(),
+      phrases: [
+        "Toggle \(.applicationName) dictation",
+        "Start \(.applicationName) dictation",
+        "Stop \(.applicationName) dictation",
+      ],
+      shortTitle: "Toggle Dictation",
+      systemImageName: "mic"
+    )
   }
 }

@@ -211,6 +211,18 @@ final class AppCoordinator {
     keyTap?.refreshBinding()
   }
 
+  /// Starts a dictation when nothing is being captured, and releases the one in
+  /// flight otherwise — the hotkey's tap-to-toggle behaviour for programmatic
+  /// callers (see `ToggleDictationIntent`). Routed through the same synchronous
+  /// `submit(_:)` command feed the key tap drives, so commands stay in emit
+  /// order. Known benign desync: a programmatic start leaves the key-tap gate
+  /// idle, so the next physical tap follows the gate's own latch logic rather
+  /// than stopping this capture — and the gate is re-synced on every terminal
+  /// phase (see `render(_:)`).
+  func toggleDictation() {
+    session.submit(isCapturing ? .release : .press)
+  }
+
   // MARK: - Dictation render
 
   /// The record start/stop chimes (see `CueSoundPlayer` below).
