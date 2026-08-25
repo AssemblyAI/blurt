@@ -3,23 +3,18 @@ import Testing
 
 @testable import BlurtEngine
 
-/// The warm-recorder lifecycle (`MicCapture+Warm`): prepare ahead of the press,
-/// refuse to double-prepare, validate against the live input before reuse, and
-/// tear down on a stale expiry ticket.
+/// The warm-recorder lifecycle (`MicCapture+Warm`): build ahead of the press,
+/// refuse to double-build, and validate against the resolved input (device
+/// *and* pin) before reuse.
 ///
-/// Gated on BLURT_LIVE_AUDIO_TESTS=1, like `MicCaptureLevelsTests`, because every
-/// test here goes through `MicCapture.makeRecorder()` — and that calls
-/// `prepareToRecord()`, which is *the* route-activation call this whole change is
-/// about. On a runner with no input device it is not merely unreliable, it is
-/// hostile: it blocks the calling thread rather than suspending, so several of
-/// these running concurrently occupy the cooperative pool and wedge the entire
-/// `swift test` run, not just this suite. That is not a hypothetical — an
-/// ungated first attempt failed three expectations here and then hung 171
-/// unrelated tests until the job's 30-minute timeout killed it.
-///
-/// So this suite documents and locks the warm lifecycle for a human running it
-/// on a real Mac with a real microphone; `MicCapture+Warm.swift` is excluded
-/// from the coverage gate for the same reason `MicCapture.swift` is.
+/// Gated on BLURT_LIVE_AUDIO_TESTS=1, like `MicCaptureLevelsTests`, because
+/// every test here builds a real `CaptureSessionRecorder` — a live
+/// `AVCaptureSession` with a real `AVCaptureDeviceInput`, which needs an input
+/// device and the microphone authorization only a human's Mac has. On a
+/// headless runner device attachment is at best absent and at worst blocks on
+/// a TCC prompt nothing will answer, so the suite documents and locks the warm
+/// lifecycle for a human running it locally; `MicCapture+Warm.swift` is
+/// excluded from the coverage gate for the same reason `MicCapture.swift` is.
 @Suite(
   "MicCapture warm recorder (live)",
   .enabled(
@@ -31,21 +26,21 @@ struct MicCaptureWarmTests {
   private let builtIn = AudioRoute.InputSnapshot(deviceID: 7, transportType: nil)
   private let airPods = AudioRoute.InputSnapshot(deviceID: 8, transportType: nil)
 
-  @Test("warmUp prepares a recorder once; a second call has been overtaken and no-ops")
+  @Test("warmUp builds a recorder once; a second call has been overtaken and no-ops")
   func warmUpPreparesOnce() async throws {
     let mic = MicCapture(deviceSelection: { .systemDefault })
     #expect(await mic.canPrepareWarmRecorder)
 
     await mic.warmUp()
     #expect(await mic.hasWarmRecorder)
-    // The slot is taken, so it is no longer safe to open the input for another.
+    // The slot is taken, so a second build has nothing to do.
     #expect(await mic.canPrepareWarmRecorder == false)
 
     // A second warm-up — e.g. a scheduled re-warm that lost its race with a
-    // launch-time warmUp — must not stack a second open recorder onto the input.
-    let generation = await mic.preparedGeneration
+    // launch-time warmUp — must not replace the recorder already built.
+    let identity = await mic.warmRecorderIdentity
     await mic.warmUp()
-    #expect(await mic.preparedGeneration == generation)
+    #expect(await mic.warmRecorderIdentity == identity)
 
     await mic.discardWarmRecorder()
   }
@@ -54,8 +49,8 @@ struct MicCaptureWarmTests {
   func warmUpRefusedDuringBringUp() async throws {
     // The regression `bringingUpCapture` exists for: across `start()`'s liveness
     // wait both `activeRecorder` and `warm` are nil, so a guard reading only
-    // those would call a live capture "idle" and prepare a second recorder onto
-    // the already-open input.
+    // those would call a live capture "idle" and build a recorder the press is
+    // about to race.
     let mic = MicCapture(deviceSelection: { .systemDefault })
     await mic.setBringingUpCapture(true)
     await mic.warmUp()
@@ -68,7 +63,7 @@ struct MicCaptureWarmTests {
     await mic.discardWarmRecorder()
   }
 
-  @Test("a warm recorder is reused only while still bound to the live default input")
+  @Test("a warm recorder is reused only while still bound to the live resolved input")
   func warmRecorderReusedWhenDeviceUnchanged() async throws {
     let mic = MicCapture(deviceSelection: { .systemDefault })
     try await mic.installWarmRecorder(boundTo: builtIn)
@@ -87,8 +82,7 @@ struct MicCaptureWarmTests {
   func warmRecorderDiscardedOnDeviceChangeOrUnknown() async throws {
     // Reuse requires *positively* confirming the device is unchanged. A recorder
     // bound to the wrong device doesn't fail loudly — it records the wrong mic,
-    // or silence — so unknown means discard: paying route activation again is
-    // the cheaper mistake.
+    // or silence — so unknown means discard: rebuilding is the cheaper mistake.
     let mic = MicCapture(deviceSelection: { .systemDefault })
 
     // The user connected their AirPods after the warm-up.
@@ -111,7 +105,7 @@ struct MicCaptureWarmTests {
     // resolves to: even when both selections currently resolve to the same
     // device, a recorder warmed un-pinned follows a later default switch where
     // a pinned one must not — so a match on device ID alone would reuse the
-    // wrong backend.
+    // wrong binding.
     let mic = MicCapture(deviceSelection: { .systemDefault })
 
     // Warmed while following the system default; the press arrives pinned.
@@ -127,42 +121,20 @@ struct MicCaptureWarmTests {
     #expect(await mic.takeWarm(matching: builtIn, pinnedUID: "uid:test"))
   }
 
-  @Test("an expiry with a stale generation ticket leaves a later warm recorder alone")
-  func staleExpiryTicketDoesNothing() async throws {
-    // Cancellation alone doesn't cover this: an expiry already past its
-    // cancellation check still gets its actor turn, and without the ticket it
-    // would tear down a recorder prepared a moment ago.
-    let mic = MicCapture(deviceSelection: { .systemDefault })
-    try await mic.installWarmRecorder(boundTo: builtIn)
-    let generation = await mic.preparedGeneration
-
-    await mic.releasePreparedRecorder(generation: generation - 1)
-    #expect(await mic.hasWarmRecorder)
-
-    // The live ticket is what tears the idle recorder down, freeing the input.
-    await mic.releasePreparedRecorder(generation: generation)
-    #expect(await mic.hasWarmRecorder == false)
-  }
-
-  @Test("a scheduled re-warm eventually prepares a recorder on its own turn")
+  @Test("a scheduled re-warm eventually builds a recorder on its own turn")
   func scheduledRewarmPreparesARecorder() async throws {
-    // `stop()`/`cancelCapture()` schedule rather than prepare inline because
-    // preparing re-opens the input — the slow part — and both sit on paths the
-    // user is waiting behind. All this can pin deterministically is the other
-    // half of that contract: the scheduled task does land, and prepares.
-    // Polled on a deadline with a real sleep between reads, NOT a bare
-    // `Task.yield()` spin. `scheduleRewarm` hands the work to a child task that
-    // needs a cooperative thread to run on, and `warmUp()` then blocks that
-    // thread inside CoreAudio — so a hot spin here competes with the very task
-    // it is waiting for, and on a machine where the recorder never materialises
-    // it never terminates at all. Sleeping yields the thread outright, and the
-    // deadline turns "never landed" into a failed expectation rather than a hang
-    // the suite's time limit has to clean up.
+    // `stop()`/`cancelCapture()` schedule rather than build inline because the
+    // caller sits on a path the user is waiting behind. All this can pin
+    // deterministically is the other half of that contract: the scheduled task
+    // does land, and builds. Polled on a deadline with a real sleep between
+    // reads — the scheduled child task needs a cooperative thread, and a hot
+    // spin here competes with the very task it is waiting for; the deadline
+    // turns "never landed" into a failed expectation rather than a hang the
+    // suite's time limit has to clean up.
     let mic = MicCapture(deviceSelection: { .systemDefault })
-    let before = await mic.preparedGeneration
     await mic.scheduleRewarm()
     let deadline = ContinuousClock().now.advanced(by: .seconds(5))
-    while await mic.preparedGeneration == before, ContinuousClock().now < deadline {
+    while await mic.hasWarmRecorder == false, ContinuousClock().now < deadline {
       try await Task.sleep(for: .milliseconds(10))
     }
     #expect(await mic.hasWarmRecorder)
@@ -172,13 +144,19 @@ struct MicCaptureWarmTests {
 }
 
 /// Actor-isolated test seams over `MicCapture`'s internal warm-recorder state.
-/// Extensions because the recorder backends are only `@unchecked Sendable`
-/// under the capture path's confinement argument, so neither the `warm` slot
-/// nor `takeWarmRecorder`'s return should cross the actor boundary into a
-/// test — each helper reduces it to a `Sendable` answer on the actor instead.
+/// Extensions because the recorder backend is only `@unchecked Sendable` under
+/// the capture path's confinement argument, so neither the `warm` slot nor
+/// `takeWarmRecorder`'s return should cross the actor boundary into a test —
+/// each helper reduces it to a `Sendable` answer on the actor instead.
 extension MicCapture {
   /// Whether a warm recorder is currently held.
   var hasWarmRecorder: Bool { warm != nil }
+
+  /// The held warm recorder's identity, so a test can tell "still the same
+  /// recorder" from "quietly replaced" without taking it out of the slot.
+  var warmRecorderIdentity: ObjectIdentifier? {
+    warm.map { ObjectIdentifier($0.recorder) }
+  }
 
   /// Opens or closes the bring-up window `canPrepareWarmRecorder` guards on,
   /// standing in for a `start()` suspended in its liveness wait (which needs
@@ -190,19 +168,18 @@ extension MicCapture {
   /// Installs a warm recorder bound to a *known* input (and pin) —
   /// `prepareWarmRecorder` with the resolution read replaced by `input` /
   /// `pinnedUID`, so the identity tests don't depend on what the test machine's
-  /// routing happens to answer.
+  /// routing happens to answer. The recorder itself is a real (idle) session on
+  /// the default device; only the recorded identity is synthetic.
   func installWarmRecorder(
     boundTo input: AudioRoute.InputSnapshot?, pinnedUID: String? = nil
   ) throws {
-    preparedGeneration += 1
     warm = WarmRecorder(
-      recorder: try WAVFileRecorder(), input: input, pinnedUID: pinnedUID,
-      generation: preparedGeneration)
+      recorder: try CaptureSessionRecorder(pinnedUID: nil), input: input, pinnedUID: pinnedUID)
   }
 
   /// Consumes the warm slot through the production validation, reporting whether
-  /// the recorder was reusable. A reused recorder's temp file is cleaned up here,
-  /// the job `start()` would otherwise inherit; the discard path already does so.
+  /// the recorder was reusable. A reused recorder is torn down here, the job
+  /// `start()` would otherwise inherit; the discard path already does so.
   func takeWarm(matching input: AudioRoute.InputSnapshot?, pinnedUID: String? = nil) -> Bool {
     let resolved = ResolvedInput(input: input, pinnedUID: pinnedUID)
     guard let recorder = takeWarmRecorder(matching: resolved) else { return false }
@@ -210,10 +187,9 @@ extension MicCapture {
     return true
   }
 
-  /// Test teardown: drops the warm recorder (and its expiry countdown) so a
-  /// finished test doesn't leave a 60 s expiry task holding the suite's actor.
-  /// Through `takeWarmRecorder` — which cancels the expiry — rather than a bare
-  /// `warm = nil`, so teardown can't diverge from how production empties the slot.
+  /// Test teardown: drops the warm recorder. Through `takeWarmRecorder` rather
+  /// than a bare `warm = nil`, so teardown can't diverge from how production
+  /// empties the slot.
   func discardWarmRecorder() {
     _ = takeWarmRecorder(matching: ResolvedInput(input: nil, pinnedUID: nil))
   }

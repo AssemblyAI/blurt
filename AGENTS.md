@@ -51,9 +51,12 @@ workflow and the _why_ behind the design; the engine's README covers the _what_ 
 ```text
 Sources/BlurtEngine/         the engine (dependency-free Swift package)
   README.md                  the engine's developer guide (quick start, seams, error table)
-  Audio/                     MicCapture (+meter/+warm), MicLiveness (mic bring-up gate), AudioRoute
-                             (+Monitor)/AudioTransport — CoreAudio routing, SoundPack/Catalog/Store
-                             (the voice *descriptors*; the voices themselves are app-side)
+  Audio/                     MicCapture (+meter/+warm) over CaptureRecorder/CaptureSessionRecorder
+                             (the AVCaptureSession backend), MicLiveness (mic bring-up gate),
+                             AudioRoute (+Monitor)/AudioTransport — CoreAudio routing,
+                             AudioInputDevices + MicDeviceStore (microphone selection),
+                             SoundPack/Catalog/Store (the voice *descriptors*; the voices
+                             themselves are app-side)
   HostIdentity.swift         the host's Keychain service, log subsystem, defaults prefix, log
                              directory, product name and release feed — one overridable value
   Config/                    Keychain-backed API key, key terms, developer mode, style profiles,
@@ -367,7 +370,7 @@ rule along with the row.
 | Don't                                                      | Because                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Add an external SPM dependency to the engine               | Dependency-free by rule (biggest supply-chain risk); a `check.sh` guard fails on `.package(` in `Package.swift` or a `url:`/`github:` package in `project.yml`. Extend `BlurtEngine` instead.                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| Use `AVAudioEngine` / `installTap` for capture             | A long-lived engine bound its input graph to one device and went stale on a mic↔built-in switch — `-10868` (`kAudioUnitErr_FormatNotSupported`) or all-zero buffers. `MicCapture` uses a fresh `AVAudioRecorder` per session.                                                                                                                                                                                                                                                                                                                                                                                                |
+| Use `AVAudioEngine` / `installTap` for capture             | A long-lived engine bound its input graph to one device and went stale on a mic↔built-in switch — `-10868` (`kAudioUnitErr_FormatNotSupported`) or all-zero buffers. `MicCapture` builds a fresh `AVCaptureSession` recorder per capture (owner-directed move from `AVAudioRecorder`, 2026-08-25).                                                                                                                                                                                                                                                                                                                           |
 | Add streaming STT                                          | The dictation API returns the full (already rewritten) text in one response; the overlay shows "Transcribing…" then the full text.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | Add a client-side LLM cleanup pass                         | Cleanup is the dictation API's server-side rewrite, requested by the `llm` block on the same `/transcribe` call. No LLM Gateway client, no `StylerProtocol`, no styling stage, no second request — transcription steering belongs in `ConversationContext`.                                                                                                                                                                                                                                                                                                                                                                  |
 | Add local models or model downloads                        | Transcription is a remote AssemblyAI call: no on-device ASR/LLM, no model cache, no download UI.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -435,33 +438,33 @@ DictationKeyTap (CGEventTap + DictationKeyGate) → AppCoordinator → Dictation
 
 ### `MicCapture` — `Sources/BlurtEngine/Audio/MicCapture.swift`
 
-An actor implementing `MicCaptureProtocol`. It captures with **`AVAudioRecorder`**, recording
-straight to a temp 16 kHz / mono / 16-bit PCM WAV — the exact geometry the dictation API wants, so
-`stop()` reads the file back as raw S16LE bytes (`Data`, via `AVAudioFile`'s int16 common format)
-with no resampling or float-conversion pass. That blob is what the dictation request uploads, byte
-for byte.
+An actor implementing `MicCaptureProtocol`. It captures with an **`AVCaptureSession`** recorder
+(`CaptureSessionRecorder`, behind the actor's `CaptureRecorder` seam; the owner-directed move from
+`AVAudioRecorder`, 2026-08-25): the session's audio data output converts to 16 kHz / mono / 16-bit
+LPCM — the exact geometry the dictation API wants — and the delegate accumulates the raw S16LE
+bytes in memory, so `stop()` returns the blob the dictation request uploads byte for byte, with no
+temp file, no read-back, and no resampling or float-conversion pass.
 
-A **fresh recorder per session** resolves the current default input device at `record()` time; this
-is deliberate — see [Settled decisions](#settled-decisions--dont-reintroduce-these) for the
-`AVAudioEngine` failure it replaced.
+A **fresh recorder per session**, built around the _current_ resolution of the user's selection at
+press time; this is deliberate — see
+[Settled decisions](#settled-decisions--dont-reintroduce-these) for the `AVAudioEngine` failure it
+replaced.
 
-**Microphone selection** rides a backend seam inside the actor (`CaptureRecorder`): un-pinned
-capture — the default — keeps the `AVAudioRecorder` path above unchanged, while a device pinned in
-Settings (`MicDeviceStore`, persisted as the device UID) records through `PinnedAudioQueueRecorder`,
-an AudioQueue bound to that device via `kAudioQueueProperty_CurrentDevice` — still fresh per
-session. The transport-keyed policies (liveness cap, tail linger) and the warm-recorder identity
-check key off the **pinned** device's snapshot, and a pinned device that isn't connected falls back
-to the system default per press (`MicDeviceSelection.effective` — pure and unit-tested; the pin
-stays stored). Device enumeration and UID translation live in `AudioInputDevices` (hardware-bound,
-coverage-excluded, like `AudioRoute`).
+**Microphone selection** is that resolution: a device pinned in Settings (`MicDeviceStore`,
+persisted as the device UID — `AVCaptureDevice(uniqueID:)` takes the same string) or the system
+default input. The transport-keyed policies (liveness cap, tail linger) and the warm-recorder
+identity check key off the **pinned** device's snapshot, and a pinned device that isn't connected
+falls back to the system default per press (`MicDeviceSelection.effective` — pure and unit-tested;
+the pin stays stored). Device enumeration and UID translation live in `AudioInputDevices`
+(hardware-bound, coverage-excluded, like `AudioRoute`).
 
-**Bluetooth inputs are the reason for four of this actor's moving parts.** Opening the mic on
+**Bluetooth inputs are the reason for three of this actor's moving parts.** Opening the mic on
 AirPods (or any Bluetooth headset) makes the system renegotiate the link into its mic-capable mode —
 one to two seconds, during which the OS receives no audio at all — and that link then buffers audio
 in both directions. So:
 
 - **`start()` does not return until the input is live.** `record()` returning `true` only means the
-  AudioQueue started, not that frames are arriving, so `start()` polls the recorder until **both**
+  session started running, not that frames are arriving, so `start()` polls the recorder until **both**
   its clock has advanced past 0 **and** its meter reads above `MicLiveness.silenceFloorDB`. The
   clock alone is not enough: macOS can deliver all-zero buffers from a stale or not-yet-switched
   device, and frames of digital silence advance the clock exactly like real audio — so the gate was
@@ -493,31 +496,27 @@ in both directions. So:
   `performPress` still consumes the flag before claiming `.recording`, for the narrow window where
   the cancel lands after the wait returned and there is nothing left to interrupt.
 
-- **The warm recorder is re-armed after every capture**, not just at launch. The cost above is paid
-  at `prepareToRecord()`, i.e. per session, so warming only the first one hid it for one dictation
-  out of N. `stop()`/`cancelCapture()` schedule a re-warm; `start()` consumes it.
-- **A warm recorder is validated before reuse.** `AVAudioRecorder` resolves its device once and
-  never re-resolves, so `MicCapture` records the default input's identity (`AudioRoute.currentInput()`)
-  alongside the warm recorder and discards it when the device has changed — otherwise a recorder
-  warmed before the user connected their AirPods would keep recording the built-in mic. Unknown
-  counts as changed.
-- **The warm recorder expires** (`preparedRecorderLifetime`, 60 s). A prepared recorder holds the
-  input device open, which is exactly what pins AirPods in the profile where _output_ audio is
-  degraded — so it is not held indefinitely. Back-to-back dictations land inside the window; a press
-  past it just prepares lazily, which is the pre-re-warm behavior.
-
-The re-warm and the liveness gate are complements, not alternatives: the re-warm shortens how _often_
-the profile switch is paid (a warm recorder has already held the route open), and the gate is what
-keeps the app honest on the presses that pay it anyway.
+- **The warm recorder is re-built after every capture**, not just at launch
+  (`stop()`/`cancelCapture()` schedule a re-warm; `start()` consumes it). Building a session does
+  **not** engage the microphone — no capture, no input indicator — so a warm recorder is free to
+  hold idle with no expiry; what it pre-pays is session construction, while the route activation
+  itself happens at `record()`'s `startRunning()`, inside the connecting window the liveness gate
+  covers. (The retired recorder pre-opened the route at warm time instead, which is why its warm
+  slot needed a 60 s expiry — an open input pins AirPods in the profile where _output_ audio is
+  degraded. A built-but-idle session holds nothing, so the expiry went with the backend.)
+- **A warm recorder is validated before reuse.** The session attaches its device once, at build
+  time, and never re-resolves, so `MicCapture` records the resolved input's identity (and the pin it
+  was built under) alongside the warm recorder and discards it when either has changed — otherwise a
+  recorder warmed before the user connected their AirPods would keep recording the built-in mic.
+  Unknown counts as changed.
 
 `stop()` also waits out `AudioTransport.tailLinger(forTransportType:)` (220 ms on Bluetooth, `.zero`
 otherwise — the policy sits beside `MicLiveness`'s wait cap so both are unit-tested) before ending
 the recording **when the
-session's input is Bluetooth**, so speech still travelling over the link lands in the file instead of
-being truncated — the missing last word. It runs after `.transcribing` is claimed, so it delays the
-transcript, never the "it heard me" cue. Cancels take `cancelCapture()` instead, which skips both the
-linger and the file read-back: the audio is being discarded, so neither is worth delaying the user's
-cancel for.
+session's input is Bluetooth**, so speech still travelling over the link lands in the recording
+instead of being truncated — the missing last word. It runs after `.transcribing` is claimed, so it
+delays the transcript, never the "it heard me" cue. Cancels take `cancelCapture()` instead, which
+skips the linger: the audio is being discarded, so it isn't worth delaying the user's cancel for.
 
 The routing facts behind all of that live in **`AudioRoute`** (`Audio/AudioRoute.swift`, internal):
 which device is the default input, and its raw CoreAudio transport type. **Raw reads only** — what a

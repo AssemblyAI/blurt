@@ -9,7 +9,7 @@ enum MicLiveness {
   /// The first re-check delay, doubling up to `maxPollInterval`.
   ///
   /// Geometric rather than a fixed quantum because the two cases this loop
-  /// serves want opposite things. `AVAudioRecorder.currentTime` is 0 the instant
+  /// serves want opposite things. The recorder's clock is 0 the instant
   /// `record()` returns, so *every* press sleeps at least once before
   /// `.recording`, the start chime and the meter — on a wired mic that quantum
   /// is the entire wait, and it should be as small as possible. A real Bluetooth
@@ -61,12 +61,17 @@ enum MicLiveness {
   ///
   /// This is not a speech threshold and must never be raised into one. All it
   /// has to separate is "the buffers are literally zeroes" from "the ADC is
-  /// handing us something": `averagePower(forChannel:)` reports dBFS in roughly
-  /// `[-160, 0]`, a zero-filled buffer bottoms out at or near -160, and a single
-  /// least-significant bit of a 16-bit sample is already about -90, so any real
-  /// analog noise floor — including a live mic in a dead-quiet room, which still
-  /// reads its own self-noise — sits far above this. -115 is in the empty band
-  /// between the two.
+  /// handing us something": the capture meter
+  /// (`AVCaptureAudioChannel.averagePowerLevel`, dBFS with full scale at 0 —
+  /// the same scale the retired recorder's meter reported) reads a zero-filled
+  /// buffer at or near its floor, while a single least-significant bit of a
+  /// 16-bit sample is already about -90, so any real analog noise floor —
+  /// including a live mic in a dead-quiet room, which still reads its own
+  /// self-noise — sits far above this. -115 is in the empty band between the
+  /// two. The value was calibrated against the retired meter; the dBFS math is
+  /// identical, but where the session meter actually bottoms out (and what it
+  /// reads before its first update) must be re-verified on real hardware —
+  /// AirPods mid-profile-switch especially.
   ///
   /// A speech-level floor (`MicCapture.meterFloorDB` is -50) would turn this
   /// gate into voice-activity detection and fail every press in a quiet room

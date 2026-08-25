@@ -5,13 +5,13 @@ import Testing
 
 /// Live-hardware checks for the microphone-selection plumbing: the device
 /// enumeration the Settings picker lists, the UID→snapshot translation the
-/// capture path pins with, and the pinned AudioQueue recorder itself.
+/// capture path pins with, and the session recorder itself.
 ///
 /// Gated on BLURT_LIVE_AUDIO_TESTS=1 like the other capture suites — every test
 /// here talks to the real CoreAudio HAL (and the recorder test opens a real
 /// input device), which a headless CI runner cannot answer for. Documents and
 /// locks the behavior for a human running it on a Mac with a microphone;
-/// `AudioInputDevices.swift` and `PinnedAudioQueueRecorder.swift` are excluded
+/// `AudioInputDevices.swift` and `CaptureSessionRecorder.swift` are excluded
 /// from the coverage gate for the same reason `MicCapture.swift` is.
 @Suite(
   "AudioInputDevices & pinned recorder (live)",
@@ -49,7 +49,7 @@ struct AudioInputDevicesTests {
     #expect(AudioInputDevices.input(forUID: "blurt-test-no-such-device") == nil)
   }
 
-  @Test("the pinned recorder captures S16LE audio from the device it was built for")
+  @Test("the session recorder captures S16LE audio from the device it was pinned to")
   func pinnedRecorderCapturesAudio() async throws {
     // Pin to the current default input's UID — the one device a machine running
     // this suite is known to have working.
@@ -59,12 +59,16 @@ struct AudioInputDevicesTests {
         AudioInputDevices.input(forUID: $0.uid)?.deviceID == defaultInput.deviceID
       }, "the default input should be among the enumerated devices")
 
-    let recorder = try PinnedAudioQueueRecorder(deviceUID: device.uid)
-    try #require(recorder.record(), "the pinned recorder should start on a live device")
+    let recorder = try CaptureSessionRecorder(pinnedUID: device.uid)
+    try #require(recorder.record(), "the session recorder should start on a live device")
 
-    // Give the queue a moment to clock and deliver, as the liveness gate would.
+    // Give the session a moment to clock and deliver, as the liveness gate would.
     try await Task.sleep(for: .milliseconds(500))
-    #expect(recorder.currentTime > 0, "the queue's clock should advance while recording")
+    #expect(recorder.currentTime > 0, "the clock should advance while buffers arrive")
+    // The meter must read as a live analog input, not digital silence — this is
+    // the reading `MicLiveness.silenceFloorDB` gates on, and the assertion that
+    // proves the session meter's floor semantics on real hardware.
+    #expect(recorder.meteredPowerDB() > MicLiveness.silenceFloorDB, "a live mic must out-read the silence floor")
 
     let pcm = recorder.stopAndReadPCM()
     #expect(!pcm.isEmpty, "half a second of capture should deliver samples")

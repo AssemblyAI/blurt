@@ -27,21 +27,3 @@ enum MicCaptureError: LocalizedError {
     }
   }
 }
-
-/// A CoreAudio call the pinned-device recorder couldn't get past, carrying which
-/// call and the `OSStatus` it answered — the two facts a field report needs to
-/// be actionable. Reaches the overlay the same way `MicCaptureError` does
-/// (interpolated by `BlurtError.audioCaptureFailed`), so the message carries the
-/// same read-like-a-sentence requirement, pinned in `MicCaptureFormatTests`.
-/// Declared here beside `MicCaptureError` — not in the recorder's own file —
-/// because it is pure, so the coverage gate counts it and the message test keeps
-/// it green.
-struct AudioQueueError: LocalizedError {
-  /// The CoreAudio call that refused, e.g. `"AudioQueueNewInput"`.
-  let operation: String
-  let status: OSStatus
-
-  var errorDescription: String? {
-    "The selected microphone couldn't be opened (\(operation): error \(status))."
-  }
-}

@@ -1,13 +1,13 @@
-@preconcurrency import AVFoundation
 import Foundation
 import Testing
 
 @testable import BlurtEngine
 
-/// Pure-logic tests for `MicCapture`'s level-metering math and recorded-file
-/// decoding. The recorder capture lifecycle itself needs a real device and is
-/// exercised by the env-gated `MicCaptureLevelsTests`.
-@Suite("MicCapture decoding & metering")
+/// Pure-logic tests for `MicCapture`'s level-metering math and the capture
+/// errors' user-facing wording. The recorder capture lifecycle itself needs a
+/// real device and is exercised by the env-gated `MicCaptureLevelsTests` and
+/// `AudioInputDevicesTests`.
+@Suite("MicCapture metering & errors")
 struct MicCaptureFormatTests {
   // MARK: - dBFS → linear level
 
@@ -34,30 +34,7 @@ struct MicCaptureFormatTests {
     #expect(MicCapture.linearLevel(fromPowerDB: -11) > MicCapture.linearLevel(fromPowerDB: -22))
   }
 
-  // MARK: - PCM file decoding
-
-  @Test func decodePCMRoundTripsRecordedAudio() throws {
-    let known: [Float] = [0, 0.5, -0.5, 1.0, -1.0, 0.25, -0.25, 0]
-    let url = try Self.writeWAV(samples: known)
-    defer { try? FileManager.default.removeItem(at: url) }
-
-    let pcm = try MicCapture.decodePCM(fromFileAt: url)
-
-    // Two bytes per sample, no RIFF/WAVE header — the blob uploads as-is.
-    #expect(pcm.count == known.count * 2)
-    for (i, want) in known.enumerated() {
-      let got = Float(Self.readInt16LE(pcm, i * 2)) / 32_767
-      // int16 quantization tolerance (full scale is ±32767, ~3e-5 per step;
-      // the write side's ±32768-vs-±32767 scaling convention also fits inside).
-      #expect(abs(got - want) < 0.001)
-    }
-  }
-
-  @Test func decodePCMReturnsEmptyForEmptyFile() throws {
-    let url = try Self.writeWAV(samples: [])
-    defer { try? FileManager.default.removeItem(at: url) }
-    #expect(try MicCapture.decodePCM(fromFileAt: url).isEmpty)
-  }
+  // MARK: - Error wording
 
   @Test func noInputDeviceHasHumanReadableMessage() {
     // This message reaches the overlay via BlurtError.audioCaptureFailed's
@@ -71,56 +48,5 @@ struct MicCaptureFormatTests {
     // noInputDevice above, and the same sentence requirement. Together the two
     // also keep MicCaptureError.swift's errorDescription fully covered.
     #expect(MicCaptureError.inputNeverDelivered.errorDescription == "The microphone didn't start.")
-  }
-
-  @Test func audioQueueErrorNamesTheCallAndStatus() {
-    // The pinned-device recorder's failure, on the same route to the pill — the
-    // sentence has to carry the refusing call and its OSStatus, the two facts a
-    // field report is read off.
-    let error = AudioQueueError(operation: "AudioQueueNewInput", status: -66681)
-    #expect(
-      error.errorDescription
-        == "The selected microphone couldn't be opened (AudioQueueNewInput: error -66681).")
-  }
-
-  // MARK: - Helpers
-
-  /// Little-endian Int16 at `offset` — decodes the raw S16LE blob under test.
-  private static func readInt16LE(_ data: Data, _ offset: Int) -> Int16 {
-    Int16(bitPattern: UInt16(data[offset]) | (UInt16(data[offset + 1]) << 8))
-  }
-
-  /// Write the given mono samples to a temp 16 kHz / 16-bit PCM WAV — the same
-  /// on-disk format `MicCapture` records — and return its URL. The file is closed
-  /// (flushed) before returning so `decodePCM` reads a complete file.
-  private static func writeWAV(samples: [Float]) throws -> URL {
-    let url = FileManager.default.temporaryDirectory
-      .appendingPathComponent("blurt-test-\(UUID().uuidString).wav")
-    let settings: [String: Any] = [
-      AVFormatIDKey: kAudioFormatLinearPCM,
-      // The engine's rate, not a restated literal: this helper claims to write
-      // "the same on-disk format MicCapture records", and MicCapture derives its
-      // targetSampleRate from here too. Pinned independently, a rate change would
-      // leave decodePCM's round trip exercising a format the recorder never makes,
-      // with the suite still green. (SyncSTTLimitsTests pins the value itself.)
-      AVSampleRateKey: Double(SyncSTTLimits.sampleRate),
-      AVNumberOfChannelsKey: 1,
-      AVLinearPCMBitDepthKey: 16,
-      AVLinearPCMIsFloatKey: false,
-      AVLinearPCMIsBigEndianKey: false,
-    ]
-    // Scoped so the AVAudioFile is released (and the file flushed) before we read.
-    try {
-      let file = try AVAudioFile(forWriting: url, settings: settings)
-      guard !samples.isEmpty else { return }
-      let buffer = try #require(
-        AVAudioPCMBuffer(
-          pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(samples.count)))
-      buffer.frameLength = AVAudioFrameCount(samples.count)
-      let channel = try #require(buffer.floatChannelData)
-      for (i, sample) in samples.enumerated() { channel[0][i] = sample }
-      try file.write(from: buffer)
-    }()
-    return url
   }
 }

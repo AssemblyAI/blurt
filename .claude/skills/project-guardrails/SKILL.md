@@ -24,12 +24,14 @@ genuinely correct, and reaching for it means it's time to stop and ask.
 
 ## Audio
 
-- **No `AVAudioEngine` / `installTap` capture path.** `MicCapture` uses
-  `AVAudioRecorder` with a **fresh recorder per session** on purpose — a
-  long-lived engine bound its input graph to one device and went stale on a
-  mic↔built-in switch (`-10868`, all-zero buffers). Keep recording to a 16 kHz
-  mono 16-bit WAV (the Sync API's geometry) so `stop()` reads it back with no
-  resample pass.
+- **No `AVAudioEngine` / `installTap` capture path.** `MicCapture` builds a
+  **fresh `AVCaptureSession` recorder per capture** (`CaptureSessionRecorder`;
+  owner-directed move from `AVAudioRecorder`, 2026-08-25) — a long-lived engine
+  bound its input graph to one device and went stale on a mic↔built-in switch
+  (`-10868`, all-zero buffers), so no recorder survives across a device change.
+  Keep the data output converting to 16 kHz mono 16-bit S16LE (the Sync API's
+  geometry), captured straight to memory so `stop()` returns upload-ready bytes
+  with no resample pass.
 
 ## Transcription pipeline
 

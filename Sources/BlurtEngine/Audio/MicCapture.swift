@@ -2,14 +2,13 @@ import Foundation
 import os
 
 /// Captures mic audio as the 16 kHz / mono / 16-bit PCM the dictation API wants
-/// — so there's no manual tap, sample-rate conversion, or PCM plumbing here.
-/// Each session uses a freshly created recorder (`CaptureRecorder`): the
-/// `AVAudioRecorder`-backed WAV path when the user follows the system default
-/// input — the shipping behavior, which resolves the *current* default device
-/// at `record()` time — or an AudioQueue bound to one specific device when a
-/// microphone is pinned in Settings (`MicDeviceSelection`). The fresh recorder
-/// per session is the whole reason this is no longer a long-lived engine graph:
-/// that graph bound its input to one device and went stale on a device switch,
+/// — so there's no manual tap, resample pass, or PCM plumbing here. Each
+/// session uses a freshly built recorder (`CaptureRecorder`, backed by
+/// `CaptureSessionRecorder`): an `AVCaptureSession` around the *current*
+/// resolution of the user's selection — the device pinned in Settings
+/// (`MicDeviceSelection`), or the system default input. The fresh recorder per
+/// session is the whole reason this is not a long-lived engine graph: that
+/// graph bound its input to one device and went stale on a device switch,
 /// raising `-10868` or quietly capturing all-zero buffers; per-session
 /// recorders can't go stale.
 public actor MicCapture: MicCaptureProtocol {
@@ -22,13 +21,6 @@ public actor MicCapture: MicCaptureProtocol {
   public nonisolated let levels: AsyncStream<Float>
   private nonisolated let levelsContinuation: AsyncStream<Float>.Continuation
 
-  /// The geometry the recorder converts hardware audio to on the fly. The dictation
-  /// API's rate (`SyncSTTLimits.sampleRate`) — the same one the pipeline hands
-  /// the transcriber — so `stop()` returns bytes ready to upload with no
-  /// resampling or re-encoding pass. Internal because `makeRecorder` reads it
-  /// from `CaptureRecorder.swift` (split out for this file's length budget).
-  static let targetSampleRate = Double(SyncSTTLimits.sampleRate)
-
   /// Reads the persisted microphone selection, once per session bring-up (and
   /// per warm-up). A closure so tests inject a fixed selection instead of the
   /// process defaults; production reads `MicDeviceStore` per capture, so a
@@ -36,41 +28,28 @@ public actor MicCapture: MicCaptureProtocol {
   /// rule as the key terms.
   let deviceSelection: @Sendable () -> MicDeviceSelection
 
-  /// A recorder prepared ahead of the press so `start()` doesn't pay hardware
-  /// route activation on the hot path, together with everything that belongs to
-  /// *that* recorder: the input it is bound to, its idle countdown, and the
-  /// ticket that countdown carries.
-  ///
-  /// One optional rather than four parallel fields, so "a recorder without its
-  /// input snapshot" and "an expiry without its recorder" are unrepresentable
-  /// instead of merely never written.
+  /// A recorder built ahead of the press so `start()` doesn't pay session
+  /// construction on the hot path, together with the input identity it was
+  /// built against. Building does **not** engage the microphone — the device
+  /// only opens at `record()` — so holding one idle costs nothing, needs no
+  /// expiry, and never shows an input indicator. (Route activation itself is
+  /// paid by `record()`'s `startRunning()`, inside the connecting window the
+  /// liveness gate already covers.)
   ///
   /// Filled by `warmUp()` at launch and **re-filled after every capture** (see
-  /// `scheduleRewarm`), because that cost is paid per session, not once:
-  /// `prepareToRecord()` is where the route is resolved and opened, and on a
-  /// Bluetooth input that means renegotiating the link into its mic-capable
-  /// mode — hundreds of milliseconds, sometimes over a second, during which the
-  /// user has pressed the key and nothing has happened. Warming only the first
-  /// session (the previous behavior) hid that cost for one dictation out of N.
-  ///
-  /// Still a *fresh recorder per session*, which is the invariant the
-  /// `AVAudioEngine` rewrite bought: the warm recorder is validated against the
-  /// live default input before it is used (`takeWarmRecorder`) and discarded
-  /// rather than reused when the device has changed underneath it.
+  /// `scheduleRewarm`). Still a *fresh recorder per session*, which is the
+  /// invariant the long-lived-graph revert bought: the warm recorder is
+  /// validated against the live resolved input before it is used
+  /// (`takeWarmRecorder`) and discarded rather than reused when the device or
+  /// the selection has changed underneath it.
   var warm: WarmRecorder?
 
-  /// Bumped for each warm recorder prepared, so an expiry whose recorder has
-  /// since been consumed or replaced can recognise itself as stale. See
-  /// `releasePreparedRecorder(generation:)` for why cancelling the task isn't
-  /// sufficient on its own.
-  var preparedGeneration = 0
-
-  /// A prepared-but-not-started recorder and the state that only makes sense
+  /// A built-but-not-started recorder and the identity that only makes sense
   /// alongside it.
   struct WarmRecorder {
     let recorder: any CaptureRecorder
-    /// The input it was built against. A recorder resolves its device once, at
-    /// prepare time, and never re-resolves — so without this a recorder warmed
+    /// The input it was built against. A recorder attaches its device once, at
+    /// build time, and never re-resolves — so without this a recorder warmed
     /// while the built-in mic was default would keep recording from it after
     /// the user connected their AirPods. See `AudioRoute.InputSnapshot.deviceID`
     /// for why identity is the device ID.
@@ -80,12 +59,6 @@ public actor MicCapture: MicCaptureProtocol {
     /// recorder warmed under one selection must not serve a press made under
     /// another, even when both currently resolve to the same device.
     let pinnedUID: String?
-    /// Releases this recorder once it has gone unused for
-    /// `preparedRecorderLifetime`. See that constant for why holding one open
-    /// forever is not an option.
-    var expiry: Task<Void, Never>?
-    /// The ticket `expiry` carries, so a stale one can identify itself.
-    let generation: Int
   }
 
   /// The recorder for the in-flight session; nil between `stop()` and `start()`.
@@ -101,7 +74,7 @@ public actor MicCapture: MicCaptureProtocol {
   /// re-checks after, so a teardown that interleaves during the wait wins.
   /// Without it, a reentrant caller's stop saw `activeRecorder == nil`, returned
   /// an empty "clean stop", and the not-yet-installed recorder kept capturing
-  /// (mic indicator hot, temp WAV leaked) until `start()` resumed. Unreachable
+  /// (mic indicator hot) until `start()` resumed. Unreachable
   /// through `DictationSession` — its serial command queue runs release/cancel
   /// only after the press turn completes — but this is a public actor, and any
   /// host can call it unqueued.
@@ -140,19 +113,6 @@ public actor MicCapture: MicCaptureProtocol {
 
   /// `meterIntervalSeconds` as the `Duration` the meter task sleeps for.
   private static let meterInterval = Duration.seconds(meterIntervalSeconds)
-
-  /// How long a prepared-but-unused recorder is held before being torn down.
-  ///
-  /// The warm recorder is the fix for per-session route activation, but it is
-  /// not free to hold: a prepared recorder keeps the input device open, and an
-  /// open input is exactly what pins AirPods in their mic-capable profile, where
-  /// *output* audio is degraded. Holding one indefinitely would trade dictation
-  /// latency for permanently worse music. This bounds that: back-to-back
-  /// dictations — the case the warm recorder exists for — land well inside the
-  /// window, and a user who stops dictating gets their output route back shortly
-  /// after. The next press past the window simply prepares lazily, which is the
-  /// behavior that shipped before the re-warm existed.
-  static let preparedRecorderLifetime = Duration.seconds(60)
 
   public init(
     deviceSelection: @escaping @Sendable () -> MicDeviceSelection = { MicDeviceStore().selection }
@@ -197,17 +157,16 @@ public actor MicCapture: MicCaptureProtocol {
     bringingUpCapture = true
     defer { bringingUpCapture = false }
 
-    // `record()` returning true only means the AudioQueue started — not that the
-    // input route is delivering frames. A Bluetooth mic spends up to a couple of
-    // seconds switching into its mic-capable profile first, and the OS captures
-    // nothing in that window, so returning here immediately cues the user to
-    // speak into a dead mic and the first words never reach the transcript. Hold
-    // — `DictationSession` keeps the pill in `.connecting` and the start chime
-    // waits — until the recorder is clocking *and* metering real samples, capped
-    // per transport and FAILING CLOSED on timeout (the throw below). `MicLiveness`
-    // owns both policies and the reasoning, including why the clock alone was
-    // not enough. The re-warm above is what usually makes this return at once;
-    // the gate is what makes it correct when it doesn't.
+    // `record()` returning true only means the session started running — not
+    // that the input route is delivering frames. A Bluetooth mic spends up to a
+    // couple of seconds switching into its mic-capable profile first, and the OS
+    // captures nothing in that window, so returning here immediately cues the
+    // user to speak into a dead mic and the first words never reach the
+    // transcript. Hold — `DictationSession` keeps the pill in `.connecting` and
+    // the start chime waits — until the recorder is clocking *and* metering real
+    // samples, capped per transport and FAILING CLOSED on timeout (the throw
+    // below). `MicLiveness` owns both policies and the reasoning, including why
+    // the clock alone was not enough.
     let timeout = MicLiveness.timeout(forTransportType: resolved.input?.transportType)
     let generationBeforeWait = stopGeneration
     // Both probes read off-actor (`waitUntilLive` is nonisolated), safe by
@@ -222,7 +181,7 @@ public actor MicCapture: MicCaptureProtocol {
 
     // Two ways the bring-up can be abandoned while suspended, both ending the
     // same way — tear the recorder down instead of installing it, so nothing is
-    // left capturing and no temp file is orphaned:
+    // left capturing:
     //
     // - A teardown landed (`stopGeneration` moved), so the caller's stop has to
     //   stay a real stop rather than returning an empty "clean" one.
@@ -293,10 +252,9 @@ public actor MicCapture: MicCaptureProtocol {
   /// `DictationSession`'s cancels.
   ///
   /// Deliberately *not* `stop()`-and-discard: the user asked for nothing to
-  /// happen, so neither of `stop()`'s costs is worth paying. The Bluetooth tail
-  /// linger would delay the `.cancelled` phase (and with it the pill's dismissal)
-  /// to preserve audio about to be deleted, and reading the whole recording back
-  /// off disk would decode a blob with no consumer.
+  /// happen, so `stop()`'s one cost isn't worth paying. The Bluetooth tail
+  /// linger would delay the `.cancelled` phase (and with it the pill's
+  /// dismissal) to preserve audio about to be deleted.
   ///
   /// Not marked `throws`, because nothing on this path can fail — a
   /// non-throwing implementation satisfies the `throws` requirement fine. The
@@ -392,8 +350,7 @@ public actor MicCapture: MicCaptureProtocol {
   // The dB→0...1 conversion `emitLevel` uses lives in `MicCapture+Meter.swift`
   // — pure math the coverage gate counts, unlike this hardware-bound actor. The
   // warm-recorder lifecycle lives in `MicCapture+Warm.swift`, and the recorder
-  // backends with their construction and file plumbing in
-  // `CaptureRecorder.swift` — both split off for the lint file-length budget,
-  // which is why the prepared-recorder state, `logger`, `deviceSelection`,
-  // `targetSampleRate` and those statics are internal rather than private.
+  // seam with its factory in `CaptureRecorder.swift` — both split off for the
+  // lint file-length budget, which is why the warm state, `logger`,
+  // `deviceSelection` and `makeBackend` are internal rather than private.
 }
