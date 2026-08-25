@@ -73,6 +73,16 @@ struct MicCaptureFormatTests {
     #expect(MicCaptureError.inputNeverDelivered.errorDescription == "The microphone didn't start.")
   }
 
+  @Test func audioQueueErrorNamesTheCallAndStatus() {
+    // The pinned-device recorder's failure, on the same route to the pill — the
+    // sentence has to carry the refusing call and its OSStatus, the two facts a
+    // field report is read off.
+    let error = AudioQueueError(operation: "AudioQueueNewInput", status: -66681)
+    #expect(
+      error.errorDescription
+        == "The selected microphone couldn't be opened (AudioQueueNewInput: error -66681).")
+  }
+
   // MARK: - Helpers
 
   /// Little-endian Int16 at `offset` — decodes the raw S16LE blob under test.

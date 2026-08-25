@@ -33,7 +33,7 @@ struct MicCaptureWarmTests {
 
   @Test("warmUp prepares a recorder once; a second call has been overtaken and no-ops")
   func warmUpPreparesOnce() async throws {
-    let mic = MicCapture()
+    let mic = MicCapture(deviceSelection: { .systemDefault })
     #expect(await mic.canPrepareWarmRecorder)
 
     await mic.warmUp()
@@ -56,7 +56,7 @@ struct MicCaptureWarmTests {
     // wait both `activeRecorder` and `warm` are nil, so a guard reading only
     // those would call a live capture "idle" and prepare a second recorder onto
     // the already-open input.
-    let mic = MicCapture()
+    let mic = MicCapture(deviceSelection: { .systemDefault })
     await mic.setBringingUpCapture(true)
     await mic.warmUp()
     #expect(await mic.hasWarmRecorder == false)
@@ -70,7 +70,7 @@ struct MicCaptureWarmTests {
 
   @Test("a warm recorder is reused only while still bound to the live default input")
   func warmRecorderReusedWhenDeviceUnchanged() async throws {
-    let mic = MicCapture()
+    let mic = MicCapture(deviceSelection: { .systemDefault })
     try await mic.installWarmRecorder(boundTo: builtIn)
 
     #expect(await mic.takeWarm(matching: builtIn))
@@ -89,7 +89,7 @@ struct MicCaptureWarmTests {
     // bound to the wrong device doesn't fail loudly — it records the wrong mic,
     // or silence — so unknown means discard: paying route activation again is
     // the cheaper mistake.
-    let mic = MicCapture()
+    let mic = MicCapture(deviceSelection: { .systemDefault })
 
     // The user connected their AirPods after the warm-up.
     try await mic.installWarmRecorder(boundTo: builtIn)
@@ -105,12 +105,34 @@ struct MicCaptureWarmTests {
     #expect(await mic.takeWarm(matching: nil) == false)
   }
 
+  @Test("a selection change between warm-up and press discards the warm recorder")
+  func warmRecorderDiscardedOnPinChange() async throws {
+    // The pin is part of the warm recorder's identity, not just the device it
+    // resolves to: even when both selections currently resolve to the same
+    // device, a recorder warmed un-pinned follows a later default switch where
+    // a pinned one must not — so a match on device ID alone would reuse the
+    // wrong backend.
+    let mic = MicCapture(deviceSelection: { .systemDefault })
+
+    // Warmed while following the system default; the press arrives pinned.
+    try await mic.installWarmRecorder(boundTo: builtIn)
+    #expect(await mic.takeWarm(matching: builtIn, pinnedUID: "uid:test") == false)
+
+    // Warmed under a pin; the press arrives un-pinned.
+    try await mic.installWarmRecorder(boundTo: builtIn, pinnedUID: "uid:test")
+    #expect(await mic.takeWarm(matching: builtIn) == false)
+
+    // The same pin on both sides still reuses.
+    try await mic.installWarmRecorder(boundTo: builtIn, pinnedUID: "uid:test")
+    #expect(await mic.takeWarm(matching: builtIn, pinnedUID: "uid:test"))
+  }
+
   @Test("an expiry with a stale generation ticket leaves a later warm recorder alone")
   func staleExpiryTicketDoesNothing() async throws {
     // Cancellation alone doesn't cover this: an expiry already past its
     // cancellation check still gets its actor turn, and without the ticket it
     // would tear down a recorder prepared a moment ago.
-    let mic = MicCapture()
+    let mic = MicCapture(deviceSelection: { .systemDefault })
     try await mic.installWarmRecorder(boundTo: builtIn)
     let generation = await mic.preparedGeneration
 
@@ -136,7 +158,7 @@ struct MicCaptureWarmTests {
     // it never terminates at all. Sleeping yields the thread outright, and the
     // deadline turns "never landed" into a failed expectation rather than a hang
     // the suite's time limit has to clean up.
-    let mic = MicCapture()
+    let mic = MicCapture(deviceSelection: { .systemDefault })
     let before = await mic.preparedGeneration
     await mic.scheduleRewarm()
     let deadline = ContinuousClock().now.advanced(by: .seconds(5))
@@ -150,8 +172,9 @@ struct MicCaptureWarmTests {
 }
 
 /// Actor-isolated test seams over `MicCapture`'s internal warm-recorder state.
-/// Extensions because `AVAudioRecorder` is not `Sendable`, so neither the `warm`
-/// slot nor `takeWarmRecorder`'s return can cross the actor boundary into a
+/// Extensions because the recorder backends are only `@unchecked Sendable`
+/// under the capture path's confinement argument, so neither the `warm` slot
+/// nor `takeWarmRecorder`'s return should cross the actor boundary into a
 /// test — each helper reduces it to a `Sendable` answer on the actor instead.
 extension MicCapture {
   /// Whether a warm recorder is currently held.
@@ -164,22 +187,26 @@ extension MicCapture {
     bringingUpCapture = value
   }
 
-  /// Installs a warm recorder bound to a *known* input — `prepareWarmRecorder`
-  /// with the `AudioRoute.currentInput()` read replaced by `input`, so the
-  /// device-identity tests don't depend on what the test machine's routing
-  /// happens to answer.
-  func installWarmRecorder(boundTo input: AudioRoute.InputSnapshot?) throws {
+  /// Installs a warm recorder bound to a *known* input (and pin) —
+  /// `prepareWarmRecorder` with the resolution read replaced by `input` /
+  /// `pinnedUID`, so the identity tests don't depend on what the test machine's
+  /// routing happens to answer.
+  func installWarmRecorder(
+    boundTo input: AudioRoute.InputSnapshot?, pinnedUID: String? = nil
+  ) throws {
     preparedGeneration += 1
     warm = WarmRecorder(
-      recorder: try Self.makeRecorder(), input: input, generation: preparedGeneration)
+      recorder: try WAVFileRecorder(), input: input, pinnedUID: pinnedUID,
+      generation: preparedGeneration)
   }
 
   /// Consumes the warm slot through the production validation, reporting whether
   /// the recorder was reusable. A reused recorder's temp file is cleaned up here,
   /// the job `start()` would otherwise inherit; the discard path already does so.
-  func takeWarm(matching input: AudioRoute.InputSnapshot?) -> Bool {
-    guard let recorder = takeWarmRecorder(matching: input) else { return false }
-    Self.removeFile(at: recorder.url)
+  func takeWarm(matching input: AudioRoute.InputSnapshot?, pinnedUID: String? = nil) -> Bool {
+    let resolved = ResolvedInput(input: input, pinnedUID: pinnedUID)
+    guard let recorder = takeWarmRecorder(matching: resolved) else { return false }
+    recorder.stopAndDiscard()
     return true
   }
 
@@ -188,6 +215,6 @@ extension MicCapture {
   /// Through `takeWarmRecorder` — which cancels the expiry — rather than a bare
   /// `warm = nil`, so teardown can't diverge from how production empties the slot.
   func discardWarmRecorder() {
-    _ = takeWarmRecorder(matching: nil)
+    _ = takeWarmRecorder(matching: ResolvedInput(input: nil, pinnedUID: nil))
   }
 }

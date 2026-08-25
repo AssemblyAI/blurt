@@ -109,8 +109,10 @@ enum AudioRoute {
 
   /// The device's transport type, or nil when the read failed —
   /// `AudioTransport` and `MicLiveness` both treat nil as "not Bluetooth", which
-  /// is the conservative direction for each.
-  private static func transportType(of deviceID: AudioDeviceID) -> UInt32? {
+  /// is the conservative direction for each. Internal rather than private so
+  /// `AudioInputDevices.input(forUID:)` builds a pinned device's `InputSnapshot`
+  /// from the same read the default input's snapshot comes from.
+  static func transportType(of deviceID: AudioDeviceID) -> UInt32? {
     var address = globalAddress(kAudioDevicePropertyTransportType)
     var transport = UInt32(0)
     var size = UInt32(MemoryLayout<UInt32>.size)

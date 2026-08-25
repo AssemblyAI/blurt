@@ -26,7 +26,7 @@ struct MicCaptureLevelsTests {
     .tags(.liveAudio),
     .timeLimit(.minutes(1)))
   func levelsYieldDuringCapture() async throws {
-    let mic = MicCapture()
+    let mic = MicCapture(deviceSelection: { .systemDefault })
 
     let collector = Task { () -> [Float] in
       var collected: [Float] = []

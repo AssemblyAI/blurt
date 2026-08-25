@@ -1,15 +1,17 @@
-@preconcurrency import AVFoundation
 import Foundation
 import os
 
-/// Captures mic audio with `AVAudioRecorder`, which records straight to the
-/// 16 kHz / mono / 16-bit PCM the dictation API wants — so there's no manual tap,
-/// sample-rate conversion, or PCM plumbing here. Each session uses a freshly
-/// created recorder, which resolves the *current* default input device at
-/// `record()` time. That's the whole reason this is no longer an `AVAudioEngine`:
-/// the engine's input graph bound to one device and went stale on a device switch
-/// (mic ↔ built-in), raising `-10868` (`kAudioUnitErr_FormatNotSupported`) or
-/// quietly capturing all-zero buffers. A per-session recorder can't go stale.
+/// Captures mic audio as the 16 kHz / mono / 16-bit PCM the dictation API wants
+/// — so there's no manual tap, sample-rate conversion, or PCM plumbing here.
+/// Each session uses a freshly created recorder (`CaptureRecorder`): the
+/// `AVAudioRecorder`-backed WAV path when the user follows the system default
+/// input — the shipping behavior, which resolves the *current* default device
+/// at `record()` time — or an AudioQueue bound to one specific device when a
+/// microphone is pinned in Settings (`MicDeviceSelection`). The fresh recorder
+/// per session is the whole reason this is no longer a long-lived engine graph:
+/// that graph bound its input to one device and went stale on a device switch,
+/// raising `-10868` or quietly capturing all-zero buffers; per-session
+/// recorders can't go stale.
 public actor MicCapture: MicCaptureProtocol {
   // Subsystem/category make these lines findable via:
   //   log show --predicate 'subsystem == "dev.alex.blurt"' --last 1h
@@ -23,8 +25,16 @@ public actor MicCapture: MicCaptureProtocol {
   /// The geometry the recorder converts hardware audio to on the fly. The dictation
   /// API's rate (`SyncSTTLimits.sampleRate`) — the same one the pipeline hands
   /// the transcriber — so `stop()` returns bytes ready to upload with no
-  /// resampling or re-encoding pass.
-  private static let targetSampleRate = Double(SyncSTTLimits.sampleRate)
+  /// resampling or re-encoding pass. Internal because `makeRecorder` reads it
+  /// from `CaptureRecorder.swift` (split out for this file's length budget).
+  static let targetSampleRate = Double(SyncSTTLimits.sampleRate)
+
+  /// Reads the persisted microphone selection, once per session bring-up (and
+  /// per warm-up). A closure so tests inject a fixed selection instead of the
+  /// process defaults; production reads `MicDeviceStore` per capture, so a
+  /// Settings change applies to the very next press — the same re-read-per-use
+  /// rule as the key terms.
+  let deviceSelection: @Sendable () -> MicDeviceSelection
 
   /// A recorder prepared ahead of the press so `start()` doesn't pay hardware
   /// route activation on the hot path, together with everything that belongs to
@@ -58,13 +68,18 @@ public actor MicCapture: MicCaptureProtocol {
   /// A prepared-but-not-started recorder and the state that only makes sense
   /// alongside it.
   struct WarmRecorder {
-    let recorder: AVAudioRecorder
-    /// The default input it was built against. `AVAudioRecorder` resolves its
-    /// device once, at `prepareToRecord()`, and never re-resolves — so without
-    /// this a recorder warmed while the built-in mic was default would keep
-    /// recording from it after the user connected their AirPods. See
-    /// `AudioRoute.InputSnapshot.deviceID` for why identity is the device ID.
+    let recorder: any CaptureRecorder
+    /// The input it was built against. A recorder resolves its device once, at
+    /// prepare time, and never re-resolves — so without this a recorder warmed
+    /// while the built-in mic was default would keep recording from it after
+    /// the user connected their AirPods. See `AudioRoute.InputSnapshot.deviceID`
+    /// for why identity is the device ID.
     let input: AudioRoute.InputSnapshot?
+    /// The device UID the recorder was pinned to, or nil for the system
+    /// default. Matched alongside the device identity in `takeWarmRecorder`: a
+    /// recorder warmed under one selection must not serve a press made under
+    /// another, even when both currently resolve to the same device.
+    let pinnedUID: String?
     /// Releases this recorder once it has gone unused for
     /// `preparedRecorderLifetime`. See that constant for why holding one open
     /// forever is not an option.
@@ -74,7 +89,7 @@ public actor MicCapture: MicCaptureProtocol {
   }
 
   /// The recorder for the in-flight session; nil between `stop()` and `start()`.
-  var activeRecorder: AVAudioRecorder?
+  var activeRecorder: (any CaptureRecorder)?
   /// The in-flight session's input transport, sampled once at `start()`. Read by
   /// `stop()` to size the tail linger — sampled at start rather than re-read at
   /// stop so a device switch mid-utterance can't make the two halves of one
@@ -139,7 +154,10 @@ public actor MicCapture: MicCaptureProtocol {
   /// behavior that shipped before the re-warm existed.
   static let preparedRecorderLifetime = Duration.seconds(60)
 
-  public init() {
+  public init(
+    deviceSelection: @escaping @Sendable () -> MicDeviceSelection = { MicDeviceStore().selection }
+  ) {
+    self.deviceSelection = deviceSelection
     // The continuation is fed from a ~20 Hz meter timer; the levels stream is a
     // meter, not the captured signal — the consumer only renders the most recent
     // value — so cap it at the newest single element.
@@ -149,23 +167,26 @@ public actor MicCapture: MicCaptureProtocol {
   }
 
   public func start() async throws {
-    // One CoreAudio read per session, answering both questions this capture has
-    // about its input: whether the warm recorder is still bound to it, and
-    // whether its link buffers a tail worth waiting for at stop.
-    let input = AudioRoute.currentInput()
-    // Reuse the warm recorder when it is still bound to the current default
-    // input; otherwise build a fresh one. `??` only evaluates `makeRecorder()`
-    // when nothing usable was warmed.
-    let recorder = try takeWarmRecorder(matching: input) ?? Self.makeRecorder()
+    // One trip through CoreAudio per session, answering every question this
+    // capture has about its input: which device the selection resolves to
+    // (pinned, or the system default — including the missing-pin fallback),
+    // whether the warm recorder is still bound to it, and whether its link
+    // buffers a tail worth waiting for at stop.
+    let resolved = Self.resolveInput(selection: deviceSelection())
+    // Reuse the warm recorder when it is still bound to the resolved input;
+    // otherwise build a fresh one. `??` only evaluates `makeBackend` when
+    // nothing usable was warmed.
+    let recorder = try takeWarmRecorder(matching: resolved)
+      ?? Self.makeBackend(pinnedUID: resolved.pinnedUID)
 
     // record() returns false when no usable input device is available (unplugged,
     // asleep, route lost). Surface that as a thrown Swift error so
     // DictationSession.press() reports `.audioCaptureFailed` instead of recording
-    // nothing. (Unlike AVAudioEngine's installTap, no path here can raise an
-    // uncatchable Obj-C exception, so there's no degenerate-format guard to keep.)
+    // nothing. (No path here can raise an uncatchable Obj-C exception, so there's
+    // no degenerate-format guard to keep.)
     guard recorder.record() else {
       Self.logger.error("recorder.record() returned false — no usable input device")
-      Self.removeFile(at: recorder.url)
+      recorder.stopAndDiscard()
       throw BlurtError.audioCaptureFailed(underlying: MicCaptureError.noInputDevice)
     }
 
@@ -186,7 +207,7 @@ public actor MicCapture: MicCaptureProtocol {
     // owns both policies and the reasoning, including why the clock alone was
     // not enough. The re-warm above is what usually makes this return at once;
     // the gate is what makes it correct when it doesn't.
-    let timeout = MicLiveness.timeout(forTransportType: input?.transportType)
+    let timeout = MicLiveness.timeout(forTransportType: resolved.input?.transportType)
     let generationBeforeWait = stopGeneration
     // Both probes read off-actor (`waitUntilLive` is nonisolated), safe by
     // confinement: the polls run sequentially in one task and nothing else
@@ -196,10 +217,7 @@ public actor MicCapture: MicCaptureProtocol {
     let gap = await MicLiveness.waitUntilLive(
       timeout: timeout, clock: ContinuousClock(),
       currentTime: { recorder.currentTime },
-      inputPowerDB: {
-        recorder.updateMeters()
-        return recorder.averagePower(forChannel: 0)
-      })
+      inputPowerDB: { recorder.meteredPowerDB() })
 
     // Two ways the bring-up can be abandoned while suspended, both ending the
     // same way — tear the recorder down instead of installing it, so nothing is
@@ -213,18 +231,16 @@ public actor MicCapture: MicCaptureProtocol {
     //   distinguished from the timeout, which returns nil too but is a reported
     //   *failure* (the throw below) — a cancel is the user's own act, not a fault.
     guard stopGeneration == generationBeforeWait, !Task.isCancelled else {
-      recorder.stop()
-      Self.removeFile(at: recorder.url)
+      recorder.stopAndDiscard()
       Self.logger.info("start aborted — teardown or cancellation during the liveness wait")
       throw CancellationError()
     }
 
     // The gate's outcome, worded in `MicLiveness` so the line a field report is
     // read off is unit-tested. See `logSummary` for what it has to carry.
-    recorder.updateMeters()
     let summary = MicLiveness.logSummary(
-      gap: gap, timeout: timeout, transportType: input?.transportType,
-      powerDB: recorder.averagePower(forChannel: 0))
+      gap: gap, timeout: timeout, transportType: resolved.input?.transportType,
+      powerDB: recorder.meteredPowerDB())
     Self.logger.log(level: gap == nil ? .error : .info, "\(summary, privacy: .public)")
     // No confirmed signal within the cap: fail CLOSED — tear the capture down and
     // surface the same `.audioCaptureFailed` presentation as the record()-false
@@ -234,15 +250,14 @@ public actor MicCapture: MicCaptureProtocol {
     // so no stopGeneration bump — a concurrent stop() correctly sees no active
     // capture — and `bringingUpCapture` is cleared by the defer above.
     guard gap != nil else {
-      recorder.stop()
-      Self.removeFile(at: recorder.url)
+      recorder.stopAndDiscard()
       throw BlurtError.audioCaptureFailed(underlying: MicCaptureError.inputNeverDelivered)
     }
 
     activeRecorder = recorder
-    activeTransportType = input?.transportType
+    activeTransportType = resolved.input?.transportType
     lastEmittedLevel = nil
-    Self.logger.info("start recording to \(recorder.url.lastPathComponent, privacy: .public)")
+    Self.logger.info("start recording to \(recorder.logName, privacy: .public)")
     startMeterTimer()
   }
 
@@ -253,22 +268,18 @@ public actor MicCapture: MicCaptureProtocol {
     guard let recorder = detachActiveRecorder() else { return Data() }
     if linger > .zero {
       // Keep capturing for a moment past key-up so the audio still travelling
-      // over the link lands in the file instead of being truncated. See
+      // over the link lands in the recording instead of being truncated. See
       // `AudioTransport.tailLinger(forTransportType:)`.
       try? await Task.sleep(for: linger)
     }
-    recorder.stop()
-
-    let url = recorder.url
     defer {
-      Self.removeFile(at: url)
       // Re-arm for the *next* press now that the device is free, so the route
       // activation this session just paid for isn't paid again. Scheduled rather
       // than done inline: preparing re-opens the input, which is the slow part,
       // and `stop()` is on the release path the transcript waits behind.
       scheduleRewarm()
     }
-    let pcm = try Self.decodePCM(fromFileAt: url)
+    let pcm = try recorder.stopAndReadPCM()
 
     let sampleCount = pcm.count / SyncSTTLimits.bytesPerSample
     let durationMs = SyncSTTLimits.durationMs(ofPCMBytes: pcm.count)
@@ -293,8 +304,7 @@ public actor MicCapture: MicCaptureProtocol {
   /// developer-mode failure log keeps working for hosts that take it.
   public func cancelCapture() {
     guard let recorder = detachActiveRecorder() else { return }
-    recorder.stop()
-    Self.removeFile(at: recorder.url)
+    recorder.stopAndDiscard()
     Self.logger.info("cancelled capture, discarded audio")
     scheduleRewarm()
   }
@@ -306,7 +316,7 @@ public actor MicCapture: MicCaptureProtocol {
   /// the generation bump in particular is what `start()` re-checks across its
   /// liveness wait to know a teardown landed, so a third exit that forgot it
   /// would let an abandoned bring-up install itself and keep capturing.
-  private func detachActiveRecorder() -> AVAudioRecorder? {
+  private func detachActiveRecorder() -> (any CaptureRecorder)? {
     stopGeneration += 1
     meterTask?.cancel()
     meterTask = nil
@@ -314,26 +324,39 @@ public actor MicCapture: MicCaptureProtocol {
     return activeRecorder
   }
 
-  // MARK: - Recorder construction
+  // MARK: - Input resolution
 
-  /// Build a recorder that writes mono 16-bit little-endian PCM at the target
-  /// rate into a unique temp file. `prepareToRecord()` does the heavy route/buffer
-  /// setup so the subsequent `record()` starts promptly.
-  static func makeRecorder() throws -> AVAudioRecorder {
-    let url = FileManager.default.temporaryDirectory
-      .appendingPathComponent("blurt-\(UUID().uuidString).wav")
-    let settings: [String: Any] = [
-      AVFormatIDKey: kAudioFormatLinearPCM,
-      AVSampleRateKey: targetSampleRate,
-      AVNumberOfChannelsKey: 1,
-      AVLinearPCMBitDepthKey: 16,
-      AVLinearPCMIsFloatKey: false,
-      AVLinearPCMIsBigEndianKey: false,
-    ]
-    let recorder = try AVAudioRecorder(url: url, settings: settings)
-    recorder.isMeteringEnabled = true
-    recorder.prepareToRecord()
-    return recorder
+  /// The input a capture (or warm-up) resolved to bind to: the snapshot the
+  /// transport policies key off — of the *pinned* device when one is pinned and
+  /// present, so the liveness cap, tail linger and warm-recorder identity check
+  /// all follow the device actually recorded — plus the UID the recorder must
+  /// pin to, nil when it records the system default (no pin, or the fallback).
+  struct ResolvedInput {
+    let input: AudioRoute.InputSnapshot?
+    let pinnedUID: String?
+  }
+
+  /// One trip through the selection policy: resolve the pinned UID to a live
+  /// device (or notice it's gone), let `MicDeviceSelection.effective` — the
+  /// pure, unit-tested rule — pick the fallback, and read the snapshot of
+  /// whichever input won. Hardware-adjacent glue in a coverage-excluded file;
+  /// the decision itself stays testable.
+  static func resolveInput(selection: MicDeviceSelection) -> ResolvedInput {
+    var pinnedInput: AudioRoute.InputSnapshot?
+    if case .pinned(let uid) = selection {
+      pinnedInput = AudioInputDevices.input(forUID: uid)
+    }
+    switch selection.effective(pinnedDevicePresent: pinnedInput != nil) {
+    case .pinned(let uid):
+      return ResolvedInput(input: pinnedInput, pinnedUID: uid)
+    case .systemDefault:
+      if case .pinned = selection {
+        // Graceful degradation, not an error: the pin stays stored, and this
+        // capture records what an un-pinned one would.
+        logger.info("pinned microphone not connected — recording the system default input")
+      }
+      return ResolvedInput(input: AudioRoute.currentInput(), pinnedUID: nil)
+    }
   }
 
   // MARK: - Level metering
@@ -354,8 +377,7 @@ public actor MicCapture: MicCaptureProtocol {
 
   private func emitLevel() {
     guard let recorder = activeRecorder else { return }
-    recorder.updateMeters()
-    let level = Self.linearLevel(fromPowerDB: recorder.averagePower(forChannel: 0))
+    let level = Self.linearLevel(fromPowerDB: recorder.meteredPowerDB())
     // Only yield transitions. `linearLevel` floors room ambient to exactly 0, so a
     // silent stretch would otherwise push the same value 20×/s, resuming the
     // host's `@MainActor` observer each time just to have it discard the
@@ -368,32 +390,9 @@ public actor MicCapture: MicCaptureProtocol {
 
   // The dB→0...1 conversion `emitLevel` uses lives in `MicCapture+Meter.swift`
   // — pure math the coverage gate counts, unlike this hardware-bound actor. The
-  // warm-recorder lifecycle (`warmUp`, `takeWarmRecorder`, the re-warm and its
-  // expiry) lives in `MicCapture+Warm.swift`, split off for the lint
-  // file-length budget — which is why the prepared-recorder state, `logger`,
-  // `removeFile` and `makeRecorder` are internal rather than private.
-
-  // MARK: - File helpers
-
-  /// Read a recorded PCM file back as raw S16LE bytes — the dictation API's upload
-  /// encoding. The on-disk WAV already holds 16-bit int samples, so asking
-  /// `AVAudioFile` for the int16 common format makes this a straight copy-out:
-  /// no detour through Float32 (which the default `processingFormat` would
-  /// impose, and which the transcriber would only convert straight back). Int16
-  /// is host-endian; Apple platforms (arm64/x86_64) are little-endian, so the
-  /// bytes are already the S16LE the dictation API expects.
-  static func decodePCM(fromFileAt url: URL) throws -> Data {
-    let file = try AVAudioFile(forReading: url, commonFormat: .pcmFormatInt16, interleaved: true)
-    let frameCount = AVAudioFrameCount(file.length)
-    guard frameCount > 0,
-      let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: frameCount)
-    else { return Data() }
-    try file.read(into: buffer)
-    guard let channel = buffer.int16ChannelData?[0] else { return Data() }
-    return Data(bytes: channel, count: Int(buffer.frameLength) * SyncSTTLimits.bytesPerSample)
-  }
-
-  static func removeFile(at url: URL) {
-    try? FileManager.default.removeItem(at: url)
-  }
+  // warm-recorder lifecycle lives in `MicCapture+Warm.swift`, and the recorder
+  // backends with their construction and file plumbing in
+  // `CaptureRecorder.swift` — both split off for the lint file-length budget,
+  // which is why the prepared-recorder state, `logger`, `deviceSelection`,
+  // `targetSampleRate` and those statics are internal rather than private.
 }

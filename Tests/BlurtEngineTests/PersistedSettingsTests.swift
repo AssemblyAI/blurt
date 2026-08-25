@@ -34,14 +34,17 @@ struct PersistedSettingsTests {
     // The launch update check's throttle: left out of the sweep, a UI-test run
     // (or a "clean install") would inherit yesterday's stamp and skip the check.
     #expect(PersistedSettings.allDefaultsKeys.contains(LastUpdateCheckStore.defaultsKey))
+    // The pinned microphone: left out, a reset "clean install" would keep
+    // recording from a previously pinned device.
+    #expect(PersistedSettings.allDefaultsKeys.contains(MicDeviceStore.defaultsKey))
   }
 
   @Test("the roster carries no stale or duplicate keys")
   func rosterHasNoStrays() {
-    // Exactly the eight known stores' keys (OverlayOriginStore contributes two,
+    // Exactly the nine known stores' keys (OverlayOriginStore contributes two,
     // StyleProfileStore three): a removed store must leave the roster in the same
     // change, and a key listed twice would hint at a copy-paste slip.
-    #expect(PersistedSettings.allDefaultsKeys.count == 11)
+    #expect(PersistedSettings.allDefaultsKeys.count == 12)
     #expect(Set(PersistedSettings.allDefaultsKeys).count == PersistedSettings.allDefaultsKeys.count)
   }
 
@@ -65,11 +68,12 @@ struct PersistedSettingsTests {
       OverlayOriginStore.xDefaultsKey,
       OverlayOriginStore.yDefaultsKey,
       LastUpdateCheckStore.defaultsKey,
+      MicDeviceStore.defaultsKey,
     ]
     #expect(storeKeys == Set(DefaultsKey.allCases.map(\.key)))
     // No two stores sharing a slot — the Set above would have quietly absorbed a
     // collision, and two stores on one key means each overwrites the other.
-    #expect(storeKeys.count == 11)
+    #expect(storeKeys.count == 12)
   }
 
   @Test("resetAll clears every roster key and leaves unrelated ones alone")

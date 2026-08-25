@@ -445,6 +445,16 @@ A **fresh recorder per session** resolves the current default input device at `r
 is deliberate — see [Settled decisions](#settled-decisions--dont-reintroduce-these) for the
 `AVAudioEngine` failure it replaced.
 
+**Microphone selection** rides a backend seam inside the actor (`CaptureRecorder`): un-pinned
+capture — the default — keeps the `AVAudioRecorder` path above unchanged, while a device pinned in
+Settings (`MicDeviceStore`, persisted as the device UID) records through `PinnedAudioQueueRecorder`,
+an AudioQueue bound to that device via `kAudioQueueProperty_CurrentDevice` — still fresh per
+session. The transport-keyed policies (liveness cap, tail linger) and the warm-recorder identity
+check key off the **pinned** device's snapshot, and a pinned device that isn't connected falls back
+to the system default per press (`MicDeviceSelection.effective` — pure and unit-tested; the pin
+stays stored). Device enumeration and UID translation live in `AudioInputDevices` (hardware-bound,
+coverage-excluded, like `AudioRoute`).
+
 **Bluetooth inputs are the reason for four of this actor's moving parts.** Opening the mic on
 AirPods (or any Bluetooth headset) makes the system renegotiate the link into its mic-capable mode —
 one to two seconds, during which the OS receives no audio at all — and that link then buffers audio
@@ -837,6 +847,9 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
   Only the active profile is ever sent, so that budget is not divided between them. One of the
   three stores with a setter, for the encoded-on-write reason below: the settings sheet and the
   main window's switcher write through it rather than binding the raw slots),
+  **`MicDeviceStore`** (`BlurtMicDeviceUID`, the input device dictation is pinned to, as its
+  CoreAudio UID — empty/unset follows the system default; re-read at every press, and a pinned
+  device that isn't connected falls back to the system default without unpinning),
   **`OverlayOriginStore`** (the pill's dragged origin, x/y), **`LastUpdateCheckStore`**
   (`BlurtLastUpdateCheck`, the stamp throttling the automatic launch update check).
 - **`DefaultsKey`** (`Config/DefaultsKey.swift`) defines every key those stores write, one case each,

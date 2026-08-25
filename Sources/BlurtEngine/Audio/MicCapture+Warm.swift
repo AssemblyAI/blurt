@@ -1,12 +1,11 @@
-import AVFoundation
 import Foundation
 
 // The warm-recorder lifecycle — prepare ahead of the press, validate it still
 // matches the live input, and let it expire — split from `MicCapture.swift` to
 // stay within the lint file-length budget, like `MicCapture+Meter`. Members it
-// reaches (`warm`, `preparedGeneration`, `logger`, `removeFile`, `makeRecorder`)
-// are internal rather than private for that reason: `private` is file-scoped and
-// can't cross the split.
+// reaches (`warm`, `preparedGeneration`, `logger`, `deviceSelection`,
+// `makeBackend`, `resolveInput`) are internal rather than private for that
+// reason: `private` is file-scoped and can't cross the split.
 extension MicCapture {
   /// Pre-create and prepare a recorder so the first `start()` skips first-time
   /// hardware route discovery. Does NOT begin capture — no mic indicator. Safe to
@@ -28,21 +27,25 @@ extension MicCapture {
     activeRecorder == nil && warm == nil && !bringingUpCapture
   }
 
-  /// The warm recorder if it is still bound to `input`, else nil — discarding
-  /// (and cleaning up after) one that isn't.
+  /// The warm recorder if it is still bound to `resolved`'s input *and* was
+  /// prepared under the same pin, else nil — discarding (and cleaning up after)
+  /// one that isn't.
   ///
   /// Reuse requires *positively* confirming the device is unchanged: an
   /// unreadable route on either side leaves us unable to tell, and a recorder
   /// bound to the wrong device doesn't fail loudly — it records the wrong mic, or
   /// silence. Paying route activation is the cheaper mistake, so unknown means
-  /// discard.
-  func takeWarmRecorder(matching input: AudioRoute.InputSnapshot?) -> AVAudioRecorder? {
+  /// discard. The pin must match too, not just the device — see
+  /// `WarmRecorder.pinnedUID`.
+  func takeWarmRecorder(matching resolved: ResolvedInput) -> (any CaptureRecorder)? {
     guard let held = warm else { return nil }
     held.expiry?.cancel()
     warm = nil
-    guard let warmed = held.input, let input, warmed.deviceID == input.deviceID else {
-      Self.removeFile(at: held.recorder.url)
-      Self.logger.info("discarded warm recorder — input device changed since warm-up")
+    guard held.pinnedUID == resolved.pinnedUID,
+      let warmed = held.input, let input = resolved.input, warmed.deviceID == input.deviceID
+    else {
+      held.recorder.stopAndDiscard()
+      Self.logger.info("discarded warm recorder — input device or selection changed since warm-up")
       return nil
     }
     return held.recorder
@@ -61,15 +64,18 @@ extension MicCapture {
     }
   }
 
-  /// Builds a recorder, records the input it is bound to, and starts its idle
-  /// countdown. A failure is non-fatal: `start()` then prepares lazily, exactly
-  /// as it did before any warm recorder existed.
+  /// Builds a recorder for the current selection, records the input (and pin)
+  /// it is bound to, and starts its idle countdown. A failure is non-fatal:
+  /// `start()` then prepares lazily, exactly as it did before any warm recorder
+  /// existed.
   func prepareWarmRecorder() {
     do {
       preparedGeneration += 1
+      let resolved = Self.resolveInput(selection: deviceSelection())
       warm = WarmRecorder(
-        recorder: try Self.makeRecorder(),
-        input: AudioRoute.currentInput(),
+        recorder: try Self.makeBackend(pinnedUID: resolved.pinnedUID),
+        input: resolved.input,
+        pinnedUID: resolved.pinnedUID,
         generation: preparedGeneration)
       armPreparedRecorderExpiry(generation: preparedGeneration)
       Self.logger.info("prepared a warm recorder")
@@ -103,7 +109,7 @@ extension MicCapture {
   func releasePreparedRecorder(generation: Int) {
     guard let held = warm, held.generation == generation else { return }
     warm = nil
-    Self.removeFile(at: held.recorder.url)
+    held.recorder.stopAndDiscard()
     Self.logger.info("released idle warm recorder")
   }
 }

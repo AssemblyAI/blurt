@@ -629,8 +629,22 @@ else
   #                        when the user switches output — and the listener half
   #                        can only fire on an actual route change. Same
   #                        justification as MicCapture.swift above.
+  #  - AudioInputDevices.swift : the input-device enumeration and UID translation
+  #                        behind the Settings microphone picker — HAL reads with
+  #                        the same justification as AudioRoute.swift. The pure
+  #                        selection/fallback rules it serves (MicDeviceSelection,
+  #                        MicDeviceStore) stay covered.
+  #  - CaptureRecorder.swift / PinnedAudioQueueRecorder.swift : the two capture
+  #                        backends behind MicCapture's recorder seam — the WAV
+  #                        recorder construction (prepareToRecord, the
+  #                        route-activation call: see MicCapture+Warm above for
+  #                        what covering that in CI did) and the device-pinned
+  #                        AudioQueue. Their live suites ride the same env gate
+  #                        (MicCaptureLevelsTests, AudioInputDevicesTests); the
+  #                        pure decode in CaptureRecorder.swift keeps its
+  #                        MicCaptureFormatTests coverage, it just isn't counted.
   COVERAGE="$(xcrun llvm-cov export -summary-only -instr-profile "$PROFDATA" "$XCTEST_BIN" \
-    -ignore-filename-regex='Tests/|Audio/MicCapture(\+Warm)?\.swift|Audio/AudioRoute(Monitor)?\.swift' \
+    -ignore-filename-regex='Tests/|Audio/MicCapture(\+Warm)?\.swift|Audio/AudioRoute(Monitor)?\.swift|Audio/AudioInputDevices\.swift|Audio/CaptureRecorder\.swift|Audio/PinnedAudioQueueRecorder\.swift' \
     | python3 -c 'import sys,json; print(round(json.load(sys.stdin)["data"][0]["totals"]["lines"]["percent"],2))')"
   echo "engine line coverage: ${COVERAGE}%"
   if ! awk -v c="$COVERAGE" -v min="$MIN_COVERAGE" 'BEGIN{ exit (c+0 < min+0) }'; then
