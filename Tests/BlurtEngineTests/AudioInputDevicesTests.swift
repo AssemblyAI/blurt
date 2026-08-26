@@ -85,7 +85,7 @@ struct AudioInputDevicesTests {
     // this holds the instant `record()` returns; on AirPods it returns in ~80 ms
     // and the device comes up ~400 ms later. Asserting immediately passes on
     // wired hardware and fails on the transport the gate exists for.
-    try #require(recorder.record())
+    try #require(await recorder.record())
     #expect(
       await Self.waitForRunning(uid: device.uniqueID),
       "record() is what opens the device, even if the link finishes opening it later")
@@ -100,7 +100,7 @@ struct AudioInputDevicesTests {
     #expect(AudioInputDevices.all().contains { $0.uid == uid }, "the default input should be listed")
 
     let recorder = try CaptureSessionRecorder(pinnedUID: uid)
-    try #require(recorder.record(), "the session recorder should start on a live device")
+    try #require(await recorder.record(), "the session recorder should start on a live device")
 
     // Wait for frames the way the liveness gate does, rather than sleeping a
     // fixed 500 ms: on AirPods the first buffer lands ~490 ms after

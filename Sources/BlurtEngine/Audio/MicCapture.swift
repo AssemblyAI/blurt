@@ -117,15 +117,32 @@ public actor MicCapture: MicCaptureProtocol {
     let resolved = Self.resolveInput(selection: deviceSelection())
     let recorder = try CaptureSessionRecorder(pinnedUID: resolved.pinnedUID)
 
-    // record() returns false when no usable input device is available (unplugged,
+    // Snapshotted before the *first* suspension rather than just before the
+    // liveness wait, because opening the device is itself one: `record()` hops
+    // off-actor (see `CaptureSessionRecorder.record()`), so a stop or cancel can
+    // land while the input is coming up, and it has to win over a bring-up that
+    // is no longer wanted.
+    let generationBeforeBringUp = stopGeneration
+
+    // record() answers false when no usable input device is available (unplugged,
     // asleep, route lost). Surface that as a thrown Swift error so
     // DictationSession.press() reports `.audioCaptureFailed` instead of recording
     // nothing. (No path here can raise an uncatchable Obj-C exception, so there's
     // no degenerate-format guard to keep.)
-    guard recorder.record() else {
+    guard await recorder.record() else {
       Self.logger.error("recorder.record() returned false — no usable input device")
       recorder.stopAndDiscard()
       throw BlurtError.audioCaptureFailed(underlying: MicCaptureError.noInputDevice)
+    }
+
+    // A teardown or cancel that landed during the open: tear the recorder down
+    // instead of sitting through the liveness wait for a capture nobody wants.
+    // Same handling as the post-wait check below, just earlier — see it for why
+    // the two conditions are distinguished from a timeout.
+    guard stopGeneration == generationBeforeBringUp, !Task.isCancelled else {
+      recorder.stopAndDiscard()
+      Self.logger.info("start aborted — teardown or cancellation during the device open")
+      throw CancellationError()
     }
 
     // `record()` returning true only means the session started running — not
@@ -139,7 +156,6 @@ public actor MicCapture: MicCaptureProtocol {
     // (the throw below). `MicLiveness` owns both policies and the reasoning,
     // including why frame arrival alone was not enough.
     let timeout = MicLiveness.timeout(forTransportType: resolved.transportType)
-    let generationBeforeWait = stopGeneration
     // Both probes read off-actor (`waitUntilLive` is nonisolated), safe by
     // confinement: the polls run sequentially in one task and nothing else
     // references this recorder while `start()` is suspended — it isn't
@@ -161,7 +177,7 @@ public actor MicCapture: MicCaptureProtocol {
     //   between an Escape acting now and acting in `bluetoothTimeout`. It must be
     //   distinguished from the timeout, which returns nil too but is a reported
     //   *failure* (the throw below) — a cancel is the user's own act, not a fault.
-    guard stopGeneration == generationBeforeWait, !Task.isCancelled else {
+    guard stopGeneration == generationBeforeBringUp, !Task.isCancelled else {
       recorder.stopAndDiscard()
       Self.logger.info("start aborted — teardown or cancellation during the liveness wait")
       throw CancellationError()

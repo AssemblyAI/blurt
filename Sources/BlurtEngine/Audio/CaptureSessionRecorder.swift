@@ -62,6 +62,17 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// method runs here, and it touches nothing but `state`.
   private let delegateQueue = DispatchQueue(
     label: HostIdentity.current.queueLabel("MicCaptureSession"))
+  /// The serial queue `startRunning()` runs on — session *control*, deliberately
+  /// not `delegateQueue`. Opening the device takes ~600 ms on a USB interface,
+  /// and blocking the delivery queue for that long would stall the very frames
+  /// the liveness gate is then waiting for. A dedicated `DispatchQueue` rather
+  /// than a detached `Task`, so the wait parks a Dispatch thread instead of one
+  /// of the cooperative pool's — the pool is what the rest of the press runs on
+  /// (the context capture that overlaps this, the transcriber's connection
+  /// warm-up), and starving it is how covering the retired backend in CI
+  /// deadlocked the whole test run.
+  private let sessionQueue = DispatchQueue(
+    label: HostIdentity.current.queueLabel("MicCaptureSessionControl"))
   private let state = Mutex(Guarded())
   /// A short name for the capture-start log line.
   let logName: String
@@ -122,14 +133,30 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
     return AVCaptureDevice.default(for: .audio)
   }
 
-  /// Opens the device and starts capture. `startRunning()` is synchronous —
-  /// this is where the route-activation cost lives, all of it — and false means
-  /// no usable input: nothing was attached at build time, or the session
-  /// refused to run.
-  func record() -> Bool {
+  /// Opens the device and starts capture, answering false when there is no
+  /// usable input: nothing was attached at build time, or the session refused to
+  /// run.
+  ///
+  /// This is where the route-activation cost lives, all of it — ~180 ms on the
+  /// built-in mic, ~600 ms on a USB interface, and on AirPods ~80 ms before
+  /// `startRunning()` returns plus ~400 ms before the first frame. It is `async`
+  /// and hops to `sessionQueue` precisely because that cost is unbounded from the
+  /// caller's point of view: run inline it blocked `MicCapture` for the whole
+  /// open, and a teardown arriving in that window measured 578 ms of waiting on a
+  /// 635 ms open (`MicCaptureBringUpTests`). Suspending instead of blocking means
+  /// the actor stays available to the stop and cancel that may be racing this.
+  ///
+  /// The suspension is why `MicCapture.start()` snapshots `stopGeneration`
+  /// *before* calling this and re-checks after: a teardown can now land during
+  /// the open, and it has to win.
+  func record() async -> Bool {
     guard !session.inputs.isEmpty else { return false }
-    session.startRunning()
-    return session.isRunning
+    return await withCheckedContinuation { continuation in
+      sessionQueue.async {
+        self.session.startRunning()
+        continuation.resume(returning: self.session.isRunning)
+      }
+    }
   }
 
   /// Frames the delegate has actually received. 0 until the first buffer lands,
@@ -167,6 +194,14 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// Non-throwing, unlike the seam this replaces: the bytes are already in
   /// memory in the upload encoding, so there is no read-back, decode or temp
   /// file left to fail at.
+  ///
+  /// Synchronous, unlike `record()`, on two grounds. `stopRunning()` measures
+  /// 19–41 ms against the open's ~600 ms, which is not worth another suspension
+  /// point on the release path the transcript waits behind; and it cannot race
+  /// the `sessionQueue` work, because every caller runs on a recorder whose
+  /// `record()` has already resumed (an abandoned bring-up tears down only after
+  /// the open returns). If a stop ever does need to overlap an open, it belongs
+  /// on `sessionQueue` too — that is what the queue is for.
   func stopAndReadPCM() -> Data {
     session.stopRunning()
     return state.withLock { $0.captured }

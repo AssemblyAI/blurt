@@ -489,7 +489,25 @@ in both directions. So:
   follows ~8 ms later, so the gate confirms almost at once; on AirPods `startRunning()` returns in
   ~80 ms and the first frame arrives ~410 ms after that, so the gate is doing the waiting. Both end
   in the same place because the wait's clock starts _after_ `record()` returns — a slow open eats
-  none of the frame-arrival budget, which is what lets the caps be this tight. `stopGeneration`
+  none of the frame-arrival budget, which is what lets the caps be this tight.
+
+  **The open itself is off-actor.** `record()` is `async` and runs `startRunning()` on the
+  recorder's own serial `sessionQueue`, so the ~600 ms open suspends the press instead of blocking
+  the actor. Run inline it did both: a teardown arriving during the open measured **578 ms** of
+  waiting on a 635 ms open, against **24 µs** once suspended (`MicCaptureBringUpTests`, which
+  calibrates against the real device and skips itself on an input too fast to show the window). It
+  also parked a cooperative-pool thread for the duration — the same pool the overlapping context
+  capture and the transcriber's connection warm-up run on, and starving it is how covering the
+  retired backend in CI deadlocked the whole test run, which is why the hop is a `DispatchQueue`
+  rather than a detached `Task`. Through `DictationSession` the win is latent rather than visible:
+  its serial command queue already runs release and cancel only after the press turn completes, and
+  `cancel()` claims `.cancelled` synchronously without touching the mic. But `MicCapture` is a
+  public actor and the contract has to hold for a host that doesn't serialize its own commands.
+  `stopRunning()` stays inline, at 19–41 ms against the open's ~600.
+
+  The suspension is also why the teardown snapshot moved: `stopGeneration` is now read before the
+  open rather than before the liveness wait, and checked at both ends, because a stop or cancel can
+  land while the input is still coming up. `stopGeneration`
   covers the one suspension this introduces — a teardown landing mid-wait wins, and the recorder is torn down rather than
   installed.
 
