@@ -44,8 +44,8 @@ struct MicCaptureBringUpTests {
     // reports a real cost that a launched app has already paid.
     await mic.warmUp()
 
-    // An unstructured `Task` rather than `async let`, only because the
-    // `#expect(throws:)` below can't capture an `async let` variable.
+    // An unstructured `Task` so the press stays in flight while this function
+    // cancels it and then inspects how it ended.
     let press = Task { try await mic.start() }
     // 30 ms is a bracket, not a guarantee: it has to clear the ~5 ms session
     // build (cancelling before the open is reached would pass even if `record()`
