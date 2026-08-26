@@ -563,12 +563,27 @@ def tally(pairs) -> dict[str, float]:
     they mean "not asked", not "failed".
     """
     counts: dict[str, int] = dict.fromkeys(OUTCOMES, 0)
+    rows = failed_rows = literal_rows = 0
     for commands, hypothesis in pairs:
-        for command in commands:
-            counts[outcome(command, hypothesis)] += 1
+        rows += 1
+        outcomes = [outcome(command, hypothesis) for command in commands]
+        for name in outcomes:
+            counts[name] += 1
+        if commands:
+            failed_rows += any(name != "converted" for name in outcomes)
+            literal_rows += any(name == "literal" for name in outcomes)
     total = sum(counts.values())
     stats = {f"commands_{name}": (counts[name] / total if total else 0.0) for name in OUTCOMES}
-    return stats | {"commands_total": float(total)}
+    # Per-**row** as well as per-command, because they answer different questions and only
+    # the second is the product's. "68% of commands converted" does not say how often a
+    # dictation comes back wrong: at 2.3 commands a row those failures could sit in a
+    # third of rows or in nearly all of them, and a mean cannot tell you which.
+    return stats | {
+        "commands_total": float(total),
+        "rows_total": float(rows),
+        "rows_with_command_failure": failed_rows / rows if rows else 0.0,
+        "rows_with_command_literal": literal_rows / rows if rows else 0.0,
+    }
 
 
 def feedback_note(commands: tuple[Command, ...], hypothesis: str) -> str:

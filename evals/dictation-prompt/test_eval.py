@@ -1882,6 +1882,33 @@ def test_every_planted_command_is_answered_by_its_own_reference():
             assert spoken_punctuation.outcome(command, target) == "converted", command
 
 
+def test_the_tally_counts_rows_as_well_as_commands():
+    """They answer different questions, and only the second is the product's.
+
+    "68% of commands converted" does not say how often a dictation comes back wrong: at
+    2.3 commands a row those failures could sit in a third of rows or in nearly all of
+    them, and a per-command mean cannot tell you which.
+    """
+    text = "We shipped it today. Monday was quiet, so nobody noticed."
+    reference, spoken, commands = spoken_punctuation.inject(
+        text, text, seed=1, rate=1.0, caps_rate=0.0
+    )
+    assert len(commands) == 2
+    # Two rows, four commands: one cleaned perfectly, one that left both commands in.
+    stats = spoken_punctuation.tally([(commands, reference), (commands, spoken)])
+    assert stats["rows_total"] == 2.0
+    assert stats["commands_total"] == 4.0
+    assert stats["rows_with_command_failure"] == 0.5
+    assert stats["rows_with_command_literal"] == 0.5
+    assert stats["commands_literal"] == 0.5
+
+
+def test_a_row_with_no_commands_is_never_counted_as_a_failure():
+    stats = spoken_punctuation.tally([((), "anything at all")])
+    assert stats["rows_total"] == 1.0
+    assert stats["rows_with_command_failure"] == 0.0
+
+
 def test_the_tally_of_nothing_says_nothing_rather_than_zero_percent():
     assert spoken_punctuation.tally([])["commands_total"] == 0.0
     assert spoken_punctuation.tally([((), "anything")])["commands_converted"] == 0.0

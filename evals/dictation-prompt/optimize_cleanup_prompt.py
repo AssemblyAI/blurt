@@ -108,13 +108,23 @@ def print_command_table(rows: list[tuple[str, dict[str, float]]], axis: str) -> 
     if not scored:
         return
     print("\nSpoken punctuation commands, per candidate")
-    print(f"  {'candidate':<22} {'converted':>10} {'left as words':>14} {'dropped':>9}")
-    print(f"  {'-' * 22} {'-' * 10} {'-' * 14} {'-' * 9}")
+    print(
+        f"  {'candidate':<22} {'converted':>10} {'left as words':>14} {'dropped':>9}"
+        f" {'ROWS wrong':>11} {'ROWS w/ word':>13}"
+    )
+    print(f"  {'-' * 22} {'-' * 10} {'-' * 14} {'-' * 9} {'-' * 11} {'-' * 13}")
     for name, scores in sorted(scored, key=lambda row: row[1][axis], reverse=True):
         print(
             f"  {name:<22} {scores['commands_converted']:>10.1%} "
             f"{scores['commands_literal']:>14.1%} {scores['commands_missing']:>9.1%}"
+            f" {scores.get('rows_with_command_failure', 0.0):>11.1%}"
+            f" {scores.get('rows_with_command_literal', 0.0):>13.1%}"
         )
+    print(
+        "  The last two columns are per utterance, not per command: how often a dictation\n"
+        "  comes back with any command missed, and how often it comes back with a command\n"
+        "  word pasted into it. A per-command mean cannot tell you either."
+    )
 
 
 def print_samples(loaded: corpus.Corpus, count: int) -> None:

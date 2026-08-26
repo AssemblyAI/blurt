@@ -252,20 +252,30 @@ def evaluate(
     counted = program if on_example is None else _Ticking(program, on_example)
     predictions = runner([(counted, {INPUT_FIELD: u.disfluent}) for u in utterances])
     cleaned = [_cleaned(prediction) for prediction in predictions]
-    axes = metrics.mean(
-        [
-            utterance.scored(hypothesis)
-            for utterance, hypothesis in zip(utterances, cleaned, strict=True)
-        ]
-    )
     # Reported next to the axes rather than instead of them. WER answers "how close is
     # the text", which mixes the punctuation task into every other kind of error; the
     # tally answers "of the commands planted, how many were obeyed", which is the
     # question `--spoken-punctuation` is asking and which only a synthetic operator can
     # be asked. Zeros with `commands_total` at 0 mean "not asked", not "failed".
-    return axes | spoken_punctuation.tally(
-        (utterance.commands, hypothesis)
+    scored = [
+        utterance.scored(hypothesis)
         for utterance, hypothesis in zip(utterances, cleaned, strict=True)
+    ]
+    # Row-level too. A mean of 0.81 is consistent with every row being slightly wrong and
+    # with a fifth being badly wrong, and those are different products.
+    exact = {
+        f"rows_exact_{axis}": sum(s.value(axis) >= 1.0 for s in scored) / len(scored)
+        if scored
+        else 0.0
+        for axis in metrics.AXES
+    }
+    return (
+        metrics.mean(scored)
+        | exact
+        | spoken_punctuation.tally(
+            (utterance.commands, hypothesis)
+            for utterance, hypothesis in zip(utterances, cleaned, strict=True)
+        )
     )
 
 
