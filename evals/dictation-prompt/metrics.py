@@ -261,7 +261,9 @@ def _echoes_its_neighbour(run: list[int], spoken: list[tuple[str, str]]) -> bool
     return words in (before, after)
 
 
-def _is_abandoned(run: list[int], spoken: list[tuple[str, str]]) -> bool:
+def _is_abandoned(
+    run: list[int], spoken: list[tuple[str, str]], not_abandoned: frozenset[str] = frozenset()
+) -> bool:
     """Whether one surplus run is an abandoned span rather than a stumble.
 
     Two ways to qualify, in order of how much they can be trusted:
@@ -272,16 +274,27 @@ def _is_abandoned(run: list[int], spoken: list[tuple[str, str]]) -> bool:
        beside them — a phrase the speaker started and replaced. One word is not
        enough: a lone surplus content word is a repetition or a slip, and charging
        triple for it would sweep in most of what the old flat weight already handled.
+
+    `not_abandoned` is extra vocabulary the *caller's corpus* knows is surplus for some
+    other reason, counted alongside `HESITATIONS` in rule 2. It exists for spoken
+    punctuation: "question mark" is two non-hesitation words that echo nothing, so
+    without it the classifier reads a dictation command as an abandoned phrase and
+    charges it `FALSE_START_WEIGHT` per word — which makes a leftover "question mark"
+    ten errors and a leftover "period" one, an asymmetry nobody chose. It defaults to
+    empty and is passed only by an utterance that planted commands, so every number
+    measured before it existed is unchanged.
     """
     if any(_is_cut_off(spoken[index][0]) for index in run):
         return True
     words = [spoken[index][1] for index in run]
-    if sum(word not in HESITATIONS for word in words) < 2:
+    if sum(word not in HESITATIONS and word not in not_abandoned for word in words) < 2:
         return False
     return not _echoes_its_neighbour(run, spoken)
 
 
-def false_start_tokens(disfluent: str, reference: str) -> tuple[str, ...]:
+def false_start_tokens(
+    disfluent: str, reference: str, not_abandoned: frozenset[str] = frozenset()
+) -> tuple[str, ...]:
     """The words of `disfluent` the speaker abandoned, normalized, in order.
 
     A multiset, not a set: "we wouldn't ha-, we wouldn't have them" abandons three
@@ -295,18 +308,24 @@ def false_start_tokens(disfluent: str, reference: str) -> tuple[str, ...]:
     only recognizable as abandoned by the `ha-` sitting in front of it. A hedge caught
     inside such a run ("um we walked-") is charged with it, which is right: the whole
     region was abandoned, and the model has to delete all of it or none.
+
+    `not_abandoned` passes through to `_is_abandoned` — see there for why a corpus that
+    plants dictation commands has to name them.
     """
     spoken = [(raw, word) for raw in disfluent.split() if (word := normalize_text(raw))]
     alignment = align(normalize(reference), [word for _, word in spoken])
     abandoned: list[str] = []
     for run in _runs(sorted(set(alignment.inserted_positions))):
-        if _is_abandoned(run, spoken):
+        if _is_abandoned(run, spoken, not_abandoned):
             abandoned.extend(spoken[index][1] for index in run)
     return tuple(abandoned)
 
 
 def uncorrected_false_starts(
-    disfluent: str, reference: str, alignment: Alignment
+    disfluent: str,
+    reference: str,
+    alignment: Alignment,
+    not_abandoned: frozenset[str] = frozenset(),
 ) -> tuple[str, ...]:
     """Abandoned words the cleanup left in — the multiset `FALSE_START_WEIGHT` charges.
 
@@ -316,7 +335,8 @@ def uncorrected_false_starts(
     hypothesis; both sides are already normalized there, which is what lets the raw
     `store—` in the input match the `store` the model echoed back.
     """
-    left_in = Counter(alignment.inserted) & Counter(false_start_tokens(disfluent, reference))
+    spoken = false_start_tokens(disfluent, reference, not_abandoned)
+    left_in = Counter(alignment.inserted) & Counter(spoken)
     return tuple(sorted(left_in.elements()))
 
 
@@ -396,7 +416,12 @@ def _surcharged(alignment: Alignment, extra_errors: float) -> float:
     return alignment.error_rate + extra_errors / alignment.reference_length
 
 
-def score(reference: str, hypothesis: str, disfluent: str | None = None) -> Score:
+def score(
+    reference: str,
+    hypothesis: str,
+    disfluent: str | None = None,
+    not_abandoned: frozenset[str] = frozenset(),
+) -> Score:
     """Score a cleanup against its reference on both axes — see `from_error_rate`.
 
     `disfluent` is what the model was given. Pass it and leftover false starts are
@@ -409,10 +434,17 @@ def score(reference: str, hypothesis: str, disfluent: str | None = None) -> Scor
     The same surcharge lands on both axes. A word left in is a word left in whichever
     way you tokenize, and exempting the formatting axis would quietly dilute the
     weighting by 30% under the default `blend`.
+
+    `not_abandoned` exempts vocabulary the corpus planted deliberately — see
+    `_is_abandoned`. Empty by default, so nothing that does not pass it changes.
     """
     content_alignment = align(normalize(reference), normalize(hypothesis))
     format_alignment = align(surface(reference), surface(hypothesis))
-    left_in = uncorrected_false_starts(disfluent, reference, content_alignment) if disfluent else ()
+    left_in = (
+        uncorrected_false_starts(disfluent, reference, content_alignment, not_abandoned)
+        if disfluent
+        else ()
+    )
     surcharge = (FALSE_START_WEIGHT - 1.0) * len(left_in)
     return Score(
         content=from_error_rate(_surcharged(content_alignment, surcharge)),

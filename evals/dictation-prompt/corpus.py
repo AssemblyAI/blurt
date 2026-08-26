@@ -70,6 +70,7 @@ from dataclasses import dataclass, field, replace
 
 import disfluency
 import metrics
+import spoken_punctuation
 
 ROWS_API = "https://datasets-server.huggingface.co/rows"
 
@@ -141,7 +142,30 @@ SOURCES: dict[str, Source] = {
 }
 
 # Stand-in corpus for `--source builtin`. Written for this repo (not drawn from any
-# dataset) so the offline path carries no third-party licensing.
+# dataset) so the offline path carries no third-party licensing — which is also what
+# makes it the only corpus here that can be *committed*: `data/spoken-punctuation.jsonl`
+# is generated from these sentences, so a frozen dataset can live in the tree without
+# redistributing LDC-licensed Switchboard transcripts. See `--dump-corpus`.
+#
+# The first twelve are the original offline sample and are kept first and unchanged, so
+# a test or a `--limit 12` smoke run sees exactly the rows it always did. Everything
+# after them exists to give the punctuation task something to bite on, which the
+# original dozen could not:
+#
+# - **Internal commas and terminal marks** on most rows, since `spoken_punctuation`
+#   speaks only marks the reference licenses. A corpus of bare declaratives licenses one
+#   period each and nothing else.
+# - **Questions and exclamations**, so `?` and `!` fire at all. `nyra` supplies 43
+#   question marks per 400 rows and no exclamation points whatsoever.
+# - **Colons and semicolons**, which `nyra` never supplies, so those entries in
+#   `spoken_punctuation.SPOKEN_FORMS` are exercised by something.
+# - **Literal-use traps** — references that use "period", "comma", "question mark",
+#   "colon", "dash" or "all caps" as ordinary content. These are the blind spot `nyra`
+#   cannot cover (~0-1% of its rows), and they compose with the injector into the
+#   sharpest case on the task: "one grace period comma so plan accordingly" has to come
+#   back as "one grace period, so plan accordingly", keeping the word and obeying the
+#   command that follows it. An instruction that pattern-matches the vocabulary rather
+#   than reading the sentence loses a content word here, which the score charges.
 BUILTIN_SAMPLE: tuple[str, ...] = (
     "The build failed because the signing certificate expired over the weekend.",
     "Can you send me the latest numbers before the review meeting tomorrow morning?",
@@ -155,6 +179,77 @@ BUILTIN_SAMPLE: tuple[str, ...] = (
     "It turns out the regression was introduced by the change to the clipboard restore path.",
     "Please double check the sample rate before you send the audio to the transcription endpoint.",
     "The design review is blocked on whether we keep the menu bar item at all.",
+    # Prose with internal commas, which is what licenses anything other than a period.
+    "If the upload stalls, retry it once, and then fall back to the smaller chunk size.",
+    "We shipped the change on Tuesday, and by Thursday the error rate had halved.",
+    "The onboarding flow works, but the second screen still asks for a permission we never use.",
+    "Before you merge, rebase on main, run the whole suite, and check the coverage gate.",
+    "I read the incident report, and the root cause was a stale cache in the edge layer.",
+    "Once the lease expires, the worker stops accepting jobs, which is what we wanted.",
+    "The vendor confirmed the outage, apologised, and promised a postmortem by Friday.",
+    "Send the draft to Priya, loop in the design team, and we can review it together.",
+    "When the mic is muted, the waveform freezes, and users read that as a crash.",
+    "The migration touched four tables, two indexes, and one view nobody remembered.",
+    "After the retry budget runs out, the request fails, and the overlay says try again.",
+    "We looked at three vendors, and only one of them will sign a data processing agreement.",
+    "The cache warms in about a minute, so the first few requests are always slower.",
+    "If you cannot reproduce it locally, attach the sysdiagnose, and I will look tonight.",
+    "The estimate assumed two engineers, and we have one, so the date needs to move.",
+    "Their API returns a 202, then polls, then hands back a URL that expires in an hour.",
+    "I moved the standup to nine, cancelled the Thursday sync, and blocked out Friday afternoon.",
+    "The feature is behind a flag, off by default, and only enabled for the internal team.",
+    # Questions, so the question-mark command has something to attach to.
+    "Did anyone check whether the new entitlement survives a clean install?",
+    "Should we hold the release until the notarization queue clears, or ship it now?",
+    "Can you remind me what the retry budget is on the streaming endpoint?",
+    "Do you know why the waveform stops animating when the window loses focus?",
+    "Is there a reason we still ship the old audio unit alongside the new one?",
+    "What happens to a partial transcript if the socket closes before the final message?",
+    "Would it be easier to gate this on the account tier instead of a flag?",
+    "Have we ever measured how long the first paste takes on a cold launch?",
+    "Are the crash reports symbolicated, or do I need to upload the archive myself?",
+    "Who owns the dashboard now that the analytics team has been folded into platform?",
+    # Exclamations, which no corpus here otherwise supplies.
+    "That fixed it, and the latency dropped by half!",
+    "Please do not ship this on a Friday afternoon again!",
+    "The whole suite passed on the first try for once!",
+    "Watch out, the staging database is still pointed at production!",
+    # Colons and semicolons, so those commands are exercised by something.
+    "Here is the plan: land the fix, cut a build, and hand it to QA tomorrow.",
+    "Two things are still open: the entitlement review and the App Store description.",
+    "The cause was simple: we were reading the sample rate from the wrong device.",
+    "It builds cleanly on my machine; it fails on the runner every single time.",
+    "Ship the smaller change first; the refactor can wait until after the release.",
+    "The tradeoff is straightforward: more accuracy for about eighty milliseconds of latency.",
+    "Keep the interface as it is; only the storage layer needs to change.",
+    "One caveat: the migration is not reversible once the first write lands.",
+    # Literal-use traps. The reference uses a command word as content, so an instruction
+    # that converts on sight loses a real word here.
+    "We only support one grace period, so plan accordingly before the trial ends.",
+    "Add a comma after the second clause and the sentence reads much better.",
+    "Every question mark in that survey was ambiguous, so we rewrote the whole form.",
+    "The billing period rolls over at midnight UTC, not at midnight local time.",
+    "Put a colon after the heading and leave the rest of the line alone.",
+    "She used a full stop where the style guide clearly asks for a semicolon.",
+    "The legal team wants the warning in all caps, which our design system forbids.",
+    "That exclamation point in the release notes reads as sarcasm, so please remove it.",
+    "There is a dash missing from the second bullet on the pricing page.",
+    "I said period, and it typed the word instead of the punctuation mark.",
+    "The Cretaceous period ended with an impact, which is roughly how the demo went.",
+    "Use a semicolon there; a comma is not strong enough to join those two clauses.",
+    # More ordinary dictation, to keep the traps from dominating a small corpus.
+    "Remind me to follow up with the accessibility team about the focus ring.",
+    "The transcript came back empty, which usually means the audio was all silence.",
+    "I will draft the announcement tonight and send it round for comments in the morning.",
+    "We should probably stop supporting the beta channel now that nobody is on it.",
+    "The keyboard shortcut conflicts with the system dictation shortcut on a fresh install.",
+    "Let me know if the new model handles background noise any better than the old one.",
+    "Nothing in the logs explains why the first request after a sleep always times out.",
+    "The onboarding video is four minutes long and most people quit after thirty seconds.",
+    "I would rather fix the flake than mark the test as skipped and forget about it.",
+    "Our smallest customer files more bug reports than the other twenty combined.",
+    "The release notes need a line about the new permission before we can publish.",
+    "Check whether the trial expiry is stored in the keychain or in user defaults.",
 )
 
 
@@ -166,6 +261,23 @@ class Utterance:
     disfluent: str
     # Injector operators, empty for a real paired corpus — nobody annotated those.
     operations: tuple[str, ...] = field(default=())
+    #: Spoken punctuation commands planted in `disfluent` by
+    #: `spoken_punctuation.inject`, empty unless `--spoken-punctuation` is on. Kept on
+    #: the utterance because the only thing that can say whether a command was obeyed
+    #: is the record of what was planted — WER sees a missing comma and a missing word
+    #: as the same kind of error, and cannot see a *casing* command at all on the
+    #: content axis. Travels with the pair for the same reason both sides do.
+    commands: tuple[spoken_punctuation.Command, ...] = field(default=())
+    #: True when the input side came from the source rather than from an injector here —
+    #: a paired dataset column, or a `--jsonl` row that carried a `disfluent` key.
+    #:
+    #: Recorded rather than inferred from `is_disfluent`, which was the proxy before and
+    #: is wrong in exactly the case a dumped corpus produces: a row whose input happens
+    #: to equal its reference (no command drawn, no disfluency drawn) reads as "needs
+    #: injecting", so re-loading a dumped file would silently hand that row a *different*
+    #: input than the file records. The documented contract is "objects with both
+    #: disfluent and reference are used as-is", and this is what makes it true.
+    input_supplied: bool = False
 
     @property
     def is_disfluent(self) -> bool:
@@ -182,7 +294,20 @@ class Utterance:
         entirely reasonable. An utterance holds both sides already, so let it be the
         thing that remembers.
         """
-        return metrics.score(self.reference, hypothesis, self.disfluent)
+        return metrics.score(self.reference, hypothesis, self.disfluent, self.not_abandoned)
+
+    @property
+    def not_abandoned(self) -> frozenset[str]:
+        """Words in `disfluent` that are surplus by construction, not by abandonment.
+
+        Only the spoken punctuation commands, and empty for every corpus that has none —
+        so this changes no number measured before it existed. `metrics._is_abandoned`
+        says why it has to exist: "question mark" is two non-hesitation words echoing
+        nothing, which is exactly the shape of an abandoned phrase, and left unnamed it
+        would be charged `FALSE_START_WEIGHT` per word while a leftover "period" was
+        charged one.
+        """
+        return frozenset(word for command in self.commands for word in command.spoken_words)
 
 
 @dataclass(frozen=True)
@@ -196,6 +321,24 @@ class Corpus:
 
     def __len__(self) -> int:
         return len(self.utterances)
+
+    @property
+    def commands_planted(self) -> int:
+        """Spoken-punctuation commands across the whole corpus.
+
+        Read instead of `--spoken-punctuation` wherever the run has to decide whether it
+        is posing the punctuation task — which axis to select on, which candidates to
+        score, whether to print the command table. A corpus loaded from a
+        `--dump-corpus` file via `--jsonl` carries the commands and not the flag, and
+        keying on the flag meant that dataset silently selected on `blend` and reported no
+        command outcomes: the same corpus, scored two different ways depending on how it
+        was reached.
+        """
+        return sum(len(u.commands) for u in self.utterances)
+
+    @property
+    def has_commands(self) -> bool:
+        return self.commands_planted > 0
 
     @property
     def disfluent_fraction(self) -> float:
@@ -221,16 +364,21 @@ def _usable_reference(text: str, *, for_injection: bool) -> bool:
     return not for_injection or text[-1] in ".?!"
 
 
-def _collect(pairs, limit: int, *, for_injection: bool) -> list[Utterance]:
+def _collect(utterances, limit: int, *, for_injection: bool) -> list[Utterance]:
     """Filter, de-duplicate by reference, and cap — the one copy of that policy.
 
     Consumes lazily, so a paging loader stops fetching as soon as `limit` usable
     pairs have been found.
+
+    Takes whole `Utterance`s rather than `(disfluent, reference)` pairs so that a source
+    can carry more than the two strings through this filter: a `--jsonl` row restores the
+    commands and operators a `--dump-corpus` run recorded, and dropping them here would
+    make a saved dataset score differently from the corpus it was saved from.
     """
     seen: set[str] = set()
     kept: list[Utterance] = []
-    for disfluent, reference in pairs:
-        reference, disfluent = _tidy(reference), _tidy(disfluent)
+    for utterance in utterances:
+        reference, disfluent = _tidy(utterance.reference), _tidy(utterance.disfluent)
         if not reference or not disfluent:
             continue
         if not _usable_reference(reference, for_injection=for_injection):
@@ -238,7 +386,7 @@ def _collect(pairs, limit: int, *, for_injection: bool) -> list[Utterance]:
         if reference in seen:
             continue
         seen.add(reference)
-        kept.append(Utterance(reference=reference, disfluent=disfluent))
+        kept.append(replace(utterance, reference=reference, disfluent=disfluent))
         if len(kept) >= limit:
             break
     return kept
@@ -371,31 +519,79 @@ def _fetch_page(url: str, headers: dict, source: Source, token: str | None) -> d
     raise AssertionError("unreachable: the loop either returns or raises")
 
 
-def _pairs_from_rows(rows, source: Source, where: str):
-    """Project raw rows into (disfluent, reference), de-tagging where needed."""
+def _utterances_from_rows(rows, source: Source, where: str):
+    """Project raw dataset rows into utterances, de-tagging where needed."""
     detag = source.detag or (lambda text: text)
     for row in rows:
         reference = detag(_tidy(_field(row, source.target_field, where)))
         if source.is_paired:
-            yield detag(_tidy(_field(row, source.input_field, where))), reference
+            yield Utterance(
+                reference=reference,
+                disfluent=detag(_tidy(_field(row, str(source.input_field), where))),
+                input_supplied=True,
+            )
         else:
             # Reference-only: the injector fills the input side in `load`.
-            yield reference, reference
+            yield Utterance(reference=reference, disfluent=reference)
 
 
-def _pairs_from_jsonl(path: str):
-    """Read pairs or bare references from a local file."""
+def _utterances_from_jsonl(path: str):
+    """Read a local file: pairs, bare references, or a `--dump-corpus` dataset.
+
+    A dumped row round-trips exactly — its `commands` and `operations` come back, so the
+    saved dataset scores identically to the corpus it was saved from and `load` knows not
+    to inject over it. A hand-written row with only a reference still goes through the
+    injector, and a bare line is read as a reference.
+    """
     with open(path, encoding="utf-8") as handle:
         for line in handle:
             line = line.strip()
             if not line:
                 continue
             if not line.startswith("{"):
-                yield line, line
+                yield Utterance(reference=line, disfluent=line)
                 continue
             row = json.loads(line)
             reference = row.get("reference") or row.get("text") or row.get("transcript") or ""
-            yield row.get("disfluent") or reference, reference
+            yield Utterance(
+                reference=reference,
+                disfluent=row.get("disfluent") or reference,
+                operations=tuple(row.get("operations", ())),
+                commands=tuple(
+                    spoken_punctuation.Command.from_json(c) for c in row.get("commands", ())
+                ),
+                input_supplied="disfluent" in row,
+            )
+
+
+def dump_jsonl(loaded: Corpus, path: str) -> int:
+    """Write a loaded corpus as JSONL, exactly as `_utterances_from_jsonl` reads it back.
+
+    Why a dataset is worth freezing at all: the corpus this harness scores against is
+    assembled at load time from a dataset download, a seeded disfluency injector and a
+    seeded punctuation injector. That is reproducible in principle and unreviewable in
+    practice — nobody reads a generator to find out whether the examples are any good, and
+    a change to an injector silently changes what every past number was measured on. A
+    file in the tree is diffable.
+
+    What can be committed is limited by licensing, not by size. `--source builtin` is
+    written for this repo (see `BUILTIN_SAMPLE`), so a dataset generated from it carries
+    no third-party terms; `nyra` derives from LDC-licensed Switchboard transcripts, so
+    dump it locally and leave it out of the tree.
+    """
+    lines = []
+    for utterance in loaded.utterances:
+        row: dict[str, object] = {
+            "reference": utterance.reference,
+            "disfluent": utterance.disfluent,
+        }
+        if utterance.operations:
+            row["operations"] = list(utterance.operations)
+        if utterance.commands:
+            row["commands"] = [command.to_json() for command in utterance.commands]
+        lines.append(json.dumps(row, ensure_ascii=False))
+    pathlib.Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return len(lines)
 
 
 def load(
@@ -407,13 +603,15 @@ def load(
     seed: int = 7,
     severity: float = 0.35,
     strip_formatting: bool = False,
+    spoken_punctuation_rate: float = 0.0,
+    spoken_caps_rate: float = 0.25,
 ) -> Corpus:
     """Load up to `limit` pairs, injecting disfluencies for reference-only sources."""
     if jsonl:
-        pairs = _pairs_from_jsonl(jsonl)
+        rows = _utterances_from_jsonl(jsonl)
         spec, detail, formatted = None, {"path": jsonl}, True
     elif source == "builtin":
-        pairs = ((text, text) for text in BUILTIN_SAMPLE)
+        rows = (Utterance(reference=text, disfluent=text) for text in BUILTIN_SAMPLE)
         spec, formatted = None, True
         detail = {"note": "bundled sample; no dataset was downloaded"}
     elif source in SOURCES:
@@ -425,8 +623,7 @@ def load(
         if split:
             spec = replace(spec, split=split)
         where = f"{spec.dataset}/{spec.split}"
-        rows = _rows_via_api(spec, limit)
-        pairs = _pairs_from_rows(rows, spec, where)
+        rows = _utterances_from_rows(_rows_via_api(spec, limit), spec, where)
         formatted = spec.formatting_is_measurable
         detail = {
             "dataset": spec.dataset,
@@ -444,16 +641,19 @@ def load(
     # needs a reference long and well-punctuated enough to inject into. A jsonl
     # file is the user's own text, so it is filtered leniently either way.
     reference_only = spec is None or not spec.is_paired
-    utterances = _collect(pairs, limit, for_injection=reference_only and jsonl is None)
+    utterances = _collect(rows, limit, for_injection=reference_only and jsonl is None)
 
     if reference_only:
         injected: list[Utterance] = []
         for index, utterance in enumerate(utterances):
-            # A jsonl row that already carried a disfluent side keeps it. Per-example
-            # seeds (rather than one shared generator) keep an utterance's
-            # disfluencies stable when the corpus around it changes, so re-running
-            # with a larger --limit doesn't reshuffle what you already looked at.
-            if utterance.is_disfluent:
+            # A jsonl row that already carried a disfluent side keeps it — read off
+            # `input_supplied` rather than `is_disfluent`, so a dumped row whose input
+            # happens to equal its reference is not quietly re-injected into something
+            # else. Per-example seeds (rather than one shared generator) keep an
+            # utterance's disfluencies stable when the corpus around it changes, so
+            # re-running with a larger --limit doesn't reshuffle what you already
+            # looked at.
+            if utterance.input_supplied:
                 injected.append(utterance)
                 continue
             disfluent, operations = disfluency.inject(
@@ -467,6 +667,48 @@ def load(
             )
         utterances = injected
         detail |= {"injected": True, "severity": severity, "strip_formatting": strip_formatting}
+
+    # Spoken punctuation goes on last, over whatever the input side already is — real
+    # annotated disfluencies from a paired source, or the injector's. That ordering is
+    # the point: the task under test is a dictation user saying "comma" *while* also
+    # hesitating, not either in isolation, and layering it keeps the disfluencies the
+    # ones a corpus actually recorded rather than ones this repo wrote. Per-example
+    # seeds for the same reason the disfluency injector uses them — a row's commands
+    # stay put when the corpus around it grows.
+    if spoken_punctuation_rate:
+        spoken: list[Utterance] = []
+        for index, utterance in enumerate(utterances):
+            # A row that already carries commands has been through this injector — a
+            # `--dump-corpus` dataset read back with the flag still set. Injecting again
+            # would speak marks that are no longer there and score the result against a
+            # reference whose ALL CAPS run has been uppercased twice.
+            if utterance.commands:
+                spoken.append(utterance)
+                continue
+            reference, disfluent, commands = spoken_punctuation.inject(
+                utterance.reference,
+                utterance.disfluent,
+                seed=seed + index,
+                rate=spoken_punctuation_rate,
+                caps_rate=spoken_caps_rate,
+            )
+            spoken.append(
+                replace(
+                    utterance,
+                    reference=reference,
+                    disfluent=disfluent,
+                    operations=utterance.operations + tuple(c.label for c in commands),
+                    commands=commands,
+                )
+            )
+        utterances = spoken
+        detail |= {
+            "spoken_punctuation_rate": spoken_punctuation_rate,
+            "spoken_caps_rate": spoken_caps_rate,
+            "commands_per_row": sum(len(u.commands) for u in utterances) / len(utterances)
+            if utterances
+            else 0.0,
+        }
 
     if not utterances:
         raise RuntimeError(f"no usable pairs from {source!r} (needs {MIN_WORDS}-{MAX_WORDS} words)")
@@ -540,10 +782,19 @@ def false_start_fraction(utterances: list[Utterance]) -> float:
     Printed next to the floor because `metrics.FALSE_START_WEIGHT` only bites on these
     rows, so it is the number that says whether the weighting is shaping the search or
     is a rounding error on this corpus. Pure arithmetic; no model is involved.
+
+    Reads each utterance's own `not_abandoned`, so the figure printed is the figure
+    charged. Without it a spoken-punctuation corpus reported 55% of rows carrying an
+    abandoned span against 21% for the same rows unmodified — the difference being
+    "question mark" counted as a false start in the report while `Utterance.scored`
+    correctly declined to charge it.
     """
     if not utterances:
         return 0.0
-    carrying = sum(bool(metrics.false_start_tokens(u.disfluent, u.reference)) for u in utterances)
+    carrying = sum(
+        bool(metrics.false_start_tokens(u.disfluent, u.reference, u.not_abandoned))
+        for u in utterances
+    )
     return carrying / len(utterances)
 
 

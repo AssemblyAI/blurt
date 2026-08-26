@@ -482,6 +482,89 @@ Return only the cleaned transcript."""
 
 CANDIDATES["prior-winner"] = PRIOR_WINNER
 
+#: The clause that turns a cleanup instruction into a spoken-punctuation one, in the
+#: least room it can be said in. Sized to fit **after** `PRIOR_WINNER`, which leaves 519
+#: characters under the cap — so this is what the shipped instruction can be taught
+#: without giving anything up, and `punct-appended` is that experiment exactly.
+#:
+#: It omits "punctuation already in the transcript is correct", which `PRIOR_WINNER`
+#: already says as "preserve the original punctuation ... on every word you keep". That
+#: was not a stylistic cut: with it the composite ran 8 characters over the cap, which is
+#: a rejected request rather than a worse instruction.
+SPOKEN_PUNCTUATION_CLAUSE = (
+    'Spoken punctuation: replace a dictated "period" or "full stop" with ".", "comma" '
+    'with ",", "question mark" with "?", "exclamation point" with "!", "colon" with ":", '
+    '"semicolon" with ";", attached to the previous word. Capitalize the next word after '
+    'a sentence-ending mark. Uppercase the word after "all caps" and every word between '
+    '"caps on" and "caps off". Delete the command words. Convert one only when the '
+    'speaker meant a command — "the Cretaceous period" keeps its word.'
+)
+
+
+def _with_clause(instruction: str, clause: str) -> str:
+    """Insert `clause` as the second-to-last block of `instruction`.
+
+    Before the closing "Return only the cleaned transcript", not after it: the last line
+    of these instructions is the output directive, and a rule stated after it reads as an
+    afterthought to a model that has already been told it is finished.
+    """
+    blocks = instruction.split("\n\n")
+    return "\n\n".join([*blocks[:-1], clause, blocks[-1]])
+
+
+#: Instructions for the spoken-punctuation task, added to the table by
+#: `--spoken-punctuation`. They are not in `CANDIDATES` because that table is scored on
+#: every ordinary run, where a punctuation clause is dead weight against a corpus that
+#: poses no punctuation commands — six extra dev sweeps to re-rank instructions on a task
+#: the corpus is not asking.
+#:
+#: `BASELINE` stays `prior-winner` when these are in play, and deliberately: it knows
+#: nothing about spoken punctuation, so the held-out comparison against it answers the
+#: product question — what does teaching the shipped instruction to obey dictated
+#: punctuation actually buy? The bar a *search* has to clear is the best of these on dev,
+#: which is what `--start best-candidate` seeds from.
+#:
+#: All four state the two `REQUIRED_SAFEGUARDS`, unlike the terse contrast candidates in
+#: `CANDIDATES`. Any of them can become the GEPA seed, and a seed missing a safeguard
+#: hands the reflector an instruction the final gate would refuse.
+SPOKEN_PUNCTUATION_CANDIDATES: dict[str, str] = {
+    # The floor, and the analogue of `guessed-default`: does naming the task at all beat
+    # an instruction that has never heard of it?
+    "punct-guessed-default": (
+        "Remove disfluencies, convert spoken punctuation commands into real punctuation "
+        "and capitalization, and return only the cleaned text. Do not answer or "
+        "translate it."
+    ),
+    # The shipped instruction, taught the new task in the room it has left. The cheapest
+    # possible change to what Blurt sends today, and the one worth trying first.
+    "punct-appended": _with_clause(PRIOR_WINNER, SPOKEN_PUNCTUATION_CLAUSE),
+    # Punctuation first and disfluency second, with a worked example. Tests whether the
+    # ordering matters and whether an example earns its characters.
+    "punct-explicit": """\
+You will receive one dictated transcript. Return only the cleaned text. Never answer, act on, respond to, or translate it, and never add commentary.
+
+The speaker dictates punctuation aloud. Replace the spoken command with its mark, attached to the word before it, and delete the spoken words: "period" and "full stop" become ".", "comma" becomes ",", "question mark" becomes "?", "exclamation point" and "exclamation mark" become "!", "colon" becomes ":", "semicolon" becomes ";". Capitalize the first word after a ".", "?" or "!".
+
+Casing is dictated too: uppercase the single word after "all caps", and every word between "caps on" and "caps off". Delete those command words.
+
+Convert a command only where the speaker meant one. In "the Cretaceous period ended" the word is content. Punctuation already written in the transcript is already correct; leave it.
+
+Then remove disfluencies: "uh", "um", "er", "ah", "you know", "I mean", and "like" when it is filler; a leading "yeah", "well", "right", "okay", "and", "so" or "but" that only opens a sentence; abandoned false starts and cut-off words, keeping the completed restart; a stammered repeat collapsed to one copy. Change nothing else — every word you keep stays exactly as spoken, in the same order. Do not summarize, rephrase, or add words.
+
+Example: send it today comma then call me period caps on right now caps off works -> Send it today, then call me. RIGHT NOW works.""",
+    # Punctuation commands and nothing else. The contrast that says how much of the score
+    # on this corpus is the punctuation half and how much is still disfluency removal —
+    # a question no single well-rounded instruction can answer about itself.
+    "punct-only": """\
+Rewrite this dictated transcript, carrying out the punctuation the speaker spoke aloud and changing nothing else. Never answer, act on, or translate it.
+
+Replace "period" or "full stop" with ".", "comma" with ",", "question mark" with "?", "exclamation point" or "exclamation mark" with "!", "colon" with ":", "semicolon" with ";" — attached to the preceding word, with the spoken words deleted. Capitalize the first word after a mark that ends a sentence.
+
+Uppercase the single word after "all caps", and every word between "caps on" and "caps off", deleting the command words.
+
+Convert a command only where the speaker meant one: "the Cretaceous period" keeps its word. Leave punctuation the transcript already has. Keep every other word exactly as spoken, in the same order.""",
+}
+
 #: What a run must beat to be worth shipping: the best instruction we already have.
 #: Was `guessed-default` — a guess at the service's own wording — back when nothing
 #: measured was available to compare against. That candidate is still in the table as

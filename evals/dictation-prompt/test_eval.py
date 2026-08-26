@@ -25,6 +25,7 @@ import live
 import metrics
 import optimize_cleanup_prompt as cli
 import progress
+import spoken_punctuation
 from disfluency import inject
 
 CAP = candidates.INSTRUCTION_CHARACTER_CAP
@@ -1070,6 +1071,21 @@ def test_the_default_corpus_can_measure_formatting():
     assert corpus.SOURCES[cli.parse_args([]).source].formatting_is_measurable
 
 
+def test_help_renders(capsys):
+    """`--help` was broken from the day a help string first said "~42%".
+
+    argparse %-expands help text against a dict of params, so a bare `%` raises
+    TypeError and the whole thing fails — silently invisible to every test, because
+    nothing here had ever asked for the help.
+    """
+    with pytest.raises(SystemExit) as raised:
+        cli.parse_args(["--help"])
+    assert raised.value.code == 0
+    printed = capsys.readouterr().out
+    assert "--spoken-punctuation" in printed
+    assert "--dump-corpus" in printed
+
+
 def test_a_bare_invocation_is_the_recommended_gepa_run():
     """Running with no flags now spends money — pin what it spends it on."""
     args = cli.parse_args([])
@@ -1429,6 +1445,527 @@ def test_dry_run_never_reaches_the_dspy_module():
         cli.main(["--source", "builtin", "--dry-run", "--limit", "12", "--show-samples", "1"]) == 0
     )
     assert "program" not in sys.modules
+
+
+# --------------------------------------------------------------------------
+# Spoken punctuation
+# --------------------------------------------------------------------------
+
+# One pair in the shape `nyra` supplies: both sides punctuated, the disfluent side
+# carrying a comma (`really,`) the reference does not, and a proper noun sitting
+# where a sentence starts.
+SPOKEN_REFERENCE = "We shipped it today. Monday was quiet, so nobody noticed."
+SPOKEN_DISFLUENT = "Um we shipped it today. Monday was really, quiet, so nobody noticed."
+
+
+def spoken_pair(**kwargs):
+    """`(reference, input, commands)` for the pair above."""
+    return spoken_punctuation.inject(SPOKEN_REFERENCE, SPOKEN_DISFLUENT, **kwargs)
+
+
+def test_a_perfect_cleanup_is_still_the_reference_exactly():
+    """The invariant the whole module rests on: the planted task is achievable.
+
+    Marks are spoken only where the reference licenses them, so the correct answer never
+    stops being the corpus's own target. If this fails, some row is asking for a mark its
+    target does not contain and no instruction can score 1.0 on it.
+    """
+    reference, disfluent, commands = spoken_pair(seed=3, rate=1.0, caps_rate=1.0)
+    assert commands
+    scored = metrics.score(reference, reference, disfluent)
+    assert (scored.content, scored.format) == (1.0, 1.0)
+    assert spoken_punctuation.tally([(commands, reference)])["commands_converted"] == 1.0
+
+
+def test_leaving_every_command_in_is_scored_as_leaving_every_command_in():
+    reference, disfluent, commands = spoken_pair(seed=3, rate=1.0, caps_rate=1.0)
+    assert spoken_punctuation.tally([(commands, disfluent)])["commands_literal"] == 1.0
+
+
+def test_spoken_injection_is_deterministic_for_a_seed():
+    assert spoken_pair(seed=5) == spoken_pair(seed=5)
+
+
+def test_rate_zero_plants_nothing_and_leaves_both_sides_alone():
+    reference, disfluent, commands = spoken_pair(seed=5, rate=0.0, caps_rate=0.0)
+    assert (reference, disfluent, commands) == (SPOKEN_REFERENCE, SPOKEN_DISFLUENT, ())
+
+
+def test_rates_out_of_range_are_rejected():
+    with pytest.raises(ValueError):
+        spoken_pair(seed=1, rate=1.5)
+    with pytest.raises(ValueError):
+        spoken_pair(seed=1, caps_rate=-0.1)
+
+
+def test_only_marks_the_reference_licenses_are_ever_spoken():
+    """A mark the target lacks would ask for punctuation and then score it as an error.
+
+    `really,` is in the input and not in the reference, which is ordinary for `nyra` —
+    the annotator deleted the span it introduced. Speaking it would teach an instruction
+    that commands are sometimes to be ignored.
+    """
+    assert ("really", ",") not in spoken_punctuation.licensed_marks(SPOKEN_REFERENCE)
+    _, disfluent, _ = spoken_pair(seed=5, rate=1.0, caps_rate=0.0)
+    assert "really," in disfluent
+
+
+def test_a_spoken_terminal_mark_takes_its_sentence_capital_with_it():
+    """Otherwise the casing alone restores the period and the eval measures nothing."""
+    reference, disfluent, commands = spoken_punctuation.inject(
+        "We shipped it today. Nobody noticed.",
+        "We shipped it today. Nobody noticed.",
+        seed=2,
+        rate=1.0,
+        caps_rate=0.0,
+    )
+    assert "today period nobody" in disfluent
+    assert reference == "We shipped it today. Nobody noticed."
+    assert [c.mark for c in commands] == [".", "."]
+
+
+def test_a_name_after_a_spoken_mark_is_lowercased_like_any_other_word():
+    """It is sentence-initial in the reference, so restoring its capital *is* the task.
+
+    A corpus-derived proper-noun rule stood here first, on the theory that lowercasing
+    `Monday` charges a correct cleanup for the injector's damage. It does not: the
+    required output is `Monday` and the required action is "capitalize the first word
+    after a sentence-ending mark", which is the same for a name and an ordinary word. What
+    the rule did do was hand the answer to 30% of the commands on `nyra` — the share whose
+    following word appears capitalized mid-sentence somewhere in the corpus.
+    """
+    _, disfluent, _ = spoken_pair(seed=5, rate=1.0, caps_rate=0.0)
+    assert "today period monday" in disfluent
+    # And the target still asks for the capital, so nothing about the task got easier.
+    assert "today. Monday" in SPOKEN_REFERENCE
+
+
+def test_the_pronoun_i_is_the_one_capital_that_survives():
+    """It is capitalized everywhere, mid-sentence included, so lowercasing it is unlike
+    every other case.
+
+    `politics full stop i'm not sure` is a transcript no speech-to-text service returns,
+    and it would show the model the same token cased two ways in one utterance.
+    """
+    text = "I like politics. I'm not sure why."
+    _, disfluent, _ = spoken_punctuation.inject(text, text, seed=1, rate=1.0, caps_rate=0.0)
+    assert "I'm" in disfluent
+    assert "i'm" not in disfluent
+
+
+def test_all_caps_is_the_only_operator_that_edits_the_reference():
+    """And it has to: a target with no uppercase in it cannot pose the task."""
+    reference, _, _ = spoken_pair(seed=5, rate=1.0, caps_rate=0.0)
+    assert reference == SPOKEN_REFERENCE
+    shouted, disfluent, commands = spoken_pair(seed=5, rate=0.0, caps_rate=1.0)
+    caps = [c for c in commands if c.kind == "caps"]
+    assert caps
+    assert shouted != SPOKEN_REFERENCE
+    assert any(word.strip(metrics.PUNCTUATION).isupper() for word in shouted.split())
+    # The input carries the command plus the plain lowercase word, so nothing in it
+    # leaks the answer.
+    assert caps[0].spoken in disfluent
+    for word in caps[0].words:
+        assert word in metrics.normalize(disfluent)
+        assert word.upper() not in disfluent.split()
+
+
+def test_a_caps_run_carries_no_punctuation_so_the_two_operators_cannot_collide():
+    """`caps off` goes after the run's last word; a run ending in `today.` would strand it."""
+    for seed in range(40):
+        _, _, commands = spoken_pair(seed=seed, rate=1.0, caps_rate=1.0)
+        for command in (c for c in commands if c.kind == "caps"):
+            assert all(word == metrics.normalize_text(word) for word in command.words)
+
+
+def test_a_caps_command_is_invisible_to_the_content_axis_and_visible_to_format():
+    """Which is why `--spoken-punctuation` selects on format."""
+    shouted, disfluent, commands = spoken_pair(seed=5, rate=0.0, caps_rate=1.0)
+    assert [c.kind for c in commands] == ["caps"]
+    # A cleanup that did everything but the shouting.
+    unshouted = " ".join(
+        word.lower() if word.strip(metrics.PUNCTUATION).isupper() else word
+        for word in shouted.split()
+    )
+    scored = metrics.score(shouted, unshouted, disfluent)
+    assert scored.content == 1.0
+    assert scored.format < 1.0
+    assert spoken_punctuation.outcome(commands[0], unshouted) == "missing"
+
+
+def test_a_two_word_command_is_not_charged_as_an_abandoned_false_start():
+    """Without the exemption a leftover "question mark" costs ten errors and "period" one.
+
+    `_is_abandoned`'s rule 2 is "two or more non-hesitation words that echo nothing",
+    which is exactly the shape of a dictation command. The asymmetry it produces is one
+    nobody chose, and it would push the search at the multi-word commands for arithmetic
+    reasons.
+    """
+    reference = "Is it ready?"
+    disfluent = "is it ready question mark"
+    exempt = frozenset({"question", "mark"})
+    assert metrics.false_start_tokens(disfluent, reference) == ("question", "mark")
+    assert metrics.false_start_tokens(disfluent, reference, exempt) == ()
+    charged = metrics.score(reference, disfluent, disfluent)
+    exempted = metrics.score(reference, disfluent, disfluent, exempt)
+    assert exempted.content > charged.content
+
+
+def test_the_exemption_is_neutral_on_a_corpus_that_plants_nothing():
+    """Every number measured before it existed has to still hold."""
+    reference = "We would have them."
+    disfluent = "we wouldn't ha- we would have them"
+    assert metrics.score(reference, disfluent, disfluent) == metrics.score(
+        reference, disfluent, disfluent, frozenset()
+    )
+
+
+def test_the_utterance_hands_its_own_planted_commands_to_the_scorer():
+    """`Utterance.scored` is the one place that knows both sides and what was planted."""
+    reference, disfluent, commands = spoken_punctuation.inject(
+        "Is it ready?", "is it ready?", seed=1, rate=1.0, caps_rate=0.0
+    )
+    utterance = corpus.Utterance(reference=reference, disfluent=disfluent, commands=commands)
+    assert utterance.not_abandoned == frozenset({"question", "mark"})
+    assert utterance.scored(disfluent) == metrics.score(
+        reference, disfluent, disfluent, utterance.not_abandoned
+    )
+
+
+def test_the_reported_false_start_fraction_is_the_charged_one():
+    """The figure printed and the figure charged came from different code paths once."""
+    reference, disfluent, commands = spoken_punctuation.inject(
+        "Is it ready?", "is it ready?", seed=1, rate=1.0, caps_rate=0.0
+    )
+    utterances = [corpus.Utterance(reference=reference, disfluent=disfluent, commands=commands)]
+    assert corpus.false_start_fraction(utterances) == 0.0
+
+
+def test_a_command_left_in_is_told_apart_from_a_command_dropped():
+    reference, disfluent, commands = spoken_punctuation.inject(
+        "Is it ready?", "is it ready?", seed=1, rate=1.0, caps_rate=0.0
+    )
+    (command,) = commands
+    assert spoken_punctuation.outcome(command, "Is it ready?") == "converted"
+    assert spoken_punctuation.outcome(command, "Is it ready question mark") == "literal"
+    assert spoken_punctuation.outcome(command, "Is it ready") == "missing"
+
+
+def test_conversion_is_credited_on_the_anchor_not_on_any_mark_anywhere():
+    """Otherwise punctuating something else entirely reads as obeying the command."""
+    _, _, (command,) = spoken_punctuation.inject(
+        "Is it ready?", "is it ready?", seed=1, rate=1.0, caps_rate=0.0
+    )
+    assert spoken_punctuation.outcome(command, "Is it? ready") == "missing"
+
+
+def test_the_literal_match_is_anchored_so_an_ordinary_word_is_not_charged():
+    """ "the Cretaceous period was long" is content, not a command left in."""
+    _, _, (command,) = spoken_punctuation.inject(
+        "It ended then.", "it ended then.", seed=1, rate=1.0, caps_rate=0.0
+    )
+    assert command.anchor == "then"
+    assert (
+        spoken_punctuation.outcome(command, "The Cretaceous period was long. It ended then.")
+        == "converted"
+    )
+
+
+def test_a_shouted_run_is_found_as_a_run_not_word_by_word():
+    """A word-keyed lookup found the wrong copy and marked a correct answer missed.
+
+    On "All the people signed confessions ... trying THESE PEOPLE now" it took the first
+    "people" — lowercase, eight words earlier — and reported the run as not shouted.
+    """
+    command = spoken_punctuation.Command(
+        spoken="caps on", mark="", kind="caps", words=("these", "people")
+    )
+    hypothesis = "All the people signed confessions. They been trying THESE PEOPLE now."
+    assert spoken_punctuation.outcome(command, hypothesis) == "converted"
+    assert (
+        spoken_punctuation.outcome(command, "All the people signed. Trying these people now.")
+        == "missing"
+    )
+
+
+def test_every_planted_command_is_answered_by_its_own_reference():
+    """The corpus-wide version of the achievability invariant, over enough rows to bite.
+
+    A one-row check passes on a construction that is wrong on some shape appearing once
+    in four hundred — which is how the run-as-a-run bug above got in.
+    """
+    reference = "All the people signed confessions, they went to a trial by jury."
+    disfluent = "All the people signed confessions, they went to a trial by jury."
+    for seed in range(60):
+        target, spoken_side, commands = spoken_punctuation.inject(
+            reference, disfluent, seed=seed, rate=1.0, caps_rate=1.0
+        )
+        assert metrics.score(target, target, spoken_side).format == 1.0
+        for command in commands:
+            assert spoken_punctuation.outcome(command, target) == "converted", command
+
+
+def test_the_tally_of_nothing_says_nothing_rather_than_zero_percent():
+    assert spoken_punctuation.tally([])["commands_total"] == 0.0
+    assert spoken_punctuation.tally([((), "anything")])["commands_converted"] == 0.0
+
+
+def test_the_literal_use_fraction_matches_phrases_not_their_words():
+    """Matching words reported a fifth of `nyra` as traps; it was the words "all" and "on".
+
+    A diagnostic that overstates the blind spot by 10x is worse than none, because it
+    argues the gap has already been closed.
+    """
+    assert spoken_punctuation.literal_use_fraction(["The Cretaceous period was long."]) == 1.0
+    assert (
+        spoken_punctuation.literal_use_fraction(["We looked at all of it and turned it on."]) == 0.0
+    )
+    assert spoken_punctuation.literal_use_fraction([]) == 0.0
+
+
+def test_the_command_vocabulary_covers_the_marks_the_task_is_named_for():
+    """period, comma, question mark, ALL CAPS — plus the aliases people actually say."""
+    assert {".", ",", "?"} <= set(spoken_punctuation.SPOKEN_FORMS)
+    assert "full stop" in {form for form, _ in spoken_punctuation.SPOKEN_FORMS["."]}
+    assert spoken_punctuation.CAPS_WORD == "all caps"
+
+
+def test_spoken_punctuation_layers_onto_the_real_disfluencies_rather_than_replacing_them():
+    """The task under test is saying "comma" *while* hesitating, not either alone."""
+    loaded = corpus.load(source="builtin", limit=12, spoken_punctuation_rate=1.0)
+    operations = {op for u in loaded.utterances for op in u.operations}
+    assert any(op.startswith("spoken:") for op in operations)
+    assert any(not op.startswith("spoken:") for op in operations)
+    assert loaded.detail["spoken_punctuation_rate"] == 1.0
+
+
+def test_a_corpus_without_the_flag_plants_nothing():
+    loaded = corpus.load(source="builtin", limit=12)
+    assert all(u.commands == () for u in loaded.utterances)
+    assert all(u.not_abandoned == frozenset() for u in loaded.utterances)
+
+
+# The committed dataset, and the exact arguments that produce it. Both live here rather
+# than only in `data/README.md` so the file is self-verifying: a change to either injector
+# fails this suite instead of quietly invalidating a dataset still sitting in the tree.
+FROZEN_DATASET = pathlib.Path(__file__).parent / "data" / "spoken-punctuation.jsonl"
+FROZEN_ARGV = (
+    "--source builtin --limit 200 --spoken-punctuation 0.8 --severity 0.35 --seed 7"
+).split()
+
+
+def frozen_corpus():
+    return corpus.load(
+        source="builtin", limit=200, spoken_punctuation_rate=0.8, severity=0.35, seed=7
+    )
+
+
+def test_the_committed_dataset_is_what_the_generator_still_produces(tmp_path):
+    """A frozen dataset nobody re-derives is a dataset that silently goes stale.
+
+    The alternative is a file in the tree that was correct when it was written and is now
+    a different corpus from the one the code builds — and every number measured on it
+    unattributable to either. Regenerate it with the command in `data/README.md`.
+    """
+    regenerated = tmp_path / "spoken-punctuation.jsonl"
+    corpus.dump_jsonl(frozen_corpus(), str(regenerated))
+    assert regenerated.read_text(encoding="utf-8") == FROZEN_DATASET.read_text(encoding="utf-8")
+
+
+def test_the_frozen_dataset_round_trips_through_the_loader():
+    """Reading it back has to reproduce the corpus, commands included.
+
+    Scoring a dumped dataset is only scoring the corpus it came from if the commands
+    survive: without them the tally reports nothing and the false-start classifier goes
+    back to charging "question mark" as an abandoned phrase.
+    """
+    generated = frozen_corpus()
+    reloaded = corpus.load(jsonl=str(FROZEN_DATASET), limit=200)
+    assert len(reloaded) == len(generated)
+    for a, b in zip(generated.utterances, reloaded.utterances, strict=True):
+        assert (a.reference, a.disfluent) == (b.reference, b.disfluent)
+        assert a.commands == b.commands
+        assert a.not_abandoned == b.not_abandoned
+        assert a.scored(a.reference) == b.scored(b.reference)
+
+
+def test_a_reloaded_dataset_is_not_injected_over_again():
+    """The flag is often still on the command line; injecting twice would speak marks that
+    are no longer there and uppercase an ALL CAPS run a second time."""
+    reloaded = corpus.load(jsonl=str(FROZEN_DATASET), limit=200, spoken_punctuation_rate=0.8)
+    generated = frozen_corpus()
+    assert [u.disfluent for u in reloaded.utterances] == [u.disfluent for u in generated.utterances]
+
+
+def test_a_dumped_row_whose_input_matches_its_reference_is_still_left_alone(tmp_path):
+    """The case `is_disfluent` got wrong, and the reason `input_supplied` is recorded.
+
+    A row where no command and no disfluency were drawn reads as "needs injecting", so
+    reloading would hand it a different input than the file records — a dumped corpus that
+    is not the corpus it was dumped from, with nothing to say so.
+    """
+    path = tmp_path / "clean.jsonl"
+    text = "The build failed because the certificate expired over the weekend."
+    path.write_text(json.dumps({"reference": text, "disfluent": text}) + "\n", encoding="utf-8")
+    (utterance,) = corpus.load(jsonl=str(path), limit=1).utterances
+    assert utterance.disfluent == text
+
+
+def test_a_jsonl_row_with_only_a_reference_still_goes_through_the_injector(tmp_path):
+    path = tmp_path / "bare.jsonl"
+    text = "The build failed because the certificate expired over the weekend."
+    path.write_text(json.dumps({"reference": text}) + "\n", encoding="utf-8")
+    (utterance,) = corpus.load(jsonl=str(path), limit=1).utterances
+    assert utterance.disfluent != text
+    assert utterance.operations
+
+
+def test_the_frozen_dataset_can_charge_over_conversion_where_nyra_cannot():
+    """Its whole reason for existing beyond being a fixture.
+
+    `nyra` uses a command word as content on ~0-1% of rows, so nothing there punishes an
+    instruction that rewrites "the Jurassic period was long" into "the Jurassic. was
+    long". These sentences were written to.
+    """
+    references = [u.reference for u in corpus.load(source="builtin", limit=200).utterances]
+    assert spoken_punctuation.literal_use_fraction(references) > 0.1
+
+
+def test_the_dump_flag_works_without_a_key_or_a_network(tmp_path):
+    """Generating a dataset must not require paying for a run."""
+    path = tmp_path / "dump.jsonl"
+    assert (
+        cli.main([*FROZEN_ARGV, "--dump-corpus", str(path), "--dry-run", "--show-samples", "0"])
+        == 0
+    )
+    assert path.read_text(encoding="utf-8") == FROZEN_DATASET.read_text(encoding="utf-8")
+
+
+def test_the_original_offline_sample_is_still_the_first_twelve_rows():
+    """`--limit 12` and the tests that use it have to see what they always saw."""
+    assert len(corpus.BUILTIN_SAMPLE) > 12
+    assert corpus.BUILTIN_SAMPLE[0].startswith("The build failed because the signing")
+    assert corpus.BUILTIN_SAMPLE[11].endswith("menu bar item at all.")
+
+
+def test_every_bundled_sentence_survives_the_injection_filter():
+    """A fixture that silently drops the rows it was written to contain is a bad fixture."""
+    kept = {u.reference for u in corpus.load(source="builtin", limit=500).utterances}
+    assert len(kept) == len(corpus.BUILTIN_SAMPLE)
+
+
+def test_the_bundled_sample_exercises_every_mark_in_the_vocabulary():
+    """`nyra` supplies no exclamation point, colon or semicolon at all, so if these
+    entries in SPOKEN_FORMS are to mean anything, this corpus has to license them."""
+    licensed = set()
+    for text in corpus.BUILTIN_SAMPLE:
+        licensed |= {mark for _, mark in spoken_punctuation.licensed_marks(text)}
+    assert set(spoken_punctuation.SPOKEN_FORMS) <= licensed
+
+
+def test_the_punctuation_candidates_join_the_table_only_when_the_corpus_asks():
+    """Keyed on the corpus, not the flag, so a frozen dataset read with --jsonl behaves
+    the same as the corpus it was dumped from."""
+    plain = corpus.load(source="builtin", limit=12)
+    assert cli.instruction_table(plain) == dict(candidates.CANDIDATES)
+    table = cli.instruction_table(corpus.load(jsonl=str(FROZEN_DATASET), limit=200))
+    assert set(candidates.SPOKEN_PUNCTUATION_CANDIDATES) <= set(table)
+    # The bar stays what Blurt ships, so the held-out comparison answers the product
+    # question: what does teaching it the new task buy?
+    assert candidates.BASELINE in table
+
+
+def test_every_punctuation_candidate_is_shippable_and_keeps_the_safeguards():
+    """Any of them can become the GEPA seed, and a seed the final gate would refuse
+    wastes the whole search."""
+    for name, text in candidates.SPOKEN_PUNCTUATION_CANDIDATES.items():
+        assert candidates.overage(text) == 0, name
+        assert candidates.missing_safeguards(text) == [], name
+
+
+def test_an_oversized_punctuation_candidate_stops_the_run_too(monkeypatch):
+    monkeypatch.setitem(candidates.SPOKEN_PUNCTUATION_CANDIDATES, "too-long", "x" * 5000)
+    loaded = corpus.load(jsonl=str(FROZEN_DATASET), limit=200)
+    with pytest.raises(SystemExit) as raised:
+        cli.check_candidates(cli.instruction_table(loaded))
+    assert "too-long" in str(raised.value)
+
+
+def test_the_clause_fits_after_the_shipped_instruction():
+    """That is the experiment `punct-appended` is: what can be taught for free?"""
+    composite = candidates.SPOKEN_PUNCTUATION_CANDIDATES["punct-appended"]
+    assert candidates.PRIOR_WINNER.split("\n\n")[0] in composite
+    assert composite.endswith("Return only the cleaned transcript.")
+    assert candidates.SPOKEN_PUNCTUATION_CLAUSE in composite
+    assert candidates.overage(composite) == 0
+
+
+def test_a_spoken_punctuation_run_selects_on_format_by_default():
+    """Content casefolds and strips marks, so it cannot see most of this task."""
+    plain = corpus.load(source="builtin", limit=12)
+    spoken = corpus.load(jsonl=str(FROZEN_DATASET), limit=200)
+    assert cli.resolve_axis(None, plain) == "blend"
+    assert cli.resolve_axis(None, spoken) == "format"
+    # An explicit choice still wins.
+    assert cli.resolve_axis("content", spoken) == "content"
+
+
+def test_a_spoken_punctuation_run_scores_the_bar_and_the_challengers():
+    """Not `BASELINE` alone, and not the whole table.
+
+    Alone it would search from an instruction that has never heard of the task; the whole
+    table adds six terse instructions that rank framings of *disfluency* cleanup, none of
+    which mentions punctuation, at 900 dev calls each.
+    """
+    loaded = corpus.load(jsonl=str(FROZEN_DATASET), limit=200)
+    table = cli.instruction_table(loaded)
+    scoring = cli.resolve_candidates(cli.parse_args([]), table, spoken=True)
+    assert scoring[0] == candidates.BASELINE
+    assert set(scoring) == {candidates.BASELINE, *candidates.SPOKEN_PUNCTUATION_CANDIDATES}
+    assert set(scoring) < set(table)
+
+
+def test_the_full_table_is_still_available_on_a_spoken_run():
+    scoring = cli.resolve_candidates(
+        cli.parse_args(["--candidates", "all"]),
+        cli.instruction_table(corpus.load(jsonl=str(FROZEN_DATASET), limit=200)),
+        spoken=True,
+    )
+    assert set(candidates.CANDIDATES) <= set(scoring)
+
+
+def test_the_command_table_is_ordered_by_the_selecting_axis(capsys):
+    """A candidate that converts more commands and still loses should read as that."""
+    rows = [
+        (
+            "worse-text",
+            dict.fromkeys(metrics.AXES, 0.1)
+            | {
+                "commands_converted": 0.9,
+                "commands_literal": 0.05,
+                "commands_missing": 0.05,
+                "commands_total": 10.0,
+            },
+        ),
+        (
+            "better-text",
+            dict.fromkeys(metrics.AXES, 0.9)
+            | {
+                "commands_converted": 0.2,
+                "commands_literal": 0.4,
+                "commands_missing": 0.4,
+                "commands_total": 10.0,
+            },
+        ),
+    ]
+    cli.print_command_table(rows, "format")
+    printed = capsys.readouterr().out
+    assert printed.index("better-text") < printed.index("worse-text")
+
+
+def test_the_command_table_is_silent_when_nothing_was_planted(capsys):
+    cli.print_command_table([("x", dict.fromkeys(metrics.AXES, 0.5))], "format")
+    assert capsys.readouterr().out == ""
 
 
 def test_program_is_the_only_module_that_imports_dspy():

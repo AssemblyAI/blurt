@@ -69,10 +69,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import corpus  # noqa: E402
 import metrics  # noqa: E402
+import spoken_punctuation  # noqa: E402
 from candidates import (  # noqa: E402
     BASELINE,
     CANDIDATES,
     INSTRUCTION_CHARACTER_CAP,
+    SPOKEN_PUNCTUATION_CANDIDATES,
     missing_safeguards,
     objections,
     overage,
@@ -88,6 +90,31 @@ def print_table(rows: list[tuple[str, dict[str, float]]], title: str, axis: str)
     print(f"  {'-' * 22} {'  '.join(['-' * 9] * len(metrics.AXES))}")
     for name, scores in sorted(rows, key=lambda row: row[1][axis], reverse=True):
         print(f"  {name:<22} " + "  ".join(f"{scores[a]:>9.4f}" for a in metrics.AXES))
+
+
+def print_command_table(rows: list[tuple[str, dict[str, float]]], axis: str) -> None:
+    """What became of the planted commands, per candidate.
+
+    Printed apart from the axis table because it answers a different question. WER says
+    how close the text came; this says how many of the commands actually planted were
+    obeyed, left in the output as words, or silently dropped — and `literal` is the one
+    that reaches the user's document as visible nonsense, so it earns its own column
+    rather than being folded into "did not convert".
+
+    Ordered by the selecting axis, not by conversion rate, so a candidate that converts
+    more commands and still loses is visible as exactly that.
+    """
+    scored = [row for row in rows if row[1].get("commands_total")]
+    if not scored:
+        return
+    print("\nSpoken punctuation commands, per candidate")
+    print(f"  {'candidate':<22} {'converted':>10} {'left as words':>14} {'dropped':>9}")
+    print(f"  {'-' * 22} {'-' * 10} {'-' * 14} {'-' * 9}")
+    for name, scores in sorted(scored, key=lambda row: row[1][axis], reverse=True):
+        print(
+            f"  {name:<22} {scores['commands_converted']:>10.1%} "
+            f"{scores['commands_literal']:>14.1%} {scores['commands_missing']:>9.1%}"
+        )
 
 
 def print_samples(loaded: corpus.Corpus, count: int) -> None:
@@ -153,12 +180,42 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="also lowercase and unpunctuate, making formatting restoration part of the task",
     )
 
+    spoken = parser.add_argument_group("spoken punctuation (any source)")
+    spoken.add_argument(
+        "--spoken-punctuation",
+        type=float,
+        default=0.0,
+        metavar="RATE",
+        help="0..1; speak this share of the punctuation the reference licenses, turning "
+        'each mark into the words a dictation user says out loud ("comma", "question '
+        'mark", "all caps"). 0 (default) is off. Unlike --severity this applies to a '
+        "PAIRED source too: the marks come from the corpus's own clean side, so the "
+        "disfluencies stay the ones annotators marked by hand and only the punctuation "
+        "task is synthetic. Below 1 on purpose — a corpus with no real marks left in the "
+        "input teaches an instruction to punctuate by guesswork instead of by command",
+    )
+    spoken.add_argument(
+        "--spoken-caps-rate",
+        type=float,
+        default=0.25,
+        metavar="RATE",
+        help="0..1; chance a row also gets one ALL CAPS command (default: 0.25). At most "
+        "one per row — two in a 15-word utterance would make the operator most of the "
+        "corpus. Only this operator edits the reference, because a target with no "
+        "uppercase in it cannot pose the task. Ignored unless --spoken-punctuation is on",
+    )
+
     evaluation = parser.add_argument_group("evaluation")
     evaluation.add_argument(
         "--metric",
-        default="blend",
+        default=None,
         choices=metrics.AXES,
-        help="which axis selects the winner (default: blend, 0.7 content / 0.3 format)",
+        help="which axis selects the winner. Default: blend (0.7 content / 0.3 format), "
+        "or format under --spoken-punctuation. Spoken punctuation is a formatting task "
+        "that content cannot see — normalize() casefolds and strips marks, so a restored "
+        "comma and a missed one are the same string to it, and an ALL CAPS command is "
+        "invisible. format is the axis that sees the whole task, and it still sees the "
+        "expensive failure (a command left in as a word) as an inserted token",
     )
     evaluation.add_argument(
         "--dev-fraction",
@@ -185,7 +242,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "own advice is the smallest set that still matches the task distribution, and 50 "
         "was that; it was raised to 150 because at 50 the Pareto front was ranking candidates "
         "on differences it could not resolve, and picking a winner that dev then rejected, and "
-        "tripled again alongside dev. Noise falls as the square root, so 3x the rows is ~42% "
+        # `%%` because argparse %-expands help strings against a dict of params, so a bare
+        # `%` raises TypeError and `--help` fails outright — which it did, from the day
+        # this figure was written until someone tried to read the help.
+        "tripled again alongside dev. Noise falls as the square root, so 3x the rows is ~42%% "
         "less of it — nothing cheaper buys that",
     )
     evaluation.add_argument(
@@ -334,8 +394,42 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "at that wording, and this uses the wording itself",
     )
 
+    parser.add_argument(
+        "--dump-corpus",
+        default=None,
+        metavar="PATH",
+        help="write the loaded corpus to PATH as JSONL and carry on. Reading it back with "
+        "--jsonl reproduces it exactly, commands and all, so a dataset can be frozen in "
+        "the tree and diffed instead of re-derived from a download plus two seeded "
+        "injectors. Works under --dry-run, so generating one needs no API key. Mind the "
+        "licensing: --source builtin is written for this repo, while nyra derives from "
+        "LDC-licensed Switchboard transcripts and should stay out of version control",
+    )
     parser.add_argument("--out", default=None, help="write the full results as JSON to this path")
     return parser.parse_args(argv)
+
+
+#: Axis each corpus shape selects on when `--metric` is not given.
+DEFAULT_AXIS = "blend"
+SPOKEN_PUNCTUATION_AXIS = "format"
+
+
+def instruction_table(loaded: corpus.Corpus) -> dict[str, str]:
+    """The instructions this run scores — the shipped set, plus the task's own.
+
+    `SPOKEN_PUNCTUATION_CANDIDATES` are merged in rather than living in `CANDIDATES`
+    because they are dead weight on every ordinary run: a punctuation clause cannot help
+    against a corpus that poses no punctuation commands, and each one costs a full dev
+    sweep to re-rank. `BASELINE` is untouched either way, so the held-out comparison is
+    still against what Blurt ships.
+
+    Keyed on the loaded corpus rather than on `--spoken-punctuation`, so a frozen dataset
+    read back with `--jsonl` is scored the same way as the corpus it was dumped from: it
+    carries the commands and not the flag.
+    """
+    if not loaded.has_commands:
+        return dict(CANDIDATES)
+    return dict(CANDIDATES) | SPOKEN_PUNCTUATION_CANDIDATES
 
 
 def describe_length(instruction: str) -> str:
@@ -347,7 +441,7 @@ def describe_length(instruction: str) -> str:
     return f"{len(instruction)} chars, {headroom} under the {INSTRUCTION_CHARACTER_CAP} cap"
 
 
-def check_candidates() -> None:
+def check_candidates(table: dict[str, str] | None = None) -> None:
     """Refuse to start if a hand-written candidate could never be shipped.
 
     Before any model call, because these are typo-class mistakes and paying for a full
@@ -359,9 +453,15 @@ def check_candidates() -> None:
     deliberately terse one-liners whose job is to be *contrast* — `guessed-default` is
     a floor, not something anyone would ship — and demanding the full safeguard set of
     them would turn the comparison set into six copies of the same careful paragraph.
+
+    Takes the table rather than reading `CANDIDATES` so that whatever
+    `instruction_table` merged in is checked too; omitting it checks the shipped set. A `--spoken-punctuation` candidate is
+    exactly as capable of being 8 characters over the cap as any other — `punct-appended`
+    lands at 2006 of 2048 — and discovering that after paying for a dev sweep is the
+    waste this function exists to prevent.
     """
     problems: list[str] = []
-    for name, text in CANDIDATES.items():
+    for name, text in (CANDIDATES if table is None else table).items():
         if overage(text):
             problems.append(f"  {name}: {describe_length(text)}")
         if name == BASELINE and (absent := missing_safeguards(text)):
@@ -374,7 +474,11 @@ def check_candidates() -> None:
         )
 
 
-def resolve_candidates(args: argparse.Namespace) -> list[str]:
+def resolve_candidates(
+    args: argparse.Namespace,
+    table: dict[str, str] | None = None,
+    spoken: bool = False,
+) -> list[str]:
     """Which candidates get scored on dev before the search.
 
     Sweeping all of them costs `len(CANDIDATES) × dev` calls to re-establish an
@@ -388,14 +492,29 @@ def resolve_candidates(args: argparse.Namespace) -> list[str]:
     A run that isn't searching gets the full table, because ranking one candidate is
     not a ranking. That is the shape of `--optimizer none`: the cheap pass you make
     when you have changed the corpus or the model and want the ordering itself.
+
+    A `spoken` corpus gets a **third** answer: the punctuation candidates plus
+    `BASELINE`, and not the six terse contrast instructions. `BASELINE` alone is not
+    enough — it has never heard of the task, so a search seeded from it starts outside
+    the region worth exploring — but the six one-liners are worse than useless here. They
+    exist to rank framings of *disfluency* cleanup ("verbatim-preserving" against
+    "dictation-intent"), none of them mentions punctuation, and every one of them will
+    land near the floor for the same reason. At the default 900-row dev split that
+    ordering costs 5,400 model calls to re-discover. `--candidates all` still buys them
+    if you want to see it happen.
     """
+    if args.candidates == "all":
+        return list(CANDIDATES if table is None else table)
+    if spoken:
+        # BASELINE first so the table reads as "the bar, then the challengers".
+        return [BASELINE, *SPOKEN_PUNCTUATION_CANDIDATES]
     if (
-        args.candidates == "all"
-        or (args.candidates is None and args.optimizer == "none")
+        args.candidates is None
+        and args.optimizer == "none"
         # Nothing has been scored yet, so "best" is unknowable without the sweep.
         or args.start == "best-candidate"
     ):
-        return list(CANDIDATES)
+        return list(CANDIDATES if table is None else table)
     return [BASELINE]
 
 
@@ -463,7 +582,7 @@ def run_live_verification(
     return summaries
 
 
-def resolve_axis(requested: str, loaded: corpus.Corpus) -> str:
+def resolve_axis(requested: str | None, loaded: corpus.Corpus) -> str:
     """Refuse to select on an axis the corpus cannot measure.
 
     Some corpora carry casing or punctuation their targets did not intend — most
@@ -471,7 +590,15 @@ def resolve_axis(requested: str, loaded: corpus.Corpus) -> str:
     strands the following word in lowercase. Scoring formatting against that
     penalizes a *correct* cleanup, so `blend` degrades to `content` with a note and
     an explicit `--metric format` is an error rather than a meaningless number.
+
+    `requested` is None when `--metric` was not given, which is where the default lives
+    rather than in `argparse`: it depends on whether the corpus poses punctuation
+    commands. A `--spoken-punctuation` corpus that also cannot be scored on formatting
+    fails below rather than quietly selecting on content, because content cannot see an
+    ALL CAPS command at all and half the task would go unmeasured.
     """
+    if requested is None:
+        requested = SPOKEN_PUNCTUATION_AXIS if loaded.has_commands else DEFAULT_AXIS
     if loaded.formatting_is_measurable or requested == "content":
         return requested
     if requested == "format":
@@ -479,6 +606,12 @@ def resolve_axis(requested: str, loaded: corpus.Corpus) -> str:
             f"--metric format needs a corpus with trustworthy target formatting; "
             f"{loaded.source} does not have it. Use --source nyra for repaired casing, or "
             "--source builtin --strip-formatting to pose formatting restoration as a task."
+            + (
+                " Spoken punctuation needs it too: the commands it plants are answered "
+                "in capitalization and marks, which the content axis cannot see."
+                if loaded.has_commands
+                else ""
+            )
         )
     print(
         f"\nNote: {loaded.source} targets carry formatting artifacts from mechanical "
@@ -489,8 +622,6 @@ def resolve_axis(requested: str, loaded: corpus.Corpus) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    check_candidates()
-
     loaded = corpus.load(
         source=args.source,
         limit=args.limit,
@@ -499,9 +630,18 @@ def main(argv: list[str] | None = None) -> int:
         seed=args.seed,
         severity=args.severity,
         strip_formatting=args.strip_formatting,
+        spoken_punctuation_rate=args.spoken_punctuation,
+        spoken_caps_rate=args.spoken_caps_rate,
     )
     print(f"Loaded {len(loaded)} pairs from {loaded.source}: {loaded.detail}")
     print(f"{loaded.disfluent_fraction:.0%} of pairs differ from their target")
+
+    # After the load, because which instructions are in play depends on whether the
+    # corpus poses the punctuation task — and a `--jsonl` dataset answers that by what it
+    # contains, not by a flag. Still before any model call, which is what the check is
+    # for: a typo in candidates.py should not cost a paid sweep to discover.
+    table = instruction_table(loaded)
+    check_candidates(table)
 
     train, dev, test = corpus.split(
         list(loaded.utterances), args.seed, args.dev_fraction, args.test_fraction
@@ -518,10 +658,17 @@ def main(argv: list[str] | None = None) -> int:
         f"{len(dev)} dev / {len(test)} test"
     )
 
+    if args.dump_corpus:
+        written = corpus.dump_jsonl(loaded, args.dump_corpus)
+        print(f"\nWrote {written} rows to {args.dump_corpus}")
+
     if args.show_samples:
         print_samples(loaded, args.show_samples)
 
     axis = resolve_axis(args.metric, loaded)
+    # Written back so the results file records the axis the run actually selected on
+    # rather than the `None` that means "let the corpus decide".
+    args.metric = axis
     floors = {"dev": corpus.no_cleanup_floor(dev), "test": corpus.no_cleanup_floor(test)}
     print(
         f"\nNo-cleanup floor ({axis}) — the corpus's disfluent side scored against its "
@@ -533,6 +680,22 @@ def main(argv: list[str] | None = None) -> int:
         f"rather than one; {corpus.false_start_fraction(dev):.0%} of dev rows and "
         f"{corpus.false_start_fraction(test):.0%} of test rows contain one"
     )
+    if loaded.has_commands:
+        planted = sum(len(u.commands) for u in dev + test)
+        print(
+            f"\nSpoken punctuation: {planted} commands planted across {len(dev) + len(test)} "
+            f"dev+test rows ({planted / max(1, len(dev) + len(test)):.2f} per row); "
+            f"{sum(bool(u.commands) for u in dev + test) / max(1, len(dev) + len(test)):.0%} "
+            "of rows carry at least one"
+        )
+        # Bounds what the run can say about over-conversion, so it is printed rather
+        # than left to be assumed away. See spoken_punctuation.literal_use_fraction.
+        literal = spoken_punctuation.literal_use_fraction(u.reference for u in dev + test)
+        print(
+            f"{literal:.1%} of those references use a command phrase as ordinary content, so "
+            "the score is nearly blind to an instruction that converts 'the Cretaceous "
+            "period'. That clause is in the candidates on product grounds, not scored ones"
+        )
 
     if args.dry_run:
         print("\n--dry-run: corpus and scoring verified; no model was called.")
@@ -549,22 +712,23 @@ def main(argv: list[str] | None = None) -> int:
     )
     program.configure(spec)
 
-    scoring = resolve_candidates(args)
+    scoring = resolve_candidates(args, table, spoken=loaded.has_commands)
     dev_rows: list[tuple[str, dict[str, float]]] = []
     with Progress(len(scoring) * len(dev), "Scoring candidates on dev") as meter:
         for index, name in enumerate(scoring, start=1):
             note = f"{name} ({index}/{len(scoring)})"
             scores = program.evaluate(
-                program.build(CANDIDATES[name]),
+                program.build(table[name]),
                 dev,
                 args.num_threads,
                 on_example=lambda n=note: meter.tick(n),
             )
             dev_rows.append((name, scores))
     print_table(dev_rows, f"Candidate instructions on dev, selecting on {axis}", axis)
+    print_command_table(dev_rows, axis)
 
     winner_name, winner_scores = max(dev_rows, key=lambda row: row[1][axis])
-    winner_instruction = CANDIDATES[winner_name]
+    winner_instruction = table[winner_name]
 
     if args.optimizer != "none":
         # The seed is an ordinary candidate — it fits the cap, so it was scored in the
@@ -572,7 +736,7 @@ def main(argv: list[str] | None = None) -> int:
         # need to keep it out of the selection: unlike the over-cap instruction this
         # replaced, shipping it is a real option.
         seed_name = BASELINE if args.start == "prior-winner" else winner_name
-        seed_instruction = CANDIDATES[seed_name]
+        seed_instruction = table[seed_name]
         seed_scores = dict(dev_rows)[seed_name]
 
         proposer = program.CappedInstructionProposer(INSTRUCTION_CHARACTER_CAP)
@@ -608,6 +772,7 @@ def main(argv: list[str] | None = None) -> int:
         optimized_name = f"{args.optimizer}-optimized"
         dev_rows.append((optimized_name, optimized_scores))
         print_table(dev_rows, f"With the optimized instruction, on dev ({axis})", axis)
+        print_command_table(dev_rows, axis)
         print(f"\nThe optimized instruction is {describe_length(optimized_instruction)}.")
         delta = optimized_scores[axis] - seed_scores[axis]
         print(
@@ -644,7 +809,7 @@ def main(argv: list[str] | None = None) -> int:
     # reported improvement is measured on data no selection decision saw.
     scored_on_test = [(winner_name, winner_instruction)]
     if winner_name != BASELINE:
-        scored_on_test.append((BASELINE, CANDIDATES[BASELINE]))
+        scored_on_test.append((BASELINE, table[BASELINE]))
     test_rows = []
     with Progress(len(scored_on_test) * len(test), "Scoring on held-out test") as meter:
         for name, instruction in scored_on_test:
@@ -660,6 +825,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
     print_table(test_rows, f"Held-out test ({axis})", axis)
+    print_command_table(test_rows, axis)
 
     live_summary = run_live_verification(args, winner_name, winner_instruction, test)
 
@@ -695,7 +861,7 @@ def main(argv: list[str] | None = None) -> int:
                 "length": len(winner_instruction),
             },
             "live": live_summary,
-            "candidates": CANDIDATES,
+            "candidates": table,
         }
         Path(args.out).write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
         print(f"\nWrote {args.out}")

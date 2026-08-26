@@ -16,6 +16,7 @@ import dspy
 from gepa.strategies.instruction_proposal import InstructionProposalSignature
 
 import metrics
+import spoken_punctuation
 from candidates import constraint_preamble, objections, revision_directive, trim_to_fit
 from corpus import Utterance
 
@@ -146,7 +147,32 @@ def _cleaned(prediction) -> str:
     return getattr(prediction, OUTPUT_FIELD, "") or ""
 
 
-def make_feedback_metric(axis: str):
+def commands_by_input(utterances: list[Utterance]) -> dict[str, tuple]:
+    """`{input text: planted spoken-punctuation commands}` for the metric to look up.
+
+    GEPA hands the metric a `dspy.Example`, so anything the metric needs has to be
+    reachable from one. Keying on the input text rather than adding a field to the
+    Example is deliberate: `Example.labels()` returns every non-input key, and GEPA
+    builds its reflective dataset out of those, so a `commands` field would put a list of
+    dataclass reprs into the reflection prompt the model reads. A side table costs a dict
+    and changes nothing GEPA sees.
+
+    Raises on a duplicate input rather than letting one row silently answer for another.
+    Two identical transcripts would be a corpus problem — `corpus._collect` de-duplicates
+    on the *reference* side, so this is the check that does not exist yet.
+    """
+    table: dict[str, tuple] = {}
+    for utterance in utterances:
+        if utterance.disfluent in table and table[utterance.disfluent] != utterance.commands:
+            raise RuntimeError(
+                "two rows share an input side but carry different planted commands: "
+                f"{utterance.disfluent!r}"
+            )
+        table[utterance.disfluent] = utterance.commands
+    return table
+
+
+def make_feedback_metric(axis: str, commands: dict[str, tuple] | None = None):
     """Metric for GEPA: the same score plus a diff its reflector can act on.
 
     `axis` decides which score the reflector is shown, and it is shown only that one.
@@ -154,22 +180,34 @@ def make_feedback_metric(axis: str):
     `metrics.feedback` for why the formatting score in particular is misleading on the
     default corpus. The length budget is not here at all; it belongs in the proposer's
     preamble, said once with the real target rather than eight times with the cap.
+
+    `commands` adds the spoken-punctuation note when the corpus planted any. Without it
+    the reflector sees a leftover "comma" only as `metrics.feedback`'s "left disfluencies
+    in the output: comma" — true, and pointing at the wrong rule — and sees a *missing*
+    mark or a missed ALL CAPS as nothing more specific than "capitalization or
+    punctuation differs from the reference". On a search whose whole subject is
+    punctuation commands, that is most of the signal thrown away.
     """
+    commands = commands or {}
 
     def scorer(gold, pred, trace=None, pred_name=None, pred_trace=None, **_):
         hypothesis = _cleaned(pred)
+        target, spoken = getattr(gold, OUTPUT_FIELD), getattr(gold, INPUT_FIELD)
+        planted = commands.get(spoken, ())
         # The input as well as the target: `metrics.score` charges a leftover false
         # start `FALSE_START_WEIGHT` errors, and only the spoken side says which
-        # leftovers were abandoned.
-        scored = metrics.score(getattr(gold, OUTPUT_FIELD), hypothesis, getattr(gold, INPUT_FIELD))
+        # leftovers were abandoned. `not_abandoned` keeps a two-word dictation command
+        # from being read as one — see `metrics._is_abandoned`.
+        scored = metrics.score(
+            target,
+            hypothesis,
+            spoken,
+            frozenset(word for command in planted for word in command.spoken_words),
+        )
         return dspy.Prediction(
             score=scored.value(axis),
-            feedback=metrics.feedback(
-                getattr(gold, OUTPUT_FIELD),
-                getattr(gold, INPUT_FIELD),
-                scored,
-                axis=axis,
-            ),
+            feedback=metrics.feedback(target, spoken, scored, axis=axis)
+            + spoken_punctuation.feedback_note(planted, hypothesis),
         )
 
     return scorer
@@ -213,11 +251,21 @@ def evaluate(
     )
     counted = program if on_example is None else _Ticking(program, on_example)
     predictions = runner([(counted, {INPUT_FIELD: u.disfluent}) for u in utterances])
-    return metrics.mean(
+    cleaned = [_cleaned(prediction) for prediction in predictions]
+    axes = metrics.mean(
         [
-            utterance.scored(_cleaned(prediction))
-            for utterance, prediction in zip(utterances, predictions, strict=True)
+            utterance.scored(hypothesis)
+            for utterance, hypothesis in zip(utterances, cleaned, strict=True)
         ]
+    )
+    # Reported next to the axes rather than instead of them. WER answers "how close is
+    # the text", which mixes the punctuation task into every other kind of error; the
+    # tally answers "of the commands planted, how many were obeyed", which is the
+    # question `--spoken-punctuation` is asking and which only a synthetic operator can
+    # be asked. Zeros with `commands_total` at 0 mean "not asked", not "failed".
+    return axes | spoken_punctuation.tally(
+        (utterance.commands, hypothesis)
+        for utterance, hypothesis in zip(utterances, cleaned, strict=True)
     )
 
 
@@ -443,7 +491,7 @@ def optimize(
     """
     trainset, valset = to_examples(train), to_examples(validation)
     return dspy.GEPA(
-        metric=make_feedback_metric(axis),
+        metric=make_feedback_metric(axis, commands_by_input(train + validation)),
         auto=auto,
         # Never below the task model's ceiling: the reflector writes whole
         # instructions and thinks at length first, so it is the call most likely
