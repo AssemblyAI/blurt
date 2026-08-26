@@ -1611,6 +1611,106 @@ def test_a_two_word_command_is_not_charged_as_an_abandoned_false_start():
     assert exempted.content > charged.content
 
 
+def test_a_leftover_command_word_costs_its_own_weight():
+    """Not one, and not the incidental two it used to cost.
+
+    Plain WER already charged a leftover command twice on the format axis — a
+    substitution for the mark that never appeared plus an insertion for the word that
+    did — so it came to 2 without anyone deciding 2.
+    """
+    # Long enough that the charge stays inside WER 1, where `1 - WER` is linear and the
+    # error count can be read back off the score. Past that `from_error_rate` decays.
+    clean = "Can you send me the numbers before the review meeting tomorrow?"
+    reference, disfluent, (command,) = spoken_punctuation.inject(
+        clean, clean, seed=1, rate=1.0, caps_rate=0.0
+    )
+    words = frozenset(command.spoken_words)
+    left_in = metrics.score(reference, clean[:-1] + " question mark", disfluent, words)
+    charged = (1.0 - left_in.content) * left_in.content_alignment.reference_length
+    assert charged == pytest.approx(metrics.COMMAND_WEIGHT * len(command.spoken_words))
+    assert left_in.uncorrected_commands == ("mark", "question")
+
+
+def test_leaving_a_command_in_is_clearly_worse_than_dropping_it():
+    """The distinction the old incidental 2 could barely make.
+
+    `Is it ready` for `Is it ready?` is a missing mark. `Is it ready question mark` puts
+    two words in the reader's document that the speaker never meant to write.
+    """
+    reference, disfluent, (command,) = spoken_punctuation.inject(
+        "Is it ready?", "is it ready?", seed=1, rate=1.0, caps_rate=0.0
+    )
+    words = frozenset(command.spoken_words)
+    dropped = metrics.score(reference, "Is it ready", disfluent, words)
+    left_in = metrics.score(reference, "Is it ready question mark", disfluent, words)
+    assert left_in.format < dropped.format
+    lost = dropped.format - left_in.format
+    assert lost > (1.0 - dropped.format), "leaving it in must cost more than the mark alone"
+
+
+def test_a_command_word_is_charged_once_even_inside_an_abandoned_span():
+    """Rule 1 of `_is_abandoned` fires on a cut-off word whatever the vocabulary, so a
+    command caught in that run would otherwise be charged at both weights."""
+    reference = "We would have them."
+    disfluent = "we wouldn't ha- period we would have them"
+    words = frozenset({"period"})
+    scored = metrics.score(reference, disfluent, disfluent, words)
+    charged_as_abandoned = set(scored.uncorrected_false_starts)
+    assert "period" in charged_as_abandoned
+    assert "period" not in scored.uncorrected_commands
+
+
+def test_a_command_costs_less_than_an_abandoned_word_and_more_than_a_filler():
+    """The ordering the two weights exist to express.
+
+    An abandoned span fabricates a clause the speaker never said; a command is one stray
+    word that failed to disappear; a filler reads as a typo.
+    """
+    assert 1.0 < metrics.COMMAND_WEIGHT < metrics.FALSE_START_WEIGHT
+
+
+def test_the_command_weight_is_neutral_on_a_corpus_that_plants_nothing():
+    reference = "We would have them."
+    disfluent = "we wouldn't ha- we would have them"
+    assert metrics.score(reference, disfluent, disfluent) == metrics.score(
+        reference, disfluent, disfluent, frozenset()
+    )
+
+
+def test_feedback_names_a_leftover_command_apart_from_a_disfluency_and_says_what_it_cost():
+    """Calling "comma" a disfluency points the reflector at the wrong rule: it is not a
+    hesitation the speaker made, it is an instruction they gave."""
+    reference, disfluent, (command,) = spoken_punctuation.inject(
+        "Is it ready?", "um is it ready?", seed=1, rate=1.0, caps_rate=0.0
+    )
+    words = frozenset(command.spoken_words)
+    scored = metrics.score(reference, "Um is it ready question mark", disfluent, words)
+    text = metrics.feedback(reference, disfluent, scored)
+    assert "dictated punctuation commands" in text
+    assert f"{metrics.COMMAND_WEIGHT:g} errors" in text
+    # The filler was in the input, so it is a leftover — reported, and separately.
+    assert "left disfluencies in the output: um" in text
+
+
+def test_the_note_and_the_feedback_do_not_both_report_a_leftover_command():
+    """Said in both places it was the same complaint twice in every reflection prompt.
+
+    `metrics.feedback` owns it, because that is where the weight lives and a failure named
+    without its cost is half a fact. The note owns what metrics cannot see: a command
+    whose words are gone and whose mark never appeared.
+    """
+    reference, disfluent, (command,) = spoken_punctuation.inject(
+        "Is it ready?", "is it ready?", seed=1, rate=1.0, caps_rate=0.0
+    )
+    hypothesis = "Is it ready question mark"
+    note = spoken_punctuation.feedback_note((command,), hypothesis)
+    assert note == ""
+    assert "left in" not in note
+    # Dropped, on the other hand, is invisible to metrics on the content axis.
+    dropped = spoken_punctuation.feedback_note((command,), "Is it ready")
+    assert "did not carry out" in dropped
+
+
 def test_the_exemption_is_neutral_on_a_corpus_that_plants_nothing():
     """Every number measured before it existed has to still hold."""
     reference = "We would have them."
@@ -1626,9 +1726,9 @@ def test_the_utterance_hands_its_own_planted_commands_to_the_scorer():
         "Is it ready?", "is it ready?", seed=1, rate=1.0, caps_rate=0.0
     )
     utterance = corpus.Utterance(reference=reference, disfluent=disfluent, commands=commands)
-    assert utterance.not_abandoned == frozenset({"question", "mark"})
+    assert utterance.command_words == frozenset({"question", "mark"})
     assert utterance.scored(disfluent) == metrics.score(
-        reference, disfluent, disfluent, utterance.not_abandoned
+        reference, disfluent, disfluent, utterance.command_words
     )
 
 
@@ -1742,7 +1842,7 @@ def test_spoken_punctuation_layers_onto_the_real_disfluencies_rather_than_replac
 def test_a_corpus_without_the_flag_plants_nothing():
     loaded = corpus.load(source="builtin", limit=12)
     assert all(u.commands == () for u in loaded.utterances)
-    assert all(u.not_abandoned == frozenset() for u in loaded.utterances)
+    assert all(u.command_words == frozenset() for u in loaded.utterances)
 
 
 # The committed dataset, and the exact arguments that produce it. Both live here rather
@@ -1785,7 +1885,7 @@ def test_the_frozen_dataset_round_trips_through_the_loader():
     for a, b in zip(generated.utterances, reloaded.utterances, strict=True):
         assert (a.reference, a.disfluent) == (b.reference, b.disfluent)
         assert a.commands == b.commands
-        assert a.not_abandoned == b.not_abandoned
+        assert a.command_words == b.command_words
         assert a.scored(a.reference) == b.scored(b.reference)
 
 
@@ -1852,6 +1952,26 @@ def test_every_bundled_sentence_survives_the_injection_filter():
     """A fixture that silently drops the rows it was written to contain is a bad fixture."""
     kept = {u.reference for u in corpus.load(source="builtin", limit=500).utterances}
     assert len(kept) == len(corpus.BUILTIN_SAMPLE)
+
+
+def test_the_bundled_sample_exercises_the_capital_after_a_spoken_mark():
+    """It did not, for 0 of 61 terminal marks: every sentence ended at its own period, so
+    there was no following word whose capital a period command has to restore.
+
+    That is half of what a terminal command asks for, and on `nyra` — where utterances run
+    to several sentences — it is 26% of terminal marks.
+    """
+    eligible = terminal = 0
+    for utterance in corpus.load(source="builtin", limit=500).utterances:
+        toks = utterance.reference.split()
+        for i, raw in enumerate(toks):
+            if raw and raw[-1] in spoken_punctuation.TERMINAL_MARKS:
+                if not spoken_punctuation._split_mark(raw):
+                    continue
+                terminal += 1
+                if i + 1 < len(toks) and not spoken_punctuation._keeps_its_capital(toks[i + 1]):
+                    eligible += 1
+    assert eligible >= 10, f"only {eligible} of {terminal} terminal marks have a next word"
 
 
 def test_the_bundled_sample_exercises_every_mark_in_the_vocabulary():

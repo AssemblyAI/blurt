@@ -488,23 +488,23 @@ def feedback_note(commands: tuple[Command, ...], hypothesis: str) -> str:
     was built can leak into how it is scored. The command vocabulary is corpus
     construction, so it composes on top rather than moving down.
 
-    Names the failure in the two shapes that matter and nothing else. A leftover literal
-    is reported first: `metrics.feedback` sees it only as "left disfluencies in the
-    output: comma", which is true, actionable in the wrong direction, and the worst
-    outcome of the three.
+    Reports only the commands that were **dropped** — the ones whose words are gone and
+    whose mark never appeared. A command left in as words is `metrics.feedback`'s to
+    report, because that is where its weight lives (`metrics.COMMAND_WEIGHT`) and a
+    failure named without its cost is half a fact. Saying it in both places was the first
+    cut and it put the same complaint twice in every reflection prompt.
+
+    Dropped commands are here because nothing in `metrics` can see them. A mark that was
+    never produced is one substitution among many on the format axis and *nothing at all*
+    on the content axis, and a missed ALL CAPS is invisible to content too — so without
+    this the reflector reads "capitalization or punctuation differs from the reference"
+    and has to guess that a command was the reason.
     """
     if not commands:
         return ""
     outcomes = [(command, outcome(command, hypothesis)) for command in commands]
-    literal = [c.spoken for c, o in outcomes if o == "literal"]
     missing = [c for c, o in outcomes if o == "missing"]
     notes: list[str] = []
-    if literal:
-        notes.append(
-            f"left spoken punctuation commands in the output as words: {', '.join(literal)} — "
-            "the speaker was asking for the punctuation mark, not dictating the word, so the "
-            "words must be replaced by the mark and never pasted"
-        )
     if missing:
         asked = ", ".join(
             f"{c.spoken!r} -> {c.mark!r}" if c.kind == "mark" else f"{c.spoken!r} -> uppercase"

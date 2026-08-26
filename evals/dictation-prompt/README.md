@@ -23,7 +23,7 @@ ones we thought to write down.
 | `--source`       | What it is                                                                                                                                                                                                                        | Measures         |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
 | `nyra` (default) | [`nyralabs/disfluency_speech_english`][nyra] — ~5k Switchboard utterances whose disfluencies trained annotators marked **by hand**, repackaged with casing repaired so the formatting axis is live. Costs some fidelity for that. | content + format |
-| `builtin`        | A dozen bundled sentences plus injection. No network, no key — for smoke-testing.                                                                                                                                                 | content + format |
+| `builtin`        | 91 bundled sentences plus injection. No network, no key. The only corpus that can be committed, and the only one with literal-use traps.                                                                                          | content + format |
 
 `--jsonl` reads a local file instead: objects with both `disfluent` and `reference` are used
 as-is; anything with only a reference goes through the injector.
@@ -32,7 +32,7 @@ as-is; anything with only a reference goes through the injector.
 path** — `--source builtin` needs no network and no key, which is what lets the test suite and
 `--dry-run` verify the pipeline end to end. It also keeps a **severity dial** (`--severity`)
 and a **punctuation-restoration** task (`--strip-formatting`) that the real corpus cannot pose,
-though on a dozen bundled sentences those are smoke tests rather than measurements.
+though on 91 bundled sentences those are smoke tests rather than measurements.
 
 ### How the hand annotation reaches the eval
 
@@ -57,7 +57,7 @@ reparanda, and rewrites the verbatim side into its own conventions (`[UH]`, `[la
 `th*`) that the loader has to undo. Prefer it when formatting matters more than exact recall.
 
 It does not pose punctuation _restoration_, since both sides are already punctuated. Only
-`--source builtin --strip-formatting` does, on a dozen bundled sentences.
+`--source builtin --strip-formatting` does, on the bundled sentences.
 
 ### Spoken punctuation — "period, comma, question mark, ALL CAPS"
 
@@ -143,7 +143,7 @@ injector. Reproducible in principle; unreviewable in practice — nobody reads a
 find out whether the examples are any good, and a change to an injector silently changes
 what every past number was measured on. A file in the tree is diffable.
 
-[`data/spoken-punctuation.jsonl`](./data/spoken-punctuation.jsonl) is that file: 76 rows
+[`data/spoken-punctuation.jsonl`](./data/spoken-punctuation.jsonl) is that file: 91 rows
 generated from `--source builtin`, whose sentences are written for this repo and so carry
 no third-party terms. `nyra` derives from LDC-licensed Switchboard transcripts and is
 deliberately **not** committed — dump it locally if you want it frozen. `test_eval.py`
@@ -155,9 +155,9 @@ Everything downstream keys off **what the corpus contains, not what flags were p
 that, reading the saved dataset back selected on `blend` and printed no command outcomes:
 the same corpus scored two different ways depending on how it was reached.
 
-Read the committed file as a **fixture**, not a benchmark. 50 dev / 25 test rows is far
+Read the committed file as a **fixture**, not a benchmark. 60 dev / 30 test rows is far
 below the resolution this README argues for everywhere else. What it is uniquely good for
-is the one thing `nyra` cannot do: **15% of its references use a command word as ordinary
+is the one thing `nyra` cannot do: **12% of its references use a command word as ordinary
 content** ("one grace period, so plan accordingly", "add a comma after the second
 clause"), against ~0-1% of `nyra`'s. It is the only corpus here that can charge an
 instruction for converting a word the speaker meant literally — and those rows compose
@@ -510,6 +510,55 @@ Two consequences worth keeping in mind. `metrics.score` needs the **input** as w
 target, since nothing about a leftover word says whether it was abandoned — `corpus.Utterance`
 carries both sides for exactly that reason. And numbers either side of a change to
 `FALSE_START_WEIGHT` are not comparable; 1.0 restores plain WER.
+
+### Nor are dictated commands
+
+The second departure, and it only bites on a `--spoken-punctuation` corpus. **A word of a
+dictated punctuation command left in the output costs `metrics.COMMAND_WEIGHT` errors (3)
+rather than one.**
+
+Plain WER already charged one twice on the format axis — a substitution for the mark that
+never appeared, plus an insertion for the word that did — so it came to 2 without anyone
+deciding 2. That is only twice what _dropping_ the command costs, and dropping it is the
+cosmetic version of the mistake: `children` where the reference wants `children.` is a
+missing mark, while `children period` puts a word in the user's document they never meant
+to write.
+
+Three is where two bounds meet. Swept over 1114 command-carrying `nyra` rows, the gradient
+in the region rival instructions actually differ in (0% to 25% residue) is 0.056 unweighted
+and 0.104 at 3 — so a weight is worth having — and it keeps growing, so the gradient alone
+picks nothing. `FALSE_START_WEIGHT` is the ceiling, and it binds at 4 rather than 5: on the
+format axis a leftover command carries the mark's substitution as well, so its total is the
+weight plus one, and at 3 that is 4 — between a leftover filler (1) and a leftover abandoned
+word (5). At 4 it would tie the abandoned word, which is the wrong ordering, because an
+abandoned span fabricates a clause the speaker never said while a command is one stray word
+that failed to disappear. The decaying tail bounds it from the same side: a row whose
+residue alone clears WER 2 stops being rankable against its neighbours, which is 1.0% of
+rows at 3, 4.6% at 5 and 20% at 8.
+
+Measured per occurrence on the committed fixture, that leaves this ordering:
+
+| failure, per occurrence                  | content | format |
+| ---------------------------------------- | ------: | -----: |
+| filler left in (`um`)                    |    1.00 |   1.00 |
+| **abandoned span word left in**          |    5.00 |   5.00 |
+| command left in as words (per word)      |    3.03 |   3.97 |
+| command dropped, no mark produced        |    0.00 |   1.09 |
+| mark restored, next word not capitalised |    0.00 |   1.00 |
+| ALL CAPS missed (per word)               |    0.00 |   1.00 |
+
+The same set of words does both jobs, because both follow from one fact — that these words
+are commands rather than speech. `_is_abandoned` must not read `question mark` as an
+abandoned phrase, which is exactly its shape (two non-hesitation words echoing nothing), and
+left unnamed it charged a leftover `question mark` ten errors against a leftover `period`'s
+one. A token charged as abandoned is never charged again as a command: rule 1 fires on a
+cut-off word whatever the vocabulary, so a command caught inside an abandoned run is charged
+at the higher weight only.
+
+`corpus.Utterance.command_words` is empty for every corpus that plants none, so this changes
+nothing measured before it existed — the false-start fraction over 300 `nyra` rows is 0.207
+with spoken punctuation and 0.207 without, and plain `nyra`'s floor is unmoved at
+0.6452 / 0.6011 / 0.6320.
 
 All three axes are printed for every candidate, with the selecting one starred, so you can
 see whether a winner gained on wording or only on punctuation. The winner is chosen on a dev

@@ -250,6 +250,28 @@ BUILTIN_SAMPLE: tuple[str, ...] = (
     "Our smallest customer files more bug reports than the other twenty combined.",
     "The release notes need a line about the new permission before we can publish.",
     "Check whether the trial expiry is stored in the keychain or in user defaults.",
+    # Multi-sentence rows. Every other sentence here ends at the terminal mark, so the
+    # word *after* a spoken period was never exercised: 0 of 61 terminal marks on the
+    # generated corpus had a following word, and restoring its capital is half of what
+    # a period command asks for. On `nyra` that case is 26% of terminal marks, because
+    # Switchboard utterances run to several sentences. These put it back — including the
+    # two shapes the injector treats specially, a proper noun after the mark and the
+    # pronoun "I", which keep their capitals where an ordinary word loses it.
+    "The build is green. Ship it before the release window closes tonight.",
+    "I read the whole thread. Nobody actually answered the question that was asked.",
+    "We tried that last quarter. It made the cold start worse, so we reverted it.",
+    "The fix is small. The test that proves it is not, and that is the whole delay.",
+    "Priya reviewed the diff. She wants the retry logic split into its own function.",
+    "London is three hours ahead. Move the sync earlier or half the team misses it.",
+    "Something changed upstream. I cannot reproduce yesterday's numbers at all now.",
+    "Do not merge this yet. The staging run has not finished and I want to see it.",
+    "It works on my machine. It does not work on the runner, which is the usual story.",
+    "Check the entitlement first. Everything else follows from whether that survived.",
+    "That was the last blocker! We can cut the build as soon as CI comes back green.",
+    "Are we still shipping Thursday? The notarization queue was two hours this morning.",
+    "The overlay flickers once on launch. Nobody has been able to catch it on video.",
+    "Thursday is a holiday in Berlin. Let us push the retrospective out by a week.",
+    "I filed it as a P2. Honestly it should be a P1 given how many users hit it.",
 )
 
 
@@ -294,18 +316,19 @@ class Utterance:
         entirely reasonable. An utterance holds both sides already, so let it be the
         thing that remembers.
         """
-        return metrics.score(self.reference, hypothesis, self.disfluent, self.not_abandoned)
+        return metrics.score(self.reference, hypothesis, self.disfluent, self.command_words)
 
     @property
-    def not_abandoned(self) -> frozenset[str]:
-        """Words in `disfluent` that are surplus by construction, not by abandonment.
+    def command_words(self) -> frozenset[str]:
+        """The dictation commands planted in `disfluent`, as normalized words.
 
-        Only the spoken punctuation commands, and empty for every corpus that has none —
-        so this changes no number measured before it existed. `metrics._is_abandoned`
-        says why it has to exist: "question mark" is two non-hesitation words echoing
-        nothing, which is exactly the shape of an abandoned phrase, and left unnamed it
-        would be charged `FALSE_START_WEIGHT` per word while a leftover "period" was
-        charged one.
+        Empty for every corpus that plants none, so this changes no number measured
+        before it existed. Scoring needs it for two things, both consequences of the same
+        fact — that these words are commands rather than speech. `metrics._is_abandoned`
+        must not read "question mark" as an abandoned phrase, which is exactly its shape:
+        two non-hesitation words echoing nothing. And `metrics.COMMAND_WEIGHT` charges
+        one left in the output more than an ordinary surplus word, because it reaches the
+        user's document as a word they never meant to write.
         """
         return frozenset(word for command in self.commands for word in command.spoken_words)
 
@@ -783,7 +806,7 @@ def false_start_fraction(utterances: list[Utterance]) -> float:
     rows, so it is the number that says whether the weighting is shaping the search or
     is a rounding error on this corpus. Pure arithmetic; no model is involved.
 
-    Reads each utterance's own `not_abandoned`, so the figure printed is the figure
+    Reads each utterance's own `command_words`, so the figure printed is the figure
     charged. Without it a spoken-punctuation corpus reported 55% of rows carrying an
     abandoned span against 21% for the same rows unmodified — the difference being
     "question mark" counted as a false start in the report while `Utterance.scored`
@@ -792,7 +815,7 @@ def false_start_fraction(utterances: list[Utterance]) -> float:
     if not utterances:
         return 0.0
     carrying = sum(
-        bool(metrics.false_start_tokens(u.disfluent, u.reference, u.not_abandoned))
+        bool(metrics.false_start_tokens(u.disfluent, u.reference, u.command_words))
         for u in utterances
     )
     return carrying / len(utterances)

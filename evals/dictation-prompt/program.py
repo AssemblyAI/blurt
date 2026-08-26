@@ -196,7 +196,7 @@ def make_feedback_metric(axis: str, commands: dict[str, tuple] | None = None):
         planted = commands.get(spoken, ())
         # The input as well as the target: `metrics.score` charges a leftover false
         # start `FALSE_START_WEIGHT` errors, and only the spoken side says which
-        # leftovers were abandoned. `not_abandoned` keeps a two-word dictation command
+        # leftovers were abandoned. `command_words` keeps a two-word dictation command
         # from being read as one — see `metrics._is_abandoned`.
         scored = metrics.score(
             target,

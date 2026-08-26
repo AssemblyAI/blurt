@@ -110,6 +110,65 @@ HESITATIONS = frozenset(
 #: side of a change to it are not comparable.
 FALSE_START_WEIGHT = 5.0
 
+#: What one word of a dictated punctuation command left in the output costs, in errors.
+#: 1.0 charges it like any other surplus word.
+#:
+#: Its own weight because it is its own failure, and because the number it had before was
+#: an accident. A command left in is charged twice by plain WER already — a substitution
+#: for the mark that never appeared, plus an insertion for the word that did — so it came
+#: to 2 on the format axis without anyone deciding 2. That is only twice what *dropping*
+#: the command costs, and dropping it is the cosmetic version: `children` where the
+#: reference wants `children.` is a missing mark, while `children period` pastes into the
+#: user's document a word they never meant to write. Those are not two grades of the same
+#: mistake.
+#:
+#: The argument for a weight is `FALSE_START_WEIGHT`'s, almost verbatim: a leftover "um"
+#: reads as a typo, and a leftover "period" reads as the software malfunctioning. The
+#: argument for it being *lower* than the false-start weight is that an abandoned span is
+#: usually several words (4.1 on nyra) and fabricates a clause the speaker never said,
+#: while a command is one or two words and merely fails to disappear.
+#:
+#: **Why 3.** Swept over 1114 command-carrying `nyra` rows (2.36 commands each), against
+#: hypotheses that leave a fixed share of each row's commands unconverted in front of an
+#: otherwise perfect cleanup. Format axis, since that is what a spoken run selects on:
+#:
+#:     weight     0%    25%    50%    75%   100%   gap 0->25%   unrankable
+#:          1  1.000  0.944  0.842  0.725  0.677        0.056       1/1114
+#:          2  1.000  0.920  0.770  0.594  0.520        0.080       3/1114
+#:          3  1.000  0.896  0.697  0.464  0.370        0.104      11/1114
+#:          4  1.000  0.873  0.626  0.339  0.231        0.127      25/1114
+#:          5  1.000  0.849  0.556  0.221  0.104        0.151      51/1114
+#:          8  1.000  0.778  0.365 -0.079 -0.196        0.222     225/1114
+#:
+#: The gradient in the region candidates actually differ in (0% to 25% residue) argues
+#: for any weight at all — 3 nearly doubles the unweighted 0.056 — and keeps growing, so
+#: it does not pick a number. Two things bound it.
+#:
+#: **`FALSE_START_WEIGHT` is the ceiling, and it binds at 4, not 5.** On the format axis a
+#: leftover command is already charged the mark's substitution as well as the word's
+#: insertion, so its total is this weight plus one: 4 at a weight of 3, sitting between a
+#: leftover filler (1) and a leftover abandoned word (5). At a weight of 4 it ties the
+#: abandoned word, which is the wrong ordering — an abandoned span fabricates a clause the
+#: speaker never said, while a command is one stray word that failed to disappear.
+#:
+#: **The tail bounds it too.** `from_error_rate` decays past WER 1 rather than clipping,
+#: and that decay flattens, so a row whose residue alone clears WER 2 stops being rankable
+#: against its neighbours. That is 1.0% of rows at 3, 4.6% at 5, and 20% at 8.
+#:
+#: It also lands 4x what *dropping* the command costs, which is the distinction the old
+#: incidental 2 could barely make: `children` for `children.` is a missing mark, and
+#: `children period` is a word in the user's document they never meant to write.
+#:
+#: Charged per command **word**, so "question mark" costs twice "comma" — the same
+#: per-word convention as the false-start surcharge, and for the same reason: two spurious
+#: words in the user's text is twice the mess of one.
+#:
+#: A token already charged as an abandoned false start is not charged again here. Rule 1
+#: of `_is_abandoned` fires on a cut-off word regardless of vocabulary, so a command word
+#: caught inside an abandoned run is charged at the higher weight and excluded from this
+#: one.
+COMMAND_WEIGHT = 3.0
+
 
 def normalize_text(text: str) -> str:
     """Casefold, drop punctuation, collapse whitespace — still a string."""
@@ -262,7 +321,7 @@ def _echoes_its_neighbour(run: list[int], spoken: list[tuple[str, str]]) -> bool
 
 
 def _is_abandoned(
-    run: list[int], spoken: list[tuple[str, str]], not_abandoned: frozenset[str] = frozenset()
+    run: list[int], spoken: list[tuple[str, str]], command_words: frozenset[str] = frozenset()
 ) -> bool:
     """Whether one surplus run is an abandoned span rather than a stumble.
 
@@ -275,25 +334,24 @@ def _is_abandoned(
        enough: a lone surplus content word is a repetition or a slip, and charging
        triple for it would sweep in most of what the old flat weight already handled.
 
-    `not_abandoned` is extra vocabulary the *caller's corpus* knows is surplus for some
-    other reason, counted alongside `HESITATIONS` in rule 2. It exists for spoken
-    punctuation: "question mark" is two non-hesitation words that echo nothing, so
-    without it the classifier reads a dictation command as an abandoned phrase and
-    charges it `FALSE_START_WEIGHT` per word — which makes a leftover "question mark"
-    ten errors and a leftover "period" one, an asymmetry nobody chose. It defaults to
-    empty and is passed only by an utterance that planted commands, so every number
-    measured before it existed is unchanged.
+    `command_words` is vocabulary the *caller's corpus* planted as dictation commands,
+    counted alongside `HESITATIONS` in rule 2. Without it the classifier reads "question
+    mark" — two non-hesitation words that echo nothing — as an abandoned phrase and
+    charges it `FALSE_START_WEIGHT` per word, making a leftover "question mark" ten errors
+    and a leftover "period" one, an asymmetry nobody chose. Those words are charged
+    `COMMAND_WEIGHT` instead. It defaults to empty and is passed only by an utterance that
+    planted commands, so every number measured before it existed is unchanged.
     """
     if any(_is_cut_off(spoken[index][0]) for index in run):
         return True
     words = [spoken[index][1] for index in run]
-    if sum(word not in HESITATIONS and word not in not_abandoned for word in words) < 2:
+    if sum(word not in HESITATIONS and word not in command_words for word in words) < 2:
         return False
     return not _echoes_its_neighbour(run, spoken)
 
 
 def false_start_tokens(
-    disfluent: str, reference: str, not_abandoned: frozenset[str] = frozenset()
+    disfluent: str, reference: str, command_words: frozenset[str] = frozenset()
 ) -> tuple[str, ...]:
     """The words of `disfluent` the speaker abandoned, normalized, in order.
 
@@ -309,14 +367,14 @@ def false_start_tokens(
     inside such a run ("um we walked-") is charged with it, which is right: the whole
     region was abandoned, and the model has to delete all of it or none.
 
-    `not_abandoned` passes through to `_is_abandoned` — see there for why a corpus that
+    `command_words` passes through to `_is_abandoned` — see there for why a corpus that
     plants dictation commands has to name them.
     """
     spoken = [(raw, word) for raw in disfluent.split() if (word := normalize_text(raw))]
     alignment = align(normalize(reference), [word for _, word in spoken])
     abandoned: list[str] = []
     for run in _runs(sorted(set(alignment.inserted_positions))):
-        if _is_abandoned(run, spoken, not_abandoned):
+        if _is_abandoned(run, spoken, command_words):
             abandoned.extend(spoken[index][1] for index in run)
     return tuple(abandoned)
 
@@ -325,7 +383,7 @@ def uncorrected_false_starts(
     disfluent: str,
     reference: str,
     alignment: Alignment,
-    not_abandoned: frozenset[str] = frozenset(),
+    command_words: frozenset[str] = frozenset(),
 ) -> tuple[str, ...]:
     """Abandoned words the cleanup left in — the multiset `FALSE_START_WEIGHT` charges.
 
@@ -335,9 +393,31 @@ def uncorrected_false_starts(
     hypothesis; both sides are already normalized there, which is what lets the raw
     `store—` in the input match the `store` the model echoed back.
     """
-    spoken = false_start_tokens(disfluent, reference, not_abandoned)
+    spoken = false_start_tokens(disfluent, reference, command_words)
     left_in = Counter(alignment.inserted) & Counter(spoken)
     return tuple(sorted(left_in.elements()))
+
+
+def uncorrected_commands(
+    alignment: Alignment, command_words: frozenset[str], abandoned: tuple[str, ...] = ()
+) -> tuple[str, ...]:
+    """Dictated command words the cleanup left in — what `COMMAND_WEIGHT` charges.
+
+    A multiset read straight off the diff: every word the hypothesis added over the
+    reference that the input contained as a command. No membership test beyond that is
+    needed, because `command_words` is already scoped to this one pair — the corpus
+    planted those words in this input, so an added occurrence of one is a command that
+    failed to disappear.
+
+    `abandoned` is subtracted so no token is charged twice. `_is_abandoned`'s first rule
+    fires on a cut-off word whatever the vocabulary, so a command word caught inside an
+    abandoned run is charged at `FALSE_START_WEIGHT` and must not also be charged here.
+    The higher weight wins, which is right: that whole region has to go.
+    """
+    if not command_words:
+        return ()
+    left_in = Counter(word for word in alignment.inserted if word in command_words)
+    return tuple(sorted((left_in - Counter(abandoned)).elements()))
 
 
 @dataclass(frozen=True)
@@ -352,6 +432,10 @@ class Score:
     #: Kept alongside them so `feedback` can name the failure instead of the reflector
     #: having to guess which of its leftovers cost triple.
     uncorrected_false_starts: tuple[str, ...] = ()
+    #: Dictated command words the cleanup left in, priced at `COMMAND_WEIGHT`. Same
+    #: reason as above: a reflector told only "left disfluencies in: comma" cannot tell
+    #: that this leftover is neither a disfluency nor charged like one.
+    uncorrected_commands: tuple[str, ...] = ()
 
     @property
     def blend(self) -> float:
@@ -420,7 +504,7 @@ def score(
     reference: str,
     hypothesis: str,
     disfluent: str | None = None,
-    not_abandoned: frozenset[str] = frozenset(),
+    command_words: frozenset[str] = frozenset(),
 ) -> Score:
     """Score a cleanup against its reference on both axes — see `from_error_rate`.
 
@@ -435,23 +519,26 @@ def score(
     way you tokenize, and exempting the formatting axis would quietly dilute the
     weighting by 30% under the default `blend`.
 
-    `not_abandoned` exempts vocabulary the corpus planted deliberately — see
-    `_is_abandoned`. Empty by default, so nothing that does not pass it changes.
+    `command_words` names the dictation commands the corpus planted in `disfluent`. They
+    are exempt from the false-start classifier and charged `COMMAND_WEIGHT` when left in —
+    see both constants. Empty by default, so nothing that does not pass it changes.
     """
     content_alignment = align(normalize(reference), normalize(hypothesis))
     format_alignment = align(surface(reference), surface(hypothesis))
     left_in = (
-        uncorrected_false_starts(disfluent, reference, content_alignment, not_abandoned)
+        uncorrected_false_starts(disfluent, reference, content_alignment, command_words)
         if disfluent
         else ()
     )
-    surcharge = (FALSE_START_WEIGHT - 1.0) * len(left_in)
+    commands = uncorrected_commands(content_alignment, command_words, left_in)
+    surcharge = (FALSE_START_WEIGHT - 1.0) * len(left_in) + (COMMAND_WEIGHT - 1.0) * len(commands)
     return Score(
         content=from_error_rate(_surcharged(content_alignment, surcharge)),
         format=from_error_rate(_surcharged(format_alignment, surcharge)),
         content_alignment=content_alignment,
         format_alignment=format_alignment,
         uncorrected_false_starts=left_in,
+        uncorrected_commands=commands,
     )
 
 
@@ -482,9 +569,12 @@ def feedback(
     on real transcripts whose disfluencies nobody enumerated in advance.
 
     Abandoned spans are reported apart from ordinary leftovers, and told what they
-    cost. They are the failure the score now weights heaviest (`FALSE_START_WEIGHT`),
+    cost. They are the failure the score weights heaviest (`FALSE_START_WEIGHT`),
     and a reflector shown "left disfluencies in: um, ha-, we, wouldn't" has no way to
-    tell which four of those words moved the number.
+    tell which four of those words moved the number. Dictated commands
+    (`COMMAND_WEIGHT`) are split out for the same reason, and because calling one a
+    disfluency points the reflector at the wrong rule: "comma" is not a hesitation the
+    speaker made, it is an instruction they gave.
 
     Three things are deliberately **not** here, because the reflector already has them
     or is misled by them:
@@ -515,11 +605,14 @@ def feedback(
     # ordinary ones, so the reflector reads two distinct failures rather than one list
     # in which the expensive words are indistinguishable from the cheap ones.
     abandoned = Counter(scored.uncorrected_false_starts)
+    commands = Counter(scored.uncorrected_commands)
     leftover: list[str] = []
     invented: list[str] = []
     for word in content.inserted:
         if abandoned[word]:
             abandoned[word] -= 1
+        elif commands[word]:
+            commands[word] -= 1
         elif word in spoken:
             leftover.append(word)
         else:
@@ -532,6 +625,13 @@ def feedback(
             "started the phrase again, so those words are not part of what they meant to write, "
             f"and each one is scored as {FALSE_START_WEIGHT:g} errors rather than one. This is "
             "the costliest mistake on this task"
+        )
+    if scored.uncorrected_commands:
+        kept = ", ".join(sorted(set(scored.uncorrected_commands)))
+        notes.append(
+            f"left dictated punctuation commands in the output as words: {kept} — each is "
+            f"scored as {COMMAND_WEIGHT:g} errors rather than one, because it reaches the "
+            "reader as a word the speaker never meant to write"
         )
     if leftover:
         notes.append(f"left disfluencies in the output: {', '.join(sorted(set(leftover)))}")

@@ -2,7 +2,7 @@
 
 ## `spoken-punctuation.jsonl`
 
-76 dictated utterances that speak their own punctuation — `period`, `comma`,
+91 dictated utterances that speak their own punctuation — `period`, `comma`,
 `question mark`, `all caps` — on top of injected disfluency. The input side is what a
 speech-to-text pass would hand the rewrite model; the `reference` is what the speaker
 meant to write.
@@ -68,11 +68,11 @@ python3 evals/dictation-prompt/optimize_cleanup_prompt.py --spoken-punctuation 0
   --limit 4000 --dump-corpus /tmp/nyra-spoken.jsonl --dry-run --show-samples 0
 ```
 
-So read this file as a **fixture**, not a benchmark. 76 rows split into 50 dev / 25 test is
+So read this file as a **fixture**, not a benchmark. 91 rows split into 60 dev / 30 test is
 far below the resolution the parent README argues for — differences between good
-instructions on this task are a few hundredths, and 25 test rows cannot see them. What it
+instructions on this task are a few hundredths, and 30 test rows cannot see them. What it
 is good for: reading the examples, reviewing a diff when an injector changes, and the one
-thing `nyra` genuinely cannot do — **literal-use traps**. 15% of these references use a
+thing `nyra` genuinely cannot do — **literal-use traps**. 12% of these references use a
 command word as ordinary content ("one grace period, so plan accordingly", "add a comma
 after the second clause"), against ~0–1% of `nyra`'s, so this is the only corpus here that
 can charge an instruction for converting a word the speaker meant literally.
