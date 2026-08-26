@@ -442,6 +442,15 @@ short ones back to back — will start getting 429s. Authenticating lifts the li
 in the environment. Either works; the loader resolves a token the same way `huggingface_hub`
 does, so whichever one you reach for is the one it reads.
 
+The server also returns `HTTP 500 {"error": "Unexpected error."}` now and again on a
+dataset that is otherwise entirely healthy. Those are retried with the same bounded
+backoff as a 429 — a 4000-row load is ~45 pages, and abandoning it over one bad page
+throws away everything already fetched, before the first model call. Each retry prints, so
+a slow load says why it was slow. A 4xx is raised at once instead: 403 and 404 are facts
+about the request, and waiting does not change them. If a 500 survives all five attempts,
+run it again before believing it — and use `--dump-corpus` once it loads, so a flaky server
+cannot kill a later run.
+
 [tok]: https://huggingface.co/settings/tokens
 
 The dry-run and the tests import nothing outside the standard library. That is structural, not

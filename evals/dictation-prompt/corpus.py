@@ -578,16 +578,27 @@ def hf_token() -> str | None:
     return None
 
 
-#: Attempts per page against a 429, and the base of the backoff between them.
+#: Attempts per page against a retryable failure, and the base of the backoff between
+#: them.
 #:
-#: The rows API rate-limits by volume, not just by anonymity: a 4000-row load is ~40
-#: pages, and a token raises the ceiling without removing it. Failing the whole load on
-#: one 429 wastes the pages already fetched and, worse, fails *before* the first model
-#: call — so a run set up to take an hour dies at second zero. Bounded, because a rate
-#: limit that has not lifted in a minute of waiting is a quota rather than a burst, and
-#: the error already says what to do about it.
-_RATE_LIMIT_ATTEMPTS = 5
-_RATE_LIMIT_BACKOFF = 4.0
+#: Two kinds are retryable, for the same reason. The rows API rate-limits by volume, not
+#: just by anonymity: a 4000-row load is ~45 pages, and a token raises the ceiling without
+#: removing it. And the server returns a 500 `{"error": "Unexpected error."}` now and
+#: again on a dataset that is otherwise entirely healthy — probed across six offsets of
+#: `nyra` minutes after one, every page came back 200.
+#:
+#: Either way, failing the whole load on one bad page wastes every page already fetched
+#: and, worse, fails *before the first model call* — so a run set up to take hours dies at
+#: second zero. Bounded, because a rate limit that has not lifted in a minute of waiting
+#: is a quota rather than a burst, and a 500 that persists that long is an outage; the
+#: error says which it was and what to do about it.
+_RETRY_ATTEMPTS = 5
+_RETRY_BACKOFF = 4.0
+
+#: Statuses worth waiting out: the rate limit, and the 5xx family. Everything else — 401,
+#: 403, 404, 422 — is a fact about the request or the dataset that no amount of waiting
+#: changes, and surfacing it immediately is the whole point.
+_RETRYABLE = frozenset({429, 500, 502, 503, 504})
 
 
 def _rows_via_api(source: Source, limit: int):
@@ -620,16 +631,44 @@ def _rows_via_api(source: Source, limit: int):
         offset += page
 
 
-def _fetch_page(url: str, headers: dict, source: Source, token: str | None) -> dict:
-    """One page of rows, waiting out a rate limit rather than failing the load.
+def _retry_advice(code: int, token: str | None) -> str:
+    """What to do about a failure that survived every retry."""
+    if code != 429:
+        return (
+            "The datasets-server does this intermittently on datasets that are otherwise "
+            "fine, so it is usually worth simply running again. If it persists, the "
+            "dataset's viewer on huggingface.co will say so. --dump-corpus freezes a "
+            "corpus once it has loaded, and --jsonl reads it back, so a flaky server "
+            "cannot kill a later run"
+        )
+    if not token:
+        return (
+            "Authenticating raises the limit: run `hf auth login`, or set HF_TOKEN to a "
+            "read token from https://huggingface.co/settings/tokens"
+        )
+    return (
+        "A token is already in use, so this is the authenticated ceiling — wait a few "
+        "minutes, or lower --limit"
+    )
 
-    Retries only 429. Every other HTTP status is a fact about the request or the
-    dataset that waiting will not change, and the 500s the server intermittently
-    returns are worth surfacing rather than papering over — a load that silently took
-    four minutes to work around a broken upstream is harder to diagnose than one that
-    said so.
+
+def _fetch_page(url: str, headers: dict, source: Source, token: str | None) -> dict:
+    """One page of rows, waiting out a transient failure rather than failing the load.
+
+    Retries `_RETRYABLE` — the rate limit and the 5xx family — and nothing else. A 404 or
+    a 403 is a fact about the request that waiting does not change, so it is raised at
+    once.
+
+    The 500s were **not** retried at first, on the reasoning that a load which silently
+    took four minutes to work around a broken upstream is harder to diagnose than one that
+    said so. That was wrong twice over. It is self-contradicting — the same docstring
+    called them intermittent — and the diagnosis argument is answered by printing each
+    retry as it happens rather than by abandoning the load. What it actually produced was
+    a 45-page load discarding 30 fetched pages over one `{"error": "Unexpected error."}`,
+    before a single model call, on a dataset that answered 200 at every offset minutes
+    later.
     """
-    for attempt in range(1, _RATE_LIMIT_ATTEMPTS + 1):
+    for attempt in range(1, _RETRY_ATTEMPTS + 1):
         try:
             with urllib.request.urlopen(  # noqa: S310 — fixed https endpoint
                 urllib.request.Request(url, headers=headers), timeout=60
@@ -637,24 +676,19 @@ def _fetch_page(url: str, headers: dict, source: Source, token: str | None) -> d
                 return json.load(response)
         except urllib.error.HTTPError as error:
             body = error.read().decode("utf-8", "replace")[:400]
-            if error.code != 429:
+            if error.code not in _RETRYABLE:
                 raise RuntimeError(
                     f"datasets-server returned HTTP {error.code} for {source.dataset}: {body}"
                 ) from error
-            if attempt == _RATE_LIMIT_ATTEMPTS:
-                advice = (
-                    "Authenticating raises the limit: run `hf auth login`, or set HF_TOKEN to a "
-                    "read token from https://huggingface.co/settings/tokens"
-                    if not token
-                    else "A token is already in use, so this is the authenticated ceiling — wait "
-                    "a few minutes, or lower --limit"
-                )
+            if attempt == _RETRY_ATTEMPTS:
                 raise RuntimeError(
-                    f"rate limited by {ROWS_API} while reading {source.dataset}, still after "
-                    f"{_RATE_LIMIT_ATTEMPTS} attempts. {advice}."
+                    f"datasets-server returned HTTP {error.code} for {source.dataset}, still "
+                    f"after {_RETRY_ATTEMPTS} attempts: {body}. "
+                    f"{_retry_advice(error.code, token)}."
                 ) from error
-            delay = _RATE_LIMIT_BACKOFF * 2 ** (attempt - 1)
-            print(f"  rate limited; retrying in {delay:.0f}s ({attempt}/{_RATE_LIMIT_ATTEMPTS})")
+            delay = _RETRY_BACKOFF * 2 ** (attempt - 1)
+            reason = "rate limited" if error.code == 429 else f"HTTP {error.code}"
+            print(f"  {reason}; retrying in {delay:.0f}s ({attempt}/{_RETRY_ATTEMPTS})")
             time.sleep(delay)
         except urllib.error.URLError as error:
             raise RuntimeError(

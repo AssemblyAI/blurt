@@ -10,12 +10,14 @@ transcript text, and that the splits are disjoint. Run with:
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import io
 import json
 import pathlib
 import re
 import sys
+import urllib.error
 
 import pytest
 
@@ -537,6 +539,77 @@ def test_the_paired_source_reads_both_repackaged_columns_and_undoes_its_markup()
     # Unlike its upstream, this side is written in the corpus's own conventions
     # (`[UH]`, `[laughter]`, `th*`), so it has to be rewritten as transcript text.
     assert source.detag is corpus._detag_nyra
+
+
+# --------------------------------------------------------------------------
+# datasets-server retries
+# --------------------------------------------------------------------------
+
+
+def _http_error(code: int, body: str = '{"error":"Unexpected error."}'):
+    return urllib.error.HTTPError("https://x", code, "err", {}, io.BytesIO(body.encode()))
+
+
+def _fetch_with(monkeypatch, statuses, sleeps=None):
+    """Drive `_fetch_page` through `statuses`, returning a page when one is 200."""
+    codes = iter(statuses)
+
+    def fake_urlopen(request, timeout=None):
+        code = next(codes)
+        if code != 200:
+            raise _http_error(code)
+        return contextlib.closing(io.BytesIO(b'{"rows": [{"row": {}}]}'))
+
+    monkeypatch.setattr(corpus.urllib.request, "urlopen", fake_urlopen)
+    # `sleeps or []` would append to a throwaway list: an empty list is falsy, which is
+    # exactly the state it is in on the first call.
+    recorded = [] if sleeps is None else sleeps
+    monkeypatch.setattr(corpus.time, "sleep", recorded.append)
+    return corpus._fetch_page("https://x", {}, corpus.SOURCES["nyra"], "token")
+
+
+def test_a_transient_server_error_is_waited_out_not_fatal(monkeypatch):
+    """A 45-page load used to discard 30 fetched pages over one "Unexpected error." — and
+    before the first model call, so a run set up to take hours died at second zero."""
+    sleeps: list[float] = []
+    assert _fetch_with(monkeypatch, [500, 200], sleeps) == {"rows": [{"row": {}}]}
+    assert sleeps == [corpus._RETRY_BACKOFF]
+
+
+def test_every_retryable_status_is_retried(monkeypatch):
+    for code in sorted(corpus._RETRYABLE):
+        assert _fetch_with(monkeypatch, [code, 200]) == {"rows": [{"row": {}}]}
+
+
+def test_a_request_level_failure_is_raised_at_once(monkeypatch):
+    """404 and 403 are facts about the request; waiting does not change them, and a retry
+    loop would only delay the message that says so."""
+    for code in (401, 403, 404, 422):
+        with pytest.raises(RuntimeError) as raised:
+            _fetch_with(monkeypatch, [code, 200])
+        assert str(code) in str(raised.value)
+        assert "attempts" not in str(raised.value)
+
+
+def test_a_persistent_failure_gives_up_and_says_which_kind_it_was(monkeypatch):
+    with pytest.raises(RuntimeError) as raised:
+        _fetch_with(monkeypatch, [500] * corpus._RETRY_ATTEMPTS)
+    message = str(raised.value)
+    assert f"{corpus._RETRY_ATTEMPTS} attempts" in message
+    assert "intermittently" in message, "a 500 must not be described as a rate limit"
+
+    with pytest.raises(RuntimeError) as raised:
+        _fetch_with(monkeypatch, [429] * corpus._RETRY_ATTEMPTS)
+    assert "ceiling" in str(raised.value)
+
+
+def test_the_backoff_is_bounded_and_grows(monkeypatch):
+    sleeps: list[float] = []
+    with pytest.raises(RuntimeError):
+        _fetch_with(monkeypatch, [503] * corpus._RETRY_ATTEMPTS, sleeps)
+    assert len(sleeps) == corpus._RETRY_ATTEMPTS - 1
+    assert sleeps == sorted(sleeps)
+    assert sum(sleeps) < 120, "a wait this long is an outage, not a burst"
 
 
 # --------------------------------------------------------------------------
