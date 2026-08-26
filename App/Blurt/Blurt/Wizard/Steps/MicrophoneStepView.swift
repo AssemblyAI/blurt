@@ -18,7 +18,15 @@ struct MicrophoneStepView: View {
   /// does. A snapshot rather than a live listener: the picker's menu is built
   /// when it opens, and a device plugged in mid-session shows up on the next
   /// visit — the capture path resolves the UID fresh at every press regardless.
+  ///
   @State private var devices: [AudioInputDevice] = []
+  /// Whether `devices` has been read yet, as distinct from "read, and empty".
+  /// Without the distinction `missingPin` took the empty initial value as "the
+  /// pinned device is gone", so the picker showed "Disconnected microphone" for
+  /// the 150–500 ms of a cold read — on a mic plugged in the whole time. A flag
+  /// rather than an optional array because SwiftLint's
+  /// `discouraged_optional_collection` (opted into repo-wide) forbids the latter.
+  @State private var devicesLoaded = false
   /// The current default input's name, for the "Same as system (…)" label; nil
   /// (no device, or the read failed) drops the parenthetical.
   @State private var systemDefaultName: String?
@@ -39,9 +47,9 @@ struct MicrophoneStepView: View {
   /// the picker can render the persisted choice instead of a blank control, and
   /// the user sees why dictation is currently using the system default.
   private var missingPin: MicDeviceSelection? {
-    guard !micDeviceUID.isEmpty, !devices.contains(where: { $0.uid == micDeviceUID }) else {
-      return nil
-    }
+    guard devicesLoaded, !micDeviceUID.isEmpty,
+      !devices.contains(where: { $0.uid == micDeviceUID })
+    else { return nil }
     return .pinned(uid: micDeviceUID)
   }
 
@@ -80,6 +88,7 @@ struct MicrophoneStepView: View {
       }.value
       devices = snapshot.devices
       systemDefaultName = snapshot.defaultName
+      devicesLoaded = true
     }
   }
 }

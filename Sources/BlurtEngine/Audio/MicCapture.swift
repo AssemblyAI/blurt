@@ -132,6 +132,11 @@ public actor MicCapture: MicCaptureProtocol {
     // bring-up that is no longer wanted.
     let generationBeforeBringUp = stopGeneration
     let recorder = try await CaptureSessionRecorder.make(pinnedUID: resolved.pinnedUID)
+    // Building is a suspension too, so it needs the same check as the two below.
+    // It had none when the build moved off-actor, which is the failure this
+    // helper exists to stop repeating: a guard hand-written per suspension means
+    // the next suspension arrives unguarded.
+    try checkStillWanted(since: generationBeforeBringUp, stage: "the session build")
 
     // One teardown for every exit that doesn't install the recorder — a failed
     // open, either abandonment check, the fail-closed timeout. Written once as a
@@ -153,14 +158,10 @@ public actor MicCapture: MicCaptureProtocol {
       throw BlurtError.audioCaptureFailed(underlying: MicCaptureError.noInputDevice)
     }
 
-    // A teardown or cancel that landed during the open: tear the recorder down
-    // instead of sitting through the liveness wait for a capture nobody wants.
-    // Same handling as the post-wait check below, just earlier — see it for why
-    // the two conditions are distinguished from a timeout.
-    guard stopGeneration == generationBeforeBringUp, !Task.isCancelled else {
-      Self.logger.info("start aborted — teardown or cancellation during the device open")
-      throw CancellationError()
-    }
+    // A teardown or cancel that landed during the open: the `defer` tears the
+    // recorder down rather than sitting through the liveness wait for a capture
+    // nobody wants.
+    try checkStillWanted(since: generationBeforeBringUp, stage: "the device open")
 
     // `record()` returning true only means the session started running — not
     // that the input route is delivering frames. A Bluetooth mic spends up to a
@@ -183,21 +184,7 @@ public actor MicCapture: MicCaptureProtocol {
       deliveredFrames: { recorder.deliveredFrames },
       inputPowerDB: { recorder.meteredPowerDB() })
 
-    // Two ways the bring-up can be abandoned while suspended, both ending the
-    // same way — tear the recorder down instead of installing it, so nothing is
-    // left capturing:
-    //
-    // - A teardown landed (`stopGeneration` moved), so the caller's stop has to
-    //   stay a real stop rather than returning an empty "clean" one.
-    // - The task was cancelled, which is how a cancel preempts the wait:
-    //   `waitUntilLive` returns as soon as it sees it, so this is the difference
-    //   between an Escape acting now and acting in `bluetoothTimeout`. It must be
-    //   distinguished from the timeout, which returns nil too but is a reported
-    //   *failure* (the throw below) — a cancel is the user's own act, not a fault.
-    guard stopGeneration == generationBeforeBringUp, !Task.isCancelled else {
-      Self.logger.info("start aborted — teardown or cancellation during the liveness wait")
-      throw CancellationError()
-    }
+    try checkStillWanted(since: generationBeforeBringUp, stage: "the liveness wait")
 
     // The gate's outcome, worded in `MicLiveness` so the line a field report is
     // read off is unit-tested. See `logSummary` for what it has to carry.
@@ -260,6 +247,28 @@ public actor MicCapture: MicCaptureProtocol {
     guard let recorder = detachActiveRecorder() else { return }
     recorder.stopAndDiscard()
     Self.logger.info("cancelled capture, discarded audio")
+  }
+
+  /// Throws when this bring-up has been abandoned while suspended, in either of
+  /// the two ways that end the same — the caller's `defer` tears the recorder
+  /// down instead of installing it, so nothing is left capturing:
+  ///
+  /// - A teardown landed (`stopGeneration` moved), so the caller's stop has to
+  ///   stay a real stop rather than returning an empty "clean" one.
+  /// - The task was cancelled, which is how a cancel preempts the bring-up:
+  ///   `waitUntilLive` returns as soon as it sees it, so this is the difference
+  ///   between an Escape acting now and acting in `bluetoothTimeout`. It must be
+  ///   distinguished from the liveness timeout, which also abandons the press but
+  ///   is a reported *failure* — a cancel is the user's own act, not a fault.
+  ///
+  /// One definition called after each of `start()`'s suspensions, rather than a
+  /// guard copied per suspension: the copies drifted the moment a third
+  /// suspension (the off-actor session build) arrived without one.
+  private func checkStillWanted(since generation: Int, stage: String) throws {
+    guard stopGeneration == generation, !Task.isCancelled else {
+      Self.logger.info("start aborted — teardown or cancellation during \(stage, privacy: .public)")
+      throw CancellationError()
+    }
   }
 
   /// Ends the current capture's claim on the actor's state and hands back the

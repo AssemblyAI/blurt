@@ -495,8 +495,9 @@ in both directions. So:
   on the recorder's serial `controlQueue`, so neither blocks the actor: the ~600 ms open, and the
   build before it (~5 ms warm, ~185 ms on a process's first touch of the capture stack). Only the
   selection lookup stays inline, at microseconds once warm. Run inline it did both: a teardown arriving during the open measured **578 ms** of
-  waiting on a 635 ms open, against **24 µs** once suspended (`MicCaptureBringUpTests`, which
-  calibrates against the real device and skips itself on an input too fast to show the window). It
+  waiting on a 635 ms open, against **24 µs** once suspended (`MicCaptureBringUpTests`, which warms
+  the stack first so it measures this rather than a process's first touch, then asserts an absolute
+  budget that holds on every input). It
   also parked a cooperative-pool thread for the duration — the same pool the overlapping context
   capture and the transcriber's connection warm-up run on, and starving it is how covering the
   retired backend in CI deadlocked the whole test run, which is why the hop is a `DispatchQueue`

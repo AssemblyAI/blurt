@@ -47,18 +47,54 @@ struct MicCaptureBringUpTests {
     // An unstructured `Task` rather than `async let`, only because the
     // `#expect(throws:)` below can't capture an `async let` variable.
     let press = Task { try await mic.start() }
+    // 30 ms is a bracket, not a guarantee: it has to clear the ~5 ms session
+    // build (cancelling before the open is reached would pass even if `record()`
+    // went back to blocking the actor) and still land inside the open, whose
+    // fastest measurement here is ~80 ms. Both ends matter, so the outcome is
+    // checked below rather than assumed.
     try await Task.sleep(for: .milliseconds(30))
 
     let cancelCost = await ContinuousClock().measure {
       try? await mic.cancelCapture()
     }
-    #expect(
-      cancelCost < Self.teardownBudget,
-      "cancelCapture took \(cancelCost) while the device was still opening — the actor was blocked")
 
-    // And the press notices it was abandoned rather than installing a recorder
-    // nothing owns: whichever suspension the cancel landed in, the bring-up's
-    // generation check turns it into a CancellationError.
-    await #expect(throws: CancellationError.self) { try await press.value }
+    // Where the cancel actually landed, straight from the press: an abandoned
+    // bring-up throws `CancellationError` from one of the three
+    // `checkStillWanted` points instead of installing its recorder.
+    var pressFailure: Error?
+    do {
+      try await press.value
+    } catch {
+      pressFailure = error
+    }
+    let abandonedMidBringUp = pressFailure is CancellationError
+
+    // An unrelated capture failure is its own report, not evidence about the
+    // bracket — otherwise a mic that never delivers reads as "too fast".
+    if let pressFailure, !abandonedMidBringUp {
+      Issue.record("start() failed for an unrelated reason: \(pressFailure)")
+    }
+
+    // Judged before the budget, because the two are different failures. If the
+    // bring-up finished inside the wait — a virtual or aggregate input that
+    // opens *and* delivers non-silent audio in under 30 ms — then
+    // `cancelCapture()` took the installed path, whose inline `stopRunning()` is
+    // documented at 19–41 ms, and asserting the teardown budget on that reports
+    // "the actor was blocked" about an actor that was never blocked. Naming the
+    // bracket separately is what stops one failure wearing the other's message.
+    #expect(
+      abandonedMidBringUp,
+      """
+      the bring-up completed inside the 30 ms wait, so the teardown below measured an installed \
+      recorder rather than one mid-open — this input is too fast for a timing bracket, and pinning \
+      the property on it wants an injectable recorder rather than a longer sleep
+      """)
+
+    if abandonedMidBringUp {
+      #expect(
+        cancelCost < Self.teardownBudget,
+        "cancelCapture took \(cancelCost) while the device was still opening — the actor was blocked"
+      )
+    }
   }
 }

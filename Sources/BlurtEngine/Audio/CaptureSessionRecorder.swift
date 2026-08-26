@@ -83,7 +83,8 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// first device query alone). Run inline on `MicCapture` it blocked the actor
   /// for that whole window, which a teardown racing the bring-up then waited out
   /// — the same defect as a blocking `record()`, and `MicCaptureBringUpTests`
-  /// caught it at 100 ms once its own warm-up probe was removed.
+  /// caught it at 100 ms once its own warm-up probe was removed. Both hops run
+  /// on `controlQueue`.
   ///
   /// Deliberately still *separate* from `record()` rather than folded into one
   /// "make and start" hop: that building leaves the microphone closed is the
@@ -113,12 +114,23 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
       let input = try AVCaptureDeviceInput(device: device)
       if session.canAddInput(input) {
         session.addInput(input)
+      } else {
+        // Leaves the session inputless, so `record()` answers false and the press
+        // surfaces `.audioCaptureFailed(noInputDevice)` — correct, but silent
+        // without this: "no usable input device" for a device that exists and was
+        // refused is the one case that log line can't explain on its own.
+        MicCapture.logger.error(
+          "session refused the input device \(device.localizedName, privacy: .public)")
       }
     }
     output.audioSettings = Self.audioSettings()
     output.setSampleBufferDelegate(self, queue: delegateQueue)
     if session.canAddOutput(output) {
       session.addOutput(output)
+    } else {
+      // Without an output nothing is ever delivered, so the liveness gate would
+      // fail closed at its cap with no clue why.
+      MicCapture.logger.error("session refused the audio data output")
     }
   }
 
@@ -172,7 +184,7 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// This is where the route-activation cost lives, all of it — ~180 ms on the
   /// built-in mic, ~600 ms on a USB interface, and on AirPods ~80 ms before
   /// `startRunning()` returns plus ~400 ms before the first frame. It is `async`
-  /// and hops to `sessionQueue` precisely because that cost is unbounded from the
+  /// and hops to `controlQueue` precisely because that cost is unbounded from the
   /// caller's point of view: run inline it blocked `MicCapture` for the whole
   /// open, and a teardown arriving in that window measured 578 ms of waiting on a
   /// 635 ms open (`MicCaptureBringUpTests`). Suspending instead of blocking means
@@ -202,12 +214,30 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
     state.withLock { $0.frameCount }
   }
 
-  /// The capture connection's average input power in dBFS
+  /// The loudest of the capture connection's channels, in dBFS
   /// (`AVCaptureAudioChannel.averagePowerLevel`), feeding both the liveness
   /// gate's silence-floor probe and the overlay meter. A missing connection or
   /// channel answers -160 — reads as digital silence, so the gate keeps
   /// waiting (and fails closed at its cap) and the meter rests, the
   /// conservative direction for both.
+  ///
+  /// The **loudest**, not the first, and this is load-bearing:
+  /// `connection.audioChannels` describes the *device's* channels, not the mono
+  /// the data output converts to. Measured on this machine — a stereo interface,
+  /// an aggregate and two virtual devices all report `audioChannels=2` against
+  /// `outputChannels=1`, and a channel carrying nothing reads -758 dBFS. So
+  /// metering channel 0 alone reported silence for any device whose microphone
+  /// sits on input 2 (a 2-in interface with the mic in the second socket, or an
+  /// aggregate whose first sub-device is silent) while the recorded mono had full
+  /// signal: the liveness gate never confirmed and the press failed **closed**
+  /// with "The microphone didn't start." on a mic that records perfectly. The
+  /// retired `AVAudioRecorder.averagePower(forChannel: 0)` metered the recorded
+  /// mono downmix, so channel 0 was the whole picture there — this was a behavior
+  /// change that rode inside the backend swap unnoticed.
+  ///
+  /// A max slightly over-reads the true downmix (one loud channel of two averages
+  /// quieter once mixed), which is the harmless direction for a floor probe and
+  /// for bars.
   ///
   /// The channel itself has a second not-yet-ready value, measured on AirPods:
   /// until its first update it reports `-Float.greatestFiniteMagnitude`
@@ -216,8 +246,9 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// so it needs no clamping here, but a caller that reads the meter the instant
   /// frames appear will see it.
   func meteredPowerDB() -> Float {
-    guard let channel = output.connection(with: .audio)?.audioChannels.first else { return -160 }
-    return channel.averagePowerLevel
+    let channels = output.connection(with: .audio)?.audioChannels ?? []
+    guard !channels.isEmpty else { return -160 }
+    return channels.reduce(-Float.infinity) { max($0, $1.averagePowerLevel) }
   }
 
   /// End capture and hand back everything recorded as raw S16LE PCM at the
