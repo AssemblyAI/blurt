@@ -32,6 +32,15 @@ genuinely correct, and reaching for it means it's time to stop and ask.
   Keep the data output converting to 16 kHz mono 16-bit S16LE (the Sync API's
   geometry), captured straight to memory so `stop()` returns upload-ready bytes
   with no resample pass.
+- **Don't pre-open the mic to make presses feel faster.** `MicCapture.warmUp()`
+  is stateless on purpose — build a session, drop it — and there is no warm or
+  prepared recorder to reuse. Measured on hardware: building a session (or the
+  retired `prepareToRecord()`) leaves the device closed and costs ~15 ms, while
+  `record()`'s `startRunning()` opens it and costs 180–600 ms, so nothing can
+  pre-pay the bring-up. A warm-recorder lifecycle was tried, and its
+  device-identity check, pin check, 60 s expiry and bring-up flag all existed to
+  protect ~15 ms. If you want the press to feel faster, the liveness gate's
+  polling is where the remaining latency actually is.
 
 ## Transcription pipeline
 

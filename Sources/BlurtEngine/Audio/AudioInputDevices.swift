@@ -1,9 +1,9 @@
+@preconcurrency import AVFoundation
 import CoreAudio
 import Foundation
 
-/// One selectable input device: its persistent CoreAudio UID (what
-/// `MicDeviceStore` pins) and its user-facing name (what the Settings picker
-/// shows).
+/// One selectable input device: its persistent UID (what `MicDeviceStore` pins)
+/// and its user-facing name (what the Settings picker shows).
 public struct AudioInputDevice: Identifiable, Sendable {
   public let uid: String
   public let name: String
@@ -11,94 +11,71 @@ public struct AudioInputDevice: Identifiable, Sendable {
 }
 
 /// Read-only enumeration of the machine's audio *input* devices — the list the
-/// Settings microphone picker offers — plus the UID→device translation the
-/// capture path resolves a pinned selection with.
+/// Settings microphone picker offers — plus the two questions the capture path
+/// asks about a pinned UID: is that device connected, and what transport is it
+/// on.
 ///
-/// A sibling of `AudioRoute`, not part of it, because these reads bridge
-/// `CFString`s (device names and UIDs) and therefore need Foundation, which
-/// `AudioRoute` deliberately avoids (see `AudioRoute.InputSnapshot.deviceID`).
-/// Like `AudioRoute` it is raw reads only — the policy for a UID that no longer
-/// resolves is `MicDeviceSelection.effective`, which is pure and unit-tested —
-/// and like `AudioRoute` it needs real hardware to answer anything, so it is
-/// excluded from the coverage gate and must not be where a decision hides.
+/// Enumeration, naming and presence come from **`AVCaptureDevice`**, which is
+/// the same API the recorder opens the device with: `uniqueID` *is* the CoreAudio
+/// device UID string on macOS (confirmed against real devices — `bltn`-style
+/// built-ins, USB interfaces, and virtual devices all round-trip), so the picker
+/// lists exactly the devices `CaptureSessionRecorder` can pin to, named the way
+/// the rest of the system names them. This replaced ~60 lines of HAL plumbing —
+/// a device-list read, an input-stream filter, a `CFString` property bridge and
+/// a UID→`AudioDeviceID` translation — that existed only to answer what
+/// `AVCaptureDevice` answers in a property.
+///
+/// The **transport** read stays on CoreAudio, on purpose: see `AudioRoute`'s
+/// header for why the one unverified-on-Bluetooth inference was not worth
+/// making.
+///
+/// Like `AudioRoute` this is raw reads only — the policy for a UID that no
+/// longer resolves is `MicDeviceSelection.effective`, which is pure and
+/// unit-tested — and like `AudioRoute` it needs real hardware to answer
+/// anything, so it is excluded from the coverage gate and must not be where a
+/// decision hides.
 public enum AudioInputDevices {
-  /// Every device with at least one input stream, sorted by name for a stable
-  /// picker order. Empty when there are none, or CoreAudio refused the read.
+  /// Every microphone the system offers, sorted by name for a stable picker
+  /// order. Empty when there are none.
+  ///
+  /// A discovery session rather than the deprecated `devices(for:)`, and no
+  /// input-stream filter: `mediaType: .audio` already means "can capture audio",
+  /// which is the filter the retired HAL path had to reconstruct by asking each
+  /// device for the size of its input-scope stream list.
   public static func all() -> [AudioInputDevice] {
-    deviceIDs()
-      .compactMap { deviceID -> AudioInputDevice? in
-        guard hasInputStreams(deviceID),
-          let uid = stringProperty(kAudioDevicePropertyDeviceUID, of: deviceID),
-          let name = stringProperty(kAudioObjectPropertyName, of: deviceID)
-        else { return nil }
-        return AudioInputDevice(uid: uid, name: name)
-      }
-      .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    AVCaptureDevice.DiscoverySession(
+      deviceTypes: [.microphone], mediaType: .audio, position: .unspecified
+    )
+    .devices
+    .map { AudioInputDevice(uid: $0.uniqueID, name: $0.localizedName) }
+    .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
   }
 
   /// The current default input device's name — what the picker's "Same as
-  /// system (…)" option shows — or nil when there is no input device or a read
-  /// failed (the picker then says "Same as system" with no parenthetical).
+  /// system (…)" option shows — or nil when there is no input device (the picker
+  /// then says "Same as system" with no parenthetical).
   public static func systemDefaultInputName() -> String? {
-    guard let snapshot = AudioRoute.currentInput() else { return nil }
-    return stringProperty(kAudioObjectPropertyName, of: snapshot.deviceID)
+    AVCaptureDevice.default(for: .audio)?.localizedName
   }
 
-  /// The pinned device as an `InputSnapshot` — the same shape
-  /// `AudioRoute.currentInput()` answers for the default input, so the
-  /// transport-keyed policies (`MicLiveness.timeout`, the tail linger) and the
-  /// warm-recorder identity check key off the pinned device exactly as they key
-  /// off the default one. Nil when no device carries this UID right now, which
-  /// is the missing-device signal `MicDeviceSelection.effective` falls back on.
-  static func input(forUID uid: String) -> AudioRoute.InputSnapshot? {
+  /// Whether a device carrying this UID is connected right now — the
+  /// missing-device signal `MicDeviceSelection.effective` falls back on.
+  ///
+  /// Asked of `AVCaptureDevice` rather than the HAL because it is the same
+  /// lookup `CaptureSessionRecorder` will make a moment later to attach the
+  /// device: "the pin resolves" and "the recorder can open it" are now one fact
+  /// instead of two that could disagree.
+  static func isConnected(uid: String) -> Bool {
+    AVCaptureDevice(uniqueID: uid)?.isConnected ?? false
+  }
+
+  /// The transport type of the device carrying this UID, or nil when it isn't
+  /// connected or the read failed — read through CoreAudio so the pinned device
+  /// is classified by exactly the property the default input is (see
+  /// `AudioRoute`).
+  static func transportType(forUID uid: String) -> UInt32? {
     guard let deviceID = deviceID(forUID: uid) else { return nil }
-    return AudioRoute.InputSnapshot(
-      deviceID: deviceID, transportType: AudioRoute.transportType(of: deviceID))
-  }
-
-  // MARK: - CoreAudio reads
-
-  /// Every audio device the system object lists, input or not — the input
-  /// filter is `hasInputStreams`.
-  private static func deviceIDs() -> [AudioDeviceID] {
-    var address = AudioRoute.globalAddress(kAudioHardwarePropertyDevices)
-    var size = UInt32(0)
-    let stride = MemoryLayout<AudioDeviceID>.size
-    guard
-      AudioObjectGetPropertyDataSize(AudioRoute.systemObject, &address, 0, nil, &size) == noErr,
-      size >= UInt32(stride)
-    else { return [] }
-    var deviceIDs = [AudioDeviceID](repeating: 0, count: Int(size) / stride)
-    let status = AudioObjectGetPropertyData(
-      AudioRoute.systemObject, &address, 0, nil, &size, &deviceIDs)
-    guard status == noErr else { return [] }
-    return deviceIDs
-  }
-
-  /// Whether the device has any input streams — asked as the *size* of its
-  /// input-scope stream list, so no variable-length buffer needs decoding just
-  /// to learn "more than zero".
-  private static func hasInputStreams(_ deviceID: AudioDeviceID) -> Bool {
-    var address = AudioObjectPropertyAddress(
-      mSelector: kAudioDevicePropertyStreams,
-      mScope: kAudioObjectPropertyScopeInput,
-      mElement: kAudioObjectPropertyElementMain)
-    var size = UInt32(0)
-    let status = AudioObjectGetPropertyDataSize(deviceID, &address, 0, nil, &size)
-    return status == noErr && size > 0
-  }
-
-  /// A CFString property (name, UID) bridged to `String`, or nil when the read
-  /// failed. The HAL hands these back retained, hence `takeRetainedValue`.
-  private static func stringProperty(
-    _ selector: AudioObjectPropertySelector, of objectID: AudioObjectID
-  ) -> String? {
-    var address = AudioRoute.globalAddress(selector)
-    var value: Unmanaged<CFString>?
-    var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
-    let status = AudioObjectGetPropertyData(objectID, &address, 0, nil, &size, &value)
-    guard status == noErr, let value else { return nil }
-    return value.takeRetainedValue() as String
+    return AudioRoute.transportType(of: deviceID)
   }
 
   /// Translate a device UID to the live `AudioDeviceID` carrying it, via the

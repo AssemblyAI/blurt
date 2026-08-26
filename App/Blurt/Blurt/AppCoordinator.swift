@@ -101,11 +101,13 @@ final class AppCoordinator {
   }
 
   func start() {
-    // Pre-warm the mic so the first dictation doesn't pay hardware-route
-    // discovery on the hot path — but only once microphone access is granted, so
-    // warming up never triggers the permission prompt at launch. Before the grant
-    // the user opts in via the setup screen's "Allow Microphone Access" button;
-    // the first dictation after that just prepares a recorder lazily.
+    // Absorb the one-off cost of this process's first touch of the capture
+    // stack, so the first dictation doesn't pay it on the hot path (~75 ms; see
+    // `MicCapture.warmUp()`, which holds no recorder and opens no device). Gated
+    // on the grant because building a capture input is what raises the
+    // microphone prompt, and launch is the wrong moment for it: before the grant
+    // the user opts in via the setup screen's "Allow Microphone Access" button,
+    // and the first dictation after that simply pays the build itself.
     if PermissionsChecker.check().microphone {
       let mic = mic
       Task { await mic.warmUp() }

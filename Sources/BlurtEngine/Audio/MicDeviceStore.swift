@@ -14,8 +14,9 @@ public enum MicDeviceSelection: Equatable, Sendable {
   case systemDefault
   /// Record from the device with this UID (`kAudioDevicePropertyDeviceUID`).
   /// The UID rather than an `AudioDeviceID` because only the UID survives an
-  /// unplug/replug and a reboot — see `AudioRoute.InputSnapshot.deviceID` for
-  /// the two identities' trade-offs.
+  /// unplug/replug and a reboot — and because it is the identity
+  /// `AVCaptureDevice(uniqueID:)` takes, so the string stored here is the one
+  /// that opens the device at press time, not a translation of it.
   case pinned(uid: String)
 
   /// Decode the persisted slot: the empty string — which is also what an unset

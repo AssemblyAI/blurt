@@ -4,43 +4,56 @@ import Dispatch
 import Foundation
 import Synchronization
 
-/// The one capture backend (owner-directed move to `AVCaptureSession`,
-/// 2026-08-25): a session built fresh per capture around a single audio device
-/// — the device pinned in Settings when one is set, the system default
-/// otherwise — whose data output converts to the dictation API's 16 kHz mono
-/// 16-bit LPCM on the fly and delivers it here as sample buffers, accumulated
-/// in memory as the raw S16LE blob `stopAndReadPCM` returns. No temp file, no
-/// resample pass, no decode on the release path.
+/// The capture backend (owner-directed move to `AVCaptureSession`, 2026-08-25):
+/// a session built fresh per capture around a single audio device — the device
+/// pinned in Settings when one is set, the system default otherwise — whose data
+/// output converts to the dictation API's 16 kHz mono 16-bit LPCM on the fly and
+/// delivers it here as sample buffers, accumulated in memory as the raw S16LE
+/// blob `stopAndReadPCM` returns. No temp file, no resample pass, no decode on
+/// the release path.
 ///
-/// Fresh-per-session is load-bearing, exactly as it was for the recorders this
-/// replaces: the session's input is attached to one device at build time and
-/// never re-resolves, so reuse across a device switch is what `MicCapture`'s
-/// warm validation exists to prevent (see `takeWarmRecorder`).
+/// Used directly by `MicCapture` rather than through a protocol. There *was* a
+/// `CaptureRecorder` seam, and its whole job was to let the actor's machinery —
+/// liveness gate, meter, tail linger — be written once across two backends (an
+/// `AVAudioRecorder` WAV path and a device-pinned `AudioQueue`). Both are gone,
+/// so the seam abstracted a single conformer with no test double behind it; the
+/// contract it documented now lives on these members. `MicCaptureProtocol` is
+/// the seam hosts and tests actually inject at.
 ///
-/// Building the session does **not** engage the microphone — no capture, no
-/// input indicator — which is what makes the warm-up safe to hold idle. The
-/// device is only opened by `record()`'s `startRunning()`, so the route
-/// activation cost lands inside the press's connecting window (the liveness
-/// wait's clock starts *after* `record()` returns, so a slow bring-up eats
-/// none of the frame-arrival budget).
+/// Fresh-per-session is load-bearing: the session's input is attached to one
+/// device at build time and never re-resolves, so a session outliving a device
+/// switch would record the wrong mic (or silence) rather than failing loudly.
+/// `MicCapture` builds one per press and drops it at stop.
+///
+/// Building the session does **not** engage the microphone — measured against
+/// CoreAudio's own `kAudioDevicePropertyDeviceIsRunningSomewhere`, the bit
+/// behind the input indicator: it stays clear until `record()`. What building
+/// costs is ~15 ms of object graph, and ~75 ms more the first time a process
+/// touches AVFoundation's capture stack at all; the device open and route
+/// activation — 180 ms on the built-in mic, ~600 ms on a USB interface, seconds
+/// on a Bluetooth link — all land in `record()`'s `startRunning()`, inside the
+/// press's connecting window. That measurement is why there is no warm-recorder
+/// lifecycle here anymore (see `MicCapture.warmUp()`).
 ///
 /// Hardware-bound like `MicCapture`, and excluded from the coverage gate for
 /// the same reason; its live test rides the `BLURT_LIVE_AUDIO_TESTS` gate in
 /// `AudioInputDevicesTests`.
 ///
-/// `@unchecked Sendable`: the capture-path confinement argument on
-/// `CaptureRecorder` covers the session/output handles (configured in `init`,
-/// then only read), and everything the delegate queue also touches lives
-/// behind the `Mutex`.
-final class CaptureSessionRecorder: NSObject, CaptureRecorder, @unchecked Sendable {
+/// `@unchecked Sendable`: `MicCapture.start()`'s liveness probes read
+/// `deliveredFrames` and `meteredPowerDB()` off-actor, safe by confinement —
+/// the polls run sequentially in one task while `start()` is suspended and
+/// nothing else references the recorder in that window. The session/output
+/// handles are configured in `init` and then only read, and everything the
+/// delegate queue also touches lives behind the `Mutex`.
+final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   private struct Guarded {
     /// Every byte the delegate has delivered, in arrival order — already the
     /// raw S16LE blob `stopAndReadPCM` returns.
     var captured = Data()
-    /// Frames delivered so far, summed off each sample buffer's own count —
-    /// the recorder's clock. Frames of digital silence advance it exactly like
-    /// real audio; the liveness gate's power term is what tells those apart.
-    var capturedSampleCount = 0
+    /// Frames delivered so far, summed off each sample buffer's own count.
+    /// Frames of digital silence count exactly like real audio; the liveness
+    /// gate's power term is what tells those apart.
+    var frameCount = 0
   }
 
   private let session = AVCaptureSession()
@@ -50,6 +63,7 @@ final class CaptureSessionRecorder: NSObject, CaptureRecorder, @unchecked Sendab
   private let delegateQueue = DispatchQueue(
     label: HostIdentity.current.queueLabel("MicCaptureSession"))
   private let state = Mutex(Guarded())
+  /// A short name for the capture-start log line.
   let logName: String
 
   /// Builds and fully configures the session — device input, converted-format
@@ -109,20 +123,24 @@ final class CaptureSessionRecorder: NSObject, CaptureRecorder, @unchecked Sendab
   }
 
   /// Opens the device and starts capture. `startRunning()` is synchronous —
-  /// this is where the route-activation cost lives now that warm-up only
-  /// pre-builds — and false means no usable input: nothing was attached at
-  /// build time, or the session refused to run.
+  /// this is where the route-activation cost lives, all of it — and false means
+  /// no usable input: nothing was attached at build time, or the session
+  /// refused to run.
   func record() -> Bool {
     guard !session.inputs.isEmpty else { return false }
     session.startRunning()
     return session.isRunning
   }
 
-  /// Seconds of audio delivered so far — the frames the delegate has actually
-  /// received, over the capture rate. 0 until the first buffer lands, which is
-  /// the "has the clock moved" probe `MicLiveness` short-circuits on.
-  var currentTime: TimeInterval {
-    Double(state.withLock { $0.capturedSampleCount }) / Double(SyncSTTLimits.sampleRate)
+  /// Frames the delegate has actually received. 0 until the first buffer lands,
+  /// which is the has-anything-arrived probe `MicLiveness` short-circuits on.
+  ///
+  /// A raw frame count rather than the seconds-since-`record()` the retired
+  /// `AVAudioRecorder` reported: the only consumer asks whether it has moved off
+  /// zero, so dividing by the sample rate manufactured a duration nothing read
+  /// as one.
+  var deliveredFrames: Int {
+    state.withLock { $0.frameCount }
   }
 
   /// The capture connection's average input power in dBFS
@@ -136,16 +154,24 @@ final class CaptureSessionRecorder: NSObject, CaptureRecorder, @unchecked Sendab
     return channel.averagePowerLevel
   }
 
+  /// End capture and hand back everything recorded as raw S16LE PCM at the
+  /// dictation API's rate, releasing the device.
+  ///
+  /// Non-throwing, unlike the seam this replaces: the bytes are already in
+  /// memory in the upload encoding, so there is no read-back, decode or temp
+  /// file left to fail at.
   func stopAndReadPCM() -> Data {
     session.stopRunning()
     return state.withLock { $0.captured }
   }
 
+  /// End capture and throw the audio away, releasing the device — the teardown
+  /// behind a failed `record()`, an aborted bring-up, and a cancel.
   func stopAndDiscard() {
     session.stopRunning()
     state.withLock {
       $0.captured = Data()
-      $0.capturedSampleCount = 0
+      $0.frameCount = 0
     }
   }
 }
@@ -154,7 +180,7 @@ extension CaptureSessionRecorder: AVCaptureAudioDataOutputSampleBufferDelegate {
   /// Sample buffers, on `delegateQueue`: copy the converted S16LE bytes out of
   /// the block buffer and account the frames, under the lock. A buffer whose
   /// bytes can't be copied is dropped whole — better a short gap than a blob
-  /// whose byte count and sample count disagree.
+  /// whose byte count and frame count disagree.
   func captureOutput(
     _ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer,
     from connection: AVCaptureConnection
@@ -172,10 +198,10 @@ extension CaptureSessionRecorder: AVCaptureAudioDataOutputSampleBufferDelegate {
         blockBuffer, atOffset: 0, dataLength: length, destination: base)
     }
     guard status == kCMBlockBufferNoErr else { return }
-    let sampleCount = CMSampleBufferGetNumSamples(sampleBuffer)
+    let frames = CMSampleBufferGetNumSamples(sampleBuffer)
     state.withLock {
       $0.captured.append(chunk)
-      $0.capturedSampleCount += sampleCount
+      $0.frameCount += frames
     }
   }
 }

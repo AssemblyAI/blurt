@@ -14,8 +14,9 @@ public protocol MicCaptureProtocol: Sendable {
   func start() async throws
   /// Stop capture and return the captured audio as raw S16LE PCM bytes — the
   /// exact encoding the dictation request uploads, so no conversion pass sits on
-  /// the release hot path. Throws if the captured audio couldn't be read back,
-  /// so the pipeline can surface an error instead of silently dropping speech.
+  /// the release hot path. `throws` so a conformer that has to fetch the audio
+  /// from somewhere can surface a failure instead of silently dropping speech;
+  /// `MicCapture` accumulates it in memory as it arrives and never does.
   func stop() async throws -> Data
   /// Stop capture and discard the audio — the teardown behind a *cancel*, where
   /// the user asked for nothing to happen. Split from `stop()` because the two
@@ -30,11 +31,13 @@ public protocol MicCaptureProtocol: Sendable {
   /// through the same seam they inject — a stub without a meter satisfies it
   /// for free instead of every composition threading a side-channel stream.
   var levels: AsyncStream<Float> { get }
-  /// Optionally pre-open the capture device so the first `start()` doesn't pay
-  /// hardware route discovery on the hot path. Must not begin capture (no mic
-  /// indicator) and must not throw — a failure just means `start()` prepares
-  /// lazily as before. Declared here (not only in the default extension) so it
-  /// dispatches dynamically through `any MicCaptureProtocol`.
+  /// Optionally pay whatever set-up cost the first `start()` would otherwise
+  /// pay on the hot path. Must **not** open the input device — no capture, no
+  /// mic indicator, nothing held between presses — and must not throw; a failure
+  /// just means `start()` pays it. `MicCapture` documents what is and isn't
+  /// pre-payable here, which is less than it looks. Declared here (not only in
+  /// the default extension) so it dispatches dynamically through
+  /// `any MicCaptureProtocol`.
   func warmUp() async
 }
 
