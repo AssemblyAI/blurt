@@ -78,8 +78,17 @@ struct AudioInputDevicesTests {
 
     // And the same recorder still opens it on demand, so "closed" isn't just a
     // recorder that was never usable.
+    //
+    // Polled rather than asserted outright, because when the open *completes*
+    // is transport-dependent — the measurement that shaped the liveness gate.
+    // On a USB interface `startRunning()` blocks until the device is running, so
+    // this holds the instant `record()` returns; on AirPods it returns in ~80 ms
+    // and the device comes up ~400 ms later. Asserting immediately passes on
+    // wired hardware and fails on the transport the gate exists for.
     try #require(recorder.record())
-    #expect(Self.isRunningSomewhere(uid: device.uniqueID), "record() is what opens the device")
+    #expect(
+      await Self.waitForRunning(uid: device.uniqueID),
+      "record() is what opens the device, even if the link finishes opening it later")
     recorder.stopAndDiscard()
   }
 
@@ -93,19 +102,52 @@ struct AudioInputDevicesTests {
     let recorder = try CaptureSessionRecorder(pinnedUID: uid)
     try #require(recorder.record(), "the session recorder should start on a live device")
 
-    // Give the session a moment to deliver, as the liveness gate would.
-    try await Task.sleep(for: .milliseconds(500))
-    #expect(recorder.deliveredFrames > 0, "buffers should be arriving")
+    // Wait for frames the way the liveness gate does, rather than sleeping a
+    // fixed 500 ms: on AirPods the first buffer lands ~490 ms after
+    // `startRunning()` returns, so a fixed sleep sits right on the edge and this
+    // suite would flake on a cold link.
+    try #require(
+      await Self.poll(upTo: MicLiveness.bluetoothTimeout) { recorder.deliveredFrames > 0 },
+      "buffers should be arriving")
     // The meter must read as a live analog input, not digital silence — this is
     // the reading `MicLiveness.silenceFloorDB` gates on, and the assertion that
     // proves the session meter's floor semantics on real hardware.
+    //
+    // Polled for the same reason the frame wait is, and this is the sharper
+    // case: the channel's power lags the first frames, reporting
+    // `-Float.greatestFiniteMagnitude` until its first update (measured on
+    // AirPods). That is exactly why the gate polls *both* terms instead of
+    // metering once frames appear.
     #expect(
-      recorder.meteredPowerDB() > MicLiveness.silenceFloorDB,
-      "a live mic must out-read the silence floor")
+      await Self.poll(upTo: MicLiveness.bluetoothTimeout) {
+        recorder.meteredPowerDB() > MicLiveness.silenceFloorDB
+      }, "a live mic must out-read the silence floor")
 
     let pcm = recorder.stopAndReadPCM()
     #expect(!pcm.isEmpty, "half a second of capture should deliver samples")
     #expect(pcm.count % SyncSTTLimits.bytesPerSample == 0, "the blob must be whole S16LE samples")
+  }
+
+  /// Polls `condition` on a short tick until it holds or `timeout` elapses,
+  /// answering whether it ever held. The suite's own miniature of
+  /// `MicLiveness.waitUntilLive`, for the same reason that exists: nothing about
+  /// a capture device is synchronous just because the call that started it
+  /// returned.
+  private static func poll(
+    upTo timeout: Duration, _ condition: @Sendable () -> Bool
+  ) async -> Bool {
+    let deadline = ContinuousClock().now.advanced(by: timeout)
+    while ContinuousClock().now < deadline {
+      if condition() { return true }
+      try? await Task.sleep(for: .milliseconds(20))
+    }
+    return condition()
+  }
+
+  /// Whether the device carrying `uid` comes up as capturing within the
+  /// Bluetooth cap — the widest the product itself ever waits.
+  private static func waitForRunning(uid: String) async -> Bool {
+    await poll(upTo: MicLiveness.bluetoothTimeout) { isRunningSomewhere(uid: uid) }
   }
 
   /// CoreAudio's own answer to "is this device capturing right now" — the bit

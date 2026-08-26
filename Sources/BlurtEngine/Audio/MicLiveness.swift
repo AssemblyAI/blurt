@@ -66,10 +66,13 @@ enum MicLiveness {
   /// 16-bit sample is already about -90, so any real analog noise floor —
   /// including a live mic in a dead-quiet room, which still reads its own
   /// self-noise — sits far above this. -115 is in the empty band between the
-  /// two. The value was calibrated against the retired meter; the dBFS math is
-  /// identical, but where the session meter actually bottoms out (and what it
-  /// reads before its first update) must be re-verified on real hardware —
-  /// AirPods mid-profile-switch especially.
+  /// two. Verified on AirPods, which was the case that mattered: before the
+  /// channel's first update the meter reads `-Float.greatestFiniteMagnitude`
+  /// (~-3.4e38), not the -160 a settled meter floors at, and a live AirPods mic
+  /// reads far above -115 within a few hundred ms of the first frame. Both fall
+  /// on the correct side of this floor, and the `!(power > floor)` spelling in
+  /// `waitUntilLive` is what makes the sentinel — a wildly out-of-range value,
+  /// like NaN — count as *not live* rather than sneaking through a comparison.
   ///
   /// A speech-level floor (`MicCapture.meterFloorDB` is -50) would turn this
   /// gate into voice-activity detection and fail every press in a quiet room

@@ -281,7 +281,8 @@ public actor MicCapture: MicCaptureProtocol {
         // capture records what an un-pinned one would.
         logger.info("pinned microphone not connected — recording the system default input")
       }
-      return ResolvedInput(pinnedUID: nil, transportType: AudioRoute.defaultInputTransportType())
+      return ResolvedInput(
+        pinnedUID: nil, transportType: AudioInputDevices.systemDefaultTransportType())
     }
   }
 

@@ -53,7 +53,8 @@ Sources/BlurtEngine/         the engine (dependency-free Swift package)
   README.md                  the engine's developer guide (quick start, seams, error table)
   Audio/                     MicCapture (+meter) over CaptureSessionRecorder (the
                              AVCaptureSession backend), MicLiveness (mic bring-up gate),
-                             AudioRoute (+Monitor)/AudioTransport — CoreAudio transport reads,
+                             AudioRoute (+Monitor) — the CoreAudio output route, AudioTransport
+                             — what a transport type means,
                              AudioInputDevices + MicDeviceStore (microphone selection),
                              SoundPack/Catalog/Store (the voice *descriptors*; the voices
                              themselves are app-side)
@@ -458,9 +459,11 @@ default input. The transport-keyed policies (liveness cap, tail linger) key off 
 device, and a pinned device that isn't connected falls back to the system default per press
 (`MicDeviceSelection.effective` — pure and unit-tested; the pin stays stored). Enumeration, naming
 and presence live in `AudioInputDevices`, on `AVCaptureDevice` — the same API the recorder opens the
-device with, so the picker can't offer something the capture path would then call missing — while the
-transport read stays on CoreAudio (see `AudioRoute` for why that one wasn't worth switching). Both
-are hardware-bound and coverage-excluded.
+device with, so the picker can't offer something the capture path would then call missing. So does
+the transport read, once `AVCaptureDevice.transportType` was confirmed on hardware to report the same
+four-character codes CoreAudio does for every case the policies turn on — `blue` on AirPods most of
+all, since a transport that fails to read as Bluetooth silently costs the 2.5 s liveness cap and the
+220 ms tail linger. Hardware-bound and coverage-excluded.
 
 **Bluetooth inputs are the reason for three of this actor's moving parts.** Opening the mic on
 AirPods (or any Bluetooth headset) makes the system renegotiate the link into its mic-capable mode —
@@ -481,8 +484,13 @@ in both directions. So:
   and `start()` throws `.audioCaptureFailed`, so the press ends in the same error pill as any other
   capture failure rather than recording an utterance the mic never heard. (The gate originally failed
   open, proceeding as if live — which cued the user to speak into a dead mic anyway.) Audio spoken
-  during the switch cannot be recovered by anything, because nothing ever receives it. `stopGeneration` covers the one suspension
-  this introduces — a teardown landing mid-wait wins, and the recorder is torn down rather than
+  during the switch cannot be recovered by anything, because nothing ever receives it. Where that cost lands differs by
+  transport, measured: on a USB interface `startRunning()` blocks for ~600 ms and the first frame
+  follows ~8 ms later, so the gate confirms almost at once; on AirPods `startRunning()` returns in
+  ~80 ms and the first frame arrives ~410 ms after that, so the gate is doing the waiting. Both end
+  in the same place because the wait's clock starts _after_ `record()` returns — a slow open eats
+  none of the frame-arrival budget, which is what lets the caps be this tight. `stopGeneration`
+  covers the one suspension this introduces — a teardown landing mid-wait wins, and the recorder is torn down rather than
   installed.
 
   **A cancel preempts the bring-up rather than queueing behind it**, which took two pieces. The
@@ -521,12 +529,11 @@ instead of being truncated — the missing last word. It runs after `.transcribi
 delays the transcript, never the "it heard me" cue. Cancels take `cancelCapture()` instead, which
 skips the linger: the audio is being discarded, so it isn't worth delaying the user's cancel for.
 
-The routing facts behind all of that live in **`AudioRoute`** (`Audio/AudioRoute.swift`, internal):
-the default input's raw CoreAudio transport type, plus the default _output_ device the cue players
-watch. **Raw reads only** — what a
-transport _means_ is **`AudioTransport.isBluetooth`** and **`MicLiveness.timeout`**, which are pure
-and unit-tested, because `AudioRoute` itself needs real hardware and is excluded from the coverage
-gate. Don't let a decision drift into it. Its sibling
+What a transport _means_ is **`AudioTransport.isBluetooth`** and **`MicLiveness.timeout`**, which
+are pure and unit-tested; the reads that feed them are hardware-bound and coverage-excluded, so don't
+let a decision drift into them. **`AudioRoute`** (`Audio/AudioRoute.swift`, internal) is what's left
+of the CoreAudio side after the input reads moved to `AVCaptureDevice`: the default _output_ device,
+plus the property addressing its sibling shares. Its sibling
 **`AudioRouteMonitor`** (public) publishes output-route changes for the cue players — see
 [Settings, persistence, and cues](#settings-persistence-and-cues). Both are excluded from the
 coverage gate for the same reason

@@ -149,6 +149,13 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// channel answers -160 — reads as digital silence, so the gate keeps
   /// waiting (and fails closed at its cap) and the meter rests, the
   /// conservative direction for both.
+  ///
+  /// The channel itself has a second not-yet-ready value, measured on AirPods:
+  /// until its first update it reports `-Float.greatestFiniteMagnitude`
+  /// (~-3.4e38), which can arrive *after* the first frames do. Both consumers
+  /// take it as silence — `MicLiveness` keeps waiting, `linearLevel` floors —
+  /// so it needs no clamping here, but a caller that reads the meter the instant
+  /// frames appear will see it.
   func meteredPowerDB() -> Float {
     guard let channel = output.connection(with: .audio)?.audioChannels.first else { return -160 }
     return channel.averagePowerLevel
