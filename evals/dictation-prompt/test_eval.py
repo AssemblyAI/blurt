@@ -2207,6 +2207,31 @@ def test_a_spoken_punctuation_run_scores_the_bar_and_the_challengers():
     assert set(scoring) < set(table)
 
 
+def test_baseline_only_is_honoured_on_a_spoken_run():
+    """It was silently ignored, which made the flag a lie exactly where it earns its keep:
+    on a large corpus the sweep is len(scoring) x dev calls."""
+    loaded = corpus.load(jsonl=str(FROZEN_DATASET), limit=200)
+    scoring = cli.resolve_candidates(
+        cli.parse_args(["--candidates", "baseline"]),
+        cli.instruction_table(loaded),
+        spoken=True,
+    )
+    assert scoring == [candidates.BASELINE]
+
+
+def test_a_search_can_start_from_a_named_candidate():
+    """So a search picks up where a ranking left off instead of re-paying for the sweep."""
+    args = cli.parse_args(["--start", "punct-explicit", "--candidates", "baseline"])
+    assert args.start == "punct-explicit"
+    assert cli.resolve_candidates(args, spoken=True) == [candidates.BASELINE]
+
+
+def test_an_unknown_start_is_refused_before_anything_is_spent():
+    with pytest.raises(SystemExit) as raised:
+        cli.main(["--source", "punctuation", "--punctuation-only", "--start", "nope", "--dry-run"])
+    assert "not a candidate" in str(raised.value)
+
+
 def test_the_full_table_is_still_available_on_a_spoken_run():
     scoring = cli.resolve_candidates(
         cli.parse_args(["--candidates", "all"]),

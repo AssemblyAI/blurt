@@ -381,11 +381,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     search.add_argument(
         "--start",
         default="prior-winner",
-        choices=("prior-winner", "best-candidate"),
+        metavar="prior-winner|best-candidate|NAME",
         help="which instruction the optimizer starts from (default: prior-winner, the "
         "evolved instruction in candidates.py — it already scores well and only needs "
         "pruning under the character cap; best-candidate starts from whichever "
-        "hand-written candidate topped dev instead)",
+        "hand-written candidate topped dev instead). Any candidate name also works, which "
+        "is how a search picks up where a ranking run left off: --start punct-explicit "
+        "--candidates baseline skips a sweep you have already paid for",
     )
 
     live_group = parser.add_argument_group("live verification (macOS, real endpoint)")
@@ -526,6 +528,12 @@ def resolve_candidates(
     """
     if args.candidates == "all":
         return list(CANDIDATES if table is None else table)
+    # Honoured on a spoken run too. It was not, which made the flag a lie exactly when it
+    # was worth using: on a large corpus the sweep is `len(scoring) x dev` calls, and
+    # having already run it once, paying for it again to reach the search is the one thing
+    # anyone would reach for this flag to avoid.
+    if args.candidates == "baseline":
+        return [BASELINE]
     if spoken:
         # BASELINE first so the table reads as "the bar, then the challengers".
         return [BASELINE, *SPOKEN_PUNCTUATION_CANDIDATES]
@@ -664,6 +672,11 @@ def main(argv: list[str] | None = None) -> int:
     # for: a typo in candidates.py should not cost a paid sweep to discover.
     table = instruction_table(loaded)
     check_candidates(table)
+    if args.start not in ("prior-winner", "best-candidate") and args.start not in table:
+        raise SystemExit(
+            f"--start {args.start!r} is not a candidate this run scores. Available: "
+            + ", ".join(("prior-winner", "best-candidate", *table))
+        )
 
     train, dev, test = corpus.split(
         list(loaded.utterances), args.seed, args.dev_fraction, args.test_fraction
@@ -757,7 +770,12 @@ def main(argv: list[str] | None = None) -> int:
         # sweep above and may legitimately win. Nothing to score separately, and no
         # need to keep it out of the selection: unlike the over-cap instruction this
         # replaced, shipping it is a real option.
-        seed_name = BASELINE if args.start == "prior-winner" else winner_name
+        if args.start == "prior-winner":
+            seed_name = BASELINE
+        elif args.start == "best-candidate":
+            seed_name = winner_name
+        else:
+            seed_name = args.start
         seed_instruction = table[seed_name]
         seed_scores = dict(dev_rows)[seed_name]
 

@@ -114,6 +114,42 @@ disfluency smoke corpus wants plain declaratives with room to inject hesitation 
 punctuation corpus wants **internal** marks, and 37 of `BUILTIN_SAMPLE`'s 91 rows have
 none. Every row of `PUNCTUATION_SAMPLE` carries at least one, most carry several.
 
+#### Running it on the whole corpus
+
+`nyra`'s train split is the large dataset, and `--punctuation-only` keeps ~86% of it — the
+rest are rows whose only mark is their last one, which is not speakable. Set `HF_TOKEN`
+before a load this size or the datasets-server will rate-limit it.
+
+```bash
+# 3442 rows -> 1642 train / 450 optimizer valset / 900 dev / 450 test.
+# Ranking first: 7 instructions x 900 dev + 2 x 450 test, about 7,200 calls.
+uv run evals/dictation-prompt/optimize_cleanup_prompt.py --punctuation-only \
+  --limit 4000 --optimizer none --num-threads 4 --out ranking.json
+
+# Then search from whichever won, without paying for that sweep twice.
+uv run evals/dictation-prompt/optimize_cleanup_prompt.py --punctuation-only \
+  --limit 4000 --start punct-explicit --candidates baseline --auto medium \
+  --num-threads 4 --out search.json
+```
+
+The second command is the one worth understanding. A spoken run scores `BASELINE` plus
+every punctuation candidate by default, which is right once and pure waste afterwards — at
+900 dev rows that sweep is 6,300 calls to re-establish an ordering you already have.
+`--candidates baseline` skips it and `--start NAME` seeds the search from the instruction
+that actually won, so the paid work goes into the search instead of into re-ranking.
+
+Two cheaper shapes, when the full corpus is more than the question needs:
+
+```bash
+# The committed fixture: 80 rows, ~420 calls, no download.
+uv run evals/dictation-prompt/optimize_cleanup_prompt.py \
+  --jsonl evals/dictation-prompt/data/spoken-punctuation.jsonl --optimizer none
+
+# nyra at a resolution that still separates candidates, ~2,500 calls.
+uv run evals/dictation-prompt/optimize_cleanup_prompt.py --punctuation-only \
+  --limit 900 --optimizer none --dev-fraction 300 --test-fraction 200 --num-threads 4
+```
+
 #### The two operators
 
 **Marks** are spoken on the **input side only**, and only where the reference **licenses**
@@ -451,30 +487,30 @@ is `--model`. Its proposal prompts are multi-field, so they keep DSPy's marker p
 
 ## The knobs that matter
 
-| Flag                   | Default                                           | What it changes                                                                                        |
-| ---------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `--source`             | `disfluency-speech`                               | Which corpus to score against — see the table above.                                                   |
-| `--model`              | `openai/qwen3.5-4b-32k-fast`                      | The LiteLLM model standing in for the service's rewrite model.                                         |
-| `--reflection-model`   | `openai/claude-opus-4-8`                          | Writes the instructions during `--optimizer gepa`. Keep it stronger than `--model`.                    |
-| `--api-base`           | the AssemblyAI gateway                            | Endpoint for both models. `""` falls back to the provider's own.                                       |
-| `--metric`             | `blend`, or `format` under `--spoken-punctuation` | `content` (words only), `format` (case and punctuation too), or 0.7/0.3 of both.                       |
-| `--severity`           | `0.35`                                            | 0–1; how often a disfluency is injected. Reference-only sources only.                                  |
-| `--strip-formatting`   | off                                               | Also lowercase and unpunctuate, so restoring formatting is part of the task.                           |
-| `--spoken-punctuation` | `0` (off), or `1.0` under `--punctuation-only`    | Speak this share of the marks the reference licenses. Never the utterance-final one.                   |
-| `--punctuation-only`   | off                                               | Score ONLY the commands: no disfluencies, and a paired source's verbatim side discarded.               |
-| `--spoken-caps-rate`   | `0.25`                                            | Chance a row also gets one ALL CAPS command. Only this operator edits a reference.                     |
-| `--dump-corpus`        | off                                               | Write the loaded corpus to a JSONL file and carry on. Works under `--dry-run`.                         |
-| `--optimizer`          | `gepa`                                            | `none` only ranks the candidates; both optimizers search instructions only.                            |
-| `--start`              | `prior-winner`                                    | Which instruction GEPA evolves from — the compressed prior winner, or the best hand-written candidate. |
-| `--auto`               | `heavy`                                           | Reflection trials: 10 / 18 / 27. The only knob that changes how many ideas get tried.                  |
-| `--split`              | `train`                                           | The sources' own held-out splits are only ~250 rows — too few for the default `--limit`.               |
-| `--limit`              | `2000`                                            | Rows loaded, then sliced 1800 train / 50 dev / 150 test. Train rows cost nothing.                      |
-| `--dev-fraction`       | `150` (rows)                                      | Fraction below 1, absolute count at 1 or above. Decides what ships; the search never sees it.          |
-| `--gepa-valset`        | `50` (rows)                                       | The optimizer's valset, taken off train. Multiplies search cost, adds no exploration.                  |
-| `--test-fraction`      | `150` (rows)                                      | Same convention. Scored twice, and by nothing that makes a selection.                                  |
-| `--num-threads`        | `1`                                               | Serial by default — the gateway rate-limits.                                                           |
-| `--max-tokens`         | `8192`                                            | Headroom for reasoning tokens. Too low silently corrupts a run rather than failing it.                 |
-| `--seed`               | `7`                                               | Seeds injection and the train/dev/test split.                                                          |
+| Flag                   | Default                                           | What it changes                                                                                   |
+| ---------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `--source`             | `disfluency-speech`                               | Which corpus to score against — see the table above.                                              |
+| `--model`              | `openai/qwen3.5-4b-32k-fast`                      | The LiteLLM model standing in for the service's rewrite model.                                    |
+| `--reflection-model`   | `openai/claude-opus-4-8`                          | Writes the instructions during `--optimizer gepa`. Keep it stronger than `--model`.               |
+| `--api-base`           | the AssemblyAI gateway                            | Endpoint for both models. `""` falls back to the provider's own.                                  |
+| `--metric`             | `blend`, or `format` under `--spoken-punctuation` | `content` (words only), `format` (case and punctuation too), or 0.7/0.3 of both.                  |
+| `--severity`           | `0.35`                                            | 0–1; how often a disfluency is injected. Reference-only sources only.                             |
+| `--strip-formatting`   | off                                               | Also lowercase and unpunctuate, so restoring formatting is part of the task.                      |
+| `--spoken-punctuation` | `0` (off), or `1.0` under `--punctuation-only`    | Speak this share of the marks the reference licenses. Never the utterance-final one.              |
+| `--punctuation-only`   | off                                               | Score ONLY the commands: no disfluencies, and a paired source's verbatim side discarded.          |
+| `--spoken-caps-rate`   | `0.25`                                            | Chance a row also gets one ALL CAPS command. Only this operator edits a reference.                |
+| `--dump-corpus`        | off                                               | Write the loaded corpus to a JSONL file and carry on. Works under `--dry-run`.                    |
+| `--optimizer`          | `gepa`                                            | `none` only ranks the candidates; both optimizers search instructions only.                       |
+| `--start`              | `prior-winner`                                    | Which instruction GEPA evolves from — `prior-winner`, `best-candidate`, or any candidate by name. |
+| `--auto`               | `heavy`                                           | Reflection trials: 10 / 18 / 27. The only knob that changes how many ideas get tried.             |
+| `--split`              | `train`                                           | The sources' own held-out splits are only ~250 rows — too few for the default `--limit`.          |
+| `--limit`              | `2000`                                            | Rows loaded, then sliced 1800 train / 50 dev / 150 test. Train rows cost nothing.                 |
+| `--dev-fraction`       | `150` (rows)                                      | Fraction below 1, absolute count at 1 or above. Decides what ships; the search never sees it.     |
+| `--gepa-valset`        | `50` (rows)                                       | The optimizer's valset, taken off train. Multiplies search cost, adds no exploration.             |
+| `--test-fraction`      | `150` (rows)                                      | Same convention. Scored twice, and by nothing that makes a selection.                             |
+| `--num-threads`        | `1`                                               | Serial by default — the gateway rate-limits.                                                      |
+| `--max-tokens`         | `8192`                                            | Headroom for reasoning tokens. Too low silently corrupts a run rather than failing it.            |
+| `--seed`               | `7`                                               | Seeds injection and the train/dev/test split.                                                     |
 
 Both optimizers run with few-shot demos disabled. `config.llm.instruction` is a single string
 the service applies in one pass, so an optimized program that depended on bundled examples
