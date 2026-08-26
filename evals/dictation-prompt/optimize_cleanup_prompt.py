@@ -777,7 +777,24 @@ def main(argv: list[str] | None = None) -> int:
         else:
             seed_name = args.start
         seed_instruction = table[seed_name]
-        seed_scores = dict(dev_rows)[seed_name]
+        scored_on_dev = dict(dev_rows)
+        if seed_name in scored_on_dev:
+            seed_scores = scored_on_dev[seed_name]
+        else:
+            # The resume path: `--candidates baseline --start NAME` deliberately skips the
+            # sweep, so the seed has no dev score yet — and the seed is precisely what the
+            # search's result has to be measured against, since "did evolving this beat
+            # starting from it" is the question. One dev sweep instead of the whole table's.
+            with Progress(len(dev), f"Scoring the seed {seed_name} on dev") as meter:
+                seed_scores = program.evaluate(
+                    program.build(seed_instruction), dev, args.num_threads, on_example=meter.tick
+                )
+            dev_rows.append((seed_name, seed_scores))
+            # Recomputed, because the seed may well beat what the sweep scored: if the
+            # search then fails, the fallback should be the better of the two rather than
+            # whichever happened to be measured first.
+            winner_name, winner_scores = max(dev_rows, key=lambda row: row[1][axis])
+            winner_instruction = table[winner_name]
 
         proposer = program.CappedInstructionProposer(INSTRUCTION_CHARACTER_CAP)
 

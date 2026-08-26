@@ -17,6 +17,7 @@ import json
 import pathlib
 import re
 import sys
+import types
 import urllib.error
 
 import pytest
@@ -2297,6 +2298,76 @@ def test_a_search_can_start_from_a_named_candidate():
     args = cli.parse_args(["--start", "punct-explicit", "--candidates", "baseline"])
     assert args.start == "punct-explicit"
     assert cli.resolve_candidates(args, spoken=True) == [candidates.BASELINE]
+
+
+def _fake_program(scored: list[str], instruction: str = "an evolved instruction"):
+    """A stand-in for `program`, so `main` can be driven end to end with no model.
+
+    Injected into `sys.modules` before `main`'s deferred import fires. That keeps the test
+    suite free of DSPy — the property two other tests here exist to protect — while still
+    exercising the CLI's own control flow, which is where the interesting mistakes are.
+    """
+    module = types.ModuleType("program")
+    axes = dict.fromkeys(metrics.AXES, 0.5)
+    commands = {
+        "commands_converted": 0.5,
+        "commands_literal": 0.25,
+        "commands_missing": 0.25,
+        "commands_total": 4.0,
+    }
+
+    def evaluate(built, rows, threads, on_example=None):
+        scored.append(built)
+        for _ in rows:
+            if on_example:
+                on_example()
+        return axes | commands
+
+    class Proposer:
+        def __init__(self, cap, attempts=5, fields=()):
+            self.cap, self.fields = cap, fields or ("raw_transcript", "cleaned_transcript")
+            self.rejected = self.trimmed = self.abandoned = 0
+
+    class Optimized:
+        signature = types.SimpleNamespace(instructions=instruction)
+
+    module.ModelSpec = lambda **kwargs: types.SimpleNamespace(**kwargs)
+    module.configure = lambda spec: None
+    module.build = lambda text: text
+    module.evaluate = evaluate
+    module.CappedInstructionProposer = Proposer
+    module.optimize = lambda *a, **k: Optimized()
+    return module
+
+
+def test_the_seed_is_scored_on_dev_even_when_the_sweep_skipped_it(monkeypatch):
+    """`--candidates baseline --start NAME` is the resume path, and it used to crash.
+
+    The seed's dev score was read out of the sweep with `dict(dev_rows)[seed_name]`, so
+    skipping the sweep — the entire point of `--candidates baseline` — raised KeyError
+    before the search ever began. The seed is precisely what the result has to be
+    compared against, so it is scored rather than the lookup being made lenient.
+    """
+    scored: list[str] = []
+    monkeypatch.setitem(sys.modules, "program", _fake_program(scored))
+    assert (
+        cli.main(
+            [
+                "--jsonl",
+                str(FROZEN_DATASET),
+                "--candidates",
+                "baseline",
+                "--start",
+                "punct-explicit",
+                "--show-samples",
+                "0",
+            ]
+        )
+        == 0
+    )
+    # The bar and the seed, both on dev — and the seed not skipped.
+    assert candidates.CANDIDATES[candidates.BASELINE] in scored
+    assert candidates.SPOKEN_PUNCTUATION_CANDIDATES["punct-explicit"] in scored
 
 
 def test_an_unknown_start_is_refused_before_anything_is_spent():
