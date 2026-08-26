@@ -124,6 +124,14 @@ class Command:
     anchor: str = ""
     #: Normalized words a casing command uppercases; empty for a mark.
     words: tuple[str, ...] = ()
+    #: The words that close a bracketed command (`caps off`), empty for every other kind.
+    #:
+    #: Held because the closing marker is part of the command's vocabulary and nothing
+    #: else records it: `spoken` is only the opener. Left out, the word "off" sat in the
+    #: input outside `command_words`, so a cleanup that left `caps off` standing was
+    #: charged one ordinary insertion for it instead of `metrics.COMMAND_WEIGHT` — the
+    #: same command, priced two ways depending on which half survived.
+    closing: str = ""
 
     def to_json(self) -> dict:
         """The command as plain JSON, for `corpus.dump_jsonl`.
@@ -138,6 +146,7 @@ class Command:
             "kind": self.kind,
             "anchor": self.anchor,
             "words": list(self.words),
+            "closing": self.closing,
         }
 
     @classmethod
@@ -150,6 +159,7 @@ class Command:
             kind=row["kind"],
             anchor=row.get("anchor", ""),
             words=tuple(row.get("words", ())),
+            closing=row.get("closing", ""),
         )
 
     @property
@@ -165,7 +175,7 @@ class Command:
         not read "question mark" as an abandoned phrase and charge it five errors a word.
         See `metrics._is_abandoned`.
         """
-        return tuple(metrics.normalize_text(self.spoken).split())
+        return tuple(metrics.normalize_text(f"{self.spoken} {self.closing}").split())
 
     @property
     def literal(self) -> tuple[str, ...]:
@@ -175,8 +185,8 @@ class Command:
         (`("all", "caps", "urgent")`), so an instruction that happened to use the word
         elsewhere is not charged for it.
         """
-        spoken = self.spoken_words
-        return (self.anchor, *spoken) if self.kind == "mark" else (*spoken, *self.words)
+        opener = tuple(metrics.normalize_text(self.spoken).split())
+        return (self.anchor, *opener) if self.kind == "mark" else (*opener, *self.words)
 
 
 def _tokens(text: str) -> list[tuple[int, str]]:
@@ -322,6 +332,7 @@ def inject(
     seed: int,
     rate: float = 0.8,
     caps_rate: float = 0.25,
+    require: bool = False,
 ) -> tuple[str, str, tuple[Command, ...]]:
     """Speak some of this pair's punctuation. Returns `(reference, input, commands)`.
 
@@ -334,6 +345,23 @@ def inject(
     `caps_rate` is the chance the pair also gets one casing command — at most one,
     because a user shouting twice in one dictated sentence is not the common case and
     two commands in a 15-word utterance would make the operator most of the corpus.
+
+    The **last token is never spoken**, and that exclusion is most of what makes a command
+    a test of anything. A dictated "period" on the final word asks for a mark the model
+    would produce unprompted — any instruction that says "restore punctuation" ends a
+    sentence with a full stop — so obeying the command and ignoring it look identical, and
+    the row scores the same either way. Those marks were 55% of what the bundled corpus
+    licensed and 37% of nyra's. What survives is discriminative by construction: a
+    mid-utterance terminal mark forces a sentence split *and* the following capital, an
+    internal comma forces a placement inside the clause, and ALL CAPS forces uppercase,
+    which nothing produces by default.
+
+    `require` guarantees at least one command whenever the pair licenses one, by speaking
+    a randomly chosen mark if the per-mark draws happened to select none. For a corpus
+    whose whole subject is punctuation commands, a row carrying none is not a hard example
+    — it is a row measuring nothing, diluting every mean it appears in. Off by default,
+    because on a mixed corpus a row where the speaker punctuated normally is a legitimate
+    negative: the instruction has to leave existing marks alone.
 
     The reference comes back **unchanged** unless a casing command was planted, which is
     the invariant that lets this run over a real paired corpus at all.
@@ -350,17 +378,35 @@ def inject(
     caps = _pick_caps_run(reference, disfluent, rng) if rng.random() < caps_rate else None
     caps_indices = frozenset(caps[1]) if caps else frozenset()
 
+    # Which marks get spoken is settled before anything is emitted, because `require`
+    # is a statement about the row as a whole: "none were selected" is only knowable
+    # once every draw has been made.
+    tokens = disfluent.split()
+    convertible = [
+        index
+        for index, raw in enumerate(tokens)
+        if index not in caps_indices
+        and index != len(tokens) - 1
+        and (split := _split_mark(raw))
+        and (metrics.normalize_text(split[0]), split[1]) in licensed
+    ]
+    speaking = {index for index in convertible if rng.random() < rate}
+    if require and convertible and not speaking:
+        speaking = {rng.choice(convertible)}
+
     out: list[str] = []
     lowercase_next = False
-    for index, raw in enumerate(disfluent.split()):
+    for index, raw in enumerate(tokens):
         if caps and index == caps[1][0]:
-            out.append(CAPS_WORD if len(caps[2]) == 1 else CAPS_ON)
+            bracketed = len(caps[2]) > 1
+            out.append(CAPS_ON if bracketed else CAPS_WORD)
             commands.append(
                 Command(
-                    spoken=CAPS_WORD if len(caps[2]) == 1 else CAPS_ON,
+                    spoken=CAPS_ON if bracketed else CAPS_WORD,
                     mark="",
                     kind="caps",
                     words=caps[2],
+                    closing=CAPS_OFF if bracketed else "",
                 )
             )
 
@@ -377,12 +423,10 @@ def inject(
         # guaranteed cannot apply to these tokens.
         if index in caps_indices:
             out.append(token.lower())
-        elif (
-            (split := _split_mark(token))
-            and (metrics.normalize_text(split[0]), split[1]) in licensed
-            and rng.random() < rate
-        ):
-            stem, mark = split
+        elif index in speaking:
+            # `convertible` already checked the shape and the licence; the only thing
+            # that can have changed `token` since is a leading capital.
+            stem, mark = token[:-1], token[-1]
             spoken = _speak(mark, rng)
             out.extend((stem, spoken))
             commands.append(
@@ -457,6 +501,53 @@ def outcome(command: Command, hypothesis: str) -> str:
         if all(stem and stem.isupper() for stem in stems):
             return "converted"
     return "missing"
+
+
+def undo(command: Command, reference: str) -> str:
+    """The reference with this one command's effect taken back out.
+
+    The mark it produced is removed and the capital that followed it lowered; a casing
+    command's run is lowercased. What is left is the text a cleanup would emit if it had
+    dropped the command silently — the honest comparison for asking what obeying it buys.
+    """
+    tokens = reference.split()
+    if command.kind == "mark":
+        for i, raw in enumerate(tokens):
+            if raw.endswith(command.mark) and metrics.normalize_text(raw[:-1]) == command.anchor:
+                tokens[i] = raw[:-1]
+                if command.mark in TERMINAL_MARKS and i + 1 < len(tokens):
+                    following = tokens[i + 1]
+                    if not _keeps_its_capital(following):
+                        tokens[i + 1] = following[:1].lower() + following[1:]
+                break
+        return " ".join(tokens)
+
+    words = [w for _, w in _tokens(reference)]
+    index = [i for i, _ in _tokens(reference)]
+    span = len(command.words)
+    for k in range(len(words) - span + 1):
+        if tuple(words[k : k + span]) == command.words:
+            for j in index[k : k + span]:
+                tokens[j] = tokens[j].lower()
+            break
+    return " ".join(tokens)
+
+
+def effect(command: Command, reference: str) -> int:
+    """Format tokens that obeying `command` fixes — how much getting it right is worth.
+
+    The marginal value of this one command: the reference against the reference with only
+    this command's effect undone. Zero would mean the command is decoration — the same
+    output scores the same whether the model understood it or not — and a corpus of those
+    measures nothing however many rows it has.
+
+    Nothing here can be zero, which is what the exclusions in `inject` buy: a
+    mid-utterance terminal mark is worth 2 (the mark, and the capital behind it), an
+    internal mark 1, and a casing command one per word. It is checked rather than filtered
+    on for that reason — a zero means an invariant broke, not that the row is unusable.
+    """
+    diff = metrics.align(metrics.surface(reference), metrics.surface(undo(command, reference)))
+    return diff.substitutions + diff.deletions + diff.insertions
 
 
 def tally(pairs) -> dict[str, float]:

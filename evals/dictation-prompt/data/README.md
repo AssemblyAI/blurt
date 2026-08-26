@@ -2,10 +2,10 @@
 
 ## `spoken-punctuation.jsonl`
 
-91 dictated utterances that speak their own punctuation — `period`, `comma`,
-`question mark`, `all caps` — on top of injected disfluency. The input side is what a
-speech-to-text pass would hand the rewrite model; the `reference` is what the speaker
-meant to write.
+80 dictated utterances that speak their own punctuation — `period`, `comma`,
+`question mark`, `all caps` — and **nothing else**. The input differs from the target by
+the commands alone: no disfluencies are injected, so no score here can be moved by
+anything but the punctuation task.
 
 ```json
 {
@@ -37,6 +37,11 @@ meant to write.
 }
 ```
 
+Every command is guaranteed to change something: a mid-utterance terminal mark forces the
+mark _and_ the capital behind it, an internal comma forces a placement, and ALL CAPS forces
+uppercase. A mark on the final word is never spoken, because that is the one an instruction
+would produce unprompted.
+
 `commands` records what was planted, which is the only reason the run can report how many
 commands were **obeyed** rather than just how close the text came. `--jsonl` reads it back
 exactly — see `corpus._utterances_from_jsonl` — so scoring this file is scoring the corpus
@@ -46,7 +51,7 @@ it was generated from, not an approximation of it.
 
 ```bash
 python3 evals/dictation-prompt/optimize_cleanup_prompt.py \
-  --source builtin --limit 200 --spoken-punctuation 0.8 --severity 0.35 --seed 7 \
+  --source punctuation --punctuation-only --limit 200 --spoken-caps-rate 0.35 --seed 7 \
   --dump-corpus evals/dictation-prompt/data/spoken-punctuation.jsonl \
   --dry-run --show-samples 0
 ```
@@ -64,15 +69,15 @@ LDC-licensed transcripts, and `corpus.BUILTIN_SAMPLE` exists precisely so the of
 carries no third-party licensing. Dump it locally if you want it frozen:
 
 ```bash
-python3 evals/dictation-prompt/optimize_cleanup_prompt.py --spoken-punctuation 0.8 \
-  --limit 4000 --dump-corpus /tmp/nyra-spoken.jsonl --dry-run --show-samples 0
+python3 evals/dictation-prompt/optimize_cleanup_prompt.py --punctuation-only \
+  --limit 4000 --dump-corpus /tmp/nyra-punctuation.jsonl --dry-run --show-samples 0
 ```
 
-So read this file as a **fixture**, not a benchmark. 91 rows split into 60 dev / 30 test is
+So read this file as a **fixture**, not a benchmark. 80 rows split into 53 dev / 26 test is
 far below the resolution the parent README argues for — differences between good
-instructions on this task are a few hundredths, and 30 test rows cannot see them. What it
+instructions on this task are a few hundredths, and 26 test rows cannot see them. What it
 is good for: reading the examples, reviewing a diff when an injector changes, and the one
-thing `nyra` genuinely cannot do — **literal-use traps**. 12% of these references use a
+thing `nyra` genuinely cannot do — **literal-use traps**. 14% of these references use a
 command word as ordinary content ("one grace period, so plan accordingly", "add a comma
 after the second clause"), against ~0–1% of `nyra`'s, so this is the only corpus here that
 can charge an instruction for converting a word the speaker meant literally.

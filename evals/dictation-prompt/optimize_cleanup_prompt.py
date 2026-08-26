@@ -138,11 +138,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     data.add_argument(
         "--source",
         default="nyra",
-        choices=(*corpus.SOURCES, "builtin"),
+        choices=(*corpus.SOURCES, "builtin", "punctuation"),
         help="which corpus to score against (default: nyra, the same hand-annotated "
         "Switchboard pairs with casing repaired, so the formatting axis is live and "
         "--metric blend scores two axes instead of degrading to content). builtin is a "
-        "bundled sample made disfluent by the injector, for the offline path",
+        "bundled sample made disfluent by the injector, for the offline path. punctuation is "
+        "a second bundled sample written for --punctuation-only: every row carries an "
+        "internal mark, because a dictated mark on the last word is one any instruction "
+        "would produce unprompted",
     )
     data.add_argument(
         "--limit",
@@ -184,11 +187,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     spoken.add_argument(
         "--spoken-punctuation",
         type=float,
-        default=0.0,
+        default=None,
         metavar="RATE",
         help="0..1; speak this share of the punctuation the reference licenses, turning "
         'each mark into the words a dictation user says out loud ("comma", "question '
-        'mark", "all caps"). 0 (default) is off. Unlike --severity this applies to a '
+        'mark", "all caps"). Defaults to 0 — off — or to 1.0 under --punctuation-only. Unlike --severity this applies to a '
         "PAIRED source too: the marks come from the corpus's own clean side, so the "
         "disfluencies stay the ones annotators marked by hand and only the punctuation "
         "task is synthetic. Below 1 on purpose — a corpus with no real marks left in the "
@@ -203,6 +206,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "one per row — two in a 15-word utterance would make the operator most of the "
         "corpus. Only this operator edits the reference, because a target with no "
         "uppercase in it cannot pose the task. Ignored unless --spoken-punctuation is on",
+    )
+    spoken.add_argument(
+        "--punctuation-only",
+        action="store_true",
+        help="score ONLY the punctuation commands. The input then differs from the target "
+        "by nothing but the commands: no disfluencies are injected, and a paired source's "
+        "verbatim side is discarded in favour of its clean one, so nothing a cleanup does "
+        "about hesitation can move the number. Every row is guaranteed at least one "
+        "command and rows the injector cannot plant one in are dropped. Implies "
+        "--spoken-punctuation 1.0 unless you pass a rate; the utterance-final mark is "
+        "never spoken even then, so each row still contains real punctuation the "
+        "instruction has to leave alone",
     )
 
     evaluation = parser.add_argument_group("evaluation")
@@ -406,7 +421,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "LDC-licensed Switchboard transcripts and should stay out of version control",
     )
     parser.add_argument("--out", default=None, help="write the full results as JSON to this path")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    # `--punctuation-only` without a rate would load a corpus with no commands in it,
+    # which is the opposite of what it asks for. Resolved here rather than in `main` so
+    # anything reading `parse_args` sees the same coupling.
+    if args.spoken_punctuation is None:
+        args.spoken_punctuation = 1.0 if args.punctuation_only else 0.0
+    return args
 
 
 #: Axis each corpus shape selects on when `--metric` is not given.
@@ -632,6 +653,7 @@ def main(argv: list[str] | None = None) -> int:
         strip_formatting=args.strip_formatting,
         spoken_punctuation_rate=args.spoken_punctuation,
         spoken_caps_rate=args.spoken_caps_rate,
+        punctuation_only=args.punctuation_only,
     )
     print(f"Loaded {len(loaded)} pairs from {loaded.source}: {loaded.detail}")
     print(f"{loaded.disfluent_fraction:.0%} of pairs differ from their target")

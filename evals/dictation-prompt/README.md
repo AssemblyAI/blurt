@@ -23,7 +23,8 @@ ones we thought to write down.
 | `--source`       | What it is                                                                                                                                                                                                                        | Measures         |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
 | `nyra` (default) | [`nyralabs/disfluency_speech_english`][nyra] — ~5k Switchboard utterances whose disfluencies trained annotators marked **by hand**, repackaged with casing repaired so the formatting axis is live. Costs some fidelity for that. | content + format |
-| `builtin`        | 91 bundled sentences plus injection. No network, no key. The only corpus that can be committed, and the only one with literal-use traps.                                                                                          | content + format |
+| `builtin`        | 91 bundled sentences plus disfluency injection. No network, no key — the offline smoke path.                                                                                                                                      | content + format |
+| `punctuation`    | 80 bundled sentences written for `--punctuation-only`: every row carries an internal mark. Committable, and the only source with literal-use traps.                                                                               | format           |
 
 `--jsonl` reads a local file instead: objects with both `disfluent` and `reference` are used
 as-is; anything with only a reference goes through the injector.
@@ -62,39 +63,65 @@ It does not pose punctuation _restoration_, since both sides are already punctua
 ### Spoken punctuation — "period, comma, question mark, ALL CAPS"
 
 A dictation user who wants a comma often _says_ "comma", and the transcript comes back
-with the word in it. `--spoken-punctuation RATE` poses that task, on top of whatever the
-input side already is:
+with the word in it. `--spoken-punctuation RATE` poses that task; `--punctuation-only`
+poses **nothing else**.
 
 ```bash
-# Rank the punctuation instructions against the shipped one. No search, ~5 candidates.
+# The focused run: the input differs from the target by nothing but the commands.
 uv run evals/dictation-prompt/optimize_cleanup_prompt.py \
-  --spoken-punctuation 0.8 --optimizer none --limit 600
+  --source punctuation --punctuation-only --optimizer none
 
-# Then search from the best of them.
-uv run evals/dictation-prompt/optimize_cleanup_prompt.py \
-  --spoken-punctuation 0.8 --start best-candidate
+# The same task layered on top of real annotated disfluency, for the mixed question.
+uv run evals/dictation-prompt/optimize_cleanup_prompt.py --spoken-punctuation 0.8
 ```
 
-Unlike `--severity`, this applies to a **paired** source too, and that is the point: the
-disfluencies stay the ones annotators marked by hand and only the punctuation is
-synthetic. A row comes out carrying both, which is the task a real user poses —
+`--punctuation-only` makes every source reference-only: no disfluencies are injected, and
+a paired source's **verbatim side is discarded** in favour of its clean one. So on `nyra`
+it scores against the intended transcripts — real conversational English — and nothing a
+cleanup does about hesitation can move the number. Every row is guaranteed at least one
+command, rows the injector cannot plant one in are dropped, and the rate defaults to 1.0.
+Stated on the alignment, and pinned by a test: on the content axis the input is the target
+plus command words, with **no word substituted and none dropped**.
 
 ```
-input : Um we shipped it today period monday was really, quiet comma so nobody noticed period
-target: We shipped it today. Monday was quiet, so nobody noticed.
+input : I read the whole thread period nobody actually answered the caps on question that caps off was asked.
+target: I read the whole thread. Nobody actually answered the QUESTION THAT was asked.
 ```
 
-Two operators, and only one of them touches a target:
+#### A command has to actually do something
 
-**Marks** are spoken on the **input side only**, and only where the reference
-**licenses** them — the same word carries the same mark in the target. So the correct
-answer never stops being the corpus's own target, and the target is not edited at all.
-A mark the reference lacks is never spoken: `really,` above stays a comma, because the
-annotator deleted the span it introduced, and asking for a mark that would then be
-scored as an error teaches an instruction that commands are sometimes to be ignored.
-`.` `,` `?` `!` `:` `;` are all in the vocabulary with their common aliases (`period` /
-`full stop`); on `nyra` only the first three ever fire, because its references contain
-483 periods, 460 commas, 43 question marks and none of the other three.
+**The utterance-final mark is never spoken.** A dictated "period" on the last word asks
+for a mark any instruction produces unprompted — every candidate here says "restore
+punctuation" — so obeying that command and ignoring it score identically, and the row is
+padding. Those marks were **55%** of everything `BUILTIN_SAMPLE` licensed and 37% of
+`nyra`'s.
+
+What survives is discriminative by construction, and
+`spoken_punctuation.effect` prices it — the reference against the reference with that one
+command's effect undone:
+
+| what is spoken                            |  worth | what obeying it forces                        |
+| ----------------------------------------- | -----: | --------------------------------------------- |
+| a **mid-utterance terminal mark**         |      2 | the mark, and the capital behind it           |
+| an **internal comma, colon or semicolon** |      1 | a placement inside the clause                 |
+| **ALL CAPS**                              | 1/word | uppercase, which nothing produces by accident |
+
+Nothing can be worth 0, and a test asserts it over the whole corpus rather than filtering
+on it: a zero means an invariant broke, not that the row is unusable.
+
+That exclusion is why `--source punctuation` exists as a second bundled sample. A
+disfluency smoke corpus wants plain declaratives with room to inject hesitation into; a
+punctuation corpus wants **internal** marks, and 37 of `BUILTIN_SAMPLE`'s 91 rows have
+none. Every row of `PUNCTUATION_SAMPLE` carries at least one, most carry several.
+
+#### The two operators
+
+**Marks** are spoken on the **input side only**, and only where the reference **licenses**
+them — the same word carries the same mark in the target. So the correct answer never
+stops being the corpus's own target, and the target is not edited at all. A mark the
+reference lacks is never spoken: asking for one that would then be scored as an error
+teaches an instruction that commands are sometimes to be ignored. `.` `,` `?` `!` `:` `;`
+are all in the vocabulary with their common aliases (`period` / `full stop`).
 
 **ALL CAPS** is the exception, and the only place in the harness that edits a reference.
 You cannot pose "uppercase this word" against a target with no uppercase in it, so the
@@ -106,19 +133,24 @@ The word after a spoken sentence-ending mark is **lowercased**, which is what ma
 task a task: leave the capital in and an instruction can restore the period from the
 casing alone. Proper nouns are lowercased along with everything else — that word is
 sentence-initial in the reference by construction, so `Monday` and `today` ask for the
-same rule and the same answer, and protecting names would have handed the answer to 30%
-of the commands (the share whose following word appears capitalized mid-sentence
-somewhere in `nyra`). The pronoun _I_ is the one exception: it is capitalized
-mid-sentence too, so `politics full stop i'm not sure` is a transcript no service
-returns and would show the model one token cased two ways in one utterance.
+same rule and the same answer, and protecting names would have handed the answer to 30% of
+the commands. The pronoun _I_ is the one exception: it is capitalized mid-sentence too, so
+`politics full stop i'm not sure` is a transcript no service returns.
 
-**It selects on `format` by default**, not `blend`. `metrics.normalize` casefolds and
-strips punctuation, so a restored comma and a missed one are the same string to the
-content axis and an ALL CAPS command is invisible to it. `format` sees the whole task —
-and still sees the expensive failure, a command left in the output as a literal word,
-because that is an inserted token on either axis.
+#### What it selects on
 
-Alongside the axes the run reports what became of the commands themselves:
+**`format`, not `blend`.** `metrics.normalize` casefolds and strips punctuation, so a
+restored comma and a missed one are the same string to the content axis and an ALL CAPS
+command is invisible to it. On a `--punctuation-only` corpus that is not a compromise:
+since the input differs from the target by nothing but the commands, every error the
+format axis can charge is either a command failure or collateral damage to text the
+instruction was told to leave alone. Both belong in the objective.
+
+Which is also why the selecting axis is **not** the raw conversion rate. "Fraction of
+commands obeyed" is the number this task is named for, and it is blind to the damage done
+in getting there: an instruction that converts every command and deletes half the sentence
+scores 1.0 on it. GEPA would find that. So conversion rate is **reported** and WER
+**selects**.
 
 | column          | what it means                                             |
 | --------------- | --------------------------------------------------------- |
@@ -143,9 +175,9 @@ injector. Reproducible in principle; unreviewable in practice — nobody reads a
 find out whether the examples are any good, and a change to an injector silently changes
 what every past number was measured on. A file in the tree is diffable.
 
-[`data/spoken-punctuation.jsonl`](./data/spoken-punctuation.jsonl) is that file: 91 rows
-generated from `--source builtin`, whose sentences are written for this repo and so carry
-no third-party terms. `nyra` derives from LDC-licensed Switchboard transcripts and is
+[`data/spoken-punctuation.jsonl`](./data/spoken-punctuation.jsonl) is that file: 80
+`--punctuation-only` rows generated from `--source punctuation`, whose sentences are
+written for this repo and so carry no third-party terms. `nyra` derives from LDC-licensed Switchboard transcripts and is
 deliberately **not** committed — dump it locally if you want it frozen. `test_eval.py`
 regenerates the committed file and asserts it is byte-identical, so an injector change
 fails the suite instead of leaving a stale dataset in the tree.
@@ -155,9 +187,9 @@ Everything downstream keys off **what the corpus contains, not what flags were p
 that, reading the saved dataset back selected on `blend` and printed no command outcomes:
 the same corpus scored two different ways depending on how it was reached.
 
-Read the committed file as a **fixture**, not a benchmark. 60 dev / 30 test rows is far
+Read the committed file as a **fixture**, not a benchmark. 53 dev / 26 test rows is far
 below the resolution this README argues for everywhere else. What it is uniquely good for
-is the one thing `nyra` cannot do: **12% of its references use a command word as ordinary
+is the one thing `nyra` cannot do: **14% of its references use a command word as ordinary
 content** ("one grace period, so plan accordingly", "add a comma after the second
 clause"), against ~0-1% of `nyra`'s. It is the only corpus here that can charge an
 instruction for converting a word the speaker meant literally — and those rows compose
@@ -197,7 +229,7 @@ Three things this cannot tell you, all of them reported rather than assumed away
   has to clear is the best of the punctuation candidates on dev, which is what
   `--start best-candidate` seeds from.
 
-A spoken-punctuation run scores **`BASELINE` plus the four punctuation candidates**, not
+A spoken-punctuation run scores **`BASELINE` plus the six punctuation candidates**, not
 the whole table. `BASELINE` alone is not enough — a search seeded from an instruction that
 has never heard of the task starts outside the region worth exploring — but the six terse
 contrast instructions are worse than useless here: they exist to rank framings of
@@ -212,6 +244,12 @@ possible change to what Blurt ships: `PRIOR_WINNER` plus `SPOKEN_PUNCTUATION_CLA
 2006 of the 2048 characters. That leaves 42 characters of headroom, so GEPA cannot grow
 from it — `punct-explicit` at 1430 is the searchable seed. Which one wins on dev and
 which one a search can improve are different questions.
+
+`punct-mapping` and `punct-literal-guard` carry **no disfluency rules at all**, which
+matters on a `--punctuation-only` corpus: there are no disfluencies to remove there, so
+every deletion those rules invite is damage to text the instruction was told to leave
+alone. Whether carrying them costs anything measurable is one of the things the run
+answers, which is why the composites stay in the table rather than being swapped out.
 
 [nyra]: https://huggingface.co/datasets/nyralabs/disfluency_speech_english
 [ds]: https://huggingface.co/datasets/amaai-lab/DisfluencySpeech
@@ -413,29 +451,30 @@ is `--model`. Its proposal prompts are multi-field, so they keep DSPy's marker p
 
 ## The knobs that matter
 
-| Flag                   | Default                                           | What it changes                                                                                           |
-| ---------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `--source`             | `disfluency-speech`                               | Which corpus to score against — see the table above.                                                      |
-| `--model`              | `openai/qwen3.5-4b-32k-fast`                      | The LiteLLM model standing in for the service's rewrite model.                                            |
-| `--reflection-model`   | `openai/claude-opus-4-8`                          | Writes the instructions during `--optimizer gepa`. Keep it stronger than `--model`.                       |
-| `--api-base`           | the AssemblyAI gateway                            | Endpoint for both models. `""` falls back to the provider's own.                                          |
-| `--metric`             | `blend`, or `format` under `--spoken-punctuation` | `content` (words only), `format` (case and punctuation too), or 0.7/0.3 of both.                          |
-| `--severity`           | `0.35`                                            | 0–1; how often a disfluency is injected. Reference-only sources only.                                     |
-| `--strip-formatting`   | off                                               | Also lowercase and unpunctuate, so restoring formatting is part of the task.                              |
-| `--spoken-punctuation` | `0` (off)                                         | Speak this share of the marks the reference licenses. Applies to paired sources too; selects on `format`. |
-| `--spoken-caps-rate`   | `0.25`                                            | Chance a row also gets one ALL CAPS command. Only this operator edits a reference.                        |
-| `--dump-corpus`        | off                                               | Write the loaded corpus to a JSONL file and carry on. Works under `--dry-run`.                            |
-| `--optimizer`          | `gepa`                                            | `none` only ranks the candidates; both optimizers search instructions only.                               |
-| `--start`              | `prior-winner`                                    | Which instruction GEPA evolves from — the compressed prior winner, or the best hand-written candidate.    |
-| `--auto`               | `heavy`                                           | Reflection trials: 10 / 18 / 27. The only knob that changes how many ideas get tried.                     |
-| `--split`              | `train`                                           | The sources' own held-out splits are only ~250 rows — too few for the default `--limit`.                  |
-| `--limit`              | `2000`                                            | Rows loaded, then sliced 1800 train / 50 dev / 150 test. Train rows cost nothing.                         |
-| `--dev-fraction`       | `150` (rows)                                      | Fraction below 1, absolute count at 1 or above. Decides what ships; the search never sees it.             |
-| `--gepa-valset`        | `50` (rows)                                       | The optimizer's valset, taken off train. Multiplies search cost, adds no exploration.                     |
-| `--test-fraction`      | `150` (rows)                                      | Same convention. Scored twice, and by nothing that makes a selection.                                     |
-| `--num-threads`        | `1`                                               | Serial by default — the gateway rate-limits.                                                              |
-| `--max-tokens`         | `8192`                                            | Headroom for reasoning tokens. Too low silently corrupts a run rather than failing it.                    |
-| `--seed`               | `7`                                               | Seeds injection and the train/dev/test split.                                                             |
+| Flag                   | Default                                           | What it changes                                                                                        |
+| ---------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `--source`             | `disfluency-speech`                               | Which corpus to score against — see the table above.                                                   |
+| `--model`              | `openai/qwen3.5-4b-32k-fast`                      | The LiteLLM model standing in for the service's rewrite model.                                         |
+| `--reflection-model`   | `openai/claude-opus-4-8`                          | Writes the instructions during `--optimizer gepa`. Keep it stronger than `--model`.                    |
+| `--api-base`           | the AssemblyAI gateway                            | Endpoint for both models. `""` falls back to the provider's own.                                       |
+| `--metric`             | `blend`, or `format` under `--spoken-punctuation` | `content` (words only), `format` (case and punctuation too), or 0.7/0.3 of both.                       |
+| `--severity`           | `0.35`                                            | 0–1; how often a disfluency is injected. Reference-only sources only.                                  |
+| `--strip-formatting`   | off                                               | Also lowercase and unpunctuate, so restoring formatting is part of the task.                           |
+| `--spoken-punctuation` | `0` (off), or `1.0` under `--punctuation-only`    | Speak this share of the marks the reference licenses. Never the utterance-final one.                   |
+| `--punctuation-only`   | off                                               | Score ONLY the commands: no disfluencies, and a paired source's verbatim side discarded.               |
+| `--spoken-caps-rate`   | `0.25`                                            | Chance a row also gets one ALL CAPS command. Only this operator edits a reference.                     |
+| `--dump-corpus`        | off                                               | Write the loaded corpus to a JSONL file and carry on. Works under `--dry-run`.                         |
+| `--optimizer`          | `gepa`                                            | `none` only ranks the candidates; both optimizers search instructions only.                            |
+| `--start`              | `prior-winner`                                    | Which instruction GEPA evolves from — the compressed prior winner, or the best hand-written candidate. |
+| `--auto`               | `heavy`                                           | Reflection trials: 10 / 18 / 27. The only knob that changes how many ideas get tried.                  |
+| `--split`              | `train`                                           | The sources' own held-out splits are only ~250 rows — too few for the default `--limit`.               |
+| `--limit`              | `2000`                                            | Rows loaded, then sliced 1800 train / 50 dev / 150 test. Train rows cost nothing.                      |
+| `--dev-fraction`       | `150` (rows)                                      | Fraction below 1, absolute count at 1 or above. Decides what ships; the search never sees it.          |
+| `--gepa-valset`        | `50` (rows)                                       | The optimizer's valset, taken off train. Multiplies search cost, adds no exploration.                  |
+| `--test-fraction`      | `150` (rows)                                      | Same convention. Scored twice, and by nothing that makes a selection.                                  |
+| `--num-threads`        | `1`                                               | Serial by default — the gateway rate-limits.                                                           |
+| `--max-tokens`         | `8192`                                            | Headroom for reasoning tokens. Too low silently corrupts a run rather than failing it.                 |
+| `--seed`               | `7`                                               | Seeds injection and the train/dev/test split.                                                          |
 
 Both optimizers run with few-shot demos disabled. `config.llm.instruction` is a single string
 the service applies in one pass, so an optimized program that depended on bundled examples

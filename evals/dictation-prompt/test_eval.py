@@ -1463,6 +1463,22 @@ def spoken_pair(**kwargs):
     return spoken_punctuation.inject(SPOKEN_REFERENCE, SPOKEN_DISFLUENT, **kwargs)
 
 
+# A pair whose one convertible mark is internal, so exactly one command is planted and the
+# spoken side doubles as the "left the command in" hypothesis. Single-sentence fixtures no
+# longer work here: `inject` will not speak an utterance-final mark, because that is the
+# one mark any instruction produces unprompted.
+ONE_COMMAND_TEXT = "Is it ready? Let me know either way."
+
+
+def one_command(text: str = ONE_COMMAND_TEXT):
+    """`(reference, spoken input, the single command)`."""
+    reference, spoken, commands = spoken_punctuation.inject(
+        text, text, seed=1, rate=1.0, caps_rate=0.0
+    )
+    (command,) = commands
+    return reference, spoken, command
+
+
 def test_a_perfect_cleanup_is_still_the_reference_exactly():
     """The invariant the whole module rests on: the planted task is achievable.
 
@@ -1521,7 +1537,9 @@ def test_a_spoken_terminal_mark_takes_its_sentence_capital_with_it():
     )
     assert "today period nobody" in disfluent
     assert reference == "We shipped it today. Nobody noticed."
-    assert [c.mark for c in commands] == [".", "."]
+    # One command, not two: the second period ends the utterance and is left alone.
+    assert [c.mark for c in commands] == ["."]
+    assert disfluent.endswith("noticed.")
 
 
 def test_a_name_after_a_spoken_mark_is_lowercased_like_any_other_word():
@@ -1535,7 +1553,8 @@ def test_a_name_after_a_spoken_mark_is_lowercased_like_any_other_word():
     following word appears capitalized mid-sentence somewhere in the corpus.
     """
     _, disfluent, _ = spoken_pair(seed=5, rate=1.0, caps_rate=0.0)
-    assert "today period monday" in disfluent
+    assert "monday" in disfluent.split()
+    assert "Monday" not in disfluent
     # And the target still asks for the capital, so nothing about the task got easier.
     assert "today. Monday" in SPOKEN_REFERENCE
 
@@ -1620,12 +1639,9 @@ def test_a_leftover_command_word_costs_its_own_weight():
     """
     # Long enough that the charge stays inside WER 1, where `1 - WER` is linear and the
     # error count can be read back off the score. Past that `from_error_rate` decays.
-    clean = "Can you send me the numbers before the review meeting tomorrow?"
-    reference, disfluent, (command,) = spoken_punctuation.inject(
-        clean, clean, seed=1, rate=1.0, caps_rate=0.0
-    )
+    reference, spoken, command = one_command()
     words = frozenset(command.spoken_words)
-    left_in = metrics.score(reference, clean[:-1] + " question mark", disfluent, words)
+    left_in = metrics.score(reference, spoken, spoken, words)
     charged = (1.0 - left_in.content) * left_in.content_alignment.reference_length
     assert charged == pytest.approx(metrics.COMMAND_WEIGHT * len(command.spoken_words))
     assert left_in.uncorrected_commands == ("mark", "question")
@@ -1637,12 +1653,10 @@ def test_leaving_a_command_in_is_clearly_worse_than_dropping_it():
     `Is it ready` for `Is it ready?` is a missing mark. `Is it ready question mark` puts
     two words in the reader's document that the speaker never meant to write.
     """
-    reference, disfluent, (command,) = spoken_punctuation.inject(
-        "Is it ready?", "is it ready?", seed=1, rate=1.0, caps_rate=0.0
-    )
+    reference, spoken, command = one_command()
     words = frozenset(command.spoken_words)
-    dropped = metrics.score(reference, "Is it ready", disfluent, words)
-    left_in = metrics.score(reference, "Is it ready question mark", disfluent, words)
+    dropped = metrics.score(reference, spoken_punctuation.undo(command, reference), spoken, words)
+    left_in = metrics.score(reference, spoken, spoken, words)
     assert left_in.format < dropped.format
     lost = dropped.format - left_in.format
     assert lost > (1.0 - dropped.format), "leaving it in must cost more than the mark alone"
@@ -1680,12 +1694,10 @@ def test_the_command_weight_is_neutral_on_a_corpus_that_plants_nothing():
 def test_feedback_names_a_leftover_command_apart_from_a_disfluency_and_says_what_it_cost():
     """Calling "comma" a disfluency points the reflector at the wrong rule: it is not a
     hesitation the speaker made, it is an instruction they gave."""
-    reference, disfluent, (command,) = spoken_punctuation.inject(
-        "Is it ready?", "um is it ready?", seed=1, rate=1.0, caps_rate=0.0
-    )
+    reference, spoken, command = one_command()
     words = frozenset(command.spoken_words)
-    scored = metrics.score(reference, "Um is it ready question mark", disfluent, words)
-    text = metrics.feedback(reference, disfluent, scored)
+    scored = metrics.score(reference, "Um " + spoken, "um " + spoken, words)
+    text = metrics.feedback(reference, "um " + spoken, scored)
     assert "dictated punctuation commands" in text
     assert f"{metrics.COMMAND_WEIGHT:g} errors" in text
     # The filler was in the input, so it is a leftover — reported, and separately.
@@ -1699,15 +1711,12 @@ def test_the_note_and_the_feedback_do_not_both_report_a_leftover_command():
     without its cost is half a fact. The note owns what metrics cannot see: a command
     whose words are gone and whose mark never appeared.
     """
-    reference, disfluent, (command,) = spoken_punctuation.inject(
-        "Is it ready?", "is it ready?", seed=1, rate=1.0, caps_rate=0.0
-    )
-    hypothesis = "Is it ready question mark"
-    note = spoken_punctuation.feedback_note((command,), hypothesis)
-    assert note == ""
-    assert "left in" not in note
+    reference, spoken, command = one_command()
+    assert spoken_punctuation.feedback_note((command,), spoken) == ""
     # Dropped, on the other hand, is invisible to metrics on the content axis.
-    dropped = spoken_punctuation.feedback_note((command,), "Is it ready")
+    dropped = spoken_punctuation.feedback_note(
+        (command,), spoken_punctuation.undo(command, reference)
+    )
     assert "did not carry out" in dropped
 
 
@@ -1722,13 +1731,11 @@ def test_the_exemption_is_neutral_on_a_corpus_that_plants_nothing():
 
 def test_the_utterance_hands_its_own_planted_commands_to_the_scorer():
     """`Utterance.scored` is the one place that knows both sides and what was planted."""
-    reference, disfluent, commands = spoken_punctuation.inject(
-        "Is it ready?", "is it ready?", seed=1, rate=1.0, caps_rate=0.0
-    )
-    utterance = corpus.Utterance(reference=reference, disfluent=disfluent, commands=commands)
+    reference, spoken, command = one_command()
+    utterance = corpus.Utterance(reference=reference, disfluent=spoken, commands=(command,))
     assert utterance.command_words == frozenset({"question", "mark"})
-    assert utterance.scored(disfluent) == metrics.score(
-        reference, disfluent, disfluent, utterance.command_words
+    assert utterance.scored(spoken) == metrics.score(
+        reference, spoken, spoken, utterance.command_words
     )
 
 
@@ -1742,31 +1749,27 @@ def test_the_reported_false_start_fraction_is_the_charged_one():
 
 
 def test_a_command_left_in_is_told_apart_from_a_command_dropped():
-    reference, disfluent, commands = spoken_punctuation.inject(
-        "Is it ready?", "is it ready?", seed=1, rate=1.0, caps_rate=0.0
+    reference, spoken, command = one_command()
+    assert spoken_punctuation.outcome(command, reference) == "converted"
+    assert spoken_punctuation.outcome(command, spoken) == "literal"
+    assert (
+        spoken_punctuation.outcome(command, spoken_punctuation.undo(command, reference))
+        == "missing"
     )
-    (command,) = commands
-    assert spoken_punctuation.outcome(command, "Is it ready?") == "converted"
-    assert spoken_punctuation.outcome(command, "Is it ready question mark") == "literal"
-    assert spoken_punctuation.outcome(command, "Is it ready") == "missing"
 
 
 def test_conversion_is_credited_on_the_anchor_not_on_any_mark_anywhere():
     """Otherwise punctuating something else entirely reads as obeying the command."""
-    _, _, (command,) = spoken_punctuation.inject(
-        "Is it ready?", "is it ready?", seed=1, rate=1.0, caps_rate=0.0
-    )
-    assert spoken_punctuation.outcome(command, "Is it? ready") == "missing"
+    _, _, command = one_command()
+    assert spoken_punctuation.outcome(command, "Is it? ready let me know either way") == "missing"
 
 
 def test_the_literal_match_is_anchored_so_an_ordinary_word_is_not_charged():
     """ "the Cretaceous period was long" is content, not a command left in."""
-    _, _, (command,) = spoken_punctuation.inject(
-        "It ended then.", "it ended then.", seed=1, rate=1.0, caps_rate=0.0
-    )
+    reference, _, command = one_command("It ended then. We moved on to the next thing.")
     assert command.anchor == "then"
     assert (
-        spoken_punctuation.outcome(command, "The Cretaceous period was long. It ended then.")
+        spoken_punctuation.outcome(command, "The Cretaceous period was long. " + reference)
         == "converted"
     )
 
@@ -1850,13 +1853,18 @@ def test_a_corpus_without_the_flag_plants_nothing():
 # fails this suite instead of quietly invalidating a dataset still sitting in the tree.
 FROZEN_DATASET = pathlib.Path(__file__).parent / "data" / "spoken-punctuation.jsonl"
 FROZEN_ARGV = (
-    "--source builtin --limit 200 --spoken-punctuation 0.8 --severity 0.35 --seed 7"
+    "--source punctuation --punctuation-only --limit 200 --spoken-caps-rate 0.35 --seed 7"
 ).split()
 
 
 def frozen_corpus():
     return corpus.load(
-        source="builtin", limit=200, spoken_punctuation_rate=0.8, severity=0.35, seed=7
+        source="punctuation",
+        limit=200,
+        spoken_punctuation_rate=1.0,
+        spoken_caps_rate=0.35,
+        punctuation_only=True,
+        seed=7,
     )
 
 
@@ -1892,7 +1900,7 @@ def test_the_frozen_dataset_round_trips_through_the_loader():
 def test_a_reloaded_dataset_is_not_injected_over_again():
     """The flag is often still on the command line; injecting twice would speak marks that
     are no longer there and uppercase an ALL CAPS run a second time."""
-    reloaded = corpus.load(jsonl=str(FROZEN_DATASET), limit=200, spoken_punctuation_rate=0.8)
+    reloaded = corpus.load(jsonl=str(FROZEN_DATASET), limit=200, spoken_punctuation_rate=1.0)
     generated = frozen_corpus()
     assert [u.disfluent for u in reloaded.utterances] == [u.disfluent for u in generated.utterances]
 
@@ -1927,8 +1935,8 @@ def test_the_frozen_dataset_can_charge_over_conversion_where_nyra_cannot():
     instruction that rewrites "the Jurassic period was long" into "the Jurassic. was
     long". These sentences were written to.
     """
-    references = [u.reference for u in corpus.load(source="builtin", limit=200).utterances]
-    assert spoken_punctuation.literal_use_fraction(references) > 0.1
+    assert spoken_punctuation.literal_use_fraction(corpus.PUNCTUATION_SAMPLE) > 0.1
+    assert spoken_punctuation.literal_use_fraction(corpus.BUILTIN_SAMPLE) > 0.1
 
 
 def test_the_dump_flag_works_without_a_key_or_a_network(tmp_path):
@@ -1981,6 +1989,160 @@ def test_the_bundled_sample_exercises_every_mark_in_the_vocabulary():
     for text in corpus.BUILTIN_SAMPLE:
         licensed |= {mark for _, mark in spoken_punctuation.licensed_marks(text)}
     assert set(spoken_punctuation.SPOKEN_FORMS) <= licensed
+
+
+def test_an_utterance_final_mark_is_never_spoken():
+    """It is the one command that tests nothing.
+
+    A dictated "period" on the last word asks for a mark any instruction would produce
+    unprompted, so obeying it and ignoring it score the same. Those were 55% of what the
+    bundled corpus licensed.
+    """
+    text = "We shipped it today. Nobody noticed."
+    _, spoken, commands = spoken_punctuation.inject(text, text, seed=1, rate=1.0, caps_rate=0.0)
+    assert spoken.endswith("noticed.")
+    assert len(commands) == 1
+
+
+def test_a_row_whose_only_mark_is_final_yields_no_command_at_all():
+    """Which is why `--punctuation-only` drops such rows rather than keeping them."""
+    text = "The build failed over the weekend and nobody noticed."
+    _, spoken, commands = spoken_punctuation.inject(
+        text, text, seed=1, rate=1.0, caps_rate=0.0, require=True
+    )
+    assert commands == ()
+    assert spoken == text
+
+
+def test_require_guarantees_a_command_wherever_one_is_possible():
+    """A row carrying none is not a hard example on this task; it measures nothing."""
+    text = "We shipped it today. Monday was quiet, so nobody noticed."
+    without = sum(
+        not spoken_punctuation.inject(text, text, seed=n, rate=0.15, caps_rate=0.0)[2]
+        for n in range(200)
+    )
+    with_require = sum(
+        not spoken_punctuation.inject(text, text, seed=n, rate=0.15, caps_rate=0.0, require=True)[2]
+        for n in range(200)
+    )
+    assert without > 50
+    assert with_require == 0
+
+
+def test_every_planted_command_changes_something():
+    """The invariant that makes the corpus worth scoring at all.
+
+    A command worth 0 is decoration — the same output scores the same whether the model
+    understood it or not. Mid-utterance terminal marks are worth 2 (the mark, and the
+    capital behind it), internal marks 1, casing commands one per word.
+    """
+    loaded = corpus.load(
+        source="punctuation",
+        limit=200,
+        spoken_punctuation_rate=1.0,
+        spoken_caps_rate=0.35,
+        punctuation_only=True,
+    )
+    worth = [
+        spoken_punctuation.effect(command, utterance.reference)
+        for utterance in loaded.utterances
+        for command in utterance.commands
+    ]
+    assert worth
+    assert min(worth) >= 1, "a command that changes nothing measures nothing"
+    assert max(worth) >= 2, "no command forces a capital, so the split is untested"
+
+
+def test_undoing_a_command_is_what_ignoring_it_would_produce():
+    reference, _, command = one_command()
+    assert spoken_punctuation.undo(command, reference) == "Is it ready let me know either way."
+
+
+def test_punctuation_only_leaves_nothing_but_commands_between_input_and_target():
+    """The whole point of the mode: no score can be moved by disfluency removal.
+
+    On a paired source that means discarding the verbatim side, so `nyra`'s hand-annotated
+    disfluencies are not in the input at all.
+    """
+    loaded = corpus.load(
+        source="punctuation", limit=200, spoken_punctuation_rate=1.0, punctuation_only=True
+    )
+    assert len(loaded) > 50
+    for utterance in loaded.utterances:
+        assert utterance.commands, "every row carries at least one command"
+        assert all(op.startswith("spoken:") for op in utterance.operations)
+        # Stated on the alignment rather than by reconstructing the input: on the content
+        # axis the input must be the target plus command words and nothing else — no word
+        # substituted, none dropped, and every addition a command. Marks and casing are
+        # what the format axis sees, and they are the task.
+        diff = metrics.align(
+            metrics.normalize(utterance.reference), metrics.normalize(utterance.disfluent)
+        )
+        assert diff.substitutions == 0, utterance.disfluent
+        assert diff.deletions == 0, utterance.disfluent
+        assert all(word in utterance.command_words for word in diff.inserted), utterance.disfluent
+    assert corpus.false_start_fraction(list(loaded.utterances)) == 0.0
+    assert loaded.detail["punctuation_only"] is True
+
+
+def test_punctuation_only_scores_a_perfect_cleanup_perfectly():
+    loaded = corpus.load(
+        source="punctuation", limit=200, spoken_punctuation_rate=1.0, punctuation_only=True
+    )
+    scored = metrics.mean([u.scored(u.reference) for u in loaded.utterances])
+    assert scored["format"] == 1.0
+    assert scored["content"] == 1.0
+
+
+def test_punctuation_only_discards_a_paired_source_s_verbatim_side(monkeypatch):
+    """`nyra`'s input side is its disfluent one; the mode has to reach past it."""
+    rows = [
+        {
+            "verbatim_transcript": "um we shipped it today. uh Monday was quiet.",
+            "intended_transcript": "We shipped it today. Monday was quiet, so nobody noticed.",
+        }
+    ]
+    monkeypatch.setattr(corpus, "_rows_via_api", lambda *a, **k: iter(rows))
+    loaded = corpus.load(
+        source="nyra",
+        limit=1,
+        spoken_punctuation_rate=1.0,
+        spoken_caps_rate=0.0,
+        punctuation_only=True,
+    )
+    (utterance,) = loaded.utterances
+    assert "um" not in metrics.normalize(utterance.disfluent)
+    assert "uh" not in metrics.normalize(utterance.disfluent)
+    assert utterance.commands
+
+
+def test_punctuation_only_implies_a_rate_so_the_corpus_is_not_empty():
+    """Without one the mode would load a corpus with no commands in it, which is the
+    opposite of what it asks for."""
+    assert cli.parse_args(["--punctuation-only"]).spoken_punctuation == 1.0
+    assert cli.parse_args([]).spoken_punctuation == 0.0
+    # An explicit rate still wins.
+    assert (
+        cli.parse_args(["--punctuation-only", "--spoken-punctuation", "0.5"]).spoken_punctuation
+        == 0.5
+    )
+
+
+def test_the_punctuation_sample_is_all_internal_marks():
+    """Its reason for existing apart from BUILTIN_SAMPLE, 55% of whose marks are final."""
+    for text in corpus.PUNCTUATION_SAMPLE:
+        tokens = text.split()
+        internal = [
+            i
+            for i, raw in enumerate(tokens[:-1])
+            if spoken_punctuation._split_mark(raw)
+            and (
+                metrics.normalize_text(raw[:-1]),
+                raw[-1],
+            )
+            in spoken_punctuation.licensed_marks(text)
+        ]
+        assert internal, f"no internal mark to speak: {text!r}"
 
 
 def test_the_punctuation_candidates_join_the_table_only_when_the_corpus_asks():

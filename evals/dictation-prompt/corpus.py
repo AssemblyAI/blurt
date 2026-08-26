@@ -275,6 +275,120 @@ BUILTIN_SAMPLE: tuple[str, ...] = (
 )
 
 
+# Stand-in corpus for `--source punctuation`, and the base for the committed
+# punctuation dataset. Written for this repo, like `BUILTIN_SAMPLE`, so a dataset
+# generated from it can live in the tree.
+#
+# Separate from `BUILTIN_SAMPLE` because the two corpora are asked different questions and
+# the material for one is wrong for the other. A disfluency smoke corpus wants plain
+# declaratives with room to inject hesitation into. A punctuation corpus wants **internal
+# marks**, because `spoken_punctuation.inject` will not speak the last token: a dictated
+# "period" on the final word asks for a mark any instruction would produce unprompted, so
+# obeying it and ignoring it score the same. Of what `BUILTIN_SAMPLE` licenses, 55% is
+# exactly that, and 37 of its 91 rows have nothing else.
+#
+# So every row here carries at least one mark that is not utterance-final, and most carry
+# several. Three kinds, and `spoken_punctuation.effect` prices them:
+#
+# - a **mid-utterance terminal mark** is worth 2 — the mark, and the capital behind it;
+# - an **internal comma, colon or semicolon** is worth 1, at a placement inside the clause
+#   that default punctuation does not reliably guess;
+# - **ALL CAPS** is worth one per word, and is the only command nothing produces by
+#   accident.
+#
+# The last group are literal-use traps, and they still carry internal marks so they test
+# both things at once: "one grace period comma so plan accordingly" has to come back with
+# the noun kept and the command obeyed.
+PUNCTUATION_SAMPLE: tuple[str, ...] = (
+    # Two sentences: the internal mark forces a split and the capital behind it.
+    "The build is green. Ship it before the release window closes tonight.",
+    "I read the whole thread. Nobody actually answered the question that was asked.",
+    "We tried that last quarter. It made the cold start worse, so we reverted it.",
+    "The fix is small. The test that proves it is not, and that is the whole delay.",
+    "Priya reviewed the diff. She wants the retry logic split into its own function.",
+    "London is three hours ahead. Move the sync earlier or half the team misses it.",
+    "Something changed upstream. I cannot reproduce yesterday's numbers at all now.",
+    "Do not merge this yet. The staging run has not finished and I want to see it.",
+    "It works on my machine. It does not work on the runner, which is the usual story.",
+    "Check the entitlement first. Everything else follows from whether that survived.",
+    "That was the last blocker! We can cut the build as soon as CI comes back green.",
+    "Are we still shipping Thursday? The notarization queue was two hours this morning.",
+    "The overlay flickers once on launch. Nobody has caught it on video yet.",
+    "Thursday is a holiday in Berlin. Let us push the retrospective out by a week.",
+    "I filed it as a P2. Honestly it should be a P1 given how many users hit it.",
+    "The vendor confirmed the outage. They promised a postmortem by Friday afternoon.",
+    "Stop the rollout. The error rate tripled in the last twenty minutes of traffic.",
+    "Nobody owns this dashboard. That is why it has been broken since February.",
+    "The estimate assumed two engineers. We have one, so the date has to move out.",
+    "I will draft the announcement tonight. Send me any corrections before nine.",
+    # Comma-rich, so the placement inside the clause is what is being asked for.
+    "If the upload stalls, retry it once, and then fall back to the smaller chunk size.",
+    "We shipped the change on Tuesday, and by Thursday the error rate had halved.",
+    "The onboarding flow works, but the second screen asks for a permission we never use.",
+    "Before you merge, rebase on main, run the whole suite, and check the coverage gate.",
+    "I read the incident report, and the root cause was a stale cache in the edge layer.",
+    "Once the lease expires, the worker stops accepting jobs, which is what we wanted.",
+    "Send the draft to Priya, loop in the design team, and we can review it together.",
+    "When the mic is muted, the waveform freezes, and users read that as a crash.",
+    "The migration touched four tables, two indexes, and one view nobody remembered.",
+    "After the retry budget runs out, the request fails, and the overlay says try again.",
+    "We looked at three vendors, and only one will sign a data processing agreement.",
+    "The cache warms in about a minute, so the first few requests are always slower.",
+    "If you cannot reproduce it locally, attach the sysdiagnose, and I will look tonight.",
+    "Their API returns a 202, then polls, then hands back a URL that expires in an hour.",
+    "I moved the standup to nine, cancelled the Thursday sync, and blocked out Friday.",
+    "The feature is behind a flag, off by default, and enabled only for the internal team.",
+    "Given the timing, the risk, and how little we know, I would rather wait a week.",
+    "The parser is fine, the writer is fine, and the thing between them loses a byte.",
+    "Whatever we do, do it before the freeze, because after that nothing lands.",
+    "She asked for the numbers, the caveats, and a recommendation on one page.",
+    # A mark mid-utterance and a question or exclamation, so those commands fire too.
+    "The queue drained overnight. Are we confident it will hold under Monday traffic?",
+    "I looked at the trace. Why is the second request slower than the first one?",
+    "We fixed the leak. Did anyone check whether the fix survives a clean install?",
+    "The demo went well. Can you send the recording to the whole team this afternoon?",
+    "It finally reproduced! The trick was launching from a read-only directory.",
+    "That is the third regression this week! We need the gate back on before Friday.",
+    "The numbers came in. Honestly, they are better than anything we projected.",
+    "Everything is symbolicated now. You should be able to read the crash directly.",
+    # Colons and semicolons, internal, so those commands are exercised at all.
+    "Here is the plan: land the fix, cut a build, and hand it to QA tomorrow morning.",
+    "Two things are still open: the entitlement review and the store description.",
+    "The cause was simple: we were reading the sample rate from the wrong device.",
+    "It builds cleanly on my machine; it fails on the runner every single time.",
+    "Ship the smaller change first; the refactor can wait until after the release.",
+    "The tradeoff is straightforward: more accuracy for eighty milliseconds of latency.",
+    "Keep the interface as it is; only the storage layer actually needs to change.",
+    "One caveat: the migration is not reversible once the first write has landed.",
+    "Three people asked for this: two customers and one person on the support rota.",
+    "The rule is simple; if the test is flaky, fix it or delete it the same day.",
+    # Content worth shouting, so the casing command has somewhere natural to land.
+    "This is urgent, and the deadline is Friday, not the following Wednesday.",
+    "Do not deploy this today. The database migration has not been reviewed yet.",
+    "The answer is no, and it will stay no until the security review is finished.",
+    "Never commit the signing key. Rotate it immediately if it ever reaches a log.",
+    "Everything downstream depends on this table, so treat the schema as frozen.",
+    "The important part is the ordering, not the individual steps in the pipeline.",
+    "Read the whole thread before replying, because the decision changed twice.",
+    "That number is wrong, and it has been wrong in every deck since November.",
+    "Only the release manager can approve this, and only after the gate is green.",
+    "The critical path is the notarization, not the build, so start it early.",
+    # Literal-use traps, each with an internal mark so both things are tested at once.
+    "We only support one grace period, so plan accordingly before the trial ends.",
+    "Add a comma after the second clause, and the sentence reads much better.",
+    "Every question mark in that survey was ambiguous, so we rewrote the whole form.",
+    "The billing period rolls over at midnight UTC, not at midnight local time.",
+    "Put a colon after the heading, and leave the rest of the line exactly as it is.",
+    "She used a full stop where the style guide asks for a semicolon, which is minor.",
+    "The legal team wants that warning in all caps, which our design system forbids.",
+    "That exclamation point reads as sarcasm, so please take it out of the release notes.",
+    "There is a dash missing from the second bullet, and a typo in the third one.",
+    "I said period, and it typed the word instead of the punctuation mark I wanted.",
+    "The Cretaceous period ended with an impact, which is roughly how the demo went.",
+    "Use a semicolon there; a comma is not strong enough to join those two clauses.",
+)
+
+
 @dataclass(frozen=True)
 class Utterance:
     """One eval example: what the model is given, and what it should produce."""
@@ -329,6 +443,14 @@ class Utterance:
         two non-hesitation words echoing nothing. And `metrics.COMMAND_WEIGHT` charges
         one left in the output more than an ordinary surplus word, because it reaches the
         user's document as a word they never meant to write.
+
+        Bare words, not positions, so on a row that uses one as content — "Stop the
+        rollout" against a spoken "full stop" — the exemption covers the speaker's own
+        noun too. It costs almost nothing: the exemption only bites on words the
+        *hypothesis added*, so a cleanup that keeps the content word correctly, or drops
+        it, is unaffected either way, and only one that duplicates it is over-charged.
+        Positions would fix it and would have to survive the round trip through
+        `--dump-corpus` to be worth having.
         """
         return frozenset(word for command in self.commands for word in command.spoken_words)
 
@@ -628,6 +750,7 @@ def load(
     strip_formatting: bool = False,
     spoken_punctuation_rate: float = 0.0,
     spoken_caps_rate: float = 0.25,
+    punctuation_only: bool = False,
 ) -> Corpus:
     """Load up to `limit` pairs, injecting disfluencies for reference-only sources."""
     if jsonl:
@@ -637,6 +760,10 @@ def load(
         rows = (Utterance(reference=text, disfluent=text) for text in BUILTIN_SAMPLE)
         spec, formatted = None, True
         detail = {"note": "bundled sample; no dataset was downloaded"}
+    elif source == "punctuation":
+        rows = (Utterance(reference=text, disfluent=text) for text in PUNCTUATION_SAMPLE)
+        spec, formatted = None, True
+        detail = {"note": "bundled punctuation sample; no dataset was downloaded"}
     elif source in SOURCES:
         spec = SOURCES[source]
         # Each source defaults to its held-out split, which is small (250 rows for
@@ -663,10 +790,20 @@ def load(
     # A reference-only source needs the injector to produce an input side, and
     # needs a reference long and well-punctuated enough to inject into. A jsonl
     # file is the user's own text, so it is filtered leniently either way.
-    reference_only = spec is None or not spec.is_paired
+    # `punctuation_only` makes any source reference-only: the target becomes the input
+    # base and the verbatim side is discarded. That is the whole point of the mode — the
+    # input must differ from the target by nothing but the spoken commands, so a score
+    # cannot be moved by disfluency removal. On `nyra` it means scoring against the
+    # intended side, which is real conversational English and no longer a paired corpus.
+    reference_only = spec is None or not spec.is_paired or punctuation_only
     utterances = _collect(rows, limit, for_injection=reference_only and jsonl is None)
+    if punctuation_only:
+        utterances = [
+            replace(u, disfluent=u.reference, input_supplied=False, operations=())
+            for u in utterances
+        ]
 
-    if reference_only:
+    if reference_only and not punctuation_only:
         injected: list[Utterance] = []
         for index, utterance in enumerate(utterances):
             # A jsonl row that already carried a disfluent side keeps it — read off
@@ -714,7 +851,14 @@ def load(
                 seed=seed + index,
                 rate=spoken_punctuation_rate,
                 caps_rate=spoken_caps_rate,
+                require=punctuation_only,
             )
+            # A row the injector could not plant anything in measures nothing on a corpus
+            # whose only subject is commands, and dilutes every mean it appears in. It
+            # happens when the reference's only mark is its last one, which `inject`
+            # refuses to speak.
+            if punctuation_only and not commands:
+                continue
             spoken.append(
                 replace(
                     utterance,
@@ -728,6 +872,7 @@ def load(
         detail |= {
             "spoken_punctuation_rate": spoken_punctuation_rate,
             "spoken_caps_rate": spoken_caps_rate,
+            "punctuation_only": punctuation_only,
             "commands_per_row": sum(len(u.commands) for u in utterances) / len(utterances)
             if utterances
             else 0.0,
