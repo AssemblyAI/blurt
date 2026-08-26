@@ -379,6 +379,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "only this makes there be more of them",
     )
     search.add_argument(
+        "--baseline",
+        default=BASELINE,
+        metavar="NAME",
+        help=f"which instruction is the bar (default: {BASELINE}, what Blurt ships). It is "
+        "the row the winner is scored against on held-out test, what --candidates baseline "
+        "scores, and the one instruction held to the safeguard requirement. Point it at a "
+        "candidate that has already won a round and the run stops re-measuring something "
+        "you know: a search whose bar is still the shipped string spends a dev sweep "
+        "confirming the shipped string. candidates.BASELINE itself does not move, because "
+        "it is what the Swift side actually sends",
+    )
+    search.add_argument(
         "--start",
         default="prior-winner",
         metavar="prior-winner|best-candidate|NAME",
@@ -464,7 +476,7 @@ def describe_length(instruction: str) -> str:
     return f"{len(instruction)} chars, {headroom} under the {INSTRUCTION_CHARACTER_CAP} cap"
 
 
-def check_candidates(table: dict[str, str] | None = None) -> None:
+def check_candidates(table: dict[str, str] | None = None, baseline: str = BASELINE) -> None:
     """Refuse to start if a hand-written candidate could never be shipped.
 
     Before any model call, because these are typo-class mistakes and paying for a full
@@ -487,9 +499,9 @@ def check_candidates(table: dict[str, str] | None = None) -> None:
     for name, text in (CANDIDATES if table is None else table).items():
         if overage(text):
             problems.append(f"  {name}: {describe_length(text)}")
-        if name == BASELINE and (absent := missing_safeguards(text)):
+        if name == baseline and (absent := missing_safeguards(text)):
             stems = ", ".join(stem for stem, _ in absent)
-            problems.append(f"  {name}: BASELINE is missing safeguard(s): {stems}")
+            problems.append(f"  {name}: the baseline is missing safeguard(s): {stems}")
     if problems:
         raise SystemExit(
             "These candidates.py instructions could not be shipped as written:\n"
@@ -532,11 +544,14 @@ def resolve_candidates(
     # was worth using: on a large corpus the sweep is `len(scoring) x dev` calls, and
     # having already run it once, paying for it again to reach the search is the one thing
     # anyone would reach for this flag to avoid.
+    baseline = getattr(args, "baseline", BASELINE)
     if args.candidates == "baseline":
-        return [BASELINE]
+        return [baseline]
     if spoken:
-        # BASELINE first so the table reads as "the bar, then the challengers".
-        return [BASELINE, *SPOKEN_PUNCTUATION_CANDIDATES]
+        # The bar first, so the table reads as "the bar, then the challengers" — and
+        # de-duplicated, since a baseline promoted from a previous round is itself one of
+        # them and would otherwise be scored twice.
+        return [baseline, *(n for n in SPOKEN_PUNCTUATION_CANDIDATES if n != baseline)]
     if (
         args.candidates is None
         and args.optimizer == "none"
@@ -544,7 +559,7 @@ def resolve_candidates(
         or args.start == "best-candidate"
     ):
         return list(CANDIDATES if table is None else table)
-    return [BASELINE]
+    return [baseline]
 
 
 def run_live_verification(
@@ -671,11 +686,16 @@ def main(argv: list[str] | None = None) -> int:
     # contains, not by a flag. Still before any model call, which is what the check is
     # for: a typo in candidates.py should not cost a paid sweep to discover.
     table = instruction_table(loaded)
-    check_candidates(table)
-    if args.start not in ("prior-winner", "best-candidate") and args.start not in table:
+    check_candidates(table, args.baseline)
+    if args.baseline not in table:
+        raise SystemExit(
+            f"--baseline {args.baseline!r} is not a candidate this run scores. Available: "
+            + ", ".join(table)
+        )
+    if args.start != "best-candidate" and args.start not in table:
         raise SystemExit(
             f"--start {args.start!r} is not a candidate this run scores. Available: "
-            + ", ".join(("prior-winner", "best-candidate", *table))
+            + ", ".join(("best-candidate", *table))
         )
 
     train, dev, test = corpus.split(
@@ -770,12 +790,7 @@ def main(argv: list[str] | None = None) -> int:
         # sweep above and may legitimately win. Nothing to score separately, and no
         # need to keep it out of the selection: unlike the over-cap instruction this
         # replaced, shipping it is a real option.
-        if args.start == "prior-winner":
-            seed_name = BASELINE
-        elif args.start == "best-candidate":
-            seed_name = winner_name
-        else:
-            seed_name = args.start
+        seed_name = winner_name if args.start == "best-candidate" else args.start
         seed_instruction = table[seed_name]
         scored_on_dev = dict(dev_rows)
         if seed_name in scored_on_dev:
@@ -865,8 +880,8 @@ def main(argv: list[str] | None = None) -> int:
     # Held-out test scores for the winner and for the shipped-default proxy, so the
     # reported improvement is measured on data no selection decision saw.
     scored_on_test = [(winner_name, winner_instruction)]
-    if winner_name != BASELINE:
-        scored_on_test.append((BASELINE, table[BASELINE]))
+    if winner_name != args.baseline:
+        scored_on_test.append((args.baseline, table[args.baseline]))
     test_rows = []
     with Progress(len(scored_on_test) * len(test), "Scoring on held-out test") as meter:
         for name, instruction in scored_on_test:

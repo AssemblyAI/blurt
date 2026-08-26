@@ -2281,6 +2281,80 @@ def test_a_spoken_punctuation_run_scores_the_bar_and_the_challengers():
     assert set(scoring) < set(table)
 
 
+def test_the_bar_can_be_moved_to_a_candidate_that_already_won_a_round():
+    """So a second round stops re-measuring what the first one established.
+
+    `candidates.BASELINE` deliberately does not move: it is the string the Swift side
+    actually sends, and the "what does this buy over what ships" comparison depends on it
+    meaning that. `--baseline` moves the bar for one run.
+    """
+    loaded = corpus.load(jsonl=str(FROZEN_DATASET), limit=200)
+    table = cli.instruction_table(loaded)
+    args = cli.parse_args(["--baseline", "punct-explicit", "--candidates", "baseline"])
+    assert cli.resolve_candidates(args, table, spoken=True) == ["punct-explicit"]
+    assert candidates.BASELINE == "prior-winner"
+
+
+def test_a_promoted_baseline_is_not_scored_twice():
+    """It is itself one of the punctuation candidates, so the sweep would duplicate it."""
+    loaded = corpus.load(jsonl=str(FROZEN_DATASET), limit=200)
+    scoring = cli.resolve_candidates(
+        cli.parse_args(["--baseline", "punct-explicit"]),
+        cli.instruction_table(loaded),
+        spoken=True,
+    )
+    assert scoring[0] == "punct-explicit"
+    assert len(scoring) == len(set(scoring))
+    assert set(scoring) == set(candidates.SPOKEN_PUNCTUATION_CANDIDATES)
+
+
+def test_the_moved_bar_is_the_one_held_to_the_safeguards(monkeypatch):
+    """Whatever a run compares against is what it would fall back to shipping."""
+    monkeypatch.setitem(
+        candidates.SPOKEN_PUNCTUATION_CANDIDATES, "punct-explicit", "Convert the commands."
+    )
+    table = dict(candidates.CANDIDATES) | candidates.SPOKEN_PUNCTUATION_CANDIDATES
+    # Held to it as the bar...
+    with pytest.raises(SystemExit) as raised:
+        cli.check_candidates(table, baseline="punct-explicit")
+    assert "safeguard" in str(raised.value)
+    # ...and not held to it otherwise, like every other contrast candidate.
+    assert cli.check_candidates(table, baseline="prior-winner") is None
+
+
+def test_an_unknown_baseline_is_refused_before_anything_is_spent():
+    with pytest.raises(SystemExit) as raised:
+        cli.main(
+            ["--source", "punctuation", "--punctuation-only", "--baseline", "nope", "--dry-run"]
+        )
+    assert "not a candidate" in str(raised.value)
+
+
+def test_the_held_out_table_compares_against_the_moved_bar(monkeypatch):
+    scored: list[str] = []
+    monkeypatch.setitem(sys.modules, "program", _fake_program(scored))
+    assert (
+        cli.main(
+            [
+                "--jsonl",
+                str(FROZEN_DATASET),
+                "--baseline",
+                "punct-explicit",
+                "--candidates",
+                "baseline",
+                "--optimizer",
+                "none",
+                "--show-samples",
+                "0",
+            ]
+        )
+        == 0
+    )
+    # The bar is the only thing scored, on dev and then on test — prior-winner never runs.
+    assert candidates.SPOKEN_PUNCTUATION_CANDIDATES["punct-explicit"] in scored
+    assert candidates.CANDIDATES["prior-winner"] not in scored
+
+
 def test_baseline_only_is_honoured_on_a_spoken_run():
     """It was silently ignored, which made the flag a lie exactly where it earns its keep:
     on a large corpus the sweep is len(scoring) x dev calls."""
