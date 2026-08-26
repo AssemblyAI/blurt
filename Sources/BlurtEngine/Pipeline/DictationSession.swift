@@ -260,8 +260,8 @@ public actor DictationSession {
     guard phase == .recording else { return }
     cancelAutoRelease()
     // Flip the phase before stopping the mic, not after: the stop chime and
-    // the pill's "Transcribing…" ride this transition, and mic.stop() reads
-    // the whole recording back from disk — I/O the user's "it heard me" cue
+    // the pill's "Transcribing…" ride this transition, and mic.stop() waits out
+    // the Bluetooth tail linger — up to 220 ms the user's "it heard me" cue
     // must not wait on. This also closes the double-release window: a second
     // release arriving during the mic.stop() suspension now fails the
     // `.recording` guard above instead of running the pipeline twice.
@@ -316,9 +316,9 @@ public actor DictationSession {
   func stopAndCancel() async {
     cancelAutoRelease()
     do {
-      // `cancelCapture`, not `stop`: the audio is being thrown away, so neither
-      // preserving it (the Bluetooth tail linger) nor reading it back off disk
-      // is worth delaying the user's cancel for.
+      // `cancelCapture`, not `stop`: the audio is being thrown away, so
+      // preserving it (the Bluetooth tail linger) is not worth delaying the
+      // user's cancel for.
       try await mic.cancelCapture()
     } catch {
       // Stays out of the UI: the user asked for nothing to happen, and a cancel

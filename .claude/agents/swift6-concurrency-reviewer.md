@@ -34,11 +34,19 @@ Look at the changes (default to the working diff via `git diff` and
 ## Project invariants (treat violations as findings)
 
 - **Do not reintroduce `AVAudioEngine`/`installTap`.** `MicCapture` deliberately
-  uses `AVAudioRecorder` with a **fresh recorder per session** to survive input
-  device switches (`-10868` / all-zero buffers). Flag any move back to a
-  long-lived engine or tap.
+  uses an `AVCaptureSession` (`CaptureSessionRecorder`) with a **fresh recorder
+  per session** to survive input device switches (`-10868` / all-zero buffers).
+  Flag any move back to a long-lived engine or tap. Session control — building
+  and `startRunning()` — belongs off the actor on the recorder's serial
+  `controlQueue`; flag a blocking hardware call made inline on `MicCapture`.
+- **Do not reintroduce a warm/prepared recorder.** `warmUp()` is stateless by
+  measurement (see its doc comment): a warm recorder pre-pays nothing and brings
+  back a device-identity check, a pin check and a bring-up flag.
 - No streaming STT, no local models, no separate LLM cleanup pass — cleanup
-  rides in the Sync STT `prompt`. Flag reintroductions.
+  rides in the dictation request's `llm` block, as its `instruction`
+  (`CleanupInstruction`). There is **no** `config.prompt`; the steering field is
+  `config.conversation_context` (`ConversationContext`). Flag reintroductions of
+  any of these, `config.prompt` included.
 - Unit tests use **Swift Testing** (`@Suite`/`@Test`/`#expect`), not XCTest (the
   `BlurtUITests` XCUITest bundle is the exception), and must never touch the real
   Keychain (`APIKeyStore`) — use an isolated service.

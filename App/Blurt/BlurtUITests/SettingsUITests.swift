@@ -75,6 +75,22 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertEqual(picker.value as? String, "right ⌥")
   }
 
+  /// The microphone picker exists and defaults to following the system input.
+  /// Only the first option is asserted: the rest of the menu lists whatever
+  /// input devices the machine happens to have (a CI runner may have none), and
+  /// the parenthetical default-device name varies with it — so the assertion is
+  /// a prefix, and nothing here opens the menu or pins a device.
+  func testMicrophonePickerDefaultsToSystemInput() {
+    let settings = openSettingsWindow()
+
+    let picker = settings.popUpButtons[UITestIdentifiers.micPicker]
+    XCTAssertTrue(picker.waitForExistence(timeout: 10), "Microphone picker not found")
+    let value = picker.value as? String ?? ""
+    XCTAssertTrue(
+      value.hasPrefix("Same as system"),
+      "The picker should start on the system default (got: \(value))")
+  }
+
   /// The sound-cue picker changes the persisted selection. Selecting "None"
   /// works regardless of the runner's persisted starting value.
   func testSoundPickerChangesSelection() {

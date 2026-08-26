@@ -64,13 +64,13 @@ struct MicLivenessTests {
     #expect(MicLiveness.unknownTransportTimeout < MicLiveness.bluetoothTimeout)
   }
 
-  @Test("already-advancing recorder clock confirms immediately, without sleeping")
+  @Test("frames already arriving confirm immediately, without sleeping")
   func immediateLiveness() async {
     let clock = TestClock()
     // Never advanced: a sleep would park forever, so returning at all proves
     // the fast path never sleeps (the suite's time limit backs that up).
     let gap = await MicLiveness.waitUntilLive(
-      timeout: .seconds(1), clock: clock, currentTime: { 0.1 },
+      timeout: .seconds(1), clock: clock, deliveredFrames: { 1024 },
       inputPowerDB: { quietRoomPowerDB })
     #expect(gap == .zero)
   }
@@ -81,12 +81,12 @@ struct MicLivenessTests {
     let polls = Mutex(0)
     async let gap = MicLiveness.waitUntilLive(
       timeout: MicLiveness.bluetoothTimeout, clock: clock,
-      currentTime: {
-        // Stuck at 0 for the first three checks — the route still switching —
-        // then the recorder clock starts moving.
+      deliveredFrames: {
+        // Nothing delivered for the first three checks — the route still
+        // switching — then buffers start arriving.
         polls.withLock { polls in
           polls += 1
-          return polls < 4 ? 0 : 0.05
+          return polls < 4 ? 0 : 1024
         }
       }, inputPowerDB: { quietRoomPowerDB })
     // Each wait is twice the last: 1 ms, 2 ms, 4 ms. Driving the clock by the
@@ -112,10 +112,10 @@ struct MicLivenessTests {
     let polls = Mutex(0)
     async let gap = MicLiveness.waitUntilLive(
       timeout: .seconds(30), clock: clock,
-      currentTime: {
+      deliveredFrames: {
         polls.withLock { polls in
           polls += 1
-          return polls < 12 ? 0 : 0.05
+          return polls < 12 ? 0 : 1024
         }
       }, inputPowerDB: { quietRoomPowerDB })
     var expected = MicLiveness.initialPollInterval
@@ -128,12 +128,12 @@ struct MicLivenessTests {
     #expect(await gap != nil)
   }
 
-  @Test("a clock advancing over digital silence is not live — the shipped bug")
+  @Test("frames arriving as digital silence are not live — the shipped bug")
   func zeroFilledBuffersAreNotLive() async {
-    // The gate's original signal was `currentTime > 0` alone, and macOS can hand
+    // The gate's original signal was frame arrival alone, and macOS can hand
     // a stale or not-yet-switched device's queue all-zero buffers (the same
     // failure that retired the `AVAudioEngine` capture path). Frames of digital
-    // silence advance the recorder's clock exactly like real audio, so the wait
+    // silence arrive and count exactly like real audio, so the wait
     // was satisfied on the first ~1 ms poll while the AirPods link was still
     // renegotiating: the "Connecting…" pill flashed past and the start chime
     // fired over a dead mic. With the power term the wait holds, and a device
@@ -152,7 +152,7 @@ struct MicLivenessTests {
     #expect(await waitToCap(powerDB: { -Float.infinity }) == nil)
   }
 
-  @Test("an advancing clock plus real input power confirms at once")
+  @Test("delivered frames plus real input power confirm at once")
   func realInputPowerConfirmsPromptly() async {
     // The other half of the floor's job: it must not become voice-activity
     // detection. A live mic in a silent room reads its own self-noise, well above
@@ -162,7 +162,7 @@ struct MicLivenessTests {
     // would fail this rather than let it pass slowly.
     let clock = TestClock()
     let gap = await MicLiveness.waitUntilLive(
-      timeout: MicLiveness.bluetoothTimeout, clock: clock, currentTime: { 0.05 },
+      timeout: MicLiveness.bluetoothTimeout, clock: clock, deliveredFrames: { 1024 },
       inputPowerDB: { quietRoomPowerDB })
     #expect(gap == .zero)
   }
@@ -189,7 +189,7 @@ struct MicLivenessTests {
     #expect(failedOpen.contains("powerDB=-160.0"))
   }
 
-  @Test("a clock that never advances times out with nil — the not-live verdict")
+  @Test("a recorder that never delivers times out with nil — the not-live verdict")
   func timeoutReturnsNil() async {
     // nil is pure information — the *caller* decides what it means, and
     // `MicCapture.start()` fails the press closed on it (tears the recorder
@@ -198,7 +198,7 @@ struct MicLivenessTests {
     let clock = TestClock()
     let timeout = MicLiveness.initialPollInterval * 3
     async let gap = MicLiveness.waitUntilLive(
-      timeout: timeout, clock: clock, currentTime: { 0 },
+      timeout: timeout, clock: clock, deliveredFrames: { 0 },
       inputPowerDB: { digitalSilencePowerDB })
     var expected = MicLiveness.initialPollInterval
     for _ in 1...2 {
@@ -210,14 +210,14 @@ struct MicLivenessTests {
   }
 
   /// Drives the wait to its cap against a clock this test owns, for a power probe
-  /// that never reports live while the recorder's clock is already advancing.
+  /// that never reports live while frames are already arriving.
   /// Shared so each "not live" reading is one assertion rather than a copy of the
   /// backoff-driving loop.
   private func waitToCap(powerDB: @escaping @Sendable () -> Float) async -> Duration? {
     let clock = TestClock()
     let timeout = MicLiveness.initialPollInterval * 3
     async let gap = MicLiveness.waitUntilLive(
-      timeout: timeout, clock: clock, currentTime: { 0.05 }, inputPowerDB: powerDB)
+      timeout: timeout, clock: clock, deliveredFrames: { 1024 }, inputPowerDB: powerDB)
     var expected = MicLiveness.initialPollInterval
     for _ in 1...2 {
       await clock.waitUntilSleeping(for: expected)

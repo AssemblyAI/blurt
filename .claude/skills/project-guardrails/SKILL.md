@@ -24,12 +24,23 @@ genuinely correct, and reaching for it means it's time to stop and ask.
 
 ## Audio
 
-- **No `AVAudioEngine` / `installTap` capture path.** `MicCapture` uses
-  `AVAudioRecorder` with a **fresh recorder per session** on purpose — a
-  long-lived engine bound its input graph to one device and went stale on a
-  mic↔built-in switch (`-10868`, all-zero buffers). Keep recording to a 16 kHz
-  mono 16-bit WAV (the Sync API's geometry) so `stop()` reads it back with no
-  resample pass.
+- **No `AVAudioEngine` / `installTap` capture path.** `MicCapture` builds a
+  **fresh `AVCaptureSession` recorder per capture** (`CaptureSessionRecorder`;
+  owner-directed move from `AVAudioRecorder`, 2026-08-25) — a long-lived engine
+  bound its input graph to one device and went stale on a mic↔built-in switch
+  (`-10868`, all-zero buffers), so no recorder survives across a device change.
+  Keep the data output converting to 16 kHz mono 16-bit S16LE (the Sync API's
+  geometry), captured straight to memory so `stop()` returns upload-ready bytes
+  with no resample pass.
+- **Don't pre-open the mic to make presses feel faster.** `MicCapture.warmUp()`
+  is stateless on purpose — build a session, drop it — and there is no warm or
+  prepared recorder to reuse. Measured on hardware: building a session (or the
+  retired `prepareToRecord()`) leaves the device closed and costs ~15 ms, while
+  `record()`'s `startRunning()` opens it and costs 180–600 ms, so nothing can
+  pre-pay the bring-up. A warm-recorder lifecycle was tried, and its
+  device-identity check, pin check, 60 s expiry and bring-up flag all existed to
+  protect ~15 ms. If you want the press to feel faster, the liveness gate's
+  polling is where the remaining latency actually is.
 
 ## Transcription pipeline
 

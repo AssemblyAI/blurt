@@ -51,9 +51,13 @@ workflow and the _why_ behind the design; the engine's README covers the _what_ 
 ```text
 Sources/BlurtEngine/         the engine (dependency-free Swift package)
   README.md                  the engine's developer guide (quick start, seams, error table)
-  Audio/                     MicCapture (+meter/+warm), MicLiveness (mic bring-up gate), AudioRoute
-                             (+Monitor)/AudioTransport — CoreAudio routing, SoundPack/Catalog/Store
-                             (the voice *descriptors*; the voices themselves are app-side)
+  Audio/                     MicCapture (+meter) over CaptureSessionRecorder (the
+                             AVCaptureSession backend), MicLiveness (mic bring-up gate),
+                             AudioRoute (+Monitor) — the CoreAudio output route, AudioTransport
+                             — what a transport type means,
+                             AudioInputDevices + MicDeviceStore (microphone selection),
+                             SoundPack/Catalog/Store (the voice *descriptors*; the voices
+                             themselves are app-side)
   HostIdentity.swift         the host's Keychain service, log subsystem, defaults prefix, log
                              directory, product name and release feed — one overridable value
   Config/                    Keychain-backed API key, key terms, developer mode, style profiles,
@@ -364,25 +368,26 @@ a rule that outlives its row keeps firing and keeps citing this table while enfo
 project has already reversed. Reworded the row? Update the anchor. Reversed the decision? Delete the
 rule along with the row.
 
-| Don't                                                      | Because                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Add an external SPM dependency to the engine               | Dependency-free by rule (biggest supply-chain risk); a `check.sh` guard fails on `.package(` in `Package.swift` or a `url:`/`github:` package in `project.yml`. Extend `BlurtEngine` instead.                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| Use `AVAudioEngine` / `installTap` for capture             | A long-lived engine bound its input graph to one device and went stale on a mic↔built-in switch — `-10868` (`kAudioUnitErr_FormatNotSupported`) or all-zero buffers. `MicCapture` uses a fresh `AVAudioRecorder` per session.                                                                                                                                                                                                                                                                                                                                                                                                |
-| Add streaming STT                                          | The dictation API returns the full (already rewritten) text in one response; the overlay shows "Transcribing…" then the full text.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| Add a client-side LLM cleanup pass                         | Cleanup is the dictation API's server-side rewrite, requested by the `llm` block on the same `/transcribe` call. No LLM Gateway client, no `StylerProtocol`, no styling stage, no second request — transcription steering belongs in `ConversationContext`.                                                                                                                                                                                                                                                                                                                                                                  |
-| Add local models or model downloads                        | Transcription is a remote AssemblyAI call: no on-device ASR/LLM, no model cache, no download UI.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Pin transcription to English, or set a language at all     | Hurt non-English transcription; language is left to the model's own detection. **No `config.language_code`** either — the API documents it as defaulting to `en` and as ignored while a custom `prompt` is set, so dropping the prompt un-ignored it; detection was then measured to work with neither field set (es/fr/de/ja clips each transcribed in their own language against the live endpoint, rewrite included). Setting one would only take that away. `KeytermsWireTests` asserts the absence.                                                                                                                     |
-| Bring back `config.prompt`                                 | Replaced by `config.conversation_context` (`ConversationContext`), which is the structured field for the same job. A custom `prompt` also replaces the service's managed default and makes the API ignore `language_code`, so re-adding one silently gives up both.                                                                                                                                                                                                                                                                                                                                                          |
-| Widen the request's context past history + the prior chunk | `ConversationContext.turns` reads exactly two fields of `TranscriptionContext` — `recentTranscripts` and `priorText`. The app name, window title, field label and selected text are captured for the paste path and the developer-mode log and stay on the machine; the app/window/field hints and the `Selected text:` block were removed, not gated. Don't add one back, and don't route that context onto the request by another path. The user's key terms are the exception that proves the rule: they _are_ sent, as the request's own `word_boost` list (`KeytermsBoost`) — never folded back into the context turns. |
-| Add a "remove filler words (um, uh, like)" clause          | Not in the STT model's trained instruction set — a no-op, deliberately dropped; disfluency removal is the server-side LLM rewrite's job.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| Add a keystroke-typing paste path or a length threshold    | Injection is **always** clipboard paste (save → write → ⌘V → settle → restore), with the copied-to-clipboard degradation when the target is lost.                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| Add `LSUIElement` or a menu-bar-**only** mode              | Blurt is a Dock app first. The `MenuBarExtra` status item is convenience layered on the Dock icon; the notch can hide a status item, so nothing may depend on it. A menu-bar-only variant was reverted twice.                                                                                                                                                                                                                                                                                                                                                                                                                |
-| Add a `KeyboardShortcuts` package or a key+modifier chord  | The trigger is a single lone modifier, home-grown (`CGEventTap` + `DictationKeyGate`), and swallows nothing.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| Add a self-replacing install or background auto-updater    | Updates are download-only; `mxcl/AppUpdater` and its in-place updater were removed. The once-a-day launch _check_ (`AutomaticUpdateCheck`) is fine; installing for the user, or polling, is not. Extend `UpdateCheckModel`.                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Hand-edit `Blurt.xcodeproj/project.pbxproj`                | Generated from `project.yml`; `check.sh`'s drift check fails on any manual edit (a Claude PreToolUse hook also blocks it).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| Redirect the post-build install away from `/Applications`  | TCC won't register apps in DerivedData/`/tmp`, so permission toggles never appear.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| Touch the real Keychain in tests                           | `APIKeyStore` is the production item — a test that writes it triggers Keychain prompts and corrupts the real item's ACL. Use an isolated service (see `KeychainStoreTests`) or `InMemoryAPIKeyStore`.                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| Add backwards-compat shims for removed types               | Deleted types stay deleted — no deprecated re-exports.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Don't                                                                 | Because                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Add an external SPM dependency to the engine                          | Dependency-free by rule (biggest supply-chain risk); a `check.sh` guard fails on `.package(` in `Package.swift` or a `url:`/`github:` package in `project.yml`. Extend `BlurtEngine` instead.                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Use `AVAudioEngine` / `installTap` for capture                        | A long-lived engine bound its input graph to one device and went stale on a mic↔built-in switch — `-10868` (`kAudioUnitErr_FormatNotSupported`) or all-zero buffers. `MicCapture` builds a fresh `AVCaptureSession` recorder per capture (owner-directed move from `AVAudioRecorder`, 2026-08-25).                                                                                                                                                                                                                                                                                                                           |
+| Pre-open the mic to shave bring-up latency (a warm/prepared recorder) | Measured against `kAudioDevicePropertyDeviceIsRunningSomewhere`: neither building an `AVCaptureSession` nor the retired `AVAudioRecorder.prepareToRecord()` opens the device, so neither pre-pays the 180–600 ms route activation `record()` costs. A warm-recorder lifecycle bought ~15 ms and cost a device-identity check, a pin check, an expiry and a bring-up flag. `MicCapture.warmUp()` is stateless: it absorbs the process's first-touch cost and holds nothing.                                                                                                                                                   |
+| Add streaming STT                                                     | The dictation API returns the full (already rewritten) text in one response; the overlay shows "Transcribing…" then the full text.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Add a client-side LLM cleanup pass                                    | Cleanup is the dictation API's server-side rewrite, requested by the `llm` block on the same `/transcribe` call. No LLM Gateway client, no `StylerProtocol`, no styling stage, no second request — transcription steering belongs in `ConversationContext`.                                                                                                                                                                                                                                                                                                                                                                  |
+| Add local models or model downloads                                   | Transcription is a remote AssemblyAI call: no on-device ASR/LLM, no model cache, no download UI.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Pin transcription to English, or set a language at all                | Hurt non-English transcription; language is left to the model's own detection. **No `config.language_code`** either — the API documents it as defaulting to `en` and as ignored while a custom `prompt` is set, so dropping the prompt un-ignored it; detection was then measured to work with neither field set (es/fr/de/ja clips each transcribed in their own language against the live endpoint, rewrite included). Setting one would only take that away. `KeytermsWireTests` asserts the absence.                                                                                                                     |
+| Bring back `config.prompt`                                            | Replaced by `config.conversation_context` (`ConversationContext`), which is the structured field for the same job. A custom `prompt` also replaces the service's managed default and makes the API ignore `language_code`, so re-adding one silently gives up both.                                                                                                                                                                                                                                                                                                                                                          |
+| Widen the request's context past history + the prior chunk            | `ConversationContext.turns` reads exactly two fields of `TranscriptionContext` — `recentTranscripts` and `priorText`. The app name, window title, field label and selected text are captured for the paste path and the developer-mode log and stay on the machine; the app/window/field hints and the `Selected text:` block were removed, not gated. Don't add one back, and don't route that context onto the request by another path. The user's key terms are the exception that proves the rule: they _are_ sent, as the request's own `word_boost` list (`KeytermsBoost`) — never folded back into the context turns. |
+| Add a "remove filler words (um, uh, like)" clause                     | Not in the STT model's trained instruction set — a no-op, deliberately dropped; disfluency removal is the server-side LLM rewrite's job.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Add a keystroke-typing paste path or a length threshold               | Injection is **always** clipboard paste (save → write → ⌘V → settle → restore), with the copied-to-clipboard degradation when the target is lost.                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Add `LSUIElement` or a menu-bar-**only** mode                         | Blurt is a Dock app first. The `MenuBarExtra` status item is convenience layered on the Dock icon; the notch can hide a status item, so nothing may depend on it. A menu-bar-only variant was reverted twice.                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Add a `KeyboardShortcuts` package or a key+modifier chord             | The trigger is a single lone modifier, home-grown (`CGEventTap` + `DictationKeyGate`), and swallows nothing.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Add a self-replacing install or background auto-updater               | Updates are download-only; `mxcl/AppUpdater` and its in-place updater were removed. The once-a-day launch _check_ (`AutomaticUpdateCheck`) is fine; installing for the user, or polling, is not. Extend `UpdateCheckModel`.                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Hand-edit `Blurt.xcodeproj/project.pbxproj`                           | Generated from `project.yml`; `check.sh`'s drift check fails on any manual edit (a Claude PreToolUse hook also blocks it).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Redirect the post-build install away from `/Applications`             | TCC won't register apps in DerivedData/`/tmp`, so permission toggles never appear.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Touch the real Keychain in tests                                      | `APIKeyStore` is the production item — a test that writes it triggers Keychain prompts and corrupts the real item's ACL. Use an isolated service (see `KeychainStoreTests`) or `InMemoryAPIKeyStore`.                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Add backwards-compat shims for removed types                          | Deleted types stay deleted — no deprecated re-exports.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 Release-side invariants (hardened runtime and a secure timestamp on every nested mach-o and embedded
 framework, or notarization rejects the build; roll-forward-only for a bad release) live in
@@ -435,26 +440,41 @@ DictationKeyTap (CGEventTap + DictationKeyGate) → AppCoordinator → Dictation
 
 ### `MicCapture` — `Sources/BlurtEngine/Audio/MicCapture.swift`
 
-An actor implementing `MicCaptureProtocol`. It captures with **`AVAudioRecorder`**, recording
-straight to a temp 16 kHz / mono / 16-bit PCM WAV — the exact geometry the dictation API wants, so
-`stop()` reads the file back as raw S16LE bytes (`Data`, via `AVAudioFile`'s int16 common format)
-with no resampling or float-conversion pass. That blob is what the dictation request uploads, byte
-for byte.
+An actor implementing `MicCaptureProtocol`. It captures with an **`AVCaptureSession`** recorder
+(`CaptureSessionRecorder`, used directly — the `CaptureRecorder` protocol that once abstracted two
+backends went with the second one; the owner-directed move from `AVAudioRecorder`, 2026-08-25): the
+session's audio data output converts to 16 kHz / mono / 16-bit
+LPCM — the exact geometry the dictation API wants — and the delegate accumulates the raw S16LE
+bytes in memory, so `stop()` returns the blob the dictation request uploads byte for byte, with no
+temp file, no read-back, and no resampling or float-conversion pass.
 
-A **fresh recorder per session** resolves the current default input device at `record()` time; this
-is deliberate — see [Settled decisions](#settled-decisions--dont-reintroduce-these) for the
-`AVAudioEngine` failure it replaced.
+A **fresh recorder per session**, built around the _current_ resolution of the user's selection at
+press time; this is deliberate — see
+[Settled decisions](#settled-decisions--dont-reintroduce-these) for the `AVAudioEngine` failure it
+replaced.
 
-**Bluetooth inputs are the reason for four of this actor's moving parts.** Opening the mic on
+**Microphone selection** is that resolution: a device pinned in Settings (`MicDeviceStore`,
+persisted as the device UID — `AVCaptureDevice(uniqueID:)` takes the same string) or the system
+default input. The transport-keyed policies (liveness cap, tail linger) key off the **pinned**
+device, and a pinned device that isn't connected falls back to the system default per press
+(`MicDeviceSelection.effective` — pure and unit-tested; the pin stays stored). Enumeration, naming
+and presence live in `AudioInputDevices`, on `AVCaptureDevice` — the same API the recorder opens the
+device with, so the picker can't offer something the capture path would then call missing. So does
+the transport read, once `AVCaptureDevice.transportType` was confirmed on hardware to report the same
+four-character codes CoreAudio does for every case the policies turn on — `blue` on AirPods most of
+all, since a transport that fails to read as Bluetooth silently costs the 2.5 s liveness cap and the
+220 ms tail linger. Hardware-bound and coverage-excluded.
+
+**Bluetooth inputs are the reason for three of this actor's moving parts.** Opening the mic on
 AirPods (or any Bluetooth headset) makes the system renegotiate the link into its mic-capable mode —
 one to two seconds, during which the OS receives no audio at all — and that link then buffers audio
 in both directions. So:
 
 - **`start()` does not return until the input is live.** `record()` returning `true` only means the
-  AudioQueue started, not that frames are arriving, so `start()` polls the recorder until **both**
-  its clock has advanced past 0 **and** its meter reads above `MicLiveness.silenceFloorDB`. The
+  session started running, not that frames are arriving, so `start()` polls the recorder until **both**
+  it has delivered at least one frame **and** its meter reads above `MicLiveness.silenceFloorDB`. The
   clock alone is not enough: macOS can deliver all-zero buffers from a stale or not-yet-switched
-  device, and frames of digital silence advance the clock exactly like real audio — so the gate was
+  device, and frames of digital silence arrive and count exactly like real audio — so the gate was
   satisfied on its first ~1 ms poll while the AirPods link was still renegotiating. The floor
   discriminates _digital_ silence from any real analog input (a live mic in a quiet room still reads
   its own self-noise, far above it); it is deliberately **not** a speech threshold, which would hang
@@ -464,11 +484,35 @@ in both directions. So:
   and `start()` throws `.audioCaptureFailed`, so the press ends in the same error pill as any other
   capture failure rather than recording an utterance the mic never heard. (The gate originally failed
   open, proceeding as if live — which cued the user to speak into a dead mic anyway.) Audio spoken
-  during the switch cannot be recovered by anything, because nothing ever receives it. `stopGeneration` covers the one suspension
-  this introduces — a teardown landing mid-wait wins, and the recorder is torn down rather than
-  installed. `bringingUpCapture` covers the other consequence: across the wait both `activeRecorder`
-  and `warm` are nil, so the warm-up paths can't infer "no capture in flight" from them (see
-  `canPrepareWarmRecorder`) or they'd open a second recorder onto the live input.
+  during the switch cannot be recovered by anything, because nothing ever receives it. Where that cost lands differs by
+  transport, measured: on a USB interface `startRunning()` blocks for ~600 ms and the first frame
+  follows ~8 ms later, so the gate confirms almost at once; on AirPods `startRunning()` returns in
+  ~80 ms and the first frame arrives ~410 ms after that, so the gate is doing the waiting. Both end
+  in the same place because the wait's clock starts _after_ `record()` returns — a slow open eats
+  none of the frame-arrival budget, which is what lets the caps be this tight.
+
+  **The bring-up is off-actor.** Building the session and opening the device are both `async`, run
+  on the recorder's serial `controlQueue`, so neither blocks the actor: the ~600 ms open, and the
+  build before it (~5 ms warm, ~185 ms on a process's first touch of the capture stack). Only the
+  selection lookup stays inline, at microseconds once warm. Run inline it did both: a teardown arriving during the open measured **578 ms** of
+  waiting on a 635 ms open, against **24 µs** once suspended (`MicCaptureBringUpTests`, which warms
+  the stack first so it measures this rather than a process's first touch, then asserts an absolute
+  budget that holds on every input). It
+  also parked a cooperative-pool thread for the duration — the same pool the overlapping context
+  capture and the transcriber's connection warm-up run on, and starving it is how covering the
+  retired backend in CI deadlocked the whole test run, which is why the hop is a `DispatchQueue`
+  rather than a detached `Task`. Through `DictationSession` the win is latent rather than visible:
+  its serial command queue already runs release and cancel only after the press turn completes, and
+  `cancel()` claims `.cancelled` synchronously without touching the mic. But `MicCapture` is a
+  public actor and the contract has to hold for a host that doesn't serialize its own commands.
+  `stopRunning()` stays inline, at 19–41 ms against the open's ~600.
+
+  The suspension is also why the teardown snapshot moved: `stopGeneration` is now read before the
+  open rather than before the liveness wait, and checked at both ends, because a stop or cancel can
+  land while the input is still coming up. `stopGeneration`
+  covers the suspensions this introduces — a teardown landing anywhere in the bring-up wins, and the
+  recorder is torn down rather than installed. The check is written at each suspension; the teardown
+  itself is one `defer`, so a new suspension point inherits it.
 
   **A cancel preempts the bring-up rather than queueing behind it**, which took two pieces. The
   press publishes its task handle (`inFlightPress`) exactly as the pipeline publishes
@@ -483,37 +527,35 @@ in both directions. So:
   `performPress` still consumes the flag before claiming `.recording`, for the narrow window where
   the cancel lands after the wait returned and there is nothing left to interrupt.
 
-- **The warm recorder is re-armed after every capture**, not just at launch. The cost above is paid
-  at `prepareToRecord()`, i.e. per session, so warming only the first one hid it for one dictation
-  out of N. `stop()`/`cancelCapture()` schedule a re-warm; `start()` consumes it.
-- **A warm recorder is validated before reuse.** `AVAudioRecorder` resolves its device once and
-  never re-resolves, so `MicCapture` records the default input's identity (`AudioRoute.currentInput()`)
-  alongside the warm recorder and discards it when the device has changed — otherwise a recorder
-  warmed before the user connected their AirPods would keep recording the built-in mic. Unknown
-  counts as changed.
-- **The warm recorder expires** (`preparedRecorderLifetime`, 60 s). A prepared recorder holds the
-  input device open, which is exactly what pins AirPods in the profile where _output_ audio is
-  degraded — so it is not held indefinitely. Back-to-back dictations land inside the window; a press
-  past it just prepares lazily, which is the pre-re-warm behavior.
-
-The re-warm and the liveness gate are complements, not alternatives: the re-warm shortens how _often_
-the profile switch is paid (a warm recorder has already held the route open), and the gate is what
-keeps the app honest on the presses that pay it anyway.
+- **There is no warm recorder** — the bring-up cost is not pre-payable, and that is a
+  measurement, not a preference. Timed against CoreAudio's own
+  `kAudioDevicePropertyDeviceIsRunningSomewhere` (the bit behind the input indicator): building an
+  `AVCaptureSession` leaves the device closed and costs ~15 ms, while `record()`'s `startRunning()`
+  opens it and costs 180 ms on the built-in mic and ~600 ms on a USB interface. The retired
+  `AVAudioRecorder.prepareToRecord()` measured the same way — ~3 ms, device still closed, and a cold
+  `record()` after it cost 614 ms versus 585 ms with no prepare at all. **Neither API ever pre-paid
+  the route activation**, so the machinery that assumed one did (a recorder re-warmed after every
+  capture, validated against the resolved device identity and pin, a 60 s expiry to un-pin AirPods
+  from their degraded output profile, and a `bringingUpCapture` flag to stop a re-warm racing a live
+  press) was buying ~15 ms of a ~600 ms bring-up. It was deleted in favour of a stateless
+  `warmUp()`: build one session at launch and drop it, which absorbs the ~185 ms a process pays the
+  _first_ time it touches AVFoundation's capture stack (~90–125 ms of that the first device query
+  alone) and holds nothing afterwards. The live
+  suite pins the load-bearing half — building, and warming, must leave the microphone closed.
 
 `stop()` also waits out `AudioTransport.tailLinger(forTransportType:)` (220 ms on Bluetooth, `.zero`
 otherwise — the policy sits beside `MicLiveness`'s wait cap so both are unit-tested) before ending
 the recording **when the
-session's input is Bluetooth**, so speech still travelling over the link lands in the file instead of
-being truncated — the missing last word. It runs after `.transcribing` is claimed, so it delays the
-transcript, never the "it heard me" cue. Cancels take `cancelCapture()` instead, which skips both the
-linger and the file read-back: the audio is being discarded, so neither is worth delaying the user's
-cancel for.
+session's input is Bluetooth**, so speech still travelling over the link lands in the recording
+instead of being truncated — the missing last word. It runs after `.transcribing` is claimed, so it
+delays the transcript, never the "it heard me" cue. Cancels take `cancelCapture()` instead, which
+skips the linger: the audio is being discarded, so it isn't worth delaying the user's cancel for.
 
-The routing facts behind all of that live in **`AudioRoute`** (`Audio/AudioRoute.swift`, internal):
-which device is the default input, and its raw CoreAudio transport type. **Raw reads only** — what a
-transport _means_ is **`AudioTransport.isBluetooth`** and **`MicLiveness.timeout`**, which are pure
-and unit-tested, because `AudioRoute` itself needs real hardware and is excluded from the coverage
-gate. Don't let a decision drift into it. Its sibling
+What a transport _means_ is **`AudioTransport.isBluetooth`** and **`MicLiveness.timeout`**, which
+are pure and unit-tested; the reads that feed them are hardware-bound and coverage-excluded, so don't
+let a decision drift into them. **`AudioRoute`** (`Audio/AudioRoute.swift`, internal) is what's left
+of the CoreAudio side after the input reads moved to `AVCaptureDevice`: the default _output_ device,
+plus the property addressing its sibling shares. Its sibling
 **`AudioRouteMonitor`** (public) publishes output-route changes for the cue players — see
 [Settings, persistence, and cues](#settings-persistence-and-cues). Both are excluded from the
 coverage gate for the same reason
@@ -837,6 +879,9 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
   Only the active profile is ever sent, so that budget is not divided between them. One of the
   three stores with a setter, for the encoded-on-write reason below: the settings sheet and the
   main window's switcher write through it rather than binding the raw slots),
+  **`MicDeviceStore`** (`BlurtMicDeviceUID`, the input device dictation is pinned to, as its
+  CoreAudio UID — empty/unset follows the system default; re-read at every press, and a pinned
+  device that isn't connected falls back to the system default without unpinning),
   **`OverlayOriginStore`** (the pill's dragged origin, x/y), **`LastUpdateCheckStore`**
   (`BlurtLastUpdateCheck`, the stamp throttling the automatic launch update check).
 - **`DefaultsKey`** (`Config/DefaultsKey.swift`) defines every key those stores write, one case each,

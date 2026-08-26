@@ -46,8 +46,8 @@ struct MicCaptureProtocolDefaultsTests {
     // A capture with no cancel-specific teardown must still *end* on a cancel —
     // the default is stop-and-discard, so a conformance that never heard of
     // `cancelCapture` keeps the behavior it had when the session called `stop()`
-    // directly. (`MicCapture` overrides it to skip the tail linger and the
-    // read-back; that path needs real hardware, so it isn't covered here.)
+    // directly. (`MicCapture` overrides it to skip the tail linger; that path
+    // needs real hardware, so it isn't covered here.)
     let mic = BareMic()
     try await mic.cancelCapture()
     let stops = mic.stops.withLock { $0 }

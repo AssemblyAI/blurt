@@ -1,15 +1,15 @@
-@preconcurrency import AVFoundation
 import Foundation
 import os
 
-/// Captures mic audio with `AVAudioRecorder`, which records straight to the
-/// 16 kHz / mono / 16-bit PCM the dictation API wants — so there's no manual tap,
-/// sample-rate conversion, or PCM plumbing here. Each session uses a freshly
-/// created recorder, which resolves the *current* default input device at
-/// `record()` time. That's the whole reason this is no longer an `AVAudioEngine`:
-/// the engine's input graph bound to one device and went stale on a device switch
-/// (mic ↔ built-in), raising `-10868` (`kAudioUnitErr_FormatNotSupported`) or
-/// quietly capturing all-zero buffers. A per-session recorder can't go stale.
+/// Captures mic audio as the 16 kHz / mono / 16-bit PCM the dictation API wants
+/// — so there's no manual tap, resample pass, or PCM plumbing here. Each
+/// session uses a freshly built `CaptureSessionRecorder`: an `AVCaptureSession`
+/// around the *current* resolution of the user's selection — the device pinned
+/// in Settings (`MicDeviceSelection`), or the system default input. The fresh
+/// recorder per session is the whole reason this is not a long-lived engine
+/// graph: that graph bound its input to one device and went stale on a device
+/// switch, raising `-10868` or quietly capturing all-zero buffers; per-session
+/// recorders can't go stale.
 public actor MicCapture: MicCaptureProtocol {
   // Subsystem/category make these lines findable via:
   //   log show --predicate 'subsystem == "dev.alex.blurt"' --last 1h
@@ -20,90 +20,32 @@ public actor MicCapture: MicCaptureProtocol {
   public nonisolated let levels: AsyncStream<Float>
   private nonisolated let levelsContinuation: AsyncStream<Float>.Continuation
 
-  /// The geometry the recorder converts hardware audio to on the fly. The dictation
-  /// API's rate (`SyncSTTLimits.sampleRate`) — the same one the pipeline hands
-  /// the transcriber — so `stop()` returns bytes ready to upload with no
-  /// resampling or re-encoding pass.
-  private static let targetSampleRate = Double(SyncSTTLimits.sampleRate)
-
-  /// A recorder prepared ahead of the press so `start()` doesn't pay hardware
-  /// route activation on the hot path, together with everything that belongs to
-  /// *that* recorder: the input it is bound to, its idle countdown, and the
-  /// ticket that countdown carries.
-  ///
-  /// One optional rather than four parallel fields, so "a recorder without its
-  /// input snapshot" and "an expiry without its recorder" are unrepresentable
-  /// instead of merely never written.
-  ///
-  /// Filled by `warmUp()` at launch and **re-filled after every capture** (see
-  /// `scheduleRewarm`), because that cost is paid per session, not once:
-  /// `prepareToRecord()` is where the route is resolved and opened, and on a
-  /// Bluetooth input that means renegotiating the link into its mic-capable
-  /// mode — hundreds of milliseconds, sometimes over a second, during which the
-  /// user has pressed the key and nothing has happened. Warming only the first
-  /// session (the previous behavior) hid that cost for one dictation out of N.
-  ///
-  /// Still a *fresh recorder per session*, which is the invariant the
-  /// `AVAudioEngine` rewrite bought: the warm recorder is validated against the
-  /// live default input before it is used (`takeWarmRecorder`) and discarded
-  /// rather than reused when the device has changed underneath it.
-  var warm: WarmRecorder?
-
-  /// Bumped for each warm recorder prepared, so an expiry whose recorder has
-  /// since been consumed or replaced can recognise itself as stale. See
-  /// `releasePreparedRecorder(generation:)` for why cancelling the task isn't
-  /// sufficient on its own.
-  var preparedGeneration = 0
-
-  /// A prepared-but-not-started recorder and the state that only makes sense
-  /// alongside it.
-  struct WarmRecorder {
-    let recorder: AVAudioRecorder
-    /// The default input it was built against. `AVAudioRecorder` resolves its
-    /// device once, at `prepareToRecord()`, and never re-resolves — so without
-    /// this a recorder warmed while the built-in mic was default would keep
-    /// recording from it after the user connected their AirPods. See
-    /// `AudioRoute.InputSnapshot.deviceID` for why identity is the device ID.
-    let input: AudioRoute.InputSnapshot?
-    /// Releases this recorder once it has gone unused for
-    /// `preparedRecorderLifetime`. See that constant for why holding one open
-    /// forever is not an option.
-    var expiry: Task<Void, Never>?
-    /// The ticket `expiry` carries, so a stale one can identify itself.
-    let generation: Int
-  }
+  /// Reads the persisted microphone selection, once per session bring-up (and
+  /// per warm-up). A closure so tests inject a fixed selection instead of the
+  /// process defaults; production reads `MicDeviceStore` per capture, so a
+  /// Settings change applies to the very next press — the same re-read-per-use
+  /// rule as the key terms.
+  let deviceSelection: @Sendable () -> MicDeviceSelection
 
   /// The recorder for the in-flight session; nil between `stop()` and `start()`.
-  var activeRecorder: AVAudioRecorder?
-  /// The in-flight session's input transport, sampled once at `start()`. Read by
-  /// `stop()` to size the tail linger — sampled at start rather than re-read at
-  /// stop so a device switch mid-utterance can't make the two halves of one
-  /// capture disagree.
-  private var activeTransportType: UInt32?
+  private var activeRecorder: CaptureSessionRecorder?
+  /// How long `stop()` keeps capturing past key-up for the in-flight session —
+  /// `.zero` off Bluetooth. Decided at `start()` from the resolved transport
+  /// rather than re-read at stop, so a device switch mid-utterance can't make
+  /// the two halves of one capture disagree; stored as the `Duration` itself
+  /// because the transport has no other reader once the cap is chosen.
+  private var activeTailLinger: Duration = .zero
 
   /// Incremented by every `stop()` / `cancelCapture()`. `start()` snapshots it
   /// before suspending in the liveness wait — its one internal suspension — and
   /// re-checks after, so a teardown that interleaves during the wait wins.
   /// Without it, a reentrant caller's stop saw `activeRecorder == nil`, returned
   /// an empty "clean stop", and the not-yet-installed recorder kept capturing
-  /// (mic indicator hot, temp WAV leaked) until `start()` resumed. Unreachable
+  /// (mic indicator hot) until `start()` resumed. Unreachable
   /// through `DictationSession` — its serial command queue runs release/cancel
   /// only after the press turn completes — but this is a public actor, and any
   /// host can call it unqueued.
   private var stopGeneration = 0
-
-  /// True from `record()` succeeding until the capture is installed or torn
-  /// down — i.e. across the liveness wait.
-  ///
-  /// Needed because during that window **both** recorder slots are nil:
-  /// `activeRecorder` isn't installed until the wait returns (the recorder stays
-  /// confined to `start()` so nothing can touch it while the poll loop reads its
-  /// clock off-actor), and `warm` was consumed on the way in. Without this,
-  /// `warmUp()` — which every re-warm goes through — reads those two nils as "no
-  /// capture in flight" and prepares a *second* recorder onto the already-live
-  /// input, which is very reachable since `stop()` schedules a re-warm that can
-  /// land inside the next press's bring-up.
-  var bringingUpCapture = false
 
   /// Polls the active recorder's meter and feeds `levels` while recording.
   private var meterTask: Task<Void, Never>?
@@ -126,20 +68,10 @@ public actor MicCapture: MicCaptureProtocol {
   /// `meterIntervalSeconds` as the `Duration` the meter task sleeps for.
   private static let meterInterval = Duration.seconds(meterIntervalSeconds)
 
-  /// How long a prepared-but-unused recorder is held before being torn down.
-  ///
-  /// The warm recorder is the fix for per-session route activation, but it is
-  /// not free to hold: a prepared recorder keeps the input device open, and an
-  /// open input is exactly what pins AirPods in their mic-capable profile, where
-  /// *output* audio is degraded. Holding one indefinitely would trade dictation
-  /// latency for permanently worse music. This bounds that: back-to-back
-  /// dictations — the case the warm recorder exists for — land well inside the
-  /// window, and a user who stops dictating gets their output route back shortly
-  /// after. The next press past the window simply prepares lazily, which is the
-  /// behavior that shipped before the re-warm existed.
-  static let preparedRecorderLifetime = Duration.seconds(60)
-
-  public init() {
+  public init(
+    deviceSelection: @escaping @Sendable () -> MicDeviceSelection = { MicDeviceStore().selection }
+  ) {
+    self.deviceSelection = deviceSelection
     // The continuation is fed from a ~20 Hz meter timer; the levels stream is a
     // meter, not the captured signal — the consumer only renders the most recent
     // value — so cap it at the newest single element.
@@ -148,83 +80,117 @@ public actor MicCapture: MicCaptureProtocol {
     self.levelsContinuation = continuation
   }
 
-  public func start() async throws {
-    // One CoreAudio read per session, answering both questions this capture has
-    // about its input: whether the warm recorder is still bound to it, and
-    // whether its link buffers a tail worth waiting for at stop.
-    let input = AudioRoute.currentInput()
-    // Reuse the warm recorder when it is still bound to the current default
-    // input; otherwise build a fresh one. `??` only evaluates `makeRecorder()`
-    // when nothing usable was warmed.
-    let recorder = try takeWarmRecorder(matching: input) ?? Self.makeRecorder()
+  /// Absorbs the one-off cost of this process's first touch of AVFoundation's
+  /// capture stack, by building a session for the current selection and dropping
+  /// it. Holds no state: there is no warm recorder, nothing to validate against
+  /// the live route at press time, and nothing to tear down.
+  ///
+  /// That is deliberate, and it is a measurement rather than a preference. This
+  /// actor used to keep a prepared recorder between presses — re-warmed after
+  /// every capture, validated against the resolved input's device identity and
+  /// pin, and guarded by a bring-up flag so a re-warm couldn't race a live
+  /// press. What that machinery bought, timed against
+  /// `kAudioDevicePropertyDeviceIsRunningSomewhere` on real hardware, was ~15 ms
+  /// of a ~600 ms bring-up: neither building an `AVCaptureSession` **nor** the
+  /// retired `AVAudioRecorder.prepareToRecord()` opens the device (the indicator
+  /// bit stays clear through both), so neither could pre-pay the route
+  /// activation the warm recorder existed to hide. `record()`'s `startRunning()`
+  /// pays all of it, inside the connecting window the liveness gate already
+  /// covers. Only the first build in a process is worth pre-paying — ~185 ms of
+  /// framework set-up (~90–125 ms of it the first device query, the rest the
+  /// session and its input), against ~5 ms for every build after it — and that
+  /// needs no state to hold.
+  ///
+  /// Reads the pin straight off the selection rather than running `start()`'s
+  /// input resolution: what is being pre-paid is process-level framework set-up,
+  /// which is the same whichever device is named, and resolving here would spend
+  /// two device lookups on a value the recorder resolves again anyway — and
+  /// would log `resolveInput`'s "pinned microphone not connected" line at launch,
+  /// where nothing is being recorded. Naming the pin still costs a microsecond,
+  /// so it stays: if a driver has its own first-load cost, this pre-pays it.
+  ///
+  /// Never throws (a failure just leaves `start()` to build the real one) and
+  /// never begins capture, so no input indicator appears.
+  public func warmUp() async {
+    do {
+      _ = try await CaptureSessionRecorder.make(pinnedUID: deviceSelection().pinnedUID)
+      Self.logger.info("warmed the capture stack")
+    } catch {
+      Self.logger.error("warm-up failed: \(error.localizedDescription, privacy: .public)")
+    }
+  }
 
-    // record() returns false when no usable input device is available (unplugged,
+  public func start() async throws {
+    // The selection, resolved once per press: which device to pin the session to
+    // (or nil to follow the system default, including the missing-pin fallback),
+    // and the transport the liveness cap and the tail linger key off.
+    let resolved = Self.resolveInput(selection: deviceSelection())
+
+    // Snapshotted before the first suspension, which is the *build* — both it
+    // and the open hop off-actor (see `CaptureSessionRecorder.make`), so a stop
+    // or cancel can land anywhere in the bring-up, and it has to win over a
+    // bring-up that is no longer wanted.
+    let generationBeforeBringUp = stopGeneration
+    let recorder = try await CaptureSessionRecorder.make(pinnedUID: resolved.pinnedUID)
+    // Building is a suspension too, so it needs the same check as the two below.
+    // It had none when the build moved off-actor, which is the failure this
+    // helper exists to stop repeating: a guard hand-written per suspension means
+    // the next suspension arrives unguarded.
+    try checkStillWanted(since: generationBeforeBringUp, stage: "the session build")
+
+    // One teardown for every exit that doesn't install the recorder — a failed
+    // open, either abandonment check, the fail-closed timeout. Written once as a
+    // `defer` rather than at each `throw`, because forgetting it at any of them
+    // leaves a session capturing with nothing holding it: a hot input indicator
+    // and no owner, which is the failure `stopGeneration` exists to prevent. A
+    // future suspension point in this bring-up inherits the teardown for free
+    // and only has to add its own abandonment check.
+    var installed = false
+    defer { if !installed { recorder.stopAndDiscard() } }
+
+    // record() answers false when no usable input device is available (unplugged,
     // asleep, route lost). Surface that as a thrown Swift error so
     // DictationSession.press() reports `.audioCaptureFailed` instead of recording
-    // nothing. (Unlike AVAudioEngine's installTap, no path here can raise an
-    // uncatchable Obj-C exception, so there's no degenerate-format guard to keep.)
-    guard recorder.record() else {
+    // nothing. (No path here can raise an uncatchable Obj-C exception, so there's
+    // no degenerate-format guard to keep.)
+    guard await recorder.record() else {
       Self.logger.error("recorder.record() returned false — no usable input device")
-      Self.removeFile(at: recorder.url)
       throw BlurtError.audioCaptureFailed(underlying: MicCaptureError.noInputDevice)
     }
 
-    // The input is open from here, so claim the bring-up window before the first
-    // suspension — see `bringingUpCapture`. `defer` clears it on every exit,
-    // including the abort throw below.
-    bringingUpCapture = true
-    defer { bringingUpCapture = false }
+    // A teardown or cancel that landed during the open: the `defer` tears the
+    // recorder down rather than sitting through the liveness wait for a capture
+    // nobody wants.
+    try checkStillWanted(since: generationBeforeBringUp, stage: "the device open")
 
-    // `record()` returning true only means the AudioQueue started — not that the
-    // input route is delivering frames. A Bluetooth mic spends up to a couple of
-    // seconds switching into its mic-capable profile first, and the OS captures
-    // nothing in that window, so returning here immediately cues the user to
-    // speak into a dead mic and the first words never reach the transcript. Hold
-    // — `DictationSession` keeps the pill in `.connecting` and the start chime
-    // waits — until the recorder is clocking *and* metering real samples, capped
-    // per transport and FAILING CLOSED on timeout (the throw below). `MicLiveness`
-    // owns both policies and the reasoning, including why the clock alone was
-    // not enough. The re-warm above is what usually makes this return at once;
-    // the gate is what makes it correct when it doesn't.
-    let timeout = MicLiveness.timeout(forTransportType: input?.transportType)
-    let generationBeforeWait = stopGeneration
+    // `record()` returning true only means the session started running — not
+    // that the input route is delivering frames. A Bluetooth mic spends up to a
+    // couple of seconds switching into its mic-capable profile first, and the OS
+    // captures nothing in that window, so returning here immediately cues the
+    // user to speak into a dead mic and the first words never reach the
+    // transcript. Hold — `DictationSession` keeps the pill in `.connecting` and
+    // the start chime waits — until the recorder is delivering frames *and*
+    // metering real samples, capped per transport and FAILING CLOSED on timeout
+    // (the throw below). `MicLiveness` owns both policies and the reasoning,
+    // including why frame arrival alone was not enough.
+    let timeout = MicLiveness.timeout(forTransportType: resolved.transportType)
     // Both probes read off-actor (`waitUntilLive` is nonisolated), safe by
     // confinement: the polls run sequentially in one task and nothing else
     // references this recorder while `start()` is suspended — it isn't
-    // `activeRecorder` yet, the warm slot was cleared above, and the meter task
-    // hasn't started. Meters read stale until refreshed, exactly as in `emitLevel`.
+    // `activeRecorder` yet, and the meter task hasn't started. Meters read stale
+    // until refreshed, exactly as in `emitLevel`.
     let gap = await MicLiveness.waitUntilLive(
       timeout: timeout, clock: ContinuousClock(),
-      currentTime: { recorder.currentTime },
-      inputPowerDB: {
-        recorder.updateMeters()
-        return recorder.averagePower(forChannel: 0)
-      })
+      deliveredFrames: { recorder.deliveredFrames },
+      inputPowerDB: { recorder.meteredPowerDB() })
 
-    // Two ways the bring-up can be abandoned while suspended, both ending the
-    // same way — tear the recorder down instead of installing it, so nothing is
-    // left capturing and no temp file is orphaned:
-    //
-    // - A teardown landed (`stopGeneration` moved), so the caller's stop has to
-    //   stay a real stop rather than returning an empty "clean" one.
-    // - The task was cancelled, which is how a cancel preempts the wait:
-    //   `waitUntilLive` returns as soon as it sees it, so this is the difference
-    //   between an Escape acting now and acting in `bluetoothTimeout`. It must be
-    //   distinguished from the timeout, which returns nil too but is a reported
-    //   *failure* (the throw below) — a cancel is the user's own act, not a fault.
-    guard stopGeneration == generationBeforeWait, !Task.isCancelled else {
-      recorder.stop()
-      Self.removeFile(at: recorder.url)
-      Self.logger.info("start aborted — teardown or cancellation during the liveness wait")
-      throw CancellationError()
-    }
+    try checkStillWanted(since: generationBeforeBringUp, stage: "the liveness wait")
 
     // The gate's outcome, worded in `MicLiveness` so the line a field report is
     // read off is unit-tested. See `logSummary` for what it has to carry.
-    recorder.updateMeters()
     let summary = MicLiveness.logSummary(
-      gap: gap, timeout: timeout, transportType: input?.transportType,
-      powerDB: recorder.averagePower(forChannel: 0))
+      gap: gap, timeout: timeout, transportType: resolved.transportType,
+      powerDB: recorder.meteredPowerDB())
     Self.logger.log(level: gap == nil ? .error : .info, "\(summary, privacy: .public)")
     // No confirmed signal within the cap: fail CLOSED — tear the capture down and
     // surface the same `.audioCaptureFailed` presentation as the record()-false
@@ -232,43 +198,30 @@ public actor MicCapture: MicCaptureProtocol {
     // "speak now" over a mic delivering nothing; a recording made anyway would
     // discard the user's words after the fact. The recorder was never installed,
     // so no stopGeneration bump — a concurrent stop() correctly sees no active
-    // capture — and `bringingUpCapture` is cleared by the defer above.
+    // capture.
     guard gap != nil else {
-      recorder.stop()
-      Self.removeFile(at: recorder.url)
       throw BlurtError.audioCaptureFailed(underlying: MicCaptureError.inputNeverDelivered)
     }
 
     activeRecorder = recorder
-    activeTransportType = input?.transportType
+    activeTailLinger = AudioTransport.tailLinger(forTransportType: resolved.transportType)
     lastEmittedLevel = nil
-    Self.logger.info("start recording to \(recorder.url.lastPathComponent, privacy: .public)")
+    installed = true
+    Self.logger.info(
+      "start recording from \(resolved.pinnedUID ?? "system default", privacy: .public)")
     startMeterTimer()
   }
 
   public func stop() async throws -> Data {
-    // Read before the suspension below, so this capture's decision can't be
-    // rewritten by whatever a later `start()` sets.
-    let linger = AudioTransport.tailLinger(forTransportType: activeTransportType)
+    let linger = activeTailLinger
     guard let recorder = detachActiveRecorder() else { return Data() }
     if linger > .zero {
       // Keep capturing for a moment past key-up so the audio still travelling
-      // over the link lands in the file instead of being truncated. See
+      // over the link lands in the recording instead of being truncated. See
       // `AudioTransport.tailLinger(forTransportType:)`.
       try? await Task.sleep(for: linger)
     }
-    recorder.stop()
-
-    let url = recorder.url
-    defer {
-      Self.removeFile(at: url)
-      // Re-arm for the *next* press now that the device is free, so the route
-      // activation this session just paid for isn't paid again. Scheduled rather
-      // than done inline: preparing re-opens the input, which is the slow part,
-      // and `stop()` is on the release path the transcript waits behind.
-      scheduleRewarm()
-    }
-    let pcm = try Self.decodePCM(fromFileAt: url)
+    let pcm = recorder.stopAndReadPCM()
 
     let sampleCount = pcm.count / SyncSTTLimits.bytesPerSample
     let durationMs = SyncSTTLimits.durationMs(ofPCMBytes: pcm.count)
@@ -281,10 +234,9 @@ public actor MicCapture: MicCaptureProtocol {
   /// `DictationSession`'s cancels.
   ///
   /// Deliberately *not* `stop()`-and-discard: the user asked for nothing to
-  /// happen, so neither of `stop()`'s costs is worth paying. The Bluetooth tail
-  /// linger would delay the `.cancelled` phase (and with it the pill's dismissal)
-  /// to preserve audio about to be deleted, and reading the whole recording back
-  /// off disk would decode a blob with no consumer.
+  /// happen, so `stop()`'s one cost isn't worth paying. The Bluetooth tail
+  /// linger would delay the `.cancelled` phase (and with it the pill's
+  /// dismissal) to preserve audio about to be deleted.
   ///
   /// Not marked `throws`, because nothing on this path can fail — a
   /// non-throwing implementation satisfies the `throws` requirement fine. The
@@ -293,10 +245,30 @@ public actor MicCapture: MicCaptureProtocol {
   /// developer-mode failure log keeps working for hosts that take it.
   public func cancelCapture() {
     guard let recorder = detachActiveRecorder() else { return }
-    recorder.stop()
-    Self.removeFile(at: recorder.url)
+    recorder.stopAndDiscard()
     Self.logger.info("cancelled capture, discarded audio")
-    scheduleRewarm()
+  }
+
+  /// Throws when this bring-up has been abandoned while suspended, in either of
+  /// the two ways that end the same — the caller's `defer` tears the recorder
+  /// down instead of installing it, so nothing is left capturing:
+  ///
+  /// - A teardown landed (`stopGeneration` moved), so the caller's stop has to
+  ///   stay a real stop rather than returning an empty "clean" one.
+  /// - The task was cancelled, which is how a cancel preempts the bring-up:
+  ///   `waitUntilLive` returns as soon as it sees it, so this is the difference
+  ///   between an Escape acting now and acting in `bluetoothTimeout`. It must be
+  ///   distinguished from the liveness timeout, which also abandons the press but
+  ///   is a reported *failure* — a cancel is the user's own act, not a fault.
+  ///
+  /// One definition called after each of `start()`'s suspensions, rather than a
+  /// guard copied per suspension: the copies drifted the moment a third
+  /// suspension (the off-actor session build) arrived without one.
+  private func checkStillWanted(since generation: Int, stage: String) throws {
+    guard stopGeneration == generation, !Task.isCancelled else {
+      Self.logger.info("start aborted — teardown or cancellation during \(stage, privacy: .public)")
+      throw CancellationError()
+    }
   }
 
   /// Ends the current capture's claim on the actor's state and hands back the
@@ -306,34 +278,56 @@ public actor MicCapture: MicCaptureProtocol {
   /// the generation bump in particular is what `start()` re-checks across its
   /// liveness wait to know a teardown landed, so a third exit that forgot it
   /// would let an abandoned bring-up install itself and keep capturing.
-  private func detachActiveRecorder() -> AVAudioRecorder? {
+  private func detachActiveRecorder() -> CaptureSessionRecorder? {
     stopGeneration += 1
     meterTask?.cancel()
     meterTask = nil
-    defer { activeRecorder = nil }
+    defer {
+      activeRecorder = nil
+      activeTailLinger = .zero
+    }
     return activeRecorder
   }
 
-  // MARK: - Recorder construction
+  // MARK: - Input resolution
 
-  /// Build a recorder that writes mono 16-bit little-endian PCM at the target
-  /// rate into a unique temp file. `prepareToRecord()` does the heavy route/buffer
-  /// setup so the subsequent `record()` starts promptly.
-  static func makeRecorder() throws -> AVAudioRecorder {
-    let url = FileManager.default.temporaryDirectory
-      .appendingPathComponent("blurt-\(UUID().uuidString).wav")
-    let settings: [String: Any] = [
-      AVFormatIDKey: kAudioFormatLinearPCM,
-      AVSampleRateKey: targetSampleRate,
-      AVNumberOfChannelsKey: 1,
-      AVLinearPCMBitDepthKey: 16,
-      AVLinearPCMIsFloatKey: false,
-      AVLinearPCMIsBigEndianKey: false,
-    ]
-    let recorder = try AVAudioRecorder(url: url, settings: settings)
-    recorder.isMeteringEnabled = true
-    recorder.prepareToRecord()
-    return recorder
+  /// What a press needs to know about its input, and nothing more: the UID the
+  /// session must pin to (nil for the system default — no pin, or the
+  /// missing-device fallback), and the transport the two transport-keyed
+  /// policies read (`MicLiveness.timeout`, `AudioTransport.tailLinger`).
+  ///
+  /// It used to carry the resolved device's `AudioDeviceID` as well, purely so a
+  /// warm recorder could be checked for still being bound to it. With no warm
+  /// recorder to validate, nothing asks which device this is — only how to open
+  /// it and how its link behaves.
+  struct ResolvedInput {
+    let pinnedUID: String?
+    let transportType: UInt32?
+  }
+
+  /// One trip through the selection policy: check whether the pinned UID still
+  /// names a connected device, let `MicDeviceSelection.effective` — the pure,
+  /// unit-tested rule — pick the fallback, and read the transport of whichever
+  /// input won. Hardware-adjacent glue in a coverage-excluded file; the decision
+  /// itself stays testable.
+  static func resolveInput(selection: MicDeviceSelection) -> ResolvedInput {
+    // One device lookup, answering both questions: the transport is nil exactly
+    // when no connected device carries the pin (see
+    // `AudioInputDevices.transportType(forUID:)`), so presence is `!= nil` and
+    // the value is reused below instead of read a second time.
+    let pinnedTransport = selection.pinnedUID.flatMap(AudioInputDevices.transportType(forUID:))
+    switch selection.effective(pinnedDevicePresent: pinnedTransport != nil) {
+    case .pinned(let uid):
+      return ResolvedInput(pinnedUID: uid, transportType: pinnedTransport)
+    case .systemDefault:
+      if case .pinned = selection {
+        // Graceful degradation, not an error: the pin stays stored, and this
+        // capture records what an un-pinned one would.
+        logger.info("pinned microphone not connected — recording the system default input")
+      }
+      return ResolvedInput(
+        pinnedUID: nil, transportType: AudioInputDevices.systemDefaultTransportType())
+    }
   }
 
   // MARK: - Level metering
@@ -354,8 +348,7 @@ public actor MicCapture: MicCaptureProtocol {
 
   private func emitLevel() {
     guard let recorder = activeRecorder else { return }
-    recorder.updateMeters()
-    let level = Self.linearLevel(fromPowerDB: recorder.averagePower(forChannel: 0))
+    let level = Self.linearLevel(fromPowerDB: recorder.meteredPowerDB())
     // Only yield transitions. `linearLevel` floors room ambient to exactly 0, so a
     // silent stretch would otherwise push the same value 20×/s, resuming the
     // host's `@MainActor` observer each time just to have it discard the
@@ -367,33 +360,7 @@ public actor MicCapture: MicCaptureProtocol {
   }
 
   // The dB→0...1 conversion `emitLevel` uses lives in `MicCapture+Meter.swift`
-  // — pure math the coverage gate counts, unlike this hardware-bound actor. The
-  // warm-recorder lifecycle (`warmUp`, `takeWarmRecorder`, the re-warm and its
-  // expiry) lives in `MicCapture+Warm.swift`, split off for the lint
-  // file-length budget — which is why the prepared-recorder state, `logger`,
-  // `removeFile` and `makeRecorder` are internal rather than private.
-
-  // MARK: - File helpers
-
-  /// Read a recorded PCM file back as raw S16LE bytes — the dictation API's upload
-  /// encoding. The on-disk WAV already holds 16-bit int samples, so asking
-  /// `AVAudioFile` for the int16 common format makes this a straight copy-out:
-  /// no detour through Float32 (which the default `processingFormat` would
-  /// impose, and which the transcriber would only convert straight back). Int16
-  /// is host-endian; Apple platforms (arm64/x86_64) are little-endian, so the
-  /// bytes are already the S16LE the dictation API expects.
-  static func decodePCM(fromFileAt url: URL) throws -> Data {
-    let file = try AVAudioFile(forReading: url, commonFormat: .pcmFormatInt16, interleaved: true)
-    let frameCount = AVAudioFrameCount(file.length)
-    guard frameCount > 0,
-      let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: frameCount)
-    else { return Data() }
-    try file.read(into: buffer)
-    guard let channel = buffer.int16ChannelData?[0] else { return Data() }
-    return Data(bytes: channel, count: Int(buffer.frameLength) * SyncSTTLimits.bytesPerSample)
-  }
-
-  static func removeFile(at url: URL) {
-    try? FileManager.default.removeItem(at: url)
-  }
+  // — pure math the coverage gate counts, unlike this hardware-bound actor,
+  // which is why `logger` and `deviceSelection` are internal rather than
+  // private.
 }

@@ -185,7 +185,7 @@ what each script does, signing — and how changes land;
 
 ```text
 Sources/BlurtEngine/     Swift 6 package owning the pipeline — no external dependencies
-  Audio/                 MicCapture: fresh AVAudioRecorder per session, 16 kHz mono PCM,
+  Audio/                 MicCapture: fresh AVCaptureSession per session, 16 kHz mono PCM,
                          live level meter; DX7/Juno-106 sound packs
   STT/                   AssemblyAITranscriber: one POST to dictation.assemblyai.com/transcribe
                          (STT + LLM rewrite); ConversationContext (contextual priming:

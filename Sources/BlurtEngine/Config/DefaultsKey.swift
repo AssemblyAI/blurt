@@ -42,6 +42,9 @@ enum DefaultsKey: String, CaseIterable {
   case overlayCustomOriginX = "OverlayCustomOriginX"
   case overlayCustomOriginY = "OverlayCustomOriginY"
   case lastUpdateCheck = "LastUpdateCheck"
+  /// The CoreAudio UID of the input device dictation is pinned to, or empty for
+  /// "same as system" (`MicDeviceStore`).
+  case micDeviceUID = "MicDeviceUID"
 
   /// The key this case actually reads and writes, under the configured host
   /// identity. A computed property rather than a stored string because the

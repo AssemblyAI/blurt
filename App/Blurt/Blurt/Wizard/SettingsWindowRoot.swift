@@ -65,7 +65,7 @@ private struct SettingsPane<Content: View>: View {
 }
 
 /// The everyday setup a user changes: the AssemblyAI key, the dictation
-/// shortcut, the cue sound, and the transcription key terms.
+/// shortcut, the microphone, the cue sound, and the transcription key terms.
 private struct GeneralSettingsTab: View {
   let coordinator: AppCoordinator
 
@@ -73,6 +73,7 @@ private struct GeneralSettingsTab: View {
     SettingsPane {
       APIKeyStepView(apiKey: coordinator.apiKey)
       HotkeyStepView(coordinator: coordinator)
+      MicrophoneStepView()
       SoundStepView(coordinator: coordinator)
       KeyTermsStepView()
     }

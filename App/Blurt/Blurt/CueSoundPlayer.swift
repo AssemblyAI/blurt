@@ -152,12 +152,16 @@ final class CueSoundPlayer {
     // A pending route re-prime is acted on at exactly two points.
     //
     // `.connecting` covers the re-prime that is *already pending when a press
-    // arrives*, which is the one the user hears: `MicCapture.warmUp()` opens the
-    // input at launch, flipping AirPods out of their output-only profile well
-    // before the first dictation, so the players `prime()` pre-rolled are stale
-    // and the very first start chime is the one that stalls or clips. Waiting for
-    // a terminal phase meant that reload landed *after* the dictation it should
-    // have protected. Reloading here is safe where reloading mid-press was not:
+    // arrives*, which is the one the user hears: opening the mic flips AirPods
+    // out of their output-only profile, which invalidates the players `prime()`
+    // pre-rolled, and the first start chime after such a flip is the one that
+    // stalls or clips. That flip lands at the *press* — `record()`'s
+    // `startRunning()` is what opens the device, and nothing before it does (see
+    // `MicCapture.warmUp()`, which deliberately holds no open input) — so a
+    // pending re-prime and the chime it has to protect are one phase apart.
+    // Waiting for a terminal phase meant that reload landed *after* the
+    // dictation it should have protected. Reloading here is safe where reloading
+    // mid-press was not:
     // no cue is in flight in this phase (the start chime rides the
     // connecting→recording edge), so nothing is swapped out from under a playing
     // `AVAudioPlayer`; the decode runs off the main actor, so it isn't competing

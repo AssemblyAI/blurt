@@ -110,7 +110,7 @@ SCOPES=(
   "$ENGINE $APP"
 )
 ADVICE=(
-  "MicCapture uses a fresh AVAudioRecorder per session — a long-lived engine goes stale on a device switch"
+  "MicCapture builds a fresh AVCaptureSession recorder per capture — a long-lived engine goes stale on a device switch"
   "the dictation API returns the full text in one response; there is no streaming path"
   "cleanup is the API's server-side rewrite via the llm block on the same /transcribe call"
   "transcription is a remote AssemblyAI call — no on-device ASR/LLM, no model cache"

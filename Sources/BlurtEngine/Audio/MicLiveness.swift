@@ -1,5 +1,3 @@
-import Foundation
-
 /// The pure decision half of `MicCapture.start()`'s liveness gate: how long to
 /// wait for the input device to actually deliver frames, and the polling loop
 /// that detects when it has. Kept out of the hardware-bound capture actor (the
@@ -9,7 +7,7 @@ enum MicLiveness {
   /// The first re-check delay, doubling up to `maxPollInterval`.
   ///
   /// Geometric rather than a fixed quantum because the two cases this loop
-  /// serves want opposite things. `AVAudioRecorder.currentTime` is 0 the instant
+  /// serves want opposite things. No frames have arrived the instant
   /// `record()` returns, so *every* press sleeps at least once before
   /// `.recording`, the start chime and the meter — on a wired mic that quantum
   /// is the entire wait, and it should be as small as possible. A real Bluetooth
@@ -27,11 +25,9 @@ enum MicLiveness {
   /// Wait cap for Bluetooth inputs: bringing an AirPods mic up means a profile
   /// switch into the mic-capable mode that takes ~1–2 s, and the link drops back
   /// to the output-only profile after an idle gap — so a dictation after a pause
-  /// pays it again, not just the first one.
-  ///
-  /// `MicCapture`'s re-warm shortens how *often* this is paid (it keeps the
-  /// input open between dictations); this cap governs what happens when it is
-  /// paid anyway.
+  /// pays it again, not just the first one. Nothing on the capture path can
+  /// pre-pay it — `MicCapture.warmUp()` holds that measurement — so this cap
+  /// governs every press that lands on a cold link.
   static let bluetoothTimeout: Duration = .milliseconds(2500)
 
   /// Wait cap for a transport known to be wired or on-board
@@ -61,12 +57,20 @@ enum MicLiveness {
   ///
   /// This is not a speech threshold and must never be raised into one. All it
   /// has to separate is "the buffers are literally zeroes" from "the ADC is
-  /// handing us something": `averagePower(forChannel:)` reports dBFS in roughly
-  /// `[-160, 0]`, a zero-filled buffer bottoms out at or near -160, and a single
-  /// least-significant bit of a 16-bit sample is already about -90, so any real
-  /// analog noise floor — including a live mic in a dead-quiet room, which still
-  /// reads its own self-noise — sits far above this. -115 is in the empty band
-  /// between the two.
+  /// handing us something": the capture meter
+  /// (`AVCaptureAudioChannel.averagePowerLevel`, dBFS with full scale at 0 —
+  /// the same scale the retired recorder's meter reported) reads a zero-filled
+  /// buffer at or near its floor, while a single least-significant bit of a
+  /// 16-bit sample is already about -90, so any real analog noise floor —
+  /// including a live mic in a dead-quiet room, which still reads its own
+  /// self-noise — sits far above this. -115 is in the empty band between the
+  /// two. Verified on AirPods, which was the case that mattered: before the
+  /// channel's first update the meter reads `-Float.greatestFiniteMagnitude`
+  /// (~-3.4e38), not the -160 a settled meter floors at, and a live AirPods mic
+  /// reads far above -115 within a few hundred ms of the first frame. Both fall
+  /// on the correct side of this floor, and the `!(power > floor)` spelling in
+  /// `waitUntilLive` is what makes the sentinel — a wildly out-of-range value,
+  /// like NaN — count as *not live* rather than sneaking through a comparison.
   ///
   /// A speech-level floor (`MicCapture.meterFloorDB` is -50) would turn this
   /// gate into voice-activity detection and fail every press in a quiet room
@@ -113,21 +117,21 @@ enum MicLiveness {
   }
 
   /// Polls the recorder on a backoff (see `initialPollInterval`) until it is
-  /// genuinely live: the clock has advanced past zero **and** one meter reading
-  /// is above `silenceFloorDB`.
+  /// genuinely live: at least one frame has been delivered **and** one meter
+  /// reading is above `silenceFloorDB`.
   ///
-  /// The clock alone is not enough, which is what shipped and what still lost
-  /// the first words on AirPods. macOS can hand a stale or not-yet-switched
-  /// device's queue **all-zero buffers** (the failure that retired the
+  /// Frame arrival alone is not enough, which is what shipped and what still
+  /// lost the first words on AirPods. macOS can hand a stale or
+  /// not-yet-switched device **all-zero buffers** (the failure that retired the
   /// `AVAudioEngine` capture path — see `MicCapture`'s header), and frames of
-  /// digital silence advance `currentTime` exactly like real audio does. So the
-  /// clock term was satisfied on the first ~1 ms poll while the link was still
-  /// renegotiating, the wait returned immediately, and the "Connecting…" pill
-  /// flashed past instead of holding.
+  /// digital silence arrive and count exactly like real audio does. So the
+  /// arrival term was satisfied on the first ~1 ms poll while the link was
+  /// still renegotiating, the wait returned immediately, and the "Connecting…"
+  /// pill flashed past instead of holding.
   ///
   /// The power term is a *device is delivering real samples* test, not a
   /// voice-activity one — see `silenceFloorDB`. Short-circuited, so a recorder
-  /// whose clock hasn't moved is never metered.
+  /// that hasn't delivered anything yet is never metered.
   ///
   /// Returns the elapsed wait once the input is live, or nil when `timeout` (or
   /// a task cancellation) won the race. Nil is pure information — this function
@@ -141,7 +145,7 @@ enum MicLiveness {
   static func waitUntilLive(
     timeout: Duration,
     clock: some Clock<Duration>,
-    currentTime: @escaping @Sendable () -> TimeInterval,
+    deliveredFrames: @escaping @Sendable () -> Int,
     inputPowerDB: @escaping @Sendable () -> Float
   ) async -> Duration? {
     let start = clock.now
@@ -149,7 +153,7 @@ enum MicLiveness {
     var interval = initialPollInterval
     // Negated `>` rather than `<=` on purpose: a NaN reading fails both
     // comparisons, and this spelling makes that "not live" instead of "live".
-    while currentTime() <= 0 || !(inputPowerDB() > silenceFloorDB) {
+    while deliveredFrames() <= 0 || !(inputPowerDB() > silenceFloorDB) {
       guard clock.now < deadline, !Task.isCancelled else { return nil }
       try? await clock.sleep(for: interval)
       interval = min(interval * 2, maxPollInterval)

@@ -3,30 +3,24 @@ import Testing
 
 @testable import BlurtEngine
 
-extension Tag {
-  /// Marks tests that drive the real AVAudioEngine and the system mic. They only
-  /// run when BLURT_LIVE_AUDIO_TESTS=1; the tag lets a run include/exclude them
-  /// as a group (e.g. `--filter-tag liveAudio`).
-  @Tag static var liveAudio: Self
-}
-
-/// Hits the real AVAudioEngine and the system mic, so it's gated on
-/// BLURT_LIVE_AUDIO_TESTS=1 (set it in the scheme to enable). Using
-/// `.enabled(if:)` rather than an in-body `guard … else { return }` means a
-/// normal run reports this as *skipped* instead of a silent pass — the skip is
-/// visible, so no one mistakes "didn't run" for "passed". `.timeLimit` fails fast
-/// if the capture hangs instead of stalling the whole run.
+/// Hits a real `AVCaptureSession` and the system mic, so it rides the
+/// `requiresLiveAudio` gate (set BLURT_LIVE_AUDIO_TESTS=1 in the scheme to
+/// enable). `.timeLimit` fails fast if the capture hangs instead of stalling the
+/// whole run.
 @Suite("MicCapture.levels (live)")
 struct MicCaptureLevelsTests {
   @Test(
     "levels yield during capture",
-    .enabled(
-      if: ProcessInfo.processInfo.environment["BLURT_LIVE_AUDIO_TESTS"] == "1",
-      "set BLURT_LIVE_AUDIO_TESTS=1 to run (needs a real microphone)"),
+    ConditionTrait.requiresLiveAudio,
     .tags(.liveAudio),
     .timeLimit(.minutes(1)))
   func levelsYieldDuringCapture() async throws {
-    let mic = MicCapture()
+    // See `LiveAudioDevice`: the suites that open the mic take turns, so the one
+    // asserting on the device's own "is anyone capturing" bit isn't reading ours.
+    await LiveAudioDevice.acquire()
+    defer { LiveAudioDevice.release() }
+
+    let mic = MicCapture(deviceSelection: { .systemDefault })
 
     let collector = Task { () -> [Float] in
       var collected: [Float] = []
