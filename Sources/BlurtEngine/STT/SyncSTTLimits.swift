@@ -31,6 +31,19 @@ public enum SyncSTTLimits {
   /// audio with `minPCMBytes`; only the capture/upload code needs the factor.
   static let bytesPerSample = 2
 
+  /// Channels in that geometry. Mono, and the capture side has to agree: every
+  /// byte-count-to-duration conversion here assumes one channel, so a stereo
+  /// recorder would report half the duration it captured.
+  static let channelCount = 1
+
+  /// Bit depth of that geometry, derived from `bytesPerSample` rather than
+  /// restated. `CaptureSessionRecorder.audioSettings` asks for these three
+  /// values instead of spelling 16 and 1 as literals: capture geometry and the
+  /// byte math above are one contract, and they used to be two unlinked
+  /// definitions with nothing failing if they drifted (`MicCaptureFormatTests`
+  /// pins the link).
+  static let bitDepth = bytesPerSample * 8
+
   /// The fewest PCM bytes worth sending: `minSamples` expressed in the raw
   /// S16LE encoding the pipeline captures and uploads — the floor
   /// `DictationSession` applies to the blob `MicCaptureProtocol.stop()` returns.

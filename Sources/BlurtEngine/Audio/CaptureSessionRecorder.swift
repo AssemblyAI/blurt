@@ -25,15 +25,12 @@ import Synchronization
 /// switch would record the wrong mic (or silence) rather than failing loudly.
 /// `MicCapture` builds one per press and drops it at stop.
 ///
-/// Building the session does **not** engage the microphone — measured against
+/// Building the session does **not** engage the microphone: measured against
 /// CoreAudio's own `kAudioDevicePropertyDeviceIsRunningSomewhere`, the bit
-/// behind the input indicator: it stays clear until `record()`. What building
-/// costs is ~15 ms of object graph, and ~75 ms more the first time a process
-/// touches AVFoundation's capture stack at all; the device open and route
-/// activation — 180 ms on the built-in mic, ~600 ms on a USB interface, seconds
-/// on a Bluetooth link — all land in `record()`'s `startRunning()`, inside the
-/// press's connecting window. That measurement is why there is no warm-recorder
-/// lifecycle here anymore (see `MicCapture.warmUp()`).
+/// behind the input indicator, it stays clear until `record()`. Building is also
+/// cheap next to opening. `MicCapture.warmUp()` holds the full measurement and
+/// what follows from it (no warm-recorder lifecycle, and nothing worth
+/// pre-paying but the process's first touch).
 ///
 /// Hardware-bound like `MicCapture`, and excluded from the coverage gate for
 /// the same reason; its live test rides the `BLURT_LIVE_AUDIO_TESTS` gate in
@@ -62,29 +59,52 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// method runs here, and it touches nothing but `state`.
   private let delegateQueue = DispatchQueue(
     label: HostIdentity.current.queueLabel("MicCaptureSession"))
-  /// The serial queue `startRunning()` runs on — session *control*, deliberately
-  /// not `delegateQueue`. Opening the device takes ~600 ms on a USB interface,
-  /// and blocking the delivery queue for that long would stall the very frames
-  /// the liveness gate is then waiting for. A dedicated `DispatchQueue` rather
-  /// than a detached `Task`, so the wait parks a Dispatch thread instead of one
-  /// of the cooperative pool's — the pool is what the rest of the press runs on
-  /// (the context capture that overlaps this, the transcriber's connection
-  /// warm-up), and starving it is how covering the retired backend in CI
-  /// deadlocked the whole test run.
-  private let sessionQueue = DispatchQueue(
+  /// The serial queue session *control* runs on — building and starting —
+  /// deliberately not `delegateQueue`. Both steps block for as long as the
+  /// hardware takes, and blocking the delivery queue would stall the very frames
+  /// the liveness gate is then waiting for. A `DispatchQueue` rather than a
+  /// detached `Task`, so those waits park a Dispatch thread instead of one of the
+  /// cooperative pool's — the pool is what the rest of the press runs on (the
+  /// context capture that overlaps this, the transcriber's connection warm-up),
+  /// and starving it is how covering the retired backend in CI deadlocked the
+  /// whole test run.
+  ///
+  /// `static`, so it also serializes across recorders: only one capture session
+  /// is ever meant to be coming up at a time, and AVFoundation asks that session
+  /// control be serialized rather than concurrent.
+  private static let controlQueue = DispatchQueue(
     label: HostIdentity.current.queueLabel("MicCaptureSessionControl"))
   private let state = Mutex(Guarded())
-  /// A short name for the capture-start log line.
-  let logName: String
+
+  /// Builds a recorder off the caller's executor, on `controlQueue`.
+  ///
+  /// The build is not free and not bounded: ~5 ms warm, but ~185 ms the first
+  /// time a process touches AVFoundation's capture stack (~90–125 ms of that the
+  /// first device query alone). Run inline on `MicCapture` it blocked the actor
+  /// for that whole window, which a teardown racing the bring-up then waited out
+  /// — the same defect as a blocking `record()`, and `MicCaptureBringUpTests`
+  /// caught it at 100 ms once its own warm-up probe was removed.
+  ///
+  /// Deliberately still *separate* from `record()` rather than folded into one
+  /// "make and start" hop: that building leaves the microphone closed is the
+  /// invariant the whole warm-up design rests on, and the live suite can only
+  /// assert it while the two steps are observable apart.
+  static func make(pinnedUID: String?) async throws -> CaptureSessionRecorder {
+    try await withCheckedThrowingContinuation { continuation in
+      controlQueue.async {
+        continuation.resume(with: Result { try CaptureSessionRecorder(pinnedUID: pinnedUID) })
+      }
+    }
+  }
 
   /// Builds and fully configures the session — device input, converted-format
-  /// data output, delegate — without starting it. Throws only when
+  /// data output, delegate — without starting it. Private: `make` is the entry
+  /// point, so no caller can put this back on its own executor. Throws only when
   /// `AVCaptureDeviceInput` refuses the device (e.g. no microphone
   /// authorization); "no device at all" instead leaves the session inputless,
   /// so `record()` answers false and `MicCapture.start()` surfaces the same
   /// `.audioCaptureFailed(noInputDevice)` it always has.
-  init(pinnedUID: String?) throws {
-    logName = pinnedUID == nil ? "capture session (default input)" : "capture session (pinned input)"
+  private init(pinnedUID: String?) throws {
     super.init()
 
     session.beginConfiguration()
@@ -95,17 +115,7 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
         session.addInput(input)
       }
     }
-    // The dictation API's geometry, converted by the output itself — the same
-    // six keys the retired WAV recorder asked of its file, so capture still
-    // lands in upload-ready S16LE with no resample pass anywhere.
-    output.audioSettings = [
-      AVFormatIDKey: kAudioFormatLinearPCM,
-      AVSampleRateKey: Double(SyncSTTLimits.sampleRate),
-      AVNumberOfChannelsKey: 1,
-      AVLinearPCMBitDepthKey: 16,
-      AVLinearPCMIsFloatKey: false,
-      AVLinearPCMIsBigEndianKey: false,
-    ]
+    output.audioSettings = Self.audioSettings()
     output.setSampleBufferDelegate(self, queue: delegateQueue)
     if session.canAddOutput(output) {
       session.addOutput(output)
@@ -127,10 +137,32 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// here too so the race where the device vanishes between resolution and
   /// build degrades identically. Nil when the machine has no input at all.
   private static func device(forPinnedUID pinnedUID: String?) -> AVCaptureDevice? {
-    if let pinnedUID, let pinned = AVCaptureDevice(uniqueID: pinnedUID) {
+    if let pinnedUID, let pinned = AudioInputDevices.device(forUID: pinnedUID) {
       return pinned
     }
-    return AVCaptureDevice.default(for: .audio)
+    return AudioInputDevices.systemDefaultDevice
+  }
+
+  /// The dictation API's geometry, converted by the output itself — the same six
+  /// keys the retired WAV recorder asked of its file, so capture still lands in
+  /// upload-ready S16LE with no resample pass anywhere.
+  ///
+  /// Every number comes from `SyncSTTLimits`, which also owns the byte math the
+  /// upload side applies to the result. They are one contract: a stereo or
+  /// 8-bit recorder would silently halve or double every duration the pipeline
+  /// computes. Device-free, so `MicCaptureFormatTests` can assert it despite
+  /// this file being coverage-excluded; a function rather than a stored static
+  /// because `[String: Any]` is not `Sendable`, and it is built once per
+  /// recorder regardless.
+  static func audioSettings() -> [String: Any] {
+    [
+      AVFormatIDKey: kAudioFormatLinearPCM,
+      AVSampleRateKey: Double(SyncSTTLimits.sampleRate),
+      AVNumberOfChannelsKey: SyncSTTLimits.channelCount,
+      AVLinearPCMBitDepthKey: SyncSTTLimits.bitDepth,
+      AVLinearPCMIsFloatKey: false,
+      AVLinearPCMIsBigEndianKey: false,
+    ]
   }
 
   /// Opens the device and starts capture, answering false when there is no
@@ -147,12 +179,12 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// the actor stays available to the stop and cancel that may be racing this.
   ///
   /// The suspension is why `MicCapture.start()` snapshots `stopGeneration`
-  /// *before* calling this and re-checks after: a teardown can now land during
-  /// the open, and it has to win.
+  /// before the bring-up and re-checks after: a teardown can land during the
+  /// open, and it has to win.
   func record() async -> Bool {
     guard !session.inputs.isEmpty else { return false }
     return await withCheckedContinuation { continuation in
-      sessionQueue.async {
+      Self.controlQueue.async {
         self.session.startRunning()
         continuation.resume(returning: self.session.isRunning)
       }
@@ -195,13 +227,13 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// memory in the upload encoding, so there is no read-back, decode or temp
   /// file left to fail at.
   ///
-  /// Synchronous, unlike `record()`, on two grounds. `stopRunning()` measures
-  /// 19–41 ms against the open's ~600 ms, which is not worth another suspension
-  /// point on the release path the transcript waits behind; and it cannot race
-  /// the `sessionQueue` work, because every caller runs on a recorder whose
-  /// `record()` has already resumed (an abandoned bring-up tears down only after
-  /// the open returns). If a stop ever does need to overlap an open, it belongs
-  /// on `sessionQueue` too — that is what the queue is for.
+  /// Synchronous, unlike `make` and `record()`, on two grounds. `stopRunning()`
+  /// measures 19–41 ms against the open's ~600 ms, which is not worth another
+  /// suspension point on the release path the transcript waits behind; and it
+  /// cannot race the `controlQueue` work, because every caller runs on a recorder
+  /// whose `record()` has already resumed (an abandoned bring-up tears down only
+  /// after the open returns). If a stop ever does need to overlap an open, it
+  /// belongs on `controlQueue` too — that is what the queue is for.
   func stopAndReadPCM() -> Data {
     session.stopRunning()
     return state.withLock { $0.captured }

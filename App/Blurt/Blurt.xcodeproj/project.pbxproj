@@ -409,6 +409,7 @@
 		EA50EC15CDECF534464D9208 /* BlurtUITestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A0683C1BE5AD05E4C724956 /* BlurtUITestSupport.swift */; };
 		EA9FBD50906FBE8ECC2DCB43 /* rom1a-2-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DDD514790151F484A68127BB /* rom1a-2-stop.m4a */; };
 		EB1E111038C87156F2CF11B4 /* rom1b-24-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 87570A5DC1428AC2DE812BBE /* rom1b-24-stop.m4a */; };
+		EC0B15FB6EAAF91396A8BF50 /* MicrophoneStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BE9BA7182953D06AAD913AE /* MicrophoneStepView.swift */; };
 		EC3DAE9036AA1D57607157F8 /* juno-111-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 0088DE3FD3980CA727EB02FE /* juno-111-start.m4a */; };
 		EC49246782EDC2BE84223723 /* juno-2-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 958C5FDCD430D87BD61D048C /* juno-2-start.m4a */; };
 		EC6A4B9B4DB3A8DAF2388004 /* juno-71-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 156C3E8FF4B96A45913A97F0 /* juno-71-start.m4a */; };
@@ -600,6 +601,7 @@
 		4AE2B597126C95C118FF9FDD /* rom1a-29-start.m4a */ = {isa = PBXFileReference; path = "rom1a-29-start.m4a"; sourceTree = "<group>"; };
 		4B9209100F5A6E8514AF6FA7 /* rom1a-9-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-9-stop.m4a"; sourceTree = "<group>"; };
 		4B9A2A460519088D70893121 /* rom1a-25-start.m4a */ = {isa = PBXFileReference; path = "rom1a-25-start.m4a"; sourceTree = "<group>"; };
+		4BE9BA7182953D06AAD913AE /* MicrophoneStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophoneStepView.swift; sourceTree = "<group>"; };
 		4DB6065E9D1F64F3AF0FD03B /* juno-5-start.m4a */ = {isa = PBXFileReference; path = "juno-5-start.m4a"; sourceTree = "<group>"; };
 		4E25792AC8E46820FF270D64 /* rom1a-2-start.m4a */ = {isa = PBXFileReference; path = "rom1a-2-start.m4a"; sourceTree = "<group>"; };
 		4E414413BCDA4C613782919D /* juno-66-stop.m4a */ = {isa = PBXFileReference; path = "juno-66-stop.m4a"; sourceTree = "<group>"; };
@@ -1450,6 +1452,7 @@
 				3DA3A304528FD1C7FE6C2B94 /* APIKeyStepView.swift */,
 				50FFCDBD1FB2CF0A81A68D18 /* HotkeyStepView.swift */,
 				C59092F9220BBE7465068325 /* KeyTermsStepView.swift */,
+				4BE9BA7182953D06AAD913AE /* MicrophoneStepView.swift */,
 				E8DE60178ABA2CC7F4EB6401 /* PermissionsStepView.swift */,
 				27E18FF6880EADB94F98C7C4 /* SoundStepView.swift */,
 			);
@@ -2006,6 +2009,7 @@
 				E8AE03AA4DCD807D2BB8D660 /* LiquidGlass.swift in Sources */,
 				7F838018EA0ACE7170FC32C4 /* MainWindowRoot.swift in Sources */,
 				AD32046355138298E7FC40D0 /* MenuBarScene.swift in Sources */,
+				EC0B15FB6EAAF91396A8BF50 /* MicrophoneStepView.swift in Sources */,
 				74BD28AA54484635D62FA797 /* OverlayPillContent.swift in Sources */,
 				9437C292A6D7FE533338073D /* OverlayView.swift in Sources */,
 				8FE4B9B139BB9557FBC5589B /* OverlayWindowController.swift in Sources */,

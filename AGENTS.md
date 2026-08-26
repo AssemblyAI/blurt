@@ -472,9 +472,9 @@ in both directions. So:
 
 - **`start()` does not return until the input is live.** `record()` returning `true` only means the
   session started running, not that frames are arriving, so `start()` polls the recorder until **both**
-  its clock has advanced past 0 **and** its meter reads above `MicLiveness.silenceFloorDB`. The
+  it has delivered at least one frame **and** its meter reads above `MicLiveness.silenceFloorDB`. The
   clock alone is not enough: macOS can deliver all-zero buffers from a stale or not-yet-switched
-  device, and frames of digital silence advance the clock exactly like real audio — so the gate was
+  device, and frames of digital silence arrive and count exactly like real audio — so the gate was
   satisfied on its first ~1 ms poll while the AirPods link was still renegotiating. The floor
   discriminates _digital_ silence from any real analog input (a live mic in a quiet room still reads
   its own self-noise, far above it); it is deliberately **not** a speech threshold, which would hang
@@ -491,9 +491,10 @@ in both directions. So:
   in the same place because the wait's clock starts _after_ `record()` returns — a slow open eats
   none of the frame-arrival budget, which is what lets the caps be this tight.
 
-  **The open itself is off-actor.** `record()` is `async` and runs `startRunning()` on the
-  recorder's own serial `sessionQueue`, so the ~600 ms open suspends the press instead of blocking
-  the actor. Run inline it did both: a teardown arriving during the open measured **578 ms** of
+  **The bring-up is off-actor.** Building the session and opening the device are both `async`, run
+  on the recorder's serial `controlQueue`, so neither blocks the actor: the ~600 ms open, and the
+  build before it (~5 ms warm, ~185 ms on a process's first touch of the capture stack). Only the
+  selection lookup stays inline, at microseconds once warm. Run inline it did both: a teardown arriving during the open measured **578 ms** of
   waiting on a 635 ms open, against **24 µs** once suspended (`MicCaptureBringUpTests`, which
   calibrates against the real device and skips itself on an input too fast to show the window). It
   also parked a cooperative-pool thread for the duration — the same pool the overlapping context
@@ -508,8 +509,9 @@ in both directions. So:
   The suspension is also why the teardown snapshot moved: `stopGeneration` is now read before the
   open rather than before the liveness wait, and checked at both ends, because a stop or cancel can
   land while the input is still coming up. `stopGeneration`
-  covers the one suspension this introduces — a teardown landing mid-wait wins, and the recorder is torn down rather than
-  installed.
+  covers the suspensions this introduces — a teardown landing anywhere in the bring-up wins, and the
+  recorder is torn down rather than installed. The check is written at each suspension; the teardown
+  itself is one `defer`, so a new suspension point inherits it.
 
   **A cancel preempts the bring-up rather than queueing behind it**, which took two pieces. The
   press publishes its task handle (`inFlightPress`) exactly as the pipeline publishes
@@ -535,8 +537,9 @@ in both directions. So:
   capture, validated against the resolved device identity and pin, a 60 s expiry to un-pin AirPods
   from their degraded output profile, and a `bringingUpCapture` flag to stop a re-warm racing a live
   press) was buying ~15 ms of a ~600 ms bring-up. It was deleted in favour of a stateless
-  `warmUp()`: build one session at launch and drop it, which absorbs the ~75 ms this process pays
-  the _first_ time it touches AVFoundation's capture stack and holds nothing afterwards. The live
+  `warmUp()`: build one session at launch and drop it, which absorbs the ~185 ms a process pays the
+  _first_ time it touches AVFoundation's capture stack (~90–125 ms of that the first device query
+  alone) and holds nothing afterwards. The live
   suite pins the load-bearing half — building, and warming, must leave the microphone closed.
 
 `stop()` also waits out `AudioTransport.tailLinger(forTransportType:)` (220 ms on Bluetooth, `.zero`

@@ -17,9 +17,7 @@ import Testing
 /// same reason `MicCapture.swift` is.
 @Suite(
   "AudioInputDevices & capture session (live)",
-  .enabled(
-    if: ProcessInfo.processInfo.environment["BLURT_LIVE_AUDIO_TESTS"] == "1",
-    "set BLURT_LIVE_AUDIO_TESTS=1 to run (needs a real microphone)"),
+  ConditionTrait.requiresLiveAudio,
   .tags(.liveAudio),
   // Serialized: three of these open the default input, and the engagement test
   // reads whether *anyone* has it open. Run in parallel they'd flag each other.
@@ -42,35 +40,42 @@ struct AudioInputDevicesTests {
     #expect(AudioInputDevices.systemDefaultInputName() != nil)
   }
 
-  @Test("a listed UID reads as connected and classifiable; a bogus one doesn't")
+  @Test("a listed UID classifies; a bogus one reads as absent")
   func uidLookupsAgreeWithTheEnumeration() throws {
     let first = try #require(AudioInputDevices.all().first)
 
-    // The two questions `MicCapture.resolveInput` asks of a pin. That the first
-    // holds for every enumerated device is the load-bearing part: the picker
-    // must not offer a device the capture path would then treat as missing.
-    #expect(AudioInputDevices.isConnected(uid: first.uid))
-    #expect(
-      AudioInputDevices.transportType(forUID: first.uid) != nil,
-      "a connected device must classify, or it silently loses the Bluetooth caps")
+    // One read answers both questions `MicCapture.resolveInput` asks of a pin —
+    // is the device there, and what transport is it on. That it holds for every
+    // enumerated device is the load-bearing part: the picker must not offer a
+    // device the capture path would then treat as missing (or fail to classify,
+    // which silently loses the Bluetooth caps).
+    #expect(AudioInputDevices.transportType(forUID: first.uid) != nil)
 
     // The missing-device signal `MicDeviceSelection.effective` falls back on.
-    #expect(AudioInputDevices.isConnected(uid: "blurt-test-no-such-device") == false)
     #expect(AudioInputDevices.transportType(forUID: "blurt-test-no-such-device") == nil)
   }
 
   @Test("building a recorder — and warming up — leaves the microphone closed")
   func buildingASessionDoesNotEngageTheDevice() async throws {
+    await LiveAudioDevice.acquire()
+    defer { LiveAudioDevice.release() }
+
     // The measurement the warm-up design rests on, as a regression test: a built
     // but unstarted session must not open the device, or `warmUp()` at launch
     // would light the input indicator and pin AirPods into their mic-capable
     // profile (where *output* audio is degraded) for as long as the app runs.
     let device = try #require(AVCaptureDevice.default(for: .audio))
+    // Wait for the device to be free rather than demanding it already is: this
+    // suite is `.serialized`, but the other live suites are separate suites and
+    // run in parallel with it, and two of them open this same device. Polling
+    // makes the precondition deterministic instead of dependent on which suite
+    // got there first; a device that never frees up is a real failure with a
+    // message that says so.
     try #require(
-      Self.isRunningSomewhere(uid: device.uniqueID) == false,
-      "another app is capturing from the default input — can't tell who opened it")
+      await Self.poll(upTo: .seconds(3)) { Self.isRunningSomewhere(uid: device.uniqueID) == false },
+      "the default input stayed busy — another app (or suite) is capturing from it")
 
-    let recorder = try CaptureSessionRecorder(pinnedUID: device.uniqueID)
+    let recorder = try await CaptureSessionRecorder.make(pinnedUID: device.uniqueID)
     #expect(Self.isRunningSomewhere(uid: device.uniqueID) == false, "building must not open the device")
 
     await MicCapture(deviceSelection: { .systemDefault }).warmUp()
@@ -94,12 +99,15 @@ struct AudioInputDevicesTests {
 
   @Test("the session recorder captures S16LE audio from the device it was pinned to")
   func pinnedRecorderCapturesAudio() async throws {
+    await LiveAudioDevice.acquire()
+    defer { LiveAudioDevice.release() }
+
     // Pin to the current default input — the one device a machine running this
     // suite is known to have working — by the same UID the picker would store.
     let uid = try #require(AVCaptureDevice.default(for: .audio)?.uniqueID)
     #expect(AudioInputDevices.all().contains { $0.uid == uid }, "the default input should be listed")
 
-    let recorder = try CaptureSessionRecorder(pinnedUID: uid)
+    let recorder = try await CaptureSessionRecorder.make(pinnedUID: uid)
     try #require(await recorder.record(), "the session recorder should start on a live device")
 
     // Wait for frames the way the liveness gate does, rather than sleeping a

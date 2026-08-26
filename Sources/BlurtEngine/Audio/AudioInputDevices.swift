@@ -56,20 +56,20 @@ public enum AudioInputDevices {
   /// system (…)" option shows — or nil when there is no input device (the picker
   /// then says "Same as system" with no parenthetical).
   public static func systemDefaultInputName() -> String? {
-    AVCaptureDevice.default(for: .audio)?.localizedName
+    systemDefaultDevice?.localizedName
   }
 
-  /// Whether a device carrying this UID is connected right now — the
-  /// missing-device signal `MicDeviceSelection.effective` falls back on.
-  static func isConnected(uid: String) -> Bool {
-    connectedDevice(uid: uid) != nil
-  }
-
-  /// The transport type of the device carrying this UID, or nil when it isn't
-  /// connected. Read for the *pinned* device so the liveness cap and the tail
-  /// linger follow the device actually being recorded.
+  /// The transport type of the device carrying this UID, or nil when no
+  /// connected device does.
+  ///
+  /// That nil does double duty, and deliberately: it is also the
+  /// missing-device signal `MicDeviceSelection.effective` falls back on. The two
+  /// used to be separate calls — an `isConnected(uid:)` and this — which meant
+  /// two lookups of the same device per press for one question, and two chances
+  /// to answer it differently. `transportType(of:)` cannot fail for a device
+  /// that exists, so "no transport" and "no device" are the same fact.
   static func transportType(forUID uid: String) -> UInt32? {
-    transportType(of: connectedDevice(uid: uid))
+    transportType(of: device(forUID: uid))
   }
 
   /// The transport type of the system default input, or nil when there is no
@@ -77,15 +77,25 @@ public enum AudioInputDevices {
   /// `AudioTransport` reads it as not-Bluetooth, which means the middle liveness
   /// cap and no tail linger.
   static func systemDefaultTransportType() -> UInt32? {
-    transportType(of: AVCaptureDevice.default(for: .audio))
+    transportType(of: systemDefaultDevice)
   }
 
   /// The device carrying `uid`, or nil when none does. `isConnected` is checked
   /// as well as the lookup succeeding: a device that has just gone away can
-  /// still be handed back, and every caller here means "usable right now".
-  private static func connectedDevice(uid: String) -> AVCaptureDevice? {
+  /// still be handed back, and every caller means "usable right now".
+  ///
+  /// Internal, not private, because `CaptureSessionRecorder` resolves the same
+  /// pin a moment later to attach it — one spelling of "resolve a pin to a
+  /// device", so the two layers can't apply different presence rules.
+  static func device(forUID uid: String) -> AVCaptureDevice? {
     guard let device = AVCaptureDevice(uniqueID: uid), device.isConnected else { return nil }
     return device
+  }
+
+  /// The system default input device. One spelling, shared with the recorder's
+  /// fallback and the picker's "Same as system (…)" label.
+  static var systemDefaultDevice: AVCaptureDevice? {
+    AVCaptureDevice.default(for: .audio)
   }
 
   /// `AVCaptureDevice.transportType` as the `UInt32` four-character code

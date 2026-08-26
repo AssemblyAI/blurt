@@ -8,7 +8,7 @@ extension MicCapture {
   /// the overlay's voice bars read as empty at rest and only move for speech.
   static let meterFloorDB: Float = -50
 
-  /// Convert `AVAudioRecorder`'s dBFS meter power into the `0...1` the overlay
+  /// Convert the capture meter's dBFS power into the `0...1` the overlay
   /// expects, mapped linearly across `[meterFloorDB, 0]`. (A raw `pow(10, db/20)`
   /// amplitude leaves ambient noise well above zero, so the bars never rested
   /// at empty.)

@@ -26,10 +26,8 @@ enum MicLiveness {
   /// switch into the mic-capable mode that takes ~1–2 s, and the link drops back
   /// to the output-only profile after an idle gap — so a dictation after a pause
   /// pays it again, not just the first one. Nothing on the capture path can
-  /// pre-pay it: neither building the session nor the recorder the
-  /// `AVCaptureSession` backend replaced opens the device ahead of `record()`
-  /// (see `MicCapture.warmUp()`), so this cap governs every press that lands on
-  /// a cold link.
+  /// pre-pay it — `MicCapture.warmUp()` holds that measurement — so this cap
+  /// governs every press that lands on a cold link.
   static let bluetoothTimeout: Duration = .milliseconds(2500)
 
   /// Wait cap for a transport known to be wired or on-board

@@ -9,7 +9,7 @@ import Foundation
 /// devices exist, what a UID currently resolves to), which live in
 /// `AudioInputDevices` and are excluded from the coverage gate. These rules are
 /// what `swift test` pins.
-public enum MicDeviceSelection: Equatable, Sendable {
+public enum MicDeviceSelection: Hashable, Sendable {
   /// Follow the system's default input, re-resolved at every capture.
   case systemDefault
   /// Record from the device with this UID (`kAudioDevicePropertyDeviceUID`).
@@ -26,6 +26,16 @@ public enum MicDeviceSelection: Equatable, Sendable {
   /// rule as `SoundPackCatalog.fromPersisted` and `TriggerKey.fromPersisted`.
   public static func fromPersisted(_ raw: String) -> MicDeviceSelection {
     raw.isEmpty ? .systemDefault : .pinned(uid: raw)
+  }
+
+  /// The pinned device's UID, or nil for the system default — what a recorder
+  /// is built around. Here beside the other encode/decode rules rather than
+  /// re-derived by callers switching on the case.
+  var pinnedUID: String? {
+    switch self {
+    case .systemDefault: nil
+    case .pinned(let uid): uid
+    }
   }
 
   /// The raw value the store writes for this selection — `fromPersisted`'s

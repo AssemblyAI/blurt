@@ -3,77 +3,62 @@ import Testing
 
 @testable import BlurtEngine
 
-/// Does a teardown land *during* the device open, or queue behind it?
+/// The bring-up race: a teardown arriving while the input device is still
+/// opening must be serviced, not queued behind the open.
 ///
-/// `record()` opens the device, and how long that takes is entirely the
-/// hardware's business: ~100 ms on AirPods (the link returns early and delivers
-/// frames later), ~600 ms on a USB interface, ~180 ms on the built-in mic. While
-/// it runs, nothing else can use the capture actor unless the call is off-actor —
-/// which is what this suite pins.
-///
-/// Live-gated, and self-calibrating: it measures the open first and skips its own
-/// assertion when the device it has is too fast for the question to be visible.
-/// Set `BLURT_LIVE_AUDIO_INPUT_UID` to a device UID (see the Settings picker, or
-/// `AudioInputDevices.all()`) to point it at a slower input than the system
-/// default — that is how the USB case gets covered on a machine whose default is
-/// Bluetooth.
+/// `record()` opens the device, and how long that takes is the hardware's
+/// business — ~100 ms on AirPods, ~180 ms on the built-in mic, ~600 ms on a USB
+/// interface. Run inline on the actor it blocked every other call for that whole
+/// window (measured: 578 ms on a 635 ms open); off-actor the same teardown takes
+/// microseconds. Hence the absolute budget below rather than a ratio against a
+/// calibration run: an unblocked `cancelCapture()` is one actor hop and a nil
+/// check either way, so the budget holds on every input, and a regression fails
+/// it on any device whose open outlasts the budget — which is all of them.
 @Suite(
   "MicCapture bring-up (live)",
-  .enabled(
-    if: ProcessInfo.processInfo.environment["BLURT_LIVE_AUDIO_TESTS"] == "1",
-    "set BLURT_LIVE_AUDIO_TESTS=1 to run (needs a real microphone)"),
+  ConditionTrait.requiresLiveAudio,
   .tags(.liveAudio),
   .serialized,
   .timeLimit(.minutes(1)))
 struct MicCaptureBringUpTests {
-  /// The input this suite exercises: the env-named device, else the system
-  /// default.
-  private static var pinnedUID: String? {
-    ProcessInfo.processInfo.environment["BLURT_LIVE_AUDIO_INPUT_UID"]
-  }
-
-  private static var selection: MicDeviceSelection {
-    pinnedUID.map { MicDeviceSelection.pinned(uid: $0) } ?? .systemDefault
-  }
+  /// Generous next to the ~24 µs an unblocked teardown measures, and far below
+  /// the tens-to-hundreds of ms a blocked one costs on any real input.
+  private static let teardownBudget = Duration.milliseconds(10)
 
   @Test("a teardown during the device open isn't blocked by it")
   func teardownDuringOpenIsNotBlocked() async throws {
-    let clock = ContinuousClock()
+    await LiveAudioDevice.acquire()
+    defer { LiveAudioDevice.release() }
 
-    // Calibrate against the real device, since the assertion is a comparison
-    // against its open cost rather than a fixed budget.
-    let probe = try CaptureSessionRecorder(pinnedUID: Self.pinnedUID)
-    let openStart = clock.now
-    _ = await probe.record()
-    let openCost = clock.now - openStart
-    probe.stopAndDiscard()
+    // An unqueued teardown mid-bring-up — the shape a host that doesn't
+    // serialize its own commands produces. `DictationSession` does serialize
+    // (its release and cancel run only after the press turn completes), but this
+    // is a public actor and the contract has to hold without that.
+    let mic = MicCapture(deviceSelection: { .systemDefault })
 
-    guard openCost > .milliseconds(150) else {
-      // Not a failure: on a fast input there is no window to land inside, so
-      // there is nothing here to get wrong. Named rather than silently passing.
-      print(
-        "MicCaptureBringUpTests: input opens in \(openCost) — too fast to observe the window; "
-          + "set BLURT_LIVE_AUDIO_INPUT_UID to a slower device to cover this")
-      return
-    }
+    // Warm first, exactly as the app does at launch, so what is measured below
+    // is the property under test and not this process's first touch of the
+    // capture stack. That first touch is ~185 ms — most of it the first device
+    // query, which `start()` makes inline while resolving the selection — and
+    // absorbing it is `warmUp()`'s entire job. Without this the measurement
+    // reports a real cost that a launched app has already paid.
+    await mic.warmUp()
 
-    // A press, then an unqueued teardown a beat later — the shape a host that
-    // doesn't serialize its own commands produces. `DictationSession` does
-    // serialize (its release/cancel run only after the press turn completes), but
-    // this is a public actor and the contract has to hold without that.
-    let mic = MicCapture(deviceSelection: { Self.selection })
-    async let started: Void = mic.start()
+    // An unstructured `Task` rather than `async let`, only because the
+    // `#expect(throws:)` below can't capture an `async let` variable.
+    let press = Task { try await mic.start() }
     try await Task.sleep(for: .milliseconds(30))
-    let cancelStart = clock.now
-    try await mic.cancelCapture()
-    let cancelCost = clock.now - cancelStart
-    _ = try? await started
 
+    let cancelCost = await ContinuousClock().measure {
+      try? await mic.cancelCapture()
+    }
     #expect(
-      cancelCost < openCost / 2,
-      """
-      cancelCapture took \(cancelCost) while an open costing \(openCost) was in flight — \
-      the actor was blocked for the duration of the open
-      """)
+      cancelCost < Self.teardownBudget,
+      "cancelCapture took \(cancelCost) while the device was still opening — the actor was blocked")
+
+    // And the press notices it was abandoned rather than installing a recorder
+    // nothing owns: whichever suspension the cancel landed in, the bring-up's
+    // generation check turns it into a CancellationError.
+    await #expect(throws: CancellationError.self) { try await press.value }
   }
 }

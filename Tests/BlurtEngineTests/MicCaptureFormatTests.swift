@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Testing
 
@@ -9,6 +10,33 @@ import Testing
 /// `AudioInputDevicesTests`.
 @Suite("MicCapture metering & errors")
 struct MicCaptureFormatTests {
+  // MARK: - Capture geometry
+
+  @Test("the geometry the recorder asks for is the one the upload math assumes")
+  func captureGeometryMatchesUploadMath() throws {
+    // These used to be two unlinked definitions: six literals in the recorder,
+    // and `SyncSTTLimits.bytesPerSample`/`durationMs` independently assuming
+    // mono 16-bit. Nothing failed if they drifted, and the drift is silent —
+    // a stereo or 8-bit recorder halves or doubles every duration the pipeline
+    // reports. The recorder now derives all three from `SyncSTTLimits`; this
+    // pins that it still does, from the covered side of the coverage gate.
+    let settings = CaptureSessionRecorder.audioSettings()
+
+    #expect(settings[AVFormatIDKey] as? AudioFormatID == kAudioFormatLinearPCM)
+    #expect(settings[AVSampleRateKey] as? Double == Double(SyncSTTLimits.sampleRate))
+    #expect(settings[AVNumberOfChannelsKey] as? Int == 1, "durationMs assumes one channel")
+
+    let bitDepth = try #require(settings[AVLinearPCMBitDepthKey] as? Int)
+    #expect(
+      bitDepth / 8 == SyncSTTLimits.bytesPerSample,
+      "bit depth and bytesPerSample describe the same sample")
+
+    // S16LE specifically: int, not float, and little-endian — the encoding the
+    // dictation request uploads byte for byte.
+    #expect(settings[AVLinearPCMIsFloatKey] as? Bool == false)
+    #expect(settings[AVLinearPCMIsBigEndianKey] as? Bool == false)
+  }
+
   // MARK: - dBFS → linear level
 
   @Test func fullScalePowerMapsToOne() {

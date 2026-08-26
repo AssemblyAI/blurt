@@ -29,11 +29,12 @@ public actor MicCapture: MicCaptureProtocol {
 
   /// The recorder for the in-flight session; nil between `stop()` and `start()`.
   private var activeRecorder: CaptureSessionRecorder?
-  /// The in-flight session's input transport, sampled once at `start()`. Read by
-  /// `stop()` to size the tail linger — sampled at start rather than re-read at
-  /// stop so a device switch mid-utterance can't make the two halves of one
-  /// capture disagree.
-  private var activeTransportType: UInt32?
+  /// How long `stop()` keeps capturing past key-up for the in-flight session —
+  /// `.zero` off Bluetooth. Decided at `start()` from the resolved transport
+  /// rather than re-read at stop, so a device switch mid-utterance can't make
+  /// the two halves of one capture disagree; stored as the `Duration` itself
+  /// because the transport has no other reader once the cap is chosen.
+  private var activeTailLinger: Duration = .zero
 
   /// Incremented by every `stop()` / `cancelCapture()`. `start()` snapshots it
   /// before suspending in the liveness wait — its one internal suspension — and
@@ -95,15 +96,24 @@ public actor MicCapture: MicCaptureProtocol {
   /// bit stays clear through both), so neither could pre-pay the route
   /// activation the warm recorder existed to hide. `record()`'s `startRunning()`
   /// pays all of it, inside the connecting window the liveness gate already
-  /// covers. Only the first build in a process is worth pre-paying — ~75 ms of
-  /// framework set-up, versus ~15 ms for every build after it — and that needs
-  /// no state to hold.
+  /// covers. Only the first build in a process is worth pre-paying — ~185 ms of
+  /// framework set-up (~90–125 ms of it the first device query, the rest the
+  /// session and its input), against ~5 ms for every build after it — and that
+  /// needs no state to hold.
+  ///
+  /// Reads the pin straight off the selection rather than running `start()`'s
+  /// input resolution: what is being pre-paid is process-level framework set-up,
+  /// which is the same whichever device is named, and resolving here would spend
+  /// two device lookups on a value the recorder resolves again anyway — and
+  /// would log `resolveInput`'s "pinned microphone not connected" line at launch,
+  /// where nothing is being recorded. Naming the pin still costs a microsecond,
+  /// so it stays: if a driver has its own first-load cost, this pre-pays it.
   ///
   /// Never throws (a failure just leaves `start()` to build the real one) and
   /// never begins capture, so no input indicator appears.
-  public func warmUp() {
+  public func warmUp() async {
     do {
-      _ = try CaptureSessionRecorder(pinnedUID: Self.resolveInput(selection: deviceSelection()).pinnedUID)
+      _ = try await CaptureSessionRecorder.make(pinnedUID: deviceSelection().pinnedUID)
       Self.logger.info("warmed the capture stack")
     } catch {
       Self.logger.error("warm-up failed: \(error.localizedDescription, privacy: .public)")
@@ -115,14 +125,23 @@ public actor MicCapture: MicCaptureProtocol {
     // (or nil to follow the system default, including the missing-pin fallback),
     // and the transport the liveness cap and the tail linger key off.
     let resolved = Self.resolveInput(selection: deviceSelection())
-    let recorder = try CaptureSessionRecorder(pinnedUID: resolved.pinnedUID)
 
-    // Snapshotted before the *first* suspension rather than just before the
-    // liveness wait, because opening the device is itself one: `record()` hops
-    // off-actor (see `CaptureSessionRecorder.record()`), so a stop or cancel can
-    // land while the input is coming up, and it has to win over a bring-up that
-    // is no longer wanted.
+    // Snapshotted before the first suspension, which is the *build* — both it
+    // and the open hop off-actor (see `CaptureSessionRecorder.make`), so a stop
+    // or cancel can land anywhere in the bring-up, and it has to win over a
+    // bring-up that is no longer wanted.
     let generationBeforeBringUp = stopGeneration
+    let recorder = try await CaptureSessionRecorder.make(pinnedUID: resolved.pinnedUID)
+
+    // One teardown for every exit that doesn't install the recorder — a failed
+    // open, either abandonment check, the fail-closed timeout. Written once as a
+    // `defer` rather than at each `throw`, because forgetting it at any of them
+    // leaves a session capturing with nothing holding it: a hot input indicator
+    // and no owner, which is the failure `stopGeneration` exists to prevent. A
+    // future suspension point in this bring-up inherits the teardown for free
+    // and only has to add its own abandonment check.
+    var installed = false
+    defer { if !installed { recorder.stopAndDiscard() } }
 
     // record() answers false when no usable input device is available (unplugged,
     // asleep, route lost). Surface that as a thrown Swift error so
@@ -131,7 +150,6 @@ public actor MicCapture: MicCaptureProtocol {
     // no degenerate-format guard to keep.)
     guard await recorder.record() else {
       Self.logger.error("recorder.record() returned false — no usable input device")
-      recorder.stopAndDiscard()
       throw BlurtError.audioCaptureFailed(underlying: MicCaptureError.noInputDevice)
     }
 
@@ -140,7 +158,6 @@ public actor MicCapture: MicCaptureProtocol {
     // Same handling as the post-wait check below, just earlier — see it for why
     // the two conditions are distinguished from a timeout.
     guard stopGeneration == generationBeforeBringUp, !Task.isCancelled else {
-      recorder.stopAndDiscard()
       Self.logger.info("start aborted — teardown or cancellation during the device open")
       throw CancellationError()
     }
@@ -178,7 +195,6 @@ public actor MicCapture: MicCaptureProtocol {
     //   distinguished from the timeout, which returns nil too but is a reported
     //   *failure* (the throw below) — a cancel is the user's own act, not a fault.
     guard stopGeneration == generationBeforeBringUp, !Task.isCancelled else {
-      recorder.stopAndDiscard()
       Self.logger.info("start aborted — teardown or cancellation during the liveness wait")
       throw CancellationError()
     }
@@ -197,21 +213,20 @@ public actor MicCapture: MicCaptureProtocol {
     // so no stopGeneration bump — a concurrent stop() correctly sees no active
     // capture.
     guard gap != nil else {
-      recorder.stopAndDiscard()
       throw BlurtError.audioCaptureFailed(underlying: MicCaptureError.inputNeverDelivered)
     }
 
     activeRecorder = recorder
-    activeTransportType = resolved.transportType
+    activeTailLinger = AudioTransport.tailLinger(forTransportType: resolved.transportType)
     lastEmittedLevel = nil
-    Self.logger.info("start recording to \(recorder.logName, privacy: .public)")
+    installed = true
+    Self.logger.info(
+      "start recording from \(resolved.pinnedUID ?? "system default", privacy: .public)")
     startMeterTimer()
   }
 
   public func stop() async throws -> Data {
-    // Read before the suspension below, so this capture's decision can't be
-    // rewritten by whatever a later `start()` sets.
-    let linger = AudioTransport.tailLinger(forTransportType: activeTransportType)
+    let linger = activeTailLinger
     guard let recorder = detachActiveRecorder() else { return Data() }
     if linger > .zero {
       // Keep capturing for a moment past key-up so the audio still travelling
@@ -258,7 +273,10 @@ public actor MicCapture: MicCaptureProtocol {
     stopGeneration += 1
     meterTask?.cancel()
     meterTask = nil
-    defer { activeRecorder = nil }
+    defer {
+      activeRecorder = nil
+      activeTailLinger = .zero
+    }
     return activeRecorder
   }
 
@@ -284,13 +302,14 @@ public actor MicCapture: MicCaptureProtocol {
   /// input won. Hardware-adjacent glue in a coverage-excluded file; the decision
   /// itself stays testable.
   static func resolveInput(selection: MicDeviceSelection) -> ResolvedInput {
-    var pinnedPresent = false
-    if case .pinned(let uid) = selection {
-      pinnedPresent = AudioInputDevices.isConnected(uid: uid)
-    }
-    switch selection.effective(pinnedDevicePresent: pinnedPresent) {
+    // One device lookup, answering both questions: the transport is nil exactly
+    // when no connected device carries the pin (see
+    // `AudioInputDevices.transportType(forUID:)`), so presence is `!= nil` and
+    // the value is reused below instead of read a second time.
+    let pinnedTransport = selection.pinnedUID.flatMap(AudioInputDevices.transportType(forUID:))
+    switch selection.effective(pinnedDevicePresent: pinnedTransport != nil) {
     case .pinned(let uid):
-      return ResolvedInput(pinnedUID: uid, transportType: AudioInputDevices.transportType(forUID: uid))
+      return ResolvedInput(pinnedUID: uid, transportType: pinnedTransport)
     case .systemDefault:
       if case .pinned = selection {
         // Graceful degradation, not an error: the pin stays stored, and this
