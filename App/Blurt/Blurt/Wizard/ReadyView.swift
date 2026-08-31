@@ -226,10 +226,20 @@ private struct ReadyBrandingView: View {
   var body: some View {
     if let image = Self.logo {
       Image(nsImage: image)
+        // Drawn as a template tinted with the accent rather than shipped in its
+        // own color. The design draws the wordmark in two shades — `#01762F` on
+        // light, `#67AD82` on dark (its `Logo_Dark` / `Logo_Light` pair) — and
+        // those are precisely the accent's two appearances, so tinting gets the
+        // dark-mode variant for free from one asset. A fixed-color PNG kept the
+        // dark green on a dark window, where it goes muddy. It also means the
+        // mark and the accent-filled buttons beside it can't drift apart: they
+        // now resolve the same color, rather than agreeing by coincidence.
+        .renderingMode(.template)
         .interpolation(.high)
         .resizable()
         .scaledToFit()
         .frame(maxWidth: 180)
+        .foregroundStyle(BlurtBrand.accent)
         .accessibilityLabel("Blurt logo")
     }
   }

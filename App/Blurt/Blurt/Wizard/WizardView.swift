@@ -66,12 +66,18 @@ struct WizardView: View {
 }
 
 private struct OnboardingBrandMark: View {
+  /// 60 pt, the size the design draws it at (a 60×60 icon against the title and
+  /// its two-line subtitle). It was 38, which left the mark reading as a favicon
+  /// beside the heading rather than as the app introducing itself — this is the
+  /// first thing shown on first run.
+  private static let size: CGFloat = 60
+
   var body: some View {
     Image(nsImage: NSApplication.shared.applicationIconImage)
       .resizable()
       .interpolation(.high)
       .scaledToFit()
-      .frame(width: 38, height: 38)
+      .frame(width: Self.size, height: Self.size)
       .accessibilityHidden(true)
   }
 }

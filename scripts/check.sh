@@ -1,7 +1,7 @@
 #!/bin/bash
 # Project health check: build + test the SPM engine and the macOS app.
 # Pipes xcodebuild through xcbeautify when available (brew install xcbeautify).
-# Runs swiftlint / periphery / actionlint / zizmor / prettier / xmllint /
+# Runs swiftlint / periphery / actionlint / zizmor / prettier /
 # markdownlint / shellcheck / shfmt / ruff / pytest when available.
 # Swift warnings are treated as errors everywhere; engine line coverage is gated.
 # The read-only checks run to completion and report together at the bottom rather
@@ -18,7 +18,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_DIR="$REPO_ROOT/App/Blurt"
 
 # --portable: run only the platform-independent checks (actionlint / zizmor /
-# prettier / xmllint / markdownlint / shellcheck / shfmt / ruff / pytest /
+# prettier / markdownlint / shellcheck / shfmt / ruff / pytest /
 # release.test.sh, plus swift-format and
 # swiftlint lint when their Linux builds happen to be present). For Linux / web
 # sandboxes where the macOS toolchain is absent. A green --portable run is NOT
@@ -357,20 +357,12 @@ check_sound_catalog() {
 }
 run_check "sound catalog integrity" check_sound_catalog
 
-# GitHub Pages site integrity. prettier and xmllint below cover the site's
-# *formatting* and the sitemap's well-formedness; neither asks whether the page
-# still works once deployed. pages.yml uploads site/ verbatim with no build
-# step, so a renamed asset, a stale absolute URL, or a missing CNAME produces no
-# error anywhere in this repo — just a 404 on the live site with check.sh green.
-# scripts/check-site.sh closes that gap. Pure text/filesystem and deliberately
-# offline (no external link fetching), so it runs in --portable too.
 cd "$REPO_ROOT"
-run_check "site integrity" bash scripts/check-site.sh
 
 # Shell portability. scripts/ and .claude/hooks/ run against BSD userland on a Mac
 # and CI, and GNU userland in a Linux / web sandbox; shellcheck reads both as
-# correct shell, so a GNU-only idiom is written green and ships red (PR #116, the
-# BSD-sed sitemap strip). Pure text, so it runs in --portable — which is exactly
+# correct shell, so a GNU-only idiom is written green and ships red (PR #116, a
+# BSD-sed invocation). Pure text, so it runs in --portable — which is exactly
 # where the divergence gets introduced. --self-test first, because a pattern that
 # stops matching is indistinguishable from a clean tree.
 check_portability() {
@@ -478,25 +470,13 @@ if tool_ready zizmor 'brew install zizmor'; then
 fi
 
 if tool_ready prettier 'brew install prettier'; then
-  # Formatting authority for the repo's non-Swift text: CI/config (yml/yaml),
-  # docs (md), and the GitHub Pages site (html/css — which also covers the
-  # JSON-LD embedded in site/index.html). JSON is intentionally left out of the
-  # glob: the only non-conforming file is the Xcode-generated AppIcon icon.json,
-  # which must not be reformatted by hand.
-  run_check "prettier --check" prettier --check '**/*.{yml,yaml,md,html,css}'
-fi
-
-if tool_ready xmllint 'ships with libxml2'; then
-  # Prettier can't format XML without a plugin (and this repo has no JS toolchain
-  # to add one), so libxml2's xmllint validates well-formedness instead — covers
-  # the GitHub Pages sitemap. A parse error fails the check; --noout drops the
-  # reserialized output. xmllint ships with macOS, so CI has it without a Brewfile
-  # entry. Guard on an empty file list so xmllint never blocks reading stdin.
-  XML_FILES="$(git ls-files '*.xml')"
-  if [ -n "$XML_FILES" ]; then
-    # shellcheck disable=SC2086
-    run_check "xmllint (XML well-formedness)" xmllint --noout $XML_FILES
-  fi
+  # Formatting authority for the repo's non-Swift text: CI/config (yml/yaml) and
+  # docs (md). No html/css in the glob — the Pages site that supplied them is
+  # gone (the product page lives at assemblyai.com/blurt now), and this repo has
+  # held no HTML, CSS or XML since. JSON is intentionally left out too: the only
+  # non-conforming file is the Xcode-generated AppIcon icon.json, which must not
+  # be reformatted by hand.
+  run_check "prettier --check" prettier --check '**/*.{yml,yaml,md}'
 fi
 
 # Structural lint for the repo's Markdown (config in .markdownlint.jsonc;

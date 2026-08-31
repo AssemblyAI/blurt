@@ -80,13 +80,12 @@ App/Blurt/
   Shared/                    UITestIdentifiers.swift — compiled into BOTH app and UI-test targets
   BlurtUITests/              XCUITest bundle (see Tests)
 Tests/BlurtEngineTests/      Swift Testing suites; Stubs/ holds the seam doubles
-scripts/                     check.sh, check-site.sh, check-portability.sh, check-invariants.sh,
+scripts/                     check.sh, check-portability.sh, check-invariants.sh,
                              bootstrap.sh, dev-build.sh, uitest.sh, leaks.sh, release*.sh
                              hand-run maintainer tools — no automated caller, invoked by a
                              human, so "nothing references it" here does NOT mean dead code:
-                             serve-site.sh (preview site/ locally), screenshot.swift +
-                             beautify.swift (the site's window imagery, capture then
-                             composite), generate-branding-images.sh (records how the logo
+                             screenshot.swift + beautify.swift (window imagery, capture
+                             then composite), generate-branding-images.sh (records how the logo
                              assets were generated — provenance, not a renderer),
                              generate-sounds.swift (regenerates the cues AND the app's
                              SoundPackCatalog.swift together)
@@ -96,11 +95,9 @@ evals/                       offline decision support — the repo's only Python
   dictation-prompt/          DSPy harness for tuning the dictation API's cleanup instruction;
                              check.sh lints (ruff), format-checks (ruff format), and tests it
   ruff.toml                  ruff config for the above — the repo's only Python config
-site/                        the GitHub Pages site (html/css, sitemap) — formatted by prettier and
-                             checked for deployability by scripts/check-site.sh
 .github/workflows/           check.yml (the gate, macos-26),
                              release-bump.yml (version bump) + release.yml (sign +
-                             publish), codeql.yml, pages.yml
+                             publish), codeql.yml
 .claude/                     Claude Code hooks, skills, subagents (see CLAUDE.md)
 ```
 
@@ -129,36 +126,17 @@ cheap checks are never reached, so their findings arrive on the _next_ red run, 
 green run does identical total work either way; what changes is how much a red run tells you. Only
 the two checks that genuinely need the build products stay behind them (step 12).
 
-1. **Repo-integrity guards** — no external SPM dependencies; sound-catalog integrity (every
-   `SoundPackCatalog` voice has both cue files, no orphans, no duplicate or reserved ids); and
-   **site integrity** (`scripts/check-site.sh`). All three run in `--portable` too. The catalog and
-   the audio are generated together — both into the app target, one as source and one as
-   resources — so drift plays silence with nothing raising an error. The site guard exists for the same reason on the web: `pages.yml`
-   uploads `site/` verbatim with no build step, so a renamed asset, a stale absolute URL, or a
-   missing `CNAME` produces no error in this repo — just a 404 on the live site.
-
-   It checks the Pages-required files; that every local `src`/`href`/`srcset`/`poster` and CSS
-   `url()` resolves; that every `#fragment` has a matching `id`; that every absolute
-   `https://<CNAME>/` URL (canonical, `og:url`, `og:image`, JSON-LD, sitemap `<loc>`, robots
-   `Sitemap:`) names the domain in `CNAME` and points at a file that exists; per-element hygiene
-   (no duplicate `id`, no plain `http://`, no `<img>` without `alt`, no `<a>` without `href`, no
-   empty `src`/`href`); and that nothing under `site/assets/` ships unreferenced. Deliberately
-   offline — external links are never fetched, so the check stays deterministic and a third
-   party's outage is never this repo being red.
-
-   **Dependency-free on purpose, and it did not start that way.** This was briefly built on
-   html-proofer, to get a real HTML parser instead of greps. Aikido then flagged the licence on
-   `ttfunk` — GPL-2.0-only / GPL-3.0-only, reached via `html-proofer` → `pdf-reader` → `ttfunk` —
-   and bundler cannot drop a transitive gem, so keeping the parser meant keeping a GPL branch in an
-   MIT repo's lockfile and 20 gems of supply-chain surface for a one-page static site. Going back
-   cost no coverage: the audit of that tool is what surfaced the missing-`alt`, no-`href` and
-   empty-`src` checks, which are greps now. Don't reintroduce it without a licence answer.
+1. **Repo-integrity guards** — no external SPM dependencies; and sound-catalog integrity (every
+   `SoundPackCatalog` voice has both cue files, no orphans, no duplicate or reserved ids). Both run
+   in `--portable` too. The catalog and the audio are generated together — both into the app
+   target, one as source and one as resources — so drift plays silence with nothing raising an
+   error.
 
 2. **Shell portability** (`scripts/check-portability.sh`) — GNU-only idioms in `scripts/*.sh` and
    `.claude/hooks/*.sh`. Those run against BSD userland on a Mac and on CI, and GNU userland in a
    Linux / web sandbox, and shellcheck reads both as correct shell — so `sed -i` without a suffix,
    `grep -P`, `readlink -f`, `stat -c` and friends are written green and ship red (PR #116's
-   BSD-sed sitemap strip). Runs in `--portable`, which is where the divergence gets introduced.
+   BSD-sed invocation). Runs in `--portable`, which is where the divergence gets introduced.
    Mark a false positive with a trailing `# portable-ok: <reason>`; `--self-test` asserts every rule
    still matches its own probe, because a pattern that stops matching looks exactly like a clean
    tree.
@@ -168,7 +146,7 @@ the two checks that genuinely need the build products stay behind them (step 12)
 4. **actionlint** (workflow correctness — and, via shellcheck, the inline `run:` bash) **/ zizmor**
    (workflow _security_: template injection, overbroad `permissions:`, unpinned actions — it matters
    most for `release.yml`, which hands the Developer ID key to a runner) **/ prettier** (yml/yaml/md
-   plus the Pages site's html/css) **/ xmllint** (XML well-formedness, e.g. the sitemap) **/
+   — the repo holds no html/css/xml since the Pages site moved to assemblyai.com/blurt) **/
    markdownlint / shellcheck / shfmt --diff** (`scripts/*.sh` formatting, style from the `[*.sh]`
    block in `.editorconfig`).
 5. **The evals** (`evals/`, the repo's only Python): `ruff format --check`, `ruff check`, and
