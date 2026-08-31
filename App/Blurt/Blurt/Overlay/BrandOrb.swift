@@ -4,20 +4,18 @@ import SwiftUI
 /// The overlay pill's brand orb: a gradient disc that stands where the "● REC"
 /// tag used to, present through every working state so the pill has one fixed
 /// anchor while its right-hand side changes (bars → label). It replaces the
-/// pulsing dot outright — the design carries "recording, right now" in the
-/// meter beside it and in the ring, so a second blinking cue would be noise.
+/// pulsing dot outright — a second blinking cue beside the meter would be noise.
 ///
-/// While the pill is waiting on something — the mic coming up, or the
-/// transcription round-trip — a hairline ring **rotates** around the disc. That
-/// is the pill's only progress cue in those states, which is why it spins
-/// rather than breathes: a pulse says "alive", a sweep says "working, and still
-/// going". The disc underneath never moves.
+/// A hairline ring **rotates** around the disc the whole time the orb is on
+/// screen: connecting, recording, and transcribing alike. The orb is one object,
+/// so it behaves like one — a ring that stopped during recording and restarted
+/// on the hand-off to transcribing would read as two different orbs trading
+/// places, which is exactly what keeping the disc fixed is meant to avoid. It
+/// spins rather than breathes because a pulse says "alive" while a sweep says
+/// "working, and still going". The disc underneath never moves.
 struct BrandOrb: View {
-  /// Whether to draw and spin the ring. False during `.recording`, where the
-  /// live meter is already the activity cue.
-  let isWaiting: Bool
   /// Whether to run the rotation (off under Reduce Motion, where the ring is
-  /// still drawn — it's a state cue, not decoration — but holds still).
+  /// still drawn — it's part of the mark, not decoration — but holds still).
   let animated: Bool
 
   /// One turn every 1.6 s: slow enough to read as deliberate rather than a
@@ -34,11 +32,7 @@ struct BrandOrb: View {
     Circle()
       .fill(BlurtBrand.orbGradient)
       .frame(width: Self.diameter, height: Self.diameter)
-      .overlay {
-        if isWaiting {
-          ring
-        }
-      }
+      .overlay { ring }
       // The orb is brand furniture; the pill as a whole already carries the
       // state's accessibility label (see `OverlayView`).
       .accessibilityHidden(true)

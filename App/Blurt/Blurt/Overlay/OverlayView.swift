@@ -92,11 +92,12 @@ struct OverlayView: View {
       waitingContent("Connecting")
         .transition(.opacity)
     case .recording:
-      // The orb beside the live waveform. No ring here: the meter is already
-      // moving, and a second animation would compete with the one that's
-      // actually carrying information.
+      // The orb beside the live waveform, its ring sweeping as it does in every
+      // other state — the orb is one object and doesn't change behaviour with
+      // the content next to it. The meter carries the level; the ring carries
+      // "still running".
       HStack(spacing: 8) {
-        BrandOrb(isWaiting: false, animated: !reduceMotion)
+        BrandOrb(animated: !reduceMotion)
         WaveformMeter(bridge: bridge, animated: !reduceMotion, color: BlurtBrand.greenOnDark)
       }
       .padding(.horizontal, 12)
@@ -135,13 +136,13 @@ struct OverlayView: View {
     }
   }
 
-  /// The shape both waits share: the brand orb with its ring sweeping, then the
-  /// status word. One builder rather than two call sites that happen to match,
+  /// The shape both waits share: the brand orb, then the status word in place
+  /// of the meter. One builder rather than two call sites that happen to match,
   /// so "Connecting" and "Transcribing" can't drift into two different layouts
   /// — the whole point of the orb is that it doesn't move between them.
   private func waitingContent(_ text: String) -> some View {
     HStack(spacing: 8) {
-      BrandOrb(isWaiting: true, animated: !reduceMotion)
+      BrandOrb(animated: !reduceMotion)
       StatusLineText(text)
       Spacer(minLength: 0)
     }
