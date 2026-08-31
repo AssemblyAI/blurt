@@ -82,6 +82,22 @@ public enum MeterBarGeometry {
     let osc = (cos(time / period * 2 * .pi) + 1) / 2  // 0...1
     return minOpacity + (1 - minOpacity) * osc
   }
+
+  /// Angle in degrees of a continuous rotation of `period` seconds per turn —
+  /// the brand orb's ring while the pill is waiting on something.
+  ///
+  /// Wrapped into 0..<360 rather than growing without bound: the value feeds a
+  /// `rotationEffect`, and after a long session an ever-increasing angle loses
+  /// precision in the `Double` and starts quantising the spin.
+  ///
+  /// Here beside `breathingOpacity` for the same reason that one is: it's the
+  /// pill's motion expressed as a pure function of the clock, so it's testable
+  /// without a view and can't drift into a second, subtly different curve.
+  public static func rotationDegrees(time: TimeInterval, period: Double) -> Double {
+    guard period > 0 else { return 0 }
+    let turns = time / period
+    return (turns - turns.rounded(.down)) * 360
+  }
 }
 
 /// One laid-out row of meter bars: how many fit the frame and how tall each may

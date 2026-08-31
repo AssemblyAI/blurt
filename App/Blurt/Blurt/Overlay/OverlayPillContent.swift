@@ -1,41 +1,58 @@
 import BlurtEngine
 import SwiftUI
 
-/// The shared type, tracking, and brand color for the overlay's status-line
-/// text ("Transcribing…", "Pasted", and "Copied") so they can't drift out of
+/// The shared type, tracking, and color for the overlay's status-line text
+/// ("Transcribing", "Pasted", "Copied", "Error") so they can't drift out of
 /// sync.
+///
+/// Set in tracked uppercase, as the design draws it — the caps and the letter
+/// spacing are what make a bare word read as a status readout rather than as a
+/// sentence that lost its ending. The call sites pass ordinary capitalisation
+/// and `textCase` does the shouting, so the strings stay readable in source and
+/// the engine's accessibility labels (which speak the same states) aren't
+/// dragged into all-caps.
 struct StatusLineText: View {
   let text: String
+  /// The text color — brand green for every state but `.error`, which the
+  /// design gives its own orange rather than a red pill body.
+  var color: Color = BlurtBrand.greenOnDark
 
-  init(_ text: String) {
+  init(_ text: String, color: Color = BlurtBrand.greenOnDark) {
     self.text = text
+    self.color = color
   }
 
   var body: some View {
     Text(text)
       .font(.system(size: 10, weight: .semibold))
-      .tracking(0.8)
+      .textCase(.uppercase)
+      .tracking(1.2)
       .lineLimit(1)
       .minimumScaleFactor(0.7)
-      .foregroundStyle(BlurtBrand.greenOnDark)
+      .foregroundStyle(color)
   }
 }
 
-/// Redraw cap for the pill's continuous animations — the REC dot's pulse, the
-/// "Transcribing…" breath, and the waveform's idle wave.
+/// Redraw cap for the pill's continuous animations — the brand orb's ring sweep
+/// (`BrandOrb`, which is why this isn't file-private) and the waveform's idle
+/// wave.
 ///
 /// Read from the engine rather than restated: the cap exists *because* of the mic
 /// meter's cadence (the level feed and these slow sines can't show anything
 /// faster, so rendering at the display's full refresh rate — up to 120 Hz on
 /// ProMotion — would only burn energy), so it tracks that one number instead of
 /// duplicating it behind a comment that could go stale.
-private let overlayAnimationInterval = MicCapture.meterIntervalSeconds
+let overlayAnimationInterval = MicCapture.meterIntervalSeconds
 
 extension View {
   /// Raised-cosine opacity breathing over `period`: 1 → `minOpacity` → 1, so the
-  /// view eases through the dim point instead of bouncing off it. Shared by the
-  /// REC dot and the "Transcribing…" label so the pill's two heartbeats stay one
-  /// curve. With `animated` false (Reduce Motion) the view renders untouched.
+  /// view eases through the dim point instead of bouncing off it. With
+  /// `animated` false (Reduce Motion) the view renders untouched.
+  ///
+  /// Lives here rather than beside its one remaining caller (`ReadyView`'s
+  /// Listening glyph) because it's the overlay's breathing curve — the pill's
+  /// own uses moved to the orb's ring sweep, and the main window borrows the
+  /// cadence deliberately so the two windows' motion matches.
   @ViewBuilder
   func pulsingOpacity(period: Double, minOpacity: Double, animated: Bool) -> some View {
     if animated {
@@ -48,73 +65,6 @@ extension View {
     } else {
       self
     }
-  }
-}
-
-/// A status line that breathes — the pill's "working, hold on" treatment, used
-/// for both waits it has: "Connecting…" while `MicCapture`'s liveness gate waits
-/// for the input route to deliver frames, and "Transcribing…" while the app
-/// waits on the dictation API and pastes the result.
-///
-/// One view rather than two near-identical ones, so the heartbeat is shared by
-/// construction instead of by a comment asking two copies of the constants to
-/// stay equal. Driven by the same continuous-clock `TimelineView` pattern as
-/// `WaveformBars` (never a one-shot state toggle); under Reduce Motion it holds
-/// steady at full opacity, exactly the pre-animation rendering.
-///
-/// `StatusLineText` is shared with the "Pasted"/"Copied" notices, so every
-/// hand-off between these states reads as one continuous status line.
-struct BreathingStatusLine: View {
-  let text: String
-  /// Whether to run the breathing motion (off under Reduce Motion).
-  let animated: Bool
-
-  // One breath every ~1.8 s, dimming to ~55% and back: slow and shallow enough
-  // to read as a calm heartbeat rather than an alert blink. The floor keeps the
-  // 10 pt green legible against the dark tint at the trough, and limits the
-  // brightness pop if the cross-fade to "Pasted" (rendered at full opacity)
-  // starts mid-breath.
-  private let breathPeriod: Double = 1.8
-  private let minOpacity: Double = 0.55
-
-  var body: some View {
-    StatusLineText(text)
-      .pulsingOpacity(period: breathPeriod, minOpacity: minOpacity, animated: animated)
-  }
-}
-
-/// The "● REC" recording tag: a pulsing brand-green dot + "REC" caption,
-/// sitting to the left of the waveform. The green stands in for the
-/// conventional red record dot; its slow pulse (see `pulsePeriod`) carries the
-/// live-capture affordance while the bars beside it carry the level — which is
-/// what lets the tag and the bars share one color instead of needing a second
-/// hue to tell them apart.
-struct RecordingTag: View {
-  /// Whether to pulse the dot (off under Reduce Motion).
-  let animated: Bool
-
-  // One pulse every ~1.2 s, dimming to 40% and back: the universal "recording,
-  // right now" heartbeat. Since the brand green stands in for the conventional
-  // red dot, the pulse — not the hue — carries the live-capture cue, which is
-  // also why the tag and the bars beside it can share one color. Driven by the same
-  // continuous-clock TimelineView as the waveform and BreathingStatusLine (never a
-  // one-shot repeatForever toggle).
-  private let pulsePeriod: Double = 1.2
-  private let minOpacity: Double = 0.4
-
-  var body: some View {
-    HStack(spacing: 4) {
-      // The brand-green record dot, breathing while recording.
-      Circle()
-        .fill(BlurtBrand.greenOnDark)
-        .frame(width: 5, height: 5)
-        .pulsingOpacity(period: pulsePeriod, minOpacity: minOpacity, animated: animated)
-      Text("REC")
-        .font(.system(size: 9, weight: .semibold))
-        .tracking(1.2)
-        .foregroundStyle(BlurtBrand.greenOnDark)
-    }
-    .fixedSize()
   }
 }
 

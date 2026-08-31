@@ -25,17 +25,12 @@ struct OverlayView: View {
   // is an adaptive material that samples the backdrop to decide its light/dark
   // rendering, and can't do so until it's composited on screen; fading in from
   // alpha 0 it flashed white for a frame over a dark desktop before settling.
-  // A fixed fill never adapts, so it fades in the same dark gray on any backdrop.
-  // Every state is the same dark gray except `.error`, which keeps a red body as
-  // an alarm cue (the ↻ "Try again" content alone shouldn't have to carry it).
-  private var fillColor: Color {
-    switch state {
-    case .error:
-      return Color(red: 0.62, green: 0.13, blue: 0.13)
-    case .connecting, .recording, .processing, .pasted, .noTarget, .idle:
-      return Color(white: 0.16)
-    }
-  }
+  // A fixed fill never adapts, so it fades in the same brand ink on any backdrop.
+  // Every state shares that one body, `.error` included: the design moves the
+  // alarm off the capsule and into the word, which is orange rather than the
+  // green the other states use (see `errorPill`). One fill for every state also
+  // means the cross-fade below now only ever animates content, never the body.
+  private let fillColor = BlurtBrand.ink
 
   var body: some View {
     content
@@ -85,33 +80,34 @@ struct OverlayView: View {
       // `hide()`'s pre-hide reset.
       Color.clear
     case .connecting:
-      // The mic is coming up; nothing is being captured yet. Styled like
-      // "Transcribing…" (same status-line type, tracking, brand green, and
-      // breathing pulse) so the connecting → recording hand-off reads as one
-      // status line rather than a new kind of alert — and deliberately *not*
-      // the `● REC` tag or the meter, which would cue the user to speak into a
-      // mic that isn't delivering yet.
+      // The mic is coming up; nothing is being captured yet. Shaped like
+      // "Transcribing" — orb with the ring sweeping, then the label — so the
+      // two waits look like one thing, and deliberately *not* the meter, which
+      // would cue the user to speak into a mic that isn't delivering yet.
       //
       // On a built-in mic this is on screen for a frame or two, inside the
       // pill's own 0.08 s fade-in, so it blends into the appearance rather than
       // flashing; on a Bluetooth route it holds for as long as the link takes,
       // which is the whole point.
-      BreathingStatusLine(text: "Connecting…", animated: !reduceMotion)
+      waitingContent("Connecting")
         .transition(.opacity)
     case .recording:
-      // "● REC" tag beside the live waveform, both in the brand green lifted for
-      // dark chrome. The bars fill the width left of the tag.
+      // The orb beside the live waveform. No ring here: the meter is already
+      // moving, and a second animation would compete with the one that's
+      // actually carrying information.
       HStack(spacing: 8) {
-        RecordingTag(animated: !reduceMotion)
+        BrandOrb(isWaiting: false, animated: !reduceMotion)
         WaveformMeter(bridge: bridge, animated: !reduceMotion, color: BlurtBrand.greenOnDark)
       }
       .padding(.horizontal, 12)
       .transition(.opacity)
     case .processing:
-      // Cross-fades from REC like the bars do, in the same brand green.
-      // The label breathes (slow opacity pulse) so the wait for the dictation API +
-      // paste reads as active work rather than a frozen pill.
-      BreathingStatusLine(text: "Transcribing…", animated: !reduceMotion)
+      // The meter stops and the ring takes over as the activity cue, so the
+      // wait for the dictation API + paste reads as active work rather than a
+      // frozen pill. The orb itself doesn't move across the hand-off — only
+      // what's beside it changes — which is what makes the pill read as one
+      // surface progressing rather than three unrelated states.
+      waitingContent("Transcribing")
         .transition(.opacity)
     case .error(let message):
       // "Try again" tells the user what to do; the full failure reason is too
@@ -139,26 +135,31 @@ struct OverlayView: View {
     }
   }
 
-  /// The transient `.error` notice: a ↻ glyph and "Try again". Spelled out rather
-  /// than parameterized because it's the only notice pill left — `.pasted` and
-  /// `.noTarget` moved to `StatusLineText`, and a symbol/tint/label knob for one
-  /// caller made the reader check three arguments to learn what the pill says.
-  /// `help` is the hover tooltip — pass the state's message so it stays the same
-  /// string the window controller announces to VoiceOver (the wording lives in one
-  /// place, `OverlayUIState`).
-  private func errorPill(help: String) -> some View {
-    HStack(spacing: 6) {
-      Image(systemName: "arrow.clockwise")
-        .font(.callout.weight(.semibold))
-        .foregroundStyle(.white)
-      Text("Try again")
-        .font(.callout.weight(.semibold))
-        .lineLimit(1)
-        .minimumScaleFactor(0.6)
-        .foregroundStyle(.white)
+  /// The shape both waits share: the brand orb with its ring sweeping, then the
+  /// status word. One builder rather than two call sites that happen to match,
+  /// so "Connecting" and "Transcribing" can't drift into two different layouts
+  /// — the whole point of the orb is that it doesn't move between them.
+  private func waitingContent(_ text: String) -> some View {
+    HStack(spacing: 8) {
+      BrandOrb(isWaiting: true, animated: !reduceMotion)
+      StatusLineText(text)
+      Spacer(minLength: 0)
     }
-    .padding(.horizontal, 4)
-    .transition(.opacity)
-    .help(help)
+    .padding(.horizontal, 12)
+  }
+
+  /// The transient `.error` notice: the word alone, in the design's orange, on
+  /// the same ink body as every other state.
+  ///
+  /// The orange *is* the alarm — this pill used to turn red and say "↻ Try
+  /// again", and the design trades that for a quieter, on-brand treatment. The
+  /// instruction is no longer on the capsule, so the actual failure reason
+  /// matters more than before: it stays on hover (`help`) and in the VoiceOver
+  /// announcement, both from `OverlayUIState` so the wording lives in one place.
+  private func errorPill(help: String) -> some View {
+    StatusLineText("Error", color: BlurtBrand.errorOrange)
+      .padding(.horizontal, 4)
+      .transition(.opacity)
+      .help(help)
   }
 }

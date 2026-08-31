@@ -176,6 +176,7 @@
 		6842E896710203CD7D71773B /* rom1a-24-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 875545CFDFCFF4288AAC7D09 /* rom1a-24-start.m4a */; };
 		687C4250670C94DF21351CEC /* rom1b-2-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = B67F817AD357801080D26FFF /* rom1b-2-stop.m4a */; };
 		6887F2B14A0602B28F316AD7 /* juno-106-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 35EA12CB630AC702CBAC175A /* juno-106-stop.m4a */; };
+		68990A3D1D120CC927789338 /* BrandOrb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AE5EE7838D59C7068270D1C /* BrandOrb.swift */; };
 		68AE6018C91E06C05EBFB2D0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E3DD66C653EAB2EFF2CF8DAA /* Assets.xcassets */; };
 		690F181B950CB4F0693013B1 /* rom1a-10-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 767217AE992554FDF6D67A4D /* rom1a-10-stop.m4a */; };
 		691207BE65B615EF4C9B77C1 /* rom1b-14-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DB1715E594E1F2A1A3F152E0 /* rom1b-14-stop.m4a */; };
@@ -734,6 +735,7 @@
 		989E9BBEA9AFED21774E0230 /* rom1b-18-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-18-stop.m4a"; sourceTree = "<group>"; };
 		99B45E82D3DF744DF2031238 /* rom1b-6-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-6-stop.m4a"; sourceTree = "<group>"; };
 		9A9BA87A72AFB3829A388E95 /* juno-18-start.m4a */ = {isa = PBXFileReference; path = "juno-18-start.m4a"; sourceTree = "<group>"; };
+		9AE5EE7838D59C7068270D1C /* BrandOrb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandOrb.swift; sourceTree = "<group>"; };
 		9C3B044CD20456A76EBB99FB /* juno-61-stop.m4a */ = {isa = PBXFileReference; path = "juno-61-stop.m4a"; sourceTree = "<group>"; };
 		9D02AECDAE6B146F11B7A721 /* juno-87-stop.m4a */ = {isa = PBXFileReference; path = "juno-87-stop.m4a"; sourceTree = "<group>"; };
 		9EB4EF55A9B57C93926D433F /* juno-14-stop.m4a */ = {isa = PBXFileReference; path = "juno-14-stop.m4a"; sourceTree = "<group>"; };
@@ -1403,6 +1405,7 @@
 		912505E1D0FBD5D5CA591BA2 /* Overlay */ = {
 			isa = PBXGroup;
 			children = (
+				9AE5EE7838D59C7068270D1C /* BrandOrb.swift */,
 				41AD30574EA478D2BD0E87ED /* OverlayPillContent.swift */,
 				2E79CB809D285C0C27E8D43D /* OverlayView.swift */,
 				A27D7F43295DE2A81EFFDDBC /* OverlayWindowController.swift */,
@@ -2007,6 +2010,7 @@
 				034A91EE923BF5EA71438B7D /* BlurtBrand.swift in Sources */,
 				76C1876DB538F8E190EB509E /* BlurtCommands.swift in Sources */,
 				121DC6CD82DEAC7CC0F5AC24 /* BoundTriggerKey.swift in Sources */,
+				68990A3D1D120CC927789338 /* BrandOrb.swift in Sources */,
 				A5D51CD762229A68757463C8 /* CueSoundPlayer.swift in Sources */,
 				4290831AB516CD38229449D8 /* DeveloperSection.swift in Sources */,
 				0F1317CCFA2A3245DAA96141 /* DictationComposition.swift in Sources */,

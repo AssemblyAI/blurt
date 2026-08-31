@@ -8,22 +8,24 @@ import SwiftUI
 // the gate + the pre-Tahoe fallback so call sites stay a single modifier.
 extension View {
   /// Liquid Glass button style on macOS 26+, falling back to the standard
-  /// bordered styles on macOS 15–25. `prominent` maps `.glassProminent` ↔
-  /// `.borderedProminent`.
+  /// bordered styles on macOS 15–25.
+  ///
+  /// `prominent` is the exception: it stays `.borderedProminent` on every
+  /// version. `.glassProminent` tints its *material* rather than filling with
+  /// the accent, which lands a filled button at `#007723` while the wordmark
+  /// and every plain accent use render `#01762F` — close, but visibly less
+  /// blue side by side. `.borderedProminent` paints the accent flat, so the
+  /// filled buttons match the brand exactly. It's still a system style, so
+  /// hover/press chrome, sizing and the accessibility fallbacks all come from
+  /// AppKit rather than a hand-rolled fill.
   @ViewBuilder
   func glassButtonStyleCompat(prominent: Bool = false) -> some View {
-    if #available(macOS 26.0, *) {
-      if prominent {
-        buttonStyle(.glassProminent)
-      } else {
-        buttonStyle(.glass)
-      }
+    if prominent {
+      buttonStyle(.borderedProminent)
+    } else if #available(macOS 26.0, *) {
+      buttonStyle(.glass)
     } else {
-      if prominent {
-        buttonStyle(.borderedProminent)
-      } else {
-        buttonStyle(.bordered)
-      }
+      buttonStyle(.bordered)
     }
   }
 }

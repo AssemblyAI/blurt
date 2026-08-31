@@ -39,4 +39,41 @@ enum BlurtBrand {
   /// `Color.accentColor`, because at those call sites the color is a *brand*
   /// decision (the row glyphs, the granted checkmark) and reads as one here.
   nonisolated static let accent = Color.accentColor
+
+  /// `#1D1B16` — the brand ink, and the overlay pill's body in every state.
+  /// Fixed rather than appearance-adaptive: the pill floats over whatever app
+  /// the user is dictating into, so it can't take its cue from the app's own
+  /// appearance the way a window can.
+  nonisolated static let ink = Color(red: 29 / 255, green: 27 / 255, blue: 22 / 255)
+
+  /// `#E67F36` — the pill's error text. The design keeps the body ink in every
+  /// state and lets this carry the alarm, rather than flashing a red capsule.
+  nonisolated static let errorOrange = Color(red: 230 / 255, green: 127 / 255, blue: 54 / 255)
+
+  /// The brand orb's fill: the full palette swept bottom-to-top, pale lavender
+  /// through both greens, into the blue-violet and back out to white. Stops and
+  /// offsets are the design's own (`App elements/Recording.svg`).
+  ///
+  /// `.bottom` to `.top` because the source gradient runs y=32 → y=8, i.e. up
+  /// the orb — flipping the endpoints instead of reversing the stop list keeps
+  /// the offsets readable against the file they came from.
+  nonisolated static let orbGradient = LinearGradient(
+    stops: [
+      .init(color: Color(red: 215 / 255, green: 211 / 255, blue: 244 / 255), location: 0),
+      .init(color: Color(red: 176 / 255, green: 167 / 255, blue: 233 / 255), location: 0.0673),
+      .init(color: greenOnDark, location: 0.1442),
+      .init(color: green, location: 0.3029),
+      .init(color: Color(red: 57 / 255, green: 35 / 255, blue: 199 / 255), location: 0.5962),
+      .init(color: Color(red: 136 / 255, green: 123 / 255, blue: 221 / 255), location: 0.75),
+      .init(color: Color(red: 215 / 255, green: 211 / 255, blue: 244 / 255), location: 0.8942),
+      .init(color: .white, location: 1),
+    ],
+    startPoint: .bottom,
+    endPoint: .top)
+
+  /// The ring drawn around the orb while the pill is waiting: brand green into
+  /// white, corner to corner. Spun by `BrandOrb`, which is what turns a static
+  /// two-stop gradient into a progress cue.
+  nonisolated static let orbRingGradient = LinearGradient(
+    colors: [green, .white], startPoint: .topLeading, endPoint: .bottomTrailing)
 }
