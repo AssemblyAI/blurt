@@ -1,12 +1,7 @@
 import BlurtEngine
 import SwiftUI
 
-enum OverlayBrandPalette {
-  static let cyan = Color(red: 0.20, green: 0.88, blue: 0.96)
-  static let magenta = Color(red: 0.98, green: 0.12, blue: 0.73)
-}
-
-/// The shared type, tracking, and cyan color for the overlay's status-line
+/// The shared type, tracking, and brand color for the overlay's status-line
 /// text ("Transcribing…", "Pasted", and "Copied") so they can't drift out of
 /// sync.
 struct StatusLineText: View {
@@ -22,7 +17,7 @@ struct StatusLineText: View {
       .tracking(0.8)
       .lineLimit(1)
       .minimumScaleFactor(0.7)
-      .foregroundStyle(OverlayBrandPalette.cyan)
+      .foregroundStyle(BlurtBrand.greenOnDark)
   }
 }
 
@@ -76,7 +71,7 @@ struct BreathingStatusLine: View {
 
   // One breath every ~1.8 s, dimming to ~55% and back: slow and shallow enough
   // to read as a calm heartbeat rather than an alert blink. The floor keeps the
-  // 10 pt cyan legible against the dark tint at the trough, and limits the
+  // 10 pt green legible against the dark tint at the trough, and limits the
   // brightness pop if the cross-fade to "Pasted" (rendered at full opacity)
   // starts mid-breath.
   private let breathPeriod: Double = 1.8
@@ -88,18 +83,20 @@ struct BreathingStatusLine: View {
   }
 }
 
-/// The "● REC" recording tag: a pulsing magenta dot + "REC" caption, sitting to
-/// the left of the waveform — the native echo of the site demo's magenta pixel
-/// tag. Magenta (the brand --hot) stands in for the conventional red record dot;
-/// its slow pulse (see `pulsePeriod`) carries the live-capture affordance while the cyan
-/// bars carry the level.
+/// The "● REC" recording tag: a pulsing brand-green dot + "REC" caption,
+/// sitting to the left of the waveform. The green stands in for the
+/// conventional red record dot; its slow pulse (see `pulsePeriod`) carries the
+/// live-capture affordance while the bars beside it carry the level — which is
+/// what lets the tag and the bars share one color instead of needing a second
+/// hue to tell them apart.
 struct RecordingTag: View {
   /// Whether to pulse the dot (off under Reduce Motion).
   let animated: Bool
 
   // One pulse every ~1.2 s, dimming to 40% and back: the universal "recording,
-  // right now" heartbeat. Since magenta stands in for the conventional red dot,
-  // the pulse — not the hue — carries the live-capture cue. Driven by the same
+  // right now" heartbeat. Since the brand green stands in for the conventional
+  // red dot, the pulse — not the hue — carries the live-capture cue, which is
+  // also why the tag and the bars beside it can share one color. Driven by the same
   // continuous-clock TimelineView as the waveform and BreathingStatusLine (never a
   // one-shot repeatForever toggle).
   private let pulsePeriod: Double = 1.2
@@ -107,15 +104,15 @@ struct RecordingTag: View {
 
   var body: some View {
     HStack(spacing: 4) {
-      // The magenta record dot, breathing while recording.
+      // The brand-green record dot, breathing while recording.
       Circle()
-        .fill(OverlayBrandPalette.magenta)
+        .fill(BlurtBrand.greenOnDark)
         .frame(width: 5, height: 5)
         .pulsingOpacity(period: pulsePeriod, minOpacity: minOpacity, animated: animated)
       Text("REC")
         .font(.system(size: 9, weight: .semibold))
         .tracking(1.2)
-        .foregroundStyle(OverlayBrandPalette.magenta)
+        .foregroundStyle(BlurtBrand.greenOnDark)
     }
     .fixedSize()
   }

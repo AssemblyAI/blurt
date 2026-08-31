@@ -251,10 +251,10 @@ private struct RecentCopyButton: View {
 
   var body: some View {
     configuration.label
-      .foregroundStyle(Color.accentColor)
+      .foregroundStyle(BlurtBrand.accent)
       .background {
         RoundedRectangle(cornerRadius: 5, style: .continuous)
-          .fill(Color.accentColor.opacity(highlightOpacity))
+          .fill(BlurtBrand.accent.opacity(highlightOpacity))
           .padding(.horizontal, -5)
           .padding(.vertical, -3)
       }

@@ -86,7 +86,7 @@ struct OverlayView: View {
       Color.clear
     case .connecting:
       // The mic is coming up; nothing is being captured yet. Styled like
-      // "Transcribing…" (same status-line type, tracking, cyan --ice, and
+      // "Transcribing…" (same status-line type, tracking, brand green, and
       // breathing pulse) so the connecting → recording hand-off reads as one
       // status line rather than a new kind of alert — and deliberately *not*
       // the `● REC` tag or the meter, which would cue the user to speak into a
@@ -99,17 +99,16 @@ struct OverlayView: View {
       BreathingStatusLine(text: "Connecting…", animated: !reduceMotion)
         .transition(.opacity)
     case .recording:
-      // "● REC" tag beside the live waveform, mirroring the site demo's recording
-      // pill (magenta tag + bars). The bars fill the width left of the tag.
+      // "● REC" tag beside the live waveform, both in the brand green lifted for
+      // dark chrome. The bars fill the width left of the tag.
       HStack(spacing: 8) {
         RecordingTag(animated: !reduceMotion)
-        WaveformMeter(bridge: bridge, animated: !reduceMotion, color: OverlayBrandPalette.cyan)
+        WaveformMeter(bridge: bridge, animated: !reduceMotion, color: BlurtBrand.greenOnDark)
       }
       .padding(.horizontal, 12)
       .transition(.opacity)
     case .processing:
-      // Matches the site demo's "Transcribing…" label (the demo cross-fades REC →
-      // Transcribing); cyan echoes the demo's --ice. Cross-fades like the bars.
+      // Cross-fades from REC like the bars do, in the same brand green.
       // The label breathes (slow opacity pulse) so the wait for the dictation API +
       // paste reads as active work rather than a frozen pill.
       BreathingStatusLine(text: "Transcribing…", animated: !reduceMotion)
@@ -122,7 +121,7 @@ struct OverlayView: View {
     case .pasted:
       // Quiet, informational notice confirming the transcript was typed into the
       // focused field. Styled exactly like "Transcribing…" (same type, tracking,
-      // and cyan --ice) so the processing → pasted hand-off reads as one
+      // and brand green) so the processing → pasted hand-off reads as one
       // continuous status line rather than a new kind of alert. No glyph — the
       // word alone carries it. Hover still exposes the full announcement text.
       StatusLineText("Pasted")
@@ -131,7 +130,7 @@ struct OverlayView: View {
     case .noTarget:
       // Quiet, informational notice: there was no text field to type into, so
       // the transcript went to the clipboard. Styled exactly like "Pasted"
-      // (same status-line type and cyan --ice) so it reads as info, not the red
+      // (same status-line type and brand green) so it reads as info, not the red
       // error flash. No glyph — the word alone carries it. Hover still exposes
       // the full announcement text.
       StatusLineText("Copied")

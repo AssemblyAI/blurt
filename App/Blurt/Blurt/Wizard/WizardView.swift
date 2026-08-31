@@ -50,7 +50,7 @@ struct WizardView: View {
       VStack(alignment: .leading, spacing: 4) {
         Text("Set up Blurt")
           .font(.title2)
-          .fontWeight(.semibold)
+          .fontWeight(.bold)
         Text("Add your API key, then allow Microphone and Accessibility access.")
           .font(.body)
           .foregroundStyle(.secondary)

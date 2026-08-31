@@ -1,28 +1,20 @@
 {
-  "fill-specializations" : [
-    {
-      "value" : "system-dark"
-    },
-    {
-      "appearance" : "dark",
-      "value" : "system-dark"
-    }
-  ],
   "groups" : [
     {
       "layers" : [
         {
-          "image-name" : "blurt-mic-glyph.png",
-          "name" : "blurt-mic-glyph"
+          "image-name" : "blurt-wordmark.png",
+          "name" : "blurt-wordmark"
         }
       ],
       "shadow" : {
         "kind" : "neutral",
         "opacity" : 0.5
       },
+      "specular" : false,
       "translucency" : {
-        "enabled" : true,
-        "value" : 0.5
+        "enabled" : false,
+        "value" : 0
       }
     }
   ],

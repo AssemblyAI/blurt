@@ -76,8 +76,10 @@ struct ReadyView: View {
       }
       // The system Liquid Glass button — hover/press chrome, edge highlights,
       // and accessibility fallbacks come from the style, not hand-rolled fills.
-      // Falls back to `.bordered` on macOS 15–25 (see glassButtonStyleCompat).
-      .glassButtonStyleCompat()
+      // Prominent, so it takes the brand-green fill the design gives it: it's
+      // the only button on the window's closing line.
+      // Falls back to `.borderedProminent` on macOS 15–25 (see glassButtonStyleCompat).
+      .glassButtonStyleCompat(prominent: true)
     }
     .frame(maxWidth: .infinity)
     .padding(.horizontal, 32)
@@ -149,8 +151,9 @@ struct ReadyView: View {
   /// The capture-in-progress face of the top block, mirroring the idle face's
   /// shape exactly — two centered lines on the shared tiers — so the swap
   /// reads as the same surface changing words: the pill's waveform cue in its
-  /// color (`OverlayBrandPalette.cyan` — the tint `WaveformMeter` uses while
-  /// recording) inline with a bold "Listening…", then the way out. The style
+  /// color (`BlurtBrand.green` — the brand green in its light-chrome shade,
+  /// the pill's `greenOnDark` being too pale on this window's background)
+  /// inline with a bold "Listening…", then the way out. The style
   /// clause names the active profile; with none active the sentence starts at
   /// "Tap again" — "Blurting in Default." reads as if a profile by that
   /// name existed.
@@ -158,7 +161,7 @@ struct ReadyView: View {
     VStack(spacing: 2) {
       HStack(spacing: 6) {
         Image(systemName: "waveform")
-          .foregroundStyle(OverlayBrandPalette.cyan)
+          .foregroundStyle(BlurtBrand.green)
           // The pill's live-capture heartbeat (`RecordingTag`), same cadence,
           // stilled under Reduce Motion the same way.
           .pulsingOpacity(period: 1.2, minOpacity: 0.4, animated: !reduceMotion)
@@ -196,12 +199,15 @@ struct ReadyView: View {
   }
 }
 
-/// The BLURT wordmark over the status block: the pink pixel-art mark
-/// (`Branding/blurt-ready-logo.png`, a 720×180 render of its 180×45 pt slot,
-/// so the nearest-neighbor downscale is an even 2× on Retina and the pixels
-/// stay square). A header mark, not the window's identity — the standard
-/// titlebar names the app — which is why it simply omits itself if the PNG
-/// can't load rather than swapping in a fallback identity view.
+/// The `blurt` wordmark over the status block: the brand-green mark
+/// (`Branding/blurt-ready-logo.png`, a 720×180 rasterization of the design's
+/// vector wordmark, so its 180×45 pt slot is fed 4× the pixels it needs and
+/// stays crisp at any display scale). Smoothly interpolated — it's curved
+/// letterforms now, not the pixel-art mark it replaced, which needed
+/// nearest-neighbor to keep its pixels square. A header mark, not the window's
+/// identity — the standard titlebar names the app — which is why it simply
+/// omits itself if the PNG can't load rather than swapping in a fallback
+/// identity view.
 private struct ReadyBrandingView: View {
   /// Loaded once for the process rather than per `body` evaluation: this view
   /// sits in `ReadyView`, whose body re-runs on every new dictation
@@ -220,7 +226,7 @@ private struct ReadyBrandingView: View {
   var body: some View {
     if let image = Self.logo {
       Image(nsImage: image)
-        .interpolation(.none)
+        .interpolation(.high)
         .resizable()
         .scaledToFit()
         .frame(maxWidth: 180)
@@ -285,7 +291,9 @@ private struct StyleRow: View {
           Button(action: addStyle) {
             Image(systemName: "plus")
           }
-          .glassButtonStyleCompat()
+          // Filled green, as the design draws it — the row's one *action*,
+          // distinct from the style buttons beside it, which are a selection.
+          .glassButtonStyleCompat(prominent: true)
           .accessibilityLabel("Add Style")
           .accessibilityIdentifier(UITestIdentifiers.styleProfileAddFromMain)
         }
@@ -352,14 +360,20 @@ private struct StyleRow: View {
 /// key name, the Listening face its "Listening…"). Private to this file — these
 /// name the top block's tiers, not an app-wide type ramp.
 extension View {
-  /// Tier 1: the sentence that says what to do (or what is happening).
+  /// Tier 1: the sentence that says what to do (or what is happening). Set a
+  /// step above body and semibold, the weight carried by the whole line rather
+  /// than the key name alone — this is the window's headline, and the design
+  /// gives it the visual rank to match. The inline `.bold()` on the key name
+  /// still reads as emphasis against semibold.
   fileprivate func statusPrimaryLine() -> some View {
-    font(.body)
+    font(.title3.weight(.semibold))
   }
 
-  /// Tier 2: the supporting line beneath it, quieter in size and color.
+  /// Tier 2: the supporting line beneath it, quieter in color and one tier
+  /// down in size — a step below tier 1 rather than two, so the pair reads as
+  /// one block instead of a heading with a caption.
   fileprivate func statusSecondaryLine() -> some View {
-    font(.subheadline)
+    font(.body)
       .foregroundStyle(.secondary)
   }
 }
