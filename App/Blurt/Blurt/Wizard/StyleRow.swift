@@ -98,18 +98,31 @@ struct StyleRow: View {
   private static let labelHeight =
     NSFont.preferredFont(forTextStyle: .body).boundingRectForFont.height
 
-  /// One style's button. The active one is the prominent (accent-filled)
-  /// system button, the rest plain bordered — Liquid Glass variants on
-  /// macOS 26+ (see `glassButtonStyleCompat`) — so selection chrome, sizing
-  /// and accessibility come from the system styles rather than hand-drawn
-  /// fills. `.isSelected` says what the fill shows, so VoiceOver reads the
-  /// active style without relying on color.
+  /// One style's button. Every one is the same prominent system button; only
+  /// the tint differs, so sizing, hover/press chrome and the accessibility
+  /// fallbacks all still come from the system style rather than a hand-drawn
+  /// fill.
+  ///
+  /// The active style is **white** and the rest are **green**, which is the
+  /// design's scheme and reads as state-vs-action rather than as inverted
+  /// prominence: green is what the row uses for things you can click *to do
+  /// something* — switch to that style, or "+" to add one — while the style
+  /// already in effect isn't an action, so it sits out in white.
+  ///
+  /// A prominent button draws its label white to sit on the accent, which is
+  /// invisible once the fill is white, so the active one names the ink
+  /// explicitly. `.isSelected` carries the state for VoiceOver, so nothing
+  /// depends on seeing the difference.
   private func styleButton(
     _ name: String, isActive: Bool, activate: @escaping () -> Void
   ) -> some View {
-    Button(name, action: activate)
-      .glassButtonStyleCompat(prominent: isActive)
-      .accessibilityAddTraits(isActive ? .isSelected : [])
+    Button(action: activate) {
+      Text(name)
+        .foregroundStyle(isActive ? AnyShapeStyle(BlurtBrand.ink) : AnyShapeStyle(.white))
+    }
+    .glassButtonStyleCompat(prominent: true)
+    .tint(isActive ? Color.white : BlurtBrand.accent)
+    .accessibilityAddTraits(isActive ? .isSelected : [])
   }
 
   /// Keyboard shortcuts for the style buttons: ⌘1 selects Default, ⌘2…⌘5 the
