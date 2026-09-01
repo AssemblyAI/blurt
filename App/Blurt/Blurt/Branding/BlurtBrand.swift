@@ -4,12 +4,19 @@ import SwiftUI
 /// setup" comps, 2026-08-31). Two greens, because one green can't serve both
 /// kinds of chrome the app puts on screen:
 ///
-/// - `green` (`#01762F`) is the wordmark green and the accent on **light**
-///   surfaces — the main window, Settings, the setup form. It's dark enough to
-///   read as text and as a filled button's label backdrop.
+/// - `green` (`#01762F`) is the wordmark green, for **light** surfaces. It's
+///   dark enough to read as text and as a filled button's label backdrop.
 /// - `greenOnDark` (`#67AD82`) is the same brand hue lifted for **dark**
 ///   surfaces — the overlay pill (a fixed dark capsule) and the app icon's
-///   wordmark. `#01762F` on the pill's `Color(white: 0.16)` is nearly invisible.
+///   wordmark. `#01762F` on the pill's ink body is nearly invisible.
+///
+/// **Reach for `accent`, not for either of these, in anything that follows the
+/// system appearance.** These two are the raw shades, and naming one directly
+/// pins a view to it: that's right for chrome whose background is fixed
+/// whatever the user's setting (the pill, the orb's gradient stops), and wrong
+/// everywhere else. Both bugs it caused looked the same — the ready screen's
+/// wordmark and its Listening glyph each kept `#01762F` on a dark window, where
+/// it goes muddy.
 ///
 /// `accent` is the appearance-adaptive pick between them, and needs no
 /// `.tint(_:)` at any call site: it resolves the app's accent color, which
@@ -24,7 +31,8 @@ import SwiftUI
 /// asset-catalog accent. The hexes are duplicated in the catalog because JSON
 /// can't reference Swift; keep the two in step.
 enum BlurtBrand {
-  /// `#01762F` — the wordmark green. The accent on light chrome.
+  /// `#01762F` — the wordmark green, on light chrome. A *fixed* shade: use
+  /// `accent` unless the surface is fixed too (see the type's note).
   nonisolated static let green = Color(red: 1 / 255, green: 118 / 255, blue: 47 / 255)
 
   /// `#67AD82` — the brand hue lifted for dark chrome (the overlay pill, and

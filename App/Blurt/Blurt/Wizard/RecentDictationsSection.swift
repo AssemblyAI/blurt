@@ -34,8 +34,13 @@ struct RecentDictationsSection: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
+      // The same tier as the caption under the Style row above it — both are
+      // quiet labels naming the card beneath them, and the design draws them
+      // identically. This was `.subheadline.weight(.semibold)`, which read a
+      // weight and a shade heavier than its sibling and made the two captions
+      // look like different levels of heading.
       Text("Recent")
-        .font(.subheadline.weight(.semibold))
+        .font(.callout)
         .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityAddTraits(.isHeader)
@@ -44,10 +49,10 @@ struct RecentDictationsSection: View {
         .frame(height: reservedHeight, alignment: .top)
         .frame(maxWidth: .infinity)
         .background(
-          RoundedRectangle(cornerRadius: 10, style: .continuous)
+          RoundedRectangle(cornerRadius: 4, style: .continuous)
             .fill(.quinary)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
     }
   }
 

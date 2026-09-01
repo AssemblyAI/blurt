@@ -16,6 +16,7 @@
 		02A88DD7DA0165811436B8C3 /* juno-80-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 9536A4A4611280C6237C9D95 /* juno-80-start.m4a */; };
 		034A91EE923BF5EA71438B7D /* BlurtBrand.swift in Sources */ = {isa = PBXBuildFile; fileRef = C19DBE4661B752927D16B261 /* BlurtBrand.swift */; };
 		03AC3DBE3755E3B7D66B8CF4 /* juno-120-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = A640F1C2A7EBAF3B0F8FFB83 /* juno-120-start.m4a */; };
+		0708BB71FB0A48748BA508C0 /* StyleRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30703F589CF213720C7E3B15 /* StyleRow.swift */; };
 		08956A83272E2ADC9B821894 /* juno-17-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = EC0CF2AE01C6EE41101CBB74 /* juno-17-stop.m4a */; };
 		08DC3CC8F65C73612D9543F7 /* juno-35-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 093A44A6DB129960326C1796 /* juno-35-stop.m4a */; };
 		0933F6F9CD7294843A63E09C /* rom1b-15-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = B401FA111CA49F5A535366AC /* rom1b-15-stop.m4a */; };
@@ -542,6 +543,7 @@
 		2E79CB809D285C0C27E8D43D /* OverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayView.swift; sourceTree = "<group>"; };
 		2FFA326076660C91492A6CE1 /* juno-8-stop.m4a */ = {isa = PBXFileReference; path = "juno-8-stop.m4a"; sourceTree = "<group>"; };
 		3012F22300681F3DD71AD51B /* juno-34-stop.m4a */ = {isa = PBXFileReference; path = "juno-34-stop.m4a"; sourceTree = "<group>"; };
+		30703F589CF213720C7E3B15 /* StyleRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StyleRow.swift; sourceTree = "<group>"; };
 		30E57A9C9B934A2120381005 /* WizardController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardController.swift; sourceTree = "<group>"; };
 		31986D541F06DA91827C18A0 /* juno-58-start.m4a */ = {isa = PBXFileReference; path = "juno-58-start.m4a"; sourceTree = "<group>"; };
 		3258A84E37C372993B1572EE /* DictationKeyTap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationKeyTap.swift; sourceTree = "<group>"; };
@@ -1378,6 +1380,7 @@
 				A0EC4E3D73862F8E4DB6F47D /* RecentDictationsSection.swift */,
 				254D4D3CAC1C114EC51C96C8 /* SettingRow.swift */,
 				37CBB4580F251B182A8B1937 /* SettingsWindowRoot.swift */,
+				30703F589CF213720C7E3B15 /* StyleRow.swift */,
 				30E57A9C9B934A2120381005 /* WizardController.swift */,
 				7F646CD07DBBA47F44CE0AD1 /* WizardView.swift */,
 				F61744A7BF2B24E0C8078DE6 /* Steps */,
@@ -2032,6 +2035,7 @@
 				1D1100AB3D47EFC80D47B04B /* SettingsWindowRoot.swift in Sources */,
 				8F3F1CC7203A148A68DFCCFF /* SoundPackCatalog.swift in Sources */,
 				69E27229D8C64D7119918B7A /* SoundStepView.swift in Sources */,
+				0708BB71FB0A48748BA508C0 /* StyleRow.swift in Sources */,
 				1817ACD2F7D8F7AF3C9B1C7C /* UITestIdentifiers.swift in Sources */,
 				E1CA5C692CB2A7E1BF231928 /* UITestSupport.swift in Sources */,
 				AB6CEBDE7BE4CA99EB469D8E /* UpdateCheckModel.swift in Sources */,
