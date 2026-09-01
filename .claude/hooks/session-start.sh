@@ -80,6 +80,6 @@ echo "Blurt web sandbox: no macOS toolchain — Swift build/tests/format run on 
 if [ -n "$missing" ]; then
   echo "Portable linters missing:${missing}. 'scripts/check.sh --portable' will skip them with a note."
 else
-  echo "Portable linters ready. Run 'scripts/check.sh --portable' to verify docs/site/scripts/workflow changes."
+  echo "Portable linters ready. Run 'scripts/check.sh --portable' to verify docs/scripts/workflow changes."
 fi
 exit 0

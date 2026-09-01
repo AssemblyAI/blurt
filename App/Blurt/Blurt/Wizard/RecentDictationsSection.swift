@@ -33,9 +33,17 @@ struct RecentDictationsSection: View {
   }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 6) {
+    // `MainWindow.captionGap`, the same distance the Style row's caption keeps
+    // from its card — the two labels sit at one height above the thing they
+    // name rather than at two.
+    VStack(alignment: .leading, spacing: MainWindow.captionGap) {
+      // The same tier as the caption under the Style row above it — both are
+      // quiet labels naming the card beneath them, and the design draws them
+      // identically. This was `.subheadline.weight(.semibold)`, which read a
+      // weight and a shade heavier than its sibling and made the two captions
+      // look like different levels of heading.
       Text("Recent")
-        .font(.subheadline.weight(.semibold))
+        .font(.callout)
         .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityAddTraits(.isHeader)
@@ -43,11 +51,19 @@ struct RecentDictationsSection: View {
       listBody
         .frame(height: reservedHeight, alignment: .top)
         .frame(maxWidth: .infinity)
+        // The design's warm card fill and hairline, matching the Style row's
+        // container above (see `BlurtBrand.cardFill` for why the neutrals stop
+        // at surfaces we draw). The border is drawn after the clip so the
+        // full-bleed row separators can't paint over it.
         .background(
-          RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(.quinary)
+          RoundedRectangle(cornerRadius: 4, style: .continuous)
+            .fill(BlurtBrand.cardFill)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        .overlay(
+          RoundedRectangle(cornerRadius: 4, style: .continuous)
+            .strokeBorder(BlurtBrand.cardBorder, lineWidth: 1)
+        )
     }
   }
 
@@ -251,10 +267,10 @@ private struct RecentCopyButton: View {
 
   var body: some View {
     configuration.label
-      .foregroundStyle(Color.accentColor)
+      .foregroundStyle(BlurtBrand.accent)
       .background {
         RoundedRectangle(cornerRadius: 5, style: .continuous)
-          .fill(Color.accentColor.opacity(highlightOpacity))
+          .fill(BlurtBrand.accent.opacity(highlightOpacity))
           .padding(.horizontal, -5)
           .padding(.vertical, -3)
       }

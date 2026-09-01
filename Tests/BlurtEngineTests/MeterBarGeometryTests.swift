@@ -222,4 +222,25 @@ struct MeterBarGeometryTests {
       }
     }
   }
+
+  @Test("rotation sweeps one full turn per period and wraps")
+  func rotationSweepsOneTurnPerPeriod() {
+    let period = 1.6
+    #expect(abs(MeterBarGeometry.rotationDegrees(time: 0, period: period)) < 0.0001)
+    #expect(abs(MeterBarGeometry.rotationDegrees(time: period / 4, period: period) - 90) < 0.0001)
+    #expect(abs(MeterBarGeometry.rotationDegrees(time: period / 2, period: period) - 180) < 0.0001)
+    // A whole turn lands back at 0 rather than 360 — the wrap is what keeps the
+    // angle from growing without bound across a long session.
+    #expect(abs(MeterBarGeometry.rotationDegrees(time: period, period: period)) < 0.0001)
+  }
+
+  @Test("rotation stays in 0..<360 and never divides by a zero period")
+  func rotationStaysInBand() {
+    for time in stride(from: 0.0, through: 600.0, by: 0.37) {
+      let d = MeterBarGeometry.rotationDegrees(time: time, period: 1.6)
+      #expect(d >= 0)
+      #expect(d < 360)
+    }
+    #expect(MeterBarGeometry.rotationDegrees(time: 5, period: 0) == 0)
+  }
 }

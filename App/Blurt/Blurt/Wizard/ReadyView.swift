@@ -35,33 +35,36 @@ struct ReadyView: View {
     // second reading here.
     let profiles = StyleProfileStore().profiles(decoding: rawProfiles)
     let active = StyleProfileStore.active(in: profiles, id: rawActiveID)
-    // Sections sit 20 pt apart; the wordmark and the status block are one
-    // idea, so they nest in a tighter 14 pt group rather than spreading to
-    // match.
-    VStack(spacing: 20) {
-      VStack(spacing: 14) {
+    // The window's vertical rhythm, measured off the design rather than picked:
+    // `sectionGap` between the stacked sections and between the wordmark and
+    // the readout, `captionGap` from a caption to the card it names (captions
+    // sit *above* their card, so the pair reads as label-then-thing), and a
+    // wider `readoutGap` under the shortcut readout — the design gives that one
+    // line noticeably more air before the controls start, which is what keeps
+    // the window from reading as a single dense stack.
+    VStack(spacing: MainWindow.sectionGap) {
+      VStack(spacing: MainWindow.sectionGap) {
         ReadyBrandingView()
 
         statusBlock(activeStyleName: active?.name)
       }
+      .padding(.bottom, MainWindow.readoutGap - MainWindow.sectionGap)
 
       // Always present, even with no custom styles: the lone Default button
       // plus the trailing "+" is the row's empty state, so the feature is
       // discoverable from the main window rather than only from Settings.
-      // The caption under the card says what a "style" is in one line, in the
-      // Recent header's 6 pt card gap and the app's caption tier.
-      VStack(alignment: .leading, spacing: 6) {
+      VStack(alignment: .leading, spacing: MainWindow.captionGap) {
+        Text("How Blurt cleans up your raw transcript")
+          .font(.callout)
+          .foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity, alignment: .leading)
+
         StyleRow(profiles: profiles, activeID: active?.id, addStyle: addStyle)
           // Locked while the mic is opening or capturing: a style clicked
           // mid-utterance would disagree with what the request was built with.
           // `.disabled` propagates to the buttons and the hidden ⌘1–⌘5 buttons,
           // whose shortcuts don't fire while disabled.
           .disabled(coordinator.isCapturing)
-
-        Text("How Blurt cleans up your raw transcript")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .frame(maxWidth: .infinity, alignment: .leading)
       }
 
       // `displayed`, not `entries`: the ring remembers 100 dictations (they are
@@ -76,11 +79,17 @@ struct ReadyView: View {
       }
       // The system Liquid Glass button — hover/press chrome, edge highlights,
       // and accessibility fallbacks come from the style, not hand-rolled fills.
-      // Falls back to `.bordered` on macOS 15–25 (see glassButtonStyleCompat).
-      .glassButtonStyleCompat()
+      // Prominent, so it takes the brand-green fill the design gives it: it's
+      // the only button on the window's closing line.
+      // Falls back to `.borderedProminent` on macOS 15–25 (see glassButtonStyleCompat).
+      .glassButtonStyleCompat(prominent: true)
     }
     .frame(maxWidth: .infinity)
-    .padding(.horizontal, 32)
+    // 24, the margin the design keeps on both comps (its cards run x 24.5 to
+    // 455.5 in a 480-wide window). Was 32, which made this window's cards
+    // narrower than the setup window's — the grouped `Form` there insets its
+    // rows to 20 and can't be told otherwise.
+    .padding(.horizontal, 24)
     // The standard titlebar supplies the top clearance now (the logo's
     // transparent margin used to); match the section spacing top and bottom so
     // the readout and the Recent card sit in an evenly-padded window.
@@ -124,7 +133,7 @@ struct ReadyView: View {
   /// Both faces are two text lines on the shared tiers, so this is simply
   /// enough for either with breathing room; each centers in the same slot and
   /// nothing below moves on the swap.
-  private static let statusBlockHeight: CGFloat = 44
+  private static let statusBlockHeight: CGFloat = 50
 
   /// The idle readout: "Tap **Right Command (⌘)** to start and stop." over
   /// "Or hold it to talk, then release." — the key spelled out and bolded
@@ -148,9 +157,10 @@ struct ReadyView: View {
 
   /// The capture-in-progress face of the top block, mirroring the idle face's
   /// shape exactly — two centered lines on the shared tiers — so the swap
-  /// reads as the same surface changing words: the pill's waveform cue in its
-  /// color (`OverlayBrandPalette.cyan` — the tint `WaveformMeter` uses while
-  /// recording) inline with a bold "Listening…", then the way out. The style
+  /// reads as the same surface changing words: the pill's waveform cue in the
+  /// accent (`#01762F` on light, `#67AD82` on dark — the adaptive value, not a
+  /// pinned shade, since this glyph lives in a window that follows the system
+  /// appearance) inline with a bold "Listening…", then the way out. The style
   /// clause names the active profile; with none active the sentence starts at
   /// "Tap again" — "Blurting in Default." reads as if a profile by that
   /// name existed.
@@ -158,7 +168,7 @@ struct ReadyView: View {
     VStack(spacing: 2) {
       HStack(spacing: 6) {
         Image(systemName: "waveform")
-          .foregroundStyle(OverlayBrandPalette.cyan)
+          .foregroundStyle(BlurtBrand.accent)
           // The pill's live-capture heartbeat (`RecordingTag`), same cadence,
           // stilled under Reduce Motion the same way.
           .pulsingOpacity(period: 1.2, minOpacity: 0.4, animated: !reduceMotion)
@@ -196,12 +206,15 @@ struct ReadyView: View {
   }
 }
 
-/// The BLURT wordmark over the status block: the pink pixel-art mark
-/// (`Branding/blurt-ready-logo.png`, a 720×180 render of its 180×45 pt slot,
-/// so the nearest-neighbor downscale is an even 2× on Retina and the pixels
-/// stay square). A header mark, not the window's identity — the standard
-/// titlebar names the app — which is why it simply omits itself if the PNG
-/// can't load rather than swapping in a fallback identity view.
+/// The `blurt` wordmark over the status block: the brand-green mark
+/// (`Branding/blurt-ready-logo.png`, a 720×180 rasterization of the design's
+/// vector wordmark, so its 180×45 pt slot is fed 4× the pixels it needs and
+/// stays crisp at any display scale). Smoothly interpolated — it's curved
+/// letterforms now, not the pixel-art mark it replaced, which needed
+/// nearest-neighbor to keep its pixels square. A header mark, not the window's
+/// identity — the standard titlebar names the app — which is why it simply
+/// omits itself if the PNG can't load rather than swapping in a fallback
+/// identity view.
 private struct ReadyBrandingView: View {
   /// Loaded once for the process rather than per `body` evaluation: this view
   /// sits in `ReadyView`, whose body re-runs on every new dictation
@@ -220,129 +233,22 @@ private struct ReadyBrandingView: View {
   var body: some View {
     if let image = Self.logo {
       Image(nsImage: image)
-        .interpolation(.none)
+        // Drawn as a template tinted with the accent rather than shipped in its
+        // own color. The design draws the wordmark in two shades — `#01762F` on
+        // light, `#67AD82` on dark (its `Logo_Dark` / `Logo_Light` pair) — and
+        // those are precisely the accent's two appearances, so tinting gets the
+        // dark-mode variant for free from one asset. A fixed-color PNG kept the
+        // dark green on a dark window, where it goes muddy. It also means the
+        // mark and the accent-filled buttons beside it can't drift apart: they
+        // now resolve the same color, rather than agreeing by coincidence.
+        .renderingMode(.template)
+        .interpolation(.high)
         .resizable()
         .scaledToFit()
         .frame(maxWidth: 180)
+        .foregroundStyle(BlurtBrand.accent)
         .accessibilityLabel("Blurt logo")
     }
-  }
-}
-
-/// The style switcher: a System Settings–style labeled row — leading
-/// "Output Style" label, trailing row of buttons — in the same rounded
-/// `.quinary` card as the Recent list below it, so the window's two in-content
-/// surfaces match. The first button, **Default**, is the base styling (no
-/// profile instructions appended) and the rest are the user's profiles; the
-/// active one is drawn prominent (accent fill), the others bordered, so each
-/// style is a distinct button rather than a segment. A trailing "+" opens
-/// Settings deep-linked to the Advanced pane, where profiles are created and
-/// edited (see `SettingsWindowRoot`'s Styles section) — this row owns only
-/// which one is in effect. It sits
-/// between the shortcut readout and the Recent list because which style is in
-/// effect is the one dictation setting worth changing mid-flow. The choice is
-/// **sticky**: a selection holds until the user makes another, so a switch is
-/// not something to redo before every dictation.
-private struct StyleRow: View {
-  /// Already decoded and resolved by `ReadyView`, which observes the slots —
-  /// this view is pure render-and-write.
-  let profiles: [StyleProfile]
-  /// The active profile's id, or `nil` for Default — with no profiles defined
-  /// the store resolves to the same base styling, so `nil` always draws the
-  /// Default button selected.
-  let activeID: StyleProfile.ID?
-  /// The "+" button's action — opens Settings deep-linked to the Advanced
-  /// pane, where styles are edited. Handed down from `MainWindowRoot`, which
-  /// sets `AppDelegate.settingsOpensOnAdvanced` before calling the
-  /// `openSettings` environment action.
-  var addStyle: () -> Void
-
-  var body: some View {
-    // The row shape is `SettingRow`'s (leading label, trailing control, center
-    // alignment) but built inline — `SettingRow` would wrap the title in an
-    // icon-bearing `Label`. Each style button carries its own name, so the
-    // row label is ordinary static text (no picker to lend it to).
-    HStack {
-      Text("Output Style")
-      Spacer(minLength: 12)
-      HStack(spacing: 8) {
-        // Writes go through the store — never the raw slot — so the store
-        // keeps owning how a choice is encoded (a profile's id, or the
-        // store's "default" sentinel; see `HotkeyStepView.selection` for the
-        // precedent).
-        styleButton(StyleProfileStore.defaultStyleName, isActive: activeID == nil) {
-          StyleProfileStore().activateDefault()
-        }
-        ForEach(profiles) { profile in
-          styleButton(profile.name, isActive: activeID == profile.id) {
-            StyleProfileStore().activate(profile)
-          }
-        }
-        // Room for another profile? Offer the door to where they're made.
-        // Hidden at the cap rather than disabled: a permanently-grey control
-        // reads as broken, and the style buttons already fill the row then.
-        if profiles.count < StyleProfileStore.profileLimit {
-          Button(action: addStyle) {
-            Image(systemName: "plus")
-          }
-          .glassButtonStyleCompat()
-          .accessibilityLabel("Add Style")
-          .accessibilityIdentifier(UITestIdentifiers.styleProfileAddFromMain)
-        }
-      }
-      .background(shortcuts)
-    }
-    .padding(.horizontal, 12)
-    .padding(.vertical, 8)
-    // Full width, like the Recent card below: both stretch to the one content
-    // width `ReadyView`'s horizontal padding leaves, so the two cards' edges
-    // align by construction rather than by matching numbers.
-    .frame(maxWidth: .infinity)
-    // The Recent card's container, so the two surfaces read as one family.
-    .background(
-      RoundedRectangle(cornerRadius: 10, style: .continuous)
-        .fill(.quinary)
-    )
-  }
-
-  /// One style's button. The active one is the prominent (accent-filled)
-  /// system button, the rest plain bordered — Liquid Glass variants on
-  /// macOS 26+ (see `glassButtonStyleCompat`) — so selection chrome, sizing
-  /// and accessibility come from the system styles rather than hand-drawn
-  /// fills. `.isSelected` says what the fill shows, so VoiceOver reads the
-  /// active style without color.
-  private func styleButton(
-    _ name: String, isActive: Bool, activate: @escaping () -> Void
-  ) -> some View {
-    Button(name, action: activate)
-      .glassButtonStyleCompat(prominent: isActive)
-      .accessibilityAddTraits(isActive ? .isSelected : [])
-  }
-
-  /// Keyboard shortcuts for the style buttons: ⌘1 selects Default, ⌘2…⌘5 the
-  /// profiles in row order. Hidden buttons rather than a `Commands` menu block,
-  /// because the scoping is the point: a menu command fires while *any* of the
-  /// app's windows is key (Settings included), whereas a button's shortcut is
-  /// resolved through the window that hosts it — so these fire exactly while
-  /// the main window is key, and not at all while it shows the wizard (this
-  /// view doesn't exist then). `.hidden()` keeps the buttons out
-  /// of sight, layout (they're parked in `background`) and accessibility while
-  /// leaving their shortcuts registered; the writes go through the same store
-  /// calls as the visible buttons. A "Style" submenu naming the shortcuts —
-  /// menu-bar discoverability — is a possible follow-up; the buttons
-  /// themselves are always visible, so nothing here is *only* reachable by
-  /// shortcut.
-  private var shortcuts: some View {
-    Group {
-      Button(StyleProfileStore.defaultStyleName) { StyleProfileStore().activateDefault() }
-        .keyboardShortcut("1", modifiers: .command)
-      // The store caps the list at `profileLimit` (4), so the digits end at ⌘5.
-      ForEach(Array(profiles.enumerated()), id: \.element.id) { index, profile in
-        Button(profile.name) { StyleProfileStore().activate(profile) }
-          .keyboardShortcut(KeyEquivalent(Character("\(index + 2)")), modifiers: .command)
-      }
-    }
-    .hidden()
   }
 }
 
@@ -352,14 +258,20 @@ private struct StyleRow: View {
 /// key name, the Listening face its "Listening…"). Private to this file — these
 /// name the top block's tiers, not an app-wide type ramp.
 extension View {
-  /// Tier 1: the sentence that says what to do (or what is happening).
+  /// Tier 1: the sentence that says what to do (or what is happening). Set a
+  /// step above body and semibold, the weight carried by the whole line rather
+  /// than the key name alone — this is the window's headline, and the design
+  /// gives it the visual rank to match. The inline `.bold()` on the key name
+  /// still reads as emphasis against semibold.
   fileprivate func statusPrimaryLine() -> some View {
-    font(.body)
+    font(.title2.weight(.semibold))
   }
 
-  /// Tier 2: the supporting line beneath it, quieter in size and color.
+  /// Tier 2: the supporting line beneath it, quieter in color and one tier
+  /// down in size — a step below tier 1 rather than two, so the pair reads as
+  /// one block instead of a heading with a caption.
   fileprivate func statusSecondaryLine() -> some View {
-    font(.subheadline)
+    font(.title3)
       .foregroundStyle(.secondary)
   }
 }

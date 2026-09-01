@@ -117,11 +117,14 @@ struct PermissionsStepView: View {
     SettingRow(title: info.label, systemImage: info.symbol) {
       if granted {
         HStack(spacing: 4) {
-          Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+          Image(systemName: "checkmark.circle.fill").foregroundStyle(BlurtBrand.accent)
           Text("Granted").foregroundStyle(.secondary)
         }
       } else {
+        // Prominent (brand-green fill), like the API key row's button: the one
+        // action that clears this row's outstanding requirement.
         Button(info.buttonLabel, action: action)
+          .glassButtonStyleCompat(prominent: true)
       }
     }
   }

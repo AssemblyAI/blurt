@@ -25,6 +25,10 @@
   </p>
 
   <p>
+    <a href="https://www.assemblyai.com/blurt"><strong>assemblyai.com/blurt</strong></a>
+  </p>
+
+  <p>
     <a href="https://github.com/AssemblyAI/blurt/releases/latest">
       <img
         src="https://img.shields.io/badge/macOS-15%2B-00d8ef?style=flat-square"

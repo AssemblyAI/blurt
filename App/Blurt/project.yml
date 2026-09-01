@@ -29,6 +29,13 @@ settings:
     DEVELOPMENT_TEAM: "B2VQF7Q2QY"
     ENABLE_HARDENED_RUNTIME: YES
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    # The brand green, from Blurt/Assets.xcassets. An app-level accent color has
+    # to come from the asset catalog: SwiftUI's `.tint(_:)` reaches only views,
+    # while AppKit chrome the app never draws itself — the Settings window's
+    # toolbar selection, focus rings, text selection — resolves
+    # `NSColor.controlAccentColor`, which consults *this* setting (falling back
+    # to the user's system accent when it's unset). See `BlurtBrand`.
+    ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
     DEAD_CODE_STRIPPING: YES
   configs:
     Release:

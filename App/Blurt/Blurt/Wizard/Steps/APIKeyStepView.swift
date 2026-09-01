@@ -42,6 +42,10 @@ struct APIKeyStepView: View {
         HStack(spacing: 12) {
           statusLabel
           Button(display.editButtonTitle) { isPresentingEditor = true }
+            // Prominent (brand-green fill): the design draws each row's one
+            // action as a filled button, and this row has exactly one — it's
+            // the action the section exists for, not a peer among several.
+            .glassButtonStyleCompat(prominent: true)
             .accessibilityIdentifier(
               display.isConnected ? UITestIdentifiers.apiKeyChange : UITestIdentifiers.apiKeyConnect
             )

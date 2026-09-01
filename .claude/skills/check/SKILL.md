@@ -1,6 +1,6 @@
 ---
 name: check
-description: Verify the repo is green by running scripts/check.sh — the same full health check CI runs (swift test + coverage gate, sanitizers, xcodegen drift, app build, swift-format/swiftlint/periphery/prettier/markdownlint/shellcheck/shfmt, site deployability, settled-decision invariants, ruff + pytest over evals/). Its read-only checks report together, so a red run names every failure at the bottom rather than stopping at the first. Use before claiming a change builds, passes, or is ready to commit/PR. Bakes in the macOS-only guard so a Linux/web sandbox flags "verify on a Mac" instead of fabricating a green result; there, scripts/check.sh --portable runs the platform-independent subset (docs/site/scripts/workflows).
+description: Verify the repo is green by running scripts/check.sh — the same full health check CI runs (swift test + coverage gate, sanitizers, xcodegen drift, app build, swift-format/swiftlint/periphery/prettier/markdownlint/shellcheck/shfmt, settled-decision invariants, ruff + pytest over evals/). Its read-only checks report together, so a red run names every failure at the bottom rather than stopping at the first. Use before claiming a change builds, passes, or is ready to commit/PR. Bakes in the macOS-only guard so a Linux/web sandbox flags "verify on a Mac" instead of fabricating a green result; there, scripts/check.sh --portable runs the platform-independent subset (docs/scripts/workflows).
 ---
 
 # check — is this green?
@@ -27,14 +27,14 @@ What you CAN run there is the portable subset:
 scripts/check.sh --portable
 ```
 
-It runs the repo-integrity guards — dependencies, sound catalog, site, shell
+It runs the repo-integrity guards — dependencies, sound catalog, shell
 portability, and settled decisions — then actionlint, zizmor, prettier, xmllint,
 markdownlint, shellcheck, shfmt, ruff (lint + format check), pytest over
 `evals/`, and `release.test.sh`. `swift-format lint` and `swiftlint lint` join
 them when Linux builds are on `PATH`; under the default web network policy they
 are not.
 
-That fully verifies docs, site, scripts, eval, and workflow changes. It is
+That fully verifies docs, scripts, eval, and workflow changes. It is
 **not** "green" in the CI sense: the entire Swift side is skipped, and the
 closing line says so. For Swift changes, push and watch `check.yml` instead —
 its `compile` job reports a broken test build in ~2 minutes, and `format-patch`
@@ -68,12 +68,9 @@ runs, failures are tallied, and the run ends with a single `error: N check(s)
 failed:` list naming all of them. So one pending `swift-format` reflow no longer
 hides every lint finding behind it — expect to fix a batch, not a queue.
 
-1. repo-integrity guards: no external SPM dependencies; sound-catalog
+1. repo-integrity guards: no external SPM dependencies; and sound-catalog
    integrity (every `SoundPackCatalog` voice has both cue files, no orphans, no
-   duplicate or reserved ids); and site integrity (`scripts/check-site.sh` —
-   the Pages site's local references, `#fragment`s, per-element hygiene,
-   `CNAME` agreement with canonical/og:url/sitemap/robots, CSS `url()`, and
-   no unreferenced assets). All run in `--portable` too
+   duplicate or reserved ids). Both run in `--portable` too
 2. shell portability (`scripts/check-portability.sh`): GNU-only idioms in
    `scripts/*.sh` and `.claude/hooks/*.sh`, which run on BSD userland (Mac, CI)
    as well as GNU (Linux sandbox). Then settled decisions
