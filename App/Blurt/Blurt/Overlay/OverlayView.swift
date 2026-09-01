@@ -98,14 +98,13 @@ struct OverlayView: View {
       // "still running".
       HStack(spacing: Self.contentSpacing) {
         BrandOrb(animated: !reduceMotion)
+        // Fills what's left, which is now about half what it used to be —
+        // the pill itself shrank rather than the meter being capped inside it.
+        // Capping it left the right half of the capsule empty; shrinking the
+        // capsule gets the same short bar row with no dead space. The row
+        // derives its bar count from the width it's given, so this is fewer
+        // bars rather than squashed ones.
         WaveformMeter(bridge: bridge, animated: !reduceMotion, color: BlurtBrand.greenOnDark)
-          // Half the width the meter would otherwise fill. Left to expand it ran
-          // nearly the pill's whole width, which at rest — where every bar sits
-          // at its floor — read as a long dotted rule rather than a meter. The
-          // bar row derives its count from the width it's given, so halving the
-          // frame halves the number of bars rather than squashing them.
-          .frame(maxWidth: Self.meterWidth)
-        Spacer(minLength: 0)
       }
       .padding(.horizontal, Self.contentInset)
       .transition(.opacity)
@@ -144,18 +143,8 @@ struct OverlayView: View {
   }
 
   /// The pill's inner inset and the gap between the orb and what follows it.
-  /// Named because `meterWidth` is derived from them.
   private static let contentInset: CGFloat = 12
   private static let contentSpacing: CGFloat = 8
-
-  /// Half of what the meter would fill on its own — the pill's width less its
-  /// insets, the orb, and the gap after it.
-  private static var meterWidth: CGFloat {
-    let available =
-      OverlayWindowController.pillSize.width
-      - contentInset * 2 - BrandOrb.diameter - contentSpacing
-    return available / 2
-  }
 
   /// The shape both waits share: the brand orb, then the status word in place
   /// of the meter. One builder rather than two call sites that happen to match,

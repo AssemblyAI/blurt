@@ -31,7 +31,15 @@ final class OverlayWindowController {
   // `shadowMargin`) has room to render without being clipped by the window's
   // contentRect — especially around the capsule's rounded ends, where the
   // shadow extends furthest from the pill body.
-  static let pillSize = CGSize(width: 168, height: 28)
+  //
+  // The width is set by the longest status word, not by the meter: at 138 the
+  // content area leaves 89 pt beside the orb, and "TRANSCRIBING" at the status
+  // tier measures 82 — about 7 pt of headroom, so a font-metric change (Bold
+  // Text, a different system version) shortens the word rather than clipping
+  // it. Was 168, which left the right of the capsule visibly empty once the
+  // meter stopped filling the whole width; the meter simply takes whatever is
+  // left, so shrinking the capsule is what shortens the bar row.
+  static let pillSize = CGSize(width: 138, height: 28)
   // Transparent breathing room around the pill so the drop shadow's *full*
   // Gaussian falloff renders before the panel's contentRect clips it. A SwiftUI
   // `.shadow(radius:)` spreads visibly to roughly 2× the radius (not `radius`
