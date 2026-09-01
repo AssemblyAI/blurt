@@ -74,7 +74,8 @@ struct StyleRow: View {
       .background(shortcuts)
     }
     .padding(.horizontal, 12)
-    .padding(.vertical, 8)
+    // 9, so the card lands on the design's 42 pt around a 24 pt control row.
+    .padding(.vertical, 9)
     // Full width, like the Recent card below: both stretch to the one content
     // width `ReadyView`'s horizontal padding leaves, so the two cards' edges
     // align by construction rather than by matching numbers.

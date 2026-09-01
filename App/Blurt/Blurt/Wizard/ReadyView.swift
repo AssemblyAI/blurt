@@ -85,7 +85,11 @@ struct ReadyView: View {
       .glassButtonStyleCompat(prominent: true)
     }
     .frame(maxWidth: .infinity)
-    .padding(.horizontal, 32)
+    // 24, the margin the design keeps on both comps (its cards run x 24.5 to
+    // 455.5 in a 480-wide window). Was 32, which made this window's cards
+    // narrower than the setup window's — the grouped `Form` there insets its
+    // rows to 20 and can't be told otherwise.
+    .padding(.horizontal, 24)
     // The standard titlebar supplies the top clearance now (the logo's
     // transparent margin used to); match the section spacing top and bottom so
     // the readout and the Recent card sit in an evenly-padded window.
