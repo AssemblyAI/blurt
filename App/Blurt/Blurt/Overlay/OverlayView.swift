@@ -96,11 +96,18 @@ struct OverlayView: View {
       // other state — the orb is one object and doesn't change behaviour with
       // the content next to it. The meter carries the level; the ring carries
       // "still running".
-      HStack(spacing: 8) {
+      HStack(spacing: Self.contentSpacing) {
         BrandOrb(animated: !reduceMotion)
         WaveformMeter(bridge: bridge, animated: !reduceMotion, color: BlurtBrand.greenOnDark)
+          // Half the width the meter would otherwise fill. Left to expand it ran
+          // nearly the pill's whole width, which at rest — where every bar sits
+          // at its floor — read as a long dotted rule rather than a meter. The
+          // bar row derives its count from the width it's given, so halving the
+          // frame halves the number of bars rather than squashing them.
+          .frame(maxWidth: Self.meterWidth)
+        Spacer(minLength: 0)
       }
-      .padding(.horizontal, 12)
+      .padding(.horizontal, Self.contentInset)
       .transition(.opacity)
     case .processing:
       // The meter stops and the ring takes over as the activity cue, so the
@@ -136,6 +143,20 @@ struct OverlayView: View {
     }
   }
 
+  /// The pill's inner inset and the gap between the orb and what follows it.
+  /// Named because `meterWidth` is derived from them.
+  private static let contentInset: CGFloat = 12
+  private static let contentSpacing: CGFloat = 8
+
+  /// Half of what the meter would fill on its own — the pill's width less its
+  /// insets, the orb, and the gap after it.
+  private static var meterWidth: CGFloat {
+    let available =
+      OverlayWindowController.pillSize.width
+      - contentInset * 2 - BrandOrb.diameter - contentSpacing
+    return available / 2
+  }
+
   /// The shape both waits share: the brand orb, then the status word in place
   /// of the meter. One builder rather than two call sites that happen to match,
   /// so "Connecting" and "Transcribing" can't drift into two different layouts
@@ -146,7 +167,7 @@ struct OverlayView: View {
       StatusLineText(text)
       Spacer(minLength: 0)
     }
-    .padding(.horizontal, 12)
+    .padding(.horizontal, Self.contentInset)
   }
 
   /// The transient `.error` notice: the word alone, in the design's orange, on

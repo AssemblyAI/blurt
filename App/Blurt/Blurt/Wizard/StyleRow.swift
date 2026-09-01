@@ -36,7 +36,11 @@ struct StyleRow: View {
     // icon-bearing `Label`. Each style button carries its own name, so the
     // row label is ordinary static text (no picker to lend it to).
     HStack {
+      // Fixed so the chips, not the row's own label, absorb any shortfall: a
+      // truncated "Output Sty…" would be a worse loss than a shortened style
+      // name, which the tooltip and Settings both still spell out.
       Text("Output Style")
+        .fixedSize()
       Spacer(minLength: 12)
       HStack(spacing: 8) {
         // Writes go through the store — never the raw slot — so the store
@@ -117,9 +121,18 @@ struct StyleRow: View {
     _ name: String, isActive: Bool, activate: @escaping () -> Void
   ) -> some View {
     Button(action: activate) {
+      // One line, tail-truncated. Style names are user-authored and unbounded,
+      // and the row is the fixed width of the card: without this a long name
+      // pushed the "+" off the edge and kept going past the window (a name like
+      // "sdfsdfsdfsdfsdf" blew the whole row out). Truncating makes the chips
+      // the thing that gives, which is recoverable — the full name is on hover
+      // and in Settings — where a broken layout isn't.
       Text(name)
+        .lineLimit(1)
+        .truncationMode(.tail)
         .foregroundStyle(isActive ? AnyShapeStyle(BlurtBrand.ink) : AnyShapeStyle(.white))
     }
+    .help(name)
     .glassButtonStyleCompat(prominent: true)
     .tint(isActive ? Color.white : BlurtBrand.accent)
     .accessibilityAddTraits(isActive ? .isSelected : [])
