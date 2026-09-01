@@ -34,11 +34,16 @@ let out = NSBitmapImageRep(
 NSGraphicsContext.saveGraphicsState()
 NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: out)
 
-// Brand gradient (matches the site's accent colors), angled.
+// Brand gradient, angled. The three shades are BlurtBrand's own — `green`
+// (#01762F), `greenOnDark` (#67AD82), and `ink` (#1D1B16) — rather than the
+// blue-violet this used to draw, which came from the Pages site's accents and
+// outlived the site. Spelled as literals because a `swift` script run straight
+// from disk can't import the app target that declares them; keep them in step
+// with App/Blurt/Blurt/Branding/BlurtBrand.swift by hand.
 let gradient = NSGradient(colors: [
-  NSColor(calibratedRed: 0.24, green: 0.36, blue: 0.86, alpha: 1),
-  NSColor(calibratedRed: 0.42, green: 0.23, blue: 0.86, alpha: 1),
-  NSColor(calibratedRed: 0.58, green: 0.25, blue: 0.78, alpha: 1),
+  NSColor(calibratedRed: 1 / 255, green: 118 / 255, blue: 47 / 255, alpha: 1),
+  NSColor(calibratedRed: 103 / 255, green: 173 / 255, blue: 130 / 255, alpha: 1),
+  NSColor(calibratedRed: 29 / 255, green: 27 / 255, blue: 22 / 255, alpha: 1),
 ])!
 gradient.draw(in: NSRect(x: 0, y: 0, width: outW, height: outH), angle: -35)
 

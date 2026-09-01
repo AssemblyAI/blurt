@@ -85,10 +85,8 @@ scripts/                     check.sh, check-portability.sh, check-invariants.sh
                              hand-run maintainer tools — no automated caller, invoked by a
                              human, so "nothing references it" here does NOT mean dead code:
                              screenshot.swift + beautify.swift (window imagery, capture
-                             then composite), generate-branding-images.sh (records how the logo
-                             assets were generated — provenance, not a renderer),
-                             generate-sounds.swift (regenerates the cues AND the app's
-                             SoundPackCatalog.swift together)
+                             then composite), generate-sounds.swift (regenerates the cues
+                             AND the app's SoundPackCatalog.swift together)
 Brewfile                     Homebrew-managed check.sh tools — the whole toolchain
 evals/                       offline decision support — the repo's only Python, none of it
                              shipped (see evals/README.md)
