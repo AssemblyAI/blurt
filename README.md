@@ -1,7 +1,10 @@
 <div align="center">
   <picture>
-    <source srcset=".github/images/blurt-logo-ansi.webp" type="image/webp" />
-    <img src=".github/images/blurt-logo-ansi.png" alt="Blurt logo" width="720" />
+    <source
+      media="(prefers-color-scheme: dark)"
+      srcset=".github/images/blurt-logo-dark.png"
+    />
+    <img src=".github/images/blurt-logo.png" alt="Blurt" width="300" />
   </picture>
 
   <h2>Free, open-source dictation for your Mac</h2>
@@ -18,7 +21,7 @@
   <p>
     <a href="https://github.com/AssemblyAI/blurt/releases/latest/download/Blurt.dmg">
       <img
-        src="https://img.shields.io/badge/Download-Blurt.dmg-f32a91?style=for-the-badge"
+        src="https://img.shields.io/badge/Download-Blurt.dmg-01762F?style=for-the-badge"
         alt="Download Blurt.dmg"
       />
     </a>
@@ -31,13 +34,13 @@
   <p>
     <a href="https://github.com/AssemblyAI/blurt/releases/latest">
       <img
-        src="https://img.shields.io/badge/macOS-15%2B-00d8ef?style=flat-square"
+        src="https://img.shields.io/badge/macOS-15%2B-01762F?style=flat-square"
         alt="macOS 15 or later"
       />
     </a>
     <a href="https://www.assemblyai.com">
       <img
-        src="https://img.shields.io/badge/powered%20by-AssemblyAI-00d8ef?style=flat-square"
+        src="https://img.shields.io/badge/powered%20by-AssemblyAI-01762F?style=flat-square"
         alt="Powered by AssemblyAI"
       />
     </a>
@@ -50,9 +53,9 @@
 
 <img
     src=".github/images/blurt.png"
-    alt="Blurt's ready screen: tap or hold the hotkey, speak, and transcribed text is pasted into the focused app"
-    width="760"
-    height="625"
+    alt="Blurt's ready screen: the brand wordmark over 'Tap Right Command to start and stop', an Output Style row, and the Recent list where finished dictations land"
+    width="620"
+    height="636"
   />
 
 </div>
