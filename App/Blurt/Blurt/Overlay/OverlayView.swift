@@ -96,11 +96,17 @@ struct OverlayView: View {
       // other state — the orb is one object and doesn't change behaviour with
       // the content next to it. The meter carries the level; the ring carries
       // "still running".
-      HStack(spacing: 8) {
+      HStack(spacing: Self.contentSpacing) {
         BrandOrb(animated: !reduceMotion)
+        // Fills what's left, which is now about half what it used to be —
+        // the pill itself shrank rather than the meter being capped inside it.
+        // Capping it left the right half of the capsule empty; shrinking the
+        // capsule gets the same short bar row with no dead space. The row
+        // derives its bar count from the width it's given, so this is fewer
+        // bars rather than squashed ones.
         WaveformMeter(bridge: bridge, animated: !reduceMotion, color: BlurtBrand.greenOnDark)
       }
-      .padding(.horizontal, 12)
+      .padding(.horizontal, Self.contentInset)
       .transition(.opacity)
     case .processing:
       // The meter stops and the ring takes over as the activity cue, so the
@@ -136,6 +142,10 @@ struct OverlayView: View {
     }
   }
 
+  /// The pill's inner inset and the gap between the orb and what follows it.
+  private static let contentInset: CGFloat = 12
+  private static let contentSpacing: CGFloat = 8
+
   /// The shape both waits share: the brand orb, then the status word in place
   /// of the meter. One builder rather than two call sites that happen to match,
   /// so "Connecting" and "Transcribing" can't drift into two different layouts
@@ -146,7 +156,7 @@ struct OverlayView: View {
       StatusLineText(text)
       Spacer(minLength: 0)
     }
-    .padding(.horizontal, 12)
+    .padding(.horizontal, Self.contentInset)
   }
 
   /// The transient `.error` notice: the word alone, in the design's orange, on

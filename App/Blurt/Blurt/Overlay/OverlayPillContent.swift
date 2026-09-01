@@ -24,9 +24,9 @@ struct StatusLineText: View {
 
   var body: some View {
     Text(text)
-      .font(.system(size: 10, weight: .semibold))
+      .font(.system(size: 9, weight: .semibold))
       .textCase(.uppercase)
-      .tracking(1.2)
+      .tracking(0.9)
       .lineLimit(1)
       .minimumScaleFactor(0.7)
       .foregroundStyle(color)
