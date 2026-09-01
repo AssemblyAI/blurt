@@ -48,6 +48,25 @@ enum BlurtBrand {
   /// decision (the row glyphs, the granted checkmark) and reads as one here.
   nonisolated static let accent = Color.accentColor
 
+  /// The warm grey the design fills its cards with (`#EBE8E8`), and the
+  /// hairline it draws round them (`#DEDBDB`).
+  ///
+  /// Scoped deliberately to the containers *we* draw — the Style row's card and
+  /// the Recent list. Text stays on `.primary`/`.secondary`, and the grouped
+  /// `Form` rows stay on system materials: those are the places where the
+  /// system's own colors earn their keep (Increase Contrast, vibrancy, and
+  /// agreeing with system-drawn labels in the same window), and where the
+  /// design's neutrals differ from them least anyway.
+  ///
+  /// The dark values aren't in the comps, which are light-only — they're
+  /// derived from the dark surfaces the design *does* specify, the overlay
+  /// pill and the app icon, both of which sit in the `#1D1B16` family. So the
+  /// card reads as a warm panel in dark rather than the cool grey a system
+  /// material would give. Worth replacing with real values if a dark comp
+  /// lands.
+  nonisolated static let cardFill = Color("CardFill")
+  nonisolated static let cardBorder = Color("CardBorder")
+
   /// `#1D1B16` — the brand ink, and the overlay pill's body in every state.
   /// Fixed rather than appearance-adaptive: the pill floats over whatever app
   /// the user is dictating into, so it can't take its cue from the app's own

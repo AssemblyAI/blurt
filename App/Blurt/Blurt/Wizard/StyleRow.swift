@@ -1,13 +1,14 @@
+import AppKit
 import BlurtEngine
 import SwiftUI
 
 /// The style switcher: a System Settings–style labeled row — leading
-/// "Output Style" label, trailing row of buttons — in the same rounded
-/// `.quinary` card as the Recent list below it, so the window's two in-content
-/// surfaces match. The first button, **Default**, is the base styling (no
-/// profile instructions appended) and the rest are the user's profiles; the
-/// active one is drawn prominent (accent fill), the others bordered, so each
-/// style is a distinct button rather than a segment. A trailing "+" opens
+/// "Output Style" label, trailing row of buttons — in the same warm card as
+/// the Recent list below it, so the window's two in-content surfaces match.
+/// The first button, **Default**, is the base styling (no profile instructions
+/// appended) and the rest are the user's profiles; the active one is drawn
+/// prominent (accent fill), the others bordered, so each style is a distinct
+/// button rather than a segment. A trailing "+" opens
 /// Settings deep-linked to the Advanced pane, where profiles are created and
 /// edited (see `SettingsWindowRoot`'s Styles section) — this row owns only
 /// which one is in effect. It sits
@@ -38,31 +39,30 @@ struct StyleRow: View {
       Text("Output Style")
       Spacer(minLength: 12)
       HStack(spacing: 8) {
-        // A segmented control, not a row of buttons. This is the macOS control
-        // for picking one of a few mutually-exclusive options, and it's what
-        // the design draws: the selected segment is a white raised chip on a
-        // grey track, which a row of buttons could only fake by hand-filling
-        // the active one. It's also tighter — segments share one track instead
-        // of each carrying a bordered button's own padding.
-        //
-        // Writes go through the store — never the raw slot — so the store keeps
-        // owning how a choice is encoded (a profile's id, or the store's
-        // "default" sentinel; see `HotkeyStepView.selection` for the precedent).
-        Picker("Output Style", selection: styleSelection) {
-          Text(StyleProfileStore.defaultStyleName).tag(StyleProfile.ID?.none)
-          ForEach(profiles) { profile in
-            Text(profile.name).tag(StyleProfile.ID?.some(profile.id))
+        // Writes go through the store — never the raw slot — so the store
+        // keeps owning how a choice is encoded (a profile's id, or the
+        // store's "default" sentinel; see `HotkeyStepView.selection` for the
+        // precedent).
+        styleButton(StyleProfileStore.defaultStyleName, isActive: activeID == nil) {
+          StyleProfileStore().activateDefault()
+        }
+        ForEach(profiles) { profile in
+          styleButton(profile.name, isActive: activeID == profile.id) {
+            StyleProfileStore().activate(profile)
           }
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .fixedSize()
         // Room for another profile? Offer the door to where they're made.
         // Hidden at the cap rather than disabled: a permanently-grey control
         // reads as broken, and the style buttons already fill the row then.
         if profiles.count < StyleProfileStore.profileLimit {
           Button(action: addStyle) {
+            // Sized to a text label's height so this matches the style buttons
+            // beside it. A bordered button sizes its chrome to its *content*
+            // and ignores an outer `.frame(height:)`, and an SF Symbol is
+            // shorter than a line of text — which rendered the "+" 3.5 pt
+            // shorter than "Default". The design has them at one height.
             Image(systemName: "plus")
+              .frame(height: Self.labelHeight)
           }
           // Filled green, as the design draws it — the row's one *action*,
           // distinct from the style buttons beside it, which are a selection.
@@ -79,29 +79,36 @@ struct StyleRow: View {
     // width `ReadyView`'s horizontal padding leaves, so the two cards' edges
     // align by construction rather than by matching numbers.
     .frame(maxWidth: .infinity)
-    // The Recent card's container, so the two surfaces read as one family.
+    // The Recent card's container, so the two surfaces read as one family:
+    // the design's warm card fill with its hairline, rather than the system
+    // `.quinary` material this used to take.
     .background(
       RoundedRectangle(cornerRadius: 4, style: .continuous)
-        .fill(.quinary)
+        .fill(BlurtBrand.cardFill)
+    )
+    .overlay(
+      RoundedRectangle(cornerRadius: 4, style: .continuous)
+        .strokeBorder(BlurtBrand.cardBorder, lineWidth: 1)
     )
   }
 
-  /// The segmented control's selection, bridging `nil`-means-Default to the
-  /// store. Read-only from `activeID` (already resolved by `ReadyView`); every
-  /// write goes through `StyleProfileStore`, which owns whether a choice is
-  /// encoded as a profile id or the "default" sentinel — the view never touches
-  /// the raw defaults slot.
-  private var styleSelection: Binding<StyleProfile.ID?> {
-    Binding(
-      get: { activeID },
-      set: { id in
-        let store = StyleProfileStore()
-        guard let id, let profile = profiles.first(where: { $0.id == id }) else {
-          store.activateDefault()
-          return
-        }
-        store.activate(profile)
-      })
+  /// The height of a text button's label, read from the font rather than
+  /// written as a literal, so the icon button can match the text buttons.
+  private static let labelHeight =
+    NSFont.preferredFont(forTextStyle: .body).boundingRectForFont.height
+
+  /// One style's button. The active one is the prominent (accent-filled)
+  /// system button, the rest plain bordered — Liquid Glass variants on
+  /// macOS 26+ (see `glassButtonStyleCompat`) — so selection chrome, sizing
+  /// and accessibility come from the system styles rather than hand-drawn
+  /// fills. `.isSelected` says what the fill shows, so VoiceOver reads the
+  /// active style without relying on color.
+  private func styleButton(
+    _ name: String, isActive: Bool, activate: @escaping () -> Void
+  ) -> some View {
+    Button(name, action: activate)
+      .glassButtonStyleCompat(prominent: isActive)
+      .accessibilityAddTraits(isActive ? .isSelected : [])
   }
 
   /// Keyboard shortcuts for the style buttons: ⌘1 selects Default, ⌘2…⌘5 the

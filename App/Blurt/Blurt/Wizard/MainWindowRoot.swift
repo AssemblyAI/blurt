@@ -29,6 +29,20 @@ enum MainWindow {
   /// jumps on the transition, and the `Color.clear` placeholders have to match them
   /// or the defensive branch resizes it.
   static let contentWidth: CGFloat = 480
+
+  /// The main window's vertical rhythm, read off the design's own geometry (the
+  /// "Blurt hub" comp, measured at 1×) rather than chosen: stacked sections and
+  /// the wordmark-to-readout gap at 26, a caption to the card it names at 12,
+  /// and 45 under the shortcut readout before the controls begin.
+  ///
+  /// Here rather than private to `ReadyView` because its content views own
+  /// their own captions — `RecentDictationsSection` draws the "Recent" label
+  /// above its card exactly as `ReadyView` draws the Style row's caption — so a
+  /// number private to one of them left the two captions sitting at different
+  /// distances from the thing they label.
+  static let sectionGap: CGFloat = 26
+  static let captionGap: CGFloat = 12
+  static let readoutGap: CGFloat = 45
 }
 
 /// Root view of the main `Window` scene. It pulls the long-lived models off the

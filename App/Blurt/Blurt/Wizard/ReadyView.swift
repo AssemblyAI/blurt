@@ -42,18 +42,18 @@ struct ReadyView: View {
     // wider `readoutGap` under the shortcut readout — the design gives that one
     // line noticeably more air before the controls start, which is what keeps
     // the window from reading as a single dense stack.
-    VStack(spacing: Self.sectionGap) {
-      VStack(spacing: Self.sectionGap) {
+    VStack(spacing: MainWindow.sectionGap) {
+      VStack(spacing: MainWindow.sectionGap) {
         ReadyBrandingView()
 
         statusBlock(activeStyleName: active?.name)
       }
-      .padding(.bottom, Self.readoutGap - Self.sectionGap)
+      .padding(.bottom, MainWindow.readoutGap - MainWindow.sectionGap)
 
-      // Always present, even with no custom styles: the lone Default segment
+      // Always present, even with no custom styles: the lone Default button
       // plus the trailing "+" is the row's empty state, so the feature is
       // discoverable from the main window rather than only from Settings.
-      VStack(alignment: .leading, spacing: Self.captionGap) {
+      VStack(alignment: .leading, spacing: MainWindow.captionGap) {
         Text("How Blurt cleans up your raw transcript")
           .font(.callout)
           .foregroundStyle(.secondary)
@@ -62,7 +62,7 @@ struct ReadyView: View {
         StyleRow(profiles: profiles, activeID: active?.id, addStyle: addStyle)
           // Locked while the mic is opening or capturing: a style clicked
           // mid-utterance would disagree with what the request was built with.
-          // `.disabled` propagates to the picker and the hidden ⌘1–⌘5 buttons,
+          // `.disabled` propagates to the buttons and the hidden ⌘1–⌘5 buttons,
           // whose shortcuts don't fire while disabled.
           .disabled(coordinator.isCapturing)
       }
@@ -130,14 +130,6 @@ struct ReadyView: View {
   /// enough for either with breathing room; each centers in the same slot and
   /// nothing below moves on the swap.
   private static let statusBlockHeight: CGFloat = 50
-
-  /// The window's vertical rhythm, read off the design's own geometry (the
-  /// "Blurt hub" comp, measured at 1×) rather than chosen: sections and the
-  /// wordmark-to-readout gap at 26, a caption to the card it names at 12, and
-  /// 45 under the readout before the controls begin.
-  private static let sectionGap: CGFloat = 26
-  private static let captionGap: CGFloat = 12
-  private static let readoutGap: CGFloat = 45
 
   /// The idle readout: "Tap **Right Command (⌘)** to start and stop." over
   /// "Or hold it to talk, then release." — the key spelled out and bolded

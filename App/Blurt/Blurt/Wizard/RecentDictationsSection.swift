@@ -33,7 +33,10 @@ struct RecentDictationsSection: View {
   }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 6) {
+    // `MainWindow.captionGap`, the same distance the Style row's caption keeps
+    // from its card — the two labels sit at one height above the thing they
+    // name rather than at two.
+    VStack(alignment: .leading, spacing: MainWindow.captionGap) {
       // The same tier as the caption under the Style row above it — both are
       // quiet labels naming the card beneath them, and the design draws them
       // identically. This was `.subheadline.weight(.semibold)`, which read a
@@ -48,11 +51,19 @@ struct RecentDictationsSection: View {
       listBody
         .frame(height: reservedHeight, alignment: .top)
         .frame(maxWidth: .infinity)
+        // The design's warm card fill and hairline, matching the Style row's
+        // container above (see `BlurtBrand.cardFill` for why the neutrals stop
+        // at surfaces we draw). The border is drawn after the clip so the
+        // full-bleed row separators can't paint over it.
         .background(
           RoundedRectangle(cornerRadius: 4, style: .continuous)
-            .fill(.quinary)
+            .fill(BlurtBrand.cardFill)
         )
         .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        .overlay(
+          RoundedRectangle(cornerRadius: 4, style: .continuous)
+            .strokeBorder(BlurtBrand.cardBorder, lineWidth: 1)
+        )
     }
   }
 
