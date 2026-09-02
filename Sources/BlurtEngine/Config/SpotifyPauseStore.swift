@@ -1,7 +1,7 @@
 import Foundation
 
 /// Persists the "pause Spotify while dictating" switch in `UserDefaults`. Off
-/// by default; the Settings window's Music section flips it. While on, a
+/// by default; the Settings window's Dictation section flips it. While on, a
 /// dictation that finds Spotify playing pauses it and resumes it when the
 /// dictation ends (see `SpotifyPauser`, which reads this per dictation, so a
 /// change applies to the very next one). Off, Spotify is never even queried —
