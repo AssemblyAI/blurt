@@ -3,10 +3,36 @@ import BlurtEngine
 import OSLog
 import SwiftUI
 
-// The Advanced pane's two standalone sections: the developer-mode switch and
-// the start-over button. Both are Settings-only (neither gates setup, so
-// neither is a wizard step), and they live here rather than in
+// The Advanced pane's standalone sections: the Spotify pause switch, the
+// developer-mode switch and the start-over button. All are Settings-only (none
+// gates setup, so none is a wizard step), and they live here rather than in
 // `SettingsWindowRoot` because that file is at the repo's file-length limit.
+
+/// The Music section of the Settings window: an opt-in switch that pauses a
+/// playing Spotify when a dictation starts and resumes it when the dictation
+/// ends — only when Blurt did the pausing, so music the user paused themselves
+/// stays paused (see `SpotifyPauser`, which reads the same default this toggle
+/// writes at each dictation). Off by default: the first dictation with it on
+/// raises macOS's one-time Automation prompt asking to control Spotify, which
+/// must never appear for a user who didn't opt in.
+struct SpotifySection: View {
+  @AppStorage(SpotifyPauseStore.defaultsKey) private var pauseSpotify = false
+
+  var body: some View {
+    Section {
+      Toggle(isOn: $pauseSpotify) {
+        Label("Pause Spotify while dictating", systemImage: "playpause")
+      }
+      .accessibilityIdentifier(UITestIdentifiers.pauseSpotifyToggle)
+    } header: {
+      Text("Music")
+    } footer: {
+      Text(
+        "Pauses Spotify when a dictation starts and resumes it when the dictation ends. "
+          + "macOS asks once for permission to control Spotify.")
+    }
+  }
+}
 
 /// The Developer section of the Settings window: an opt-in switch for developer
 /// mode. While on, every completed dictation is appended to the local JSONL log

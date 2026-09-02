@@ -81,8 +81,8 @@ private struct GeneralSettingsTab: View {
 }
 
 /// The occasional stuff: the enhanced-transcripts switch, the style profiles,
-/// checking for an update, the developer-mode log toggle, and the
-/// start-over button.
+/// the Spotify pause toggle, checking for an update, the developer-mode log
+/// toggle, and the start-over button.
 /// Kept out of General so the common pane stays short.
 private struct AdvancedSettingsTab: View {
   let coordinator: AppCoordinator
@@ -92,6 +92,7 @@ private struct AdvancedSettingsTab: View {
     SettingsPane {
       TranscriptionSection()
       StyleProfilesSection()
+      SpotifySection()
       UpdateSection(model: updateModel)
       DeveloperSection()
       ResetSection(coordinator: coordinator)

@@ -610,8 +610,15 @@ else
   #                        (MicCaptureLevelsTests, AudioInputDevicesTests). The
   #                        transport and liveness *policy* it serves stays
   #                        covered, in AudioTransport and MicLiveness.
+  #  - SpotifyPauser+Live.swift : the real Spotify client behind SpotifyPauser.
+  #                        Its closures read the live process list or send a
+  #                        synchronous Apple Event into a running Spotify — and
+  #                        the first event a process sends raises the one-time
+  #                        macOS Automation prompt, which CI can neither answer
+  #                        nor have a Spotify to point at. The pause/resume
+  #                        *policy* it serves stays covered, in SpotifyPauser.
   COVERAGE="$(xcrun llvm-cov export -summary-only -instr-profile "$PROFDATA" "$XCTEST_BIN" \
-    -ignore-filename-regex='Tests/|Audio/MicCapture\.swift|Audio/AudioRoute(Monitor)?\.swift|Audio/AudioInputDevices\.swift|Audio/CaptureSessionRecorder\.swift' \
+    -ignore-filename-regex='Tests/|Audio/MicCapture\.swift|Audio/AudioRoute(Monitor)?\.swift|Audio/AudioInputDevices\.swift|Audio/CaptureSessionRecorder\.swift|Media/SpotifyPauser\+Live\.swift' \
     | python3 -c 'import sys,json; print(round(json.load(sys.stdin)["data"][0]["totals"]["lines"]["percent"],2))')"
   echo "engine line coverage: ${COVERAGE}%"
   if ! awk -v c="$COVERAGE" -v min="$MIN_COVERAGE" 'BEGIN{ exit (c+0 < min+0) }'; then

@@ -65,6 +65,7 @@ enum UITestIdentifiers {
   static let soundPicker = "settings.sound.picker"
   static let developerToggle = "settings.developer.toggle"
   static let enhancedTranscriptsToggle = "settings.enhancedTranscripts.toggle"
+  static let pauseSpotifyToggle = "settings.pauseSpotify.toggle"
   static let updateCheck = "settings.update.check"
   /// The Advanced pane's "Reset…" button (`SettingsWindowRoot`'s reset section).
   /// Only the row button is identified: the confirmation it opens is an alert,

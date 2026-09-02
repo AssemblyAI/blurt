@@ -133,11 +133,15 @@ targets:
         CFBundleShortVersionString: "0.1.48"
         LSMinimumSystemVersion: "15.0"
         LSApplicationCategoryType: public.app-category.productivity
+        NSAppleEventsUsageDescription: Blurt pauses Spotify while you dictate and resumes it afterwards.
         NSMicrophoneUsageDescription: Blurt uses your microphone to transcribe your dictation with AssemblyAI.
     entitlements:
       path: Blurt/Blurt.entitlements
       properties:
         com.apple.security.app-sandbox: false
+        # Apple Events into Spotify (SpotifyPauser): under the hardened runtime
+        # they need this entitlement plus the NSAppleEventsUsageDescription above.
+        com.apple.security.automation.apple-events: true
         com.apple.security.device.audio-input: true
         com.apple.security.network.client: true
     dependencies:

@@ -218,6 +218,13 @@ final class AppCoordinator {
   /// The record start/stop chimes (see `CueSoundPlayer` below).
   private let cues = CueSoundPlayer()
 
+  /// Pauses Spotify while a dictation is in flight and resumes it afterwards —
+  /// only when Blurt did the pausing, and only with the Settings switch on
+  /// (off by default). Both calls below are fire-and-forget onto the pauser's
+  /// own serial queue, so a slow or hung Spotify never touches the
+  /// press-to-record path (see `SpotifyPauser`).
+  private let spotify = SpotifyPauser()
+
   /// Called when the user changes the sound pack in Settings: reload the cue
   /// players and preview the new voice so the choice is audible immediately.
   func soundPackChanged() {
@@ -247,6 +254,13 @@ final class AppCoordinator {
 
     cues.transition(for: phase)
 
+    // Duck Spotify at the dictation's edges: `.connecting` is the first phase
+    // of every accepted press, and every dictation funnels through a terminal
+    // phase (below) — including the initial `.idle`, which the pauser reads as
+    // "nothing owed". Rendering is the one place that sees every phase, the
+    // same argument as the gate sync below.
+    if phase == .connecting { spotify.dictationBegan() }
+
     // A dictation that ended without a key event (auto-release cap, a refused or
     // failed press) leaves the trigger's gate latched, which would swallow the
     // user's next press entirely. Clearing it here — the one place that sees every
@@ -255,6 +269,7 @@ final class AppCoordinator {
     // normal flow.
     if phase.isTerminal {
       keyTap?.syncAfterTerminalPhase()
+      spotify.dictationEnded()
     }
   }
 }
