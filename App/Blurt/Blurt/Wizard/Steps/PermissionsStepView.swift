@@ -102,7 +102,18 @@ struct PermissionsStepView: View {
       .task(id: openedAccessibilitySettings) {
         guard openedAccessibilitySettings else { return }
         try? await Task.sleep(for: Self.stuckGrantHintDelay)
+        // The sleep swallows cancellation (`try?`), so check it explicitly —
+        // a cancelled arm (view gone, id flipped back) must not set the flag.
+        guard !Task.isCancelled else { return }
         accessibilityGrantLooksStuck = true
+      }
+      // A grant that lands retires both cues: if the user later revokes it with
+      // the wizard still open, the footer should re-arm from a fresh settings
+      // tap rather than show the relaunch hint instantly with stale advice.
+      .onChange(of: controller.permissions.accessibility) {
+        guard controller.permissions.accessibility else { return }
+        openedAccessibilitySettings = false
+        accessibilityGrantLooksStuck = false
       }
     }
   }
