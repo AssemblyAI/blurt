@@ -22,11 +22,14 @@ final class ReadyViewUITests: BlurtUITestCase {
       "Ready screen should state the dictation shortcut")
     XCTAssertTrue(app.staticTexts["Or hold it to talk, then release."].exists)
 
-    // The Output Style row is always present — with no custom styles yet it
-    // shows the selected Default button plus the "+" that leads to Settings,
-    // where styles are made.
+    // The style row is always present — with no custom styles yet it shows the
+    // selected Default button plus the "+" that leads to Settings, where styles
+    // are made. Addressed by its caption and its buttons rather than by a row
+    // label: the row itself is unlabelled, since the caption above the card is
+    // what names it.
     XCTAssertTrue(
-      app.staticTexts["Output Style"].exists, "Ready screen should have an Output Style row")
+      app.staticTexts["How Blurt cleans up your raw transcript"].exists,
+      "Ready screen should caption the style row")
     // The label is `StyleProfileStore.defaultStyleName`, spelled out because
     // this bundle can't import the engine.
     let main = app.windows[UITestIdentifiers.mainWindowTitle]
