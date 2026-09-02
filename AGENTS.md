@@ -56,6 +56,9 @@ Sources/BlurtEngine/         the engine (dependency-free Swift package)
                              AudioRoute (+Monitor) — the CoreAudio output route, AudioTransport
                              — what a transport type means,
                              AudioInputDevices + MicDeviceStore (microphone selection),
+                             AudioDucker (+Live) — lowers the output volume while a dictation
+                             is in flight (opt-in, off by default) and restores it after,
+                             unless the user moved it themselves,
                              SoundPack/Catalog/Store (the voice *descriptors*; the voices
                              themselves are app-side)
   HostIdentity.swift         the host's Keychain service, log subsystem, defaults prefix, log
@@ -66,9 +69,6 @@ Sources/BlurtEngine/         the engine (dependency-free Swift package)
   FocusCapture/              Accessibility reads of the frontmost app / focused field
   Hotkey/                    TriggerKey(+Store), DictationKeyGate, DictationKeyRouter
   Injection/                 KeyInjector (clipboard paste), SystemClipboard
-  Media/                     MediaPauser — pauses Spotify and Apple Music while
-                             a dictation is in flight (opt-in, off by default),
-                             resuming only what it itself paused
   Permissions/               PermissionsChecker (mic + Accessibility)
   Pipeline/                  DictationSession (actor) + phases, UI projections, geometry, log
   STT/                       AssemblyAITranscriber, Conversation/TranscriptionContext, KeytermsBoost,

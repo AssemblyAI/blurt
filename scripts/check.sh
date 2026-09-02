@@ -610,16 +610,16 @@ else
   #                        (MicCaptureLevelsTests, AudioInputDevicesTests). The
   #                        transport and liveness *policy* it serves stays
   #                        covered, in AudioTransport and MicLiveness.
-  #  - MediaPauser+Live.swift : the real player client behind MediaPauser.
-  #                        Its closures read the live process list or send a
-  #                        synchronous Apple Event into a running Spotify or
-  #                        Apple Music — and the first event a process sends
-  #                        raises the one-time macOS Automation prompt, which CI
-  #                        can neither answer nor have a player to point at. The
-  #                        pause/resume *policy* it serves stays covered, in
-  #                        MediaPauser.
+  #  - AudioDucker+Live.swift : the real HAL client behind AudioDucker. Its
+  #                        closures read and set the default output device's
+  #                        virtual main volume — and a headless CI runner has no
+  #                        default output device with a settable volume to point
+  #                        them at, while a developer Mac running them for real
+  #                        would have its volume yanked around by a test run.
+  #                        The duck/restore *policy* it serves stays covered, in
+  #                        AudioDucker.
   COVERAGE="$(xcrun llvm-cov export -summary-only -instr-profile "$PROFDATA" "$XCTEST_BIN" \
-    -ignore-filename-regex='Tests/|Audio/MicCapture\.swift|Audio/AudioRoute(Monitor)?\.swift|Audio/AudioInputDevices\.swift|Audio/CaptureSessionRecorder\.swift|Media/MediaPauser\+Live\.swift' \
+    -ignore-filename-regex='Tests/|Audio/MicCapture\.swift|Audio/AudioRoute(Monitor)?\.swift|Audio/AudioInputDevices\.swift|Audio/CaptureSessionRecorder\.swift|Audio/AudioDucker\+Live\.swift' \
     | python3 -c 'import sys,json; print(round(json.load(sys.stdin)["data"][0]["totals"]["lines"]["percent"],2))')"
   echo "engine line coverage: ${COVERAGE}%"
   if ! awk -v c="$COVERAGE" -v min="$MIN_COVERAGE" 'BEGIN{ exit (c+0 < min+0) }'; then

@@ -45,7 +45,7 @@ enum DefaultsKey: String, CaseIterable {
   /// The CoreAudio UID of the input device dictation is pinned to, or empty for
   /// "same as system" (`MicDeviceStore`).
   case micDeviceUID = "MicDeviceUID"
-  case pauseMedia = "PauseMediaWhileDictating"
+  case duckAudio = "LowerAudioWhileDictating"
 
   /// The key this case actually reads and writes, under the configured host
   /// identity. A computed property rather than a stored string because the

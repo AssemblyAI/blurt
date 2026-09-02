@@ -37,9 +37,11 @@ struct PersistedSettingsTests {
     // The pinned microphone: left out, a reset "clean install" would keep
     // recording from a previously pinned device.
     #expect(PersistedSettings.allDefaultsKeys.contains(MicDeviceStore.defaultsKey))
-    // The pause-music switch: left out, a reset "clean install" would keep
-    // pausing the user's music — controlling other apps must stay opt-in.
-    #expect(PersistedSettings.allDefaultsKeys.contains(MediaPauseStore.defaultsKey))
+    // The audio-ducking switch: left out, a reset "clean install" would keep
+    // lowering the user's volume — changing system output must stay opt-in.
+    // (Only the switch: the ducker's crash-recovery slot is deliberately not a
+    // roster key — see `AudioDuckStore.pendingRestore`.)
+    #expect(PersistedSettings.allDefaultsKeys.contains(AudioDuckStore.defaultsKey))
   }
 
   @Test("the roster carries no stale or duplicate keys")
@@ -72,7 +74,7 @@ struct PersistedSettingsTests {
       OverlayOriginStore.yDefaultsKey,
       LastUpdateCheckStore.defaultsKey,
       MicDeviceStore.defaultsKey,
-      MediaPauseStore.defaultsKey,
+      AudioDuckStore.defaultsKey,
     ]
     #expect(storeKeys == Set(DefaultsKey.allCases.map(\.key)))
     // No two stores sharing a slot — the Set above would have quietly absorbed a

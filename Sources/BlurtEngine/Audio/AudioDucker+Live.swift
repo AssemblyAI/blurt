@@ -1,0 +1,70 @@
+import CoreAudio
+
+// The real HAL boundary behind `AudioDucker` — read and set the default output
+// device's virtual main volume. Seams-style (`DictationSession.Seams`): `var`
+// properties carrying the production defaults, so tests substitute both
+// (`AudioDuckerTests` substitutes everything — nothing under `swift test` may
+// touch a real device path). Excluded from the coverage gate for the reason
+// check.sh records: these closures need a real, volume-settable output device,
+// which a headless CI runner doesn't have.
+extension AudioDucker {
+  struct Client: Sendable {
+    /// The default output device's virtual main volume in 0...1 — the
+    /// device-wide scalar the volume keys move — or nil when there is no
+    /// default output device, it has no main volume, or the volume isn't
+    /// settable (some HDMI and AirPlay outputs). Settability is checked on the
+    /// read so nil means "don't duck": a volume we could read but never put
+    /// back must not be lowered in the first place.
+    var outputVolume: @Sendable () -> Float? = {
+      guard let device = AudioRoute.defaultOutputDeviceID(),
+        AudioDucker.isVolumeSettable(on: device)
+      else { return nil }
+      var address = AudioDucker.volumeAddress()
+      var volume = Float32(0)
+      var size = UInt32(MemoryLayout<Float32>.size)
+      let status = AudioObjectGetPropertyData(device, &address, 0, nil, &size, &volume)
+      guard status == noErr else { return nil }
+      return volume
+    }
+
+    /// Sets the default output device's virtual main volume, clamped to 0...1.
+    /// A failure — the device vanished between the read and this write — is a
+    /// silent no-op: the dictation itself is unaffected either way, and the
+    /// restore's touched-volume comparison already treats "not where we left
+    /// it" as leave-it-alone.
+    var setOutputVolume: @Sendable (Float) -> Void = { volume in
+      guard let device = AudioRoute.defaultOutputDeviceID() else { return }
+      var address = AudioDucker.volumeAddress()
+      var value = Float32(min(max(volume, 0), 1))
+      _ = AudioObjectSetPropertyData(
+        device, &address, 0, nil, UInt32(MemoryLayout<Float32>.size), &value)
+    }
+
+    /// The real client — what the public initializer uses.
+    static let production = Client()
+  }
+
+  /// The virtual main volume on the output scope: the one device-wide scalar
+  /// macOS's own volume keys and menu-bar slider move, which the HAL maps onto
+  /// per-channel controls where the hardware has those. Returned fresh per
+  /// call, like `AudioRoute.globalAddress`, because every caller passes it
+  /// `inout` to CoreAudio.
+  private static func volumeAddress() -> AudioObjectPropertyAddress {
+    AudioObjectPropertyAddress(
+      mSelector: kAudioDevicePropertyVirtualMainVolume,
+      mScope: kAudioDevicePropertyScopeOutput,
+      mElement: kAudioObjectPropertyElementMain)
+  }
+
+  /// Whether the device carries the virtual main volume *and* lets us set it.
+  /// Both halves matter: a device can lack the property entirely, or expose it
+  /// read-only — digital outputs whose level the receiver owns — and ducking
+  /// either would owe a restore we can never deliver.
+  private static func isVolumeSettable(on device: AudioDeviceID) -> Bool {
+    var address = volumeAddress()
+    guard AudioObjectHasProperty(device, &address) else { return false }
+    var settable = DarwinBoolean(false)
+    guard AudioObjectIsPropertySettable(device, &address, &settable) == noErr else { return false }
+    return settable.boolValue
+  }
+}

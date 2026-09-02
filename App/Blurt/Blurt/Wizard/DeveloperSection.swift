@@ -3,20 +3,18 @@ import BlurtEngine
 import OSLog
 import SwiftUI
 
-// The Advanced pane's music pause row and its two standalone sections: the
+// The Advanced pane's audio-ducking row and its two standalone sections: the
 // developer-mode switch and the start-over button. All are Settings-only (none
 // gates setup, so none is a wizard step), and they live here rather than in
 // `SettingsWindowRoot` because that file is at the repo's file-length limit.
 
-/// The "Pause music while dictating" switch (a row of the Dictation section):
-/// opt-in, pauses a playing Spotify or Apple Music when a dictation starts and
-/// resumes what it paused when the dictation ends — only when Blurt did the
-/// pausing, so music the user paused themselves stays paused (see
-/// `MediaPauser`, which reads the same default this toggle writes at each
-/// dictation). Off by default: with it on, each player raises macOS's one-time
-/// Automation prompt asking to control it (the first time that player is
-/// running during a dictation), which must never appear for a user who didn't
-/// opt in.
+/// The "Lower other audio while dictating" switch (a row of the Dictation
+/// section): opt-in, lowers the system output volume when a dictation starts
+/// and restores it when the dictation ends — unless the user moved the volume
+/// themselves mid-dictation, in which case their choice stands (see
+/// `AudioDucker`, which reads the same default this toggle writes at each
+/// dictation). Off by default: quietly changing the system volume is exactly
+/// the kind of thing an app must never do to a user who didn't opt in.
 ///
 /// A row in an existing section rather than a `Section` of its own, and its
 /// detail a tooltip rather than footer text, deliberately: the settings panes
@@ -24,24 +22,24 @@ import SwiftUI
 /// `SettingsPane`), and the Advanced pane already stands within one section
 /// header of the CI runner's visible frame. Measured across two red runs of
 /// `SettingsUITests.testResetAsksBeforeDoingAnything` (the pane's bottom button
-/// goes "Not hittable" the moment the pane outgrows the screen): a whole Music
+/// goes "Not hittable" the moment the pane outgrows the screen): a whole extra
 /// section put the Reset button's hit point at y=801, this row plus one extra
 /// footer line still left it at y=722, and the runner's usable bottom sits near
 /// y=720 — so the row rides in with zero new chrome, paid for by dropping the
 /// redundant "Updates" and "Reset" headers. Anything that grows the Advanced
 /// pane must shrink it somewhere else first.
-struct MediaPauseToggle: View {
-  @AppStorage(MediaPauseStore.defaultsKey) private var pauseMedia = false
+struct AudioDuckToggle: View {
+  @AppStorage(AudioDuckStore.defaultsKey) private var duckAudio = false
 
   var body: some View {
-    Toggle(isOn: $pauseMedia) {
-      Label("Pause music while dictating", systemImage: "playpause")
+    Toggle(isOn: $duckAudio) {
+      Label("Lower other audio while dictating", systemImage: "speaker.wave.1")
     }
-    .accessibilityIdentifier(UITestIdentifiers.pauseMediaToggle)
+    .accessibilityIdentifier(UITestIdentifiers.duckAudioToggle)
     // The explanation the section footer has no room for (see the doc comment).
     .help(
-      "Pauses Spotify and Apple Music when a dictation starts and resumes what it paused when "
-        + "the dictation ends. macOS asks once per app for permission to control it.")
+      "Turns the system volume down while you dictate and back up afterwards, so music "
+        + "doesn't talk over you. If you change the volume mid-dictation, your setting wins.")
   }
 }
 
@@ -143,7 +141,7 @@ struct ResetSection: View {
       // No "Reset" header on purpose: the row already says "Reset Blurt", and
       // the Advanced pane's height budget is spent — a redundant header here
       // pushes this very button past the CI runner's screen edge (see
-      // `MediaPauseToggle`).
+      // `AudioDuckToggle`).
       Text(
         "Deletes your AssemblyAI API key, clears every setting, removes the dictation logs, and "
           + "revokes Blurt’s microphone, accessibility and input-monitoring permissions.")

@@ -218,12 +218,13 @@ final class AppCoordinator {
   /// The record start/stop chimes (see `CueSoundPlayer` below).
   private let cues = CueSoundPlayer()
 
-  /// Pauses the music players (Spotify, Apple Music) while a dictation is in
-  /// flight and resumes them afterwards — only the ones Blurt itself paused,
-  /// and only with the Settings switch on (off by default). Both calls below
-  /// are fire-and-forget onto the pauser's own serial queue, so a slow or hung
-  /// player never touches the press-to-record path (see `MediaPauser`).
-  private let mediaPauser = MediaPauser()
+  /// Lowers the system output volume while a dictation is in flight and
+  /// restores it afterwards — only with the Settings switch on (off by
+  /// default), and only when the volume still sits where the duck left it, so
+  /// a user who touched the volume keys mid-dictation keeps their choice. Both
+  /// calls below are fire-and-forget onto the ducker's own serial queue, so
+  /// the HAL never touches the press-to-record path (see `AudioDucker`).
+  private let audioDucker = AudioDucker()
 
   /// Called when the user changes the sound pack in Settings: reload the cue
   /// players and preview the new voice so the choice is audible immediately.
@@ -252,14 +253,20 @@ final class AppCoordinator {
     // both follow the same stream the pill renders, never a second source.
     isCapturing = phase.isCapturing
 
-    cues.transition(for: phase)
+    // While the output is ducked the chimes ride at compensated gain, or the
+    // duck would swallow them (see `CueSoundPlayer.duckedCueVolume`). The read
+    // is fresh per render: the duck lands during `.connecting`, and the start
+    // chime fires a phase later, on the connecting→recording edge — after the
+    // mic bring-up, so the duck has long since settled.
+    cues.transition(for: phase, duckedOutput: audioDucker.isOutputDucked)
 
-    // Duck the music players at the dictation's edges: `.connecting` is the
-    // first phase of every accepted press, and every dictation funnels through
-    // a terminal phase (below) — including the initial `.idle`, which the
-    // pauser reads as "nothing owed". Rendering is the one place that sees
-    // every phase, the same argument as the gate sync below.
-    if phase == .connecting { mediaPauser.dictationBegan() }
+    // Duck the output at the dictation's edges: `.connecting` is the first
+    // phase of every accepted press, and every dictation funnels through a
+    // terminal phase (below) — including the initial `.idle`, which settles
+    // nothing in a normal launch but is exactly where a crashed run's leftover
+    // duck gets restored. Rendering is the one place that sees every phase,
+    // the same argument as the gate sync below.
+    if phase == .connecting { audioDucker.dictationBegan() }
 
     // A dictation that ended without a key event (auto-release cap, a refused or
     // failed press) leaves the trigger's gate latched, which would swallow the
@@ -269,7 +276,7 @@ final class AppCoordinator {
     // normal flow.
     if phase.isTerminal {
       keyTap?.syncAfterTerminalPhase()
-      mediaPauser.dictationEnded()
+      audioDucker.dictationEnded()
     }
   }
 }
