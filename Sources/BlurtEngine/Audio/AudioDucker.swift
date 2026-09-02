@@ -13,10 +13,11 @@ import Dispatch
 ///
 /// - **Restore only what we ducked.** The volume goes back only when it still
 ///   sits where the duck left it; a user who touched the volume keys
-///   mid-dictation has taken the wheel, and their choice stands. (A default
-///   output *device* change mid-dictation reads the same way — the new
-///   device's volume won't match the ducked value — which is the conservative
-///   answer: never move a volume we didn't set.)
+///   mid-dictation has taken the wheel, and their choice stands. A default
+///   output *device* change is caught by identity, not luck: the slot records
+///   the ducked device's UID, and the restore refuses to move any other
+///   device — the volume comparison alone couldn't tell a switched-in device
+///   that happens to sit at the ducked value from an untouched duck.
 /// - **Restore survives a crash.** What the duck owes is persisted
 ///   (`AudioDuckStore.pendingRestore`) *before* the volume moves, so a run
 ///   that dies mid-dictation still restores: the next launch's very first
@@ -42,6 +43,10 @@ public final class AudioDucker: Sendable {
   struct PendingRestore: Equatable, Sendable {
     let saved: Float
     let ducked: Float
+    /// The CoreAudio UID of the device the duck lowered, or nil when the read
+    /// failed. The restore only moves a device carrying this UID; with no
+    /// identity recorded it falls back to the volume comparison alone.
+    let deviceUID: String?
   }
 
   /// How far a duck lowers the volume: to this fraction of what the user had.
@@ -127,25 +132,27 @@ public final class AudioDucker: Sendable {
     guard isEnabled(), readPendingRestore() == nil,
       let saved = client.outputVolume(), saved > 0
     else { return }
+    let device = client.defaultOutputDeviceUID()
     let target = saved * Self.duckFraction
     // Persist what we owe *before* moving the volume: a crash between the two
     // writes must strand a stale slot (settled harmlessly at next launch by
     // the touched-volume rule), never a lowered volume with no record of it.
-    writePendingRestore(PendingRestore(saved: saved, ducked: target))
+    writePendingRestore(PendingRestore(saved: saved, ducked: target, deviceUID: device))
     client.setOutputVolume(target)
     // Re-read where the duck actually landed — hardware quantizes — so the
     // restore's "still where we left it?" comparison is against the device's
     // truth, not our arithmetic.
     if let landed = client.outputVolume(), landed != target {
-      writePendingRestore(PendingRestore(saved: saved, ducked: landed))
+      writePendingRestore(PendingRestore(saved: saved, ducked: landed, deviceUID: device))
     }
   }
 
   /// The decision half of `dictationEnded()`. The pending slot is consumed
   /// either way — a restore happens at most once per duck — but the volume is
-  /// only put back when it still sits where the duck left it: a user who
-  /// moved it mid-dictation (or switched output devices, which reads the
-  /// same) keeps their choice.
+  /// only put back when the default output is still the device the duck
+  /// lowered (by UID) *and* its volume still sits where the duck left it: a
+  /// user who moved the volume or switched devices mid-dictation keeps their
+  /// choice, and no other device's volume is ever touched.
   ///
   /// The slot is cleared *after* the volume moves, mirroring the duck's
   /// persist-before-move: a crash between the two leaves a slot whose ducked
@@ -154,7 +161,12 @@ public final class AudioDucker: Sendable {
   /// order would strand the user at the ducked volume with no record of it.
   func restoreIfDucked() {
     guard let pending = readPendingRestore() else { return }
-    if let current = client.outputVolume(), abs(current - pending.ducked) <= Self.volumeTolerance {
+    // Device identity first: a restore must never move a device the duck
+    // didn't lower, however plausible its volume looks.
+    let sameDevice = pending.deviceUID == nil || client.defaultOutputDeviceUID() == pending.deviceUID
+    if sameDevice, let current = client.outputVolume(),
+      abs(current - pending.ducked) <= Self.volumeTolerance
+    {
       client.setOutputVolume(pending.saved)
     }
     writePendingRestore(nil)

@@ -36,6 +36,7 @@ public struct AudioDuckStore {
   /// while ducked still owes the user their volume back at the next launch.
   private static let savedVolumeKey = "audioDuck.savedOutputVolume"
   private static let duckedVolumeKey = "audioDuck.duckedOutputVolume"
+  private static let deviceUIDKey = "audioDuck.outputDeviceUID"
 
   /// The restore a duck in flight owes, or nil when none is. Persisted rather
   /// than held in memory so a crash mid-dictation doesn't strand the user at
@@ -48,16 +49,26 @@ public struct AudioDuckStore {
       guard let saved = defaults.object(forKey: Self.savedVolumeKey) as? Double,
         let ducked = defaults.object(forKey: Self.duckedVolumeKey) as? Double
       else { return nil }
-      return AudioDucker.PendingRestore(saved: Float(saved), ducked: Float(ducked))
+      return AudioDucker.PendingRestore(
+        saved: Float(saved), ducked: Float(ducked),
+        // Absent when the UID read failed at duck time; the restore then falls
+        // back to the volume comparison alone.
+        deviceUID: defaults.string(forKey: Self.deviceUIDKey))
     }
     nonmutating set {
       guard let newValue else {
         defaults.removeObject(forKey: Self.savedVolumeKey)
         defaults.removeObject(forKey: Self.duckedVolumeKey)
+        defaults.removeObject(forKey: Self.deviceUIDKey)
         return
       }
       defaults.set(Double(newValue.saved), forKey: Self.savedVolumeKey)
       defaults.set(Double(newValue.ducked), forKey: Self.duckedVolumeKey)
+      if let device = newValue.deviceUID {
+        defaults.set(device, forKey: Self.deviceUIDKey)
+      } else {
+        defaults.removeObject(forKey: Self.deviceUIDKey)
+      }
     }
   }
 }

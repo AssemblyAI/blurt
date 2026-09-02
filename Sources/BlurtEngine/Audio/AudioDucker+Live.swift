@@ -40,6 +40,26 @@ extension AudioDucker {
         device, &address, 0, nil, UInt32(MemoryLayout<Float32>.size), &value)
     }
 
+    /// The default output device's CoreAudio UID — the stable identity the
+    /// restore checks so it only ever moves the device the duck lowered (an
+    /// `AudioDeviceID` is transient across launches and device replugs; the
+    /// UID is not, which is why `MicDeviceStore` pins microphones by UID too).
+    /// Nil when there is no default output device or the read fails; a duck
+    /// recorded without an identity falls back to the volume comparison alone.
+    var defaultOutputDeviceUID: @Sendable () -> String? = {
+      guard let device = AudioRoute.defaultOutputDeviceID() else { return nil }
+      var address = AudioRoute.globalAddress(kAudioDevicePropertyDeviceUID)
+      var uid: CFString?
+      var size = UInt32(MemoryLayout<CFString?>.size)
+      // The HAL hands back a +1-retained CFString; landing it in a managed
+      // `CFString?` slot lets Swift balance that retain at scope exit.
+      let status = withUnsafeMutablePointer(to: &uid) {
+        AudioObjectGetPropertyData(device, &address, 0, nil, &size, $0)
+      }
+      guard status == noErr, let uid else { return nil }
+      return uid as String
+    }
+
     /// The real client — what the public initializer uses.
     static let production = Client()
   }

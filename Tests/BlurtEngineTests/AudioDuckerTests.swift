@@ -16,11 +16,13 @@ struct AudioDuckerTests {
   /// is assertable for the opted-out case.
   private final class Rig: Sendable {
     private let volume: Mutex<Float?>
+    private let deviceUID: Mutex<String?>
     private let pending = Mutex<AudioDucker.PendingRestore?>(nil)
     private let reads = Mutex(0)
 
-    init(volume: Float?) {
+    init(volume: Float?, deviceUID: String? = "device-A") {
       self.volume = Mutex(volume)
+      self.deviceUID = Mutex(deviceUID)
     }
 
     var currentVolume: Float? { volume.withLock { $0 } }
@@ -29,6 +31,13 @@ struct AudioDuckerTests {
 
     func setVolume(_ newValue: Float?) {
       volume.withLock { $0 = newValue }
+    }
+
+    /// The user picks a different default output mid-scenario: a new identity
+    /// with its own volume, as `AudioDucker`'s client would then see.
+    func switchDevice(to uid: String?, volume newVolume: Float?) {
+      deviceUID.withLock { $0 = uid }
+      volume.withLock { $0 = newVolume }
     }
 
     /// A ducker over this rig. Separate from the rig so a scenario can build a
@@ -45,7 +54,8 @@ struct AudioDuckerTests {
             reads.withLock { $0 += 1 }
             return volume.withLock { $0 }
           },
-          setOutputVolume: { [self] newValue in volume.withLock { $0 = quantize(newValue) } }),
+          setOutputVolume: { [self] newValue in volume.withLock { $0 = quantize(newValue) } },
+          defaultOutputDeviceUID: { [self] in deviceUID.withLock { $0 } }),
         isEnabled: { enabled },
         readPendingRestore: { [self] in pending.withLock { $0 } },
         writePendingRestore: { [self] newValue in pending.withLock { $0 = newValue } })
@@ -158,6 +168,34 @@ struct AudioDuckerTests {
     #expect(rig.pendingRestore?.ducked == quantize(0.75 * AudioDucker.duckFraction))
     ducker.restoreIfDucked()
     #expect(rig.currentVolume == 0.75)
+  }
+
+  @Test("a restore never moves a device the duck didn't lower")
+  func deviceSwitchIsNeverRestored() {
+    let rig = Rig(volume: 1.0)
+    let ducker = rig.makeDucker()
+    ducker.duckIfEnabled()
+    // The user switches the default output mid-dictation to a device that
+    // happens to sit exactly at the ducked value — the one switch the volume
+    // comparison alone cannot tell from "untouched". The UID recorded at duck
+    // time is what keeps the new device's volume from being yanked to the old
+    // device's saved level; the owed slot is still consumed.
+    rig.switchDevice(to: "device-B", volume: 1.0 * AudioDucker.duckFraction)
+    ducker.restoreIfDucked()
+    #expect(rig.currentVolume == 1.0 * AudioDucker.duckFraction)
+    #expect(rig.pendingRestore == nil)
+  }
+
+  @Test("a duck recorded without a device identity still restores on volume match")
+  func nilDeviceIdentityFallsBackToVolumeMatch() {
+    // The UID read can fail while the volume calls work; the slot then carries
+    // no identity and the touched-volume rule alone decides, as before.
+    let rig = Rig(volume: 0.8, deviceUID: nil)
+    let ducker = rig.makeDucker()
+    ducker.duckIfEnabled()
+    ducker.restoreIfDucked()
+    #expect(rig.currentVolume == 0.8)
+    #expect(rig.pendingRestore == nil)
   }
 
   @Test("a crash mid-dictation is settled at the next launch")
