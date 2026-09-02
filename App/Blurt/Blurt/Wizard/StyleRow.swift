@@ -2,13 +2,24 @@ import AppKit
 import BlurtEngine
 import SwiftUI
 
-/// The style switcher: a System Settings–style labeled row — leading
-/// "Output Style" label, trailing row of buttons — in the same warm card as
-/// the Recent list below it, so the window's two in-content surfaces match.
+/// The style switcher: a centered row of buttons in the same warm card as the
+/// Recent list below it, so the window's two in-content surfaces match. It
+/// carries no label of its own — the caption `ReadyView` draws above the card
+/// names it, so a leading "Output Style" inside the card only said it twice.
 /// The first button, **Default**, is the base styling (no profile instructions
 /// appended) and the rest are the user's profiles; the active one is drawn
-/// prominent (accent fill), the others bordered, so each style is a distinct
-/// button rather than a segment. A trailing "+" opens
+/// prominent (green accent fill), the others plain bordered (grey), so each
+/// style is a distinct button rather than a segment.
+///
+/// Buttons rather than a segmented `Picker` for a load-bearing reason, not a
+/// stylistic one: style names are user-authored, and a segmented control
+/// reports its full-label width as its *minimum*, so it cannot be truncated or
+/// compressed. At the reachable worst case — five segments at the 24-character
+/// `nameLimit` — it drives itself straight through the caption above it and
+/// both card edges, and out of the 480 pt window. Separate buttons can each
+/// tail-truncate instead, so the chips give and the layout holds.
+///
+/// A trailing "+" opens
 /// Settings deep-linked to the Advanced pane, where profiles are created and
 /// edited (see `SettingsWindowRoot`'s Styles section) — this row owns only
 /// which one is in effect. It sits
@@ -31,17 +42,15 @@ struct StyleRow: View {
   var addStyle: () -> Void
 
   var body: some View {
-    // The row shape is `SettingRow`'s (leading label, trailing control, center
-    // alignment) but built inline — `SettingRow` would wrap the title in an
-    // icon-bearing `Label`. Each style button carries its own name, so the
-    // row label is ordinary static text (no picker to lend it to).
+    // Centered chips with no leading label of its own: the caption `ReadyView`
+    // draws above this card ("How Blurt cleans up your raw transcript") already
+    // names the row, so an "Output Style" label inside it said the same thing
+    // twice and spent ~85 pt of the card doing it — width the chips now use to
+    // truncate later. The two `Spacer`s are `minLength: 0` so they collapse
+    // before the chips give: extra room centers the group, and once there is
+    // none the names start truncating instead.
     HStack {
-      // Fixed so the chips, not the row's own label, absorb any shortfall: a
-      // truncated "Output Sty…" would be a worse loss than a shortened style
-      // name, which the tooltip and Settings both still spell out.
-      Text("Output Style")
-        .fixedSize()
-      Spacer(minLength: 12)
+      Spacer(minLength: 0)
       HStack(spacing: 8) {
         // Writes go through the store — never the raw slot — so the store
         // keeps owning how a choice is encoded (a profile's id, or the
@@ -68,14 +77,17 @@ struct StyleRow: View {
             Image(systemName: "plus")
               .frame(height: Self.labelHeight)
           }
-          // Filled green, as the design draws it — the row's one *action*,
-          // distinct from the style buttons beside it, which are a selection.
+          // Filled green, as the design draws it. Note that green now marks
+          // the selected style too, so the fill alone no longer tells this
+          // apart from the chips — what does is that it is the row's only
+          // glyph rather than a name, and it sits past the last of them.
           .glassButtonStyleCompat(prominent: true)
           .accessibilityLabel("Add Style")
           .accessibilityIdentifier(UITestIdentifiers.styleProfileAddFromMain)
         }
       }
       .background(shortcuts)
+      Spacer(minLength: 0)
     }
     .padding(.horizontal, 12)
     // 9, so the card lands on the design's 42 pt around a 24 pt control row.
@@ -102,39 +114,44 @@ struct StyleRow: View {
   private static let labelHeight =
     NSFont.preferredFont(forTextStyle: .body).boundingRectForFont.height
 
-  /// One style's button. Every one is the same prominent system button; only
-  /// the tint differs, so sizing, hover/press chrome and the accessibility
-  /// fallbacks all still come from the system style rather than a hand-drawn
-  /// fill.
+  /// One style's button. The active one is the prominent (accent-filled)
+  /// system button and the rest are the plain bordered one — Liquid Glass
+  /// variants on macOS 26+ (see `glassButtonStyleCompat`) — so **green marks
+  /// the selection and grey the alternatives**, and selection chrome, sizing
+  /// and accessibility all come from the system styles rather than a
+  /// hand-drawn fill.
   ///
-  /// The active style is **white** and the rest are **green**, which is the
-  /// design's scheme and reads as state-vs-action rather than as inverted
-  /// prominence: green is what the row uses for things you can click *to do
-  /// something* — switch to that style, or "+" to add one — while the style
-  /// already in effect isn't an action, so it sits out in white.
+  /// Neither the fill nor the label color is named here. A prominent button
+  /// takes the app's asset-catalog accent (`BlurtBrand.accent`'s note explains
+  /// why that reaches further than `.tint(_:)`) and draws its label white to
+  /// sit on it; a bordered button draws grey chrome with a label-colored
+  /// title. That's the whole scheme, so there is no pair of hand-picked
+  /// colors here to get the wrong way round — which is what happened when
+  /// every button was prominent and only the tint varied.
   ///
-  /// A prominent button draws its label white to sit on the accent, which is
-  /// invisible once the fill is white, so the active one names the ink
-  /// explicitly. `.isSelected` carries the state for VoiceOver, so nothing
-  /// depends on seeing the difference.
+  /// `.isSelected` carries the state for VoiceOver, so nothing depends on
+  /// seeing the difference.
   private func styleButton(
     _ name: String, isActive: Bool, activate: @escaping () -> Void
   ) -> some View {
     Button(action: activate) {
-      // One line, tail-truncated. Style names are user-authored and unbounded,
-      // and the row is the fixed width of the card: without this a long name
-      // pushed the "+" off the edge and kept going past the window (a name like
-      // "sdfsdfsdfsdfsdf" blew the whole row out). Truncating makes the chips
-      // the thing that gives, which is recoverable — the full name is on hover
-      // and in Settings — where a broken layout isn't.
+      // One line, tail-truncated. Style names are user-authored (up to
+      // `nameLimit`, 24) and the row is the fixed width of the card: without
+      // this a long name pushed the "+" off the edge and kept going past the
+      // window (a name like "sdfsdfsdfsdfsdf" blew the whole row out).
+      // Truncating makes the chips the thing that gives, which is recoverable
+      // — the full name is on hover and in Settings — where a broken layout
+      // isn't. It is also why this row is buttons and not a segmented
+      // `Picker`: a segmented control reports its full-label width as its
+      // *minimum*, so it can't be truncated or compressed at all, and at five
+      // segments of long names it shoves the caption above the card and the
+      // card's own edges out of the window.
       Text(name)
         .lineLimit(1)
         .truncationMode(.tail)
-        .foregroundStyle(isActive ? AnyShapeStyle(BlurtBrand.ink) : AnyShapeStyle(.white))
     }
     .help(name)
-    .glassButtonStyleCompat(prominent: true)
-    .tint(isActive ? Color.white : BlurtBrand.accent)
+    .glassButtonStyleCompat(prominent: isActive)
     .accessibilityAddTraits(isActive ? .isSelected : [])
   }
 
