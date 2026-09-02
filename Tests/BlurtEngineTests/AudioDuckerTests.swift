@@ -228,12 +228,16 @@ struct AudioDuckerTests {
     let ducker = rig.makeDucker()
     ducker.dictationBegan()
     ducker.dictationEnded()
-    // Both calls return immediately; the queue is serial and FIFO, so once the
-    // volume is back the duck must have run ahead of the restore (a restore
-    // that jumped the queue would have found nothing owed and left the volume
-    // ducked). Bounded poll rather than a bare spin, so a regression fails
-    // instead of hanging.
-    for _ in 0..<2_000 where rig.currentVolume != 0.8 {
+    // Both calls return immediately, so wait for the observable *end* state —
+    // the owed slot consumed after at least one HAL read — never the volume,
+    // which sits at 0.8 both before the duck has run and after the restore
+    // has, and so can't tell "done" from "not started" (a poll on it exits
+    // instantly and reads flake as volumeReads == 0). The queue is serial and
+    // FIFO, so reaching that state means the duck ran ahead of the restore (a
+    // restore that jumped the queue would have found nothing owed and left
+    // the volume ducked). Bounded poll rather than a bare spin, so a
+    // regression fails instead of hanging.
+    for _ in 0..<2_000 where !(rig.volumeReads > 0 && rig.pendingRestore == nil) {
       try? await Task.sleep(for: .milliseconds(1))
     }
     #expect(rig.currentVolume == 0.8)
