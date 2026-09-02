@@ -21,6 +21,16 @@ struct PermissionsStepView: View {
   /// Same cue for Microphone, set when the in-app prompt couldn't grant access
   /// and we fell back to opening System Settings.
   @State private var openedMicrophoneSettings = false
+  /// Set when the Accessibility grant is still outstanding well after the user
+  /// opened System Settings — the signature of a grant pinned to a stale signing
+  /// identity, where the toggle shows on while `AXIsProcessTrusted()` stays
+  /// false (see AGENTS.md, "The Accessibility grant and signing identity").
+  /// Relaunching runs the launch-time self-heal, so the footer says so.
+  @State private var accessibilityGrantLooksStuck = false
+
+  /// How long the grant stays outstanding after opening System Settings before
+  /// the footer suggests a relaunch. Long enough to find and flip the toggle.
+  private static let stuckGrantHintDelay: Duration = .seconds(12)
 
   var body: some View {
     Group {
@@ -74,12 +84,26 @@ struct PermissionsStepView: View {
         }
       )
     } footer: {
-      settingsFooter(
-        opened: openedAccessibilitySettings,
-        granted: controller.permissions.accessibility,
-        waiting: "Waiting for you to turn on Blurt in the Accessibility list…",
-        description: "Blurt uses Accessibility to paste transcripts into the active app."
-      )
+      VStack(alignment: .leading, spacing: 4) {
+        settingsFooter(
+          opened: openedAccessibilitySettings,
+          granted: controller.permissions.accessibility,
+          waiting: "Waiting for you to turn on Blurt in the Accessibility list…",
+          description: "Blurt uses Accessibility to paste transcripts into the active app."
+        )
+        if accessibilityGrantLooksStuck && openedAccessibilitySettings
+          && !controller.permissions.accessibility
+        {
+          Text("If the Blurt toggle is already on, quit and reopen Blurt to refresh the grant.")
+        }
+      }
+      // Arms the stuck cue once the user heads to System Settings; if the grant
+      // lands first, the condition above keeps the line hidden.
+      .task(id: openedAccessibilitySettings) {
+        guard openedAccessibilitySettings else { return }
+        try? await Task.sleep(for: Self.stuckGrantHintDelay)
+        accessibilityGrantLooksStuck = true
+      }
     }
   }
 

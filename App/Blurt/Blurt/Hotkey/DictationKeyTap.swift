@@ -91,6 +91,12 @@ final class DictationKeyTap {
     }
   }
 
+  /// Whether the `CGEventTap` has been created — false until `ensureRunning()`
+  /// first succeeds. `AppCoordinator.retryKeyTapInstallIfNeeded` polls this so a
+  /// failed install (see `ensureRunning`) is retried instead of staying dead
+  /// until relaunch.
+  var isInstalled: Bool { tap != nil }
+
   /// Idempotent. Creates and enables the tap if needed and syncs the binding.
   /// Returns false when the tap can't be created yet (process not Accessibility
   /// trusted) so the caller can retry once permissions land.

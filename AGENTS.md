@@ -693,8 +693,9 @@ than faults is the engine's single classification, so the shell's navigation and
 calm-idle projection can't disagree. It also owns `hasAPIKey` (drives the wizard/Settings UI; the
 press-time gate itself is the session's `readinessCheck`) and `saveAPIKey`, calls
 `keyTap.ensureRunning()` to install/enable the tap (which returns false until the process is
-Accessibility-trusted, so it retries once permissions land), and `keyTap.refreshBinding()` after the
-user picks a different trigger key.
+Accessibility-trusted; `WizardController`'s permission poll then calls
+`retryKeyTapInstallIfNeeded()` each tick while ready, so a failed install is retried until it
+lands), and `keyTap.refreshBinding()` after the user picks a different trigger key.
 
 ## Hotkey
 
