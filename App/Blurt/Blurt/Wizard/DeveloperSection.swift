@@ -16,13 +16,18 @@ import SwiftUI
 /// dictation with it on raises macOS's one-time Automation prompt asking to
 /// control Spotify, which must never appear for a user who didn't opt in.
 ///
-/// A row in an existing section rather than a `Section` of its own, deliberately:
-/// the settings panes are non-scrolling forms that size the window to their
-/// content (see `SettingsPane`), and a sixth Advanced section — header, row and
-/// footer — grew the pane past a small display's height, stranding the Reset
-/// button below the screen edge where it can't be clicked (caught on CI by
-/// `SettingsUITests.testResetAsksBeforeDoingAnything`, whose runner screen is
-/// 800 points tall). One row is the feature's whole height budget.
+/// A row in an existing section rather than a `Section` of its own, and its
+/// detail a tooltip rather than footer text, deliberately: the settings panes
+/// are non-scrolling forms that size the window to their content (see
+/// `SettingsPane`), and the Advanced pane already stands within one section
+/// header of the CI runner's visible frame. Measured across two red runs of
+/// `SettingsUITests.testResetAsksBeforeDoingAnything` (the pane's bottom button
+/// goes "Not hittable" the moment the pane outgrows the screen): a whole Music
+/// section put the Reset button's hit point at y=801, this row plus one extra
+/// footer line still left it at y=722, and the runner's usable bottom sits near
+/// y=720 — so the row rides in with zero new chrome, paid for by dropping the
+/// redundant "Updates" and "Reset" headers. Anything that grows the Advanced
+/// pane must shrink it somewhere else first.
 struct SpotifyPauseToggle: View {
   @AppStorage(SpotifyPauseStore.defaultsKey) private var pauseSpotify = false
 
@@ -31,6 +36,10 @@ struct SpotifyPauseToggle: View {
       Label("Pause Spotify while dictating", systemImage: "playpause")
     }
     .accessibilityIdentifier(UITestIdentifiers.pauseSpotifyToggle)
+    // The explanation the section footer has no room for (see the doc comment).
+    .help(
+      "Pauses Spotify when a dictation starts and resumes it when the dictation ends. "
+        + "macOS asks once for permission to control Spotify.")
   }
 }
 
@@ -128,9 +137,11 @@ struct ResetSection: View {
         Button("Reset…", role: .destructive) { prompt = .confirm }
           .accessibilityIdentifier(UITestIdentifiers.installReset)
       }
-    } header: {
-      Text("Reset")
     } footer: {
+      // No "Reset" header on purpose: the row already says "Reset Blurt", and
+      // the Advanced pane's height budget is spent — a redundant header here
+      // pushes this very button past the CI runner's screen edge (see
+      // `SpotifyPauseToggle`).
       Text(
         "Deletes your AssemblyAI API key, clears every setting, removes the dictation logs, and "
           + "revokes Blurt’s microphone, accessibility and input-monitoring permissions.")

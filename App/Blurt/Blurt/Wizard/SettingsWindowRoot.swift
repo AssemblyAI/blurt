@@ -123,10 +123,11 @@ private struct DictationSection: View {
     } header: {
       Text("Dictation")
     } footer: {
+      // Two lines at most (≤137 characters) — a third pushed the pane past the
+      // CI runner's screen; the Spotify detail rides its tooltip instead.
       Text(
-        "Enhanced transcripts polishes each dictation before pasting — removing filler words and "
-          + "fixing punctuation; off pastes your words exactly as spoken. Pausing Spotify asks "
-          + "macOS once for permission to control it.")
+        "Enhanced transcripts polishes each dictation — fixing punctuation and dropping filler "
+          + "words; off pastes your words exactly as spoken.")
     }
   }
 }
@@ -391,8 +392,8 @@ private struct UpdateSection: View {
             .accessibilityIdentifier(UITestIdentifiers.updateCheck)
         }
       }
-    } header: {
-      Text("Updates")
     }
+    // No "Updates" header on purpose: the row already names the version and the
+    // action, and the pane's height budget is spent — see `SpotifyPauseToggle`.
   }
 }
