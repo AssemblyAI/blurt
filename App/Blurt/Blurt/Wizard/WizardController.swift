@@ -140,6 +140,12 @@ final class WizardController {
     }
     syncReadiness()
     if revoked { onNeedsForeground() }
+    // The key tap is installed on the not-ready→ready transition (`showOverlay`),
+    // but `CGEvent.tapCreate` can fail even then (a fresh Accessibility grant can
+    // lag behind `AXIsProcessTrusted()`), and the transition never re-fires while
+    // `isReady` holds. Riding the existing poll keeps retrying the install until
+    // it lands — a no-op every tick after that.
+    if isReady { coordinator?.retryKeyTapInstallIfNeeded() }
   }
 
   /// Recomputes readiness and, only on a genuine change, updates the observable

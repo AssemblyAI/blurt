@@ -50,6 +50,12 @@ final class DictationKeyTap {
   /// Monotonic reference; per-event timestamps are `reference.duration(to: now)`.
   private let reference = ContinuousClock.now
 
+  /// Keeps the `tapCreate`-failure log to once per process: the install retry
+  /// rides the lifetime permission poll, so a persistently failing create (e.g.
+  /// the UI-test all-granted permissions stub) would otherwise log the same
+  /// error every tick, forever. The retry itself stays silent.
+  private var hasLoggedInstallFailure = false
+
   /// `nonisolated(unsafe)` so the nonisolated `deinit` can read it: written only
   /// in `ensureRunning()` on the main actor, and the last release of an
   /// `AppCoordinator`-owned object happens on the main actor too, so the deinit
@@ -91,6 +97,12 @@ final class DictationKeyTap {
     }
   }
 
+  /// Whether the `CGEventTap` has been created — false until `ensureRunning()`
+  /// first succeeds. `AppCoordinator.retryKeyTapInstallIfNeeded` polls this so a
+  /// failed install (see `ensureRunning`) is retried instead of staying dead
+  /// until relaunch.
+  var isInstalled: Bool { tap != nil }
+
   /// Idempotent. Creates and enables the tap if needed and syncs the binding.
   /// Returns false when the tap can't be created yet (process not Accessibility
   /// trusted) so the caller can retry once permissions land.
@@ -112,7 +124,10 @@ final class DictationKeyTap {
         userInfo: Unmanaged.passUnretained(self).toOpaque()
       )
     else {
-      Self.logger.error("CGEvent.tapCreate failed — input not yet trusted")
+      if !hasLoggedInstallFailure {
+        hasLoggedInstallFailure = true
+        Self.logger.error("CGEvent.tapCreate failed — input not yet trusted")
+      }
       return false
     }
     tap = created
