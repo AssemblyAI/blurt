@@ -12,7 +12,7 @@ struct ReadyView: View {
   /// The style row's "+": opens Settings deep-linked to the Advanced pane,
   /// where styles are edited — a separate closure from `openSettings` so the
   /// plain Settings button keeps opening on General (see `MainWindowRoot`).
-  var addStyle: () -> Void
+  var editStyles: () -> Void
   // Observed (not read once) so changing the dictation key in the separate
   // Settings window re-renders this window's keycap live — see `BoundTriggerKey`.
   @BoundTriggerKey private var triggerKey
@@ -50,8 +50,8 @@ struct ReadyView: View {
       }
       .padding(.bottom, MainWindow.readoutGap - MainWindow.sectionGap)
 
-      // Always present, even with no custom styles: the lone Default button
-      // plus the trailing "+" is the row's empty state, so the feature is
+      // Always present, even with no custom styles: a pop-up holding Default
+      // and "Edit Styles…" is the row's empty state, so the feature is
       // discoverable from the main window rather than only from Settings.
       VStack(alignment: .leading, spacing: MainWindow.captionGap) {
         Text("How Blurt cleans up your raw transcript")
@@ -59,10 +59,10 @@ struct ReadyView: View {
           .foregroundStyle(.secondary)
           .frame(maxWidth: .infinity, alignment: .leading)
 
-        StyleRow(profiles: profiles, activeID: active?.id, addStyle: addStyle)
-          // Locked while the mic is opening or capturing: a style clicked
+        StyleRow(profiles: profiles, activeID: active?.id, editStyles: editStyles)
+          // Locked while the mic is opening or capturing: a style picked
           // mid-utterance would disagree with what the request was built with.
-          // `.disabled` propagates to the buttons and the hidden ⌘1–⌘5 buttons,
+          // `.disabled` propagates to the pop-up and the hidden ⌘1–⌘5 buttons,
           // whose shortcuts don't fire while disabled.
           .disabled(coordinator.isCapturing)
       }
@@ -85,11 +85,12 @@ struct ReadyView: View {
       .glassButtonStyleCompat(prominent: true)
     }
     .frame(maxWidth: .infinity)
-    // 24, the margin the design keeps on both comps (its cards run x 24.5 to
-    // 455.5 in a 480-wide window). Was 32, which made this window's cards
-    // narrower than the setup window's — the grouped `Form` there insets its
-    // rows to 20 and can't be told otherwise.
-    .padding(.horizontal, 24)
+    // The design's margin on both comps (its cards run x 24.5 to 455.5 in a
+    // 480-wide window). Was 32, which made this window's cards narrower than
+    // the setup window's — the grouped `Form` there insets its rows to 20 and
+    // can't be told otherwise. Named in `MainWindow` because `StyleRow` sizes
+    // its pop-up against the width this leaves.
+    .padding(.horizontal, MainWindow.contentMargin)
     // The standard titlebar supplies the top clearance now (the logo's
     // transparent margin used to); match the section spacing top and bottom so
     // the readout and the Recent card sit in an evenly-padded window.
