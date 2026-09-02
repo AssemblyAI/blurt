@@ -44,6 +44,15 @@ extension AudioDucker {
     static let production = Client()
   }
 
+  /// `kAudioHardwareServiceDeviceProperty_VirtualMainVolume` — 'vmvc' — spelled
+  /// as its four-char code because the named constant lives in AudioToolbox's
+  /// AudioHardwareService.h, not in CoreAudio, and the engine's framework set
+  /// stays where it is (the same reason `AudioRoute` spells `kAudioObjectUnknown`
+  /// as a literal: don't depend on how a constant imports). The selector itself
+  /// is served by the plain `AudioObject*PropertyData` calls below — only the
+  /// old `AudioHardwareService*` entry points around it were deprecated.
+  private static let virtualMainVolumeSelector = AudioObjectPropertySelector(0x766D_7663)
+
   /// The virtual main volume on the output scope: the one device-wide scalar
   /// macOS's own volume keys and menu-bar slider move, which the HAL maps onto
   /// per-channel controls where the hardware has those. Returned fresh per
@@ -51,7 +60,7 @@ extension AudioDucker {
   /// `inout` to CoreAudio.
   private static func volumeAddress() -> AudioObjectPropertyAddress {
     AudioObjectPropertyAddress(
-      mSelector: kAudioDevicePropertyVirtualMainVolume,
+      mSelector: virtualMainVolumeSelector,
       mScope: kAudioDevicePropertyScopeOutput,
       mElement: kAudioObjectPropertyElementMain)
   }
