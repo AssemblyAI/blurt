@@ -43,6 +43,14 @@ enum MainWindow {
   static let sectionGap: CGFloat = 26
   static let captionGap: CGFloat = 12
   static let readoutGap: CGFloat = 45
+
+  /// The margin the main window's content keeps on both sides — 24, the value
+  /// the design keeps on both comps (its cards run x 24.5 to 455.5 in a
+  /// 480-wide window). `ReadyView` pads with it; `StyleRow` subtracts it,
+  /// because the width its pop-up may occupy is `contentWidth` less this
+  /// margin, and a number those two disagreed on would put the control's edge
+  /// somewhere other than the card's.
+  static let contentMargin: CGFloat = 24
 }
 
 /// Root view of the main `Window` scene. It pulls the long-lived models off the
@@ -60,10 +68,10 @@ struct MainWindowRoot: View {
           ReadyView(
             coordinator: coordinator,
             openSettings: { openSettings() },
-            addStyle: {
-              // The "+" deep-links: flag the Advanced pane (where styles are
-              // edited) before opening, so the user lands on the Styles
-              // section instead of General — see `SettingsWindowRoot`.
+            editStyles: {
+              // "Edit Styles…" deep-links: flag the Advanced pane (where
+              // styles are edited) before opening, so the user lands on the
+              // Styles section instead of General — see `SettingsWindowRoot`.
               appDelegate.settingsOpensOnAdvanced = true
               openSettings()
             })

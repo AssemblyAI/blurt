@@ -22,23 +22,21 @@ final class ReadyViewUITests: BlurtUITestCase {
       "Ready screen should state the dictation shortcut")
     XCTAssertTrue(app.staticTexts["Or hold it to talk, then release."].exists)
 
-    // The style row is always present — with no custom styles yet it shows the
-    // selected Default button plus the "+" that leads to Settings, where styles
-    // are made. Addressed by its caption and its buttons rather than by a row
-    // label: the row itself is unlabelled, since the caption above the card is
-    // what names it.
+    // The style row is always present — with no custom styles yet its pop-up
+    // holds just Default and the "Edit Styles…" item that leads to Settings,
+    // where styles are made. The caption above the card and the row's own
+    // "Output Styles:" label both name it.
     XCTAssertTrue(
       app.staticTexts["How Blurt cleans up your raw transcript"].exists,
       "Ready screen should caption the style row")
-    // The label is `StyleProfileStore.defaultStyleName`, spelled out because
-    // this bundle can't import the engine.
     let main = app.windows[UITestIdentifiers.mainWindowTitle]
-    XCTAssertTrue(
-      main.buttons["Default"].exists,
-      "The style row should offer the Default style")
-    XCTAssertTrue(
-      main.buttons[UITestIdentifiers.styleProfileAddFromMain].exists,
-      "The style row should offer the add-style shortcut while under the cap")
+    let styles = main.popUpButtons[UITestIdentifiers.styleProfilePickerFromMain]
+    XCTAssertTrue(styles.waitForExistence(timeout: 10), "Style pop-up not found")
+    // The value is `StyleProfileStore.defaultStyleName`, spelled out because
+    // this bundle can't import the engine.
+    XCTAssertEqual(
+      styles.value as? String, "Default",
+      "The style pop-up should start on the Default style")
 
     // The Recent section, empty on a fresh launch, shows its header and the
     // placeholder that fills the reserved list area.
@@ -52,6 +50,30 @@ final class ReadyViewUITests: BlurtUITestCase {
     XCTAssertTrue(
       main.buttons["Settings"].exists,
       "Ready screen should offer its Settings button")
+  }
+
+  /// The style pop-up's menu: the styles, then "Edit Styles…" past a divider.
+  /// The separator itself isn't an accessibility element, so what's asserted is
+  /// that both kinds of item share the one menu. The menu is dismissed rather
+  /// than clicked through — choosing that item opens Settings, which is
+  /// `SettingsUITests`' ground.
+  func testStylePopUpOffersEditStyles() {
+    let main = mainWindow()
+
+    let styles = main.popUpButtons[UITestIdentifiers.styleProfilePickerFromMain]
+    XCTAssertTrue(styles.waitForExistence(timeout: 10), "Style pop-up not found")
+    styles.click()
+
+    // Matched by prefix, not equality: the item's title carries trailing
+    // non-breaking spaces, which is what sets the pop-up's width (see
+    // `StyleRow.Bar`).
+    let editPredicate = NSPredicate(format: "title BEGINSWITH %@", "Edit Styles…")
+    XCTAssertTrue(
+      app.menuItems.matching(editPredicate).firstMatch.waitForExistence(timeout: 5),
+      "The style menu should offer the route to where styles are edited")
+    XCTAssertTrue(app.menuItems["Default"].exists, "The style menu should list the Default style")
+
+    app.typeKey(.escape, modifierFlags: [])
   }
 
   func testCompletedDictationPopulatesRecentList() {
