@@ -25,7 +25,7 @@
 	<key>LSMinimumSystemVersion</key>
 	<string>15.0</string>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Blurt pauses Spotify while you dictate and resumes it afterwards.</string>
+	<string>Blurt pauses Spotify and Apple Music while you dictate and resumes them afterwards.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Blurt uses your microphone to transcribe your dictation with AssemblyAI.</string>
 </dict>

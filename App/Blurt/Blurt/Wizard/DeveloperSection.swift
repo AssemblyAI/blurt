@@ -3,18 +3,20 @@ import BlurtEngine
 import OSLog
 import SwiftUI
 
-// The Advanced pane's Spotify pause row and its two standalone sections: the
+// The Advanced pane's music pause row and its two standalone sections: the
 // developer-mode switch and the start-over button. All are Settings-only (none
 // gates setup, so none is a wizard step), and they live here rather than in
 // `SettingsWindowRoot` because that file is at the repo's file-length limit.
 
-/// The "Pause Spotify while dictating" switch (a row of the Dictation section):
-/// opt-in, pauses a playing Spotify when a dictation starts and resumes it when
-/// the dictation ends — only when Blurt did the pausing, so music the user
-/// paused themselves stays paused (see `SpotifyPauser`, which reads the same
-/// default this toggle writes at each dictation). Off by default: the first
-/// dictation with it on raises macOS's one-time Automation prompt asking to
-/// control Spotify, which must never appear for a user who didn't opt in.
+/// The "Pause music while dictating" switch (a row of the Dictation section):
+/// opt-in, pauses a playing Spotify or Apple Music when a dictation starts and
+/// resumes what it paused when the dictation ends — only when Blurt did the
+/// pausing, so music the user paused themselves stays paused (see
+/// `MediaPauser`, which reads the same default this toggle writes at each
+/// dictation). Off by default: with it on, each player raises macOS's one-time
+/// Automation prompt asking to control it (the first time that player is
+/// running during a dictation), which must never appear for a user who didn't
+/// opt in.
 ///
 /// A row in an existing section rather than a `Section` of its own, and its
 /// detail a tooltip rather than footer text, deliberately: the settings panes
@@ -28,18 +30,18 @@ import SwiftUI
 /// y=720 — so the row rides in with zero new chrome, paid for by dropping the
 /// redundant "Updates" and "Reset" headers. Anything that grows the Advanced
 /// pane must shrink it somewhere else first.
-struct SpotifyPauseToggle: View {
-  @AppStorage(SpotifyPauseStore.defaultsKey) private var pauseSpotify = false
+struct MediaPauseToggle: View {
+  @AppStorage(MediaPauseStore.defaultsKey) private var pauseMedia = false
 
   var body: some View {
-    Toggle(isOn: $pauseSpotify) {
-      Label("Pause Spotify while dictating", systemImage: "playpause")
+    Toggle(isOn: $pauseMedia) {
+      Label("Pause music while dictating", systemImage: "playpause")
     }
-    .accessibilityIdentifier(UITestIdentifiers.pauseSpotifyToggle)
+    .accessibilityIdentifier(UITestIdentifiers.pauseMediaToggle)
     // The explanation the section footer has no room for (see the doc comment).
     .help(
-      "Pauses Spotify when a dictation starts and resumes it when the dictation ends. "
-        + "macOS asks once for permission to control Spotify.")
+      "Pauses Spotify and Apple Music when a dictation starts and resumes what it paused when "
+        + "the dictation ends. macOS asks once per app for permission to control it.")
   }
 }
 
@@ -141,7 +143,7 @@ struct ResetSection: View {
       // No "Reset" header on purpose: the row already says "Reset Blurt", and
       // the Advanced pane's height budget is spent — a redundant header here
       // pushes this very button past the CI runner's screen edge (see
-      // `SpotifyPauseToggle`).
+      // `MediaPauseToggle`).
       Text(
         "Deletes your AssemblyAI API key, clears every setting, removes the dictation logs, and "
           + "revokes Blurt’s microphone, accessibility and input-monitoring permissions.")

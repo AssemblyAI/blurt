@@ -81,7 +81,7 @@ private struct GeneralSettingsTab: View {
 }
 
 /// The occasional stuff: the enhanced-transcripts switch, the style profiles,
-/// the Spotify pause toggle, checking for an update, the developer-mode log
+/// the music pause toggle, checking for an update, the developer-mode log
 /// toggle, and the start-over button.
 /// Kept out of General so the common pane stays short.
 private struct AdvancedSettingsTab: View {
@@ -100,8 +100,8 @@ private struct AdvancedSettingsTab: View {
 }
 
 /// The Dictation section of the Settings window: what happens around each
-/// dictation — the enhanced-transcripts switch and the Spotify pause row
-/// (`SpotifyPauseToggle`). Enhanced transcripts, on by default, asks AssemblyAI's
+/// dictation — the enhanced-transcripts switch and the music pause row
+/// (`MediaPauseToggle`). Enhanced transcripts, on by default, asks AssemblyAI's
 /// dictation API for its server-side cleanup rewrite, so the pasted text is the
 /// polished version; off, the verbatim transcript is pasted exactly as spoken.
 /// The transcriber reads the same default this toggle writes at every request,
@@ -119,12 +119,12 @@ private struct DictationSection: View {
         Label("Enhanced transcripts", systemImage: "wand.and.stars")
       }
       .accessibilityIdentifier(UITestIdentifiers.enhancedTranscriptsToggle)
-      SpotifyPauseToggle()
+      MediaPauseToggle()
     } header: {
       Text("Dictation")
     } footer: {
       // Two lines at most (≤137 characters) — a third pushed the pane past the
-      // CI runner's screen; the Spotify detail rides its tooltip instead.
+      // CI runner's screen; the music-pause detail rides its tooltip instead.
       Text(
         "Enhanced transcripts polishes each dictation — fixing punctuation and dropping filler "
           + "words; off pastes your words exactly as spoken.")
@@ -394,6 +394,6 @@ private struct UpdateSection: View {
       }
     }
     // No "Updates" header on purpose: the row already names the version and the
-    // action, and the pane's height budget is spent — see `SpotifyPauseToggle`.
+    // action, and the pane's height budget is spent — see `MediaPauseToggle`.
   }
 }
