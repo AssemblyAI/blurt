@@ -81,8 +81,8 @@ private struct GeneralSettingsTab: View {
 }
 
 /// The occasional stuff: the enhanced-transcripts switch, the style profiles,
-/// checking for an update, the developer-mode log toggle, and the
-/// start-over button.
+/// the audio-ducking toggle, checking for an update, the developer-mode log
+/// toggle, and the start-over button.
 /// Kept out of General so the common pane stays short.
 private struct AdvancedSettingsTab: View {
   let coordinator: AppCoordinator
@@ -90,7 +90,7 @@ private struct AdvancedSettingsTab: View {
 
   var body: some View {
     SettingsPane {
-      TranscriptionSection()
+      DictationSection()
       StyleProfilesSection()
       UpdateSection(model: updateModel)
       DeveloperSection()
@@ -99,15 +99,14 @@ private struct AdvancedSettingsTab: View {
   }
 }
 
-/// The Transcription section of the Settings window: the enhanced-transcripts
-/// switch. While on (the default), every dictation request asks AssemblyAI's
-/// dictation API for its server-side cleanup rewrite, so the pasted text is
-/// the polished version; turned off, the request omits the rewrite and the
-/// verbatim transcript is pasted exactly as spoken. The transcriber reads the
-/// same default this toggle writes at every request, so a change applies to
-/// the next dictation. Settings-only — not a wizard step, since it never
-/// gates setup.
-private struct TranscriptionSection: View {
+/// The Dictation section of the Settings window: what happens around each
+/// dictation — the enhanced-transcripts switch and the audio-ducking row
+/// (`AudioDuckToggle`). Enhanced transcripts, on by default, asks AssemblyAI's
+/// dictation API for its server-side cleanup rewrite, so the pasted text is the
+/// polished version; off, the verbatim transcript is pasted exactly as spoken.
+/// The transcriber reads the same default this toggle writes at every request,
+/// so a change applies to the next dictation. Settings-only — not a wizard step.
+private struct DictationSection: View {
   // The unset default comes from the store, not a literal here: the transcriber
   // reads the same slot per request, and two spellings of "unset means on" would let
   // the toggle and the request disagree about an untouched install.
@@ -120,12 +119,15 @@ private struct TranscriptionSection: View {
         Label("Enhanced transcripts", systemImage: "wand.and.stars")
       }
       .accessibilityIdentifier(UITestIdentifiers.enhancedTranscriptsToggle)
+      AudioDuckToggle()
     } header: {
-      Text("Transcription")
+      Text("Dictation")
     } footer: {
+      // Two lines at most (≤137 characters) — a third pushed the pane past the
+      // CI runner's screen; the audio-ducking detail rides its tooltip instead.
       Text(
-        "Polishes each dictation before pasting — removing filler words and fixing punctuation. "
-          + "Turn off to paste your words exactly as spoken.")
+        "Enhanced transcripts polishes each dictation — fixing punctuation and dropping filler "
+          + "words; off pastes your words exactly as spoken.")
     }
   }
 }
@@ -390,8 +392,8 @@ private struct UpdateSection: View {
             .accessibilityIdentifier(UITestIdentifiers.updateCheck)
         }
       }
-    } header: {
-      Text("Updates")
     }
+    // No "Updates" header on purpose: the row already names the version and the
+    // action, and the pane's height budget is spent — see `AudioDuckToggle`.
   }
 }
