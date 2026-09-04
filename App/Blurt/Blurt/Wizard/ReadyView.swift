@@ -72,17 +72,33 @@ struct ReadyView: View {
       // rows tall.
       RecentDictationsSection(entries: coordinator.recentDictations.displayed)
 
-      Button(action: openSettings) {
-        Label("Settings", systemImage: "gearshape")
-          .labelStyle(.titleAndIcon)
-          .symbolRenderingMode(.hierarchical)
+      VStack(spacing: MainWindow.captionGap) {
+        Button(action: openSettings) {
+          Label("Settings", systemImage: "gearshape")
+            .labelStyle(.titleAndIcon)
+            .symbolRenderingMode(.hierarchical)
+        }
+        // The system Liquid Glass button — hover/press chrome, edge highlights,
+        // and accessibility fallbacks come from the style, not hand-rolled fills.
+        // Prominent, so it takes the brand-green fill the design gives it: it's
+        // the only button on the window's closing line.
+        // Falls back to `.borderedProminent` on macOS 15–25 (see glassButtonStyleCompat).
+        .glassButtonStyleCompat(prominent: true)
+
+        // Attribution footer under the closing button: a caption-level text
+        // link, quiet in the secondary color so it doesn't compete with the
+        // prominent Settings button. `Link` routes through the environment's
+        // `openURL` — the default browser — the same road the wizard's
+        // "Get a Free Key" button takes. Built through the failable `URL`
+        // initializer (`force_unwrapping` is banned repo-wide), so like the
+        // wordmark above it simply omits itself if the literal ever fails to
+        // parse.
+        if let url = Self.poweredByURL {
+          Link("Powered by AssemblyAI", destination: url)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
       }
-      // The system Liquid Glass button — hover/press chrome, edge highlights,
-      // and accessibility fallbacks come from the style, not hand-rolled fills.
-      // Prominent, so it takes the brand-green fill the design gives it: it's
-      // the only button on the window's closing line.
-      // Falls back to `.borderedProminent` on macOS 15–25 (see glassButtonStyleCompat).
-      .glassButtonStyleCompat(prominent: true)
     }
     .frame(maxWidth: .infinity)
     // The design's margin on both comps (its cards run x 24.5 to 455.5 in a
@@ -135,6 +151,9 @@ struct ReadyView: View {
   /// enough for either with breathing room; each centers in the same slot and
   /// nothing below moves on the swap.
   private static let statusBlockHeight: CGFloat = 50
+
+  /// Where the "Powered by AssemblyAI" footer link points.
+  private static let poweredByURL = URL(string: "https://www.assemblyai.com/blurt")
 
   /// The idle readout: "Tap **Right Command (⌘)** to start and stop." over
   /// "Or hold it to talk, then release." — the key spelled out and bolded
