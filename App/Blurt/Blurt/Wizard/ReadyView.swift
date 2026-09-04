@@ -84,21 +84,25 @@ struct ReadyView: View {
       // Falls back to `.borderedProminent` on macOS 15–25 (see glassButtonStyleCompat).
       .glassButtonStyleCompat(prominent: true)
 
-      // The window's footer: a caption-level "Powered by AssemblyAI" text
-      // link, centered on the window's closing edge, quiet in the secondary
-      // color so it doesn't compete with the Settings button above it. A
-      // sibling of the sections rather than grouped with the button — the
-      // standard section gap above it and the window's own bottom padding
-      // below are what make it read as a footer instead of a caption on the
-      // button. `Link` routes through the environment's `openURL` — the
-      // default browser — the same road the wizard's "Get a Free Key" button
-      // takes. Built through the failable `URL` initializer
-      // (`force_unwrapping` is banned repo-wide), so like the wordmark above
-      // it simply omits itself if the literal ever fails to parse.
+      // The window's footer: a caption-level "Powered by AssemblyAI" line,
+      // centered on the window's closing edge. A sibling of the sections
+      // rather than grouped with the button — the standard section gap above
+      // it and the window's own bottom padding below are what make it read as
+      // a footer instead of a caption on the button. Split so the linked word
+      // keeps its affordance: "Powered by" is quiet secondary prose, while
+      // the `Link` takes the default link tint — all-secondary made the whole
+      // line indistinguishable from static text. `Link` routes through the
+      // environment's `openURL` — the default browser — the same road the
+      // wizard's "Get a Free Key" button takes. Built through the failable
+      // `URL` initializer (`force_unwrapping` is banned repo-wide), so like
+      // the wordmark above it simply omits itself if the literal ever fails
+      // to parse.
       if let url = Self.poweredByURL {
-        Link("Powered by AssemblyAI", destination: url)
-          .font(.caption)
-          .foregroundStyle(.secondary)
+        HStack(spacing: 3) {
+          Text("Powered by").foregroundStyle(.secondary)
+          Link("AssemblyAI", destination: url)
+        }
+        .font(.caption)
       }
     }
     .frame(maxWidth: .infinity)
