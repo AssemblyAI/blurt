@@ -72,32 +72,33 @@ struct ReadyView: View {
       // rows tall.
       RecentDictationsSection(entries: coordinator.recentDictations.displayed)
 
-      VStack(spacing: MainWindow.captionGap) {
-        Button(action: openSettings) {
-          Label("Settings", systemImage: "gearshape")
-            .labelStyle(.titleAndIcon)
-            .symbolRenderingMode(.hierarchical)
-        }
-        // The system Liquid Glass button — hover/press chrome, edge highlights,
-        // and accessibility fallbacks come from the style, not hand-rolled fills.
-        // Prominent, so it takes the brand-green fill the design gives it: it's
-        // the only button on the window's closing line.
-        // Falls back to `.borderedProminent` on macOS 15–25 (see glassButtonStyleCompat).
-        .glassButtonStyleCompat(prominent: true)
+      Button(action: openSettings) {
+        Label("Settings", systemImage: "gearshape")
+          .labelStyle(.titleAndIcon)
+          .symbolRenderingMode(.hierarchical)
+      }
+      // The system Liquid Glass button — hover/press chrome, edge highlights,
+      // and accessibility fallbacks come from the style, not hand-rolled fills.
+      // Prominent, so it takes the brand-green fill the design gives it: it's
+      // the only button on the window's closing line.
+      // Falls back to `.borderedProminent` on macOS 15–25 (see glassButtonStyleCompat).
+      .glassButtonStyleCompat(prominent: true)
 
-        // Attribution footer under the closing button: a caption-level text
-        // link, quiet in the secondary color so it doesn't compete with the
-        // prominent Settings button. `Link` routes through the environment's
-        // `openURL` — the default browser — the same road the wizard's
-        // "Get a Free Key" button takes. Built through the failable `URL`
-        // initializer (`force_unwrapping` is banned repo-wide), so like the
-        // wordmark above it simply omits itself if the literal ever fails to
-        // parse.
-        if let url = Self.poweredByURL {
-          Link("Powered by AssemblyAI", destination: url)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
+      // The window's footer: a caption-level "Powered by AssemblyAI" text
+      // link, centered on the window's closing edge, quiet in the secondary
+      // color so it doesn't compete with the Settings button above it. A
+      // sibling of the sections rather than grouped with the button — the
+      // standard section gap above it and the window's own bottom padding
+      // below are what make it read as a footer instead of a caption on the
+      // button. `Link` routes through the environment's `openURL` — the
+      // default browser — the same road the wizard's "Get a Free Key" button
+      // takes. Built through the failable `URL` initializer
+      // (`force_unwrapping` is banned repo-wide), so like the wordmark above
+      // it simply omits itself if the literal ever fails to parse.
+      if let url = Self.poweredByURL {
+        Link("Powered by AssemblyAI", destination: url)
+          .font(.caption)
+          .foregroundStyle(.secondary)
       }
     }
     .frame(maxWidth: .infinity)
