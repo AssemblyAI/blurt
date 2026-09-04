@@ -83,6 +83,39 @@ struct ReadyView: View {
       // the only button on the window's closing line.
       // Falls back to `.borderedProminent` on macOS 15–25 (see glassButtonStyleCompat).
       .glassButtonStyleCompat(prominent: true)
+
+      // The window's footer: a caption-level "Powered by AssemblyAI" line,
+      // centered on the window's closing edge. A sibling of the sections
+      // rather than grouped with the button — what makes it read as a footer
+      // instead of a caption on the Settings button is the *asymmetry* below:
+      // the full section gap above it, but only half the window's usual inset
+      // beneath, so it sits against the bottom edge rather than floating
+      // between the button and the chrome.
+      //
+      // Split so the linked word keeps its affordance: "Powered by" is quiet
+      // secondary prose, while the `Link` carries colour — all-secondary made
+      // the whole line indistinguishable from static text. That colour is
+      // `BlurtBrand.accent`, not the system link blue a bare `Link` draws
+      // itself in: blue would be the only instance of a second hue in a window
+      // whose sole accent is the brand green, and it landed directly under the
+      // green Settings button, giving the least important element on screen
+      // the second-loudest colour. `.foregroundStyle` rather than `.tint`
+      // because `Link` styles its own label with `NSColor.linkColor` and only
+      // an explicit foreground overrides it.
+      //
+      // `Link` routes through the environment's `openURL` — the default
+      // browser — the same road the wizard's "Get a Free Key" button takes.
+      // Built through the failable `URL` initializer (`force_unwrapping` is
+      // banned repo-wide), so like the wordmark above it simply omits itself
+      // if the literal ever fails to parse.
+      if let url = Self.poweredByURL {
+        HStack(spacing: 3) {
+          Text("Powered by").foregroundStyle(.secondary)
+          Link("AssemblyAI", destination: url)
+            .foregroundStyle(BlurtBrand.accent)
+        }
+        .font(.caption)
+      }
     }
     .frame(maxWidth: .infinity)
     // The design's margin on both comps (its cards run x 24.5 to 455.5 in a
@@ -92,10 +125,14 @@ struct ReadyView: View {
     // its pop-up against the width this leaves.
     .padding(.horizontal, MainWindow.contentMargin)
     // The standard titlebar supplies the top clearance now (the logo's
-    // transparent margin used to); match the section spacing top and bottom so
-    // the readout and the Recent card sit in an evenly-padded window.
+    // transparent margin used to), so the top matches the section spacing.
+    // The bottom is deliberately *half* that: the last line in the stack is
+    // the attribution footer, and a footer only reads as one when it is closer
+    // to the window's edge than to the content above it. At an even 20 it sat
+    // almost exactly between the Settings button and the chrome, which read as
+    // a fourth stacked item rather than a footer.
     .padding(.top, 20)
-    .padding(.bottom, 20)
+    .padding(.bottom, 10)
     .frame(width: MainWindow.contentWidth)
     .fixedSize(horizontal: false, vertical: true)
   }
@@ -135,6 +172,9 @@ struct ReadyView: View {
   /// enough for either with breathing room; each centers in the same slot and
   /// nothing below moves on the swap.
   private static let statusBlockHeight: CGFloat = 50
+
+  /// Where the "Powered by AssemblyAI" footer link points.
+  private static let poweredByURL = URL(string: "https://www.assemblyai.com/blurt")
 
   /// The idle readout: "Tap **Right Command (⌘)** to start and stop." over
   /// "Or hold it to talk, then release." — the key spelled out and bolded
