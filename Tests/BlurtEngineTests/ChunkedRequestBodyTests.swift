@@ -26,10 +26,11 @@ struct ChunkedRequestBodyTests {
     let reader = readAll(from: body)
 
     // Stands in for the `config` part failing to encode: the body can no longer
-    // be completed, and the server would only report a generic 400.
-    await #expect(throws: ChunkedUploadError.self) {
-      try await body.drain(
-        .chunks(Data("partial".utf8), failingWith: ChunkedUploadError.uploadNeverStarted))
+    // be completed, and the server would only report a generic 400. A local
+    // error rather than one of the transport's own, so the test says "the
+    // producer failed" without borrowing a case that means something else.
+    await #expect(throws: ProducerFailure.self) {
+      try await body.drain(.chunks(Data("partial".utf8), failingWith: ProducerFailure()))
     }
     _ = await reader.value
   }
@@ -131,7 +132,7 @@ struct ChunkedRequestBodyTests {
   }
 
   @Test("upload progress accounts the audio it has actually sent")
-  func uploadProgressAccountsAudio() {
+  func uploadProgressAccountsAudio() throws {
     let progress = UploadProgress()
     // Nothing sent yet: there is no "last frame" instant to measure post-speech
     // latency from, which is what nil means to the log line.
@@ -145,9 +146,13 @@ struct ChunkedRequestBodyTests {
 
     progress.recordFrame(bytes: 1_600)
     // Bytes accumulate; the instant tracks the *latest* frame, because that is
-    // the one the user stopped talking at.
+    // the one the user stopped talking at. Both unwrapped rather than
+    // `?? .now`-defaulted, which would compare `.now >= .now` and pass whatever
+    // the code did.
     #expect(progress.audioBytes == 4_800)
-    #expect(progress.lastFrameAt ?? .now >= first ?? .now)
+    let earlier = try #require(first)
+    let later = try #require(progress.lastFrameAt)
+    #expect(later >= earlier)
   }
 }
 
@@ -169,3 +174,7 @@ extension ChunkedRequestBodyTests {
     }
   }
 }
+
+/// Stands in for whatever the body producer might fail with — an unencodable
+/// `config` part, in production.
+private struct ProducerFailure: Error {}

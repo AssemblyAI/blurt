@@ -24,13 +24,9 @@ actor StubTranscriber: TranscriberProtocol {
     // Drain the feed first, then take the context: that is the production order
     // (the config part is written after the last frame), and a stub that read
     // the context early would hide a session that stopped feeding the stream.
+    // `firstOrAbandoned` also gives this stub the abandonment rule for free.
     for await _ in frames {}
-    var resolved: TranscriptionContext?
-    for await value in context {
-      resolved = value
-      break
-    }
-    receivedContexts.append(resolved)
+    receivedContexts.append(try await context.firstOrAbandoned())
     switch mode {
     case .transcript(let transcript):
       return transcript

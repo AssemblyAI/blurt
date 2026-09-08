@@ -13,7 +13,7 @@ struct ChunkedUploadTests {
     // at all is the assertion — the transcriber was called while the session is
     // still recording, and nothing has been released, stopped, or awaited.
     let probe = UploadProbe(transcript: "Hello world.")
-    let session = makeUploadSession(probe)
+    let session = makeSession(transcriber: probe)
 
     await session.press()
     #expect(await session.phase == .recording)
@@ -23,7 +23,7 @@ struct ChunkedUploadTests {
   @Test("the frame feed ends at release, which is what completes the body")
   func framesEndAtRelease() async throws {
     let probe = UploadProbe(transcript: "Hello world.")
-    let session = makeUploadSession(probe)
+    let session = makeSession(transcriber: probe)
 
     await session.press()
     await probe.waitUntilEntered()
@@ -43,7 +43,7 @@ struct ChunkedUploadTests {
   func cancelWhileRecordingAbandonsUpload() async throws {
     let probe = UploadProbe(transcript: "Hello world.")
     let injector = StubInjector()
-    let session = makeUploadSession(probe, injector: injector)
+    let session = makeSession(transcriber: probe, injector: injector)
 
     await session.press()
     await probe.waitUntilEntered()
@@ -65,7 +65,7 @@ struct ChunkedUploadTests {
     // request has to be cancelled by name or it runs to completion and
     // transcribes a dictation the user dismissed.
     let probe = UploadProbe(transcript: "Hello world.", holdsBeforeReturning: true)
-    let session = makeUploadSession(probe)
+    let session = makeSession(transcriber: probe)
 
     await session.press()
     await session.release()
@@ -89,7 +89,7 @@ struct ChunkedUploadTests {
     await mic.setPCM(Data(count: 8))
     let probe = UploadProbe(transcript: "Hello world.")
     let injector = StubInjector()
-    let session = makeUploadSession(probe, mic: mic, injector: injector)
+    let session = makeSession(transcriber: probe, mic: mic, injector: injector)
 
     await session.press()
     await session.release()
@@ -108,19 +108,9 @@ struct ChunkedUploadTests {
     // the user's own cancel as a red failure with a developer-mode error entry.
     // The context read blocks for the whole test, which is what holds the
     // pipeline in that window deterministically.
-    let hung = DispatchSemaphore(value: 0)
     let log = RecordedLog()
-    let session = DictationSession(
-      mic: StubMicCapture(), transcriber: UploadProbe(transcript: "Hello world."),
-      injector: StubInjector(), keyTermsProvider: { [] },
-      seams: DictationSession.Seams(
-        captureFrontmost: { nil },
-        captureFieldContext: {
-          hung.wait()
-          return .empty
-        },
-        logTranscript: { _, _ in },
-        logFailure: { log.recordFailure($0, context: $1) }))
+    let (seams, release) = hungFieldSeams(log: log)
+    let session = makeSession(transcriber: UploadProbe(transcript: "Hello world."), seams: seams)
 
     await session.press()
     await session.release()
@@ -128,7 +118,7 @@ struct ChunkedUploadTests {
     await session.cancel()
     #expect(await session.phase == .cancelled)
 
-    hung.signal()
+    release.signal()
     await session.awaitPipeline()
 
     // The user's cancel is what stands, and nothing is logged as broken.
@@ -145,9 +135,8 @@ struct ChunkedUploadTests {
     // dictation had no focused field at all. Now the release path resolves and
     // pushes it, so the failure is logged with what was actually captured.
     let log = RecordedLog()
-    let session = DictationSession(
-      mic: StubMicCapture(), transcriber: FailsBeforeContext(), injector: StubInjector(),
-      keyTermsProvider: { [] },
+    let session = makeSession(
+      transcriber: FailsBeforeContext(),
       seams: testSeams(
         field: FocusCapture.FocusedFieldContext(
           priorText: "Dear Sam,", selectedText: nil, windowTitle: nil, fieldLabel: nil),
@@ -163,20 +152,6 @@ struct ChunkedUploadTests {
 }
 
 // MARK: - Fixtures
-
-extension ChunkedUploadTests {
-  /// A session wired to `probe`, with the doubles a chunked-upload test needs
-  /// and nothing else. `makeSession` hard-codes `StubTranscriber`, which cannot
-  /// report *when* it was called.
-  private func makeUploadSession(
-    _ probe: UploadProbe, mic: StubMicCapture = StubMicCapture(),
-    injector: StubInjector = StubInjector()
-  ) -> DictationSession {
-    DictationSession(
-      mic: mic, transcriber: probe, injector: injector,
-      keyTermsProvider: { [] }, seams: .offline)
-  }
-}
 
 /// Transcriber double that fails without ever reading the context channel — an
 /// authorization failure that lands before the body is finished.
@@ -207,7 +182,7 @@ private final class UploadProbe: TranscriberProtocol, Sendable {
   private let holding: Gate?
   private let framesDone = ValueBox(false)
   private let cancelled = ValueBox(false)
-  private let completed = ValueBox(0)
+  private let completed = Counter()
 
   init(transcript: String, holdsBeforeReturning: Bool = false) {
     self.transcript = transcript
@@ -223,23 +198,16 @@ private final class UploadProbe: TranscriberProtocol, Sendable {
     // the context early would hide a session that stopped feeding the stream.
     for await _ in frames {}
     framesDone.value = true
-    var received = false
-    for await _ in context {
-      received = true
-      break
-    }
-    // A channel that finished without ever sending means the dictation was
-    // abandoned, and the real transcriber stops here rather than writing a
-    // config part for it — see `TranscriberProtocol.transcribe`. Decided from
-    // receipt rather than `Task.isCancelled` for the same reason it is there.
-    guard received else { throw CancellationError() }
+    // Throws when the session abandoned the dictation, exactly as the real
+    // transcriber does — see `AsyncStream.firstOrAbandoned()`.
+    _ = try await context.firstOrAbandoned()
     if let holding {
       await holding.enter()
       // Sampled after the gate so the test controls when it is read; a real
       // request would have been torn down by the cancellation itself.
       cancelled.value = Task.isCancelled
     }
-    completed.value += 1
+    _ = completed.next()
     return transcript
   }
 

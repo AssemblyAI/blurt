@@ -303,7 +303,4 @@ struct HTTPClientTests {
     return try #require(JSONSerialization.jsonObject(with: config) as? [String: Any])
   }
 
-  /// Three arbitrary S16LE samples — the raw blob shape `MicCapture.stop()`
-  /// hands the transcriber.
-  private static let testPCM = Data([0x00, 0x00, 0xCD, 0x0C, 0x33, 0xF3])
 }

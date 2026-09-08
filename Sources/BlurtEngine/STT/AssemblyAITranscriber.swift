@@ -142,30 +142,12 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
           continuation.yield(frame)
         }
         do {
-          // Wait for the session's press-time read, which it resolves at release
-          // and sends here.
-          var resolved: TranscriptionContext?
-          var received = false
-          for await value in context {
-            resolved = value
-            received = true
-            break
-          }
-          // A channel that finished without ever sending means the dictation was
-          // abandoned, so fail the body rather than completing a request for
+          // Wait for the session's press-time read, which it resolves at
+          // release and sends here. A channel that finishes without sending
+          // means the dictation was abandoned, and `firstOrAbandoned` throws —
+          // caught below, so the body fails instead of completing a request for
           // audio nobody is waiting for.
-          //
-          // Decided from the channel rather than from `Task.isCancelled`, which
-          // would be the obvious check and does not work: this producer is an
-          // unstructured task, so it does not inherit the upload task's
-          // cancellation and only learns of it later, through the body stream's
-          // `onTermination`. `cancelUpload()` closes this channel synchronously,
-          // so the producer wakes here first — and on the cancel path it could
-          // hand the server a complete request before cancellation caught up.
-          guard received else {
-            continuation.finish(throwing: CancellationError())
-            return
-          }
+          let resolved = try await context.firstOrAbandoned()
           // The prior dialogue that goes on the wire: the user's recent
           // dictations, then the text before the cursor (empty when there is
           // neither, which omits the field). App name, window title, field
@@ -311,7 +293,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   ) async throws -> Data {
     // Per-task delegate (not a session delegate) so this rides along on whatever
     // transport was injected — `URLSession.shared` in production, a fake in
-    // tests — without reconfiguring it. `MetricsLogger` logs the connect-vs-
+    // tests — without reconfiguring it. `DictationUploadDelegate` logs the connect-vs-
     // inference split and refuses a body replay; the lines below are the
     // always-available totals.
     // Not optional instrumentation: this delegate also refuses `URLSession`'s
@@ -365,7 +347,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   // The request/response types this encodes and decodes — `DictationConfig`,
   // `LLMRewrite`, `DictationResponse`, `ErrorResponse` — live in
   // `DictationWireTypes.swift`, and the upload's instrumentation —
-  // `UploadProgress`, `MetricsLogger` — in `DictationUploadMetrics.swift`. Both
+  // `UploadProgress`, `DictationUploadDelegate` — in `DictationUploadMetrics.swift`. Both
   // split out to stay within the lint file-length budget. They are the JSON
   // contract and the measurement; everything here is the transport.
 }

@@ -1,4 +1,8 @@
-import Foundation
+// `Dispatch`, not `Foundation`: the only thing here from outside the module is
+// `contextQueue`'s and `commandQueue`'s `DispatchQueue`, the same choice
+// `+Press.swift` documents. Foundation's last use here went with `mic.stop()`
+// returning a byte count instead of a `Data` blob.
+import Dispatch
 import Synchronization
 
 public actor DictationSession {
@@ -143,19 +147,13 @@ public actor DictationSession {
   /// propagates is honored by `runTranscribeInject` and `KeyInjector.insert`.
   var pipelineTask: Task<Void, Never>?  // internal: joined by awaitPipeline()
 
-  /// Handle to the in-flight dictation request, opened at press so the
-  /// recording uploads while the user speaks. Stored for the same reason
-  /// `pipelineTask` is: it is unstructured work that a cancel has to be able to
-  /// reach. Cancelling `pipelineTask` alone would only abandon the *wait* — the
-  /// request itself would keep streaming and complete against a dictation the
-  /// user already dismissed.
-  var uploadTask: Task<String, any Error>?
-
-  /// The channel the in-flight request's `config` part is waiting on, pushed by
-  /// `resolveCapturedContext` at release. Held here for the same reason
-  /// `uploadTask` is: a cancel has to be able to close it, or the request's body
-  /// producer parks on a value that is never coming.
-  var uploadContextFeed: AsyncStream<TranscriptionContext?>.Continuation?
+  /// The in-flight dictation request, opened at press so the recording uploads
+  /// while the user speaks. Stored for the same reason `pipelineTask` is: it is
+  /// unstructured work a cancel has to be able to reach, and cancelling
+  /// `pipelineTask` alone would abandon only the *wait* — the request itself
+  /// would keep streaming and complete against a dictation the user dismissed.
+  /// See `InFlightUpload` for why the task and its context channel are one value.
+  var upload: InFlightUpload?
 
   /// The production entry point: the real focus capture and the real
   /// developer-mode log. Delegates to the seam-carrying initializer below, which
@@ -230,6 +228,11 @@ public actor DictationSession {
   }
 
   deinit {
+    // The one door into a terminal state that is not a phase transition, so the
+    // `setPhase` funnel never runs for it: a session dropped mid-recording would
+    // otherwise leave its request to be wound down by continuation deallocation
+    // rather than by the rule.
+    upload?.abandon()
     commandFeed.finish()
     for continuation in continuations.values {
       continuation.finish()
@@ -304,7 +307,7 @@ public actor DictationSession {
     //
     // Safe against the request finishing first, without depending on this turn
     // not suspending: the body producer cannot write its `config` part until the
-    // release path pushes a context onto `uploadContextFeed`, and only
+    // release path sends a context to the in-flight request, and only
     // `resolveCapturedContext` — reached solely from the pipeline task this
     // guard returns before spawning — ever does. So a dropped clip's request is
     // abandoned still holding its body open. (It used to be a real race, won by
@@ -377,13 +380,13 @@ public actor DictationSession {
   /// Abandons the in-flight dictation request — the streamed body can't be
   /// completed meaningfully once the audio behind it is going away, so the
   /// whole request goes rather than being left to finish on its own.
+  /// Reached from `setPhase` for every terminal phase, so a dictation that ends
+  /// without a transcript cannot leave a request streaming. The one explicit
+  /// caller left is `stopAndCancel`, which has to run before `cancelCapture()`
+  /// ends the feed.
   func cancelUpload() {
-    uploadTask?.cancel()
-    uploadTask = nil
-    // Close the context channel too, so a body producer parked on a value that
-    // is no longer coming winds down instead of waiting.
-    uploadContextFeed?.finish()
-    uploadContextFeed = nil
+    upload?.abandon()
+    upload = nil
   }
 
   // The post-release pipeline — `runTranscribeInject` and its transcribe/inject

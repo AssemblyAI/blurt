@@ -12,7 +12,7 @@ import Foundation
 /// documented path but has no `async` form, which would cost the whole
 /// data-collecting/completion delegate; `httpBodyStream` keeps the
 /// `data(for:delegate:)` ergonomics and pairs with a `needNewBodyStream`
-/// delegate that refuses a replay (see `MetricsLogger`).
+/// delegate that refuses a replay (see `DictationUploadDelegate`).
 ///
 /// Not setting `Content-Length` is what makes the upload chunked: `URLSession`
 /// falls back to `Transfer-Encoding: chunked` (or streamed HTTP/2 DATA frames)
@@ -104,7 +104,7 @@ final class ChunkedRequestBody: @unchecked Sendable {
         // as the failure it is.
         switch output.streamStatus {
         case .error, .atEnd, .closed:
-          throw output.streamError ?? ChunkedUploadError.bodyStreamClosed
+          throw ChunkedUploadError.bodyStreamClosed
         default:
           try await Task.sleep(for: retry)
           retry = min(retry * 2, Self.maxSpaceRetry)
@@ -118,7 +118,17 @@ final class ChunkedRequestBody: @unchecked Sendable {
       guard written > 0 else {
         // 0 means the reader went away, negative means a real stream error;
         // either way the body can never be completed, so fail rather than spin.
-        throw output.streamError ?? ChunkedUploadError.bodyStreamClosed
+        //
+        // Not `streamError ?? …`: probed against a real bound pair for both
+        // teardown shapes (reader opened-then-closed, and closed mid-stream),
+        // `write` answers -1 with `streamStatus == .open` and a **nil**
+        // `streamError`, so the fallback was the only value it ever produced.
+        // Logged instead, on the rare chance a future OS does populate it.
+        if let streamError = output.streamError {
+          AssemblyAITranscriber.log.error(
+            "upload pipe write failed: \(streamError.localizedDescription, privacy: .public)")
+        }
+        throw ChunkedUploadError.bodyStreamClosed
       }
       remaining = remaining.dropFirst(written)
       retry = Self.minSpaceRetry
@@ -161,15 +171,18 @@ final class ChunkedRequestBody: @unchecked Sendable {
     // the body, and the server answers with some generic 4xx that doesn't name
     // the cause — so that error wins. Everything else defers to the response.
     //
-    // Which means two writer errors are explicitly not preferred, because both
-    // are symptoms of the response rather than causes of it. `CancellationError`
-    // is this method cancelling its own writer above. `bodyStreamClosed` is the
-    // transport tearing the pipe down on the way to delivering an early status,
-    // which can beat that cancel — and preferring it turned an expired API key
-    // into "the upload connection closed before the recording finished
-    // sending", exactly the substitution this policy exists to prevent.
+    // Which means the writer's own two error shapes are explicitly not
+    // preferred, because both are symptoms of the response rather than causes of
+    // it. `CancellationError` is this method cancelling its own writer above.
+    // Every `ChunkedUploadError` from the writer means the pipe went away — the
+    // transport tearing it down on the way to delivering an early status, which
+    // can beat that cancel. Preferring it turned an expired API key into "the
+    // upload connection closed before the recording finished sending", exactly
+    // the substitution this policy exists to prevent. What is left, and does
+    // win, is a producer failure: an unencodable `config` part surfaces as the
+    // `EncodingError` it is rather than as whatever 4xx a truncated body earns.
     if case .failure(let error) = outcome, !(error is CancellationError),
-      !isPipeTeardown(error),
+      !(error is ChunkedUploadError),
       let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode)
     {
       throw error
@@ -177,14 +190,6 @@ final class ChunkedRequestBody: @unchecked Sendable {
     return (responseData, response)
   }
 
-  /// Whether `error` is the pipe going away rather than the body failing to be
-  /// produced — the distinction the precedence rule above turns on.
-  private static func isPipeTeardown(_ error: any Error) -> Bool {
-    if case ChunkedUploadError.bodyStreamClosed = error { return true }
-    // The `OutputStream`'s own error for a reader that has gone: same meaning,
-    // different origin, and it reaches `write` first when the stream reports one.
-    return (error as? URLError)?.code == .networkConnectionLost
-  }
 }
 
 /// Failures specific to feeding a streamed request body. Wrapped in
@@ -195,9 +200,6 @@ enum ChunkedUploadError: Error, LocalizedError {
   case bodyStreamClosed
   /// The platform refused to create the pipe the body is written through.
   case bodyStreamUnavailable
-  /// A release reached the transcript step with no request in flight — the
-  /// recording was never uploaded.
-  case uploadNeverStarted
 
   var errorDescription: String? {
     switch self {
@@ -205,8 +207,6 @@ enum ChunkedUploadError: Error, LocalizedError {
       return "The upload connection closed before the recording finished sending."
     case .bodyStreamUnavailable:
       return "Couldn't open an upload stream for the recording."
-    case .uploadNeverStarted:
-      return "The recording wasn't uploaded."
     }
   }
 }

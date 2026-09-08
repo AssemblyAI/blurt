@@ -29,16 +29,5 @@ func collectTranscript(
   context: TranscriptionContext? = nil
 ) async throws -> String {
   try await transcriber.transcribe(
-    frames: .oneShot(pcm), sampleRate: 16_000, context: .just(context))
-}
-
-extension AsyncStream where Element == TranscriptionContext? {
-  /// A finished one-value context channel — what `DictationSession` pushes at
-  /// release, for tests that drive `transcribe` directly.
-  static func just(_ context: TranscriptionContext?) -> AsyncStream<TranscriptionContext?> {
-    AsyncStream { continuation in
-      continuation.yield(context)
-      continuation.finish()
-    }
-  }
+    frames: .oneShot(pcm), sampleRate: 16_000, context: .oneShot(context))
 }

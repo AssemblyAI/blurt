@@ -20,6 +20,10 @@ public protocol TranscriberProtocol: Sendable {
   /// was built there. Send nil for none; finishing the channel without a value
   /// abandons the request.
   ///
+  /// Read it with `firstOrAbandoned()`, which is that contract as code — every
+  /// conformer and test double inherits the abandonment rule instead of
+  /// re-deriving it, which three of them were doing and two got wrong.
+  ///
   /// A pushed value rather than a closure the request calls back into, so the
   /// whole thing runs one way: the caller sends audio and then context, and the
   /// transcriber holds no reference to whatever assembled them. Pulling the
@@ -47,4 +51,24 @@ extension TranscriberProtocol {
   /// No-op default: a transcriber with nothing to pre-open (e.g. test stubs)
   /// inherits this and `DictationSession` can call `warmUp()` unconditionally.
   public func warmUp() async {}
+}
+
+extension AsyncStream where Element == TranscriptionContext? {
+  /// The one value the caller sends, or `CancellationError` when the channel
+  /// finishes without ever sending.
+  ///
+  /// The abandonment half of `transcribe(frames:sampleRate:context:)`'s
+  /// contract, stated once here rather than in each reader. It was prose plus a
+  /// hand-rolled `received` flag in the production conformer, and the test
+  /// doubles — which skipped the flag — happily returned a transcript for a
+  /// dictation the session had already abandoned, so no double could exercise
+  /// the rule the protocol documents.
+  ///
+  /// Deliberately *not* keyed off `Task.isCancelled`: the party reading this is
+  /// typically an unstructured task that does not inherit the cancellation, and
+  /// learns of the abandonment from this channel closing and nothing else.
+  public func firstOrAbandoned() async throws -> TranscriptionContext? {
+    for await value in self { return value }
+    throw CancellationError()
+  }
 }

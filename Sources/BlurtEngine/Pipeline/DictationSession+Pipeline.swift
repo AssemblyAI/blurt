@@ -1,9 +1,32 @@
 import Foundation
 import os
 
-// The post-release pipeline — transcribe → inject, plus the bounded wait on
-// the press-time context read — split from `DictationSession.swift` to stay
-// within the lint file-length budget, like `+Commands` and `+Observation`.
+// The post-release pipeline — transcribe → inject, plus the bounded wait on the
+// press-time context read — split from `DictationSession.swift` to stay within
+// the lint file-length budget, like `+Commands` and `+Observation`.
+//
+// It also owns the *whole* upload lifecycle, including `startUpload(frames:)`,
+// which `performPress` calls: the request spans press to release, and keeping it
+// beside `awaitUpload` and `resolveCapturedContext` — the two things that finish
+// it — beats splitting one lifecycle across the press/release line to match the
+// file names.
+/// Failures the release pipeline itself raises, as opposed to the transport's
+/// (`ChunkedUploadError`) or the service's (`AssemblyAIError`). Declared here
+/// because this is where it is raised: filed under the transport's body-stream
+/// errors it read as one, and a transport test reached for it as a stand-in.
+enum DictationPipelineError: Error, LocalizedError {
+  /// A release reached the transcript step with no request in flight — the
+  /// recording was never uploaded.
+  case uploadNeverStarted
+
+  var errorDescription: String? {
+    switch self {
+    case .uploadNeverStarted:
+      return "The recording wasn't uploaded."
+    }
+  }
+}
+
 extension DictationSession {
   /// The longest `runTranscribeInject` waits for the press-time AX
   /// field-context read before transcribing without it. In the common case the
@@ -102,21 +125,23 @@ extension DictationSession {
   func startUpload(frames: AsyncStream<Data>) {
     let (context, contextFeed) = AsyncStream.makeStream(
       of: TranscriptionContext?.self, bufferingPolicy: .bufferingNewest(1))
-    uploadContextFeed = contextFeed
-    // Lifted out of the actor so the task body captures Sendable values rather
-    // than isolated state, the same move `performPress` makes for `transcriber`.
+
+    // Lifted out of the actor so the task body captures a Sendable value rather
+    // than isolated state, the same move `performPress` makes for it.
+    // `SyncSTTLimits.sampleRate` needs no such hoist — it is a static on an enum.
     let transcriber = transcriber
-    let sampleRate = SyncSTTLimits.sampleRate
-    uploadTask = Task {
-      try await transcriber.transcribe(
-        frames: frames, sampleRate: sampleRate, context: context)
-    }
+    upload = InFlightUpload(
+      task: Task {
+        try await transcriber.transcribe(
+          frames: frames, sampleRate: SyncSTTLimits.sampleRate, context: context)
+      },
+      contextFeed: contextFeed)
   }
 
   /// Waits for the request opened at press. Returns the transcript, or nil if
   /// it failed (phase set to `.failed`).
   private func awaitUpload() async -> String? {
-    guard let upload = uploadTask else {
+    guard let inFlight = upload else {
       // Reached when a cancel cleared the handle while this task was suspended
       // in the context wait — `setPhase` abandons the upload on any terminal
       // phase, and that wait can hold for `contextWaitBudget` against an
@@ -130,7 +155,7 @@ extension DictationSession {
       // describes "the user spoke and nothing was uploaded" is invisible
       // otherwise, so it is surfaced rather than silently idled.
       if !Task.isCancelled {
-        setPhase(.failed(.sttFailed(underlying: ChunkedUploadError.uploadNeverStarted)))
+        setPhase(.failed(.sttFailed(underlying: DictationPipelineError.uploadNeverStarted)))
       }
       return nil
     }
@@ -144,9 +169,9 @@ extension DictationSession {
     // cancel — the same trap `resolveCapturedContext` documents for
     // `contextStream`, reached here because this runs in a detached task that
     // can outlive the press that started it.
-    defer { if uploadTask == upload { uploadTask = nil } }
+    defer { if upload?.task == inFlight.task { upload = nil } }
     do {
-      return try await upload.value
+      return try await inFlight.task.value
     } catch {
       // A cancel() that landed mid-request already tore this task down and set
       // .cancelled; the transport then surfaces a cancellation-shaped error
@@ -189,11 +214,9 @@ extension DictationSession {
     } else {
       capturedContext = nil
     }
-    // Hand it over and close the channel: the request writes its config part on
-    // receiving this, so a channel left open would hold the upload indefinitely.
-    uploadContextFeed?.yield(capturedContext)
-    uploadContextFeed?.finish()
-    uploadContextFeed = nil
+    // Hand it to the request, which has been holding its config part for it
+    // since the last frame. `send` closes the channel as part of sending.
+    upload?.send(capturedContext)
   }
 
   private func inject(_ text: String) async {

@@ -61,6 +61,41 @@ func testSeams(
     logFailure: { log.recordFailure($0, context: $1) })
 }
 
+/// Seams whose field capture blocks until the returned semaphore is signalled —
+/// a beachballing frontmost app, which is what holds the pipeline inside its
+/// bounded context wait long enough for a test to land something there.
+///
+/// A factory rather than each suite hand-writing `DictationSession.Seams`: two
+/// did, and both copies quietly dropped the transcript recording `testSeams`
+/// wires up, so a later assertion on `log.transcripts` would have seen nothing.
+func hungFieldSeams(
+  log: RecordedLog = RecordedLog()
+) -> (seams: DictationSession.Seams, release: DispatchSemaphore) {
+  let hung = DispatchSemaphore(value: 0)
+  var seams = testSeams(log: log)
+  seams.captureFieldContext = {
+    hung.wait()
+    return .empty
+  }
+  return (seams, hung)
+}
+
+/// A session wired to a custom transcriber, which `makeSession` cannot do — it
+/// hard-codes `StubTranscriber`, and the upload suites need a double that
+/// reports *when* it was called. Here beside `makeSession` so the two don't
+/// drift; the file-local factory it replaces had none of the passthroughs, so
+/// tests needing a transcriber *and* a seam bypassed it entirely.
+func makeSession(
+  transcriber: any TranscriberProtocol,
+  mic: StubMicCapture = StubMicCapture(),
+  injector: StubInjector = StubInjector(),
+  seams: DictationSession.Seams = .offline
+) -> DictationSession {
+  DictationSession(
+    mic: mic, transcriber: transcriber, injector: injector,
+    keyTermsProvider: { [] }, seams: seams)
+}
+
 extension DictationSession.Seams {
   /// The offline seams for suites that don't assert on the context or the log but
   /// must not touch the window server, the Accessibility API, or the user's real

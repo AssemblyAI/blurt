@@ -297,7 +297,7 @@ private actor GatedTranscriber: TranscriberProtocol {
     frames: AsyncStream<Data>, sampleRate: Int, context: AsyncStream<TranscriptionContext?>
   ) async throws -> String {
     for await _ in frames {}
-    for await _ in context { break }
+    _ = try await context.firstOrAbandoned()
     await gate.enter()
     if throwsWhenCancelled && Task.isCancelled { throw URLError(.cancelled) }
     return text

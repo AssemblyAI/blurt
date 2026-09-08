@@ -31,7 +31,7 @@ actor StubMicCapture: MicCaptureProtocol {
   func stop() async throws -> Int {
     stopCalls += 1
     // Ends the feed before the (possibly throwing) stop, mirroring
-    // `CaptureSessionRecorder.stopAndReadPCM`: the upload's body is completed by
+    // `CaptureSessionRecorder.stopAndReadByteCount`: the upload's body is completed by
     // the recording stopping, not by the stop succeeding.
     finishFrames()
     if let stopError { throw stopError }

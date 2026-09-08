@@ -98,7 +98,7 @@
       // over a live feed at press and the harness has to consume it for the
       // release to complete.
       for await _ in frames {}
-      for await _ in context { break }
+      _ = try await context.firstOrAbandoned()
       return await MainActor.run { UITestState.shared.cannedTranscript }
     }
   }
