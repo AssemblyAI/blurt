@@ -157,18 +157,33 @@ final class ChunkedRequestBody: @unchecked Sendable {
     // indefinitely, with the `defer` above not yet reached.
     writer.cancel()
     let outcome = await writer.result
-    // A producer failure (the `config` part failing to encode, say) truncates
+    // A *producer* failure (the `config` part failing to encode, say) truncates
     // the body, and the server answers with some generic 4xx that doesn't name
-    // the cause — so the writer's error wins there. On a 2xx the body plainly
-    // arrived whole, and a late write failure is noise that would mask a
-    // perfectly good transcript; on a non-2xx with no writer error the server's
-    // own message is what surfaces, via the caller's status check.
+    // the cause — so that error wins. Everything else defers to the response.
+    //
+    // Which means two writer errors are explicitly not preferred, because both
+    // are symptoms of the response rather than causes of it. `CancellationError`
+    // is this method cancelling its own writer above. `bodyStreamClosed` is the
+    // transport tearing the pipe down on the way to delivering an early status,
+    // which can beat that cancel — and preferring it turned an expired API key
+    // into "the upload connection closed before the recording finished
+    // sending", exactly the substitution this policy exists to prevent.
     if case .failure(let error) = outcome, !(error is CancellationError),
+      !isPipeTeardown(error),
       let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode)
     {
       throw error
     }
     return (responseData, response)
+  }
+
+  /// Whether `error` is the pipe going away rather than the body failing to be
+  /// produced — the distinction the precedence rule above turns on.
+  private static func isPipeTeardown(_ error: any Error) -> Bool {
+    if case ChunkedUploadError.bodyStreamClosed = error { return true }
+    // The `OutputStream`'s own error for a reader that has gone: same meaning,
+    // different origin, and it reaches `write` first when the stream reports one.
+    return (error as? URLError)?.code == .networkConnectionLost
   }
 }
 

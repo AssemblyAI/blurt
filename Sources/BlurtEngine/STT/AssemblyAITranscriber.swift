@@ -143,15 +143,29 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
         }
         do {
           // Wait for the session's press-time read, which it resolves at release
-          // and sends here. A channel that finishes without a value means the
-          // dictation was abandoned, and the cancellation check below is what
-          // stops a config part going out for it.
+          // and sends here.
           var resolved: TranscriptionContext?
+          var received = false
           for await value in context {
             resolved = value
+            received = true
             break
           }
-          try Task.checkCancellation()
+          // A channel that finished without ever sending means the dictation was
+          // abandoned, so fail the body rather than completing a request for
+          // audio nobody is waiting for.
+          //
+          // Decided from the channel rather than from `Task.isCancelled`, which
+          // would be the obvious check and does not work: this producer is an
+          // unstructured task, so it does not inherit the upload task's
+          // cancellation and only learns of it later, through the body stream's
+          // `onTermination`. `cancelUpload()` closes this channel synchronously,
+          // so the producer wakes here first — and on the cancel path it could
+          // hand the server a complete request before cancellation caught up.
+          guard received else {
+            continuation.finish(throwing: CancellationError())
+            return
+          }
           // The prior dialogue that goes on the wire: the user's recent
           // dictations, then the text before the cursor (empty when there is
           // neither, which omits the field). App name, window title, field

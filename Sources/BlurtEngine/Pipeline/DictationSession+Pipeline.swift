@@ -117,11 +117,21 @@ extension DictationSession {
   /// it failed (phase set to `.failed`).
   private func awaitUpload() async -> String? {
     guard let upload = uploadTask else {
-      // Unreachable while `performRelease` only runs from `.recording`, which
-      // is claimed after `startUpload()` — but surfaced rather than silently
-      // idled, because the failure it would describe (the user spoke and
-      // nothing was ever uploaded) is invisible otherwise.
-      setPhase(.failed(.sttFailed(underlying: ChunkedUploadError.uploadNeverStarted)))
+      // Reached when a cancel cleared the handle while this task was suspended
+      // in the context wait — `setPhase` abandons the upload on any terminal
+      // phase, and that wait can hold for `contextWaitBudget` against an
+      // unresponsive app. The cancel already claimed the phase, so leave it
+      // alone: repainting it `.failed` flashes the pill red and writes a
+      // developer-mode error entry for a dictation the user dismissed, the same
+      // rule every other exit in this file follows.
+      //
+      // Without a cancel this is unreachable — `performRelease` only runs from
+      // `.recording`, claimed after `startUpload()` — but a failure that
+      // describes "the user spoke and nothing was uploaded" is invisible
+      // otherwise, so it is surfaced rather than silently idled.
+      if !Task.isCancelled {
+        setPhase(.failed(.sttFailed(underlying: ChunkedUploadError.uploadNeverStarted)))
+      }
       return nil
     }
     // Keep the handle live across the await. `cancel()` reaches the request

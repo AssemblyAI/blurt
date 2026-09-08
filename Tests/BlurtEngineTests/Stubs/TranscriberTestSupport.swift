@@ -8,7 +8,10 @@ import Foundation
 /// off the process's real `UserDefaults`.
 func makeTranscriber(
   apiKey: String?,
-  transport: any HTTPTransport = FakeHTTPTransport { _ in (200, Data()) },
+  // 500, not 200: the default is for the cases that must never reach the wire
+  // (a missing key throws first), so a test that accidentally does reach it
+  // fails rather than quietly succeeding on an empty body.
+  transport: any HTTPTransport = FakeHTTPTransport { _ in (500, Data()) },
   enhancedTranscripts: Bool = true,
   customStyle: String? = nil
 ) -> AssemblyAITranscriber {

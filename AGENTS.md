@@ -606,7 +606,7 @@ apart, and the harness refuses to report an over-cap winner — see its README's
 2048-character cap".
 
 The finished text arrives in the response body — no `/v2/upload`, no job submission, no polling.
-The **upload is chunked**: `transcribe(frames:sampleRate:resolveContext:)` is called at _press_ and
+The **upload is chunked**: `transcribe(frames:sampleRate:context:)` is called at _press_ and
 streams the recording into one open request as the microphone produces it, so the transfer overlaps
 the speaking instead of following it. There is no buffered path — measured on a 1 Mbps uplink, a
 10 s dictation waits ~3.1 s after speech buffered versus ~0.5 s chunked, and on a fast link the two
