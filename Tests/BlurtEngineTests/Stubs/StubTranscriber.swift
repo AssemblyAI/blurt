@@ -18,8 +18,15 @@ actor StubTranscriber: TranscriberProtocol {
 
   init(mode: Mode) { self.mode = mode }
 
-  func transcribe(pcm: Data, sampleRate: Int, context: TranscriptionContext?) async throws -> String {
-    receivedContexts.append(context)
+  func transcribe(
+    frames: AsyncStream<Data>, sampleRate: Int, context: AsyncStream<TranscriptionContext?>
+  ) async throws -> String {
+    // Drain the feed first, then take the context: that is the production order
+    // (the config part is written after the last frame), and a stub that read
+    // the context early would hide a session that stopped feeding the stream.
+    // `firstOrAbandoned` also gives this stub the abandonment rule for free.
+    for await _ in frames {}
+    receivedContexts.append(try await context.firstOrAbandoned())
     switch mode {
     case .transcript(let transcript):
       return transcript

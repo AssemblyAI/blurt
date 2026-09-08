@@ -62,16 +62,12 @@ struct HTTPClientTests {
     // A context with history and prior text exercises the
     // `ConversationContext.turns` path inside transcribe() that the nil-context
     // happy path skips, so the request goes out carrying a real
-    // `config.conversation_context`. The fake can't observe the multipart upload
-    // body, so this asserts the round trip rather than the wire contents (covered
-    // directly by makeConfigData).
-    let result = try await makeTranscriber(apiKey: "test-key", transport: transport)
-      .transcribe(
-        pcm: Self.testPCM,
-        sampleRate: 16_000,
-        context: TranscriptionContext(
-          appName: "Slack", priorText: "Dear Sam,",
-          recentTranscripts: ["Following up on yesterday."]))
+    // `config.conversation_context`.
+    let result = try await collectTranscript(
+      makeTranscriber(apiKey: "test-key", transport: transport),
+      context: TranscriptionContext(
+        appName: "Slack", priorText: "Dear Sam,",
+        recentTranscripts: ["Following up on yesterday."]))
     #expect(result == "hello world")
   }
 
@@ -213,36 +209,6 @@ struct HTTPClientTests {
     #expect(object["conversation_context"] as? [String] == ["at the cursor"])
   }
 
-  @Test("the multipart body frames the audio and config parts the dictation API expects")
-  func multipartBodyFraming() throws {
-    let body = makeTranscriber(apiKey: "test-key")
-      .multipartBody(pcm: Data("PCMBYTES".utf8), config: Data(#"{"channels":1}"#.utf8), boundary: "BOUND")
-    let text = try #require(String(data: body, encoding: .utf8))
-
-    #expect(text.hasPrefix("--BOUND\r\n"))
-    #expect(text.hasSuffix("--BOUND--\r\n"))
-    // Field names and the filename are the contract: the server matches on them,
-    // so a rename here is a 4xx that no other test would catch.
-    #expect(text.contains("Content-Disposition: form-data; name=\"audio\"; filename=\"audio.pcm\"\r\n"))
-    #expect(text.contains("Content-Disposition: form-data; name=\"config\"\r\n"))
-    // Each part's payload sits after the blank line that ends its headers and runs
-    // up to the next boundary — the CRLF placement a hand-built body gets wrong.
-    #expect(text.contains("Content-Type: audio/pcm\r\n\r\nPCMBYTES\r\n--BOUND\r\n"))
-    #expect(text.contains("Content-Type: application/json\r\n\r\n{\"channels\":1}\r\n--BOUND--\r\n"))
-  }
-
-  @Test("arbitrary binary PCM survives the multipart body byte-exact")
-  func multipartBodyPreservesBinaryPCM() throws {
-    // The audio part is raw S16LE, not text. Any accidental transcoding or stray
-    // framing byte would corrupt the upload while the string assertions above still
-    // passed, so pin the bytes: every value 0...255, ending exactly at the boundary.
-    let pcm = Data((0...255).map { UInt8($0) })
-    let body = makeTranscriber(apiKey: "test-key")
-      .multipartBody(pcm: pcm, config: Data("{}".utf8), boundary: "B")
-    let range = try #require(body.range(of: pcm))
-    #expect(body[range.upperBound...].starts(with: Data("\r\n--B\r\n".utf8)))
-  }
-
   @Test("transcriber HTTP error carries the decoded server message")
   func transcribeHTTPErrorMessage() async throws {
     let transport = FakeHTTPTransport { _ in (422, json(["message": "audio too long"])) }
@@ -323,27 +289,6 @@ struct HTTPClientTests {
 
   // MARK: - helpers
 
-  /// Builds a transcriber wired to `transport`. The default transport answers
-  /// every request with a 500, for the cases that must never reach the wire.
-  /// Enhanced transcripts and the custom style are pinned (on / none unless a
-  /// test opts out) rather than left to the production defaults, which read the
-  /// process's real `UserDefaults`.
-  private func makeTranscriber(
-    apiKey: String?,
-    transport: any HTTPTransport = FakeHTTPTransport { _ in (500, Data()) },
-    enhancedTranscripts: Bool = true,
-    customStyle: String? = nil
-  ) -> AssemblyAITranscriber {
-    AssemblyAITranscriber(
-      apiKeyProvider: { apiKey }, transport: transport,
-      enhancedTranscripts: { enhancedTranscripts },
-      customStyle: { customStyle })
-  }
-
-  private func collectTranscript(_ transcriber: AssemblyAITranscriber) async throws -> String {
-    try await transcriber.transcribe(pcm: Self.testPCM, sampleRate: 16_000, context: nil)
-  }
-
   /// The encoded `config` part re-parsed as a dictionary — the shape every
   /// config assertion below wants, since `makeConfigData` returns raw JSON.
   /// A part that isn't a JSON object at all fails here rather than turning every
@@ -358,7 +303,4 @@ struct HTTPClientTests {
     return try #require(JSONSerialization.jsonObject(with: config) as? [String: Any])
   }
 
-  /// Three arbitrary S16LE samples — the raw blob shape `MicCapture.stop()`
-  /// hands the transcriber.
-  private static let testPCM = Data([0x00, 0x00, 0xCD, 0x0C, 0x33, 0xF3])
 }

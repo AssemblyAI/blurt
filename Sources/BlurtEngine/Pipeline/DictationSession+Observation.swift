@@ -54,6 +54,20 @@ extension DictationSession {
     if case .failed(let error) = newPhase {
       seams.logFailure(error, capturedContext)
     }
+    // The same construction argument, for the same reason: a dictation that
+    // reaches a terminal phase without a transcript must not leave a request
+    // streaming, or the service transcribes audio nobody is waiting for. Spelled
+    // out at each exit it was five near-identical reminders, and the next
+    // terminal exit added would have silently missed it.
+    //
+    // Safe as a blanket rule because a terminal phase and a live upload are
+    // mutually exclusive by definition: the only phase set between
+    // `startUpload(frames:)` and `awaitUpload`'s hand-off is `.transcribing`,
+    // which is not terminal, and on the way out the handle is already cleared
+    // before `.pasted` / `.noTarget` are claimed.
+    if newPhase.isTerminal {
+      cancelUpload()
+    }
     phase = newPhase
     for continuation in continuations.values {
       continuation.yield(newPhase)

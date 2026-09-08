@@ -1,4 +1,8 @@
-import Foundation
+// `Dispatch`, not `Foundation`: the only thing here from outside the module is
+// `contextQueue`'s and `commandQueue`'s `DispatchQueue`, the same choice
+// `+Press.swift` documents. Foundation's last use here went with `mic.stop()`
+// returning a byte count instead of a `Data` blob.
+import Dispatch
 import Synchronization
 
 public actor DictationSession {
@@ -143,6 +147,14 @@ public actor DictationSession {
   /// propagates is honored by `runTranscribeInject` and `KeyInjector.insert`.
   var pipelineTask: Task<Void, Never>?  // internal: joined by awaitPipeline()
 
+  /// The in-flight dictation request, opened at press so the recording uploads
+  /// while the user speaks. Stored for the same reason `pipelineTask` is: it is
+  /// unstructured work a cancel has to be able to reach, and cancelling
+  /// `pipelineTask` alone would abandon only the *wait* — the request itself
+  /// would keep streaming and complete against a dictation the user dismissed.
+  /// See `InFlightUpload` for why the task and its context channel are one value.
+  var upload: InFlightUpload?
+
   /// The production entry point: the real focus capture and the real
   /// developer-mode log. Delegates to the seam-carrying initializer below, which
   /// can't be public because it names internal types.
@@ -216,6 +228,11 @@ public actor DictationSession {
   }
 
   deinit {
+    // The one door into a terminal state that is not a phase transition, so the
+    // `setPhase` funnel never runs for it: a session dropped mid-recording would
+    // otherwise leave its request to be wound down by continuation deallocation
+    // rather than by the rule.
+    upload?.abandon()
     commandFeed.finish()
     for continuation in continuations.values {
       continuation.finish()
@@ -266,10 +283,13 @@ public actor DictationSession {
     // release arriving during the mic.stop() suspension now fails the
     // `.recording` guard above instead of running the pipeline twice.
     setPhase(.transcribing)
-    let pcm: Data
+    let recordedBytes: Int
     do {
-      pcm = try await mic.stop()
+      recordedBytes = try await mic.stop()
     } catch {
+      // Both exits below set a terminal phase, and `setPhase` cancels the
+      // in-flight request there — so a conformer whose `stop()` throws without
+      // ending the feed can't leave it streaming until the idle timeout.
       // A cancel wins over surfacing the audio error — the user asked for
       // nothing to happen.
       if cancelWonRelease() { return }
@@ -281,8 +301,23 @@ public actor DictationSession {
     // Honored again here, before any pipeline exists — deterministically no
     // transcription, no paste.
     if cancelWonRelease() { return }
+    // A clip too short for the STT model (an accidental brief tap) would only
+    // earn a 400 — drop it as a silent no-op, like an empty transcript, rather
+    // than letting the request finish.
+    //
+    // Safe against the request finishing first, without depending on this turn
+    // not suspending: the body producer cannot write its `config` part until the
+    // release path sends a context to the in-flight request, and only
+    // `resolveCapturedContext` — reached solely from the pipeline task this
+    // guard returns before spawning — ever does. So a dropped clip's request is
+    // abandoned still holding its body open. (It used to be a real race, won by
+    // the request on a fast link.)
+    guard recordedBytes >= SyncSTTLimits.minPCMBytes else {
+      setPhase(.idle)
+      return
+    }
     pipelineTask = Task { [weak self] in
-      await self?.runTranscribeInject(pcm: pcm)
+      await self?.runTranscribeInject()
     }
   }
 
@@ -315,6 +350,10 @@ public actor DictationSession {
   /// recording to tear down.
   func stopAndCancel() async {
     cancelAutoRelease()
+    // Before the mic teardown, not after: `cancelCapture()` finishes the frame
+    // stream, and a still-live upload would read that as "the utterance ended",
+    // write its config part and transcribe audio the user just discarded.
+    cancelUpload()
     do {
       // `cancelCapture`, not `stop`: the audio is being thrown away, so
       // preserving it (the Bluetooth tail linger) is not worth delaying the
@@ -336,6 +375,18 @@ public actor DictationSession {
   private func cancelAutoRelease() {
     autoReleaseTask?.cancel()
     autoReleaseTask = nil
+  }
+
+  /// Abandons the in-flight dictation request — the streamed body can't be
+  /// completed meaningfully once the audio behind it is going away, so the
+  /// whole request goes rather than being left to finish on its own.
+  /// Reached from `setPhase` for every terminal phase, so a dictation that ends
+  /// without a transcript cannot leave a request streaming. The one explicit
+  /// caller left is `stopAndCancel`, which has to run before `cancelCapture()`
+  /// ends the feed.
+  func cancelUpload() {
+    upload?.abandon()
+    upload = nil
   }
 
   // The post-release pipeline — `runTranscribeInject` and its transcribe/inject

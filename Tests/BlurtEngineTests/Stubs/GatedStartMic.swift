@@ -26,18 +26,19 @@ actor GatedStartMic: MicCaptureProtocol {
 
   func setThrowsIfCancelled(_ value: Bool) { throwsIfCancelled = value }
 
-  func start() async throws {
+  func start() async throws -> AsyncStream<Data> {
     startCalls += 1
     await gate.enter()
     if throwsIfCancelled, Task.isCancelled { throw CancellationError() }
+    return .oneShot(StubPCM.aboveMinimum)
   }
 
   func waitUntilStartEntered() async { await gate.waitUntilEntered() }
   func allowStartToFinish() { gate.allowToFinish() }
 
-  func stop() async throws -> Data {
+  func stop() async throws -> Int {
     stopCalls += 1
-    return StubPCM.aboveMinimum
+    return StubPCM.aboveMinimum.count
   }
 
   /// Counts the call and delegates, so `stopCalls` keeps meaning "the mic was

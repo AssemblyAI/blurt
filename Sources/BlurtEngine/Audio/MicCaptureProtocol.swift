@@ -11,13 +11,32 @@ public protocol MicCaptureProtocol: Sendable {
   /// start chime — arriving only on return. A conformer that returns before
   /// frames flow cues the user to speak into a dead mic, and the first words of
   /// the utterance are unrecoverable.
-  func start() async throws
-  /// Stop capture and return the captured audio as raw S16LE PCM bytes — the
-  /// exact encoding the dictation request uploads, so no conversion pass sits on
-  /// the release hot path. `throws` so a conformer that has to fetch the audio
-  /// from somewhere can surface a failure instead of silently dropping speech;
-  /// `MicCapture` accumulates it in memory as it arrives and never does.
-  func stop() async throws -> Data
+  ///
+  /// Returns the live PCM feed for the capture it just started: raw S16LE
+  /// chunks in arrival order, ending when the capture stops. This is what makes
+  /// the upload chunked — the dictation request opens at press and drains this
+  /// while the user speaks, so ending the feed is what tells the service the
+  /// utterance is over.
+  ///
+  /// Handed back by `start()` rather than fetched separately so the ordering
+  /// cannot be got wrong: a feed always belongs to a capture that is running,
+  /// and there is no window in which to ask for one before (or after) there is
+  /// anything behind it. Asking separately raced the release — the capture could
+  /// already have been torn down, and the answer was an empty feed that uploaded
+  /// an utterance with no audio in it.
+  func start() async throws -> AsyncStream<Data>
+  /// Stop capture and return how many bytes of audio it produced.
+  ///
+  /// A count, not the audio: the recording is uploaded on the feed `start()`
+  /// returned, as it is captured, so by the time capture stops there is nothing
+  /// left to hand anyone. All the release path still needs is whether there was
+  /// enough of it to be worth transcribing (`SyncSTTLimits.minPCMBytes`).
+  /// Returning the blob as well meant copying every byte a second time and
+  /// holding a duplicate of the whole utterance until release.
+  ///
+  /// `throws` so a conformer whose teardown can genuinely fail surfaces it
+  /// instead of silently reporting a clean stop; `MicCapture` never does.
+  func stop() async throws -> Int
   /// Stop capture and discard the audio — the teardown behind a *cancel*, where
   /// the user asked for nothing to happen. Split from `stop()` because the two
   /// want opposite things: `stop()` may legitimately spend time preserving the

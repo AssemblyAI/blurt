@@ -3,10 +3,6 @@ import os
 
 /// Latency instrumentation for the dictation round-trip. Findable via:
 ///   log show --predicate 'subsystem == "dev.alex.blurt" && category == "Transcriber"' --last 1h
-/// File-scoped so both `send(_:body:audioDurationMs:)` (wall-clock) and
-/// `MetricsLogger` (the DNS/TCP/TLS/TTFB split) can write to it.
-private let transcriberLog = HostIdentity.current.logger("Transcriber")
-
 /// `TranscriberProtocol` backed by AssemblyAI's **dictation** API.
 ///
 /// A single `POST dictation.assemblyai.com/transcribe` carries the captured
@@ -22,6 +18,14 @@ private let transcriberLog = HostIdentity.current.logger("Transcriber")
 /// rewrite is best-effort with a ~5 s server-side deadline, so a rewrite
 /// failure still returns the verbatim transcript (`llm_response` null).
 public struct AssemblyAITranscriber: TranscriberProtocol {
+  /// Latency instrumentation for the dictation round-trip. Findable via:
+  ///   log show --predicate 'subsystem == "dev.alex.blurt" && category == "Transcriber"' --last 1h
+  ///
+  /// Type-scoped like every other logger in the engine (`MicCapture`,
+  /// `DictationLog`, `AudioRouteMonitor`) rather than a module-global, and
+  /// internal so `DictationUploadDelegate` in `DictationUploadMetrics.swift`
+  /// writes the same category — one category, two files.
+  static let log = HostIdentity.current.logger("Transcriber")
   private let apiKeyProvider: @Sendable () -> String?
   private let baseURL: URL
   private let transport: any HTTPTransport
@@ -63,36 +67,30 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   // MARK: - Dictation request
 
   public func transcribe(
-    pcm: Data, sampleRate: Int, context: TranscriptionContext?
+    frames: AsyncStream<Data>, sampleRate: Int, context: AsyncStream<TranscriptionContext?>
   ) async throws -> String {
     guard let apiKey = apiKeyProvider(), !apiKey.isEmpty else {
       throw BlurtError.apiKeyMissing
     }
-    // The prior dialogue that goes on the wire: the user's recent dictations,
-    // then the text before the cursor (empty when there is neither, which omits
-    // the field). App name, window title, field label and selected text stay on
-    // the machine — `ConversationContext` draws that line, so nothing is
-    // filtered here.
-    let conversation = ConversationContext.turns(context: context)
-    // The other steering field: the user's key terms as a word-boost list,
-    // fitted to its own (different) cap.
-    let boost = KeytermsBoost.fitted(context?.keyTerms ?? [])
-    let config = try makeConfigData(
-      sampleRate: sampleRate, conversationContext: conversation, wordBoost: boost)
     let boundary = "blurt-\(UUID().uuidString)"
 
     var request = URLRequest(url: baseURL.appendingPathComponent("transcribe"))
     request.httpMethod = "POST"
     // Bounds a stalled connection; see `requestTimeoutSeconds` for why an idle
-    // timeout is the right shape here.
+    // timeout is the right shape here — and note it now has to cover the
+    // recording as well as the round trip, which is exactly what an idle
+    // timeout does and a total one would not.
     request.timeoutInterval = Self.requestTimeoutSeconds
     request.setValue(apiKey, forHTTPHeaderField: "Authorization")
     request.setValue(
       "multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
-    let body = multipartBody(pcm: pcm, config: config, boundary: boundary)
-    let audioDurationMs = SyncSTTLimits.durationMs(ofPCMBytes: pcm.count, rate: sampleRate)
-    let data = try await send(request, body: body, audioDurationMs: audioDurationMs)
+    let progress = UploadProgress()
+    let body = streamedBody(
+      frames: frames, sampleRate: sampleRate, boundary: boundary,
+      context: context, progress: progress)
+    let data = try await send(
+      request, streaming: body, sampleRate: sampleRate, progress: progress)
     guard let response = try? JSONDecoder().decode(DictationResponse.self, from: data) else {
       throw AssemblyAIError.malformedResponse
     }
@@ -104,21 +102,96 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     // verbatim `text` right below it.
     if let rewrite = response.llmResponse.trimmedNonEmpty() { return rewrite }
     if let error = response.llmError {
-      transcriberLog.warning(
+      Self.log.warning(
         "llm rewrite unavailable (\(error, privacy: .public)); using verbatim transcript")
     }
     return response.text
   }
 
-  /// Pre-open and pool a connection to the dictation host so the next
-  /// `transcribe` reuses it instead of paying DNS+TCP+TLS on the hot path
-  /// (~170 ms cold, more on mobile — measured). A throwaway GET to the host
-  /// root is enough to establish the HTTP/2 connection `URLSession` then reuses
-  /// for the POST to `/transcribe`; the response (an auth-less 4xx) is
-  /// discarded. No key, so it never counts as a transcription. A short timeout
-  /// keeps a dead network from leaving the task hanging. Fire-and-forget: any
-  /// error is swallowed — a failed warm-up just means the next request pays
-  /// connection setup itself.
+  /// The multipart body, produced in the only order a live recording allows:
+  /// the `audio` part's headers, then each captured frame as it arrives, then
+  /// the `config` part once the frames stop.
+  ///
+  /// `config` goes **last**. The dictation API permits it because it parses the
+  /// body only once complete (verified against the service — sync's own
+  /// streaming route requires the opposite order and would reject this). That
+  /// ordering is load-bearing rather than incidental: it lets the press-time
+  /// Accessibility context read resolve at *release*, exactly as it did when
+  /// the whole request was built after recording. The producer therefore waits
+  /// here, after the last frame, for the value the session pushes on `context` —
+  /// the config carries the same `conversation_context` and `word_boost` it
+  /// always did, decided at the same moment as before.
+  ///
+  /// Finishing the stream is what closes the multipart body and tells the
+  /// service the utterance is over, so `frames` ending is end-of-audio.
+  ///
+  /// The stream buffers without bound, which is deliberate: frames can only
+  /// arrive as fast as the microphone produces them, so a backlog forms only
+  /// when the uplink is slower than realtime — and then the audio has to wait
+  /// somewhere regardless. The recording cap bounds it to
+  /// `SyncSTTLimits.maxAudioSeconds` of PCM.
+  private func streamedBody(
+    frames: AsyncStream<Data>, sampleRate: Int, boundary: String,
+    context: AsyncStream<TranscriptionContext?>, progress: UploadProgress
+  ) -> AsyncThrowingStream<Data, any Error> {
+    AsyncThrowingStream { continuation in
+      let producer = Task {
+        continuation.yield(Self.audioPartHeader(boundary: boundary))
+        for await frame in frames {
+          progress.recordFrame(bytes: frame.count)
+          continuation.yield(frame)
+        }
+        do {
+          // Wait for the session's press-time read, which it resolves at
+          // release and sends here. A channel that finishes without sending
+          // means the dictation was abandoned, and `firstOrAbandoned` throws —
+          // caught below, so the body fails instead of completing a request for
+          // audio nobody is waiting for.
+          let resolved = try await context.firstOrAbandoned()
+          // The prior dialogue that goes on the wire: the user's recent
+          // dictations, then the text before the cursor (empty when there is
+          // neither, which omits the field). App name, window title, field
+          // label and selected text stay on the machine — `ConversationContext`
+          // draws that line, so nothing is filtered here.
+          let config = try makeConfigData(
+            sampleRate: sampleRate,
+            conversationContext: ConversationContext.turns(context: resolved),
+            // The other steering field: the user's key terms as a word-boost
+            // list, fitted to its own (different) cap.
+            wordBoost: KeytermsBoost.fitted(resolved?.keyTerms ?? []))
+          continuation.yield(Self.configTail(config: config, boundary: boundary))
+          continuation.finish()
+        } catch {
+          // A truncated body would earn a generic 400 from the service; finish
+          // with the real error so the failure names its own cause.
+          continuation.finish(throwing: error)
+        }
+      }
+      continuation.onTermination = { _ in producer.cancel() }
+    }
+  }
+
+  /// Pre-open and pool a connection to the dictation host so the request opened
+  /// at press starts streaming immediately instead of spending its first
+  /// ~170 ms on DNS+TCP+TLS (more on mobile — measured).
+  ///
+  /// The reason changed with the chunked upload and is worth stating, because
+  /// the obvious reading is now wrong. It used to keep connection setup off the
+  /// *release* hot path, where the user was waiting. The request now opens at
+  /// press, so its handshake overlaps the recording either way and no longer
+  /// sits on the wait at all. What the warm-up still buys is the audio starting
+  /// to move ~170 ms sooner — which is free on a fast uplink and worth having on
+  /// a saturated one, where a late start is a backlog that never clears and adds
+  /// its own delay to the post-speech wait.
+  ///
+  /// Measured rather than assumed (2026-09-08), because "the POST opens at press
+  /// now, so this races it" is the plausible objection: with a fresh
+  /// `URLSession`, the POST reports `isReusedConnection == true` both after a
+  /// 250 ms mic bring-up and when fired back-to-back with the warm-up. URLSession
+  /// coalesces onto the in-flight connection, so this costs one throwaway GET
+  /// and never a second handshake.
+  ///
+  /// A throwaway GET to the host
   public func warmUp() async {
     var request = URLRequest(url: baseURL)
     request.httpMethod = "GET"
@@ -127,7 +200,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     let start = clock.now
     _ = try? await transport.data(for: request)
     let elapsedMs = (clock.now - start).milliseconds
-    transcriberLog.info(
+    Self.log.info(
       "warm-up connect \(elapsedMs, format: .fixed(precision: 0), privacy: .public)ms")
   }
 
@@ -157,7 +230,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
       // Logged rather than trusted because the failure it guards against is silent —
       // the request would 400 and every dictation would error, so a line naming the
       // real cause is worth the one comparison per request it costs.
-      transcriberLog.error(
+      Self.log.error(
         """
         cleanup instruction is \(CleanupInstruction.text.utf8.count, privacy: .public) UTF-8 bytes, \
         over the \(CleanupInstruction.characterCap, privacy: .public) cap; \
@@ -175,52 +248,77 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     )
   }
 
-  /// Builds the `audio` (raw PCM) + `config` (JSON) multipart payload the
-  /// dictation API expects.
+  /// The `audio` part's framing — everything before the PCM bytes themselves,
+  /// written once when the request opens so the frames that follow are just
+  /// audio.
   ///
-  /// Internal, not private, so tests can assert the framing against the bytes.
-  /// `FakeHTTPTransport` can't: `URLProtocol`-style mocks don't reliably observe
-  /// the body of an `upload(from:)`, which left the wire format — boundaries, part
-  /// headers, the `audio.pcm` filename, CRLF placement — checked by nothing.
-  func multipartBody(pcm: Data, config: Data, boundary: String) -> Data {
-    var body = Data()
-    // Reserve up front (payload + a generous allowance for the boundary/header
-    // framing) so appending the multi-MB PCM blob never grows the buffer through
-    // reallocation copies.
-    body.reserveCapacity(pcm.count + config.count + 512)
-    func append(_ string: String) { body.append(Data(string.utf8)) }
+  /// Internal, not private, so tests can assert the wire format against the
+  /// bytes. `FakeHTTPTransport` can observe the streamed body directly now
+  /// (it collects the `AsyncThrowingStream`), but these two halves are still
+  /// where the framing — boundaries, part headers, the `audio.pcm` filename,
+  /// CRLF placement — is stated once.
+  static func audioPartHeader(boundary: String) -> Data {
+    framed(
+      "--\(boundary)\r\n",
+      "Content-Disposition: form-data; name=\"audio\"; filename=\"audio.pcm\"\r\n",
+      "Content-Type: audio/pcm\r\n\r\n")
+  }
 
-    append("--\(boundary)\r\n")
-    append("Content-Disposition: form-data; name=\"audio\"; filename=\"audio.pcm\"\r\n")
-    append("Content-Type: audio/pcm\r\n\r\n")
-    body.append(pcm)
-    append("\r\n")
+  /// UTF-8 encodes the multipart framing. One definition for both halves of the
+  /// body — the CRLF placement and part headers are what the file's comments
+  /// call the contract, so they are stated once rather than once per half.
+  private static func framed(_ parts: String...) -> Data {
+    Data(parts.joined().utf8)
+  }
 
-    append("--\(boundary)\r\n")
-    append("Content-Disposition: form-data; name=\"config\"\r\n")
-    append("Content-Type: application/json\r\n\r\n")
-    body.append(config)
-    append("\r\n")
-
-    append("--\(boundary)--\r\n")
-    return body
+  /// Everything after the last audio frame: the `audio` part's terminating
+  /// CRLF, the whole `config` part, and the closing boundary. Written when the
+  /// recording ends — see `streamedBody` for why `config` is last.
+  static func configTail(config: Data, boundary: String) -> Data {
+    var tail = framed(
+      "\r\n",
+      "--\(boundary)\r\n",
+      "Content-Disposition: form-data; name=\"config\"\r\n",
+      "Content-Type: application/json\r\n\r\n")
+    tail.append(config)
+    tail.append(framed("\r\n", "--\(boundary)--\r\n"))
+    return tail
   }
 
   // MARK: - Networking helpers
 
-  private func send(_ request: URLRequest, body: Data, audioDurationMs: Int) async throws -> Data {
+  private func send(
+    _ request: URLRequest, streaming body: AsyncThrowingStream<Data, any Error>,
+    sampleRate: Int, progress: UploadProgress
+  ) async throws -> Data {
     // Per-task delegate (not a session delegate) so this rides along on whatever
     // transport was injected — `URLSession.shared` in production, a fake in
-    // tests — without reconfiguring it. `MetricsLogger` logs the connect-vs-
-    // inference split; the wall-clock line below is the always-available total.
-    let metrics = MetricsLogger(audioDurationMs: audioDurationMs)
+    // tests — without reconfiguring it. `DictationUploadDelegate` logs the connect-vs-
+    // inference split and refuses a body replay; the lines below are the
+    // always-available totals.
+    // Not optional instrumentation: this delegate also refuses `URLSession`'s
+    // request to replay the body, which is what stands between an internal retry
+    // and a blank transcript. Dropping it would drop that guarantee silently.
+    let metrics = DictationUploadDelegate()
     let clock = ContinuousClock()
     let start = clock.now
-    let (data, response) = try await transport.upload(for: request, from: body, delegate: metrics)
-    let wallMs = (clock.now - start).milliseconds
-    transcriberLog.info(
-      "dictation round-trip audioMs=\(audioDurationMs, privacy: .public) wallMs=\(wallMs, format: .fixed(precision: 0), privacy: .public)"
-    )
+    let (data, response) = try await transport.upload(
+      for: request, streaming: body, delegate: metrics)
+    let finished = clock.now
+    let audioMs = SyncSTTLimits.durationMs(ofPCMBytes: progress.audioBytes, rate: sampleRate)
+    // `wallMs` now spans the recording too, because the request opens at press
+    // — so on its own it says nothing about how long the user waited.
+    // `postSpeechMs` is that number: last audio frame handed to the upload
+    // until the transcript landed. It is the one to compare against the old
+    // buffered round trip, and against the service's own `post_speech_ms`.
+    let wallMs = (finished - start).milliseconds
+    let postSpeechMs = progress.lastFrameAt.map { (finished - $0).milliseconds }
+    Self.log.info(
+      """
+      dictation round-trip audioMs=\(audioMs, privacy: .public) \
+      postSpeechMs=\(postSpeechMs ?? -1, format: .fixed(precision: 0), privacy: .public) \
+      wallMs=\(wallMs, format: .fixed(precision: 0), privacy: .public)
+      """)
     guard let http = response as? HTTPURLResponse else { return data }
     guard (200..<300).contains(http.statusCode) else {
       throw AssemblyAIError.http(status: http.statusCode, message: Self.errorMessage(from: data))
@@ -248,41 +346,10 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 
   // The request/response types this encodes and decodes — `DictationConfig`,
   // `LLMRewrite`, `DictationResponse`, `ErrorResponse` — live in
-  // `DictationWireTypes.swift`, split out to stay within the lint file-length
-  // budget. They are the JSON contract; everything here is the transport.
-}
-
-/// Per-request `URLSessionTaskDelegate` that logs the dictation round-trip's latency
-/// breakdown from `URLSessionTaskMetrics`: how much was connection setup
-/// (DNS/TCP/TLS — warmable by pre-connecting at record-start) versus server
-/// inference (`ttfbMs` ≈ requestStart→responseStart). `reused=true` means the
-/// pooled connection was hot, so setup was ~free. Best-effort: any timestamp the
-/// transport doesn't report is logged as `n/a`. Holds only immutable state, so
-/// `@unchecked Sendable` is sound for the delegate-queue callback.
-private final class MetricsLogger: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
-  private let audioDurationMs: Int
-  init(audioDurationMs: Int) { self.audioDurationMs = audioDurationMs }
-
-  func urlSession(
-    _ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics
-  ) {
-    guard let transaction = metrics.transactionMetrics.last else { return }
-    func ms(_ from: Date?, _ to: Date?) -> String {
-      guard let from, let to else { return "n/a" }
-      return String(format: "%.0f", to.timeIntervalSince(from) * 1000)
-    }
-    transcriberLog.info(
-      """
-      dictation metrics audioMs=\(self.audioDurationMs, privacy: .public) \
-      reused=\(transaction.isReusedConnection, privacy: .public) \
-      dnsMs=\(ms(transaction.domainLookupStartDate, transaction.domainLookupEndDate), privacy: .public) \
-      connectMs=\(ms(transaction.connectStartDate, transaction.connectEndDate), privacy: .public) \
-      tlsMs=\(ms(transaction.secureConnectionStartDate, transaction.secureConnectionEndDate), privacy: .public) \
-      ttfbMs=\(ms(transaction.requestStartDate, transaction.responseStartDate), privacy: .public) \
-      totalMs=\(ms(transaction.fetchStartDate, transaction.responseEndDate), privacy: .public)
-      """
-    )
-  }
+  // `DictationWireTypes.swift`, and the upload's instrumentation —
+  // `UploadProgress`, `DictationUploadDelegate` — in `DictationUploadMetrics.swift`. Both
+  // split out to stay within the lint file-length budget. They are the JSON
+  // contract and the measurement; everything here is the transport.
 }
 
 // `Duration.milliseconds` — the latency-logging conversion this file's request

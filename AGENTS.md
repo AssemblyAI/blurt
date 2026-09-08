@@ -421,8 +421,12 @@ An actor implementing `MicCaptureProtocol`. It captures with an **`AVCaptureSess
 backends went with the second one; the owner-directed move from `AVAudioRecorder`, 2026-08-25): the
 session's audio data output converts to 16 kHz / mono / 16-bit
 LPCM — the exact geometry the dictation API wants — and the delegate accumulates the raw S16LE
-bytes in memory, so `stop()` returns the blob the dictation request uploads byte for byte, with no
-temp file, no read-back, and no resampling or float-conversion pass.
+bytes onto the feed `start()` returns, which is what the chunked upload drains while the user is
+still speaking — no temp file, no read-back, and no resampling or float-conversion pass. `stop()`
+answers a **byte count**, not the audio: the recording has already gone out by then, so all the
+release path needs is whether there was enough of it to send (`SyncSTTLimits.minPCMBytes`).
+Accumulating the blob as well cost a second `memcpy` of every byte inside the capture lock and
+retained a duplicate of the whole utterance until release.
 
 A **fresh recorder per session**, built around the _current_ resolution of the user's selection at
 press time; this is deliberate — see
@@ -602,8 +606,13 @@ apart, and the harness refuses to report an over-cap winner — see its README's
 2048-character cap".
 
 The finished text arrives in the response body — no `/v2/upload`, no job submission, no polling.
-Truly synchronous: `transcribe(pcm:sampleRate:context:)` is a single `async throws -> String`
-returning the whole polished text at once (no streaming, no deltas). The underlying sync STT model
+The **upload is chunked**: `transcribe(frames:sampleRate:context:)` is called at _press_ and
+streams the recording into one open request as the microphone produces it, so the transfer overlaps
+the speaking instead of following it. There is no buffered path — measured on a 1 Mbps uplink, a
+10 s dictation waits ~3.1 s after speech buffered versus ~0.5 s chunked, and on a fast link the two
+are within noise. The `config` part is written **last** (the dictation API parses the body only once
+complete), which is what lets the press-time context read still resolve at release. The _response_
+is unchanged and still arrives whole: a single `async throws -> String`, no deltas. The underlying sync STT model
 handles audio from ~80 ms up to 120 s (server-side ~30 s inference deadline); those limits live in
 `SyncSTTLimits` and back `DictationSession`'s auto-release timeout, so a held hotkey stops before
 the cap.

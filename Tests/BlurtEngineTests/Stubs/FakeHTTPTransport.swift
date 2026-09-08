@@ -11,6 +11,11 @@ import Synchronization
 final class FakeHTTPTransport: HTTPTransport, Sendable {
   private let responder: @Sendable (URLRequest) -> (Int, Data)
   private let transportError: (any Error & Sendable)?
+  /// Every chunk of the last streamed upload body, concatenated. The streamed
+  /// body is observable in a way the old `Data` one never was through a
+  /// `URLProtocol` mock, so the multipart framing the transcriber writes can be
+  /// asserted end to end rather than only through its builders.
+  private let uploaded = Mutex(Data())
 
   /// `responder` maps each request to an HTTP status and JSON body.
   init(_ responder: @escaping @Sendable (URLRequest) -> (Int, Data)) {
@@ -34,10 +39,20 @@ final class FakeHTTPTransport: HTTPTransport, Sendable {
   }
 
   func upload(
-    for request: URLRequest, from bodyData: Data, delegate: (any URLSessionTaskDelegate)?
+    for request: URLRequest, streaming body: AsyncThrowingStream<Data, any Error>,
+    delegate: (any URLSessionTaskDelegate)?
   ) async throws -> (Data, URLResponse) {
-    try respond(to: request)
+    // Drain the body before answering, the way a real upload does: the producer
+    // only writes the `config` part once the frames finish, so a fake that
+    // replied without reading would never exercise that half of the request.
+    for try await chunk in body {
+      uploaded.withLock { $0.append(chunk) }
+    }
+    return try respond(to: request)
   }
+
+  /// The bytes the client streamed as the request body.
+  var uploadedBody: Data { uploaded.withLock { $0 } }
 
   private func respond(to request: URLRequest) throws -> (Data, URLResponse) {
     if let transportError { throw transportError }

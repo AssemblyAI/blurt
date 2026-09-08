@@ -18,14 +18,17 @@ actor GatedStopMic: MicCaptureProtocol {
     self.stopError = stopError
   }
 
-  func start() async throws { startCalls += 1 }
+  func start() async throws -> AsyncStream<Data> {
+    startCalls += 1
+    return .oneShot(StubPCM.aboveMinimum)
+  }
 
-  func stop() async throws -> Data {
+  func stop() async throws -> Int {
     stopCalls += 1
     await gate.enter()
     if let stopError { throw stopError }
     // These suites exercise stop races, not the too-short-audio guard.
-    return StubPCM.aboveMinimum
+    return StubPCM.aboveMinimum.count
   }
 
   func waitUntilStopEntered() async { await gate.waitUntilEntered() }

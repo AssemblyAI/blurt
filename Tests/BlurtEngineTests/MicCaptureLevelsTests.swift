@@ -32,7 +32,8 @@ struct MicCaptureLevelsTests {
       return collected
     }
 
-    try await mic.start()
+    // The meter is what this asserts, not the frame feed.
+    _ = try await mic.start()
     try await Task.sleep(for: .milliseconds(500))
     _ = try await mic.stop()
     collector.cancel()

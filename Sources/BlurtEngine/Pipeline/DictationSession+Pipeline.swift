@@ -1,9 +1,32 @@
 import Foundation
 import os
 
-// The post-release pipeline — transcribe → inject, plus the bounded wait on
-// the press-time context read — split from `DictationSession.swift` to stay
-// within the lint file-length budget, like `+Commands` and `+Observation`.
+// The post-release pipeline — transcribe → inject, plus the bounded wait on the
+// press-time context read — split from `DictationSession.swift` to stay within
+// the lint file-length budget, like `+Commands` and `+Observation`.
+//
+// It also owns the *whole* upload lifecycle, including `startUpload(frames:)`,
+// which `performPress` calls: the request spans press to release, and keeping it
+// beside `awaitUpload` and `resolveCapturedContext` — the two things that finish
+// it — beats splitting one lifecycle across the press/release line to match the
+// file names.
+/// Failures the release pipeline itself raises, as opposed to the transport's
+/// (`ChunkedUploadError`) or the service's (`AssemblyAIError`). Declared here
+/// because this is where it is raised: filed under the transport's body-stream
+/// errors it read as one, and a transport test reached for it as a stand-in.
+enum DictationPipelineError: Error, LocalizedError {
+  /// A release reached the transcript step with no request in flight — the
+  /// recording was never uploaded.
+  case uploadNeverStarted
+
+  var errorDescription: String? {
+    switch self {
+    case .uploadNeverStarted:
+      return "The recording wasn't uploaded."
+    }
+  }
+}
+
 extension DictationSession {
   /// The longest `runTranscribeInject` waits for the press-time AX
   /// field-context read before transcribing without it. In the common case the
@@ -15,47 +38,21 @@ extension DictationSession {
   /// (slightly less primed) beats the wait.
   static let contextWaitBudget: Duration = .milliseconds(500)
 
-  func runTranscribeInject(pcm: Data) async {
+  /// Takes no audio: the recording was uploaded as it was captured, so the
+  /// recorded blob's only remaining job — the too-short-clip check — belongs to
+  /// `performRelease`, which can abandon the request without racing it.
+  func runTranscribeInject() async {
     // Times the full post-release hot path — dictation round trip plus the paste
-    // (including the clipboard settle) — across every exit (short-clip no-op,
-    // empty transcript, failure, cancel, or a completed paste).
+    // (including the clipboard settle) — across every exit (empty transcript,
+    // failure, cancel, or a completed paste).
     let pipelineInterval = Self.signposter.beginInterval(Self.pipelineSignpostName)
     defer { Self.signposter.endInterval(Self.pipelineSignpostName, pipelineInterval) }
-    // A clip too short for the STT model (an accidental brief tap) would only
-    // earn a 400 — drop it as a silent no-op, like an empty transcript, rather
-    // than calling the API and surfacing an error.
-    guard pcm.count >= SyncSTTLimits.minPCMBytes else {
-      // A cancel() racing the freshly spawned pipeline task already claimed the
-      // phase — don't overwrite .cancelled with .idle.
-      if !Task.isCancelled { setPhase(.idle) }
-      return
-    }
-
-    // Resolve the press-time AX field read now that it's actually needed —
-    // waiting at most `contextWaitBudget` (see its doc), so a hung read costs
-    // the transcript its priming, not multiple seconds of stall.
-    // Take the stream out of the actor's state in the SAME turn it's read, before
-    // the suspension below. Reading it and clearing it across an `await` let a
-    // cancelled pipeline clear a *newer* press's stream: `cancel()` detaches this
-    // task while it's parked in `firstValue`, a fresh `press()` installs its own
-    // `contextStream`, and this task's resumption then nils that one out — so
-    // dictation #2 transcribes with `context: nil`, losing its whole
-    // `conversation_context` — the recent-dictation turns *and* the prior chunk —
-    // along with the key terms. The window is microseconds, but the invariant is
-    // now local instead of depending on scheduling.
-    let stream = contextStream
-    contextStream = nil
-    if let stream {
-      capturedContext = await Self.firstValue(
-        of: stream, within: Self.contextWaitBudget, clock: clock)
-    } else {
-      capturedContext = nil
-    }
-
-    // The dictation API runs the cleanup rewrite server-side, so the text it
-    // returns is already the final, polished text — there is no client-side
-    // styling pass.
-    guard let text = await transcribe(pcm: pcm) else { return }
+    // Resolve the press-time AX field read and hand it to the request, which
+    // has been holding its `config` part since `mic.stop()` ended the frame
+    // feed. Done here, before the wait, so `capturedContext` is set for the
+    // paste separator and the log whether or not the request gets that far.
+    await resolveCapturedContext()
+    guard let text = await awaitUpload() else { return }
 
     // A cancel() that landed while transcribe was in flight already set
     // .cancelled and detached this task — don't inject or touch the phase.
@@ -110,12 +107,71 @@ extension DictationSession {
     }
   }
 
-  /// Runs the single dictation request. Returns the transcript, or nil if it
-  /// failed (phase set to `.failed`).
-  private func transcribe(pcm: Data) async -> String? {
+  /// Opens the dictation request at press and streams `frames` into it.
+  ///
+  /// Unstructured on purpose: the request has to outlive `performPress`'s turn
+  /// and stay reachable from a later `release()` or `cancel()`, which is what
+  /// `uploadTask` is for. Nothing awaits it here — the whole point is that the
+  /// upload runs while the user talks.
+  ///
+  /// The feed arrives as an argument rather than being fetched here, so it
+  /// belongs to the capture `mic.start()` just brought up; see
+  /// `MicCaptureProtocol.start()` for the race that shape rules out.
+  ///
+  /// The context travels the same direction: this installs the channel the
+  /// request's `config` part waits on, and `resolveCapturedContext` pushes the
+  /// value at release. So the request is one-way throughout — audio, then
+  /// context — and needs no reference back to this actor.
+  func startUpload(frames: AsyncStream<Data>) {
+    let (context, contextFeed) = AsyncStream.makeStream(
+      of: TranscriptionContext?.self, bufferingPolicy: .bufferingNewest(1))
+
+    // Lifted out of the actor so the task body captures a Sendable value rather
+    // than isolated state, the same move `performPress` makes for it.
+    // `SyncSTTLimits.sampleRate` needs no such hoist — it is a static on an enum.
+    let transcriber = transcriber
+    upload = InFlightUpload(
+      task: Task {
+        try await transcriber.transcribe(
+          frames: frames, sampleRate: SyncSTTLimits.sampleRate, context: context)
+      },
+      contextFeed: contextFeed)
+  }
+
+  /// Waits for the request opened at press. Returns the transcript, or nil if
+  /// it failed (phase set to `.failed`).
+  private func awaitUpload() async -> String? {
+    guard let inFlight = upload else {
+      // Reached when a cancel cleared the handle while this task was suspended
+      // in the context wait — `setPhase` abandons the upload on any terminal
+      // phase, and that wait can hold for `contextWaitBudget` against an
+      // unresponsive app. The cancel already claimed the phase, so leave it
+      // alone: repainting it `.failed` flashes the pill red and writes a
+      // developer-mode error entry for a dictation the user dismissed, the same
+      // rule every other exit in this file follows.
+      //
+      // Without a cancel this is unreachable — `performRelease` only runs from
+      // `.recording`, claimed after `startUpload()` — but a failure that
+      // describes "the user spoke and nothing was uploaded" is invisible
+      // otherwise, so it is surfaced rather than silently idled.
+      if !Task.isCancelled {
+        setPhase(.failed(.sttFailed(underlying: DictationPipelineError.uploadNeverStarted)))
+      }
+      return nil
+    }
+    // Keep the handle live across the await. `cancel()` reaches the request
+    // only through it, and awaiting a `Task`'s value is *not* cancellation-aware
+    // — cancelling the pipeline abandons the wait while the request runs on to
+    // completion and transcribes a dictation the user already dismissed.
+    //
+    // Cleared only while it is still *ours*: a later press installs its own
+    // upload, and clearing that one would strand a live request nothing can
+    // cancel — the same trap `resolveCapturedContext` documents for
+    // `contextStream`, reached here because this runs in a detached task that
+    // can outlive the press that started it.
+    defer { if upload?.task == inFlight.task { upload = nil } }
     do {
-      return try await transcriber.transcribe(
-        pcm: pcm, sampleRate: SyncSTTLimits.sampleRate, context: capturedContext)
+      return try await inFlight.task.value
     } catch {
       // A cancel() that landed mid-request already tore this task down and set
       // .cancelled; the transport then surfaces a cancellation-shaped error
@@ -131,6 +187,36 @@ extension DictationSession {
       }
       return nil
     }
+  }
+
+  /// Consumes the press-time AX field read, bounded by `contextWaitBudget`,
+  /// records it as `capturedContext` for the paste's separator decision and the
+  /// log, and sends it to the request's `config` part.
+  ///
+  /// Called from the release path, so the context is decided at release exactly
+  /// as it was when the request was built there.
+  ///
+  /// Take the stream out of the actor's state in the SAME turn it's read, before
+  /// the suspension below. Reading it and clearing it across an `await` let a
+  /// cancelled pipeline clear a *newer* press's stream: `cancel()` detaches this
+  /// task while it's parked in `firstValue`, a fresh `press()` installs its own
+  /// `contextStream`, and this task's resumption then nils that one out — so
+  /// dictation #2 transcribes with `context: nil`, losing its whole
+  /// `conversation_context` — the recent-dictation turns *and* the prior chunk —
+  /// along with the key terms. The window is microseconds, but the invariant is
+  /// now local instead of depending on scheduling.
+  func resolveCapturedContext() async {
+    let stream = contextStream
+    contextStream = nil
+    if let stream {
+      capturedContext = await Self.firstValue(
+        of: stream, within: Self.contextWaitBudget, clock: clock)
+    } else {
+      capturedContext = nil
+    }
+    // Hand it to the request, which has been holding its config part for it
+    // since the last frame. `send` closes the channel as part of sending.
+    upload?.send(capturedContext)
   }
 
   private func inject(_ text: String) async {

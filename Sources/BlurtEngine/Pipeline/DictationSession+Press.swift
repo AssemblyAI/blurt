@@ -32,10 +32,14 @@ extension DictationSession {
     // keeps meaning exactly what it says.
     setPhase(.connecting)
     do {
-      // Pre-open the dictation connection while the user speaks, so the first dictation after an idle
-      // gap doesn't pay DNS+TCP+TLS on the transcribe hot path (~170 ms cold, measured). Detached
-      // + fire-and-forget: it must never delay recording, and a failure is harmless (the request
-      // just pays setup as before); warming every press is cheap since a hot pool just reuses it.
+      // Pre-open the dictation connection so the request `startUpload` opens
+      // below is streaming from its first frame rather than spending ~170 ms on
+      // DNS+TCP+TLS (cold, measured). Not about the release path any more — the
+      // request opens at press, so setup overlaps the recording regardless; see
+      // `AssemblyAITranscriber.warmUp()` for what it still buys and for the
+      // measurement showing it coalesces with, rather than races, that request.
+      // Detached + fire-and-forget: it must never delay recording, and a failure
+      // is harmless.
       let transcriber = transcriber
       Task.detached { await transcriber.warmUp() }
       // The mic bring-up runs as a child task so the whole context-capture chain
@@ -51,7 +55,7 @@ extension DictationSession {
       // `async let`, so a cancel still reaches it: the child inherits this task's
       // cancellation, which is what `cancel()`'s `.connecting` branch relies on
       // to preempt the wait.
-      async let started: Void = mic.start()
+      async let started = mic.start()
       await beginContextCapture()
       // Only now join the bring-up. Everything above ran while the mic was
       // coming up; the phase still flips to `.recording` only once `start()`
@@ -59,7 +63,7 @@ extension DictationSession {
       // starting the context work first is that a press whose mic fails has
       // already set the injector's target and dispatched one AX read — both
       // harmless and overwritten by the next press.
-      try await started
+      let frames = try await started
       // A cancel that arrived during the bring-up, on the path where `start()`
       // still returned normally — the cancel landed in the window between the
       // liveness wait finishing and `.recording` being claimed, so there was
@@ -80,7 +84,15 @@ extension DictationSession {
         return
       }
       setPhase(.recording)
+      // Ended here, before the upload is opened: this interval is documented as
+      // timing the startup path "up to the moment recording actually begins",
+      // and press-latency traces are compared across releases against it.
       Self.signposter.endInterval(Self.pressSignpostName, pressInterval)
+      // Open the dictation request and start streaming the recording into it.
+      // This is the whole point of the chunked upload: the transfer overlaps the
+      // speaking instead of following it, so what the user waits out at release
+      // is inference on the last frames rather than the upload of all of them.
+      startUpload(frames: frames)
       let timeout = maxRecordingSeconds
       let clock = clock
       autoReleaseTask = Task { [weak self] in

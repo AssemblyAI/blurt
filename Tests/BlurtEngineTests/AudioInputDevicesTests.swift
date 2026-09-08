@@ -131,9 +131,10 @@ struct AudioInputDevicesTests {
         recorder.meteredPowerDB() > MicLiveness.silenceFloorDB
       }, "a live mic must out-read the silence floor")
 
-    let pcm = recorder.stopAndReadPCM()
-    #expect(!pcm.isEmpty, "half a second of capture should deliver samples")
-    #expect(pcm.count % SyncSTTLimits.bytesPerSample == 0, "the blob must be whole S16LE samples")
+    let byteCount = recorder.stopAndReadByteCount()
+    #expect(byteCount > 0, "half a second of capture should deliver samples")
+    #expect(
+      byteCount % SyncSTTLimits.bytesPerSample == 0, "the capture must be whole S16LE samples")
   }
 
   /// Polls `condition` on a short tick until it holds or `timeout` elapses,

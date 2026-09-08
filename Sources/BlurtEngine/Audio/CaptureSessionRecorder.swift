@@ -8,9 +8,10 @@ import Synchronization
 /// a session built fresh per capture around a single audio device — the device
 /// pinned in Settings when one is set, the system default otherwise — whose data
 /// output converts to the dictation API's 16 kHz mono 16-bit LPCM on the fly and
-/// delivers it here as sample buffers, accumulated in memory as the raw S16LE
-/// blob `stopAndReadPCM` returns. No temp file, no resample pass, no decode on
-/// the release path.
+/// delivers it here as sample buffers, published straight onto `frames` for the
+/// upload to drain and tallied by byte count. No temp file, no resample pass, no
+/// decode on the release path — and no second copy of the utterance held in
+/// memory, because the bytes leave as they arrive.
 ///
 /// Used directly by `MicCapture` rather than through a protocol. There *was* a
 /// `CaptureRecorder` seam, and its whole job was to let the actor's machinery —
@@ -44,14 +45,41 @@ import Synchronization
 /// delegate queue also touches lives behind the `Mutex`.
 final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   private struct Guarded {
-    /// Every byte the delegate has delivered, in arrival order — already the
-    /// raw S16LE blob `stopAndReadPCM` returns.
-    var captured = Data()
+    /// How many bytes the delegate has delivered. A count, not the bytes: the
+    /// recording goes out on `frames` as it is captured, so nothing downstream
+    /// reads the audio back — the release path only needs to know whether there
+    /// was enough of it to send (`SyncSTTLimits.minPCMBytes`). Accumulating the
+    /// blob as well cost a second `memcpy` of every byte inside this lock, plus
+    /// `Data`'s geometric reallocation, and retained a duplicate of the whole
+    /// utterance (~3.7 MB at the recording cap) until release.
+    var capturedBytes = 0
     /// Frames delivered so far, summed off each sample buffer's own count.
     /// Frames of digital silence count exactly like real audio; the liveness
     /// gate's power term is what tells those apart.
     var frameCount = 0
   }
+
+  /// The live feed of captured audio, in arrival order — handed out as it lands
+  /// so the dictation request can upload it while the user is still speaking.
+  /// Nothing is kept behind it; `Guarded.capturedBytes` only counts what went
+  /// past.
+  ///
+  /// One stream per recorder, which is exactly one per capture: the recorder is
+  /// built fresh for every press (see the type's own note on why), so a stream
+  /// can never carry two utterances' audio and there is nothing to reset
+  /// between presses. It exists from `init`, before `record()` opens the
+  /// device, so no frame can be delivered before there is somewhere to put it —
+  /// including the ones the liveness gate waits for.
+  ///
+  /// Unbounded, but a handoff rather than a buffer: the upload's body producer
+  /// drains it eagerly (it yields onward into an unbounded stream, and an
+  /// unbounded yield never suspends), so a slow uplink backs up *there*, not
+  /// here. And once the request ends the producer is cancelled, which terminates
+  /// this stream — later yields are dropped rather than accumulated. So no
+  /// backlog forms in this stage at all; check `streamedBody` for the one that
+  /// does.
+  let frames: AsyncStream<Data>
+  private let framesContinuation: AsyncStream<Data>.Continuation
 
   private let session = AVCaptureSession()
   private let output = AVCaptureAudioDataOutput()
@@ -106,6 +134,9 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// so `record()` answers false and `MicCapture.start()` surfaces the same
   /// `.audioCaptureFailed(noInputDevice)` it always has.
   private init(pinnedUID: String?) throws {
+    let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .unbounded)
+    frames = stream
+    framesContinuation = continuation
     super.init()
 
     session.beginConfiguration()
@@ -136,10 +167,13 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
 
   deinit {
     // Backstop for a recorder dropped without a stop, so an orphaned instance
-    // can't keep the microphone engaged for the rest of the process.
+    // can't keep the microphone engaged for the rest of the process — and so a
+    // consumer awaiting `frames` can't be left hanging on a stream nothing will
+    // ever feed again.
     if session.isRunning {
       session.stopRunning()
     }
+    framesContinuation.finish()
   }
 
   /// The device the session records from: the pinned device when its UID still
@@ -251,12 +285,12 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
     return channels.reduce(-Float.infinity) { max($0, $1.averagePowerLevel) }
   }
 
-  /// End capture and hand back everything recorded as raw S16LE PCM at the
-  /// dictation API's rate, releasing the device.
+  /// End capture and report how many bytes it produced, releasing the device.
+  /// The audio itself went out on `frames` as it arrived — see this type's
+  /// summary — so there is nothing here to hand back.
   ///
-  /// Non-throwing, unlike the seam this replaces: the bytes are already in
-  /// memory in the upload encoding, so there is no read-back, decode or temp
-  /// file left to fail at.
+  /// Non-throwing, unlike the seam this replaces: a tally cannot fail, and there
+  /// is no read-back, decode or temp file left to fail at either.
   ///
   /// Synchronous, unlike `make` and `record()`, on two grounds. `stopRunning()`
   /// measures 19–41 ms against the open's ~600 ms, which is not worth another
@@ -265,19 +299,72 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// whose `record()` has already resumed (an abandoned bring-up tears down only
   /// after the open returns). If a stop ever does need to overlap an open, it
   /// belongs on `controlQueue` too — that is what the queue is for.
-  func stopAndReadPCM() -> Data {
+  /// Finishing `frames` here is what closes the upload's multipart body: the
+  /// transcriber writes the `config` part and the closing boundary as soon as
+  /// the stream ends, so "the recording stopped" and "the request body is
+  /// complete" are the same event.
+  ///
+  /// Answers the byte count rather than the audio, because by here the audio has
+  /// already been uploaded — see `Guarded.capturedBytes`.
+  func stopAndReadByteCount() -> Int {
     session.stopRunning()
-    return state.withLock { $0.captured }
+    // Finish and count under one lock, so the feed and the count cut off at the
+    // same chunk. A delegate callback still waiting on the lock then lands after
+    // both — its bytes reach neither, which is consistent, and it is
+    // post-`stopRunning()` audio in the first place.
+    return state.withLock {
+      framesContinuation.finish()
+      return $0.capturedBytes
+    }
   }
 
   /// End capture and throw the audio away, releasing the device — the teardown
   /// behind a failed `record()`, an aborted bring-up, and a cancel.
+  ///
+  /// The same mechanism as `stopAndReadByteCount`, whose result it drops. It
+  /// used to differ by clearing the captured blob, which released megabytes;
+  /// with a byte count there is nothing to release, and zeroing the tallies
+  /// would be a dead store — the recorder is one per capture and every caller
+  /// drops it immediately. Kept as its own name because the call sites' intent
+  /// (there is nothing here worth keeping) is worth stating.
   func stopAndDiscard() {
-    session.stopRunning()
-    state.withLock {
-      $0.captured = Data()
-      $0.frameCount = 0
+    _ = stopAndReadByteCount()
+  }
+}
+
+extension CaptureSessionRecorder {
+  /// The block buffer's `length` bytes, copied exactly **once** — this runs on
+  /// the audio delivery queue, which this file goes to lengths elsewhere to keep
+  /// unblocked.
+  ///
+  /// Prefers the buffer's own pointer, which needs no destination allocation and
+  /// so no zero-fill. `Data(count:)` is documented to hand back *zeroed* bytes,
+  /// so the fallback below writes every byte twice — once by the allocator, once
+  /// by the copy — a wasted ~32 kB/s memset for the length of the recording.
+  /// `CMBlockBufferGetDataPointer` reports how much is contiguous at the offset,
+  /// and anything short of the whole length means the buffer is segmented (which
+  /// LPCM from this output is not, in practice) and the copying path has to run
+  /// rather than be assumed away. Nil when neither read succeeds.
+  fileprivate static func copyBytes(from blockBuffer: CMBlockBuffer, length: Int) -> Data? {
+    var contiguousLength = 0
+    var totalLength = 0
+    var pointer: UnsafeMutablePointer<Int8>?
+    let located = CMBlockBufferGetDataPointer(
+      blockBuffer, atOffset: 0, lengthAtOffsetOut: &contiguousLength,
+      totalLengthOut: &totalLength, dataPointerOut: &pointer)
+    if located == kCMBlockBufferNoErr, let pointer, contiguousLength >= length {
+      return Data(bytes: pointer, count: length)
     }
+    var copied = Data(count: length)
+    let status = copied.withUnsafeMutableBytes { raw -> OSStatus in
+      // Empty is excluded by the caller, so a nil base can't happen; answered as
+      // a plain non-noErr status rather than trapping, since dropping the buffer
+      // is this method's failure mode for every other copy problem too.
+      guard let base = raw.baseAddress else { return OSStatus(-1) }
+      return CMBlockBufferCopyDataBytes(
+        blockBuffer, atOffset: 0, dataLength: length, destination: base)
+    }
+    return status == kCMBlockBufferNoErr ? copied : nil
   }
 }
 
@@ -293,20 +380,21 @@ extension CaptureSessionRecorder: AVCaptureAudioDataOutputSampleBufferDelegate {
     guard let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else { return }
     let length = CMBlockBufferGetDataLength(blockBuffer)
     guard length > 0 else { return }
-    var chunk = Data(count: length)
-    let status = chunk.withUnsafeMutableBytes { raw -> OSStatus in
-      // Empty is excluded above, so a nil base can't happen; answered as a
-      // plain non-noErr status rather than trapping, since dropping the buffer
-      // is this method's failure mode for every other copy problem too.
-      guard let base = raw.baseAddress else { return OSStatus(-1) }
-      return CMBlockBufferCopyDataBytes(
-        blockBuffer, atOffset: 0, dataLength: length, destination: base)
-    }
-    guard status == kCMBlockBufferNoErr else { return }
-    let frames = CMSampleBufferGetNumSamples(sampleBuffer)
+    // A failed read drops the buffer whole rather than appending part of it: a
+    // tally and a feed that disagree are worse than a gap.
+    guard let chunk = Self.copyBytes(from: blockBuffer, length: length) else { return }
+    let frameCount = CMSampleBufferGetNumSamples(sampleBuffer)
     state.withLock {
-      $0.captured.append(chunk)
-      $0.frameCount += frames
+      $0.capturedBytes += chunk.count
+      $0.frameCount += frameCount
+      // Published *under* the lock, together with the tally, because the two
+      // have to agree: `stopAndReadByteCount` finishes the feed and reads the
+      // count under this same lock, so a chunk counted here but yielded after
+      // that would be measured without being uploaded — and the slice lost that
+      // way is exactly the tail the Bluetooth linger exists to preserve. Cheap
+      // enough to hold: an unbounded `yield` is a buffer append plus at most one
+      // continuation resumption, and it cannot re-enter this lock.
+      framesContinuation.yield(chunk)
     }
   }
 }
