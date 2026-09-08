@@ -80,6 +80,11 @@ extension DictationSession {
         return
       }
       setPhase(.recording)
+      // Open the dictation request and start streaming the recording into it.
+      // This is the whole point of the chunked upload: the transfer overlaps the
+      // speaking instead of following it, so what the user waits out at release
+      // is inference on the last frames rather than the upload of all of them.
+      startUpload()
       Self.signposter.endInterval(Self.pressSignpostName, pressInterval)
       let timeout = maxRecordingSeconds
       let clock = clock

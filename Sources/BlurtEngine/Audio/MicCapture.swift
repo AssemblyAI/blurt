@@ -212,6 +212,14 @@ public actor MicCapture: MicCaptureProtocol {
     startMeterTimer()
   }
 
+  /// The in-flight capture's live PCM feed, or an immediately finished stream
+  /// when nothing is recording — a press whose bring-up failed has no audio to
+  /// offer, and the upload it would have fed is never started.
+  public func frames() -> AsyncStream<Data> {
+    guard let activeRecorder else { return AsyncStream { $0.finish() } }
+    return activeRecorder.frames
+  }
+
   public func stop() async throws -> Data {
     let linger = activeTailLinger
     guard let recorder = detachActiveRecorder() else { return Data() }

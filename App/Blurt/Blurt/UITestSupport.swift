@@ -76,15 +76,32 @@
   nonisolated struct UITestMic: MicCaptureProtocol {
     func start() async throws {}
     func stop() async throws -> Data {
-      Data(count: SyncSTTLimits.minPCMBytes * 2)
+      Self.cannedPCM
     }
+    /// The same blob `stop()` reports, handed to the chunked upload as one
+    /// frame — so the streamed request carries what the release path counts.
+    func frames() async -> AsyncStream<Data> {
+      AsyncStream { continuation in
+        continuation.yield(Self.cannedPCM)
+        continuation.finish()
+      }
+    }
+    private static let cannedPCM = Data(count: SyncSTTLimits.minPCMBytes * 2)
   }
 
   /// Stub transcriber: returns the harness's canned transcript, so the "spoken"
   /// text is whatever the test set — no network, fully deterministic.
   nonisolated struct UITestTranscriber: TranscriberProtocol {
-    func transcribe(pcm: Data, sampleRate: Int, context: TranscriptionContext?) async throws -> String {
-      await MainActor.run { UITestState.shared.cannedTranscript }
+    func transcribe(
+      frames: AsyncStream<Data>, sampleRate: Int,
+      resolveContext: @escaping @Sendable () async -> TranscriptionContext?
+    ) async throws -> String {
+      // Drained, and the context resolved, in production order: the session
+      // hands over a live feed at press and the harness has to consume it for
+      // the release to complete.
+      for await _ in frames {}
+      _ = await resolveContext()
+      return await MainActor.run { UITestState.shared.cannedTranscript }
     }
   }
 
@@ -139,7 +156,8 @@
 
     // The update check only ever GETs; upload is never called.
     func upload(
-      for request: URLRequest, from bodyData: Data, delegate: (any URLSessionTaskDelegate)?
+      for request: URLRequest, streaming body: AsyncThrowingStream<Data, any Error>,
+      delegate: (any URLSessionTaskDelegate)?
     ) async throws -> (Data, URLResponse) {
       throw URLError(.unsupportedURL)
     }

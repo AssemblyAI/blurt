@@ -143,6 +143,14 @@ public actor DictationSession {
   /// propagates is honored by `runTranscribeInject` and `KeyInjector.insert`.
   var pipelineTask: Task<Void, Never>?  // internal: joined by awaitPipeline()
 
+  /// Handle to the in-flight dictation request, opened at press so the
+  /// recording uploads while the user speaks. Stored for the same reason
+  /// `pipelineTask` is: it is unstructured work that a cancel has to be able to
+  /// reach. Cancelling `pipelineTask` alone would only abandon the *wait* — the
+  /// request itself would keep streaming and complete against a dictation the
+  /// user already dismissed.
+  var uploadTask: Task<String, any Error>?
+
   /// The production entry point: the real focus capture and the real
   /// developer-mode log. Delegates to the seam-carrying initializer below, which
   /// can't be public because it names internal types.
@@ -280,7 +288,10 @@ public actor DictationSession {
     }
     // Honored again here, before any pipeline exists — deterministically no
     // transcription, no paste.
-    if cancelWonRelease() { return }
+    if cancelWonRelease() {
+      cancelUpload()
+      return
+    }
     pipelineTask = Task { [weak self] in
       await self?.runTranscribeInject(pcm: pcm)
     }
@@ -315,6 +326,10 @@ public actor DictationSession {
   /// recording to tear down.
   func stopAndCancel() async {
     cancelAutoRelease()
+    // Before the mic teardown, not after: `cancelCapture()` finishes the frame
+    // stream, and a still-live upload would read that as "the utterance ended",
+    // write its config part and transcribe audio the user just discarded.
+    cancelUpload()
     do {
       // `cancelCapture`, not `stop`: the audio is being thrown away, so
       // preserving it (the Bluetooth tail linger) is not worth delaying the
@@ -336,6 +351,14 @@ public actor DictationSession {
   private func cancelAutoRelease() {
     autoReleaseTask?.cancel()
     autoReleaseTask = nil
+  }
+
+  /// Abandons the in-flight dictation request — the streamed body can't be
+  /// completed meaningfully once the audio behind it is going away, so the
+  /// whole request goes rather than being left to finish on its own.
+  func cancelUpload() {
+    uploadTask?.cancel()
+    uploadTask = nil
   }
 
   // The post-release pipeline — `runTranscribeInject` and its transcribe/inject

@@ -53,6 +53,23 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
     var frameCount = 0
   }
 
+  /// The live feed of captured audio, in arrival order — the same bytes that
+  /// accumulate into `captured`, handed out as they land so the dictation
+  /// request can upload them while the user is still speaking.
+  ///
+  /// One stream per recorder, which is exactly one per capture: the recorder is
+  /// built fresh for every press (see the type's own note on why), so a stream
+  /// can never carry two utterances' audio and there is nothing to reset
+  /// between presses. It exists from `init`, before `record()` opens the
+  /// device, so no frame can be delivered before there is somewhere to put it —
+  /// including the ones the liveness gate waits for.
+  ///
+  /// Buffers without bound. The consumer drains it into the upload, so a
+  /// backlog only forms when the uplink is slower than realtime, and the
+  /// recording cap bounds it either way.
+  let frames: AsyncStream<Data>
+  private let framesContinuation: AsyncStream<Data>.Continuation
+
   private let session = AVCaptureSession()
   private let output = AVCaptureAudioDataOutput()
   /// The serial queue sample buffers are delivered on; only the delegate
@@ -106,6 +123,9 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// so `record()` answers false and `MicCapture.start()` surfaces the same
   /// `.audioCaptureFailed(noInputDevice)` it always has.
   private init(pinnedUID: String?) throws {
+    let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .unbounded)
+    frames = stream
+    framesContinuation = continuation
     super.init()
 
     session.beginConfiguration()
@@ -136,10 +156,13 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
 
   deinit {
     // Backstop for a recorder dropped without a stop, so an orphaned instance
-    // can't keep the microphone engaged for the rest of the process.
+    // can't keep the microphone engaged for the rest of the process — and so a
+    // consumer awaiting `frames` can't be left hanging on a stream nothing will
+    // ever feed again.
     if session.isRunning {
       session.stopRunning()
     }
+    framesContinuation.finish()
   }
 
   /// The device the session records from: the pinned device when its UID still
@@ -265,8 +288,13 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// whose `record()` has already resumed (an abandoned bring-up tears down only
   /// after the open returns). If a stop ever does need to overlap an open, it
   /// belongs on `controlQueue` too — that is what the queue is for.
+  /// Finishing `frames` here is what closes the upload's multipart body: the
+  /// transcriber writes the `config` part and the closing boundary as soon as
+  /// the stream ends, so "the recording stopped" and "the request body is
+  /// complete" are the same event.
   func stopAndReadPCM() -> Data {
     session.stopRunning()
+    framesContinuation.finish()
     return state.withLock { $0.captured }
   }
 
@@ -274,6 +302,7 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// behind a failed `record()`, an aborted bring-up, and a cancel.
   func stopAndDiscard() {
     session.stopRunning()
+    framesContinuation.finish()
     state.withLock {
       $0.captured = Data()
       $0.frameCount = 0
@@ -303,10 +332,15 @@ extension CaptureSessionRecorder: AVCaptureAudioDataOutputSampleBufferDelegate {
         blockBuffer, atOffset: 0, dataLength: length, destination: base)
     }
     guard status == kCMBlockBufferNoErr else { return }
-    let frames = CMSampleBufferGetNumSamples(sampleBuffer)
+    let frameCount = CMSampleBufferGetNumSamples(sampleBuffer)
     state.withLock {
       $0.captured.append(chunk)
-      $0.frameCount += frames
+      $0.frameCount += frameCount
     }
+    // Published after the lock is dropped, not inside it: the consumer is the
+    // upload's body producer, and holding the capture lock across a stream
+    // yield would put an unrelated task's scheduling in front of the next
+    // sample buffer. A yield to a finished stream (stop already ran) is a no-op.
+    framesContinuation.yield(chunk)
   }
 }

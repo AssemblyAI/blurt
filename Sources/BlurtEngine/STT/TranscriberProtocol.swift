@@ -1,15 +1,31 @@
 import Foundation
 
 public protocol TranscriberProtocol: Sendable {
-  /// Transcribe captured audio (raw S16LE mono PCM at `sampleRate` — the bytes
-  /// `MicCaptureProtocol.stop()` returns, uploaded as-is) into text.
-  /// The dictation API resolves an utterance to a single final transcript, so
-  /// this returns that transcript in one shot (no incremental deltas).
+  /// Transcribe an utterance that is **still being recorded**, uploading the
+  /// audio in chunks as the microphone produces it.
   ///
-  /// `context` carries per-utterance priming (focused app + text before the
-  /// cursor, the user's recent dictations) sent as the request's conversation
-  /// context; pass `nil` for none.
-  func transcribe(pcm: Data, sampleRate: Int, context: TranscriptionContext?) async throws -> String
+  /// Called at press, not release: the request opens immediately and `frames`
+  /// feeds it raw S16LE mono PCM at `sampleRate` (the bytes the capture
+  /// delivers, uploaded as-is). Finishing `frames` is what signals
+  /// end-of-audio, so the caller ends the stream when recording stops. There is
+  /// no buffered variant — a dictation client records in real time, and an
+  /// upload that waits for the last sample puts the whole transfer on the path
+  /// the user is sitting through. Measured: on a 1 Mbps uplink a 10 s dictation
+  /// waits ~3.1 s after speech for a buffered upload versus ~0.5 s chunked.
+  ///
+  /// `resolveContext` supplies the per-utterance priming (focused app + text
+  /// before the cursor, the user's recent dictations) and is called *after* the
+  /// last frame, because the `config` part is written last — so the context is
+  /// still decided at release, as it was when the whole request was built then.
+  /// Return nil for none.
+  ///
+  /// The dictation API resolves an utterance to a single final transcript, so
+  /// this still returns that transcript in one shot (no incremental deltas) —
+  /// chunking is about the upload, not the response.
+  func transcribe(
+    frames: AsyncStream<Data>, sampleRate: Int,
+    resolveContext: @escaping @Sendable () async -> TranscriptionContext?
+  ) async throws -> String
 
   /// Optionally pre-open the transcription connection so the next `transcribe`
   /// doesn't pay connection setup (DNS/TCP/TLS) on the latency-sensitive hot
