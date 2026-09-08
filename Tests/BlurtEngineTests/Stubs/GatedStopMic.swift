@@ -18,9 +18,10 @@ actor GatedStopMic: MicCaptureProtocol {
     self.stopError = stopError
   }
 
-  func start() async throws { startCalls += 1 }
-
-  func frames() async -> AsyncStream<Data> { .oneShot(StubPCM.aboveMinimum) }
+  func start() async throws -> AsyncStream<Data> {
+    startCalls += 1
+    return .oneShot(StubPCM.aboveMinimum)
+  }
 
   func stop() async throws -> Data {
     stopCalls += 1

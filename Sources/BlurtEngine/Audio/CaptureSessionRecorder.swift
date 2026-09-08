@@ -64,9 +64,11 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// device, so no frame can be delivered before there is somewhere to put it —
   /// including the ones the liveness gate waits for.
   ///
-  /// Buffers without bound. The consumer drains it into the upload, so a
-  /// backlog only forms when the uplink is slower than realtime, and the
-  /// recording cap bounds it either way.
+  /// Buffers without bound, which the recording cap
+  /// (`SyncSTTLimits.maxAudioSeconds`) is what ultimately bounds. A backlog
+  /// forms in two cases: the uplink is slower than realtime, or the request
+  /// ended early (an authorization failure mid-upload) and nothing is draining
+  /// this at all while capture continues to auto-release.
   let frames: AsyncStream<Data>
   private let framesContinuation: AsyncStream<Data>.Continuation
 

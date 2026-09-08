@@ -20,13 +20,10 @@ extension DictationSession {
   /// `performRelease`, which can abandon the request without racing it.
   func runTranscribeInject() async {
     // Times the full post-release hot path — dictation round trip plus the paste
-    // (including the clipboard settle) — across every exit (short-clip no-op,
-    // empty transcript, failure, cancel, or a completed paste).
+    // (including the clipboard settle) — across every exit (empty transcript,
+    // failure, cancel, or a completed paste).
     let pipelineInterval = Self.signposter.beginInterval(Self.pipelineSignpostName)
     defer { Self.signposter.endInterval(Self.pipelineSignpostName, pipelineInterval) }
-    // A clip too short for the STT model (an accidental brief tap) would only
-    // earn a 400 — drop it as a silent no-op, like an empty transcript, rather
-    // than calling the API and surfacing an error.
     // The transcript comes from the request opened at press, which has been
     // streaming this audio all along. `mic.stop()` (in `performRelease`) ended
     // the frame stream, which is what makes the transcriber write its `config`
@@ -88,24 +85,17 @@ extension DictationSession {
     }
   }
 
-  /// Opens the dictation request at press and streams the recording into it.
+  /// Opens the dictation request at press and streams `frames` into it.
   ///
-  /// The request itself is unstructured on purpose: it has to outlive
-  /// `performPress`'s turn and stay reachable from a later `release()` or
-  /// `cancel()`, which is what `uploadTask` is for. Nothing awaits the *request*
-  /// here — the whole point is that the upload runs while the user talks.
+  /// Unstructured on purpose: the request has to outlive `performPress`'s turn
+  /// and stay reachable from a later `release()` or `cancel()`, which is what
+  /// `uploadTask` is for. Nothing awaits it here — the whole point is that the
+  /// upload runs while the user talks.
   ///
-  /// The frame feed, though, is bound **before** that task is spawned, and this
-  /// is load-bearing. Resolved inside the task instead, it raced the release:
-  /// the command queue chains on the press turn completing, so `await` here is
-  /// safe, but a detached task hopping to the `MicCapture` actor is not ordered
-  /// against anything. Under load the release could stop the capture first, and
-  /// `frames()` would then hand back the finished empty stream it returns when
-  /// nothing is recording — uploading an utterance with no audio in it and
-  /// losing the user's speech to a 400. Binding it here pins the feed to the
-  /// recorder that is live at press.
-  func startUpload() async {
-    let frames = await mic.frames()
+  /// The feed arrives as an argument rather than being fetched here, so it
+  /// belongs to the capture `mic.start()` just brought up; see
+  /// `MicCaptureProtocol.start()` for the race that shape rules out.
+  func startUpload(frames: AsyncStream<Data>) {
     // Lifted out of the actor so the task body captures Sendable values rather
     // than isolated state, the same move `performPress` makes for `transcriber`.
     let transcriber = transcriber

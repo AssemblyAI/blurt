@@ -274,15 +274,15 @@ public actor DictationSession {
     // release arriving during the mic.stop() suspension now fails the
     // `.recording` guard above instead of running the pipeline twice.
     setPhase(.transcribing)
-    let pcm: Data
+    // The count, not the blob: the recording went out as it was captured, so all
+    // the release path still needs from `stop()` is how much of it there was.
+    let recordedBytes: Int
     do {
-      pcm = try await mic.stop()
+      recordedBytes = try await mic.stop().count
     } catch {
-      // Either way the recording is not going to arrive, so the request opened
-      // at press has to go with it — a conformer whose `stop()` throws without
-      // ending the frame feed would otherwise leave it streaming until the idle
-      // timeout, and the next press would overwrite the handle and orphan it.
-      cancelUpload()
+      // Both exits below set a terminal phase, and `setPhase` cancels the
+      // in-flight request there — so a conformer whose `stop()` throws without
+      // ending the feed can't leave it streaming until the idle timeout.
       // A cancel wins over surfacing the audio error — the user asked for
       // nothing to happen.
       if cancelWonRelease() { return }
@@ -293,22 +293,21 @@ public actor DictationSession {
     }
     // Honored again here, before any pipeline exists — deterministically no
     // transcription, no paste.
-    if cancelWonRelease() {
-      cancelUpload()
-      return
-    }
+    if cancelWonRelease() { return }
     // A clip too short for the STT model (an accidental brief tap) would only
     // earn a 400 — drop it as a silent no-op, like an empty transcript, rather
     // than letting the request finish.
     //
     // Checked *here* rather than in the pipeline task, and that is the whole
     // point: this turn runs from `mic.stop()` returning to the end with no
-    // suspension, so `cancelUpload()` lands before the body producer can take
-    // the actor to resolve its context. Deferred to the pipeline task it was a
-    // race the request usually won on a fast link — the config part went out and
-    // the utterance the guard means to drop was transcribed anyway.
-    guard pcm.count >= SyncSTTLimits.minPCMBytes else {
-      cancelUpload()
+    // suspension, so the abandonment `setPhase(.idle)` triggers lands before the
+    // body producer can take the actor to resolve its context. Deferred to the
+    // pipeline task it was a race the request usually won on a fast link — the
+    // config part went out and the utterance the guard means to drop was
+    // transcribed anyway. The no-suspension property is what makes this correct
+    // and nothing enforces it, so don't add an `await` between here and the
+    // `setPhase`.
+    guard recordedBytes >= SyncSTTLimits.minPCMBytes else {
       setPhase(.idle)
       return
     }

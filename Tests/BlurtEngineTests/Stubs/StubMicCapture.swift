@@ -12,10 +12,18 @@ actor StubMicCapture: MicCaptureProtocol {
 
   // Actor-isolated methods satisfy these `async` protocol requirements directly,
   // so no `nonisolated` + hop-back-onto-self dance is needed.
-  func start() async throws {
+  func start() async throws -> AsyncStream<Data> {
     startCalls += 1
-    stopped = false
     if let startError { throw startError }
+    // Publishes the "captured" bytes while recording is open and ends only at
+    // `stop()` / `cancelCapture()`, modelled on the real recorder. A stub that
+    // handed back an already-finished feed let the request complete during the
+    // press, so the ordering the config-part-last framing depends on — frames
+    // first, context resolved after — was never exercised by a session test.
+    let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .unbounded)
+    framesContinuation = continuation
+    if !pcmToReturn.isEmpty { continuation.yield(pcmToReturn) }
+    return stream
   }
   func stop() async throws -> Data {
     stopCalls += 1
@@ -27,33 +35,9 @@ actor StubMicCapture: MicCaptureProtocol {
     return pcmToReturn
   }
 
-  /// The live feed the chunked upload drains, modelled on the real recorder
-  /// rather than shortcut to a finished stream: the "captured" bytes are
-  /// published while recording is open, and the feed ends only at `stop()` /
-  /// `cancelCapture()`.
-  ///
-  /// That fidelity is the point. A stub that handed back an
-  /// already-finished stream let the request complete during the press, so the
-  /// ordering the config-part-last framing depends on — frames first, context
-  /// resolved after — was never exercised by any session test.
-  func frames() async -> AsyncStream<Data> {
-    // Asked after a stop, hand back a finished feed like `MicCapture` does
-    // rather than a live one nothing will ever end — a stream left open parks
-    // the upload forever, which surfaces as a pipeline that never reaches a
-    // terminal phase instead of as the ordering bug it actually is.
-    guard !stopped else { return .oneShot(Data()) }
-    let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .unbounded)
-    framesContinuation = continuation
-    if !pcmToReturn.isEmpty { continuation.yield(pcmToReturn) }
-    return stream
-  }
-
-  private var stopped = false
-
   private var framesContinuation: AsyncStream<Data>.Continuation?
 
   private func finishFrames() {
-    stopped = true
     framesContinuation?.finish()
     framesContinuation = nil
   }

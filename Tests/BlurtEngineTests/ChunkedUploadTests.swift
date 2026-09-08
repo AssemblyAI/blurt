@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 import Testing
 
 @testable import BlurtEngine
@@ -9,41 +8,34 @@ struct ChunkedUploadTests {
 
   @Test("the request opens at press and streams, rather than waiting for release")
   func requestOpensAtPress() async throws {
-    // The entire point of the change: if the request only opened at release,
-    // the upload would sit on the wait the user feels. `entered` flips as soon
-    // as the transcriber is called, which is observable *while* recording.
+    // The entire point of the change: if the request only opened at release, the
+    // upload would sit on the wait the user feels. Reaching `waitUntilEntered()`
+    // at all is the assertion — the transcriber was called while the session is
+    // still recording, and nothing has been released, stopped, or awaited.
     let probe = UploadProbe(transcript: "Hello world.")
-    let session = DictationSession(
-      mic: StubMicCapture(), transcriber: probe, injector: StubInjector(),
-      keyTermsProvider: { [] }, seams: .offline)
+    let session = makeUploadSession(probe)
 
     await session.press()
-    // Still recording — nothing has been released, stopped, or awaited.
     #expect(await session.phase == .recording)
     await probe.waitUntilEntered()
-    #expect(probe.enteredWhileRecording)
   }
 
   @Test("the frame feed ends at release, which is what completes the body")
   func framesEndAtRelease() async throws {
     let probe = UploadProbe(transcript: "Hello world.")
-    let session = DictationSession(
-      mic: StubMicCapture(), transcriber: probe, injector: StubInjector(),
-      keyTermsProvider: { [] }, seams: .offline)
+    let session = makeUploadSession(probe)
 
     await session.press()
     await probe.waitUntilEntered()
     // The producer is parked on the feed: the recording is still open, so the
-    // config part must not have been written yet.
+    // config part cannot have been written yet.
     #expect(probe.framesFinished == false)
 
     await session.release()
     await session.waitForIdle()
 
-    // Release ended the feed, and only then was the context resolved — the
-    // ordering the config-part-last framing depends on.
+    // Release ended the feed, which is what lets the request complete.
     #expect(probe.framesFinished)
-    #expect(probe.contextResolvedAfterFrames)
     #expect(await session.phase == .pasted)
   }
 
@@ -51,9 +43,7 @@ struct ChunkedUploadTests {
   func cancelWhileRecordingAbandonsUpload() async throws {
     let probe = UploadProbe(transcript: "Hello world.")
     let injector = StubInjector()
-    let session = DictationSession(
-      mic: StubMicCapture(), transcriber: probe, injector: injector,
-      keyTermsProvider: { [] }, seams: .offline)
+    let session = makeUploadSession(probe, injector: injector)
 
     await session.press()
     await probe.waitUntilEntered()
@@ -62,31 +52,7 @@ struct ChunkedUploadTests {
 
     #expect(await session.phase == .cancelled)
     // The request was cancelled, not completed: nothing was pasted, and the
-    // transcript the probe would have returned never arrived. Without
-    // `cancelUpload()` the streamed body would finish on its own and transcribe
-    // audio the user discarded.
-    #expect(await injector.inserted.isEmpty)
-    #expect(probe.completions == 0)
-  }
-
-  @Test("a too-short clip abandons the request instead of completing it")
-  func tooShortClipAbandonsUpload() async throws {
-    let mic = StubMicCapture()
-    // Below `minPCMBytes` — an accidental tap. The request is already open and
-    // carrying those bytes, so the guard has to cancel it rather than let it
-    // finish and earn a 400.
-    await mic.setPCM(Data(count: 8))
-    let probe = UploadProbe(transcript: "Hello world.")
-    let injector = StubInjector()
-    let session = DictationSession(
-      mic: mic, transcriber: probe, injector: injector,
-      keyTermsProvider: { [] }, seams: .offline)
-
-    await session.press()
-    await session.release()
-    await session.waitForIdle()
-
-    #expect(await session.phase == .idle)
+    // transcript the probe would have returned never arrived.
     #expect(await injector.inserted.isEmpty)
     #expect(probe.completions == 0)
   }
@@ -94,18 +60,16 @@ struct ChunkedUploadTests {
   @Test("a cancel during transcribing cancels the request, not just the wait")
   func cancelDuringTranscribingCancelsUpload() async throws {
     // The window after release and before the response: the feed has ended and
-    // the request is waiting on inference. Cancelling the pipeline only
-    // abandons the *wait* — awaiting a `Task`'s value is not cancellation-aware
-    // — so the request has to be cancelled by name or it runs to completion and
+    // the request is waiting on inference. Cancelling the pipeline only abandons
+    // the *wait* — awaiting a `Task`'s value is not cancellation-aware — so the
+    // request has to be cancelled by name or it runs to completion and
     // transcribes a dictation the user dismissed.
-    let probe = LateProbe(transcript: "Hello world.")
-    let session = DictationSession(
-      mic: StubMicCapture(), transcriber: probe, injector: StubInjector(),
-      keyTermsProvider: { [] }, seams: .offline)
+    let probe = UploadProbe(transcript: "Hello world.", holdsBeforeReturning: true)
+    let session = makeUploadSession(probe)
 
     await session.press()
     await session.release()
-    await probe.waitUntilAwaitingResponse()
+    await probe.waitUntilHolding()
     #expect(await session.phase == .transcribing)
 
     await session.cancel()
@@ -116,32 +80,120 @@ struct ChunkedUploadTests {
     #expect(probe.sawCancellation)
   }
 
+  @Test("a too-short clip abandons the request instead of completing it")
+  func tooShortClipAbandonsUpload() async throws {
+    let mic = StubMicCapture()
+    // Below `minPCMBytes` — an accidental tap. The request is already open and
+    // carrying those bytes, so the guard has to abandon it rather than let it
+    // finish and earn a 400.
+    await mic.setPCM(Data(count: 8))
+    let probe = UploadProbe(transcript: "Hello world.")
+    let injector = StubInjector()
+    let session = makeUploadSession(probe, mic: mic, injector: injector)
+
+    await session.press()
+    await session.release()
+    await session.waitForIdle()
+
+    #expect(await session.phase == .idle)
+    #expect(await injector.inserted.isEmpty)
+    #expect(probe.completions == 0)
+  }
+
+  // MARK: - The body pipe
+
   @Test("the body pipe delivers every chunk, in order")
   func pipeDeliversChunksInOrder() async throws {
     let body = try ChunkedRequestBody()
-    let chunks = [Data("first".utf8), Data("second".utf8), Data("third".utf8)]
-    let stream = AsyncThrowingStream<Data, any Error> { continuation in
-      for chunk in chunks { continuation.yield(chunk) }
-      continuation.finish()
-    }
+    let reader = readAll(from: body)
 
-    // The reader stands in for URLSession: it owns the input end and drains it
-    // until the writer closes, which is what marks the body complete.
-    let reader = Task.detached { () -> Data in
-      body.input.open()
-      defer { body.input.close() }
-      var received = Data()
-      var buffer = [UInt8](repeating: 0, count: 64)
-      while true {
-        let read = body.input.read(&buffer, maxLength: buffer.count)
-        if read <= 0 { break }
-        received.append(contentsOf: buffer[0..<read])
-      }
-      return received
-    }
-    try await body.drain(stream)
+    try await body.drain(.chunks(Data("first".utf8), Data("second".utf8), Data("third".utf8)))
 
     #expect(await reader.value == Data("firstsecondthird".utf8))
+  }
+
+  @Test("a producer failure surfaces rather than truncating the body silently")
+  func producerFailurePropagates() async throws {
+    let body = try ChunkedRequestBody()
+    let reader = readAll(from: body)
+
+    // Stands in for the `config` part failing to encode: the body can no longer
+    // be completed, and the server would only report a generic 400.
+    await #expect(throws: ChunkedUploadError.self) {
+      try await body.drain(
+        .chunks(Data("partial".utf8), failingWith: ChunkedUploadError.uploadNeverStarted))
+    }
+    _ = await reader.value
+  }
+
+  @Test("a reader that goes away fails the write instead of dropping audio")
+  func closedReaderFailsTheWrite() async throws {
+    let body = try ChunkedRequestBody()
+    // Stands in for the transport abandoning the body — an early 401, or a
+    // replay it asked for and was refused. The pipe can then stop accepting
+    // bytes without ever reporting itself writable, so this has to fail rather
+    // than poll forever or silently discard the rest of the recording.
+    body.input.open()
+    body.input.close()
+
+    await #expect(throws: (any Error).self) {
+      try await body.drain(.chunks(Data(count: 128 * 1024)))
+    }
+  }
+
+  @Test("cancelling the upload stops the writer instead of parking on a full pipe")
+  func cancellationUnblocksTheWriter() async throws {
+    let body = try ChunkedRequestBody()
+    // Nobody ever reads, so the pipe fills and the writer lands in its
+    // backpressure loop. Cancellation is what has to get it out — `send` relies
+    // on exactly this when the response arrives before the body is done.
+    let writer = Task { try await body.drain(.chunks(Data(count: 512 * 1024))) }
+    // Let it reach the loop before cancelling, so this exercises the wait rather
+    // than the pre-flight `checkCancellation`.
+    try await Task.sleep(for: .milliseconds(50))
+    writer.cancel()
+
+    await #expect(throws: CancellationError.self) { try await writer.value }
+  }
+
+  @Test("an early failure response outranks the torn-down pipe it causes")
+  func earlyResponseWinsOverTheWriterError() async throws {
+    // Authorization resolves concurrently with the upload, so a 401 can land
+    // while the body is still being written — and writing then fails, because
+    // the transport has torn the pipe down. The user has to see the status that
+    // explains the failure, not "the upload connection closed". The body here is
+    // far larger than the pipe, so the writer is certainly mid-write.
+    let (data, response) = try await ChunkedRequestBody.send(
+      URLRequest(url: URL(staticString: "https://example.invalid")),
+      body: .chunks(Data(count: 512 * 1024)),
+      delegate: nil
+    ) { request, _ in
+      let url = try #require(request.url)
+      let response = try #require(
+        HTTPURLResponse(url: url, statusCode: 401, httpVersion: nil, headerFields: nil))
+      return (Data(#"{"detail":"Invalid API key"}"#.utf8), response)
+    }
+
+    #expect((response as? HTTPURLResponse)?.statusCode == 401)
+    #expect(!data.isEmpty)
+  }
+
+  @Test("URLSession is refused a second copy of the body, never handed an empty one")
+  func replayIsRefused() async {
+    // One of the three no-fallback guarantees. URLSession asks for a fresh body
+    // stream whenever it has to send the request again — an auth challenge, a
+    // 307, a connection retry it handles internally. A recording that has
+    // already been streamed is gone, so the honest answer is nil, which fails
+    // the request. Handing back anything else would re-send the dictation with
+    // no audio in it and return a blank transcript.
+    let delegate = DictationUploadDelegate()
+    // Never resumed — the delegate ignores both arguments, so an idle task is
+    // enough to exercise the contract without touching the network.
+    let task = URLSession.shared.dataTask(with: URL(staticString: "https://example.invalid"))
+
+    let replacement = await delegate.urlSession(.shared, needNewBodyStreamForTask: task)
+
+    #expect(replacement == nil)
   }
 
   @Test("upload progress accounts the audio it has actually sent")
@@ -163,163 +215,92 @@ struct ChunkedUploadTests {
     #expect(progress.audioBytes == 4_800)
     #expect(progress.lastFrameAt ?? .now >= first ?? .now)
   }
+}
 
-  @Test("URLSession is refused a second copy of the body, never handed an empty one")
-  func replayIsRefused() async {
-    // One of the three no-fallback guarantees. URLSession asks for a fresh body
-    // stream whenever it has to send the request again — an auth challenge, a
-    // 307, a connection retry it handles internally. A recording that has
-    // already been streamed is gone, so the honest answer is nil, which fails
-    // the request. Handing back anything else would re-send the dictation with
-    // no audio in it and return a blank transcript.
-    let metrics = MetricsLogger(progress: UploadProgress())
-    // Never resumed — the delegate ignores both arguments, so an idle task is
-    // enough to exercise the contract without touching the network.
-    let task = URLSession.shared.dataTask(with: URL(staticString: "https://example.invalid"))
+// MARK: - Fixtures
 
-    let replacement = await metrics.urlSession(.shared, needNewBodyStreamForTask: task)
-
-    #expect(replacement == nil)
+extension ChunkedUploadTests {
+  /// A session wired to `probe`, with the doubles a chunked-upload test needs
+  /// and nothing else. `makeSession` hard-codes `StubTranscriber`, which cannot
+  /// report *when* it was called.
+  private func makeUploadSession(
+    _ probe: UploadProbe, mic: StubMicCapture = StubMicCapture(),
+    injector: StubInjector = StubInjector()
+  ) -> DictationSession {
+    DictationSession(
+      mic: mic, transcriber: probe, injector: injector,
+      keyTermsProvider: { [] }, seams: .offline)
   }
 
-  @Test("a reader that goes away fails the write instead of dropping audio")
-  func closedReaderFailsTheWrite() async throws {
-    let body = try ChunkedRequestBody()
-    // Stands in for URLSession abandoning the body — an early 401, or a replay
-    // it asked for and was refused. The pipe can then stop accepting bytes
-    // without ever reporting itself writable, so this has to fail rather than
-    // poll forever or silently discard the rest of the recording.
-    body.input.open()
-    body.input.close()
-    let chunk = Data(count: 128 * 1024)  // larger than the pipe's buffer
-
-    await #expect(throws: (any Error).self) {
-      try await body.drain(
-        AsyncThrowingStream { continuation in
-          continuation.yield(chunk)
-          continuation.finish()
-        })
-    }
-  }
-
-  @Test("cancelling the upload stops the writer instead of parking on a full pipe")
-  func cancellationUnblocksTheWriter() async throws {
-    let body = try ChunkedRequestBody()
-    // Nobody ever reads, so the pipe fills and the writer lands in its
-    // backpressure loop. Cancellation is what has to get it out — the transport
-    // relies on exactly this when the response arrives before the body is done.
-    let writer = Task {
-      try await body.drain(
-        AsyncThrowingStream { continuation in
-          continuation.yield(Data(count: 512 * 1024))
-          continuation.finish()
-        })
-    }
-    // Let it reach the loop before cancelling, so this exercises the wait rather
-    // than the pre-flight `checkCancellation`.
-    try await Task.sleep(for: .milliseconds(50))
-    writer.cancel()
-
-    await #expect(throws: CancellationError.self) { try await writer.value }
-  }
-
-  @Test("a producer failure surfaces rather than truncating the body silently")
-  func producerFailurePropagates() async throws {
-    let body = try ChunkedRequestBody()
-    let stream = AsyncThrowingStream<Data, any Error> { continuation in
-      continuation.yield(Data("partial".utf8))
-      // Stands in for the `config` part failing to encode: the body can no
-      // longer be completed, and the server would only report a generic 400.
-      continuation.finish(throwing: ChunkedUploadError.uploadNeverStarted)
-    }
-    let reader = Task.detached {
+  /// Stands in for the transport: owns the pipe's read end and drains it until
+  /// the writer closes, which is what marks the body complete.
+  private func readAll(from body: ChunkedRequestBody) -> Task<Data, Never> {
+    Task.detached {
       body.input.open()
       defer { body.input.close() }
+      var received = Data()
       var buffer = [UInt8](repeating: 0, count: 64)
-      while body.input.read(&buffer, maxLength: buffer.count) > 0 {}
+      while true {
+        let read = body.input.read(&buffer, maxLength: buffer.count)
+        if read <= 0 { break }
+        received.append(contentsOf: buffer[0..<read])
+      }
+      return received
     }
-
-    await #expect(throws: ChunkedUploadError.self) {
-      try await body.drain(stream)
-    }
-    await reader.value
   }
 }
 
-/// Transcriber double that parks *after* the feed ends — i.e. where a real
-/// request waits for inference — so a cancel can be landed while the session is
-/// `.transcribing` and the request is still open.
-private final class LateProbe: TranscriberProtocol, @unchecked Sendable {
-  private let transcript: String
-  private let awaiting = AsyncGate()
-  private let release = AsyncGate()
-  private let cancelled = Mutex(false)
-
-  init(transcript: String) { self.transcript = transcript }
-
-  func transcribe(
-    frames: AsyncStream<Data>, sampleRate: Int,
-    resolveContext: @escaping @Sendable () async -> TranscriptionContext?
-  ) async throws -> String {
-    for await _ in frames {}
-    _ = await resolveContext()
-    awaiting.open()
-    await release.wait()
-    // Read after the gate so the test controls when this is sampled. A real
-    // request would have been torn down by the cancellation itself.
-    cancelled.withLock { $0 = Task.isCancelled }
-    return transcript
-  }
-
-  func waitUntilAwaitingResponse() async { await awaiting.wait() }
-  func allowToFinish() { release.open() }
-  var sawCancellation: Bool { cancelled.withLock { $0 } }
-}
-
-/// Transcriber double that reports *when* it was called and in what order it
-/// consumed the feed — the two facts the chunked upload turns on and that a
+/// Transcriber double that reports *when* it was called and, optionally, parks
+/// after the feed ends — the two facts the chunked upload turns on and that a
 /// return-value-only stub cannot show.
-private final class UploadProbe: TranscriberProtocol, @unchecked Sendable {
-  private struct State {
-    var entered = false
-    var framesFinished = false
-    var contextResolvedAfterFrames = false
-    var completions = 0
-  }
-
+///
+/// One type rather than two: "parks on entry" and "parks after resolving" are
+/// the same double with the hold in a different place.
+private final class UploadProbe: TranscriberProtocol, Sendable {
   private let transcript: String
-  private let state = Mutex(State())
   /// Opened the moment `transcribe` is entered, so a test can wait for the
   /// request to be in flight without polling a phase that never changes. A bare
   /// `AsyncGate`, not `Gate`: the probe must *not* block on entry — it parks on
   /// the frame feed instead, which is where the production producer waits.
   private let entered = AsyncGate()
+  /// Where a real request waits for inference. Only armed when the test needs to
+  /// land something while the session is `.transcribing`.
+  private let holding: Gate?
+  private let framesDone = ValueBox(false)
+  private let cancelled = ValueBox(false)
+  private let completed = ValueBox(0)
 
-  init(transcript: String) { self.transcript = transcript }
+  init(transcript: String, holdsBeforeReturning: Bool = false) {
+    self.transcript = transcript
+    holding = holdsBeforeReturning ? Gate() : nil
+  }
 
   func transcribe(
     frames: AsyncStream<Data>, sampleRate: Int,
     resolveContext: @escaping @Sendable () async -> TranscriptionContext?
   ) async throws -> String {
-    state.withLock { $0.entered = true }
     entered.open()
-    // Parks here until the session ends the feed at release — exactly where the
-    // production producer sits while the user is speaking.
+    // Drain first, then resolve the context: that is the production order (the
+    // config part is written after the last frame), and a probe that resolved
+    // early would hide a session that stopped feeding the stream.
     for await _ in frames {}
-    state.withLock { $0.framesFinished = true }
+    framesDone.value = true
     _ = await resolveContext()
-    state.withLock {
-      $0.contextResolvedAfterFrames = $0.framesFinished
-      $0.completions += 1
+    if let holding {
+      await holding.enter()
+      // Sampled after the gate so the test controls when it is read; a real
+      // request would have been torn down by the cancellation itself.
+      cancelled.value = Task.isCancelled
     }
+    completed.value += 1
     return transcript
   }
 
-  /// Suspends until `transcribe` has been entered.
   func waitUntilEntered() async { await entered.wait() }
+  func waitUntilHolding() async { await holding?.waitUntilEntered() }
+  func allowToFinish() { holding?.allowToFinish() }
 
-  var enteredWhileRecording: Bool { state.withLock { $0.entered } }
-  var framesFinished: Bool { state.withLock { $0.framesFinished } }
-  var contextResolvedAfterFrames: Bool { state.withLock { $0.contextResolvedAfterFrames } }
-  var completions: Int { state.withLock { $0.completions } }
+  var framesFinished: Bool { framesDone.value }
+  var sawCancellation: Bool { cancelled.value }
+  var completions: Int { completed.value }
 }

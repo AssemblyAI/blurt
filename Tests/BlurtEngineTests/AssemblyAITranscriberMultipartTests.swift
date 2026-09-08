@@ -61,21 +61,4 @@ struct AssemblyAITranscriberMultipartTests {
     let text = try #require(String(data: body[configHeader.lowerBound...], encoding: .utf8))
     #expect(text.hasSuffix("--\r\n"))
   }
-
-  private func makeTranscriber(
-    apiKey: String?, transport: any HTTPTransport = FakeHTTPTransport { _ in (200, Data()) }
-  ) -> AssemblyAITranscriber {
-    AssemblyAITranscriber(
-      apiKeyProvider: { apiKey }, transport: transport,
-      enhancedTranscripts: { true }, customStyle: { nil })
-  }
-
-  /// Drives one chunked dictation request off a canned frame feed — the stand-in
-  /// for a live capture, which is what `transcribe` now takes.
-  private func collectTranscript(
-    _ transcriber: AssemblyAITranscriber, pcm: Data
-  ) async throws -> String {
-    try await transcriber.transcribe(
-      frames: .oneShot(pcm), sampleRate: 16_000, resolveContext: { nil })
-  }
 }

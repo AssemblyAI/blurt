@@ -1,10 +1,44 @@
 import Foundation
+import Synchronization
 import os
 
 // The chunked upload's instrumentation, split from `AssemblyAITranscriber.swift`
 // to stay within the lint file-length budget (like `DictationWireTypes.swift`,
 // which took the JSON contract). What the body producer measures on its way
 // past, and the per-task delegate that reports it.
+
+/// What the body producer knows and the request's log line needs: how much
+/// audio has actually been streamed, and when the last frame went out.
+///
+/// Shared through a `Mutex` rather than returned, because the producer runs as
+/// its own task inside the body stream and outlives no single call — the
+/// response handler reads these back once the upload completes. `lastFrameAt`
+/// is nil only for a recording that produced no frames at all.
+final class UploadProgress: Sendable {
+  private struct State {
+    var audioBytes = 0
+    var lastFrameAt: ContinuousClock.Instant?
+  }
+
+  /// A reference type wrapping a `Mutex`, rather than a `Mutex<Struct>` passed
+  /// around directly: `Mutex` is non-copyable, so it cannot cross a function
+  /// parameter or be captured by the escaping body-producer closure.
+  private let state = Mutex(State())
+
+  /// Accounts one delivered frame. The timestamp is taken here, at the moment
+  /// the frame is handed to the upload — the closest thing the client has to
+  /// "the user stopped talking" for the final frame.
+  func recordFrame(bytes: Int) {
+    let now = ContinuousClock().now
+    state.withLock {
+      $0.audioBytes += bytes
+      $0.lastFrameAt = now
+    }
+  }
+
+  var audioBytes: Int { state.withLock { $0.audioBytes } }
+  var lastFrameAt: ContinuousClock.Instant? { state.withLock { $0.lastFrameAt } }
+}
 
 /// Per-request `URLSessionTaskDelegate` that logs the dictation round-trip's latency
 /// breakdown from `URLSessionTaskMetrics`: how much was connection setup
@@ -16,10 +50,7 @@ import os
 ///
 /// Internal rather than file-private now that it lives beside the transcriber
 /// rather than inside its file.
-final class MetricsLogger: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
-  private let progress: UploadProgress
-  init(progress: UploadProgress) { self.progress = progress }
-
+final class DictationUploadDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
   /// Refuses to hand `URLSession` a second copy of the request body.
   ///
   /// `URLSession` asks for a fresh body stream whenever it has to send the
@@ -31,7 +62,7 @@ final class MetricsLogger: NSObject, URLSessionTaskDelegate, @unchecked Sendable
   func urlSession(
     _ session: URLSession, needNewBodyStreamForTask task: URLSessionTask
   ) async -> InputStream? {
-    transcriberLog.error(
+    AssemblyAITranscriber.log.error(
       "URLSession asked to replay the upload body; a streamed recording can't be replayed")
     return nil
   }
@@ -44,10 +75,9 @@ final class MetricsLogger: NSObject, URLSessionTaskDelegate, @unchecked Sendable
       guard let from, let to else { return "n/a" }
       return String(format: "%.0f", to.timeIntervalSince(from) * 1000)
     }
-    transcriberLog.info(
+    AssemblyAITranscriber.log.info(
       """
-      dictation metrics audioMs=\(SyncSTTLimits.durationMs(ofPCMBytes: self.progress.audioBytes), privacy: .public) \
-      reused=\(transaction.isReusedConnection, privacy: .public) \
+      dictation metrics reused=\(transaction.isReusedConnection, privacy: .public) \
       dnsMs=\(ms(transaction.domainLookupStartDate, transaction.domainLookupEndDate), privacy: .public) \
       connectMs=\(ms(transaction.connectStartDate, transaction.connectEndDate), privacy: .public) \
       tlsMs=\(ms(transaction.secureConnectionStartDate, transaction.secureConnectionEndDate), privacy: .public) \

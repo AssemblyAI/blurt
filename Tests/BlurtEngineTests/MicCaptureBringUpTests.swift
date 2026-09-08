@@ -63,7 +63,9 @@ struct MicCaptureBringUpTests {
     // `checkStillWanted` points instead of installing its recorder.
     var pressFailure: Error?
     do {
-      try await press.value
+      // The feed `start()` now hands back is irrelevant here — this test is
+      // about how the bring-up *ended*, not what it captured.
+      _ = try await press.value
     } catch {
       pressFailure = error
     }

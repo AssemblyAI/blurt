@@ -74,17 +74,16 @@
   /// `SyncSTTLimits.minPCMBytes` so the pipeline clears the too-short-audio
   /// guard and proceeds to transcribe.
   nonisolated struct UITestMic: MicCaptureProtocol {
-    func start() async throws {}
-    func stop() async throws -> Data {
-      Self.cannedPCM
-    }
-    /// The same blob `stop()` reports, handed to the chunked upload as one
-    /// frame — so the streamed request carries what the release path counts.
-    func frames() async -> AsyncStream<Data> {
+    /// Hands the chunked upload the same blob `stop()` reports, as one frame, so
+    /// the streamed request carries what the release path counts.
+    func start() async throws -> AsyncStream<Data> {
       AsyncStream { continuation in
         continuation.yield(Self.cannedPCM)
         continuation.finish()
       }
+    }
+    func stop() async throws -> Data {
+      Self.cannedPCM
     }
     private static let cannedPCM = Data(count: SyncSTTLimits.minPCMBytes * 2)
   }

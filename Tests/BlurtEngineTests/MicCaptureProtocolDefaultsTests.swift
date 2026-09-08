@@ -21,14 +21,11 @@ struct MicCaptureProtocolDefaultsTests {
     /// default can be observed.
     let stops = Mutex(0)
 
-    func start() async throws {}
+    func start() async throws -> AsyncStream<Data> { .finished }
     func stop() async throws -> Data {
       stops.withLock { $0 += 1 }
       return Data()
     }
-    /// Required, not defaulted — see `MicCaptureProtocol.frames()` for why a
-    /// silent empty-feed default would be the wrong favour to do a conformer.
-    func frames() async -> AsyncStream<Data> { .oneShot(Data()) }
   }
 
   @Test("default levels stream is empty and finishes immediately; warmUp is a no-op")

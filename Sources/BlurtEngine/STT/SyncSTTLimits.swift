@@ -49,6 +49,14 @@ public enum SyncSTTLimits {
   /// `DictationSession` applies to the blob `MicCaptureProtocol.stop()` returns.
   public static let minPCMBytes = minSamples * bytesPerSample
 
+  /// Raw S16LE bytes that `seconds` of audio occupies at `sampleRate` — the
+  /// inverse of `durationMs(ofPCMBytes:)`, and mono for the same reason (see
+  /// `channelCount`). Here rather than at the call site so the upload pipe's
+  /// buffer doesn't hand-roll the seconds-to-bytes conversion this type owns.
+  static func pcmBytes(forSeconds seconds: Double) -> Int {
+    Int(seconds * Double(sampleRate)) * bytesPerSample
+  }
+
   /// Milliseconds of audio a raw S16LE byte count represents at `rate`. Both the
   /// capture side (`MicCapture.stop`) and the upload side
   /// (`AssemblyAITranscriber.transcribe`) log the clip's duration, and those logs

@@ -1,14 +1,8 @@
 import Foundation
-import Synchronization
 import os
 
 /// Latency instrumentation for the dictation round-trip. Findable via:
 ///   log show --predicate 'subsystem == "dev.alex.blurt" && category == "Transcriber"' --last 1h
-/// Internal, not file-private: `send` (wall-clock and post-speech) writes here,
-/// and so does `MetricsLogger` (the DNS/TCP/TLS/TTFB split, plus the refused
-/// body replay) from `DictationUploadMetrics.swift` — one category, two files.
-let transcriberLog = HostIdentity.current.logger("Transcriber")
-
 /// `TranscriberProtocol` backed by AssemblyAI's **dictation** API.
 ///
 /// A single `POST dictation.assemblyai.com/transcribe` carries the captured
@@ -24,6 +18,14 @@ let transcriberLog = HostIdentity.current.logger("Transcriber")
 /// rewrite is best-effort with a ~5 s server-side deadline, so a rewrite
 /// failure still returns the verbatim transcript (`llm_response` null).
 public struct AssemblyAITranscriber: TranscriberProtocol {
+  /// Latency instrumentation for the dictation round-trip. Findable via:
+  ///   log show --predicate 'subsystem == "dev.alex.blurt" && category == "Transcriber"' --last 1h
+  ///
+  /// Type-scoped like every other logger in the engine (`MicCapture`,
+  /// `DictationLog`, `AudioRouteMonitor`) rather than a module-global, and
+  /// internal so `DictationUploadDelegate` in `DictationUploadMetrics.swift`
+  /// writes the same category — one category, two files.
+  static let log = HostIdentity.current.logger("Transcriber")
   private let apiKeyProvider: @Sendable () -> String?
   private let baseURL: URL
   private let transport: any HTTPTransport
@@ -88,7 +90,8 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     let body = streamedBody(
       frames: frames, sampleRate: sampleRate, boundary: boundary,
       resolveContext: resolveContext, progress: progress)
-    let data = try await send(request, streaming: body, progress: progress)
+    let data = try await send(
+      request, streaming: body, sampleRate: sampleRate, progress: progress)
     guard let response = try? JSONDecoder().decode(DictationResponse.self, from: data) else {
       throw AssemblyAIError.malformedResponse
     }
@@ -100,7 +103,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     // verbatim `text` right below it.
     if let rewrite = response.llmResponse.trimmedNonEmpty() { return rewrite }
     if let error = response.llmError {
-      transcriberLog.warning(
+      Self.log.warning(
         "llm rewrite unavailable (\(error, privacy: .public)); using verbatim transcript")
     }
     return response.text
@@ -128,7 +131,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// when the uplink is slower than realtime — and then the audio has to wait
   /// somewhere regardless. The recording cap bounds it to
   /// `SyncSTTLimits.maxAudioSeconds` of PCM.
-  func streamedBody(
+  private func streamedBody(
     frames: AsyncStream<Data>, sampleRate: Int, boundary: String,
     resolveContext: @escaping @Sendable () async -> TranscriptionContext?,
     progress: UploadProgress
@@ -182,7 +185,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     let start = clock.now
     _ = try? await transport.data(for: request)
     let elapsedMs = (clock.now - start).milliseconds
-    transcriberLog.info(
+    Self.log.info(
       "warm-up connect \(elapsedMs, format: .fixed(precision: 0), privacy: .public)ms")
   }
 
@@ -212,7 +215,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
       // Logged rather than trusted because the failure it guards against is silent —
       // the request would 400 and every dictation would error, so a line naming the
       // real cause is worth the one comparison per request it costs.
-      transcriberLog.error(
+      Self.log.error(
         """
         cleanup instruction is \(CleanupInstruction.text.utf8.count, privacy: .public) UTF-8 bytes, \
         over the \(CleanupInstruction.characterCap, privacy: .public) cap; \
@@ -240,27 +243,30 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// where the framing — boundaries, part headers, the `audio.pcm` filename,
   /// CRLF placement — is stated once.
   static func audioPartHeader(boundary: String) -> Data {
-    var head = Data()
-    func append(_ string: String) { head.append(Data(string.utf8)) }
-    append("--\(boundary)\r\n")
-    append("Content-Disposition: form-data; name=\"audio\"; filename=\"audio.pcm\"\r\n")
-    append("Content-Type: audio/pcm\r\n\r\n")
-    return head
+    framed(
+      "--\(boundary)\r\n",
+      "Content-Disposition: form-data; name=\"audio\"; filename=\"audio.pcm\"\r\n",
+      "Content-Type: audio/pcm\r\n\r\n")
+  }
+
+  /// UTF-8 encodes the multipart framing. One definition for both halves of the
+  /// body — the CRLF placement and part headers are what the file's comments
+  /// call the contract, so they are stated once rather than once per half.
+  private static func framed(_ parts: String...) -> Data {
+    Data(parts.joined().utf8)
   }
 
   /// Everything after the last audio frame: the `audio` part's terminating
   /// CRLF, the whole `config` part, and the closing boundary. Written when the
   /// recording ends — see `streamedBody` for why `config` is last.
   static func configTail(config: Data, boundary: String) -> Data {
-    var tail = Data()
-    func append(_ string: String) { tail.append(Data(string.utf8)) }
-    append("\r\n")
-    append("--\(boundary)\r\n")
-    append("Content-Disposition: form-data; name=\"config\"\r\n")
-    append("Content-Type: application/json\r\n\r\n")
+    var tail = framed(
+      "\r\n",
+      "--\(boundary)\r\n",
+      "Content-Disposition: form-data; name=\"config\"\r\n",
+      "Content-Type: application/json\r\n\r\n")
     tail.append(config)
-    append("\r\n")
-    append("--\(boundary)--\r\n")
+    tail.append(framed("\r\n", "--\(boundary)--\r\n"))
     return tail
   }
 
@@ -268,20 +274,23 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 
   private func send(
     _ request: URLRequest, streaming body: AsyncThrowingStream<Data, any Error>,
-    progress: UploadProgress
+    sampleRate: Int, progress: UploadProgress
   ) async throws -> Data {
     // Per-task delegate (not a session delegate) so this rides along on whatever
     // transport was injected — `URLSession.shared` in production, a fake in
     // tests — without reconfiguring it. `MetricsLogger` logs the connect-vs-
     // inference split and refuses a body replay; the lines below are the
     // always-available totals.
-    let metrics = MetricsLogger(progress: progress)
+    // Not optional instrumentation: this delegate also refuses `URLSession`'s
+    // request to replay the body, which is what stands between an internal retry
+    // and a blank transcript. Dropping it would drop that guarantee silently.
+    let metrics = DictationUploadDelegate()
     let clock = ContinuousClock()
     let start = clock.now
     let (data, response) = try await transport.upload(
       for: request, streaming: body, delegate: metrics)
     let finished = clock.now
-    let audioMs = SyncSTTLimits.durationMs(ofPCMBytes: progress.audioBytes)
+    let audioMs = SyncSTTLimits.durationMs(ofPCMBytes: progress.audioBytes, rate: sampleRate)
     // `wallMs` now spans the recording too, because the request opens at press
     // — so on its own it says nothing about how long the user waited.
     // `postSpeechMs` is that number: last audio frame handed to the upload
@@ -289,7 +298,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     // buffered round trip, and against the service's own `post_speech_ms`.
     let wallMs = (finished - start).milliseconds
     let postSpeechMs = progress.lastFrameAt.map { (finished - $0).milliseconds }
-    transcriberLog.info(
+    Self.log.info(
       """
       dictation round-trip audioMs=\(audioMs, privacy: .public) \
       postSpeechMs=\(postSpeechMs ?? -1, format: .fixed(precision: 0), privacy: .public) \
@@ -332,38 +341,6 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 // timing uses — moved to `Duration+Milliseconds.swift` when `MicCapture` needed
 // the same thing for its liveness-gap line. It was `fileprivate` here; a second
 // copy is an "invalid redeclaration", not a shadow.
-
-/// What the body producer knows and the request's log line needs: how much
-/// audio has actually been streamed, and when the last frame went out.
-///
-/// Shared through a `Mutex` rather than returned, because the producer runs as
-/// its own task inside the body stream and outlives no single call — the
-/// response handler reads these back once the upload completes. `lastFrameAt`
-/// is nil only for a recording that produced no frames at all.
-final class UploadProgress: Sendable {
-  private struct State {
-    var audioBytes = 0
-    var lastFrameAt: ContinuousClock.Instant?
-  }
-
-  /// A reference type wrapping a `Mutex`, rather than a `Mutex<Struct>` passed
-  /// around directly: `Mutex` is non-copyable, so it cannot cross a function
-  /// parameter or be captured by the escaping body-producer closure.
-  private let state = Mutex(State())
-
-  /// Accounts one delivered frame. The timestamp is taken here, at the moment
-  /// the frame is handed to the upload — the closest thing the client has to
-  /// "the user stopped talking" for the final frame.
-  func recordFrame(bytes: Int) {
-    state.withLock {
-      $0.audioBytes += bytes
-      $0.lastFrameAt = ContinuousClock().now
-    }
-  }
-
-  var audioBytes: Int { state.withLock { $0.audioBytes } }
-  var lastFrameAt: ContinuousClock.Instant? { state.withLock { $0.lastFrameAt } }
-}
 
 /// Errors specific to the AssemblyAI transport. These get wrapped in
 /// `BlurtError.sttFailed` before reaching the UI.

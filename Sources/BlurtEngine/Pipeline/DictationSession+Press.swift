@@ -51,7 +51,7 @@ extension DictationSession {
       // `async let`, so a cancel still reaches it: the child inherits this task's
       // cancellation, which is what `cancel()`'s `.connecting` branch relies on
       // to preempt the wait.
-      async let started: Void = mic.start()
+      async let started = mic.start()
       await beginContextCapture()
       // Only now join the bring-up. Everything above ran while the mic was
       // coming up; the phase still flips to `.recording` only once `start()`
@@ -59,7 +59,7 @@ extension DictationSession {
       // starting the context work first is that a press whose mic fails has
       // already set the injector's target and dispatched one AX read — both
       // harmless and overwritten by the next press.
-      try await started
+      let frames = try await started
       // A cancel that arrived during the bring-up, on the path where `start()`
       // still returned normally — the cancel landed in the window between the
       // liveness wait finishing and `.recording` being claimed, so there was
@@ -80,12 +80,15 @@ extension DictationSession {
         return
       }
       setPhase(.recording)
+      // Ended here, before the upload is opened: this interval is documented as
+      // timing the startup path "up to the moment recording actually begins",
+      // and press-latency traces are compared across releases against it.
+      Self.signposter.endInterval(Self.pressSignpostName, pressInterval)
       // Open the dictation request and start streaming the recording into it.
       // This is the whole point of the chunked upload: the transfer overlaps the
       // speaking instead of following it, so what the user waits out at release
       // is inference on the last frames rather than the upload of all of them.
-      await startUpload()
-      Self.signposter.endInterval(Self.pressSignpostName, pressInterval)
+      startUpload(frames: frames)
       let timeout = maxRecordingSeconds
       let clock = clock
       autoReleaseTask = Task { [weak self] in

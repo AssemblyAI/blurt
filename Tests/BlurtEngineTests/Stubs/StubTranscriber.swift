@@ -18,10 +18,6 @@ actor StubTranscriber: TranscriberProtocol {
 
   init(mode: Mode) { self.mode = mode }
 
-  /// The PCM each call received, reassembled from the frame stream — the stub's
-  /// stand-in for "what would have gone on the wire".
-  private(set) var receivedPCM: [Data] = []
-
   func transcribe(
     frames: AsyncStream<Data>, sampleRate: Int,
     resolveContext: @escaping @Sendable () async -> TranscriptionContext?
@@ -29,9 +25,7 @@ actor StubTranscriber: TranscriberProtocol {
     // Drain first, then resolve the context: that is the production order (the
     // config part is written after the last frame), and a stub that resolved
     // early would hide a session that stopped feeding the stream.
-    var pcm = Data()
-    for await frame in frames { pcm.append(frame) }
-    receivedPCM.append(pcm)
+    for await _ in frames {}
     receivedContexts.append(await resolveContext())
     switch mode {
     case .transcript(let transcript):

@@ -289,33 +289,6 @@ struct HTTPClientTests {
 
   // MARK: - helpers
 
-  /// Builds a transcriber wired to `transport`. The default transport answers
-  /// every request with a 500, for the cases that must never reach the wire.
-  /// Enhanced transcripts and the custom style are pinned (on / none unless a
-  /// test opts out) rather than left to the production defaults, which read the
-  /// process's real `UserDefaults`.
-  private func makeTranscriber(
-    apiKey: String?,
-    transport: any HTTPTransport = FakeHTTPTransport { _ in (500, Data()) },
-    enhancedTranscripts: Bool = true,
-    customStyle: String? = nil
-  ) -> AssemblyAITranscriber {
-    AssemblyAITranscriber(
-      apiKeyProvider: { apiKey }, transport: transport,
-      enhancedTranscripts: { enhancedTranscripts },
-      customStyle: { customStyle })
-  }
-
-  /// Drives one chunked dictation request off a canned frame feed — the stand-in
-  /// for a live capture, which is what `transcribe` now takes.
-  private func collectTranscript(
-    _ transcriber: AssemblyAITranscriber, pcm: Data = Self.testPCM,
-    context: TranscriptionContext? = nil
-  ) async throws -> String {
-    try await transcriber.transcribe(
-      frames: .oneShot(pcm), sampleRate: 16_000, resolveContext: { context })
-  }
-
   /// The encoded `config` part re-parsed as a dictionary — the shape every
   /// config assertion below wants, since `makeConfigData` returns raw JSON.
   /// A part that isn't a JSON object at all fails here rather than turning every

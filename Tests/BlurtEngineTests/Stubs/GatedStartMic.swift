@@ -26,12 +26,11 @@ actor GatedStartMic: MicCaptureProtocol {
 
   func setThrowsIfCancelled(_ value: Bool) { throwsIfCancelled = value }
 
-  func frames() async -> AsyncStream<Data> { .oneShot(StubPCM.aboveMinimum) }
-
-  func start() async throws {
+  func start() async throws -> AsyncStream<Data> {
     startCalls += 1
     await gate.enter()
     if throwsIfCancelled, Task.isCancelled { throw CancellationError() }
+    return .oneShot(StubPCM.aboveMinimum)
   }
 
   func waitUntilStartEntered() async { await gate.waitUntilEntered() }

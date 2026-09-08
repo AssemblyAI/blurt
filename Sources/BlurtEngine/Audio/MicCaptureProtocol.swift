@@ -11,27 +11,26 @@ public protocol MicCaptureProtocol: Sendable {
   /// start chime — arriving only on return. A conformer that returns before
   /// frames flow cues the user to speak into a dead mic, and the first words of
   /// the utterance are unrecoverable.
-  func start() async throws
+  ///
+  /// Returns the live PCM feed for the capture it just started: raw S16LE
+  /// chunks in arrival order, ending when the capture stops. This is what makes
+  /// the upload chunked — the dictation request opens at press and drains this
+  /// while the user speaks, so ending the feed is what tells the service the
+  /// utterance is over.
+  ///
+  /// Handed back by `start()` rather than fetched separately so the ordering
+  /// cannot be got wrong: a feed always belongs to a capture that is running,
+  /// and there is no window in which to ask for one before (or after) there is
+  /// anything behind it. Asking separately raced the release — the capture could
+  /// already have been torn down, and the answer was an empty feed that uploaded
+  /// an utterance with no audio in it.
+  func start() async throws -> AsyncStream<Data>
   /// Stop capture and return the captured audio as raw S16LE PCM bytes — the
   /// exact encoding the dictation request uploads, so no conversion pass sits on
   /// the release hot path. `throws` so a conformer that has to fetch the audio
   /// from somewhere can surface a failure instead of silently dropping speech;
   /// `MicCapture` accumulates it in memory as it arrives and never does.
   func stop() async throws -> Data
-  /// The live feed of captured audio for the in-flight capture: raw S16LE PCM
-  /// chunks in arrival order, ending when the capture stops.
-  ///
-  /// This is what makes the upload chunked — the dictation request opens at
-  /// press and drains this while the user speaks, so ending the stream is what
-  /// tells the service the utterance is over. Call it after `start()` returns;
-  /// nothing is lost by waiting, because the feed buffers from the moment the
-  /// capture is built (before the device is even opened).
-  ///
-  /// Deliberately has no default implementation. A conformer that returned an
-  /// empty stream would upload an utterance with no audio in it and get a
-  /// puzzling 400 back, so every conformer is made to say what it feeds.
-  func frames() async -> AsyncStream<Data>
-
   /// Stop capture and discard the audio — the teardown behind a *cancel*, where
   /// the user asked for nothing to happen. Split from `stop()` because the two
   /// want opposite things: `stop()` may legitimately spend time preserving the

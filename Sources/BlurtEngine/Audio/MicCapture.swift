@@ -120,7 +120,7 @@ public actor MicCapture: MicCaptureProtocol {
     }
   }
 
-  public func start() async throws {
+  public func start() async throws -> AsyncStream<Data> {
     // The selection, resolved once per press: which device to pin the session to
     // (or nil to follow the system default, including the missing-pin fallback),
     // and the transport the liveness cap and the tail linger key off.
@@ -210,22 +210,9 @@ public actor MicCapture: MicCaptureProtocol {
     Self.logger.info(
       "start recording from \(resolved.pinnedUID ?? "system default", privacy: .public)")
     startMeterTimer()
-  }
-
-  /// The in-flight capture's live PCM feed, or an immediately finished stream
-  /// when nothing is recording — a press whose bring-up failed has no audio to
-  /// offer, and the upload it would have fed is never started.
-  public func frames() -> AsyncStream<Data> {
-    guard let activeRecorder else {
-      // `DictationSession` binds the feed inside its press turn, before a stop
-      // can interleave, so this is unreachable through the pipeline. Any other
-      // host can still ask at the wrong moment, and the result is a request
-      // carrying no audio — worth a line, because a 400 on a dictation the user
-      // definitely spoke explains nothing on its own.
-      Self.logger.error("frames() with no active capture — the upload will carry no audio")
-      return AsyncStream { $0.finish() }
-    }
-    return activeRecorder.frames
+    // The feed of the recorder just installed, so the caller cannot hold one
+    // that belongs to no capture.
+    return recorder.frames
   }
 
   public func stop() async throws -> Data {
