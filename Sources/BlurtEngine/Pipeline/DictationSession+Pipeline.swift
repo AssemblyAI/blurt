@@ -15,7 +15,10 @@ extension DictationSession {
   /// (slightly less primed) beats the wait.
   static let contextWaitBudget: Duration = .milliseconds(500)
 
-  func runTranscribeInject(pcm: Data) async {
+  /// Takes no audio: the recording was uploaded as it was captured, so the
+  /// recorded blob's only remaining job — the too-short-clip check — belongs to
+  /// `performRelease`, which can abandon the request without racing it.
+  func runTranscribeInject() async {
     // Times the full post-release hot path — dictation round trip plus the paste
     // (including the clipboard settle) — across every exit (short-clip no-op,
     // empty transcript, failure, cancel, or a completed paste).
@@ -24,17 +27,6 @@ extension DictationSession {
     // A clip too short for the STT model (an accidental brief tap) would only
     // earn a 400 — drop it as a silent no-op, like an empty transcript, rather
     // than calling the API and surfacing an error.
-    guard pcm.count >= SyncSTTLimits.minPCMBytes else {
-      // The request is already open and carrying these few bytes, so dropping
-      // the clip means abandoning it — completing it would only earn the 400
-      // this guard exists to avoid.
-      cancelUpload()
-      // A cancel() racing the freshly spawned pipeline task already claimed the
-      // phase — don't overwrite .cancelled with .idle.
-      if !Task.isCancelled { setPhase(.idle) }
-      return
-    }
-
     // The transcript comes from the request opened at press, which has been
     // streaming this audio all along. `mic.stop()` (in `performRelease`) ended
     // the frame stream, which is what makes the transcriber write its `config`
@@ -98,15 +90,25 @@ extension DictationSession {
 
   /// Opens the dictation request at press and streams the recording into it.
   ///
-  /// Unstructured on purpose: it has to outlive `performPress`'s turn and stay
-  /// reachable from a later `release()` or `cancel()`, which is what
-  /// `uploadTask` is for. Nothing awaits it here — the whole point is that the
-  /// upload runs while the user talks.
-  func startUpload() {
+  /// The request itself is unstructured on purpose: it has to outlive
+  /// `performPress`'s turn and stay reachable from a later `release()` or
+  /// `cancel()`, which is what `uploadTask` is for. Nothing awaits the *request*
+  /// here — the whole point is that the upload runs while the user talks.
+  ///
+  /// The frame feed, though, is bound **before** that task is spawned, and this
+  /// is load-bearing. Resolved inside the task instead, it raced the release:
+  /// the command queue chains on the press turn completing, so `await` here is
+  /// safe, but a detached task hopping to the `MicCapture` actor is not ordered
+  /// against anything. Under load the release could stop the capture first, and
+  /// `frames()` would then hand back the finished empty stream it returns when
+  /// nothing is recording — uploading an utterance with no audio in it and
+  /// losing the user's speech to a 400. Binding it here pins the feed to the
+  /// recorder that is live at press.
+  func startUpload() async {
+    let frames = await mic.frames()
     // Lifted out of the actor so the task body captures Sendable values rather
     // than isolated state, the same move `performPress` makes for `transcriber`.
     let transcriber = transcriber
-    let mic = mic
     let sampleRate = SyncSTTLimits.sampleRate
     uploadTask = Task { [weak self] in
       // Bound once here rather than referenced through the capture list inside
@@ -114,7 +116,7 @@ extension DictationSession {
       // concurrently-executing closure may not read.
       let session = self
       return try await transcriber.transcribe(
-        frames: await mic.frames(), sampleRate: sampleRate,
+        frames: frames, sampleRate: sampleRate,
         resolveContext: { await session?.resolveCapturedContext() ?? nil })
     }
   }
@@ -130,7 +132,17 @@ extension DictationSession {
       setPhase(.failed(.sttFailed(underlying: ChunkedUploadError.uploadNeverStarted)))
       return nil
     }
-    uploadTask = nil
+    // Keep the handle live across the await. `cancel()` reaches the request
+    // only through it, and awaiting a `Task`'s value is *not* cancellation-aware
+    // — cancelling the pipeline abandons the wait while the request runs on to
+    // completion and transcribes a dictation the user already dismissed.
+    //
+    // Cleared only while it is still *ours*: a later press installs its own
+    // upload, and clearing that one would strand a live request nothing can
+    // cancel — the same trap `resolveCapturedContext` documents for
+    // `contextStream`, reached here because this runs in a detached task that
+    // can outlive the press that started it.
+    defer { if uploadTask == upload { uploadTask = nil } }
     do {
       return try await upload.value
     } catch {

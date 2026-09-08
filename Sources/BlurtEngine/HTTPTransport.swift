@@ -46,12 +46,26 @@ extension URLSession: HTTPTransport {
     // is still being written. Without it an abandoned dictation would leave the
     // writer feeding a request nobody is waiting for.
     defer { writer.cancel() }
-    let result = try await data(for: streamed, delegate: delegate)
-    // Ask the writer for its outcome *after* the response, not instead of it. A
-    // producer failure truncates the body, which the server reports as some
-    // generic 400 — the writer's own error is the one that names the cause, so
-    // it wins when both exist.
-    try await writer.value
-    return result
+    let (body, response) = try await data(for: streamed, delegate: delegate)
+    // Cancel the writer rather than joining it, and do it before asking for its
+    // outcome. The response can arrive while the body is still being written —
+    // an early 401 or 429 is the whole reason the writer is a sibling task — and
+    // a pipe `URLSession` has already torn down may simply stop accepting bytes
+    // without ever reporting itself writable. Joining first would then park here
+    // indefinitely, with the `defer` above not yet reached.
+    writer.cancel()
+    let outcome = await writer.result
+    // A producer failure (the `config` part failing to encode, say) truncates
+    // the body, and the server answers with some generic 4xx that doesn't name
+    // the cause — so the writer's error wins there. On a 2xx the body plainly
+    // arrived whole, and a late write failure is noise that would mask a
+    // perfectly good transcript; on a non-2xx with no writer error the server's
+    // own message is what surfaces, via the caller's status check.
+    if case .failure(let error) = outcome, !(error is CancellationError),
+      let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode)
+    {
+      throw error
+    }
+    return (body, response)
   }
 }

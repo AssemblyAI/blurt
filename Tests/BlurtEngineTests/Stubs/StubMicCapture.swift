@@ -14,6 +14,7 @@ actor StubMicCapture: MicCaptureProtocol {
   // so no `nonisolated` + hop-back-onto-self dance is needed.
   func start() async throws {
     startCalls += 1
+    stopped = false
     if let startError { throw startError }
   }
   func stop() async throws -> Data {
@@ -36,15 +37,23 @@ actor StubMicCapture: MicCaptureProtocol {
   /// ordering the config-part-last framing depends on — frames first, context
   /// resolved after — was never exercised by any session test.
   func frames() async -> AsyncStream<Data> {
+    // Asked after a stop, hand back a finished feed like `MicCapture` does
+    // rather than a live one nothing will ever end — a stream left open parks
+    // the upload forever, which surfaces as a pipeline that never reaches a
+    // terminal phase instead of as the ordering bug it actually is.
+    guard !stopped else { return .oneShot(Data()) }
     let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .unbounded)
     framesContinuation = continuation
     if !pcmToReturn.isEmpty { continuation.yield(pcmToReturn) }
     return stream
   }
 
+  private var stopped = false
+
   private var framesContinuation: AsyncStream<Data>.Continuation?
 
   private func finishFrames() {
+    stopped = true
     framesContinuation?.finish()
     framesContinuation = nil
   }

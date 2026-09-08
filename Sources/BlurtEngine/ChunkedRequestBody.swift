@@ -88,8 +88,19 @@ final class ChunkedRequestBody: @unchecked Sendable {
     while !remaining.isEmpty {
       try Task.checkCancellation()
       guard output.hasSpaceAvailable else {
-        try await Task.sleep(for: Self.spaceRetry)
-        continue
+        // A pipe that has been torn down — `URLSession` abandoned the body after
+        // an early response, or asked for a replay it cannot have — can stop
+        // accepting bytes without ever reporting itself writable *or* returning
+        // a short write, so the zero-write branch below would never be reached
+        // and this would poll until the task was cancelled. Treat a dead stream
+        // as the failure it is.
+        switch output.streamStatus {
+        case .error, .atEnd, .closed:
+          throw output.streamError ?? ChunkedUploadError.bodyStreamClosed
+        default:
+          try await Task.sleep(for: Self.spaceRetry)
+          continue
+        }
       }
       let written = remaining.withUnsafeBytes { raw -> Int in
         guard let base = raw.bindMemory(to: UInt8.self).baseAddress else { return -1 }

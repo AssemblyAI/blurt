@@ -294,16 +294,22 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// complete" are the same event.
   func stopAndReadPCM() -> Data {
     session.stopRunning()
-    framesContinuation.finish()
-    return state.withLock { $0.captured }
+    // Finish and read under one lock, so the feed and the returned blob cut off
+    // at the same chunk. A delegate callback still waiting on the lock then
+    // lands after both — its bytes reach neither, which is consistent, and it
+    // is post-`stopRunning()` audio in the first place.
+    return state.withLock {
+      framesContinuation.finish()
+      return $0.captured
+    }
   }
 
   /// End capture and throw the audio away, releasing the device — the teardown
   /// behind a failed `record()`, an aborted bring-up, and a cancel.
   func stopAndDiscard() {
     session.stopRunning()
-    framesContinuation.finish()
     state.withLock {
+      framesContinuation.finish()
       $0.captured = Data()
       $0.frameCount = 0
     }
@@ -336,11 +342,15 @@ extension CaptureSessionRecorder: AVCaptureAudioDataOutputSampleBufferDelegate {
     state.withLock {
       $0.captured.append(chunk)
       $0.frameCount += frameCount
+      // Published *under* the lock, together with the append, because the two
+      // have to agree: `stopAndReadPCM` finishes the feed and reads `captured`
+      // under this same lock, so a chunk appended here but yielded after that
+      // would sit in the returned blob while being absent from the upload — and
+      // the slice lost that way is exactly the tail the Bluetooth linger exists
+      // to preserve. Cheap enough to hold: an unbounded `yield` is a buffer
+      // append plus at most one continuation resumption, and it cannot re-enter
+      // this lock.
+      framesContinuation.yield(chunk)
     }
-    // Published after the lock is dropped, not inside it: the consumer is the
-    // upload's body producer, and holding the capture lock across a stream
-    // yield would put an unrelated task's scheduling in front of the next
-    // sample buffer. A yield to a finished stream (stop already ran) is a no-op.
-    framesContinuation.yield(chunk)
   }
 }

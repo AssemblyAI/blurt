@@ -216,7 +216,15 @@ public actor MicCapture: MicCaptureProtocol {
   /// when nothing is recording — a press whose bring-up failed has no audio to
   /// offer, and the upload it would have fed is never started.
   public func frames() -> AsyncStream<Data> {
-    guard let activeRecorder else { return AsyncStream { $0.finish() } }
+    guard let activeRecorder else {
+      // `DictationSession` binds the feed inside its press turn, before a stop
+      // can interleave, so this is unreachable through the pipeline. Any other
+      // host can still ask at the wrong moment, and the result is a request
+      // carrying no audio — worth a line, because a 400 on a dictation the user
+      // definitely spoke explains nothing on its own.
+      Self.logger.error("frames() with no active capture — the upload will carry no audio")
+      return AsyncStream { $0.finish() }
+    }
     return activeRecorder.frames
   }
 

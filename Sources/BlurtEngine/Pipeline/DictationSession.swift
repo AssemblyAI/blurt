@@ -278,6 +278,11 @@ public actor DictationSession {
     do {
       pcm = try await mic.stop()
     } catch {
+      // Either way the recording is not going to arrive, so the request opened
+      // at press has to go with it — a conformer whose `stop()` throws without
+      // ending the frame feed would otherwise leave it streaming until the idle
+      // timeout, and the next press would overwrite the handle and orphan it.
+      cancelUpload()
       // A cancel wins over surfacing the audio error — the user asked for
       // nothing to happen.
       if cancelWonRelease() { return }
@@ -292,8 +297,23 @@ public actor DictationSession {
       cancelUpload()
       return
     }
+    // A clip too short for the STT model (an accidental brief tap) would only
+    // earn a 400 — drop it as a silent no-op, like an empty transcript, rather
+    // than letting the request finish.
+    //
+    // Checked *here* rather than in the pipeline task, and that is the whole
+    // point: this turn runs from `mic.stop()` returning to the end with no
+    // suspension, so `cancelUpload()` lands before the body producer can take
+    // the actor to resolve its context. Deferred to the pipeline task it was a
+    // race the request usually won on a fast link — the config part went out and
+    // the utterance the guard means to drop was transcribed anyway.
+    guard pcm.count >= SyncSTTLimits.minPCMBytes else {
+      cancelUpload()
+      setPhase(.idle)
+      return
+    }
     pipelineTask = Task { [weak self] in
-      await self?.runTranscribeInject(pcm: pcm)
+      await self?.runTranscribeInject()
     }
   }
 
