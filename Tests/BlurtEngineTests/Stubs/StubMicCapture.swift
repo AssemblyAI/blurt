@@ -6,6 +6,9 @@ actor StubMicCapture: MicCaptureProtocol {
   var startCalls = 0
   var stopCalls = 0
   var cancelCaptureCalls = 0
+  /// The canned audio the feed publishes — and, by its length, what `stop()`
+  /// reports. One value for both so a test setting it moves the request's
+  /// payload and the release path's length check together, as production does.
   var pcmToReturn = StubPCM.aboveMinimum
   var startError: (any Error & Sendable)?
   var stopError: (any Error & Sendable)?
@@ -25,14 +28,14 @@ actor StubMicCapture: MicCaptureProtocol {
     if !pcmToReturn.isEmpty { continuation.yield(pcmToReturn) }
     return stream
   }
-  func stop() async throws -> Data {
+  func stop() async throws -> Int {
     stopCalls += 1
     // Ends the feed before the (possibly throwing) stop, mirroring
     // `CaptureSessionRecorder.stopAndReadPCM`: the upload's body is completed by
     // the recording stopping, not by the stop succeeding.
     finishFrames()
     if let stopError { throw stopError }
-    return pcmToReturn
+    return pcmToReturn.count
   }
 
   private var framesContinuation: AsyncStream<Data>.Continuation?

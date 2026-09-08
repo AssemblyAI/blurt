@@ -67,8 +67,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   // MARK: - Dictation request
 
   public func transcribe(
-    frames: AsyncStream<Data>, sampleRate: Int,
-    resolveContext: @escaping @Sendable () async -> TranscriptionContext?
+    frames: AsyncStream<Data>, sampleRate: Int, context: AsyncStream<TranscriptionContext?>
   ) async throws -> String {
     guard let apiKey = apiKeyProvider(), !apiKey.isEmpty else {
       throw BlurtError.apiKeyMissing
@@ -89,7 +88,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     let progress = UploadProgress()
     let body = streamedBody(
       frames: frames, sampleRate: sampleRate, boundary: boundary,
-      resolveContext: resolveContext, progress: progress)
+      context: context, progress: progress)
     let data = try await send(
       request, streaming: body, sampleRate: sampleRate, progress: progress)
     guard let response = try? JSONDecoder().decode(DictationResponse.self, from: data) else {
@@ -118,10 +117,10 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// streaming route requires the opposite order and would reject this). That
   /// ordering is load-bearing rather than incidental: it lets the press-time
   /// Accessibility context read resolve at *release*, exactly as it did when
-  /// the whole request was built after recording. `resolveContext` is therefore
-  /// called here, after the last frame — the config carries the same
-  /// `conversation_context` and `word_boost` it always did, decided at the same
-  /// moment as before.
+  /// the whole request was built after recording. The producer therefore waits
+  /// here, after the last frame, for the value the session pushes on `context` —
+  /// the config carries the same `conversation_context` and `word_boost` it
+  /// always did, decided at the same moment as before.
   ///
   /// Finishing the stream is what closes the multipart body and tells the
   /// service the utterance is over, so `frames` ending is end-of-audio.
@@ -133,8 +132,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// `SyncSTTLimits.maxAudioSeconds` of PCM.
   private func streamedBody(
     frames: AsyncStream<Data>, sampleRate: Int, boundary: String,
-    resolveContext: @escaping @Sendable () async -> TranscriptionContext?,
-    progress: UploadProgress
+    context: AsyncStream<TranscriptionContext?>, progress: UploadProgress
   ) -> AsyncThrowingStream<Data, any Error> {
     AsyncThrowingStream { continuation in
       let producer = Task {
@@ -144,18 +142,27 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
           continuation.yield(frame)
         }
         do {
+          // Wait for the session's press-time read, which it resolves at release
+          // and sends here. A channel that finishes without a value means the
+          // dictation was abandoned, and the cancellation check below is what
+          // stops a config part going out for it.
+          var resolved: TranscriptionContext?
+          for await value in context {
+            resolved = value
+            break
+          }
+          try Task.checkCancellation()
           // The prior dialogue that goes on the wire: the user's recent
           // dictations, then the text before the cursor (empty when there is
           // neither, which omits the field). App name, window title, field
           // label and selected text stay on the machine — `ConversationContext`
           // draws that line, so nothing is filtered here.
-          let context = await resolveContext()
           let config = try makeConfigData(
             sampleRate: sampleRate,
-            conversationContext: ConversationContext.turns(context: context),
+            conversationContext: ConversationContext.turns(context: resolved),
             // The other steering field: the user's key terms as a word-boost
             // list, fitted to its own (different) cap.
-            wordBoost: KeytermsBoost.fitted(context?.keyTerms ?? []))
+            wordBoost: KeytermsBoost.fitted(resolved?.keyTerms ?? []))
           continuation.yield(Self.configTail(config: config, boundary: boundary))
           continuation.finish()
         } catch {
@@ -168,15 +175,27 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     }
   }
 
-  /// Pre-open and pool a connection to the dictation host so the next
-  /// `transcribe` reuses it instead of paying DNS+TCP+TLS on the hot path
-  /// (~170 ms cold, more on mobile — measured). A throwaway GET to the host
-  /// root is enough to establish the HTTP/2 connection `URLSession` then reuses
-  /// for the POST to `/transcribe`; the response (an auth-less 4xx) is
-  /// discarded. No key, so it never counts as a transcription. A short timeout
-  /// keeps a dead network from leaving the task hanging. Fire-and-forget: any
-  /// error is swallowed — a failed warm-up just means the next request pays
-  /// connection setup itself.
+  /// Pre-open and pool a connection to the dictation host so the request opened
+  /// at press starts streaming immediately instead of spending its first
+  /// ~170 ms on DNS+TCP+TLS (more on mobile — measured).
+  ///
+  /// The reason changed with the chunked upload and is worth stating, because
+  /// the obvious reading is now wrong. It used to keep connection setup off the
+  /// *release* hot path, where the user was waiting. The request now opens at
+  /// press, so its handshake overlaps the recording either way and no longer
+  /// sits on the wait at all. What the warm-up still buys is the audio starting
+  /// to move ~170 ms sooner — which is free on a fast uplink and worth having on
+  /// a saturated one, where a late start is a backlog that never clears and adds
+  /// its own delay to the post-speech wait.
+  ///
+  /// Measured rather than assumed (2026-09-08), because "the POST opens at press
+  /// now, so this races it" is the plausible objection: with a fresh
+  /// `URLSession`, the POST reports `isReusedConnection == true` both after a
+  /// 250 ms mic bring-up and when fired back-to-back with the warm-up. URLSession
+  /// coalesces onto the in-flight connection, so this costs one throwaway GET
+  /// and never a second handshake.
+  ///
+  /// A throwaway GET to the host
   public func warmUp() async {
     var request = URLRequest(url: baseURL)
     request.httpMethod = "GET"

@@ -25,12 +25,18 @@ public protocol MicCaptureProtocol: Sendable {
   /// already have been torn down, and the answer was an empty feed that uploaded
   /// an utterance with no audio in it.
   func start() async throws -> AsyncStream<Data>
-  /// Stop capture and return the captured audio as raw S16LE PCM bytes — the
-  /// exact encoding the dictation request uploads, so no conversion pass sits on
-  /// the release hot path. `throws` so a conformer that has to fetch the audio
-  /// from somewhere can surface a failure instead of silently dropping speech;
-  /// `MicCapture` accumulates it in memory as it arrives and never does.
-  func stop() async throws -> Data
+  /// Stop capture and return how many bytes of audio it produced.
+  ///
+  /// A count, not the audio: the recording is uploaded on the feed `start()`
+  /// returned, as it is captured, so by the time capture stops there is nothing
+  /// left to hand anyone. All the release path still needs is whether there was
+  /// enough of it to be worth transcribing (`SyncSTTLimits.minPCMBytes`).
+  /// Returning the blob as well meant copying every byte a second time and
+  /// holding a duplicate of the whole utterance until release.
+  ///
+  /// `throws` so a conformer whose teardown can genuinely fail surfaces it
+  /// instead of silently reporting a clean stop; `MicCapture` never does.
+  func stop() async throws -> Int
   /// Stop capture and discard the audio — the teardown behind a *cancel*, where
   /// the user asked for nothing to happen. Split from `stop()` because the two
   /// want opposite things: `stop()` may legitimately spend time preserving the

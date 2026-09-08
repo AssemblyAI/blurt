@@ -30,8 +30,13 @@ genuinely correct, and reaching for it means it's time to stop and ask.
   bound its input graph to one device and went stale on a mic↔built-in switch
   (`-10868`, all-zero buffers), so no recorder survives across a device change.
   Keep the data output converting to 16 kHz mono 16-bit S16LE (the Sync API's
-  geometry), captured straight to memory so `stop()` returns upload-ready bytes
-  with no resample pass.
+  geometry), published straight onto the feed `start()` returns with no resample
+  pass. **`stop()` answers a byte count, not the audio** (owner-directed,
+  2026-09-08): the recording is uploaded in chunks as it is captured, so nothing
+  downstream reads it back, and accumulating the blob as well copied every byte
+  a second time inside the capture lock and held a duplicate of the whole
+  utterance (~3.7 MB at the cap) until release. Don't reintroduce a buffered
+  copy "just in case" — there is no retry-from-buffer path, by design.
 - **Don't pre-open the mic to make presses feel faster.** `MicCapture.warmUp()`
   is stateless on purpose — build a session, drop it — and there is no warm or
   prepared recorder to reuse. Measured on hardware: building a session (or the

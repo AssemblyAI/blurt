@@ -36,9 +36,9 @@ actor GatedStartMic: MicCaptureProtocol {
   func waitUntilStartEntered() async { await gate.waitUntilEntered() }
   func allowStartToFinish() { gate.allowToFinish() }
 
-  func stop() async throws -> Data {
+  func stop() async throws -> Int {
     stopCalls += 1
-    return StubPCM.aboveMinimum
+    return StubPCM.aboveMinimum.count
   }
 
   /// Counts the call and delegates, so `stopCalls` keeps meaning "the mic was

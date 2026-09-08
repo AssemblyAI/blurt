@@ -421,10 +421,12 @@ An actor implementing `MicCaptureProtocol`. It captures with an **`AVCaptureSess
 backends went with the second one; the owner-directed move from `AVAudioRecorder`, 2026-08-25): the
 session's audio data output converts to 16 kHz / mono / 16-bit
 LPCM — the exact geometry the dictation API wants — and the delegate accumulates the raw S16LE
-bytes in memory, so `stop()` returns the blob the dictation request uploaded byte for byte, with no
-temp file, no read-back, and no resampling or float-conversion pass. The same chunks are published
-live on `frames()` as they arrive, which is what the chunked upload drains while the user is still
-speaking; `stop()`'s blob is what the release path measures against the too-short-audio guard.
+bytes onto the feed `start()` returns, which is what the chunked upload drains while the user is
+still speaking — no temp file, no read-back, and no resampling or float-conversion pass. `stop()`
+answers a **byte count**, not the audio: the recording has already gone out by then, so all the
+release path needs is whether there was enough of it to send (`SyncSTTLimits.minPCMBytes`).
+Accumulating the blob as well cost a second `memcpy` of every byte inside the capture lock and
+retained a duplicate of the whole utterance until release.
 
 A **fresh recorder per session**, built around the _current_ resolution of the user's selection at
 press time; this is deliberate — see

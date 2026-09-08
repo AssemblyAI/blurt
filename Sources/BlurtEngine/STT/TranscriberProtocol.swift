@@ -13,18 +13,25 @@ public protocol TranscriberProtocol: Sendable {
   /// the user is sitting through. Measured: on a 1 Mbps uplink a 10 s dictation
   /// waits ~3.1 s after speech for a buffered upload versus ~0.5 s chunked.
   ///
-  /// `resolveContext` supplies the per-utterance priming (focused app + text
-  /// before the cursor, the user's recent dictations) and is called *after* the
-  /// last frame, because the `config` part is written last — so the context is
-  /// still decided at release, as it was when the whole request was built then.
-  /// Return nil for none.
+  /// `context` supplies the per-utterance priming (focused app + text before the
+  /// cursor, the user's recent dictations) as a one-value channel the caller
+  /// pushes at release. The `config` part is written last and waits on it, so
+  /// the context is still decided at release, as it was when the whole request
+  /// was built there. Send nil for none; finishing the channel without a value
+  /// abandons the request.
+  ///
+  /// A pushed value rather than a closure the request calls back into, so the
+  /// whole thing runs one way: the caller sends audio and then context, and the
+  /// transcriber holds no reference to whatever assembled them. Pulling the
+  /// context back out of the caller also made it a side effect of the request
+  /// reaching its config part, so a request that failed earlier left the caller
+  /// believing the utterance had no context at all.
   ///
   /// The dictation API resolves an utterance to a single final transcript, so
   /// this still returns that transcript in one shot (no incremental deltas) —
   /// chunking is about the upload, not the response.
   func transcribe(
-    frames: AsyncStream<Data>, sampleRate: Int,
-    resolveContext: @escaping @Sendable () async -> TranscriptionContext?
+    frames: AsyncStream<Data>, sampleRate: Int, context: AsyncStream<TranscriptionContext?>
   ) async throws -> String
 
   /// Optionally pre-open the transcription connection so the next `transcribe`

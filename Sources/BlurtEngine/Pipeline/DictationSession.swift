@@ -151,6 +151,12 @@ public actor DictationSession {
   /// user already dismissed.
   var uploadTask: Task<String, any Error>?
 
+  /// The channel the in-flight request's `config` part is waiting on, pushed by
+  /// `resolveCapturedContext` at release. Held here for the same reason
+  /// `uploadTask` is: a cancel has to be able to close it, or the request's body
+  /// producer parks on a value that is never coming.
+  var uploadContextFeed: AsyncStream<TranscriptionContext?>.Continuation?
+
   /// The production entry point: the real focus capture and the real
   /// developer-mode log. Delegates to the seam-carrying initializer below, which
   /// can't be public because it names internal types.
@@ -274,11 +280,9 @@ public actor DictationSession {
     // release arriving during the mic.stop() suspension now fails the
     // `.recording` guard above instead of running the pipeline twice.
     setPhase(.transcribing)
-    // The count, not the blob: the recording went out as it was captured, so all
-    // the release path still needs from `stop()` is how much of it there was.
     let recordedBytes: Int
     do {
-      recordedBytes = try await mic.stop().count
+      recordedBytes = try await mic.stop()
     } catch {
       // Both exits below set a terminal phase, and `setPhase` cancels the
       // in-flight request there — so a conformer whose `stop()` throws without
@@ -298,15 +302,13 @@ public actor DictationSession {
     // earn a 400 — drop it as a silent no-op, like an empty transcript, rather
     // than letting the request finish.
     //
-    // Checked *here* rather than in the pipeline task, and that is the whole
-    // point: this turn runs from `mic.stop()` returning to the end with no
-    // suspension, so the abandonment `setPhase(.idle)` triggers lands before the
-    // body producer can take the actor to resolve its context. Deferred to the
-    // pipeline task it was a race the request usually won on a fast link — the
-    // config part went out and the utterance the guard means to drop was
-    // transcribed anyway. The no-suspension property is what makes this correct
-    // and nothing enforces it, so don't add an `await` between here and the
-    // `setPhase`.
+    // Safe against the request finishing first, without depending on this turn
+    // not suspending: the body producer cannot write its `config` part until the
+    // release path pushes a context onto `uploadContextFeed`, and only
+    // `resolveCapturedContext` — reached solely from the pipeline task this
+    // guard returns before spawning — ever does. So a dropped clip's request is
+    // abandoned still holding its body open. (It used to be a real race, won by
+    // the request on a fast link.)
     guard recordedBytes >= SyncSTTLimits.minPCMBytes else {
       setPhase(.idle)
       return
@@ -378,6 +380,10 @@ public actor DictationSession {
   func cancelUpload() {
     uploadTask?.cancel()
     uploadTask = nil
+    // Close the context channel too, so a body producer parked on a value that
+    // is no longer coming winds down instead of waiting.
+    uploadContextFeed?.finish()
+    uploadContextFeed = nil
   }
 
   // The post-release pipeline — `runTranscribeInject` and its transcribe/inject

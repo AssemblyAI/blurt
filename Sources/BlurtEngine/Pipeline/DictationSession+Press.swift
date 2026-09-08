@@ -32,10 +32,14 @@ extension DictationSession {
     // keeps meaning exactly what it says.
     setPhase(.connecting)
     do {
-      // Pre-open the dictation connection while the user speaks, so the first dictation after an idle
-      // gap doesn't pay DNS+TCP+TLS on the transcribe hot path (~170 ms cold, measured). Detached
-      // + fire-and-forget: it must never delay recording, and a failure is harmless (the request
-      // just pays setup as before); warming every press is cheap since a hot pool just reuses it.
+      // Pre-open the dictation connection so the request `startUpload` opens
+      // below is streaming from its first frame rather than spending ~170 ms on
+      // DNS+TCP+TLS (cold, measured). Not about the release path any more — the
+      // request opens at press, so setup overlaps the recording regardless; see
+      // `AssemblyAITranscriber.warmUp()` for what it still buys and for the
+      // measurement showing it coalesces with, rather than races, that request.
+      // Detached + fire-and-forget: it must never delay recording, and a failure
+      // is harmless.
       let transcriber = transcriber
       Task.detached { await transcriber.warmUp() }
       // The mic bring-up runs as a child task so the whole context-capture chain

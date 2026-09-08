@@ -19,14 +19,18 @@ actor StubTranscriber: TranscriberProtocol {
   init(mode: Mode) { self.mode = mode }
 
   func transcribe(
-    frames: AsyncStream<Data>, sampleRate: Int,
-    resolveContext: @escaping @Sendable () async -> TranscriptionContext?
+    frames: AsyncStream<Data>, sampleRate: Int, context: AsyncStream<TranscriptionContext?>
   ) async throws -> String {
-    // Drain first, then resolve the context: that is the production order (the
-    // config part is written after the last frame), and a stub that resolved
-    // early would hide a session that stopped feeding the stream.
+    // Drain the feed first, then take the context: that is the production order
+    // (the config part is written after the last frame), and a stub that read
+    // the context early would hide a session that stopped feeding the stream.
     for await _ in frames {}
-    receivedContexts.append(await resolveContext())
+    var resolved: TranscriptionContext?
+    for await value in context {
+      resolved = value
+      break
+    }
+    receivedContexts.append(resolved)
     switch mode {
     case .transcript(let transcript):
       return transcript

@@ -100,6 +100,31 @@ struct ChunkedUploadTests {
     #expect(probe.completions == 0)
   }
 
+  @Test("a request that fails before its config part still leaves the context resolved")
+  func contextSurvivesAnEarlyRequestFailure() async throws {
+    // The context used to be populated as a side effect of the request reaching
+    // its config part — pulled out of the session by the body producer. A
+    // request that failed earlier (an early 401, a torn-down pipe) therefore
+    // left the paste separator and the developer-mode error log believing the
+    // dictation had no focused field at all. Now the release path resolves and
+    // pushes it, so the failure is logged with what was actually captured.
+    let log = RecordedLog()
+    let session = DictationSession(
+      mic: StubMicCapture(), transcriber: FailsBeforeContext(), injector: StubInjector(),
+      keyTermsProvider: { [] },
+      seams: testSeams(
+        field: FocusCapture.FocusedFieldContext(
+          priorText: "Dear Sam,", selectedText: nil, windowTitle: nil, fieldLabel: nil),
+        log: log))
+
+    await session.press()
+    await session.release()
+    await session.waitForIdle()
+
+    let failure = try #require(log.failures.first)
+    #expect(failure.context?.priorText == "Dear Sam,")
+  }
+
   // MARK: - The body pipe
 
   @Test("the body pipe delivers every chunk, in order")
@@ -250,6 +275,17 @@ extension ChunkedUploadTests {
   }
 }
 
+/// Transcriber double that fails without ever reading the context channel — an
+/// authorization failure that lands before the body is finished.
+private struct FailsBeforeContext: TranscriberProtocol {
+  func transcribe(
+    frames: AsyncStream<Data>, sampleRate: Int, context: AsyncStream<TranscriptionContext?>
+  ) async throws -> String {
+    for await _ in frames {}
+    throw AssemblyAIError.http(status: 401, message: "Invalid API key")
+  }
+}
+
 /// Transcriber double that reports *when* it was called and, optionally, parks
 /// after the feed ends — the two facts the chunked upload turns on and that a
 /// return-value-only stub cannot show.
@@ -276,16 +312,20 @@ private final class UploadProbe: TranscriberProtocol, Sendable {
   }
 
   func transcribe(
-    frames: AsyncStream<Data>, sampleRate: Int,
-    resolveContext: @escaping @Sendable () async -> TranscriptionContext?
+    frames: AsyncStream<Data>, sampleRate: Int, context: AsyncStream<TranscriptionContext?>
   ) async throws -> String {
     entered.open()
-    // Drain first, then resolve the context: that is the production order (the
-    // config part is written after the last frame), and a probe that resolved
-    // early would hide a session that stopped feeding the stream.
+    // Drain the feed first, then take the context: that is the production order
+    // (the config part is written after the last frame), and a probe that read
+    // the context early would hide a session that stopped feeding the stream.
     for await _ in frames {}
     framesDone.value = true
-    _ = await resolveContext()
+    for await _ in context { break }
+    // A channel that finished without a value means the dictation was
+    // abandoned, and the real transcriber stops here rather than writing a
+    // config part for it — see `TranscriberProtocol.transcribe`. A probe that
+    // sailed on would report a completion the request never made.
+    try Task.checkCancellation()
     if let holding {
       await holding.enter()
       // Sampled after the gate so the test controls when it is read; a real

@@ -24,12 +24,11 @@ extension DictationSession {
     // failure, cancel, or a completed paste).
     let pipelineInterval = Self.signposter.beginInterval(Self.pipelineSignpostName)
     defer { Self.signposter.endInterval(Self.pipelineSignpostName, pipelineInterval) }
-    // The transcript comes from the request opened at press, which has been
-    // streaming this audio all along. `mic.stop()` (in `performRelease`) ended
-    // the frame stream, which is what makes the transcriber write its `config`
-    // part — calling `resolveCapturedContext` on the way, so the press-time AX
-    // read is still consumed at release and `capturedContext` is set by the time
-    // this returns.
+    // Resolve the press-time AX field read and hand it to the request, which
+    // has been holding its `config` part since `mic.stop()` ended the frame
+    // feed. Done here, before the wait, so `capturedContext` is set for the
+    // paste separator and the log whether or not the request gets that far.
+    await resolveCapturedContext()
     guard let text = await awaitUpload() else { return }
 
     // A cancel() that landed while transcribe was in flight already set
@@ -95,19 +94,22 @@ extension DictationSession {
   /// The feed arrives as an argument rather than being fetched here, so it
   /// belongs to the capture `mic.start()` just brought up; see
   /// `MicCaptureProtocol.start()` for the race that shape rules out.
+  ///
+  /// The context travels the same direction: this installs the channel the
+  /// request's `config` part waits on, and `resolveCapturedContext` pushes the
+  /// value at release. So the request is one-way throughout — audio, then
+  /// context — and needs no reference back to this actor.
   func startUpload(frames: AsyncStream<Data>) {
+    let (context, contextFeed) = AsyncStream.makeStream(
+      of: TranscriptionContext?.self, bufferingPolicy: .bufferingNewest(1))
+    uploadContextFeed = contextFeed
     // Lifted out of the actor so the task body captures Sendable values rather
     // than isolated state, the same move `performPress` makes for `transcriber`.
     let transcriber = transcriber
     let sampleRate = SyncSTTLimits.sampleRate
-    uploadTask = Task { [weak self] in
-      // Bound once here rather than referenced through the capture list inside
-      // the nested closure — a `[weak self]` capture is a var, which a second
-      // concurrently-executing closure may not read.
-      let session = self
-      return try await transcriber.transcribe(
-        frames: frames, sampleRate: sampleRate,
-        resolveContext: { await session?.resolveCapturedContext() ?? nil })
+    uploadTask = Task {
+      try await transcriber.transcribe(
+        frames: frames, sampleRate: sampleRate, context: context)
     }
   }
 
@@ -152,12 +154,12 @@ extension DictationSession {
     }
   }
 
-  /// Consumes the press-time AX field read, bounded by `contextWaitBudget`, and
-  /// records it as `capturedContext` for the config part, the paste's separator
-  /// decision and the log to share one snapshot.
+  /// Consumes the press-time AX field read, bounded by `contextWaitBudget`,
+  /// records it as `capturedContext` for the paste's separator decision and the
+  /// log, and sends it to the request's `config` part.
   ///
-  /// Called by the transcriber once the last frame is sent, so the context is
-  /// decided at release exactly as it was when the request was built there.
+  /// Called from the release path, so the context is decided at release exactly
+  /// as it was when the request was built there.
   ///
   /// Take the stream out of the actor's state in the SAME turn it's read, before
   /// the suspension below. Reading it and clearing it across an `await` let a
@@ -168,16 +170,20 @@ extension DictationSession {
   /// `conversation_context` — the recent-dictation turns *and* the prior chunk —
   /// along with the key terms. The window is microseconds, but the invariant is
   /// now local instead of depending on scheduling.
-  func resolveCapturedContext() async -> TranscriptionContext? {
+  func resolveCapturedContext() async {
     let stream = contextStream
     contextStream = nil
-    guard let stream else {
+    if let stream {
+      capturedContext = await Self.firstValue(
+        of: stream, within: Self.contextWaitBudget, clock: clock)
+    } else {
       capturedContext = nil
-      return nil
     }
-    capturedContext = await Self.firstValue(
-      of: stream, within: Self.contextWaitBudget, clock: clock)
-    return capturedContext
+    // Hand it over and close the channel: the request writes its config part on
+    // receiving this, so a channel left open would hold the upload indefinitely.
+    uploadContextFeed?.yield(capturedContext)
+    uploadContextFeed?.finish()
+    uploadContextFeed = nil
   }
 
   private func inject(_ text: String) async {

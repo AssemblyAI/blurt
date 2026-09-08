@@ -82,8 +82,8 @@
         continuation.finish()
       }
     }
-    func stop() async throws -> Data {
-      Self.cannedPCM
+    func stop() async throws -> Int {
+      Self.cannedPCM.count
     }
     private static let cannedPCM = Data(count: SyncSTTLimits.minPCMBytes * 2)
   }
@@ -92,14 +92,13 @@
   /// text is whatever the test set — no network, fully deterministic.
   nonisolated struct UITestTranscriber: TranscriberProtocol {
     func transcribe(
-      frames: AsyncStream<Data>, sampleRate: Int,
-      resolveContext: @escaping @Sendable () async -> TranscriptionContext?
+      frames: AsyncStream<Data>, sampleRate: Int, context: AsyncStream<TranscriptionContext?>
     ) async throws -> String {
-      // Drained, and the context resolved, in production order: the session
-      // hands over a live feed at press and the harness has to consume it for
-      // the release to complete.
+      // Feed drained then context taken, in production order: the session hands
+      // over a live feed at press and the harness has to consume it for the
+      // release to complete.
       for await _ in frames {}
-      _ = await resolveContext()
+      for await _ in context { break }
       return await MainActor.run { UITestState.shared.cannedTranscript }
     }
   }

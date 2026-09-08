@@ -44,9 +44,14 @@ import Synchronization
 /// delegate queue also touches lives behind the `Mutex`.
 final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   private struct Guarded {
-    /// Every byte the delegate has delivered, in arrival order — already the
-    /// raw S16LE blob `stopAndReadPCM` returns.
-    var captured = Data()
+    /// How many bytes the delegate has delivered. A count, not the bytes: the
+    /// recording goes out on `frames` as it is captured, so nothing downstream
+    /// reads the audio back — the release path only needs to know whether there
+    /// was enough of it to send (`SyncSTTLimits.minPCMBytes`). Accumulating the
+    /// blob as well cost a second `memcpy` of every byte inside this lock, plus
+    /// `Data`'s geometric reallocation, and retained a duplicate of the whole
+    /// utterance (~3.7 MB at the recording cap) until release.
+    var capturedBytes = 0
     /// Frames delivered so far, summed off each sample buffer's own count.
     /// Frames of digital silence count exactly like real audio; the liveness
     /// gate's power term is what tells those apart.
@@ -294,15 +299,18 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// transcriber writes the `config` part and the closing boundary as soon as
   /// the stream ends, so "the recording stopped" and "the request body is
   /// complete" are the same event.
-  func stopAndReadPCM() -> Data {
+  ///
+  /// Answers the byte count rather than the audio, because by here the audio has
+  /// already been uploaded — see `Guarded.capturedBytes`.
+  func stopAndReadByteCount() -> Int {
     session.stopRunning()
-    // Finish and read under one lock, so the feed and the returned blob cut off
-    // at the same chunk. A delegate callback still waiting on the lock then
-    // lands after both — its bytes reach neither, which is consistent, and it
-    // is post-`stopRunning()` audio in the first place.
+    // Finish and count under one lock, so the feed and the count cut off at the
+    // same chunk. A delegate callback still waiting on the lock then lands after
+    // both — its bytes reach neither, which is consistent, and it is
+    // post-`stopRunning()` audio in the first place.
     return state.withLock {
       framesContinuation.finish()
-      return $0.captured
+      return $0.capturedBytes
     }
   }
 
@@ -312,7 +320,7 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
     session.stopRunning()
     state.withLock {
       framesContinuation.finish()
-      $0.captured = Data()
+      $0.capturedBytes = 0
       $0.frameCount = 0
     }
   }
@@ -342,16 +350,15 @@ extension CaptureSessionRecorder: AVCaptureAudioDataOutputSampleBufferDelegate {
     guard status == kCMBlockBufferNoErr else { return }
     let frameCount = CMSampleBufferGetNumSamples(sampleBuffer)
     state.withLock {
-      $0.captured.append(chunk)
+      $0.capturedBytes += chunk.count
       $0.frameCount += frameCount
-      // Published *under* the lock, together with the append, because the two
-      // have to agree: `stopAndReadPCM` finishes the feed and reads `captured`
-      // under this same lock, so a chunk appended here but yielded after that
-      // would sit in the returned blob while being absent from the upload — and
-      // the slice lost that way is exactly the tail the Bluetooth linger exists
-      // to preserve. Cheap enough to hold: an unbounded `yield` is a buffer
-      // append plus at most one continuation resumption, and it cannot re-enter
-      // this lock.
+      // Published *under* the lock, together with the tally, because the two
+      // have to agree: `stopAndReadByteCount` finishes the feed and reads the
+      // count under this same lock, so a chunk counted here but yielded after
+      // that would be measured without being uploaded — and the slice lost that
+      // way is exactly the tail the Bluetooth linger exists to preserve. Cheap
+      // enough to hold: an unbounded `yield` is a buffer append plus at most one
+      // continuation resumption, and it cannot re-enter this lock.
       framesContinuation.yield(chunk)
     }
   }
