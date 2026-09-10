@@ -178,6 +178,22 @@ extension DictationSession {
     upload?.send(resolved)
   }
 
+  /// Abandons the in-flight dictation request — the streamed body can't be
+  /// completed meaningfully once the audio behind it is going away, so the
+  /// whole request goes rather than being left to finish on its own.
+  /// Reached from `setPhase` for every terminal phase, so a dictation that ends
+  /// without a transcript cannot leave a request streaming. The one explicit
+  /// caller left is `stopAndCancel`, which has to run before `cancelCapture()`
+  /// ends the feed.
+  func cancelUpload() {
+    upload?.abandon()
+    upload = nil
+    // The resolution outlives nothing: its only two jobs are this request's
+    // config part and this dictation's `capturedContext`.
+    contextResolution?.cancel()
+    contextResolution = nil
+  }
+
   /// Waits for the request opened at press. Returns the transcript, or nil if
   /// it failed (phase set to `.failed`).
   private func awaitUpload() async -> String? {

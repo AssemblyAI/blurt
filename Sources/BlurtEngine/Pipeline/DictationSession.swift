@@ -383,25 +383,10 @@ public actor DictationSession {
     autoReleaseTask = nil
   }
 
-  /// Abandons the in-flight dictation request — the streamed body can't be
-  /// completed meaningfully once the audio behind it is going away, so the
-  /// whole request goes rather than being left to finish on its own.
-  /// Reached from `setPhase` for every terminal phase, so a dictation that ends
-  /// without a transcript cannot leave a request streaming. The one explicit
-  /// caller left is `stopAndCancel`, which has to run before `cancelCapture()`
-  /// ends the feed.
-  func cancelUpload() {
-    upload?.abandon()
-    upload = nil
-    // The resolution outlives nothing: its only two jobs are this request's
-    // config part and this dictation's `capturedContext`.
-    contextResolution?.cancel()
-    contextResolution = nil
-  }
-
   // The post-release pipeline — `runTranscribeInject` and its transcribe/inject
   // halves, plus the bounded context wait — lives in
-  // `DictationSession+Pipeline.swift`, and `setPhase` (the one place a phase
-  // change is published and a failure logged) with the rest of the observation
-  // surface in `+Observation` (see the split note at the top).
+  // `DictationSession+Pipeline.swift` along with the rest of the upload
+  // lifecycle (`startUpload`, `cancelUpload`), and `setPhase` (the one place a
+  // phase change is published and a failure logged) with the rest of the
+  // observation surface in `+Observation` (see the split note at the top).
 }
