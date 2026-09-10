@@ -1364,6 +1364,12 @@ def test_the_multipart_body_matches_what_the_swift_client_sends():
     assert 'name="config"' in text
     assert '{"sample_rate": 16000}' in text
     assert b"\x01\x02" in body
+    # `config` before `audio` is the route's contract, not a preference:
+    # `/v1/transcribe/live` rejects an audio-first body outright (the service's
+    # exact 400 is quoted once, on `AssemblyAITranscriber.streamedBody`).
+    # Nothing else here would catch a swap — `--verify-live` would just start
+    # failing wholesale against the API.
+    assert text.index('name="config"') < text.index('name="audio"')
 
 
 def test_an_empty_instruction_asks_for_the_service_default():
@@ -1371,7 +1377,11 @@ def test_an_empty_instruction_asks_for_the_service_default():
 
     for instruction, expected in ((None, {}), ("", {}), ("do x", {"instruction": "do x"})):
         body, _ = live._multipart(b"", {"llm": {"instruction": instruction} if instruction else {}})
-        config = json.loads(body.decode("latin-1").split("\r\n\r\n")[-1].split("\r\n--")[0])
+        # Found by part name, not by position: this used to take the last
+        # `\r\n\r\n` chunk, which silently depended on `config` being the trailing
+        # part and broke when the streaming route required it to lead.
+        part = body.decode("latin-1").split('name="config"')[1]
+        config = json.loads(part.split("\r\n\r\n")[1].split("\r\n--")[0])
         assert config["llm"] == expected
 
 

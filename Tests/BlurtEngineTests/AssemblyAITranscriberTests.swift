@@ -16,7 +16,7 @@ struct HTTPClientTests {
     let hits = Counter()
     let transport = FakeHTTPTransport { request in
       _ = hits.next()
-      guard request.url?.path.hasSuffix("/transcribe") == true,
+      guard request.url?.path.hasSuffix("/v1/transcribe/live") == true,
         request.httpMethod == "POST"
       else { return (404, Data()) }
       return (200, json(["text": "um hello world", "llm_response": "Hello world."]))
@@ -55,7 +55,7 @@ struct HTTPClientTests {
   @Test("transcriber succeeds with a real context (which builds context turns)")
   func transcribeWithContext() async throws {
     let transport = FakeHTTPTransport { request in
-      guard request.url?.path.hasSuffix("/transcribe") == true else { return (404, Data()) }
+      guard request.url?.path.hasSuffix("/v1/transcribe/live") == true else { return (404, Data()) }
       return (200, json(["text": "hello world"]))
     }
 
@@ -95,9 +95,9 @@ struct HTTPClientTests {
     let getHits = Counter()
     let transport = FakeHTTPTransport { request in
       _ = hits.next()
-      // The warm-up must be a bare, auth-less GET off the /transcribe path —
+      // The warm-up must be a bare, auth-less GET off the transcribe path —
       // carrying the key would make it count as a transcription.
-      if request.httpMethod == "GET", request.url?.path.hasSuffix("/transcribe") == false,
+      if request.httpMethod == "GET", request.url?.path.hasSuffix("/v1/transcribe/live") == false,
         request.value(forHTTPHeaderField: "Authorization") == nil
       {
         _ = getHits.next()
@@ -106,7 +106,7 @@ struct HTTPClientTests {
     }
 
     // warmUp is fire-and-forget and swallows errors; it should still issue
-    // exactly one lightweight GET (no /transcribe POST, no auth) to establish
+    // exactly one lightweight GET (no transcribe POST, no auth) to establish
     // the pooled connection the next transcribe reuses.
     await makeTranscriber(apiKey: "test-key", transport: transport).warmUp()
     #expect(hits.value == 1)

@@ -7,8 +7,9 @@
 
 What this optimizes
 -------------------
-Blurt sends one `POST /transcribe` per utterance. The request's `config.prompt`
-steers *transcription*; the `config.llm` block asks the service to run an LLM
+Blurt sends one `POST /v1/transcribe/live` per utterance. The request's
+`config.conversation_context` steers *transcription* (there is no `config.prompt`
+— a settled decision, see AGENTS.md); the `config.llm` block asks the service to run an LLM
 rewrite over the verbatim transcript — that rewrite is what removes disfluencies
 and fixes punctuation before the text is pasted. Blurt sends `candidates.PRIOR_WINNER`
 there (as `CleanupInstruction.text` on the Swift side); before that it sent an empty

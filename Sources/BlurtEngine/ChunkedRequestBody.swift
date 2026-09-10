@@ -37,6 +37,14 @@ final class ChunkedRequestBody: @unchecked Sendable {
   /// second is enough to absorb the jitter between the capture callback's
   /// delivery cadence and the socket's, and no more. (The kernel's own socket
   /// send buffer sits behind this and is not ours to size.)
+  ///
+  /// Swept against the real route (2026-09-09, 6 s clips paced at realtime, 3
+  /// reps each): post-speech latency is flat from 4 kB to the whole body —
+  /// 4 kB 323 ms, 8 kB 287, 16 kB 292, **32 kB 281**, 64 kB 301, one write 308 —
+  /// with every range overlapping. So this value is not load-bearing on a fast
+  /// uplink, and it is already the low end and the tightest spread (276-286 ms).
+  /// Nothing to win by retuning it; what it protects against is a *saturated*
+  /// uplink, which that sweep cannot manufacture and so did not test.
   private static let bufferSize = SyncSTTLimits.pcmBytes(forSeconds: 1)
 
   /// Backpressure re-check interval: starts here and doubles up to

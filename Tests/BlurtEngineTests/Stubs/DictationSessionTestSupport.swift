@@ -69,13 +69,14 @@ func testSeams(
 /// did, and both copies quietly dropped the transcript recording `testSeams`
 /// wires up, so a later assertion on `log.transcripts` would have seen nothing.
 func hungFieldSeams(
+  field: FocusCapture.FocusedFieldContext = .empty,
   log: RecordedLog = RecordedLog()
 ) -> (seams: DictationSession.Seams, release: DispatchSemaphore) {
   let hung = DispatchSemaphore(value: 0)
   var seams = testSeams(log: log)
   seams.captureFieldContext = {
     hung.wait()
-    return .empty
+    return field
   }
   return (seams, hung)
 }
@@ -89,11 +90,13 @@ func makeSession(
   transcriber: any TranscriberProtocol,
   mic: StubMicCapture = StubMicCapture(),
   injector: StubInjector = StubInjector(),
+  clock: any Clock<Duration> = ContinuousClock(),
+  keyTerms: [String] = [],
   seams: DictationSession.Seams = .offline
 ) -> DictationSession {
   DictationSession(
-    mic: mic, transcriber: transcriber, injector: injector,
-    keyTermsProvider: { [] }, seams: seams)
+    mic: mic, transcriber: transcriber, injector: injector, clock: clock,
+    keyTermsProvider: { keyTerms }, seams: seams)
 }
 
 extension DictationSession.Seams {

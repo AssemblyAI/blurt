@@ -1,7 +1,7 @@
 /// The cleanup instruction sent as `config.llm.instruction` (see
 /// `AssemblyAITranscriber.DictationConfig`). The service applies it to the
 /// verbatim transcript with its own rewrite model, inside the same
-/// `/transcribe` call — this is the *server-side* rewrite instruction, not a
+/// `/v1/transcribe/live` call — this is the *server-side* rewrite instruction, not a
 /// client-side cleanup pass, and not a `ConversationContext` change (that field
 /// steers transcription with the prior dialogue and carries no instructions at
 /// all, because disfluency removal is this rewrite's job).

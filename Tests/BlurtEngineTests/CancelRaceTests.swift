@@ -294,10 +294,9 @@ private actor GatedTranscriber: TranscriberProtocol {
   }
 
   func transcribe(
-    frames: AsyncStream<Data>, sampleRate: Int, context: AsyncStream<TranscriptionContext?>
+    frames: AsyncStream<Data>, sampleRate: Int, context: TranscriptionContext?
   ) async throws -> String {
-    for await _ in frames {}
-    _ = try await context.firstOrAbandoned()
+    try await drainUntilAbandoned(frames)
     await gate.enter()
     if throwsWhenCancelled && Task.isCancelled { throw URLError(.cancelled) }
     return text

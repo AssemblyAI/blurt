@@ -5,15 +5,17 @@ import os
 ///   log show --predicate 'subsystem == "dev.alex.blurt" && category == "Transcriber"' --last 1h
 /// `TranscriberProtocol` backed by AssemblyAI's **dictation** API.
 ///
-/// A single `POST dictation.assemblyai.com/transcribe` carries the captured
-/// audio (raw S16LE PCM, exactly the bytes the mic recorded — there is no
-/// re-encoding pass) plus a JSON `config` part, and the response body carries
+/// A single `POST dictation.assemblyai.com/v1/transcribe/live` carries a JSON
+/// `config` part plus the captured audio (raw S16LE PCM, exactly the bytes the
+/// mic recorded — there is no re-encoding pass), and the response body carries
 /// both the verbatim transcript and — when the config requests one via its
 /// `llm` block (the "enhanced transcripts" setting, on by default) — an
 /// LLM-rewritten version with disfluencies removed, produced by applying
 /// `CleanupInstruction.text` server-side.
 /// No upload step, no job submission, no polling — one
-/// request per utterance covers transcription *and* cleanup. The service picks
+/// request per utterance covers transcription *and* cleanup. `config` leads the
+/// body because the streaming route cannot open its upstream call without it —
+/// see `transcribePath` and `streamedBody`. The service picks
 /// the STT model server-side and handles audio from ~80 ms up to 120 s; the
 /// rewrite is best-effort with a ~5 s server-side deadline, so a rewrite
 /// failure still returns the verbatim transcript (`llm_response` null).
@@ -41,6 +43,16 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// stuck on "Transcribing…" indefinitely.
   private static let requestTimeoutSeconds: TimeInterval = 90
 
+  /// The dictation API's **streaming** route, relative to `baseURL`.
+  ///
+  /// More than a respelling of the unversioned `/transcribe` it replaced: that
+  /// route parsed the body only once complete, so inference could not begin
+  /// until the last byte landed (and it required the opposite part order). This
+  /// one opens its upstream STT call as soon as `config` arrives, so inference
+  /// overlaps the recording. No fallback to the old route — a client that can
+  /// silently take the slower path is one whose latency nobody can reason about.
+  private static let transcribePath = "v1/transcribe/live"
+
   /// `enhancedTranscripts` decides, per request, whether the config carries
   /// the `llm` cleanup-rewrite block; `customStyle` supplies the *active* style
   /// profile's instructions, appended to that block's cleanup instruction — one
@@ -67,14 +79,26 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   // MARK: - Dictation request
 
   public func transcribe(
-    frames: AsyncStream<Data>, sampleRate: Int, context: AsyncStream<TranscriptionContext?>
+    frames: AsyncStream<Data>, sampleRate: Int, context: TranscriptionContext?
   ) async throws -> String {
     guard let apiKey = apiKeyProvider(), !apiKey.isEmpty else {
       throw BlurtError.apiKeyMissing
     }
     let boundary = "blurt-\(UUID().uuidString)"
+    // Encoded before the request opens, not from inside the body producer: the
+    // `config` part leads the wire now, so an unencodable config has to fail
+    // here — mid-body it would abort a request whose upstream call was open.
+    //
+    // What goes on the wire is the prior dialogue (recent dictations, then the
+    // text before the cursor) and the key terms as word boosting. App name,
+    // window title, field label and selected text stay on the machine —
+    // `ConversationContext` draws that line, so nothing is filtered here.
+    let config = try makeConfigData(
+      sampleRate: sampleRate,
+      conversationContext: ConversationContext.turns(context: context),
+      wordBoost: KeytermsBoost.fitted(context?.keyTerms ?? []))
 
-    var request = URLRequest(url: baseURL.appendingPathComponent("transcribe"))
+    var request = URLRequest(url: baseURL.appending(path: Self.transcribePath))
     request.httpMethod = "POST"
     // Bounds a stalled connection; see `requestTimeoutSeconds` for why an idle
     // timeout is the right shape here — and note it now has to cover the
@@ -87,8 +111,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 
     let progress = UploadProgress()
     let body = streamedBody(
-      frames: frames, sampleRate: sampleRate, boundary: boundary,
-      context: context, progress: progress)
+      frames: frames, config: config, boundary: boundary, progress: progress)
     let data = try await send(
       request, streaming: body, sampleRate: sampleRate, progress: progress)
     guard let response = try? JSONDecoder().decode(DictationResponse.self, from: data) else {
@@ -108,22 +131,30 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     return response.text
   }
 
-  /// The multipart body, produced in the only order a live recording allows:
-  /// the `audio` part's headers, then each captured frame as it arrives, then
-  /// the `config` part once the frames stop.
+  /// The multipart body, in the order the streaming route requires: the whole
+  /// `config` part, then the `audio` part's headers, then each captured frame as
+  /// it arrives, then the closing boundary once the frames stop.
   ///
-  /// `config` goes **last**. The dictation API permits it because it parses the
-  /// body only once complete (verified against the service — sync's own
-  /// streaming route requires the opposite order and would reject this). That
-  /// ordering is load-bearing rather than incidental: it lets the press-time
-  /// Accessibility context read resolve at *release*, exactly as it did when
-  /// the whole request was built after recording. The producer therefore waits
-  /// here, after the last frame, for the value the session pushes on `context` —
-  /// the config carries the same `conversation_context` and `word_boost` it
-  /// always did, decided at the same moment as before.
+  /// `config` goes **first**: the route's contract, not a preference — an
+  /// audio-first body earns `400 the config part must be sent before the audio
+  /// part on the streaming endpoint, because the upstream call cannot be opened
+  /// without it` (verified against the service, 2026-09-09). Leading with it is
+  /// also what buys the latency, since the service opens its upstream STT call
+  /// the moment it lands. The config is therefore settled before any audio moves
+  /// — see `transcribe`, and `DictationSession.startUpload` for where the
+  /// press-time Accessibility read is awaited so `conversation_context` still
+  /// carries the text before the cursor.
   ///
-  /// Finishing the stream is what closes the multipart body and tells the
-  /// service the utterance is over, so `frames` ending is end-of-audio.
+  /// Finishing the stream closes the body, so `frames` ending is end-of-audio —
+  /// and nothing happens between the last frame and that close now, the other
+  /// half of the win: the old body waited for the context read here first.
+  ///
+  /// Abandonment is `onTermination` cancelling this producer, and there is no
+  /// in-band check: the producer is an unstructured `Task` and does not inherit
+  /// the upload task's cancellation, so by the time it could notice, the
+  /// continuation is torn down and its yields are already no-ops. The teardown
+  /// is the mechanism; the config-last body used to make a complete body
+  /// impossible by construction, and nothing does now.
   ///
   /// The stream buffers without bound, which is deliberate: frames can only
   /// arrive as fast as the microphone produces them, so a backlog forms only
@@ -131,41 +162,30 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// somewhere regardless. The recording cap bounds it to
   /// `SyncSTTLimits.maxAudioSeconds` of PCM.
   private func streamedBody(
-    frames: AsyncStream<Data>, sampleRate: Int, boundary: String,
-    context: AsyncStream<TranscriptionContext?>, progress: UploadProgress
+    frames: AsyncStream<Data>, config: Data, boundary: String, progress: UploadProgress
   ) -> AsyncThrowingStream<Data, any Error> {
     AsyncThrowingStream { continuation in
       let producer = Task {
-        continuation.yield(Self.audioPartHeader(boundary: boundary))
+        continuation.yield(DictationMultipart.configHead(config: config, boundary: boundary))
+        continuation.yield(DictationMultipart.audioPartHeader(boundary: boundary))
         for await frame in frames {
           progress.recordFrame(bytes: frame.count)
           continuation.yield(frame)
         }
-        do {
-          // Wait for the session's press-time read, which it resolves at
-          // release and sends here. A channel that finishes without sending
-          // means the dictation was abandoned, and `firstOrAbandoned` throws —
-          // caught below, so the body fails instead of completing a request for
-          // audio nobody is waiting for.
-          let resolved = try await context.firstOrAbandoned()
-          // The prior dialogue that goes on the wire: the user's recent
-          // dictations, then the text before the cursor (empty when there is
-          // neither, which omits the field). App name, window title, field
-          // label and selected text stay on the machine — `ConversationContext`
-          // draws that line, so nothing is filtered here.
-          let config = try makeConfigData(
-            sampleRate: sampleRate,
-            conversationContext: ConversationContext.turns(context: resolved),
-            // The other steering field: the user's key terms as a word-boost
-            // list, fitted to its own (different) cap.
-            wordBoost: KeytermsBoost.fitted(resolved?.keyTerms ?? []))
-          continuation.yield(Self.configTail(config: config, boundary: boundary))
-          continuation.finish()
-        } catch {
-          // A truncated body would earn a generic 400 from the service; finish
-          // with the real error so the failure names its own cause.
-          continuation.finish(throwing: error)
+        // The too-short-clip floor, enforced here and not only by
+        // `DictationSession.performRelease`: this producer has nothing left to
+        // wait for, so it could close the request the moment `frames` ends and
+        // beat that guard on a fast link — the race the guard used to win by
+        // construction, when the config part waited on the pipeline's context.
+        // What it costs to lose is not an error but a pointless billed request:
+        // the route answers a 20 ms clip with 200 and an empty transcript
+        // (measured), which the pipeline then drops to `.idle` anyway.
+        guard progress.audioBytes >= SyncSTTLimits.minPCMBytes else {
+          continuation.finish(throwing: AssemblyAIError.audioTooShort)
+          return
         }
+        continuation.yield(DictationMultipart.closingBoundary(boundary: boundary))
+        continuation.finish()
       }
       continuation.onTermination = { _ in producer.cancel() }
     }
@@ -248,43 +268,6 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     )
   }
 
-  /// The `audio` part's framing — everything before the PCM bytes themselves,
-  /// written once when the request opens so the frames that follow are just
-  /// audio.
-  ///
-  /// Internal, not private, so tests can assert the wire format against the
-  /// bytes. `FakeHTTPTransport` can observe the streamed body directly now
-  /// (it collects the `AsyncThrowingStream`), but these two halves are still
-  /// where the framing — boundaries, part headers, the `audio.pcm` filename,
-  /// CRLF placement — is stated once.
-  static func audioPartHeader(boundary: String) -> Data {
-    framed(
-      "--\(boundary)\r\n",
-      "Content-Disposition: form-data; name=\"audio\"; filename=\"audio.pcm\"\r\n",
-      "Content-Type: audio/pcm\r\n\r\n")
-  }
-
-  /// UTF-8 encodes the multipart framing. One definition for both halves of the
-  /// body — the CRLF placement and part headers are what the file's comments
-  /// call the contract, so they are stated once rather than once per half.
-  private static func framed(_ parts: String...) -> Data {
-    Data(parts.joined().utf8)
-  }
-
-  /// Everything after the last audio frame: the `audio` part's terminating
-  /// CRLF, the whole `config` part, and the closing boundary. Written when the
-  /// recording ends — see `streamedBody` for why `config` is last.
-  static func configTail(config: Data, boundary: String) -> Data {
-    var tail = framed(
-      "\r\n",
-      "--\(boundary)\r\n",
-      "Content-Disposition: form-data; name=\"config\"\r\n",
-      "Content-Type: application/json\r\n\r\n")
-    tail.append(config)
-    tail.append(framed("\r\n", "--\(boundary)--\r\n"))
-    return tail
-  }
-
   // MARK: - Networking helpers
 
   private func send(
@@ -362,6 +345,14 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 enum AssemblyAIError: Error, LocalizedError {
   case http(status: Int, message: String?)
   case malformedResponse
+  /// The recording ended below `SyncSTTLimits.minPCMBytes`, so the body was
+  /// never closed — a belt on top of `DictationSession.performRelease`'s own
+  /// guard rather than the only thing between a stray tap and a request billed
+  /// for transcribing nothing. `awaitUpload` maps it to the same quiet `.idle`
+  /// that guard produces, so whichever layer notices first the user sees the
+  /// same nothing; the description below is a backstop, not a message anyone is
+  /// expected to read.
+  case audioTooShort
 
   var errorDescription: String? {
     switch self {
@@ -370,6 +361,8 @@ enum AssemblyAIError: Error, LocalizedError {
       return "AssemblyAI error \(status)"
     case .malformedResponse:
       return "Unexpected response from AssemblyAI."
+    case .audioTooShort:
+      return "That recording was too short to transcribe."
     }
   }
 }

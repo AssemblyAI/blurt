@@ -50,7 +50,11 @@ genuinely correct, and reaching for it means it's time to stop and ask.
 ## Transcription pipeline
 
 - **No streaming STT.** The AssemblyAI Sync API returns the full transcript in
-  one response. Overlay goes "Transcribing…" → full text.
+  one response. Overlay goes "Transcribing…" → full text. The route is named
+  `/v1/transcribe/live` and the `config` part must precede the `audio` part, but
+  that is about the **upload**: the service starts inferring as the audio
+  arrives, and still answers with one final transcript. No deltas, no partial
+  results, no WebSocket — don't read the route name as permission to add them.
 - **No separate LLM cleanup pass.** Cleanup rides in the same dictation request,
   as the `llm` block's `instruction` (`CleanupInstruction`). No LLM Gateway
   client, no `StylerProtocol`, no post-transcription styling stage.

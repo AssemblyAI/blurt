@@ -54,16 +54,21 @@ enum ConversationContext {
   /// the focus capture returned.
   static let recentTurnCap = 99
 
-  /// Cap the dictation API places on `config.conversation_context`: 4096
-  /// characters summed across every turn.
+  /// **Our** budget for `config.conversation_context`: 4096 characters summed
+  /// across every turn. Not the API's — swept against `/v1/transcribe/live`
+  /// (2026-09-09), the field has no cap of its own: 4097, 16384, 32768 and
+  /// 49152 characters all returned 200, and the only limit found was on the
+  /// whole `config` part (`config part too large`, somewhere between 48 KB and
+  /// 64 KB). So this is a bandwidth-and-latency measure, and there are ~12x of
+  /// headroom under the real ceiling if a reason to spend it ever appears.
   ///
   /// Counted in **characters**, not the UTF-8 bytes `KeytermsBoost` and
-  /// `CleanupInstruction` use, and the difference is deliberate. Those two count
-  /// bytes because over their cap the API rejects the whole request (400, before
-  /// the audio is read), so the conservative unit is the safe one. This field is
-  /// documented as *trimmed*, not rejected — the server drops the oldest turns
-  /// itself — so fitting here is a bandwidth and latency measure, and matching
-  /// the documented unit is worth more than over-shooting it.
+  /// `CleanupInstruction` use, and the difference is deliberate: those two count
+  /// bytes because over their cap the API really does reject the whole request
+  /// (measured — `word_boost` at 2049 characters earns
+  /// `keyterms_prompt exceeds 2048 characters`, before the audio is read), so
+  /// the conservative unit is the safe one. Nothing here is rejected, so the
+  /// documented unit is the right one to match.
   static let characterCap = 4096
 
   /// The turns to send for `context` — empty when there are none, which the
