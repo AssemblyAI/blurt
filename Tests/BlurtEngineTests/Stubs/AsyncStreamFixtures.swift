@@ -20,9 +20,8 @@ extension AsyncStream where Element: Sendable {
     }
   }
 
-  /// An already-finished feed — a capture that produced nothing, or a context
-  /// channel the session abandoned. Its own name, so a zero-length element
-  /// never has to stand in for "no element".
+  /// An already-finished feed — a capture that produced nothing. Its own name,
+  /// so a zero-length element never has to stand in for "no element".
   static var finished: AsyncStream {
     AsyncStream { $0.finish() }
   }

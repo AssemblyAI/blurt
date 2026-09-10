@@ -14,28 +14,27 @@ public protocol TranscriberProtocol: Sendable {
   /// waits ~3.1 s after speech for a buffered upload versus ~0.5 s chunked.
   ///
   /// `context` supplies the per-utterance priming (focused app + text before the
-  /// cursor, the user's recent dictations) as a one-value channel the caller
-  /// pushes at release. The `config` part is written last and waits on it, so
-  /// the context is still decided at release, as it was when the whole request
-  /// was built there. Send nil for none; finishing the channel without a value
-  /// abandons the request.
+  /// cursor, the user's recent dictations) as a plain value, resolved *before*
+  /// the request opens. It used to be a one-value channel the caller pushed at
+  /// release, because the `config` part was written last and could wait on it;
+  /// the streaming route puts `config` first, so there is nothing left to wait
+  /// with. The caller now owns that wait — see
+  /// `DictationSession.startUpload(frames:)`, which bounds it by
+  /// `contextWaitBudget` — and hands the settled value in. Pass nil for none.
   ///
-  /// Read it with `firstOrAbandoned()`, which is that contract as code — every
-  /// conformer and test double inherits the abandonment rule instead of
-  /// re-deriving it, which three of them were doing and two got wrong.
+  /// Abandonment travels the same simplification: cancelling the task that
+  /// called this is the whole of it, because nothing here parks on a channel
+  /// that might never deliver.
   ///
-  /// A pushed value rather than a closure the request calls back into, so the
-  /// whole thing runs one way: the caller sends audio and then context, and the
-  /// transcriber holds no reference to whatever assembled them. Pulling the
-  /// context back out of the caller also made it a side effect of the request
-  /// reaching its config part, so a request that failed earlier left the caller
-  /// believing the utterance had no context at all.
+  /// A value rather than a closure the request calls back into, so the whole
+  /// thing still runs one way: the caller decides the context, then feeds audio,
+  /// and the transcriber holds no reference to whatever assembled either.
   ///
   /// The dictation API resolves an utterance to a single final transcript, so
   /// this still returns that transcript in one shot (no incremental deltas) —
   /// chunking is about the upload, not the response.
   func transcribe(
-    frames: AsyncStream<Data>, sampleRate: Int, context: AsyncStream<TranscriptionContext?>
+    frames: AsyncStream<Data>, sampleRate: Int, context: TranscriptionContext?
   ) async throws -> String
 
   /// Optionally pre-open the transcription connection so the next `transcribe`
@@ -51,24 +50,4 @@ extension TranscriberProtocol {
   /// No-op default: a transcriber with nothing to pre-open (e.g. test stubs)
   /// inherits this and `DictationSession` can call `warmUp()` unconditionally.
   public func warmUp() async {}
-}
-
-extension AsyncStream where Element == TranscriptionContext? {
-  /// The one value the caller sends, or `CancellationError` when the channel
-  /// finishes without ever sending.
-  ///
-  /// The abandonment half of `transcribe(frames:sampleRate:context:)`'s
-  /// contract, stated once here rather than in each reader. It was prose plus a
-  /// hand-rolled `received` flag in the production conformer, and the test
-  /// doubles — which skipped the flag — happily returned a transcript for a
-  /// dictation the session had already abandoned, so no double could exercise
-  /// the rule the protocol documents.
-  ///
-  /// Deliberately *not* keyed off `Task.isCancelled`: the party reading this is
-  /// typically an unstructured task that does not inherit the cancellation, and
-  /// learns of the abandonment from this channel closing and nothing else.
-  public func firstOrAbandoned() async throws -> TranscriptionContext? {
-    for await value in self { return value }
-    throw CancellationError()
-  }
 }

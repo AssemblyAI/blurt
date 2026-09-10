@@ -350,7 +350,7 @@ rule along with the row.
 | Use `AVAudioEngine` / `installTap` for capture                        | A long-lived engine bound its input graph to one device and went stale on a mic↔built-in switch — `-10868` (`kAudioUnitErr_FormatNotSupported`) or all-zero buffers. `MicCapture` builds a fresh `AVCaptureSession` recorder per capture (owner-directed move from `AVAudioRecorder`, 2026-08-25).                                                                                                                                                                                                                                                                                                                           |
 | Pre-open the mic to shave bring-up latency (a warm/prepared recorder) | Measured against `kAudioDevicePropertyDeviceIsRunningSomewhere`: neither building an `AVCaptureSession` nor the retired `AVAudioRecorder.prepareToRecord()` opens the device, so neither pre-pays the 180–600 ms route activation `record()` costs. A warm-recorder lifecycle bought ~15 ms and cost a device-identity check, a pin check, an expiry and a bring-up flag. `MicCapture.warmUp()` is stateless: it absorbs the process's first-touch cost and holds nothing.                                                                                                                                                   |
 | Add streaming STT                                                     | The dictation API returns the full (already rewritten) text in one response; the overlay shows "Transcribing…" then the full text.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| Add a client-side LLM cleanup pass                                    | Cleanup is the dictation API's server-side rewrite, requested by the `llm` block on the same `/transcribe` call. No LLM Gateway client, no `StylerProtocol`, no styling stage, no second request — transcription steering belongs in `ConversationContext`.                                                                                                                                                                                                                                                                                                                                                                  |
+| Add a client-side LLM cleanup pass                                    | Cleanup is the dictation API's server-side rewrite, requested by the `llm` block on the same `/v1/transcribe/live` call. No LLM Gateway client, no `StylerProtocol`, no styling stage, no second request — transcription steering belongs in `ConversationContext`.                                                                                                                                                                                                                                                                                                                                                          |
 | Add local models or model downloads                                   | Transcription is a remote AssemblyAI call: no on-device ASR/LLM, no model cache, no download UI.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Pin transcription to English, or set a language at all                | Hurt non-English transcription; language is left to the model's own detection. **No `config.language_code`** either — the API documents it as defaulting to `en` and as ignored while a custom `prompt` is set, so dropping the prompt un-ignored it; detection was then measured to work with neither field set (es/fr/de/ja clips each transcribed in their own language against the live endpoint, rewrite included). Setting one would only take that away. `KeytermsWireTests` asserts the absence.                                                                                                                     |
 | Bring back `config.prompt`                                            | Replaced by `config.conversation_context` (`ConversationContext`), which is the structured field for the same job. A custom `prompt` also replaces the service's managed default and makes the API ignore `language_code`, so re-adding one silently gives up both.                                                                                                                                                                                                                                                                                                                                                          |
@@ -409,7 +409,7 @@ framework, or notarization rejects the build; roll-forward-only for a bad releas
 ```text
 DictationKeyTap (CGEventTap + DictationKeyGate) → AppCoordinator → DictationSession (actor) → MicCapture
                        ↓
-              AssemblyAITranscriber  (STT + LLM cleanup, AssemblyAI dictation API: one POST /transcribe)
+              AssemblyAITranscriber  (STT + LLM cleanup, dictation API: one POST /v1/transcribe/live)
                        ↓
               KeyInjector → focused app (clipboard paste via a synthesized ⌘V CGEvent)
 ```
@@ -552,9 +552,9 @@ hosts still read the meter through the seam they inject.
 ### `AssemblyAITranscriber` — `Sources/BlurtEngine/STT/AssemblyAITranscriber.swift`
 
 Implements `TranscriberProtocol` against AssemblyAI's **dictation** API: a single
-`POST https://dictation.assemblyai.com/transcribe` with the captured audio as a raw S16LE PCM blob
-in the `audio` multipart part plus a JSON `config` part (`sample_rate`, `channels`, and an `llm`
-block). No model header — the service pins the STT model server-side. The config's
+`POST https://dictation.assemblyai.com/v1/transcribe/live` with a JSON `config` part
+(`sample_rate`, `channels`, and an `llm` block) followed by the captured audio as a raw S16LE PCM
+blob in the `audio` part. No model header — the service pins the STT model server-side. The config's
 `conversation_context` field steers _transcription_ and carries the user's recent dictations followed
 by the text before the cursor (`ConversationContext.turns`), or nothing at all when there is neither —
 an empty list omits the field. There is no `prompt` field. The `llm` block asks the
@@ -610,12 +610,27 @@ The **upload is chunked**: `transcribe(frames:sampleRate:context:)` is called at
 streams the recording into one open request as the microphone produces it, so the transfer overlaps
 the speaking instead of following it. There is no buffered path — measured on a 1 Mbps uplink, a
 10 s dictation waits ~3.1 s after speech buffered versus ~0.5 s chunked, and on a fast link the two
-are within noise. The `config` part is written **last** (the dictation API parses the body only once
-complete), which is what lets the press-time context read still resolve at release. The _response_
+are within noise. The `config` part is written **first**, which the streaming route requires — it
+cannot open its upstream STT call without it, and rejects an audio-first body with a 400 (whose
+exact wording lives once, on `AssemblyAITranscriber.streamedBody`). That is
+also where the rest of the win comes from: the service starts inferring as the audio arrives rather
+than after the last byte, and nothing at all sits between the final frame and the request closing.
+The cost is that the press-time context read has to be settled _before_ the request opens, so
+`DictationSession.startUpload` awaits it (bounded by `contextWaitBudget`) instead of the release
+path doing so — the read is dispatched before the mic bring-up is joined, so it is almost always
+already finished and the wait is spent while the user is still speaking, not while they wait for a
+transcript. The _response_
 is unchanged and still arrives whole: a single `async throws -> String`, no deltas. The underlying sync STT model
 handles audio from ~80 ms up to 120 s (server-side ~30 s inference deadline); those limits live in
 `SyncSTTLimits` and back `DictationSession`'s auto-release timeout, so a held hotkey stops before
 the cap.
+
+Every wire constant was swept against the live route on 2026-09-09 (`word_boost` 2048 chars and the
+120 s ceiling are both exact and enforced; `conversation_context`'s 4096 is **ours**, not the API's,
+which only limits the whole `config` part somewhere past 48 kB; sub-floor audio returns 200 with an
+empty transcript rather than a 400; post-speech latency is flat from a 4 kB write to a single one, so
+`ChunkedRequestBody.bufferSize` has nothing to gain from retuning). Each constant's own doc comment
+carries its measurement — change one only against a fresh sweep, not against the old prose.
 
 ### `DictationSession` — `Sources/BlurtEngine/Pipeline/DictationSession.swift`
 

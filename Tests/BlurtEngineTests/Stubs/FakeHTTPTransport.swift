@@ -43,7 +43,7 @@ final class FakeHTTPTransport: HTTPTransport, Sendable {
     delegate: (any URLSessionTaskDelegate)?
   ) async throws -> (Data, URLResponse) {
     // Drain the body before answering, the way a real upload does: the producer
-    // only writes the `config` part once the frames finish, so a fake that
+    // writes the closing boundary only once the frames finish, so a fake that
     // replied without reading would never exercise that half of the request.
     for try await chunk in body {
       uploaded.withLock { $0.append(chunk) }

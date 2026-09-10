@@ -28,7 +28,8 @@ struct ChunkedUploadTests {
     await session.press()
     await probe.waitUntilEntered()
     // The producer is parked on the feed: the recording is still open, so the
-    // config part cannot have been written yet.
+    // body cannot have been closed yet. (It is no longer the `config` part that
+    // is outstanding — that one leads the body now — but the closing boundary.)
     #expect(probe.framesFinished == false)
 
     await session.release()
@@ -102,12 +103,13 @@ struct ChunkedUploadTests {
 
   @Test("a cancel during the context wait stays cancelled, not repainted as a failure")
   func cancelDuringContextWaitStaysCancelled() async throws {
-    // `setPhase` clears `uploadTask` on any terminal phase, so a cancel landing
-    // while `runTranscribeInject` is suspended in the context wait leaves the
-    // pipeline task to resume, find no handle, and — before this guard — repaint
-    // the user's own cancel as a red failure with a developer-mode error entry.
-    // The context read blocks for the whole test, which is what holds the
-    // pipeline in that window deterministically.
+    // `setPhase` clears `upload` on any terminal phase, so a cancel landing
+    // while the pipeline is waiting on the request leaves that task to resume,
+    // find no handle, and — before this guard — repaint the user's own cancel as
+    // a red failure with a developer-mode error entry. The context read blocks
+    // for the whole test, which holds the *upload* inside its own context wait
+    // (`startUpload`, not the release path, since `config` leads the body now)
+    // and so holds the pipeline in that window deterministically.
     let log = RecordedLog()
     let (seams, release) = hungFieldSeams(log: log)
     let session = makeSession(transcriber: UploadProbe(transcript: "Hello world."), seams: seams)
@@ -126,7 +128,7 @@ struct ChunkedUploadTests {
     #expect(log.failures.isEmpty)
   }
 
-  @Test("a request that fails before its config part still leaves the context resolved")
+  @Test("a request that fails without using the context still leaves it resolved")
   func contextSurvivesAnEarlyRequestFailure() async throws {
     // The context used to be populated as a side effect of the request reaching
     // its config part — pulled out of the session by the body producer. A
@@ -153,11 +155,14 @@ struct ChunkedUploadTests {
 
 // MARK: - Fixtures
 
-/// Transcriber double that fails without ever reading the context channel — an
-/// authorization failure that lands before the body is finished.
+/// Transcriber double that fails without ever using the context — an
+/// authorization failure that lands before the body is finished. Still pins that
+/// the session recorded the press-time context for the log: `startUpload` adopts
+/// it before it opens the request, so a request that fails immediately cannot
+/// take the context down with it.
 private struct FailsBeforeContext: TranscriberProtocol {
   func transcribe(
-    frames: AsyncStream<Data>, sampleRate: Int, context: AsyncStream<TranscriptionContext?>
+    frames: AsyncStream<Data>, sampleRate: Int, context: TranscriptionContext?
   ) async throws -> String {
     for await _ in frames {}
     throw AssemblyAIError.http(status: 401, message: "Invalid API key")
@@ -190,17 +195,17 @@ private final class UploadProbe: TranscriberProtocol, Sendable {
   }
 
   func transcribe(
-    frames: AsyncStream<Data>, sampleRate: Int, context: AsyncStream<TranscriptionContext?>
+    frames: AsyncStream<Data>, sampleRate: Int, context: TranscriptionContext?
   ) async throws -> String {
     entered.open()
-    // Drain the feed first, then take the context: that is the production order
-    // (the config part is written after the last frame), and a probe that read
-    // the context early would hide a session that stopped feeding the stream.
+    // The session has to keep feeding the stream for the request to complete,
+    // and a probe that returned early would hide one that stopped. Spelled out
+    // rather than using `drainUntilAbandoned`, because the flag has to be set
+    // between the two halves: this probe reports *when* the feed ended, and a
+    // cancelled run must not report a feed that did end as unfinished.
     for await _ in frames {}
     framesDone.value = true
-    // Throws when the session abandoned the dictation, exactly as the real
-    // transcriber does — see `AsyncStream.firstOrAbandoned()`.
-    _ = try await context.firstOrAbandoned()
+    try Task.checkCancellation()
     if let holding {
       await holding.enter()
       // Sampled after the gate so the test controls when it is read; a real

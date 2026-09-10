@@ -12,14 +12,17 @@ public enum SyncSTTLimits {
   /// Maximum audio duration the Sync model accepts per request (seconds).
   public static let maxAudioSeconds: Double = 120
 
-  /// Minimum audio duration the Sync model accepts (seconds). The endpoint
-  /// rejects anything shorter with a 400, so a recording below this — an
-  /// accidental ultra-brief tap — is dropped as a silent no-op rather than sent.
-  /// Set a hair above the model's documented ~80 ms floor for margin.
+  /// Minimum audio duration worth sending (seconds). Not a rejection
+  /// threshold: measured against `/v1/transcribe/live` (2026-09-09) the route
+  /// answers 20/50/80 ms clips with 200 and an empty `text`, so a recording
+  /// below this — an accidental ultra-brief tap — is dropped as a silent no-op
+  /// to avoid paying for a request that transcribes nothing, not to avoid an
+  /// error. Set a hair above the model's documented ~80 ms floor for margin,
+  /// which is also where words first appear in the sweep.
   public static let minAudioSeconds: Double = 0.1
 
-  /// The fewest samples worth sending; a buffer shorter than this is below
-  /// `minAudioSeconds` and would only earn a 400. A stored constant (not a
+  /// The sample form of `minAudioSeconds` — see there for what the route
+  /// actually does with a shorter clip. A stored constant (not a
   /// function taking a rate) because the pipeline records at exactly
   /// `sampleRate` — a parameter would just re-ask a question this type already
   /// answers, and invite a floor inconsistent with what's actually recorded.

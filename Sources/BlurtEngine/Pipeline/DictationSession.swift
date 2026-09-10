@@ -86,9 +86,17 @@ public actor DictationSession {
   /// Internal so `+Pipeline` reaches it across the file split.
   let seams: Seams
 
-  /// Context captured at `press()` (focused app + prior text), stored so the
-  /// transcriber, `inject`'s separator decision, and the log share one snapshot.
-  var capturedContext: TranscriptionContext?
+  /// The press-time capture, for `inject`'s separator decision and the log.
+  ///
+  /// Derived, not stored: `PressContext` already holds exactly one read per
+  /// press, so a stored copy could only ever be a cache of it — and was, until
+  /// the release path had to repair it whenever `startUpload`'s deadline had
+  /// elapsed before the read landed. Reading through means every reader gets the
+  /// freshest known value wherever it runs, instead of the value as of the
+  /// moment the upload opened. The request itself may hold something different
+  /// (`PressContext.pressKnown`, when the budget was missed), which is
+  /// deliberate — see `startUpload`.
+  var capturedContext: TranscriptionContext? { pressContext?.resolved }
 
   /// The user's recent dictations, in memory for this launch only — and the **one**
   /// copy of that history. Recorded in `runTranscribeInject` (`+Pipeline`) just
@@ -103,14 +111,13 @@ public actor DictationSession {
   /// so `+Pipeline` reaches it across the file split.
   var recentDictations = RecentDictations()
 
-  /// The in-flight AX field-context read, started by `press()` — that's when
-  /// the target field still holds focus — but consumed only in
-  /// `runTranscribeInject`, bounded by `contextWaitBudget`. Deliberately not
-  /// awaited before `.recording`: the read is cross-process IPC into the
-  /// frontmost app, and an unresponsive app must never delay the recording
-  /// indicator. A buffered stream rather than a `Task` so the bounded wait can
-  /// abandon a hung read (awaiting a `Task.value` is not cancellable).
-  var contextStream: AsyncStream<TranscriptionContext?>?
+  /// The AX field-context read started by `press()` — that's when the target
+  /// field still holds focus — and the two ways it is read: `wait` when
+  /// `startUpload` opens the request, a peek at release. Deliberately not
+  /// awaited before `.recording`, because the read is cross-process IPC into the
+  /// frontmost app and an unresponsive app must never delay the recording
+  /// indicator. See `PressContext` for why one value needs two deadlines.
+  var pressContext: PressContext?
 
   /// Tail of the serial command queue. `press()`/`release()`/`cancel()`/
   /// `cancelRecording()` chain behind it (see `enqueue`), so commands run one at
@@ -152,8 +159,12 @@ public actor DictationSession {
   /// unstructured work a cancel has to be able to reach, and cancelling
   /// `pipelineTask` alone would abandon only the *wait* — the request itself
   /// would keep streaming and complete against a dictation the user dismissed.
-  /// See `InFlightUpload` for why the task and its context channel are one value.
-  var upload: InFlightUpload?
+  ///
+  /// A bare task, because that is now all a live request is. It was an
+  /// `InFlightUpload` pairing the task with the context channel its `config`
+  /// part parked on, so abandoning it meant closing that too; the streaming
+  /// route settles the context up front, so `cancel()` is now the whole of it.
+  var upload: Task<String, any Error>?
 
   /// The production entry point: the real focus capture and the real
   /// developer-mode log. Delegates to the seam-carrying initializer below, which
@@ -232,7 +243,7 @@ public actor DictationSession {
     // `setPhase` funnel never runs for it: a session dropped mid-recording would
     // otherwise leave its request to be wound down by continuation deallocation
     // rather than by the rule.
-    upload?.abandon()
+    upload?.cancel()
     commandFeed.finish()
     for continuation in continuations.values {
       continuation.finish()
@@ -301,17 +312,16 @@ public actor DictationSession {
     // Honored again here, before any pipeline exists — deterministically no
     // transcription, no paste.
     if cancelWonRelease() { return }
-    // A clip too short for the STT model (an accidental brief tap) would only
-    // earn a 400 — drop it as a silent no-op, like an empty transcript, rather
-    // than letting the request finish.
+    // A clip too short for the STT model (an accidental brief tap) comes back
+    // 200-with-empty-text, not 400 (measured) — so drop it as a silent no-op
+    // rather than paying for a request that transcribes nothing.
     //
-    // Safe against the request finishing first, without depending on this turn
-    // not suspending: the body producer cannot write its `config` part until the
-    // release path sends a context to the in-flight request, and only
-    // `resolveCapturedContext` — reached solely from the pipeline task this
-    // guard returns before spawning — ever does. So a dropped clip's request is
-    // abandoned still holding its body open. (It used to be a real race, won by
-    // the request on a fast link.)
+    // Safe against the request finishing first, but no longer by winning a
+    // race: with `config` leading the body the producer closes the request as
+    // soon as `frames` ends, so it could beat this guard on a fast link. The
+    // floor is enforced on the producer's side too — `streamedBody` refuses to
+    // write the closing boundary below `minPCMBytes` — leaving this as the
+    // quiet path to `.idle`, not the only thing keeping a tap off the wire.
     guard recordedBytes >= SyncSTTLimits.minPCMBytes else {
       setPhase(.idle)
       return
@@ -375,18 +385,6 @@ public actor DictationSession {
   private func cancelAutoRelease() {
     autoReleaseTask?.cancel()
     autoReleaseTask = nil
-  }
-
-  /// Abandons the in-flight dictation request — the streamed body can't be
-  /// completed meaningfully once the audio behind it is going away, so the
-  /// whole request goes rather than being left to finish on its own.
-  /// Reached from `setPhase` for every terminal phase, so a dictation that ends
-  /// without a transcript cannot leave a request streaming. The one explicit
-  /// caller left is `stopAndCancel`, which has to run before `cancelCapture()`
-  /// ends the feed.
-  func cancelUpload() {
-    upload?.abandon()
-    upload = nil
   }
 
   // The post-release pipeline — `runTranscribeInject` and its transcribe/inject

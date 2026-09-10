@@ -129,8 +129,8 @@ extension DictationSession {
   }
 
   /// Captures the paste target and kicks off the press-time AX field-context
-  /// read, leaving the result in `contextStream` for `runTranscribeInject` to
-  /// consume.
+  /// read, leaving the result in `pressContext` for `startUpload` to wait on and
+  /// the release path to peek at.
   ///
   /// Called *before* the bring-up is joined, so all of it — including the
   /// cross-process AX read, the expensive part — overlaps the mic coming up
@@ -153,12 +153,19 @@ extension DictationSession {
     // holds focus, but don't await it here: it's cross-process IPC into the
     // frontmost app (detached — off the main actor, where it froze the
     // overlay, and off this actor, where it would wedge release()/cancel()).
-    // runTranscribeInject consumes the result right before transcription,
-    // bounded by `contextWaitBudget` — so a slow AX target delays the
-    // transcript by at most the budget, never the recording indicator.
-    let (stream, contextFeed) = AsyncStream.makeStream(
-      of: TranscriptionContext?.self, bufferingPolicy: .bufferingNewest(1))
-    contextStream = stream
+    // `startUpload` consumes the result when it opens the request, bounded by
+    // `contextWaitBudget` — so a slow AX target delays the audio by at most the
+    // budget, and the recording indicator never at all.
+    //
+    // `pressKnown` carries only what this actor already has, so a missed budget
+    // costs the request the field text and not `word_boost` and the recent turns
+    // as well. It deliberately carries no focus signals — see `PressContext`,
+    // which also owns the wait and the release-side peek.
+    let pressKnown = TranscriptionContext(
+      appName: nil, priorText: nil,
+      recentTranscripts: recentTranscripts, keyTerms: keyTerms)
+    let press = PressContext(pressKnown: pressKnown.isEmpty ? nil : pressKnown)
+    pressContext = press
     // A Dispatch queue, not `Task.detached`: `captureFieldContext` is documented
     // as making ~6 synchronous cross-process AX round trips, each bounded only by
     // the 1 s messaging timeout, so against a beachballing frontmost app one
@@ -182,8 +189,9 @@ extension DictationSession {
         recentTranscripts: recentTranscripts,
         keyTerms: keyTerms,
         targetIsSecure: field.isSecure)
-      contextFeed.yield(context.isEmpty ? nil : context)
-      contextFeed.finish()
+      // One publish, which is what makes the value-before-stream ordering
+      // `startUpload`'s wait depends on unforgeable — see `PressContext.store`.
+      press.store(resolved: context.isEmpty ? nil : context)
     }
   }
 }

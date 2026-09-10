@@ -92,13 +92,13 @@
   /// text is whatever the test set — no network, fully deterministic.
   nonisolated struct UITestTranscriber: TranscriberProtocol {
     func transcribe(
-      frames: AsyncStream<Data>, sampleRate: Int, context: AsyncStream<TranscriptionContext?>
+      frames: AsyncStream<Data>, sampleRate: Int, context: TranscriptionContext?
     ) async throws -> String {
-      // Feed drained then context taken, in production order: the session hands
-      // over a live feed at press and the harness has to consume it for the
-      // release to complete.
+      // The feed still has to be drained: the session hands over a live feed at
+      // press, and the release cannot complete until someone consumes it. The
+      // context needs no draining now — the streaming route settles it before
+      // the request opens, so it arrives as a value.
       for await _ in frames {}
-      _ = try await context.firstOrAbandoned()
       return await MainActor.run { UITestState.shared.cannedTranscript }
     }
   }

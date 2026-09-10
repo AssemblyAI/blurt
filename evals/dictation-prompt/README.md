@@ -1,7 +1,7 @@
 # Dictation cleanup-prompt eval
 
 A DSPy eval that searches for the best **cleanup instruction** for the dictation API's
-LLM rewrite — the `config.llm` block Blurt sends on every `/transcribe` request.
+LLM rewrite — the `config.llm` block Blurt sends on every `/v1/transcribe/live` request.
 
 Blurt sends `llm` as an empty object today, which selects the service's own default cleanup
 instruction. This harness answers the question that comes next: is there an explicit
@@ -301,7 +301,7 @@ Two consequences worth holding onto when reading a result:
 - A winner is only as transferable as `--model` is representative of the service's rewrite
   model, which runs under a ~5s budget and is probably much smaller.
 - Confirming a win against the live default means sending real audio to
-  `dictation.assemblyai.com/transcribe` with an empty `llm` block and comparing. That is
+  `dictation.assemblyai.com/v1/transcribe/live` with an empty `llm` block and comparing. That is
   `--verify-live --verify-baseline`, and for the current winner it has been done — see
   [Verifying on the model that actually runs it](#verifying-on-the-model-that-actually-runs-it).
   It is a separate measurement from everything above, not a property of these scores.
@@ -521,7 +521,7 @@ real thing.
 
 `--verify-live N` closes that loop. After a winner is picked it takes N **held-out** rows,
 speaks the disfluent side with `say`, converts to 16 kHz mono PCM, and POSTs it to the real
-`/transcribe` with the winner as `config.llm.instruction`:
+`/v1/transcribe/live` with the winner as `config.llm.instruction`:
 
 ```bash
 export ASSEMBLYAI_API_KEY=...
@@ -577,7 +577,7 @@ between them hold. macOS only, and off by default — it costs real transcriptio
 | `corpus.py`                  | Sources, loading, de-tagging, splitting, the echo floor.                                      |
 | `disfluency.py`              | The seeded, additive disfluency injector.                                                     |
 | `metrics.py`                 | Token alignment, the two word-error-rate axes, the false-start surcharge, GEPA feedback text. |
-| `live.py`                    | Synthesis + the real `/transcribe` round trip, for `--verify-live`.                           |
+| `live.py`                    | Synthesis + the real `/v1/transcribe/live` round trip, for `--verify-live`.                   |
 | `program.py`                 | Everything that imports DSPy — the program, metrics adapters, optimizers.                     |
 | `test_eval.py`               | Offline tests for injection, scoring, de-tagging, loading, and splitting.                     |
 
