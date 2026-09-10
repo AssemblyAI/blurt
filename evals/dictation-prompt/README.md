@@ -301,7 +301,7 @@ Two consequences worth holding onto when reading a result:
 - A winner is only as transferable as `--model` is representative of the service's rewrite
   model, which runs under a ~5s budget and is probably much smaller.
 - Confirming a win against the live default means sending real audio to
-  `dictation.assemblyai.com/transcribe` with an empty `llm` block and comparing. That is
+  `dictation.assemblyai.com/v1/transcribe` with an empty `llm` block and comparing. That is
   `--verify-live --verify-baseline`, and for the current winner it has been done — see
   [Verifying on the model that actually runs it](#verifying-on-the-model-that-actually-runs-it).
   It is a separate measurement from everything above, not a property of these scores.

@@ -74,7 +74,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     }
     let boundary = "blurt-\(UUID().uuidString)"
 
-    var request = URLRequest(url: baseURL.appendingPathComponent("transcribe"))
+    var request = URLRequest(url: baseURL.appendingPathComponent("v1").appendingPathComponent("transcribe"))
     request.httpMethod = "POST"
     // Bounds a stalled connection; see `requestTimeoutSeconds` for why an idle
     // timeout is the right shape here — and note it now has to cover the
@@ -108,19 +108,20 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     return response.text
   }
 
-  /// The multipart body, produced in the only order a live recording allows:
-  /// the `audio` part's headers, then each captured frame as it arrives, then
-  /// the `config` part once the frames stop.
+  /// The multipart body: the `config` part, then the `audio` part's headers,
+  /// then each captured frame as it arrives, then the closing boundary.
   ///
-  /// `config` goes **last**. The dictation API permits it because it parses the
-  /// body only once complete (verified against the service — sync's own
-  /// streaming route requires the opposite order and would reject this). That
-  /// ordering is load-bearing rather than incidental: it lets the press-time
-  /// Accessibility context read resolve at *release*, exactly as it did when
-  /// the whole request was built after recording. The producer therefore waits
-  /// here, after the last frame, for the value the session pushes on `context` —
-  /// the config carries the same `conversation_context` and `word_boost` it
-  /// always did, decided at the same moment as before.
+  /// `config` goes **first**, and is required. The service decodes the audio as
+  /// it arrives and cannot start without the config, so an `audio` part that
+  /// reaches it first is a 400 on the whole request. The producer therefore
+  /// waits here, before the first frame, for the value the session pushes on
+  /// `context` — the press-time Accessibility read, which the session forwards
+  /// as soon as it resolves rather than holding until release.
+  ///
+  /// That wait is what the audio buffers behind: frames captured before the
+  /// context resolves queue in `frames` and go out the moment the config is
+  /// written. The read is bounded (`DictationSession.contextWaitBudget`), so
+  /// the delay is capped and it overlaps the speaking either way.
   ///
   /// Finishing the stream is what closes the multipart body and tells the
   /// service the utterance is over, so `frames` ending is end-of-audio.
@@ -136,17 +137,12 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   ) -> AsyncThrowingStream<Data, any Error> {
     AsyncThrowingStream { continuation in
       let producer = Task {
-        continuation.yield(Self.audioPartHeader(boundary: boundary))
-        for await frame in frames {
-          progress.recordFrame(bytes: frame.count)
-          continuation.yield(frame)
-        }
         do {
-          // Wait for the session's press-time read, which it resolves at
-          // release and sends here. A channel that finishes without sending
-          // means the dictation was abandoned, and `firstOrAbandoned` throws —
-          // caught below, so the body fails instead of completing a request for
-          // audio nobody is waiting for.
+          // Wait for the session's press-time read before writing anything. A
+          // channel that finishes without sending means the dictation was
+          // abandoned, and `firstOrAbandoned` throws — caught below, so the
+          // body fails instead of opening a request for audio nobody is
+          // waiting for.
           let resolved = try await context.firstOrAbandoned()
           // The prior dialogue that goes on the wire: the user's recent
           // dictations, then the text before the cursor (empty when there is
@@ -159,13 +155,21 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
             // The other steering field: the user's key terms as a word-boost
             // list, fitted to its own (different) cap.
             wordBoost: KeytermsBoost.fitted(resolved?.keyTerms ?? []))
-          continuation.yield(Self.configTail(config: config, boundary: boundary))
-          continuation.finish()
+          continuation.yield(Self.configPart(config: config, boundary: boundary))
         } catch {
-          // A truncated body would earn a generic 400 from the service; finish
-          // with the real error so the failure names its own cause.
+          // Nothing has been written yet, so this fails the request outright
+          // rather than truncating a body the service would answer with a
+          // generic 4xx that doesn't name the cause.
           continuation.finish(throwing: error)
+          return
         }
+        continuation.yield(Self.audioPartHeader(boundary: boundary))
+        for await frame in frames {
+          progress.recordFrame(bytes: frame.count)
+          continuation.yield(frame)
+        }
+        continuation.yield(Self.closingBoundary(boundary: boundary))
+        continuation.finish()
       }
       continuation.onTermination = { _ in producer.cancel() }
     }
@@ -248,13 +252,12 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     )
   }
 
-  /// The `audio` part's framing — everything before the PCM bytes themselves,
-  /// written once when the request opens so the frames that follow are just
-  /// audio.
+  /// The `audio` part's framing — everything between the `config` part and the
+  /// PCM bytes themselves, so the frames that follow are just audio.
   ///
   /// Internal, not private, so tests can assert the wire format against the
   /// bytes. `FakeHTTPTransport` can observe the streamed body directly now
-  /// (it collects the `AsyncThrowingStream`), but these two halves are still
+  /// (it collects the `AsyncThrowingStream`), but these three pieces are still
   /// where the framing — boundaries, part headers, the `audio.pcm` filename,
   /// CRLF placement — is stated once.
   static func audioPartHeader(boundary: String) -> Data {
@@ -271,18 +274,23 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     Data(parts.joined().utf8)
   }
 
-  /// Everything after the last audio frame: the `audio` part's terminating
-  /// CRLF, the whole `config` part, and the closing boundary. Written when the
-  /// recording ends — see `streamedBody` for why `config` is last.
-  static func configTail(config: Data, boundary: String) -> Data {
-    var tail = framed(
-      "\r\n",
+  /// The whole `config` part, written before any audio — see `streamedBody`
+  /// for why it goes first.
+  static func configPart(config: Data, boundary: String) -> Data {
+    var part = framed(
       "--\(boundary)\r\n",
       "Content-Disposition: form-data; name=\"config\"\r\n",
       "Content-Type: application/json\r\n\r\n")
-    tail.append(config)
-    tail.append(framed("\r\n", "--\(boundary)--\r\n"))
-    return tail
+    part.append(config)
+    part.append(framed("\r\n"))
+    return part
+  }
+
+  /// The `audio` part's terminating CRLF and the closing boundary, written when
+  /// the recording ends. Closing the body is what tells the service the
+  /// utterance is over.
+  static func closingBoundary(boundary: String) -> Data {
+    framed("\r\n", "--\(boundary)--\r\n")
   }
 
   // MARK: - Networking helpers

@@ -1364,6 +1364,10 @@ def test_the_multipart_body_matches_what_the_swift_client_sends():
     assert 'name="config"' in text
     assert '{"sample_rate": 16000}' in text
     assert b"\x01\x02" in body
+    # `config` before `audio`: the endpoint decodes the audio as it arrives and
+    # rejects a body whose audio reaches it first, so a swap here is a 400 on
+    # every request rather than a scoring wobble.
+    assert text.index('name="config"') < text.index('name="audio"')
 
 
 def test_an_empty_instruction_asks_for_the_service_default():
@@ -1371,7 +1375,10 @@ def test_an_empty_instruction_asks_for_the_service_default():
 
     for instruction, expected in ((None, {}), ("", {}), ("do x", {"instruction": "do x"})):
         body, _ = live._multipart(b"", {"llm": {"instruction": instruction} if instruction else {}})
-        config = json.loads(body.decode("latin-1").split("\r\n\r\n")[-1].split("\r\n--")[0])
+        # Located by its part header rather than by position, so this keeps
+        # reading the config whichever end of the body it is written at.
+        payload = body.decode("latin-1").split('name="config"', 1)[1]
+        config = json.loads(payload.split("\r\n\r\n", 1)[1].split("\r\n--")[0])
         assert config["llm"] == expected
 
 

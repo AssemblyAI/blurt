@@ -194,7 +194,7 @@ what each script does, signing — and how changes land;
 Sources/BlurtEngine/     Swift 6 package owning the pipeline — no external dependencies
   Audio/                 MicCapture: fresh AVCaptureSession per session, 16 kHz mono PCM,
                          live level meter; DX7/Juno-106 sound packs
-  STT/                   AssemblyAITranscriber: one POST to dictation.assemblyai.com/transcribe
+  STT/                   AssemblyAITranscriber: one POST to dictation.assemblyai.com/v1/transcribe
                          (STT + LLM rewrite); ConversationContext (contextual priming:
                          your recent dictations then the text before the cursor, and
                          nothing else about your screen); KeytermsBoost (key terms as

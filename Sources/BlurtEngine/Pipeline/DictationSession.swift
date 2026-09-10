@@ -112,6 +112,13 @@ public actor DictationSession {
   /// abandon a hung read (awaiting a `Task.value` is not cancellable).
   var contextStream: AsyncStream<TranscriptionContext?>?
 
+  /// The task that resolves `contextStream` and hands the value to the request,
+  /// started by `startUpload(frames:)`. Held so the release path can join it
+  /// (`resolveCapturedContext`) and so a teardown can cancel it — a resolution
+  /// that outlived its dictation must not write `capturedContext` over a newer
+  /// press's.
+  var contextResolution: Task<Void, Never>?
+
   /// Tail of the serial command queue. `press()`/`release()`/`cancel()`/
   /// `cancelRecording()` chain behind it (see `enqueue`), so commands run one at
   /// a time in arrival order — none observes another suspended mid-`mic` call.
@@ -305,13 +312,12 @@ public actor DictationSession {
     // earn a 400 — drop it as a silent no-op, like an empty transcript, rather
     // than letting the request finish.
     //
-    // Safe against the request finishing first, without depending on this turn
-    // not suspending: the body producer cannot write its `config` part until the
-    // release path sends a context to the in-flight request, and only
-    // `resolveCapturedContext` — reached solely from the pipeline task this
-    // guard returns before spawning — ever does. So a dropped clip's request is
-    // abandoned still holding its body open. (It used to be a real race, won by
-    // the request on a fast link.)
+    // Safe against the request finishing first: `setPhase` abandons the upload
+    // on every terminal phase, `.idle` included, so the dropped clip's request
+    // is cancelled rather than left to transcribe audio nobody is waiting for.
+    // The body producer no longer holds the request open for a release-time
+    // context — the config part goes out at press — so that teardown is the
+    // whole of the guarantee here.
     guard recordedBytes >= SyncSTTLimits.minPCMBytes else {
       setPhase(.idle)
       return
@@ -387,6 +393,10 @@ public actor DictationSession {
   func cancelUpload() {
     upload?.abandon()
     upload = nil
+    // The resolution outlives nothing: its only two jobs are this request's
+    // config part and this dictation's `capturedContext`.
+    contextResolution?.cancel()
+    contextResolution = nil
   }
 
   // The post-release pipeline — `runTranscribeInject` and its transcribe/inject

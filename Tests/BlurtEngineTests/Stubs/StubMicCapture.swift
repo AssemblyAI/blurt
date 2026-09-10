@@ -21,8 +21,8 @@ actor StubMicCapture: MicCaptureProtocol {
     // Publishes the "captured" bytes while recording is open and ends only at
     // `stop()` / `cancelCapture()`, modelled on the real recorder. A stub that
     // handed back an already-finished feed let the request complete during the
-    // press, so the ordering the config-part-last framing depends on — frames
-    // first, context resolved after — was never exercised by a session test.
+    // press, so a session test never exercised a recording that outlives the
+    // config part the request opens with.
     let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .unbounded)
     framesContinuation = continuation
     if !pcmToReturn.isEmpty { continuation.yield(pcmToReturn) }

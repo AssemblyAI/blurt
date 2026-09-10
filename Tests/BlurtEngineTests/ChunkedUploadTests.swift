@@ -193,14 +193,15 @@ private final class UploadProbe: TranscriberProtocol, Sendable {
     frames: AsyncStream<Data>, sampleRate: Int, context: AsyncStream<TranscriptionContext?>
   ) async throws -> String {
     entered.open()
-    // Drain the feed first, then take the context: that is the production order
-    // (the config part is written after the last frame), and a probe that read
-    // the context early would hide a session that stopped feeding the stream.
-    for await _ in frames {}
-    framesDone.value = true
+    // Take the context first, then drain the feed: that is the production order
+    // (the config part is written before the first frame). Draining afterwards
+    // still exercises a session that stops feeding the stream.
+    //
     // Throws when the session abandoned the dictation, exactly as the real
     // transcriber does — see `AsyncStream.firstOrAbandoned()`.
     _ = try await context.firstOrAbandoned()
+    for await _ in frames {}
+    framesDone.value = true
     if let holding {
       await holding.enter()
       // Sampled after the gate so the test controls when it is read; a real

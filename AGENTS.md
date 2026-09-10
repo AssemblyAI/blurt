@@ -552,9 +552,9 @@ hosts still read the meter through the seam they inject.
 ### `AssemblyAITranscriber` — `Sources/BlurtEngine/STT/AssemblyAITranscriber.swift`
 
 Implements `TranscriberProtocol` against AssemblyAI's **dictation** API: a single
-`POST https://dictation.assemblyai.com/transcribe` with the captured audio as a raw S16LE PCM blob
-in the `audio` multipart part plus a JSON `config` part (`sample_rate`, `channels`, and an `llm`
-block). No model header — the service pins the STT model server-side. The config's
+`POST https://dictation.assemblyai.com/v1/transcribe` with a JSON `config` part (`sample_rate`,
+`channels`, and an `llm` block) followed by the captured audio as a raw S16LE PCM blob in the
+`audio` multipart part. No model header — the service pins the STT model server-side. The config's
 `conversation_context` field steers _transcription_ and carries the user's recent dictations followed
 by the text before the cursor (`ConversationContext.turns`), or nothing at all when there is neither —
 an empty list omits the field. There is no `prompt` field. The `llm` block asks the
@@ -610,8 +610,15 @@ The **upload is chunked**: `transcribe(frames:sampleRate:context:)` is called at
 streams the recording into one open request as the microphone produces it, so the transfer overlaps
 the speaking instead of following it. There is no buffered path — measured on a 1 Mbps uplink, a
 10 s dictation waits ~3.1 s after speech buffered versus ~0.5 s chunked, and on a fast link the two
-are within noise. The `config` part is written **last** (the dictation API parses the body only once
-complete), which is what lets the press-time context read still resolve at release. The _response_
+are within noise. The `config` part is written **first** and is required: the service decodes the audio as it arrives
+and cannot start without it, so an `audio` part that reaches it first is a 400 on the whole request.
+The producer therefore waits for the press-time context read before writing anything, and the
+session pushes that read into the request as soon as it lands rather than holding it until release
+(`DictationSession.forwardCapturedContext`). The read itself still starts at press, so the value on
+the wire is unchanged; only the moment it is consumed moved. Audio captured while it resolves
+queues in `frames` and goes out once the config is written, bounded by `contextWaitBudget`.
+**WAV or raw PCM only** — the endpoint rejects compressed audio with 415, which costs Blurt nothing
+since it sends the mic's S16LE bytes untouched. The _response_
 is unchanged and still arrives whole: a single `async throws -> String`, no deltas. The underlying sync STT model
 handles audio from ~80 ms up to 120 s (server-side ~30 s inference deadline); those limits live in
 `SyncSTTLimits` and back `DictationSession`'s auto-release timeout, so a held hotkey stops before

@@ -47,10 +47,11 @@ extension DictationSession {
     // failure, cancel, or a completed paste).
     let pipelineInterval = Self.signposter.beginInterval(Self.pipelineSignpostName)
     defer { Self.signposter.endInterval(Self.pipelineSignpostName, pipelineInterval) }
-    // Resolve the press-time AX field read and hand it to the request, which
-    // has been holding its `config` part since `mic.stop()` ended the frame
-    // feed. Done here, before the wait, so `capturedContext` is set for the
-    // paste separator and the log whether or not the request gets that far.
+    // Wait out the press-time AX field read if it is somehow still running —
+    // it was started at press and bounded by `contextWaitBudget`, so by now it
+    // has almost always resolved and handed itself to the request. Done here,
+    // before the transcript wait, so `capturedContext` is set for the paste
+    // separator and the log whether or not the request gets that far.
     await resolveCapturedContext()
     guard let text = await awaitUpload() else { return }
 
@@ -119,9 +120,16 @@ extension DictationSession {
   /// `MicCaptureProtocol.start()` for the race that shape rules out.
   ///
   /// The context travels the same direction: this installs the channel the
-  /// request's `config` part waits on, and `resolveCapturedContext` pushes the
-  /// value at release. So the request is one-way throughout — audio, then
-  /// context — and needs no reference back to this actor.
+  /// request's `config` part waits on, and starts the task that pushes the
+  /// press-time read into it as soon as that read lands. So the request is
+  /// one-way throughout — context, then audio — and needs no reference back to
+  /// this actor.
+  ///
+  /// The push happens here rather than at release because the `config` part is
+  /// written before any audio: the service decodes the audio as it arrives and
+  /// cannot start without the config. The value is the same one release used to
+  /// send — the read is started at press either way — it just stops being held
+  /// back until the recording ends.
   func startUpload(frames: AsyncStream<Data>) {
     let (context, contextFeed) = AsyncStream.makeStream(
       of: TranscriptionContext?.self, bufferingPolicy: .bufferingNewest(1))
@@ -136,6 +144,38 @@ extension DictationSession {
           frames: frames, sampleRate: SyncSTTLimits.sampleRate, context: context)
       },
       contextFeed: contextFeed)
+    contextResolution = Task { [weak self] in await self?.forwardCapturedContext() }
+  }
+
+  /// Resolves the press-time AX field read, bounded by `contextWaitBudget`,
+  /// records it as `capturedContext` for the paste's separator decision and the
+  /// log, and hands it to the request's `config` part.
+  ///
+  /// Take the stream out of the actor's state in the SAME turn it's read, before
+  /// the suspension below. Reading it and clearing it across an `await` let a
+  /// cancelled pipeline clear a *newer* press's stream: a fresh `press()`
+  /// installs its own `contextStream`, and a stale task's resumption would then
+  /// nil that one out — so dictation #2 transcribes with `context: nil`, losing
+  /// its whole `conversation_context` — the recent-dictation turns *and* the
+  /// prior chunk — along with the key terms.
+  private func forwardCapturedContext() async {
+    let stream = contextStream
+    contextStream = nil
+    let resolved: TranscriptionContext?
+    if let stream {
+      resolved = await Self.firstValue(
+        of: stream, within: Self.contextWaitBudget, clock: clock)
+    } else {
+      resolved = nil
+    }
+    // A cancelled resolution belongs to a dictation that is already over. Its
+    // successor has its own, and writing this one's value here would hand
+    // dictation #2 the context of #1.
+    guard !Task.isCancelled else { return }
+    capturedContext = resolved
+    // `send` closes the channel as part of sending, which is what lets the body
+    // producer write the config part and start feeding audio through.
+    upload?.send(resolved)
   }
 
   /// Waits for the request opened at press. Returns the transcript, or nil if
@@ -189,34 +229,14 @@ extension DictationSession {
     }
   }
 
-  /// Consumes the press-time AX field read, bounded by `contextWaitBudget`,
-  /// records it as `capturedContext` for the paste's separator decision and the
-  /// log, and sends it to the request's `config` part.
+  /// Joins the press-time context resolution so `capturedContext` is settled
+  /// before the paste separator and the log read it.
   ///
-  /// Called from the release path, so the context is decided at release exactly
-  /// as it was when the request was built there.
-  ///
-  /// Take the stream out of the actor's state in the SAME turn it's read, before
-  /// the suspension below. Reading it and clearing it across an `await` let a
-  /// cancelled pipeline clear a *newer* press's stream: `cancel()` detaches this
-  /// task while it's parked in `firstValue`, a fresh `press()` installs its own
-  /// `contextStream`, and this task's resumption then nils that one out — so
-  /// dictation #2 transcribes with `context: nil`, losing its whole
-  /// `conversation_context` — the recent-dictation turns *and* the prior chunk —
-  /// along with the key terms. The window is microseconds, but the invariant is
-  /// now local instead of depending on scheduling.
+  /// Awaiting a `Task`'s value is not cancellation-aware, which is safe here
+  /// only because the wait inside it is bounded by `contextWaitBudget` from
+  /// press — an unresponsive frontmost app cannot park the release path.
   func resolveCapturedContext() async {
-    let stream = contextStream
-    contextStream = nil
-    if let stream {
-      capturedContext = await Self.firstValue(
-        of: stream, within: Self.contextWaitBudget, clock: clock)
-    } else {
-      capturedContext = nil
-    }
-    // Hand it to the request, which has been holding its config part for it
-    // since the last frame. `send` closes the channel as part of sending.
-    upload?.send(capturedContext)
+    await contextResolution?.value
   }
 
   private func inject(_ text: String) async {

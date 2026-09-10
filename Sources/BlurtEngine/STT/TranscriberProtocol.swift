@@ -15,10 +15,10 @@ public protocol TranscriberProtocol: Sendable {
   ///
   /// `context` supplies the per-utterance priming (focused app + text before the
   /// cursor, the user's recent dictations) as a one-value channel the caller
-  /// pushes at release. The `config` part is written last and waits on it, so
-  /// the context is still decided at release, as it was when the whole request
-  /// was built there. Send nil for none; finishing the channel without a value
-  /// abandons the request.
+  /// pushes as soon as the press-time read lands. The `config` part is written
+  /// first and waits on it, so nothing reaches the wire until it arrives — the
+  /// read still starts at press, so the value is the one it always was. Send nil
+  /// for none; finishing the channel without a value abandons the request.
   ///
   /// Read it with `firstOrAbandoned()`, which is that contract as code — every
   /// conformer and test double inherits the abandonment rule instead of

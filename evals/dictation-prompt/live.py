@@ -51,7 +51,7 @@ import metrics
 from corpus import Utterance
 
 #: The dictation endpoint. Same host `AssemblyAITranscriber` posts to.
-DICTATION_URL = "https://dictation.assemblyai.com/transcribe"
+DICTATION_URL = "https://dictation.assemblyai.com/v1/transcribe"
 
 #: What the service expects, and what `SyncSTTLimits` records on the Swift side.
 SAMPLE_RATE = 16_000
@@ -97,14 +97,16 @@ def _multipart(pcm: bytes, config: dict) -> tuple[bytes, str]:
     """The `audio` + `config` body, framed exactly as the Swift client frames it."""
     boundary = f"eval-{uuid.uuid4()}"
     body = bytearray()
+    # `config` first: the endpoint decodes the audio as it arrives and rejects a
+    # body whose `audio` part reaches it before the config.
     body += f"--{boundary}\r\n".encode()
-    body += b'Content-Disposition: form-data; name="audio"; filename="audio.pcm"\r\n'
-    body += b"Content-Type: audio/pcm\r\n\r\n"
-    body += pcm
-    body += f"\r\n--{boundary}\r\n".encode()
     body += b'Content-Disposition: form-data; name="config"\r\n'
     body += b"Content-Type: application/json\r\n\r\n"
     body += json.dumps(config).encode()
+    body += f"\r\n--{boundary}\r\n".encode()
+    body += b'Content-Disposition: form-data; name="audio"; filename="audio.pcm"\r\n'
+    body += b"Content-Type: audio/pcm\r\n\r\n"
+    body += pcm
     body += f"\r\n--{boundary}--\r\n".encode()
     return bytes(body), boundary
 
