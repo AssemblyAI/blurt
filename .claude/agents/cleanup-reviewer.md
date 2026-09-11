@@ -37,17 +37,18 @@ exactly two fields of `TranscriptionContext` (`recentTranscripts`, then `priorTe
 the other fields are captured on purpose for work that never reaches the API** — paste
 spacing, the injector's window identity, the developer-mode log. `appName`,
 `windowTitle`, `fieldLabel` and `selectedText` are not unused just because
-`ConversationContext` ignores them. Nor is `targetIsSecure`, which no request carries: it
+`STTPrompt` ignores them. Nor is `targetIsSecure`, which no request carries: it
 is what stops a password dictated into a secure field being remembered as history. The
 key-terms read is not unused either: it feeds `KeytermsBoost`, the request's separate
-`config.word_boost` list. Do not propose deleting any of them, folding the key terms back
+`config.keyterms_prompt` list. Do not propose deleting any of them, folding the key terms back
 into the context as a `Keywords:` clause, or dropping the `context:` parameter.
 
 Two field names are load-bearing and were verified against the live endpoint — do not
-"correct" either. The boost list is **`config.word_boost`**, the name the dictation API's
-own reference documents (`keyterms_prompt` is the sibling Sync surface's name for the same
-feature; the aliases are mutually exclusive, so sending both is the bug). And there is
-**no `config.prompt`** — `config.conversation_context` replaced it, deliberately, because
+"correct" either. The keyterms list is **`config.keyterms_prompt`**, the canonical name
+(`keyterms` and `word_boost` are legacy aliases for the same feature and mutually
+exclusive with it, so sending two names is the bug). And there is
+**no `config.conversation_context`** — `config.stt_prompt` (`STTPrompt`) replaced it, and
+`prompt` is that same field's alias, so a request may carry exactly one of the three. Because
 a custom prompt also displaces the service's managed default and makes the API ignore
 `config.language_code`.
 

@@ -8,14 +8,14 @@ the Claude-Code-specific tooling under `.claude/` (hooks, skills, subagents).
 Blurt is a macOS dictation app powered by [AssemblyAI](https://www.assemblyai.com). Tap or hold a
 trigger key, speak, and polished text is pasted into the focused app. Transcription is **one remote
 AssemblyAI dictation API call**: the audio plus a request for the service's server-side LLM cleanup
-rewrite (`config.llm`), so the text that comes back is already polished. The user supplies their own
-API key. The request's `conversation_context` carries **two context signals, as ordered turns: the
+rewrite (`config.llm_instruction`), so the text that comes back is already polished. The user supplies their own
+API key. The request's `stt_prompt` carries **two context signals, newline-joined oldest first: the
 user's recent dictations, then the text immediately before the cursor**. The frontmost app, the
 window title, the focused field's label, and the selected text are captured for local work (paste
 spacing, the injector's window identity, the developer-mode log) and none of them go on the wire.
-There is no `config.prompt` — the context field replaced it. The user's key terms ride a second
-field, `word_boost`, as a flat list of strings. See
-[Conversation context and key terms](#conversation-context-and-key-terms).
+`stt_prompt` and `prompt` are the same field, so never send both. The user's key terms ride a second
+field, `keyterms_prompt`, as a flat list of strings. See
+[Contextual prompt and key terms](#contextual-prompt-and-key-terms).
 
 Four reflexes before you touch anything:
 
@@ -332,7 +332,7 @@ Each was tried the other way and reverted. If a task seems to require one, stop 
 `scripts/check-invariants.sh` mechanizes the subset of this table a regex can decide, so those
 entries fail `check.sh` rather than relying on a reviewer's memory: `AVAudioEngine`/`installTap`
 capture, a streaming or on-device path, a client-side cleanup pass (`StylerProtocol`, an LLM
-Gateway/LeMUR client), `config.language_code`, `config.prompt`, a keystroke-typing injector,
+Gateway/LeMUR client), `config.language_code(s)`, `config.conversation_context`, `config.prompt`, a keystroke-typing injector,
 `LSUIElement`, a `KeyboardShortcuts` import, a self-replacing updater, the production Keychain
 under `Tests/`, and `@available(*, deprecated)` shims. The SPM-dependency row has its own guard in
 `check.sh` (it parses `project.yml`'s `packages:` block), and the `.pbxproj` row is covered by the
@@ -347,26 +347,28 @@ a rule that outlives its row keeps firing and keeps citing this table while enfo
 project has already reversed. Reworded the row? Update the anchor. Reversed the decision? Delete the
 rule along with the row.
 
-| Don't                                                                 | Because                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Add an external SPM dependency to the engine                          | Dependency-free by rule (biggest supply-chain risk); a `check.sh` guard fails on `.package(` in `Package.swift` or a `url:`/`github:` package in `project.yml`. Extend `BlurtEngine` instead.                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| Use `AVAudioEngine` / `installTap` for capture                        | A long-lived engine bound its input graph to one device and went stale on a mic↔built-in switch — `-10868` (`kAudioUnitErr_FormatNotSupported`) or all-zero buffers. `MicCapture` builds a fresh `AVCaptureSession` recorder per capture (owner-directed move from `AVAudioRecorder`, 2026-08-25).                                                                                                                                                                                                                                                                                                                           |
-| Pre-open the mic to shave bring-up latency (a warm/prepared recorder) | Measured against `kAudioDevicePropertyDeviceIsRunningSomewhere`: neither building an `AVCaptureSession` nor the retired `AVAudioRecorder.prepareToRecord()` opens the device, so neither pre-pays the 180–600 ms route activation `record()` costs. A warm-recorder lifecycle bought ~15 ms and cost a device-identity check, a pin check, an expiry and a bring-up flag. `MicCapture.warmUp()` is stateless: it absorbs the process's first-touch cost and holds nothing.                                                                                                                                                   |
-| Add streaming STT                                                     | The dictation API returns the full (already rewritten) text in one response; the overlay shows "Transcribing…" then the full text.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| Add a client-side LLM cleanup pass                                    | Cleanup is the dictation API's server-side rewrite, requested by the `llm` block on the same `/transcribe` call. No LLM Gateway client, no `StylerProtocol`, no styling stage, no second request — transcription steering belongs in `ConversationContext`.                                                                                                                                                                                                                                                                                                                                                                  |
-| Add local models or model downloads                                   | Transcription is a remote AssemblyAI call: no on-device ASR/LLM, no model cache, no download UI.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Pin transcription to English, or set a language at all                | Hurt non-English transcription; language is left to the model's own detection. **No `config.language_code`** either — the API documents it as defaulting to `en` and as ignored while a custom `prompt` is set, so dropping the prompt un-ignored it; detection was then measured to work with neither field set (es/fr/de/ja clips each transcribed in their own language against the live endpoint, rewrite included). Setting one would only take that away. `KeytermsWireTests` asserts the absence.                                                                                                                     |
-| Bring back `config.prompt`                                            | Replaced by `config.conversation_context` (`ConversationContext`), which is the structured field for the same job. A custom `prompt` also replaces the service's managed default and makes the API ignore `language_code`, so re-adding one silently gives up both.                                                                                                                                                                                                                                                                                                                                                          |
-| Widen the request's context past history + the prior chunk            | `ConversationContext.turns` reads exactly two fields of `TranscriptionContext` — `recentTranscripts` and `priorText`. The app name, window title, field label and selected text are captured for the paste path and the developer-mode log and stay on the machine; the app/window/field hints and the `Selected text:` block were removed, not gated. Don't add one back, and don't route that context onto the request by another path. The user's key terms are the exception that proves the rule: they _are_ sent, as the request's own `word_boost` list (`KeytermsBoost`) — never folded back into the context turns. |
-| Add a "remove filler words (um, uh, like)" clause                     | Not in the STT model's trained instruction set — a no-op, deliberately dropped; disfluency removal is the server-side LLM rewrite's job.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| Add a keystroke-typing paste path or a length threshold               | Injection is **always** clipboard paste (save → write → ⌘V → settle → restore), with the copied-to-clipboard degradation when the target is lost.                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| Add `LSUIElement` or a menu-bar-**only** mode                         | Blurt is a Dock app first. The `MenuBarExtra` status item is convenience layered on the Dock icon; the notch can hide a status item, so nothing may depend on it. A menu-bar-only variant was reverted twice.                                                                                                                                                                                                                                                                                                                                                                                                                |
-| Add a `KeyboardShortcuts` package or a key+modifier chord             | The trigger is a single lone modifier, home-grown (`CGEventTap` + `DictationKeyGate`), and swallows nothing.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| Add a self-replacing install or background auto-updater               | Updates are download-only; `mxcl/AppUpdater` and its in-place updater were removed. The once-a-day launch _check_ (`AutomaticUpdateCheck`) is fine; installing for the user, or polling, is not. Extend `UpdateCheckModel`.                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Hand-edit `Blurt.xcodeproj/project.pbxproj`                           | Generated from `project.yml`; `check.sh`'s drift check fails on any manual edit (a Claude PreToolUse hook also blocks it).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| Redirect the post-build install away from `/Applications`             | TCC won't register apps in DerivedData/`/tmp`, so permission toggles never appear.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| Touch the real Keychain in tests                                      | `APIKeyStore` is the production item — a test that writes it triggers Keychain prompts and corrupts the real item's ACL. Use an isolated service (see `KeychainStoreTests`) or `InMemoryAPIKeyStore`.                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| Add backwards-compat shims for removed types                          | Deleted types stay deleted — no deprecated re-exports.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Don't                                                                 | Because                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Add an external SPM dependency to the engine                          | Dependency-free by rule (biggest supply-chain risk); a `check.sh` guard fails on `.package(` in `Package.swift` or a `url:`/`github:` package in `project.yml`. Extend `BlurtEngine` instead.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Use `AVAudioEngine` / `installTap` for capture                        | A long-lived engine bound its input graph to one device and went stale on a mic↔built-in switch — `-10868` (`kAudioUnitErr_FormatNotSupported`) or all-zero buffers. `MicCapture` builds a fresh `AVCaptureSession` recorder per capture (owner-directed move from `AVAudioRecorder`, 2026-08-25).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Pre-open the mic to shave bring-up latency (a warm/prepared recorder) | Measured against `kAudioDevicePropertyDeviceIsRunningSomewhere`: neither building an `AVCaptureSession` nor the retired `AVAudioRecorder.prepareToRecord()` opens the device, so neither pre-pays the 180–600 ms route activation `record()` costs. A warm-recorder lifecycle bought ~15 ms and cost a device-identity check, a pin check, an expiry and a bring-up flag. `MicCapture.warmUp()` is stateless: it absorbs the process's first-touch cost and holds nothing.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Add streaming STT                                                     | The dictation API returns the full (already rewritten) text in one response; the overlay shows "Transcribing…" then the full text.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Call the dictation API in a way its docs don't describe               | **The reference is the source of truth.** Every path, header, multipart part, `config` key, response key and error key Blurt sends or reads is one it documents. The route has been renamed repeatedly and still answers to names the docs have dropped — `prompt`, `keyterms`, `word_boost`, `language_code`, `llm: null` — so a 200 is not evidence a field is supported, only that it has not been removed yet; treat anything absent from the docs as deprecated. Undocumented behaviour carries no compatibility promise, so a feature resting on it can stop working silently: that is why `llm: null` (the only rewrite off switch there is) and the `message` error field were dropped on 2026-09-11, along with `warmUp()`'s GET at the bare host root in favour of the documented `GET /warm`. Running tighter than a documented cap is fine — `STTPrompt.characterCap` does. Measuring is still how a claim gets settled, and the docs have been wrong twice (see `DictationWireTypes` on unknown fields, `STTPrompt` on the 6000 cap), but a measurement licenses _distrusting_ a documented field, never _sending_ an undocumented one. |
+| Add a client-side LLM cleanup pass                                    | Cleanup is the dictation API's server-side rewrite, requested by `config.llm_instruction` on the same `/v1/transcribe/live` call. No LLM Gateway client, no `StylerProtocol`, no styling stage, no second request — transcription steering belongs in `STTPrompt`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Add local models or model downloads                                   | Transcription is a remote AssemblyAI call: no on-device ASR/LLM, no model cache, no download UI.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Pin transcription to English, or set a language at all                | Hurt non-English transcription; language is left to the model's own detection. **No `config.language_codes`** either — note the plural, which is the documented spelling, though the undocumented singular `language_code` is accepted too (a 200, not the unknown-key 400 a bogus name earns), so both are live and both are pinned absent. Detection was measured to work with neither it nor a prompt set (es/fr/de/ja clips each transcribed in their own language against the live endpoint, rewrite included), and re-measured 2026-09-11: a Spanish clip came back as Spanish with no field, with `language_codes: ["es"]`, **and** with `language_codes: ["en"]` — asking for English did not force English, so the reference's `["en"]` default does not describe this route and omission is not a bet on a default. Setting one would only take working detection away. `KeytermsWireTests` asserts the absence of both spellings.                                                                                                                                                                                                         |
+| Send `config.prompt` alongside `config.stt_prompt`                    | They are the same field under two names — the docs give `stt_prompt` as the field and note it is "Also accepted as `prompt`" — and a request carrying both is rejected before the audio is read (`provide only one of stt_prompt or prompt; they are the same field`). So this is never a compatible addition: it is a 400 on _every_ dictation. `stt_prompt` is the documented spelling and the only one to send; `prompt` is the legacy one, and the route's own inner validator still answers under it (see `STTPrompt.characterCap`), which is a reason to treat it as deprecated rather than interchangeable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Bring back `config.conversation_context`                              | Replaced by `config.stt_prompt` (`STTPrompt`), which carries the same two signals as one string. Both fields still work and can ride the same request, so re-adding the turn list sends the prior text twice rather than failing. `prompt` is `stt_prompt`'s own alias — a request carrying both is a 400 (`they are the same field`) — and a custom prompt replaces the service's managed default, which is the trade this swap accepted.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Widen the request's context past history + the prior chunk            | `STTPrompt.text` reads exactly two fields of `TranscriptionContext` — `recentTranscripts` and `priorText`. The app name, window title, field label and selected text are captured for the paste path and the developer-mode log and stay on the machine; the app/window/field hints and the `Selected text:` block were removed, not gated. Don't add one back, and don't route that context onto the request by another path. The user's key terms are the exception that proves the rule: they _are_ sent, as the request's own `keyterms_prompt` list (`KeytermsBoost`) — never folded back into the prompt.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Add a "remove filler words (um, uh, like)" clause                     | Not in the STT model's trained instruction set — a no-op, deliberately dropped; disfluency removal is the server-side LLM rewrite's job.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Add a keystroke-typing paste path or a length threshold               | Injection is **always** clipboard paste (save → write → ⌘V → settle → restore), with the copied-to-clipboard degradation when the target is lost.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Add `LSUIElement` or a menu-bar-**only** mode                         | Blurt is a Dock app first. The `MenuBarExtra` status item is convenience layered on the Dock icon; the notch can hide a status item, so nothing may depend on it. A menu-bar-only variant was reverted twice.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Add a `KeyboardShortcuts` package or a key+modifier chord             | The trigger is a single lone modifier, home-grown (`CGEventTap` + `DictationKeyGate`), and swallows nothing.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Add a self-replacing install or background auto-updater               | Updates are download-only; `mxcl/AppUpdater` and its in-place updater were removed. The once-a-day launch _check_ (`AutomaticUpdateCheck`) is fine; installing for the user, or polling, is not. Extend `UpdateCheckModel`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Hand-edit `Blurt.xcodeproj/project.pbxproj`                           | Generated from `project.yml`; `check.sh`'s drift check fails on any manual edit (a Claude PreToolUse hook also blocks it).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Redirect the post-build install away from `/Applications`             | TCC won't register apps in DerivedData/`/tmp`, so permission toggles never appear.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Touch the real Keychain in tests                                      | `APIKeyStore` is the production item — a test that writes it triggers Keychain prompts and corrupts the real item's ACL. Use an isolated service (see `KeychainStoreTests`) or `InMemoryAPIKeyStore`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Add backwards-compat shims for removed types                          | Deleted types stay deleted — no deprecated re-exports.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 Release-side invariants (hardened runtime and a secure timestamp on every nested mach-o and embedded
 framework, or notarization rejects the build; roll-forward-only for a bad release) live in
@@ -412,7 +414,7 @@ framework, or notarization rejects the build; roll-forward-only for a bad releas
 ```text
 DictationKeyTap (CGEventTap + DictationKeyGate) → AppCoordinator → DictationSession (actor) → MicCapture
                        ↓
-              AssemblyAITranscriber  (STT + LLM cleanup, AssemblyAI dictation API: one POST /transcribe)
+              AssemblyAITranscriber  (STT + LLM cleanup, dictation API: one POST /v1/transcribe/live)
                        ↓
               KeyInjector → focused app (clipboard paste via a synthesized ⌘V CGEvent)
 ```
@@ -424,8 +426,12 @@ An actor implementing `MicCaptureProtocol`. It captures with an **`AVCaptureSess
 backends went with the second one; the owner-directed move from `AVAudioRecorder`, 2026-08-25): the
 session's audio data output converts to 16 kHz / mono / 16-bit
 LPCM — the exact geometry the dictation API wants — and the delegate accumulates the raw S16LE
-bytes in memory, so `stop()` returns the blob the dictation request uploads byte for byte, with no
-temp file, no read-back, and no resampling or float-conversion pass.
+bytes onto the feed `start()` returns, which is what the chunked upload drains while the user is
+still speaking — no temp file, no read-back, and no resampling or float-conversion pass. `stop()`
+answers a **byte count**, not the audio: the recording has already gone out by then, so all the
+release path needs is whether there was enough of it to send (`SyncSTTLimits.minPCMBytes`).
+Accumulating the blob as well cost a second `memcpy` of every byte inside the capture lock and
+retained a duplicate of the whole utterance until release.
 
 A **fresh recorder per session**, built around the _current_ resolution of the user's selection at
 press time; this is deliberate — see
@@ -551,21 +557,38 @@ hosts still read the meter through the seam they inject.
 ### `AssemblyAITranscriber` — `Sources/BlurtEngine/STT/AssemblyAITranscriber.swift`
 
 Implements `TranscriberProtocol` against AssemblyAI's **dictation** API: a single
-`POST https://dictation.assemblyai.com/transcribe` with the captured audio as a raw S16LE PCM blob
-in the `audio` multipart part plus a JSON `config` part (`sample_rate`, `channels`, and an `llm`
-block). No model header — the service pins the STT model server-side. The config's
-`conversation_context` field steers _transcription_ and carries the user's recent dictations followed
-by the text before the cursor (`ConversationContext.turns`), or nothing at all when there is neither —
-an empty list omits the field. There is no `prompt` field. The `llm` block asks the
-service to run its default LLM cleanup rewrite (remove disfluencies, fix punctuation) over the
-verbatim transcript, all inside the same request. The block rides along while **enhanced
-transcripts** are enabled (`EnhancedTranscriptsStore`, on by default, read per request via the
-transcriber's injected `enhancedTranscripts` closure); with the setting off the config omits `llm`
-entirely, the service skips the rewrite, and the verbatim transcript is pasted as spoken. The
-response carries both `text` (verbatim) and
-`llm_response` (the rewrite); the transcriber returns the rewrite and falls back to `text` when
-`llm_response` is null — the rewrite is best-effort (5 s server-side budget), so a rewrite failure
-(`llm_error`) is a logged degradation, never a user-facing error.
+`POST https://dictation.assemblyai.com/v1/transcribe/live` with a JSON `config` part
+(`sample_rate`, `channels`, and the rewrite request) followed by the captured audio as a raw S16LE PCM
+blob in the `audio` part. No model header — the service pins the STT model server-side. The config's
+`stt_prompt` field steers _transcription_ and carries the user's recent dictations followed
+by the text before the cursor (`STTPrompt.text`), or nothing at all when there is neither —
+an empty string omits the field. There is no `prompt` field — the route accepts one, so that
+absence is the settled decision and not a constraint. `config.llm_instruction` asks the
+service to run our LLM cleanup rewrite (remove disfluencies, fix punctuation) over the
+verbatim transcript, all inside the same request, and it rides **every** request:
+`DictationConfig` carries no rewrite on/off switch at all.
+
+**The switch is applied to the response, not the request** (since 2026-09-11). The response
+carries both `text` (the verbatim transcript, "never altered by the LLM") and `llm_response`
+(the rewrite), so `AssemblyAITranscriber.transcript(from:)` simply picks: with **enhanced
+transcripts** on (`EnhancedTranscriptsStore`, on by default, read per request via the
+transcriber's injected `enhancedTranscripts` closure) it prefers the rewrite and falls back to
+`text` when `llm_response` is null or blank — the rewrite is best-effort (5 s server-side
+budget), so a rewrite failure (`llm_error`) is a logged degradation, never a user-facing error.
+With the setting off it returns `text`, and the rewrite that came back is discarded unread.
+
+That ordering is deliberate and it has a price. **The route documents no way to decline the
+rewrite**: it rewrites _by default_, omitting `llm_instruction` only selects the service's own
+wording ("Omitting the field, or setting it to `null`, keeps the default cleanup task"), and the
+escape the reference prescribes is exactly the one taken here — ignore `llm_response` and use
+`text`. An explicit `"llm": null` _does_ suppress it (measured 2026-09-10, and the only off
+switch there is; `llm: {}`, `llm: {"enabled": false}` and `llm_instruction: null` all run the
+default instead), but it is **undocumented**, and Blurt sent it until 2026-09-11. What the move
+costs is real: a user with the setting off still waits out the rewrite's server-side budget and
+is still billed for a pass nobody reads. What it buys is one request shape rather than two, and a
+switch that cannot disagree with the response it was applied to — the bug that shipped the other
+way round, when "enhanced transcripts: off" returned a default-cleaned transcript anyway because
+the config merely omitted the instruction.
 
 The instruction is `CleanupInstruction.text`, the winner of a GEPA run of
 `evals/dictation-prompt/` (see its README), compressed to fit the cap. Two later searches
@@ -582,20 +605,27 @@ every dictation, since over-cap is a 400 on the whole request.
 
 Note what that does and does not establish. It is the best instruction the harness has
 produced, measured against other _text_ candidates on a _stand-in_ model; it has never been
-shown to beat the empty `llm` block, because the harness cannot score the service's own
+shown to beat the service's default instruction, because the harness cannot score the service's own
 rewrite model. On the one live comparison so far — two utterances through the real endpoint —
 this instruction and the service default produced identical output. `--verify-live` settles
 that with real audio. And every corpus behind it is English while the string ships to every
 user in every language; pinning the _transcription_ prompt to English was reverted once
-already. A revert here is one line: drop `LLMRewrite`'s field and it encodes `{}` again.
+already. A revert here is one line: return nil and the key comes off the wire again — which
+restores the service's own cleanup wording, not a verbatim transcript.
 
 That field is capped at **2048 characters** (`CleanupInstruction.characterCap`) — a different,
-smaller limit than the 4096 on `config.conversation_context`
-(`ConversationContext.characterCap`, which the turn builder fits the history and prior chunk into),
-and the instruction cap is not in the published API reference; it was measured against the live
-endpoint. There is a _third_ cap in the same request — `config.word_boost` accepts 2048 characters
-summed across all terms (`KeytermsBoost.characterCap`), the same figure as the instruction cap but a
-limit on a different field. Three caps, three constants: never reuse one field's figure for another.
+smaller limit than the 4096 on `config.stt_prompt`
+(`STTPrompt.characterCap`, which the prompt builder fits the history and prior chunk into),
+and the instruction cap was measured against the live endpoint before the reference carried it
+(it now gives `llm_instruction` a `maxLength` of 2048, in characters, while the constant counts
+UTF-8 bytes — the conservative unit). There is a _third_ cap in the same request —
+`config.keyterms_prompt` accepts 2048 characters summed across all terms
+(`KeytermsBoost.characterCap`), the same figure as the instruction cap but a limit on a different
+field — and that field carries a _fourth_, which is a **count** and not a size:
+at most 100 terms (`KeytermsBoost.termCap`, the reference's `maxItems`). The count is the one the
+byte budget does not imply, and it is reachable, since 150 short terms cost ~1500 bytes and clear
+the byte cap easily. Four caps, four constants: never reuse one field's figure for another, and
+never assume one cap on a field is the only cap on it.
 Over
 the cap the API 400s the whole request before reading the audio, so every dictation fails
 outright rather than degrading to the verbatim transcript. A 3057-character eval winner
@@ -605,11 +635,33 @@ apart, and the harness refuses to report an over-cap winner — see its README's
 2048-character cap".
 
 The finished text arrives in the response body — no `/v2/upload`, no job submission, no polling.
-Truly synchronous: `transcribe(pcm:sampleRate:context:)` is a single `async throws -> String`
-returning the whole polished text at once (no streaming, no deltas). The underlying sync STT model
+The **upload is chunked**: `transcribe(frames:sampleRate:context:)` is called at _press_ and
+streams the recording into one open request as the microphone produces it, so the transfer overlaps
+the speaking instead of following it. There is no buffered path — measured on a 1 Mbps uplink, a
+10 s dictation waits ~3.1 s after speech buffered versus ~0.5 s chunked, and on a fast link the two
+are within noise. The `config` part is written **first**, which the streaming route requires — it
+cannot open its upstream STT call without it, and rejects an audio-first body with a 400 (whose
+exact wording lives once, on `AssemblyAITranscriber.streamedBody`). That is
+also where the rest of the win comes from: the service starts inferring as the audio arrives rather
+than after the last byte, and nothing at all sits between the final frame and the request closing.
+The cost is that the press-time context read has to be settled _before_ the request opens, so
+`DictationSession.startUpload` awaits it (bounded by `contextWaitBudget`) instead of the release
+path doing so — the read is dispatched before the mic bring-up is joined, so it is almost always
+already finished and the wait is spent while the user is still speaking, not while they wait for a
+transcript. The _response_
+is unchanged and still arrives whole: a single `async throws -> String`, no deltas. The underlying sync STT model
 handles audio from ~80 ms up to 120 s (server-side ~30 s inference deadline); those limits live in
 `SyncSTTLimits` and back `DictationSession`'s auto-release timeout, so a held hotkey stops before
 the cap.
+
+Every wire constant was swept against the live route on 2026-09-09 (the keyterms list at 2048 chars and the
+120 s ceiling are both exact and enforced; the prompt's 4096 is the API's own and hard-rejecting,
+measured in Unicode scalars on 2026-09-10 — it was `conversation_context`'s 4096, which was **ours**
+and merely trimmed, until `stt_prompt` replaced that field; the whole `config` part is separately
+limited somewhere past 48 kB; sub-floor audio returns 200 with an
+empty transcript rather than a 400; post-speech latency is flat from a 4 kB write to a single one, so
+`ChunkedRequestBody.bufferSize` has nothing to gain from retuning). Each constant's own doc comment
+carries its measurement — change one only against a fresh sweep, not against the old prose.
 
 ### `DictationSession` — `Sources/BlurtEngine/Pipeline/DictationSession.swift`
 
@@ -696,8 +748,9 @@ than faults is the engine's single classification, so the shell's navigation and
 calm-idle projection can't disagree. It also owns `hasAPIKey` (drives the wizard/Settings UI; the
 press-time gate itself is the session's `readinessCheck`) and `saveAPIKey`, calls
 `keyTap.ensureRunning()` to install/enable the tap (which returns false until the process is
-Accessibility-trusted, so it retries once permissions land), and `keyTap.refreshBinding()` after the
-user picks a different trigger key.
+Accessibility-trusted; `WizardController`'s permission poll then calls
+`retryKeyTapInstallIfNeeded()` each tick while ready, so a failed install is retried until it
+lands), and `keyTap.refreshBinding()` after the user picks a different trigger key.
 
 ## Hotkey
 
@@ -747,74 +800,100 @@ the `@AppStorage(TriggerKeyStore.defaultsKey)` + `TriggerKey.fromPersisted` pair
 restating that pairing per view. The unset default belongs to `fromPersisted` (an absent keycode maps
 to right ⌘), so views must not re-declare `TriggerKey.rightCommand.rawValue` themselves.
 
-## Conversation context and key terms
+## Contextual prompt and key terms
 
-`Sources/BlurtEngine/STT/ConversationContext.swift` builds the turn list passed as the dictation
-request's `config.conversation_context` — it steers the _transcription_, not the LLM rewrite (that's
-the request's separate `llm` block). It's unit-tested in
-`Tests/BlurtEngineTests/ConversationContextTests.swift`.
+`Sources/BlurtEngine/STT/STTPrompt.swift` builds the string passed as the dictation
+request's `config.stt_prompt` — it steers the _transcription_, not the LLM rewrite (that's
+the request's separate `llm_instruction`). It's unit-tested in
+`Tests/BlurtEngineTests/STTPromptTests.swift`.
 
-**It reads exactly two fields of `TranscriptionContext`**, and emits them as turns in this order:
+**It reads exactly two fields of `TranscriptionContext`**, and joins them with a newline in this
+order:
 
 1. `recentTranscripts` — the user's own recent dictations, oldest first, from the session's
    `RecentDictations` ring. A stretch of dictation therefore reads to the model as one continuing
-   dialogue instead of N unrelated clips.
-2. `priorText` — the text immediately before the cursor, as the **last** turn, because it is what the
+   passage instead of N unrelated clips.
+2. `priorText` — the text immediately before the cursor, **last**, because it is what the
    utterance most immediately continues from: the sentence the caret sits in. So vocabulary,
    capitalization and mid-sentence continuity carry over from what is already there.
 
-**There is no `config.prompt` any more.** It used to carry the same prior chunk under a
-`Previous transcript:` heading plus a fixed `baseInstruction`, which was a prose imitation of the
-structured field the API offers for exactly this job. Two consequences of dropping it are deliberate:
-the service's managed default transcription prompt applies again (a custom `prompt` replaced it), and
-`config.language_code` is no longer ignored — the API documents it as ignored whenever a custom
-prompt is set.
+**This field is `config.prompt` under its other name.** The service rejects a request carrying both
+— `provide only one of stt_prompt or prompt; they are the same field` — so `stt_prompt` is a name,
+not a second parameter, and the older `conversation_context` (an ordered array of turns) is what it
+replaced. Both of those still work and can ride the same request, measured, so the swap is a choice
+about which one steers rather than something the API forced; sending the turn list too would put the
+same prior text on the wire twice.
+
+What the swap accepts: a custom prompt replaces the service's managed default transcription prompt,
+and the API documents `config.language_code` as ignored whenever one is set. The language half was
+re-measured on 2026-09-10 — a Spanish clip came back in Spanish with an English prompt, a Spanish
+one, and none at all — so detection survives in practice, and the request still sets no language.
+What it carries is prior text and nothing else: no `Previous transcript:` heading and no fixed
+instruction, since the field is documented as a description of the audio rather than a command, and
+the service applies its own transcription behaviour on top. That heading-plus-instruction shape is
+what `conversation_context` was introduced to replace; don't bring it back with it.
 
 Nothing else about the user's screen is on the request. The frontmost app name, the window title,
 the focused field's label and the selected text are still captured — they drive paste spacing, the
 injector's window identity, and the developer-mode log — and they stay on the machine. The app /
-window / field hints, the `Selected text:` block, and the inline `Keywords:` clause the prompt used
-to carry were deleted, not switched off; see
+window / field hints, the `Selected text:` block, and the inline `Keywords:` clause the old prompt
+used to carry were deleted, not switched off; see
 [Settled decisions](#settled-decisions--dont-reintroduce-these).
 
-`turns(context:)` returns `[]` when there is neither history nor prior text, and an empty array omits
-the field so the model works from the audio alone. Two caps apply, both enforced here rather than
-assumed of the caller: at most `recentTurnCap` (99) recent dictations, one short of the API's
-100-turn maximum so `priorText` always has the last slot; and 4096 characters summed across every
-turn (`characterCap`), fitted by dropping the **oldest** turns first — the same rule the server
-applies, so the two can't disagree about which end of the dialogue matters. The kept turns are a
-contiguous newest run: an older turn that doesn't fit is dropped whole rather than half-sent, since a
-truncated turn reads as how the speaker actually talks. The one exception is a single turn longer
-than the whole budget with nothing newer kept, which is clipped to its _tail_ rather than dropped —
-nearest the cursor is what the utterance continues from. Unlike `KeytermsBoost` and
-`CleanupInstruction`, the cap counts **characters, not UTF-8 bytes**: those two count bytes because
-over-cap is a 400 that fails the whole request, whereas this field is documented as _trimmed_, so
-fitting is a bandwidth measure and matching the documented unit beats over-shooting it. Two omissions
-are deliberate and regression-tested — no language directive and no filler-word clause; see
+`text(context:)` returns `""` when there is neither history nor prior text, and an empty string omits
+the field so the model works from the audio alone. One cap applies, enforced here rather than assumed
+of the caller: 4096 across the whole string including the newlines that join it (`characterCap`),
+fitted by dropping the **oldest** entries first — the end `conversation_context`'s server-side
+trimming dropped, so the swap didn't change which end of the history matters. There is no longer a
+turn cap: `recentTurnCap` (99) answered to `conversation_context`'s 100-turn maximum, which this
+field has no equivalent of, so one knob replaced two. The kept entries are a contiguous newest run:
+an older one that doesn't fit is dropped whole rather than half-sent, since a truncated entry reads
+as how the speaker actually talks. The one exception is a single entry longer than the whole budget
+with nothing newer kept, which is clipped to its _tail_ rather than dropped — nearest the cursor is
+what the utterance continues from.
+
+**The cap is the API's now, and it rejects rather than trims.** `conversation_context` was documented
+as trimming an over-cap list, which made our 4096 a bandwidth measure; `stt_prompt` answers 4097 with
+`400 stt_prompt: String should have at most 4096 characters` before the audio is read, so `fitted` is
+what stands between a long history and every dictation failing. Its unit is **Unicode scalars**,
+measured rather than inferred from the word "characters": 4096 `é` (8192 UTF-8 bytes) is accepted,
+while 820 family emoji — 820 grapheme clusters but 4100 scalars — is rejected. So Swift's
+`String.count` would under-count and let a 400 through, and the UTF-8 bytes `KeytermsBoost` and
+`CleanupInstruction` count (their own servers' units being unmeasured) would needlessly halve the
+budget for accented text. Two omissions are deliberate and regression-tested — no language directive
+and no filler-word clause; see
 [Settled decisions](#settled-decisions--dont-reintroduce-these).
 
 **The key terms are the request's other steering field.**
-`Sources/BlurtEngine/STT/KeytermsBoost.swift` sends the user's Settings list as `config.word_boost` —
-word boosting: a flat array of strings biasing recognition toward those exact spellings. It is a
-sibling of `conversation_context`, not an alternative; the API takes both on the same request and
-they do different jobs (prior dialogue versus a vocabulary list), which is why the
-`Keywords: a, b, c.` clause was the wrong shape for the same intent. `word_boost` is the name the
-dictation API's own reference documents for this parameter; `keyterms_prompt` is what the sibling Sync
-STT surface calls the same feature, and it only ever reached the dictation engine as one of the
-unknown fields that endpoint forwards as-is. Send one of the two, never both — the aliases are
-documented as mutually exclusive. `KeytermsBoost.fitted` takes whole terms in the user's order while
+`Sources/BlurtEngine/STT/KeytermsBoost.swift` sends the user's Settings list as
+`config.keyterms_prompt` — keyterms prompting: a flat array of strings biasing recognition toward
+those exact spellings. It is a
+sibling of `stt_prompt`, not an alternative; the API takes both on the same request and
+they do different jobs (prior text versus a vocabulary list), which is why the
+`Keywords: a, b, c.` clause was the wrong shape for the same intent. `keyterms_prompt` is the
+canonical name — the one the other STT surfaces use, the one the dictation reference documents, and
+the one the route's own validation lists first — with `keyterms` and `word_boost` kept as legacy
+aliases. This sent `word_boost` until 2026-09-10, on the belief that it was the documented name and
+`keyterms_prompt` merely one of the unknown fields the endpoint forwards as-is; measurement killed
+both halves of that, since `/v1/transcribe/live` rejects an unknown key outright
+(`Extra inputs are not permitted`) and `keyterms_prompt` returns 200. Send exactly one of the three,
+never two — they are mutually exclusive on this route (`provide only one of keyterms_prompt,
+keyterms, or word_boost`, 400 before the audio is read), so a rename here is a swap and never an
+addition. `KeytermsBoost.fitted` takes whole terms in the user's order while
 they fit the field's own 2048-character cap (`KeytermsBoost.characterCap`, measured in UTF-8 bytes —
-the conservative reading, as with `CleanupInstruction`). It returns a plain `[String]`, not an
+the conservative reading, as with `CleanupInstruction`) **and** the list stays within
+`termCap` (100), the reference's `maxItems` on the same field — two independent limits, so both are
+checked; a comma-split list of 150 short terms clears the byte cap and 400s on the count. It returns a plain `[String]`, not an
 optional one — the repo bans optional collections, and "no terms" needs only one spelling — so the
 omit-vs-`[]` distinction that _does_ matter to the API lives in `DictationConfig.encode(to:)`, which
 drops the key for an empty list. Terms arrive already trimmed and deduped from `KeyTermsStore.parse`,
 so length is the only thing enforced here. Unit-tested in
 `Tests/BlurtEngineTests/KeytermsBoostTests.swift`.
 
-**Both fields always encode as JSON arrays of strings**, even holding a single value —
-`conversation_context` also accepts a bare string for one turn, and collapsing to it would make a
-one-turn request a different shape from every other. `DictationConfig.encode(to:)` is where that and
-the omit-vs-`[]` rule live; `KeytermsWireTests` pins both.
+**The two fields are deliberately different JSON types, and neither tolerates the other's.**
+`stt_prompt` is a string — an array earns `400 stt_prompt: Input should be a valid string` — while
+`keyterms_prompt` is an array even for a single term. `DictationConfig.encode(to:)` is where that and
+the omit-vs-`""`/`[]` rule live; `KeytermsWireTests` pins both, in both directions.
 
 ## Settings, persistence, and cues
 
@@ -838,11 +917,12 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
 
 - **`TriggerKeyStore`** (`BlurtTriggerKeyCode`), **`SoundPackStore`** (`BlurtSoundPack`),
   **`KeyTermsStore`** (`BlurtKeyTerms`, the user's domain vocabulary, re-read at every press via
-  the session's `keyTermsProvider` and sent as the request's `word_boost` list —
+  the session's `keyTermsProvider` and sent as the request's `keyterms_prompt` list —
   see `KeytermsBoost`),
   **`DeveloperModeStore`** (`BlurtDeveloperMode`, off by default),
   **`EnhancedTranscriptsStore`** (`BlurtEnhancedTranscripts`, **on** by default — unset reads as
-  enabled; gates the dictation request's `llm` cleanup-rewrite block, re-read at every request),
+  enabled; picks the cleanup rewrite over the verbatim transcript in the dictation _response_,
+  re-read at every request — it shapes no part of the request),
   **`StyleProfileStore`** (three keys: `BlurtStyleProfiles`, the JSON list of up to
   `profileLimit` (4) named `StyleProfile`s; `BlurtActiveStyleProfile`, the id of the one in
   effect, or the `defaultStyleID` sentinel when the user has selected **Default** — base
@@ -909,8 +989,8 @@ sample rate (the profile flip), re-targeting the second listener whenever the fi
 
 History: **`RecentDictations`** is an in-memory, newest-first ring (never written to disk) holding
 `capacity` (100) dictations, of which the ready window lists `displayCapacity` (3). It is deep because
-the history is also request context — `ConversationContext` sends it as the leading
-`conversation_context` turns — so "how many do we remember" is a transcription-quality question, not a
+the history is also request context — `STTPrompt` sends it as the leading
+lines of `stt_prompt` — so "how many do we remember" is a transcription-quality question, not a
 layout one. **`DictationSession` owns the one ring**, since it assembles each request inside its
 actor; the app's `AppCoordinator.recentDictations` is a projection pushed to it through
 `onTranscriptDelivered` (which hands over the updated ring alongside the transcript), so the list can

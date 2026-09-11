@@ -1,11 +1,14 @@
 import Foundation
 
 /// Persists the "enhanced transcripts" switch in `UserDefaults`. On by
-/// default; the Settings window's Transcription section flips it. While on,
-/// every dictation request carries the `llm` block asking the dictation API
-/// for its server-side cleanup rewrite (remove disfluencies, fix punctuation);
-/// turned off, the request omits the block and the verbatim transcript is
-/// pasted exactly as spoken. `AssemblyAITranscriber` reads this at each
+/// default; the Settings window's Transcription section flips it.
+///
+/// **A response-side switch, not a request-side one.** Every dictation request
+/// carries `llm_instruction` regardless, so the response always holds both the
+/// verbatim transcript and the cleanup rewrite (disfluencies removed,
+/// punctuation fixed); this flag decides which one gets pasted — see
+/// `AssemblyAITranscriber.transcript(from:)`, which also records what that
+/// costs a user who has it off. `AssemblyAITranscriber` reads this at each
 /// request, so a change applies to the very next dictation.
 /// Same shape as `DeveloperModeStore` / `SoundPackStore`.
 public struct EnhancedTranscriptsStore {

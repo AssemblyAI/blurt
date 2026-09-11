@@ -18,8 +18,14 @@ actor StubTranscriber: TranscriberProtocol {
 
   init(mode: Mode) { self.mode = mode }
 
-  func transcribe(pcm: Data, sampleRate: Int, context: TranscriptionContext?) async throws -> String {
+  func transcribe(
+    frames: AsyncStream<Data>, sampleRate: Int, context: TranscriptionContext?
+  ) async throws -> String {
+    // Context first, then the feed: that is the production order now — the
+    // config part leads the body, so the session must have settled the context
+    // before it opens the request.
     receivedContexts.append(context)
+    try await drainUntilAbandoned(frames)
     switch mode {
     case .transcript(let transcript):
       return transcript

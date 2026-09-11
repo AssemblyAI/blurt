@@ -66,7 +66,7 @@ struct DictationSessionTranscriptTests {
     // The property the app's "Recent" list depends on: it assigns this value
     // wholesale rather than recording into a ring of its own, so the value must
     // already include the transcript being reported — and must be the same history
-    // the *next* request's `conversation_context` is built from.
+    // the *next* request's `stt_prompt` is built from.
     // Each push recorded as its ring's contents joined, so the growth across two
     // dictations is one readable expectation (`StringListBox` is the existing
     // thread-safe recorder; the ring itself is asserted on the session below).

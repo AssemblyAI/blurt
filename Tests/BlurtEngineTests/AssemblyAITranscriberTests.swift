@@ -16,7 +16,7 @@ struct HTTPClientTests {
     let hits = Counter()
     let transport = FakeHTTPTransport { request in
       _ = hits.next()
-      guard request.url?.path.hasSuffix("/transcribe") == true,
+      guard request.url?.path.hasSuffix("/v1/transcribe/live") == true,
         request.httpMethod == "POST"
       else { return (404, Data()) }
       return (200, json(["text": "um hello world", "llm_response": "Hello world."]))
@@ -52,26 +52,42 @@ struct HTTPClientTests {
     #expect(result == expected)
   }
 
-  @Test("transcriber succeeds with a real context (which builds context turns)")
+  @Test("the response's documented metadata decodes, and a missing field is not a failure")
+  func responseMetadataDecodes() async throws {
+    // `session_id` is the load-bearing one — the reference asks callers to quote
+    // it when reporting a problem — and the timings localize a slow dictation to
+    // the STT upstream or the rewrite. They are logged, not returned, so what is
+    // asserted here is that a response carrying them still yields the transcript
+    // and that a response *missing* them does too: the reference marks
+    // `session_id` and `audio_duration_ms` required, and decoding them
+    // non-optionally would turn a dropped diagnostic into a failed dictation.
+    let full = #"""
+      {"text":"hello","llm_response":"Hello.","session_id":"a-b-c",
+       "audio_duration_ms":1200,"request_time_ms":840.5,"sync_time_ms":610}
+      """#
+    for body in [full, #"{"text":"hello","llm_response":"Hello."}"#] {
+      let transport = FakeHTTPTransport { _ in (200, Data(body.utf8)) }
+      let result = try await collectTranscript(makeTranscriber(apiKey: "k", transport: transport))
+      #expect(result == "Hello.")
+    }
+  }
+
+  @Test("transcriber succeeds with a real context (which builds the prompt)")
   func transcribeWithContext() async throws {
     let transport = FakeHTTPTransport { request in
-      guard request.url?.path.hasSuffix("/transcribe") == true else { return (404, Data()) }
+      guard request.url?.path.hasSuffix("/v1/transcribe/live") == true else { return (404, Data()) }
       return (200, json(["text": "hello world"]))
     }
 
     // A context with history and prior text exercises the
-    // `ConversationContext.turns` path inside transcribe() that the nil-context
+    // `STTPrompt.text` path inside transcribe() that the nil-context
     // happy path skips, so the request goes out carrying a real
-    // `config.conversation_context`. The fake can't observe the multipart upload
-    // body, so this asserts the round trip rather than the wire contents (covered
-    // directly by makeConfigData).
-    let result = try await makeTranscriber(apiKey: "test-key", transport: transport)
-      .transcribe(
-        pcm: Self.testPCM,
-        sampleRate: 16_000,
-        context: TranscriptionContext(
-          appName: "Slack", priorText: "Dear Sam,",
-          recentTranscripts: ["Following up on yesterday."]))
+    // `config.stt_prompt`.
+    let result = try await collectTranscript(
+      makeTranscriber(apiKey: "test-key", transport: transport),
+      context: TranscriptionContext(
+        appName: "Slack", priorText: "Dear Sam,",
+        recentTranscripts: ["Following up on yesterday."]))
     #expect(result == "hello world")
   }
 
@@ -93,15 +109,18 @@ struct HTTPClientTests {
     #expect(try await collectTranscript(makeTranscriber(apiKey: "test-key", transport: transport)) == "ok")
   }
 
-  @Test("warmUp issues a single GET to the host so the connection is pre-opened")
+  @Test("warmUp issues a single GET to the documented /warm endpoint")
   func warmUpPreOpensConnection() async throws {
     let hits = Counter()
     let getHits = Counter()
     let transport = FakeHTTPTransport { request in
       _ = hits.next()
-      // The warm-up must be a bare, auth-less GET off the /transcribe path —
-      // carrying the key would make it count as a transcription.
-      if request.httpMethod == "GET", request.url?.path.hasSuffix("/transcribe") == false,
+      // The warm-up must be a bare, auth-less GET off the transcribe path —
+      // carrying the key would make it count as a transcription — and it must
+      // land on `/warm`, the unauthenticated no-op the route publishes for this.
+      // It hit the bare host root until 2026-09-11: the same pooled connection,
+      // but a request the service never documented answering.
+      if request.httpMethod == "GET", request.url?.path == "/warm",
         request.value(forHTTPHeaderField: "Authorization") == nil
       {
         _ = getHits.next()
@@ -110,7 +129,7 @@ struct HTTPClientTests {
     }
 
     // warmUp is fire-and-forget and swallows errors; it should still issue
-    // exactly one lightweight GET (no /transcribe POST, no auth) to establish
+    // exactly one lightweight GET (no transcribe POST, no auth) to establish
     // the pooled connection the next transcribe reuses.
     await makeTranscriber(apiKey: "test-key", transport: transport).warmUp()
     #expect(hits.value == 1)
@@ -158,36 +177,43 @@ struct HTTPClientTests {
     }
   }
 
-  @Test("config part carries the built context turns and the audio geometry")
-  func configIncludesConversationContext() throws {
-    let object = try configObject(turns: ["Previous utterance.", "at the cursor"])
-    #expect(object["conversation_context"] as? [String] == ["Previous utterance.", "at the cursor"])
+  @Test("config part carries the built contextual prompt and the audio geometry")
+  func configIncludesSTTPrompt() throws {
+    let object = try configObject(prompt: "Previous utterance.\nat the cursor")
+    #expect(object["stt_prompt"] as? String == "Previous utterance.\nat the cursor")
     #expect(object["sample_rate"] as? Int == 16_000)
     // The capture path is mono by construction; the declared geometry must agree.
     #expect(object["channels"] as? Int == 1)
   }
 
   @Test(
-    "config part carries our cleanup instruction while enhanced transcripts are on",
-    arguments: [["at the cursor"], []])
-  func configRequestsRewrite(turns: [String]) throws {
-    // `llm` must be present on every enhanced request (else the service skips the
-    // rewrite) and must carry `instruction` under exactly that key — the field name
-    // is the contract, so a rename here degrades silently to the service default
-    // rather than failing anything. Sent with and without context, since the two
-    // fields are independent.
-    let llm = try #require(try configObject(turns: turns)["llm"] as? [String: Any])
-    #expect(llm["instruction"] as? String == CleanupInstruction.text)
-    // Nothing else rides in the block: output format and the don't-answer-the-text
-    // safeguards are the instruction's job and the service's, not extra fields'.
-    #expect(llm.keys.sorted() == ["instruction"])
+    "config part carries our cleanup instruction on every request",
+    arguments: ["at the cursor", ""], [true, false])
+  func configRequestsRewrite(prompt: String, enhancedTranscripts: Bool) throws {
+    // `llm_instruction` must be present on every request under exactly that key
+    // — the field name is the contract, and a rename here degrades silently to
+    // the service's default cleanup rather than failing anything, so the user
+    // would still get *a* rewrite, just not theirs. Sent with and without
+    // context, since the two fields are independent.
+    //
+    // And sent with the enhanced-transcripts switch in **both** positions,
+    // which is the change of 2026-09-11: the request no longer varies with that
+    // setting at all. `transcript(from:)` applies it to the response instead.
+    let object = try configObject(prompt: prompt, enhancedTranscripts: enhancedTranscripts)
+    #expect(object["llm_instruction"] as? String == CleanupInstruction.text)
+    // Two keys that must never appear. `llm` is the nested block this replaced —
+    // both shapes work on the route, so sending both would be silently
+    // redundant — *and* it is the route's only off switch, which is exactly what
+    // this no longer sends: a null `llm` here would suppress the rewrite the
+    // response-side switch now needs in hand.
+    #expect(object.keys.contains("llm") == false)
   }
 
   @Test("config carries the custom style instructions appended to the cleanup instruction")
   func configAppendsCustomStyle() throws {
     let custom = "always write in lowercase"
-    let llm = try #require(try configObject(customStyle: custom)["llm"] as? [String: Any])
-    let instruction = try #require(llm["instruction"] as? String)
+    let instruction = try #require(
+      try configObject(customStyle: custom)["llm_instruction"] as? String)
     // The exact combination rule lives in `CleanupInstructionTests`; what this pins
     // is the wiring — the transcriber's per-request read lands on the request, with
     // the base instruction still leading.
@@ -198,54 +224,43 @@ struct HTTPClientTests {
     "a blank custom style leaves the cleanup instruction exactly as shipped",
     arguments: [nil, "   \n"])
   func configIgnoresBlankCustomStyle(customStyle: String?) throws {
-    let llm = try #require(try configObject(customStyle: customStyle)["llm"] as? [String: Any])
-    #expect(llm["instruction"] as? String == CleanupInstruction.text)
+    let object = try configObject(customStyle: customStyle)
+    #expect(object["llm_instruction"] as? String == CleanupInstruction.text)
   }
 
-  @Test("config part omits the llm block when enhanced transcripts are off")
-  func configOmitsRewriteWhenDisabled() throws {
-    // Omission — not an empty or null `llm` — is what tells the service to skip
-    // the rewrite, so the user gets the verbatim transcript pasted as spoken.
-    let object = try configObject(turns: ["at the cursor"], enhancedTranscripts: false)
-    #expect(object.keys.contains("llm") == false)
-    // The rest of the config is unaffected by the switch.
-    #expect(object["sample_rate"] as? Int == 16_000)
-    #expect(object["conversation_context"] as? [String] == ["at the cursor"])
-  }
-
-  @Test("the multipart body frames the audio and config parts the dictation API expects")
-  func multipartBodyFraming() throws {
-    let body = makeTranscriber(apiKey: "test-key")
-      .multipartBody(pcm: Data("PCMBYTES".utf8), config: Data(#"{"channels":1}"#.utf8), boundary: "BOUND")
-    let text = try #require(String(data: body, encoding: .utf8))
-
-    #expect(text.hasPrefix("--BOUND\r\n"))
-    #expect(text.hasSuffix("--BOUND--\r\n"))
-    // Field names and the filename are the contract: the server matches on them,
-    // so a rename here is a 4xx that no other test would catch.
-    #expect(text.contains("Content-Disposition: form-data; name=\"audio\"; filename=\"audio.pcm\"\r\n"))
-    #expect(text.contains("Content-Disposition: form-data; name=\"config\"\r\n"))
-    // Each part's payload sits after the blank line that ends its headers and runs
-    // up to the next boundary — the CRLF placement a hand-built body gets wrong.
-    #expect(text.contains("Content-Type: audio/pcm\r\n\r\nPCMBYTES\r\n--BOUND\r\n"))
-    #expect(text.contains("Content-Type: application/json\r\n\r\n{\"channels\":1}\r\n--BOUND--\r\n"))
-  }
-
-  @Test("arbitrary binary PCM survives the multipart body byte-exact")
-  func multipartBodyPreservesBinaryPCM() throws {
-    // The audio part is raw S16LE, not text. Any accidental transcoding or stray
-    // framing byte would corrupt the upload while the string assertions above still
-    // passed, so pin the bytes: every value 0...255, ending exactly at the boundary.
-    let pcm = Data((0...255).map { UInt8($0) })
-    let body = makeTranscriber(apiKey: "test-key")
-      .multipartBody(pcm: pcm, config: Data("{}".utf8), boundary: "B")
-    let range = try #require(body.range(of: pcm))
-    #expect(body[range.upperBound...].starts(with: Data("\r\n--B\r\n".utf8)))
+  @Test(
+    "enhanced transcripts off pastes the verbatim transcript, rewrite in hand or not",
+    arguments: [
+      #"{"text":"um hello","llm_response":"Hello."}"#,
+      #"{"text":"um hello","llm_response":null,"llm_error":"timeout"}"#,
+      #"{"text":"um hello"}"#,
+    ])
+  func transcribeReturnsVerbatimWhenDisabled(body: String) async throws {
+    // The switch, and the whole of it. Every request asks for the rewrite, so a
+    // user with the setting off gets a perfectly good `llm_response` back and it
+    // must be ignored — the first row is the one that matters, and it is the row
+    // the enabled suite above turns into "Hello.".
+    //
+    // Until 2026-09-11 this was a *request* switch: the config sent an explicit
+    // null `llm`, the route's only off state, because omitting the instruction
+    // merely selects the service's own default cleanup. Deciding here costs a
+    // rewrite nobody reads (its ~5 s server-side budget, and the billing) and
+    // buys one request shape plus a switch that cannot disagree with the
+    // response it was applied to.
+    let transport = FakeHTTPTransport { _ in (200, Data(body.utf8)) }
+    let result = try await collectTranscript(
+      makeTranscriber(apiKey: "test-key", transport: transport, enhancedTranscripts: false))
+    #expect(result == "um hello")
   }
 
   @Test("transcriber HTTP error carries the decoded server message")
   func transcribeHTTPErrorMessage() async throws {
-    let transport = FakeHTTPTransport { _ in (422, json(["message": "audio too long"])) }
+    // A documented status carrying a documented shape: 413 with
+    // `{error, error_code}`. This asserted a 422 with a `message` key until
+    // 2026-09-11, and neither the status nor the field is in the reference —
+    // so the test was pinning a response the route does not send.
+    let body = json(["error": "audio too long", "error_code": "audio_too_large"])
+    let transport = FakeHTTPTransport { _ in (413, body) }
 
     // The transcriber surfaces its transport error directly; DictationSession is
     // the layer that wraps it in BlurtError.sttFailed before it reaches the UI.
@@ -253,7 +268,7 @@ struct HTTPClientTests {
       _ = try await collectTranscript(makeTranscriber(apiKey: "k", transport: transport))
       Issue.record("expected a throw")
     } catch let AssemblyAIError.http(status, message) {
-      #expect(status == 422)
+      #expect(status == 413)
       #expect(message == "audio too long")
     } catch {
       Issue.record("expected AssemblyAIError.http, got \(error)")
@@ -271,19 +286,49 @@ struct HTTPClientTests {
     #expect(AssemblyAITranscriber.errorMessage(from: json(["detail": "audio required"])) == "audio required")
   }
 
-  @Test("HTTP error message field precedence is message > detail")
+  @Test("HTTP error message field precedence is error > detail, and nothing else")
   func errorMessageFieldPrecedence() {
-    // The two documented shapes: `{error_code, message}` for request/audio/server
-    // errors and `{detail}` for auth and rate limiting. They shouldn't co-occur,
-    // but pin the order so a reorder can't silently change which reaches the user.
-    #expect(AssemblyAITranscriber.errorMessage(from: json(["message": "b", "detail": "c"])) == "b")
+    // The two documented shapes, and only those two: `{error, error_code}` for
+    // most failures, `{status, title, detail}` for the ones relayed from the
+    // transcription service (invalid key, unsupported format). They shouldn't
+    // co-occur, but pin the order so a reorder can't silently change which
+    // reaches the user.
+    #expect(AssemblyAITranscriber.errorMessage(from: json(["error": "a"])) == "a")
     #expect(AssemblyAITranscriber.errorMessage(from: json(["detail": "c"])) == "c")
-    // An `error` key is in none of the documented responses, so it is no longer
+    #expect(AssemblyAITranscriber.errorMessage(from: json(["error": "a", "detail": "c"])) == "a")
+    // `error` is the field the *common* failures carry, 400 among them — so a
+    // config-validation message reaches the user as a sentence instead of as
+    // the raw JSON body. It went unread until 2026-09-11.
+    #expect(
+      AssemblyAITranscriber.errorMessage(
+        from: json(["error": "invalid config part: llm: Extra inputs are not permitted"]))
+        == "invalid config part: llm: Extra inputs are not permitted")
+    // `message` is in *neither* documented shape, so it is deliberately not
     // consulted — such a body falls through to the raw-body arm rather than
-    // yielding the value. (Asserting the behavior, not the serialized bytes.)
-    let errorShaped = AssemblyAITranscriber.errorMessage(from: json(["error": "a"]))
-    #expect(errorShaped != "a")
-    #expect(errorShaped?.contains("error") == true)
+    // yielding the value. Same rule that keeps `llm: null` off the request:
+    // only the documented contract, in both directions. (Asserting the
+    // behavior, not the serialized bytes.)
+    let messageShaped = AssemblyAITranscriber.errorMessage(from: json(["message": "b"]))
+    #expect(messageShaped != "b")
+    #expect(messageShaped?.contains("message") == true)
+  }
+
+  @Test("a documented `{error, error_code}` 400 surfaces its sentence, not the body")
+  func httpErrorUsesDocumentedErrorField() async throws {
+    // End to end, because the decode is only half of it: the status has to
+    // arrive carrying the sentence the route sent. This is the shape the
+    // reference gives for a 400 — the status a bad config field earns.
+    let body = json(["error": "audio part must not be empty", "error_code": "bad_request"])
+    let transport = FakeHTTPTransport { _ in (400, body) }
+    do {
+      _ = try await collectTranscript(makeTranscriber(apiKey: "k", transport: transport))
+      Issue.record("expected a throw")
+    } catch let AssemblyAIError.http(status, message) {
+      #expect(status == 400)
+      #expect(message == "audio part must not be empty")
+    } catch {
+      Issue.record("expected AssemblyAIError.http, got \(error)")
+    }
   }
 
   @Test("a non-string `detail` (validation array) falls back to the raw body")
@@ -323,42 +368,18 @@ struct HTTPClientTests {
 
   // MARK: - helpers
 
-  /// Builds a transcriber wired to `transport`. The default transport answers
-  /// every request with a 500, for the cases that must never reach the wire.
-  /// Enhanced transcripts and the custom style are pinned (on / none unless a
-  /// test opts out) rather than left to the production defaults, which read the
-  /// process's real `UserDefaults`.
-  private func makeTranscriber(
-    apiKey: String?,
-    transport: any HTTPTransport = FakeHTTPTransport { _ in (500, Data()) },
-    enhancedTranscripts: Bool = true,
-    customStyle: String? = nil
-  ) -> AssemblyAITranscriber {
-    AssemblyAITranscriber(
-      apiKeyProvider: { apiKey }, transport: transport,
-      enhancedTranscripts: { enhancedTranscripts },
-      customStyle: { customStyle })
-  }
-
-  private func collectTranscript(_ transcriber: AssemblyAITranscriber) async throws -> String {
-    try await transcriber.transcribe(pcm: Self.testPCM, sampleRate: 16_000, context: nil)
-  }
-
   /// The encoded `config` part re-parsed as a dictionary — the shape every
   /// config assertion below wants, since `makeConfigData` returns raw JSON.
   /// A part that isn't a JSON object at all fails here rather than turning every
   /// downstream assertion into a silent nil-compare.
   private func configObject(
-    turns: [String] = [], enhancedTranscripts: Bool = true, customStyle: String? = nil
+    prompt: String = "", enhancedTranscripts: Bool = true, customStyle: String? = nil
   ) throws -> [String: Any] {
     let config = try makeTranscriber(
       apiKey: "test-key", enhancedTranscripts: enhancedTranscripts, customStyle: customStyle
     )
-    .makeConfigData(sampleRate: 16_000, conversationContext: turns, wordBoost: [])
+    .makeConfigData(sampleRate: 16_000, sttPrompt: prompt, keytermsPrompt: [])
     return try #require(JSONSerialization.jsonObject(with: config) as? [String: Any])
   }
 
-  /// Three arbitrary S16LE samples — the raw blob shape `MicCapture.stop()`
-  /// hands the transcriber.
-  private static let testPCM = Data([0x00, 0x00, 0xCD, 0x0C, 0x33, 0xF3])
 }

@@ -3,7 +3,7 @@ import Testing
 
 @testable import BlurtEngine
 
-/// `DictationSession.firstValue(of:within:clock:)` — the bounded wait
+/// `PressContext.firstValue(of:within:clock:)` — the bounded wait
 /// `runTranscribeInject` puts on the press-time AX field-context read, so an
 /// unresponsive frontmost app delays the transcript by at most
 /// `contextWaitBudget` (the utterance just goes out with less priming) instead
@@ -21,7 +21,7 @@ struct ContextWaitTests {
 
     // The clock is never advanced: a buffered result must come back without the
     // race ever sleeping out its budget (a wall-clock sleep would hang here).
-    let got = await DictationSession.firstValue(
+    let got = await PressContext.firstValue(
       of: stream, within: .milliseconds(500), clock: TestClock())
     #expect(got == context)
   }
@@ -33,7 +33,7 @@ struct ContextWaitTests {
     feed.yield(nil)
     feed.finish()
 
-    let got = await DictationSession.firstValue(
+    let got = await PressContext.firstValue(
       of: stream, within: .milliseconds(500), clock: TestClock())
     #expect(got == nil)
   }
@@ -46,7 +46,7 @@ struct ContextWaitTests {
       of: TranscriptionContext?.self, bufferingPolicy: .bufferingNewest(1))
     let clock = TestClock()
 
-    async let got = DictationSession.firstValue(
+    async let got = PressContext.firstValue(
       of: stream, within: .milliseconds(500), clock: clock)
     // Let the timeout racer park on the virtual clock before advancing past its
     // deadline — waiting on the clock's own state, not on a yield budget that

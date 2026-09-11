@@ -9,7 +9,7 @@ harness was written, and until now there was nothing to do about it.
 There is something to do about it. The dictation API takes audio, so:
 
     reference text -> `say` -> 16 kHz mono PCM -> POST /transcribe with the
-    candidate as config.llm.instruction -> score `llm_response`
+    candidate as config.llm_instruction -> score `llm_response`
 
 The response carries both sides of the question. `text` is the verbatim transcript,
 so `score(reference, text)` is the floor — what pasting without any rewrite would
@@ -51,7 +51,7 @@ import metrics
 from corpus import Utterance
 
 #: The dictation endpoint. Same host `AssemblyAITranscriber` posts to.
-DICTATION_URL = "https://dictation.assemblyai.com/transcribe"
+DICTATION_URL = "https://dictation.assemblyai.com/v1/transcribe/live"
 
 #: What the service expects, and what `SyncSTTLimits` records on the Swift side.
 SAMPLE_RATE = 16_000
@@ -94,30 +94,45 @@ def synthesize(text: str, directory: Path, voice: str | None = None) -> bytes:
 
 
 def _multipart(pcm: bytes, config: dict) -> tuple[bytes, str]:
-    """The `audio` + `config` body, framed exactly as the Swift client frames it."""
+    """The `config` + `audio` body, framed exactly as the Swift client frames it.
+
+    `config` leads, because the streaming route cannot open its upstream call
+    without it and answers an audio-first body with a 400. The Swift client
+    (`AssemblyAITranscriber.configHead` / `audioPartHeader`) writes these same
+    bytes in this same order; this harness tunes the instruction that rides in
+    the `config` part, so a body shaped differently from the app's would be
+    tuning against a different request.
+    """
     boundary = f"eval-{uuid.uuid4()}"
     body = bytearray()
     body += f"--{boundary}\r\n".encode()
-    body += b'Content-Disposition: form-data; name="audio"; filename="audio.pcm"\r\n'
-    body += b"Content-Type: audio/pcm\r\n\r\n"
-    body += pcm
-    body += f"\r\n--{boundary}\r\n".encode()
     body += b'Content-Disposition: form-data; name="config"\r\n'
     body += b"Content-Type: application/json\r\n\r\n"
     body += json.dumps(config).encode()
+    body += f"\r\n--{boundary}\r\n".encode()
+    body += b'Content-Disposition: form-data; name="audio"; filename="audio.pcm"\r\n'
+    body += b"Content-Type: audio/pcm\r\n\r\n"
+    body += pcm
     body += f"\r\n--{boundary}--\r\n".encode()
     return bytes(body), boundary
 
 
 def transcribe(pcm: bytes, api_key: str, instruction: str | None, url: str = DICTATION_URL) -> dict:
-    """One `/transcribe` round trip. `instruction=None` asks for the service default.
+    """One `/v1/transcribe/live` round trip. `instruction=None` asks for the default.
 
-    That `None` is the comparison the text harness has never been able to make: an
-    empty `llm` block selects the service's own default wording, so it is the real
-    baseline rather than `guessed-default`, which only ever guessed at it.
+    That `None` is the comparison the text harness has never been able to make:
+    omitting the instruction selects the service's own default wording — the route
+    rewrites by default — so it is the real baseline rather than `guessed-default`,
+    which only ever guessed at it.
+
+    Field name and shape track the Swift client exactly (`config.llm_instruction`,
+    a top-level string). It sent the nested `config.llm.instruction` until
+    2026-09-10; both are accepted by the route, but a harness tuning a field the
+    app does not send is tuning the wrong request.
     """
     config: dict = {"sample_rate": SAMPLE_RATE, "channels": 1}
-    config["llm"] = {"instruction": instruction} if instruction else {}
+    if instruction:
+        config["llm_instruction"] = instruction
     body, boundary = _multipart(pcm, config)
     request = urllib.request.Request(  # noqa: S310 — fixed https endpoint
         url,

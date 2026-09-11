@@ -105,6 +105,10 @@ extension DictationSession {
     if phase == .transcribing || phase == .injecting {
       // Cancel but keep the handle so `awaitPipeline()` can join the cancelled task.
       pipelineTask?.cancel()
+      // `setPhase(.cancelled)` also abandons the request, which cancelling the
+      // pipeline alone would not: awaiting a `Task`'s value is not
+      // cancellation-aware, so the upload would finish and transcribe a
+      // dictation the user dismissed.
       setPhase(.cancelled)
       return
     }

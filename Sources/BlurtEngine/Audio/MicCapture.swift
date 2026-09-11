@@ -120,7 +120,7 @@ public actor MicCapture: MicCaptureProtocol {
     }
   }
 
-  public func start() async throws {
+  public func start() async throws -> AsyncStream<Data> {
     // The selection, resolved once per press: which device to pin the session to
     // (or nil to follow the system default, including the missing-pin fallback),
     // and the transport the liveness cap and the tail linger key off.
@@ -210,24 +210,27 @@ public actor MicCapture: MicCaptureProtocol {
     Self.logger.info(
       "start recording from \(resolved.pinnedUID ?? "system default", privacy: .public)")
     startMeterTimer()
+    // The feed of the recorder just installed, so the caller cannot hold one
+    // that belongs to no capture.
+    return recorder.frames
   }
 
-  public func stop() async throws -> Data {
+  public func stop() async throws -> Int {
     let linger = activeTailLinger
-    guard let recorder = detachActiveRecorder() else { return Data() }
+    guard let recorder = detachActiveRecorder() else { return 0 }
     if linger > .zero {
       // Keep capturing for a moment past key-up so the audio still travelling
       // over the link lands in the recording instead of being truncated. See
       // `AudioTransport.tailLinger(forTransportType:)`.
       try? await Task.sleep(for: linger)
     }
-    let pcm = recorder.stopAndReadPCM()
+    let byteCount = recorder.stopAndReadByteCount()
 
-    let sampleCount = pcm.count / SyncSTTLimits.bytesPerSample
-    let durationMs = SyncSTTLimits.durationMs(ofPCMBytes: pcm.count)
+    let sampleCount = byteCount / SyncSTTLimits.bytesPerSample
+    let durationMs = SyncSTTLimits.durationMs(ofPCMBytes: byteCount)
     let lingerMs = Int(linger.milliseconds.rounded())
     Self.logger.info("stop samples=\(sampleCount) durationMs=\(durationMs) lingerMs=\(lingerMs)")
-    return pcm
+    return byteCount
   }
 
   /// Ends the capture and throws the audio away — the teardown behind

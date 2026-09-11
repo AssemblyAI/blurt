@@ -32,10 +32,14 @@ extension DictationSession {
     // keeps meaning exactly what it says.
     setPhase(.connecting)
     do {
-      // Pre-open the dictation connection while the user speaks, so the first dictation after an idle
-      // gap doesn't pay DNS+TCP+TLS on the transcribe hot path (~170 ms cold, measured). Detached
-      // + fire-and-forget: it must never delay recording, and a failure is harmless (the request
-      // just pays setup as before); warming every press is cheap since a hot pool just reuses it.
+      // Pre-open the dictation connection so the request `startUpload` opens
+      // below is streaming from its first frame rather than spending ~170 ms on
+      // DNS+TCP+TLS (cold, measured). Not about the release path any more — the
+      // request opens at press, so setup overlaps the recording regardless; see
+      // `AssemblyAITranscriber.warmUp()` for what it still buys and for the
+      // measurement showing it coalesces with, rather than races, that request.
+      // Detached + fire-and-forget: it must never delay recording, and a failure
+      // is harmless.
       let transcriber = transcriber
       Task.detached { await transcriber.warmUp() }
       // The mic bring-up runs as a child task so the whole context-capture chain
@@ -51,7 +55,7 @@ extension DictationSession {
       // `async let`, so a cancel still reaches it: the child inherits this task's
       // cancellation, which is what `cancel()`'s `.connecting` branch relies on
       // to preempt the wait.
-      async let started: Void = mic.start()
+      async let started = mic.start()
       await beginContextCapture()
       // Only now join the bring-up. Everything above ran while the mic was
       // coming up; the phase still flips to `.recording` only once `start()`
@@ -59,7 +63,7 @@ extension DictationSession {
       // starting the context work first is that a press whose mic fails has
       // already set the injector's target and dispatched one AX read — both
       // harmless and overwritten by the next press.
-      try await started
+      let frames = try await started
       // A cancel that arrived during the bring-up, on the path where `start()`
       // still returned normally — the cancel landed in the window between the
       // liveness wait finishing and `.recording` being claimed, so there was
@@ -80,7 +84,15 @@ extension DictationSession {
         return
       }
       setPhase(.recording)
+      // Ended here, before the upload is opened: this interval is documented as
+      // timing the startup path "up to the moment recording actually begins",
+      // and press-latency traces are compared across releases against it.
       Self.signposter.endInterval(Self.pressSignpostName, pressInterval)
+      // Open the dictation request and start streaming the recording into it.
+      // This is the whole point of the chunked upload: the transfer overlaps the
+      // speaking instead of following it, so what the user waits out at release
+      // is inference on the last frames rather than the upload of all of them.
+      startUpload(frames: frames)
       let timeout = maxRecordingSeconds
       let clock = clock
       autoReleaseTask = Task { [weak self] in
@@ -117,8 +129,8 @@ extension DictationSession {
   }
 
   /// Captures the paste target and kicks off the press-time AX field-context
-  /// read, leaving the result in `contextStream` for `runTranscribeInject` to
-  /// consume.
+  /// read, leaving the result in `pressContext` for `startUpload` to wait on and
+  /// the release path to peek at.
   ///
   /// Called *before* the bring-up is joined, so all of it — including the
   /// cross-process AX read, the expensive part — overlaps the mic coming up
@@ -141,12 +153,19 @@ extension DictationSession {
     // holds focus, but don't await it here: it's cross-process IPC into the
     // frontmost app (detached — off the main actor, where it froze the
     // overlay, and off this actor, where it would wedge release()/cancel()).
-    // runTranscribeInject consumes the result right before transcription,
-    // bounded by `contextWaitBudget` — so a slow AX target delays the
-    // transcript by at most the budget, never the recording indicator.
-    let (stream, contextFeed) = AsyncStream.makeStream(
-      of: TranscriptionContext?.self, bufferingPolicy: .bufferingNewest(1))
-    contextStream = stream
+    // `startUpload` consumes the result when it opens the request, bounded by
+    // `contextWaitBudget` — so a slow AX target delays the audio by at most the
+    // budget, and the recording indicator never at all.
+    //
+    // `pressKnown` carries only what this actor already has, so a missed budget
+    // costs the request the field text and not `keyterms_prompt` and the recent turns
+    // as well. It deliberately carries no focus signals — see `PressContext`,
+    // which also owns the wait and the release-side peek.
+    let pressKnown = TranscriptionContext(
+      appName: nil, priorText: nil,
+      recentTranscripts: recentTranscripts, keyTerms: keyTerms)
+    let press = PressContext(pressKnown: pressKnown.isEmpty ? nil : pressKnown)
+    pressContext = press
     // A Dispatch queue, not `Task.detached`: `captureFieldContext` is documented
     // as making ~6 synchronous cross-process AX round trips, each bounded only by
     // the 1 s messaging timeout, so against a beachballing frontmost app one
@@ -170,8 +189,9 @@ extension DictationSession {
         recentTranscripts: recentTranscripts,
         keyTerms: keyTerms,
         targetIsSecure: field.isSecure)
-      contextFeed.yield(context.isEmpty ? nil : context)
-      contextFeed.finish()
+      // One publish, which is what makes the value-before-stream ordering
+      // `startUpload`'s wait depends on unforgeable — see `PressContext.store`.
+      press.store(resolved: context.isEmpty ? nil : context)
     }
   }
 }

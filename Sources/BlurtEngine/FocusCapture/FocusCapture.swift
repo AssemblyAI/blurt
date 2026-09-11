@@ -61,7 +61,7 @@ enum FocusCapture {
   /// Secure text fields (password inputs) are detected by role **or** subrole and
   /// never have their contents read. This guard is what keeps a typed password out
   /// of the developer-mode log and — since the text before the cursor is sent as
-  /// the request's context turns (`ConversationContext`) — off the wire
+  /// the request's contextual prompt (`STTPrompt`) — off the wire
   /// entirely. The check
   /// fails closed: an unreadable role is treated as secure, since it can't be
   /// shown not to be.

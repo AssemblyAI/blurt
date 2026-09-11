@@ -1,4 +1,8 @@
-import Foundation
+// `Dispatch`, not `Foundation`: the only thing here from outside the module is
+// `contextQueue`'s and `commandQueue`'s `DispatchQueue`, the same choice
+// `+Press.swift` documents. Foundation's last use here went with `mic.stop()`
+// returning a byte count instead of a `Data` blob.
+import Dispatch
 import Synchronization
 
 public actor DictationSession {
@@ -42,7 +46,7 @@ public actor DictationSession {
   let transcriber: TranscriberProtocol
   let injector: InjectorProtocol
   /// Supplies the user's key terms (domain vocabulary) at press time, so each
-  /// utterance's request boosts those spellings — as its own `word_boost` field
+  /// utterance's request boosts those spellings — as its own `keyterms_prompt` field
   /// (`KeytermsBoost`), not as part of the conversation context. A closure, rather
   /// than a stored list, so edits in Settings take effect on the next dictation
   /// without rebuilding the session. Defaults to reading `KeyTermsStore`.
@@ -82,15 +86,23 @@ public actor DictationSession {
   /// Internal so `+Pipeline` reaches it across the file split.
   let seams: Seams
 
-  /// Context captured at `press()` (focused app + prior text), stored so the
-  /// transcriber, `inject`'s separator decision, and the log share one snapshot.
-  var capturedContext: TranscriptionContext?
+  /// The press-time capture, for `inject`'s separator decision and the log.
+  ///
+  /// Derived, not stored: `PressContext` already holds exactly one read per
+  /// press, so a stored copy could only ever be a cache of it — and was, until
+  /// the release path had to repair it whenever `startUpload`'s deadline had
+  /// elapsed before the read landed. Reading through means every reader gets the
+  /// freshest known value wherever it runs, instead of the value as of the
+  /// moment the upload opened. The request itself may hold something different
+  /// (`PressContext.pressKnown`, when the budget was missed), which is
+  /// deliberate — see `startUpload`.
+  var capturedContext: TranscriptionContext? { pressContext?.resolved }
 
   /// The user's recent dictations, in memory for this launch only — and the **one**
   /// copy of that history. Recorded in `runTranscribeInject` (`+Pipeline`) just
   /// before `onTranscriptDelivered` fires, and read at press time into
   /// `TranscriptionContext.recentTranscripts`, which sends them as the leading
-  /// `conversation_context` turns — so a run of dictations reads to the model as
+  /// leading `stt_prompt` lines — so a run of dictations reads to the model as
   /// one continuing dialogue rather than N unrelated clips.
   ///
   /// It lives here, not in the host, because the request is assembled inside this
@@ -99,14 +111,13 @@ public actor DictationSession {
   /// so `+Pipeline` reaches it across the file split.
   var recentDictations = RecentDictations()
 
-  /// The in-flight AX field-context read, started by `press()` — that's when
-  /// the target field still holds focus — but consumed only in
-  /// `runTranscribeInject`, bounded by `contextWaitBudget`. Deliberately not
-  /// awaited before `.recording`: the read is cross-process IPC into the
-  /// frontmost app, and an unresponsive app must never delay the recording
-  /// indicator. A buffered stream rather than a `Task` so the bounded wait can
-  /// abandon a hung read (awaiting a `Task.value` is not cancellable).
-  var contextStream: AsyncStream<TranscriptionContext?>?
+  /// The AX field-context read started by `press()` — that's when the target
+  /// field still holds focus — and the two ways it is read: `wait` when
+  /// `startUpload` opens the request, a peek at release. Deliberately not
+  /// awaited before `.recording`, because the read is cross-process IPC into the
+  /// frontmost app and an unresponsive app must never delay the recording
+  /// indicator. See `PressContext` for why one value needs two deadlines.
+  var pressContext: PressContext?
 
   /// Tail of the serial command queue. `press()`/`release()`/`cancel()`/
   /// `cancelRecording()` chain behind it (see `enqueue`), so commands run one at
@@ -142,6 +153,18 @@ public actor DictationSession {
   /// pasted into the focused app despite the user cancelling. The cancellation it
   /// propagates is honored by `runTranscribeInject` and `KeyInjector.insert`.
   var pipelineTask: Task<Void, Never>?  // internal: joined by awaitPipeline()
+
+  /// The in-flight dictation request, opened at press so the recording uploads
+  /// while the user speaks. Stored for the same reason `pipelineTask` is: it is
+  /// unstructured work a cancel has to be able to reach, and cancelling
+  /// `pipelineTask` alone would abandon only the *wait* — the request itself
+  /// would keep streaming and complete against a dictation the user dismissed.
+  ///
+  /// A bare task, because that is now all a live request is. It was an
+  /// `InFlightUpload` pairing the task with the context channel its `config`
+  /// part parked on, so abandoning it meant closing that too; the streaming
+  /// route settles the context up front, so `cancel()` is now the whole of it.
+  var upload: Task<String, any Error>?
 
   /// The production entry point: the real focus capture and the real
   /// developer-mode log. Delegates to the seam-carrying initializer below, which
@@ -216,6 +239,11 @@ public actor DictationSession {
   }
 
   deinit {
+    // The one door into a terminal state that is not a phase transition, so the
+    // `setPhase` funnel never runs for it: a session dropped mid-recording would
+    // otherwise leave its request to be wound down by continuation deallocation
+    // rather than by the rule.
+    upload?.cancel()
     commandFeed.finish()
     for continuation in continuations.values {
       continuation.finish()
@@ -266,10 +294,13 @@ public actor DictationSession {
     // release arriving during the mic.stop() suspension now fails the
     // `.recording` guard above instead of running the pipeline twice.
     setPhase(.transcribing)
-    let pcm: Data
+    let recordedBytes: Int
     do {
-      pcm = try await mic.stop()
+      recordedBytes = try await mic.stop()
     } catch {
+      // Both exits below set a terminal phase, and `setPhase` cancels the
+      // in-flight request there — so a conformer whose `stop()` throws without
+      // ending the feed can't leave it streaming until the idle timeout.
       // A cancel wins over surfacing the audio error — the user asked for
       // nothing to happen.
       if cancelWonRelease() { return }
@@ -281,8 +312,22 @@ public actor DictationSession {
     // Honored again here, before any pipeline exists — deterministically no
     // transcription, no paste.
     if cancelWonRelease() { return }
+    // A clip too short for the STT model (an accidental brief tap) comes back
+    // 200-with-empty-text, not 400 (measured) — so drop it as a silent no-op
+    // rather than paying for a request that transcribes nothing.
+    //
+    // Safe against the request finishing first, but no longer by winning a
+    // race: with `config` leading the body the producer closes the request as
+    // soon as `frames` ends, so it could beat this guard on a fast link. The
+    // floor is enforced on the producer's side too — `streamedBody` refuses to
+    // write the closing boundary below `minPCMBytes` — leaving this as the
+    // quiet path to `.idle`, not the only thing keeping a tap off the wire.
+    guard recordedBytes >= SyncSTTLimits.minPCMBytes else {
+      setPhase(.idle)
+      return
+    }
     pipelineTask = Task { [weak self] in
-      await self?.runTranscribeInject(pcm: pcm)
+      await self?.runTranscribeInject()
     }
   }
 
@@ -315,6 +360,10 @@ public actor DictationSession {
   /// recording to tear down.
   func stopAndCancel() async {
     cancelAutoRelease()
+    // Before the mic teardown, not after: `cancelCapture()` finishes the frame
+    // stream, and a still-live upload would read that as "the utterance ended",
+    // write its config part and transcribe audio the user just discarded.
+    cancelUpload()
     do {
       // `cancelCapture`, not `stop`: the audio is being thrown away, so
       // preserving it (the Bluetooth tail linger) is not worth delaying the

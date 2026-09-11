@@ -205,6 +205,19 @@ final class AppCoordinator {
     overlay?.hide()
   }
 
+  /// Re-attempts the key tap install after a failed `ensureRunning()`.
+  /// `showOverlay()` runs once, on the not-ready→ready transition; if
+  /// `CGEvent.tapCreate` fails at that moment (a fresh Accessibility grant can
+  /// lag behind `AXIsProcessTrusted()` flipping true), nothing else would try
+  /// again — `isReady` stays true, so the transition never re-fires and the
+  /// hotkey stayed dead until relaunch. The wizard's lifetime permission poll
+  /// calls this on each tick while the app is ready, so the install keeps being
+  /// retried until it lands. No-op once the tap exists.
+  func retryKeyTapInstallIfNeeded() {
+    guard let keyTap, !keyTap.isInstalled else { return }
+    keyTap.ensureRunning()
+  }
+
   /// Called when the user rebinds the dictation trigger in the Shortcut picker,
   /// so the event tap starts matching the new key. The shortcut no longer gates
   /// readiness (it has a default and lives in Settings), so there's nothing else

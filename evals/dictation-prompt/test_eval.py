@@ -721,7 +721,7 @@ def test_every_candidate_instruction_is_shippable():
     assert candidates.BASELINE in candidates.CANDIDATES
     for name, instruction in candidates.CANDIDATES.items():
         assert instruction.strip(), name
-        # The API's cap on config.llm.instruction, not the 4096 one on config.prompt.
+        # The API's cap on config.llm_instruction, not the 4096 one on config.stt_prompt.
         # Asserting the prompt's figure here is the bug this file now guards: it let a
         # 3057-character instruction pass every test and 400 every real request.
         assert candidates.overage(instruction) == 0, name
@@ -1364,15 +1364,37 @@ def test_the_multipart_body_matches_what_the_swift_client_sends():
     assert 'name="config"' in text
     assert '{"sample_rate": 16000}' in text
     assert b"\x01\x02" in body
+    # `config` before `audio` is the route's contract, not a preference:
+    # `/v1/transcribe/live` rejects an audio-first body outright (the service's
+    # exact 400 is quoted once, on `AssemblyAITranscriber.streamedBody`).
+    # Nothing else here would catch a swap — `--verify-live` would just start
+    # failing wholesale against the API.
+    assert text.index('name="config"') < text.index('name="audio"')
 
 
 def test_an_empty_instruction_asks_for_the_service_default():
-    """`None` must send `llm: {}` — the wording Blurt ships, not a candidate's guess."""
+    """`None` must omit the key — the service default is what Blurt falls back to.
 
-    for instruction, expected in ((None, {}), ("", {}), ("do x", {"instruction": "do x"})):
-        body, _ = live._multipart(b"", {"llm": {"instruction": instruction} if instruction else {}})
-        config = json.loads(body.decode("latin-1").split("\r\n\r\n")[-1].split("\r\n--")[0])
-        assert config["llm"] == expected
+    Omission, not `llm_instruction: null` and not `llm: {}`: all three run the
+    default cleanup, but omission is what the Swift client encodes for a nil
+    instruction, and a harness that disagrees measures a request nobody sends.
+    Note that none of them turn the rewrite *off* — that takes an explicit
+    `llm: null`, which is undocumented and which neither this harness nor the
+    client ever wants (the client picks `text` over `llm_response` instead).
+    """
+
+    for instruction, expected in ((None, None), ("", None), ("do x", "do x")):
+        config: dict = {"sample_rate": live.SAMPLE_RATE, "channels": 1}
+        if instruction:
+            config["llm_instruction"] = instruction
+        body, _ = live._multipart(b"", config)
+        # Found by part name, not by position: this used to take the last
+        # `\r\n\r\n` chunk, which silently depended on `config` being the trailing
+        # part and broke when the streaming route required it to lead.
+        part = body.decode("latin-1").split('name="config"')[1]
+        parsed = json.loads(part.split("\r\n\r\n")[1].split("\r\n--")[0])
+        assert parsed.get("llm_instruction") == expected
+        assert "llm" not in parsed
 
 
 def test_the_live_summary_reports_the_gain_over_no_rewrite():

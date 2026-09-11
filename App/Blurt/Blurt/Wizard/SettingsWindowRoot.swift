@@ -101,11 +101,13 @@ private struct AdvancedSettingsTab: View {
 
 /// The Dictation section of the Settings window: what happens around each
 /// dictation — the enhanced-transcripts switch and the audio-ducking row
-/// (`AudioDuckToggle`). Enhanced transcripts, on by default, asks AssemblyAI's
-/// dictation API for its server-side cleanup rewrite, so the pasted text is the
-/// polished version; off, the verbatim transcript is pasted exactly as spoken.
+/// (`AudioDuckToggle`). Every dictation request asks AssemblyAI's dictation API
+/// for its server-side cleanup rewrite, so the response always holds both
+/// versions; while enhanced transcripts is on (the default) the polished one is
+/// pasted, and turned off the verbatim transcript is pasted exactly as spoken.
 /// The transcriber reads the same default this toggle writes at every request,
-/// so a change applies to the next dictation. Settings-only — not a wizard step.
+/// so a change applies to the next dictation — see
+/// `AssemblyAITranscriber.transcript(from:)`. Settings-only — not a wizard step.
 private struct DictationSection: View {
   // The unset default comes from the store, not a literal here: the transcriber
   // reads the same slot per request, and two spellings of "unset means on" would let
@@ -180,9 +182,9 @@ private struct StyleProfilesSection: View {
     } header: {
       Text("Custom Styles")
     } footer: {
-      // The caveat *replaces* the help sentence rather than joining it: with the
-      // rewrite switched off there is nothing for a style to apply to, so
-      // describing the limit is the less useful half.
+      // The caveat *replaces* the help sentence rather than joining it: with
+      // enhanced transcripts off the rewrite a style shapes is discarded
+      // unread, so describing the limit is the less useful half.
       Text(
         enhancedTranscripts
           ? "Up to \(StyleProfileStore.profileLimit) styles."

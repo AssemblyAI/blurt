@@ -21,10 +21,10 @@ struct MicCaptureProtocolDefaultsTests {
     /// default can be observed.
     let stops = Mutex(0)
 
-    func start() async throws {}
-    func stop() async throws -> Data {
+    func start() async throws -> AsyncStream<Data> { .finished }
+    func stop() async throws -> Int {
       stops.withLock { $0 += 1 }
-      return Data()
+      return 0
     }
   }
 

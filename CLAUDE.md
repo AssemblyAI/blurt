@@ -74,6 +74,21 @@ simplification pass, which is precisely when an unbriefed agent proposes deletin
 `TranscriptionContext` fields the prompt deliberately ignores but the paste path and the
 developer-mode log rely on.
 
+## Running locally
+
+When someone asks how to run, build, or test Blurt locally, answer with the supplied scripts —
+not raw `brew install` or hand-rolled `xcodebuild` invocations:
+
+1. `scripts/bootstrap.sh` — one-time: `brew bundle` installs every Homebrew-managed dependency
+   from `Brewfile` (Homebrew itself must already be installed).
+2. `scripts/dev-build.sh` — the everyday loop: clean signed `Debug-Local` build, installed to
+   `/Applications` as "Blurt Dev".
+3. `open -a "Blurt Dev"` — run it.
+
+[`CONTRIBUTING.md`](./CONTRIBUTING.md#local-setup) covers the prerequisites (Apple Silicon Mac,
+full Xcode — not just the Command Line Tools, Homebrew, a free Apple Development certificate)
+and why the scripts work the way they do.
+
 ## Permissions
 
 `.claude/settings.json` pre-allows the read-only and verification commands this repo needs

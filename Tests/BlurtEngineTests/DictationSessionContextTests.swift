@@ -15,6 +15,13 @@ struct DictationSessionContextTests {
     priorText: "Hi Sam,", selectedText: "the old plan", windowTitle: "Re: Q3 pricing",
     fieldLabel: "Body")
 
+  /// The secure-target fixture, shared by the two tests that assert a password
+  /// is never remembered — one where the read lands in time, one where it lands
+  /// after the upload's budget.
+  private static let secureField = FocusCapture.FocusedFieldContext(
+    priorText: nil, selectedText: nil, windowTitle: "1Password", fieldLabel: "Password",
+    isSecure: true)
+
   @Test("the press-time capture reaches the transcriber, the injector, and the log")
   func contextThreadsThroughThePipeline() async throws {
     let fixture = makeSession(
@@ -93,23 +100,20 @@ struct DictationSessionContextTests {
     #expect(contexts[0]?.recentTranscripts == [])
     #expect(contexts[1]?.recentTranscripts == ["First thought."])
     #expect(contexts[2]?.recentTranscripts == ["First thought.", "First thought."])
-    // And that history is what the wire turns are built from, with the cursor's
+    // And that history is what the wire prompt is built from, with the cursor's
     // prior chunk last — the whole point of accumulating it.
     #expect(
-      ConversationContext.turns(context: contexts[2])
-        == ["First thought.", "First thought.", "Hi Sam,"])
+      STTPrompt.text(context: contexts[2])
+        == "First thought.\nFirst thought.\nHi Sam,")
   }
 
   @Test("a dictation into a secure field is never remembered as history")
   func secureTargetIsNotRecorded() async throws {
     // The outgoing half of `FocusCapture`'s read guard. A password dictated into a
-    // secure field must not become a `conversation_context` turn on every later
+    // secure field must not become part of `stt_prompt` on every later
     // dictation — including in other apps — so it is transcribed, pasted, and
     // deliberately not recorded.
-    let secure = FocusCapture.FocusedFieldContext(
-      priorText: nil, selectedText: nil, windowTitle: "1Password", fieldLabel: "Password",
-      isSecure: true)
-    let fixture = makeSession(mode: .transcript("hunter2"), field: secure)
+    let fixture = makeSession(mode: .transcript("hunter2"), field: Self.secureField)
 
     for _ in 1...2 {
       await fixture.session.press()
@@ -124,7 +128,88 @@ struct DictationSessionContextTests {
     #expect(await fixture.session.recentDictations.entries.isEmpty)
     let contexts = await fixture.transcriber.receivedContexts
     #expect(contexts.allSatisfy { $0?.recentTranscripts.isEmpty == true })
-    #expect(contexts.allSatisfy { ConversationContext.turns(context: $0).isEmpty })
+    #expect(contexts.allSatisfy { STTPrompt.text(context: $0).isEmpty })
+  }
+
+  @Test("a missed budget still sends the key terms and the recent turns")
+  func timedOutReadStillSendsPressKnownContext() async throws {
+    // `pressKnown`'s reason to exist. Key terms and the recent-dictation ring
+    // are read synchronously on the actor at press and need no AX round trip, so
+    // a read that misses `contextWaitBudget` must cost the request only the
+    // field text — not `keyterms_prompt` and the context turns along with it, which
+    // is what happened when one `TranscriptionContext` carried all of it.
+    let clock = TestClock()
+    let transcriber = StubTranscriber(mode: .transcript("spoken"))
+    let (seams, hung) = hungFieldSeams()
+    let session = makeSession(
+      transcriber: transcriber, injector: StubInjector(), clock: clock,
+      keyTerms: ["Kubernetes"], seams: seams)
+
+    // Twice, so the second press has history to carry — `recentDictations` is
+    // actor state and this is how the sibling tests seed it.
+    for _ in 1...2 {
+      await session.press()
+      await clock.waitUntilSleeping(for: DictationSession.contextWaitBudget)
+      clock.advance(by: DictationSession.contextWaitBudget)
+      await session.release()
+      await session.waitForIdle()
+    }
+
+    let contexts = await transcriber.receivedContexts
+    #expect(contexts.count == 2)
+    // Both requests carried the key terms despite neither read landing.
+    #expect(contexts.allSatisfy { $0?.keyTerms == ["Kubernetes"] })
+    // And the second carried the first's transcript as a context turn.
+    let second = try #require(contexts.last.flatMap { $0 })
+    #expect(second.recentTranscripts == ["spoken"])
+    #expect(STTPrompt.text(context: second) == "spoken")
+    // None of the focus signals, which are the part that genuinely timed out.
+    #expect(second.priorText == nil)
+    #expect(second.windowTitle == nil)
+    hung.signal()
+  }
+
+  @Test("a secure capture that lands after the upload's budget is still honored")
+  func lateSecureCaptureStillSuppressesHistory() async throws {
+    // The regression the config-first switch opened. `startUpload` cannot wait
+    // past `contextWaitBudget` for the AX read without holding the audio back,
+    // and that budget now runs against a read that has only had the mic
+    // bring-up to finish in rather than the whole recording. A merely slow
+    // target (Electron, Java, Office — `FocusCapture` makes ~6 serial round
+    // trips, each capped at ~1 s) therefore misses it routinely.
+    //
+    // Missing it must not cost the `targetIsSecure` flag: a nil context reads as
+    // "not a password field", so the dictation would be written into
+    // `recentDictations` and replayed in `stt_prompt` on every later
+    // dictation this launch. `PressContext` is what keeps the read reachable
+    // after the deadline, and this is the test that says so.
+    let clock = TestClock()
+    let transcriber = StubTranscriber(mode: .transcript("hunter2"))
+    let injector = StubInjector()
+    let (seams, gate) = hungFieldSeams(field: Self.secureField)
+    let session = makeSession(
+      transcriber: transcriber, injector: injector, clock: clock, seams: seams)
+
+    await session.press()
+    // Cross the upload's deadline while the capture is still blocked, so the
+    // request goes out with no context at all — the case being tested.
+    await clock.waitUntilSleeping(for: DictationSession.contextWaitBudget)
+    clock.advance(by: DictationSession.contextWaitBudget)
+    // Only now let the read finish. Waiting on the box rather than sleeping, so
+    // this asserts the recovery instead of racing the capture queue.
+    gate.signal()
+    while await session.pressContext?.resolved == nil { await Task.yield() }
+
+    await session.release()
+    await session.waitForIdle()
+
+    // Pasted, as always — the flag suppresses remembering, never delivery.
+    #expect(await injector.inserted == ["hunter2"])
+    // The request itself did go out unprimed; that is the cost of the deadline.
+    #expect(await transcriber.receivedContexts == [nil])
+    // But the late read was picked up in time for the decision that matters.
+    #expect(await session.capturedContext?.targetIsSecure == true)
+    #expect(await session.recentDictations.entries.isEmpty)
   }
 
   @Test("a secure capture with no readable text is still carried, not collapsed to nil")
@@ -162,7 +247,7 @@ struct DictationSessionContextTests {
     let contexts = await fixture.transcriber.receivedContexts
     #expect(contexts.first == nil as TranscriptionContext?)
     #expect(contexts.last??.recentTranscripts == ["Said this."])
-    #expect(ConversationContext.turns(context: contexts[1]) == ["Said this."])
+    #expect(STTPrompt.text(context: contexts[1]) == "Said this.")
   }
 
   /// The bounded wait, driven through the pipeline rather than against
@@ -171,23 +256,13 @@ struct DictationSessionContextTests {
   @Test("a context read that never completes is abandoned once the budget elapses")
   func hungCaptureStillTranscribes() async throws {
     let clock = TestClock()
-    let mic = StubMicCapture()
     let transcriber = StubTranscriber(mode: .transcript("Spoken anyway."))
     let injector = StubInjector()
-    // Models a beachballing frontmost app: the capture blocks its Dispatch thread
-    // for the whole test, so the stream behind `contextStream` never yields.
-    let hung = DispatchSemaphore(value: 0)
-    let session = DictationSession(
-      mic: mic, transcriber: transcriber, injector: injector, clock: clock,
-      keyTermsProvider: { [] },
-      seams: DictationSession.Seams(
-        captureFrontmost: { nil },
-        captureFieldContext: {
-          hung.wait()
-          return .empty
-        },
-        logTranscript: { _, _ in },
-        logFailure: { _, _ in }))
+    // Models a beachballing frontmost app: the capture blocks its Dispatch
+    // thread for the whole test, so `PressContext` never resolves.
+    let (seams, hung) = hungFieldSeams()
+    let session = makeSession(
+      transcriber: transcriber, injector: injector, clock: clock, seams: seams)
 
     await session.press()
     await session.release()

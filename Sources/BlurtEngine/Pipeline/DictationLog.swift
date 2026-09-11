@@ -26,28 +26,30 @@ public enum DictationLog {
     /// it, when any was captured. Lets you verify prior-text reading actually
     /// fired.
     ///
-    /// **This overlaps `turns.last` on purpose, and is not redundant with it.**
-    /// `turns` records what went on the wire, where the prior chunk is *trimmed*;
+    /// **This overlaps the tail of `sttPrompt` on purpose, and is not redundant
+    /// with it.** `sttPrompt` records what went on the wire, where the prior
+    /// chunk is *trimmed* and joined to the history;
     /// this records it raw. The difference is load-bearing twice over. Its trailing
     /// whitespace is the entire input to the paste's leading-separator decision
     /// (`KeyInjector.withLeadingSeparator` branches on `prior.last.isWhitespace`),
     /// so a spacing bug is undiagnosable from a trimmed copy. And a nil here
-    /// distinguishes "no prior text was read" from "the last turn is the newest
-    /// recent dictation", which `turns` alone cannot say.
+    /// distinguishes "no prior text was read" from "the prompt ends with the
+    /// newest recent dictation", which `sttPrompt` alone cannot say.
     let prior: String?
     /// Selected text (the dictation replaced it), when any. Local to this file:
     /// it is captured for the paste path and recorded here, never sent.
     let selected: String?
-    /// The `config.conversation_context` turns sent to AssemblyAI for this
-    /// utterance, oldest first — the user's recent dictations, then `prior`.
+    /// The `config.stt_prompt` string sent to AssemblyAI for this utterance:
+    /// the user's recent dictations oldest-first, then `prior`, newline-joined.
     /// Built here from `context` (rather than threaded through from the
     /// transcriber) so the log always reflects what was actually sent, even for
     /// calls that construct an entry directly from a context. Worth recording
     /// separately from `prior` because it is the only record of how much history
-    /// the request carried and of what the 4096-character fit dropped — and
-    /// because these turns are trimmed where `prior` is raw (see it).
-    let turns: [String]
-    /// The `config.word_boost` list sent for this utterance —
+    /// the request carried and of what the 4096-scalar fit dropped — and
+    /// because this string is trimmed where `prior` is raw (see it). Empty when
+    /// no prompt was sent, and `encode(to:)` then omits the key.
+    let sttPrompt: String
+    /// The `config.keyterms_prompt` list sent for this utterance —
     /// the request's other steering field, so the log accounts for both. Built
     /// through the same `KeytermsBoost.fitted` the request uses, so an
     /// over-long list is recorded as the terms that actually went out. Empty
@@ -60,11 +62,13 @@ public enum DictationLog {
     /// grepping or decoding the corpus, so they're stated rather than left to a
     /// synthesis that no longer happens.
     enum CodingKeys: String, CodingKey {
-      case transcript, ts, app, window, field, prior, selected, turns, keyterms
+      case transcript, ts, app, window, field, prior, selected, keyterms
+      case sttPrompt = "stt_prompt"
     }
 
-    /// Hand-written for two fields: `turns` and `keyterms` are plain arrays (the
-    /// repo bans optional collections), so synthesis would write `"keyterms":[]`
+    /// Hand-written for two fields: `sttPrompt` is a plain string and
+    /// `keyterms` a plain array (the repo bans optional collections), so
+    /// synthesis would write `"keyterms":[]` and `"stt_prompt":""`
     /// on every line of a corpus where nothing else absent is written at all. The
     /// optional fields keep exactly the `encodeIfPresent` behavior synthesis
     /// gave them. `DictationLogEntryTests` asserts every field, so a property
@@ -79,8 +83,8 @@ public enum DictationLog {
       try container.encodeIfPresent(field, forKey: .field)
       try container.encodeIfPresent(prior, forKey: .prior)
       try container.encodeIfPresent(selected, forKey: .selected)
-      if !turns.isEmpty {
-        try container.encode(turns, forKey: .turns)
+      if !sttPrompt.isEmpty {
+        try container.encode(sttPrompt, forKey: .sttPrompt)
       }
       if !keyterms.isEmpty {
         try container.encode(keyterms, forKey: .keyterms)
@@ -214,8 +218,8 @@ public enum DictationLog {
   }
 
   /// One log entry as a value: which parts of the context are carried, how the
-  /// timestamp is formatted, and the two steering fields — the context turns and
-  /// the boost list — mirroring what the transcriber actually sends, because both
+  /// timestamp is formatted, and the two steering fields — the contextual prompt
+  /// and the keyterms list — mirroring what the transcriber actually sends, because both
   /// are built here through the same builders the request uses. Split from `write`
   /// so all of that is assertable directly rather than through a temp file and a
   /// substring search over the encoded line — a search that read the same whether
@@ -225,7 +229,7 @@ public enum DictationLog {
       transcript: transcript, ts: now.formatted(timestampFormat),
       app: context?.appName, window: context?.windowTitle, field: context?.fieldLabel,
       prior: context?.priorText, selected: context?.selectedText,
-      turns: ConversationContext.turns(context: context),
+      sttPrompt: STTPrompt.text(context: context),
       keyterms: KeytermsBoost.fitted(context?.keyTerms ?? [])
     )
   }
