@@ -8,10 +8,23 @@
 // Every field name here was swept against the live route on 2026-09-10, because
 // the route validates its config **strictly**: an unrecognized key earns
 // `400 invalid config part: <key>: Extra inputs are not permitted`, exactly as a
-// deliberately bogus one does. The reference's "unknown fields are forwarded to
-// the transcription engine as-is" describes the unversioned `/transcribe`, not
-// `/v1/transcribe/live` — so a field name here is either one the route knows or
-// a request that never transcribes. Guess nothing; measure it.
+// deliberately bogus one does. The reference says the opposite about this
+// endpoint — "Over HTTP, unknown fields are forwarded to the transcription
+// engine as-is" — but re-measured 2026-09-11, a config carrying
+// `blurt_probe_bogus_key: 1` earns `400 invalid config part:
+// blurt_probe_bogus_key: Extra inputs are not permitted`.
+//
+// **The docs are the source of truth for what to send, and that disagreement
+// does not change what this file does**: every key below is one the reference
+// documents, so nothing here depends on unknown fields being either forwarded or
+// rejected. Keep it that way and the question stays academic.
+//
+// The corollary is the one that bites. The route *accepts* more names than the
+// reference lists — `prompt`, `keyterms`, `word_boost` and `language_code` are
+// all live, and the docs call the first three legacy aliases — so a 200 is not
+// evidence a field is supported, only that it has not been removed yet. There
+// has been a lot of renaming on this route. Treat any name absent from the docs
+// as deprecated and don't send it, however well it works today.
 extension AssemblyAITranscriber {
   struct DictationConfig: Encodable {
     let sampleRate: Int
@@ -19,7 +32,7 @@ extension AssemblyAITranscriber {
     /// The contextual prompt: the text that preceded this utterance, oldest
     /// first — the user's recent dictations, then the text before the cursor.
     /// Steers *transcription* (continuity, spelling, mid-sentence continuation);
-    /// the cleanup rewrite is `rewrite`'s job. A **string**, and only ever a
+    /// the cleanup rewrite is `llmInstruction`'s job. A **string**, and only ever a
     /// string: the route rejects an array with
     /// `stt_prompt: Input should be a valid string`. Empty means no prior text,
     /// and `encode(to:)` then drops the key rather than sending `""`. Assembled
@@ -45,25 +58,57 @@ extension AssemblyAITranscriber {
     /// an addition — a compatibility shim that sent both names would 400 every
     /// dictation.
     let keytermsPrompt: [String]
-    /// What to ask of the server-side cleanup rewrite — including asking for
-    /// none. Three states, because the route has three; see `Rewrite`.
-    let rewrite: Rewrite
+    /// The cleanup instruction the server-side rewrite should apply
+    /// (`CleanupInstruction.sendable`, style profile and all), or nil to leave
+    /// the wording to the service. `encode(to:)` then drops the key.
+    ///
+    /// **Nil is not "no rewrite."** The route rewrites *by default*, which the
+    /// reference states outright — "Omitting the field, or setting it to
+    /// `null`, keeps the default cleanup task" — and which was measured the
+    /// same way on 2026-09-10: a config carrying neither `llm_instruction` nor
+    /// `llm` comes back with `llm_response` set to a **default-cleaned**
+    /// transcript. Omission selects the service's own wording; it does not
+    /// decline.
+    ///
+    /// **The route documents no way to decline at all**, and the escape it
+    /// prescribes is the one Blurt now takes: ignore `llm_response` and use
+    /// `text`, which is "always the verbatim transcript". So the config carries
+    /// no off switch, and the *response* is where the enhanced-transcripts
+    /// setting chooses between the two transcripts
+    /// (`AssemblyAITranscriber.transcript(from:)`).
+    ///
+    /// An explicit null `llm` does suppress the rewrite — measured 2026-09-10 and
+    /// re-confirmed 2026-09-11 (200, with `llm_response` and `llm_error` both
+    /// null), and the only off switch there is — but it appears **nowhere in the
+    /// reference**, and no documented spelling substitutes for it: `llm: {}`,
+    /// `llm: {"enabled": false}` and `llm_instruction: null` all run the default
+    /// cleanup, while invented names (`llm_enabled`, `disable_llm`) are rejected
+    /// as unknown keys.
+    ///
+    /// That it works is therefore not a reason to send it. **Blurt calls this
+    /// API only the way the docs describe it** — an undocumented field carries
+    /// no compatibility promise, so a switch built on one is a switch that can
+    /// stop being a switch without notice, silently pasting cleaned-up text to
+    /// users who turned cleanup off. That is the failure this whole path already
+    /// shipped once, by a different route. Blurt sent the null until 2026-09-11.
+    /// Adding an `llm` case back would reintroduce it *and* leave the response's
+    /// choice unreachable — read `transcript(from:)` first.
+    let llmInstruction: String?
     enum CodingKeys: String, CodingKey {
       case sampleRate = "sample_rate"
       case channels
       case sttPrompt = "stt_prompt"
       case keytermsPrompt = "keyterms_prompt"
       case llmInstruction = "llm_instruction"
-      case llm
     }
 
-    /// Hand-written for the three things synthesis can't express: an empty
-    /// `stt_prompt` or `keyterms_prompt` must be *absent*, not `""`/`[]`,
-    /// and a non-optional string or array always encodes; `rewrite`'s three
-    /// states map to two different keys, one of which has to be an explicit
-    /// `null`. A property
-    /// added above and forgotten here never reaches the wire — which is what the
-    /// config assertions in the tests catch.
+    /// Hand-written for the one thing synthesis can't express: an empty
+    /// `stt_prompt` or `keyterms_prompt` must be *absent*, not `""`/`[]`, and a
+    /// non-optional string or array always encodes. (`llmInstruction` would
+    /// omit-if-nil on its own; it is spelled out here so the whole wire shape
+    /// reads in one place.) A property added above and forgotten here never
+    /// reaches the wire — which is what the config assertions in the tests
+    /// catch.
     func encode(to encoder: Encoder) throws {
       var container = encoder.container(keyedBy: CodingKeys.self)
       try container.encode(sampleRate, forKey: .sampleRate)
@@ -74,87 +119,84 @@ extension AssemblyAITranscriber {
       if !keytermsPrompt.isEmpty {
         try container.encode(keytermsPrompt, forKey: .keytermsPrompt)
       }
-      switch rewrite {
-      case .instructed(let instruction):
-        try container.encode(instruction, forKey: .llmInstruction)
-      case .serviceDefault:
-        break
-      case .disabled:
-        // `encodeNil`, not omission: see `Rewrite.disabled`. This is the one
-        // key in the config that has to be present *and* null.
-        try container.encodeNil(forKey: .llm)
-      }
+      try container.encodeIfPresent(llmInstruction, forKey: .llmInstruction)
     }
   }
 
-  /// What the request asks of the dictation API's server-side rewrite.
-  ///
-  /// Three cases because the route answers three ways, and the mapping is not
-  /// the one an omit-if-nil optional would produce. Measured against
-  /// `/v1/transcribe/live` on 2026-09-10, same clip each time:
-  ///
-  /// | config carries              | `llm_response`                  |
-  /// | --------------------------- | ------------------------------- |
-  /// | `llm_instruction: "…"`      | our instruction applied         |
-  /// | neither key                 | the service's **default** cleanup |
-  /// | `llm: null`                 | `null` — no rewrite, no error   |
-  ///
-  /// The middle row is why this is an enum and not `String?`. "No instruction"
-  /// and "no rewrite" are different requests: leaving the keys off does not turn
-  /// the rewrite off, it selects the service's own wording. An explicit null
-  /// `llm` is the only off switch the route has — `llm: {}`,
-  /// `llm: {"enabled": false}` and `llm_instruction: null` all run the default
-  /// cleanup, and invented spellings (`llm_enabled`, `disable_llm`) are rejected
-  /// outright as unknown keys.
-  ///
-  /// That distinction is load-bearing for the **enhanced transcripts** setting:
-  /// with it off, a config that merely omitted the instruction would come back
-  /// with a rewritten transcript anyway, and `transcribe` prefers `llm_response`
-  /// whenever it is non-nil — so the user would get cleanup they had switched
-  /// off, silently and at no error. `.disabled` is what makes the switch a
-  /// switch.
-  enum Rewrite: Equatable {
-    /// Apply this instruction (`CleanupInstruction.sendable`, style profile and
-    /// all) instead of the service's default wording.
-    case instructed(String)
-    /// Rewrite with the service's own default cleanup instruction — what an
-    /// over-cap instruction degrades to, rather than failing the request.
-    case serviceDefault
-    /// Don't rewrite at all: paste the verbatim transcript as spoken.
-    case disabled
-  }
-
   struct DictationResponse: Decodable {
-    /// The verbatim transcript — always present, never altered by the LLM.
+    /// The verbatim transcript — always present, never altered by the LLM. What
+    /// gets pasted with **enhanced transcripts** off, and the fallback when it
+    /// is on but the rewrite is unusable.
     let text: String
-    /// The rewritten transcript, or nil when the rewrite failed or was not asked
-    /// for (`Rewrite.disabled`).
+    /// The rewritten transcript, or nil when the rewrite failed. Every request
+    /// asks for one, so — unlike before — nil here means failure rather than
+    /// possibly a declined rewrite.
     let llmResponse: String?
-    /// `"timeout"` or `"error"` when a requested rewrite failed. Stays nil for a
-    /// declined rewrite, so a null `llm_response` alone does not mean failure.
+    /// `"timeout"` or `"error"` when the rewrite failed, which is the only
+    /// reason `llm_response` can be null now that every request asks for one.
     let llmError: String?
+    /// The request identifier, which the reference says to "include it when
+    /// reporting problems" — so it is logged on every round trip
+    /// (`logServerMetrics`). Without it a user's report of a bad dictation
+    /// cannot be tied to the request that produced it.
+    let sessionId: String?
+    /// The service's own duration for the audio it received. Worth having
+    /// beside the client's `audioMs`, which is computed from the bytes *sent*:
+    /// a disagreement means the upload was truncated, which no other signal
+    /// distinguishes from a user who simply stopped talking.
+    let audioDurationMs: Double?
+    /// Total server-side processing time, and the transcription portion of it.
+    /// The pair localizes a slow dictation that the client's `postSpeechMs`
+    /// only reports the total of: `request_time_ms` minus `sync_time_ms` is
+    /// roughly what the rewrite cost, so a regression can be attributed to the
+    /// network, the STT upstream, or the LLM rather than guessed at.
+    let requestTimeMs: Double?
+    let syncTimeMs: Double?
+    /// **All optional except `text`, and deliberately so**, even though the
+    /// reference marks `session_id` and `audio_duration_ms` required. A
+    /// non-optional here turns a field the service stops sending into
+    /// `AssemblyAIError.malformedResponse` — a failed dictation, for a
+    /// diagnostic nobody was waiting on. `text` is the only field whose absence
+    /// means there is nothing to paste.
     enum CodingKeys: String, CodingKey {
       case text
       case llmResponse = "llm_response"
       case llmError = "llm_error"
+      case sessionId = "session_id"
+      case audioDurationMs = "audio_duration_ms"
+      case requestTimeMs = "request_time_ms"
+      case syncTimeMs = "sync_time_ms"
     }
   }
 
-  /// A dictation API failure body. The reference documents exactly two shapes:
-  /// `{error_code, message}` for the request/audio/server errors (400, 413, 415,
-  /// 500, 503, 504) and `{detail}` for auth and rate limiting — so read
-  /// `message`, then `detail`. A non-string `detail` (a FastAPI-style validation
-  /// array) is ignored and the caller falls back to the raw body.
+  /// A dictation API failure body. The reference documents exactly two shapes
+  /// and says to read both: `{error, error_code}` for most failures (400, 401,
+  /// 413, 429, 502, 503, 504) and `{status, title, detail}` for the ones relayed
+  /// from the transcription service — an invalid API key (404, *not* 401) and an
+  /// unsupported audio format (415). A non-string `detail` (a FastAPI-style
+  /// validation array) is ignored and the caller falls back to the raw body.
   ///
-  /// `detail` is the arm that carries config-validation failures, which is what
-  /// a wrong field name produces: `invalid config part: <key>: Extra inputs are
-  /// not permitted`. Worth keeping readable — it is the difference between a
-  /// diagnosable typo and "AssemblyAI error 400".
+  /// **`error` is the field the common failures carry**, and reading it is not
+  /// optional dressing: 400 is the config-validation status, so a wrong field
+  /// name lands here as
+  /// `{"error": "invalid config part: <key>: Extra inputs are not permitted",
+  /// "error_code": "bad_request"}`. This type consulted `message` and `detail`
+  /// until 2026-09-11, so every one of those fell through to the raw-body arm
+  /// and surfaced as JSON.
+  ///
+  /// **Exactly these two keys, because they are the two the reference
+  /// documents.** `message` was the first key read here and is in neither
+  /// documented shape; it was dropped rather than kept as a harmless fallback,
+  /// under the same rule that took `llm: null` off the request — Blurt calls
+  /// this API only the way the docs describe it, on both directions of the
+  /// wire. A body carrying some third spelling now reaches the user through the
+  /// raw-body arm below, which is the honest outcome: unrecognized, not silently
+  /// guessed at.
   struct ErrorResponse: Decodable {
     let message: String?
 
     enum CodingKeys: String, CodingKey {
-      case message, detail
+      case error, detail
     }
 
     init(from decoder: Decoder) throws {
@@ -165,7 +207,7 @@ extension AssemblyAITranscriber {
       func string(_ key: CodingKeys) -> String? {
         try? container.decode(String.self, forKey: key)
       }
-      message = string(.message) ?? string(.detail)
+      message = string(.error) ?? string(.detail)
     }
   }
 }

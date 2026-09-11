@@ -30,8 +30,9 @@
 ///
 /// The terms arrive already normalized — `KeyTermsStore.parse` splits on commas,
 /// trims, drops blanks, and dedupes case-insensitively — so the only thing left
-/// to enforce here is length: the field accepts at most `characterCap` across
-/// all terms, and the user's list is the one unbounded input in the request.
+/// to enforce here is size: the field accepts at most `characterCap` across
+/// all terms and at most `termCap` terms, and the user's list is the one
+/// unbounded input in the request.
 /// Exercised by `Tests/BlurtEngineTests/KeytermsBoostTests.swift`.
 enum KeytermsBoost {
   /// Cap the API places on `config.keyterms_prompt`: 2048 characters summed
@@ -46,6 +47,19 @@ enum KeytermsBoost {
   /// before.
   static let characterCap = 2048
 
+  /// The *other* cap on the same field, and the one the byte budget above does
+  /// not imply: at most **100 terms**, however short they are
+  /// (`keyterms_prompt: maxItems: 100` in the reference, alongside its "Maximum
+  /// 100 terms and 8000 characters in total"). Exceeding either is a 400 on the
+  /// whole request, before the audio is read.
+  ///
+  /// Reachable, which is why it is here: the terms are comma-split from one
+  /// free-text field, so 150 short ones cost ~1500 bytes and sail under
+  /// `characterCap` while being half again over this. That shape failed *every*
+  /// dictation until the user shortened the list — the same outage a 3057-character
+  /// cleanup instruction caused once, by the same mechanism.
+  static let termCap = 100
+
   /// The terms to send for `terms` — empty when there are none to send, which
   /// the encoders read as "omit the field", so the request asks for no boosting
   /// at all. One empty state, not two: an `[String]?` here would make "no terms"
@@ -54,15 +68,18 @@ enum KeytermsBoost {
   /// wire, where `DictationConfig.encode(to:)` states it once.
   ///
   /// Over-long lists are fitted rather than rejected: terms are taken in order
-  /// while the running total fits `characterCap`, and the first one that doesn't
-  /// fit stops the list. Whole terms only — half a name boosts nothing — and
-  /// order is the user's, so the terms they typed first are the ones that
-  /// survive a list too long to send. A term is never split and a blank one is
-  /// never sent, so a stray entry can't cost the request.
+  /// while the running total fits `characterCap` **and** the list is under
+  /// `termCap`, and the first term that breaches either stops the list. Two
+  /// independent limits, so both are checked — a list can be well under the byte
+  /// budget and still over the count. Whole terms only — half a name boosts
+  /// nothing — and order is the user's, so the terms they typed first are the
+  /// ones that survive a list too long to send. A term is never split and a
+  /// blank one is never sent, so a stray entry can't cost the request.
   static func fitted(_ terms: [String]) -> [String] {
     var included: [String] = []
     var remaining = characterCap
     for term in terms {
+      guard included.count < termCap else { break }
       guard let term = term.trimmedNonEmpty() else { continue }
       let cost = term.utf8.count
       guard cost <= remaining else { break }

@@ -9,7 +9,8 @@
 /// Sending it replaces the service's own default cleanup wording, which is what
 /// a request carrying no instruction gets — the route rewrites by default, so
 /// omitting this field selects the default rather than declining the rewrite
-/// (see `AssemblyAITranscriber.Rewrite`).
+/// (see `AssemblyAITranscriber.DictationConfig.llmInstruction`). The reference
+/// is explicit that it replaces rather than adds to the default task.
 ///
 /// It is the **only** instruction-shaped field on the request, and the only one
 /// whose value is the same every time: `config.stt_prompt` carries the
@@ -73,15 +74,16 @@
 ///
 /// Every corpus behind it is English while this string ships to every user in
 /// every language; pinning the *transcription* prompt to English was reverted
-/// once for hurting non-English speech. A revert here is one line: return
-/// `.serviceDefault` and the key comes off the wire again.
+/// once for hurting non-English speech. A revert here is one line: return nil
+/// and the key comes off the wire again — which restores the service's own
+/// cleanup wording, not a verbatim transcript.
 ///
 /// Exercised by `Tests/BlurtEngineTests/CleanupInstructionTests.swift`.
 enum CleanupInstruction {
-  /// Hard cap the dictation API places on `config.llm_instruction`. The number
-  /// was measured against the live endpoint, not read off a doc page — the
-  /// reference does not state it — and its *unit* was never measured, so every
-  /// length here counts UTF-8 bytes: the largest plausible unit
+  /// Hard cap the dictation API places on `config.llm_instruction`. Measured
+  /// against the live endpoint first and since confirmed by the reference, which
+  /// gives `llm_instruction` a `maxLength` of 2048 — in **characters**, while
+  /// every length here counts UTF-8 bytes: the largest plausible unit
   /// (bytes ≥ UTF-16 units ≥ codepoints ≥ graphemes), and therefore
   /// conservative against whichever one the server uses. Asserted in
   /// `CleanupInstructionTests`, against this constant rather than
@@ -96,8 +98,9 @@ enum CleanupInstruction {
   /// verbatim transcript. A 3057-character version of this string shipped once and
   /// did exactly that. `nil` sends no instruction instead, which selects the
   /// service's own default cleanup: worse than our instruction, and immeasurably
-  /// better than an outage. It does *not* turn the rewrite off — that takes
-  /// `Rewrite.disabled`, which is the enhanced-transcripts switch's job.
+  /// better than an outage. It does *not* turn the rewrite off — nothing on the
+  /// request does, and the enhanced-transcripts switch is applied to the
+  /// response instead (`AssemblyAITranscriber.transcript(from:)`).
   ///
   /// The tests make this unreachable, which is the point — this is the belt to
   /// their braces, for the edit that lands when nobody runs them.

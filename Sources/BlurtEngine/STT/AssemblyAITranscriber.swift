@@ -1,26 +1,35 @@
 import Foundation
 import os
 
-/// Latency instrumentation for the dictation round-trip. Findable via:
-///   log show --predicate 'subsystem == "dev.alex.blurt" && category == "Transcriber"' --last 1h
 /// `TranscriberProtocol` backed by AssemblyAI's **dictation** API.
 ///
 /// A single `POST dictation.assemblyai.com/v1/transcribe/live` carries a JSON
 /// `config` part plus the captured audio (raw S16LE PCM, exactly the bytes the
 /// mic recorded — there is no re-encoding pass), and the response body carries
-/// both the verbatim transcript and — when the config requests one via
-/// `llm_instruction` (the "enhanced transcripts" setting, on by default) — an
-/// LLM-rewritten version with disfluencies removed, produced by applying
-/// `CleanupInstruction.text` server-side. Turning that setting off takes an
-/// explicit null `llm`, not a missing instruction; `Rewrite` has the measured
-/// reason why.
+/// both the verbatim transcript and an LLM-rewritten version with disfluencies
+/// removed, produced by applying `CleanupInstruction.text` server-side.
+///
+/// **Every request asks for that rewrite** — `llm_instruction` rides the config
+/// unconditionally, and the config carries no on/off switch at all. Which of the
+/// two transcripts gets pasted is decided on the *response*, by the "enhanced
+/// transcripts" setting (on by default): see `transcript(from:)`, which also
+/// states what that costs a user who has it off.
 /// No upload step, no job submission, no polling — one
 /// request per utterance covers transcription *and* cleanup. `config` leads the
 /// body because the streaming route cannot open its upstream call without it —
 /// see `transcribePath` and `streamedBody`. The service picks
-/// the STT model server-side and handles audio from ~80 ms up to 120 s; the
-/// rewrite is best-effort with a ~5 s server-side deadline, so a rewrite
-/// failure still returns the verbatim transcript (`llm_response` null).
+/// the STT model server-side and accepts **at most 120 s** of audio (the
+/// documented cap; there is no documented *minimum* — the ~80 ms floor is this
+/// client's own, see `SyncSTTLimits.minPCMBytes`). The rewrite is best-effort
+/// with a 5 s server-side deadline, so a failure still returns the verbatim
+/// transcript (`llm_response` null, `llm_error` set).
+///
+/// **Every request this file makes is one the reference describes** — path,
+/// header, part order, config keys, response keys, error keys. That is a
+/// standing rule, not an accident of the current shape: measured-but-
+/// undocumented behaviour is not something to build on, however well it works.
+/// `llm: null` is the one that was removed for it (see
+/// `DictationConfig.llmInstruction`).
 public struct AssemblyAITranscriber: TranscriberProtocol {
   /// Latency instrumentation for the dictation round-trip. Findable via:
   ///   log show --predicate 'subsystem == "dev.alex.blurt" && category == "Transcriber"' --last 1h
@@ -31,8 +40,11 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// writes the same category — one category, two files.
   static let log = HostIdentity.current.logger("Transcriber")
   private let apiKeyProvider: @Sendable () -> String?
-  private let baseURL: URL
-  private let transport: any HTTPTransport
+  /// Internal, not private, for the same reason `DictationWireTypes`' nested
+  /// types are: `warmUp()` lives in `DictationWarmUp.swift` and needs both, and
+  /// Swift's `private` is file-scoped so it cannot cross that split.
+  let baseURL: URL
+  let transport: any HTTPTransport
   private let enhancedTranscriptsEnabled: @Sendable () -> Bool
   private let customStyle: @Sendable () -> String?
 
@@ -55,9 +67,10 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// silently take the slower path is one whose latency nobody can reason about.
   private static let transcribePath = "v1/transcribe/live"
 
-  /// `enhancedTranscripts` decides, per request, whether the config asks for the
-  /// cleanup rewrite at all; `customStyle` supplies the *active* style
-  /// profile's instructions, appended to that block's cleanup instruction — one
+  /// `enhancedTranscripts` decides, per response, which of the two transcripts
+  /// the route returns gets pasted — it no longer shapes the request, which
+  /// always asks for the rewrite; `customStyle` supplies the *active* style
+  /// profile's instructions, appended to the cleanup instruction — one
   /// profile's text, never a join of several (see `StyleProfileStore`). Both are
   /// read at every `transcribe` so a settings change applies to the next
   /// dictation without rebuilding the transcriber. `nil` (the default) reads
@@ -119,14 +132,34 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     guard let response = try? JSONDecoder().decode(DictationResponse.self, from: data) else {
       throw AssemblyAIError.malformedResponse
     }
-    // The rewrite is best-effort, so anything unusable degrades to the verbatim
-    // transcript rather than an error — and a null `llm_response` is also what a
-    // declined rewrite looks like (`Rewrite.disabled`), which is the same
-    // fallback by a different route. Blank counts as unusable alongside null:
-    // the service is documented to null out an empty rewrite, but a "" slipping
-    // through would strand the utterance — the pipeline drops a whitespace-only
-    // transcript to `.idle` without pasting or reporting, wasting the good
-    // verbatim `text` right below it.
+    Self.logServerMetrics(response)
+    return transcript(from: response)
+  }
+
+  /// Which of the two transcripts in the response to paste.
+  ///
+  /// **This is the enhanced-transcripts switch.** The config always asks for the
+  /// rewrite, so both transcripts are in hand by the time this runs and the
+  /// setting is a pure choice between them: off means paste `text` exactly as
+  /// spoken, on means prefer the rewrite. Read fresh per request, so a toggle
+  /// applies to the next dictation without rebuilding the transcriber.
+  ///
+  /// It used to be a *request* switch — an explicit null `llm`, the only off
+  /// state the route has, since omitting the instruction merely selects the
+  /// service's own default cleanup. Deciding here instead costs a rewrite the
+  /// user never sees: with the setting off they still wait out its ~5 s
+  /// server-side budget and are still billed for it. What it buys is one request
+  /// shape to reason about, and a switch that cannot disagree with the response
+  /// it was applied to.
+  ///
+  /// With the setting on, the rewrite is best-effort, so anything unusable
+  /// degrades to the verbatim transcript rather than an error. Blank counts as
+  /// unusable alongside null: the service nulls out an empty rewrite, but a ""
+  /// slipping through would strand the utterance — the pipeline drops a
+  /// whitespace-only transcript to `.idle` without pasting or reporting, wasting
+  /// the good verbatim `text` beside it.
+  private func transcript(from response: DictationResponse) -> String {
+    guard enhancedTranscriptsEnabled() else { return response.text }
     if let rewrite = response.llmResponse.trimmedNonEmpty() { return rewrite }
     if let error = response.llmError {
       Self.log.warning(
@@ -195,47 +228,16 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     }
   }
 
-  /// Pre-open and pool a connection to the dictation host so the request opened
-  /// at press starts streaming immediately instead of spending its first
-  /// ~170 ms on DNS+TCP+TLS (more on mobile — measured).
-  ///
-  /// The reason changed with the chunked upload and is worth stating, because
-  /// the obvious reading is now wrong. It used to keep connection setup off the
-  /// *release* hot path, where the user was waiting. The request now opens at
-  /// press, so its handshake overlaps the recording either way and no longer
-  /// sits on the wait at all. What the warm-up still buys is the audio starting
-  /// to move ~170 ms sooner — which is free on a fast uplink and worth having on
-  /// a saturated one, where a late start is a backlog that never clears and adds
-  /// its own delay to the post-speech wait.
-  ///
-  /// Measured rather than assumed (2026-09-08), because "the POST opens at press
-  /// now, so this races it" is the plausible objection: with a fresh
-  /// `URLSession`, the POST reports `isReusedConnection == true` both after a
-  /// 250 ms mic bring-up and when fired back-to-back with the warm-up. URLSession
-  /// coalesces onto the in-flight connection, so this costs one throwaway GET
-  /// and never a second handshake.
-  ///
-  /// A throwaway GET to the host
-  public func warmUp() async {
-    var request = URLRequest(url: baseURL)
-    request.httpMethod = "GET"
-    request.timeoutInterval = 5
-    let clock = ContinuousClock()
-    let start = clock.now
-    _ = try? await transport.data(for: request)
-    let elapsedMs = (clock.now - start).milliseconds
-    Self.log.info(
-      "warm-up connect \(elapsedMs, format: .fixed(precision: 0), privacy: .public)ms")
-  }
-
   /// Builds the JSON `config` part sent alongside the audio. Both steering
   /// fields are included only when non-empty: an empty `sttPrompt`
   /// omits `stt_prompt` (no prior text, so the model works from the audio alone
   /// and the service's managed default prompt applies) and an empty
   /// `keytermsPrompt` omits `keyterms_prompt` (which would otherwise ask to boost
   /// nothing). `prompt` is `stt_prompt`'s other name and must never ride
-  /// alongside it — see `STTPrompt`. The rewrite request is `rewriteRequest()`'s, which reads
-  /// the enhanced-transcripts setting per call. Internal so tests can assert the
+  /// alongside it — see `STTPrompt`. The cleanup instruction is
+  /// `cleanupInstruction()`'s and rides every request, whatever the
+  /// enhanced-transcripts setting says — that switch is applied to the response,
+  /// in `transcript(from:)`. Internal so tests can assert the
   /// config wiring without inspecting the multipart upload body (which
   /// `URLProtocol` mocks can't observe reliably for `upload(from:)`).
   /// Neither steering field is defaulted: every caller states both, so what a
@@ -250,20 +252,18 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
         channels: 1,
         sttPrompt: sttPrompt,
         keytermsPrompt: keytermsPrompt,
-        rewrite: rewriteRequest()
+        llmInstruction: cleanupInstruction()
       )
     )
   }
 
-  /// Which of the route's three rewrite states this request asks for — see
-  /// `Rewrite` for the wire mapping and why "no instruction" is not "no
-  /// rewrite".
+  /// The cleanup instruction this request asks the route to rewrite with, or nil
+  /// to leave the wording to the service — which is *not* the same as no
+  /// rewrite; see `DictationConfig.llmInstruction`.
   ///
-  /// Read fresh per request, so toggling **enhanced transcripts** or switching
-  /// style profiles applies to the next dictation without rebuilding the
-  /// transcriber.
-  private func rewriteRequest() -> Rewrite {
-    guard enhancedTranscriptsEnabled() else { return .disabled }
+  /// Read fresh per request, so switching style profiles applies to the next
+  /// dictation without rebuilding the transcriber.
+  private func cleanupInstruction() -> String? {
     guard let instruction = CleanupInstruction.sendable(appending: customStyle()) else {
       // Unreachable while the tests run: `CleanupInstructionTests` asserts the length.
       // Logged rather than trusted because the failure it guards against is silent —
@@ -275,9 +275,9 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
         over the \(CleanupInstruction.characterCap, privacy: .public) cap; \
         falling back to the service default
         """)
-      return .serviceDefault
+      return nil
     }
-    return .instructed(instruction)
+    return instruction
   }
 
   // MARK: - Networking helpers
@@ -321,9 +321,10 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     return data
   }
 
-  /// Best human-readable explanation for a non-2xx response: `message`, then
-  /// `detail` (the two documented shapes — see `ErrorResponse`), then the raw body
-  /// text, trimmed and capped.
+  /// Best human-readable explanation for a non-2xx response: `error`, then
+  /// `detail` (the two documented shapes — see `ErrorResponse`, which is also
+  /// where the dropped `message` key is accounted for), then the raw body text,
+  /// trimmed and capped.
   ///
   /// The raw-body arm is deliberately kept. It is not compatibility with an old
   /// API shape — it is what turns a response the API never promised (a proxy's HTML
@@ -340,11 +341,11 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   }
 
   // The request/response types this encodes and decodes — `DictationConfig`,
-  // `Rewrite`, `DictationResponse`, `ErrorResponse` — live in
-  // `DictationWireTypes.swift`, and the upload's instrumentation —
-  // `UploadProgress`, `DictationUploadDelegate` — in `DictationUploadMetrics.swift`. Both
-  // split out to stay within the lint file-length budget. They are the JSON
-  // contract and the measurement; everything here is the transport.
+  // `DictationResponse`, `ErrorResponse` — live in `DictationWireTypes.swift`,
+  // and the upload's instrumentation — `UploadProgress`,
+  // `DictationUploadDelegate` — in `DictationUploadMetrics.swift`. Both split
+  // out to stay within the lint file-length budget. They are the JSON contract
+  // and the measurement; everything here is the transport.
 }
 
 // `Duration.milliseconds` — the latency-logging conversion this file's request

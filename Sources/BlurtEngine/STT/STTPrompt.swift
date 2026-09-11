@@ -60,6 +60,32 @@ enum STTPrompt {
   /// on `conversation_context`, which the server merely trimmed), every
   /// dictation fails if this one is exceeded.
   ///
+  /// **The reference says 6000** (`stt_prompt: maxLength: 6000`) and 4096 is
+  /// still the right number, because the route validates this field **twice**.
+  /// Measured up the ladder, 2026-09-11:
+  ///
+  /// | length | response                                                      |
+  /// | ------ | ------------------------------------------------------------- |
+  /// | 4096   | 200                                                           |
+  /// | 4097   | `400 invalid config part: prompt: … at most 4096 characters`   |
+  /// | 6000   | `400 invalid config part: prompt: … at most 4096 characters`   |
+  /// | 6001   | `400 stt_prompt: String should have at most 6000 characters`   |
+  ///
+  /// Read the field *names* in those two messages. Over 6000 the outer envelope
+  /// rejects `stt_prompt` — the documented cap, and the only one the reference
+  /// describes. Between 4097 and 6000 the request clears that envelope and is
+  /// then rejected by the engine behind it, which knows the field by its **legacy
+  /// alias** `prompt` and caps it at 4096.
+  ///
+  /// So the documented 6000 is the field's real cap and the 4096 is the
+  /// deprecated path's, still sitting in front of it. 4096 is what a request has
+  /// to fit today, and it is safe under both numbers — being under a cap costs
+  /// prompt budget, being over one fails every dictation carrying a long
+  /// history. This is the one place the repo runs tighter than the docs on
+  /// purpose. Raising it to the documented 6000 is the right end state and takes
+  /// one re-measurement at 4097 to confirm the inner validator is gone; until
+  /// that measurement says 200, don't.
+  ///
   /// Counted in **Unicode scalars**, which is measured and not a guess at what
   /// "characters" means: 4096 `é` (8192 UTF-8 bytes, 4096 scalars) is accepted,
   /// and 820 family emoji — 820 grapheme clusters but 4100 scalars — is

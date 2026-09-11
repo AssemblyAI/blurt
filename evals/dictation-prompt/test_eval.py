@@ -1376,10 +1376,11 @@ def test_an_empty_instruction_asks_for_the_service_default():
     """`None` must omit the key — the service default is what Blurt falls back to.
 
     Omission, not `llm_instruction: null` and not `llm: {}`: all three run the
-    default cleanup, but only omission is what the Swift client encodes for
-    `Rewrite.serviceDefault`, and a harness that disagrees measures a request
-    nobody sends. Note that none of them turn the rewrite *off* — that takes an
-    explicit `llm: null`, which this harness never wants.
+    default cleanup, but omission is what the Swift client encodes for a nil
+    instruction, and a harness that disagrees measures a request nobody sends.
+    Note that none of them turn the rewrite *off* — that takes an explicit
+    `llm: null`, which is undocumented and which neither this harness nor the
+    client ever wants (the client picks `text` over `llm_response` instead).
     """
 
     for instruction, expected in ((None, None), ("", None), ("do x", "do x")):

@@ -41,9 +41,15 @@ public struct RecentDictations: Equatable, Sendable {
   /// How many recent dictations the ring remembers. Deliberately deeper than
   /// what the UI shows (`displayCapacity`): the history is also transcription
   /// context, and this is the number that decides how much of it the model gets.
-  /// Sized against the request rather than the window — the API accepts 100
-  /// `stt_prompt` lines, and `STTPrompt.characterCap` takes
-  /// the newest 99 of these so the cursor's prior text can have the last slot.
+  /// Sized against the request rather than the window, but **not** against a
+  /// turn limit any more: `stt_prompt` is one string with no turn concept, so
+  /// `STTPrompt` has "deliberately no turn cap" and its 4096-scalar budget is
+  /// the only thing that trims the history. This number therefore just bounds
+  /// how much the prompt builder can draw from — it is the ring's own limit, and
+  /// the scalar budget will usually bind first. It reads as 100 because the
+  /// field this replaced (`conversation_context`) accepted 100 turns with the
+  /// prior chunk in the last slot, which is why `ConversationContext.recentTurnCap`
+  /// was 99; nothing enforces either figure now.
   public static let capacity = 100
 
   /// How many rows the ready window's "Recent" list renders. The list area

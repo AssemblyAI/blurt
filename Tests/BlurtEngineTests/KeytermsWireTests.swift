@@ -69,10 +69,23 @@ extension HTTPClientTests {
 
   @Test("config part never sets a language, leaving detection to the model")
   func configOmitsLanguageCode() throws {
-    // Absence is the decision, so it is asserted rather than assumed. The API
-    // documents `language_code` as defaulting to `en` and as ignored whenever a
-    // custom prompt is set — and Blurt now sends one, so the field would be
-    // ignored anyway on any request carrying context.
+    // Absence is the decision, so it is asserted rather than assumed. The
+    // documented field is `language_codes` — plural, an array, which the
+    // reference says defaults to `["en"]`. The singular `language_code` is
+    // absent from the docs but still answered with a 200 rather than the
+    // `Extra inputs are not permitted` a bogus key earns (measured 2026-09-11),
+    // which makes it a **legacy alias on its way out**, not a supported
+    // alternative — the same shape as `prompt`, `keyterms` and `word_boost`.
+    // Both spellings are pinned absent here, and the undocumented one is the
+    // one it would be most tempting to reach for.
+    //
+    // The documented `["en"]` default does not describe the behaviour. Measured
+    // 2026-09-11 with a synthesized Spanish clip, all three came back as correct
+    // Spanish in both `text` and `llm_response`: no language field,
+    // `language_codes: ["es"]`, and `language_codes: ["en"]`. Even *explicitly*
+    // asking for English did not force English — so on this route the field does
+    // not appear to constrain the output at all, and omission is not a bet on a
+    // default. Setting it can only take working detection away.
     //
     // Measured against the live endpoint instead of reasoned about: with neither
     // field set, Spanish, French, German and Japanese clips each came back
@@ -98,22 +111,20 @@ extension HTTPClientTests {
     #expect(object.keys.contains("stt_prompt") == false)
   }
 
-  @Test("each rewrite state encodes as the key the route reads it from")
-  func rewriteStatesEncodeDistinctly() throws {
-    // The three states are three different requests, and only two of them are
-    // reachable through `makeConfigData` (`.serviceDefault` needs a shipped
-    // instruction over the cap, which `CleanupInstructionTests` forbids), so the
-    // mapping is pinned here against the encoder directly.
-    //
-    // Measured against `/v1/transcribe/live`, same clip each time: an instruction
-    // is applied; neither key runs the service's *default* cleanup; a null `llm`
-    // is the only way to get no rewrite at all. Collapsing `.serviceDefault` and
-    // `.disabled` onto one spelling is therefore a silent behaviour change, not a
-    // simplification — see `AssemblyAITranscriber.Rewrite`.
-    #expect(try rewriteKeys(.instructed("do the thing")) == ["llm_instruction"])
-    #expect(try rewriteKeys(.serviceDefault) == [])
-    #expect(try rewriteKeys(.disabled) == ["llm"])
-    #expect(try rewriteConfig(.disabled)["llm"] is NSNull)
+  @Test("the cleanup instruction encodes as the key the route reads it from")
+  func rewriteInstructionEncodesUnderItsOwnKey() throws {
+    // Pinned against the encoder directly because the nil arm is unreachable
+    // through `makeConfigData`: it needs a shipped instruction over the cap,
+    // which `CleanupInstructionTests` forbids.
+    #expect(try rewriteKeys("do the thing") == ["llm_instruction"])
+    #expect(try rewriteConfig("do the thing")["llm_instruction"] as? String == "do the thing")
+    // Nil **omits** the key, and omission is not declining: measured against
+    // `/v1/transcribe/live` on 2026-09-10, a config carrying neither
+    // `llm_instruction` nor `llm` still comes back with `llm_response` set to a
+    // default-cleaned transcript. So this row is "the service's wording", not
+    // "no rewrite" — which is fine, because the config no longer tries to
+    // decline (`AssemblyAITranscriber.transcript(from:)` chooses instead).
+    #expect(try rewriteKeys(nil) == [])
   }
 
   // MARK: - helpers
@@ -136,21 +147,20 @@ extension HTTPClientTests {
     return try #require(JSONSerialization.jsonObject(with: config) as? [String: Any])
   }
 
-  /// One config carrying `rewrite` and nothing else optional, re-parsed.
-  private func rewriteConfig(
-    _ rewrite: AssemblyAITranscriber.Rewrite
-  ) throws -> [String: Any] {
+  /// One config carrying `llmInstruction` and nothing else optional, re-parsed.
+  private func rewriteConfig(_ instruction: String?) throws -> [String: Any] {
     let data = try JSONEncoder().encode(
       AssemblyAITranscriber.DictationConfig(
         sampleRate: 16_000, channels: 1, sttPrompt: "", keytermsPrompt: [],
-        rewrite: rewrite))
+        llmInstruction: instruction))
     return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
   }
 
-  /// The rewrite-related keys `rewrite` puts on the wire — the always-present
-  /// `sample_rate` and `channels` subtracted, so the expectation reads as the
-  /// state's own contribution.
-  private func rewriteKeys(_ rewrite: AssemblyAITranscriber.Rewrite) throws -> [String] {
-    try rewriteConfig(rewrite).keys.filter { !["sample_rate", "channels"].contains($0) }.sorted()
+  /// The rewrite-related keys an instruction puts on the wire — the
+  /// always-present `sample_rate` and `channels` subtracted, so the expectation
+  /// reads as that argument's own contribution.
+  private func rewriteKeys(_ instruction: String?) throws -> [String] {
+    try rewriteConfig(instruction).keys.filter { !["sample_rate", "channels"].contains($0) }
+      .sorted()
   }
 }
