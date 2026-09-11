@@ -74,28 +74,57 @@ field`).
   path and the developer-mode log and stay on the machine; the hints that used to
   carry them were deleted, not gated. Don't widen the context back out, and don't
   route that context onto the request by another path.
+- **Never send `config.prompt`.** It is `config.stt_prompt` under its legacy
+  name — the docs list `stt_prompt` as the field and `prompt` as also accepted —
+  and the two are mutually exclusive: a request carrying both earns `400 provide
+only one of stt_prompt or prompt; they are the same field`, before the audio is
+  read. Adding it alongside is not a compatibility shim, it is every dictation
+  failing.
 - **Key terms are keyterms prompting, not context text.** They ride
   `config.keyterms_prompt` as a flat array of strings (`KeytermsBoost`), fitted to
-  that field's own 2048-character cap. Don't fold them back into the context as a
+  that field's own 2048-character cap _and_ its 100-term `maxItems` — two caps on
+  one field, and the count is reachable under the byte budget. Don't fold them back into the context as a
   `Keywords: a, b, c.` clause, and don't also send `keyterms` or `word_boost` —
   the three names are the same feature and mutually exclusive (400 before the
   audio is read), and `keyterms_prompt` is the canonical one. Sending `word_boost`
   instead was the shape until 2026-09-10; adding a second name is never a
   compatible change.
-- **The rewrite is off only with an explicit `"llm": null`.** The route rewrites
-  by default, so a config that merely omits `llm_instruction` gets the service's
-  default cleanup — and `transcribe` prefers `llm_response` whenever it is
-  non-nil, so "enhanced transcripts off" would silently still clean up. Don't
-  collapse `Rewrite.serviceDefault` and `Rewrite.disabled` onto one spelling.
+- **The dictation API's docs are the source of truth; call it only the way they
+  describe.** Every path, header, multipart part, `config` key, response key and
+  error key Blurt sends or reads is one the reference documents. This route has
+  been renamed a lot, and it still answers to names the docs have dropped —
+  `prompt`, `keyterms`, `word_boost`, `language_code`, and `llm: null` — so **a
+  200 is not evidence a field is supported, only that it has not been removed
+  yet.** Treat any name absent from the docs as deprecated and don't send it,
+  however well it works today: it carries no compatibility promise, so a feature
+  resting on it can stop working silently. Removed under this rule on 2026-09-11:
+  `llm: null` (the only rewrite off switch — hence the response-side switch
+  below), the `message` error field, and `warmUp()`'s GET at the bare host root
+  (→ the documented `GET /warm`). Running _tighter_ than the docs is fine, and
+  `STTPrompt.characterCap` deliberately does. Measuring is still how a claim gets
+  settled — the docs have been wrong twice — but a measurement licenses
+  distrusting a documented field, never sending an undocumented one.
+- **Don't put the enhanced-transcripts switch back on the request.** Every
+  dictation asks for the rewrite (`llm_instruction` always rides the config) and
+  the switch picks between `llm_response` and `text` on the _response_
+  (`AssemblyAITranscriber.transcript(from:)`). The route documents no way to
+  decline: omitting `llm_instruction` only selects the service's own wording, and
+  the one off switch that works — an explicit `"llm": null` — is undocumented.
+  Blurt sent it until 2026-09-11. Adding an `llm` key back makes the response's
+  choice unreachable.
 - Don't reintroduce a "remove filler words (um, uh, like)" directive —
   `universal-3-5-pro` ignores it; it was deliberately dropped, and there is no
   prompt field to put it in now.
-- **Don't set a language — not a directive, and not `config.language_code`.**
-  Pinning transcription to English hurt non-English speech. The API documents
-  `language_code` as defaulting to `en`, but detection was measured to work with
-  no language field and no prompt (Spanish, French, German and Japanese clips each
-  came back in their own language). Adding one removes working detection;
-  `KeytermsWireTests` asserts the config carries no language key.
+- **Don't set a language — not a directive, and not `config.language_codes`.**
+  Pinning transcription to English hurt non-English speech. Detection was
+  measured to work with no language field and no prompt (Spanish, French, German
+  and Japanese clips each came back in their own language), and re-measured
+  2026-09-11: a Spanish clip came back as Spanish with no field, with
+  `language_codes: ["es"]`, **and** with `language_codes: ["en"]` — the field
+  does not appear to constrain output on this route, so the reference's `["en"]`
+  default does not describe the behaviour. Note the plural is the documented
+  spelling, but the singular `language_code` is accepted too (a 200, not an
+  unknown-key 400), so both are live and `KeytermsWireTests` pins both absent.
 - **Injection is always a clipboard paste** (save → write → ⌘V → settle →
   restore), degrading to "left it on the clipboard" when the target is lost. No
   keystroke-by-keystroke typing path, no length threshold.

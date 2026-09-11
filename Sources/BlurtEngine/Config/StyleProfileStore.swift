@@ -32,8 +32,11 @@ public struct StyleProfile: Codable, Identifiable, Hashable, Sendable {
 /// that selects the base styling, i.e. no profile instructions appended at all.
 ///
 /// Optional: with no profiles the request is exactly what ships with no style
-/// set at all. Inert while enhanced transcripts are off, since that request
-/// declines the rewrite outright and carries no instruction to append to. `AssemblyAITranscriber` reads
+/// set at all. Inert while enhanced transcripts are off — but not because the
+/// request changes: it still carries `llm_instruction` with the active profile
+/// appended, and the rewrite that profile shaped is what the response-side
+/// switch then discards (`AssemblyAITranscriber.transcript(from:)`). So the
+/// profile is on the wire and off the screen. `AssemblyAITranscriber` reads
 /// `activeInstructions` at each request, so an edit — or a click on the main
 /// window's switcher — applies to the very next dictation.
 ///

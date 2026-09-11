@@ -370,8 +370,8 @@ On `nyra` the numbers mean what they say. On `builtin` the disfluencies are synt
 
 The winning string goes into the request's `config.llm_instruction`, next to the `prompt`
 field that steers transcription. The Swift side is
-`Sources/BlurtEngine/STT/AssemblyAITranscriber.swift`, where `LLMRewrite` is an empty
-`Encodable` struct — omitting the field is what selects the service default (`Rewrite.serviceDefault`).
+`Sources/BlurtEngine/STT/AssemblyAITranscriber.swift`, where the field is an optional
+string — omitting it is what selects the service default.
 
 Store it **verbatim**, exactly as the run emitted it. The harness scores instructions through
 the same envelope the service applies them in (see the plain adapter), so the string
