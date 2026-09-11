@@ -721,7 +721,7 @@ def test_every_candidate_instruction_is_shippable():
     assert candidates.BASELINE in candidates.CANDIDATES
     for name, instruction in candidates.CANDIDATES.items():
         assert instruction.strip(), name
-        # The API's cap on config.llm.instruction, not the 4096 one on config.prompt.
+        # The API's cap on config.llm_instruction, not the 4096 one on config.stt_prompt.
         # Asserting the prompt's figure here is the bug this file now guards: it let a
         # 3057-character instruction pass every test and 400 every real request.
         assert candidates.overage(instruction) == 0, name
@@ -1373,16 +1373,27 @@ def test_the_multipart_body_matches_what_the_swift_client_sends():
 
 
 def test_an_empty_instruction_asks_for_the_service_default():
-    """`None` must send `llm: {}` — the wording Blurt ships, not a candidate's guess."""
+    """`None` must omit the key — the service default is what Blurt falls back to.
 
-    for instruction, expected in ((None, {}), ("", {}), ("do x", {"instruction": "do x"})):
-        body, _ = live._multipart(b"", {"llm": {"instruction": instruction} if instruction else {}})
+    Omission, not `llm_instruction: null` and not `llm: {}`: all three run the
+    default cleanup, but only omission is what the Swift client encodes for
+    `Rewrite.serviceDefault`, and a harness that disagrees measures a request
+    nobody sends. Note that none of them turn the rewrite *off* — that takes an
+    explicit `llm: null`, which this harness never wants.
+    """
+
+    for instruction, expected in ((None, None), ("", None), ("do x", "do x")):
+        config: dict = {"sample_rate": live.SAMPLE_RATE, "channels": 1}
+        if instruction:
+            config["llm_instruction"] = instruction
+        body, _ = live._multipart(b"", config)
         # Found by part name, not by position: this used to take the last
         # `\r\n\r\n` chunk, which silently depended on `config` being the trailing
         # part and broke when the streaming route required it to lead.
         part = body.decode("latin-1").split('name="config"')[1]
-        config = json.loads(part.split("\r\n\r\n")[1].split("\r\n--")[0])
-        assert config["llm"] == expected
+        parsed = json.loads(part.split("\r\n\r\n")[1].split("\r\n--")[0])
+        assert parsed.get("llm_instruction") == expected
+        assert "llm" not in parsed
 
 
 def test_the_live_summary_reports_the_gain_over_no_rewrite():

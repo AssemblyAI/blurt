@@ -34,7 +34,7 @@ def build(instruction: str) -> dspy.Predict:
     """A single-step `Predict` whose instruction is the thing being optimized.
 
     Deliberately not `ChainOfThought`: the winning instruction has to be portable
-    into `config.llm.instruction`, a lone string the service applies in one pass.
+    into `config.llm_instruction`, a lone string the service applies in one pass.
     A program whose quality depended on an extra reasoning field would not survive
     that trip.
 
@@ -54,7 +54,7 @@ class PlainChatAdapter(dspy.ChatAdapter):
     back — and parses the reply out of those markers. Two reasons that is the wrong
     envelope for this harness:
 
-    **Fidelity.** What ships is `config.llm.instruction`: one string the service applies
+    **Fidelity.** What ships is `config.llm_instruction`: one string the service applies
     to one transcript in one pass, with no scaffolding around it. Scoring an instruction
     through the marker protocol measures the instruction *plus* the protocol, and the
     winner has to travel without it. `ChatAdapter` also rewrites the instruction into

@@ -6,26 +6,27 @@ import Testing
 private struct DecodedEntry: Decodable {
   let transcript: String
   let ts: String
-  /// `turns` and `keyterms` are the two fields `Entry.encode(to:)` writes only when
-  /// non-empty, so an omitted-key line has to decode rather than throw. Empty, not
-  /// optional — the repo bans optional collections, and it costs nothing here:
+  /// `stt_prompt` and `keyterms` are the two fields `Entry.encode(to:)` writes only
+  /// when non-empty, so an omitted-key line has to decode rather than throw. Empty,
+  /// not optional — the repo bans optional collections, and it costs nothing here:
   /// "omitted" vs "written as `[]`" is asserted on the raw line by
   /// `nilFieldsAreOmitted`, which is the level that contract actually lives at.
-  let turns: [String]
+  let sttPrompt: String
   let keyterms: [String]
 
   /// Spelled out because the custom `init(from:)` below suppresses the synthesis
   /// that would otherwise derive these — mirroring `DictationLog.Entry`, which
   /// states its own keys for the same reason.
   enum CodingKeys: String, CodingKey {
-    case transcript, ts, turns, keyterms
+    case transcript, ts, keyterms
+    case sttPrompt = "stt_prompt"
   }
 
   init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     transcript = try container.decode(String.self, forKey: .transcript)
     ts = try container.decode(String.self, forKey: .ts)
-    turns = try container.decodeIfPresent([String].self, forKey: .turns) ?? []
+    sttPrompt = try container.decodeIfPresent(String.self, forKey: .sttPrompt) ?? ""
     keyterms = try container.decodeIfPresent([String].self, forKey: .keyterms) ?? []
   }
 }
@@ -88,11 +89,11 @@ struct DictationLogEntryTests {
     #expect(entry.field == nil)
     #expect(entry.prior == nil)
     #expect(entry.selected == nil)
-    #expect(entry.turns.isEmpty)
+    #expect(entry.sttPrompt.isEmpty)
     #expect(entry.keyterms.isEmpty)
   }
 
-  @Test("logs the same context turns the transcriber sends, in order")
+  @Test("logs the same contextual prompt the transcriber sends, in order")
   func logsWhatTheRequestCarries() {
     let withHistory = TranscriptionContext(
       appName: "Mail", windowTitle: "Re: Q3 pricing", fieldLabel: "Body",
@@ -100,18 +101,18 @@ struct DictationLogEntryTests {
       recentTranscripts: ["Sent the deck over."])
     let entry = DictationLog.makeEntry(transcript: "p", context: withHistory, now: Date())
     // The entry mirrors the request because the writer calls the same builder.
-    #expect(entry.turns == ConversationContext.turns(context: withHistory))
-    // So the logged turns show the narrowing too: the history and the prior chunk
+    #expect(entry.sttPrompt == STTPrompt.text(context: withHistory))
+    // So the logged prompt shows the narrowing too: the history and the prior chunk
     // went on the wire, the window title and the selected text did not — even
     // though the entry's own fields record all three.
-    #expect(entry.turns == ["Sent the deck over.", "Hi Sam,"])
-    #expect(!entry.turns.contains { $0.contains("Re: Q3 pricing") })
-    #expect(!entry.turns.contains { $0.contains("the old plan") })
+    #expect(entry.sttPrompt == "Sent the deck over.\nHi Sam,")
+    #expect(!entry.sttPrompt.contains("Re: Q3 pricing"))
+    #expect(!entry.sttPrompt.contains("the old plan"))
   }
 
-  @Test("keeps the prior chunk raw, where the context turn carrying it is trimmed")
+  @Test("keeps the prior chunk raw, where the prompt carrying it is trimmed")
   func priorIsRawWhereTheTurnIsTrimmed() {
-    // Why `prior` isn't redundant with `turns.last`. The trailing space is the
+    // Why `prior` isn't redundant with the prompt's tail. The trailing space is the
     // whole input to the paste's leading-separator decision
     // (`KeyInjector.withLeadingSeparator` branches on `prior.last.isWhitespace`),
     // and the wire copy has it trimmed off — so dropping `prior` for being a
@@ -120,22 +121,22 @@ struct DictationLogEntryTests {
       transcript: "p", context: TranscriptionContext(appName: "Mail", priorText: "Hi Sam, "),
       now: Date())
     #expect(entry.prior == "Hi Sam, ")
-    #expect(entry.turns == ["Hi Sam,"])
+    #expect(entry.sttPrompt == "Hi Sam,")
     #expect(KeyInjector.withLeadingSeparator("p", after: entry.prior) == "p")
-    #expect(KeyInjector.withLeadingSeparator("p", after: entry.turns.last) == " p")
+    #expect(KeyInjector.withLeadingSeparator("p", after: entry.sttPrompt) == " p")
   }
 
-  @Test("a nil prior tells a history-only turn list apart from a prior chunk")
+  @Test("a nil prior tells a history-only prompt apart from a prior chunk")
   func nilPriorDisambiguatesTheLastTurn() {
-    // The other half: `turns.last` is a recent dictation here, not text at the
-    // caret, and only `prior == nil` says so.
+    // The other half: the prompt's last line is a recent dictation here, not text
+    // at the caret, and only `prior == nil` says so.
     let entry = DictationLog.makeEntry(
       transcript: "p",
       context: TranscriptionContext(
         appName: "Mail", priorText: nil, recentTranscripts: ["Said this before."]),
       now: Date())
     #expect(entry.prior == nil)
-    #expect(entry.turns == ["Said this before."])
+    #expect(entry.sttPrompt == "Said this before.")
   }
 
   @Test("records the key terms the request boosts, fitted the same way")
@@ -213,11 +214,11 @@ struct DictationLogTests {
     // reason, since a plain array would otherwise encode as `[]` on every line.
     let line = readLog(url)
     #expect(!line.contains("selected"))
-    #expect(!line.contains("turns"))
+    #expect(!line.contains("stt_prompt"))
     #expect(!line.contains("keyterms"))
   }
 
-  @Test("a non-empty turns/keyterms list is written, with its values intact")
+  @Test("a non-empty prompt/keyterms pair is written, with its values intact")
   func conditionalFieldsAreWrittenWhenPresent() throws {
     // The other direction of the same contract. `nilFieldsAreOmitted` pins the
     // conditional arms' *skip*; without this, `encode(to:)` could stop writing
@@ -230,7 +231,7 @@ struct DictationLogTests {
 
     let entry = try #require(firstEntry(in: url))
     #expect(entry.keyterms == ["AssemblyAI", "LeMUR"])
-    #expect(entry.turns == ["Hi Sam,"])
+    #expect(entry.sttPrompt == "Hi Sam,")
   }
 }
 

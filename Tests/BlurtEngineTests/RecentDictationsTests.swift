@@ -31,7 +31,7 @@ struct RecentDictationsTests {
   @Test("shows only displayCapacity rows out of a much deeper history")
   func displaysOnlyTheNewestFew() {
     // The split the ready window depends on: the ring remembers 100 (they are
-    // request context — see `ConversationContext`) and the list is three rows tall,
+    // request context — see `STTPrompt`) and the list is three rows tall,
     // so `displayed` must not simply be `entries`.
     var recent = RecentDictations()
     for (offset, text) in ["a", "b", "c", "d", "e"].enumerated() {
@@ -44,7 +44,7 @@ struct RecentDictationsTests {
 
   @Test("projects the history oldest-first for the request's context turns")
   func transcriptsOldestFirst() {
-    // `entries` is newest-first for the UI; `conversation_context` wants the
+    // `entries` is newest-first for the UI; `stt_prompt` wants the
     // opposite. Reversing at this boundary is what keeps one storage order.
     var recent = RecentDictations()
     for (offset, text) in ["a", "b", "c"].enumerated() {

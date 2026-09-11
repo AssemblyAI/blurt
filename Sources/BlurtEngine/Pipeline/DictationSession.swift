@@ -46,7 +46,7 @@ public actor DictationSession {
   let transcriber: TranscriberProtocol
   let injector: InjectorProtocol
   /// Supplies the user's key terms (domain vocabulary) at press time, so each
-  /// utterance's request boosts those spellings — as its own `word_boost` field
+  /// utterance's request boosts those spellings — as its own `keyterms_prompt` field
   /// (`KeytermsBoost`), not as part of the conversation context. A closure, rather
   /// than a stored list, so edits in Settings take effect on the next dictation
   /// without rebuilding the session. Defaults to reading `KeyTermsStore`.
@@ -102,7 +102,7 @@ public actor DictationSession {
   /// copy of that history. Recorded in `runTranscribeInject` (`+Pipeline`) just
   /// before `onTranscriptDelivered` fires, and read at press time into
   /// `TranscriptionContext.recentTranscripts`, which sends them as the leading
-  /// `conversation_context` turns — so a run of dictations reads to the model as
+  /// leading `stt_prompt` lines — so a run of dictations reads to the model as
   /// one continuing dialogue rather than N unrelated clips.
   ///
   /// It lives here, not in the host, because the request is assembled inside this

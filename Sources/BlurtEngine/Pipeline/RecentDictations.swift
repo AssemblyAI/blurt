@@ -10,8 +10,8 @@ import Foundation
 /// **It holds far more than it shows.** `capacity` is the history depth;
 /// `displayCapacity` is how many rows the ready window's "Recent" list renders.
 /// The deep end exists because a dictation's recent history is also request
-/// context — `ConversationContext` sends the user's recent utterances as the
-/// leading `conversation_context` turns, so "how many do we remember" is a
+/// context — `STTPrompt` sends the user's recent utterances as the
+/// leading lines of `stt_prompt`, so "how many do we remember" is a
 /// question about transcription quality, not about how tall a list looks.
 public struct RecentDictations: Equatable, Sendable {
   /// One recorded dictation: the transcript plus when it landed.
@@ -42,7 +42,7 @@ public struct RecentDictations: Equatable, Sendable {
   /// what the UI shows (`displayCapacity`): the history is also transcription
   /// context, and this is the number that decides how much of it the model gets.
   /// Sized against the request rather than the window — the API accepts 100
-  /// `conversation_context` turns, and `ConversationContext.recentTurnCap` takes
+  /// `stt_prompt` lines, and `STTPrompt.characterCap` takes
   /// the newest 99 of these so the cursor's prior text can have the last slot.
   public static let capacity = 100
 
@@ -73,7 +73,7 @@ public struct RecentDictations: Equatable, Sendable {
   public var displayed: [Entry] { Array(entries.prefix(Self.displayCapacity)) }
 
   /// Every remembered transcript **oldest first** — the order
-  /// `config.conversation_context` wants, since `entries` is newest-first for the
+  /// `config.stt_prompt` wants, since `entries` is newest-first for the
   /// UI. Text only: the timestamps are a display concern.
   public var transcriptsOldestFirst: [String] { entries.reversed().map(\.text) }
 

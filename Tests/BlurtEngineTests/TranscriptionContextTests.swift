@@ -5,7 +5,7 @@ import Testing
 /// `TranscriptionContext.isEmpty` is the gate `FocusCapture`/`DictationSession`
 /// use to decide whether a captured context is worth carrying at all — it covers
 /// every signal, including the ones that never leave the machine. It is *not* a
-/// mirror of what gets sent: `ConversationContext.turns` reads only
+/// mirror of what gets sent: `STTPrompt.text` reads only
 /// `recentTranscripts` and `priorText`, so the implication runs one way. An empty
 /// context can never produce turns; a non-empty one often doesn't either.
 @Suite("TranscriptionContext")
@@ -46,7 +46,7 @@ struct TranscriptionContextTests {
     #expect(!context.isEmpty)
     // Not in the context turns — they are sent as the request's word-boost list,
     // which is why a key-terms-only context is still worth carrying.
-    #expect(ConversationContext.turns(context: context).isEmpty)
+    #expect(STTPrompt.text(context: context).isEmpty)
     #expect(KeytermsBoost.fitted(context.keyTerms) == ["Blurt"])
   }
 
@@ -57,7 +57,7 @@ struct TranscriptionContextTests {
     let context = TranscriptionContext(
       appName: nil, priorText: nil, recentTranscripts: ["Said this before."])
     #expect(!context.isEmpty)
-    #expect(ConversationContext.turns(context: context) == ["Said this before."])
+    #expect(STTPrompt.text(context: context) == "Said this before.")
   }
 
   @Test("an empty context can never produce context turns")
@@ -68,7 +68,7 @@ struct TranscriptionContextTests {
     ]
     for context in empties {
       #expect(context.isEmpty)
-      #expect(ConversationContext.turns(context: context).isEmpty)
+      #expect(STTPrompt.text(context: context).isEmpty)
     }
   }
 
@@ -84,11 +84,11 @@ struct TranscriptionContextTests {
     ]
     for context in withoutSendable {
       #expect(!context.isEmpty)
-      #expect(ConversationContext.turns(context: context).isEmpty)
+      #expect(STTPrompt.text(context: context).isEmpty)
     }
 
     #expect(
-      !ConversationContext.turns(context: TranscriptionContext(appName: nil, priorText: "hello"))
+      !STTPrompt.text(context: TranscriptionContext(appName: nil, priorText: "hello"))
         .isEmpty)
   }
 

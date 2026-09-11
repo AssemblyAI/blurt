@@ -158,7 +158,7 @@ extension DictationSession {
     // budget, and the recording indicator never at all.
     //
     // `pressKnown` carries only what this actor already has, so a missed budget
-    // costs the request the field text and not `word_boost` and the recent turns
+    // costs the request the field text and not `keyterms_prompt` and the recent turns
     // as well. It deliberately carries no focus signals — see `PressContext`,
     // which also owns the wait and the release-side peek.
     let pressKnown = TranscriptionContext(
