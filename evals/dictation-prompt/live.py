@@ -9,7 +9,7 @@ harness was written, and until now there was nothing to do about it.
 There is something to do about it. The dictation API takes audio, so:
 
     reference text -> `say` -> 16 kHz mono PCM -> POST /transcribe with the
-    candidate as config.llm.instruction -> score `llm_response`
+    candidate as config.llm_instruction -> score `llm_response`
 
 The response carries both sides of the question. `text` is the verbatim transcript,
 so `score(reference, text)` is the floor — what pasting without any rewrite would
@@ -120,12 +120,19 @@ def _multipart(pcm: bytes, config: dict) -> tuple[bytes, str]:
 def transcribe(pcm: bytes, api_key: str, instruction: str | None, url: str = DICTATION_URL) -> dict:
     """One `/v1/transcribe/live` round trip. `instruction=None` asks for the default.
 
-    That `None` is the comparison the text harness has never been able to make: an
-    empty `llm` block selects the service's own default wording, so it is the real
-    baseline rather than `guessed-default`, which only ever guessed at it.
+    That `None` is the comparison the text harness has never been able to make:
+    omitting the instruction selects the service's own default wording — the route
+    rewrites by default — so it is the real baseline rather than `guessed-default`,
+    which only ever guessed at it.
+
+    Field name and shape track the Swift client exactly (`config.llm_instruction`,
+    a top-level string). It sent the nested `config.llm.instruction` until
+    2026-09-10; both are accepted by the route, but a harness tuning a field the
+    app does not send is tuning the wrong request.
     """
     config: dict = {"sample_rate": SAMPLE_RATE, "channels": 1}
-    config["llm"] = {"instruction": instruction} if instruction else {}
+    if instruction:
+        config["llm_instruction"] = instruction
     body, boundary = _multipart(pcm, config)
     request = urllib.request.Request(  # noqa: S310 — fixed https endpoint
         url,

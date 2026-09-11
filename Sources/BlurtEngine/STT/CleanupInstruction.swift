@@ -1,27 +1,30 @@
-/// The cleanup instruction sent as `config.llm.instruction` (see
+/// The cleanup instruction sent as `config.llm_instruction` (see
 /// `AssemblyAITranscriber.DictationConfig`). The service applies it to the
 /// verbatim transcript with its own rewrite model, inside the same
 /// `/v1/transcribe/live` call — this is the *server-side* rewrite instruction, not a
-/// client-side cleanup pass, and not a `ConversationContext` change (that field
+/// client-side cleanup pass, and not an `STTPrompt` change (that field
 /// steers transcription with the prior dialogue and carries no instructions at
 /// all, because disfluency removal is this rewrite's job).
 ///
-/// Sending it replaces an empty `llm` block, which selected the service's own
-/// default cleanup wording.
+/// Sending it replaces the service's own default cleanup wording, which is what
+/// a request carrying no instruction gets — the route rewrites by default, so
+/// omitting this field selects the default rather than declining the rewrite
+/// (see `AssemblyAITranscriber.Rewrite`).
 ///
 /// It is the **only** instruction-shaped field on the request, and the only one
-/// whose value is the same every time: `config.conversation_context` carries the
-/// user's recent dictations and prior chunk (see `ConversationContext`), while
-/// this string is fixed and embeds no user context at all. (There used to be a
-/// second, `config.prompt`; the context field replaced it.)
+/// whose value is the same every time: `config.stt_prompt` carries the
+/// user's recent dictations and prior chunk (see `STTPrompt`), while
+/// this string is fixed and embeds no user context at all. `stt_prompt` is
+/// `config.prompt` under its other name, but it carries prior *text* and never
+/// instructions — see `STTPrompt` for why nothing directive belongs in it.
 ///
-/// **Length is the thing to be careful about.** `config.llm.instruction` accepts
+/// **Length is the thing to be careful about.** `config.llm_instruction` accepts
 /// at most `characterCap`, measured here in UTF-8 bytes (see that constant for
 /// the unit), and over it the API rejects the whole request — 400, before the
 /// audio is read, so *every* dictation fails rather than degrading. A
 /// 3057-character version of this string shipped once and did exactly that. The
 /// cap is a different, smaller number than the 4096 on
-/// `config.conversation_context` (`ConversationContext.characterCap`); reusing
+/// `config.stt_prompt` (`STTPrompt.characterCap`); reusing
 /// the other field's figure is how that bug got through the tests it should have
 /// failed.
 ///
@@ -40,7 +43,7 @@
 /// arm, no rewrite failures — scored against what the speaker meant:
 ///
 ///     no rewrite at all (floor)          0.3365
-///     service default (empty llm block)  0.3561   +0.0196
+///     service default (no instruction)   0.3561   +0.0196
 ///     the instruction before this one    0.3608   +0.0243
 ///     this one                           0.4107   +0.0742
 ///
@@ -49,7 +52,7 @@
 /// byte-identical transcript. This one adds +0.0498 more of that than its
 /// predecessor — 3.1x as much, though a ratio of two small numbers over twenty rows
 /// is the fragile way to put it. It is also the first instruction here **measured**
-/// above the empty `llm` block rather than assumed to be. Twenty rows of synthesized speech is a small sample and the
+/// above the service default rather than assumed to be. Twenty rows of synthesized speech is a small sample and the
 /// absolute numbers mean little — `say` reads "um" as a word instead of hesitating,
 /// and the transcription pass adds its own errors before the rewrite runs — so read
 /// the ranking, which is paired on identical audio.
@@ -70,19 +73,19 @@
 ///
 /// Every corpus behind it is English while this string ships to every user in
 /// every language; pinning the *transcription* prompt to English was reverted
-/// once for hurting non-English speech. A revert here is one line: drop the
-/// field and `LLMRewrite` encodes `{}` again.
+/// once for hurting non-English speech. A revert here is one line: return
+/// `.serviceDefault` and the key comes off the wire again.
 ///
 /// Exercised by `Tests/BlurtEngineTests/CleanupInstructionTests.swift`.
 enum CleanupInstruction {
-  /// Hard cap the dictation API places on `config.llm.instruction`. The number
+  /// Hard cap the dictation API places on `config.llm_instruction`. The number
   /// was measured against the live endpoint, not read off a doc page — the
   /// reference does not state it — and its *unit* was never measured, so every
   /// length here counts UTF-8 bytes: the largest plausible unit
   /// (bytes ≥ UTF-16 units ≥ codepoints ≥ graphemes), and therefore
   /// conservative against whichever one the server uses. Asserted in
   /// `CleanupInstructionTests`, against this constant rather than
-  /// `ConversationContext.characterCap`, which is a different limit on a
+  /// `STTPrompt.characterCap`, which is a different limit on a
   /// different field.
   static let characterCap = 2048
 
@@ -91,9 +94,10 @@ enum CleanupInstruction {
   /// Over `characterCap` the dictation API rejects the whole request — 400 before
   /// the audio is read — so *every* dictation fails rather than degrading to the
   /// verbatim transcript. A 3057-character version of this string shipped once and
-  /// did exactly that. `nil` sends an empty `llm` block instead, which selects the
+  /// did exactly that. `nil` sends no instruction instead, which selects the
   /// service's own default cleanup: worse than our instruction, and immeasurably
-  /// better than an outage.
+  /// better than an outage. It does *not* turn the rewrite off — that takes
+  /// `Rewrite.disabled`, which is the enhanced-transcripts switch's job.
   ///
   /// The tests make this unreachable, which is the point — this is the belt to
   /// their braces, for the edit that lands when nobody runs them.

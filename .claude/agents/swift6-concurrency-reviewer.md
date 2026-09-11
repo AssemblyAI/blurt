@@ -45,7 +45,7 @@ Look at the changes (default to the working diff via `git diff` and
 - No streaming STT, no local models, no separate LLM cleanup pass — cleanup
   rides in the dictation request's `llm` block, as its `instruction`
   (`CleanupInstruction`). There is **no** `config.prompt`; the steering field is
-  `config.conversation_context` (`ConversationContext`). Flag reintroductions of
+  `config.stt_prompt` (`STTPrompt`). Flag reintroductions of
   any of these, `config.prompt` included.
 - Unit tests use **Swift Testing** (`@Suite`/`@Test`/`#expect`), not XCTest (the
   `BlurtUITests` XCUITest bundle is the exception), and must never touch the real

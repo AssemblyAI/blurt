@@ -3,8 +3,8 @@
 /// the user's recent dictations, and the user's key terms.
 ///
 /// **Most of it never leaves the machine.** Only `recentTranscripts` and
-/// `priorText` go on the wire, as the request's `conversation_context` turns
-/// (`ConversationContext.turns`), and `keyTerms` rides a separate request field.
+/// `priorText` go on the wire, as the request's `stt_prompt` string
+/// (`STTPrompt.text`), and `keyTerms` rides a separate request field.
 /// The rest is collected for local work — paste spacing, the injector's window
 /// identity, the developer-mode log — and each field below says which it is. A
 /// field's presence here is not permission to send it; widening what is sent is
@@ -32,7 +32,7 @@ public struct TranscriptionContext: Sendable, Equatable {
   public let fieldLabel: String?
 
   /// Text immediately preceding the insertion point in the focused field.
-  /// **Sent**, as the *last* `conversation_context` turn, so the transcript
+  /// **Sent**, as the *last* line of `stt_prompt`, so the transcript
   /// continues naturally from what is already there — the one focus signal that
   /// goes on the wire. Last because it is the turn the utterance most immediately
   /// follows. Also drives the paste's leading separator.
@@ -47,7 +47,7 @@ public struct TranscriptionContext: Sendable, Equatable {
   /// Blurt before this press, from `RecentDictations`. Like `keyTerms` this isn't
   /// per-utterance focus state; it's session history, carried on the same
   /// snapshot so the request has one source. **Sent**, as the leading
-  /// `conversation_context` turns ahead of `priorText`, so a run of dictations
+  /// `stt_prompt` lines ahead of `priorText`, so a run of dictations
   /// reads to the model as one continuing dialogue rather than N unrelated clips.
   public let recentTranscripts: [String]
 
@@ -56,14 +56,14 @@ public struct TranscriptionContext: Sendable, Equatable {
   /// closed). **Local only, not sent.** It exists to stop the *outgoing* half of
   /// the same leak the read guard covers: a transcript dictated *into* a secure
   /// field is the secret, so `DictationSession` declines to remember it as history
-  /// rather than replaying it as a `conversation_context` turn in every later
+  /// rather than replaying it as an `stt_prompt` line in every later
   /// dictation. Nil focus signals mean "we read nothing"; this means "we refused".
   public let targetIsSecure: Bool
 
   /// User-configured domain vocabulary (names, jargon, product names), sourced
   /// from `KeyTermsStore`. Like `recentTranscripts` this isn't per-utterance
   /// focus state — it's the same list every time. **Sent**, but not as context:
-  /// it goes as the request's own word-boost field, `word_boost` (see
+  /// it goes as the request's own keyterms field, `keyterms_prompt` (see
   /// `KeytermsBoost`).
   public let keyTerms: [String]
 

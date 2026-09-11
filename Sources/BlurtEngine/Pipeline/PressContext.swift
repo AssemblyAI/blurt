@@ -16,7 +16,7 @@ import Synchronization
 ///   context reads as "not a password field" (`TranscriptionContext.isEmpty`
 ///   documents why the flag cannot survive being collapsed to nil), so a
 ///   dictation into a secure field would be recorded into `recentDictations` and
-///   replayed as `conversation_context` on every later dictation this launch.
+///   replayed in `stt_prompt` on every later dictation this launch.
 ///   That is precisely the leak `targetIsSecure` exists to prevent, and a merely
 ///   slow target — `FocusCapture` makes ~6 serial AX round trips, each capped at
 ///   ~1 s — must not be enough to open it.
@@ -34,7 +34,7 @@ import Synchronization
 /// again. It used to be discarded along with the field text whenever the budget
 /// was missed, because the same `TranscriptionContext` carried both. Kept apart,
 /// a timeout costs the request only what actually failed to arrive, so
-/// `word_boost` and the recent-dictation turns still reach the wire.
+/// `keyterms_prompt` and the recent-dictation turns still reach the wire.
 ///
 /// A `Mutex`-backed reference type for the same reason `UploadProgress` is one:
 /// the writer is a Dispatch block that cannot touch the actor, and `Mutex` is

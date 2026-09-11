@@ -229,7 +229,7 @@ log it prints a line per decile, since carriage returns in a file make one unrea
 
 The plain adapter — now the only one — sends the candidate instruction as the system message and the
 transcript as the user message, and takes the whole reply as the cleaned text. That is the
-shape the service applies `config.llm.instruction` in: one instruction, one transcript, one
+shape the service applies `config.llm_instruction` in: one instruction, one transcript, one
 pass, no envelope.
 
 DSPy's own `ChatAdapter`, which was selectable as `--adapter chat` and has been removed,
@@ -280,7 +280,7 @@ is `--model`. Its proposal prompts are multi-field, so they keep DSPy's marker p
 | `--max-tokens`       | `8192`                       | Headroom for reasoning tokens. Too low silently corrupts a run rather than failing it.                 |
 | `--seed`             | `7`                          | Seeds injection and the train/dev/test split.                                                          |
 
-Both optimizers run with few-shot demos disabled. `config.llm.instruction` is a single string
+Both optimizers run with few-shot demos disabled. `config.llm_instruction` is a single string
 the service applies in one pass, so an optimized program that depended on bundled examples
 would score well here and be unshippable.
 
@@ -290,7 +290,8 @@ The harness is deliberately text-only: a transcript goes in, an instruction tran
 output is scored against the target. That keeps it cheap, fast, and reproducible, and it is the
 right shape for ranking instructions against each other.
 
-It does not measure the thing we ship. Blurt sends `config.llm = {}`, which applies **the
+It does not measure the thing we ship as a _default_. Blurt sends its own
+`config.llm_instruction` (`CleanupInstruction.text`); a request that omits the field applies **the
 service's own default cleanup instruction, on the service's own rewrite model** — neither of
 which we know. The `guessed-default` candidate is a guess at the first and ignores the second,
 and is named that way on purpose. Treat a win over it as "this instruction is better than a
@@ -301,7 +302,7 @@ Two consequences worth holding onto when reading a result:
 - A winner is only as transferable as `--model` is representative of the service's rewrite
   model, which runs under a ~5s budget and is probably much smaller.
 - Confirming a win against the live default means sending real audio to
-  `dictation.assemblyai.com/v1/transcribe/live` with an empty `llm` block and comparing. That is
+  `dictation.assemblyai.com/v1/transcribe/live` with the instruction omitted and comparing. That is
   `--verify-live --verify-baseline`, and for the current winner it has been done — see
   [Verifying on the model that actually runs it](#verifying-on-the-model-that-actually-runs-it).
   It is a separate measurement from everything above, not a property of these scores.
@@ -367,10 +368,10 @@ On `nyra` the numbers mean what they say. On `builtin` the disfluencies are synt
 
 ## Applying a winner
 
-The winning string goes into the request's `config.llm.instruction`, next to the `prompt`
+The winning string goes into the request's `config.llm_instruction`, next to the `prompt`
 field that steers transcription. The Swift side is
 `Sources/BlurtEngine/STT/AssemblyAITranscriber.swift`, where `LLMRewrite` is an empty
-`Encodable` struct — encoding an empty `llm` object is what selects the service default today.
+`Encodable` struct — omitting the field is what selects the service default (`Rewrite.serviceDefault`).
 
 Store it **verbatim**, exactly as the run emitted it. The harness scores instructions through
 the same envelope the service applies them in (see the plain adapter), so the string
@@ -379,18 +380,20 @@ looks scored.
 
 ### The 2048-character cap
 
-`config.llm.instruction` accepts at most **2048 characters**. Over that, the API rejects the
-whole request — HTTP 400 `bad_request`, _"llm.instruction: String should have at most 2048
+`config.llm_instruction` accepts at most **2048 characters**. Over that, the API rejects the
+whole request — HTTP 400 `bad_request`, _"llm_instruction: String should have at most 2048
 characters"_ — before it looks at the audio. There is no degraded mode: no transcript comes
 back, so in the app every dictation fails with the overlay's "Try again".
 
 Two things make this easy to get wrong, and it has gone wrong once already — a 3057-character
 GEPA winner shipped and broke all dictation:
 
-- **It is not the same cap as `config.conversation_context`'s**, which is 4096
-  (`ConversationContext.characterCap` on the Swift side). Borrowing the other field's figure is
-  what let the oversized instruction through: the test that should have caught it asserted 4096.
-  (That field was `config.prompt` at the time; the context field has since replaced it.)
+- **It is not the same cap as `config.stt_prompt`'s**, which is 4096
+  (`STTPrompt.characterCap` on the Swift side) and counted in Unicode scalars rather than UTF-8
+  bytes. Borrowing the other field's figure is what let the oversized instruction through: the
+  test that should have caught it asserted 4096. (That field has been `config.prompt`, then
+  `config.conversation_context`, and is now `config.stt_prompt` — which is `prompt` renamed, so
+  the borrowing hazard has outlived every one of those names.)
 - **Neither limit is in the published API reference.** Both were measured against the live
   endpoint on 2026-08-11. Re-probe before trusting them indefinitely.
 
@@ -498,15 +501,15 @@ Three things to keep straight, all settled decisions in
 [`AGENTS.md`](../../AGENTS.md#settled-decisions--dont-reintroduce-these):
 
 - This is the **server-side** rewrite instruction. It is not a client-side cleanup pass, and
-  the winning string is not a transcription-steering change — `config.conversation_context`
-  (`ConversationContext`) steers transcription and carries no instructions at all, because
+  the winning string is not a transcription-steering change — `config.stt_prompt`
+  (`STTPrompt`) steers transcription and carries no instructions at all, because
   disfluency removal is this rewrite's job.
 - The positive-phrasing guidance that used to shape the transcription prompt comes from
-  AssemblyAI's Universal-3 prompting reference and applies to the STT model. That prompt no
-  longer exists — transcription context is now the structured `conversation_context` turn list
-  — while the cleanup instruction here is read by an ordinary LLM, so these candidates are
-  phrased as plain instructions.
-- **Every corpus here is English, and the prompt is not.** `config.llm.instruction` ships to
+  AssemblyAI's Universal-3 prompting reference and applies to the STT model. That prompt exists
+  again as `config.stt_prompt` (the same field renamed), but it carries prior text and no
+  instructions — while the cleanup instruction here is read by an ordinary LLM, so these
+  candidates are phrased as plain instructions.
+- **Every corpus here is English, and the prompt is not.** `config.llm_instruction` ships to
   every user in every language, and pinning the transcription prompt to English was reverted
   once already for hurting non-English transcription. A winner selected on this harness has
   only been shown to work in English; weigh that before shipping a long, English-shaped
@@ -521,7 +524,7 @@ real thing.
 
 `--verify-live N` closes that loop. After a winner is picked it takes N **held-out** rows,
 speaks the disfluent side with `say`, converts to 16 kHz mono PCM, and POSTs it to the real
-`/v1/transcribe/live` with the winner as `config.llm.instruction`:
+`/v1/transcribe/live` with the winner as `config.llm_instruction`:
 
 ```bash
 export ASSEMBLYAI_API_KEY=...
@@ -540,7 +543,7 @@ Twenty held-out utterances, same synthesized audio for every arm, no rewrite fai
 | instruction                            | delivered  | gain over no rewrite |
 | -------------------------------------- | ---------- | -------------------- |
 | _(no rewrite at all — the floor)_      | 0.3365     | —                    |
-| service default (empty `llm` block)    | 0.3561     | +0.0196              |
+| service default (no instruction)       | 0.3561     | +0.0196              |
 | the instruction before the current one | 0.3608     | +0.0243              |
 | **`prior-winner` as it ships today**   | **0.4107** | **+0.0742**          |
 
@@ -559,7 +562,7 @@ sampled outputs are worth reading too — they are what showed that the instruct
 deletion of a leading "yeah" / "well" is _earning_ the gain rather than over-editing, which is
 the opposite of what was expected of that clause and is not visible in a mean.
 
-`--verify-baseline` runs the same audio again with an empty `llm` block. That is the wording
+`--verify-baseline` runs the same audio again with the instruction omitted. That is the wording
 Blurt ships today, so it is the comparison `guessed-default` could only ever guess at — the one
 the README has flagged as unanswerable since this harness was written.
 

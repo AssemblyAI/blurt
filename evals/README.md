@@ -6,7 +6,7 @@ artifact (today: one instruction string) that a human copies into the engine.
 
 | Directory                                           | What it decides                                                                                                                                                                                                              |
 | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`dictation-prompt/`](./dictation-prompt/README.md) | The dictation API's server-side cleanup instruction — `config.llm.instruction`, the string `CleanupInstruction.text` carries. A DSPy/GEPA search over candidate instructions, scored on disfluent-to-clean transcript pairs. |
+| [`dictation-prompt/`](./dictation-prompt/README.md) | The dictation API's server-side cleanup instruction — `config.llm_instruction`, the string `CleanupInstruction.text` carries. A DSPy/GEPA search over candidate instructions, scored on disfluent-to-clean transcript pairs. |
 
 Each harness documents its own defaults, corpora, and what its numbers can and cannot establish.
 Read that README before reading a result: the ceilings here are set by the corpus and by the fact

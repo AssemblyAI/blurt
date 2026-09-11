@@ -100,17 +100,17 @@ struct DictationSessionContextTests {
     #expect(contexts[0]?.recentTranscripts == [])
     #expect(contexts[1]?.recentTranscripts == ["First thought."])
     #expect(contexts[2]?.recentTranscripts == ["First thought.", "First thought."])
-    // And that history is what the wire turns are built from, with the cursor's
+    // And that history is what the wire prompt is built from, with the cursor's
     // prior chunk last — the whole point of accumulating it.
     #expect(
-      ConversationContext.turns(context: contexts[2])
-        == ["First thought.", "First thought.", "Hi Sam,"])
+      STTPrompt.text(context: contexts[2])
+        == "First thought.\nFirst thought.\nHi Sam,")
   }
 
   @Test("a dictation into a secure field is never remembered as history")
   func secureTargetIsNotRecorded() async throws {
     // The outgoing half of `FocusCapture`'s read guard. A password dictated into a
-    // secure field must not become a `conversation_context` turn on every later
+    // secure field must not become part of `stt_prompt` on every later
     // dictation — including in other apps — so it is transcribed, pasted, and
     // deliberately not recorded.
     let fixture = makeSession(mode: .transcript("hunter2"), field: Self.secureField)
@@ -128,7 +128,7 @@ struct DictationSessionContextTests {
     #expect(await fixture.session.recentDictations.entries.isEmpty)
     let contexts = await fixture.transcriber.receivedContexts
     #expect(contexts.allSatisfy { $0?.recentTranscripts.isEmpty == true })
-    #expect(contexts.allSatisfy { ConversationContext.turns(context: $0).isEmpty })
+    #expect(contexts.allSatisfy { STTPrompt.text(context: $0).isEmpty })
   }
 
   @Test("a missed budget still sends the key terms and the recent turns")
@@ -136,7 +136,7 @@ struct DictationSessionContextTests {
     // `pressKnown`'s reason to exist. Key terms and the recent-dictation ring
     // are read synchronously on the actor at press and need no AX round trip, so
     // a read that misses `contextWaitBudget` must cost the request only the
-    // field text — not `word_boost` and the context turns along with it, which
+    // field text — not `keyterms_prompt` and the context turns along with it, which
     // is what happened when one `TranscriptionContext` carried all of it.
     let clock = TestClock()
     let transcriber = StubTranscriber(mode: .transcript("spoken"))
@@ -162,7 +162,7 @@ struct DictationSessionContextTests {
     // And the second carried the first's transcript as a context turn.
     let second = try #require(contexts.last.flatMap { $0 })
     #expect(second.recentTranscripts == ["spoken"])
-    #expect(ConversationContext.turns(context: second) == ["spoken"])
+    #expect(STTPrompt.text(context: second) == "spoken")
     // None of the focus signals, which are the part that genuinely timed out.
     #expect(second.priorText == nil)
     #expect(second.windowTitle == nil)
@@ -180,7 +180,7 @@ struct DictationSessionContextTests {
     //
     // Missing it must not cost the `targetIsSecure` flag: a nil context reads as
     // "not a password field", so the dictation would be written into
-    // `recentDictations` and replayed as `conversation_context` on every later
+    // `recentDictations` and replayed in `stt_prompt` on every later
     // dictation this launch. `PressContext` is what keeps the read reachable
     // after the deadline, and this is the test that says so.
     let clock = TestClock()
@@ -247,7 +247,7 @@ struct DictationSessionContextTests {
     let contexts = await fixture.transcriber.receivedContexts
     #expect(contexts.first == nil as TranscriptionContext?)
     #expect(contexts.last??.recentTranscripts == ["Said this."])
-    #expect(ConversationContext.turns(context: contexts[1]) == ["Said this."])
+    #expect(STTPrompt.text(context: contexts[1]) == "Said this.")
   }
 
   /// The bounded wait, driven through the pipeline rather than against

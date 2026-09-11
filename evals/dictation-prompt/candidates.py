@@ -1,7 +1,7 @@
 """The cleanup instructions under test.
 
 Each is a different hypothesis about what the dictation API's rewrite model needs
-to be told, and each is a complete, shippable value for `config.llm.instruction`.
+to be told, and each is a complete, shippable value for `config.llm_instruction`.
 They vary one thing at a time: how the task is framed, how explicitly the
 disfluency types are named, how hard the do-not-rewrite constraint is pushed, and
 whether formatting is called out.
@@ -12,9 +12,9 @@ It is `BASELINE` — the bar a new search has to clear to be worth shipping — 
 default seed GEPA evolves from.
 
 `guessed-default` is exactly that: a **guess** at what the service's own default
-cleanup instruction might say. What Blurt actually sends is `config.llm = {}`, which
-applies the service's own wording on the service's own rewrite model — and we know
-neither. So it is a floor, a check that the harness can tell a terse instruction from
+cleanup instruction might say. A request that omits `llm_instruction` gets the
+service's own wording on the service's own rewrite model — and we know neither.
+So it is a floor, a check that the harness can tell a terse instruction from
 a careful one; beating it is *not* evidence of beating what ships today. Establishing
 that would take real audio through the real endpoint, which is a different
 measurement than this text-only harness performs.
@@ -30,8 +30,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-#: Hard cap the dictation API places on `config.llm.instruction`. Exceed it and the
-#: request fails outright — HTTP 400 `bad_request`, "llm.instruction: String should
+#: Hard cap the dictation API places on `config.llm_instruction`. Exceed it and the
+#: request fails outright — HTTP 400 `bad_request`, "llm_instruction: String should
 #: have at most 2048 characters" — before the audio is looked at. The failure is
 #: total, not a degraded rewrite: no transcript comes back at all, so on the Blurt
 #: side *every* dictation errors.
@@ -40,8 +40,8 @@ from dataclasses import dataclass
 #: dictation API reference does not state it. A 2048-character instruction was
 #: accepted and rewrote correctly. Re-probe before trusting it indefinitely.
 #:
-#: This is a *different, smaller* cap than the 4096 on `config.prompt` (the same
-#: probe confirmed that one; it is `TranscriptionPrompt.characterCap` on the Swift
+#: This is a *different, smaller* cap than the 4096 on `config.stt_prompt` (the same
+#: probe confirmed that one; it is `STTPrompt.characterCap` on the Swift
 #: side). Reusing the prompt's figure for this field is precisely how an evolved
 #: 3057-character instruction once reached a build and broke all dictation: the
 #: test that should have caught it asserted the wrong limit. Score against this
@@ -100,7 +100,7 @@ class Objection:
     `message`, which is written for the reflection model. The proposer wants something
     short for an operator log, and used to get it by splitting `message` on its first
     period — which truncated every length objection at "…over the hard 2048-character
-    limit on config", because the prose names `config.llm.instruction`. A label the
+    limit on config", because the prose names `config.llm_instruction`. A label the
     producer chooses cannot be mangled that way, and adding a fifth check now means
     adding a code rather than hoping its first sentence survives a split.
     """
@@ -148,7 +148,7 @@ def objections(
                 "length",
                 f"It is {len(proposal.split())} words ({len(proposal)} characters), which is "
                 f"{excess} characters over the hard {cap}-character limit on "
-                "config.llm.instruction — the API would reject every request carrying it. "
+                "config.llm_instruction — the API would reject every request carrying it. "
                 f"You must delete at least {over_by_words} words to be legal, and "
                 f"{to_target} to reach the {word_budget(cap)}-word target you were given. "
                 "Aim for the target, not the limit: this draft is the latest of several that "
@@ -436,7 +436,7 @@ CANDIDATES: dict[str, str] = {
 #: every arm, 0% `llm_error`:
 #:
 #:     no rewrite at all (floor)          0.3365
-#:     service default (empty llm block)  0.3561   +0.0196
+#:     service default (no instruction)   0.3561   +0.0196
 #:     the instruction before this one    0.3608   +0.0243
 #:     this one                           0.4107   +0.0742
 #:

@@ -52,7 +52,7 @@ struct HTTPClientTests {
     #expect(result == expected)
   }
 
-  @Test("transcriber succeeds with a real context (which builds context turns)")
+  @Test("transcriber succeeds with a real context (which builds the prompt)")
   func transcribeWithContext() async throws {
     let transport = FakeHTTPTransport { request in
       guard request.url?.path.hasSuffix("/v1/transcribe/live") == true else { return (404, Data()) }
@@ -60,9 +60,9 @@ struct HTTPClientTests {
     }
 
     // A context with history and prior text exercises the
-    // `ConversationContext.turns` path inside transcribe() that the nil-context
+    // `STTPrompt.text` path inside transcribe() that the nil-context
     // happy path skips, so the request goes out carrying a real
-    // `config.conversation_context`.
+    // `config.stt_prompt`.
     let result = try await collectTranscript(
       makeTranscriber(apiKey: "test-key", transport: transport),
       context: TranscriptionContext(
@@ -154,10 +154,10 @@ struct HTTPClientTests {
     }
   }
 
-  @Test("config part carries the built context turns and the audio geometry")
-  func configIncludesConversationContext() throws {
-    let object = try configObject(turns: ["Previous utterance.", "at the cursor"])
-    #expect(object["conversation_context"] as? [String] == ["Previous utterance.", "at the cursor"])
+  @Test("config part carries the built contextual prompt and the audio geometry")
+  func configIncludesSTTPrompt() throws {
+    let object = try configObject(prompt: "Previous utterance.\nat the cursor")
+    #expect(object["stt_prompt"] as? String == "Previous utterance.\nat the cursor")
     #expect(object["sample_rate"] as? Int == 16_000)
     // The capture path is mono by construction; the declared geometry must agree.
     #expect(object["channels"] as? Int == 1)
@@ -165,25 +165,25 @@ struct HTTPClientTests {
 
   @Test(
     "config part carries our cleanup instruction while enhanced transcripts are on",
-    arguments: [["at the cursor"], []])
-  func configRequestsRewrite(turns: [String]) throws {
-    // `llm` must be present on every enhanced request (else the service skips the
-    // rewrite) and must carry `instruction` under exactly that key — the field name
-    // is the contract, so a rename here degrades silently to the service default
-    // rather than failing anything. Sent with and without context, since the two
-    // fields are independent.
-    let llm = try #require(try configObject(turns: turns)["llm"] as? [String: Any])
-    #expect(llm["instruction"] as? String == CleanupInstruction.text)
-    // Nothing else rides in the block: output format and the don't-answer-the-text
-    // safeguards are the instruction's job and the service's, not extra fields'.
-    #expect(llm.keys.sorted() == ["instruction"])
+    arguments: ["at the cursor", ""])
+  func configRequestsRewrite(prompt: String) throws {
+    // `llm_instruction` must be present on every enhanced request under exactly
+    // that key — the field name is the contract, and a rename here degrades
+    // silently to the service's default cleanup rather than failing anything, so
+    // the user would still get *a* rewrite, just not theirs. Sent with and
+    // without context, since the two fields are independent.
+    let object = try configObject(prompt: prompt)
+    #expect(object["llm_instruction"] as? String == CleanupInstruction.text)
+    // The nested block this replaced. Both shapes work on the route, so sending
+    // both would be silently redundant rather than an error.
+    #expect(object.keys.contains("llm") == false)
   }
 
   @Test("config carries the custom style instructions appended to the cleanup instruction")
   func configAppendsCustomStyle() throws {
     let custom = "always write in lowercase"
-    let llm = try #require(try configObject(customStyle: custom)["llm"] as? [String: Any])
-    let instruction = try #require(llm["instruction"] as? String)
+    let instruction = try #require(
+      try configObject(customStyle: custom)["llm_instruction"] as? String)
     // The exact combination rule lives in `CleanupInstructionTests`; what this pins
     // is the wiring — the transcriber's per-request read lands on the request, with
     // the base instruction still leading.
@@ -194,19 +194,27 @@ struct HTTPClientTests {
     "a blank custom style leaves the cleanup instruction exactly as shipped",
     arguments: [nil, "   \n"])
   func configIgnoresBlankCustomStyle(customStyle: String?) throws {
-    let llm = try #require(try configObject(customStyle: customStyle)["llm"] as? [String: Any])
-    #expect(llm["instruction"] as? String == CleanupInstruction.text)
+    let object = try configObject(customStyle: customStyle)
+    #expect(object["llm_instruction"] as? String == CleanupInstruction.text)
   }
 
-  @Test("config part omits the llm block when enhanced transcripts are off")
-  func configOmitsRewriteWhenDisabled() throws {
-    // Omission — not an empty or null `llm` — is what tells the service to skip
+  @Test("config part sends a null llm when enhanced transcripts are off")
+  func configDeclinesRewriteWhenDisabled() throws {
+    // An explicit `"llm": null` — not omission — is what tells the route to skip
     // the rewrite, so the user gets the verbatim transcript pasted as spoken.
-    let object = try configObject(turns: ["at the cursor"], enhancedTranscripts: false)
-    #expect(object.keys.contains("llm") == false)
+    // This asserted omission until 2026-09-10 and was wrong about the service:
+    // `/v1/transcribe/live` rewrites *by default*, so a config carrying neither
+    // key comes back with `llm_response` set to a default-cleaned transcript —
+    // which `transcribe` prefers over `text` whenever it is non-nil. The switch
+    // was therefore off in the UI and on in the response. Measured, same clip:
+    // `llm: null` → `llm_response: null` with no `llm_error`; no keys at all →
+    // the default cleanup.
+    let object = try configObject(prompt: "at the cursor", enhancedTranscripts: false)
+    #expect(object["llm"] is NSNull)
+    #expect(object.keys.contains("llm_instruction") == false)
     // The rest of the config is unaffected by the switch.
     #expect(object["sample_rate"] as? Int == 16_000)
-    #expect(object["conversation_context"] as? [String] == ["at the cursor"])
+    #expect(object["stt_prompt"] as? String == "at the cursor")
   }
 
   @Test("transcriber HTTP error carries the decoded server message")
@@ -294,12 +302,12 @@ struct HTTPClientTests {
   /// A part that isn't a JSON object at all fails here rather than turning every
   /// downstream assertion into a silent nil-compare.
   private func configObject(
-    turns: [String] = [], enhancedTranscripts: Bool = true, customStyle: String? = nil
+    prompt: String = "", enhancedTranscripts: Bool = true, customStyle: String? = nil
   ) throws -> [String: Any] {
     let config = try makeTranscriber(
       apiKey: "test-key", enhancedTranscripts: enhancedTranscripts, customStyle: customStyle
     )
-    .makeConfigData(sampleRate: 16_000, conversationContext: turns, wordBoost: [])
+    .makeConfigData(sampleRate: 16_000, sttPrompt: prompt, keytermsPrompt: [])
     return try #require(JSONSerialization.jsonObject(with: config) as? [String: Any])
   }
 

@@ -3,7 +3,7 @@ import Testing
 @testable import BlurtEngine
 
 /// `KeytermsBoost.fitted` is the last thing between the user's Settings list and
-/// `config.word_boost`. The list is the one unbounded input in the request,
+/// `config.keyterms_prompt`. The list is the one unbounded input in the request,
 /// and over the field's cap the API rejects the whole request — so what these
 /// pin is that an over-long list degrades to fewer terms rather than to a failed
 /// dictation.
@@ -12,7 +12,7 @@ struct KeytermsBoostTests {
   @Test("no terms sends no field")
   func emptyListSendsNothing() {
     // Empty is the one "nothing to send" state, which the encoders turn into an
-    // absent `word_boost` rather than a `[]` asking to boost nothing.
+    // absent `keyterms_prompt` rather than a `[]` asking to boost nothing.
     #expect(KeytermsBoost.fitted([]).isEmpty)
   }
 
@@ -64,6 +64,6 @@ struct KeytermsBoostTests {
     // Two caps on two fields of one request. Borrowing the other field's figure
     // is how an over-cap value shipped once before, so pin them apart.
     #expect(KeytermsBoost.characterCap == 2048)
-    #expect(KeytermsBoost.characterCap != ConversationContext.characterCap)
+    #expect(KeytermsBoost.characterCap != STTPrompt.characterCap)
   }
 }

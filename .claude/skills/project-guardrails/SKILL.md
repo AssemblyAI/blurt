@@ -56,27 +56,37 @@ genuinely correct, and reaching for it means it's time to stop and ask.
   arrives, and still answers with one final transcript. No deltas, no partial
   results, no WebSocket — don't read the route name as permission to add them.
 - **No separate LLM cleanup pass.** Cleanup rides in the same dictation request,
-  as the `llm` block's `instruction` (`CleanupInstruction`). No LLM Gateway
+  as `config.llm_instruction` (`CleanupInstruction`). No LLM Gateway
   client, no `StylerProtocol`, no post-transcription styling stage.
 - **No local models / model downloads.** Transcription is a remote AssemblyAI
   call. No on-device ASR/LLM, no model cache, no download UI.
-- **There is no `config.prompt`.** `config.conversation_context`
-  (`ConversationContext.turns`) replaced it. Don't add a prompt back: a custom one
-  replaces the service's managed default _and_ makes the API ignore
-  `config.language_code`.
-- **The context turns carry the recent dictations + the prior chunk, and nothing
-  else.** `ConversationContext.turns` reads exactly two fields of
+- **There is no `config.conversation_context`.** `config.stt_prompt`
+  (`STTPrompt.text`) replaced it — one string, not an array of turns. Don't add
+  the turn list back alongside: both fields work and ride the same request, so
+  doing so puts the same prior text on the wire twice rather than failing. And
+  never send `prompt`: it is `stt_prompt`'s other name, and a request carrying
+  both is a 400 (`provide only one of stt_prompt or prompt; they are the same
+field`).
+- **The contextual prompt carries the recent dictations + the prior chunk, and
+  nothing else.** `STTPrompt.text` reads exactly two fields of
   `TranscriptionContext` (`recentTranscripts`, then `priorText` last). The app
   name, window title, field label and selected text are captured for the paste
   path and the developer-mode log and stay on the machine; the hints that used to
   carry them were deleted, not gated. Don't widen the context back out, and don't
   route that context onto the request by another path.
-- **Key terms are word boosting, not context text.** They ride
-  `config.word_boost` as a flat array of strings (`KeytermsBoost`), fitted to that
-  field's own 2048-character cap. Don't fold them back into the context as a
-  `Keywords: a, b, c.` clause, and don't also send `keyterms_prompt` — the aliases
-  are mutually exclusive, and `word_boost` is the name the dictation API's
-  reference documents.
+- **Key terms are keyterms prompting, not context text.** They ride
+  `config.keyterms_prompt` as a flat array of strings (`KeytermsBoost`), fitted to
+  that field's own 2048-character cap. Don't fold them back into the context as a
+  `Keywords: a, b, c.` clause, and don't also send `keyterms` or `word_boost` —
+  the three names are the same feature and mutually exclusive (400 before the
+  audio is read), and `keyterms_prompt` is the canonical one. Sending `word_boost`
+  instead was the shape until 2026-09-10; adding a second name is never a
+  compatible change.
+- **The rewrite is off only with an explicit `"llm": null`.** The route rewrites
+  by default, so a config that merely omits `llm_instruction` gets the service's
+  default cleanup — and `transcribe` prefers `llm_response` whenever it is
+  non-nil, so "enhanced transcripts off" would silently still clean up. Don't
+  collapse `Rewrite.serviceDefault` and `Rewrite.disabled` onto one spelling.
 - Don't reintroduce a "remove filler words (um, uh, like)" directive —
   `universal-3-5-pro` ignores it; it was deliberately dropped, and there is no
   prompt field to put it in now.

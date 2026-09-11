@@ -30,7 +30,8 @@
 #
 # Every rule is also pinned to the prose it enforces, in both AGENTS.md's table
 # and the guardrails skill: `--self-test` fails if either row goes missing. The
-# rows move — PR #132 rewrote the `config.prompt` and language entries — and a
+# rows move — PR #132 rewrote the `config.prompt` and language entries, and the
+# prompt rule later inverted when `stt_prompt` replaced `conversation_context` — and a
 # rule outliving its row is the one failure this file cannot survive. It would
 # still fire, still cite AGENTS.md, and still sound authoritative while enforcing
 # a decision the project had reversed, which is strictly worse than the prose it
@@ -87,7 +88,7 @@ PATTERNS=(
   "StylerProtocol|LLMGateway|LemurClient|/lemur/"
   "import Speech|import CoreML|SFSpeechRecognizer|MLModel"
   "\"language_codes?\""
-  "\"prompt\""
+  "\"conversation_context\""
   "SetUnicodeString"
   "LSUIElement"
   "import KeyboardShortcuts"
@@ -112,10 +113,10 @@ SCOPES=(
 ADVICE=(
   "MicCapture builds a fresh AVCaptureSession recorder per capture — a long-lived engine goes stale on a device switch"
   "the dictation API returns the full text in one response; there is no streaming path"
-  "cleanup is the API's server-side rewrite via the llm block on the same /v1/transcribe/live call"
+  "cleanup is the API's server-side rewrite via config.llm_instruction on the same /v1/transcribe/live call"
   "transcription is a remote AssemblyAI call — no on-device ASR/LLM, no model cache"
   "leave language to the model's own detection; setting the field takes that away"
-  "config.prompt was replaced by config.conversation_context (ConversationContext)"
+  "config.conversation_context was replaced by config.stt_prompt (STTPrompt)"
   "injection is always clipboard paste (save → write → ⌘V → settle → restore)"
   "Blurt is a Dock app first; the MenuBarExtra item is layered on, never depended on"
   "the trigger is a home-grown lone modifier (CGEventTap + DictationKeyGate)"
@@ -134,7 +135,7 @@ PROBES=(
   "protocol StylerProtocol { func style(_ text: String) async throws -> String }"
   "import CoreML"
   "case languageCode = \"language_code\""
-  "case prompt = \"prompt\""
+  "case conversationContext = \"conversation_context\""
   "CGEventKeyboardSetUnicodeString(event, count, chars)"
   "    LSUIElement: true"
   "import KeyboardShortcuts"
@@ -155,7 +156,7 @@ TABLE_ANCHORS=(
   "Add a client-side LLM cleanup pass"
   "Add local models or model downloads"
   "Pin transcription to English, or set a language at all"
-  "Bring back \`config.prompt\`"
+  "Bring back \`config.conversation_context\`"
   "Add a keystroke-typing paste path or a length threshold"
   "Add \`LSUIElement\` or a menu-bar-**only** mode"
   "Add a \`KeyboardShortcuts\` package or a key+modifier chord"
@@ -175,7 +176,7 @@ SKILL_ANCHORS=(
   "No separate LLM cleanup pass."
   "No local models / model downloads."
   "Don't set a language — not a directive, and not \`config.language_code\`."
-  "There is no \`config.prompt\`."
+  "There is no \`config.conversation_context\`."
   "Injection is always a clipboard paste"
   "no \`LSUIElement\`, no menu-bar-_only_ mode"
   "No \`KeyboardShortcuts\` package"
@@ -208,14 +209,15 @@ if [ "${1:-}" = "--self-test" ]; then
 
   # The negatives matter as much: a gate that flags the correct form is a gate
   # people route around. Each of these is a real line from this tree that sits
-  # one character away from a rule above — the Accessibility prompt dictionary
-  # against the `"prompt"` wire key, the test keychain against the production
-  # one, the download-only checker against a self-replacing updater.
+  # one character away from a rule above — the wire key we *do* send
+  # (`stt_prompt`) against the array-of-turns field we no longer do, the test
+  # keychain against the production one, the download-only checker against a
+  # self-replacing updater.
   GOOD=(
     "let prompt: NSDictionary = [\"AXTrustedCheckOptionPrompt\": true]"
     "KeychainStore(service: \"dev.alex.blurt.tests\", account: \"test-\\(UUID().uuidString)\")"
     "@MainActor public final class UpdateCheckModel: ObservableObject {"
-    "case conversationContext = \"conversation_context\""
+    "case sttPrompt = \"stt_prompt\""
   )
   for good in "${GOOD[@]}"; do
     hit=""

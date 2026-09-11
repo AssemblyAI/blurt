@@ -8,12 +8,12 @@
 What this optimizes
 -------------------
 Blurt sends one `POST /v1/transcribe/live` per utterance. The request's
-`config.conversation_context` steers *transcription* (there is no `config.prompt`
-— a settled decision, see AGENTS.md); the `config.llm` block asks the service to run an LLM
-rewrite over the verbatim transcript — that rewrite is what removes disfluencies
+`config.stt_prompt` steers *transcription* and carries prior text only, never
+instructions — a settled decision, see AGENTS.md; `config.llm_instruction` asks the service to
+run an LLM rewrite over the verbatim transcript — that rewrite is what removes disfluencies
 and fixes punctuation before the text is pasted. Blurt sends `candidates.PRIOR_WINNER`
-there (as `CleanupInstruction.text` on the Swift side); before that it sent an empty
-`llm` object, which selects the service's own default wording. This script searches
+there (as `CleanupInstruction.text` on the Swift side); before that it sent no instruction at
+all, which selects the service's own default wording. This script searches
 for an instruction that beats the one shipping now.
 
 How it measures that
@@ -46,7 +46,7 @@ Usage
 
 The length constraint
 ---------------------
-`config.llm.instruction` is capped at `candidates.INSTRUCTION_CHARACTER_CAP`
+`config.llm_instruction` is capped at `candidates.INSTRUCTION_CHARACTER_CAP`
 characters and an instruction over it fails the whole request, so a winner that
 doesn't fit isn't a winner. Three places enforce that, because none is sufficient
 alone: the hand-written candidates are checked before any model call;
@@ -322,14 +322,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         metavar="N",
         help="after picking a winner, run N held-out utterances through the REAL dictation "
         "API — synthesized to audio with `say`, then POSTed with the winner as "
-        "config.llm.instruction. The only measurement here that uses the rewrite model "
+        "config.llm_instruction. The only measurement here that uses the rewrite model "
         "the instruction actually ships to; everything else scores a stand-in. Needs "
         "ASSEMBLYAI_API_KEY and a Mac. 0 disables",
     )
     live_group.add_argument(
         "--verify-baseline",
         action="store_true",
-        help="also run the same audio with an empty llm block, which selects the service's "
+        help="also run the same audio with no instruction, which selects the service's "
         "own default wording — what Blurt sent before it began sending an instruction. This "
         "is the comparison the text harness cannot make: guessed-default only ever guessed "
         "at that wording, and this uses the wording itself",
@@ -430,9 +430,9 @@ def run_live_verification(
     sample = test[: args.verify_live]
     runs = [(winner_name, winner_instruction)]
     if args.verify_baseline:
-        # `None` sends an empty llm block — the service's own default wording, which no
+        # `None` omits the instruction — the service's own default wording, which no
         # text-only candidate can stand in for.
-        runs.append(("service default (empty llm)", None))
+        runs.append(("service default (no instruction)", None))
 
     summaries: dict[str, dict[str, float]] = {}
     try:
@@ -669,7 +669,7 @@ def main(argv: list[str] | None = None) -> int:
     print(
         "Ship it by replacing `CleanupInstruction.text` in\n"
         "  Sources/BlurtEngine/STT/CleanupInstruction.swift, which is what\n"
-        "`AssemblyAITranscriber`'s `LLMRewrite` sends as `config.llm.instruction`.\n"
+        "`AssemblyAITranscriber` sends as `config.llm_instruction`.\n"
         "Store it verbatim: this harness scores instructions in the same envelope the\n"
         "service applies them in, so a hand-tidied copy is an unscored string."
     )

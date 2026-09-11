@@ -76,7 +76,7 @@ extension DictationSession {
 
     seams.logTranscript(text, capturedContext)
     // Remember it as context for the *next* press before handing it on: the ring
-    // is what supplies `conversation_context`'s leading turns, so a stretch of
+    // is what supplies `stt_prompt`'s leading text, so a stretch of
     // dictation continues itself. Recorded here rather than by the host so the
     // history the request is built from is the same value the "Recent" list shows.
     //
