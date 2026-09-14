@@ -39,6 +39,16 @@ final class CueSoundPlayer {
   /// rather than blasting at the system output level.
   private nonisolated static let cueVolume: Float = 0.35
 
+  /// Player gain while the output is ducked (see `AudioDucker`): the duck
+  /// lowers the *device* volume the chime renders through, so the chime must
+  /// ride hotter or it disappears with everything else. Full compensation
+  /// would need `cueVolume / duckFraction` ≈ 1.75 — more than a player has —
+  /// so full scale is as close as it gets: at the 0.2 duck the chime lands
+  /// near 0.2 of the device's normal level versus 0.35 unducked, softer than
+  /// usual but clearly audible, which is the point of ducking rather than
+  /// muting.
+  private nonisolated static let duckedCueVolume: Float = 1.0
+
   /// (Re)loads and pre-rolls the cue players for the selected sound pack so
   /// the first start/stop chime adds no latency to the pill; called from the
   /// "app is ready" transition, well before the hot path. `.none` (or a
@@ -142,11 +152,19 @@ final class CueSoundPlayer {
 
   /// Fires the start/stop cue on the recording edge. Call once per rendered
   /// phase; only the idle↔recording transitions make a sound (the edge logic is
-  /// the engine's `RecordingCueGate`).
-  func transition(for phase: PipelinePhase) {
+  /// the engine's `RecordingCueGate`). `duckedOutput` says the output volume is
+  /// currently ducked (see `AudioDucker`), so the cue plays at compensated gain
+  /// — both edges land inside the duck window: the start chime on the
+  /// connecting→recording edge, after the duck settled during `.connecting`'s
+  /// mic bring-up, and the stop chime on leaving `.recording` — normally into
+  /// `.transcribing`, well before the terminal phase that restores. (A cancel
+  /// goes recording→terminal in one edge, so there the restore lands mid-chime
+  /// and its tail rides briefly hot; a rare, sub-second artifact not worth a
+  /// completion handler.)
+  func transition(for phase: PipelinePhase, duckedOutput: Bool) {
     switch cueGate.cue(for: phase) {
-    case .start: play(startSound)
-    case .stop: play(stopSound)
+    case .start: play(startSound, boosted: duckedOutput)
+    case .stop: play(stopSound, boosted: duckedOutput)
     case nil: break
     }
     // A pending route re-prime is acted on at exactly two points.
@@ -195,8 +213,8 @@ final class CueSoundPlayer {
   private nonisolated static func decode(_ pack: SoundPack) async -> sending CuePlayers {
     let start = pack.startFileName.flatMap(bundledSound(named:))
     let stop = pack.stopFileName.flatMap(bundledSound(named:))
-    start?.volume = cueVolume
-    stop?.volume = cueVolume
+    // No gain set here: `play(_:boosted:)` sets it per play, so the ducked and
+    // unducked levels have one write site instead of a default that drifts.
     start?.prepareToPlay()
     stop?.prepareToPlay()
     return CuePlayers(start: start, stop: stop)
@@ -214,9 +232,13 @@ final class CueSoundPlayer {
   /// Plays a cue from the start, without ever blocking the caller. Rewinding
   /// first means a cue replays cleanly even if the previous play hasn't been
   /// reset, and keeping this off the visual path (callers reveal the pill
-  /// first) guarantees the sound never delays the overlay.
-  private func play(_ sound: AVAudioPlayer?) {
+  /// first) guarantees the sound never delays the overlay. The gain is set per
+  /// play rather than trusted from `decode`, so a chime fired inside a duck
+  /// window rides at `duckedCueVolume` and the next unducked one is back to
+  /// normal.
+  private func play(_ sound: AVAudioPlayer?, boosted: Bool = false) {
     guard let sound else { return }
+    sound.volume = boosted ? Self.duckedCueVolume : Self.cueVolume
     sound.currentTime = 0
     sound.play()
   }
