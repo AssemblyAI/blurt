@@ -556,7 +556,15 @@ hosts still read the meter through the seam they inject.
 Implements `TranscriberProtocol` against AssemblyAI's **dictation** API: a single
 `POST https://dictation.assemblyai.com/v1/transcribe/live` with a JSON `config` part
 (`sample_rate`, `channels`, and the rewrite request) followed by the captured audio as a raw S16LE PCM
-blob in the `audio` part. No model header — the service pins the STT model server-side. The config's
+blob in the `audio` part. No model header — the service pins the STT model server-side. Every
+request to AssemblyAI (this POST, its `/warm` GET, and `APIKeyValidator`'s key check) also carries
+`User-Agent: Blurt/<CFBundleShortVersionString> (macOS <major>.<minor>)`, with `; dev` appended on
+anything but a release build — so a server-side latency or error-rate change is attributable to the
+release that caused it, and local `dev-build.sh` traffic doesn't pollute that baseline. `UserAgent`
+holds the reasoning: why those three dimensions and not architecture, `CFBundleVersion`, locale or
+anything per-install; why the header says strictly less than `URLSession`'s default did; and why a
+header the reference doesn't list is not the undocumented-parameter rule being bent (every HTTP
+client sends this one regardless; the choice is only what it says). The config's
 `stt_prompt` field steers _transcription_ and carries the user's recent dictations followed
 by the text before the cursor (`STTPrompt.text`), or nothing at all when there is neither —
 an empty string omits the field. There is no `prompt` field — the route accepts one, so that

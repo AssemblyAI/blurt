@@ -163,6 +163,14 @@ dictation in another. Quit and reopen Blurt to clear it. Blurt stores no audio a
 no transcripts, and sends no telemetry — no crash reporting, no analytics, no
 usage tracking.
 
+Requests do say which app is asking: every call to AssemblyAI carries a
+`User-Agent` naming Blurt, its version, and your macOS version — so a problem on
+their side can be traced to a release, and to an OS if that is what explains it.
+macOS already put a header like that on every request, and it said more: the app,
+the OS build, and the networking library's build. Nothing identifies you or your
+Mac, and nothing is per-install — there is no id, no counter, and nothing that
+distinguishes one copy of Blurt from another.
+
 Because transcription is processed by AssemblyAI, their
 [Privacy Policy](https://www.assemblyai.com/legal/privacy-policy) and
 [Terms of Service](https://www.assemblyai.com/legal/terms-of-service) apply to

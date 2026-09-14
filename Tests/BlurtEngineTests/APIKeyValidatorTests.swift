@@ -9,12 +9,15 @@ import Testing
 // there is no shared state and no `.serialized` ordering.
 extension HTTPClientTests {
 
-  @Test("validator returns .valid on a 2xx response with the key in Authorization")
+  @Test("validator returns .valid on a 2xx response with the key and agent in the headers")
   func validateValidKey() async {
     let transport = FakeHTTPTransport { request in
       guard request.url?.path.hasSuffix("/v2/transcript") == true,
         request.url?.query?.contains("limit=1") == true,
-        request.value(forHTTPHeaderField: "Authorization") == "good-key"
+        request.value(forHTTPHeaderField: "Authorization") == "good-key",
+        // The same agent the dictation requests carry — the wizard's key check
+        // is a Blurt request too, and nothing about it should look unattributed.
+        request.value(forHTTPHeaderField: "User-Agent") == UserAgent.current
       else { return (404, Data()) }
       return (200, json(["page_number": "1"]))
     }

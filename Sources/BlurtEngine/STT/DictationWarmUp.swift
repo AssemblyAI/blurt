@@ -43,6 +43,9 @@ extension AssemblyAITranscriber {
     var request = URLRequest(url: baseURL.appending(path: Self.warmPath))
     request.httpMethod = "GET"
     request.timeoutInterval = 5
+    // Same agent as the transcribe POST it opens the connection for, so the
+    // warm-up isn't the one Blurt request the service can't attribute.
+    request.setUserAgent()
     let clock = ContinuousClock()
     let start = clock.now
     _ = try? await transport.data(for: request)

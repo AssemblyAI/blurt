@@ -50,6 +50,9 @@ public struct APIKeyValidator: Sendable {
     // AssemblyAI expects the raw key in Authorization (no "Bearer" prefix),
     // matching AssemblyAITranscriber.
     request.setValue(trimmed, forHTTPHeaderField: "Authorization")
+    // `Blurt/<version>`, the same agent the dictation requests carry, so a key
+    // this endpoint rejects can be traced to the build that asked.
+    request.setUserAgent()
 
     do {
       let (_, response) = try await transport.data(for: request)
