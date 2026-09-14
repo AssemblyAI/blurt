@@ -91,14 +91,17 @@ struct HTTPClientTests {
     #expect(result == "hello world")
   }
 
-  @Test("transcribe sends the raw key, no model header, and the documented timeout")
+  @Test("transcribe sends the raw key, the Blurt agent, no model header, and the documented timeout")
   func transcribeSendsRawKeyNoModelHeaderAndTimeout() async throws {
     let transport = FakeHTTPTransport { request in
       // The wire contract: the raw key in Authorization (no "Bearer" prefix), a
-      // boundary-tagged multipart body, no `X-AAI-Model` (the dictation service
+      // boundary-tagged multipart body, the naming `User-Agent` in place of
+      // `URLSession`'s default (a service-side latency regression has to be
+      // attributable to a release), no `X-AAI-Model` (the dictation service
       // pins the STT model server-side), and the API's documented 90 s client
       // timeout. Anything else gets a 400 so a regression fails loudly here.
       guard request.value(forHTTPHeaderField: "Authorization") == "test-key",
+        request.value(forHTTPHeaderField: "User-Agent") == UserAgent.current,
         request.value(forHTTPHeaderField: "X-AAI-Model") == nil,
         request.value(forHTTPHeaderField: "Content-Type")?.hasPrefix("multipart/form-data; boundary=") == true,
         request.timeoutInterval == 90
@@ -119,9 +122,12 @@ struct HTTPClientTests {
       // carrying the key would make it count as a transcription — and it must
       // land on `/warm`, the unauthenticated no-op the route publishes for this.
       // It hit the bare host root until 2026-09-11: the same pooled connection,
-      // but a request the service never documented answering.
+      // but a request the service never documented answering. Auth-less, but
+      // not anonymous: it carries the same agent as the POST it warms for, so
+      // the connection it opens isn't attributed to some other client.
       if request.httpMethod == "GET", request.url?.path == "/warm",
-        request.value(forHTTPHeaderField: "Authorization") == nil
+        request.value(forHTTPHeaderField: "Authorization") == nil,
+        request.value(forHTTPHeaderField: "User-Agent") == UserAgent.current
       {
         _ = getHits.next()
       }

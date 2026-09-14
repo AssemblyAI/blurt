@@ -29,7 +29,10 @@ import os
 /// standing rule, not an accident of the current shape: measured-but-
 /// undocumented behaviour is not something to build on, however well it works.
 /// `llm: null` is the one that was removed for it (see
-/// `DictationConfig.llmInstruction`).
+/// `DictationConfig.llmInstruction`). The single header the reference does not
+/// mention is `User-Agent`, which every HTTP client sends regardless — see
+/// `UserAgent` for why naming Blurt and its version there is not an exception
+/// to the rule above but a request the rule never governed.
 public struct AssemblyAITranscriber: TranscriberProtocol {
   /// Latency instrumentation for the dictation round-trip. Findable via:
   ///   log show --predicate 'subsystem == "dev.alex.blurt" && category == "Transcriber"' --last 1h
@@ -123,6 +126,11 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     request.setValue(apiKey, forHTTPHeaderField: "Authorization")
     request.setValue(
       "multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+    // Names the client and its release to the service (`Blurt/<version>`) in place
+    // of `URLSession`'s default agent, which reports the opaque build counter.
+    // The one header here the reference does not describe, and the exception is
+    // principled rather than a crack in that rule — see `UserAgent`.
+    request.setUserAgent()
 
     let progress = UploadProgress()
     let body = streamedBody(
