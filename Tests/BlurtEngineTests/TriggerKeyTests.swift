@@ -8,6 +8,7 @@ struct TriggerKeyTests {
   func keyCodes() {
     #expect(TriggerKey.rightCommand.keyCode == 54)
     #expect(TriggerKey.rightOption.keyCode == 61)
+    #expect(TriggerKey.function.keyCode == 63)
   }
 
   @Test("every case has a non-empty label")
@@ -25,6 +26,7 @@ struct TriggerKeyTests {
     // reader.
     #expect(TriggerKey.rightCommand.fullName == "Right Command (⌘)")
     #expect(TriggerKey.rightOption.fullName == "Right Option (⌥)")
+    #expect(TriggerKey.function.fullName == "Function (fn)")
   }
 
   @Test("raw value round-trips through keyCode")
@@ -47,12 +49,14 @@ struct TriggerKeyTests {
     #expect(TriggerKey.fromPersisted(57) == .rightCommand)
   }
 
-  @Test("a persisted fn keycode (a removed option) falls back to right ⌘")
-  func removedFunctionFallsBack() {
-    // `fn` (keycode 63) was dropped as an option; anyone who had it saved must
-    // decode to the default rather than an invalid selection.
-    #expect(TriggerKey(rawValue: 63) == nil)
-    #expect(TriggerKey.fromPersisted(63) == .rightCommand)
+  @Test("a persisted fn keycode decodes to fn, not the right-⌘ default")
+  func functionDecodesFromPersisted() {
+    // `fn` (keycode 63) was dropped as an option in #146 and restored since. It
+    // is a curated option again, so it must survive a round-trip through
+    // `UserDefaults` rather than landing on the unknown-keycode fallback — the
+    // failure the removal's own regression test used to pin, now inverted.
+    #expect(TriggerKey(rawValue: 63) == .function)
+    #expect(TriggerKey.fromPersisted(63) == .function)
   }
 
   // The hotkey tap reads the *device-dependent* modifier bit (which physical
@@ -64,6 +68,15 @@ struct TriggerKeyTests {
   func deviceMasks() {
     #expect(TriggerKey.rightCommand.deviceModifierMask == 0x10)  // NX_DEVICERCMDKEYMASK
     #expect(TriggerKey.rightOption.deviceModifierMask == 0x40)  // NX_DEVICERALTKEYMASK
+  }
+
+  // `fn` is the documented exception: macOS ships no `NX_DEVICE*` split for it,
+  // only the shared secondary-fn bit. That sharing is benign because every key
+  // setting the bit *is* the bound key, so the tap still reads "held" from the
+  // first fn press to the last fn release — see `TriggerKey.deviceModifierMask`.
+  @Test("fn uses the shared secondary-fn bit, the one non-device mask")
+  func functionMaskIsSecondaryFn() {
+    #expect(TriggerKey.function.deviceModifierMask == 0x80_0000)  // kCGEventFlagMaskSecondaryFn
   }
 
   @Test("right-⌘ mask does not collide with the left-⌘ or generic ⌘ bit")

@@ -763,9 +763,12 @@ The dictation trigger is a **single lone modifier key** (tap-to-toggle or hold-t
 in-house. Four pieces, three of them pure engine logic:
 
 - **`TriggerKey`** (`Hotkey/TriggerKey.swift`) — enum of the curated lone momentary modifiers usable
-  as the trigger (right ⌘, right ⌥), `rawValue` = the macOS virtual keycode, plus `label`
-  ("right ⌘") and the device-modifier masks the event source needs. Right-side modifiers are chosen
-  because a solo press rarely collides with app shortcuts.
+  as the trigger (right ⌘, right ⌥, fn), `rawValue` = the macOS virtual keycode, plus `label`
+  ("right ⌘") and the modifier masks the event source needs. Right-side modifiers are chosen
+  because a solo press rarely collides with app shortcuts. Their masks are the per-side
+  `NX_DEVICE*` bits; `fn` has no such split and uses the shared `kCGEventFlagMaskSecondaryFn`,
+  which is safe only because every key setting that bit _is_ the bound key (see the property's
+  doc comment — it is why `fn` was dropped in #146 and restored since).
 - **`TriggerKeyStore`** — persists the chosen keycode in `UserDefaults` (`BlurtTriggerKeyCode`),
   defaulting to **right ⌘**.
 - **`DictationKeyGate`** — pure, clock-free state machine (`idle`/`armed`/`latched`) turning

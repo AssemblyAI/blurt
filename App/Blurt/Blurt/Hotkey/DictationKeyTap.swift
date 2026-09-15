@@ -230,10 +230,12 @@ final class DictationKeyTap {
   }
 
   /// The `CGEventFlags` bit the bound key toggles, so a `flagsChanged` event for
-  /// it reads as down (bit set) or up (bit clear). This is the *device-dependent*
-  /// per-side bit (e.g. right ⌘ only), not the generic `.maskCommand` shared by
-  /// both ⌘ keys — see `TriggerKey.deviceModifierMask` for why that distinction
-  /// keeps the down/up tracking from desyncing on keyboards with both keys held.
+  /// it reads as down (bit set) or up (bit clear). For the two ⌘/⌥ options this is
+  /// the *device-dependent* per-side bit (e.g. right ⌘ only), not the generic
+  /// `.maskCommand` shared by both ⌘ keys — see `TriggerKey.deviceModifierMask`
+  /// for why that distinction keeps the down/up tracking from desyncing on
+  /// keyboards with both keys held, and why `fn`'s shared `.maskSecondaryFn` is
+  /// the documented exception rather than the same bug.
   nonisolated static func flag(for key: TriggerKey) -> CGEventFlags {
     CGEventFlags(rawValue: key.deviceModifierMask)
   }
