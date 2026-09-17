@@ -41,15 +41,15 @@ open -a "Blurt Dev"
 
 That's the whole setup. Everything else is one of these scripts:
 
-| Script                        | What it does                                                                                                   |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `scripts/bootstrap.sh`        | `brew bundle` from `Brewfile` — xcodegen, swiftlint, prettier, shellcheck, markdownlint, periphery, xcbeautify |
-| `scripts/dev-build.sh`        | Clean signed `Debug-Local` build, installed as `/Applications/Blurt Dev.app`. The everyday loop.               |
-| `scripts/check.sh`            | The full health check CI runs. The source of truth for "is this green?"                                        |
-| `scripts/check.sh --portable` | Just the platform-independent subset (docs, site, scripts, workflows) — the part that runs off a Mac           |
-| `swift test`                  | Engine unit tests only (Swift Testing), no app build                                                           |
-| `scripts/uitest.sh`           | The XCUITest suite that drives the real app                                                                    |
-| `scripts/leaks.sh`            | Whole-app leak check                                                                                           |
+| Script                        | What it does                                                                                                                                                                                                                     |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/bootstrap.sh`        | `brew bundle install` from `Brewfile` — xcodegen, swiftlint, prettier, shellcheck, markdownlint, periphery, xcbeautify — then verifies each one answers on PATH, because `check.sh` _skips_ a missing linter rather than failing |
+| `scripts/dev-build.sh`        | Clean signed `Debug-Local` build, installed as `/Applications/Blurt Dev.app`. The everyday loop.                                                                                                                                 |
+| `scripts/check.sh`            | The full health check CI runs. The source of truth for "is this green?"                                                                                                                                                          |
+| `scripts/check.sh --portable` | Just the platform-independent subset (docs, site, scripts, workflows) — the part that runs off a Mac                                                                                                                             |
+| `swift test`                  | Engine unit tests only (Swift Testing), no app build                                                                                                                                                                             |
+| `scripts/uitest.sh`           | The XCUITest suite that drives the real app                                                                                                                                                                                      |
+| `scripts/leaks.sh`            | Whole-app leak check                                                                                                                                                                                                             |
 
 `dev-build.sh` installs to `/Applications` on purpose: macOS refuses to register
 Accessibility and Input-Monitoring grants for an app living in a build
