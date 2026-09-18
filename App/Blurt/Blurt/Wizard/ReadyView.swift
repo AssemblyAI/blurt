@@ -84,6 +84,23 @@ struct ReadyView: View {
       // Falls back to `.borderedProminent` on macOS 15–25 (see glassButtonStyleCompat).
       .glassButtonStyleCompat(prominent: true)
 
+      // A quiet share line above the footer, in the footer's own voice:
+      // caption-level secondary prose with the links carrying
+      // `BlurtBrand.accent`, for the same reasons the footer's `Link` does.
+      // Both destinations come from failable construction, so like the footer
+      // the line simply omits itself if either literal ever fails to build.
+      if let xURL = Self.shareOnXURL, let linkedInURL = Self.shareOnLinkedInURL {
+        HStack(spacing: 3) {
+          Text("Share Blurt on").foregroundStyle(.secondary)
+          Link("X", destination: xURL)
+            .foregroundStyle(BlurtBrand.accent)
+          Text("or").foregroundStyle(.secondary)
+          Link("LinkedIn", destination: linkedInURL)
+            .foregroundStyle(BlurtBrand.accent)
+        }
+        .font(.caption)
+      }
+
       // The window's footer: a caption-level "Powered by AssemblyAI" line,
       // centered on the window's closing edge. A sibling of the sections
       // rather than grouped with the button — what makes it read as a footer
@@ -175,6 +192,27 @@ struct ReadyView: View {
 
   /// Where the "Powered by AssemblyAI" footer link points.
   private static let poweredByURL = URL(string: "https://www.assemblyai.com/blurt")
+
+  /// The prefilled post the X share opens with — short, in Blurt's voice, and
+  /// carrying the link itself, since the tweet intent takes only text.
+  private static let shareText = "Loving Blurt for dictation on my Mac 🎙️ https://www.assemblyai.com/blurt"
+
+  /// Where the share line's "X" link points: the tweet intent with `shareText`
+  /// prefilled. Built through `URLComponents` so the text is percent-encoded
+  /// by the type rather than by hand.
+  private static let shareOnXURL: URL? = {
+    var components = URLComponents(string: "https://twitter.com/intent/tweet")
+    components?.queryItems = [URLQueryItem(name: "text", value: shareText)]
+    return components?.url
+  }()
+
+  /// Where the share line's "LinkedIn" link points. LinkedIn's share intent
+  /// takes only a URL to share, so this one carries no message.
+  private static let shareOnLinkedInURL: URL? = {
+    var components = URLComponents(string: "https://www.linkedin.com/sharing/share-offsite/")
+    components?.queryItems = [URLQueryItem(name: "url", value: "https://www.assemblyai.com/blurt")]
+    return components?.url
+  }()
 
   /// The idle readout: "Tap **Right Command (⌘)** to start and stop." over
   /// "Or hold it to talk, then release." — the key spelled out and bolded
