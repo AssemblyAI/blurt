@@ -770,8 +770,11 @@ in-house. Four pieces, three of them pure engine logic:
   defaulting to **right ⌘**.
 - **`DictationKeyGate`** — pure, clock-free state machine (`idle`/`armed`/`latched`) turning
   modifier-down/up and other-key-down into `start`/`stop`/`cancel`/`none`. Recording starts the
-  instant the modifier goes down; on key-up a release ≥ `holdThreshold` (default 1 s) is a **hold**
-  (push-to-talk → stop) while a shorter release **latches** (tap-to-toggle; next tap stops). A combo
+  instant the modifier goes down; what a key-up means is the persisted **`TriggerActivation`**'s
+  call (`TriggerActivationStore`, default tap-or-hold; the Shortcut section's Activation picker
+  writes it): under the default a release ≥ `holdThreshold` (default 1 s) is a **hold**
+  (push-to-talk → stop) while a shorter release **latches** (tap-to-toggle; next tap stops);
+  tap-only latches on every release, hold-only stops on every release. A combo
   (modifier + another key, e.g. ⌘C) from idle cancels the fresh capture; over a latched recording it
   passes through as a normal shortcut. Callers pass monotonic timestamps, so every decision is
   deterministic and unit-tested.

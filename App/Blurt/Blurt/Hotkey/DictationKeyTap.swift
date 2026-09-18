@@ -72,15 +72,16 @@ final class DictationKeyTap {
     self.onStop = onStop
     self.onCancel = onCancel
     self.onRecordingDiscarded = onRecordingDiscarded
-    // Both halves of the binding come from the store, not a hard-coded
-    // `.rightCommand`: `TriggerKey.fromPersisted` owns the unset default, and
+    // Every half of the binding comes from its store, not a hard-coded
+    // `.rightCommand` / `.tapOrHold`: `fromPersisted` owns the unset default, and
     // restating it here is the same mistake `BoundTriggerKey` and `HotkeyStepView`
     // were each corrected away from — the tap would name the old key while the
     // picker, ready screen, and menu bar all named the new one. `refreshBinding()`
     // re-reads this, but nothing enforces that it runs before the first read of
     // either property (`simulatePressForTesting` reads `router.triggerKeyCode`).
     let key = TriggerKeyStore().triggerKey
-    self.router = DictationKeyRouter(triggerKeyCode: key.keyCode)
+    self.router = DictationKeyRouter(
+      triggerKeyCode: key.keyCode, activation: TriggerActivationStore().activation)
     self.triggerFlag = Self.flag(for: key)
   }
 
@@ -174,14 +175,18 @@ final class DictationKeyTap {
     if router.reset() { onRecordingDiscarded() }
   }
 
-  /// Re-read the bound trigger key into the router. Call after the user
-  /// rebinds. The router's reset reports a discarded live recording: rebinding
-  /// mid-dictation means the old key's up-event will never match, so the capture
-  /// must be cancelled, not left to run out the auto-release cap.
+  /// Re-read the bound trigger key and activation mode into the router. Call
+  /// after the user rebinds either. The router's reset reports a discarded live
+  /// recording: rebinding mid-dictation means the old key's up-event will never
+  /// match, so the capture must be cancelled, not left to run out the
+  /// auto-release cap.
   func refreshBinding() {
     let key = TriggerKeyStore().triggerKey
     triggerFlag = Self.flag(for: key)
-    if router.rebind(triggerKeyCode: key.keyCode) { onRecordingDiscarded() }
+    let activation = TriggerActivationStore().activation
+    if router.rebind(triggerKeyCode: key.keyCode, activation: activation) {
+      onRecordingDiscarded()
+    }
   }
 
   /// Callback entry point (always on the main thread — the tap's source lives on

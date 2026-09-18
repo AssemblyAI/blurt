@@ -26,6 +26,7 @@
 /// prefix carries the same warning.
 enum DefaultsKey: String, CaseIterable {
   case triggerKeyCode = "TriggerKeyCode"
+  case triggerActivation = "TriggerActivation"
   case soundPack = "SoundPack"
   case keyTerms = "KeyTerms"
   case developerMode = "DeveloperMode"

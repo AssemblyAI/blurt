@@ -61,6 +61,7 @@ enum UITestIdentifiers {
   static let apiKeyError = "settings.apiKey.error"
   static let keyTermsField = "settings.keyTerms.field"
   static let hotkeyPicker = "settings.hotkey.picker"
+  static let activationPicker = "settings.activation.picker"
   static let micPicker = "settings.mic.picker"
   static let soundPicker = "settings.sound.picker"
   static let developerToggle = "settings.developer.toggle"
