@@ -35,9 +35,12 @@ public struct DictationKeyRouter: Sendable {
   /// deliveries with an unchanged bit don't re-fire the gate.
   private var modifierIsDown = false
 
-  public init(triggerKeyCode: Int, holdThreshold: Duration = .seconds(1)) {
+  public init(
+    triggerKeyCode: Int, holdThreshold: Duration = .seconds(1),
+    activation: TriggerActivation = .tapOrHold
+  ) {
     self.triggerKeyCode = triggerKeyCode
-    self.gate = DictationKeyGate(holdThreshold: holdThreshold)
+    self.gate = DictationKeyGate(holdThreshold: holdThreshold, activation: activation)
   }
 
   /// Feeds one event through the relevance/edge filters into the gate and
@@ -60,13 +63,18 @@ public struct DictationKeyRouter: Sendable {
     }
   }
 
-  /// Rebinds the trigger and resets: events already tracked belong to the old
-  /// key, whose up-event can no longer match. Returns whether the reset
-  /// discarded a live recording (see `reset()`).
+  /// Rebinds the trigger — key and activation mode, the two halves of the
+  /// binding Settings can change — and resets: events already tracked belong to
+  /// the old binding, whose up-event can no longer match (or would resolve under
+  /// the old mode). The gate is rebuilt because its `activation` is `let`, part
+  /// of its determinism contract. Returns whether the reset discarded a live
+  /// recording (see `reset()`).
   @discardableResult
-  public mutating func rebind(triggerKeyCode: Int) -> Bool {
+  public mutating func rebind(triggerKeyCode: Int, activation: TriggerActivation) -> Bool {
     self.triggerKeyCode = triggerKeyCode
-    return reset()
+    let discardedRecording = reset()
+    gate = DictationKeyGate(holdThreshold: gate.holdThreshold, activation: activation)
+    return discardedRecording
   }
 
   /// Recovery after the host's event tap was disabled (by timeout, or by user input
@@ -82,7 +90,7 @@ public struct DictationKeyRouter: Sendable {
   /// the dropped events, so the gate is reset.
   ///
   /// Returns whether that reset discarded a live recording the caller must cancel
-  /// upstream, matching `reset()` and `rebind(triggerKeyCode:)`. This lived in the
+  /// upstream, matching `reset()` and `rebind(triggerKeyCode:activation:)`. This lived in the
   /// shell as a bare `if`, where nothing could test it — the app target has no test
   /// target and a `CGEventTap` can't be driven from XCUITest — while carrying the
   /// worst failure of the three decisions here: a session left in `.recording` with

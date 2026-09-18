@@ -27,11 +27,19 @@ struct DictationKeyGateTests {
   /// A named sequence of steps run against a fresh gate. Replaces what used to be
   /// a dozen near-identical `@Test`s — the tap/hold/latch/combo state machine is
   /// exactly the kind of input→output table `arguments:` is for, and a failure
-  /// now names the scenario.
+  /// now names the scenario. `activation` defaults to the shipped tap-or-hold
+  /// mode, so the pre-setting scenarios read (and assert) exactly as before.
   struct Scenario: Sendable, CustomTestStringConvertible {
     let name: String
     let steps: [Step]
+    let activation: TriggerActivation
     var testDescription: String { name }
+
+    init(name: String, steps: [Step], activation: TriggerActivation = .tapOrHold) {
+      self.name = name
+      self.steps = steps
+      self.activation = activation
+    }
   }
 
   static let scenarios: [Scenario] = [
@@ -101,11 +109,39 @@ struct DictationKeyGateTests {
         .init(.down(.milliseconds(200)), DictationKeyGate.Action.none), .init(.up(.milliseconds(280)), .stop),
         .init(.down(.seconds(5)), .start),
       ]),
+    Scenario(
+      name: "tap mode: a release past the hold threshold still latches (no push-to-talk)",
+      steps: [
+        .init(.down(.seconds(0)), .start), .init(.up(.milliseconds(1200)), DictationKeyGate.Action.none),
+        .init(.down(.seconds(5)), DictationKeyGate.Action.none), .init(.up(.milliseconds(5100)), .stop),
+      ],
+      activation: .tap),
+    Scenario(
+      name: "tap mode: a quick tap latches and the next tap stops, as in tap-or-hold",
+      steps: [
+        .init(.down(.seconds(0)), .start), .init(.up(.milliseconds(200)), DictationKeyGate.Action.none),
+        .init(.down(.seconds(2)), DictationKeyGate.Action.none), .init(.up(.milliseconds(2100)), .stop),
+      ],
+      activation: .tap),
+    Scenario(
+      name: "hold mode: a release under the threshold stops instead of latching",
+      steps: [
+        .init(.down(.seconds(0)), .start), .init(.up(.milliseconds(200)), .stop),
+        .init(.down(.seconds(2)), .start), .init(.up(.milliseconds(3500)), .stop),
+      ],
+      activation: .hold),
+    Scenario(
+      name: "hold mode: a combo from idle still cancels the fresh capture",
+      steps: [
+        .init(.down(.seconds(0)), .start), .init(.other, .cancel),
+        .init(.up(.milliseconds(100)), DictationKeyGate.Action.none), .init(.down(.seconds(2)), .start),
+      ],
+      activation: .hold),
   ]
 
   @Test("tap/hold/latch/combo state machine", arguments: scenarios)
   func gate(_ scenario: Scenario) {
-    var g = DictationKeyGate(holdThreshold: .seconds(1))
+    var g = DictationKeyGate(holdThreshold: .seconds(1), activation: scenario.activation)
     for (i, step) in scenario.steps.enumerated() {
       let action: DictationKeyGate.Action?
       switch step.event {

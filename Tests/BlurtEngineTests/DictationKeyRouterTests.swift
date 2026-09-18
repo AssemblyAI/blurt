@@ -152,7 +152,7 @@ struct DictationKeyRouterTests {
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
     // Rebinding means the old key's up-event can never match — the caller must
     // cancel the capture rather than let the auto-release cap paste it.
-    let discarded = router.rebind(triggerKeyCode: otherModifier)
+    let discarded = router.rebind(triggerKeyCode: otherModifier, activation: .tapOrHold)
     #expect(discarded)
     #expect(router.triggerKeyCode == otherModifier)
     // The old key is now irrelevant; the new one drives dictation.
@@ -163,8 +163,18 @@ struct DictationKeyRouterTests {
   @Test("rebind while idle reports nothing discarded")
   func rebindWhileIdle() {
     var router = DictationKeyRouter(triggerKeyCode: trigger)
-    let discarded = router.rebind(triggerKeyCode: otherModifier)
+    let discarded = router.rebind(triggerKeyCode: otherModifier, activation: .tapOrHold)
     #expect(!discarded)
+  }
+
+  @Test("rebind swaps the activation mode the gate applies")
+  func rebindSwapsActivationMode() {
+    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    router.rebind(triggerKeyCode: trigger, activation: .hold)
+    // Under hold-only a quick release stops instead of latching — the tap-or-hold
+    // gate this router was built with would have returned `.none` here.
+    #expect(router.handle(downEvent(trigger), at: .zero) == .start)
+    #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .stop)
   }
 
   @Test("dropped-event recovery keeps a recording whose trigger is still held")

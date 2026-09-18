@@ -2,10 +2,12 @@
 /// supports tap-to-toggle and hold-to-talk.
 ///
 /// Recording starts the instant the trigger modifier goes down; what *releasing*
-/// it means is decided on key-up by how long it was held: a release at or past
-/// `holdThreshold` is a hold (push-to-talk → stop), a shorter release is a tap
-/// (latch recording on; the next tap stops it). A press combined with any other
-/// key is a normal modifier shortcut (e.g. ⌘C), not dictation.
+/// it means is `activation`'s call (`TriggerActivation.latchesOnRelease`). Under
+/// the default tap-or-hold mode it is decided on key-up by how long it was held:
+/// a release at or past `holdThreshold` is a hold (push-to-talk → stop), a
+/// shorter release is a tap (latch recording on; the next tap stops it). Tap-only
+/// latches on every release; hold-only stops on every release. A press combined
+/// with any other key is a normal modifier shortcut (e.g. ⌘C), not dictation.
 ///
 /// The gate reads no clock — callers pass monotonic timestamps as a `Duration`
 /// from a fixed reference, so every decision is deterministic and unit-testable.
@@ -19,6 +21,11 @@ public struct DictationKeyGate: Sendable {
   /// constructor arguments plus the timestamps callers pass, so a threshold that
   /// could change mid-session would make the same event sequence non-deterministic.
   public let holdThreshold: Duration
+
+  /// What a release means — tap-to-toggle, hold-to-talk, or both. `let` for the
+  /// same determinism contract as `holdThreshold`; a Settings change reaches the
+  /// gate as a fresh one (see `DictationKeyRouter.rebind`).
+  public let activation: TriggerActivation
 
   private enum State: Sendable, Equatable {
     case idle
@@ -40,8 +47,9 @@ public struct DictationKeyGate: Sendable {
   /// otherwise the session would stay `.recording` with no key-up ever arriving.
   public var isIdle: Bool { state == .idle }
 
-  public init(holdThreshold: Duration = .seconds(1)) {
+  public init(holdThreshold: Duration = .seconds(1), activation: TriggerActivation = .tapOrHold) {
     self.holdThreshold = holdThreshold
+    self.activation = activation
   }
 
   public mutating func modifierDown(at now: Duration) -> Action {
@@ -61,9 +69,10 @@ public struct DictationKeyGate: Sendable {
 
   public mutating func modifierUp(at now: Duration) -> Action {
     guard case .armed(let downAt, let fromIdle) = state else { return .none }
-    // A short release from idle latches recording on (tap-to-toggle); every other
-    // release — a held push-to-talk, or any release over a latched recording — stops.
-    if fromIdle, now - downAt < holdThreshold {
+    // A release from idle latches recording on (tap-to-toggle) when the activation
+    // mode says this press was a tap; every other release — a held push-to-talk,
+    // or any release over a latched recording — stops.
+    if fromIdle, activation.latchesOnRelease(heldFor: now - downAt, holdThreshold: holdThreshold) {
       state = .latched
       return .none
     }

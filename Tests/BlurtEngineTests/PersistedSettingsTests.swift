@@ -11,6 +11,7 @@ struct PersistedSettingsTests {
   @Test("the reset roster names every engine store's defaults key")
   func rosterCoversEveryStore() {
     #expect(PersistedSettings.allDefaultsKeys.contains(TriggerKeyStore.defaultsKey))
+    #expect(PersistedSettings.allDefaultsKeys.contains(TriggerActivationStore.defaultsKey))
     #expect(PersistedSettings.allDefaultsKeys.contains(SoundPackStore.defaultsKey))
     #expect(PersistedSettings.allDefaultsKeys.contains(KeyTermsStore.defaultsKey))
     #expect(PersistedSettings.allDefaultsKeys.contains(DeveloperModeStore.defaultsKey))
@@ -41,10 +42,10 @@ struct PersistedSettingsTests {
 
   @Test("the roster carries no stale or duplicate keys")
   func rosterHasNoStrays() {
-    // Exactly the nine known stores' keys (OverlayOriginStore contributes two,
+    // Exactly the ten known stores' keys (OverlayOriginStore contributes two,
     // StyleProfileStore three): a removed store must leave the roster in the same
     // change, and a key listed twice would hint at a copy-paste slip.
-    #expect(PersistedSettings.allDefaultsKeys.count == 12)
+    #expect(PersistedSettings.allDefaultsKeys.count == 13)
     #expect(Set(PersistedSettings.allDefaultsKeys).count == PersistedSettings.allDefaultsKeys.count)
   }
 
@@ -58,6 +59,7 @@ struct PersistedSettingsTests {
   func casesAndStoresDescribeTheSameSet() {
     let storeKeys: Set<String> = [
       TriggerKeyStore.defaultsKey,
+      TriggerActivationStore.defaultsKey,
       SoundPackStore.defaultsKey,
       KeyTermsStore.defaultsKey,
       DeveloperModeStore.defaultsKey,
@@ -73,7 +75,7 @@ struct PersistedSettingsTests {
     #expect(storeKeys == Set(DefaultsKey.allCases.map(\.key)))
     // No two stores sharing a slot — the Set above would have quietly absorbed a
     // collision, and two stores on one key means each overwrites the other.
-    #expect(storeKeys.count == 12)
+    #expect(storeKeys.count == 13)
   }
 
   @Test("resetAll clears every roster key and leaves unrelated ones alone")
