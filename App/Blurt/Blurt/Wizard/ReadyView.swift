@@ -84,54 +84,61 @@ struct ReadyView: View {
       // Falls back to `.borderedProminent` on macOS 15–25 (see glassButtonStyleCompat).
       .glassButtonStyleCompat(prominent: true)
 
-      // A quiet share line above the footer, in the footer's own voice:
-      // caption-level secondary prose with the links carrying
-      // `BlurtBrand.accent`, for the same reasons the footer's `Link` does.
-      // Both destinations come from failable construction, so like the footer
-      // the line simply omits itself if either literal ever fails to build.
-      if let xURL = Self.shareOnXURL, let linkedInURL = Self.shareOnLinkedInURL {
-        HStack(spacing: 3) {
-          Text("Share Blurt on").foregroundStyle(.secondary)
-          Link("X", destination: xURL)
-            .foregroundStyle(BlurtBrand.accent)
-          Text("or").foregroundStyle(.secondary)
-          Link("LinkedIn", destination: linkedInURL)
-            .foregroundStyle(BlurtBrand.accent)
+      // The window's footer: the share line over the caption-level "Powered
+      // by AssemblyAI" line, grouped tight (4pt, not the section gap) so the
+      // two caption lines read as one closing block rather than the share
+      // line floating as a fourth stacked item. The block is a sibling of the
+      // sections rather than grouped with the button — what makes it read as
+      // a footer instead of a caption on the Settings button is the
+      // *asymmetry* below: the full section gap above it, but only half the
+      // window's usual inset beneath, so it sits against the bottom edge
+      // rather than floating between the button and the chrome.
+      VStack(spacing: 4) {
+        // A quiet share line in the footer's own voice: caption-level
+        // secondary prose with the links carrying `BlurtBrand.accent`, for
+        // the same reasons the footer's `Link` below does. Both destinations
+        // come from failable construction, so like the footer the line simply
+        // omits itself if either literal ever fails to build. Each `Link`
+        // carries an explicit accessibility label: the visible "X" is
+        // meaningless on its own in VoiceOver's links rotor.
+        if let xURL = Self.shareOnXURL, let linkedInURL = Self.shareOnLinkedInURL {
+          HStack(spacing: 3) {
+            Text("Share Blurt on").foregroundStyle(.secondary)
+            Link("X", destination: xURL)
+              .foregroundStyle(BlurtBrand.accent)
+              .accessibilityLabel("Share Blurt on X")
+            Text("or").foregroundStyle(.secondary)
+            Link("LinkedIn", destination: linkedInURL)
+              .foregroundStyle(BlurtBrand.accent)
+              .accessibilityLabel("Share Blurt on LinkedIn")
+          }
+          .font(.caption)
         }
-        .font(.caption)
-      }
 
-      // The window's footer: a caption-level "Powered by AssemblyAI" line,
-      // centered on the window's closing edge. A sibling of the sections
-      // rather than grouped with the button — what makes it read as a footer
-      // instead of a caption on the Settings button is the *asymmetry* below:
-      // the full section gap above it, but only half the window's usual inset
-      // beneath, so it sits against the bottom edge rather than floating
-      // between the button and the chrome.
-      //
-      // Split so the linked word keeps its affordance: "Powered by" is quiet
-      // secondary prose, while the `Link` carries colour — all-secondary made
-      // the whole line indistinguishable from static text. That colour is
-      // `BlurtBrand.accent`, not the system link blue a bare `Link` draws
-      // itself in: blue would be the only instance of a second hue in a window
-      // whose sole accent is the brand green, and it landed directly under the
-      // green Settings button, giving the least important element on screen
-      // the second-loudest colour. `.foregroundStyle` rather than `.tint`
-      // because `Link` styles its own label with `NSColor.linkColor` and only
-      // an explicit foreground overrides it.
-      //
-      // `Link` routes through the environment's `openURL` — the default
-      // browser — the same road the wizard's "Get a Free Key" button takes.
-      // Built through the failable `URL` initializer (`force_unwrapping` is
-      // banned repo-wide), so like the wordmark above it simply omits itself
-      // if the literal ever fails to parse.
-      if let url = Self.poweredByURL {
-        HStack(spacing: 3) {
-          Text("Powered by").foregroundStyle(.secondary)
-          Link("AssemblyAI", destination: url)
-            .foregroundStyle(BlurtBrand.accent)
+        // Split so the linked word keeps its affordance: "Powered by" is quiet
+        // secondary prose, while the `Link` carries colour — all-secondary made
+        // the whole line indistinguishable from static text. That colour is
+        // `BlurtBrand.accent`, not the system link blue a bare `Link` draws
+        // itself in: blue would be the only instance of a second hue in a window
+        // whose sole accent is the brand green, and it landed directly under the
+        // green Settings button, giving the least important element on screen
+        // the second-loudest colour. `.foregroundStyle` rather than `.tint`
+        // because `Link` styles its own label with `NSColor.linkColor` and only
+        // an explicit foreground overrides it.
+        //
+        // `Link` routes through the environment's `openURL` — the default
+        // browser — the same road the wizard's "Get a Free Key" button takes.
+        // Built through the failable `URL` initializer (`force_unwrapping` is
+        // banned repo-wide), so like the wordmark above it simply omits itself
+        // if the literal ever fails to parse.
+        if let url = Self.poweredByURL {
+          HStack(spacing: 3) {
+            Text("Powered by").foregroundStyle(.secondary)
+            Link("AssemblyAI", destination: url)
+              .foregroundStyle(BlurtBrand.accent)
+          }
+          .font(.caption)
         }
-        .font(.caption)
       }
     }
     .frame(maxWidth: .infinity)
