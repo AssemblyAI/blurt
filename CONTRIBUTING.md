@@ -5,7 +5,7 @@ contributions of all sizes are welcome — bug reports, fixes, docs, or a new id
 
 ## Before you start
 
-Blurt is **macOS-only** (Apple Silicon, AppKit + AVFoundation). You need a Mac
+Blurt is **macOS-only** (Intel or Apple Silicon, AppKit + AVFoundation). You need a Mac
 with Xcode to build, test, or run it — see [Local setup](#local-setup) below.
 On Linux you can still read and edit the Swift source, but you can't build or
 verify it locally; CI on `macos-26` is the authority on green.
@@ -19,7 +19,7 @@ you don't reintroduce something that was deliberately removed.
 
 You'll need:
 
-- An **Apple Silicon Mac** on macOS 15+ (26 recommended).
+- A **Mac** (Intel or Apple Silicon) on macOS 15+ (26 recommended).
 - **Xcode 26+** — the full app, not just the Command Line Tools.
   `xcode-select -p` should print a path inside `Xcode.app`; if it doesn't, run
   `sudo xcode-select -s /Applications/Xcode.app`.

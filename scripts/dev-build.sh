@@ -55,7 +55,7 @@ xcodebuild \
   -project Blurt.xcodeproj \
   -scheme Blurt \
   -configuration Debug-Local \
-  -destination 'platform=macOS,arch=arm64' \
+  -destination 'platform=macOS' \
   -derivedDataPath "$DERIVED" \
   clean build | "${PRETTY[@]}"
 

@@ -118,7 +118,7 @@ utterance.
 
 ## Requirements
 
-- Apple Silicon Mac, macOS 15+ (macOS 26 recommended — enables the Liquid
+- Mac (Intel or Apple Silicon), macOS 15+ (macOS 26 recommended — enables the Liquid
   Glass UI)
 - An [AssemblyAI API key](https://www.assemblyai.com/dashboard/api-keys)
   (free tier available)

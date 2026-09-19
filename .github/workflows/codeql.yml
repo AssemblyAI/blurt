@@ -103,8 +103,9 @@ jobs:
 
       # build-mode: manual — build the committed Blurt.xcodeproj directly (no
       # xcodegen: it's checked in and drift-checked by the `check` workflow).
-      # Generic "Any Mac" destination, not arch=arm64: under CodeQL's x86_64
-      # tracer, xcodebuild can't match an arm64 device for our arm64-only project.
+      # Generic destination (no arch pin) so the build produces a universal binary
+      # (arm64 + x86_64). CI runners are arm64 only, so the x86_64 slice is not
+      # tested here — community testing / manual verification on Intel hardware.
       # -derivedDataPath reuses the packages resolved above. Codesigning is off:
       # the Developer ID cert only lives on the maintainer's machine.
       - name: Build Swift
