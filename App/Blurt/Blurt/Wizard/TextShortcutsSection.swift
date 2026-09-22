@@ -77,17 +77,22 @@ private struct TextShortcutEditorSheet: View {
     _expansion = State(initialValue: shortcut.expansion)
   }
 
-  /// A trigger that is already another shortcut's (case-insensitively) would be
-  /// dropped by the store's dedupe, so it's refused here instead of vanishing.
+  /// The phrase as the matcher sees it (`TextShortcutStore.matchKey`) — empty
+  /// when it has no letters or digits.
+  private var triggerKey: String { TextShortcutStore.matchKey(for: trigger) }
+
+  /// A phrase the matcher can't tell from another shortcut's — "personal
+  /// email" vs "Personal-Email" — would be dropped by the store's dedupe, so
+  /// it's refused here instead of vanishing.
   private var duplicatesAnother: Bool {
-    guard let key = trigger.trimmedNonEmpty()?.lowercased() else { return false }
+    guard !triggerKey.isEmpty else { return false }
     return TextShortcutStore().shortcuts.contains {
-      $0.id != shortcut.id && $0.trigger.lowercased() == key
+      $0.id != shortcut.id && TextShortcutStore.matchKey(for: $0.trigger) == triggerKey
     }
   }
 
   private var canSave: Bool {
-    trigger.trimmedNonEmpty() != nil && expansion.trimmedNonEmpty() != nil && !duplicatesAnother
+    !triggerKey.isEmpty && expansion.trimmedNonEmpty() != nil && !duplicatesAnother
   }
 
   var body: some View {

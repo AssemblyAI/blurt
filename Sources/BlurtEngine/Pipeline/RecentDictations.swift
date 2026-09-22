@@ -28,7 +28,13 @@ public struct RecentDictations: Equatable, Sendable {
     /// Stable identity for SwiftUI list diffing — assigned once at creation, so
     /// an entry keeps its id as newer dictations push in ahead of it.
     public let id = UUID()
+    /// What was pasted, text shortcuts expanded — what the Recent row shows
+    /// and copies.
     public let text: String
+    /// What the service returned, before any text shortcut was expanded. This,
+    /// not `text`, is what rides the next request's `stt_prompt`: a shortcut's
+    /// saved replacement stays on the machine.
+    let spoken: String
     public let timestamp: Date
     /// Display name of the **custom** style this dictation was made with (the
     /// active profile's name). `nil` otherwise — the base Default styling,
@@ -80,16 +86,22 @@ public struct RecentDictations: Equatable, Sendable {
 
   /// Every remembered transcript **oldest first** — the order
   /// `config.stt_prompt` wants, since `entries` is newest-first for the
-  /// UI. Text only: the timestamps are a display concern.
-  public var transcriptsOldestFirst: [String] { entries.reversed().map(\.text) }
+  /// UI. Text only: the timestamps are a display concern. The *spoken* text,
+  /// never the expanded one — see `Entry.spoken`.
+  public var transcriptsOldestFirst: [String] { entries.reversed().map(\.spoken) }
 
   public init() {}
 
   /// Records a dictation made at `time` with `style` (see `Entry.style`),
   /// pushing it to the front and dropping the oldest entries beyond `capacity`.
   /// `time` is injected (not read from the clock) so tests are deterministic.
-  public mutating func record(_ text: String, style: String? = nil, at time: Date) {
-    entries.insert(Entry(text: text, timestamp: time, style: style), at: 0)
+  /// `spoken` is the pre-expansion transcript when text shortcuts changed it;
+  /// omitted, the two are the same.
+  public mutating func record(
+    _ text: String, spoken: String? = nil, style: String? = nil, at time: Date
+  ) {
+    entries.insert(
+      Entry(text: text, spoken: spoken ?? text, timestamp: time, style: style), at: 0)
     if entries.count > Self.capacity {
       entries.removeLast(entries.count - Self.capacity)
     }

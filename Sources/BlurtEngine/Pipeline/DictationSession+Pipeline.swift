@@ -69,14 +69,15 @@ extension DictationSession {
     // .cancelled and detached this task — don't inject or touch the phase.
     if Task.isCancelled { return }
 
-    guard text.trimmedNonEmpty() != nil else {
+    guard let spoken = text.trimmedNonEmpty() else {
       setPhase(.idle)
       return
     }
 
-    // The log keeps what the service returned; everything downstream — the
-    // ring, the host's Recent list, the paste — sees the expanded text, so the
-    // history shows what actually landed in the target.
+    // The log keeps what the service returned. The paste and the Recent list
+    // get the expanded text; the ring also keeps the spoken version, which is
+    // the one the next request's `stt_prompt` carries — so a shortcut's saved
+    // replacement never leaves the machine.
     seams.logTranscript(text, capturedContext)
     let expanded = TextShortcutExpander.expand(text, using: textShortcutsProvider())
     guard let trimmed = expanded.trimmedNonEmpty() else {
@@ -94,7 +95,8 @@ extension DictationSession {
     // dictation this launch, in unrelated apps. So a secure target is transcribed
     // and pasted as normal, and simply not remembered.
     if capturedContext?.targetIsSecure != true {
-      recentDictations.record(trimmed, style: styleNameProvider(), at: Date())
+      recentDictations.record(
+        trimmed, spoken: spoken, style: styleNameProvider(), at: Date())
     }
     // Report every produced transcript (trimmed for display), with the ring it
     // just joined, before injection — pasted, copied, and failed-to-paste all count.

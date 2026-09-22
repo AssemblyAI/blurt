@@ -76,10 +76,20 @@ public struct TextShortcutStore {
     return Self.normalized(decoded)
   }
 
+  /// The identity two triggers share when the expander can't tell them apart:
+  /// letters and digits only, lowercased, with the separators dropped — it
+  /// treats any separator run (or none) between words as equal, so "personal
+  /// email", "Personal-Email" and "personalemail" are one phrase. Empty for a
+  /// trigger with no letters or digits, which can never match anything.
+  public static func matchKey(for trigger: String) -> String {
+    TextShortcutExpander.words(in: trigger).joined().lowercased()
+  }
+
   /// The one funnel every list passes through, on read and on write: trimmed
-  /// fields within their caps, entries with a blank trigger or expansion
-  /// dropped, and triggers deduplicated case-insensitively (first wins — two
-  /// expansions for one phrase could only ever apply one of them). Idempotent.
+  /// fields within their caps, entries with a blank or unmatchable trigger or a
+  /// blank expansion dropped, and triggers deduplicated by `matchKey` (first
+  /// wins — two expansions for one phrase could only ever apply one of them).
+  /// Idempotent.
   static func normalized(_ shortcuts: [TextShortcut]) -> [TextShortcut] {
     var seen = Set<String>()
     var result: [TextShortcut] = []
@@ -89,7 +99,8 @@ public struct TextShortcutStore {
         let expansion = shortcut.expansion.trimmedNonEmpty().map({
           String($0.prefix(expansionLimit))
         }),
-        seen.insert(trigger.lowercased()).inserted
+        case let key = matchKey(for: trigger), !key.isEmpty,
+        seen.insert(key).inserted
       else { continue }
       result.append(TextShortcut(id: shortcut.id, trigger: trigger, expansion: expansion))
     }

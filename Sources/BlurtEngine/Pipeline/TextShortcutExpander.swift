@@ -74,11 +74,15 @@ enum TextShortcutExpander {
   /// an optional run of separators. `nil` for a trigger with no letters or
   /// digits, which could only ever match punctuation.
   static func pattern(for trigger: String) -> String? {
-    let words = trigger.components(separatedBy: CharacterSet.alphanumerics.inverted)
-      .filter { !$0.isEmpty }
+    let words = words(in: trigger)
     guard !words.isEmpty else { return nil }
     return words.map(NSRegularExpression.escapedPattern(for:))
       .joined(separator: "[\\s\\-_.,]*")
+  }
+
+  /// The trigger's letter/digit runs — the only part of it the matcher reads.
+  static func words(in trigger: String) -> [String] {
+    trigger.components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
   }
 
   private static func matchesWhole(_ text: String, pattern: String) -> Bool {

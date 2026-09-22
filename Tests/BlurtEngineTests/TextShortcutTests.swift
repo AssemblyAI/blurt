@@ -97,6 +97,21 @@ struct TextShortcutStoreTests {
     #expect(store.shortcuts.map(\.expansion) == ["me@example.com"])
   }
 
+  /// The expander can't tell these apart, so keeping both would leave one of
+  /// them silently unreachable.
+  @Test("dedupe treats triggers that differ only in separators as one phrase")
+  func dedupeBySeparatorlessKey() {
+    let store = TextShortcutStore(defaults: freshDefaults())
+    store.shortcuts = [
+      TextShortcut(trigger: "personal email", expansion: "a@example.com"),
+      TextShortcut(trigger: "Personal-Email", expansion: "b@example.com"),
+      TextShortcut(trigger: "personalemail", expansion: "c@example.com"),
+      TextShortcut(trigger: "...", expansion: "unmatchable"),
+    ]
+    #expect(store.shortcuts.map(\.expansion) == ["a@example.com"])
+    #expect(TextShortcutStore.matchKey(for: "Cal.com") == TextShortcutStore.matchKey(for: "cal com"))
+  }
+
   @Test("an undecodable slot reads as no shortcuts")
   func corrupt() {
     let defaults = freshDefaults()
@@ -122,5 +137,25 @@ struct DictationSessionTextShortcutTests {
     #expect(await fixture.injector.inserted == ["Mail me@example.com."])
     #expect(spy.values == ["Mail me@example.com."])
     #expect(fixture.log.transcripts.map(\.text) == ["Mail personal email."])
+  }
+
+  /// The ring feeds the next request's `stt_prompt`, so it must carry what was
+  /// said — a saved replacement (an address, a token) never goes on the wire —
+  /// while the Recent row still shows what was pasted.
+  @Test("the next request's history carries the spoken text, not the expansion")
+  func historyStaysSpoken() async {
+    let fixture = makeSession(
+      mode: .transcript("Mail personal email."),
+      textShortcuts: [TextShortcut(trigger: "personal email", expansion: "me@example.com")])
+
+    for _ in 1...2 {
+      await fixture.session.press()
+      await fixture.session.release()
+      await fixture.session.waitForIdle()
+    }
+
+    let contexts = await fixture.transcriber.receivedContexts
+    #expect(contexts.last??.recentTranscripts == ["Mail personal email."])
+    #expect(await fixture.session.recentDictations.entries.first?.text == "Mail me@example.com.")
   }
 }
