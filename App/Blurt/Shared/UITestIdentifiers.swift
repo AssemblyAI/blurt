@@ -32,6 +32,7 @@ enum UITestIdentifiers {
   // opening title (see `settingsWindowTitle` in BlurtUITestSupport).
   static let generalSettingsTab = "General"
   static let advancedSettingsTab = "Advanced"
+  static let textShortcutsTab = "Text Shortcuts"
 
   // Test-harness controls (set in `UITestSupport.swift`).
   static let transcriptField = "uitest.transcript"
@@ -82,6 +83,14 @@ enum UITestIdentifiers {
   static let styleProfileCancel = "settings.styleProfiles.cancel"
   static let styleProfileDelete = "settings.styleProfiles.delete"
   static func styleProfileEdit(_ index: Int) -> String { "settings.styleProfiles.edit.\(index)" }
+  // The Text Shortcuts pane and its sheet (`TextShortcutsSection`), indexed per
+  // row for the same reason as the style profiles' Edit buttons.
+  static let textShortcutAdd = "settings.textShortcuts.add"
+  static let textShortcutTrigger = "settings.textShortcuts.trigger"
+  static let textShortcutExpansion = "settings.textShortcuts.expansion"
+  static let textShortcutSave = "settings.textShortcuts.save"
+  static let textShortcutDelete = "settings.textShortcuts.delete"
+  static func textShortcutEdit(_ index: Int) -> String { "settings.textShortcuts.edit.\(index)" }
 
   /// The main window's style switcher (`ReadyView`): a single pop-up whose
   /// items are Default, then each defined profile, then "Edit Styles…" below a

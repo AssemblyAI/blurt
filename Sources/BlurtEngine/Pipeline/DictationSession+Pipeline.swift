@@ -69,12 +69,20 @@ extension DictationSession {
     // .cancelled and detached this task — don't inject or touch the phase.
     if Task.isCancelled { return }
 
-    guard let trimmed = text.trimmedNonEmpty() else {
+    guard text.trimmedNonEmpty() != nil else {
       setPhase(.idle)
       return
     }
 
+    // The log keeps what the service returned; everything downstream — the
+    // ring, the host's Recent list, the paste — sees the expanded text, so the
+    // history shows what actually landed in the target.
     seams.logTranscript(text, capturedContext)
+    let expanded = TextShortcutExpander.expand(text, using: textShortcutsProvider())
+    guard let trimmed = expanded.trimmedNonEmpty() else {
+      setPhase(.idle)
+      return
+    }
     // Remember it as context for the *next* press before handing it on: the ring
     // is what supplies `stt_prompt`'s leading text, so a stretch of
     // dictation continues itself. Recorded here rather than by the host so the
@@ -91,7 +99,7 @@ extension DictationSession {
     // Report every produced transcript (trimmed for display), with the ring it
     // just joined, before injection — pasted, copied, and failed-to-paste all count.
     onTranscriptDelivered?(trimmed, recentDictations)
-    await inject(text)
+    await inject(expanded)
   }
 
   /// Opens the dictation request at press and streams `frames` into it.

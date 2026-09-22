@@ -12,7 +12,7 @@ import SwiftUI
 struct SettingsWindowRoot: View {
   var appDelegate: AppDelegate
 
-  private enum Tab: Hashable { case general, advanced }
+  private enum Tab: Hashable { case general, textShortcuts, advanced }
 
   /// Drives the selected pane from `@State` (not the OS's persisted preference
   /// tab), so the window always opens on General. Without an explicit binding
@@ -28,6 +28,9 @@ struct SettingsWindowRoot: View {
         GeneralSettingsTab(coordinator: coordinator)
           .tabItem { Label(UITestIdentifiers.generalSettingsTab, systemImage: "gearshape") }
           .tag(Tab.general)
+        TextShortcutsSection()
+          .tabItem { Label(UITestIdentifiers.textShortcutsTab, systemImage: "text.badge.plus") }
+          .tag(Tab.textShortcuts)
         AdvancedSettingsTab(coordinator: coordinator, updateModel: appDelegate.updateCheckModel)
           .tabItem { Label(UITestIdentifiers.advancedSettingsTab, systemImage: "gearshape.2") }
           .tag(Tab.advanced)

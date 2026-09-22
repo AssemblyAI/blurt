@@ -26,6 +26,7 @@ func makeSession(
   field: FocusCapture.FocusedFieldContext = .empty,
   frontmost: CapturedFocus? = nil,
   keyTerms: [String] = [],
+  textShortcuts: [TextShortcut] = [],
   onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)? = nil
 ) -> SessionFixture {
   let mic = StubMicCapture()
@@ -38,6 +39,7 @@ func makeSession(
     // Pinned rather than left to read the process's real `UserDefaults`, so a
     // developer's own Settings list can't change what a test sends.
     keyTermsProvider: { keyTerms },
+    textShortcutsProvider: { textShortcuts },
     onTranscriptDelivered: onTranscriptDelivered,
     seams: testSeams(field: field, frontmost: frontmost, log: log))
   return SessionFixture(
@@ -96,7 +98,7 @@ func makeSession(
 ) -> DictationSession {
   DictationSession(
     mic: mic, transcriber: transcriber, injector: injector, clock: clock,
-    keyTermsProvider: { keyTerms }, seams: seams)
+    keyTermsProvider: { keyTerms }, textShortcutsProvider: { [] }, seams: seams)
 }
 
 extension DictationSession.Seams {
