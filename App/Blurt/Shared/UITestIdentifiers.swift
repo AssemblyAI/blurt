@@ -89,6 +89,7 @@ enum UITestIdentifiers {
   static let textShortcutTrigger = "settings.textShortcuts.trigger"
   static let textShortcutExpansion = "settings.textShortcuts.expansion"
   static let textShortcutSave = "settings.textShortcuts.save"
+  static let textShortcutCancel = "settings.textShortcuts.cancel"
   static let textShortcutDelete = "settings.textShortcuts.delete"
   static func textShortcutEdit(_ index: Int) -> String { "settings.textShortcuts.edit.\(index)" }
 

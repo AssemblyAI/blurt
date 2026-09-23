@@ -153,6 +153,7 @@ private struct TextShortcutEditorSheet: View {
         Spacer(minLength: 12)
         Button("Cancel") { dismiss() }
           .keyboardShortcut(.cancelAction)
+          .accessibilityIdentifier(UITestIdentifiers.textShortcutCancel)
         Button("Save", action: save)
           .glassButtonStyleCompat(prominent: true)
           .keyboardShortcut(.defaultAction)
