@@ -13,7 +13,7 @@ final class TextShortcutsUITests: BlurtUITestCase {
 
     addShortcut(in: pane, trigger: "work email", expansion: "me@example.com")
     XCTAssertTrue(
-      row(in: pane, containing: "me@example.com").waitForExistence(timeout: 5),
+      rowText(in: pane, reading: "me@example.com").waitForExistence(timeout: 5),
       "A saved shortcut should appear in the list")
 
     let sheet = openSheet(in: pane, via: UITestIdentifiers.textShortcutEdit(0))
@@ -24,10 +24,10 @@ final class TextShortcutsUITests: BlurtUITestCase {
     sheet.buttons[UITestIdentifiers.textShortcutSave].click()
     XCTAssertTrue(sheet.waitForNonExistence(timeout: 5), "Save should dismiss the sheet")
     XCTAssertTrue(
-      row(in: pane, containing: "you@example.com").waitForExistence(timeout: 5),
+      rowText(in: pane, reading: "you@example.com").waitForExistence(timeout: 5),
       "An edit should replace the row's text")
     XCTAssertFalse(
-      row(in: pane, containing: "me@example.com").exists,
+      rowText(in: pane, reading: "me@example.com").exists,
       "An edit should not leave the old text behind")
 
     let deleting = openSheet(in: pane, via: UITestIdentifiers.textShortcutEdit(0))
@@ -92,10 +92,11 @@ final class TextShortcutsUITests: BlurtUITestCase {
     XCTAssertTrue(sheet.waitForNonExistence(timeout: 5), "Save should dismiss the sheet")
   }
 
-  /// A row's read-out, matched on its label: the row combines trigger and
-  /// replacement into one accessibility element, so neither is its own text.
-  private func row(in pane: XCUIElement, containing text: String) -> XCUIElement {
-    pane.descendants(matching: .any)
-      .matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
+  /// A row's read-out. Each of the row's two texts is its own static text, and
+  /// the subscript matches a SwiftUI `Text` by its string, which XCUITest
+  /// carries in the element's value rather than its label (see
+  /// `waitForLabel`) — so a label-only predicate never finds it.
+  private func rowText(in pane: XCUIElement, reading text: String) -> XCUIElement {
+    pane.staticTexts[text]
   }
 }

@@ -32,7 +32,6 @@ struct TextShortcutsSection: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             }
-            .accessibilityElement(children: .combine)
             Spacer(minLength: 12)
             Button("Edit…") { editing = shortcut }
               .accessibilityIdentifier(UITestIdentifiers.textShortcutEdit(index))
