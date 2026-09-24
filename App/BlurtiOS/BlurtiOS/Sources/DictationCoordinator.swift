@@ -59,6 +59,8 @@ final class DictationCoordinator {
     ]
     reloadLexicon()
     tasks = [observePhases(), observeLevels(), observeRecents()]
+    // Whatever the last run left in the App Group is over.
+    publish(.idle)
   }
 
   // MARK: - The listening window

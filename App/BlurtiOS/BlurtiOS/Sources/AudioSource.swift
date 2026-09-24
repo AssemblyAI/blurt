@@ -64,7 +64,9 @@ nonisolated final class WindowedAudioSource: NSObject, MicCaptureProtocol, @unch
     output.setSampleBufferDelegate(self, queue: deliveryQueue)
   }
 
-  var isOpen: Bool { session.isRunning }
+  /// Running and not taken away: iOS keeps a session "running" through an
+  /// interruption (a phone call, Siri), while no frames arrive.
+  var isOpen: Bool { session.isRunning && !session.isInterrupted }
 
   /// Opens the microphone. Only works from the foreground; the audio session
   /// must already be active (`ListeningWindow` does both, in that order).

@@ -91,7 +91,7 @@ final class KeyboardModel {
   private func refresh() {
     isListening = SharedStore.isListening
     if let current = SharedStore.read(PhaseSnapshot.self, forKey: BlurtShared.Key.phase) {
-      apply(current)
+      apply(current.isStale ? .idle : current)
     }
   }
 
@@ -170,7 +170,7 @@ final class KeyboardModel {
 
   private func phaseChanged() {
     guard let current = SharedStore.read(PhaseSnapshot.self, forKey: BlurtShared.Key.phase) else { return }
-    apply(current)
+    apply(current.isStale ? .idle : current)
   }
 
   private func apply(_ current: PhaseSnapshot) {

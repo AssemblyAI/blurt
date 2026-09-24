@@ -19,6 +19,7 @@ final class ListeningWindow {
   private(set) var until: Date?
   private(set) var lastError: String?
   @ObservationIgnored private var expiry: Task<Void, Never>?
+  @ObservationIgnored private var heartbeat: Task<Void, Never>?
 
   var isOpen: Bool { source.isOpen && (until.map { $0 > Date() } ?? false) }
 
@@ -36,6 +37,7 @@ final class ListeningWindow {
       try source.open()
       lastError = nil
       extend()
+      startHeartbeat()
     } catch {
       lastError = error.localizedDescription
       close()
@@ -58,12 +60,30 @@ final class ListeningWindow {
     }
   }
 
+  /// Tells the keyboard the app is alive and the microphone really is open —
+  /// `SharedStore.isListening` needs both. Stops reporting the moment capture
+  /// is interrupted (a phone call), so the keyboard's next tap reopens the app
+  /// instead of sending a press into silence.
+  private func startHeartbeat() {
+    heartbeat?.cancel()
+    heartbeat = Task { [weak self] in
+      while !Task.isCancelled {
+        guard let self else { return }
+        SharedStore.appSeenAt = source.isOpen ? Date() : nil
+        try? await Task.sleep(for: .seconds(5))
+      }
+    }
+  }
+
   func close() {
     expiry?.cancel()
     expiry = nil
+    heartbeat?.cancel()
+    heartbeat = nil
     source.close()
     until = nil
     SharedStore.listeningUntil = nil
+    SharedStore.appSeenAt = nil
     try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
   }
 }

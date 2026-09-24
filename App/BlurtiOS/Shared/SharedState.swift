@@ -27,6 +27,7 @@ nonisolated enum BlurtShared {
     static let command = "command"
     static let result = "result"
     static let keyboardSeenAt = "keyboardSeenAt"
+    static let appSeenAt = "appSeenAt"
     static let keyboardEverSeen = "keyboardEverSeen"
     static let lexicon = "lexicon"
     static let lexiconRefreshedAt = "lexiconRefreshedAt"
@@ -135,6 +136,21 @@ nonisolated struct PhaseSnapshot: Codable, Sendable, Equatable {
   let at: Date
 
   static let idle = PhaseSnapshot(state: .idle, message: nil, level: 0, at: .distantPast)
+
+  /// Whether this is too old to show. A notice (pasted, copied, error) dwells
+  /// for a moment and is then over; an in-flight state older than the longest
+  /// possible dictation belongs to an app that was killed under it. The
+  /// keyboard reads the snapshot back on every appearance and on every signal,
+  /// including signals held while it was suspended, so it must decide for
+  /// itself.
+  var isStale: Bool {
+    let age = Date().timeIntervalSince(at)
+    switch state {
+    case .idle: return false
+    case .pasted, .copied, .error: return age > 3
+    case .connecting, .recording, .processing: return age > 130
+    }
+  }
 }
 
 /// One entry of the phone's own word list (`UILexicon`): contact names and the
@@ -193,8 +209,24 @@ nonisolated enum SharedStore {
     set { defaults.set(newValue, forKey: BlurtShared.Key.listeningUntil) }
   }
 
-  /// Whether the app currently has the microphone open for the keyboard.
-  static var isListening: Bool { (listeningUntil ?? .distantPast) > Date() }
+  /// How recently the app must have checked in to count as alive. Its
+  /// heartbeat is every few seconds while the microphone is open.
+  static let appPresenceWindow: TimeInterval = 15
+
+  /// Whether the app currently has the microphone open for the keyboard: the
+  /// window has not lapsed, and the app is still there to hear — iOS may have
+  /// killed it, or a phone call taken the microphone, with the window's end
+  /// still in the future. The keyboard then opens the app rather than sending
+  /// a press nobody would answer.
+  static var isListening: Bool {
+    guard (listeningUntil ?? .distantPast) > Date() else { return false }
+    return Date().timeIntervalSince(appSeenAt ?? .distantPast) < appPresenceWindow
+  }
+
+  static var appSeenAt: Date? {
+    get { defaults.object(forKey: BlurtShared.Key.appSeenAt) as? Date }
+    set { defaults.set(newValue, forKey: BlurtShared.Key.appSeenAt) }
+  }
 
   static var keyboardSeenAt: Date? {
     get { defaults.object(forKey: BlurtShared.Key.keyboardSeenAt) as? Date }
