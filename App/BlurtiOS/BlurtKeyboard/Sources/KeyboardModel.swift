@@ -55,11 +55,11 @@ final class KeyboardModel {
   func attach(to controller: UIInputViewController) {
     self.controller = controller
     observers = [
-      DarwinObserver(name: BlurtShared.Signal.phase) {
-        Task { @MainActor [weak self] in self?.phaseChanged() }
+      DarwinObserver(name: BlurtShared.Signal.phase) { [weak self] in
+        Task { @MainActor in self?.phaseChanged() }
       },
-      DarwinObserver(name: BlurtShared.Signal.result) {
-        Task { @MainActor [weak self] in self?.resultArrived() }
+      DarwinObserver(name: BlurtShared.Signal.result) { [weak self] in
+        Task { @MainActor in self?.resultArrived() }
       },
     ]
   }

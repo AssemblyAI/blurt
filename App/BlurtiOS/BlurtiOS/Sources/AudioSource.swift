@@ -166,6 +166,22 @@ extension WindowedAudioSource: nonisolated AVCaptureAudioDataOutputSampleBufferD
 /// rebuilds its converter if the input format changes underneath it (a route
 /// change to AirPods, say).
 nonisolated final class PCMConverter {
+  /// One buffer per `convert` call: the first pull gets it, every later pull
+  /// is told there is no more for now. The converter's input block is
+  /// `@Sendable` and escaping in type but runs synchronously on this thread
+  /// before `convert` returns, so an unchecked box is sound — and unlike a
+  /// `Mutex`, it can be captured.
+  private final class Handoff: @unchecked Sendable {
+    private var buffer: AVAudioPCMBuffer?
+
+    init(_ buffer: AVAudioPCMBuffer) { self.buffer = buffer }
+
+    func take() -> AVAudioPCMBuffer? {
+      defer { buffer = nil }
+      return buffer
+    }
+  }
+
   private let outputFormat: AVAudioFormat
   private var inputFormat: AVAudioFormat?
   private var converter: AVAudioConverter?
@@ -194,21 +210,15 @@ nonisolated final class PCMConverter {
     guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: capacity) else {
       return nil
     }
-    // One buffer per call: the first pull gets it, every later pull is told
-    // there is no more for now. The converter's input block is `@Sendable`,
-    // but it runs synchronously on this thread before `convert` returns, so
-    // handing the buffer across unchecked is sound; the flag sits in a `Mutex`.
-    nonisolated(unsafe) let handoff = input
-    let handedOver = Mutex(false)
+    let handoff = Handoff(input)
     var conversionError: NSError?
     let status = converter.convert(to: outputBuffer, error: &conversionError) { _, inputStatus in
-      let first = handedOver.withLock { done -> Bool in
-        if done { return false }
-        done = true
-        return true
+      guard let buffer = handoff.take() else {
+        inputStatus.pointee = .noDataNow
+        return nil
       }
-      inputStatus.pointee = first ? .haveData : .noDataNow
-      return first ? handoff : nil
+      inputStatus.pointee = .haveData
+      return buffer
     }
     guard status != .error, conversionError == nil, outputBuffer.frameLength > 0,
       let channels = outputBuffer.int16ChannelData

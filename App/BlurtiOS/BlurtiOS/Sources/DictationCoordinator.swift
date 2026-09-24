@@ -50,11 +50,11 @@ final class DictationCoordinator {
 
   func start() {
     observers = [
-      DarwinObserver(name: BlurtShared.Signal.command) {
-        Task { @MainActor [weak self] in self?.handleCommand() }
+      DarwinObserver(name: BlurtShared.Signal.command) { [weak self] in
+        Task { @MainActor in self?.handleCommand() }
       },
-      DarwinObserver(name: BlurtShared.Signal.lexicon) {
-        Task { @MainActor [weak self] in self?.reloadLexicon() }
+      DarwinObserver(name: BlurtShared.Signal.lexicon) { [weak self] in
+        Task { @MainActor in self?.reloadLexicon() }
       },
     ]
     reloadLexicon()
