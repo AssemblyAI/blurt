@@ -88,7 +88,7 @@ public struct RecentDictations: Equatable, Sendable {
   /// `config.stt_prompt` wants, since `entries` is newest-first for the
   /// UI. Text only: the timestamps are a display concern. The *spoken* text,
   /// never the expanded one — see `Entry.spoken`.
-  public var transcriptsOldestFirst: [String] { entries.reversed().map(\.spoken) }
+  public var spokenOldestFirst: [String] { entries.reversed().map(\.spoken) }
 
   public init() {}
 

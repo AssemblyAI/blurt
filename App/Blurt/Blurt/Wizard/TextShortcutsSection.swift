@@ -17,9 +17,8 @@ struct TextShortcutsSection: View {
   /// The shortcut the sheet is editing, or nil while it's closed.
   @State private var editing: TextShortcut?
 
-  private var shortcuts: [TextShortcut] { TextShortcutStore().shortcuts(decoding: rawShortcuts) }
-
   var body: some View {
+    let shortcuts = TextShortcutStore().shortcuts(decoding: rawShortcuts)
     Form {
       Section {
         ForEach(Array(shortcuts.enumerated()), id: \.element.id) { index, shortcut in
@@ -51,7 +50,7 @@ struct TextShortcutsSection: View {
     .formStyle(.grouped)
     .frame(height: 440)
     .sheet(item: $editing) { shortcut in
-      TextShortcutEditorSheet(shortcut: shortcut, isExisting: shortcuts.contains(shortcut))
+      TextShortcutEditorSheet(shortcut: shortcut, among: shortcuts)
     }
   }
 }
@@ -62,6 +61,9 @@ struct TextShortcutsSection: View {
 private struct TextShortcutEditorSheet: View {
   let shortcut: TextShortcut
   let isExisting: Bool
+  /// Every *other* shortcut's `matchKey`, taken once when the sheet opens
+  /// rather than re-decoded from the store on every keystroke.
+  private let otherKeys: Set<String>
 
   @Environment(\.dismiss) private var dismiss
 
@@ -69,9 +71,11 @@ private struct TextShortcutEditorSheet: View {
   @State private var expansion: String
   @FocusState private var triggerFocused: Bool
 
-  init(shortcut: TextShortcut, isExisting: Bool) {
+  init(shortcut: TextShortcut, among shortcuts: [TextShortcut]) {
     self.shortcut = shortcut
-    self.isExisting = isExisting
+    isExisting = shortcuts.contains { $0.id == shortcut.id }
+    otherKeys = Set(
+      shortcuts.filter { $0.id != shortcut.id }.map { TextShortcutStore.matchKey(for: $0.trigger) })
     _trigger = State(initialValue: shortcut.trigger)
     _expansion = State(initialValue: shortcut.expansion)
   }
@@ -84,10 +88,7 @@ private struct TextShortcutEditorSheet: View {
   /// email" vs "Personal-Email" — would be dropped by the store's dedupe, so
   /// it's refused here instead of vanishing.
   private var duplicatesAnother: Bool {
-    guard !triggerKey.isEmpty else { return false }
-    return TextShortcutStore().shortcuts.contains {
-      $0.id != shortcut.id && TextShortcutStore.matchKey(for: $0.trigger) == triggerKey
-    }
+    !triggerKey.isEmpty && otherKeys.contains(triggerKey)
   }
 
   private var canSave: Bool {

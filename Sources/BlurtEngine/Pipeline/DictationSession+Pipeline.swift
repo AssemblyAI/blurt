@@ -69,23 +69,15 @@ extension DictationSession {
     // .cancelled and detached this task — don't inject or touch the phase.
     if Task.isCancelled { return }
 
-    guard let spoken = text.trimmedNonEmpty() else {
-      setPhase(.idle)
-      return
-    }
-
-    // The log keeps what the service returned. The paste and the Recent list
-    // get the expanded text; the ring also keeps the spoken version, which is
-    // the one the next request's `stt_prompt` carries. The other way back is the
-    // field itself — the next press reads the pasted expansion as `priorText` —
-    // which `beginContextCapture` scrubs, so a shortcut's saved replacement
-    // never leaves the machine.
-    seams.logTranscript(text, capturedContext)
+    // The log keeps what the service returned; the paste and the Recent list
+    // get the expanded text, and the ring also keeps the spoken version (see
+    // `RecentDictations.Entry.spoken`).
     let expanded = TextShortcutExpander.expand(text, using: textShortcutsProvider())
-    guard let trimmed = expanded.trimmedNonEmpty() else {
+    guard let spoken = text.trimmedNonEmpty(), let trimmed = expanded.trimmedNonEmpty() else {
       setPhase(.idle)
       return
     }
+    seams.logTranscript(text, capturedContext)
     // Remember it as context for the *next* press before handing it on: the ring
     // is what supplies `stt_prompt`'s leading text, so a stretch of
     // dictation continues itself. Recorded here rather than by the host so the

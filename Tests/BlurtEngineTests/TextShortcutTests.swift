@@ -198,7 +198,8 @@ struct DictationSessionTextShortcutTests {
   }
 
   /// The field holds what was pasted, so the next press reads the expansion
-  /// back as `priorText` — which rides `stt_prompt` unless it is scrubbed.
+  /// back as `priorText` — which rides `stt_prompt` unless it is scrubbed. The
+  /// context itself stays raw: the log and the paste separator read it.
   @Test("the text before the caret goes out with expansions put back to triggers")
   func priorTextRedacted() async {
     let fixture = makeSession(
@@ -211,7 +212,7 @@ struct DictationSessionTextShortcutTests {
     await fixture.session.waitForIdle()
 
     let context = await fixture.transcriber.receivedContexts.last ?? nil
-    #expect(context?.priorText == "Mail personal email.")
-    #expect(!STTPrompt.text(context: context).contains("me@example.com"))
+    #expect(context?.priorText == "Mail me@example.com.")
+    #expect(STTPrompt.text(context: context) == "Mail personal email.")
   }
 }

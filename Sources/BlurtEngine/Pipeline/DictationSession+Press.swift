@@ -146,13 +146,9 @@ extension DictationSession {
     // Key terms are read synchronously at press (cheap UserDefaults read), so
     // each dictation observably re-reads Settings edits at press time.
     let keyTerms = keyTermsProvider()
-    // Read now for the same reason: the field text is scrubbed of pasted
-    // shortcut expansions before it becomes `stt_prompt` (see
-    // `TextShortcutExpander.redactingExpansions`).
-    let textShortcuts = textShortcutsProvider()
     // Session history, read on the actor for the same reason: the capture below
     // runs off-actor, so what it carries has to be a value taken now.
-    let recentTranscripts = recentDictations.transcriptsOldestFirst
+    let recentTranscripts = recentDictations.spokenOldestFirst
     // Kick off the AX field-context read now, while the target field still
     // holds focus, but don't await it here: it's cross-process IPC into the
     // frontmost app (detached — off the main actor, where it froze the
@@ -182,18 +178,20 @@ extension DictationSession {
     // next press's. The body is fully synchronous and captures only Sendable
     // values, so it needs no task context.
     let captureFieldContext = seams.captureFieldContext
+    let textShortcutsProvider = textShortcutsProvider
     Self.contextQueue.async {
       let field = captureFieldContext()
       let context = TranscriptionContext(
         appName: captured?.processName,
         windowTitle: field.windowTitle,
         fieldLabel: field.fieldLabel,
-        priorText: field.priorText.map {
-          TextShortcutExpander.redactingExpansions(in: $0, using: textShortcuts)
-        },
+        priorText: field.priorText,
         selectedText: field.selectedText,
         recentTranscripts: recentTranscripts,
         keyTerms: keyTerms,
+        // Only needed to scrub the field text, so read only when there is some,
+        // and here rather than on the actor.
+        textShortcuts: field.priorText == nil ? [] : textShortcutsProvider(),
         targetIsSecure: field.isSecure)
       // One publish, which is what makes the value-before-stream ordering
       // `startUpload`'s wait depends on unforgeable — see `PressContext.store`.
