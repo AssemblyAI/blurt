@@ -73,7 +73,15 @@ public struct InstallReset {
     self.init(
       clearSettings: { PersistedSettings.resetAll() },
       clearAPIKey: { keyStore.save(nil) },
-      resetPermissions: { PermissionsReset.resetAll(bundleID: bundleID) },
+      resetPermissions: {
+        #if os(macOS)
+          return PermissionsReset.resetAll(bundleID: bundleID)
+        #else
+          // iOS lets no app revoke its own grants — they go with the install —
+          // so there is nothing for this step to do, and nothing to report.
+          return true
+        #endif
+      },
       clearLogs: { DictationLog.removeStoredLogs() })
   }
 

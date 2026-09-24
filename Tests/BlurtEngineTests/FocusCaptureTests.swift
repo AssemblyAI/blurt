@@ -222,11 +222,13 @@ struct FocusCaptureTests {
 
   // MARK: isElectronApp
 
-  @Test("isElectronApp is false for a missing app")
-  func electronNilApp() {
-    // The positive branch probes the app bundle on disk and is host-dependent;
-    // the nil guard (no captured target → never the Electron paste exception)
-    // is the deterministic half.
-    #expect(!FocusCapture.isElectronApp(nil))
-  }
+  #if os(macOS)
+    @Test("isElectronApp is false for a missing app")
+    func electronNilApp() {
+      // The positive branch probes the app bundle on disk and is host-dependent;
+      // the nil guard (no captured target → never the Electron paste exception)
+      // is the deterministic half.
+      #expect(!FocusCapture.isElectronApp(nil))
+    }
+  #endif
 }

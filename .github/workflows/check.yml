@@ -213,6 +213,39 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # The engine is a two-platform package, and `check` only ever compiles it for
+  # macOS: `swift test` builds for the host, and every job above runs on one.
+  # A macOS-only symbol that escapes its `#if os(macOS)` fence therefore passes
+  # `check` and breaks the iOS app, which is why this job exists and why `gate`
+  # treats it as required. It builds the library alone, for the simulator SDK —
+  # `xcodebuild` rather than `swift build`, because cross-compiling needs the
+  # SDK/destination handling xcodebuild owns, and it resolves the package
+  # straight from the checkout, no project needed. `generic/platform=iOS
+  # Simulator` builds against the runner's default (latest installed) simulator
+  # SDK without naming a device or pinning an iOS version. The scheme is the
+  # package's own `BlurtEngine` product scheme, so only the library builds; the
+  # test target stays a macOS (`swift test`) concern.
+  ios-build:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: macos-26
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          persist-credentials: false
+
+      - name: Build BlurtEngine for iOS
+        working-directory: blurt
+        run: |
+          xcodebuild -scheme BlurtEngine \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/BlurtEngine-iOS" \
+            build
+
   # Always-runs summary job, so a *skipped* `check` can't be mistaken for a pass.
   # GitHub reports a skipped required check to branch protection as successful, so
   # anything that makes `check` skip — the `changes` filter erroring, a `needs`
@@ -223,30 +256,38 @@ jobs:
   # NOTE: this only protects the repo once branch protection requires `gate`
   # instead of (or as well as) `check` — that's a repo settings change.
   gate:
-    needs: [changes, check]
+    needs: [changes, check, ios-build]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Assert the macOS gate ran or was intentionally skipped
+      - name: Assert the macOS and iOS gates ran or were intentionally skipped
         env:
           CHECK_RESULT: ${{ needs.check.result }}
+          IOS_RESULT: ${{ needs.ios-build.result }}
           CHANGES_RESULT: ${{ needs.changes.result }}
           CODE_CHANGED: ${{ needs.changes.outputs.code }}
         run: |
-          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED check=$CHECK_RESULT"
+          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED check=$CHECK_RESULT ios-build=$IOS_RESULT"
           if [ "$CHANGES_RESULT" != "success" ]; then
             echo "error: the changes filter did not succeed, so the gate cannot be trusted" >&2
             exit 1
           fi
-          case "$CHECK_RESULT" in
-            success) echo "macOS gate passed" ;;
-            skipped)
-              if [ "$CODE_CHANGED" = "false" ]; then
-                echo "docs-only change; macOS gate intentionally skipped"
-              else
-                echo "error: check was skipped but code changed" >&2
-                exit 1
-              fi
-              ;;
-            *) echo "error: macOS gate result was '$CHECK_RESULT'" >&2; exit 1 ;;
-          esac
+          # Same rule for both platform gates: green, or skipped only because the
+          # change was docs-only. Written once so the iOS gate can't drift into
+          # a looser reading than the macOS one.
+          assert_gate() {
+            case "$2" in
+              success) echo "$1 gate passed" ;;
+              skipped)
+                if [ "$CODE_CHANGED" = "false" ]; then
+                  echo "docs-only change; $1 gate intentionally skipped"
+                else
+                  echo "error: $1 gate was skipped but code changed" >&2
+                  exit 1
+                fi
+                ;;
+              *) echo "error: $1 gate result was '$2'" >&2; exit 1 ;;
+            esac
+          }
+          assert_gate macOS "$CHECK_RESULT"
+          assert_gate iOS "$IOS_RESULT"

@@ -154,7 +154,14 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
           "session refused the input device \(device.localizedName, privacy: .public)")
       }
     }
-    output.audioSettings = Self.audioSettings()
+    // macOS only: `audioSettings` is not in the iOS SDK, where the output vends
+    // samples in the device's native format. Until the iOS capture path adds a
+    // conversion stage, what it delivers is not the 16 kHz mono S16LE the
+    // dictation API is declared to receive — so an iOS host must not upload
+    // this recorder's frames yet.
+    #if os(macOS)
+      output.audioSettings = Self.audioSettings()
+    #endif
     output.setSampleBufferDelegate(self, queue: delegateQueue)
     if session.canAddOutput(output) {
       session.addOutput(output)

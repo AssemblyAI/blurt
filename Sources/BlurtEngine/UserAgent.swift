@@ -79,14 +79,21 @@ enum UserAgent {
     return "\(name) (\(comment.joined(separator: "; ")))"
   }
 
-  /// `macOS 15.5` — major and minor, for the reason the type doc gives.
+  /// `macOS 15.5` — major and minor, for the reason the type doc gives — or
+  /// `iOS 18.1` when the engine is running on a phone: the OS name is the one
+  /// fact about the platform the service-side baseline has to split on.
   ///
   /// `ProcessInfo` rather than AppKit's `NSProcessInfo`-adjacent niceties or a
   /// `sw_vers` shell-out, because the engine is a dependency-free Swift package
-  /// and this is the one Foundation API that answers it.
+  /// and this is the one Foundation API that answers it on both platforms.
   private static func osDetail() -> String {
     let version = ProcessInfo.processInfo.operatingSystemVersion
-    return "macOS \(version.majorVersion).\(version.minorVersion)"
+    #if os(macOS)
+      let name = "macOS"
+    #else
+      let name = "iOS"
+    #endif
+    return "\(name) \(version.majorVersion).\(version.minorVersion)"
   }
 
   /// `dev` for anything that isn't a release build, and nothing at all for a

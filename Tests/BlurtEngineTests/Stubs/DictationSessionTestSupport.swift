@@ -23,7 +23,7 @@ struct SessionFixture {
 func makeSession(
   mode: StubTranscriber.Mode = .transcript("Hello world."),
   maxRecordingSeconds: Double = SyncSTTLimits.autoReleaseSeconds,
-  field: FocusCapture.FocusedFieldContext = .empty,
+  field: FocusedFieldContext = .empty,
   frontmost: CapturedFocus? = nil,
   keyTerms: [String] = [],
   onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)? = nil
@@ -50,7 +50,7 @@ func makeSession(
 /// the press-time context, so a test can assert on it instead of counting that
 /// *something* host-dependent arrived.
 func testSeams(
-  field: FocusCapture.FocusedFieldContext = .empty,
+  field: FocusedFieldContext = .empty,
   frontmost: CapturedFocus? = nil,
   log: RecordedLog = RecordedLog()
 ) -> DictationSession.Seams {
@@ -69,7 +69,7 @@ func testSeams(
 /// did, and both copies quietly dropped the transcript recording `testSeams`
 /// wires up, so a later assertion on `log.transcripts` would have seen nothing.
 func hungFieldSeams(
-  field: FocusCapture.FocusedFieldContext = .empty,
+  field: FocusedFieldContext = .empty,
   log: RecordedLog = RecordedLog()
 ) -> (seams: DictationSession.Seams, release: DispatchSemaphore) {
   let hung = DispatchSemaphore(value: 0)

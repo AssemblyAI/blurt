@@ -11,14 +11,14 @@ import Testing
 /// the seams (`testSeams`) both are ordinary values.
 @Suite("DictationSession captured context", .timeLimit(.minutes(1)))
 struct DictationSessionContextTests {
-  private static let field = FocusCapture.FocusedFieldContext(
+  private static let field = FocusedFieldContext(
     priorText: "Hi Sam,", selectedText: "the old plan", windowTitle: "Re: Q3 pricing",
     fieldLabel: "Body")
 
   /// The secure-target fixture, shared by the two tests that assert a password
   /// is never remembered — one where the read lands in time, one where it lands
   /// after the upload's budget.
-  private static let secureField = FocusCapture.FocusedFieldContext(
+  private static let secureField = FocusedFieldContext(
     priorText: nil, selectedText: nil, windowTitle: "1Password", fieldLabel: "Password",
     isSecure: true)
 
@@ -217,7 +217,7 @@ struct DictationSessionContextTests {
     // `isEmpty` has to count `targetIsSecure`: a secure field yields no prior or
     // selected text, so without that the snapshot would collapse to `nil` on the
     // way through `contextStream` and the guard above would never see the flag.
-    let secure = FocusCapture.FocusedFieldContext(
+    let secure = FocusedFieldContext(
       priorText: nil, selectedText: nil, windowTitle: nil, fieldLabel: nil, isSecure: true)
     #expect(!TranscriptionContext(appName: nil, priorText: nil, targetIsSecure: true).isEmpty)
     let fixture = makeSession(mode: .transcript("hunter2"), field: secure, frontmost: nil)
@@ -313,7 +313,7 @@ struct DictationSessionFailureLogTests {
   func failureIsLogged() async throws {
     let fixture = makeSession(
       mode: .throwError(BlurtError.apiKeyMissing),
-      field: FocusCapture.FocusedFieldContext(
+      field: FocusedFieldContext(
         priorText: nil, selectedText: nil, windowTitle: "Vault", fieldLabel: "Password"))
 
     await fixture.session.press()

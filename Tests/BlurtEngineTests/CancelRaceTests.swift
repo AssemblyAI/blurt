@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 import Testing
 
@@ -325,7 +324,7 @@ private actor GatedInjector: InjectorProtocol {
     self.onRecord = onRecord
   }
 
-  func setTargetApp(_ app: NSRunningApplication?) async {}
+  func setTarget(_ focus: CapturedFocus?) async {}
 
   func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws {
     await gate.enter()

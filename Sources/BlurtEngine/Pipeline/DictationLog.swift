@@ -31,7 +31,7 @@ public enum DictationLog {
     /// chunk is *trimmed* and joined to the history;
     /// this records it raw. The difference is load-bearing twice over. Its trailing
     /// whitespace is the entire input to the paste's leading-separator decision
-    /// (`KeyInjector.withLeadingSeparator` branches on `prior.last.isWhitespace`),
+    /// (`InsertionSeparator.withLeadingSeparator` branches on `prior.last.isWhitespace`),
     /// so a spacing bug is undiagnosable from a trimmed copy. And a nil here
     /// distinguishes "no prior text was read" from "the prompt ends with the
     /// newest recent dictation", which `sttPrompt` alone cannot say.

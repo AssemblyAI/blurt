@@ -140,7 +140,7 @@ struct ChunkedUploadTests {
     let session = makeSession(
       transcriber: FailsBeforeContext(),
       seams: testSeams(
-        field: FocusCapture.FocusedFieldContext(
+        field: FocusedFieldContext(
           priorText: "Dear Sam,", selectedText: nil, windowTitle: nil, fieldLabel: nil),
         log: log))
 

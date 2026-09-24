@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 
 @testable import BlurtEngine
@@ -20,6 +19,6 @@ actor StubInjector: InjectorProtocol {
     insertedPrior.append(priorText)
     insertedWindowTitles.append(windowTitle)
   }
-  func setTargetApp(_ app: NSRunningApplication?) async {}
+  func setTarget(_ focus: CapturedFocus?) async {}
   func setError(_ error: (any Error & Sendable)?) { self.error = error }
 }
