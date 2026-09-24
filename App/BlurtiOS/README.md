@@ -39,17 +39,32 @@ inherited from the Mac app and must become org-owned before the App Store.
 
 ## Testing on a phone
 
-1. Install Xcode 27 (targeting iOS 27 requires it), then `sudo xcode-select -s /Applications/Xcode.app`
-   and `scripts/bootstrap.sh` from the repo root for xcodegen and the linters.
-2. `cd App/BlurtiOS && xcodegen generate && open BlurtiOS.xcodeproj`. Select your team on both
-   targets; automatic signing registers the App Group if the account may create identifiers
-   (otherwise add `group.dev.alex.blurt` in the developer portal first).
-3. Run the `BlurtiOS` scheme on the phone. In the app: **Use an API key instead** (debug builds
+1. Install Xcode 27 from the Mac App Store (targeting iOS 27 requires it), then once:
+
+   ```bash
+   sudo xcode-select -s /Applications/Xcode.app
+   sudo xcodebuild -license accept
+   sudo xcodebuild -runFirstLaunch
+   xcodebuild -downloadPlatform iOS      # only for the simulator; a phone needs no download
+   ```
+
+   `scripts/bootstrap.sh` from the repo root installs xcodegen and the linters if `brew` has not.
+
+2. Sign in to Xcode with your Apple ID (Settings → Accounts) and note your team ID (the ten
+   characters after the team's name). The App Group needs a paid team — a free Personal Team
+   cannot register one, so use the org's team, not your own.
+3. `cd App/BlurtiOS && BLURT_TEAM=<your team id> xcodegen generate && open BlurtiOS.xcodeproj`.
+   Automatic signing registers `dev.alex.blurt.ios`, `dev.alex.blurt.ios.keyboard` and
+   `group.dev.alex.blurt` under that team on the first build; it fails if another team already
+   owns them.
+4. Plug the phone in (Developer Mode on: Settings → Privacy & Security), pick it as the run
+   destination, run the `BlurtiOS` scheme. On the phone, trust the developer app (Settings →
+   General → VPN & Device Management). In the app: **Use an API key instead** (debug builds
    only), **Allow** the microphone, then **Open Settings → Keyboards**: turn on Blurt and
    **Allow Full Access**.
-4. Back in the app, **Start listening**, then go to Messages, hold the globe key, pick Blurt,
+5. Back in the app, **Start listening**, then go to Messages, hold the globe key, pick Blurt,
    and tap the mic. Tap again to stop, or hold it while you talk. The words land in the field.
-5. Try the other two layouts from the app's Keyboard picker; the keyboard reads the choice the
+6. Try the other two layouts from the app's Keyboard picker; the keyboard reads the choice the
    next time it comes up.
 
 ## What is still a stub

@@ -27,7 +27,11 @@ settings:
     IPHONEOS_DEPLOYMENT_TARGET: "18.0"
     # iPhone first. iPad needs its own keyboard sizing pass.
     TARGETED_DEVICE_FAMILY: "1"
-    DEVELOPMENT_TEAM: B2VQF7Q2QY
+    # Whoever generates the project signs with their own team: XcodeGen expands
+    # `${BLURT_TEAM}` from the environment (`BLURT_TEAM=XXXXXXXXXX xcodegen
+    # generate`). Unset, it stays a reference that resolves to no team, which is
+    # what CI wants — it builds with signing off. App Groups need a paid team.
+    DEVELOPMENT_TEAM: ${BLURT_TEAM}
     CODE_SIGN_STYLE: Automatic
 packages:
   # The same local package the Mac app carries, reached from App/BlurtiOS. No
