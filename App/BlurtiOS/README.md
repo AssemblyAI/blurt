@@ -29,7 +29,10 @@ cd App/BlurtiOS && xcodegen generate     # the project is generated, not committ
 open BlurtiOS.xcodeproj                  # scheme BlurtiOS builds and embeds the keyboard
 ```
 
-CI builds it for the simulator on every PR (`check.yml`'s `ios-build` job). Running
+CI builds it for the simulator on every PR (`check.yml`'s `ios-build` job). On a
+Mac with only the Command Line Tools — no iOS SDK — `scripts/ios-typecheck.sh`
+typechecks both targets against the Mac Catalyst frameworks with the same
+flags, which catches the Swift 6 isolation errors before CI does. Running
 on a phone needs Xcode with a team that can provision the App Group; every id in
 `project.yml` (`dev.alex.blurt.ios`, `group.dev.alex.blurt`) is a placeholder
 inherited from the Mac app and must become org-owned before the App Store.

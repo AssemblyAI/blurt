@@ -141,7 +141,10 @@ nonisolated final class WindowedAudioSource: NSObject, MicCaptureProtocol, @unch
   }
 }
 
-extension WindowedAudioSource: AVCaptureAudioDataOutputSampleBufferDelegate {
+// The conformance is spelled `nonisolated`: with the target defaulting to the
+// main actor, an extension's conformance is inferred main-actor even on a
+// `nonisolated` class, and the output calls it on the delivery queue.
+extension WindowedAudioSource: nonisolated AVCaptureAudioDataOutputSampleBufferDelegate {
   func captureOutput(
     _ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection
   ) {
@@ -190,8 +193,10 @@ nonisolated final class PCMConverter {
       return nil
     }
     // One buffer per call: the first pull gets it, every later pull is told
-    // there is no more for now. A `Mutex` rather than a captured `var`, since
-    // the converter's input block may be typed as `@Sendable`.
+    // there is no more for now. The converter's input block is `@Sendable`,
+    // but it runs synchronously on this thread before `convert` returns, so
+    // handing the buffer across unchecked is sound; the flag sits in a `Mutex`.
+    nonisolated(unsafe) let handoff = input
     let handedOver = Mutex(false)
     var conversionError: NSError?
     let status = converter.convert(to: outputBuffer, error: &conversionError) { _, inputStatus in
@@ -201,7 +206,7 @@ nonisolated final class PCMConverter {
         return true
       }
       inputStatus.pointee = first ? .haveData : .noDataNow
-      return first ? input : nil
+      return first ? handoff : nil
     }
     guard status != .error, conversionError == nil, outputBuffer.frameLength > 0,
       let channels = outputBuffer.int16ChannelData
