@@ -83,7 +83,8 @@ private struct GeneralSettingsTab: View {
   }
 }
 
-/// The occasional stuff: the enhanced-transcripts switch, the style profiles,
+/// The occasional stuff: the enhanced-transcripts switch and the
+/// speak-all-punctuation mode, the style profiles,
 /// checking for an update, the developer-mode log toggle, and the
 /// start-over button.
 /// Kept out of General so the common pane stays short.
@@ -126,6 +127,7 @@ private struct TranscriptionSection: View {
         Label("Enhanced transcripts", systemImage: "wand.and.stars")
       }
       .disabled(spokenPunctuation)
+      .help(spokenPunctuation ? "Off while Speak all punctuation is on." : "")
       .accessibilityIdentifier(UITestIdentifiers.enhancedTranscriptsToggle)
       Toggle(isOn: $spokenPunctuation) {
         Label("Speak all punctuation", systemImage: "quote.opening")
@@ -140,11 +142,11 @@ private struct TranscriptionSection: View {
 
   private var footer: String {
     if spokenPunctuation {
-      return "Pastes only the punctuation you say — “comma”, “period”, “question mark”, “new line”. "
-        + "Your words are pasted as spoken, without enhancement."
+      return "Punctuation appears only where you say it — “comma”, “period”, “question mark”, "
+        + "“new line”. Overrides Enhanced transcripts."
     }
-    return "Polishes each dictation before pasting — removing filler words and fixing punctuation. "
-      + "Turn off to paste your words exactly as spoken."
+    return "Enhanced transcripts remove filler words and fix punctuation; turn off to paste your words "
+      + "exactly as spoken. Speak all punctuation adds punctuation only where you say it."
   }
 }
 
@@ -207,7 +209,7 @@ private struct StyleProfilesSection: View {
         stylesApply
           ? "Up to \(StyleProfileStore.profileLimit) styles."
           : spokenPunctuation
-            ? "Style preferences don’t apply while you speak all punctuation."
+            ? "Styles don’t apply while Speak all punctuation is on."
             : "Style preferences need enhanced transcripts turned on.")
     }
     .disabled(!stylesApply)
