@@ -34,6 +34,21 @@ on a phone needs Xcode with a team that can provision the App Group; every id in
 `project.yml` (`dev.alex.blurt.ios`, `group.dev.alex.blurt`) is a placeholder
 inherited from the Mac app and must become org-owned before the App Store.
 
+## Testing on a phone
+
+1. Install Xcode 27 (targeting iOS 27 requires it), then `sudo xcode-select -s /Applications/Xcode.app`
+   and `scripts/bootstrap.sh` from the repo root for xcodegen and the linters.
+2. `cd App/BlurtiOS && xcodegen generate && open BlurtiOS.xcodeproj`. Select your team on both
+   targets; automatic signing registers the App Group if the account may create identifiers
+   (otherwise add `group.dev.alex.blurt` in the developer portal first).
+3. Run the `BlurtiOS` scheme on the phone. In the app: **Use an API key instead** (debug builds
+   only), **Allow** the microphone, then **Open Settings → Keyboards**: turn on Blurt and
+   **Allow Full Access**.
+4. Back in the app, **Start listening**, then go to Messages, hold the globe key, pick Blurt,
+   and tap the mic. Tap again to stop, or hold it while you talk. The words land in the field.
+5. Try the other two layouts from the app's Keyboard picker; the keyboard reads the choice the
+   next time it comes up.
+
 ## What is still a stub
 
 - **Sign in with AssemblyAI.** The shipping app signs the user in and gets a key
