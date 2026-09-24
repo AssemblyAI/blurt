@@ -8,7 +8,8 @@ observable UI rather than mocking views.
 
 - **Settings page** — `SettingsUITests`: the real Settings window's API-key flow
   (save / reject / reveal, and the change → cancel round-trip back to the saved
-  row), the hotkey picker, and the sound picker.
+  row), the hotkey picker, the sound picker, and "Speak all punctuation"
+  disabling the enhanced-transcripts switch it overrides.
 - **Text shortcuts** — `TextShortcutsUITests`: the Settings pane's add / edit /
   delete round-trip through the editor sheet, and a duplicate phrase (differing
   only in case and separators) leaving Save disabled.

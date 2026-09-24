@@ -576,8 +576,9 @@ verbatim transcript, all inside the same request, and it rides **every** request
 **The switch is applied to the response, not the request** (since 2026-09-11). The response
 carries both `text` (the verbatim transcript, "never altered by the LLM") and `llm_response`
 (the rewrite), so `AssemblyAITranscriber.transcript(from:)` simply picks: with **enhanced
-transcripts** on (`EnhancedTranscriptsStore`, on by default, read per request via the
-transcriber's injected `enhancedTranscripts` closure) it prefers the rewrite and falls back to
+transcripts** on (`EnhancedTranscriptsStore.pastesRewrite`, on by default and off while "speak all
+punctuation" is on, read per request via the transcriber's injected `enhancedTranscripts` closure)
+it prefers the rewrite and falls back to
 `text` when `llm_response` is null or blank — the rewrite is best-effort (5 s server-side
 budget), so a rewrite failure (`llm_error`) is a logged degradation, never a user-facing error.
 With the setting off it returns `text`, and the rewrite that came back is discarded unread.
@@ -955,7 +956,16 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
   pairs; re-read per transcript via the session's `textShortcutsProvider` and applied locally by
   `TextShortcutExpander` between the response and the paste — never on the wire. Like
   `StyleProfileStore` it has a setter, because the value is encoded; the Settings window's Text
-  Shortcuts pane writes through it).
+  Shortcuts pane writes through it),
+  **`SpokenPunctuationStore`** (`BlurtSpokenPunctuation`, off by default — the "speak all
+  punctuation" mode, re-read per transcript via the session's `spokenPunctuationProvider`. While
+  on, `SpokenPunctuationFormatter` strips every mark the service inserted and turns the spoken
+  ones — "comma", "question mark", "new paragraph" — back into symbols, locally, before
+  `TextShortcutExpander` runs, so a shortcut's saved text keeps its own punctuation. It formats the
+  **verbatim** transcript, never the rewrite, since the rewrite is told to fix punctuation and may
+  already have turned a spoken "comma" into a mark the strip would remove: so it overrides
+  enhanced transcripts and the active style, through the one rule both read,
+  `EnhancedTranscriptsStore.pastesRewrite`. The request is unchanged).
 - **`DefaultsKey`** (`Config/DefaultsKey.swift`) defines every key those stores write, one case each,
   and each store's `defaultsKey` reads its case from there rather than spelling a string literal.
   **`PersistedSettings.allDefaultsKeys`** is therefore just `DefaultsKey.allCases`, and

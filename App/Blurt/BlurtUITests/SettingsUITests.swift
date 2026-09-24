@@ -122,6 +122,24 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertEqual("\(toggle.value ?? "")", "1", "Clicking should switch developer mode on")
   }
 
+  /// "Speak all punctuation" starts off, and switching it on disables the
+  /// enhanced-transcripts switch it overrides (`EnhancedTranscriptsStore.pastesRewrite`).
+  func testSpokenPunctuationDisablesEnhancedTranscripts() {
+    let settings = openSettingsWindow()
+    let advanced = selectSettingsTab(settings, named: UITestIdentifiers.advancedSettingsTab)
+
+    let toggle = advanced.anyDescendant(identified: UITestIdentifiers.spokenPunctuationToggle)
+    let enhanced = advanced.anyDescendant(identified: UITestIdentifiers.enhancedTranscriptsToggle)
+    XCTAssertTrue(toggle.waitForExistence(timeout: 10), "Speak all punctuation toggle not found")
+    XCTAssertEqual("\(toggle.value ?? "")", "0", "Speak all punctuation should start switched off")
+    XCTAssertTrue(enhanced.isEnabled, "Enhanced transcripts should start enabled")
+
+    toggle.click()
+
+    XCTAssertEqual("\(toggle.value ?? "")", "1", "Clicking should switch spoken punctuation on")
+    XCTAssertFalse(enhanced.isEnabled, "Spoken punctuation overrides enhanced transcripts")
+  }
+
   /// The Advanced pane's "Check for Updates" button runs the check and reports
   /// the result in a modal. Under UI testing the check is stubbed offline to
   /// always report up-to-date, so clicking it surfaces the "You’re up to date"

@@ -1,7 +1,6 @@
-// `Dispatch`, not `Foundation`: the only thing here from outside the module is
-// `contextQueue`'s and `commandQueue`'s `DispatchQueue`, the same choice
-// `+Press.swift` documents. Foundation's last use here went with `mic.stop()`
-// returning a byte count instead of a `Data` blob.
+// `Dispatch`, not `Foundation`: the only thing here from outside the module is `contextQueue`'s and
+// `commandQueue`'s `DispatchQueue`, the same choice `+Press.swift` documents. Foundation's last use
+// here went with `mic.stop()` returning a byte count instead of a `Data` blob.
 import Dispatch
 import Synchronization
 
@@ -21,14 +20,12 @@ public actor DictationSession {
   /// the failure from the log.
   public internal(set) var phase: PipelinePhase = .idle
 
-  // Split for the lint file-length budget: `performPress` — the whole press half,
-  // including the mic bring-up — lives in `+Press`, mirroring the post-release
-  // transcribe→inject pipeline in `+Pipeline`. `submit(_:)`, both cancel commands
-  // and the cancel-intent accessors over `cancelState` live in `+Commands`;
-  // `phaseStream()`/`setPhase`/os_signpost live in `+Observation`; the
-  // non-protocol collaborators (focus capture, developer-mode log) live in
-  // `+Seams`. Members those files reach are internal, not private (file-scoped
-  // access can't cross the split) — including `phase`'s setter.
+  // Split for the lint file-length budget: `performPress` — the whole press half, including the mic
+  // bring-up — lives in `+Press`, mirroring the post-release transcribe→inject pipeline in
+  // `+Pipeline`. `submit(_:)`, both cancel commands and the cancel-intent accessors over `cancelState`
+  // live in `+Commands`; `phaseStream()`/`setPhase`/os_signpost live in `+Observation`; the
+  // non-protocol collaborators (focus capture, developer-mode log) live in `+Seams`. Members those
+  // files reach are internal, not private (file-scoped access can't cross the split).
 
   /// Live feeds of phase changes. Each `phaseStream()` call yields the current
   /// phase plus every subsequent transition, so the production renderer and
@@ -61,6 +58,8 @@ public actor DictationSession {
   let styleNameProvider: @Sendable () -> String?
   /// The text shortcuts expanded into each transcript before the paste; live-read.
   let textShortcutsProvider: @Sendable () -> [TextShortcut]
+  /// Whether "speak all punctuation" formats each transcript (`SpokenPunctuationStore`); live-read.
+  let spokenPunctuationProvider: @Sendable () -> Bool
   /// Auto-releases the hotkey after this long so a held key can't run forever.
   /// Defaults to just under the dictation API's audio cap (see
   /// `SyncSTTLimits`) — recording past it would only produce audio the
@@ -77,10 +76,9 @@ public actor DictationSession {
   /// user has spoken a whole utterance. Defaults to always-ready (no Keychain
   /// read), so tests and keyless hosts are unaffected unless they opt in.
   let readinessCheck: @Sendable () -> BlurtError?
-  /// Fired once with the final transcript as soon as it's produced — before
-  /// injection, so pasted, copied, and failed-to-paste dictations all count. The
-  /// second argument is `recentDictations` as it stands, pushed from its one owner
-  /// so the "Recent" list is a projection rather than a second ring (see it).
+  /// Fired once with the final transcript as soon as it's produced — before injection, so pasted,
+  /// copied, and failed-to-paste dictations all count. The second argument is `recentDictations` as
+  /// it stands, pushed from its one owner so the "Recent" list is a projection, not a second ring.
   let onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)?
 
   /// The focus capture and the developer-mode log, behind closures rather than
@@ -104,8 +102,7 @@ public actor DictationSession {
   /// copy of that history. Recorded in `runTranscribeInject` (`+Pipeline`) just
   /// before `onTranscriptDelivered` fires, and read at press time into
   /// `TranscriptionContext.recentTranscripts`, which sends them as the leading
-  /// leading `stt_prompt` lines — so a run of dictations reads to the model as
-  /// one continuing dialogue rather than N unrelated clips.
+  /// `stt_prompt` lines — so a run of dictations reads as one continuing dialogue.
   ///
   /// It lives here, not in the host, because the request is assembled inside this
   /// actor: a ring held as MainActor UI state couldn't be read at press time
@@ -180,14 +177,15 @@ public actor DictationSession {
     keyTermsProvider: (@Sendable () -> [String])? = nil,
     styleNameProvider: (@Sendable () -> String?)? = nil,
     textShortcutsProvider: (@Sendable () -> [TextShortcut])? = nil,
+    spokenPunctuationProvider: (@Sendable () -> Bool)? = nil,
     readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
     onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)? = nil
   ) {
     self.init(
       mic: mic, transcriber: transcriber, injector: injector,
-      maxRecordingSeconds: maxRecordingSeconds, clock: clock,
-      keyTermsProvider: keyTermsProvider, styleNameProvider: styleNameProvider,
-      textShortcutsProvider: textShortcutsProvider, readinessCheck: readinessCheck,
+      maxRecordingSeconds: maxRecordingSeconds, clock: clock, keyTermsProvider: keyTermsProvider,
+      styleNameProvider: styleNameProvider, textShortcutsProvider: textShortcutsProvider,
+      spokenPunctuationProvider: spokenPunctuationProvider, readinessCheck: readinessCheck,
       onTranscriptDelivered: onTranscriptDelivered, seams: .production)
   }
 
@@ -206,6 +204,7 @@ public actor DictationSession {
     keyTermsProvider: (@Sendable () -> [String])? = nil,
     styleNameProvider: (@Sendable () -> String?)? = nil,
     textShortcutsProvider: (@Sendable () -> [TextShortcut])? = nil,
+    spokenPunctuationProvider: (@Sendable () -> Bool)? = nil,
     readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
     onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)? = nil,
     seams: Seams
@@ -219,14 +218,15 @@ public actor DictationSession {
     self.styleNameProvider =
       styleNameProvider
       ?? {
-        // No rewrite means no style was applied — matching the transcriber's
-        // own per-request read of the same store. `active` is nil for the
-        // Default sentinel as well as for an empty list, which is exactly
+        // No rewrite pasted means no style was applied — matching the
+        // transcriber's own per-request read of the same rule. `active` is nil
+        // for the Default sentinel as well as for an empty list, which is exactly
         // the rule: only a *custom* style is worth naming on the row.
-        guard EnhancedTranscriptsStore().isEnabled else { return nil }
+        guard EnhancedTranscriptsStore().pastesRewrite else { return nil }
         return StyleProfileStore().active?.name
       }
     self.textShortcutsProvider = textShortcutsProvider ?? { TextShortcutStore().shortcuts }
+    self.spokenPunctuationProvider = spokenPunctuationProvider ?? { SpokenPunctuationStore().isEnabled }
     self.readinessCheck = readinessCheck
     self.onTranscriptDelivered = onTranscriptDelivered
     self.seams = seams

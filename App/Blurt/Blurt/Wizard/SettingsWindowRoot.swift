@@ -103,33 +103,48 @@ private struct AdvancedSettingsTab: View {
 }
 
 /// The Transcription section of the Settings window: the enhanced-transcripts
-/// switch. Every dictation request asks AssemblyAI's dictation API for its
-/// server-side cleanup rewrite, so the response always holds both versions;
-/// while this is on (the default) the polished one is pasted, and turned off
-/// the verbatim transcript is pasted exactly as spoken. The transcriber reads
-/// the same default this toggle writes at every request, so a change applies to
-/// the next dictation — see `AssemblyAITranscriber.transcript(from:)`.
-/// Settings-only — not a wizard step, since it never gates setup.
+/// switch and the "speak all punctuation" mode. Every dictation request asks
+/// AssemblyAI's dictation API for its server-side cleanup rewrite, so the
+/// response always holds both versions; while enhanced transcripts are on (the
+/// default) the polished one is pasted, and turned off the verbatim transcript
+/// is pasted exactly as spoken. Speaking punctuation formats the verbatim
+/// transcript itself, so it overrides the first switch, which is disabled while
+/// it is on (`EnhancedTranscriptsStore.pastesRewrite`). Both are read at every
+/// dictation, so a change applies to the next one. Settings-only — not a wizard
+/// step, since neither gates setup.
 private struct TranscriptionSection: View {
   // The unset default comes from the store, not a literal here: the transcriber
   // reads the same slot per request, and two spellings of "unset means on" would let
   // the toggle and the request disagree about an untouched install.
   @AppStorage(EnhancedTranscriptsStore.defaultsKey)
   private var enhancedTranscripts = EnhancedTranscriptsStore.defaultValue
+  @AppStorage(SpokenPunctuationStore.defaultsKey) private var spokenPunctuation = false
 
   var body: some View {
     Section {
       Toggle(isOn: $enhancedTranscripts) {
         Label("Enhanced transcripts", systemImage: "wand.and.stars")
       }
+      .disabled(spokenPunctuation)
       .accessibilityIdentifier(UITestIdentifiers.enhancedTranscriptsToggle)
+      Toggle(isOn: $spokenPunctuation) {
+        Label("Speak all punctuation", systemImage: "quote.opening")
+      }
+      .accessibilityIdentifier(UITestIdentifiers.spokenPunctuationToggle)
     } header: {
       Text("Transcription")
     } footer: {
-      Text(
-        "Polishes each dictation before pasting — removing filler words and fixing punctuation. "
-          + "Turn off to paste your words exactly as spoken.")
+      Text(footer)
     }
+  }
+
+  private var footer: String {
+    if spokenPunctuation {
+      return "Pastes only the punctuation you say — “comma”, “period”, “question mark”, “new line”. "
+        + "Your words are pasted as spoken, without enhancement."
+    }
+    return "Polishes each dictation before pasting — removing filler words and fixing punctuation. "
+      + "Turn off to paste your words exactly as spoken."
   }
 }
 
@@ -139,8 +154,8 @@ private struct TranscriptionSection: View {
 /// request (see `CleanupInstruction.sendable(appending:)` / `StyleProfileStore`),
 /// so the enhanced-transcript polish also applies the user's formatting
 /// preferences. Optional — with none defined the request is exactly what ships
-/// today. Disabled while enhanced transcripts are off, since the instruction
-/// they extend is not sent at all then.
+/// today. Disabled while enhanced transcripts are off (or overridden by spoken
+/// punctuation), since the rewrite they shape is not pasted then.
 ///
 /// Each row is a name and a way in: all editing happens in the sheet below, for
 /// the reasons on `APIKeyStepView`'s. Which style is *active* is deliberately
@@ -150,6 +165,10 @@ private struct TranscriptionSection: View {
 private struct StyleProfilesSection: View {
   @AppStorage(EnhancedTranscriptsStore.defaultsKey)
   private var enhancedTranscripts = EnhancedTranscriptsStore.defaultValue
+  @AppStorage(SpokenPunctuationStore.defaultsKey) private var spokenPunctuation = false
+
+  /// The view-side spelling of `EnhancedTranscriptsStore.pastesRewrite`.
+  private var stylesApply: Bool { enhancedTranscripts && !spokenPunctuation }
 
   /// Bound to observe, not to write: the store owns the JSON encoding, so it
   /// decodes this slot and the sheet writes through it, while `@AppStorage` is
@@ -185,11 +204,13 @@ private struct StyleProfilesSection: View {
       // enhanced transcripts off the rewrite a style shapes is discarded
       // unread, so describing the limit is the less useful half.
       Text(
-        enhancedTranscripts
+        stylesApply
           ? "Up to \(StyleProfileStore.profileLimit) styles."
-          : "Style preferences need enhanced transcripts turned on.")
+          : spokenPunctuation
+            ? "Style preferences don’t apply while you speak all punctuation."
+            : "Style preferences need enhanced transcripts turned on.")
     }
-    .disabled(!enhancedTranscripts)
+    .disabled(!stylesApply)
     .sheet(item: $editing) { profile in
       StyleProfileEditorSheet(profile: profile, isExisting: profiles.contains(profile))
     }

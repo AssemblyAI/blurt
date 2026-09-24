@@ -20,12 +20,20 @@ extension KeyInjector {
   /// chunks where nothing strips it. `priorText` is nil for empty fields and for
   /// secure/Accessibility-opaque fields — there we can't tell what precedes the
   /// caret, so we add no separator rather than risk a stray leading space.
+  ///
+  /// Nor before text that opens with a mark that hugs the word before it — a
+  /// spoken-punctuation dictation of "comma and then" pastes ", and then", which
+  /// belongs flush against the previous word (`SpokenPunctuationFormatter`).
   public static func withLeadingSeparator(_ text: String, after priorText: String?) -> String {
     guard !text.isEmpty else { return text }
     guard let priorText, let last = priorText.last, !last.isWhitespace else { return text }
-    guard let first = text.first, !first.isWhitespace else { return text }
+    guard let first = text.first, !first.isWhitespace, !closingMarks.contains(first) else { return text }
     return " " + text
   }
+
+  /// Marks that attach to the text before them, so a paste opening with one
+  /// takes no leading separator.
+  private static let closingMarks: Set<Character> = [".", ",", "?", "!", ":", ";", ")", "]", "…"]
 
   /// Chooses what text the separator decision should treat as preceding the
   /// caret. AX-read `priorText` is authoritative whenever we have it. When it's
