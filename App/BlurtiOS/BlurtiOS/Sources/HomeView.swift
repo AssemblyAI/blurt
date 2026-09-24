@@ -162,6 +162,7 @@ struct HomeView: View {
       }
       .onChange(of: windowMinutes) { _, value in SharedStore.windowMinutes = value }
       Toggle("Enhanced transcripts", isOn: $enhancedTranscripts)
+      NavigationLink("Output styles") { StylesView() }
       TextField("Key terms, comma-separated", text: $keyTerms, axis: .vertical)
         .autocorrectionDisabled()
       Text(
