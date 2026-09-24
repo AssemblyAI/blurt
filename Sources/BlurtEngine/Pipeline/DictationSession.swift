@@ -166,9 +166,12 @@ public actor DictationSession {
   /// route settles the context up front, so `cancel()` is now the whole of it.
   var upload: Task<String, any Error>?
 
-  /// The production entry point: the real focus capture and the real
-  /// developer-mode log. Delegates to the seam-carrying initializer below, which
-  /// can't be public because it names internal types.
+  /// The production entry point: the real developer-mode log, and the real
+  /// focus capture unless the host supplies its own — `hostFocusCapture` is how
+  /// a host on a platform without Accessibility reads (the iOS app, whose
+  /// keyboard knows the text before the cursor) hands that context in.
+  /// Delegates to the seam-carrying initializer below, which can't be public
+  /// because it names the internal log seams.
   public init(
     mic: MicCaptureProtocol,
     transcriber: TranscriberProtocol,
@@ -178,14 +181,16 @@ public actor DictationSession {
     keyTermsProvider: (@Sendable () -> [String])? = nil,
     styleNameProvider: (@Sendable () -> String?)? = nil,
     readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
-    onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)? = nil
+    onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)? = nil,
+    hostFocusCapture: HostFocusCapture? = nil
   ) {
     self.init(
       mic: mic, transcriber: transcriber, injector: injector,
       maxRecordingSeconds: maxRecordingSeconds, clock: clock,
       keyTermsProvider: keyTermsProvider, styleNameProvider: styleNameProvider,
       readinessCheck: readinessCheck,
-      onTranscriptDelivered: onTranscriptDelivered, seams: .production)
+      onTranscriptDelivered: onTranscriptDelivered,
+      seams: hostFocusCapture.map(Seams.init(hostFocusCapture:)) ?? .production)
   }
 
   /// `seams` is deliberately required rather than defaulted: it's what keeps this

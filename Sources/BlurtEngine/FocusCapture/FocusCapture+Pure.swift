@@ -50,12 +50,12 @@ extension FocusCapture {
   ///
   /// Google Docs (and some other web editors) expose the text before the caret as
   /// a lone U+200B ZERO WIDTH SPACE — invisible, not real content, yet crucially
-  /// *not* `Character.isWhitespace`. Left as-is, `KeyInjector.withLeadingSeparator`
+  /// *not* `Character.isWhitespace`. Left as-is, `InsertionSeparator.withLeadingSeparator`
   /// reads it as substantive preceding text that doesn't end in whitespace and
   /// prepends a stray separator space on every dictation. Treating an
   /// entirely-invisible read as "nothing readable here" (`nil`) instead routes the
   /// field into the same-window separator fallback like any other
-  /// Accessibility-opaque editor (see `KeyInjector.separatorBasis`).
+  /// Accessibility-opaque editor (see `InsertionSeparator.basis`).
   ///
   /// "Invisible" means every scalar is a default-ignorable code point (zero-width
   /// spaces, joiners, bidi marks, BOM, …). Regular whitespace (space/tab/newline)

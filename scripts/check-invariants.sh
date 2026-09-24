@@ -75,7 +75,10 @@ GUARDRAILS=".claude/skills/project-guardrails/SKILL.md"
 # code extensions also keeps the app scope off the .png and .m4a resources it
 # was otherwise grepping byte by byte.
 ENGINE="Sources/*.swift"
-APP="App/Blurt/*.swift App/Blurt/*.yml App/Blurt/*.plist :!App/Blurt/Blurt.xcodeproj"
+# The app scope is `App/`, not `App/Blurt/`: there is a second app spec now
+# (the iOS app), and a scope pinned to one app silently stops covering the
+# next one.
+APP="App/*.swift App/*.yml App/*.plist :!App/Blurt/Blurt.xcodeproj"
 TESTS="Tests/*.swift App/Blurt/BlurtUITests/*.swift"
 
 # Four parallel arrays rather than one delimited list, for the reason
@@ -288,7 +291,7 @@ fi
 # here until it is staged — and a scan that skips the file you just wrote reads
 # exactly like a scan that approved it. Warn rather than fail, because an
 # untracked file is a normal state mid-edit; `git add -N` brings it into scope.
-UNTRACKED=$(git ls-files --others --exclude-standard -- Sources Tests App/Blurt)
+UNTRACKED=$(git ls-files --others --exclude-standard -- Sources Tests App)
 if [ -n "$UNTRACKED" ]; then
   echo "note: untracked files are NOT scanned (git add -N to include them):"
   printf '%s\n' "$UNTRACKED" | sed 's/^/  /'
