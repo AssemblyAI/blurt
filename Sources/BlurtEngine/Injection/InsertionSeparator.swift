@@ -1,3 +1,4 @@
+// periphery:ignore - public for the iOS keyboard (App/BlurtiOS), which the Mac scan doesn't index.
 /// The pure text rules for joining a new dictation onto whatever already sits
 /// before the caret.
 ///
@@ -9,6 +10,7 @@
 /// with it). `KeyInjector.resolveInsert` composes these two with the
 /// window-identity decision, which stays beside the actor's state.
 public enum InsertionSeparator {
+  // periphery:ignore - public for the iOS keyboard (App/BlurtiOS), which the Mac scan doesn't index.
   /// Joins `text` to whatever precedes the caret with exactly one separating space,
   /// so consecutive dictations don't run together. Prepends a *leading* space only
   /// when there's preceding text (`priorText`) that doesn't already end in
