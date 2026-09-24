@@ -148,7 +148,7 @@ extension DictationSession {
     let keyTerms = keyTermsProvider()
     // Session history, read on the actor for the same reason: the capture below
     // runs off-actor, so what it carries has to be a value taken now.
-    let recentTranscripts = recentDictations.transcriptsOldestFirst
+    let recentTranscripts = recentDictations.spokenOldestFirst
     // Kick off the AX field-context read now, while the target field still
     // holds focus, but don't await it here: it's cross-process IPC into the
     // frontmost app (detached — off the main actor, where it froze the
@@ -178,6 +178,7 @@ extension DictationSession {
     // next press's. The body is fully synchronous and captures only Sendable
     // values, so it needs no task context.
     let captureFieldContext = seams.captureFieldContext
+    let textShortcutsProvider = textShortcutsProvider
     Self.contextQueue.async {
       let field = captureFieldContext()
       let context = TranscriptionContext(
@@ -188,6 +189,9 @@ extension DictationSession {
         selectedText: field.selectedText,
         recentTranscripts: recentTranscripts,
         keyTerms: keyTerms,
+        // Only needed to scrub the field text, so read only when there is some,
+        // and here rather than on the actor.
+        textShortcuts: field.priorText == nil ? [] : textShortcutsProvider(),
         targetIsSecure: field.isSecure)
       // One publish, which is what makes the value-before-stream ordering
       // `startUpload`'s wait depends on unforgeable — see `PressContext.store`.

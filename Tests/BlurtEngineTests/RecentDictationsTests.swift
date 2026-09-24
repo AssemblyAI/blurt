@@ -43,14 +43,14 @@ struct RecentDictationsTests {
   }
 
   @Test("projects the history oldest-first for the request's context turns")
-  func transcriptsOldestFirst() {
+  func spokenOldestFirst() {
     // `entries` is newest-first for the UI; `stt_prompt` wants the
     // opposite. Reversing at this boundary is what keeps one storage order.
     var recent = RecentDictations()
     for (offset, text) in ["a", "b", "c"].enumerated() {
       recent.record(text, at: epoch.addingTimeInterval(Double(offset)))
     }
-    #expect(recent.transcriptsOldestFirst == ["a", "b", "c"])
+    #expect(recent.spokenOldestFirst == ["a", "b", "c"])
   }
 
   @Test("entries keep a stable, unique id as newer ones push in")

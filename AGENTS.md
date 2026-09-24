@@ -950,7 +950,12 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
   CoreAudio UID — empty/unset follows the system default; re-read at every press, and a pinned
   device that isn't connected falls back to the system default without unpinning),
   **`OverlayOriginStore`** (the pill's dragged origin, x/y), **`LastUpdateCheckStore`**
-  (`BlurtLastUpdateCheck`, the stamp throttling the automatic launch update check).
+  (`BlurtLastUpdateCheck`, the stamp throttling the automatic launch update check),
+  **`TextShortcutStore`** (`BlurtTextShortcuts`, the JSON list of spoken phrase → saved text
+  pairs; re-read per transcript via the session's `textShortcutsProvider` and applied locally by
+  `TextShortcutExpander` between the response and the paste — never on the wire. Like
+  `StyleProfileStore` it has a setter, because the value is encoded; the Settings window's Text
+  Shortcuts pane writes through it).
 - **`DefaultsKey`** (`Config/DefaultsKey.swift`) defines every key those stores write, one case each,
   and each store's `defaultsKey` reads its case from there rather than spelling a string literal.
   **`PersistedSettings.allDefaultsKeys`** is therefore just `DefaultsKey.allCases`, and

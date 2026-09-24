@@ -35,7 +35,9 @@ public struct TranscriptionContext: Sendable, Equatable {
   /// **Sent**, as the *last* line of `stt_prompt`, so the transcript
   /// continues naturally from what is already there — the one focus signal that
   /// goes on the wire. Last because it is the turn the utterance most immediately
-  /// follows. Also drives the paste's leading separator.
+  /// follows. Also drives the paste's leading separator. Raw as captured: the
+  /// text shortcut expansions it may hold are scrubbed on the way out, in
+  /// `STTPrompt` (see `textShortcuts`).
   public let priorText: String?
 
   /// The text currently selected in the focused field, when any. Dictating with
@@ -67,6 +69,12 @@ public struct TranscriptionContext: Sendable, Equatable {
   /// `KeytermsBoost`).
   public let keyTerms: [String]
 
+  /// The user's text shortcuts, from `TextShortcutStore`. **Not sent**: `STTPrompt`
+  /// uses them to put any pasted expansion in `priorText` back to its trigger
+  /// (`TextShortcutExpander.redactingExpansions`), so a saved replacement never
+  /// rides `stt_prompt`. Empty when there is no `priorText` to scrub.
+  public let textShortcuts: [TextShortcut]
+
   public init(
     appName: String?,
     windowTitle: String? = nil,
@@ -75,6 +83,7 @@ public struct TranscriptionContext: Sendable, Equatable {
     selectedText: String? = nil,
     recentTranscripts: [String] = [],
     keyTerms: [String] = [],
+    textShortcuts: [TextShortcut] = [],
     targetIsSecure: Bool = false
   ) {
     self.appName = appName
@@ -84,6 +93,7 @@ public struct TranscriptionContext: Sendable, Equatable {
     self.selectedText = selectedText
     self.recentTranscripts = recentTranscripts
     self.keyTerms = keyTerms
+    self.textShortcuts = textShortcuts
     self.targetIsSecure = targetIsSecure
   }
 

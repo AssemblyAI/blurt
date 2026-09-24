@@ -59,6 +59,8 @@ public actor DictationSession {
   /// each would be noise. A closure for the same live-read reason as
   /// `keyTermsProvider`; the default reads the stores.
   let styleNameProvider: @Sendable () -> String?
+  /// The text shortcuts expanded into each transcript before the paste; live-read.
+  let textShortcutsProvider: @Sendable () -> [TextShortcut]
   /// Auto-releases the hotkey after this long so a held key can't run forever.
   /// Defaults to just under the dictation API's audio cap (see
   /// `SyncSTTLimits`) — recording past it would only produce audio the
@@ -177,6 +179,7 @@ public actor DictationSession {
     clock: any Clock<Duration> = ContinuousClock(),
     keyTermsProvider: (@Sendable () -> [String])? = nil,
     styleNameProvider: (@Sendable () -> String?)? = nil,
+    textShortcutsProvider: (@Sendable () -> [TextShortcut])? = nil,
     readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
     onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)? = nil
   ) {
@@ -184,7 +187,7 @@ public actor DictationSession {
       mic: mic, transcriber: transcriber, injector: injector,
       maxRecordingSeconds: maxRecordingSeconds, clock: clock,
       keyTermsProvider: keyTermsProvider, styleNameProvider: styleNameProvider,
-      readinessCheck: readinessCheck,
+      textShortcutsProvider: textShortcutsProvider, readinessCheck: readinessCheck,
       onTranscriptDelivered: onTranscriptDelivered, seams: .production)
   }
 
@@ -202,6 +205,7 @@ public actor DictationSession {
     clock: any Clock<Duration> = ContinuousClock(),
     keyTermsProvider: (@Sendable () -> [String])? = nil,
     styleNameProvider: (@Sendable () -> String?)? = nil,
+    textShortcutsProvider: (@Sendable () -> [TextShortcut])? = nil,
     readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
     onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)? = nil,
     seams: Seams
@@ -222,6 +226,7 @@ public actor DictationSession {
         guard EnhancedTranscriptsStore().isEnabled else { return nil }
         return StyleProfileStore().active?.name
       }
+    self.textShortcutsProvider = textShortcutsProvider ?? { TextShortcutStore().shortcuts }
     self.readinessCheck = readinessCheck
     self.onTranscriptDelivered = onTranscriptDelivered
     self.seams = seams
