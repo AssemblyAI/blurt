@@ -39,7 +39,8 @@ inherited from the Mac app and must become org-owned before the App Store.
 
 ## Testing on a phone
 
-1. Install Xcode 27 from the Mac App Store (targeting iOS 27 requires it), then once:
+1. Install Xcode 26.6 or newer — the version CI builds with (`xcodes install 26.6 --select`, or
+   the Mac App Store). A phone on iOS 27 needs Xcode 27, which needs macOS 26.6. Then once:
 
    ```bash
    sudo xcode-select -s /Applications/Xcode.app
