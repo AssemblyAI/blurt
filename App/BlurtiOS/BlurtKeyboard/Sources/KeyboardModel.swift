@@ -129,8 +129,10 @@ final class KeyboardModel {
   // MARK: - The mic key
 
   func micDown() {
-    guard hasFullAccess else { return }
-    guard isListening else {
+    // No Full Access, or the app isn't listening: the mic key's job is to get
+    // the user to the app, whose checklist says what is missing. Opening the
+    // app needs no Full Access; everything else here does.
+    guard hasFullAccess, isListening else {
       openApp()
       return
     }
