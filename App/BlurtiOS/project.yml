@@ -1,0 +1,130 @@
+# XcodeGen spec for Blurt on iPhone: the app (listens and transcribes) plus the
+# keyboard it ships (drops the words into whatever app you are typing in).
+#
+# Like App/Blurt/project.yml this is the source of truth, but unlike it the
+# generated BlurtiOS.xcodeproj is NOT committed: nobody opens a stale one, CI
+# runs `xcodegen generate` right before it builds, and a local checkout does the
+# same (`cd App/BlurtiOS && xcodegen generate`). The Info.plist and entitlements
+# files below are generated from the `info:`/`entitlements:` blocks the same way.
+#
+# Two processes, one App Group. iOS lets no keyboard use the microphone, so the
+# app records and talks to AssemblyAI while the keyboard is a remote control that
+# inserts the result; they share `group.dev.alex.blurt` (see Shared/). Every id
+# here is a placeholder namespace inherited from the Mac app — the App Store
+# submission needs org-owned bundle ids, an org App Group and a team that can
+# provision them.
+name: BlurtiOS
+options:
+  bundleIdPrefix: dev.alex
+  deploymentTarget:
+    # Matches Package.swift's `.iOS(.v18)`: an app floor below the package's fails
+    # to resolve the dependency at all.
+    iOS: "18.0"
+  developmentLanguage: en
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "18.0"
+    # iPhone first. iPad needs its own keyboard sizing pass.
+    TARGETED_DEVICE_FAMILY: "1"
+    DEVELOPMENT_TEAM: B2VQF7Q2QY
+    CODE_SIGN_STYLE: Automatic
+packages:
+  # The same local package the Mac app carries, reached from App/BlurtiOS. No
+  # remote packages: check.sh's dependency guard reads every App/*/project.yml.
+  BlurtEngine:
+    path: ../..
+targets:
+  BlurtiOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: BlurtiOS/Sources
+      # The App Group contract, compiled into BOTH the app and the keyboard (an
+      # extension can't import the app's module) — one source, no duplication,
+      # the same shape as App/Blurt/Shared.
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt.ios
+        # Warnings are failures for our own code, scoped to the target for the
+        # reason App/Blurt/project.yml gives (the project base collides with the
+        # -suppress-warnings Xcode applies to SPM packages).
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        # UI code defaults to the main actor (Swift 6.2), like the Mac shell;
+        # the capture path and the App Group plumbing opt out with `nonisolated`.
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+    info:
+      path: BlurtiOS/Info.plist
+      properties:
+        CFBundleDisplayName: Blurt
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        LSApplicationCategoryType: public.app-category.productivity
+        NSMicrophoneUsageDescription: Blurt listens only while you dictate, and sends that audio to AssemblyAI to turn it into text.
+        # Keeps the listening window alive while the user is back in the app
+        # they are typing in: iOS ends a backgrounded app's capture without it.
+        UIBackgroundModes: [audio]
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        ITSAppUsesNonExemptEncryption: false
+        # `blurt://start` — what the keyboard opens to bring the app forward, the
+        # one moment iOS insists on before the microphone may open.
+        CFBundleURLTypes:
+          - CFBundleURLName: dev.alex.blurt.ios
+            CFBundleURLSchemes: [blurt]
+    entitlements:
+      path: BlurtiOS/BlurtiOS.entitlements
+      properties:
+        com.apple.security.application-groups: [group.dev.alex.blurt]
+    dependencies:
+      - package: BlurtEngine
+        product: BlurtEngine
+      - target: BlurtKeyboard
+  # The keyboard. It types, it starts and stops a dictation, it inserts the
+  # words; it never hears anything. `RequestsOpenAccess` asks the user for Full
+  # Access, which is what lets it reach the App Group and the app.
+  BlurtKeyboard:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: BlurtKeyboard/Sources
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt.ios.keyboard
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        APPLICATION_EXTENSION_API_ONLY: YES
+    info:
+      path: BlurtKeyboard/Info.plist
+      properties:
+        CFBundleDisplayName: Blurt
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.keyboard-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
+          NSExtensionAttributes:
+            IsASCIICapable: false
+            PrefersRightToLeft: false
+            PrimaryLanguage: en-US
+            RequestsOpenAccess: true
+    entitlements:
+      path: BlurtKeyboard/BlurtKeyboard.entitlements
+      properties:
+        com.apple.security.application-groups: [group.dev.alex.blurt]
+    dependencies:
+      - package: BlurtEngine
+        product: BlurtEngine
+# XcodeGen emits a scheme only where one is declared, and `xcodebuild -scheme`
+# needs a shared one. Building the app builds the keyboard it embeds.
+schemes:
+  BlurtiOS:
+    build:
+      targets:
+        BlurtiOS: all
+    run:
+      config: Debug

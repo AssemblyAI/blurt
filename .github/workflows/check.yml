@@ -246,6 +246,32 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/BlurtEngine-iOS" \
             build
 
+      - name: Install XcodeGen
+        # Just the one formula, not `brew bundle --file=Brewfile`: the iPhone
+        # app's project is the only thing this job generates, and installing the
+        # other eleven tools would cost more than the build it precedes. xcodegen
+        # is in the Brewfile too, so this is the version check.sh uses.
+        run: brew install xcodegen
+
+      - name: Generate the iPhone app's project
+        working-directory: blurt/App/BlurtiOS
+        # Generated here rather than committed, unlike App/Blurt/Blurt.xcodeproj:
+        # that project is committed because people open it; this one is generated
+        # a second before every build, so it can never go stale against its yml.
+        run: xcodegen generate --quiet
+
+      - name: Build the iPhone app and its keyboard
+        working-directory: blurt
+        # The app embeds the keyboard, so one scheme builds both. Signing is off:
+        # a simulator build needs no identity, and the App Group entitlement is
+        # not checked without one.
+        run: |
+          xcodebuild -project App/BlurtiOS/BlurtiOS.xcodeproj -scheme BlurtiOS \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/BlurtiOS" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" \
+            build
+
   # Always-runs summary job, so a *skipped* `check` can't be mistaken for a pass.
   # GitHub reports a skipped required check to branch protection as successful, so
   # anything that makes `check` skip — the `changes` filter erroring, a `needs`
