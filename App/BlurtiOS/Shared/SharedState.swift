@@ -9,7 +9,7 @@ import SwiftUI
 /// through the App Group's shared defaults and wake each other with Darwin
 /// notifications — a system-wide "something changed" ping that carries no data,
 /// so every payload lives in the defaults under one of the keys below.
-enum BlurtShared {
+nonisolated enum BlurtShared {
   /// The App Group both targets declare. A placeholder namespace inherited from
   /// the Mac app; an org-owned id replaces it before the App Store, and the app
   /// and the keyboard must change together.
@@ -19,7 +19,7 @@ enum BlurtShared {
   static let urlScheme = "blurt"
   static let startHost = "start"
 
-  enum Key {
+  nonisolated enum Key {
     static let layout = "keyboardLayout"
     static let listeningUntil = "listeningUntil"
     static let windowMinutes = "listeningWindowMinutes"
@@ -33,7 +33,7 @@ enum BlurtShared {
 
   /// Darwin notification names. Reverse-DNS so they can't collide with another
   /// app's on the same device.
-  enum Signal {
+  nonisolated enum Signal {
     static let command = "dev.alex.blurt.ios.command"
     static let phase = "dev.alex.blurt.ios.phase"
     static let result = "dev.alex.blurt.ios.result"
@@ -43,7 +43,7 @@ enum BlurtShared {
 
 /// Which keyboard the user chose. All three share the same plumbing underneath;
 /// they differ only in how much keyboard sits around the mic.
-enum KeyboardLayout: String, CaseIterable, Codable, Sendable, Identifiable {
+nonisolated enum KeyboardLayout: String, CaseIterable, Codable, Sendable, Identifiable {
   /// A slim strip: the mic, delete, return and the globe. Typing letters means
   /// switching back to the system keyboard.
   case slimBar
@@ -84,12 +84,16 @@ enum KeyboardLayout: String, CaseIterable, Codable, Sendable, Identifiable {
 }
 
 // MARK: - Payloads
+//
+// Every type below is `nonisolated`: both targets default their declarations to
+// the main actor (`SWIFT_DEFAULT_ACTOR_ISOLATION`), but these values cross into
+// the app's capture path and the engine's closures, which run anywhere.
 
 /// What the keyboard asks the app to do, with the context only the keyboard can
 /// see: the text before the cursor primes the transcript exactly as the Mac's
 /// Accessibility read does.
-struct KeyboardCommand: Codable, Sendable {
-  enum Kind: String, Codable, Sendable {
+nonisolated struct KeyboardCommand: Codable, Sendable {
+  nonisolated enum Kind: String, Codable, Sendable {
     case press
     case release
     case cancel
@@ -105,7 +109,7 @@ struct KeyboardCommand: Codable, Sendable {
 /// The words the app got back, for the keyboard to insert. The keyboard joins
 /// them onto the live text before the cursor itself (`InsertionSeparator`),
 /// since the user may have typed since the press.
-struct DictationResult: Codable, Sendable {
+nonisolated struct DictationResult: Codable, Sendable {
   let id: UUID
   let text: String
   let deliveredAt: Date
@@ -113,8 +117,8 @@ struct DictationResult: Codable, Sendable {
 
 /// What the keyboard shows while the app works: the pipeline's phase, flattened
 /// to what a pill can render, plus the live microphone level.
-struct PhaseSnapshot: Codable, Sendable, Equatable {
-  enum State: String, Codable, Sendable {
+nonisolated struct PhaseSnapshot: Codable, Sendable, Equatable {
+  nonisolated enum State: String, Codable, Sendable {
     case idle
     case connecting
     case recording
@@ -135,7 +139,7 @@ struct PhaseSnapshot: Codable, Sendable, Equatable {
 /// One entry of the phone's own word list (`UILexicon`): contact names and the
 /// user's text replacements. Names go to the request as key terms so they come
 /// back spelled right; replacements are the phone's own text shortcuts.
-struct LexiconEntry: Codable, Sendable, Hashable {
+nonisolated struct LexiconEntry: Codable, Sendable, Hashable {
   let userInput: String
   let documentText: String
 

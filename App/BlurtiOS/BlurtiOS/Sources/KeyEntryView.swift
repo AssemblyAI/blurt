@@ -42,9 +42,9 @@ struct KeyEntryView: View {
     defer { isSubmitting = false }
     let outcome = await apiKey.submit(key)
     switch outcome.failureReport {
-    case nil: dismiss()
-    case .inline(let message): inlineError = message
-    case .alert(let title, let message): inlineError = "\(title) \(message)"
+    case .none: dismiss()
+    case .some(.inline(let message)): inlineError = message
+    case .some(.alert(let title, let message)): inlineError = "\(title) \(message)"
     }
   }
 }

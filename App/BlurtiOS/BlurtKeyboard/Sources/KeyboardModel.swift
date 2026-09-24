@@ -99,7 +99,9 @@ final class KeyboardModel {
   /// the app to spell names right with no setup. Read here because only the
   /// keyboard is offered it; the app reads it back out of the App Group.
   private func requestLexicon() {
-    controller?.requestSupplementaryLexicon { @Sendable lexicon in
+    // UIKit hands the lexicon back on the main thread, which is where its
+    // entries may be read; the closure stays main-actor for that reason.
+    controller?.requestSupplementaryLexicon { lexicon in
       let entries = lexicon.entries.map {
         LexiconEntry(userInput: $0.userInput, documentText: $0.documentText)
       }

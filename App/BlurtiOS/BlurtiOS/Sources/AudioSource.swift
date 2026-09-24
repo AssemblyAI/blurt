@@ -189,16 +189,19 @@ nonisolated final class PCMConverter {
     guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: capacity) else {
       return nil
     }
-    var handedOver = false
+    // One buffer per call: the first pull gets it, every later pull is told
+    // there is no more for now. A `Mutex` rather than a captured `var`, since
+    // the converter's input block may be typed as `@Sendable`.
+    let handedOver = Mutex(false)
     var conversionError: NSError?
     let status = converter.convert(to: outputBuffer, error: &conversionError) { _, inputStatus in
-      if handedOver {
-        inputStatus.pointee = .noDataNow
-        return nil
+      let first = handedOver.withLock { done -> Bool in
+        if done { return false }
+        done = true
+        return true
       }
-      handedOver = true
-      inputStatus.pointee = .haveData
-      return input
+      inputStatus.pointee = first ? .haveData : .noDataNow
+      return first ? input : nil
     }
     guard status != .error, conversionError == nil, outputBuffer.frameLength > 0,
       let channels = outputBuffer.int16ChannelData
