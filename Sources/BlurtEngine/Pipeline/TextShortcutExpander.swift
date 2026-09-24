@@ -10,10 +10,14 @@ import Foundation
 ///
 /// - **Case-insensitive**, since the rewrite capitalizes freely ("Personal
 ///   email").
-/// - **Separators between words are loose**: spaces, hyphens, dots, commas and
-///   underscores in any run, or none at all — so "link tree" also matches
-///   "Linktree", and "cal.com" matches "Cal com". Only letters and digits in
-///   the trigger are significant.
+/// - **Separators between words are loose**: any run of characters that
+///   aren't letters or digits, or none at all — so "link tree" also matches
+///   "Linktree", "cal.com" matches "Cal com", and "mom's address" matches
+///   "Mom’s address". Only letters and digits in the trigger are significant,
+///   which is exactly what `TextShortcutStore.matchKey` dedupes on.
+/// - **Never across a sentence or clause break**: sentence punctuation
+///   (`.,!?;:`) followed by whitespace ends the run, so "work email" leaves "my
+///   work. Email me" alone while "cal.com" still matches.
 /// - **Whole words**: a trigger never matches inside a longer word, so
 ///   "personal email" leaves "impersonal emails" alone.
 ///
@@ -48,7 +52,7 @@ enum TextShortcutExpander {
     let alternation = ordered.map { "(\($0.1))" }.joined(separator: "|")
     guard
       let regex = try? NSRegularExpression(
-        pattern: "(?<![\\p{L}\\p{N}])(?:\(alternation))(?![\\p{L}\\p{N}])",
+        pattern: "(?<![\\p{L}\\p{M}\\p{N}])(?:\(alternation))(?![\\p{L}\\p{M}\\p{N}])",
         options: [.caseInsensitive])
     else { return text }
 
@@ -70,19 +74,58 @@ enum TextShortcutExpander {
     return result
   }
 
+  /// What may sit between two of a trigger's words: any run of non-word
+  /// characters — the complement of what `words(in:)` keeps (`alphanumerics` is
+  /// letters, marks and digits) — except sentence punctuation directly before
+  /// whitespace, which is a break in the speech rather than part of a name.
+  private static let separatorRun =
+    "(?:[^\\p{L}\\p{M}\\p{N}.,!?;:]|[.,!?;:](?!\\s))*"
+
   /// The regex body for one trigger: its letter/digit runs, escaped, joined by
   /// an optional run of separators. `nil` for a trigger with no letters or
   /// digits, which could only ever match punctuation.
   static func pattern(for trigger: String) -> String? {
     let words = words(in: trigger)
     guard !words.isEmpty else { return nil }
-    return words.map(NSRegularExpression.escapedPattern(for:))
-      .joined(separator: "[\\s\\-_.,]*")
+    return words.map(NSRegularExpression.escapedPattern(for:)).joined(separator: separatorRun)
   }
 
   /// The trigger's letter/digit runs — the only part of it the matcher reads.
   static func words(in trigger: String) -> [String] {
     trigger.components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
+  }
+
+  /// The fewest characters of an expansion's tail that `redactingExpansions`
+  /// treats as a clipped copy at the very start of `text`. Below this an overlap
+  /// is as likely to be coincidence — a shared "com" or "." — as a clip.
+  static let minimumClippedOverlap = 4
+
+  /// `text` with every expansion in it put back to its trigger — the inverse of
+  /// `expand`, for the text before the caret that goes out as `stt_prompt`.
+  /// After a shortcut is pasted, the field *holds* the saved replacement, and
+  /// the next press would read it back and send it; this keeps it local.
+  ///
+  /// Literal and case-sensitive, since the field holds exactly what was pasted.
+  /// Longest expansion first, so one that contains another is caught whole. The
+  /// capture reads only the last few hundred characters, so a long expansion can
+  /// arrive with its head cut off: a tail of one (at least
+  /// `minimumClippedOverlap` long) at the very start of `text` counts too.
+  /// Replacing with the trigger rather than nothing keeps the prompt reading as
+  /// the continuous passage it is, and leaves the text's last character — which
+  /// the paste separator reads — whitespace exactly when it was before.
+  static func redactingExpansions(in text: String, using shortcuts: [TextShortcut]) -> String {
+    var result = text
+    for shortcut in shortcuts.sorted(by: { $0.expansion.count > $1.expansion.count }) {
+      let expansion = shortcut.expansion
+      result = result.replacingOccurrences(of: expansion, with: shortcut.trigger)
+      let clip = stride(from: expansion.count - 1, through: minimumClippedOverlap, by: -1)
+        .lazy.map { String(expansion.suffix($0)) }
+        .first(where: result.hasPrefix)
+      if let clip {
+        result = shortcut.trigger + result.dropFirst(clip.count)
+      }
+    }
+    return result
   }
 
   private static func matchesWhole(_ text: String, pattern: String) -> Bool {

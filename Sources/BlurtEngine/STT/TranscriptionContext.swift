@@ -35,7 +35,9 @@ public struct TranscriptionContext: Sendable, Equatable {
   /// **Sent**, as the *last* line of `stt_prompt`, so the transcript
   /// continues naturally from what is already there — the one focus signal that
   /// goes on the wire. Last because it is the turn the utterance most immediately
-  /// follows. Also drives the paste's leading separator.
+  /// follows. Also drives the paste's leading separator. Any text shortcut
+  /// expansion in it has already been put back to its trigger, so a pasted
+  /// snippet isn't sent (`TextShortcutExpander.redactingExpansions`).
   public let priorText: String?
 
   /// The text currently selected in the focused field, when any. Dictating with

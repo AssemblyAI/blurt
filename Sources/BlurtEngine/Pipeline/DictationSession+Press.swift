@@ -146,6 +146,10 @@ extension DictationSession {
     // Key terms are read synchronously at press (cheap UserDefaults read), so
     // each dictation observably re-reads Settings edits at press time.
     let keyTerms = keyTermsProvider()
+    // Read now for the same reason: the field text is scrubbed of pasted
+    // shortcut expansions before it becomes `stt_prompt` (see
+    // `TextShortcutExpander.redactingExpansions`).
+    let textShortcuts = textShortcutsProvider()
     // Session history, read on the actor for the same reason: the capture below
     // runs off-actor, so what it carries has to be a value taken now.
     let recentTranscripts = recentDictations.transcriptsOldestFirst
@@ -184,7 +188,9 @@ extension DictationSession {
         appName: captured?.processName,
         windowTitle: field.windowTitle,
         fieldLabel: field.fieldLabel,
-        priorText: field.priorText,
+        priorText: field.priorText.map {
+          TextShortcutExpander.redactingExpansions(in: $0, using: textShortcuts)
+        },
         selectedText: field.selectedText,
         recentTranscripts: recentTranscripts,
         keyTerms: keyTerms,

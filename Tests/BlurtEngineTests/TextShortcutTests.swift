@@ -36,6 +36,44 @@ struct TextShortcutExpanderTests {
         == "send it to me@example.com")
   }
 
+  @Test("never matches across a sentence or clause break")
+  func sentenceBreaks() {
+    let work = TextShortcut(trigger: "work email", expansion: "me@work.example")
+    for text in ["I finished my work. Email me later.", "at work, email is slow", "work! Email"] {
+      #expect(TextShortcutExpander.expand(text, using: [work]) == text)
+    }
+    #expect(TextShortcutExpander.expand("my work.email", using: [work]) == "my me@work.example")
+  }
+
+  @Test("a trigger with an apostrophe or other symbol matches as spelled")
+  func symbolTriggers() {
+    let mom = TextShortcut(trigger: "mom's address", expansion: "1 Main St")
+    #expect(TextShortcutExpander.expand("send to mom's address", using: [mom]) == "send to 1 Main St")
+    #expect(TextShortcutExpander.expand("send to Mom’s address", using: [mom]) == "send to 1 Main St")
+    let rnd = TextShortcut(trigger: "R&D budget", expansion: "$2M")
+    #expect(TextShortcutExpander.expand("the R&D budget", using: [rnd]) == "the $2M")
+  }
+
+  @Test("redacting puts pasted expansions back to their triggers")
+  func redactsExpansions() {
+    #expect(
+      TextShortcutExpander.redactingExpansions(in: "Mail me@example.com.", using: [email])
+        == "Mail personal email.")
+    #expect(
+      TextShortcutExpander.redactingExpansions(in: "Mail me@example.com ", using: [email])
+        == "Mail personal email ")
+    #expect(TextShortcutExpander.redactingExpansions(in: "nothing here", using: [email]) == "nothing here")
+  }
+
+  @Test("redacting catches an expansion whose head the capture clipped")
+  func redactsClippedExpansion() {
+    #expect(
+      TextShortcutExpander.redactingExpansions(in: "ample.com and more", using: [email])
+        == "personal email and more")
+    // Too short an overlap to tell from coincidence.
+    #expect(TextShortcutExpander.redactingExpansions(in: "com and more", using: [email]) == "com and more")
+  }
+
   @Test("never matches inside a longer word")
   func wholeWords() {
     let text = "That was impersonal emails, honestly."
@@ -157,5 +195,23 @@ struct DictationSessionTextShortcutTests {
     let contexts = await fixture.transcriber.receivedContexts
     #expect(contexts.last??.recentTranscripts == ["Mail personal email."])
     #expect(await fixture.session.recentDictations.entries.first?.text == "Mail me@example.com.")
+  }
+
+  /// The field holds what was pasted, so the next press reads the expansion
+  /// back as `priorText` — which rides `stt_prompt` unless it is scrubbed.
+  @Test("the text before the caret goes out with expansions put back to triggers")
+  func priorTextRedacted() async {
+    let fixture = makeSession(
+      field: FocusCapture.FocusedFieldContext(
+        priorText: "Mail me@example.com.", selectedText: nil, windowTitle: nil, fieldLabel: nil),
+      textShortcuts: [TextShortcut(trigger: "personal email", expansion: "me@example.com")])
+
+    await fixture.session.press()
+    await fixture.session.release()
+    await fixture.session.waitForIdle()
+
+    let context = await fixture.transcriber.receivedContexts.last ?? nil
+    #expect(context?.priorText == "Mail personal email.")
+    #expect(!STTPrompt.text(context: context).contains("me@example.com"))
   }
 }
