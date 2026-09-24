@@ -25,7 +25,7 @@ public actor DictationSession {
   // `+Pipeline`. `submit(_:)`, both cancel commands and the cancel-intent accessors over `cancelState`
   // live in `+Commands`; `phaseStream()`/`setPhase`/os_signpost live in `+Observation`; the
   // non-protocol collaborators (focus capture, developer-mode log) live in `+Seams`. Members those
-  // files reach are internal, not private (file-scoped access can't cross the split).
+  // files reach are internal, not private (file-scoped access can't cross the split), `phase`'s setter too.
 
   /// Live feeds of phase changes. Each `phaseStream()` call yields the current
   /// phase plus every subsequent transition, so the production renderer and
