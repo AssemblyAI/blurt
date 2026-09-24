@@ -14,6 +14,16 @@ import UIKit
 @MainActor
 @Observable
 final class KeyboardModel {
+  /// How old a result may be and still be inserted. Darwin notifications are
+  /// held for a suspended process and delivered when it resumes, so the
+  /// keyboard inside the app the user *left* hears about a dictation done
+  /// elsewhere minutes later; anything older than this is not its to insert.
+  static let resultFreshnessWindow: TimeInterval = 10
+  /// The phone's word list is re-read at most this often. Contacts change by
+  /// the day, and reading thousands of them on every appearance is what the
+  /// keyboard's memory budget cannot afford.
+  static let lexiconRefreshInterval: TimeInterval = 60 * 60
+
   var layout: KeyboardLayout = .panel
   var snapshot = PhaseSnapshot.idle
   var isListening = false
@@ -71,6 +81,9 @@ final class KeyboardModel {
   func disappeared() {
     heartbeat?.cancel()
     heartbeat = nil
+    // Presence means on screen. A dictation that finishes after the keyboard
+    // is gone goes to the clipboard, not to a keyboard nobody can see.
+    SharedStore.keyboardSeenAt = nil
   }
 
   func contextChanged() {}
@@ -99,6 +112,8 @@ final class KeyboardModel {
   /// the app to spell names right with no setup. Read here because only the
   /// keyboard is offered it; the app reads it back out of the App Group.
   private func requestLexicon() {
+    let refreshed = SharedStore.lexiconRefreshedAt ?? .distantPast
+    guard Date().timeIntervalSince(refreshed) > Self.lexiconRefreshInterval else { return }
     // UIKit hands the lexicon back on the main thread, which is where its
     // entries may be read; the closure stays main-actor for that reason.
     controller?.requestSupplementaryLexicon { lexicon in
@@ -106,6 +121,7 @@ final class KeyboardModel {
         LexiconEntry(userInput: $0.userInput, documentText: $0.documentText)
       }
       SharedStore.write(entries, forKey: BlurtShared.Key.lexicon)
+      SharedStore.lexiconRefreshedAt = Date()
       SharedStore.post(BlurtShared.Signal.lexicon)
     }
   }
@@ -170,9 +186,13 @@ final class KeyboardModel {
 
   private func resultArrived() {
     guard let result = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result),
-      result.id != lastResultID, let proxy
+      result.id != lastResultID, let proxy,
+      Date().timeIntervalSince(result.deliveredAt) < Self.resultFreshnessWindow
     else { return }
     lastResultID = result.id
+    // Taken out of the store once inserted, so no other keyboard process —
+    // each host app runs its own — can insert the same words again.
+    SharedStore.remove(forKey: BlurtShared.Key.result)
     // Joined against the live text before the cursor, not the press-time
     // snapshot: the user may have typed since.
     proxy.insertText(InsertionSeparator.withLeadingSeparator(result.text, after: proxy.documentContextBeforeInput))

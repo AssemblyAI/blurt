@@ -7,6 +7,15 @@ schemes:
 # redundant-public and fails --strict. Keep engine internals `internal`; tests
 # see them through `@testable import`.
 retain_public: false
+# The iPhone app (App/BlurtiOS, its own generated project) consumes engine API
+# this scan can't see — FocusedFieldContext, InsertionSeparator,
+# DictationSession.HostFocusCapture — so those carry `// periphery:ignore` to
+# keep their `public` off the redundant-public list. Periphery ≥ 3.5 reports an
+# ignore on any referenced declaration as superfluous, even when it is there to
+# suppress that result, so the superfluous-ignore check is off. Turn it back on
+# once the scan covers both apps (a workspace with both projects, or a second
+# scan of App/BlurtiOS in the ios-build job).
+superfluous_ignore_comments: false
 # DictationLog.Entry's and .ErrorEntry's properties exist solely to be encoded by
 # JSONEncoder; Periphery can't see Codable's reflective key emission.
 retain_codable_properties: true

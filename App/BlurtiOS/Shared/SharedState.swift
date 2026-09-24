@@ -29,6 +29,7 @@ nonisolated enum BlurtShared {
     static let keyboardSeenAt = "keyboardSeenAt"
     static let keyboardEverSeen = "keyboardEverSeen"
     static let lexicon = "lexicon"
+    static let lexiconRefreshedAt = "lexiconRefreshedAt"
   }
 
   /// Darwin notification names. Reverse-DNS so they can't collide with another
@@ -168,6 +169,10 @@ nonisolated enum SharedStore {
     return try? JSONDecoder().decode(type, from: data)
   }
 
+  static func remove(forKey key: String) {
+    defaults.removeObject(forKey: key)
+  }
+
   static var layout: KeyboardLayout {
     get { KeyboardLayout(rawValue: defaults.string(forKey: BlurtShared.Key.layout) ?? "") ?? .panel }
     set { defaults.set(newValue.rawValue, forKey: BlurtShared.Key.layout) }
@@ -194,6 +199,12 @@ nonisolated enum SharedStore {
   static var keyboardSeenAt: Date? {
     get { defaults.object(forKey: BlurtShared.Key.keyboardSeenAt) as? Date }
     set { defaults.set(newValue, forKey: BlurtShared.Key.keyboardSeenAt) }
+  }
+
+  /// When the keyboard last copied the phone's word list into the App Group.
+  static var lexiconRefreshedAt: Date? {
+    get { defaults.object(forKey: BlurtShared.Key.lexiconRefreshedAt) as? Date }
+    set { defaults.set(newValue, forKey: BlurtShared.Key.lexiconRefreshedAt) }
   }
 
   /// Set by the keyboard the first time it runs with Full Access — the only

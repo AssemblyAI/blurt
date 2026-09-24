@@ -20,13 +20,13 @@ nonisolated struct KeyboardRelayInjector: InjectorProtocol {
   func setTarget(_ focus: CapturedFocus?) async {}
 
   func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws {
-    let result = DictationResult(id: UUID(), text: text, deliveredAt: Date())
-    SharedStore.write(result, forKey: BlurtShared.Key.result)
-    SharedStore.post(BlurtShared.Signal.result)
     let seen = SharedStore.keyboardSeenAt ?? .distantPast
     guard Date().timeIntervalSince(seen) < Self.keyboardPresenceWindow else {
       await MainActor.run { UIPasteboard.general.string = text }
       throw BlurtError.noEditableTarget
     }
+    let result = DictationResult(id: UUID(), text: text, deliveredAt: Date())
+    SharedStore.write(result, forKey: BlurtShared.Key.result)
+    SharedStore.post(BlurtShared.Signal.result)
   }
 }
