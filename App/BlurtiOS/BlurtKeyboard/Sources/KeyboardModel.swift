@@ -167,7 +167,6 @@ final class KeyboardModel {
   ]
 
   private static func returnLabel(_ type: UIReturnKeyType) -> String? { returnLabels[type] }
-  }
 
   /// Auto-capitalisation, as the system keyboard does it: shift comes on at
   /// the start of a sentence (or of every word, or always) according to what
