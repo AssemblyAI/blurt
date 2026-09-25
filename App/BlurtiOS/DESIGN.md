@@ -1,7 +1,7 @@
 # Blurt for iPhone — design
 
 The iPhone app and its keyboard are the Mac app's design on a phone: the same
-ink, the same two greens, the same orb, the same status pill. Nothing here was
+ink, the same two greens, the same orb, the Mac pill's meter and ring. Nothing here was
 invented; every number traces to a Mac source file, and where the phone needed
 something the Mac has no equivalent for, this file says what was decided and
 why. The keyboard is done; the app's own screens are next (see the end).
@@ -61,8 +61,8 @@ black legends; dark — surface `#2B2B2B`, keys `#6B6B6B`, modifiers
 On by default, with a toggle in Settings: a dictation starts the moment the
 keyboard comes up in a text field — the same synthetic tap through the
 engine's gate, so it latches and the next tap of the mic stops it. Only when
-the app is listening and nothing is in flight; otherwise the pill says what to
-do — the orb sits dimmed and the first tap opens Blurt. It fires on the keyboard's
+the app is listening and nothing is in flight; otherwise the orb sits dimmed
+and the first tap opens Blurt. It fires on the keyboard's
 appearance, not on every field change while it stays up.
 
 ## Tokens (`Shared/BlurtBrand.swift`)
@@ -70,7 +70,7 @@ appearance, not on every field change while it stays up.
 | Token             | Value       | Use                                                         |
 | ----------------- | ----------- | ----------------------------------------------------------- |
 | `green`           | `#01762F`   | the wordmark green, light chrome (the app's accent)         |
-| `greenOnDark`     | `#67AD82`   | pill text and meter, the ring, anything green on ink        |
+| `greenOnDark`     | `#67AD82`   | the meter, the ring, anything green on ink                  |
 | `ink`             | `#1D1B16`   | the pill's body in every state; the keyboard's surface      |
 | `errorOrange`     | `#E67F36`   | the error word — never a red body                           |
 | `key`             | `#33302A`   | an ordinary key on the ink surface (one step up)            |
