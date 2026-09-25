@@ -48,21 +48,35 @@ final class KeyboardModel {
   var shifted = true
   var symbolsPage = false
 
-  // Internal, not private: the typing half of this model lives in
-  // KeyboardModel+Typing.swift.
+  // Internal, not private: the model's typing, mic and phase halves live in
+  // KeyboardModel+Typing/+Mic/+Phase.swift.
   @ObservationIgnored weak var controller: UIInputViewController?
   @ObservationIgnored private var observers: [DarwinObserver] = []
-  @ObservationIgnored private var gate = DictationKeyGate()
-  @ObservationIgnored private let clockStart = ContinuousClock.now
-  @ObservationIgnored private var lastResultID: UUID?
+  @ObservationIgnored var gate = DictationKeyGate()
+  @ObservationIgnored let clockStart = ContinuousClock.now
+  @ObservationIgnored var lastResultID: UUID?
   @ObservationIgnored private var heartbeat: Task<Void, Never>?
   @ObservationIgnored var lastSpaceAt: ContinuousClock.Instant?
-  @ObservationIgnored private var noticeDwell: Task<Void, Never>?
+  @ObservationIgnored var noticeDwell: Task<Void, Never>?
+  /// This keyboard process, for results addressed to it (`DictationResult.recipient`).
+  @ObservationIgnored let instanceID = UUID().uuidString
+  /// Where commands go: the App Group, or a test's capture.
+  @ObservationIgnored var transport: (KeyboardCommand) -> Void = { command in
+    SharedStore.write(command, forKey: BlurtShared.Key.command)
+    SharedStore.post(BlurtShared.Signal.command)
+  }
+  /// A press that got no phase back is re-signalled once (a Darwin
+  /// notification can be missed), after this long.
+  static let commandRetryDelay: Duration = .milliseconds(600)
+  @ObservationIgnored var commandRetry: Task<Void, Never>?
   @ObservationIgnored var termDraftFromSelection: String?
-  /// The text before the cursor when the term field opened, so typing that
-  /// reaches the host field anyway (a hardware keyboard: an iPad's, a
-  /// Bluetooth one, the simulator's Mac) can be pulled into the term instead.
+  /// The text before and after the cursor when the term field opened, so
+  /// typing that reaches the host field anyway (a hardware keyboard: an
+  /// iPad's, a Bluetooth one, the simulator's Mac) can be pulled into the
+  /// term instead — and a cursor move, which changes both sides, cannot be
+  /// mistaken for it.
   @ObservationIgnored var termHostBaseline: String?
+  @ObservationIgnored var termHostBaselineAfter: String?
   @ObservationIgnored var termNotice: Task<Void, Never>?
 
   /// The host's text field. Tests hand in a fake in place of a controller.
@@ -95,7 +109,7 @@ final class KeyboardModel {
 
   /// Whether the phase leaves nothing in flight — the moments the gate has to
   /// be reset, since a dictation can end with no finger event to close it.
-  private var isSettled: Bool {
+  var isSettled: Bool {
     switch snapshot.state {
     case .idle, .pasted, .copied, .error: true
     case .connecting, .recording, .processing: false
@@ -120,38 +134,64 @@ final class KeyboardModel {
     hasFullAccess = controller?.hasFullAccess ?? false
     needsGlobe = controller?.needsInputModeSwitchKey ?? true
     letterRows = LetterLayout.forPreferredLanguages()
+    // Every appearance starts on the mic page with no term half-typed, and on
+    // the page the field asks for: symbols for a number, letters otherwise.
+    panelShowsKeys = false
+    termDraft = nil
+    termDraftFromSelection = nil
+    termHostBaseline = nil
+    termHostBaselineAfter = nil
+    symbolsPage = Self.wantsSymbols(proxy?.keyboardType)
     readField()
     updateShift()
     // Without Full Access the App Group is out of reach: the keyboard still
-    // types, and says what it needs (see `KeyboardRootView`), but nothing below
-    // can run.
+    // types, and says what it needs (see `VoiceBar`), but nothing below can run.
     guard hasFullAccess else { return }
     layout = SharedStore.layout
     themeID = SharedStore.themeID
-    panelShowsKeys = false
     SharedStore.keyboardEverSeen = true
-    refresh()
+    refresh(haptics: false)
     startHeartbeat()
     requestLexicon()
+    // Words that landed while this keyboard was away, still fresh and meant
+    // for whoever is up, go in now rather than waiting for a signal nobody
+    // will send again.
+    resultArrived()
     if SharedStore.autoDictate { autoStart() }
   }
 
   /// Hands-free: a dictation begins the moment the keyboard is up, as if the
   /// mic had been tapped — the same synthetic tap through the engine's gate,
   /// so it latches and the next real tap stops it. Only when the app is
-  /// listening and nothing is in flight; otherwise the pill says what to do.
+  /// listening and nothing is in flight; otherwise the orb sits dimmed and the
+  /// first tap opens Blurt.
   private func autoStart() {
     guard isListening, isSettled, gate.isIdle else { return }
     perform(gate.modifierDown(at: elapsed))
     perform(gate.modifierUp(at: elapsed))
   }
 
+  /// The keyboard is leaving the screen. A dictation it started must not run
+  /// on without it: a latched recording is released (the words still land, on
+  /// the clipboard if no keyboard is there to take them), anything earlier is
+  /// cancelled. Presence ends, so a result that finishes after this goes to
+  /// the clipboard rather than to a keyboard nobody can see.
   func disappeared() {
     heartbeat?.cancel()
     heartbeat = nil
-    // Presence means on screen. A dictation that finishes after the keyboard
-    // is gone goes to the clipboard, not to a keyboard nobody can see.
+    commandRetry?.cancel()
+    if !gate.isIdle || !isSettled {
+      send(snapshot.state == .recording ? .release : .cancel)
+      gate.reset()
+    }
     SharedStore.keyboardSeenAt = nil
+  }
+
+  deinit {
+    heartbeat?.cancel()
+    noticeDwell?.cancel()
+    termNotice?.cancel()
+    commandRetry?.cancel()
   }
 
   /// The cursor moved or the text around it changed, including by our own
@@ -170,19 +210,30 @@ final class KeyboardModel {
     guard termDraft != nil, let baseline = termHostBaseline, let proxy else { return }
     let now = proxy.documentContextBeforeInput ?? ""
     let delta = now.count - baseline.count
-    guard delta > 0, delta <= 8, now.dropLast(delta).hasSuffix(baseline.suffix(24)) else { return }
+    // Typing lengthens the text before the cursor and leaves the text after
+    // it alone; a cursor move changes both; a selection is neither.
+    guard delta > 0, delta <= 8, proxy.selectedText == nil,
+      (proxy.documentContextAfterInput ?? "") == (termHostBaselineAfter ?? ""),
+      now.dropLast(delta).hasSuffix(baseline.suffix(24))
+    else { return }
     let typed = String(now.suffix(delta))
     for _ in 0..<delta { proxy.deleteBackward() }
     termDraft?.append(typed)
+    termHostBaseline = proxy.documentContextBeforeInput ?? ""
   }
 
   /// What the field asked for, the way the system keyboard honours it: the
   /// return key's own word, and the symbols page first for a number field.
   private func readField() {
     returnLabel = proxy?.returnKeyType.flatMap(Self.returnLabel)
-    switch proxy?.keyboardType {
-    case .numberPad, .decimalPad, .phonePad, .numbersAndPunctuation, .asciiCapableNumberPad: symbolsPage = true
-    default: break
+  }
+
+  /// Number, decimal and phone fields open on the symbols page, as the system
+  /// keyboard would show a number pad.
+  static func wantsSymbols(_ type: UIKeyboardType?) -> Bool {
+    switch type {
+    case .numberPad, .decimalPad, .phonePad, .numbersAndPunctuation, .asciiCapableNumberPad: true
+    default: false
     }
   }
 
@@ -220,10 +271,12 @@ final class KeyboardModel {
     return last == "\n" || ".?!".contains(last)
   }
 
-  private func refresh() {
+  /// Catches up with whatever the app last published. No haptics: nothing
+  /// just happened, the keyboard merely came up.
+  private func refresh(haptics: Bool) {
     isListening = SharedStore.isListening
     if let current = SharedStore.read(PhaseSnapshot.self, forKey: BlurtShared.Key.phase) {
-      apply(current.isStale ? .idle : current)
+      apply(current.isStale ? .idle : current, haptics: haptics)
     }
   }
 
@@ -233,9 +286,11 @@ final class KeyboardModel {
     heartbeat?.cancel()
     heartbeat = Task { [weak self] in
       while !Task.isCancelled {
+        guard let self else { return }
         SharedStore.keyboardSeenAt = Date()
-        self?.isListening = SharedStore.isListening
-        try? await Task.sleep(for: .seconds(4))
+        SharedStore.keyboardInstance = instanceID
+        isListening = SharedStore.isListening
+        try? await Task.sleep(for: .seconds(SharedStore.keyboardHeartbeatInterval))
       }
     }
   }
@@ -268,105 +323,5 @@ final class KeyboardModel {
     SharedStore.write(entries, forKey: BlurtShared.Key.lexicon)
     SharedStore.lexiconRefreshedAt = Date()
     SharedStore.post(BlurtShared.Signal.lexicon)
-  }
-
-  // MARK: - The mic key
-
-  func micDown() {
-    // No Full Access, or the app isn't listening: the mic key's job is to get
-    // the user to the app, whose checklist says what is missing. Opening the
-    // app needs no Full Access; everything else here does.
-    guard hasFullAccess, isListening else {
-      openApp()
-      return
-    }
-    perform(gate.modifierDown(at: elapsed))
-  }
-
-  func micUp() {
-    guard hasFullAccess, isListening else { return }
-    perform(gate.modifierUp(at: elapsed))
-  }
-
-  func cancel() {
-    gate.reset()
-    send(.cancel)
-  }
-
-  private var elapsed: Duration { clockStart.duration(to: ContinuousClock.now) }
-
-  private func perform(_ action: DictationKeyGate.Action) {
-    switch action {
-    case .start: send(.press)
-    case .stop: send(.release)
-    case .cancel: send(.cancel)
-    case .none: break
-    }
-  }
-
-  private func send(_ kind: KeyboardCommand.Kind) {
-    let command = KeyboardCommand(
-      id: UUID(), kind: kind, priorText: proxy?.documentContextBeforeInput,
-      selectedText: proxy?.selectedText, sentAt: Date())
-    SharedStore.write(command, forKey: BlurtShared.Key.command)
-    SharedStore.post(BlurtShared.Signal.command)
-  }
-
-  // MARK: - What comes back
-
-  private func phaseChanged() {
-    guard let current = SharedStore.read(PhaseSnapshot.self, forKey: BlurtShared.Key.phase) else { return }
-    apply(current.isStale ? .idle : current)
-  }
-
-  private func apply(_ current: PhaseSnapshot) {
-    let previous = snapshot.state
-    snapshot = current
-    isListening = SharedStore.isListening
-    if current.state != previous { haptics(from: previous, to: current.state) }
-    // A dictation that ended without a finger event (auto-release, an error)
-    // would leave the gate latched and swallow the next tap — the same sync the
-    // Mac shell does on every terminal phase.
-    if isSettled, !gate.isIdle { gate.reset() }
-    // A notice is over after its dwell: the Mac pill fades out, this one goes
-    // back to saying how to start.
-    noticeDwell?.cancel()
-    if let seconds = current.noticeDwellSeconds {
-      noticeDwell = Task { [weak self] in
-        try? await Task.sleep(for: .seconds(seconds))
-        guard !Task.isCancelled else { return }
-        self?.apply(.idle)
-      }
-    }
-  }
-
-  private func resultArrived() {
-    guard let result = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result),
-      result.id != lastResultID, let proxy,
-      Date().timeIntervalSince(result.deliveredAt) < Self.resultFreshnessWindow
-    else { return }
-    lastResultID = result.id
-    // Taken out of the store once inserted, so no other keyboard process —
-    // each host app runs its own — can insert the same words again.
-    SharedStore.remove(forKey: BlurtShared.Key.result)
-    // Joined against the live text before the cursor, not the press-time
-    // snapshot: the user may have typed since.
-    proxy.insertText(InsertionSeparator.withLeadingSeparator(result.text, after: proxy.documentContextBeforeInput))
-  }
-
-  private func haptics(from previous: PhaseSnapshot.State, to state: PhaseSnapshot.State) {
-    guard hasFullAccess else { return }
-    switch state {
-    case .recording:
-      UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-    case .processing where previous == .recording:
-      UIImpactFeedbackGenerator(style: .light).impactOccurred()
-    case .pasted, .copied:
-      UINotificationFeedbackGenerator().notificationOccurred(.success)
-    case .error:
-      UINotificationFeedbackGenerator().notificationOccurred(.error)
-    case .idle, .connecting, .processing:
-      break
-    }
   }
 }

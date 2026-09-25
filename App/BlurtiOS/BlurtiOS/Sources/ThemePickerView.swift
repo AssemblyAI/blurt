@@ -31,7 +31,8 @@ private struct ThemeCard: View {
   let chosen: Bool
   let pick: () -> Void
 
-  /// The preview keyboard is the full layout at a third of a phone's width.
+  /// The preview keyboard is the full layout, drawn at a phone's width and
+  /// scaled down to fit two cards across.
   private static let previewWidth: CGFloat = 393
   private static let scale: CGFloat = 0.42
 

@@ -3,9 +3,9 @@ import SwiftUI
 
 /// Picks the layout the user chose. All three share `VoiceBar`/`MicKey` and
 /// `KeyCap`, and the same model underneath; they differ in how much keyboard
-/// surrounds the mic. The surface is Blurt's ink in every appearance — it
-/// floats over whichever app the user is typing in, like the Mac pill — at
-/// the iPhone keyboard's own spacing.
+/// surrounds the mic. The surface is the theme's, fixed whatever the host
+/// app's appearance — the keyboard floats over whichever app the user is
+/// typing in, like the Mac pill — at the iPhone keyboard's own spacing.
 struct KeyboardRootView: View {
   var model: KeyboardModel
 
@@ -91,7 +91,7 @@ struct PanelView: View {
       }
     }
     .overlay(alignment: .topTrailing) {
-      if !model.isSettledState {
+      if !model.isSettled {
         KeyCap(systemImage: "xmark", tint: BlurtBrand.errorOrange, dark: true) { model.cancel() }
           .accessibilityLabel("Cancel dictation")
       }
@@ -153,25 +153,52 @@ struct MicKey: View {
     .animation(.easeOut(duration: 0.1), value: pressed)
     .contentShape(Capsule())
     .accessibilityLabel(isReady ? (isRecording ? "Stop dictation" : "Dictate") : "Start Blurt")
+    .accessibilityValue(model.snapshot.state == .error ? model.snapshot.message ?? "Dictation failed." : "")
     .accessibilityAddTraits(.isButton)
     .simultaneousGesture(
       DragGesture(minimumDistance: 0)
-        .onChanged { _ in
-          guard !pressed else { return }
-          pressed = true
-          model.micDown()
+        .onChanged { value in
+          if !pressed {
+            pressed = true
+            // The press waits a beat, so a swipe that starts on the orb (the
+            // panel's carousel) never starts a dictation it must then cancel.
+            pressTask = Task { [model] in
+              try? await Task.sleep(for: Self.pressDelay)
+              guard !Task.isCancelled else { return }
+              pressSent = true
+              model.micDown()
+            }
+          }
+          if Self.travelled(value), !pressSent {
+            pressTask?.cancel()
+            pressTask = nil
+          }
         }
         .onEnded { value in
           pressed = false
-          // A finger that swiped across the orb was flipping the panel, not
-          // releasing a hold: undo the press instead of ending a dictation.
-          if abs(value.translation.width) > 24 || abs(value.translation.height) > 24 {
-            model.cancel()
-          } else {
-            model.micUp()
+          pressTask?.cancel()
+          pressTask = nil
+          defer { pressSent = false }
+          if Self.travelled(value) {
+            // A swipe: undo a press that did go out, otherwise nothing.
+            if pressSent { model.cancel() }
+            return
           }
+          // A tap quicker than the delay is still a tap.
+          if !pressSent { model.micDown() }
+          model.micUp()
         }
     )
+  }
+
+  /// How long a touch must stay before it counts as a press rather than the
+  /// start of a swipe — well under a tap's own duration for a hold.
+  static let pressDelay: Duration = .milliseconds(90)
+  @State private var pressTask: Task<Void, Never>?
+  @State private var pressSent = false
+
+  private static func travelled(_ value: DragGesture.Value) -> Bool {
+    abs(value.translation.width) > 24 || abs(value.translation.height) > 24
   }
 
   /// The ring: the app orb's sweep (one turn per 1.6 s, engine geometry)
@@ -195,7 +222,7 @@ struct MicKey: View {
     }
   }
 
-  private var isReady: Bool { model.hasFullAccess && model.isListening }
+  private var isReady: Bool { model.isReady }
   private var isRecording: Bool { isReady && model.snapshot.state == .recording }
   private var isWorking: Bool {
     switch model.snapshot.state {
@@ -260,23 +287,57 @@ struct KeyCap: View {
   }
 
   var body: some View {
-    Button(action: action) {
-      Group {
-        if let systemImage {
-          Image(systemName: systemImage)
-        } else {
-          Text(title ?? "")
-        }
+    Group {
+      if let systemImage {
+        Image(systemName: systemImage)
+      } else {
+        Text(title ?? "")
       }
-      .font(.system(size: 16, weight: .medium))
-      .foregroundStyle(tint ?? palette.keyText)
-      .frame(maxWidth: flexible ? .infinity : nil)
-      .frame(width: width)
-      .frame(minWidth: width == nil ? 44 : nil, minHeight: Self.height)
-      .padding(.horizontal, flexible || width != nil ? 0 : 4)
-      .keyCap(dark ? palette.keyDark : palette.key, palette: palette)
     }
-    .buttonStyle(KeyPressStyle())
+    .font(.system(size: 16, weight: .medium))
+    .foregroundStyle(tint ?? palette.keyText)
+    .frame(maxWidth: flexible ? .infinity : nil)
+    .frame(width: width)
+    .frame(minWidth: width == nil ? 44 : nil, minHeight: Self.height)
+    .padding(.horizontal, flexible || width != nil ? 0 : 4)
+    .keyCap(dark ? palette.keyDark : palette.key, palette: palette)
+    .keyPress(action)
+    .accessibilityLabel(title ?? systemImage ?? "")
+  }
+}
+
+extension View {
+  /// A key's touch: lights while the finger is down, acts on release — and
+  /// only if the finger didn't travel, so a swipe across a key (the panel's
+  /// carousel) never types. The system keyboard's own rule.
+  func keyPress(_ action: @escaping () -> Void) -> some View {
+    modifier(KeyPress(action: action))
+  }
+}
+
+struct KeyPress: ViewModifier {
+  let action: () -> Void
+  @State private var pressed = false
+
+  /// The most a touch may travel and still be a tap.
+  static let tapTravel: CGFloat = 12
+
+  func body(content: Content) -> some View {
+    content
+      .brightness(pressed ? 0.15 : 0)
+      .animation(.easeOut(duration: 0.08), value: pressed)
+      .contentShape(Rectangle())
+      .accessibilityAddTraits(.isButton)
+      .simultaneousGesture(
+        DragGesture(minimumDistance: 0)
+          .onChanged { _ in pressed = true }
+          .onEnded { value in
+            pressed = false
+            guard abs(value.translation.width) < Self.tapTravel, abs(value.translation.height) < Self.tapTravel
+            else { return }
+            action()
+          }
+      )
   }
 }
 
@@ -302,15 +363,5 @@ struct KeyPressStyle: ButtonStyle {
     configuration.label
       .brightness(configuration.isPressed ? 0.15 : 0)
       .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
-  }
-}
-
-extension KeyboardModel {
-  /// Whether nothing is in flight, for the views that hide the cancel key.
-  var isSettledState: Bool {
-    switch snapshot.state {
-    case .idle, .pasted, .copied, .error: true
-    case .connecting, .recording, .processing: false
-    }
   }
 }

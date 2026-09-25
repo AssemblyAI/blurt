@@ -28,6 +28,7 @@ nonisolated enum BlurtShared {
     static let command = "command"
     static let result = "result"
     static let keyboardSeenAt = "keyboardSeenAt"
+    static let keyboardInstance = "keyboardInstance"
     static let appSeenAt = "appSeenAt"
     static let keyboardEverSeen = "keyboardEverSeen"
     static let lexicon = "lexicon"
@@ -50,8 +51,8 @@ nonisolated enum KeyboardLayout: String, CaseIterable, Codable, Sendable, Identi
   /// A slim strip: the mic, delete, return and the globe. Typing letters means
   /// switching back to the system keyboard.
   case slimBar
-  /// A mic panel with the status pill, a cancel button and a few keys — the
-  /// shape Wispr and Aqua ship.
+  /// A big orb with cancel beside it and a few keys — the shape Wispr and
+  /// Aqua ship — that swipes to the full keyboard.
   case panel
   /// A complete keyboard with the mic as the main key, so nobody has to switch
   /// keyboards to fix a typo.
@@ -75,8 +76,6 @@ nonisolated enum KeyboardLayout: String, CaseIterable, Codable, Sendable, Identi
     }
   }
 
-  /// The keyboard's height in points. Fixed per layout; the system keyboard is
-  /// about 216 on a phone, which is what `panel` matches.
   /// The keyboard's height on screen, from the layout's rows at the iPhone
   /// keyboard's own spacing: see `App/BlurtiOS/DESIGN.md` for the arithmetic.
   var height: CGFloat {
@@ -118,10 +117,14 @@ nonisolated struct DictationResult: Codable, Sendable {
   let id: UUID
   let text: String
   let deliveredAt: Date
+  /// The keyboard instance the words are for — the one whose heartbeat the
+  /// app last saw — so a second live keyboard in another app doesn't also
+  /// insert them. Nil means whoever is up.
+  let recipient: String?
 }
 
 /// What the keyboard shows while the app works: the pipeline's phase, flattened
-/// to what a pill can render, plus the live microphone level.
+/// to what the orb can show, plus the live microphone level.
 nonisolated struct PhaseSnapshot: Codable, Sendable, Equatable {
   nonisolated enum State: String, Codable, Sendable {
     case idle
@@ -140,7 +143,7 @@ nonisolated struct PhaseSnapshot: Codable, Sendable, Equatable {
 
   static let idle = PhaseSnapshot(state: .idle, message: nil, level: 0, at: .distantPast)
 
-  /// How long a notice stays on the pill before it settles back to idle — the
+  /// How long a notice stays on the orb before it settles back to idle — the
   /// Mac's 0.8 s / 1.6 s dwell, a little longer since a phone has no hover to
   /// reveal more. Nil for the states that end on their own.
   var noticeDwellSeconds: Double? {
@@ -157,20 +160,28 @@ nonisolated struct PhaseSnapshot: Codable, Sendable, Equatable {
   /// keyboard reads the snapshot back on every appearance and on every signal,
   /// including signals held while it was suspended, so it must decide for
   /// itself.
-  var isStale: Bool {
-    let age = Date().timeIntervalSince(at)
+  var isStale: Bool { isStale(now: Date()) }
+
+  func isStale(now: Date) -> Bool {
+    let age = now.timeIntervalSince(at)
     switch state {
     case .idle: return false
-    case .pasted, .copied, .error: return age > 3
-    case .connecting, .recording, .processing: return age > 130
+    case .pasted, .copied, .error: return age > Self.noticeStaleAfter
+    case .connecting, .recording, .processing: return age > Self.inFlightStaleAfter
     }
   }
+
+  /// The longest notice dwell (2 s) plus a second of slack.
+  static let noticeStaleAfter: TimeInterval = 3
+  /// The engine's 120 s cap on one dictation, plus ten seconds for the
+  /// transcript to come back.
+  static let inFlightStaleAfter: TimeInterval = 130
 }
 
 /// One entry of the phone's own word list (`UILexicon`): contact names and the
 /// user's text replacements. Names go to the request as key terms so they come
 /// back spelled right; replacements are the phone's own text shortcuts.
-nonisolated struct LexiconEntry: Codable, Sendable, Hashable {
+nonisolated struct LexiconEntry: Codable, Sendable {
   let userInput: String
   let documentText: String
 
@@ -188,9 +199,12 @@ nonisolated enum SharedStore {
   /// The App Group's defaults — what both processes read and write. Falls
   /// back to the process's own only where the group is out of reach (a
   /// keyboard without Full Access), so nothing crashes; nothing is shared then.
-  static var defaults: UserDefaults {
-    UserDefaults(suiteName: BlurtShared.appGroup) ?? .standard
-  }
+  /// Tests point this at a throwaway suite (`override`) so they never touch
+  /// the real one.
+  static var defaults: UserDefaults { override ?? shared }
+  nonisolated(unsafe) static var override: UserDefaults?
+  // `UserDefaults` is thread-safe by contract; the type just isn't marked Sendable.
+  nonisolated(unsafe) private static let shared = UserDefaults(suiteName: BlurtShared.appGroup) ?? .standard
 
   static func write<Value: Encodable>(_ value: Value, forKey key: String) {
     guard let data = try? JSONEncoder().encode(value) else { return }
@@ -242,18 +256,40 @@ nonisolated enum SharedStore {
     set { defaults.set(newValue, forKey: BlurtShared.Key.listeningUntil) }
   }
 
-  /// How recently the app must have checked in to count as alive. Its
-  /// heartbeat is every few seconds while the microphone is open.
-  static let appPresenceWindow: TimeInterval = 15
+  // MARK: Presence — the contract between the two processes
+
+  /// Each side writes a timestamp every few seconds while it is there (the app
+  /// while its microphone is open, the keyboard while it is on screen), and
+  /// the other side counts it present while that timestamp is younger than
+  /// the window. The window is more than twice the heartbeat, so one missed
+  /// beat — a busy main thread, a suspended process resuming — doesn't read
+  /// as absence, while a killed process reads as absent within seconds.
+  static let appHeartbeatInterval: TimeInterval = 5
+  static let keyboardHeartbeatInterval: TimeInterval = 4
+  static let presenceWindow: TimeInterval = 15
 
   /// Whether the app currently has the microphone open for the keyboard: the
   /// window has not lapsed, and the app is still there to hear — iOS may have
   /// killed it, or a phone call taken the microphone, with the window's end
   /// still in the future. The keyboard then opens the app rather than sending
   /// a press nobody would answer.
-  static var isListening: Bool {
-    guard (listeningUntil ?? .distantPast) > Date() else { return false }
-    return Date().timeIntervalSince(appSeenAt ?? .distantPast) < appPresenceWindow
+  static var isListening: Bool { isListening(now: Date()) }
+
+  static func isListening(now: Date) -> Bool {
+    guard (listeningUntil ?? .distantPast) > now else { return false }
+    return now.timeIntervalSince(appSeenAt ?? .distantPast) < presenceWindow
+  }
+
+  /// Whether a keyboard is on screen to take the words (see `presenceWindow`).
+  static var isKeyboardPresent: Bool {
+    Date().timeIntervalSince(keyboardSeenAt ?? .distantPast) < presenceWindow
+  }
+
+  /// Which keyboard process is on screen — a fresh id per process, written
+  /// with its heartbeat — so a result can be addressed to it.
+  static var keyboardInstance: String? {
+    get { defaults.string(forKey: BlurtShared.Key.keyboardInstance) }
+    set { defaults.set(newValue, forKey: BlurtShared.Key.keyboardInstance) }
   }
 
   // MARK: Key terms
@@ -312,35 +348,6 @@ nonisolated enum SharedStore {
   static func post(_ signal: String) {
     CFNotificationCenterPostNotification(
       CFNotificationCenterGetDarwinNotifyCenter(), CFNotificationName(signal as CFString), nil, nil, true)
-  }
-}
-
-/// A Darwin-notification subscription that lives as long as this object does.
-///
-/// The handler runs on whichever thread the system delivers on and is
-/// `@Sendable` for that reason; hop to the main actor inside it when the work
-/// is UI. A class rather than a token so `deinit` can deregister — a listener
-/// left behind outlives its owner, since the system holds the callback.
-nonisolated final class DarwinObserver: Sendable {
-  private let name: String
-  private let handler: @Sendable () -> Void
-
-  init(name: String, handler: @escaping @Sendable () -> Void) {
-    self.name = name
-    self.handler = handler
-    let observer = Unmanaged.passUnretained(self).toOpaque()
-    CFNotificationCenterAddObserver(
-      CFNotificationCenterGetDarwinNotifyCenter(), observer,
-      { _, observer, _, _, _ in
-        guard let observer else { return }
-        Unmanaged<DarwinObserver>.fromOpaque(observer).takeUnretainedValue().handler()
-      }, name as CFString, nil, .deliverImmediately)
-  }
-
-  deinit {
-    CFNotificationCenterRemoveObserver(
-      CFNotificationCenterGetDarwinNotifyCenter(), Unmanaged.passUnretained(self).toOpaque(),
-      CFNotificationName(name as CFString), nil)
   }
 }
 

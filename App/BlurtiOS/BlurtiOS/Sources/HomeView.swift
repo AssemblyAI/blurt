@@ -96,7 +96,7 @@ struct HomeView: View {
       }
       if coordinator.window.isOpen {
         Button(role: .destructive) {
-          coordinator.stopListening()
+          Task { await coordinator.stopListening() }
         } label: {
           Text("Stop listening").frame(maxWidth: .infinity)
         }

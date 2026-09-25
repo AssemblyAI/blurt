@@ -78,8 +78,12 @@ ENGINE="Sources/*.swift"
 # The app scope is `App/`, not `App/Blurt/`: there is a second app spec now
 # (the iOS app), and a scope pinned to one app silently stops covering the
 # next one.
-APP="App/*.swift App/*.yml App/*.plist :!App/Blurt/Blurt.xcodeproj"
-TESTS="Tests/*.swift App/Blurt/BlurtUITests/*.swift"
+APP="App/*.swift App/*.yml App/*.plist :!App/Blurt/Blurt.xcodeproj :!App/BlurtiOS/BlurtiOSTests"
+TESTS="Tests/*.swift App/Blurt/BlurtUITests/*.swift App/BlurtiOS/BlurtiOSTests/*.swift"
+# The keyboard extension and what it compiles: iOS lets no keyboard use the
+# microphone, and the design keeps every audio type out of it, so an import
+# there is a decision being reversed by accident.
+KEYBOARD="App/BlurtiOS/BlurtKeyboard/*.swift App/BlurtiOS/Shared/*.swift"
 
 # Four parallel arrays rather than one delimited list, for the reason
 # check-portability.sh gives: the patterns contain `|`, so splitting on it
@@ -99,6 +103,7 @@ PATTERNS=(
   "AppUpdater|Sparkle|SPUUpdater"
   "KeychainStore\\(service: *(HostIdentity\\.current\\.keychainService|\"blurt\")"
   "@available\\(\\*, *deprecated"
+  "import AVFoundation|import AVFAudio|AVCaptureSession|AVAudioSession|AVAudioApplication|AudioQueueNewInput"
 )
 SCOPES=(
   "$ENGINE $APP"
@@ -114,6 +119,7 @@ SCOPES=(
   "$ENGINE $APP"
   "$TESTS"
   "$ENGINE $APP"
+  "$KEYBOARD"
 )
 ADVICE=(
   "MicCapture builds a fresh AVCaptureSession recorder per capture — a long-lived engine goes stale on a device switch"
@@ -129,6 +135,7 @@ ADVICE=(
   "updates are download-only; extend UpdateCheckModel, don't install for the user"
   "use an isolated service (see KeychainStoreTests) or InMemoryAPIKeyStore"
   "deleted types stay deleted — no deprecated re-exports"
+  "the keyboard never hears anything: the app listens and transcribes, the keyboard inserts (KeyboardRelayInjector)"
 )
 
 # One known-bad line per rule, same order. `--self-test` asserts each pattern
@@ -149,6 +156,7 @@ PROBES=(
   "let updater = AppUpdater(owner: \"assemblyai\", repo: \"blurt\")"
   "let store = KeychainStore(service: HostIdentity.current.keychainService, account: \"AssemblyAIAPIKey\")"
   "@available(*, deprecated, renamed: \"NewName\")"
+  "let session = AVCaptureSession()"
 )
 
 # A verbatim slice of the row in AGENTS.md's "Settled decisions" table that each
@@ -171,6 +179,7 @@ TABLE_ANCHORS=(
   "Add a self-replacing install or background auto-updater"
   "Touch the real Keychain in tests"
   "Add backwards-compat shims for removed types"
+  "Give the keyboard extension a microphone or any audio type"
 )
 
 # The same rule as the guardrails skill words it. Deliberately not the table's
@@ -192,6 +201,7 @@ SKILL_ANCHORS=(
   "Updates are download-only"
   "the real Keychain in tests"
   "Don't add backwards-compat shims for removed types."
+  "The keyboard never hears anything."
 )
 
 if [ "${#SCOPES[@]}" -ne "${#PATTERNS[@]}" ] \

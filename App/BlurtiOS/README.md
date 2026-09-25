@@ -39,13 +39,13 @@ inherited from the Mac app and must become org-owned before the App Store.
 
 ## Design
 
-`DESIGN.md` — the tokens, the pill, the orb, the meter, the three layouts, the
+`DESIGN.md` — the tokens, the orb, the meter, the three layouts, the
 app's screens, all traced to the Mac app's sources, plus the gallery that renders every layout
 and state for a screenshot and the launch flags that reach every app state.
 
 ## Getting Xcode
 
-Any Xcode from 26.6 (what CI builds with) works; a phone on iOS 27 needs Xcode 27, which
+Any Xcode from 26.6 (CI's macos-26 runner has it) works; a phone on iOS 27 needs Xcode 27, which
 needs macOS 26.6. The Mac App Store is one way. The other is Apple's developer site through
 [`xcodes`](https://github.com/XcodesOrg/xcodes): Homebrew cannot build it without Xcode
 already present (chicken and egg), so take the prebuilt binary —
@@ -67,7 +67,7 @@ tests stay `swift test`. Anything with a rule in `DESIGN.md` should have a test 
 ## Testing in the simulator
 
 Signing and the team don't matter here, and the App Group works, so the whole
-loop runs. `AVCaptureSession` carries no audio in the simulator, so the app uses
+loop runs (`scripts/ios-lib.sh` holds the one signing recipe and the simulator pick). `AVCaptureSession` carries no audio in the simulator, so the app uses
 `SimulatorAudioSource` (an Audio Queue on the Mac's microphone) there and
 `WindowedAudioSource` on a phone.
 
@@ -86,7 +86,7 @@ shows its console.
 
 ## Testing on a phone
 
-1. Install Xcode 26.6 or newer — the version CI builds with (`xcodes install 26.6 --select`, or
+1. Install Xcode 26.6 or newer — CI's runner has 26.6 (`xcodes install 26.6 --select`, or
    the Mac App Store). A phone on iOS 27 needs Xcode 27, which needs macOS 26.6. Then once:
 
    ```bash
@@ -117,17 +117,18 @@ shows its console.
 
 ## What is still a stub
 
+- **Autocorrect and the suggestion bar** on the full keyboard.
+
 - **Sign in with AssemblyAI.** The shipping app signs the user in and gets a key
   behind the scenes; that service does not exist yet. Debug builds show "Use an API
   key instead" (`KeyEntryView`) so the pipeline can be tested now.
 - **Returning to the host app.** After "Start Blurt" the user swipes back; iOS 26.4
   ended automatic switch-back for everyone.
 - **The full keyboard** has no autocorrect or suggestions yet.
-- **Interruptions** (a phone call) close the listening window; the user reopens it.
 
 ## What to verify on a phone first
 
 The listening window's life in the background (capture keeps flowing after the
 swipe back; battery over an hour); keyboard → app → back on iOS 26 and 27; the
-keyboard's memory with the pill animating; how long the lexicon takes on a phone
+keyboard's memory with the orb growing into the wave; how long the lexicon takes on a phone
 with thousands of contacts; and, once the service exists, sign-in end to end.

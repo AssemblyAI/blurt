@@ -4,7 +4,7 @@ The iPhone app and its keyboard are the Mac app's design on a phone: the same
 ink, the same two greens, the same orb, the Mac pill's meter and ring. Nothing here was
 invented; every number traces to a Mac source file, and where the phone needed
 something the Mac has no equivalent for, this file says what was decided and
-why. The keyboard is done; the app's own screens are next (see the end).
+why.
 
 Source of truth on the Mac side: `App/Blurt/Blurt/Branding/BlurtBrand.swift`
 (tokens, orb gradient), `App/Blurt/Blurt/Overlay/OverlayView.swift` and
@@ -26,7 +26,9 @@ BLURT_LAUNCH_ARGS="-BlurtGallery full idle,recording,error" scripts/ios-sim.sh -
 
 Layouts: `slimBar`, `panel`, `full`. States: `off` (no Full Access), `start`
 (the app isn't listening), then the pipeline's `idle`, `connecting`,
-`recording` (level 0.62), `processing`, `pasted`, `copied`, `error`. The
+`recording` (level 0.62), `processing`, `pasted`, `copied`, `error`; and two
+of the keyboard's own: `keys` (the panel flipped to its keyboard page) and
+`term` (the key-term field mid-typing, e.g. `-BlurtGallery panel keys,term`). The
 gallery is `BlurtiOS/Sources/KeyboardGalleryView.swift`, debug builds only;
 the keyboard's sources are compiled into the app for it (`project.yml`).
 
@@ -79,9 +81,17 @@ seconds, inside the app you're typing in, never a trip to Settings.
    misheard word in your text is replaced with what you typed. A success
    haptic, and the + shows a check for 1.2 s.
 
-× or an empty save leaves the mode. The list itself is edited in Settings →
-Transcription, which shows the count; the engine's caps (100 terms, 2048
-bytes) apply on the request, first terms first.
+× or an empty save leaves the mode, and so does the keyboard going away. A
+hardware keyboard (an iPad's, a Bluetooth one, the simulator's Mac) types
+past the on-screen keys into the app's field; while the term field is open a
+short run that appears there right after where the cursor was — the text
+before the cursor grew, the text after it didn't, nothing is selected — is
+moved into the term and taken back out of the field; a cursor move changes
+both sides and is left alone. A selection that carried spaces around the
+word keeps them on replacement. The list itself is edited in Settings →
+Transcription, which shows the count against the request's cap of 100 terms
+(`KeytermsBoost`); the engine applies the caps on the request, first terms
+first.
 
 ## Sharing key terms
 
@@ -92,13 +102,17 @@ declared document type, `dev.alex.blurt.terms`) with the words as the
 message text, so a friend without Blurt still gets them. A tap on the file
 in Messages opens Blurt with "Add N key terms?": every term ticked, untick
 any, Add merges the rest without duplicates. A `blurt://terms?add=a,b,c&name=…&from=…`
-link does the same (`TermPack`, `ImportTermsView`).
+link does the same (`TermPack`, `ImportTermsView`). A pack is refused over
+64 KB, past 100 terms (the request's own cap; the rest are dropped) or with a
+term, name or sender over 80 characters; a file or link that claims to be a
+pack and isn't gets "Couldn't read that list". A file iOS handed over in the
+app's Inbox is deleted once read.
 
 ## Adapting to the phone's own keyboard settings
 
 Nothing to configure: key clicks play only if the user has keyboard clicks
 on (the input view adopts `UIInputViewAudioFeedback`; `playInputClick` on
-every key); the return key says what the field asks — send, search, go, done,
+letters, space, delete and return); the return key says what the field asks — send, search, go, done,
 next, join — with the glyph otherwise; a number, decimal or phone field opens
 on the symbols page; capitalisation follows the field's
 `autocapitalizationType`; the letter rows follow the phone's first language
@@ -111,8 +125,11 @@ On by default, with a toggle in Settings: a dictation starts the moment the
 keyboard comes up in a text field — the same synthetic tap through the
 engine's gate, so it latches and the next tap of the mic stops it. Only when
 the app is listening and nothing is in flight; otherwise the orb sits dimmed
-and the first tap opens Blurt. It fires on the keyboard's
-appearance, not on every field change while it stays up.
+and the first tap opens Blurt. It fires on the keyboard's appearance, not on
+every field change while it stays up. When the keyboard leaves the screen
+with a dictation it started, it releases a recording (the words still land,
+on the clipboard if no keyboard is there) and cancels anything earlier, so
+nothing records on without it.
 
 ## Tokens (`Shared/BlurtBrand.swift`)
 
@@ -128,15 +145,15 @@ appearance, not on every field change while it stays up.
 | `orbGradient`     | 8 stops     | the design's own (`App elements/Recording.svg`), bottom→top |
 | `orbRingGradient` | green→white | the ring, top-leading to bottom-trailing                    |
 
-The keyboard is a **fixed dark surface** in both appearances, for the reason
-the Mac pill is: it floats over whichever app the user is typing in, so it
-cannot take a cue from that app, and it must read the same over a white Notes
-page and a black Messages thread. Nothing on it uses `accent`.
+The keyboard's surface is **fixed per theme**, whatever the host app's
+appearance, for the reason the Mac pill is: it floats over whichever app the
+user is typing in, so it cannot take a cue from that app, and it must read the
+same over a white Notes page and a black Messages thread. Nothing on it uses
+`accent`.
 
 ## Type
 
-Status line: 11 pt semibold, uppercase, tracking 1.1 (the Mac's 9 pt / 0.9,
-scaled for a phone at arm's length). Key legends: letters 22 pt regular,
+Key legends: letters 22 pt regular,
 everything else 16 pt medium. System font throughout.
 
 ## Components (`BlurtKeyboard/Sources/`)
@@ -180,7 +197,7 @@ a hold is push-to-talk exactly as on the Mac; a touch that travelled more
 than 24 pt cancels instead (it was a swipe). Cancel is the orange × in the
 panel's top-right corner while something is in flight.
 
-**Keys** (`KeyCap`, `LetterKey`) — 42 pt tall, radius 6, 6 % white hairline;
+**Keys** (`KeyCap`, `LetterKey`) — 42 pt tall, radius 5, 6 % white hairline;
 `key` for letters and space, `keyDark` for modifiers; a key brightens 15 %
 while pressed rather than dimming.
 
@@ -212,6 +229,37 @@ speaks the error message; the meters are hidden from VoiceOver. Reduce
 Motion stops the ring and the meter's idle wave; heights still follow the
 level.
 
+## The two processes, and every number
+
+The app listens and transcribes; the keyboard is a remote control. They talk
+over the App Group's `UserDefaults` (payloads as JSON) plus Darwin
+notifications that carry nothing and just say "look" (`SharedState.swift`).
+
+| Rule                   | Value                                                                                          | Why                                                                                                      |
+| ---------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| presence               | heartbeat 5 s (app), 4 s (keyboard); window 15 s                                               | more than twice a heartbeat, so one missed beat isn't absence; a killed process is absent within seconds |
+| listening              | window not lapsed **and** app seen within 15 s                                                 | a killed app, or a phone call, with the window's end still in the future                                 |
+| result freshness       | 10 s                                                                                           | a notification held for a suspended keyboard arrives minutes late                                        |
+| result addressing      | `recipient` = the keyboard instance last seen                                                  | two live keyboards (two host apps) must not both insert                                                  |
+| result delivery        | the app waits 3 s (poll 250 ms) for the keyboard to take the result; else clipboard + "Copied" | "Pasted" is never a guess                                                                                |
+| command freshness      | 10 s                                                                                           | a held press from minutes ago must not start a dictation on resume                                       |
+| command retry          | one re-signal after 600 ms with no phase change                                                | a missed Darwin notification would leave the gate latched over nothing                                   |
+| phase staleness        | notices 3 s (max dwell 2 s + 1); in flight 130 s (the 120 s cap + 10)                          | the keyboard reads the snapshot on every appearance                                                      |
+| notice dwell           | pasted 1.2 s; copied, error 2 s                                                                | the Mac's 0.8 / 1.6 s, a little longer with no hover                                                     |
+| press delay on the orb | 90 ms                                                                                          | a swipe that starts on the orb never starts a dictation it must then cancel                              |
+| tap travel             | 12 pt (keys), 24 pt (orb), swipe ≥ 48 pt horizontal and 1.5× the vertical                      | the carousel's swipe never types or dictates                                                             |
+| level publish          | every 80 ms while recording                                                                    | the orb's meter, off the capture path's back                                                             |
+| lexicon refresh        | hourly                                                                                         | thousands of contacts on a keyboard memory budget                                                        |
+| height change          | 0.25 s; constraint priority 999                                                                | iOS honours a keyboard's height at just under required                                                   |
+| hero glow              | `greenOnDark` 35–80 % with the level; radius 0.1–0.35 × the orb's size                         | one formula for the keyboard and the home screen                                                         |
+| letter pop-up          | 32 pt glyph, key width + 18 × 56, radius 9, 58 pt above                                        | the system keyboard's                                                                                    |
+| term field             | 36 pt, 17 pt text, caret 0.5 s; the + is 32 pt                                                 | —                                                                                                        |
+| term packs             | ≤ 64 KB, ≤ 100 terms, ≤ 80 characters each                                                     | the request's cap; unbounded input from a stranger                                                       |
+
+Tests pin the rules that can be pinned (`BlurtiOSTests`: the contract, the
+gate, results, the term field, the feed, the layout arithmetic); anything
+that gains a number here should gain a line there.
+
 ## The app's screens (`BlurtiOS/Sources/`)
 
 Appearance-adaptive, unlike the keyboard: `accent` (the catalog's
@@ -223,17 +271,17 @@ shared, not copied (`project.yml`).
 
 **Home** (`HomeView.swift`) — the Mac's ready screen, stacked for a phone:
 
-| Piece      | What                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Bar        | the wordmark (tinted accent, 22 pt tall) centred; the gear → Settings                                                                                                                                                                                                                                                                                                                                                          |
-| Setup card | only while something is missing: sign in (stub; debug builds take a key), microphone, keyboard + Full Access                                                                                                                                                                                                                                                                                                                   |
-| Hero card  | the orb, 112 pt, ring 2 pt sweeping while the mic is open or a dictation is in flight, glowing with the level while recording; a title2 line (Not listening · Ready to dictate · Listening… · Transcribing… · Pasted · Copied · the error) and a callout under it; the meter while recording; **Start listening** (prominent) or **Stop listening** (bordered, destructive); "Dictate here, to the clipboard" as a text button |
-| Style      | chips: Default and each profile, the active one filled with the accent; Edit → the styles editor                                                                                                                                                                                                                                                                                                                               |
-| Recent     | cards: three lines of text, the style as a tinted capsule, the relative time, a copy button; an empty-state card                                                                                                                                                                                                                                                                                                               |
-| Footer     | "Powered by AssemblyAI", caption                                                                                                                                                                                                                                                                                                                                                                                               |
+| Piece      | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bar        | the wordmark (tinted accent, 22 pt tall) centred; the gear → Settings                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Setup card | only while something is missing: sign in (stub; debug builds take a key), microphone, keyboard + Full Access                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Hero card  | the orb, 112 pt, ring 2 pt sweeping while the mic is open or a dictation is in flight, glowing with the level while recording (the keyboard orb's formula); a title2 line (Not listening · Ready to dictate · Connecting… · Listening… · Transcribing… · Pasted · Copied · the error) and a callout under it; the meter while recording; **Start listening** (prominent; refused without a key, with a line saying so) or **Stop listening** (bordered, destructive; cancels a dictation in flight before closing, so nothing is transcribed for nobody); "Dictate here, to the clipboard" as a text button |
+| Style      | chips: Default and each profile, the active one filled with the accent; Edit → the styles editor                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Recent     | cards: three lines of text, the style as a tinted capsule, the relative time, a copy button; an empty-state card                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Footer     | "Powered by AssemblyAI", caption                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 **Settings** (`SettingsView.swift`) — a sheet, grouped as the Mac's: Keyboard
-(layout, look, hands-free), Listening (the window), Transcription (enhanced
+(layout, theme, hands-free), Listening (the window), Transcription (enhanced
 transcripts, output styles, key terms with the contact-name count), Account
 (sign-in stub; the API key in debug builds), About (version, GitHub, Powered
 by AssemblyAI).

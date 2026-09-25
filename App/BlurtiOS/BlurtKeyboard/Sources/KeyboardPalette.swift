@@ -13,13 +13,13 @@ struct KeyboardPalette: Equatable, Identifiable {
   let name: String
   /// One line for the picker.
   let vibe: String
-  var surface: Color
-  var key: Color
-  var keyDark: Color
-  var keyText: Color
+  let surface: Color
+  let key: Color
+  let keyDark: Color
+  let keyText: Color
   /// The drop under each key, as the system keyboard draws it.
-  var keyShadow: Color
-  var popupFill: Color
+  let keyShadow: Color
+  let popupFill: Color
 
   static let keyGap: CGFloat = 6
   static let rowGap: CGFloat = 11

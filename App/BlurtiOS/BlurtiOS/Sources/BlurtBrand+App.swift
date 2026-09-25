@@ -25,7 +25,7 @@ extension View {
 /// The lowercase wordmark from the Mac's ready screen, tinted with the accent
 /// (`blurt-ready-logo.png`, shared from `App/Blurt/Blurt/Branding`).
 struct Wordmark: View {
-  var height: CGFloat = 22
+  private static let height: CGFloat = 22
 
   var body: some View {
     if let image = UIImage(named: "blurt-ready-logo") {
@@ -33,7 +33,7 @@ struct Wordmark: View {
         .renderingMode(.template)
         .resizable()
         .scaledToFit()
-        .frame(height: height)
+        .frame(height: Self.height)
         .foregroundStyle(BlurtBrand.accent)
         .accessibilityLabel("Blurt")
     } else {

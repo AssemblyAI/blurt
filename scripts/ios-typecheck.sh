@@ -11,7 +11,8 @@
 #
 # What it cannot see: APIs that differ between Catalyst and iOS proper, code
 # signing, linking, and the generated project itself. CI stays the authority;
-# this is the fast local loop for the App/BlurtiOS sources.
+# this is the fast local loop for the App/BlurtiOS sources. The unit tests
+# (`@testable import`) need the real build: scripts/ios-test.sh.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -25,6 +26,7 @@ fi
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
+# The 18.0 is the deployment target App/BlurtiOS/project.yml sets.
 TARGET=arm64-apple-ios18.0-macabi
 COMMON=(
   -target "$TARGET" -sdk "$SDK"
@@ -43,9 +45,13 @@ TARGET_FLAGS=(
   -Xfrontend -default-isolation -Xfrontend MainActor
 )
 
+# The app also compiles the keyboard's sources, all but its entry point
+# (project.yml: the theme picker and the home screen draw the real keyboard
+# and orb), and CI builds Debug, so `#if DEBUG` code is checked too.
 echo "BlurtiOS"
-xcrun swiftc "${TARGET_FLAGS[@]}" -module-name BlurtiOS \
-  "$IOS"/BlurtiOS/Sources/*.swift "$IOS"/Shared/*.swift
+find "$IOS/BlurtKeyboard/Sources" -name '*.swift' ! -name KeyboardViewController.swift -print0 \
+  | xargs -0 xcrun swiftc "${TARGET_FLAGS[@]}" -D DEBUG -module-name BlurtiOS \
+    "$IOS"/BlurtiOS/Sources/*.swift "$IOS"/Shared/*.swift
 
 echo "BlurtKeyboard"
 xcrun swiftc "${TARGET_FLAGS[@]}" -application-extension -module-name BlurtKeyboard \

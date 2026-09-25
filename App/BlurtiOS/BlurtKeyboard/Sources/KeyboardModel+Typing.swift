@@ -45,6 +45,7 @@ extension KeyboardModel {
     let seed = selected.count <= 48 && !selected.contains("\n") ? selected : ""
     termDraftFromSelection = seed.isEmpty ? nil : seed
     termHostBaseline = proxy?.documentContextBeforeInput ?? ""
+    termHostBaselineAfter = proxy?.documentContextAfterInput ?? ""
     termDraft = seed
     updateShift()
     onLayoutChange?()
@@ -54,6 +55,7 @@ extension KeyboardModel {
     termDraft = nil
     termDraftFromSelection = nil
     termHostBaseline = nil
+    termHostBaselineAfter = nil
     updateShift()
     onLayoutChange?()
   }
@@ -67,12 +69,21 @@ extension KeyboardModel {
       return
     }
     SharedStore.addKeyTerm(draft)
-    if let original = termDraftFromSelection, original != draft, proxy?.selectedText == original {
-      proxy?.insertText(draft)
-    }
+    // Out of the mode before touching the text, so the field's own change
+    // notification can't read the replacement as typing to claim.
+    let original = termDraftFromSelection
     termDraft = nil
     termDraftFromSelection = nil
     termHostBaseline = nil
+    termHostBaselineAfter = nil
+    if let original, original != draft, let selected = proxy?.selectedText,
+      selected.trimmingCharacters(in: .whitespacesAndNewlines) == original
+    {
+      // The selection may have carried the spaces around the word; keep them.
+      let lead = selected.prefix { $0.isWhitespace }
+      let trail = selected.reversed().prefix { $0.isWhitespace }.reversed()
+      proxy?.insertText(String(lead) + draft + String(trail))
+    }
     if hasFullAccess { UINotificationFeedbackGenerator().notificationOccurred(.success) }
     termSavedAt = Date()
     termNotice?.cancel()

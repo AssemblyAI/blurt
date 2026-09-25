@@ -20,9 +20,9 @@
 
     var levels: AsyncStream<Float> { feed.levels }
 
-    deinit { close() }
+    deinit { closeNow() }
 
-    func open() throws {
+    func open() async throws {
       guard queue == nil else { return }
       var format = AudioStreamBasicDescription(
         mSampleRate: Double(SyncSTTLimits.sampleRate), mFormatID: kAudioFormatLinearPCM,
@@ -33,7 +33,7 @@
       let unmanagedSelf = Unmanaged.passUnretained(self).toOpaque()
       guard AudioQueueNewInput(&format, Self.deliver, unmanagedSelf, nil, nil, 0, &created) == noErr,
         let created
-      else { throw WindowedAudioSource.Failure.noInputDevice }
+      else { throw ListeningSourceFailure.noInputDevice }
       for _ in 0..<Self.bufferCount {
         var buffer: AudioQueueBufferRef?
         guard AudioQueueAllocateBuffer(created, Self.bufferBytes, &buffer) == noErr, let buffer else { continue }
@@ -41,13 +41,15 @@
       }
       guard AudioQueueStart(created, nil) == noErr else {
         _ = AudioQueueDispose(created, true)
-        throw WindowedAudioSource.Failure.noInputDevice
+        throw ListeningSourceFailure.noInputDevice
       }
       queue = created
       isOpen = true
     }
 
-    func close() {
+    func close() async { closeNow() }
+
+    private func closeNow() {
       if let queue {
         _ = AudioQueueStop(queue, true)
         _ = AudioQueueDispose(queue, true)
@@ -61,7 +63,7 @@
 
     func start() throws -> AsyncStream<Data> {
       guard isOpen else {
-        throw BlurtError.audioCaptureFailed(underlying: WindowedAudioSource.Failure.windowClosed)
+        throw BlurtError.audioCaptureFailed(underlying: ListeningSourceFailure.windowClosed)
       }
       return feed.begin()
     }

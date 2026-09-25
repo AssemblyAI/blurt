@@ -12,16 +12,14 @@ let keyboardAnimationInterval = MicCapture.meterIntervalSeconds
 /// is happening. It spins rather than pulses — a pulse says "alive", a sweep
 /// says "working, and still going" — and the disc underneath never moves.
 ///
-/// Sized by the caller, because the keyboard draws it at two scales: inside
-/// the status pill, and as the mic key itself.
+/// Sized by the caller: the app's home screen draws it as the hero; the
+/// keyboard's mic key draws its own capsule so it can grow into the wave.
 struct BrandOrb: View {
   var diameter: CGFloat
   /// Whether the ring sweeps. Off under Reduce Motion, where the ring is still
   /// drawn — it is part of the mark — but holds still.
   var animated: Bool
   var ringWidth: CGFloat = 1
-  /// A solid ring in place of the green-to-white gradient — the error's orange.
-  var ringColor: Color?
 
   /// One turn every 1.6 s: the Mac's cadence.
   static let period: Double = 1.6
@@ -50,11 +48,7 @@ struct BrandOrb: View {
   }
 
   /// `strokeBorder` so the ring sits inside the disc instead of fringing it.
-  @ViewBuilder private var ringShape: some View {
-    if let ringColor {
-      Circle().strokeBorder(ringColor, lineWidth: ringWidth)
-    } else {
-      Circle().strokeBorder(BlurtBrand.orbRingGradient, lineWidth: ringWidth)
-    }
+  private var ringShape: some View {
+    Circle().strokeBorder(BlurtBrand.orbRingGradient, lineWidth: ringWidth)
   }
 }

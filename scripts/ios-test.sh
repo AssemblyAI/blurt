@@ -4,28 +4,35 @@
 #   scripts/ios-test.sh
 #   BLURT_SIM_DEVICE="iPhone 17" scripts/ios-test.sh
 #
-# Hosted by the app, signed ad hoc, which the simulator accepts. The engine's
-# own tests are `swift test` (scripts/check.sh); these cover the iPhone code's
-# pure logic — the App Group contract, the keyboard's rules, term packs.
+# Hosted by the app, signed ad hoc, on the named simulator or whichever iPhone
+# this Mac (or CI runner) has. The engine's own tests are `swift test`
+# (scripts/check.sh); these cover the iPhone code's pure logic — the App Group
+# contract, the keyboard's rules, term packs. The per-test log is in the
+# result bundle the last line names.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=scripts/ios-lib.sh
+source "$REPO_ROOT/scripts/ios-lib.sh"
 DERIVED="${BLURT_DERIVED_DATA:-$REPO_ROOT/.build/ios-sim}"
-# The named simulator, or whichever iPhone this Mac (or CI runner) has.
-DEVICE="$(xcrun simctl list devices available -j | python3 -c '
-import json, sys
-wanted = sys.argv[1]
-names = [d["name"] for rt, devs in json.load(sys.stdin)["devices"].items() if "iOS" in rt for d in devs]
-print(wanted if wanted in names else next((n for n in names if n.startswith("iPhone")), ""))
-' "${BLURT_SIM_DEVICE:-iPhone 18 Pro}")"
-if [ -z "$DEVICE" ]; then
+
+PICKED="$(ios_pick_device "${BLURT_SIM_DEVICE:-iPhone 18 Pro}")"
+if [ -z "$PICKED" ]; then
   echo "ios-test: no iPhone simulator available (xcrun simctl list devices)" >&2
   exit 1
 fi
-echo "testing on $DEVICE"
+UDID="${PICKED%%	*}"
+echo "testing on ${PICKED#*	}"
+ios_wait_booted "$UDID"
 
 (cd "$REPO_ROOT/App/BlurtiOS" && xcodegen generate --quiet)
+RESULTS="$DERIVED/BlurtiOSTests-$(date +%Y%m%d-%H%M%S).xcresult"
 xcodebuild test -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOS \
-  -destination "platform=iOS Simulator,name=$DEVICE" -derivedDataPath "$DERIVED" \
-  CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM= \
-  -quiet
+  -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$DERIVED" \
+  -resultBundlePath "$RESULTS" "${IOS_SIM_SIGNING[@]}" -quiet
+xcrun xcresulttool get test-results summary --path "$RESULTS" 2>/dev/null | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+print("ios-test:", d.get("passedTests", "?"), "passed,", d.get("failedTests", "?"), "failed,", d.get("skippedTests", 0), "skipped")
+' || true
+echo "results: $RESULTS"

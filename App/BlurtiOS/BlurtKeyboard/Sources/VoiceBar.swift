@@ -13,19 +13,34 @@ struct VoiceBar: View {
   static let height: CGFloat = 44
 
   var body: some View {
-    ZStack {
-      if model.termDraft != nil {
-        TermField(model: model)
+    GeometryReader { geo in
+      ZStack {
+        if model.termDraft != nil {
+          TermField(model: model)
+            .transition(.opacity)
+        } else if !model.hasFullAccess {
+          // The one state the orb can't show on its own: without Full Access
+          // nothing here can work, and the user has to be told where to go.
+          HStack(spacing: 10) {
+            MicKey(model: model, size: 40, expandedWidth: 40)
+            Text("Allow Full Access in Settings → Keyboards")
+              .font(.footnote)
+              .foregroundStyle(BlurtBrand.errorOrange)
+              .lineLimit(1)
+              .minimumScaleFactor(0.8)
+          }
           .transition(.opacity)
-      } else {
-        MicKey(model: model, size: 40, expandedWidth: 200)
-          .transition(.opacity)
+        } else {
+          // The wave's capsule stays clear of the + at the trailing edge.
+          MicKey(model: model, size: 40, expandedWidth: min(200, geo.size.width - 2 * (32 + 12)))
+            .transition(.opacity)
+        }
       }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    .frame(maxWidth: .infinity)
     .frame(height: Self.height)
     .overlay(alignment: .trailing) {
-      if model.termDraft == nil { AddTermKey(model: model) }
+      if model.termDraft == nil, model.hasFullAccess { AddTermKey(model: model) }
     }
     .animation(.easeInOut(duration: 0.15), value: model.termDraft == nil)
   }
@@ -142,6 +157,7 @@ struct WaveformMeter: View {
       }
       .frame(width: geo.size.width, height: geo.size.height)
     }
+    .accessibilityHidden(true)
   }
 
   private func bars(layout: MeterBarRow, time: TimeInterval) -> some View {

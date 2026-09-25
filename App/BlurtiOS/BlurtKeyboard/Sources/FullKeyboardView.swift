@@ -6,7 +6,7 @@ import SwiftUI
 /// spacing — with the voice bar where the suggestion bar would be. Every key is 42 pt tall. Letters pop up
 /// while pressed, sentences capitalise themselves, a double space ends one.
 /// No autocorrect or suggestions yet. iOS swaps in its own keyboard for
-/// password and phone-number fields, so those never reach here.
+/// password fields, so those never reach here.
 struct FullKeyboardView: View {
   var model: KeyboardModel
 
@@ -96,7 +96,8 @@ private struct LetterKey: View {
           .onEnded { value in
             pressed = false
             // A touch that travelled was a swipe (the panel's carousel), not a tap.
-            guard abs(value.translation.width) < 12, abs(value.translation.height) < 12 else { return }
+            guard abs(value.translation.width) < KeyPress.tapTravel, abs(value.translation.height) < KeyPress.tapTravel
+            else { return }
             action()
           }
       )

@@ -259,6 +259,16 @@ check_no_external_deps() {
 }
 run_check "no-external-dependencies guard" check_no_external_deps
 
+# The iPhone targets, typechecked against the Mac Catalyst frameworks — the
+# closest thing to an iOS SDK a Mac without Xcode has (scripts/ios-typecheck.sh
+# explains). Skipped, not failed, where those frameworks are absent; CI's
+# ios-build job builds and tests the real thing.
+if [ -d "$(xcrun --show-sdk-path 2>/dev/null)/System/iOSSupport/System/Library/Frameworks/UIKit.framework" ]; then
+  run_check "ios-typecheck (App/BlurtiOS, Mac Catalyst stand-in)" "$REPO_ROOT/scripts/ios-typecheck.sh"
+else
+  echo "==> ios-typecheck skipped: no Mac Catalyst frameworks in the selected SDK"
+fi
+
 # Ignore rules must not shadow tracked files. A .gitignore pattern only suppresses
 # files that are *untracked* — one that also matches something already committed
 # leaves it tracked but invisible to `git status`, so later edits to it stop
@@ -575,7 +585,9 @@ else
   echo "==> coverage gate (>= ${MIN_COVERAGE}% engine lines)"
   BIN="$(swift build --show-bin-path)"
   PROFDATA="$BIN/codecov/default.profdata"
-  XCTEST_BUNDLE="$(find "$BIN" -maxdepth 1 -name '*PackageTests.xctest' -print -quit)"
+  # `BlurtPackageTests.xctest` from SwiftPM's own build system; Xcode 27's
+  # SwiftPM names the bundle after the test target, `BlurtEngineTests.xctest`.
+  XCTEST_BUNDLE="$(find "$BIN" -maxdepth 1 -name '*Tests.xctest' -print -quit)"
   XCTEST_BIN="$XCTEST_BUNDLE/Contents/MacOS/$(basename "$XCTEST_BUNDLE" .xctest)"
   # These must exist after `swift test --enable-code-coverage`. Previously a
   # missing one (a renamed test bundle, a coverage build that didn't happen)

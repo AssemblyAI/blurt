@@ -16,12 +16,12 @@
   ///     BLURT_LAUNCH_ARGS="-BlurtGallery panel idle,recording,processing" \
   ///       scripts/ios-sim.sh --screenshot panel.png
   ///
-  /// is the whole loop. The keyboard's sources are compiled into the app for
-  /// this (see project.yml); the keyboard itself never runs here.
+  /// is the whole loop. The keyboard's sources are compiled into the app (see
+  /// project.yml: the theme picker and the home screen draw the real keyboard
+  /// and orb too); the keyboard itself never runs here.
   struct KeyboardGalleryView: View {
     struct Row: Identifiable {
       let id = UUID()
-      let layout: KeyboardLayout
       let caption: String
       let model: KeyboardModel
     }
@@ -54,7 +54,7 @@
       let theme = arguments.count > flag + 3 ? arguments[flag + 3] : "ink"
       return arguments[flag + 2].split(separator: ",").map { name in
         Row(
-          layout: layout, caption: "\(layout.rawValue) · \(name) · \(theme)",
+          caption: "\(layout.rawValue) · \(name) · \(theme)",
           model: model(layout: layout, state: String(name), theme: theme))
       }
     }
