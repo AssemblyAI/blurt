@@ -2,7 +2,6 @@ import AVFoundation
 import BlurtEngine
 import CoreMedia
 import Foundation
-import Synchronization
 
 /// The microphone behind an iOS dictation: an audio-only capture session that
 /// stays open for the whole listening window and hands each utterance its own
@@ -23,10 +22,10 @@ import Synchronization
 /// The output's native format is converted to the 16 kHz mono 16-bit the
 /// dictation API wants by `PCMConverter` (`audioSettings`, which does that on
 /// the Mac, is not in the iOS SDK). `@unchecked Sendable` by confinement, the
-/// same way the Mac recorder is: the feed and its tally live behind a `Mutex`,
+/// same way the Mac recorder is: the feed and its tally live behind `UtteranceFeed`'s lock,
 /// the converter is touched only on the serial delivery queue, and the session
 /// is configured once and then only started and stopped.
-nonisolated final class WindowedAudioSource: NSObject, MicCaptureProtocol, @unchecked Sendable {
+nonisolated final class WindowedAudioSource: NSObject, ListeningSource, @unchecked Sendable {
   enum Failure: Error, LocalizedError {
     /// A press arrived with no listening window open — the keyboard's job is to
     /// open the app first, so this is a plumbing fault, not a user error.
@@ -41,25 +40,16 @@ nonisolated final class WindowedAudioSource: NSObject, MicCaptureProtocol, @unch
     }
   }
 
-  private struct Feed {
-    var sink: AsyncStream<Data>.Continuation?
-    var bytes = 0
-  }
-
-  private let feed = Mutex(Feed())
+  private let feed = UtteranceFeed()
   private let session = AVCaptureSession()
   private let output = AVCaptureAudioDataOutput()
   /// Serial, so the converter below needs no lock.
   private let deliveryQueue = DispatchQueue(label: "dev.alex.blurt.ios.capture")
   private nonisolated(unsafe) var converter: PCMConverter?
-  private let levelsContinuation: AsyncStream<Float>.Continuation
-  /// The 0…1 meter the keyboard pill renders, at the output's own cadence.
-  let levels: AsyncStream<Float>
+
+  var levels: AsyncStream<Float> { feed.levels }
 
   override init() {
-    let (stream, continuation) = AsyncStream<Float>.makeStream(bufferingPolicy: .bufferingNewest(1))
-    levels = stream
-    levelsContinuation = continuation
     super.init()
     output.setSampleBufferDelegate(self, queue: deliveryQueue)
   }
@@ -91,7 +81,7 @@ nonisolated final class WindowedAudioSource: NSObject, MicCaptureProtocol, @unch
   /// Releases the microphone and ends any utterance in flight.
   func close() {
     if session.isRunning { session.stopRunning() }
-    _ = endUtterance()
+    feed.end()
   }
 
   // MARK: MicCaptureProtocol
@@ -100,47 +90,12 @@ nonisolated final class WindowedAudioSource: NSObject, MicCaptureProtocol, @unch
     guard session.isRunning else {
       throw BlurtError.audioCaptureFailed(underlying: Failure.windowClosed)
     }
-    let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .unbounded)
-    feed.withLock { feed in
-      feed.sink?.finish()
-      feed.sink = continuation
-      feed.bytes = 0
-    }
-    return stream
+    return feed.begin()
   }
 
-  func stop() -> Int { endUtterance() }
+  func stop() -> Int { feed.end() }
 
-  func cancelCapture() { _ = endUtterance() }
-
-  private func endUtterance() -> Int {
-    feed.withLock { feed in
-      let bytes = feed.bytes
-      feed.sink?.finish()
-      feed.sink = nil
-      feed.bytes = 0
-      return bytes
-    }
-  }
-
-  /// dBFS of a chunk of 16-bit PCM, mapped to 0…1 with the Mac meter's -50 dB
-  /// floor so room ambient reads as empty bars.
-  static func level(of pcm: Data) -> Float {
-    let count = pcm.count / MemoryLayout<Int16>.size
-    guard count > 0 else { return 0 }
-    let energy = pcm.withUnsafeBytes { raw -> Double in
-      raw.bindMemory(to: Int16.self).reduce(0) { sum, sample in
-        let value = Double(sample)
-        return sum + value * value
-      }
-    }
-    let rms = (energy / Double(count)).squareRoot() / Double(Int16.max)
-    guard rms > 0 else { return 0 }
-    let floor = -50.0
-    let db = 20 * log10(rms)
-    guard db > floor else { return 0 }
-    return Float(min(1, (db - floor) / -floor))
-  }
+  func cancelCapture() { feed.end() }
 }
 
 // The conformance is spelled `nonisolated`: with the target defaulting to the
@@ -151,13 +106,8 @@ extension WindowedAudioSource: nonisolated AVCaptureAudioDataOutputSampleBufferD
     _ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection
   ) {
     if converter == nil { converter = PCMConverter() }
-    guard let converter, let chunk = converter.convert(sampleBuffer), !chunk.isEmpty else { return }
-    levelsContinuation.yield(Self.level(of: chunk))
-    feed.withLock { feed in
-      guard let sink = feed.sink else { return }
-      feed.bytes += chunk.count
-      sink.yield(chunk)
-    }
+    guard let converter, let chunk = converter.convert(sampleBuffer) else { return }
+    feed.deliver(chunk)
   }
 }
 

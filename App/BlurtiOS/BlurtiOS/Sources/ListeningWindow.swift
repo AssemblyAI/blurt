@@ -15,7 +15,12 @@ import Observation
 @MainActor
 @Observable
 final class ListeningWindow {
-  let source = WindowedAudioSource()
+  #if targetEnvironment(simulator)
+    // The simulator's capture session carries no audio; see SimulatorAudioSource.
+    let source: any ListeningSource = SimulatorAudioSource()
+  #else
+    let source: any ListeningSource = WindowedAudioSource()
+  #endif
   private(set) var until: Date?
   private(set) var lastError: String?
   @ObservationIgnored private var expiry: Task<Void, Never>?

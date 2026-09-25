@@ -37,6 +37,26 @@ on a phone needs Xcode with a team that can provision the App Group; every id in
 `project.yml` (`dev.alex.blurt.ios`, `group.dev.alex.blurt`) is a placeholder
 inherited from the Mac app and must become org-owned before the App Store.
 
+## Testing in the simulator
+
+Signing and the team don't matter here, and the App Group works, so the whole
+loop runs. `AVCaptureSession` carries no audio in the simulator, so the app uses
+`SimulatorAudioSource` (an Audio Queue on the Mac's microphone) there and
+`WindowedAudioSource` on a phone.
+
+```bash
+cd App/BlurtiOS && xcodegen generate
+xcodebuild -project BlurtiOS.xcodeproj -scheme BlurtiOS -destination 'generic/platform=iOS Simulator' \
+  CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM= build
+xcrun simctl boot "iPhone 18 Pro" && xcrun simctl install booted <DerivedData>/Build/Products/Debug-iphonesimulator/BlurtiOS.app
+xcrun simctl privacy booted grant microphone dev.alex.blurt.ios && xcrun simctl launch booted dev.alex.blurt.ios
+```
+
+Xcode 27 replaced Simulator.app with Device Hub (`Xcode.app/Contents/Applications/DeviceHub.app`);
+turn off its **Always simulate hardware keyboard** setting or no on-screen keyboard appears.
+Then: Blurt → Open Settings → Keyboards → Blurt on, Allow Full Access; Start listening;
+in Notes, hold the globe key, pick Blurt, tap the mic.
+
 ## Testing on a phone
 
 1. Install Xcode 26.6 or newer — the version CI builds with (`xcodes install 26.6 --select`, or

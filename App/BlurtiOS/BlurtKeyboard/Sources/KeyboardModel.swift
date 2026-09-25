@@ -114,16 +114,28 @@ final class KeyboardModel {
   private func requestLexicon() {
     let refreshed = SharedStore.lexiconRefreshedAt ?? .distantPast
     guard Date().timeIntervalSince(refreshed) > Self.lexiconRefreshInterval else { return }
-    // UIKit hands the lexicon back on the main thread, which is where its
-    // entries may be read; the closure stays main-actor for that reason.
-    controller?.requestSupplementaryLexicon { lexicon in
-      let entries = lexicon.entries.map {
-        LexiconEntry(userInput: $0.userInput, documentText: $0.documentText)
-      }
-      SharedStore.write(entries, forKey: BlurtShared.Key.lexicon)
-      SharedStore.lexiconRefreshedAt = Date()
-      SharedStore.post(BlurtShared.Signal.lexicon)
+    // UIKit calls back on an XPC queue, not the main thread (a main-actor
+    // closure here traps), while the lexicon's entries are main-actor in
+    // Swift's eyes. So: take the callback anywhere, hand the immutable lexicon
+    // over, and read it on the main actor.
+    controller?.requestSupplementaryLexicon { @Sendable lexicon in
+      let handoff = LexiconHandoff(lexicon)
+      Task { @MainActor in Self.store(handoff.lexicon) }
     }
+  }
+
+  private nonisolated struct LexiconHandoff: @unchecked Sendable {
+    let lexicon: UILexicon
+    init(_ lexicon: UILexicon) { self.lexicon = lexicon }
+  }
+
+  private static func store(_ lexicon: UILexicon) {
+    let entries = lexicon.entries.map {
+      LexiconEntry(userInput: $0.userInput, documentText: $0.documentText)
+    }
+    SharedStore.write(entries, forKey: BlurtShared.Key.lexicon)
+    SharedStore.lexiconRefreshedAt = Date()
+    SharedStore.post(BlurtShared.Signal.lexicon)
   }
 
   // MARK: - The mic key
