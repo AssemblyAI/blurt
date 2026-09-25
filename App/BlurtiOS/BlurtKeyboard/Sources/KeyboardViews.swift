@@ -15,17 +15,68 @@ struct KeyboardRootView: View {
 
   var body: some View {
     Group {
-      switch model.layout {
+      switch model.effectiveLayout {
       case .slimBar: SlimBarView(model: model)
-      case .panel: PanelView(model: model)
-      case .full: FullKeyboardView(model: model)
+      case .panel:
+        PanelView(model: model)
+          .id("panel")
+          .transition(flip)
+      case .full:
+        FullKeyboardView(model: model)
+          .id(model.layout == .panel ? "panel-keys" : "full")
+          .transition(flip)
       }
     }
     .padding(.horizontal, model.theme.margin)
     .padding(.vertical, Self.verticalMargin)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(model.palette.surface)
+    .overlay(alignment: .bottom) {
+      if model.layout == .panel { PageDots(count: 2, current: model.panelShowsKeys ? 1 : 0).padding(.bottom, 2) }
+    }
+    .clipped()
     .environment(\.keyboardPalette, model.palette)
+    .simultaneousGesture(swipe, including: model.layout == .panel ? .all : .subviews)
+    .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: model.panelShowsKeys)
+  }
+
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  /// The carousel's slide: the incoming page arrives from the side the finger
+  /// moved towards, the outgoing one leaves the other way.
+  private var flip: AnyTransition {
+    model.flipTowardsLeading
+      ? .asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .leading))
+      : .asymmetric(insertion: .move(edge: .leading), removal: .move(edge: .trailing))
+  }
+
+  /// A horizontal swipe anywhere on the panel flips it; taps and holds on keys
+  /// never travel this far, and the keys ignore a touch that did.
+  private var swipe: some Gesture {
+    DragGesture(minimumDistance: 24)
+      .onEnded { value in
+        let dx = value.translation.width
+        guard abs(dx) > 48, abs(dx) > abs(value.translation.height) * 1.5 else { return }
+        model.flipPanel(towardsLeading: dx < 0)
+      }
+  }
+}
+
+/// The carousel's page indicator.
+struct PageDots: View {
+  let count: Int
+  let current: Int
+  @Environment(\.keyboardPalette) private var palette
+
+  var body: some View {
+    HStack(spacing: 6) {
+      ForEach(0..<count, id: \.self) { index in
+        Circle()
+          .fill(palette.keyText.opacity(index == current ? 0.9 : 0.3))
+          .frame(width: 5, height: 5)
+      }
+    }
+    .accessibilityHidden(true)
   }
 }
 
@@ -113,9 +164,15 @@ struct MicKey: View {
           pressed = true
           model.micDown()
         }
-        .onEnded { _ in
+        .onEnded { value in
           pressed = false
-          model.micUp()
+          // A finger that swiped across the orb was flipping the panel, not
+          // releasing a hold: undo the press instead of ending a dictation.
+          if abs(value.translation.width) > 24 || abs(value.translation.height) > 24 {
+            model.cancel()
+          } else {
+            model.micUp()
+          }
         }
     )
   }

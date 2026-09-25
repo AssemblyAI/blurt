@@ -27,16 +27,24 @@ final class KeyboardViewController: UIInputViewController {
     host.didMove(toParent: self)
     // The keyboard's height is ours to declare; iOS honours a constraint on the
     // input view at just under required priority.
-    let height = view.heightAnchor.constraint(equalToConstant: model.layout.height(theme: model.theme))
+    let height = view.heightAnchor.constraint(equalToConstant: model.effectiveLayout.height(theme: model.theme))
     height.priority = UILayoutPriority(999)
     height.isActive = true
     heightConstraint = height
+    // The panel's carousel changes the keyboard's height when it flips.
+    model.onLayoutChange = { [weak self] in self?.updateHeight(animated: true) }
   }
 
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
     model.appeared()
-    heightConstraint?.constant = model.layout.height(theme: model.theme)
+    updateHeight(animated: false)
+  }
+
+  private func updateHeight(animated: Bool) {
+    heightConstraint?.constant = model.effectiveLayout.height(theme: model.theme)
+    guard animated else { return }
+    UIView.animate(withDuration: 0.25) { self.view.superview?.layoutIfNeeded() }
   }
 
   override func viewWillDisappear(_ animated: Bool) {

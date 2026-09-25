@@ -70,7 +70,7 @@ nonisolated enum KeyboardLayout: String, CaseIterable, Codable, Sendable, Identi
   var summary: String {
     switch self {
     case .slimBar: "Just the mic and a few keys. Switch keyboards to type."
-    case .panel: "A big mic with status and cancel. Switch keyboards to type."
+    case .panel: "A big mic with status and cancel. Swipe sideways for the full keyboard, and back."
     case .full: "Every letter key, with the mic as the main key."
     }
   }

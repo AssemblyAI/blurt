@@ -92,8 +92,10 @@ private struct LetterKey: View {
       .simultaneousGesture(
         DragGesture(minimumDistance: 0)
           .onChanged { _ in pressed = true }
-          .onEnded { _ in
+          .onEnded { value in
             pressed = false
+            // A touch that travelled was a swipe (the panel's carousel), not a tap.
+            guard abs(value.translation.width) < 12, abs(value.translation.height) < 12 else { return }
             action()
           }
       )

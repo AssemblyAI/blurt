@@ -25,6 +25,12 @@ final class KeyboardModel {
   static let lexiconRefreshInterval: TimeInterval = 60 * 60
 
   var layout: KeyboardLayout = .panel
+  /// The panel is a two-page carousel — the mic panel and the full keyboard —
+  /// flipped by a swipe in either direction, as often as you like. Which page
+  /// is up; back to the mic each time the keyboard appears.
+  var panelShowsKeys = false
+  /// The direction of the last flip, so the pages slide the way the finger went.
+  var flipTowardsLeading = false
   var theme: KeyboardTheme = .blurt
   /// Whether the app being typed in wants a dark keyboard, for the iPhone look.
   var isDark = false
@@ -47,6 +53,21 @@ final class KeyboardModel {
   var proxy: (any UITextDocumentProxy)? { controller?.textDocumentProxy }
 
   var palette: KeyboardPalette { .resolve(theme: theme, dark: isDark) }
+
+  /// What is actually on screen: the panel's carousel may be showing its keys.
+  var effectiveLayout: KeyboardLayout { layout == .panel && panelShowsKeys ? .full : layout }
+
+  /// Told when `effectiveLayout` changes, so the host can resize the keyboard.
+  @ObservationIgnored var onLayoutChange: (() -> Void)?
+
+  /// A horizontal swipe on the panel: flip to the other page, sliding the way
+  /// the finger went.
+  func flipPanel(towardsLeading: Bool) {
+    guard layout == .panel else { return }
+    flipTowardsLeading = towardsLeading
+    panelShowsKeys.toggle()
+    onLayoutChange?()
+  }
 
   /// Whether the phase leaves nothing in flight — the moments the gate has to
   /// be reset, since a dictation can end with no finger event to close it.
@@ -82,6 +103,7 @@ final class KeyboardModel {
     guard hasFullAccess else { return }
     layout = SharedStore.layout
     theme = SharedStore.theme
+    panelShowsKeys = false
     SharedStore.keyboardEverSeen = true
     refresh()
     startHeartbeat()

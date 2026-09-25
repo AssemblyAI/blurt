@@ -35,7 +35,7 @@
             VStack(alignment: .leading, spacing: 4) {
               Text(row.caption).font(.caption.weight(.medium)).foregroundStyle(.secondary).padding(.horizontal)
               KeyboardRootView(model: row.model)
-                .frame(height: row.layout.height(theme: row.model.theme))
+                .frame(height: row.model.effectiveLayout.height(theme: row.model.theme))
                 .clipped()
             }
           }
@@ -64,6 +64,8 @@
       model.layout = layout
       model.theme = look == "blurt" ? .blurt : .system
       model.isDark = look == "dark"
+      // `keys` shows the panel's carousel flipped to its keyboard page.
+      model.panelShowsKeys = state == "keys"
       model.hasFullAccess = state != "off"
       model.isListening = state != "off" && state != "start"
       let phase: PhaseSnapshot.State =
