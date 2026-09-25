@@ -76,13 +76,21 @@ struct SettingsView: View {
       TextField("Key terms, comma-separated", text: $keyTerms, axis: .vertical)
         .autocorrectionDisabled()
       LabeledContent("Key terms", value: "\(KeyTermList.parse(keyTerms).count)")
+      if !KeyTermList.parse(keyTerms).isEmpty {
+        ShareLink(
+          item: termPack, subject: Text("Blurt key terms"), message: Text(termPack.plainText),
+          preview: SharePreview(termPack.name, icon: Image(systemName: "text.badge.plus"))
+        ) {
+          Label("Share key terms…", systemImage: "square.and.arrow.up")
+        }
+      }
     } header: {
       Text("Transcription")
     } footer: {
       Text(
         "Enhanced transcripts clean up punctuation and wording. Key terms are names and jargon to spell right — "
-          + "add one from the keyboard with the + beside the orb; \(coordinator.lexiconNameCount) contact names "
-          + "come along automatically.")
+          + "add one from the keyboard with the + beside the orb, share the list with a group chat so everyone's "
+          + "dictation gets the names right; \(coordinator.lexiconNameCount) contact names come along automatically.")
     }
   }
 
@@ -101,6 +109,11 @@ struct SettingsView: View {
       Link("Blurt on GitHub", destination: URL(string: "https://github.com/AssemblyAI/blurt") ?? URL(filePath: "/"))
       Text("Powered by AssemblyAI").foregroundStyle(.secondary)
     }
+  }
+
+  /// The whole list, for a friend: a `.blurtterms` file plus the words as text.
+  private var termPack: TermPack {
+    TermPack(name: "Key terms", from: nil, terms: KeyTermList.parse(keyTerms))
   }
 
   private static var version: String {

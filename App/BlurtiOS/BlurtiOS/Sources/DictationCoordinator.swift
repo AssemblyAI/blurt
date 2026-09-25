@@ -19,6 +19,9 @@ final class DictationCoordinator {
   /// How many contact names the keyboard last read off the phone — the key
   /// terms that come for free, so the home screen can say so.
   private(set) var lexiconNameCount = 0
+  /// A shared key-term list the app was asked to open, until the user has
+  /// answered it (`ImportTermsView`).
+  var pendingTermPack: TermPack?
 
   @ObservationIgnored private let session: DictationSession
   @ObservationIgnored private let recents: AsyncStream<RecentDictations>
@@ -83,6 +86,10 @@ final class DictationCoordinator {
   }
 
   func handle(_ url: URL) {
+    if let pack = TermPack.from(url) {
+      pendingTermPack = pack
+      return
+    }
     guard url.scheme == BlurtShared.urlScheme, url.host() == BlurtShared.startHost else { return }
     Task { await startListening() }
   }

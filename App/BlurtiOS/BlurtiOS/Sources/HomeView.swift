@@ -52,6 +52,12 @@ struct HomeView: View {
       }
       .sheet(isPresented: $showsKeyEntry) { KeyEntryView(apiKey: coordinator.apiKey) }
       .sheet(isPresented: $showsSettings) { SettingsView(coordinator: coordinator) }
+      .sheet(
+        isPresented: Binding(
+          get: { coordinator.pendingTermPack != nil }, set: { if !$0 { coordinator.pendingTermPack = nil } })
+      ) {
+        if let pack = coordinator.pendingTermPack { ImportTermsView(pack: pack) }
+      }
       .onChange(of: scenePhase) { _, phase in
         if phase == .active { refreshStatus() }
       }

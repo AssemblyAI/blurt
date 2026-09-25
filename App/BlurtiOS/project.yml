@@ -97,6 +97,20 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: dev.alex.blurt.ios
             CFBundleURLSchemes: [blurt]
+        # A shared key-term list (`.blurtterms`, JSON): declared so a tap on
+        # one in Messages offers Blurt, which opens it as an import.
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Blurt key terms
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Owner
+            LSItemContentTypes: [dev.alex.blurt.terms]
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: dev.alex.blurt.terms
+            UTTypeDescription: Blurt key terms
+            UTTypeConformsTo: [public.json]
+            UTTypeTagSpecification:
+              public.filename-extension: [blurtterms]
+              public.mime-type: application/vnd.blurt.terms+json
     entitlements:
       path: BlurtiOS/BlurtiOS.entitlements
       properties:
