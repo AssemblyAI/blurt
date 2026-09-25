@@ -1,4 +1,6 @@
-import CoreAudio
+#if os(macOS)
+  import CoreAudio
+#endif
 
 /// Classification of a CoreAudio device's transport type
 /// (`kAudioDevicePropertyTransportType`).
@@ -12,6 +14,13 @@ import CoreAudio
 ///   bring-up gate.
 /// - `MicCapture`'s tail linger, which keeps capturing past key-up so the last
 ///   word doesn't get truncated by the link's buffering.
+///
+/// The transport codes are HAL constants, which exist on macOS only. On iOS
+/// nothing produces one — `AudioInputDevices` answers nil there — so both
+/// classifiers answer `false`, which lands every iOS capture on the middle
+/// liveness cap with no tail linger: the conservative reading, and a
+/// placeholder until the iOS capture path classifies `AVAudioSession` ports
+/// (`.bluetoothHFP` is the AirPods case that matters) the same way.
 enum AudioTransport {
   /// Whether the transport is a Bluetooth one. Both types count: AirPods and
   /// other wireless headsets report the classic `bluetooth` transport, LE Audio
@@ -23,9 +32,13 @@ enum AudioTransport {
   /// and no linger. Padding every wired capture with a delay would be a worse
   /// regression than losing the tail on a device we couldn't classify.
   static func isBluetooth(_ transportType: UInt32?) -> Bool {
-    guard let transportType else { return false }
-    return transportType == kAudioDeviceTransportTypeBluetooth
-      || transportType == kAudioDeviceTransportTypeBluetoothLE
+    #if os(macOS)
+      guard let transportType else { return false }
+      return transportType == kAudioDeviceTransportTypeBluetooth
+        || transportType == kAudioDeviceTransportTypeBluetoothLE
+    #else
+      return false
+    #endif
   }
 
   /// Whether the transport is a wired or on-board one — a device that begins
@@ -45,19 +58,23 @@ enum AudioTransport {
   /// the middle cap, which is the safe direction — a slightly longer wait on an
   /// exotic input, never a truncated one.
   static func isLocal(_ transportType: UInt32?) -> Bool {
-    guard let transportType else { return false }
-    switch transportType {
-    case kAudioDeviceTransportTypeBuiltIn,
-      kAudioDeviceTransportTypeUSB,
-      kAudioDeviceTransportTypePCI,
-      kAudioDeviceTransportTypeFireWire,
-      kAudioDeviceTransportTypeThunderbolt,
-      kAudioDeviceTransportTypeDisplayPort,
-      kAudioDeviceTransportTypeHDMI:
-      return true
-    default:
+    #if os(macOS)
+      guard let transportType else { return false }
+      switch transportType {
+      case kAudioDeviceTransportTypeBuiltIn,
+        kAudioDeviceTransportTypeUSB,
+        kAudioDeviceTransportTypePCI,
+        kAudioDeviceTransportTypeFireWire,
+        kAudioDeviceTransportTypeThunderbolt,
+        kAudioDeviceTransportTypeDisplayPort,
+        kAudioDeviceTransportTypeHDMI:
+        return true
+      default:
+        return false
+      }
+    #else
       return false
-    }
+    #endif
   }
 
   /// How much longer capture runs past the key-up that ends it, for a device of
