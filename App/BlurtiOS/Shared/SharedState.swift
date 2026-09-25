@@ -225,9 +225,10 @@ nonisolated enum SharedStore {
     set { defaults.set(newValue.rawValue, forKey: BlurtShared.Key.layout) }
   }
 
-  /// Which keyboard theme (`KeyboardPalette.id`); Ink until one is picked.
+  /// Which keyboard theme (`KeyboardPalette.id`); the iPhone's own until one
+  /// is picked.
   static var themeID: String {
-    get { defaults.string(forKey: BlurtShared.Key.theme) ?? "ink" }
+    get { defaults.string(forKey: BlurtShared.Key.theme) ?? "system" }
     set { defaults.set(newValue, forKey: BlurtShared.Key.theme) }
   }
 

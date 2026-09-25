@@ -55,22 +55,29 @@ idle,recording,landed`; `-BlurtStartListening` for the hero).
 The keys sit exactly where the iPhone keyboard's do, so nobody's fingers are
 thrown off: 6 pt between keys, 11 pt between rows, 3 pt at the edges, 5 pt
 corners, a 1 pt drop under every key. A theme changes how the keyboard looks
-and never how it types. Six, curated, Partiful-style — pick from live
-previews in Settings → Keyboard → Theme; the keyboard picks it up the next
-time it comes up (`keyboardTheme` in the App Group):
+and never how it types. The **default is the iPhone keyboard's own** look,
+light or dark with the app being typed in (its field's `keyboardAppearance`,
+else the app's style), so Blurt's keys sit on Apple's globe-and-mic bar as
+one keyboard and the brand lives in the orb. Six more, curated,
+Partiful-style — pick from live previews in Settings → Keyboard → Theme; the
+keyboard picks it up the next time it comes up (`keyboardTheme` in the App
+Group):
 
-| Theme      | Surface   | Key       | Modifier  | Legend    | Vibe             |
-| ---------- | --------- | --------- | --------- | --------- | ---------------- |
-| `ink`      | `#1D1B16` | `#33302A` | `#26231E` | `#F2EEE6` | Blurt's own      |
-| `paper`    | `#EBE8E8` | white     | `#DEDBDB` | `#1D1B16` | warm and light   |
-| `lavender` | `#2C2557` | `#3F3777` | `#352E68` | `#F1EEFF` | the orb's violet |
-| `mint`     | `#10231B` | `#1E3F31` | `#183429` | `#E9F5EE` | the orb's green  |
-| `midnight` | `#0E1220` | `#1D2440` | `#161B33` | `#E8ECFF` | deep blue-black  |
-| `sunset`   | `#2B1912` | `#4B2B20` | `#3B2119` | `#FFEFE6` | warm and loud    |
+| Theme      | Surface               | Key               | Modifier              | Legend        | Vibe                                        |
+| ---------- | --------------------- | ----------------- | --------------------- | ------------- | ------------------------------------------- |
+| `system`   | `#D1D5DB` / `#2B2B2B` | white / `#6B6B6B` | `#ADB3BC` / `#464646` | black / white | the iPhone keyboard, light / dark (default) |
+| `ink`      | `#1D1B16`             | `#33302A`         | `#26231E`             | `#F2EEE6`     | Blurt's own                                 |
+| `paper`    | `#EBE8E8`             | white             | `#DEDBDB`             | `#1D1B16`     | warm and light                              |
+| `lavender` | `#2C2557`             | `#3F3777`         | `#352E68`             | `#F1EEFF`     | the orb's violet                            |
+| `mint`     | `#10231B`             | `#1E3F31`         | `#183429`             | `#E9F5EE`     | the orb's green                             |
+| `midnight` | `#0E1220`             | `#1D2440`         | `#161B33`             | `#E8ECFF`     | deep blue-black                             |
+| `sunset`   | `#2B1912`             | `#4B2B20`         | `#3B2119`             | `#FFEFE6`     | warm and loud                               |
 
-The orb, the wave and the ring are the same in every theme. The picker
-(`ThemePickerView`) draws the real full keyboard at 0.42 scale on each card.
-The gallery's last argument is a theme id.
+The orb, the wave and the ring are the same in every theme. The dark palettes
+give each key a faint light edge; the light ones have their drop for that.
+The picker (`ThemePickerView`) draws the real full keyboard at 0.42 scale on
+each card, the iPhone theme in the picker's own appearance. The gallery's
+last argument is a theme id (`system-dark` for the iPhone's dark face).
 
 The full layout follows the iPhone's geometry: ten letter keys across at one
 width (`(width − 9·gap) / 10`), the middle row centred, shift and delete
@@ -163,11 +170,11 @@ nothing records on without it.
 | `orbGradient`     | 8 stops     | the design's own (`App elements/Recording.svg`), bottom→top |
 | `orbRingGradient` | green→white | the ring, top-leading to bottom-trailing                    |
 
-The keyboard's surface is **fixed per theme**, whatever the host app's
-appearance, for the reason the Mac pill is: it floats over whichever app the
-user is typing in, so it cannot take a cue from that app, and it must read the
-same over a white Notes page and a black Messages thread. Nothing on it uses
-`accent`.
+The default theme follows the host app's light or dark appearance, as the
+iPhone keyboard does; Blurt's own themes are **fixed**, whatever the host
+app's appearance, for the reason the Mac pill is: the keyboard floats over
+whichever app the user is typing in and must read the same over a white Notes
+page and a black Messages thread. Nothing on it uses `accent`.
 
 ## Type
 

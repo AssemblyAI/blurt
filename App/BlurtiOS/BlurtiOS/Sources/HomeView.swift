@@ -210,44 +210,7 @@ struct HomeView: View {
     }
   }
 
-  // MARK: - Recent
-
-  private var recent: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      Text("Recent").font(.headline)
-      if coordinator.recent.displayed.isEmpty {
-        Text("Your recent blurts will appear here.")
-          .font(.callout).foregroundStyle(.secondary)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(16)
-          .card()
-      }
-      ForEach(coordinator.recent.displayed) { entry in
-        VStack(alignment: .leading, spacing: 8) {
-          Text(entry.text).font(.body).lineLimit(3)
-          HStack(spacing: 8) {
-            if let style = entry.style {
-              Text(style)
-                .font(.caption.weight(.medium))
-                .padding(.horizontal, 8).padding(.vertical, 3)
-                .background(Capsule().fill(BlurtBrand.accent.opacity(0.15)))
-            }
-            Text(entry.relativeLabel(now: Date())).font(.caption).foregroundStyle(.secondary)
-            Spacer()
-            Button {
-              UIPasteboard.general.string = entry.text
-            } label: {
-              Image(systemName: "doc.on.doc")
-            }
-            .buttonStyle(.borderless)
-            .accessibilityLabel("Copy")
-          }
-        }
-        .padding(16)
-        .card()
-      }
-    }
-  }
+  private var recent: some View { RecentSection(coordinator: coordinator) }
 
   private var poweredBy: some View {
     HStack(spacing: 3) {
@@ -364,6 +327,48 @@ private struct HeroRing: View {
       }
     } else {
       Circle().strokeBorder(BlurtBrand.orbRingGradient, lineWidth: 2)
+    }
+  }
+}
+
+/// The recent dictations as cards, with a copy button each.
+private struct RecentSection: View {
+  var coordinator: DictationCoordinator
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      Text("Recent").font(.headline)
+      if coordinator.recent.displayed.isEmpty {
+        Text("Your recent blurts will appear here.")
+          .font(.callout).foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(16)
+          .card()
+      }
+      ForEach(coordinator.recent.displayed) { entry in
+        VStack(alignment: .leading, spacing: 8) {
+          Text(entry.text).font(.body).lineLimit(3)
+          HStack(spacing: 8) {
+            if let style = entry.style {
+              Text(style)
+                .font(.caption.weight(.medium))
+                .padding(.horizontal, 8).padding(.vertical, 3)
+                .background(Capsule().fill(BlurtBrand.accent.opacity(0.15)))
+            }
+            Text(entry.relativeLabel(now: Date())).font(.caption).foregroundStyle(.secondary)
+            Spacer()
+            Button {
+              UIPasteboard.general.string = entry.text
+            } label: {
+              Image(systemName: "doc.on.doc")
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Copy")
+          }
+        }
+        .padding(16)
+        .card()
+      }
     }
   }
 }
