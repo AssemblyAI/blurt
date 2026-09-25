@@ -59,6 +59,10 @@ final class KeyboardModel {
   @ObservationIgnored var lastSpaceAt: ContinuousClock.Instant?
   @ObservationIgnored private var noticeDwell: Task<Void, Never>?
   @ObservationIgnored var termDraftFromSelection: String?
+  /// The text before the cursor when the term field opened, so typing that
+  /// reaches the host field anyway (a hardware keyboard: an iPad's, a
+  /// Bluetooth one, the simulator's Mac) can be pulled into the term instead.
+  @ObservationIgnored var termHostBaseline: String?
   @ObservationIgnored var termNotice: Task<Void, Never>?
 
   var proxy: (any UITextDocumentProxy)? { controller?.textDocumentProxy }
@@ -152,7 +156,22 @@ final class KeyboardModel {
   /// typing: re-read where the sentence stands and what the field wants.
   func contextChanged() {
     readField()
+    claimHostTypingForTerm()
     updateShift()
+  }
+
+  /// While the term field is open, characters that arrived in the host field
+  /// (a hardware keyboard types past the on-screen keys) belong to the term:
+  /// move them over and take them back out of the field. Only a short,
+  /// appended run right after where the cursor was; anything else is left.
+  private func claimHostTypingForTerm() {
+    guard termDraft != nil, let baseline = termHostBaseline, let proxy else { return }
+    let now = proxy.documentContextBeforeInput ?? ""
+    let delta = now.count - baseline.count
+    guard delta > 0, delta <= 8, now.dropLast(delta).hasSuffix(baseline.suffix(24)) else { return }
+    let typed = String(now.suffix(delta))
+    for _ in 0..<delta { proxy.deleteBackward() }
+    termDraft?.append(typed)
   }
 
   /// What the field asked for, the way the system keyboard honours it: the

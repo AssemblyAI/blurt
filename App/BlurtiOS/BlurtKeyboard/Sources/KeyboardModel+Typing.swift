@@ -44,6 +44,7 @@ extension KeyboardModel {
     let selected = proxy?.selectedText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     let seed = selected.count <= 48 && !selected.contains("\n") ? selected : ""
     termDraftFromSelection = seed.isEmpty ? nil : seed
+    termHostBaseline = proxy?.documentContextBeforeInput ?? ""
     termDraft = seed
     updateShift()
     onLayoutChange?()
@@ -52,6 +53,7 @@ extension KeyboardModel {
   func cancelAddingTerm() {
     termDraft = nil
     termDraftFromSelection = nil
+    termHostBaseline = nil
     updateShift()
     onLayoutChange?()
   }
@@ -70,6 +72,7 @@ extension KeyboardModel {
     }
     termDraft = nil
     termDraftFromSelection = nil
+    termHostBaseline = nil
     if hasFullAccess { UINotificationFeedbackGenerator().notificationOccurred(.success) }
     termSavedAt = Date()
     termNotice?.cancel()
