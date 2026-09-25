@@ -92,27 +92,26 @@ everything else 16 pt medium. System font throughout.
 
 ## Components (`BlurtKeyboard/Sources/`)
 
-**Voice bar** (`VoiceBar.swift`) — the only place voice lives, and it has
-no words: the orb is the mic key, 40 pt in a 44 pt row where the system
-keyboard puts its suggestion bar, with the live meter on either side of it
-(110 × 28) while recording. The panel has the orb at 96 pt with the meter
-under it; the slim bar has the bar between the globe and delete. State is
-the orb's own:
+**Voice bar** (`VoiceBar.swift`) — the only place voice lives, and it has no
+words and no glyph: the orb is the mic key, 40 pt in a 44 pt row where the
+system keyboard puts its suggestion bar. The panel has it at 96 pt, centred
+in the space above the keys; the slim bar has it between the globe and
+delete. State is the orb's own shape and ring:
 
-| State                              | Orb                                                                 | Haptic        |
-| ---------------------------------- | ------------------------------------------------------------------- | ------------- |
-| no Full Access / app not listening | dimmed (saturation 0.35, opacity 0.8), mic glyph; a tap opens Blurt | —             |
-| idle                               | mic glyph, ring still                                               | —             |
-| connecting                         | ring 2 pt sweeping                                                  | —             |
-| recording                          | stop glyph, ring sweeping, green glow with the level, meter beside  | medium impact |
-| processing                         | ring sweeping                                                       | light impact  |
-| pasted                             | green solid ring, check glyph, 1.2 s                                | success       |
-| copied (no field)                  | green solid ring, clipboard glyph, 2 s                              | success       |
-| error                              | orange solid ring, exclamation glyph, 2 s; the message on VoiceOver | error         |
+| State                              | Orb                                                                                                                                                          | Haptic        |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------- |
+| no Full Access / app not listening | dimmed (saturation 0.35, opacity 0.8); a tap opens Blurt                                                                                                     | —             |
+| idle                               | the circle, ring still                                                                                                                                       | —             |
+| connecting                         | ring 2 pt sweeping, as the app's orb does (one turn per 1.6 s)                                                                                               | —             |
+| recording                          | the circle grows sideways into a capsule (200 wide in the bar, 260 in the panel; spring 0.35 s) holding the live wave in white, glowing green with the level | medium impact |
+| processing                         | back to the circle, ring sweeping                                                                                                                            | light impact  |
+| pasted                             | green solid ring, 1.2 s                                                                                                                                      | success       |
+| copied (no field)                  | green solid ring with a clipboard glyph, 2 s                                                                                                                 | success       |
+| error                              | orange solid ring with an exclamation mark, 2 s; the message on VoiceOver                                                                                    | error         |
 
-Glyph changes cross-fade (`symbolEffect(.replace)`); every state transition
-0.15 s. VoiceOver keeps the words: Dictate / Stop dictation / Start Blurt on
-the key, and the error message.
+Every transition 0.15 s; the grow and shrink a spring. VoiceOver keeps the
+words: Dictate / Stop dictation / Start Blurt on the key, and the error
+message.
 
 **Orb** (`BrandOrb.swift`) — the gradient disc with a hairline ring that sweeps
 one turn per 1.6 s while something is happening, still otherwise. The disc
@@ -122,15 +121,15 @@ never moves. Under Reduce Motion the ring is drawn but holds still.
 count from the width, heights from `MeterBarRow` (envelope, gamma, idle wave).
 The app publishes the level at ~12 Hz; the wave keeps the row alive between.
 
-**Mic key** (`MicKey` in `KeyboardViews.swift`) — the orb _is_ the key:
-40 pt in the voice bar, 96 pt in the panel. The Mac's orb carries no glyph; a
-key needs one, so a white `mic.fill` (0.36 × size) sits on it and changes
-with the state as in the table above. Recording adds a green glow
+**Mic key** (`MicKey` in `KeyboardViews.swift`) — the orb _is_ the key, one
+capsule shape whose width is its height until recording. No glyph: the Mac's
+orb carries none and neither does this. Recording adds a green glow
 (`greenOnDark` at 35–80 % with the level, radius 0.1–0.35 × size). Ring 2 pt
 while working or noticing, 1 pt otherwise. Pressed: scale 0.94, 0.1 s.
 Finger down / up drive the engine's `DictationKeyGate`, so a tap latches and
 a hold is push-to-talk exactly as on the Mac; a touch that travelled more
-than 24 pt cancels instead (it was a swipe).
+than 24 pt cancels instead (it was a swipe). Cancel is the orange × in the
+panel's top-right corner while something is in flight.
 
 **Keys** (`KeyCap`, `LetterKey`) — 42 pt tall, radius 6, 6 % white hairline;
 `key` for letters and space, `keyDark` for modifiers; a key brightens 15 %
@@ -140,11 +139,11 @@ while pressed rather than dimming.
 
 Top and bottom margin 8 (`KeyboardRootView`); 11 between rows and 3 at the sides (`KeyboardPalette`).
 
-| Layout    | Rows                                                                                                                                                                                                                                                                                                                                                                                                                                                | Height                   |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| `slimBar` | globe · voice bar · delete · return                                                                                                                                                                                                                                                                                                                                                                                                                 | 60                       |
-| `panel`   | orb 96 (cancel beside it while in flight) · meter 24 · space row 42. A two-page carousel: a horizontal swipe in either direction, as often as you like, flips between the mic panel and the full keyboard; the page slides the way the finger went, the keyboard resizes with it, and it is back to the orb each time the keyboard appears. Keys ignore a touch that travelled more than 12 pt, the orb cancels one that travelled more than 24 pt. | 216, or 272 when flipped |
-| `full`    | voice bar 44 · three letter rows 42 · 123/globe/space/return 42; `8·2 + 44 + 4·11 + 4·42`                                                                                                                                                                                                                                                                                                                                                           | 272                      |
+| Layout    | Rows                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Height                   |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `slimBar` | globe · voice bar · delete · return                                                                                                                                                                                                                                                                                                                                                                                                                             | 60                       |
+| `panel`   | orb 96, centred (cancel in the top-right corner while in flight) · space row 42. A two-page carousel: a horizontal swipe in either direction, as often as you like, flips between the mic panel and the full keyboard; the page slides the way the finger went, the keyboard resizes with it, and it is back to the orb each time the keyboard appears. Keys ignore a touch that travelled more than 12 pt, the orb cancels one that travelled more than 24 pt. | 216, or 272 when flipped |
+| `full`    | voice bar 44 · three letter rows 42 · 123/globe/space/return 42; `8·2 + 44 + 4·11 + 4·42`                                                                                                                                                                                                                                                                                                                                                                       | 272                      |
 
 The globe key appears only when iOS says another keyboard is
 installed (`needsInputModeSwitchKey`).

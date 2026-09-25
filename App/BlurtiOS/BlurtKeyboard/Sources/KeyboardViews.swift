@@ -1,3 +1,4 @@
+import BlurtEngine
 import SwiftUI
 
 /// Picks the layout the user chose. All three share `VoiceBar`/`MicKey` and
@@ -72,30 +73,15 @@ struct SlimBarView: View {
   }
 }
 
-/// A big orb with cancel beside it while something is in flight, the meter
-/// under it while recording, and one row of keys. 216 pt.
+/// A big orb, centred, that grows into the wave while recording; cancel in
+/// the corner while something is in flight; one row of keys. 216 pt.
 struct PanelView: View {
   var model: KeyboardModel
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     VStack(spacing: 12) {
       Spacer(minLength: 0)
-      ZStack {
-        MicKey(model: model, size: 96)
-        if !model.isSettledState {
-          // Beside the orb, a hand's width off centre, rather than at the edge.
-          KeyCap(systemImage: "xmark", tint: BlurtBrand.errorOrange, dark: true) { model.cancel() }
-            .accessibilityLabel("Cancel dictation")
-            .offset(x: 96)
-        }
-      }
-      .frame(height: 96)
-      WaveformMeter(level: Float(model.snapshot.level), animated: !reduceMotion, color: BlurtBrand.greenOnDark)
-        .frame(width: 180, height: 24)
-        .opacity(model.snapshot.state == .recording ? 1 : 0)
-        .animation(.easeInOut(duration: 0.15), value: model.snapshot.state)
-        .accessibilityHidden(true)
+      MicKey(model: model, size: 96, expandedWidth: 260)
       Spacer(minLength: 0)
       HStack(spacing: KeyboardPalette.keyGap) {
         if model.needsGlobe { KeyCap(systemImage: "globe", dark: true) { model.globe() } }
@@ -104,50 +90,67 @@ struct PanelView: View {
         KeyCap(systemImage: "return", dark: true) { model.newline() }
       }
     }
+    .overlay(alignment: .topTrailing) {
+      if !model.isSettledState {
+        KeyCap(systemImage: "xmark", tint: BlurtBrand.errorOrange, dark: true) { model.cancel() }
+          .accessibilityLabel("Cancel dictation")
+      }
+    }
   }
 }
 
-/// The mic key is the brand orb, and it says everything without a word.
-/// Finger down starts, finger up decides tap (latched) or hold (push-to-talk)
-/// — `KeyboardModel` runs the engine's gate. The Mac's orb carries no glyph;
-/// here it is a key, so a mic sits on it. Then: dimmed when Blurt isn't ready
-/// (no Full Access, or the app isn't listening — the tap opens Blurt); the
-/// ring sweeping while connecting and transcribing; a stop glyph, the sweep
-/// and a glow with the voice level while recording; a check for a moment
-/// after the words landed, a clipboard when they went to the clipboard
-/// instead, an orange ring and an exclamation mark when something failed.
-/// Each of those also has its haptic.
+/// The mic key is the brand orb, and it says everything without a word or a
+/// glyph. Finger down starts, finger up decides tap (latched) or hold
+/// (push-to-talk) — `KeyboardModel` runs the engine's gate. What it does:
+/// dimmed when Blurt isn't ready (no Full Access, or the app isn't listening;
+/// the tap opens Blurt); on a tap the ring sweeps as the app's orb does while
+/// the mic comes up; then the orb grows sideways into a capsule holding the
+/// live wave for as long as you talk, glowing with your voice; on the stop it
+/// shrinks back to the circle with the ring sweeping while the words come;
+/// then a green ring for a moment when they landed, a clipboard on a green
+/// ring when they went to the clipboard instead, an orange ring and an
+/// exclamation mark when something failed. Each also has its haptic.
 struct MicKey: View {
   var model: KeyboardModel
   var size: CGFloat
+  /// How wide the orb grows while recording, to hold the wave.
+  var expandedWidth: CGFloat
   @State private var pressed = false
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     let level = CGFloat(model.snapshot.level)
+    let width = isRecording ? expandedWidth : size
     ZStack {
-      BrandOrb(
-        diameter: size, animated: isWorking && !reduceMotion, ringWidth: isWorking || isNotice ? 2 : 1,
-        ringColor: ringColor
-      )
-      .saturation(isReady ? 1 : 0.35)
-      .opacity(isReady ? 1 : 0.8)
-      Image(systemName: glyph)
-        .font(.system(size: size * 0.36, weight: .semibold))
-        .foregroundStyle(.white)
-        .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
-        .contentTransition(.symbolEffect(.replace))
+      Capsule()
+        .fill(BlurtBrand.orbGradient)
+        .overlay { ring }
+        .saturation(isReady ? 1 : 0.35)
+        .opacity(isReady ? 1 : 0.8)
+      if isRecording {
+        WaveformMeter(level: Float(model.snapshot.level), animated: !reduceMotion, color: .white.opacity(0.92))
+          .frame(width: expandedWidth - size * 0.7, height: size * 0.5)
+          .transition(.opacity)
+      }
+      if let glyph {
+        Image(systemName: glyph)
+          .font(.system(size: size * 0.34, weight: .semibold))
+          .foregroundStyle(.white)
+          .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+          .transition(.opacity)
+      }
     }
-    .animation(.easeInOut(duration: 0.15), value: model.snapshot.state)
-    .frame(width: size, height: size)
+    .frame(width: width, height: size)
     .shadow(
       color: BlurtBrand.greenOnDark.opacity(isRecording ? 0.35 + 0.45 * level : 0),
       radius: isRecording ? size * 0.1 + level * size * 0.25 : 0
     )
     .animation(.easeOut(duration: 0.08), value: level)
+    .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: isRecording)
+    .animation(.easeInOut(duration: 0.15), value: model.snapshot.state)
     .scaleEffect(pressed ? 0.94 : 1)
     .animation(.easeOut(duration: 0.1), value: pressed)
-    .contentShape(Circle())
+    .contentShape(Capsule())
     .accessibilityLabel(isReady ? (isRecording ? "Stop dictation" : "Dictate") : "Start Blurt")
     .accessibilityAddTraits(.isButton)
     .simultaneousGesture(
@@ -170,8 +173,29 @@ struct MicKey: View {
     )
   }
 
+  /// The ring: the app orb's sweep (one turn per 1.6 s, engine geometry)
+  /// while the mic comes up and while the words come; still, and solid green
+  /// or orange, for a notice; still on the capsule while recording.
+  @ViewBuilder private var ring: some View {
+    let width: CGFloat = isWorking || isNotice ? 2 : 1
+    if isWorking, !isRecording, !reduceMotion {
+      TimelineView(.animation(minimumInterval: keyboardAnimationInterval)) { timeline in
+        Capsule()
+          .strokeBorder(BlurtBrand.orbRingGradient, lineWidth: width)
+          .rotationEffect(
+            .degrees(
+              MeterBarGeometry.rotationDegrees(
+                time: timeline.date.timeIntervalSinceReferenceDate, period: BrandOrb.period)))
+      }
+    } else if let ringColor {
+      Capsule().strokeBorder(ringColor, lineWidth: width)
+    } else {
+      Capsule().strokeBorder(BlurtBrand.orbRingGradient, lineWidth: width)
+    }
+  }
+
   private var isReady: Bool { model.hasFullAccess && model.isListening }
-  private var isRecording: Bool { model.snapshot.state == .recording }
+  private var isRecording: Bool { isReady && model.snapshot.state == .recording }
   private var isWorking: Bool {
     switch model.snapshot.state {
     case .connecting, .recording, .processing: isReady
@@ -194,14 +218,13 @@ struct MicKey: View {
     }
   }
 
-  private var glyph: String {
-    guard isReady else { return "mic.fill" }
+  /// Only the two notices that need saying carry a glyph.
+  private var glyph: String? {
+    guard isReady else { return nil }
     switch model.snapshot.state {
-    case .recording: return "stop.fill"
-    case .pasted: return "checkmark"
     case .copied: return "doc.on.clipboard"
     case .error: return "exclamationmark"
-    case .idle, .connecting, .processing: return "mic.fill"
+    case .idle, .connecting, .recording, .processing, .pasted: return nil
     }
   }
 }

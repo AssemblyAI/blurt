@@ -2,32 +2,18 @@ import BlurtEngine
 import SwiftUI
 
 /// The keyboard's voice row, and the only place voice lives: the orb, which
-/// is the mic key — tap to start and stop, hold to talk — with the live meter
-/// on either side of it while recording. No words: the orb's ring, glyph and
-/// glow say what is happening, and the haptics confirm it (see `MicKey`).
+/// is the mic key — tap to start and stop, hold to talk — growing into the
+/// wave while recording. No words: the orb's ring, shape and glow say what is
+/// happening, and the haptics confirm it (see `MicKey`).
 struct VoiceBar: View {
   var model: KeyboardModel
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   static let height: CGFloat = 44
-  private static let meterWidth: CGFloat = 110
 
   var body: some View {
-    HStack(spacing: 14) {
-      meter
-      MicKey(model: model, size: 40)
-      meter
-    }
-    .frame(maxWidth: .infinity)
-    .frame(height: Self.height)
-  }
-
-  private var meter: some View {
-    WaveformMeter(level: Float(model.snapshot.level), animated: !reduceMotion, color: BlurtBrand.greenOnDark)
-      .frame(width: Self.meterWidth, height: 28)
-      .opacity(model.snapshot.state == .recording ? 1 : 0)
-      .animation(.easeInOut(duration: 0.15), value: model.snapshot.state)
-      .accessibilityHidden(true)
+    MicKey(model: model, size: 40, expandedWidth: 200)
+      .frame(maxWidth: .infinity)
+      .frame(height: Self.height)
   }
 }
 
