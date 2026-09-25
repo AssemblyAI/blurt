@@ -70,7 +70,7 @@ nonisolated enum KeyboardLayout: String, CaseIterable, Codable, Sendable, Identi
     switch self {
     case .slimBar: "Just the mic and a few keys. Switch keyboards to type."
     case .panel: "A big mic with status and cancel. Swipe sideways for the full keyboard, and back."
-    case .full: "Every letter key, with the mic as the main key."
+    case .full: "Every letter key, with the orb above them."
     }
   }
 
@@ -82,7 +82,7 @@ nonisolated enum KeyboardLayout: String, CaseIterable, Codable, Sendable, Identi
     switch self {
     case .slimBar: 60
     case .panel: 216
-    case .full: 264
+    case .full: 272
     }
   }
 }
@@ -208,9 +208,12 @@ nonisolated enum SharedStore {
   }
 
   /// Hands-free: the keyboard starts a dictation the moment it appears in a
-  /// text field, so there is nothing to tap before talking.
+  /// text field, so there is nothing to tap before talking. On by default.
   static var autoDictate: Bool {
-    get { defaults.bool(forKey: BlurtShared.Key.autoDictate) }
+    get {
+      guard defaults.object(forKey: BlurtShared.Key.autoDictate) != nil else { return true }
+      return defaults.bool(forKey: BlurtShared.Key.autoDictate)
+    }
     set { defaults.set(newValue, forKey: BlurtShared.Key.autoDictate) }
   }
 

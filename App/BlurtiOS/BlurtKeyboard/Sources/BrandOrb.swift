@@ -20,6 +20,8 @@ struct BrandOrb: View {
   /// drawn — it is part of the mark — but holds still.
   var animated: Bool
   var ringWidth: CGFloat = 1
+  /// A solid ring in place of the green-to-white gradient — the error's orange.
+  var ringColor: Color?
 
   /// One turn every 1.6 s: the Mac's cadence.
   static let period: Double = 1.6
@@ -48,30 +50,11 @@ struct BrandOrb: View {
   }
 
   /// `strokeBorder` so the ring sits inside the disc instead of fringing it.
-  private var ringShape: some View {
-    Circle().strokeBorder(BlurtBrand.orbRingGradient, lineWidth: ringWidth)
-  }
-}
-
-/// The pill's status word — "Transcribing", "Pasted", "Error" — in the Mac's
-/// tracked uppercase, scaled from the pill's 9 pt to 11 pt for a phone held at
-/// arm's length. Brand green, except the error word's orange.
-struct StatusLineText: View {
-  let text: String
-  var color: Color = BlurtBrand.greenOnDark
-
-  init(_ text: String, color: Color = BlurtBrand.greenOnDark) {
-    self.text = text
-    self.color = color
-  }
-
-  var body: some View {
-    Text(text)
-      .font(.system(size: 11, weight: .semibold))
-      .textCase(.uppercase)
-      .tracking(1.1)
-      .lineLimit(1)
-      .minimumScaleFactor(0.7)
-      .foregroundStyle(color)
+  @ViewBuilder private var ringShape: some View {
+    if let ringColor {
+      Circle().strokeBorder(ringColor, lineWidth: ringWidth)
+    } else {
+      Circle().strokeBorder(BlurtBrand.orbRingGradient, lineWidth: ringWidth)
+    }
   }
 }

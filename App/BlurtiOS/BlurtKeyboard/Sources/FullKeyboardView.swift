@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// A complete keyboard with the mic as the main key, laid out as the iPhone's
-/// own: ten letter keys across at one width, the middle row centred, shift
-/// and delete flanking the bottom letters, then 123 · globe · space · mic ·
-/// return, at the system keyboard's spacing. Every key is 42 pt tall. Letters pop up
+/// A complete keyboard laid out as the iPhone's own — ten letter keys across
+/// at one width, the middle row centred, shift and delete flanking the bottom
+/// letters, then 123 · globe · space · return, at the system keyboard's
+/// spacing — with the voice bar where the suggestion bar would be. Every key is 42 pt tall. Letters pop up
 /// while pressed, sentences capitalise themselves, a double space ends one.
 /// No autocorrect or suggestions yet. iOS swaps in its own keyboard for
 /// password and phone-number fields, so those never reach here.
@@ -23,8 +23,7 @@ struct FullKeyboardView: View {
       let sideGap = gap * 2
       let sideWidth = (geo.size.width - 7 * keyWidth - 6 * gap - 2 * sideGap) / 2
       VStack(spacing: KeyboardPalette.rowGap) {
-        StatusPill(model: model)
-          .frame(maxWidth: 260)
+        VoiceBar(model: model)
         ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
           HStack(spacing: index == 2 ? sideGap : gap) {
             if index == 2 { modifierKey(width: sideWidth) }
@@ -39,11 +38,11 @@ struct FullKeyboardView: View {
           }
           .frame(maxWidth: .infinity)
         }
+        // The stock bottom row; voice lives only in the bar above.
         HStack(spacing: gap) {
-          if model.needsGlobe { KeyCap(systemImage: "globe", dark: true, width: sideWidth) { model.globe() } }
           KeyCap(title: model.symbolsPage ? "ABC" : "123", dark: true, width: sideWidth) { model.toggleSymbols() }
+          if model.needsGlobe { KeyCap(systemImage: "globe", dark: true, width: sideWidth) { model.globe() } }
           KeyCap(title: "space", flexible: true) { model.space() }
-          MicKey(model: model, size: KeyCap.height)
           KeyCap(systemImage: "return", dark: true, width: sideWidth * 2 + gap) { model.newline() }
         }
       }

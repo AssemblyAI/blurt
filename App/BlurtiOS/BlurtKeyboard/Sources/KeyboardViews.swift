@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Picks the layout the user chose. All three share `StatusPill`, `MicKey` and
+/// Picks the layout the user chose. All three share `VoiceBar`/`MicKey` and
 /// `KeyCap`, and the same model underneath; they differ in how much keyboard
 /// surrounds the mic. The surface is Blurt's ink in every appearance — it
 /// floats over whichever app the user is typing in, like the Mac pill — at
@@ -58,30 +58,29 @@ struct KeyboardRootView: View {
   }
 }
 
-/// One row: the globe, the pill, the mic, delete and return. 60 pt.
+/// One row: the globe, the voice bar, delete and return. 60 pt.
 struct SlimBarView: View {
   var model: KeyboardModel
 
   var body: some View {
     HStack(spacing: 8) {
       if model.needsGlobe { KeyCap(systemImage: "globe", dark: true) { model.globe() } }
-      StatusPill(model: model, compact: true)
-      MicKey(model: model, size: 44)
+      VoiceBar(model: model)
       KeyCap(systemImage: "delete.left", dark: true) { model.deleteBackward() }
       KeyCap(systemImage: "return", dark: true) { model.newline() }
     }
   }
 }
 
-/// The pill, a big mic with cancel beside it while something is in flight,
-/// and one row of keys. 216 pt.
+/// A big orb with cancel beside it while something is in flight, the meter
+/// under it while recording, and one row of keys. 216 pt.
 struct PanelView: View {
   var model: KeyboardModel
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     VStack(spacing: 12) {
-      StatusPill(model: model)
-        .frame(maxWidth: 260)
+      Spacer(minLength: 0)
       ZStack {
         MicKey(model: model, size: 96)
         if !model.isSettledState {
@@ -92,7 +91,13 @@ struct PanelView: View {
         }
       }
       .frame(height: 96)
-      HStack(spacing: 8) {
+      WaveformMeter(level: Float(model.snapshot.level), animated: !reduceMotion, color: BlurtBrand.greenOnDark)
+        .frame(width: 180, height: 24)
+        .opacity(model.snapshot.state == .recording ? 1 : 0)
+        .animation(.easeInOut(duration: 0.15), value: model.snapshot.state)
+        .accessibilityHidden(true)
+      Spacer(minLength: 0)
+      HStack(spacing: KeyboardPalette.keyGap) {
         if model.needsGlobe { KeyCap(systemImage: "globe", dark: true) { model.globe() } }
         KeyCap(title: "space", flexible: true) { model.space() }
         KeyCap(systemImage: "delete.left", dark: true) { model.deleteBackward() }
@@ -102,11 +107,16 @@ struct PanelView: View {
   }
 }
 
-/// The mic key is the brand orb. Finger down starts, finger up decides tap
-/// (latched) or hold (push-to-talk) — `KeyboardModel` runs the engine's gate.
-/// The Mac's orb carries no glyph; here it is a key, so a mic sits on it, and
-/// while recording the ring sweeps and the disc glows with the voice level.
-/// When the app isn't listening the orb sits dimmed and the tap opens Blurt.
+/// The mic key is the brand orb, and it says everything without a word.
+/// Finger down starts, finger up decides tap (latched) or hold (push-to-talk)
+/// — `KeyboardModel` runs the engine's gate. The Mac's orb carries no glyph;
+/// here it is a key, so a mic sits on it. Then: dimmed when Blurt isn't ready
+/// (no Full Access, or the app isn't listening — the tap opens Blurt); the
+/// ring sweeping while connecting and transcribing; a stop glyph, the sweep
+/// and a glow with the voice level while recording; a check for a moment
+/// after the words landed, a clipboard when they went to the clipboard
+/// instead, an orange ring and an exclamation mark when something failed.
+/// Each of those also has its haptic.
 struct MicKey: View {
   var model: KeyboardModel
   var size: CGFloat
@@ -116,14 +126,19 @@ struct MicKey: View {
   var body: some View {
     let level = CGFloat(model.snapshot.level)
     ZStack {
-      BrandOrb(diameter: size, animated: isWorking && !reduceMotion, ringWidth: isWorking ? 2 : 1)
-        .saturation(isReady ? 1 : 0.35)
-        .opacity(isReady ? 1 : 0.8)
+      BrandOrb(
+        diameter: size, animated: isWorking && !reduceMotion, ringWidth: isWorking || isNotice ? 2 : 1,
+        ringColor: ringColor
+      )
+      .saturation(isReady ? 1 : 0.35)
+      .opacity(isReady ? 1 : 0.8)
       Image(systemName: glyph)
         .font(.system(size: size * 0.36, weight: .semibold))
         .foregroundStyle(.white)
         .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+        .contentTransition(.symbolEffect(.replace))
     }
+    .animation(.easeInOut(duration: 0.15), value: model.snapshot.state)
     .frame(width: size, height: size)
     .shadow(
       color: BlurtBrand.greenOnDark.opacity(isRecording ? 0.35 + 0.45 * level : 0),
@@ -164,7 +179,31 @@ struct MicKey: View {
     }
   }
 
-  private var glyph: String { isRecording ? "stop.fill" : "mic.fill" }
+  private var isNotice: Bool {
+    switch model.snapshot.state {
+    case .pasted, .copied, .error: true
+    case .idle, .connecting, .recording, .processing: false
+    }
+  }
+
+  private var ringColor: Color? {
+    switch model.snapshot.state {
+    case .error: BlurtBrand.errorOrange
+    case .pasted, .copied: BlurtBrand.greenOnDark
+    case .idle, .connecting, .recording, .processing: nil
+    }
+  }
+
+  private var glyph: String {
+    guard isReady else { return "mic.fill" }
+    switch model.snapshot.state {
+    case .recording: return "stop.fill"
+    case .pasted: return "checkmark"
+    case .copied: return "doc.on.clipboard"
+    case .error: return "exclamationmark"
+    case .idle, .connecting, .processing: return "mic.fill"
+    }
+  }
 }
 
 /// One ordinary key: a legend on a cap in the current palette; `dark` for the
