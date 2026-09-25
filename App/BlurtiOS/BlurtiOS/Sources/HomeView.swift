@@ -52,11 +52,16 @@ struct HomeView: View {
       }
       .sheet(isPresented: $showsKeyEntry) { KeyEntryView(apiKey: coordinator.apiKey) }
       .sheet(isPresented: $showsSettings) { SettingsView(coordinator: coordinator) }
-      .sheet(
-        isPresented: Binding(
-          get: { coordinator.pendingTermPack != nil }, set: { if !$0 { coordinator.pendingTermPack = nil } })
+      .sheet(item: Binding(get: { coordinator.pendingTermPack }, set: { coordinator.pendingTermPack = $0 })) {
+        ImportTermsView(pack: $0)
+      }
+      .alert(
+        "Couldn't read that list",
+        isPresented: Binding(get: { coordinator.termPackUnreadable }, set: { coordinator.termPackUnreadable = $0 })
       ) {
-        if let pack = coordinator.pendingTermPack { ImportTermsView(pack: pack) }
+        Button("OK") {}
+      } message: {
+        Text("It isn't a Blurt key-term list, or it's too big.")
       }
       .onChange(of: scenePhase) { _, phase in
         if phase == .active { refreshStatus() }
@@ -73,6 +78,7 @@ struct HomeView: View {
 
   // MARK: - The orb and the listening state
 
+  private static let orbSize: CGFloat = 112
   private var level: CGFloat { CGFloat(coordinator.level) }
   private var isRecording: Bool { coordinator.phase == .recording }
   private var orbWorking: Bool { coordinator.window.isOpen || coordinator.phase.isCapturing }
@@ -122,6 +128,10 @@ struct HomeView: View {
       }
       if coordinator.microphoneDenied {
         Text("Blurt needs the microphone. Allow it in Settings.")
+          .font(.footnote).foregroundStyle(BlurtBrand.errorOrange)
+      }
+      if coordinator.needsKey {
+        Text("Add your API key first (Settings → Account).")
           .font(.footnote).foregroundStyle(BlurtBrand.errorOrange)
       }
     }
@@ -241,10 +251,15 @@ struct HomeView: View {
         }
       }
       SetupRow(done: microphoneGranted, title: "Allow the microphone") {
-        Button("Allow") {
-          Task {
-            await coordinator.startListening()
-            refreshStatus()
+        if AVAudioApplication.shared.recordPermission == .denied {
+          // iOS asks once; after a refusal only Settings can change it.
+          Button("Allow in Settings") { openAppSettings() }
+        } else {
+          Button("Allow") {
+            Task {
+              _ = await AVAudioApplication.requestRecordPermission()
+              refreshStatus()
+            }
           }
         }
       }
