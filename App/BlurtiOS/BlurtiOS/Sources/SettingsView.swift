@@ -11,7 +11,7 @@ struct SettingsView: View {
   @State private var autoDictate = SharedStore.autoDictate
   @State private var windowMinutes = SharedStore.windowMinutes
   @State private var showsKeyEntry = false
-  @AppStorage(KeyTermsStore.defaultsKey) private var keyTerms = ""
+  @AppStorage(SharedStore.keyTermsKey, store: SharedStore.defaults) private var keyTerms = ""
   @AppStorage(EnhancedTranscriptsStore.defaultsKey) private var enhancedTranscripts =
     EnhancedTranscriptsStore.defaultValue
 
@@ -75,12 +75,14 @@ struct SettingsView: View {
       NavigationLink("Output styles") { StylesView() }
       TextField("Key terms, comma-separated", text: $keyTerms, axis: .vertical)
         .autocorrectionDisabled()
+      LabeledContent("Key terms", value: "\(KeyTermList.parse(keyTerms).count)")
     } header: {
       Text("Transcription")
     } footer: {
       Text(
-        "Enhanced transcripts clean up punctuation and wording. Key terms are names and jargon to spell right; "
-          + "\(coordinator.lexiconNameCount) contact names come along automatically.")
+        "Enhanced transcripts clean up punctuation and wording. Key terms are names and jargon to spell right — "
+          + "add one from the keyboard with the + beside the orb; \(coordinator.lexiconNameCount) contact names "
+          + "come along automatically.")
     }
   }
 

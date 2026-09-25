@@ -56,6 +56,38 @@ black legends; dark — surface `#2B2B2B`, keys `#6B6B6B`, modifiers
 `#464646`, drop `#0D0D0D`, white legends; both follow the field's
 `keyboardAppearance`, else the app's style.
 
+## Quick-add key term
+
+The most-asked-for thing: Blurt mishears a niche word, and the fix has to take
+seconds, inside the app you're typing in, never a trip to Settings.
+
+1. Select the misheard word in your text (or select nothing).
+2. Tap the small **+** beside the orb (top-right of the bar; top-left corner of
+   the panel). The bar becomes a field — × · what you type · ✓ — pre-filled
+   with the selection, and the keys type into it (the panel and slim bar flip
+   to the letter keys for it). Shift is on for the first letter.
+3. Type the right spelling; return or ✓ saves. The term goes into Blurt's key
+   terms (`BlurtKeyTerms` in the App Group, `KeyTermList` rules: trimmed,
+   deduplicated case-insensitively) and rides `keyterms_prompt` on the very
+   next dictation. If it began as a selection and you changed it, the
+   misheard word in your text is replaced with what you typed. A success
+   haptic, and the + shows a check for 1.2 s.
+
+× or an empty save leaves the mode. The list itself is edited in Settings →
+Transcription, which shows the count; the engine's caps (100 terms, 2048
+bytes) apply on the request, first terms first.
+
+## Adapting to the phone's own keyboard settings
+
+Nothing to configure: key clicks play only if the user has keyboard clicks
+on (the input view adopts `UIInputViewAudioFeedback`; `playInputClick` on
+every key); the return key says what the field asks — send, search, go, done,
+next, join — with the glyph otherwise; a number, decimal or phone field opens
+on the symbols page; capitalisation follows the field's
+`autocapitalizationType`; the letter rows follow the phone's first language
+(AZERTY for French, QWERTZ for German, Czech, Slovak and Hungarian, QWERTY
+otherwise).
+
 ## Hands-free
 
 On by default, with a toggle in Settings: a dictation starts the moment the

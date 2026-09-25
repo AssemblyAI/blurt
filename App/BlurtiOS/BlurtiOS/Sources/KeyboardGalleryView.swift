@@ -57,8 +57,10 @@
     private static func model(layout: KeyboardLayout, state: String) -> KeyboardModel {
       let model = KeyboardModel()
       model.layout = layout
-      // `keys` shows the panel's carousel flipped to its keyboard page.
+      // `keys` shows the panel's carousel flipped to its keyboard page;
+      // `term` the voice bar as the key-term field, mid-typing.
       model.panelShowsKeys = state == "keys"
+      if state == "term" { model.termDraft = "Rizz" }
       model.hasFullAccess = state != "off"
       model.isListening = state != "off" && state != "start"
       let phase: PhaseSnapshot.State =

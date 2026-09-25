@@ -113,21 +113,15 @@ final class DictationCoordinator {
     lexiconNameCount = entries.filter(\.isName).count
   }
 
-  /// The user's typed key terms, then the contact names the keyboard read off
-  /// the phone, deduplicated case-insensitively. `KeytermsBoost` fits the list
+  /// The user's own key terms (from the App Group, where the keyboard adds
+  /// them on the spot), then the contact names the keyboard read off the
+  /// phone, deduplicated case-insensitively. `KeytermsBoost` fits the list
   /// to the request's caps (100 terms, 2048 bytes), first entries first, which
   /// is why the typed terms lead.
   nonisolated static func keyTerms() -> [String] {
-    let typed = UserDefaults.standard.string(forKey: KeyTermsStore.defaultsKey) ?? ""
     let names = (SharedStore.read([LexiconEntry].self, forKey: BlurtShared.Key.lexicon) ?? [])
       .filter(\.isName).map(\.documentText)
-    let candidates = typed.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-    var seen = Set<String>()
-    var terms: [String] = []
-    for term in candidates + names where !term.isEmpty && seen.insert(term.lowercased()).inserted {
-      terms.append(term)
-    }
-    return terms
+    return KeyTermList.parse(KeyTermList.join(SharedStore.keyTerms + names))
   }
 
   /// What the keyboard saw around the cursor when it sent the press.

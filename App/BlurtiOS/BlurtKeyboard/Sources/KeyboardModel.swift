@@ -32,6 +32,16 @@ final class KeyboardModel {
   /// The direction of the last flip, so the pages slide the way the finger went.
   var flipTowardsLeading = false
   var snapshot = PhaseSnapshot.idle
+  /// The key term being typed on the keys, while the voice bar is a field;
+  /// nil otherwise. See `beginAddingTerm`.
+  var termDraft: String?
+  /// When the last term was saved, so the bar can show a check for a moment.
+  var termSavedAt: Date?
+  /// The field's own return key, as iOS labels it: "send", "search", "go"…
+  var returnLabel: String?
+  /// The letter rows for the user's first keyboard language (AZERTY for
+  /// French, QWERTZ for German and its neighbours, QWERTY otherwise).
+  var letterRows = LetterLayout.qwerty
   var isListening = false
   var hasFullAccess = false
   var needsGlobe = true
@@ -46,14 +56,20 @@ final class KeyboardModel {
   @ObservationIgnored private var heartbeat: Task<Void, Never>?
   @ObservationIgnored private var lastSpaceAt: ContinuousClock.Instant?
   @ObservationIgnored private var noticeDwell: Task<Void, Never>?
+  @ObservationIgnored private var termDraftFromSelection: String?
+  @ObservationIgnored private var termNotice: Task<Void, Never>?
 
   var proxy: (any UITextDocumentProxy)? { controller?.textDocumentProxy }
 
   /// One palette for now; themes are a later feature.
   var palette: KeyboardPalette { .blurt }
 
-  /// What is actually on screen: the panel's carousel may be showing its keys.
-  var effectiveLayout: KeyboardLayout { layout == .panel && panelShowsKeys ? .full : layout }
+  /// What is actually on screen: the panel's carousel may be showing its
+  /// keys, and typing a key term needs them whatever the layout.
+  var effectiveLayout: KeyboardLayout {
+    if termDraft != nil { return .full }
+    return layout == .panel && panelShowsKeys ? .full : layout
+  }
 
   /// Told when `effectiveLayout` changes, so the host can resize the keyboard.
   @ObservationIgnored var onLayoutChange: (() -> Void)?
@@ -93,6 +109,8 @@ final class KeyboardModel {
   func appeared() {
     hasFullAccess = controller?.hasFullAccess ?? false
     needsGlobe = controller?.needsInputModeSwitchKey ?? true
+    letterRows = LetterLayout.forPreferredLanguages()
+    readField()
     updateShift()
     // Without Full Access the App Group is out of reach: the keyboard still
     // types, and says what it needs (see `KeyboardRootView`), but nothing below
@@ -126,15 +144,47 @@ final class KeyboardModel {
   }
 
   /// The cursor moved or the text around it changed, including by our own
-  /// typing: re-read where the sentence stands.
+  /// typing: re-read where the sentence stands and what the field wants.
   func contextChanged() {
+    readField()
     updateShift()
+  }
+
+  /// What the field asked for, the way the system keyboard honours it: the
+  /// return key's own word, and the symbols page first for a number field.
+  private func readField() {
+    returnLabel = proxy?.returnKeyType.flatMap(Self.returnLabel)
+    switch proxy?.keyboardType {
+    case .numberPad, .decimalPad, .phonePad, .numbersAndPunctuation, .asciiCapableNumberPad: symbolsPage = true
+    default: break
+    }
+  }
+
+  private static func returnLabel(_ type: UIReturnKeyType) -> String? {
+    switch type {
+    case .go: "go"
+    case .google, .yahoo, .search: "search"
+    case .join: "join"
+    case .next: "next"
+    case .route: "route"
+    case .send: "send"
+    case .done: "done"
+    case .emergencyCall: "call"
+    case .continue: "continue"
+    case .default: nil
+    @unknown default: nil
+    }
   }
 
   /// Auto-capitalisation, as the system keyboard does it: shift comes on at
   /// the start of a sentence (or of every word, or always) according to what
   /// the field asks for, and goes off after one letter.
   private func updateShift() {
+    if let termDraft {
+      // A key term is usually a name: capitalised to start, then as typed.
+      shifted = termDraft.isEmpty
+      return
+    }
     guard let proxy else { return }
     let before = proxy.documentContextBeforeInput ?? ""
     switch proxy.autocapitalizationType ?? .sentences {
@@ -307,17 +357,90 @@ final class KeyboardModel {
 
 extension KeyboardModel {
   func type(_ text: String) {
+    UIDevice.current.playInputClick()
+    if termDraft != nil {
+      termDraft?.append(text)
+      updateShift()
+      return
+    }
     proxy?.insertText(text)
     if shifted, !symbolsPage { shifted = false }
   }
 
-  func deleteBackward() { proxy?.deleteBackward() }
+  func deleteBackward() {
+    UIDevice.current.playInputClick()
+    if termDraft != nil {
+      _ = termDraft?.popLast()
+      updateShift()
+      return
+    }
+    proxy?.deleteBackward()
+  }
 
-  func newline() { proxy?.insertText("\n") }
+  func newline() {
+    UIDevice.current.playInputClick()
+    if termDraft != nil {
+      saveTerm()
+      return
+    }
+    proxy?.insertText("\n")
+  }
+
+  // MARK: Quick-add key term
+
+  /// The voice bar becomes a field and the keys type into it. If the user
+  /// had selected a word — the one Blurt got wrong — it is the starting
+  /// point, and saving also replaces it in the text with what they typed.
+  func beginAddingTerm() {
+    let selected = proxy?.selectedText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let seed = selected.count <= 48 && !selected.contains("\n") ? selected : ""
+    termDraftFromSelection = seed.isEmpty ? nil : seed
+    termDraft = seed
+    updateShift()
+    onLayoutChange?()
+  }
+
+  func cancelAddingTerm() {
+    termDraft = nil
+    termDraftFromSelection = nil
+    updateShift()
+    onLayoutChange?()
+  }
+
+  /// Saves the term to Blurt's key terms — read on the very next dictation —
+  /// and, when it began as a selection, puts it into the text in place of the
+  /// misheard word.
+  func saveTerm() {
+    guard let draft = termDraft?.trimmingCharacters(in: .whitespacesAndNewlines), !draft.isEmpty else {
+      cancelAddingTerm()
+      return
+    }
+    SharedStore.addKeyTerm(draft)
+    if let original = termDraftFromSelection, original != draft, proxy?.selectedText == original {
+      proxy?.insertText(draft)
+    }
+    termDraft = nil
+    termDraftFromSelection = nil
+    if hasFullAccess { UINotificationFeedbackGenerator().notificationOccurred(.success) }
+    termSavedAt = Date()
+    termNotice?.cancel()
+    termNotice = Task { [weak self] in
+      try? await Task.sleep(for: .seconds(1.2))
+      guard !Task.isCancelled else { return }
+      self?.termSavedAt = nil
+    }
+    updateShift()
+    onLayoutChange?()
+  }
 
   /// A space — or, tapped twice quickly after a word, the system keyboard's
   /// "." shortcut: the first space becomes a full stop and a space.
   func space() {
+    UIDevice.current.playInputClick()
+    if termDraft != nil {
+      if termDraft?.isEmpty == false, termDraft?.hasSuffix(" ") == false { termDraft?.append(" ") }
+      return
+    }
     let now = ContinuousClock.now
     let before = proxy?.documentContextBeforeInput ?? ""
     if let last = lastSpaceAt, now - last < .milliseconds(450), before.hasSuffix(" "), !before.hasSuffix("  "),
@@ -356,5 +479,20 @@ extension KeyboardModel {
       }
       responder = current.next
     }
+  }
+}
+
+/// The three letter rows, by the language the user types in most.
+nonisolated enum LetterLayout {
+  static let qwerty = ["qwertyuiop", "asdfghjkl", "zxcvbnm"]
+  static let azerty = ["azertyuiop", "qsdfghjklm", "wxcvbn"]
+  static let qwertz = ["qwertzuiop", "asdfghjkl", "yxcvbnm"]
+
+  /// From the phone's own language order — no setting to make.
+  static func forPreferredLanguages(_ languages: [String] = Locale.preferredLanguages) -> [String] {
+    guard let first = languages.first?.lowercased() else { return qwerty }
+    if first.hasPrefix("fr") { return azerty }
+    if ["de", "cs", "sk", "hu"].contains(where: { first.hasPrefix($0) }) { return qwertz }
+    return qwerty
   }
 }

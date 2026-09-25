@@ -10,7 +10,6 @@ import SwiftUI
 struct FullKeyboardView: View {
   var model: KeyboardModel
 
-  private static let letters = ["qwertyuiop", "asdfghjkl", "zxcvbnm"]
   private static let symbols = ["1234567890", "-/:;()$&@\"", ".,?!'"]
 
   var body: some View {
@@ -43,13 +42,16 @@ struct FullKeyboardView: View {
           KeyCap(title: model.symbolsPage ? "ABC" : "123", dark: true, width: sideWidth) { model.toggleSymbols() }
           if model.needsGlobe { KeyCap(systemImage: "globe", dark: true, width: sideWidth) { model.globe() } }
           KeyCap(title: "space", flexible: true) { model.space() }
-          KeyCap(systemImage: "return", dark: true, width: sideWidth * 2 + gap) { model.newline() }
+          KeyCap(
+            title: model.returnLabel, systemImage: model.returnLabel == nil ? "return" : nil, dark: true,
+            width: sideWidth * 2 + gap
+          ) { model.newline() }
         }
       }
     }
   }
 
-  private var rows: [String] { model.symbolsPage ? Self.symbols : Self.letters }
+  private var rows: [String] { model.symbolsPage ? Self.symbols : model.letterRows }
 
   private func label(for character: Character) -> String {
     let text = String(character)

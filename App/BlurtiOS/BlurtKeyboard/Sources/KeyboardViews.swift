@@ -96,6 +96,7 @@ struct PanelView: View {
           .accessibilityLabel("Cancel dictation")
       }
     }
+    .overlay(alignment: .topLeading) { AddTermKey(model: model).padding(6) }
   }
 }
 

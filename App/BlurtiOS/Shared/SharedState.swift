@@ -184,7 +184,10 @@ nonisolated struct LexiconEntry: Codable, Sendable, Hashable {
 /// keyboard writes from the main actor, the app's capture path reads from
 /// wherever the engine calls it.
 nonisolated enum SharedStore {
-  private static var defaults: UserDefaults {
+  /// The App Group's defaults — what both processes read and write. Falls
+  /// back to the process's own only where the group is out of reach (a
+  /// keyboard without Full Access), so nothing crashes; nothing is shared then.
+  static var defaults: UserDefaults {
     UserDefaults(suiteName: BlurtShared.appGroup) ?? .standard
   }
 
@@ -244,6 +247,34 @@ nonisolated enum SharedStore {
   static var isListening: Bool {
     guard (listeningUntil ?? .distantPast) > Date() else { return false }
     return Date().timeIntervalSince(appSeenAt ?? .distantPast) < appPresenceWindow
+  }
+
+  // MARK: Key terms
+
+  /// The user's own key terms — names and jargon the request should spell
+  /// right — under the engine's own key (`KeyTermsStore.defaultsKey`,
+  /// `BlurtKeyTerms`, comma-separated) but in the App Group, so the keyboard
+  /// can add one on the spot and the app reads it on the very next press.
+  static var keyTerms: [String] {
+    get { KeyTermList.parse(defaults.string(forKey: keyTermsKey) ?? "") }
+    set { defaults.set(KeyTermList.join(newValue), forKey: keyTermsKey) }
+  }
+
+  /// `BlurtKeyTerms` — spelled out here rather than imported from the engine so
+  /// the keyboard, which links it too, and the app can't disagree.
+  static let keyTermsKey = "BlurtKeyTerms"
+
+  /// Adds a term unless it is already there (case-insensitively). Returns
+  /// whether the list changed.
+  @discardableResult
+  static func addKeyTerm(_ term: String) -> Bool {
+    let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return false }
+    var terms = keyTerms
+    guard !terms.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return false }
+    terms.append(trimmed)
+    keyTerms = terms
+    return true
   }
 
   static var appSeenAt: Date? {
@@ -307,3 +338,23 @@ nonisolated final class DarwinObserver: Sendable {
 }
 
 // MARK: - Brand
+
+/// The comma-separated key-term list, as the engine's `KeyTermsStore` reads
+/// it: split, trimmed, emptied of blanks, deduplicated case-insensitively in
+/// first-seen order.
+nonisolated enum KeyTermList {
+  static func parse(_ raw: String) -> [String] {
+    var seen = Set<String>()
+    var terms: [String] = []
+    for piece in raw.split(separator: ",") {
+      let term = piece.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !term.isEmpty, seen.insert(term.lowercased()).inserted else { continue }
+      terms.append(term)
+    }
+    return terms
+  }
+
+  static func join(_ terms: [String]) -> String {
+    terms.joined(separator: ", ")
+  }
+}

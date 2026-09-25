@@ -10,6 +10,17 @@ final class KeyboardViewController: UIInputViewController {
   private let model = KeyboardModel()
   private var heightConstraint: NSLayoutConstraint?
 
+  /// The input view says it wants clicks, so `UIDevice.playInputClick()` on
+  /// each key press plays the system's keyboard click — and only if the
+  /// user has keyboard clicks on in Settings. Their setting, not ours.
+  private final class ClickingInputView: UIInputView, UIInputViewAudioFeedback {
+    var enableInputClicksWhenVisible: Bool { true }
+  }
+
+  override func loadView() {
+    view = ClickingInputView(frame: .zero, inputViewStyle: .keyboard)
+  }
+
   override func viewDidLoad() {
     super.viewDidLoad()
     model.attach(to: self)
