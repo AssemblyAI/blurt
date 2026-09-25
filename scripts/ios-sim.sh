@@ -59,8 +59,9 @@ APP="$DERIVED/Build/Products/Debug-iphonesimulator/BlurtiOS.app"
 xcrun simctl install "$UDID" "$APP"
 xcrun simctl privacy "$UDID" grant microphone "$BUNDLE_ID"
 xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
+# The `+` expansion keeps an empty array from tripping `set -u` on macOS's bash 3.2.
 read -ra LAUNCH_ARGS <<<"${BLURT_LAUNCH_ARGS:-}"
-xcrun simctl launch "$UDID" "$BUNDLE_ID" "${LAUNCH_ARGS[@]}"
+xcrun simctl launch "$UDID" "$BUNDLE_ID" ${LAUNCH_ARGS[@]+"${LAUNCH_ARGS[@]}"}
 
 if [ -n "$SHOT" ]; then
   sleep 3

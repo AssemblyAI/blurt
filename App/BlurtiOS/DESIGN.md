@@ -159,9 +159,38 @@ the states match); the mic key is a button labelled Dictate / Stop dictation /
 Start Blurt. Reduce Motion stops the ring and the meter's idle wave; heights
 still follow the level.
 
-## Next: the app's screens
+## The app's screens (`BlurtiOS/Sources/`)
 
-Setup (sign in · microphone · keyboard) as a stepped flow; a home screen with
-the orb as the hero, the listening state and window, recent dictations as
-cards (`cardFill`/`cardBorder` from the Mac); styles as a chip row; settings
-grouped as on the Mac. Same tokens, appearance-adaptive there (`accent`).
+Appearance-adaptive, unlike the keyboard: `accent` (the catalog's
+`AccentColor`, `green` in light and `greenOnDark` in dark), `cardFill` /
+`cardBorder` (the Mac's card, `#EBE8E8` on `#DEDBDB` light, `#26231E` on
+`#3A362F` dark, 16 pt corners, 1 pt hairline), system grouped background,
+system fonts. The Mac's Icon Composer icon and its ready-screen wordmark are
+shared, not copied (`project.yml`).
+
+**Home** (`HomeView.swift`) — the Mac's ready screen, stacked for a phone:
+
+| Piece      | What                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Bar        | the wordmark (tinted accent, 22 pt tall) centred; the gear → Settings                                                                                                                                                                                                                                                                                                                                                          |
+| Setup card | only while something is missing: sign in (stub; debug builds take a key), microphone, keyboard + Full Access                                                                                                                                                                                                                                                                                                                   |
+| Hero card  | the orb, 112 pt, ring 2 pt sweeping while the mic is open or a dictation is in flight, glowing with the level while recording; a title2 line (Not listening · Ready to dictate · Listening… · Transcribing… · Pasted · Copied · the error) and a callout under it; the meter while recording; **Start listening** (prominent) or **Stop listening** (bordered, destructive); "Dictate here, to the clipboard" as a text button |
+| Style      | chips: Default and each profile, the active one filled with the accent; Edit → the styles editor                                                                                                                                                                                                                                                                                                                               |
+| Recent     | cards: three lines of text, the style as a tinted capsule, the relative time, a copy button; an empty-state card                                                                                                                                                                                                                                                                                                               |
+| Footer     | "Powered by AssemblyAI", caption                                                                                                                                                                                                                                                                                                                                                                                               |
+
+**Settings** (`SettingsView.swift`) — a sheet, grouped as the Mac's: Keyboard
+(layout, look, hands-free), Listening (the window), Transcription (enhanced
+transcripts, output styles, key terms with the contact-name count), Account
+(sign-in stub; the API key in debug builds), About (version, GitHub, Powered
+by AssemblyAI).
+
+Screenshots: `scripts/ios-sim.sh --screenshot home.png` for the resting
+screen; `BLURT_LAUNCH_ARGS=-BlurtStartListening` opens the mic at launch for
+the listening state (debug builds); `xcrun simctl ui booted appearance dark`
+before either for dark mode.
+
+## Next
+
+Onboarding as a stepped flow once sign-in exists; the keyboard's autocorrect
+and suggestion bar; the app's cues and haptics on the phase edges.

@@ -39,9 +39,9 @@ inherited from the Mac app and must become org-owned before the App Store.
 
 ## Design
 
-`DESIGN.md` — the tokens, the pill, the orb, the meter, the three layouts and their
-heights, all traced to the Mac app's sources, plus the gallery that renders every layout and
-state for a screenshot.
+`DESIGN.md` — the tokens, the pill, the orb, the meter, the three layouts and two looks, the
+app's screens, all traced to the Mac app's sources, plus the gallery that renders every layout
+and state for a screenshot and the launch flags that reach every app state.
 
 ## Getting Xcode
 

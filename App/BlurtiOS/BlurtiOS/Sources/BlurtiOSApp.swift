@@ -43,6 +43,13 @@ struct BlurtiOSApp: App {
   private var home: some View {
     HomeView(coordinator: coordinator)
       .onOpenURL { coordinator.handle($0) }
-      .task { coordinator.start() }
+      .task {
+        coordinator.start()
+        #if DEBUG
+          // `-BlurtStartListening` opens the mic at launch, so the listening
+          // state can be screenshotted without a tap (see scripts/ios-sim.sh).
+          if CommandLine.arguments.contains("-BlurtStartListening") { await coordinator.startListening() }
+        #endif
+      }
   }
 }
