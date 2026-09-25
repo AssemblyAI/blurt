@@ -30,6 +30,41 @@ Layouts: `slimBar`, `panel`, `full`. States: `off` (no Full Access), `start`
 gallery is `BlurtiOS/Sources/KeyboardGalleryView.swift`, debug builds only;
 the keyboard's sources are compiled into the app for it (`project.yml`).
 
+## Two looks (`KeyboardTheme`, `BlurtKeyboard/Sources/KeyboardPalette.swift`)
+
+People are used to the iPhone's keyboard, so the keys can look exactly like it.
+The **look** is a setting beside the layout, in the app's Keyboard section:
+
+| Look     | Surface and keys                                                                                                                                                                               |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `blurt`  | The ink surface and tokens below, in every appearance. Gaps 5, rows 8, margin 8.                                                                                                               |
+| `system` | The iPhone keyboard's own palette, light or dark with the app being typed in (its field's `keyboardAppearance`, else the app's style). Gaps 6, rows 11, margin 3, a 1 pt drop under every key. |
+
+System light: surface `#D1D5DB`, letter keys white, modifiers `#ADB3BC`, drop
+`#898A8D`, black legends. System dark: surface `#2B2B2B`, keys `#6B6B6B`,
+modifiers `#464646`, drop `#0D0D0D`, white legends. Radius 5 (Blurt: 6). The
+status pill and the orb stay Blurt's in both — the look is about the keys.
+The gallery's last argument picks it: `blurt` (default), `light`, `dark`.
+
+The full layout follows the iPhone's geometry in both looks: ten letter keys
+across at one width (`(width − 9·gap) / 10`), the middle row centred, shift
+and delete taking what seven letters leave (twice the gap away from them),
+then 123 · globe · space · mic · return, return two modifiers wide. Letters
+pop up while pressed (a 32 pt copy 58 pt above the key, typed on release);
+shift comes on by itself at the start of a sentence — or of every word, or
+always — as the field's `autocapitalizationType` asks, and goes off after
+one letter; a second space within 450 ms of the first, after a word, becomes
+". ". Not yet: autocorrect and the suggestion bar.
+
+## Hands-free
+
+A toggle in the same section: with it on, a dictation starts the moment the
+keyboard comes up in a text field — the same synthetic tap through the
+engine's gate, so it latches and the next tap of the mic stops it. Only when
+the app is listening and nothing is in flight; otherwise the pill says what to
+do, and the first tap opens Blurt as usual. It fires on the keyboard's
+appearance, not on every field change while it stays up.
+
 ## Tokens (`Shared/BlurtBrand.swift`)
 
 | Token             | Value       | Use                                                         |
@@ -98,13 +133,13 @@ while pressed rather than dimming.
 
 ## Layouts and their heights (`KeyboardLayout.height`)
 
-Margin 8, row gap 8 (`KeyboardRootView`).
+Top and bottom margin 8 (`KeyboardRootView`); the look sets the row gap and side margin.
 
-| Layout    | Rows                                                                        | Height |
-| --------- | --------------------------------------------------------------------------- | ------ |
-| `slimBar` | globe · pill · mic 44 · delete · return                                     | 60     |
-| `panel`   | pill 36 · mic 96 (cancel beside it while in flight) · space row 42, gaps 12 | 216    |
-| `full`    | pill 36 · three letter rows 42 · globe/123/space/mic/return 42              | 252    |
+| Layout    | Rows                                                                             | Height                |
+| --------- | -------------------------------------------------------------------------------- | --------------------- |
+| `slimBar` | globe · pill · mic 44 · delete · return                                          | 60                    |
+| `panel`   | pill 36 · mic 96 (cancel beside it while in flight) · space row 42, gaps 12      | 216                   |
+| `full`    | pill 36 · three letter rows 42 · globe/123/space/mic/return 42; `220 + 4·rowGap` | 252 Blurt, 264 iPhone |
 
 The pill is capped at 260 pt wide in the panel and full layouts, flexible in
 the slim bar. The globe key appears only when iOS says another keyboard is
