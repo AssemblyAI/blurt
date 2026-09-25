@@ -172,6 +172,17 @@ nonisolated struct PhaseSnapshot: Codable, Sendable, Equatable {
 
   static let idle = PhaseSnapshot(state: .idle, message: nil, level: 0, at: .distantPast)
 
+  /// How long a notice stays on the pill before it settles back to idle — the
+  /// Mac's 0.8 s / 1.6 s dwell, a little longer since a phone has no hover to
+  /// reveal more. Nil for the states that end on their own.
+  var noticeDwellSeconds: Double? {
+    switch state {
+    case .pasted: 1.2
+    case .copied, .error: 2.0
+    case .idle, .connecting, .recording, .processing: nil
+    }
+  }
+
   /// Whether this is too old to show. A notice (pasted, copied, error) dwells
   /// for a moment and is then over; an in-flight state older than the longest
   /// possible dictation belongs to an app that was killed under it. The

@@ -42,6 +42,7 @@ final class KeyboardModel {
   @ObservationIgnored private var lastResultID: UUID?
   @ObservationIgnored private var heartbeat: Task<Void, Never>?
   @ObservationIgnored private var lastSpaceAt: ContinuousClock.Instant?
+  @ObservationIgnored private var noticeDwell: Task<Void, Never>?
 
   var proxy: (any UITextDocumentProxy)? { controller?.textDocumentProxy }
 
@@ -252,6 +253,16 @@ final class KeyboardModel {
     // would leave the gate latched and swallow the next tap — the same sync the
     // Mac shell does on every terminal phase.
     if isSettled, !gate.isIdle { gate.reset() }
+    // A notice is over after its dwell: the Mac pill fades out, this one goes
+    // back to saying how to start.
+    noticeDwell?.cancel()
+    if let seconds = current.noticeDwellSeconds {
+      noticeDwell = Task { [weak self] in
+        try? await Task.sleep(for: .seconds(seconds))
+        guard !Task.isCancelled else { return }
+        self?.apply(.idle)
+      }
+    }
   }
 
   private func resultArrived() {
