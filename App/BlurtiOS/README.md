@@ -37,6 +37,19 @@ on a phone needs Xcode with a team that can provision the App Group; every id in
 `project.yml` (`dev.alex.blurt.ios`, `group.dev.alex.blurt`) is a placeholder
 inherited from the Mac app and must become org-owned before the App Store.
 
+## Getting Xcode
+
+Any Xcode from 26.6 (what CI builds with) works; a phone on iOS 27 needs Xcode 27, which
+needs macOS 26.6. The Mac App Store is one way. The other is Apple's developer site through
+[`xcodes`](https://github.com/XcodesOrg/xcodes): Homebrew cannot build it without Xcode
+already present (chicken and egg), so take the prebuilt binary —
+`gh release download --repo XcodesOrg/xcodes --pattern xcodes.zip`, unzip, put `xcodes` on
+`PATH` — then `xcodes install 27.0 --select`. It signs in with an Apple ID that has accepted
+the Apple Developer Agreement at developer.apple.com/account; a company-managed Apple ID
+(Apple Business Manager) cannot accept it and gets a 403, so use a personal one for the
+download. The archive lands in `~/Library/Application Support/com.robotsandpencils.xcodes/`;
+an 83 KB "xip" there is a saved error page, delete it and retry.
+
 ## Testing in the simulator
 
 Signing and the team don't matter here, and the App Group works, so the whole
@@ -45,17 +58,17 @@ loop runs. `AVCaptureSession` carries no audio in the simulator, so the app uses
 `WindowedAudioSource` on a phone.
 
 ```bash
-cd App/BlurtiOS && xcodegen generate
-xcodebuild -project BlurtiOS.xcodeproj -scheme BlurtiOS -destination 'generic/platform=iOS Simulator' \
-  CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM= build
-xcrun simctl boot "iPhone 18 Pro" && xcrun simctl install booted <DerivedData>/Build/Products/Debug-iphonesimulator/BlurtiOS.app
-xcrun simctl privacy booted grant microphone dev.alex.blurt.ios && xcrun simctl launch booted dev.alex.blurt.ios
+scripts/ios-sim.sh                          # generate, build, boot, install, grant mic, launch
+scripts/ios-sim.sh --screenshot shot.png    # …and capture the screen
 ```
 
-Xcode 27 replaced Simulator.app with Device Hub (`Xcode.app/Contents/Applications/DeviceHub.app`);
-turn off its **Always simulate hardware keyboard** setting or no on-screen keyboard appears.
-Then: Blurt → Open Settings → Keyboards → Blurt on, Allow Full Access; Start listening;
-in Notes, hold the globe key, pick Blurt, tap the mic.
+Xcode 27 replaced Simulator.app with Device Hub (`Xcode.app/Contents/Applications/DeviceHub.app`),
+which the script opens; turn off its **Always simulate hardware keyboard** setting (Device Hub →
+Settings…) or no on-screen keyboard ever appears. Then: Blurt → Open Settings → Keyboards →
+Blurt on, Allow Full Access; Start listening; in Notes, hold the globe key, pick Blurt, tap the
+mic. The keyboard's crash logs, if any, land in `~/Library/Logs/DiagnosticReports/BlurtKeyboard-*`,
+and `xcrun simctl spawn booted log show --last 5m --predicate 'process == "BlurtKeyboard"'`
+shows its console.
 
 ## Testing on a phone
 

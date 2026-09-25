@@ -96,7 +96,8 @@ App/BlurtiOS/                the iPhone app and its keyboard (README.md there is
 Tests/BlurtEngineTests/      Swift Testing suites; Stubs/ holds the seam doubles
 scripts/                     check.sh, check-portability.sh, check-invariants.sh,
                              bootstrap.sh, dev-build.sh, uitest.sh, leaks.sh, release*.sh,
-                             ios-typecheck.sh (the iPhone targets without an iOS SDK)
+                             ios-typecheck.sh (the iPhone targets without an iOS SDK),
+                             ios-sim.sh (build + run the iPhone app in the simulator)
                              hand-run maintainer tools — no automated caller, invoked by a
                              human, so "nothing references it" here does NOT mean dead code:
                              screenshot.swift + beautify.swift (window imagery, capture
