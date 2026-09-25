@@ -77,11 +77,13 @@ struct LayoutTests {
     #expect(LetterLayout.forPreferredLanguages([]) == LetterLayout.qwerty)
   }
 
-  @Test("every theme has a distinct id and an unknown id falls back to Ink")
+  @Test("every theme has a distinct id; the iPhone theme has two faces; an unknown id is the iPhone's")
   func palettes() {
     let ids = KeyboardPalette.all.map(\.id)
     #expect(Set(ids).count == ids.count)
-    #expect(KeyboardPalette.named("lavender").id == "lavender")
-    #expect(KeyboardPalette.named("nope").id == "ink")
+    #expect(KeyboardPalette.resolve("lavender", dark: true).id == "lavender")
+    #expect(KeyboardPalette.resolve("system", dark: false).keyText == .black)
+    #expect(KeyboardPalette.resolve("system", dark: true).keyText == .white)
+    #expect(KeyboardPalette.resolve("nope", dark: false).id == "system")
   }
 }

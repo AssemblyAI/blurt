@@ -83,10 +83,14 @@ final class KeyboardModel {
   var proxy: (any UITextDocumentProxy)? { proxyOverride ?? controller?.textDocumentProxy }
   @ObservationIgnored var proxyOverride: (any UITextDocumentProxy)?
 
-  /// The chosen theme's palette — or, for a preview, whatever it is told.
-  var palette: KeyboardPalette { paletteOverride ?? .named(themeID) }
+  /// The chosen theme's palette in the host's appearance — or, for a
+  /// preview, whatever it is told.
+  var palette: KeyboardPalette { paletteOverride ?? .resolve(themeID, dark: isDark) }
   var themeID = SharedStore.themeID
   var paletteOverride: KeyboardPalette?
+  /// Whether the app being typed in wants a dark keyboard: what its field
+  /// asks for, else the app's own light or dark appearance.
+  var isDark = false
 
   /// What is actually on screen: the panel's carousel may be showing its
   /// keys, and typing a key term needs them whatever the layout.
@@ -142,6 +146,7 @@ final class KeyboardModel {
     termHostBaseline = nil
     termHostBaselineAfter = nil
     symbolsPage = Self.wantsSymbols(proxy?.keyboardType)
+    readAppearance()
     readField()
     updateShift()
     // Without Full Access the App Group is out of reach: the keyboard still
@@ -197,6 +202,7 @@ final class KeyboardModel {
   /// The cursor moved or the text around it changed, including by our own
   /// typing: re-read where the sentence stands and what the field wants.
   func contextChanged() {
+    readAppearance()
     readField()
     claimHostTypingForTerm()
     updateShift()
@@ -226,6 +232,14 @@ final class KeyboardModel {
   /// return key's own word, and the symbols page first for a number field.
   private func readField() {
     returnLabel = proxy?.returnKeyType.flatMap(Self.returnLabel)
+  }
+
+  private func readAppearance() {
+    switch proxy?.keyboardAppearance {
+    case .dark: isDark = true
+    case .light: isDark = false
+    default: isDark = controller?.traitCollection.userInterfaceStyle == .dark
+    }
   }
 
   /// Number, decimal and phone fields open on the symbols page, as the system

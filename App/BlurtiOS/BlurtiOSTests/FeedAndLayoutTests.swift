@@ -55,5 +55,7 @@ struct LayoutArithmeticTests {
     #expect(rows[1].model.effectiveLayout == .full)
     #expect(rows[2].model.termDraft == "Rizz")
     #expect(rows[0].model.palette.id == "mint")
+    let dark = KeyboardGalleryView.rows(from: ["app", "-BlurtGallery", "full", "idle", "system-dark"])
+    #expect(dark[0].model.palette.keyText == .white)
   }
 }

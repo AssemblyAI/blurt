@@ -10,6 +10,7 @@ struct SettingsView: View {
   @State private var layout = SharedStore.layout
   @State private var autoDictate = SharedStore.autoDictate
   @State private var windowMinutes = SharedStore.windowMinutes
+  @AppStorage(BlurtShared.Key.theme, store: SharedStore.defaults) private var themeID = "system"
   @State private var showsKeyEntry = false
   @AppStorage(SharedStore.keyTermsKey, store: SharedStore.defaults) private var keyTerms = ""
   @AppStorage(EnhancedTranscriptsStore.defaultsKey) private var enhancedTranscripts =
@@ -45,7 +46,7 @@ struct SettingsView: View {
       NavigationLink {
         ThemePickerView()
       } label: {
-        LabeledContent("Theme", value: KeyboardPalette.named(SharedStore.themeID).name)
+        LabeledContent("Theme", value: KeyboardPalette.resolve(themeID, dark: false).name)
       }
       Toggle("Hands-free", isOn: $autoDictate)
         .onChange(of: autoDictate) { _, value in SharedStore.autoDictate = value }

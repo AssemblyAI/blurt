@@ -5,6 +5,7 @@ import SwiftUI
 /// in the accent. The keyboard picks it up the next time it comes up.
 struct ThemePickerView: View {
   @State private var chosen = SharedStore.themeID
+  @Environment(\.colorScheme) private var colorScheme
 
   private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
 
@@ -12,7 +13,12 @@ struct ThemePickerView: View {
     ScrollView {
       LazyVGrid(columns: columns, spacing: 14) {
         ForEach(KeyboardPalette.all) { palette in
-          ThemeCard(palette: palette, chosen: palette.id == chosen) {
+          // The iPhone theme has two faces; the card shows the one this
+          // screen is in, which is the one the keyboard would show in an app
+          // that looks like it.
+          ThemeCard(
+            palette: KeyboardPalette.resolve(palette.id, dark: colorScheme == .dark), chosen: palette.id == chosen
+          ) {
             chosen = palette.id
             SharedStore.themeID = palette.id
           }

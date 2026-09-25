@@ -7,8 +7,9 @@
   ///
   ///     -BlurtGallery <slimBar|panel|full> <state>[,<state>…] [theme]
   ///
-  /// The last word is a theme id (`ink`, `paper`, `lavender`, `mint`,
-  /// `midnight`, `sunset`); Ink when left out.
+  /// The last word is a theme id (`system`, `system-dark`, `ink`, `paper`,
+  /// `lavender`, `mint`, `midnight`, `sunset`); the iPhone's light face when
+  /// left out.
   /// where a state is `off` (no Full Access), `start` (app not listening),
   /// `idle`, `connecting`, `recording`, `processing`, `pasted`, `copied` or
   /// `error`. `scripts/ios-sim.sh` passes `BLURT_LAUNCH_ARGS` through, so
@@ -51,7 +52,7 @@
       guard let flag = arguments.firstIndex(of: "-BlurtGallery"), arguments.count > flag + 2,
         let layout = KeyboardLayout(rawValue: arguments[flag + 1])
       else { return [] }
-      let theme = arguments.count > flag + 3 ? arguments[flag + 3] : "ink"
+      let theme = arguments.count > flag + 3 ? arguments[flag + 3] : "system"
       return arguments[flag + 2].split(separator: ",").map { name in
         Row(
           caption: "\(layout.rawValue) · \(name) · \(theme)",
@@ -62,7 +63,8 @@
     private static func model(layout: KeyboardLayout, state: String, theme: String) -> KeyboardModel {
       let model = KeyboardModel()
       model.layout = layout
-      model.paletteOverride = .named(theme)
+      // `system` is the iPhone's light face, `system-dark` its dark one.
+      model.paletteOverride = .resolve(theme == "system-dark" ? "system" : theme, dark: theme == "system-dark")
       // `keys` shows the panel's carousel flipped to its keyboard page;
       // `term` the voice bar as the key-term field, mid-typing.
       model.panelShowsKeys = state == "keys"

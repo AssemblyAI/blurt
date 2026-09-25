@@ -343,7 +343,8 @@ struct KeyPress: ViewModifier {
 
 extension View {
   /// The cap under a key's legend: the palette's fill, the system keyboard's
-  /// corner radius and 1 pt drop, and a hairline so the cap reads on ink.
+  /// corner radius and 1 pt drop, and on the dark palettes a hairline so the
+  /// cap reads on ink.
   func keyCap(_ fill: Color, palette: KeyboardPalette) -> some View {
     background {
       RoundedRectangle(cornerRadius: KeyboardPalette.keyRadius)
@@ -351,7 +352,9 @@ extension View {
         .shadow(color: palette.keyShadow, radius: 0, y: 1)
     }
     .overlay {
-      RoundedRectangle(cornerRadius: KeyboardPalette.keyRadius).strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+      if palette.keyEdge {
+        RoundedRectangle(cornerRadius: KeyboardPalette.keyRadius).strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+      }
     }
   }
 }
