@@ -29,7 +29,14 @@ final class ListeningWindow {
   @ObservationIgnored private var heartbeat: Task<Void, Never>?
   @ObservationIgnored private var interruptions: Task<Void, Never>?
 
-  var isOpen: Bool { source.isOpen && (until.map { $0 > Date() } ?? false) }
+  /// Whether the microphone is open and the window hasn't lapsed. `until`
+  /// is read first, unconditionally: it is the observable half, and a view
+  /// that read it only after `source.isOpen` came true would never have
+  /// registered it and never redraw when the window opened.
+  var isOpen: Bool {
+    let lapsed = until.map { $0 <= Date() } ?? true
+    return !lapsed && source.isOpen
+  }
 
   /// Opens the microphone for `SharedStore.windowMinutes`. Foreground only.
   func open() async {

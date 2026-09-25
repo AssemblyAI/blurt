@@ -51,4 +51,26 @@ enum BlurtBrand {
   /// something is happening.
   nonisolated static let orbRingGradient = LinearGradient(
     colors: [green, .white], startPoint: .topLeading, endPoint: .bottomTrailing)
+
+  // MARK: The flat orb — the phone's rendering of the same mark
+
+  /// The disc, flat: the palette's violet into its green, corner to corner,
+  /// with none of the Mac gradient's white crown — on a phone that crown read
+  /// as a glossy sphere, and the design wants matte.
+  nonisolated static let orbFlat = LinearGradient(
+    colors: [Color(red: 57 / 255, green: 35 / 255, blue: 199 / 255), green],
+    startPoint: .topLeading, endPoint: .bottomTrailing)
+
+  /// The perimeter: a soft comet of the palette — green, lavender, violet —
+  /// fading to nothing round the rest of the circle, and turned continuously,
+  /// so the orb is never still.
+  nonisolated static let orbSweep = AngularGradient(
+    stops: [
+      .init(color: greenOnDark, location: 0),
+      .init(color: Color(red: 176 / 255, green: 167 / 255, blue: 233 / 255), location: 0.3),
+      .init(color: Color(red: 136 / 255, green: 123 / 255, blue: 221 / 255), location: 0.55),
+      .init(color: .clear, location: 0.8),
+      .init(color: .clear, location: 1),
+    ],
+    center: .center)
 }

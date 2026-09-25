@@ -109,7 +109,6 @@ private struct LetterKey: View {
       .foregroundStyle(palette.keyText)
       .frame(width: width + 18, height: 56)
       .background(palette.popupFill, in: RoundedRectangle(cornerRadius: 9))
-      .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
       .offset(y: -58)
       .allowsHitTesting(false)
   }
