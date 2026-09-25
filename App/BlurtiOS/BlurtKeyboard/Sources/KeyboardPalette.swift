@@ -5,9 +5,9 @@ import SwiftUI
 /// a warm paper, a midnight, a sunset), each contemporary and fun and none of
 /// them off-brand. People pick one in the app, Partiful-style, from live
 /// previews; the spacing never changes (the iPhone keyboard's own — 6 pt
-/// between keys, 11 between rows, 3 at the edges), so a theme changes how the
-/// keyboard looks and never how it types. Everything is flat: no drop under a
-/// key, no edge, no gloss — a matte surface with matte keys on it.
+/// between keys, 11 between rows, 3 at the edges, 5 pt corners, a 1 pt drop
+/// under every key), so a theme changes how the keyboard looks and never how
+/// it types.
 struct KeyboardPalette: Equatable, Identifiable {
   let id: String
   let name: String
@@ -17,43 +17,44 @@ struct KeyboardPalette: Equatable, Identifiable {
   let key: Color
   let keyDark: Color
   let keyText: Color
+  /// The drop under each key, as the system keyboard draws it.
+  let keyShadow: Color
   let popupFill: Color
 
   static let keyGap: CGFloat = 6
   static let rowGap: CGFloat = 11
   static let margin: CGFloat = 3
-  /// A touch rounder than the system's 5: flat shapes want it.
-  static let keyRadius: CGFloat = 7
+  static let keyRadius: CGFloat = 5
 
   static let ink = KeyboardPalette(
     id: "ink", name: "Ink", vibe: "Blurt's own",
     surface: BlurtBrand.ink, key: BlurtBrand.key, keyDark: BlurtBrand.keyDark, keyText: BlurtBrand.keyText,
-    popupFill: BlurtBrand.key)
+    keyShadow: Color.black.opacity(0.45), popupFill: BlurtBrand.key)
 
   static let paper = KeyboardPalette(
     id: "paper", name: "Paper", vibe: "Warm and light",
     surface: Color(hex: 0xEBE8E8), key: .white, keyDark: Color(hex: 0xDEDBDB), keyText: BlurtBrand.ink,
-    popupFill: .white)
+    keyShadow: Color.black.opacity(0.18), popupFill: .white)
 
   static let lavender = KeyboardPalette(
     id: "lavender", name: "Lavender", vibe: "The orb's violet",
     surface: Color(hex: 0x2C2557), key: Color(hex: 0x3F3777), keyDark: Color(hex: 0x352E68),
-    keyText: Color(hex: 0xF1EEFF), popupFill: Color(hex: 0x3F3777))
+    keyText: Color(hex: 0xF1EEFF), keyShadow: Color.black.opacity(0.4), popupFill: Color(hex: 0x3F3777))
 
   static let mint = KeyboardPalette(
     id: "mint", name: "Mint", vibe: "The orb's green",
     surface: Color(hex: 0x10231B), key: Color(hex: 0x1E3F31), keyDark: Color(hex: 0x183429),
-    keyText: Color(hex: 0xE9F5EE), popupFill: Color(hex: 0x1E3F31))
+    keyText: Color(hex: 0xE9F5EE), keyShadow: Color.black.opacity(0.4), popupFill: Color(hex: 0x1E3F31))
 
   static let midnight = KeyboardPalette(
     id: "midnight", name: "Midnight", vibe: "Deep blue-black",
     surface: Color(hex: 0x0E1220), key: Color(hex: 0x1D2440), keyDark: Color(hex: 0x161B33),
-    keyText: Color(hex: 0xE8ECFF), popupFill: Color(hex: 0x1D2440))
+    keyText: Color(hex: 0xE8ECFF), keyShadow: Color.black.opacity(0.5), popupFill: Color(hex: 0x1D2440))
 
   static let sunset = KeyboardPalette(
     id: "sunset", name: "Sunset", vibe: "Warm and loud",
     surface: Color(hex: 0x2B1912), key: Color(hex: 0x4B2B20), keyDark: Color(hex: 0x3B2119),
-    keyText: Color(hex: 0xFFEFE6), popupFill: Color(hex: 0x4B2B20))
+    keyText: Color(hex: 0xFFEFE6), keyShadow: Color.black.opacity(0.4), popupFill: Color(hex: 0x4B2B20))
 
   static let all: [KeyboardPalette] = [ink, paper, lavender, mint, midnight, sunset]
 

@@ -19,8 +19,6 @@ struct HomeView: View {
   @AppStorage(StyleProfileStore.activeDefaultsKey) private var activeRaw = ""
   private let styles = StyleProfileStore()
 
-  private static let orbSize: CGFloat = 112
-
   private var isSetUp: Bool { coordinator.apiKey.hasAPIKey && microphoneGranted && keyboardSeen }
   private var profiles: [StyleProfile] { styles.profiles(decoding: profilesRaw) }
   private var activeStyle: StyleProfile? { StyleProfileStore.active(in: profiles, id: activeRaw) }
@@ -54,16 +52,11 @@ struct HomeView: View {
       }
       .sheet(isPresented: $showsKeyEntry) { KeyEntryView(apiKey: coordinator.apiKey) }
       .sheet(isPresented: $showsSettings) { SettingsView(coordinator: coordinator) }
-      .sheet(item: Binding(get: { coordinator.pendingTermPack }, set: { coordinator.pendingTermPack = $0 })) {
-        ImportTermsView(pack: $0)
-      }
-      .alert(
-        "Couldn't read that list",
-        isPresented: Binding(get: { coordinator.termPackUnreadable }, set: { coordinator.termPackUnreadable = $0 })
+      .sheet(
+        isPresented: Binding(
+          get: { coordinator.pendingTermPack != nil }, set: { if !$0 { coordinator.pendingTermPack = nil } })
       ) {
-        Button("OK") {}
-      } message: {
-        Text("It isn't a Blurt key-term list, or it's too big.")
+        if let pack = coordinator.pendingTermPack { ImportTermsView(pack: pack) }
       }
       .onChange(of: scenePhase) { _, phase in
         if phase == .active { refreshStatus() }
@@ -80,18 +73,19 @@ struct HomeView: View {
 
   // MARK: - The orb and the listening state
 
+  private var level: CGFloat { CGFloat(coordinator.level) }
   private var isRecording: Bool { coordinator.phase == .recording }
   private var orbWorking: Bool { coordinator.window.isOpen || coordinator.phase.isCapturing }
 
   private var hero: some View {
     VStack(spacing: 18) {
-      // The keyboard's orb, larger: its perimeter circles slowly at rest and
-      // quickens while the mic is open or a dictation is in flight.
-      BrandOrb(
-        diameter: Self.orbSize, period: orbWorking ? BrandOrb.workingPeriod : BrandOrb.restPeriod, ringWidth: 4,
-        animated: !reduceMotion
-      )
-      .padding(.top, 6)
+      BrandOrb(diameter: 112, animated: orbWorking && !reduceMotion, ringWidth: 2)
+        .shadow(
+          color: BlurtBrand.greenOnDark.opacity(isRecording ? 0.35 + 0.45 * level : 0),
+          radius: isRecording ? 14 + 30 * level : 0
+        )
+        .animation(.easeOut(duration: 0.08), value: level)
+        .padding(.top, 6)
       VStack(spacing: 4) {
         Text(heroTitle).font(.title2.weight(.semibold)).multilineTextAlignment(.center)
         Text(heroSubtitle).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
@@ -130,10 +124,6 @@ struct HomeView: View {
         Text("Blurt needs the microphone. Allow it in Settings.")
           .font(.footnote).foregroundStyle(BlurtBrand.errorOrange)
       }
-      if coordinator.needsKey {
-        Text("Add your API key first (Settings → Account).")
-          .font(.footnote).foregroundStyle(BlurtBrand.errorOrange)
-      }
     }
     .padding(20)
     .frame(maxWidth: .infinity)
@@ -157,63 +147,11 @@ struct HomeView: View {
       return "Open the mic so the Blurt keyboard can dictate anywhere you type."
     }
     if let until = coordinator.window.until, until != .distantFuture {
-      return "Until \(until.formatted(date: .omitted, time: .shortened)) · tap the orb on the Blurt keyboard."
+      return "Until \(until.formatted(date: .omitted, time: .shortened)) · tap the mic on the Blurt keyboard."
     }
-    return "Until you stop it · tap the orb on the Blurt keyboard."
+    return "Until you stop it · tap the mic on the Blurt keyboard."
   }
 
-  // MARK: - Setup
-
-  private var setupCard: some View {
-    VStack(alignment: .leading, spacing: 14) {
-      Text("Set up Blurt").font(.headline)
-      SetupRow(done: coordinator.apiKey.hasAPIKey, title: "Sign in with AssemblyAI") {
-        VStack(alignment: .leading, spacing: 6) {
-          Text("Coming soon — sign-in needs the AssemblyAI login service.")
-            .font(.footnote).foregroundStyle(.secondary)
-          #if DEBUG
-            Button("Use an API key instead") { showsKeyEntry = true }
-          #endif
-        }
-      }
-      SetupRow(done: microphoneGranted, title: "Allow the microphone") {
-        if AVAudioApplication.shared.recordPermission == .denied {
-          // iOS asks once; after a refusal only Settings can change it.
-          Button("Allow in Settings") { openAppSettings() }
-        } else {
-          Button("Allow") {
-            Task {
-              _ = await AVAudioApplication.requestRecordPermission()
-              refreshStatus()
-            }
-          }
-        }
-      }
-      SetupRow(done: keyboardSeen, title: "Add the Blurt keyboard") {
-        VStack(alignment: .leading, spacing: 6) {
-          Text(
-            "Settings → Keyboards: turn on Blurt and Allow Full Access. "
-              + "Full Access is what lets the keyboard send your words to Blurt."
-          )
-          .font(.footnote).foregroundStyle(.secondary)
-          Button("Open Settings") { openAppSettings() }
-        }
-      }
-    }
-    .padding(20)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .card()
-  }
-
-  private func openAppSettings() {
-    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-    UIApplication.shared.open(url)
-  }
-}
-
-// The style chips, the recent cards and the footer, as an extension so the
-// struct's own body stays within the lint budget.
-extension HomeView {
   // MARK: - Styles
 
   private var styleChips: some View {
@@ -286,6 +224,49 @@ extension HomeView {
     }
     .font(.caption)
     .padding(.top, 4)
+  }
+
+  // MARK: - Setup
+
+  private var setupCard: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      Text("Set up Blurt").font(.headline)
+      SetupRow(done: coordinator.apiKey.hasAPIKey, title: "Sign in with AssemblyAI") {
+        VStack(alignment: .leading, spacing: 6) {
+          Text("Coming soon — sign-in needs the AssemblyAI login service.")
+            .font(.footnote).foregroundStyle(.secondary)
+          #if DEBUG
+            Button("Use an API key instead") { showsKeyEntry = true }
+          #endif
+        }
+      }
+      SetupRow(done: microphoneGranted, title: "Allow the microphone") {
+        Button("Allow") {
+          Task {
+            await coordinator.startListening()
+            refreshStatus()
+          }
+        }
+      }
+      SetupRow(done: keyboardSeen, title: "Add the Blurt keyboard") {
+        VStack(alignment: .leading, spacing: 6) {
+          Text(
+            "Settings → Keyboards: turn on Blurt and Allow Full Access. "
+              + "Full Access is what lets the keyboard send your words to Blurt."
+          )
+          .font(.footnote).foregroundStyle(.secondary)
+          Button("Open Settings") { openAppSettings() }
+        }
+      }
+    }
+    .padding(20)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .card()
+  }
+
+  private func openAppSettings() {
+    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+    UIApplication.shared.open(url)
   }
 }
 

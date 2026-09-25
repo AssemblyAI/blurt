@@ -61,6 +61,7 @@ struct AddTermKey: View {
         .foregroundStyle(model.termSavedAt == nil ? palette.keyText.opacity(0.7) : BlurtBrand.greenOnDark)
         .frame(width: 32, height: 32)
         .background(Circle().fill(palette.keyDark))
+        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
         .contentTransition(.symbolEffect(.replace))
     }
     .buttonStyle(KeyPressStyle())
@@ -95,6 +96,7 @@ private struct TermField: View {
       .frame(maxWidth: .infinity)
       .frame(height: 36)
       .background(Capsule().fill(palette.keyDark))
+      .overlay(Capsule().strokeBorder(BlurtBrand.greenOnDark.opacity(0.6), lineWidth: 1))
       .accessibilityElement(children: .ignore)
       .accessibilityLabel("Key term: \(model.termDraft ?? "")")
       round("checkmark", tint: BlurtBrand.greenOnDark) { model.saveTerm() }
@@ -111,6 +113,7 @@ private struct TermField: View {
         .foregroundStyle(tint)
         .frame(width: 32, height: 32)
         .background(Circle().fill(palette.keyDark))
+        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
     }
     .buttonStyle(KeyPressStyle())
   }

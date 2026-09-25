@@ -103,13 +103,13 @@ struct PanelView: View {
 /// The mic key is the brand orb, and it says everything without a word or a
 /// glyph. Finger down starts, finger up decides tap (latched) or hold
 /// (push-to-talk) — `KeyboardModel` runs the engine's gate. What it does:
-/// its perimeter circles slowly at rest; dimmed when Blurt isn't ready (no
-/// Full Access, or the app isn't listening; the tap opens Blurt); on a tap
-/// the perimeter quickens while the mic comes up; then the orb gives way to
-/// the live wave, flat on the surface, for as long as you talk; on the stop
-/// the orb returns with its perimeter quick while the words come; then a
-/// green ring for a moment when they landed, a clipboard on a green ring
-/// when they went to the clipboard instead, an orange ring and an
+/// dimmed when Blurt isn't ready (no Full Access, or the app isn't listening;
+/// the tap opens Blurt); on a tap the ring sweeps as the app's orb does while
+/// the mic comes up; then the orb grows sideways into a capsule holding the
+/// live wave for as long as you talk, glowing with your voice; on the stop it
+/// shrinks back to the circle with the ring sweeping while the words come;
+/// then a green ring for a moment when they landed, a clipboard on a green
+/// ring when they went to the clipboard instead, an orange ring and an
 /// exclamation mark when something failed. Each also has its haptic.
 struct MicKey: View {
   var model: KeyboardModel
@@ -120,30 +120,33 @@ struct MicKey: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
+    let level = CGFloat(model.snapshot.level)
     let width = isRecording ? expandedWidth : size
     ZStack {
+      Capsule()
+        .fill(BlurtBrand.orbGradient)
+        .overlay { ring }
+        .saturation(isReady ? 1 : 0.35)
+        .opacity(isReady ? 1 : 0.8)
       if isRecording {
-        // The wave, flat on the surface: no container, no gloss.
-        WaveformMeter(level: Float(model.snapshot.level), animated: !reduceMotion, color: BlurtBrand.greenOnDark)
-          .frame(width: expandedWidth, height: size * 0.55)
-          .transition(.opacity.combined(with: .scale(scale: 0.6)))
-      } else {
-        BrandOrb(
-          diameter: size, period: isWorking ? BrandOrb.workingPeriod : BrandOrb.restPeriod,
-          ringWidth: max(2, size * 0.04), ringColor: ringColor, animated: !reduceMotion
-        )
-        .saturation(isReady ? 1 : 0.3)
-        .opacity(isReady ? 1 : 0.7)
-        .transition(.opacity.combined(with: .scale(scale: 0.8)))
+        WaveformMeter(level: Float(model.snapshot.level), animated: !reduceMotion, color: .white.opacity(0.92))
+          .frame(width: expandedWidth - size * 0.7, height: size * 0.5)
+          .transition(.opacity)
       }
       if let glyph {
         Image(systemName: glyph)
           .font(.system(size: size * 0.34, weight: .semibold))
           .foregroundStyle(.white)
+          .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
           .transition(.opacity)
       }
     }
     .frame(width: width, height: size)
+    .shadow(
+      color: BlurtBrand.greenOnDark.opacity(isRecording ? 0.35 + 0.45 * level : 0),
+      radius: isRecording ? size * 0.1 + level * size * 0.25 : 0
+    )
+    .animation(.easeOut(duration: 0.08), value: level)
     .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: isRecording)
     .animation(.easeInOut(duration: 0.15), value: model.snapshot.state)
     .scaleEffect(pressed ? 0.94 : 1)
@@ -196,6 +199,27 @@ struct MicKey: View {
 
   private static func travelled(_ value: DragGesture.Value) -> Bool {
     abs(value.translation.width) > 24 || abs(value.translation.height) > 24
+  }
+
+  /// The ring: the app orb's sweep (one turn per 1.6 s, engine geometry)
+  /// while the mic comes up and while the words come; still, and solid green
+  /// or orange, for a notice; still on the capsule while recording.
+  @ViewBuilder private var ring: some View {
+    let width: CGFloat = isWorking || isNotice ? 2 : 1
+    if isWorking, !isRecording, !reduceMotion {
+      TimelineView(.animation(minimumInterval: keyboardAnimationInterval)) { timeline in
+        Capsule()
+          .strokeBorder(BlurtBrand.orbRingGradient, lineWidth: width)
+          .rotationEffect(
+            .degrees(
+              MeterBarGeometry.rotationDegrees(
+                time: timeline.date.timeIntervalSinceReferenceDate, period: BrandOrb.period)))
+      }
+    } else if let ringColor {
+      Capsule().strokeBorder(ringColor, lineWidth: width)
+    } else {
+      Capsule().strokeBorder(BlurtBrand.orbRingGradient, lineWidth: width)
+    }
   }
 
   private var isReady: Bool { model.isReady }
@@ -318,10 +342,17 @@ struct KeyPress: ViewModifier {
 }
 
 extension View {
-  /// The cap under a key's legend: the palette's fill and the corner radius,
-  /// nothing else — flat.
+  /// The cap under a key's legend: the palette's fill, the system keyboard's
+  /// corner radius and 1 pt drop, and a hairline so the cap reads on ink.
   func keyCap(_ fill: Color, palette: KeyboardPalette) -> some View {
-    background(fill, in: RoundedRectangle(cornerRadius: KeyboardPalette.keyRadius))
+    background {
+      RoundedRectangle(cornerRadius: KeyboardPalette.keyRadius)
+        .fill(fill)
+        .shadow(color: palette.keyShadow, radius: 0, y: 1)
+    }
+    .overlay {
+      RoundedRectangle(cornerRadius: KeyboardPalette.keyRadius).strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+    }
   }
 }
 
