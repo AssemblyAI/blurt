@@ -2,15 +2,14 @@ import SwiftUI
 
 /// Picks the layout the user chose. All three share `StatusPill`, `MicKey` and
 /// `KeyCap`, and the same model underneath; they differ in how much keyboard
-/// surrounds the mic. The look (`KeyboardTheme`) decides the surface and the
-/// keys: Blurt's ink in every appearance — it floats over whichever app the
-/// user is typing in, like the Mac pill — or the iPhone's own keyboard, light
-/// or dark with that app.
+/// surrounds the mic. The surface is Blurt's ink in every appearance — it
+/// floats over whichever app the user is typing in, like the Mac pill — at
+/// the iPhone keyboard's own spacing.
 struct KeyboardRootView: View {
   var model: KeyboardModel
 
   /// The keyboard's top and bottom margin: the arithmetic in
-  /// `KeyboardLayout.height` is built on it and the theme's row gap.
+  /// `KeyboardLayout.height` is built on it and the palette's row gap.
   static let verticalMargin: CGFloat = 8
 
   var body: some View {
@@ -27,13 +26,10 @@ struct KeyboardRootView: View {
           .transition(flip)
       }
     }
-    .padding(.horizontal, model.theme.margin)
+    .padding(.horizontal, KeyboardPalette.margin)
     .padding(.vertical, Self.verticalMargin)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(model.palette.surface)
-    .overlay(alignment: .bottom) {
-      if model.layout == .panel { PageDots(count: 2, current: model.panelShowsKeys ? 1 : 0).padding(.bottom, 2) }
-    }
     .clipped()
     .environment(\.keyboardPalette, model.palette)
     .simultaneousGesture(swipe, including: model.layout == .panel ? .all : .subviews)
@@ -59,24 +55,6 @@ struct KeyboardRootView: View {
         guard abs(dx) > 48, abs(dx) > abs(value.translation.height) * 1.5 else { return }
         model.flipPanel(towardsLeading: dx < 0)
       }
-  }
-}
-
-/// The carousel's page indicator.
-struct PageDots: View {
-  let count: Int
-  let current: Int
-  @Environment(\.keyboardPalette) private var palette
-
-  var body: some View {
-    HStack(spacing: 6) {
-      ForEach(0..<count, id: \.self) { index in
-        Circle()
-          .fill(palette.keyText.opacity(index == current ? 0.9 : 0.3))
-          .frame(width: 5, height: 5)
-      }
-    }
-    .accessibilityHidden(true)
   }
 }
 
@@ -240,30 +218,26 @@ struct KeyCap: View {
 }
 
 extension View {
-  /// The cap under a key's legend: the palette's fill and radius, the system
-  /// look's 1 pt drop, and the ink look's hairline.
+  /// The cap under a key's legend: the palette's fill, the system keyboard's
+  /// corner radius and 1 pt drop, and a hairline so the cap reads on ink.
   func keyCap(_ fill: Color, palette: KeyboardPalette) -> some View {
     background {
-      RoundedRectangle(cornerRadius: palette.keyRadius)
+      RoundedRectangle(cornerRadius: KeyboardPalette.keyRadius)
         .fill(fill)
-        .shadow(color: palette.keyShadow ?? .clear, radius: 0, y: palette.keyShadow == nil ? 0 : 1)
+        .shadow(color: palette.keyShadow, radius: 0, y: 1)
     }
     .overlay {
-      if palette.keyShadow == nil {
-        RoundedRectangle(cornerRadius: palette.keyRadius).strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
-      }
+      RoundedRectangle(cornerRadius: KeyboardPalette.keyRadius).strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
     }
   }
 }
 
-/// A modifier key darkens while the finger is on it, the way the system's do,
-/// instead of the default button dimming; on the ink look it lightens.
+/// A key lightens while the finger is on it, the way the system's change
+/// shade, instead of the default button dimming.
 struct KeyPressStyle: ButtonStyle {
-  @Environment(\.keyboardPalette) private var palette
-
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .brightness(configuration.isPressed ? (palette.keyShadow == nil ? 0.15 : -0.12) : 0)
+      .brightness(configuration.isPressed ? 0.15 : 0)
       .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
   }
 }

@@ -5,10 +5,8 @@
   /// reference, and the way a screenshot of the keyboard is taken without
   /// tapping through Notes. Debug builds only, reached by launch argument:
   ///
-  ///     -BlurtGallery <slimBar|panel|full> <state>[,<state>…] [blurt|light|dark]
+  ///     -BlurtGallery <slimBar|panel|full> <state>[,<state>…]
   ///
-  /// The last word picks the look: Blurt's ink (the default), or the iPhone
-  /// keyboard in its light or dark palette.
   /// where a state is `off` (no Full Access), `start` (app not listening),
   /// `idle`, `connecting`, `recording`, `processing`, `pasted`, `copied` or
   /// `error`. `scripts/ios-sim.sh` passes `BLURT_LAUNCH_ARGS` through, so
@@ -35,7 +33,7 @@
             VStack(alignment: .leading, spacing: 4) {
               Text(row.caption).font(.caption.weight(.medium)).foregroundStyle(.secondary).padding(.horizontal)
               KeyboardRootView(model: row.model)
-                .frame(height: row.model.effectiveLayout.height(theme: row.model.theme))
+                .frame(height: row.model.effectiveLayout.height)
                 .clipped()
             }
           }
@@ -51,19 +49,14 @@
       guard let flag = arguments.firstIndex(of: "-BlurtGallery"), arguments.count > flag + 2,
         let layout = KeyboardLayout(rawValue: arguments[flag + 1])
       else { return [] }
-      let look = arguments.count > flag + 3 ? arguments[flag + 3] : "blurt"
       return arguments[flag + 2].split(separator: ",").map { name in
-        Row(
-          layout: layout, caption: "\(layout.rawValue) · \(name) · \(look)",
-          model: model(layout: layout, state: String(name), look: look))
+        Row(layout: layout, caption: "\(layout.rawValue) · \(name)", model: model(layout: layout, state: String(name)))
       }
     }
 
-    private static func model(layout: KeyboardLayout, state: String, look: String) -> KeyboardModel {
+    private static func model(layout: KeyboardLayout, state: String) -> KeyboardModel {
       let model = KeyboardModel()
       model.layout = layout
-      model.theme = look == "blurt" ? .blurt : .system
-      model.isDark = look == "dark"
       // `keys` shows the panel's carousel flipped to its keyboard page.
       model.panelShowsKeys = state == "keys"
       model.hasFullAccess = state != "off"

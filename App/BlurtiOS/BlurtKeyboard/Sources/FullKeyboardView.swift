@@ -3,7 +3,7 @@ import SwiftUI
 /// A complete keyboard with the mic as the main key, laid out as the iPhone's
 /// own: ten letter keys across at one width, the middle row centred, shift
 /// and delete flanking the bottom letters, then 123 · globe · space · mic ·
-/// return. Every key is 42 pt tall; the look sets the gaps. Letters pop up
+/// return, at the system keyboard's spacing. Every key is 42 pt tall. Letters pop up
 /// while pressed, sentences capitalise themselves, a double space ends one.
 /// No autocorrect or suggestions yet. iOS swaps in its own keyboard for
 /// password and phone-number fields, so those never reach here.
@@ -15,14 +15,14 @@ struct FullKeyboardView: View {
 
   var body: some View {
     GeometryReader { geo in
-      let gap = model.theme.keyGap
+      let gap = KeyboardPalette.keyGap
       // Ten keys and nine gaps across the row.
       let keyWidth = (geo.size.width - 9 * gap) / 10
       // Shift and delete take what seven letters leave, standing a little
       // further from them than letters stand from each other.
       let sideGap = gap * 2
       let sideWidth = (geo.size.width - 7 * keyWidth - 6 * gap - 2 * sideGap) / 2
-      VStack(spacing: model.theme.rowGap) {
+      VStack(spacing: KeyboardPalette.rowGap) {
         StatusPill(model: model)
           .frame(maxWidth: 260)
         ForEach(Array(rows.enumerated()), id: \.offset) { index, row in

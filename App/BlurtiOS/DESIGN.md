@@ -30,31 +30,31 @@ Layouts: `slimBar`, `panel`, `full`. States: `off` (no Full Access), `start`
 gallery is `BlurtiOS/Sources/KeyboardGalleryView.swift`, debug builds only;
 the keyboard's sources are compiled into the app for it (`project.yml`).
 
-## Two looks (`KeyboardTheme`, `BlurtKeyboard/Sources/KeyboardPalette.swift`)
+## One look, the iPhone's spacing (`BlurtKeyboard/Sources/KeyboardPalette.swift`)
 
-People are used to the iPhone's keyboard, so the keys can look exactly like it.
-The **look** is a setting beside the layout, in the app's Keyboard section:
+The keys sit exactly where the iPhone keyboard's do, so nobody's fingers are
+thrown off: 6 pt between keys, 11 pt between rows, 3 pt at the edges, 5 pt
+corners, a 1 pt drop under every key. The colours are Blurt's — the ink
+surface and the tokens below — in every appearance, for the reason the Mac
+pill is: the keyboard floats over whichever app the user is typing in.
+`KeyboardPalette` is one value for now and the seam themes plug into later.
 
-| Look     | Surface and keys                                                                                                                                                                               |
-| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `blurt`  | The ink surface and tokens below, in every appearance. Gaps 5, rows 8, margin 8.                                                                                                               |
-| `system` | The iPhone keyboard's own palette, light or dark with the app being typed in (its field's `keyboardAppearance`, else the app's style). Gaps 6, rows 11, margin 3, a 1 pt drop under every key. |
-
-System light: surface `#D1D5DB`, letter keys white, modifiers `#ADB3BC`, drop
-`#898A8D`, black legends. System dark: surface `#2B2B2B`, keys `#6B6B6B`,
-modifiers `#464646`, drop `#0D0D0D`, white legends. Radius 5 (Blurt: 6). The
-status pill and the orb stay Blurt's in both — the look is about the keys.
-The gallery's last argument picks it: `blurt` (default), `light`, `dark`.
-
-The full layout follows the iPhone's geometry in both looks: ten letter keys
-across at one width (`(width − 9·gap) / 10`), the middle row centred, shift
-and delete taking what seven letters leave (twice the gap away from them),
-then 123 · globe · space · mic · return, return two modifiers wide. Letters
-pop up while pressed (a 32 pt copy 58 pt above the key, typed on release);
-shift comes on by itself at the start of a sentence — or of every word, or
-always — as the field's `autocapitalizationType` asks, and goes off after
-one letter; a second space within 450 ms of the first, after a word, becomes
+The full layout follows the iPhone's geometry: ten letter keys across at one
+width (`(width − 9·gap) / 10`), the middle row centred, shift and delete
+taking what seven letters leave (twice the gap away from them), then 123 ·
+globe · space · mic · return, return two modifiers wide. Letters pop up
+while pressed (a 32 pt copy 58 pt above the key, typed on release); shift
+comes on by itself at the start of a sentence — or of every word, or always
+— as the field's `autocapitalizationType` asks, and goes off after one
+letter; a second space within 450 ms of the first, after a word, becomes
 ". ". Not yet: autocorrect and the suggestion bar.
+
+**Later: themes.** Users will pick their own. The iPhone keyboard's own
+palettes are the first two to offer, and were measured for it: light —
+surface `#D1D5DB`, letter keys white, modifiers `#ADB3BC`, drop `#898A8D`,
+black legends; dark — surface `#2B2B2B`, keys `#6B6B6B`, modifiers
+`#464646`, drop `#0D0D0D`, white legends; both follow the field's
+`keyboardAppearance`, else the app's style.
 
 ## Hands-free
 
@@ -133,13 +133,13 @@ while pressed rather than dimming.
 
 ## Layouts and their heights (`KeyboardLayout.height`)
 
-Top and bottom margin 8 (`KeyboardRootView`); the look sets the row gap and side margin.
+Top and bottom margin 8 (`KeyboardRootView`); 11 between rows and 3 at the sides (`KeyboardPalette`).
 
-| Layout    | Rows                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Height                                 |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| `slimBar` | globe · pill · mic 44 · delete · return                                                                                                                                                                                                                                                                                                                                                                                                                                         | 60                                     |
-| `panel`   | pill 36 · mic 96 (cancel beside it while in flight) · space row 42, gaps 12. A two-page carousel: a horizontal swipe in either direction, as often as you like, flips between the mic panel and the full keyboard (the page slides the way the finger went; two page dots at the bottom; the keyboard resizes with it; back to the mic each time the keyboard appears). Keys ignore a touch that travelled more than 12 pt, the mic cancels one that travelled more than 24 pt. | 216, or the full layout's when flipped |
-| `full`    | pill 36 · three letter rows 42 · globe/123/space/mic/return 42; `220 + 4·rowGap`                                                                                                                                                                                                                                                                                                                                                                                                | 252 Blurt, 264 iPhone                  |
+| Layout    | Rows                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Height                   |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `slimBar` | globe · pill · mic 44 · delete · return                                                                                                                                                                                                                                                                                                                                                                                                                     | 60                       |
+| `panel`   | pill 36 · mic 96 (cancel beside it while in flight) · space row 42, gaps 12. A two-page carousel: a horizontal swipe in either direction, as often as you like, flips between the mic panel and the full keyboard; the page slides the way the finger went, the keyboard resizes with it, and it is back to the mic each time the keyboard appears. Keys ignore a touch that travelled more than 12 pt, the mic cancels one that travelled more than 24 pt. | 216, or 264 when flipped |
+| `full`    | pill 36 · three letter rows 42 · globe/123/space/mic/return 42; `220 + 4·11`                                                                                                                                                                                                                                                                                                                                                                                | 264                      |
 
 The pill is capped at 260 pt wide in the panel and full layouts, flexible in
 the slim bar. The globe key appears only when iOS says another keyboard is

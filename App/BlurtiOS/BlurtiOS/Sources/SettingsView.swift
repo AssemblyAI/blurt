@@ -2,13 +2,12 @@ import BlurtEngine
 import SwiftUI
 
 /// Everything adjustable, grouped the way the Mac's Settings are: the keyboard
-/// (layout, look, hands-free), listening, transcription, the account, and
+/// (layout, hands-free), listening, transcription, the account, and
 /// about. Presented from the home screen's gear.
 struct SettingsView: View {
   var coordinator: DictationCoordinator
   @Environment(\.dismiss) private var dismiss
   @State private var layout = SharedStore.layout
-  @State private var theme = SharedStore.theme
   @State private var autoDictate = SharedStore.autoDictate
   @State private var windowMinutes = SharedStore.windowMinutes
   @State private var showsKeyEntry = false
@@ -43,12 +42,6 @@ struct SettingsView: View {
       .pickerStyle(.segmented)
       .onChange(of: layout) { _, value in SharedStore.layout = value }
       Text(layout.summary).font(.footnote).foregroundStyle(.secondary)
-      Picker("Look", selection: $theme) {
-        ForEach(KeyboardTheme.allCases) { Text($0.title).tag($0) }
-      }
-      .pickerStyle(.segmented)
-      .onChange(of: theme) { _, value in SharedStore.theme = value }
-      Text(theme.summary).font(.footnote).foregroundStyle(.secondary)
       Toggle("Hands-free", isOn: $autoDictate)
         .onChange(of: autoDictate) { _, value in SharedStore.autoDictate = value }
     } header: {

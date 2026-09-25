@@ -31,9 +31,6 @@ final class KeyboardModel {
   var panelShowsKeys = false
   /// The direction of the last flip, so the pages slide the way the finger went.
   var flipTowardsLeading = false
-  var theme: KeyboardTheme = .blurt
-  /// Whether the app being typed in wants a dark keyboard, for the iPhone look.
-  var isDark = false
   var snapshot = PhaseSnapshot.idle
   var isListening = false
   var hasFullAccess = false
@@ -52,7 +49,8 @@ final class KeyboardModel {
 
   var proxy: (any UITextDocumentProxy)? { controller?.textDocumentProxy }
 
-  var palette: KeyboardPalette { .resolve(theme: theme, dark: isDark) }
+  /// One palette for now; themes are a later feature.
+  var palette: KeyboardPalette { .blurt }
 
   /// What is actually on screen: the panel's carousel may be showing its keys.
   var effectiveLayout: KeyboardLayout { layout == .panel && panelShowsKeys ? .full : layout }
@@ -95,14 +93,12 @@ final class KeyboardModel {
   func appeared() {
     hasFullAccess = controller?.hasFullAccess ?? false
     needsGlobe = controller?.needsInputModeSwitchKey ?? true
-    readAppearance()
     updateShift()
     // Without Full Access the App Group is out of reach: the keyboard still
     // types, and says what it needs (see `KeyboardRootView`), but nothing below
     // can run.
     guard hasFullAccess else { return }
     layout = SharedStore.layout
-    theme = SharedStore.theme
     panelShowsKeys = false
     SharedStore.keyboardEverSeen = true
     refresh()
@@ -121,16 +117,6 @@ final class KeyboardModel {
     perform(gate.modifierUp(at: elapsed))
   }
 
-  /// The iPhone look follows the app being typed in: what its text field asks
-  /// for, or failing that the app's own light or dark appearance.
-  private func readAppearance() {
-    switch proxy?.keyboardAppearance {
-    case .dark: isDark = true
-    case .light: isDark = false
-    default: isDark = controller?.traitCollection.userInterfaceStyle == .dark
-    }
-  }
-
   func disappeared() {
     heartbeat?.cancel()
     heartbeat = nil
@@ -140,9 +126,8 @@ final class KeyboardModel {
   }
 
   /// The cursor moved or the text around it changed, including by our own
-  /// typing: re-read what the field wants and where the sentence stands.
+  /// typing: re-read where the sentence stands.
   func contextChanged() {
-    readAppearance()
     updateShift()
   }
 
