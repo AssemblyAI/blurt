@@ -32,6 +32,8 @@ final class KeyboardModel {
   /// The direction of the last flip, so the pages slide the way the finger went.
   var flipTowardsLeading = false
   var snapshot = PhaseSnapshot.idle
+  /// When this keyboard last put the words into the field — the orb's drop.
+  var resultLandedAt: Date?
   /// The key term being typed on the keys, while the voice bar is a field;
   /// nil otherwise. See `beginAddingTerm`.
   var termDraft: String?

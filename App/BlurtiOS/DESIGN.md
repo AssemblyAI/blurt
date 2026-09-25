@@ -37,14 +37,18 @@ the keyboard's sources are compiled into the app for it (`project.yml`).
 The brand artwork — a green beam into the prism, a violet, starlit one out —
 as the orb's own story. The mic key and the home hero are filled by a 3 × 3
 `MeshGradient` whose edge and centre points drift on slow sines (further
-with the voice level), under a soft upper-left light, animated film grain (a
-seeded scatter of faint dots, new each frame at 20 Hz) and, when the words
-land, six four-point sparkles twinkling. Moods: `off` and `idle` (the brand
-mix), `listening(level:)` (green, brighter with the voice), `working`
-(violet), `done` (violet and light, sparkles). Mood changes cross-fade over
-0.7 s. Under Reduce Motion everything holds still. The ring stays the Mac
-orb's. Not merged: judge it on the simulator (`-BlurtGallery panel
-idle,recording,processing,pasted`, `-BlurtStartListening` for the hero).
+with the voice level), under a soft upper-left light and animated film grain
+(a seeded scatter of faint dots, new each frame at 20 Hz). The orb lives
+**green**: calm at rest (`idle`, `working`, `off`), greener and brighter with
+the voice (`listening(level:)`). The moment the words land in the field —
+`resultLandedAt` on the keyboard, the phase reaching pasted or copied on the
+home screen — a **violet drop** falls in: a bloom that grows from the centre
+(the mesh soaks violet centre-first, corners least), six four-point sparkles
+bursting a beat apart, up in 0.35 s, held to 0.6 s, flowing back out into the
+green by 1.6 s. It lands with the success haptic. Under Reduce Motion the
+fluid holds still and the drop simply fades. The ring stays the Mac orb's.
+Not merged: judge it on the simulator (`-BlurtGallery panel
+idle,recording,landed`; `-BlurtStartListening` for the hero).
 
 ## Themes, at the iPhone's spacing (`BlurtKeyboard/Sources/KeyboardPalette.swift`)
 

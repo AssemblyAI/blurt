@@ -15,6 +15,8 @@ struct HomeView: View {
   @State private var keyboardSeen = SharedStore.keyboardEverSeen
   @State private var showsKeyEntry = false
   @State private var showsSettings = false
+  /// When the last dictation's words landed — the hero's drop.
+  @State private var landedAt: Date?
   @AppStorage(StyleProfileStore.defaultsKey) private var profilesRaw = ""
   @AppStorage(StyleProfileStore.activeDefaultsKey) private var activeRaw = ""
   private let styles = StyleProfileStore()
@@ -66,6 +68,12 @@ struct HomeView: View {
       .onChange(of: scenePhase) { _, phase in
         if phase == .active { refreshStatus() }
       }
+      .onChange(of: coordinator.phase) { _, phase in
+        switch phase.overlayState {
+        case .pasted, .noTarget: landedAt = Date()
+        default: break
+        }
+      }
     }
     .tint(BlurtBrand.accent)
   }
@@ -85,7 +93,7 @@ struct HomeView: View {
 
   private var hero: some View {
     VStack(spacing: 18) {
-      PrismOrb(mood: heroMood, animated: !reduceMotion)
+      PrismOrb(mood: heroMood, landedAt: landedAt, animated: !reduceMotion)
         .frame(width: Self.orbSize, height: Self.orbSize)
         .clipShape(Circle())
         .overlay { HeroRing(animated: orbWorking && !reduceMotion) }
@@ -147,11 +155,10 @@ struct HomeView: View {
   private var heroMood: PrismOrb.Mood {
     guard coordinator.window.isOpen else { return .off }
     switch coordinator.phase.overlayState {
-    case .idle, .error: return .idle
+    case .idle, .error, .pasted, .noTarget: return .idle
     case .connecting: return .listening(level: 0)
     case .recording: return .listening(level: coordinator.level)
     case .processing: return .working
-    case .pasted, .noTarget: return .done
     }
   }
 

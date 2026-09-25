@@ -56,6 +56,7 @@ extension KeyboardModel {
     // Joined against the live text before the cursor, not the press-time
     // snapshot: the user may have typed since.
     proxy.insertText(InsertionSeparator.withLeadingSeparator(result.text, after: proxy.documentContextBeforeInput))
+    resultLandedAt = Date()
     // Not typing, so not the term field's to claim.
     if termDraft != nil { termHostBaseline = proxy.documentContextBeforeInput ?? "" }
   }

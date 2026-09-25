@@ -3,55 +3,76 @@ import SwiftUI
 
 /// The brand's artwork in motion. In the illustration a green beam goes into
 /// the prism and a violet, starlit one comes out: green is the input, the
-/// voice; violet is the magic, the words. The orb tells that story as it
-/// works — leaning green and swelling with the voice while you talk, turning
-/// violet while the words are made, finishing violet with a scatter of
-/// sparkles when they land. Liquid in its motion (a mesh gradient whose
-/// points drift, more with the voice), airy in its look (soft light, low
-/// contrast), and matte under film grain, as the artwork is.
+/// voice; violet is the magic, the words. The orb lives green — calm at rest,
+/// swelling with the voice while you talk — and the moment the words land in
+/// the field a violet drop falls into it: a glittering pulse that blooms from
+/// the centre with the haptic, then flows back out into the green. Liquid in
+/// its motion (a mesh gradient whose points drift), airy in its look (soft
+/// light, low contrast), matte under film grain, as the artwork is.
 ///
 /// A fill: the caller clips it to a circle or a capsule and puts the ring on
-/// top. Under Reduce Motion the fluid holds still and the grain is fixed.
+/// top. Under Reduce Motion the fluid holds still and the drop simply fades.
 struct PrismOrb: View {
   enum Mood: Equatable {
-    /// Blurt is not ready: the brand mix, dimmed by the caller.
+    /// Blurt is not ready: the calm green, dimmed by the caller.
     case off
-    /// Resting: the brand mix, breathing.
+    /// Resting: the calm green, breathing.
     case idle
-    /// The voice going in: green, moving with the level (0…1).
+    /// The voice going in: greener and moving with the level (0…1).
     case listening(level: Float)
-    /// The words being made: violet, working.
+    /// The words being made: the calm green, working.
     case working
-    /// The words landed: violet and light, with sparkles.
-    case done
   }
 
   var mood: Mood
+  /// When the words landed — the drop falls then and is gone 1.6 s later.
+  var landedAt: Date?
   var animated: Bool
+
+  /// The drop's life: up in 0.35 s, held to 0.6 s, gone by 1.6 s.
+  static let dropDuration: TimeInterval = 1.6
 
   var body: some View {
     TimelineView(.animation(minimumInterval: keyboardAnimationInterval, paused: !animated)) { timeline in
       let time = animated ? timeline.date.timeIntervalSinceReferenceDate : 0
+      let elapsed = landedAt.map { timeline.date.timeIntervalSince($0) } ?? .infinity
+      let drop = Self.dropAmount(at: elapsed)
       ZStack {
-        Rectangle().fill(mesh(at: time))
+        Rectangle().fill(mesh(at: time, drop: drop))
         // A soft light from the upper left, so the disc reads as a body, not
         // a flat swatch — airy, not glossy.
         Rectangle().fill(
           RadialGradient(
-            colors: [.white.opacity(0.32), .clear], center: UnitPoint(x: 0.3, y: 0.22), startRadius: 0,
+            colors: [.white.opacity(0.3), .clear], center: UnitPoint(x: 0.3, y: 0.22), startRadius: 0,
             endRadius: 110))
+        if drop > 0 {
+          Drop(amount: drop, elapsed: elapsed)
+          Sparkles(elapsed: elapsed)
+        }
         Grain(seed: animated ? Int(time * 24) : 7).opacity(0.5).blendMode(.overlay)
-        if case .done = mood { Sparkles(time: time) }
       }
     }
-    .animation(.easeInOut(duration: 0.7), value: mood)
+    .animation(.easeInOut(duration: 0.6), value: mood)
+  }
+
+  /// How much violet is in the orb `elapsed` seconds after the words landed:
+  /// a quick bloom, a moment held, a slow flow back to green.
+  static func dropAmount(at elapsed: TimeInterval) -> Double {
+    guard elapsed >= 0, elapsed < dropDuration else { return 0 }
+    func smooth(_ x: Double) -> Double {
+      let t = min(max(x, 0), 1)
+      return t * t * (3 - 2 * t)
+    }
+    if elapsed < 0.35 { return smooth(elapsed / 0.35) }
+    if elapsed < 0.6 { return 1 }
+    return 1 - smooth((elapsed - 0.6) / (dropDuration - 0.6))
   }
 
   // MARK: The fluid
 
   /// A 3 × 3 mesh. The corners stay put; the edge midpoints and the centre
   /// drift on slow sines, further with the voice.
-  private func mesh(at time: TimeInterval) -> MeshGradient {
+  private func mesh(at time: TimeInterval, drop: Double) -> MeshGradient {
     let level = CGFloat(self.level)
     let sway = 0.10 + 0.16 * level
     func drift(_ base: Float, _ phase: Double, _ speed: Double) -> Float {
@@ -62,6 +83,11 @@ struct PrismOrb: View {
       [0, drift(0.5, 1.7, 0.7)], [drift(0.5, 3.1, 1.1), drift(0.5, 0.6, 0.8)], [1, drift(0.5, 4.2, 0.6)],
       [0, 1], [drift(0.5, 2.3, 1.0), 1], [1, 1],
     ]
+    // The drop soaks the centre first and the corners least.
+    let soak: [Double] = [0.45, 0.75, 0.45, 0.75, 1, 0.75, 0.45, 0.75, 0.45]
+    let colors = zip(green, soak).map { base, weight in
+      base.mix(with: Palette.violet, by: drop * weight)
+    }
     return MeshGradient(width: 3, height: 3, points: points, colors: colors)
   }
 
@@ -70,47 +96,54 @@ struct PrismOrb: View {
     return 0
   }
 
-  /// Row-major, top to bottom. The brand gradient's own stops
-  /// (`BlurtBrand.orbGradient`), dealt differently per mood.
-  private var colors: [Color] {
+  /// Row-major, top to bottom: the green the orb lives in, with the brand's
+  /// pale lavender as the light on top so it stays airy.
+  private var green: [Color] {
     switch mood {
-    case .off, .idle:
+    case .off, .idle, .working:
       return [
-        Palette.white, Palette.lavender, Palette.periwinkle,
-        Palette.periwinkle, Palette.greenLight, Palette.violet,
-        Palette.green, Palette.greenLight, Palette.violet,
-      ]
-    case .listening(let level):
-      // More green the louder: the beam going in.
-      let bright = Color(
-        red: 0.40 + 0.3 * Double(level), green: 0.68 + 0.25 * Double(level), blue: 0.51 + 0.1 * Double(level))
-      return [
-        Palette.lavender, Palette.greenLight, Palette.lavender,
-        Palette.greenLight, bright, Palette.greenLight,
+        Palette.lavender, Palette.mist, Palette.lavender,
+        Palette.greenLight, Palette.greenLight, Palette.greenLight,
         Palette.green, Palette.greenLight, Palette.green,
       ]
-    case .working:
+    case .listening(let level):
+      // Greener and brighter the louder: the beam going in.
+      let bright = Palette.greenLight.mix(with: Palette.mist, by: 0.25 + 0.45 * Double(level))
       return [
-        Palette.lavender, Palette.periwinkle, Palette.lavender,
-        Palette.periwinkle, Palette.violet, Palette.periwinkle,
-        Palette.violet, Palette.periwinkle, Palette.violet,
-      ]
-    case .done:
-      return [
-        Palette.white, Palette.lavender, Palette.white,
-        Palette.lavender, Palette.periwinkle, Palette.lavender,
-        Palette.violet, Palette.periwinkle, Palette.violet,
+        Palette.mist, bright, Palette.mist,
+        Palette.greenLight, bright, Palette.greenLight,
+        Palette.green, Palette.greenLight, Palette.green,
       ]
     }
   }
 
   private enum Palette {
-    static let white = Color(red: 0.97, green: 0.96, blue: 1)
+    static let mist = Color(red: 0.86, green: 0.96, blue: 0.9)
     static let lavender = Color(red: 215 / 255, green: 211 / 255, blue: 244 / 255)
     static let periwinkle = Color(red: 176 / 255, green: 167 / 255, blue: 233 / 255)
     static let violet = Color(red: 57 / 255, green: 35 / 255, blue: 199 / 255)
     static let green = BlurtBrand.green
     static let greenLight = BlurtBrand.greenOnDark
+  }
+
+  /// The drop itself: a violet bloom that grows from the centre and thins as
+  /// it spreads, so the colour reads as poured in rather than switched.
+  private struct Drop: View {
+    let amount: Double
+    let elapsed: TimeInterval
+
+    var body: some View {
+      let spread = min(1, elapsed / 0.7)
+      Circle()
+        .fill(
+          RadialGradient(
+            colors: [Palette.violet.opacity(0.9), Palette.periwinkle.opacity(0.55), .clear],
+            center: .center, startRadius: 0, endRadius: 90)
+        )
+        .scaleEffect(0.15 + 1.6 * spread)
+        .opacity(amount * (1 - 0.5 * spread))
+        .blendMode(.plusLighter)
+    }
   }
 }
 
@@ -139,25 +172,27 @@ private struct Grain: View {
   }
 }
 
-/// The artwork's stars: a handful of four-point sparkles that twinkle round
-/// the orb while the words are landing.
+/// The artwork's stars: six four-point sparkles that burst once with the
+/// drop — each a beat after the last — and are gone with it.
 private struct Sparkles: View {
-  let time: TimeInterval
+  let elapsed: TimeInterval
 
-  private static let spots: [(x: CGFloat, y: CGFloat, size: CGFloat, phase: Double)] = [
-    (0.18, 0.28, 0.16, 0.0), (0.76, 0.2, 0.11, 1.3), (0.82, 0.62, 0.14, 2.6), (0.3, 0.74, 0.1, 3.7),
-    (0.58, 0.44, 0.08, 4.9), (0.5, 0.86, 0.12, 1.9),
+  private static let spots: [(x: CGFloat, y: CGFloat, size: CGFloat, delay: Double)] = [
+    (0.5, 0.5, 0.14, 0.05), (0.24, 0.3, 0.16, 0.15), (0.76, 0.22, 0.11, 0.25), (0.8, 0.64, 0.14, 0.32),
+    (0.3, 0.74, 0.1, 0.4), (0.56, 0.84, 0.12, 0.48),
   ]
 
   var body: some View {
     GeometryReader { geo in
       ForEach(Array(Self.spots.enumerated()), id: \.offset) { _, spot in
-        let pulse = max(0, sin(time * 2.4 + spot.phase))
+        let life = (elapsed - spot.delay) / 0.9
+        let up = min(max(life, 0), 1)
+        let shine = up < 0.3 ? up / 0.3 : max(0, 1 - (up - 0.3) / 0.7)
         Image(systemName: "sparkle")
           .font(.system(size: min(geo.size.width, geo.size.height) * spot.size, weight: .regular))
           .foregroundStyle(.white)
-          .opacity(0.35 + 0.65 * pulse)
-          .scaleEffect(0.7 + 0.5 * pulse)
+          .opacity(shine)
+          .scaleEffect(0.4 + 0.9 * shine)
           .position(x: geo.size.width * spot.x, y: geo.size.height * spot.y)
       }
     }

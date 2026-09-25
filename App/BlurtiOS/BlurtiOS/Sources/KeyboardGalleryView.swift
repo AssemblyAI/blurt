@@ -67,6 +67,9 @@
       // `term` the voice bar as the key-term field, mid-typing.
       model.panelShowsKeys = state == "keys"
       if state == "term" { model.termDraft = "Rizz" }
+      // `landed`: the words go in 2.6 s after launch, so a screenshot taken 3 s
+      // in (scripts/ios-sim.sh) catches the drop at its fullest.
+      if state == "landed" { model.resultLandedAt = Date().addingTimeInterval(2.6) }
       model.hasFullAccess = state != "off"
       model.isListening = state != "off" && state != "start"
       let phase: PhaseSnapshot.State =
