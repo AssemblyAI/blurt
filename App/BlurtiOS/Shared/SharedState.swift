@@ -20,6 +20,8 @@ nonisolated enum BlurtShared {
 
   nonisolated enum Key {
     static let layout = "keyboardLayout"
+    static let theme = "keyboardTheme"
+    static let autoDictate = "autoDictate"
     static let listeningUntil = "listeningUntil"
     static let windowMinutes = "listeningWindowMinutes"
     static let phase = "phase"
@@ -75,15 +77,47 @@ nonisolated enum KeyboardLayout: String, CaseIterable, Codable, Sendable, Identi
 
   /// The keyboard's height in points. Fixed per layout; the system keyboard is
   /// about 216 on a phone, which is what `panel` matches.
-  /// The keyboard's height on screen, from the layout's own rows: see
-  /// `App/BlurtiOS/DESIGN.md` for the arithmetic.
-  var height: CGFloat {
+  /// The keyboard's height on screen, from the layout's rows and the look's
+  /// spacing: see `App/BlurtiOS/DESIGN.md` for the arithmetic.
+  func height(theme: KeyboardTheme) -> CGFloat {
     switch self {
     case .slimBar: 60
     case .panel: 216
-    case .full: 252
+    case .full: 220 + 4 * theme.rowGap
     }
   }
+}
+
+/// How the keys look. The status pill and the orb are Blurt's in both; this is
+/// about the surface and the keys around them.
+nonisolated enum KeyboardTheme: String, CaseIterable, Codable, Sendable, Identifiable {
+  /// Blurt's own: the ink surface, warm-white legends.
+  case blurt
+  /// The iPhone's default keyboard, light or dark with the app being typed in,
+  /// for people who want nothing to change but the mic.
+  case system
+
+  var id: String { rawValue }
+
+  var title: String {
+    switch self {
+    case .blurt: "Blurt"
+    case .system: "iPhone"
+    }
+  }
+
+  var summary: String {
+    switch self {
+    case .blurt: "Blurt's ink and green."
+    case .system: "The keyboard you already know, light or dark with the app you're in. Only the mic is new."
+    }
+  }
+
+  /// The system keyboard's spacing (6 between keys, 11 between rows, 3 at the
+  /// edges) versus Blurt's tighter, flatter grid.
+  var keyGap: CGFloat { self == .system ? 6 : 5 }
+  var rowGap: CGFloat { self == .system ? 11 : 8 }
+  var margin: CGFloat { self == .system ? 3 : 8 }
 }
 
 // MARK: - Payloads
@@ -193,6 +227,18 @@ nonisolated enum SharedStore {
   static var layout: KeyboardLayout {
     get { KeyboardLayout(rawValue: defaults.string(forKey: BlurtShared.Key.layout) ?? "") ?? .panel }
     set { defaults.set(newValue.rawValue, forKey: BlurtShared.Key.layout) }
+  }
+
+  static var theme: KeyboardTheme {
+    get { KeyboardTheme(rawValue: defaults.string(forKey: BlurtShared.Key.theme) ?? "") ?? .blurt }
+    set { defaults.set(newValue.rawValue, forKey: BlurtShared.Key.theme) }
+  }
+
+  /// Hands-free: the keyboard starts a dictation the moment it appears in a
+  /// text field, so there is nothing to tap before talking.
+  static var autoDictate: Bool {
+    get { defaults.bool(forKey: BlurtShared.Key.autoDictate) }
+    set { defaults.set(newValue, forKey: BlurtShared.Key.autoDictate) }
   }
 
   /// How long a listening window stays open with nobody dictating, in minutes.

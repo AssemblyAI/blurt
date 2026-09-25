@@ -25,6 +25,9 @@ final class KeyboardModel {
   static let lexiconRefreshInterval: TimeInterval = 60 * 60
 
   var layout: KeyboardLayout = .panel
+  var theme: KeyboardTheme = .blurt
+  /// Whether the app being typed in wants a dark keyboard, for the iPhone look.
+  var isDark = false
   var snapshot = PhaseSnapshot.idle
   var isListening = false
   var hasFullAccess = false
@@ -38,8 +41,11 @@ final class KeyboardModel {
   @ObservationIgnored private let clockStart = ContinuousClock.now
   @ObservationIgnored private var lastResultID: UUID?
   @ObservationIgnored private var heartbeat: Task<Void, Never>?
+  @ObservationIgnored private var lastSpaceAt: ContinuousClock.Instant?
 
   var proxy: (any UITextDocumentProxy)? { controller?.textDocumentProxy }
+
+  var palette: KeyboardPalette { .resolve(theme: theme, dark: isDark) }
 
   /// Whether the phase leaves nothing in flight — the moments the gate has to
   /// be reset, since a dictation can end with no finger event to close it.
@@ -67,15 +73,39 @@ final class KeyboardModel {
   func appeared() {
     hasFullAccess = controller?.hasFullAccess ?? false
     needsGlobe = controller?.needsInputModeSwitchKey ?? true
+    readAppearance()
+    updateShift()
     // Without Full Access the App Group is out of reach: the keyboard still
     // types, and says what it needs (see `KeyboardRootView`), but nothing below
     // can run.
     guard hasFullAccess else { return }
     layout = SharedStore.layout
+    theme = SharedStore.theme
     SharedStore.keyboardEverSeen = true
     refresh()
     startHeartbeat()
     requestLexicon()
+    if SharedStore.autoDictate { autoStart() }
+  }
+
+  /// Hands-free: a dictation begins the moment the keyboard is up, as if the
+  /// mic had been tapped — the same synthetic tap through the engine's gate,
+  /// so it latches and the next real tap stops it. Only when the app is
+  /// listening and nothing is in flight; otherwise the pill says what to do.
+  private func autoStart() {
+    guard isListening, isSettled, gate.isIdle else { return }
+    perform(gate.modifierDown(at: elapsed))
+    perform(gate.modifierUp(at: elapsed))
+  }
+
+  /// The iPhone look follows the app being typed in: what its text field asks
+  /// for, or failing that the app's own light or dark appearance.
+  private func readAppearance() {
+    switch proxy?.keyboardAppearance {
+    case .dark: isDark = true
+    case .light: isDark = false
+    default: isDark = controller?.traitCollection.userInterfaceStyle == .dark
+    }
   }
 
   func disappeared() {
@@ -86,7 +116,33 @@ final class KeyboardModel {
     SharedStore.keyboardSeenAt = nil
   }
 
-  func contextChanged() {}
+  /// The cursor moved or the text around it changed, including by our own
+  /// typing: re-read what the field wants and where the sentence stands.
+  func contextChanged() {
+    readAppearance()
+    updateShift()
+  }
+
+  /// Auto-capitalisation, as the system keyboard does it: shift comes on at
+  /// the start of a sentence (or of every word, or always) according to what
+  /// the field asks for, and goes off after one letter.
+  private func updateShift() {
+    guard let proxy else { return }
+    let before = proxy.documentContextBeforeInput ?? ""
+    switch proxy.autocapitalizationType ?? .sentences {
+    case .none: break
+    case .allCharacters: shifted = true
+    case .words: shifted = before.isEmpty || before.last?.isWhitespace == true
+    case .sentences: shifted = Self.isSentenceStart(before)
+    @unknown default: break
+    }
+  }
+
+  private static func isSentenceStart(_ before: String) -> Bool {
+    let trimmed = before.reversed().drop { $0 == " " }
+    guard let last = trimmed.first else { return true }
+    return last == "\n" || ".?!".contains(last)
+  }
 
   private func refresh() {
     isListening = SharedStore.isListening
@@ -241,7 +297,23 @@ extension KeyboardModel {
 
   func newline() { proxy?.insertText("\n") }
 
-  func space() { proxy?.insertText(" ") }
+  /// A space — or, tapped twice quickly after a word, the system keyboard's
+  /// "." shortcut: the first space becomes a full stop and a space.
+  func space() {
+    let now = ContinuousClock.now
+    let before = proxy?.documentContextBeforeInput ?? ""
+    if let last = lastSpaceAt, now - last < .milliseconds(450), before.hasSuffix(" "), !before.hasSuffix("  "),
+      let previous = before.dropLast().last, previous.isLetter || previous.isNumber
+    {
+      proxy?.deleteBackward()
+      proxy?.insertText(". ")
+      lastSpaceAt = nil
+    } else {
+      proxy?.insertText(" ")
+      lastSpaceAt = now
+    }
+    updateShift()
+  }
 
   func toggleShift() { shifted.toggle() }
 

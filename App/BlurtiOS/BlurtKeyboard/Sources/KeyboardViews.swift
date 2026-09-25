@@ -2,15 +2,16 @@ import SwiftUI
 
 /// Picks the layout the user chose. All three share `StatusPill`, `MicKey` and
 /// `KeyCap`, and the same model underneath; they differ in how much keyboard
-/// surrounds the mic. The surface is the brand ink in every appearance, for the
-/// reason the Mac pill is: it floats over whichever app the user is typing in.
+/// surrounds the mic. The look (`KeyboardTheme`) decides the surface and the
+/// keys: Blurt's ink in every appearance — it floats over whichever app the
+/// user is typing in, like the Mac pill — or the iPhone's own keyboard, light
+/// or dark with that app.
 struct KeyboardRootView: View {
   var model: KeyboardModel
 
-  /// The keyboard's outer margin and the gap between rows: the arithmetic in
-  /// `KeyboardLayout.height` is built on these.
-  static let margin: CGFloat = 8
-  static let rowGap: CGFloat = 8
+  /// The keyboard's top and bottom margin: the arithmetic in
+  /// `KeyboardLayout.height` is built on it and the theme's row gap.
+  static let verticalMargin: CGFloat = 8
 
   var body: some View {
     Group {
@@ -20,9 +21,11 @@ struct KeyboardRootView: View {
       case .full: FullKeyboardView(model: model)
       }
     }
-    .padding(Self.margin)
+    .padding(.horizontal, model.theme.margin)
+    .padding(.vertical, Self.verticalMargin)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(BlurtBrand.ink)
+    .background(model.palette.surface)
+    .environment(\.keyboardPalette, model.palette)
   }
 }
 
@@ -129,29 +132,32 @@ struct MicKey: View {
   private var glyph: String { isRecording ? "stop.fill" : "mic.fill" }
 }
 
-/// One ordinary key: a warm-white legend on a raised ink cap; `dark` for the
-/// modifier keys, a step darker as on the system keyboard. `flexible` keys (the
-/// space bar) take the width they're given; the rest are 44 wide.
+/// One ordinary key: a legend on a cap in the current palette; `dark` for the
+/// modifier keys, a step darker as on the system keyboard. `flexible` keys
+/// (the space bar) take the width they're given, `width` fixes one, and the
+/// rest are 44 wide.
 struct KeyCap: View {
   var title: String?
   var systemImage: String?
-  var tint: Color = BlurtBrand.keyText
+  var tint: Color?
   var flexible = false
   var dark = false
+  var width: CGFloat?
   var action: () -> Void
+  @Environment(\.keyboardPalette) private var palette
 
   static let height: CGFloat = 42
-  static let cornerRadius: CGFloat = 6
 
   init(
-    title: String? = nil, systemImage: String? = nil, tint: Color = BlurtBrand.keyText, flexible: Bool = false,
-    dark: Bool = false, action: @escaping () -> Void
+    title: String? = nil, systemImage: String? = nil, tint: Color? = nil, flexible: Bool = false,
+    dark: Bool = false, width: CGFloat? = nil, action: @escaping () -> Void
   ) {
     self.title = title
     self.systemImage = systemImage
     self.tint = tint
     self.flexible = flexible
     self.dark = dark
+    self.width = width
     self.action = action
   }
 
@@ -165,23 +171,42 @@ struct KeyCap: View {
         }
       }
       .font(.system(size: 16, weight: .medium))
-      .foregroundStyle(tint)
+      .foregroundStyle(tint ?? palette.keyText)
       .frame(maxWidth: flexible ? .infinity : nil)
-      .frame(minWidth: 44, minHeight: Self.height)
-      .padding(.horizontal, flexible ? 0 : 4)
-      .background(dark ? BlurtBrand.keyDark : BlurtBrand.key, in: RoundedRectangle(cornerRadius: Self.cornerRadius))
-      .overlay(RoundedRectangle(cornerRadius: Self.cornerRadius).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
+      .frame(width: width)
+      .frame(minWidth: width == nil ? 44 : nil, minHeight: Self.height)
+      .padding(.horizontal, flexible || width != nil ? 0 : 4)
+      .keyCap(dark ? palette.keyDark : palette.key, palette: palette)
     }
     .buttonStyle(KeyPressStyle())
   }
 }
 
-/// A key lightens while the finger is on it, the way the system's do, instead
-/// of the default button dimming.
+extension View {
+  /// The cap under a key's legend: the palette's fill and radius, the system
+  /// look's 1 pt drop, and the ink look's hairline.
+  func keyCap(_ fill: Color, palette: KeyboardPalette) -> some View {
+    background {
+      RoundedRectangle(cornerRadius: palette.keyRadius)
+        .fill(fill)
+        .shadow(color: palette.keyShadow ?? .clear, radius: 0, y: palette.keyShadow == nil ? 0 : 1)
+    }
+    .overlay {
+      if palette.keyShadow == nil {
+        RoundedRectangle(cornerRadius: palette.keyRadius).strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+      }
+    }
+  }
+}
+
+/// A modifier key darkens while the finger is on it, the way the system's do,
+/// instead of the default button dimming; on the ink look it lightens.
 struct KeyPressStyle: ButtonStyle {
+  @Environment(\.keyboardPalette) private var palette
+
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .brightness(configuration.isPressed ? 0.15 : 0)
+      .brightness(configuration.isPressed ? (palette.keyShadow == nil ? 0.15 : -0.12) : 0)
       .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
   }
 }

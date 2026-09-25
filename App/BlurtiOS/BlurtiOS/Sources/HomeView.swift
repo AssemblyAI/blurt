@@ -13,6 +13,8 @@ struct HomeView: View {
   @State private var microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
   @State private var keyboardSeen = SharedStore.keyboardEverSeen
   @State private var layout = SharedStore.layout
+  @State private var theme = SharedStore.theme
+  @State private var autoDictate = SharedStore.autoDictate
   @State private var windowMinutes = SharedStore.windowMinutes
   @State private var showsKeyEntry = false
   @AppStorage(KeyTermsStore.defaultsKey) private var keyTerms = ""
@@ -143,10 +145,20 @@ struct HomeView: View {
       .pickerStyle(.segmented)
       .onChange(of: layout) { _, value in SharedStore.layout = value }
       Text(layout.summary).font(.footnote).foregroundStyle(.secondary)
+      Picker("Look", selection: $theme) {
+        ForEach(KeyboardTheme.allCases) { Text($0.title).tag($0) }
+      }
+      .pickerStyle(.segmented)
+      .onChange(of: theme) { _, value in SharedStore.theme = value }
+      Text(theme.summary).font(.footnote).foregroundStyle(.secondary)
+      Toggle("Hands-free", isOn: $autoDictate)
+        .onChange(of: autoDictate) { _, value in SharedStore.autoDictate = value }
+      Text("Start dictating the moment the Blurt keyboard comes up in a text field. Tap the mic to stop.")
+        .font(.footnote).foregroundStyle(.secondary)
     } header: {
       Text("Keyboard")
     } footer: {
-      Text("Any of the three works the same underneath; pick the one that fits how you type.")
+      Text("Any layout and look works the same underneath; pick what fits how you type.")
     }
   }
 

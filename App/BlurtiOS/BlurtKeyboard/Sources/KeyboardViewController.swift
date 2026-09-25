@@ -27,7 +27,7 @@ final class KeyboardViewController: UIInputViewController {
     host.didMove(toParent: self)
     // The keyboard's height is ours to declare; iOS honours a constraint on the
     // input view at just under required priority.
-    let height = view.heightAnchor.constraint(equalToConstant: model.layout.height)
+    let height = view.heightAnchor.constraint(equalToConstant: model.layout.height(theme: model.theme))
     height.priority = UILayoutPriority(999)
     height.isActive = true
     heightConstraint = height
@@ -36,7 +36,7 @@ final class KeyboardViewController: UIInputViewController {
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
     model.appeared()
-    heightConstraint?.constant = model.layout.height
+    heightConstraint?.constant = model.layout.height(theme: model.theme)
   }
 
   override func viewWillDisappear(_ animated: Bool) {
