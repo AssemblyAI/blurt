@@ -8,6 +8,7 @@
 #   scripts/ios-sim.sh                       # build, boot, install, launch
 #   scripts/ios-sim.sh --screenshot out.png  # …then capture the screen
 #   BLURT_SIM_DEVICE="iPhone 17" scripts/ios-sim.sh
+#   BLURT_LAUNCH_ARGS="-BlurtGallery panel idle,recording" scripts/ios-sim.sh --screenshot panel.png
 #
 # Xcode 27 replaced Simulator.app with Device Hub; either is opened if found.
 # In Device Hub, turn off "Always simulate hardware keyboard" or no on-screen
@@ -58,7 +59,8 @@ APP="$DERIVED/Build/Products/Debug-iphonesimulator/BlurtiOS.app"
 xcrun simctl install "$UDID" "$APP"
 xcrun simctl privacy "$UDID" grant microphone "$BUNDLE_ID"
 xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
-xcrun simctl launch "$UDID" "$BUNDLE_ID"
+read -ra LAUNCH_ARGS <<<"${BLURT_LAUNCH_ARGS:-}"
+xcrun simctl launch "$UDID" "$BUNDLE_ID" "${LAUNCH_ARGS[@]}"
 
 if [ -n "$SHOT" ]; then
   sleep 3

@@ -37,6 +37,12 @@ on a phone needs Xcode with a team that can provision the App Group; every id in
 `project.yml` (`dev.alex.blurt.ios`, `group.dev.alex.blurt`) is a placeholder
 inherited from the Mac app and must become org-owned before the App Store.
 
+## Design
+
+`DESIGN.md` — the tokens, the pill, the orb, the meter, the three layouts and their
+heights, all traced to the Mac app's sources, plus the gallery that renders every layout and
+state for a screenshot.
+
 ## Getting Xcode
 
 Any Xcode from 26.6 (what CI builds with) works; a phone on iOS 27 needs Xcode 27, which

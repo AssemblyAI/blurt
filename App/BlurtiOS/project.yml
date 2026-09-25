@@ -48,6 +48,12 @@ targets:
       # extension can't import the app's module) — one source, no duplication,
       # the same shape as App/Blurt/Shared.
       - path: Shared
+      # The keyboard's views and model, so debug builds can render every layout
+      # and state in-app (KeyboardGalleryView) for design work and screenshots.
+      # Only the extension's entry point stays out; the keyboard never runs here.
+      - path: BlurtKeyboard/Sources
+        excludes:
+          - KeyboardViewController.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt.ios

@@ -27,9 +27,22 @@ struct BlurtiOSApp: App {
 
   var body: some Scene {
     WindowGroup {
-      HomeView(coordinator: coordinator)
-        .onOpenURL { coordinator.handle($0) }
-        .task { coordinator.start() }
+      #if DEBUG
+        let rows = KeyboardGalleryView.rows(from: CommandLine.arguments)
+        if rows.isEmpty {
+          home
+        } else {
+          KeyboardGalleryView(rows: rows)
+        }
+      #else
+        home
+      #endif
     }
+  }
+
+  private var home: some View {
+    HomeView(coordinator: coordinator)
+      .onOpenURL { coordinator.handle($0) }
+      .task { coordinator.start() }
   }
 }

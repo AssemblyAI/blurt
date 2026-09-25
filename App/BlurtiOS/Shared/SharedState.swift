@@ -1,5 +1,4 @@
 import Foundation
-import SwiftUI
 
 // MARK: - The App Group contract
 
@@ -76,11 +75,13 @@ nonisolated enum KeyboardLayout: String, CaseIterable, Codable, Sendable, Identi
 
   /// The keyboard's height in points. Fixed per layout; the system keyboard is
   /// about 216 on a phone, which is what `panel` matches.
+  /// The keyboard's height on screen, from the layout's own rows: see
+  /// `App/BlurtiOS/DESIGN.md` for the arithmetic.
   var height: CGFloat {
     switch self {
-    case .slimBar: 72
+    case .slimBar: 60
     case .panel: 216
-    case .full: 264
+    case .full: 252
     }
   }
 }
@@ -284,12 +285,3 @@ nonisolated final class DarwinObserver: Sendable {
 }
 
 // MARK: - Brand
-
-/// The Mac app's palette (`App/Blurt/Blurt/Branding/BlurtBrand.swift`), for the
-/// two iOS targets. Values, not assets, so the keyboard needs no catalog.
-enum BlurtBrand {
-  static let green = Color(red: 1 / 255, green: 118 / 255, blue: 47 / 255)
-  static let greenOnDark = Color(red: 103 / 255, green: 173 / 255, blue: 130 / 255)
-  static let ink = Color(red: 29 / 255, green: 27 / 255, blue: 22 / 255)
-  static let errorOrange = Color(red: 230 / 255, green: 127 / 255, blue: 54 / 255)
-}
