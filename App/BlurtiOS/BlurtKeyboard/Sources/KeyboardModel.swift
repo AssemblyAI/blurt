@@ -48,16 +48,18 @@ final class KeyboardModel {
   var shifted = true
   var symbolsPage = false
 
-  @ObservationIgnored private weak var controller: UIInputViewController?
+  // Internal, not private: the typing half of this model lives in
+  // KeyboardModel+Typing.swift.
+  @ObservationIgnored weak var controller: UIInputViewController?
   @ObservationIgnored private var observers: [DarwinObserver] = []
   @ObservationIgnored private var gate = DictationKeyGate()
   @ObservationIgnored private let clockStart = ContinuousClock.now
   @ObservationIgnored private var lastResultID: UUID?
   @ObservationIgnored private var heartbeat: Task<Void, Never>?
-  @ObservationIgnored private var lastSpaceAt: ContinuousClock.Instant?
+  @ObservationIgnored var lastSpaceAt: ContinuousClock.Instant?
   @ObservationIgnored private var noticeDwell: Task<Void, Never>?
-  @ObservationIgnored private var termDraftFromSelection: String?
-  @ObservationIgnored private var termNotice: Task<Void, Never>?
+  @ObservationIgnored var termDraftFromSelection: String?
+  @ObservationIgnored var termNotice: Task<Void, Never>?
 
   var proxy: (any UITextDocumentProxy)? { controller?.textDocumentProxy }
 
@@ -171,7 +173,7 @@ final class KeyboardModel {
   /// Auto-capitalisation, as the system keyboard does it: shift comes on at
   /// the start of a sentence (or of every word, or always) according to what
   /// the field asks for, and goes off after one letter.
-  private func updateShift() {
+  func updateShift() {
     if let termDraft {
       // A key term is usually a name: capitalised to start, then as typed.
       shifted = termDraft.isEmpty
