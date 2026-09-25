@@ -71,7 +71,7 @@ appearance, not on every field change while it stays up.
 | ----------------- | ----------- | ----------------------------------------------------------- |
 | `green`           | `#01762F`   | the wordmark green, light chrome (the app's accent)         |
 | `greenOnDark`     | `#67AD82`   | the meter, the ring, anything green on ink                  |
-| `ink`             | `#1D1B16`   | the pill's body in every state; the keyboard's surface      |
+| `ink`             | `#1D1B16`   | the Mac pill's body; the keyboard's surface                 |
 | `errorOrange`     | `#E67F36`   | the error word — never a red body                           |
 | `key`             | `#33302A`   | an ordinary key on the ink surface (one step up)            |
 | `keyDark`         | `#26231E`   | modifier keys: shift, delete, globe, return, 123, cancel    |
@@ -159,10 +159,10 @@ Access, and the app already owns the audio session).
 
 ## Accessibility
 
-The pill is one element carrying the state's label (the Mac's wording where
-the states match); the mic key is a button labelled Dictate / Stop dictation /
-Start Blurt. Reduce Motion stops the ring and the meter's idle wave; heights
-still follow the level.
+The mic key is a button labelled Dictate / Stop dictation / Start Blurt, and
+speaks the error message; the meters are hidden from VoiceOver. Reduce
+Motion stops the ring and the meter's idle wave; heights still follow the
+level.
 
 ## The app's screens (`BlurtiOS/Sources/`)
 
