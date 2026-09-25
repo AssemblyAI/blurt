@@ -155,12 +155,35 @@ targets:
     dependencies:
       - package: BlurtEngine
         product: BlurtEngine
+  # Unit tests for the iPhone code's pure logic — the App Group contract, the
+  # keyboard's rules, term packs — hosted by the app so `@testable import
+  # BlurtiOS` reaches everything (the keyboard's sources are compiled into the
+  # app too). Swift Testing; `scripts/ios-test.sh` runs them on a simulator.
+  BlurtiOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: BlurtiOSTests
+    dependencies:
+      - target: BlurtiOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt.ios.tests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
 # XcodeGen emits a scheme only where one is declared, and `xcodebuild -scheme`
-# needs a shared one. Building the app builds the keyboard it embeds.
+# needs a shared one. Building the app builds the keyboard it embeds; testing
+# runs the unit tests against it.
 schemes:
   BlurtiOS:
     build:
       targets:
         BlurtiOS: all
+        BlurtiOSTests: [test]
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - BlurtiOSTests

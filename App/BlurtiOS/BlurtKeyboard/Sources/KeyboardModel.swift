@@ -65,7 +65,9 @@ final class KeyboardModel {
   @ObservationIgnored var termHostBaseline: String?
   @ObservationIgnored var termNotice: Task<Void, Never>?
 
-  var proxy: (any UITextDocumentProxy)? { controller?.textDocumentProxy }
+  /// The host's text field. Tests hand in a fake in place of a controller.
+  var proxy: (any UITextDocumentProxy)? { proxyOverride ?? controller?.textDocumentProxy }
+  @ObservationIgnored var proxyOverride: (any UITextDocumentProxy)?
 
   /// The chosen theme's palette — or, for a preview, whatever it is told.
   var palette: KeyboardPalette { paletteOverride ?? .named(themeID) }
@@ -212,7 +214,7 @@ final class KeyboardModel {
     }
   }
 
-  private static func isSentenceStart(_ before: String) -> Bool {
+  static func isSentenceStart(_ before: String) -> Bool {
     let trimmed = before.reversed().drop { $0 == " " }
     guard let last = trimmed.first else { return true }
     return last == "\n" || ".?!".contains(last)

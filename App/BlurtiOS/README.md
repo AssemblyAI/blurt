@@ -56,6 +56,14 @@ the Apple Developer Agreement at developer.apple.com/account; a company-managed 
 download. The archive lands in `~/Library/Application Support/com.robotsandpencils.xcodes/`;
 an 83 KB "xip" there is a saved error page, delete it and retry.
 
+## Unit tests
+
+`scripts/ios-test.sh` runs `BlurtiOSTests` on a simulator (CI's `ios-build` job runs it after
+the build): the iPhone code's pure logic — the App Group contract (`KeyTermList`, stale
+snapshots, layouts), the keyboard's rules (sentence start, the double space, the term field,
+return labels, letter rows) against a fake text field, term packs, palettes. The engine's own
+tests stay `swift test`. Anything with a rule in `DESIGN.md` should have a test here.
+
 ## Testing in the simulator
 
 Signing and the team don't matter here, and the App Group works, so the whole
