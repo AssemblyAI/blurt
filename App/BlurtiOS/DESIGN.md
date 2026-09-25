@@ -30,31 +30,37 @@ Layouts: `slimBar`, `panel`, `full`. States: `off` (no Full Access), `start`
 gallery is `BlurtiOS/Sources/KeyboardGalleryView.swift`, debug builds only;
 the keyboard's sources are compiled into the app for it (`project.yml`).
 
-## One look, the iPhone's spacing (`BlurtKeyboard/Sources/KeyboardPalette.swift`)
+## Themes, at the iPhone's spacing (`BlurtKeyboard/Sources/KeyboardPalette.swift`)
 
 The keys sit exactly where the iPhone keyboard's do, so nobody's fingers are
 thrown off: 6 pt between keys, 11 pt between rows, 3 pt at the edges, 5 pt
-corners, a 1 pt drop under every key. The colours are Blurt's — the ink
-surface and the tokens below — in every appearance, for the reason the Mac
-pill is: the keyboard floats over whichever app the user is typing in.
-`KeyboardPalette` is one value for now and the seam themes plug into later.
+corners, a 1 pt drop under every key. A theme changes how the keyboard looks
+and never how it types. Six, curated, Partiful-style — pick from live
+previews in Settings → Keyboard → Theme; the keyboard picks it up the next
+time it comes up (`keyboardTheme` in the App Group):
+
+| Theme      | Surface   | Key       | Modifier  | Legend    | Vibe             |
+| ---------- | --------- | --------- | --------- | --------- | ---------------- |
+| `ink`      | `#1D1B16` | `#33302A` | `#26231E` | `#F2EEE6` | Blurt's own      |
+| `paper`    | `#EBE8E8` | white     | `#DEDBDB` | `#1D1B16` | warm and light   |
+| `lavender` | `#2C2557` | `#3F3777` | `#352E68` | `#F1EEFF` | the orb's violet |
+| `mint`     | `#10231B` | `#1E3F31` | `#183429` | `#E9F5EE` | the orb's green  |
+| `midnight` | `#0E1220` | `#1D2440` | `#161B33` | `#E8ECFF` | deep blue-black  |
+| `sunset`   | `#2B1912` | `#4B2B20` | `#3B2119` | `#FFEFE6` | warm and loud    |
+
+The orb, the wave and the ring are the same in every theme. The picker
+(`ThemePickerView`) draws the real full keyboard at 0.42 scale on each card.
+The gallery's last argument is a theme id.
 
 The full layout follows the iPhone's geometry: ten letter keys across at one
 width (`(width − 9·gap) / 10`), the middle row centred, shift and delete
 taking what seven letters leave (twice the gap away from them), then 123 ·
-globe · space · mic · return, return two modifiers wide. Letters pop up
-while pressed (a 32 pt copy 58 pt above the key, typed on release); shift
-comes on by itself at the start of a sentence — or of every word, or always
-— as the field's `autocapitalizationType` asks, and goes off after one
-letter; a second space within 450 ms of the first, after a word, becomes
-". ". Not yet: autocorrect and the suggestion bar.
-
-**Later: themes.** Users will pick their own. The iPhone keyboard's own
-palettes are the first two to offer, and were measured for it: light —
-surface `#D1D5DB`, letter keys white, modifiers `#ADB3BC`, drop `#898A8D`,
-black legends; dark — surface `#2B2B2B`, keys `#6B6B6B`, modifiers
-`#464646`, drop `#0D0D0D`, white legends; both follow the field's
-`keyboardAppearance`, else the app's style.
+globe · space · return, return two modifiers wide. Letters pop up while
+pressed (a 32 pt copy 58 pt above the key, typed on release); shift comes on
+by itself at the start of a sentence — or of every word, or always — as the
+field's `autocapitalizationType` asks, and goes off after one letter; a
+second space within 450 ms of the first, after a word, becomes ". ". Not
+yet: autocorrect and the suggestion bar.
 
 ## Quick-add key term
 
@@ -76,6 +82,17 @@ seconds, inside the app you're typing in, never a trip to Settings.
 × or an empty save leaves the mode. The list itself is edited in Settings →
 Transcription, which shows the count; the engine's caps (100 terms, 2048
 bytes) apply on the request, first terms first.
+
+## Sharing key terms
+
+A group chat has names and slang everyone's dictation should get right, so a
+list travels. Settings → Transcription → **Share key terms…** puts the list
+in the share sheet as a `.blurtterms` file (JSON — `name`, `from`, `terms`; a
+declared document type, `dev.alex.blurt.terms`) with the words as the
+message text, so a friend without Blurt still gets them. A tap on the file
+in Messages opens Blurt with "Add N key terms?": every term ticked, untick
+any, Add merges the rest without duplicates. A `blurt://terms?add=a,b,c&name=…&from=…`
+link does the same (`TermPack`, `ImportTermsView`).
 
 ## Adapting to the phone's own keyboard settings
 

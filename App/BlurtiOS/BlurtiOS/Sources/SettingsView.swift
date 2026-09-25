@@ -42,6 +42,11 @@ struct SettingsView: View {
       .pickerStyle(.segmented)
       .onChange(of: layout) { _, value in SharedStore.layout = value }
       Text(layout.summary).font(.footnote).foregroundStyle(.secondary)
+      NavigationLink {
+        ThemePickerView()
+      } label: {
+        LabeledContent("Theme", value: KeyboardPalette.named(SharedStore.themeID).name)
+      }
       Toggle("Hands-free", isOn: $autoDictate)
         .onChange(of: autoDictate) { _, value in SharedStore.autoDictate = value }
     } header: {

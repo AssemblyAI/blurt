@@ -63,8 +63,10 @@ final class KeyboardModel {
 
   var proxy: (any UITextDocumentProxy)? { controller?.textDocumentProxy }
 
-  /// One palette for now; themes are a later feature.
-  var palette: KeyboardPalette { .blurt }
+  /// The chosen theme's palette — or, for a preview, whatever it is told.
+  var palette: KeyboardPalette { paletteOverride ?? .named(themeID) }
+  var themeID = SharedStore.themeID
+  var paletteOverride: KeyboardPalette?
 
   /// What is actually on screen: the panel's carousel may be showing its
   /// keys, and typing a key term needs them whatever the layout.
@@ -119,6 +121,7 @@ final class KeyboardModel {
     // can run.
     guard hasFullAccess else { return }
     layout = SharedStore.layout
+    themeID = SharedStore.themeID
     panelShowsKeys = false
     SharedStore.keyboardEverSeen = true
     refresh()

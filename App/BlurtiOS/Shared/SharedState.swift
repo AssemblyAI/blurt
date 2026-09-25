@@ -21,6 +21,7 @@ nonisolated enum BlurtShared {
   nonisolated enum Key {
     static let layout = "keyboardLayout"
     static let autoDictate = "autoDictate"
+    static let theme = "keyboardTheme"
     static let listeningUntil = "listeningUntil"
     static let windowMinutes = "listeningWindowMinutes"
     static let phase = "phase"
@@ -208,6 +209,12 @@ nonisolated enum SharedStore {
   static var layout: KeyboardLayout {
     get { KeyboardLayout(rawValue: defaults.string(forKey: BlurtShared.Key.layout) ?? "") ?? .panel }
     set { defaults.set(newValue.rawValue, forKey: BlurtShared.Key.layout) }
+  }
+
+  /// Which keyboard theme (`KeyboardPalette.id`); Ink until one is picked.
+  static var themeID: String {
+    get { defaults.string(forKey: BlurtShared.Key.theme) ?? "ink" }
+    set { defaults.set(newValue, forKey: BlurtShared.Key.theme) }
   }
 
   /// Hands-free: the keyboard starts a dictation the moment it appears in a
