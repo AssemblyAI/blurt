@@ -85,10 +85,14 @@ struct HomeView: View {
 
   private var hero: some View {
     VStack(spacing: 18) {
-      BrandOrb(diameter: 112, animated: orbWorking && !reduceMotion, ringWidth: 2)
+      PrismOrb(mood: heroMood, animated: !reduceMotion)
+        .frame(width: Self.orbSize, height: Self.orbSize)
+        .clipShape(Circle())
+        .overlay { HeroRing(animated: orbWorking && !reduceMotion) }
+        .saturation(coordinator.window.isOpen ? 1 : 0.45)
         .shadow(
           color: BlurtBrand.greenOnDark.opacity(isRecording ? 0.35 + 0.45 * level : 0),
-          radius: isRecording ? 14 + 30 * level : 0
+          radius: isRecording ? Self.orbSize * 0.1 + level * Self.orbSize * 0.25 : 0
         )
         .animation(.easeOut(duration: 0.08), value: level)
         .padding(.top, 6)
@@ -138,6 +142,17 @@ struct HomeView: View {
     .padding(20)
     .frame(maxWidth: .infinity)
     .card()
+  }
+
+  private var heroMood: PrismOrb.Mood {
+    guard coordinator.window.isOpen else { return .off }
+    switch coordinator.phase.overlayState {
+    case .idle, .error: return .idle
+    case .connecting: return .listening(level: 0)
+    case .recording: return .listening(level: coordinator.level)
+    case .processing: return .working
+    case .pasted, .noTarget: return .done
+    }
   }
 
   private var heroTitle: String {
@@ -321,6 +336,27 @@ private struct SetupRow<Action: View>: View {
         Text(title)
         if !done { action() }
       }
+    }
+  }
+}
+
+/// The hero orb's ring: the brand orb's sweep, on its own so the prism can
+/// be the fill.
+private struct HeroRing: View {
+  let animated: Bool
+
+  var body: some View {
+    if animated {
+      TimelineView(.animation(minimumInterval: keyboardAnimationInterval)) { timeline in
+        Circle()
+          .strokeBorder(BlurtBrand.orbRingGradient, lineWidth: 2)
+          .rotationEffect(
+            .degrees(
+              MeterBarGeometry.rotationDegrees(
+                time: timeline.date.timeIntervalSinceReferenceDate, period: BrandOrb.period)))
+      }
+    } else {
+      Circle().strokeBorder(BlurtBrand.orbRingGradient, lineWidth: 2)
     }
   }
 }

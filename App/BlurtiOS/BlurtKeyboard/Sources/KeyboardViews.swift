@@ -123,8 +123,8 @@ struct MicKey: View {
     let level = CGFloat(model.snapshot.level)
     let width = isRecording ? expandedWidth : size
     ZStack {
-      Capsule()
-        .fill(BlurtBrand.orbGradient)
+      PrismOrb(mood: mood, animated: !reduceMotion)
+        .clipShape(Capsule())
         .overlay { ring }
         .saturation(isReady ? 1 : 0.35)
         .opacity(isReady ? 1 : 0.8)
@@ -223,6 +223,18 @@ struct MicKey: View {
   }
 
   private var isReady: Bool { model.isReady }
+
+  /// The orb's story from the phase: green going in, violet coming out.
+  private var mood: PrismOrb.Mood {
+    guard isReady else { return .off }
+    switch model.snapshot.state {
+    case .idle, .error: return .idle
+    case .connecting: return .listening(level: 0)
+    case .recording: return .listening(level: Float(model.snapshot.level))
+    case .processing: return .working
+    case .pasted, .copied: return .done
+    }
+  }
   private var isRecording: Bool { isReady && model.snapshot.state == .recording }
   private var isWorking: Bool {
     switch model.snapshot.state {

@@ -32,6 +32,20 @@ of the keyboard's own: `keys` (the panel flipped to its keyboard page) and
 gallery is `BlurtiOS/Sources/KeyboardGalleryView.swift`, debug builds only;
 the keyboard's sources are compiled into the app for it (`project.yml`).
 
+## Prototype on this branch: the prism orb (`PrismOrb.swift`)
+
+The brand artwork — a green beam into the prism, a violet, starlit one out —
+as the orb's own story. The mic key and the home hero are filled by a 3 × 3
+`MeshGradient` whose edge and centre points drift on slow sines (further
+with the voice level), under a soft upper-left light, animated film grain (a
+seeded scatter of faint dots, new each frame at 20 Hz) and, when the words
+land, six four-point sparkles twinkling. Moods: `off` and `idle` (the brand
+mix), `listening(level:)` (green, brighter with the voice), `working`
+(violet), `done` (violet and light, sparkles). Mood changes cross-fade over
+0.7 s. Under Reduce Motion everything holds still. The ring stays the Mac
+orb's. Not merged: judge it on the simulator (`-BlurtGallery panel
+idle,recording,processing,pasted`, `-BlurtStartListening` for the hero).
+
 ## Themes, at the iPhone's spacing (`BlurtKeyboard/Sources/KeyboardPalette.swift`)
 
 The keys sit exactly where the iPhone keyboard's do, so nobody's fingers are
