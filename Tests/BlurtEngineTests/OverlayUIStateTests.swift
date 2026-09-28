@@ -20,7 +20,9 @@ struct OverlayUIStateTests {
     // `● REC` tag and a live meter over a mic that isn't open yet.
     (.connecting, .connecting),
     (.recording, .recording),
+    (.longMode, .longMode),
     (.transcribing, .processing),
+    (.normalizing, .normalizing),
     // `.injecting` is a *working* phase, so it must not project to `.idle`: the
     // shell reads an idle projection as "dismiss the pill" and would start a
     // fade-out mid-dictation, blinking the pill out and back in before "Pasted".
@@ -76,7 +78,8 @@ struct OverlayUIStateTests {
     #expect(PipelinePhase.failed(.targetAppLost).setupBlocker == nil)
     // Neither is any non-failed phase.
     for phase in [
-      PipelinePhase.idle, .connecting, .recording, .transcribing, .injecting, .pasted, .noTarget,
+      PipelinePhase.idle, .connecting, .recording, .longMode, .transcribing, .normalizing,
+      .injecting, .pasted, .noTarget,
     ] {
       #expect(phase.setupBlocker == nil)
     }
@@ -106,7 +109,9 @@ struct OverlayUIStateAccessibilityLabelTests {
     (.idle, "Blurt."),
     (.connecting, "Connecting to the microphone."),
     (.recording, "Recording."),
+    (.longMode, "Long recording mode. Recording continues locally."),
     (.processing, "Processing."),
+    (.normalizing, "Normalizing transcript."),
     (.pasted, "Your dictation was pasted."),
     (.noTarget, "No text field focused. Your dictation was copied to the clipboard."),
   ]
@@ -148,6 +153,8 @@ struct OverlayUIStateNoticeDwellTests {
     // mid-press, dismissing it while the mic was still opening.
     #expect(OverlayUIState.connecting.noticeDwellSeconds == nil)
     #expect(OverlayUIState.recording.noticeDwellSeconds == nil)
+    #expect(OverlayUIState.longMode.noticeDwellSeconds == nil)
     #expect(OverlayUIState.processing.noticeDwellSeconds == nil)
+    #expect(OverlayUIState.normalizing.noticeDwellSeconds == nil)
   }
 }

@@ -92,15 +92,19 @@ extension DictationSession {
       // This is the whole point of the chunked upload: the transfer overlaps the
       // speaking instead of following it, so what the user waits out at release
       // is inference on the last frames rather than the upload of all of them.
-      startUpload(frames: frames)
-      let timeout = maxRecordingSeconds
-      let clock = clock
-      autoReleaseTask = Task { [weak self] in
-        try? await clock.sleep(for: .seconds(timeout))
-        guard let self, !Task.isCancelled else { return }
-        // Enqueues like a manual key-up. If a real release already ran, the
-        // queued performRelease sees a non-.recording phase and drops out.
-        await self.release()
+      await startUpload(frames: frames)
+      guard phase == .recording else { return }
+      // The original route has a hard 120-second request ceiling, so it still
+      // auto-releases. VibeDictate instead cancels only that short request at
+      // 115 seconds; the STTRouter keeps the mic and WAV running for long mode.
+      if vibePipeline == nil {
+        let timeout = maxRecordingSeconds
+        let clock = clock
+        autoReleaseTask = Task { [weak self] in
+          try? await clock.sleep(for: .seconds(timeout))
+          guard let self, !Task.isCancelled else { return }
+          await self.release()
+        }
       }
     } catch {
       Self.signposter.endInterval(Self.pressSignpostName, pressInterval)
@@ -143,6 +147,13 @@ extension DictationSession {
     let captureFrontmost = seams.captureFrontmost
     let captured = await captureFrontmost()
     await injector.setTargetApp(captured.flatMap { FocusCapture.runningApp(for: $0) })
+    if vibePipeline != nil {
+      latestGeneration &+= 1
+      currentJob = DictationJob(
+        generation: latestGeneration,
+        targetBundleIdentifier: captured?.bundleIdentifier,
+        targetAppName: captured?.processName)
+    }
     // Key terms are read synchronously at press (cheap UserDefaults read), so
     // each dictation observably re-reads Settings edits at press time.
     let keyTerms = keyTermsProvider()

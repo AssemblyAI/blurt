@@ -159,6 +159,21 @@ public actor KeyInjector: InjectorProtocol {
   }
 
   public func insert(_ text: String, after priorText: String? = nil, windowTitle: String? = nil) async throws {
+    try await insert(recordID: nil, text: text, after: priorText, windowTitle: windowTitle)
+  }
+
+  public func insert(
+    recordID: UUID, text: String, after priorText: String? = nil,
+    windowTitle: String? = nil
+  ) async throws {
+    try await insert(
+      recordID: Optional(recordID), text: text, after: priorText,
+      windowTitle: windowTitle)
+  }
+
+  private func insert(
+    recordID: UUID?, text: String, after priorText: String?, windowTitle: String?
+  ) async throws {
     guard !text.isEmpty else { return }
     // Serialize the whole paste critical section by chaining behind the previous
     // insert's link (which includes its settle/restore — see `pendingSettle`).
@@ -170,7 +185,8 @@ public actor KeyInjector: InjectorProtocol {
     let timeout = pasteSettleDuration
     let paste = Task<(@Sendable () -> Void)?, any Error> {
       await previous?.value
-      return try await self.performInsert(text, after: priorText, windowTitle: windowTitle)
+      return try await self.performInsert(
+        recordID: recordID, text, after: priorText, windowTitle: windowTitle)
     }
     // Strong `self` captures, deliberately: each link is bounded (one paste, one
     // settle sleep — no cycle), and a weak capture would let an injector torn
@@ -196,7 +212,7 @@ public actor KeyInjector: InjectorProtocol {
   /// insert (or its settle) is mid-flight. Returns the deferred clipboard-restore
   /// action for the settle link to run once the paste has landed.
   private func performInsert(
-    _ text: String, after priorText: String?, windowTitle: String?
+    recordID: UUID?, _ text: String, after priorText: String?, windowTitle: String?
   ) async throws -> @Sendable () -> Void {
     try Task.checkCancellation()
     // Snapshot the target at entry and use only the local below: this method
@@ -240,7 +256,10 @@ public actor KeyInjector: InjectorProtocol {
 
     // Put the transcript on the clipboard and keep the deferred restore that
     // brings the user's contents back once the paste settles.
-    let restore = clipboard.writeAndPrepareRestore(finalText)
+    let restore =
+      recordID.map {
+        clipboard.writeAndPrepareRestore(finalText, recordID: $0)
+      } ?? clipboard.writeAndPrepareRestore(finalText)
     // If the event subsystem won't synthesize the keystroke, the paste can't
     // happen. The transcript is already on the pasteboard — leave it there (the
     // user's words beat the stale pre-paste snapshot) so the failure degrades

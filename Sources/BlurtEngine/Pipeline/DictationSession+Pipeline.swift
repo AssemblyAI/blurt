@@ -56,6 +56,10 @@ extension DictationSession {
     // failure, cancel, or a completed paste).
     let pipelineInterval = Self.signposter.beginInterval(Self.pipelineSignpostName)
     defer { Self.signposter.endInterval(Self.pipelineSignpostName, pipelineInterval) }
+    if vibePipeline != nil {
+      await runVibeTranscribeNormalizeInject()
+      return
+    }
     // No context step here any more: `startUpload` resolved the press-time AX
     // read before it opened the request, because the streaming route needs the
     // `config` part first. So `capturedContext` — which the paste separator and
@@ -121,7 +125,11 @@ extension DictationSession {
   /// developer-mode log see the read whether or not the request gets anywhere —
   /// which is what `resolveCapturedContext` used to guarantee from the release
   /// side, and what a stored copy then needed a repair pass to keep true.
-  func startUpload(frames: AsyncStream<Data>) {
+  func startUpload(frames: AsyncStream<Data>) async {
+    if vibePipeline != nil {
+      await startVibeRouting(frames: frames)
+      return
+    }
     // Lifted out of the actor so the task body captures Sendable values rather
     // than isolated state, the same move `performPress` makes for `transcriber`.
     // `SyncSTTLimits.sampleRate` needs no such hoist — it is a static on an
@@ -155,6 +163,8 @@ extension DictationSession {
   func cancelUpload() {
     upload?.cancel()
     upload = nil
+    routingSession?.cancel()
+    routingSession = nil
   }
 
   /// Waits for the request opened at press. Returns the transcript, or nil if

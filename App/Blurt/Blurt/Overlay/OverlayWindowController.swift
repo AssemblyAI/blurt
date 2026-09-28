@@ -1,14 +1,13 @@
 import AppKit
 import BlurtEngine
-import Observation
+import Combine
 import SwiftUI
 
-@Observable
-final class OverlayBridge {
-  var state: OverlayUIState = .idle
+final class OverlayBridge: ObservableObject {
+  @Published var state: OverlayUIState = .idle
   /// The latest mic loudness, 0...1 (MicCapture.linearLevel). The overlay's
   /// voice bars track this current value — there is no scrolling history.
-  var level: Float = 0
+  @Published var level: Float = 0
 
   func pushLevel(_ value: Float) {
     // `value` arrives on the fixed 0...1 scale `MicCaptureProtocol.levels`

@@ -30,7 +30,7 @@ public struct RecordingCueGate: Sendable {
 
   /// The cue to play for `phase`, or `nil` when the recording edge didn't move.
   public mutating func cue(for phase: PipelinePhase) -> RecordingCue? {
-    let isRecording = phase == .recording
+    let isRecording = phase == .recording || phase == .longMode
     defer { wasRecording = isRecording }
     switch (wasRecording, isRecording) {
     case (false, true): return .start

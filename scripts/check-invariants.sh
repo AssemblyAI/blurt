@@ -85,9 +85,7 @@ TESTS="Tests/*.swift App/Blurt/BlurtUITests/*.swift"
 PATTERNS=(
   "AVAudioEngine|installTap"
   "URLSessionWebSocketTask|wss://"
-  "StylerProtocol|LLMGateway|LemurClient|/lemur/"
   "import Speech|import CoreML|SFSpeechRecognizer|MLModel"
-  "\"language_codes?\""
   "\"conversation_context\""
   "\"prompt\""
   "SetUnicodeString"
@@ -103,8 +101,6 @@ SCOPES=(
   "$ENGINE $APP"
   "$ENGINE $APP"
   "$ENGINE"
-  "$ENGINE"
-  "$ENGINE"
   "$ENGINE $APP"
   "$APP"
   "$ENGINE $APP"
@@ -115,9 +111,7 @@ SCOPES=(
 ADVICE=(
   "MicCapture builds a fresh AVCaptureSession recorder per capture — a long-lived engine goes stale on a device switch"
   "the dictation API returns the full text in one response; there is no streaming path"
-  "cleanup is the API's server-side rewrite via config.llm_instruction on the same /v1/transcribe/live call"
   "transcription is a remote AssemblyAI call — no on-device ASR/LLM, no model cache"
-  "leave language to the model's own detection; setting the field takes that away"
   "config.conversation_context was replaced by config.stt_prompt (STTPrompt)"
   "config.prompt is config.stt_prompt's deprecated alias; a request carrying both is a 400 before the audio is read"
   "injection is always clipboard paste (save → write → ⌘V → settle → restore)"
@@ -135,9 +129,7 @@ ADVICE=(
 PROBES=(
   "let engine = AVAudioEngine()"
   "let task = session.webSocketTask(with: url) as URLSessionWebSocketTask"
-  "protocol StylerProtocol { func style(_ text: String) async throws -> String }"
   "import CoreML"
-  "case languageCode = \"language_code\""
   "case conversationContext = \"conversation_context\""
   "case prompt = \"prompt\""
   "CGEventKeyboardSetUnicodeString(event, count, chars)"
@@ -156,10 +148,8 @@ PROBES=(
 # safe to use as an anchor.
 TABLE_ANCHORS=(
   "Use \`AVAudioEngine\` / \`installTap\` for capture"
-  "Add streaming STT"
-  "Add a client-side LLM cleanup pass"
+  "Add WebSocket or incremental-response STT"
   "Add local models or model downloads"
-  "Pin transcription to English, or set a language at all"
   "Bring back \`config.conversation_context\`"
   "Send \`config.prompt\` alongside \`config.stt_prompt\`"
   "Add a keystroke-typing paste path or a length threshold"
@@ -177,10 +167,8 @@ TABLE_ANCHORS=(
 # skill's lines wrap and grep works a line at a time.
 SKILL_ANCHORS=(
   "No \`AVAudioEngine\` / \`installTap\` capture path."
-  "No streaming STT."
-  "No separate LLM cleanup pass."
+  "No WebSocket or incremental-response STT."
   "No local models / model downloads."
-  "Don't set a language — not a directive, and not \`config.language_codes\`."
   "There is no \`config.conversation_context\`."
   "Never send \`config.prompt\`."
   "Injection is always a clipboard paste"

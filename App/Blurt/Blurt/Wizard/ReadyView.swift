@@ -7,7 +7,7 @@ import SwiftUI
 /// own door to the Settings scene, alongside the standard app-menu
 /// "Settings…" (⌘,) and the menu-bar item.
 struct ReadyView: View {
-  var coordinator: AppCoordinator
+  @ObservedObject var coordinator: AppCoordinator
   var openSettings: () -> Void
   /// The style row's "+": opens Settings deep-linked to the Advanced pane,
   /// where styles are edited — a separate closure from `openSettings` so the

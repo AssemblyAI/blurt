@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 import os
 
 /// Everything the engine needs to know about *which app it is running inside*:
@@ -127,6 +126,17 @@ public struct HostIdentity: Sendable, Equatable {
   /// `scripts/reset-install.sh` hard-codes this service alongside the shipping
   /// one (bash can't read this constant); `HostIdentityTests` pins both.
   public static let blurtDev = blurt.withKeychainService("blurt-dev")
+
+  public static let vibeDictate = HostIdentity(
+    productName: "VibeDictate",
+    subsystem: "app.vibedictate",
+    keychainService: "vibedictate",
+    defaultsPrefix: "VibeDictate",
+    logDirectoryName: "VibeDictate",
+    releaseURL: URL(
+      staticString: "https://api.github.com/repos/AssemblyAI/blurt/releases/latest"))
+
+  public static let vibeDictateDev = vibeDictate.withKeychainService("vibedictate-dev")
 
   /// This identity with a different Keychain service. Private: the two values
   /// Blurt ships are the two above, and a host that wants a third builds it with

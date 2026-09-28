@@ -16,7 +16,11 @@ public enum PipelinePhase: Equatable, Sendable {
   /// during it is refused like one during `.recording`.
   case connecting
   case recording
+  /// The short dictation request reached its 115-second ceiling and was
+  /// cancelled. Microphone capture and the local WAV continue until release.
+  case longMode
   case transcribing
+  case normalizing
   case injecting
   case failed(BlurtError)
   case cancelled
@@ -39,7 +43,7 @@ public enum PipelinePhase: Equatable, Sendable {
   public var isTerminal: Bool {
     switch self {
     case .idle, .failed, .cancelled, .pasted, .noTarget: true
-    case .connecting, .recording, .transcribing, .injecting: false
+    case .connecting, .recording, .longMode, .transcribing, .normalizing, .injecting: false
     }
   }
 
@@ -50,8 +54,10 @@ public enum PipelinePhase: Equatable, Sendable {
   /// Exhaustive for the same reason as `isTerminal`.
   public var isCapturing: Bool {
     switch self {
-    case .connecting, .recording: true
-    case .idle, .transcribing, .injecting, .failed, .cancelled, .pasted, .noTarget: false
+    case .connecting, .recording, .longMode: true
+    case .idle, .transcribing, .normalizing, .injecting, .failed, .cancelled, .pasted,
+      .noTarget:
+      false
     }
   }
 

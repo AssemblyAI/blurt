@@ -24,7 +24,7 @@ import SwiftUI
 /// stored, how to get one, and what went wrong when AssemblyAI rejects one —
 /// lives in the sheet, which has room for it without crowding the form.
 struct APIKeyStepView: View {
-  var apiKey: APIKeyModel
+  @ObservedObject var apiKey: APIKeyModel
 
   /// The key currently in the Keychain, loaded on appear (empty when none).
   @State private var savedKey = ""
@@ -71,7 +71,7 @@ struct APIKeyStepView: View {
     // would leave the second window insisting "Not connected" and reopening its
     // sheet in first-connect mode. `hasAPIKey` is the observable edge; the
     // sheet's `onSaved` covers a rotation, which never moves it.
-    .onChange(of: apiKey.hasAPIKey) {
+    .onChange(of: apiKey.hasAPIKey) { _ in
       savedKey = apiKey.current ?? ""
     }
     .sheet(isPresented: $isPresentingEditor) {
@@ -109,7 +109,7 @@ struct APIKeyStepView: View {
 /// the trailing edge, and Return / Escape are scoped to the sheet rather than
 /// to the whole window.
 private struct APIKeyEditorSheet: View {
-  var apiKey: APIKeyModel
+  @ObservedObject var apiKey: APIKeyModel
   /// The key already stored, empty on first run. Drives the first-connect vs.
   /// rotate wording, and whether the "get a key" action is worth showing at all
   /// (once a key exists the user has clearly already found the dashboard).
@@ -235,7 +235,7 @@ private struct APIKeyEditorSheet: View {
     .disableAutocorrection(true)
     .focused($fieldFocused)
     .onSubmit(submit)
-    .onChange(of: draft) { errorMessage = nil }
+    .onChange(of: draft) { _ in errorMessage = nil }
     // `LabeledContent`'s label doesn't reliably reach the field itself, and the
     // title above is empty (the prompt is the placeholder), so name it here.
     .accessibilityLabel("API Key")

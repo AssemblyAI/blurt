@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 
 @testable import BlurtEngine
 

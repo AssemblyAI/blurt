@@ -49,15 +49,16 @@ genuinely correct, and reaching for it means it's time to stop and ask.
 
 ## Transcription pipeline
 
-- **No streaming STT.** The AssemblyAI Sync API returns the full transcript in
-  one response. Overlay goes "Transcribing…" → full text. The route is named
+- **No WebSocket or incremental-response STT.** The short request body streams
+  into AssemblyAI, but the API returns the full transcript in one response. The
+  route is named
   `/v1/transcribe/live` and the `config` part must precede the `audio` part, but
   that is about the **upload**: the service starts inferring as the audio
   arrives, and still answers with one final transcript. No deltas, no partial
   results, no WebSocket — don't read the route name as permission to add them.
-- **No separate LLM cleanup pass.** Cleanup rides in the same dictation request,
-  as `config.llm_instruction` (`CleanupInstruction`). No LLM Gateway
-  client, no `StylerProtocol`, no post-transcription styling stage.
+- **Preserve VibeDictate's normalization fallback.** OpenRouter normalization is
+  best-effort: short uses normalized → AssemblyAI clean → raw, and long uses
+  normalized → raw. Never lose a usable transcript when normalization fails.
 - **No local models / model downloads.** Transcription is a remote AssemblyAI
   call. No on-device ASR/LLM, no model cache, no download UI.
 - **There is no `config.conversation_context`.** `config.stt_prompt`
@@ -115,16 +116,9 @@ only one of stt_prompt or prompt; they are the same field`, before the audio is
 - Don't reintroduce a "remove filler words (um, uh, like)" directive —
   `universal-3-5-pro` ignores it; it was deliberately dropped, and there is no
   prompt field to put it in now.
-- **Don't set a language — not a directive, and not `config.language_codes`.**
-  Pinning transcription to English hurt non-English speech. Detection was
-  measured to work with no language field and no prompt (Spanish, French, German
-  and Japanese clips each came back in their own language), and re-measured
-  2026-09-11: a Spanish clip came back as Spanish with no field, with
-  `language_codes: ["es"]`, **and** with `language_codes: ["en"]` — the field
-  does not appear to constrain output on this route, so the reference's `["en"]`
-  default does not describe the behaviour. Note the plural is the documented
-  spelling, but the singular `language_code` is accepted too (a 200, not an
-  unknown-key 400), so both are live and `KeytermsWireTests` pins both absent.
+- **VibeDictate is Russian-first with English code-switching.** The short route
+  sends the documented `config.language_codes: ["ru", "en"]`; the long
+  Universal-2 route sends its documented `language_code: "ru"`.
 - **Injection is always a clipboard paste** (save → write → ⌘V → settle →
   restore), degrading to "left it on the clipboard" when the target is lost. No
   keystroke-by-keystroke typing path, no length threshold.

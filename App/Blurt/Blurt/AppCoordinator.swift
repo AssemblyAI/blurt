@@ -1,8 +1,8 @@
 import BlurtEngine
-import Observation
+import Combine
+import Foundation
 
-@Observable
-final class AppCoordinator {
+final class AppCoordinator: ObservableObject {
   /// The dictation pill. Created lazily by `showOverlay()` — never at launch —
   /// so the panel and its SwiftUI host aren't built until the app is fully
   /// configured and the pill is about to appear. Stays nil through onboarding.
@@ -13,24 +13,39 @@ final class AppCoordinator {
   /// setup/settings window forward so the user lands on the actionable fix rather
   /// than seeing a message that disappears.
   let onSetupBlocked: @MainActor () -> Void
+  let onInsertLast: @MainActor @Sendable () -> Void
+  let onOpenHistory: @MainActor @Sendable () -> Void
+  let onRecordingStarted: @MainActor @Sendable () -> Void
+  let onTranscriptSaved: @MainActor @Sendable (String) -> Void
+  let onDictationFailed: @MainActor @Sendable (String) -> Void
+  let onDictationDiscarded: @MainActor @Sendable () -> Void
+  let onRecordChanged: @MainActor @Sendable (DictationRecord) -> Void
+  let onRecordDiscarded: @MainActor @Sendable (UUID) -> Void
 
   let session: DictationSession
   /// The mic seam, kept beyond session construction for its two side features —
   /// the loudness `levels` feed that drives the overlay meter and the `warmUp()`
   /// pre-open — both carried by `MicCaptureProtocol` itself (with no-op
   /// defaults), so stubs need supply neither.
-  @ObservationIgnored private let mic: any MicCaptureProtocol
+  private let mic: any MicCaptureProtocol
   /// The API-key surface (storage seam, validate-then-save flow, and the
   /// observable `hasAPIKey` flag), extracted so the coordinator stays focused on
   /// pipeline↔UI wiring. The wizard and the API-key view observe this directly
   /// rather than reaching through the coordinator (see `APIKeyModel`).
   let apiKey: APIKeyModel
-  @ObservationIgnored private var phaseObserver: Task<Void, Never>?
-  @ObservationIgnored private var levelsObserver: Task<Void, Never>?
-  @ObservationIgnored var keyTap: DictationKeyTap?
+  private var phaseObserver: Task<Void, Never>?
+  private var levelsObserver: Task<Void, Never>?
+  var keyTap: DictationKeyTap?
 
-  @ObservationIgnored private let transcriptStream: AsyncStream<RecentDictations>
-  @ObservationIgnored private var transcriptObserver: Task<Void, Never>?
+  private let transcriptStream: AsyncStream<RecentDictations>
+  private var transcriptObserver: Task<Void, Never>?
+  private let recordStream: AsyncStream<RecordUpdate>
+  private var recordObserver: Task<Void, Never>?
+
+  private enum RecordUpdate: Sendable {
+    case changed(DictationRecord)
+    case discarded(UUID)
+  }
 
   /// The dictations that produced a transcript — pasted, copied, or even
   /// failed-to-paste (the seam fires before injection) — newest first, the first
@@ -42,17 +57,17 @@ final class AppCoordinator {
   /// (it builds each request's `conversation_context` from it, inside the actor)
   /// and pushes the updated value here, so this can't drift from what was
   /// actually sent. Nothing outside the session records into it.
-  private(set) var recentDictations = RecentDictations()
+  @Published private(set) var recentDictations = RecentDictations()
 
   /// Live dictation status for the menu bar indicator (see `MenuBarLabel`).
   /// Updated in `render(_:)` alongside the overlay pill. The menu bar item is a
   /// convenience layered on the Dock app and can be hidden behind the notch on a
   /// crowded menu bar, so nothing here is relied on for correctness.
-  private(set) var menuBarStatus: MenuBarStatus = .idle
+  @Published private(set) var menuBarStatus: MenuBarStatus = .idle
   /// Whether the mic is being brought up or capturing (`PipelinePhase
   /// .isCapturing`) — the ready screen disables the style switcher on it, and
   /// its `.recording` half (via `menuBarStatus`) drives the listening state.
-  private(set) var isCapturing = false
+  @Published private(set) var isCapturing = false
 
   /// `components` defaults to the production pipeline; `apiKey` defaults to the
   /// production Keychain-backed model. Tests/UI-tests inject deterministic
@@ -61,10 +76,26 @@ final class AppCoordinator {
   /// still owns the never-persist-an-unverified-key invariant either way.
   init(
     onSetupBlocked: @escaping @MainActor () -> Void,
+    onInsertLast: @escaping @MainActor @Sendable () -> Void = {},
+    onOpenHistory: @escaping @MainActor @Sendable () -> Void = {},
+    onRecordingStarted: @escaping @MainActor @Sendable () -> Void = {},
+    onTranscriptSaved: @escaping @MainActor @Sendable (String) -> Void = { _ in },
+    onDictationFailed: @escaping @MainActor @Sendable (String) -> Void = { _ in },
+    onDictationDiscarded: @escaping @MainActor @Sendable () -> Void = {},
+    onRecordChanged: @escaping @MainActor @Sendable (DictationRecord) -> Void = { _ in },
+    onRecordDiscarded: @escaping @MainActor @Sendable (UUID) -> Void = { _ in },
     components: DictationComponents = .production(),
     apiKey: APIKeyModel = APIKeyModel()
   ) {
     self.onSetupBlocked = onSetupBlocked
+    self.onInsertLast = onInsertLast
+    self.onOpenHistory = onOpenHistory
+    self.onRecordingStarted = onRecordingStarted
+    self.onTranscriptSaved = onTranscriptSaved
+    self.onDictationFailed = onDictationFailed
+    self.onDictationDiscarded = onDictationDiscarded
+    self.onRecordChanged = onRecordChanged
+    self.onRecordDiscarded = onRecordDiscarded
     self.apiKey = apiKey
 
     // Buffering the newest is enough: each element is the *whole* ring as of that
@@ -74,19 +105,42 @@ final class AppCoordinator {
     let (transcriptStream, transcriptContinuation) = AsyncStream.makeStream(
       of: RecentDictations.self, bufferingPolicy: .bufferingNewest(1))
     self.transcriptStream = transcriptStream
+    let (recordStream, recordContinuation) = AsyncStream.makeStream(
+      of: RecordUpdate.self, bufferingPolicy: .unbounded)
+    self.recordStream = recordStream
 
     self.mic = components.mic
+    let vibePipeline = components.vibePipeline.map { pipeline in
+      VibeDictationPipeline(
+        router: pipeline.router, makeAudioWriter: pipeline.makeAudioWriter,
+        normalizer: pipeline.normalizer,
+        normalizationModel: pipeline.normalizationModel,
+        onRecordChanged: { record in
+          recordContinuation.yield(.changed(record))
+        },
+        onRecordDiscarded: { id in
+          recordContinuation.yield(.discarded(id))
+        })
+    }
     self.session = DictationSession(
       mic: components.mic,
       transcriber: components.transcriber,
       injector: components.injector,
+      // VibeDictate has one vocabulary source for both recognition and
+      // post-processing. It is evaluated per press so Settings edits apply to
+      // the very next request without rebuilding the coordinator.
+      keyTermsProvider: { VocabularyStore().terms },
+      vibePipeline: vibePipeline,
       // A press with no key saved fails fast as .failed(.apiKeyMissing) —
       // before any capture — and render(_:) routes it to the settings window.
       readinessCheck: apiKey.readinessCheck(),
       // The session stamps and records each entry inside its own actor, so the
       // Recent row's time can't drift if this observer drains the buffer late
       // under contention — and the text needs no separate channel.
-      onTranscriptDelivered: { _, recents in transcriptContinuation.yield(recents) }
+      onTranscriptDelivered: { text, recents in
+        transcriptContinuation.yield(recents)
+        Task { @MainActor in onTranscriptSaved(text) }
+      }
     )
   }
 
@@ -98,6 +152,7 @@ final class AppCoordinator {
     phaseObserver?.cancel()
     levelsObserver?.cancel()
     transcriptObserver?.cancel()
+    recordObserver?.cancel()
   }
 
   func start() {
@@ -132,7 +187,9 @@ final class AppCoordinator {
       onStop: { session.submit(.release) },
       onCancel: { session.submit(.cancel) },
       // Recovery-only teardown; `cancelRecording()`'s doc owns the rationale.
-      onRecordingDiscarded: { session.submit(.cancelRecording) }
+      onRecordingDiscarded: { session.submit(.cancelRecording) },
+      onInsertLast: onInsertLast,
+      onOpenHistory: onOpenHistory
     )
     // Deliberately *not* installed here: `CGEvent.tapCreate` for keystrokes is
     // itself what surfaces the system permission prompt, so creating the tap at
@@ -151,6 +208,12 @@ final class AppCoordinator {
     phaseObserver = observePhases()
     levelsObserver = observe(mic.levels) { $0.overlay?.pushLevel($1) }
     transcriptObserver = observe(transcriptStream) { $0.recentDictations = $1 }
+    recordObserver = observe(recordStream) { coordinator, update in
+      switch update {
+      case .changed(let record): coordinator.onRecordChanged(record)
+      case .discarded(let id): coordinator.onRecordDiscarded(id)
+      }
+    }
   }
 
   private func observePhases() -> Task<Void, Never> {
@@ -160,6 +223,11 @@ final class AppCoordinator {
         guard let self else { return }
         if Task.isCancelled { return }
         self.render(phase)
+        if phase == .recording { self.onRecordingStarted() }
+        if case .failed(let error) = phase {
+          self.onDictationFailed(error.localizedDescription)
+        }
+        if phase == .cancelled { self.onDictationDiscarded() }
       }
     }
   }

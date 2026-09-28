@@ -1,5 +1,5 @@
 import BlurtEngine
-import Observation
+import Combine
 
 /// The app shell's API-key surface, extracted from `AppCoordinator` so the
 /// coordinator stays focused on wiring the pipeline to the UI. Owns the storage
@@ -11,20 +11,19 @@ import Observation
 /// the coordinator. The validate-and-never-persist-an-unverified-key rules
 /// themselves live in the engine's `APIKeySubmission`, where `swift test` covers
 /// them; this type just forwards and mirrors the result into `hasAPIKey`.
-@Observable
-final class APIKeyModel {
+final class APIKeyModel: ObservableObject {
   /// Storage for the API key. Production hits the Keychain via `APIKeyStore`;
   /// UI tests inject an in-memory store so the real key is never touched.
-  @ObservationIgnored private let keyStore: any APIKeyGateway
+  private let keyStore: any APIKeyGateway
   /// The validate-then-save flow over `keyStore` (engine-owned + unit-tested).
   /// Carries the injected validator: AssemblyAI's real network check in
   /// production, an offline stub under UI testing — both through the one submit
   /// path, so there's no test-only branch here.
-  @ObservationIgnored private let submission: APIKeySubmission
+  private let submission: APIKeySubmission
 
   /// Whether an AssemblyAI API key is currently saved. Drives the wizard (which
   /// gates dictation on having a key) and the Settings UI.
-  private(set) var hasAPIKey: Bool
+  @Published private(set) var hasAPIKey: Bool
 
   /// `validateKey` defaults to the engine's real AssemblyAI check; UI tests
   /// inject an offline validator so the settings flow needs no network.

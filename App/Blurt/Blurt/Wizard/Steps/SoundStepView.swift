@@ -5,7 +5,7 @@ import SwiftUI
 /// record-start/stop voice (or None); the choice is persisted and the cue
 /// players are reloaded immediately.
 struct SoundStepView: View {
-  var coordinator: AppCoordinator
+  @ObservedObject var coordinator: AppCoordinator
 
   // Empty means "no pack persisted" — the unset default belongs to
   // `SoundPackCatalog.fromPersisted` (below), which names no known voice for `""`

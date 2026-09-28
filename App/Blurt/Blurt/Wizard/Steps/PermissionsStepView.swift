@@ -7,7 +7,7 @@ import SwiftUI
 /// single page, so the rows simply reflect live status (the controller polls
 /// while the window is open).
 struct PermissionsStepView: View {
-  var controller: WizardController
+  @ObservedObject var controller: WizardController
 
   /// Observed rather than read once via `TriggerKeyStore()`: Settings is reachable
   /// with ⌘, while this page is showing, so a one-shot read left the footer naming
@@ -110,7 +110,7 @@ struct PermissionsStepView: View {
       // A grant that lands retires both cues: if the user later revokes it with
       // the wizard still open, the footer should re-arm from a fresh settings
       // tap rather than show the relaunch hint instantly with stale advice.
-      .onChange(of: controller.permissions.accessibility) {
+      .onChange(of: controller.permissions.accessibility) { _ in
         guard controller.permissions.accessibility else { return }
         openedAccessibilitySettings = false
         accessibilityGrantLooksStuck = false

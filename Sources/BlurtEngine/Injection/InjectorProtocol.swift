@@ -11,4 +11,15 @@ public protocol InjectorProtocol: Sendable {
   /// `priorText` is unreadable (see `KeyInjector.separatorBasis`); nil when the
   /// window exposes no title.
   func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws
+  func insert(
+    recordID: UUID, text: String, after priorText: String?, windowTitle: String?
+  ) async throws
+}
+
+extension InjectorProtocol {
+  public func insert(
+    recordID: UUID, text: String, after priorText: String?, windowTitle: String?
+  ) async throws {
+    try await insert(text, after: priorText, windowTitle: windowTitle)
+  }
 }

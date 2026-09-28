@@ -45,11 +45,11 @@ public enum PermissionsChecker {
   }
 
   private static func micGranted() -> Bool {
-    AVAudioApplication.shared.recordPermission == .granted
+    AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
   }
 
   public static func requestMicrophone() async -> Bool {
-    await AVAudioApplication.requestRecordPermission()
+    await AVCaptureDevice.requestAccess(for: .audio)
   }
 
   /// Opens System Settings to Privacy › Microphone. The fallback when the in-app

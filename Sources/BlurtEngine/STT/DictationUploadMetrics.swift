@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 import os
 
 // The chunked upload's instrumentation, split from `AssemblyAITranscriber.swift`

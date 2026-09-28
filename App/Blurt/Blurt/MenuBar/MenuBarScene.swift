@@ -10,7 +10,7 @@ import SwiftUI
 /// just draws what the engine resolves, mirroring how `OverlayView` renders
 /// `OverlayUIState`.
 struct MenuBarLabel: View {
-  var appDelegate: AppDelegate
+  @ObservedObject var appDelegate: AppDelegate
 
   var body: some View {
     let status = appDelegate.coordinator?.menuBarStatus ?? .idle
@@ -26,8 +26,7 @@ struct MenuBarLabel: View {
 /// invisible) dictation hotkey for discoverability and a one-click way back to
 /// the window.
 struct MenuBarContent: View {
-  var appDelegate: AppDelegate
-  @Environment(\.openSettings) private var openSettings
+  @ObservedObject var appDelegate: AppDelegate
 
   // Observed (as the ready screen does) so the reminder line updates live when
   // the dictation key is rebound in Settings — see `BoundTriggerKey`.
@@ -46,11 +45,10 @@ struct MenuBarContent: View {
       appDelegate.surfaceMainWindow()
     }
     Button("Settings…") {
-      NSApp.activate()
-      openSettings()
+      appDelegate.openSettings()
     }
     Button("Check for Updates…") {
-      NSApp.activate()
+      appDelegate.activateApp()
       appDelegate.updateCheckModel.checkForUpdates()
     }
 

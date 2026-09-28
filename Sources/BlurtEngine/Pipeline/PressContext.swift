@@ -1,5 +1,3 @@
-import Synchronization
-
 /// The press-time Accessibility read, and the one place it is published: waited
 /// on with a budget when the request opens, peeked at afterwards.
 ///

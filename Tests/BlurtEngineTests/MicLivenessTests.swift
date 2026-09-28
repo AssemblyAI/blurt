@@ -1,6 +1,5 @@
 import CoreAudio
 import Foundation
-import Synchronization
 import Testing
 
 @testable import BlurtEngine

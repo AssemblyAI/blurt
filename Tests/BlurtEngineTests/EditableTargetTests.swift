@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import BlurtEngine
@@ -59,6 +60,18 @@ struct EditableTargetTests {
     #expect(
       !FocusCapture.isEditableTarget(
         role: nil, valueSettable: false, hasInsertionPoint: false))
+  }
+
+  @Test("Electron bundle detection distinguishes framework presence")
+  func electronBundle() throws {
+    #expect(!FocusCapture.isElectronBundle(nil))
+    let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: folder) }
+    #expect(!FocusCapture.isElectronBundle(folder))
+    try FileManager.default.createDirectory(
+      at: folder.appending(path: "Contents/Frameworks/Electron Framework.framework"),
+      withIntermediateDirectories: true)
+    #expect(FocusCapture.isElectronBundle(folder))
   }
 }
 

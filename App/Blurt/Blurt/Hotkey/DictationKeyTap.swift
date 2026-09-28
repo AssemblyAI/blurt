@@ -1,3 +1,4 @@
+import AppKit
 import BlurtEngine
 import CoreGraphics
 import os
@@ -38,6 +39,8 @@ final class DictationKeyTap {
   /// cancel from the gate): recovery must only cancel a live *recording*, never
   /// a transcript already in flight — see `DictationSession.cancelRecording`.
   private let onRecordingDiscarded: @Sendable () -> Void
+  private let onInsertLast: @MainActor @Sendable () -> Void
+  private let onOpenHistory: @MainActor @Sendable () -> Void
 
   /// The engine-side event router (keycode relevance, down/up edge dedup, and
   /// the gate's tap/hold state machine — all unit-tested in BlurtEngine).
@@ -66,12 +69,16 @@ final class DictationKeyTap {
     onStart: @escaping @Sendable () -> Void,
     onStop: @escaping @Sendable () -> Void,
     onCancel: @escaping @Sendable () -> Void,
-    onRecordingDiscarded: @escaping @Sendable () -> Void
+    onRecordingDiscarded: @escaping @Sendable () -> Void,
+    onInsertLast: @escaping @MainActor @Sendable () -> Void = {},
+    onOpenHistory: @escaping @MainActor @Sendable () -> Void = {}
   ) {
     self.onStart = onStart
     self.onStop = onStop
     self.onCancel = onCancel
     self.onRecordingDiscarded = onRecordingDiscarded
+    self.onInsertLast = onInsertLast
+    self.onOpenHistory = onOpenHistory
     // Every half of the binding comes from its store, not a hard-coded
     // `.rightCommand` / `.tapOrHold`: `fromPersisted` owns the unset default, and
     // restating it here is the same mistake `BoundTriggerKey` and `HotkeyStepView`
@@ -206,6 +213,17 @@ final class DictationKeyTap {
       return
     }
 
+    // When VibeDictate is frontmost, the matching SwiftUI command handles the
+    // shortcut and supplies its menu discoverability. Avoid firing twice from
+    // the listen-only event tap, and ignore keyboard auto-repeat everywhere.
+    if type == .keyDown, !NSApp.isActive,
+      event.getIntegerValueField(.keyboardEventAutorepeat) == 0,
+      event.flags.contains(.maskCommand), event.flags.contains(.maskAlternate)
+    {
+      let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
+      if keyCode == GlobalHotkey.insertLast.keyCode { onInsertLast() }
+      if keyCode == GlobalHotkey.openHistory.keyCode { onOpenHistory() }
+    }
     guard let routed = routerEvent(type: type, event: event) else { return }
     let now = reference.duration(to: ContinuousClock.now)
     dispatch(router.handle(routed, at: now))

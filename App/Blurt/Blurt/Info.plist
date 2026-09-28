@@ -23,8 +23,8 @@
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
 	<key>LSMinimumSystemVersion</key>
-	<string>15.0</string>
+	<string>13.0</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Blurt uses your microphone to transcribe your dictation with AssemblyAI.</string>
+	<string>VibeDictate uses your microphone to transcribe your dictation with AssemblyAI.</string>
 </dict>
 </plist>

@@ -114,7 +114,7 @@ private struct TextShortcutEditorSheet: View {
           .focused($triggerFocused)
           .accessibilityLabel("Phrase")
           .accessibilityIdentifier(UITestIdentifiers.textShortcutTrigger)
-          .onChange(of: trigger) {
+          .onChange(of: trigger) { _ in
             if trigger.count > TextShortcutStore.triggerLimit {
               trigger = String(trigger.prefix(TextShortcutStore.triggerLimit))
             }
@@ -138,7 +138,7 @@ private struct TextShortcutEditorSheet: View {
         .lineLimit(1...6)
         .disableAutocorrection(true)
         .accessibilityIdentifier(UITestIdentifiers.textShortcutExpansion)
-        .onChange(of: expansion) {
+        .onChange(of: expansion) { _ in
           if expansion.count > TextShortcutStore.expansionLimit {
             expansion = String(expansion.prefix(TextShortcutStore.expansionLimit))
           }

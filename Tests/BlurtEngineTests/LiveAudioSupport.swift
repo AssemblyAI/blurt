@@ -1,6 +1,7 @@
 import Foundation
-import Synchronization
 import Testing
+
+@testable import BlurtEngine
 
 extension Tag {
   /// Marks tests that drive a real `AVCaptureSession` and the system mic. They

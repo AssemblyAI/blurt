@@ -1,5 +1,6 @@
 import Foundation
-import Synchronization
+
+@testable import BlurtEngine
 
 /// A manually-advanced `Clock` for deterministic timer tests: a `sleep` parks
 /// until `advance(by:)` moves virtual time past its deadline (or the sleeping

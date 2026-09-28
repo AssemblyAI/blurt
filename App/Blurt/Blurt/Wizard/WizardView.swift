@@ -15,8 +15,8 @@ import SwiftUI
 /// lives on the ready screen and Settings) — onboarding isn't the place to check
 /// for updates.
 struct WizardView: View {
-  var controller: WizardController
-  var coordinator: AppCoordinator
+  @ObservedObject var controller: WizardController
+  @ObservedObject var coordinator: AppCoordinator
 
   var body: some View {
     VStack(spacing: 0) {

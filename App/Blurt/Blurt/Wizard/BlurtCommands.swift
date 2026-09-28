@@ -15,6 +15,12 @@ struct BlurtCommands: Commands {
     CommandGroup(after: .appInfo) {
       Button("Check for Updates…") { appDelegate.updateCheckModel.checkForUpdates() }
     }
+    CommandMenu("Dictation") {
+      Button("Insert Last Dictation") { appDelegate.historyModel.insertLast() }
+        .keyboardShortcut("v", modifiers: [.option, .command])
+      Button("Open History") { appDelegate.openHistory() }
+        .keyboardShortcut("h", modifiers: [.option, .command])
+    }
     // Blurt ships no help book, so SwiftUI's default Help menu would show a
     // dead "Blurt Help" item that opens nothing. Remove it rather than leave
     // a control that does nothing.

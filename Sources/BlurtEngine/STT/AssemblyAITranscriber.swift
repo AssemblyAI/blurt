@@ -33,7 +33,7 @@ import os
 /// mention is `User-Agent`, which every HTTP client sends regardless — see
 /// `UserAgent` for why naming Blurt and its version there is not an exception
 /// to the rule above but a request the rule never governed.
-public struct AssemblyAITranscriber: TranscriberProtocol {
+public struct AssemblyAITranscriber: TranscriberProtocol, ShortSTTClient {
   /// Latency instrumentation for the dictation round-trip. Findable via:
   ///   log show --predicate 'subsystem == "dev.alex.blurt" && category == "Transcriber"' --last 1h
   ///
@@ -99,6 +99,22 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   public func transcribe(
     frames: AsyncStream<Data>, sampleRate: Int, context: TranscriptionContext?
   ) async throws -> String {
+    transcript(from: try await requestTranscription(frames: frames, sampleRate: sampleRate, context: context))
+  }
+
+  public func transcribeShort(
+    frames: AsyncStream<Data>, sampleRate: Int, context: TranscriptionContext?
+  ) async throws -> ShortTranscription {
+    let response = try await requestTranscription(
+      frames: frames, sampleRate: sampleRate, context: context)
+    return ShortTranscription(
+      raw: response.text,
+      assemblyClean: response.llmResponse.trimmedNonEmpty())
+  }
+
+  private func requestTranscription(
+    frames: AsyncStream<Data>, sampleRate: Int, context: TranscriptionContext?
+  ) async throws -> DictationResponse {
     guard let apiKey = apiKeyProvider(), !apiKey.isEmpty else {
       throw BlurtError.apiKeyMissing
     }
@@ -141,7 +157,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
       throw AssemblyAIError.malformedResponse
     }
     Self.logServerMetrics(response)
-    return transcript(from: response)
+    return response
   }
 
   /// Which of the two transcripts in the response to paste.

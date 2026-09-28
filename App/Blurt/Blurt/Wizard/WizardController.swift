@@ -1,5 +1,5 @@
 import BlurtEngine
-import Observation
+import Combine
 
 /// Backs first-run setup. Setup is a single page — the API key and the two
 /// permissions are all shown at once — and the main window shows it whenever the
@@ -11,9 +11,8 @@ import Observation
 /// a permission is later revoked — even while the app is sitting in the
 /// background with only the overlay pill — the poll catches it and brings the
 /// setup window forward.
-@Observable
-final class WizardController {
-  private(set) var permissions: PermissionStatus
+final class WizardController: ObservableObject {
+  @Published private(set) var permissions: PermissionStatus
 
   /// Whether the app is fully configured (all permissions + a saved key). Drives
   /// the main window's wizard-vs-ready routing and, off its transitions, the
@@ -31,25 +30,25 @@ final class WizardController {
   /// It doubles as the last-seen readiness edge: overlay visibility is driven by
   /// *transitions* (shown when the app becomes configured, hidden when it stops),
   /// so a steady-state poll never stomps the live recording pill back to idle.
-  private(set) var isReady = false
+  @Published private(set) var isReady = false
 
-  @ObservationIgnored private weak var coordinator: AppCoordinator?
+  private weak var coordinator: AppCoordinator?
   /// The API-key surface, observed directly for its `hasAPIKey` readiness input
   /// rather than reached through the coordinator (see `APIKeyModel`). Held
   /// strongly — it's a plain model with no back-reference to this controller, so
   /// there's no retain cycle, and the coordinator that also owns it lives for the
   /// whole app session.
-  @ObservationIgnored private let apiKey: APIKeyModel
-  @ObservationIgnored private var pollTask: Task<Void, Never>?
-  @ObservationIgnored private var keyObservationTask: Task<Void, Never>?
+  private let apiKey: APIKeyModel
+  private var pollTask: Task<Void, Never>?
+  private var keyObservation: AnyCancellable?
   /// Brings the setup window forward and activates the app. Invoked when a
   /// previously-configured app loses a requirement (e.g. a revoked permission) so
   /// the user is taken back to onboarding instead of left with a dead overlay.
-  @ObservationIgnored private let onNeedsForeground: @MainActor () -> Void
+  private let onNeedsForeground: @MainActor () -> Void
   /// How the live permission status is read. Defaults to the real
   /// `PermissionsChecker`; the UI-test harness injects an all-granted stub so the
   /// ready screen is reachable without the TCC grants the test host can't make.
-  @ObservationIgnored private let checkPermissions: () -> PermissionStatus
+  private let checkPermissions: () -> PermissionStatus
 
   init(
     coordinator: AppCoordinator,
@@ -91,20 +90,9 @@ final class WizardController {
   /// overlay the moment a verified key is saved rather than waiting for the
   /// next permission poll. Idempotent, like `startPolling`.
   private func observeAPIKeyReadiness() {
-    keyObservationTask?.cancel()
-    // `Observations` is macOS 26+. On macOS 15–25 there's no instant stream, so
-    // fall back to the setup poll: startPolling() → refreshPermissions() →
-    // syncReadiness() re-derives readiness (including hasAPIKey) each tick, so a
-    // saved key surfaces within a poll interval (≤1s during setup) rather than
-    // instantly — an acceptable degradation on older systems.
-    guard #available(macOS 26.0, *) else { return }
-    let apiKey = apiKey
-    let hasAPIKey = Observations { apiKey.hasAPIKey }
-    keyObservationTask = Task { @MainActor [weak self] in
-      for await _ in hasAPIKey {
-        self?.syncReadiness()
-      }
-    }
+    keyObservation = apiKey.$hasAPIKey
+      .removeDuplicates()
+      .sink { [weak self] _ in self?.syncReadiness() }
   }
 
   /// Starts the lifetime permission poll so a permission granted in System
@@ -168,6 +156,5 @@ final class WizardController {
 
   deinit {
     pollTask?.cancel()
-    keyObservationTask?.cancel()
   }
 }

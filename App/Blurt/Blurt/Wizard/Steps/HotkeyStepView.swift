@@ -6,7 +6,7 @@ import SwiftUI
 /// hold (push-to-talk), or both; changes are persisted and pushed to the event
 /// tap immediately.
 struct HotkeyStepView: View {
-  var coordinator: AppCoordinator
+  @ObservedObject var coordinator: AppCoordinator
 
   // `0` is "no keycode persisted", not a default binding: the unset default belongs
   // to `TriggerKey.fromPersisted` (below), which maps any unknown keycode to right

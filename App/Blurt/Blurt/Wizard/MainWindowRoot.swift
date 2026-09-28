@@ -57,9 +57,8 @@ enum MainWindow {
 /// app delegate (created at launch, before any window appears) and routes between
 /// the setup wizard (when the app isn't ready) and the ready screen (when it is).
 struct MainWindowRoot: View {
-  var appDelegate: AppDelegate
+  @ObservedObject var appDelegate: AppDelegate
   @Environment(\.openWindow) private var openWindow
-  @Environment(\.openSettings) private var openSettings
 
   var body: some View {
     if let controller = appDelegate.wizardController, let coordinator = appDelegate.coordinator {
@@ -67,13 +66,13 @@ struct MainWindowRoot: View {
         if controller.isReady {
           ReadyView(
             coordinator: coordinator,
-            openSettings: { openSettings() },
+            openSettings: { appDelegate.openSettings() },
             editStyles: {
               // "Edit Styles…" deep-links: flag the Advanced pane (where
               // styles are edited) before opening, so the user lands on the
               // Styles section instead of General — see `SettingsWindowRoot`.
               appDelegate.settingsOpensOnAdvanced = true
-              openSettings()
+              appDelegate.openSettings()
             })
         } else {
           WizardView(controller: controller, coordinator: coordinator)

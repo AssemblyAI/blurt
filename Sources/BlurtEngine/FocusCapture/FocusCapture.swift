@@ -4,6 +4,13 @@ import ApplicationServices
 struct CapturedFocus: Sendable {
   let pid: pid_t
   let processName: String?
+  let bundleIdentifier: String?
+
+  init(pid: pid_t, processName: String?, bundleIdentifier: String? = nil) {
+    self.pid = pid
+    self.processName = processName
+    self.bundleIdentifier = bundleIdentifier
+  }
 }
 
 enum FocusCapture {
@@ -12,7 +19,8 @@ enum FocusCapture {
     guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
     return CapturedFocus(
       pid: app.processIdentifier,
-      processName: app.localizedName
+      processName: app.localizedName,
+      bundleIdentifier: app.bundleIdentifier
     )
   }
 

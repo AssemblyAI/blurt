@@ -102,7 +102,7 @@ extension DictationSession {
     // after mic.stop()) nor the cancelled pipeline can overwrite it back to
     // .idle. Synchronous (no suspension), so it acts immediately rather than
     // queueing behind the pipeline's progress.
-    if phase == .transcribing || phase == .injecting {
+    if phase == .transcribing || phase == .normalizing || phase == .injecting {
       // Cancel but keep the handle so `awaitPipeline()` can join the cancelled task.
       pipelineTask?.cancel()
       // `setPhase(.cancelled)` also abandons the request, which cancelling the
@@ -110,6 +110,7 @@ extension DictationSession {
       // cancellation-aware, so the upload would finish and transcribe a
       // dictation the user dismissed.
       setPhase(.cancelled)
+      await discardVibeRecording()
       return
     }
     // `.connecting` gets the same treatment, for the same reason: it is in-flight
@@ -137,7 +138,7 @@ extension DictationSession {
     // Our turn is the cancel — clear the request whether or not an earlier
     // release already consumed it.
     cancelRequested = false
-    guard phase == .recording else { return }
+    guard phase == .recording || phase == .longMode else { return }
     await stopAndCancel()
   }
 
@@ -154,7 +155,7 @@ extension DictationSession {
   }
 
   private func performCancelRecording() async {
-    guard phase == .recording else { return }
+    guard phase == .recording || phase == .longMode else { return }
     await stopAndCancel()
   }
 }

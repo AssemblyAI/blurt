@@ -35,7 +35,9 @@ struct PipelinePhaseTests {
     // on a Bluetooth route, so it is very reachable.
     #expect(!PipelinePhase.connecting.isTerminal)
     #expect(!PipelinePhase.recording.isTerminal)
+    #expect(!PipelinePhase.longMode.isTerminal)
     #expect(!PipelinePhase.transcribing.isTerminal)
+    #expect(!PipelinePhase.normalizing.isTerminal)
     #expect(!PipelinePhase.injecting.isTerminal)
   }
 }

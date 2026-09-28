@@ -1,4 +1,5 @@
 @preconcurrency import AVFoundation
+import CoreAudio
 import Foundation
 
 /// One selectable input device: its persistent UID (what `MicDeviceStore` pins)
@@ -44,12 +45,64 @@ public enum AudioInputDevices {
   /// which is the filter the retired HAL path had to reconstruct by asking each
   /// device for the size of its input-scope stream list.
   public static func all() -> [AudioInputDevice] {
-    AVCaptureDevice.DiscoverySession(
-      deviceTypes: [.microphone], mediaType: .audio, position: .unspecified
-    )
-    .devices
-    .map { AudioInputDevice(uid: $0.uniqueID, name: $0.localizedName) }
-    .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    let devices: [AVCaptureDevice]
+    if #available(macOS 14, *) {
+      devices =
+        AVCaptureDevice.DiscoverySession(
+          deviceTypes: [.microphone], mediaType: .audio, position: .unspecified
+        ).devices
+    } else {
+      devices = legacyAudioDevices()
+    }
+    return
+      devices
+      .map { AudioInputDevice(uid: $0.uniqueID, name: $0.localizedName) }
+      .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+  }
+
+  /// macOS 13 predates the microphone discovery type. Resolve input-capable
+  /// Core Audio device UIDs through the same capture API used for recording.
+  private static func legacyAudioDevices() -> [AVCaptureDevice] {
+    var address = AudioObjectPropertyAddress(
+      mSelector: kAudioHardwarePropertyDevices,
+      mScope: kAudioObjectPropertyScopeGlobal,
+      mElement: kAudioObjectPropertyElementMain)
+    var size: UInt32 = 0
+    guard
+      AudioObjectGetPropertyDataSize(
+        AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size) == noErr
+    else { return [] }
+    var ids = [AudioDeviceID](repeating: 0, count: Int(size) / MemoryLayout<AudioDeviceID>.stride)
+    let status: OSStatus = ids.withUnsafeMutableBufferPointer { buffer in
+      guard let base = buffer.baseAddress else { return -1 }
+      return AudioObjectGetPropertyData(
+        AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, base)
+    }
+    guard status == noErr else { return [] }
+    return ids.compactMap { id in
+      var streams = AudioObjectPropertyAddress(
+        mSelector: kAudioDevicePropertyStreams,
+        mScope: kAudioObjectPropertyScopeInput,
+        mElement: kAudioObjectPropertyElementMain)
+      var streamSize: UInt32 = 0
+      guard AudioObjectGetPropertyDataSize(id, &streams, 0, nil, &streamSize) == noErr,
+        streamSize > 0
+      else { return nil }
+      var uidAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioDevicePropertyDeviceUID,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain)
+      var uidSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+      let storage = UnsafeMutableRawPointer.allocate(
+        byteCount: Int(uidSize), alignment: MemoryLayout<Unmanaged<CFString>?>.alignment)
+      defer { storage.deallocate() }
+      storage.initializeMemory(as: UInt8.self, repeating: 0, count: Int(uidSize))
+      guard AudioObjectGetPropertyData(id, &uidAddress, 0, nil, &uidSize, storage) == noErr,
+        let uid = storage.load(as: Unmanaged<CFString>?.self)?.takeRetainedValue()
+      else { return nil }
+      return AVCaptureDevice(uniqueID: uid as String)
+    }
+    .filter(\.isConnected)
   }
 
   /// The current default input device's name — what the picker's "Same as

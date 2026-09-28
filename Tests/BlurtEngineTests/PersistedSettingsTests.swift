@@ -41,6 +41,8 @@ struct PersistedSettingsTests {
     // The text shortcuts: left out, a reset would keep expanding the user's
     // phrases into their old snippets.
     #expect(PersistedSettings.allDefaultsKeys.contains(TextShortcutStore.defaultsKey))
+    #expect(PersistedSettings.allDefaultsKeys.contains(VocabularyStore.defaultsKey))
+    #expect(PersistedSettings.allDefaultsKeys.contains(OpenRouterModelStore.defaultsKey))
   }
 
   @Test("the roster carries no stale or duplicate keys")
@@ -48,7 +50,7 @@ struct PersistedSettingsTests {
     // Exactly the eleven known stores' keys (OverlayOriginStore contributes two,
     // StyleProfileStore three): a removed store must leave the roster in the same
     // change, and a key listed twice would hint at a copy-paste slip.
-    #expect(PersistedSettings.allDefaultsKeys.count == 14)
+    #expect(PersistedSettings.allDefaultsKeys.count == 16)
     #expect(Set(PersistedSettings.allDefaultsKeys).count == PersistedSettings.allDefaultsKeys.count)
   }
 
@@ -75,11 +77,13 @@ struct PersistedSettingsTests {
       LastUpdateCheckStore.defaultsKey,
       MicDeviceStore.defaultsKey,
       TextShortcutStore.defaultsKey,
+      VocabularyStore.defaultsKey,
+      OpenRouterModelStore.defaultsKey,
     ]
     #expect(storeKeys == Set(DefaultsKey.allCases.map(\.key)))
     // No two stores sharing a slot — the Set above would have quietly absorbed a
     // collision, and two stores on one key means each overwrites the other.
-    #expect(storeKeys.count == 14)
+    #expect(storeKeys.count == 16)
   }
 
   @Test("resetAll clears every roster key and leaves unrelated ones alone")

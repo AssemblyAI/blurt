@@ -1,8 +1,8 @@
 import AppKit
 import ApplicationServices
 import BlurtEngine
+import Combine
 import Foundation
-import Observation
 
 /// Owns the long-lived models and runs launch-time setup. The setup wizard and
 /// settings UI are SwiftUI `Window` scenes (see `BlurtApp` / `MainWindowRoot`
@@ -14,10 +14,11 @@ import Observation
 /// `wizardController` are assigned: they're created in `applicationDidFinishLaunching`,
 /// which can land *after* the window scene's first render — without observation
 /// the scene would keep showing its empty fallback and never refresh.
-@Observable
-final class AppDelegate: NSObject, NSApplicationDelegate {
-  private(set) var coordinator: AppCoordinator?
-  private(set) var wizardController: WizardController?
+final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
+  let historyModel = HistoryModel()
+  @Published private(set) var coordinator: AppCoordinator?
+  @Published private(set) var wizardController: WizardController?
+  private var modelObservations = Set<AnyCancellable>()
 
   /// Backs the app-menu "Check for Updates…" command, the menu-bar item, the
   /// Settings button, and the automatic launch check, so a check from any of
@@ -25,7 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// `lazy` so the UI-test substitution below can replace it before it's ever
   /// read — `applicationDidFinishLaunching` assigns `.uiTest()` ahead of the
   /// launch check, which is the first read on a normal launch.
-  @ObservationIgnored lazy var updateCheckModel = UpdateCheckModel()
+  lazy var updateCheckModel = UpdateCheckModel()
 
   /// One-shot deep-link into Settings, consumed by `SettingsWindowRoot`: while
   /// true, the Settings window switches to (or opens on) the Advanced pane,
@@ -34,16 +35,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// appear) so an already-open Settings window switches too, and reset by the
   /// consumer so every other route into Settings (⌘,, the Settings buttons,
   /// the menu-bar item) still opens on General as before.
-  var settingsOpensOnAdvanced = false
+  @Published var settingsOpensOnAdvanced = false
 
   /// Opens a window scene by id. The `openWindow` action lives in SwiftUI, so
   /// `MainWindowRoot` captures it here (in its launch-time `onAppear`) to give
   /// AppKit entry points — notably a Dock click with no open windows — a way to
   /// reopen a window once the user has closed them all.
-  @ObservationIgnored var openWindowByID: (@MainActor (String) -> Void)?
+  var openWindowByID: (@MainActor (String) -> Void)?
 
   /// Brings the main window forward (showing the wizard or the ready screen).
   func openMainWindow() { openWindowByID?(MainWindow.id) }
+
+  func openHistory() { openWindowByID?(HistoryWindow.id) }
+
+  func activateApp() {
+    if #available(macOS 14, *) {
+      NSApp.activate()
+    } else {
+      _ = NSRunningApplication.current.activate(options: [])
+    }
+  }
+
+  func openSettings() {
+    activateApp()
+    _ = NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+  }
 
   /// Surfaces the main window *and* makes the app frontmost. Shared by the menu
   /// bar's "Open Blurt", the missing-key hotkey nudge, and the permission-revoked
@@ -55,7 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// reliably re-front an existing one. Only when no main window exists (the user
   /// closed it) do we recreate it via the scene.
   func surfaceMainWindow() {
-    NSApp.activate()
+    activateApp()
     if let main = NSApp.windows.first(where: { $0.identifier?.rawValue == MainWindow.id }) {
       main.deminiaturize(nil)
       main.makeKeyAndOrderFront(nil)
@@ -65,7 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   /// True once the launch-time activation has run.
-  @ObservationIgnored private var didActivateAtLaunch = false
+  private var didActivateAtLaunch = false
 
   /// Pulls Blurt frontmost for its initial window presentation. Called from
   /// the main window's `onAppear` rather than `applicationDidFinishLaunching`:
@@ -86,7 +102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   func activateAtLaunchIfNeeded() {
     guard !didActivateAtLaunch else { return }
     didActivateAtLaunch = true
-    NSApp.activate()
+    activateApp()
     if let main = NSApp.windows.first(where: { $0.canBecomeMain }) {
       main.makeKeyAndOrderFront(nil)
       main.orderFrontRegardless()
@@ -105,6 +121,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // The overlay pill isn't built here — `AppCoordinator` creates it lazily in
     // `showOverlay()` once the app is fully configured.
     let onSetupBlocked: @MainActor () -> Void = { [weak self] in self?.surfaceMainWindow() }
+    let onInsertLast: @MainActor @Sendable () -> Void = { [weak self] in self?.historyModel.insertLast() }
+    let onOpenHistory: @MainActor @Sendable () -> Void = { [weak self] in self?.openHistory() }
+    #if UITEST_HOOKS
+      let onRecordingStarted: @MainActor @Sendable () -> Void = { [weak self] in
+        self?.historyModel.recordingStarted()
+      }
+      let onTranscriptSaved: @MainActor @Sendable (String) -> Void = { [weak self] text in
+        self?.historyModel.transcriptDelivered(text)
+      }
+      let onDictationFailed: @MainActor @Sendable (String) -> Void = { [weak self] message in
+        self?.historyModel.dictationFailed(message)
+      }
+      let onDictationDiscarded: @MainActor @Sendable () -> Void = { [weak self] in
+        self?.historyModel.dictationDiscarded()
+      }
+    #endif
+    let onRecordChanged: @MainActor @Sendable (DictationRecord) -> Void = { [weak self] record in
+      self?.historyModel.recordChanged(record)
+    }
+    let onRecordDiscarded: @MainActor @Sendable (UUID) -> Void = { [weak self] id in
+      self?.historyModel.recordDiscarded(id)
+    }
     let coord: AppCoordinator
     #if UITEST_HOOKS
       // Under UI testing, compose the app with offline stub collaborators and an
@@ -120,7 +158,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // these, by design.
         PersistedSettings.resetAll()
         coord = AppCoordinator(
-          onSetupBlocked: onSetupBlocked,
+          onSetupBlocked: onSetupBlocked, onInsertLast: onInsertLast,
+          onOpenHistory: onOpenHistory,
+          onRecordingStarted: onRecordingStarted, onTranscriptSaved: onTranscriptSaved,
+          onDictationFailed: onDictationFailed, onDictationDiscarded: onDictationDiscarded,
           components: .uiTest(),
           apiKey: APIKeyModel(
             keyStore: InMemoryAPIKeyStore(),
@@ -130,12 +171,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // `lazy` default is ever read (first check), so it replaces it cleanly.
         updateCheckModel = .uiTest()
       } else {
-        coord = AppCoordinator(onSetupBlocked: onSetupBlocked)
+        coord = AppCoordinator(
+          onSetupBlocked: onSetupBlocked, onInsertLast: onInsertLast,
+          onOpenHistory: onOpenHistory, onRecordChanged: onRecordChanged,
+          onRecordDiscarded: onRecordDiscarded)
       }
     #else
-      coord = AppCoordinator(onSetupBlocked: onSetupBlocked)
+      coord = AppCoordinator(
+        onSetupBlocked: onSetupBlocked, onInsertLast: onInsertLast,
+        onOpenHistory: onOpenHistory, onRecordChanged: onRecordChanged,
+        onRecordDiscarded: onRecordDiscarded)
     #endif
     self.coordinator = coord
+    coord.objectWillChange
+      .sink { [weak self] _ in self?.objectWillChange.send() }
+      .store(in: &modelObservations)
 
     // Start the coordinator *before* building the wizard: `start()` creates the
     // dictation key tap (without installing it — that would prompt for
@@ -157,6 +207,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     let wizard = makeWizardController(coord: coord)
     self.wizardController = wizard
+    wizard.objectWillChange
+      .sink { [weak self] _ in self?.objectWillChange.send() }
+      .store(in: &modelObservations)
 
     // A configured app checks for updates on its own shortly after launch —
     // at most once a day, and silent unless a newer release exists (see
@@ -301,7 +354,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// whatever the user was in. SwiftUI also doesn't reliably reopen a closed
   /// `Window` scene on its own, so we open it explicitly when none is visible.
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-    NSApp.activate()
+    activateApp()
     if !flag { openMainWindow() }
     return true
   }

@@ -1,7 +1,7 @@
 import AppKit
 import BlurtEngine
+import Combine
 import OSLog
-import Observation
 
 /// Runs an update check and reports the result in a modal alert (Sparkle-style).
 /// One shared instance (owned by `AppDelegate`) backs every entry point, so no
@@ -25,8 +25,7 @@ import Observation
 /// `NSAlert`, hosting it as a sheet, and opening the URL the default button
 /// carries.
 @MainActor
-@Observable
-final class UpdateCheckModel {
+final class UpdateCheckModel: ObservableObject {
   private let checker: UpdateChecker
   private let currentVersion: SemanticVersion?
   private let openURL: (URL) -> Void
@@ -44,7 +43,7 @@ final class UpdateCheckModel {
   /// button and menu both fired), so we never stack two result alerts. Observable
   /// so the Settings "Check for Updates" button can show a spinner and disable
   /// itself while a check runs — the feedback a slow connection otherwise lacks.
-  private(set) var isChecking = false
+  @Published private(set) var isChecking = false
 
   /// Title of the Settings "Updates" row, e.g. "Blurt 0.1.31" — or just "Blurt"
   /// when the bundle version can't be parsed (the button still works; the check

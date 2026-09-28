@@ -90,7 +90,7 @@ struct ResetSection: View {
     }
   }
 
-  let coordinator: AppCoordinator
+  @ObservedObject var coordinator: AppCoordinator
 
   @State private var prompt: Prompt?
 

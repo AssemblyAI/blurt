@@ -245,7 +245,17 @@ private struct RecentDictationRow: View {
     pasteboard.setString(entry.text, forType: .string)
 
     // The invisible pasteboard write gets audible + visible confirmation:
-    AccessibilityNotification.Announcement("Copied").post()
+    if #available(macOS 14, *) {
+      AccessibilityNotification.Announcement("Copied").post()
+    } else {
+      if let app = NSApp {
+        NSAccessibility.post(
+          element: app,
+          notification: .announcementRequested,
+          userInfo: [.announcement: "Copied", .priority: 50]
+        )
+      }
+    }
     showsCopyConfirmation = true
     copyCount += 1
   }

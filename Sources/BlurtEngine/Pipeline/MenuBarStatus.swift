@@ -38,8 +38,8 @@ extension PipelinePhase {
   /// How this phase should be reflected on the menu bar status item.
   public var menuBarStatus: MenuBarStatus {
     switch self {
-    case .recording: .recording
-    case .transcribing: .transcribing
+    case .recording, .longMode: .recording
+    case .transcribing, .normalizing: .transcribing
     // `.connecting` reads as idle: the filled glyph means "audio is being
     // captured", and during the mic bring-up it isn't yet — the same honesty
     // rule that holds the start chime. The pill carries the warming-up state,

@@ -10,9 +10,9 @@ import SwiftUI
 /// reuses the same section views the wizard's setup step uses, so the two stay
 /// in sync.
 struct SettingsWindowRoot: View {
-  var appDelegate: AppDelegate
+  @ObservedObject var appDelegate: AppDelegate
 
-  private enum Tab: Hashable { case general, textShortcuts, advanced }
+  private enum Tab: Hashable { case general, textShortcuts, vibeDictate, advanced }
 
   /// Drives the selected pane from `@State` (not the OS's persisted preference
   /// tab), so the window always opens on General. Without an explicit binding
@@ -31,6 +31,9 @@ struct SettingsWindowRoot: View {
         TextShortcutsSection()
           .tabItem { Label(UITestIdentifiers.textShortcutsTab, systemImage: "text.badge.plus") }
           .tag(Tab.textShortcuts)
+        VibeDictateSettingsTab(history: appDelegate.historyModel)
+          .tabItem { Label("VibeDictate", systemImage: "waveform.and.mic") }
+          .tag(Tab.vibeDictate)
         AdvancedSettingsTab(coordinator: coordinator, updateModel: appDelegate.updateCheckModel)
           .tabItem { Label(UITestIdentifiers.advancedSettingsTab, systemImage: "gearshape.2") }
           .tag(Tab.advanced)
@@ -42,14 +45,19 @@ struct SettingsWindowRoot: View {
       // still opens on General. `initial: true` covers the window being
       // (re)created after the flag was set; the observed change covers an
       // already-open Settings window, which switches panes in place.
-      .onChange(of: appDelegate.settingsOpensOnAdvanced, initial: true) {
-        guard appDelegate.settingsOpensOnAdvanced else { return }
-        tab = .advanced
-        appDelegate.settingsOpensOnAdvanced = false
+      .onAppear { consumeAdvancedDeepLink() }
+      .onChange(of: appDelegate.settingsOpensOnAdvanced) { _ in
+        consumeAdvancedDeepLink()
       }
     } else {
       Color.clear.frame(width: MainWindow.contentWidth, height: 240)
     }
+  }
+
+  private func consumeAdvancedDeepLink() {
+    guard appDelegate.settingsOpensOnAdvanced else { return }
+    tab = .advanced
+    appDelegate.settingsOpensOnAdvanced = false
   }
 }
 
@@ -70,7 +78,7 @@ private struct SettingsPane<Content: View>: View {
 /// The everyday setup a user changes: the AssemblyAI key, the dictation
 /// shortcut, the microphone, the cue sound, and the transcription key terms.
 private struct GeneralSettingsTab: View {
-  let coordinator: AppCoordinator
+  @ObservedObject var coordinator: AppCoordinator
 
   var body: some View {
     SettingsPane {
@@ -88,8 +96,8 @@ private struct GeneralSettingsTab: View {
 /// start-over button.
 /// Kept out of General so the common pane stays short.
 private struct AdvancedSettingsTab: View {
-  let coordinator: AppCoordinator
-  let updateModel: UpdateCheckModel
+  @ObservedObject var coordinator: AppCoordinator
+  @ObservedObject var updateModel: UpdateCheckModel
 
   var body: some View {
     SettingsPane {
@@ -269,7 +277,7 @@ private struct StyleProfileEditorSheet: View {
         .accessibilityIdentifier(UITestIdentifiers.styleProfileName)
         // Capped because the name labels a segment of the main window's
         // switcher; counted in characters, which is what that width bounds.
-        .onChange(of: name) {
+        .onChange(of: name) { _ in
           if name.count > StyleProfileStore.nameLimit {
             name = String(name.prefix(StyleProfileStore.nameLimit))
           }
@@ -297,7 +305,7 @@ private struct StyleProfileEditorSheet: View {
       .font(.body)
       .disableAutocorrection(true)
       .accessibilityIdentifier(UITestIdentifiers.styleProfileInstructions)
-      .onChange(of: instructions) {
+      .onChange(of: instructions) { _ in
         // The dictation API rejects the whole request over its instruction
         // limit, so text past the cap must never be storable.
         if instructions.utf8.count > StyleProfileStore.characterLimit {
@@ -372,7 +380,7 @@ private struct StyleProfileEditorSheet: View {
 /// the one `UpdateCheckModel` owned by `AppDelegate`, so a check from any place
 /// runs through the same controller.
 private struct UpdateSection: View {
-  let model: UpdateCheckModel
+  @ObservedObject var model: UpdateCheckModel
 
   var body: some View {
     Section {

@@ -57,6 +57,7 @@ struct RecordingCueGateTests {
     var gate = RecordingCueGate()
     #expect(gate.cue(for: .recording) == .start)
     #expect(gate.cue(for: .recording) == nil)
+    #expect(gate.cue(for: .longMode) == nil)
   }
 
   @Test("transitions between two non-recording phases are silent")

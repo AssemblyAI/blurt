@@ -1,5 +1,3 @@
-import Synchronization
-
 /// The narrow key-storage seam hosts compose against: read, write, and "is one
 /// saved?". `APIKeyStore` is deliberately static (one production Keychain item),
 /// so this protocol is how a host injects a different backing — most usefully

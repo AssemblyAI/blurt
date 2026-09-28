@@ -99,6 +99,7 @@
 		3407E8759D61D569A998EE78 /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 240939D503F3CE03A0697A5F /* AppCoordinator.swift */; };
 		342F0435944628D5A79DEC07 /* juno-75-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E22688A49EC9BD63DABF2A7B /* juno-75-stop.m4a */; };
 		351E74AD4AF61AC397D0E29F /* juno-0-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 812039ECEDABDEEE2EFA8BD5 /* juno-0-start.m4a */; };
+		35B9652F15F054306ECB55ED /* HistoryWindowRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38AB5AB10FC5BD42D1CF0DA8 /* HistoryWindowRoot.swift */; };
 		36500919A31FD54D0CBB6879 /* juno-4-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 7D97F15BC06507369522BB59 /* juno-4-stop.m4a */; };
 		3666B25BA68E77CE928E9AAC /* rom1a-17-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 5FBD6C327FE4EC154AF786C4 /* rom1a-17-start.m4a */; };
 		366F3493E15ABD4CEB8B204F /* juno-23-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2DB41AE5C69904E278F5C6E6 /* juno-23-start.m4a */; };
@@ -203,6 +204,7 @@
 		73FA46BD466212E9AE09C847 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C151FD5B49E5D7E61BDDEF0 /* App.swift */; };
 		74BD28AA54484635D62FA797 /* OverlayPillContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41AD30574EA478D2BD0E87ED /* OverlayPillContent.swift */; };
 		750BE46A52E2E794D4FD3366 /* rom1b-26-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DD0650160548287F62C1FA77 /* rom1b-26-start.m4a */; };
+		758EFEAEC0C232A67EDFCB2C /* HistoryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C1F122460C9B8F5325B956B /* HistoryModel.swift */; };
 		7661BD55883B6F3B03AA3905 /* juno-40-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = BCE9C2C9715E2C1C96683AE0 /* juno-40-stop.m4a */; };
 		76C1876DB538F8E190EB509E /* BlurtCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = D643CB1D491E00A2182907F8 /* BlurtCommands.swift */; };
 		771F23875EE95C160EF71EC9 /* juno-62-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 86140F16972A9661816EC786 /* juno-62-start.m4a */; };
@@ -306,6 +308,7 @@
 		B13A61E6F639E2543D4B6804 /* juno-51-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 36CF30F1384D606BE74362C8 /* juno-51-start.m4a */; };
 		B13F272AB1FF6533B5636595 /* juno-40-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = CFA57E6B7B3A81E2531990B5 /* juno-40-start.m4a */; };
 		B2DD0930AA5C7250B6FB127C /* juno-117-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = CB487BE3C821FF18E414CF4B /* juno-117-stop.m4a */; };
+		B34CAE75564AE39C265B5D1B /* VibeDictateSettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA2EA070C014E19FF2FDD6FB /* VibeDictateSettingsTab.swift */; };
 		B391EA5F093506B3DF318F10 /* AppCoordinator+UITesting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3611A8FA0547B780D0804F52 /* AppCoordinator+UITesting.swift */; };
 		B3D0BB7BB889FA8C8E0D2B56 /* juno-14-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 32AAFF585AF1A77D0D872F11 /* juno-14-start.m4a */; };
 		B3FC1877229B7510E656EEFC /* rom1a-7-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D79CA18872ADF342DE5426CA /* rom1a-7-stop.m4a */; };
@@ -564,7 +567,7 @@
 		3751D3C923F3614E866B947C /* juno-106-start.m4a */ = {isa = PBXFileReference; path = "juno-106-start.m4a"; sourceTree = "<group>"; };
 		37CBB4580F251B182A8B1937 /* SettingsWindowRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowRoot.swift; sourceTree = "<group>"; };
 		383E03AB60BA21AAD92655D5 /* ReadyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadyView.swift; sourceTree = "<group>"; };
-		38CAFC7A39E679F1CA3A9692 /* blurt */ = {isa = PBXFileReference; lastKnownFileType = folder; name = blurt; path = ../..; sourceTree = SOURCE_ROOT; };
+		38AB5AB10FC5BD42D1CF0DA8 /* HistoryWindowRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryWindowRoot.swift; sourceTree = "<group>"; };
 		3996A11A62CD49D6CB89CB8E /* rom1b-6-start.m4a */ = {isa = PBXFileReference; path = "rom1b-6-start.m4a"; sourceTree = "<group>"; };
 		3A0683C1BE5AD05E4C724956 /* BlurtUITestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlurtUITestSupport.swift; sourceTree = "<group>"; };
 		3A50C85936C100F9E51CC2AD /* TextShortcutsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextShortcutsSection.swift; sourceTree = "<group>"; };
@@ -690,6 +693,7 @@
 		79FDAA58085D83CB336E9578 /* juno-42-start.m4a */ = {isa = PBXFileReference; path = "juno-42-start.m4a"; sourceTree = "<group>"; };
 		7A6872FE0B51D0EC9C4B397B /* rom1b-10-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-10-stop.m4a"; sourceTree = "<group>"; };
 		7C151FD5B49E5D7E61BDDEF0 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
+		7C1F122460C9B8F5325B956B /* HistoryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryModel.swift; sourceTree = "<group>"; };
 		7D222ED050CC93DEB330E773 /* CueSoundPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CueSoundPlayer.swift; sourceTree = "<group>"; };
 		7D97F15BC06507369522BB59 /* juno-4-stop.m4a */ = {isa = PBXFileReference; path = "juno-4-stop.m4a"; sourceTree = "<group>"; };
 		7ED9A00CD960B3A33AC83C08 /* juno-72-stop.m4a */ = {isa = PBXFileReference; path = "juno-72-stop.m4a"; sourceTree = "<group>"; };
@@ -799,6 +803,7 @@
 		C7714523A92F4753092CA67C /* juno-81-start.m4a */ = {isa = PBXFileReference; path = "juno-81-start.m4a"; sourceTree = "<group>"; };
 		C7C95B4C80443E2A6EFE05E7 /* DeveloperSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperSection.swift; sourceTree = "<group>"; };
 		C7DAE8C9E70F6D2232F409DE /* juno-101-start.m4a */ = {isa = PBXFileReference; path = "juno-101-start.m4a"; sourceTree = "<group>"; };
+		CA2EA070C014E19FF2FDD6FB /* VibeDictateSettingsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeDictateSettingsTab.swift; sourceTree = "<group>"; };
 		CB487BE3C821FF18E414CF4B /* juno-117-stop.m4a */ = {isa = PBXFileReference; path = "juno-117-stop.m4a"; sourceTree = "<group>"; };
 		CBBA2376BDBD82E7474C9D84 /* juno-46-start.m4a */ = {isa = PBXFileReference; path = "juno-46-start.m4a"; sourceTree = "<group>"; };
 		CC40ECD64CC632EF7C26115F /* juno-49-start.m4a */ = {isa = PBXFileReference; path = "juno-49-start.m4a"; sourceTree = "<group>"; };
@@ -864,6 +869,7 @@
 		EAB0871FD8CB94A4DCF837CC /* rom1b-23-start.m4a */ = {isa = PBXFileReference; path = "rom1b-23-start.m4a"; sourceTree = "<group>"; };
 		EB08EC40A267C71B185EC782 /* juno-109-stop.m4a */ = {isa = PBXFileReference; path = "juno-109-stop.m4a"; sourceTree = "<group>"; };
 		EB504AAB7330EE4D4C1E4948 /* rom1a-26-start.m4a */ = {isa = PBXFileReference; path = "rom1a-26-start.m4a"; sourceTree = "<group>"; };
+		EBB78B0CFB0160E44BBD19EE /* Говорилка */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "Говорилка"; path = ../..; sourceTree = SOURCE_ROOT; };
 		EBB8641EF9B0108DC0B103B7 /* juno-120-stop.m4a */ = {isa = PBXFileReference; path = "juno-120-stop.m4a"; sourceTree = "<group>"; };
 		EC0CF2AE01C6EE41101CBB74 /* juno-17-stop.m4a */ = {isa = PBXFileReference; path = "juno-17-stop.m4a"; sourceTree = "<group>"; };
 		EC6584FE7C94EF604CA33BE3 /* rom1a-19-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-19-stop.m4a"; sourceTree = "<group>"; };
@@ -911,6 +917,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		01AEBADC752F536AAB194610 /* History */ = {
+			isa = PBXGroup;
+			children = (
+				7C1F122460C9B8F5325B956B /* HistoryModel.swift */,
+				38AB5AB10FC5BD42D1CF0DA8 /* HistoryWindowRoot.swift */,
+			);
+			path = History;
+			sourceTree = "<group>";
+		};
 		10E2E11380C974390308C1D2 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -937,6 +952,7 @@
 				78C5D6E7BD14D68FEB9BA215 /* SoundPackCatalog.swift */,
 				6072A6B0AC8219B5484326B3 /* UITestSupport.swift */,
 				7D6DE85EA50E7CD4CC977211 /* Branding */,
+				01AEBADC752F536AAB194610 /* History */,
 				DF92BBDB4B9C15FAE100B783 /* Hotkey */,
 				8C67CBF637D85C0F642E53B5 /* MenuBar */,
 				912505E1D0FBD5D5CA591BA2 /* Overlay */,
@@ -962,7 +978,7 @@
 		4B1375E36CD42DBEFF08BC7E /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				38CAFC7A39E679F1CA3A9692 /* blurt */,
+				EBB78B0CFB0160E44BBD19EE /* Говорилка */,
 			);
 			name = Packages;
 			sourceTree = "<group>";
@@ -1387,6 +1403,7 @@
 				37CBB4580F251B182A8B1937 /* SettingsWindowRoot.swift */,
 				30703F589CF213720C7E3B15 /* StyleRow.swift */,
 				3A50C85936C100F9E51CC2AD /* TextShortcutsSection.swift */,
+				CA2EA070C014E19FF2FDD6FB /* VibeDictateSettingsTab.swift */,
 				30E57A9C9B934A2120381005 /* WizardController.swift */,
 				7F646CD07DBBA47F44CE0AD1 /* WizardView.swift */,
 				F61744A7BF2B24E0C8078DE6 /* Steps */,
@@ -2026,6 +2043,8 @@
 				0F1317CCFA2A3245DAA96141 /* DictationComposition.swift in Sources */,
 				1C40B5DB92262E05808ECCEA /* DictationKeyTap.swift in Sources */,
 				B5A7CEA6517E5A1E4D77623F /* FloatingPanel.swift in Sources */,
+				758EFEAEC0C232A67EDFCB2C /* HistoryModel.swift in Sources */,
+				35B9652F15F054306ECB55ED /* HistoryWindowRoot.swift in Sources */,
 				F42E6D4E62345772C5A49A08 /* HotkeyStepView.swift in Sources */,
 				9B7CB19D131F1374FCA0A986 /* KeyTermsStepView.swift in Sources */,
 				E8AE03AA4DCD807D2BB8D660 /* LiquidGlass.swift in Sources */,
@@ -2047,6 +2066,7 @@
 				1817ACD2F7D8F7AF3C9B1C7C /* UITestIdentifiers.swift in Sources */,
 				E1CA5C692CB2A7E1BF231928 /* UITestSupport.swift in Sources */,
 				AB6CEBDE7BE4CA99EB469D8E /* UpdateCheckModel.swift in Sources */,
+				B34CAE75564AE39C265B5D1B /* VibeDictateSettingsTab.swift in Sources */,
 				91C1257866F6E2D4EE65BD09 /* WindowAccessor.swift in Sources */,
 				B844779F8427A1225C45A9FB /* WizardController.swift in Sources */,
 				DD800E4A2657C87DD45E4AF8 /* WizardView.swift in Sources */,
@@ -2090,7 +2110,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ARCHS = "$(ARCHS_STANDARD)";
+				ARCHS = "arm64 x86_64";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -2145,7 +2165,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -2161,7 +2181,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ARCHS = "$(ARCHS_STANDARD)";
+				ARCHS = "arm64 x86_64";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -2210,9 +2230,10 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -2226,7 +2247,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				BLURT_APP_NAME = Blurt;
+				BLURT_APP_NAME = VibeDictate;
 				CODE_SIGN_ENTITLEMENTS = Blurt/Blurt.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				INFOPLIST_FILE = Blurt/Info.plist;
@@ -2234,7 +2255,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = dev.alex.blurt;
+				PRODUCT_BUNDLE_IDENTIFIER = app.vibedictate;
 				SDKROOT = macosx;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
@@ -2267,7 +2288,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ARCHS = "$(ARCHS_STANDARD)";
+				ARCHS = "arm64 x86_64";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -2322,7 +2343,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -2338,7 +2359,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				BLURT_APP_NAME = "Blurt Dev";
+				BLURT_APP_NAME = "VibeDictate Dev";
 				CODE_SIGN_ENTITLEMENTS = Blurt/Blurt.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				INFOPLIST_FILE = Blurt/Info.plist;
@@ -2346,7 +2367,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = dev.alex.blurt.dev;
+				PRODUCT_BUNDLE_IDENTIFIER = app.vibedictate.dev;
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG UITEST_HOOKS";
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -2358,7 +2379,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				BLURT_APP_NAME = "Blurt Dev";
+				BLURT_APP_NAME = "VibeDictate Dev";
 				CODE_SIGN_ENTITLEMENTS = Blurt/Blurt.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				INFOPLIST_FILE = Blurt/Info.plist;
@@ -2366,7 +2387,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = dev.alex.blurt.dev;
+				PRODUCT_BUNDLE_IDENTIFIER = app.vibedictate.dev;
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;

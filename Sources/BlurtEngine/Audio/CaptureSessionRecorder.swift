@@ -2,7 +2,6 @@
 import CoreMedia
 import Dispatch
 import Foundation
-import Synchronization
 
 /// The capture backend (owner-directed move to `AVCaptureSession`, 2026-08-25):
 /// a session built fresh per capture around a single audio device — the device

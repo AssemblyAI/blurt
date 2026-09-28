@@ -67,37 +67,12 @@ extension HTTPClientTests {
     #expect(object["keyterms_prompt"] as? [String] == ["Blurt"])
   }
 
-  @Test("config part never sets a language, leaving detection to the model")
-  func configOmitsLanguageCode() throws {
-    // Absence is the decision, so it is asserted rather than assumed. The
-    // documented field is `language_codes` — plural, an array, which the
-    // reference says defaults to `["en"]`. The singular `language_code` is
-    // absent from the docs but still answered with a 200 rather than the
-    // `Extra inputs are not permitted` a bogus key earns (measured 2026-09-11),
-    // which makes it a **legacy alias on its way out**, not a supported
-    // alternative — the same shape as `prompt`, `keyterms` and `word_boost`.
-    // Both spellings are pinned absent here, and the undocumented one is the
-    // one it would be most tempting to reach for.
-    //
-    // The documented `["en"]` default does not describe the behaviour. Measured
-    // 2026-09-11 with a synthesized Spanish clip, all three came back as correct
-    // Spanish in both `text` and `llm_response`: no language field,
-    // `language_codes: ["es"]`, and `language_codes: ["en"]`. Even *explicitly*
-    // asking for English did not force English — so on this route the field does
-    // not appear to constrain the output at all, and omission is not a bet on a
-    // default. Setting it can only take working detection away.
-    //
-    // Measured against the live endpoint instead of reasoned about: with neither
-    // field set, Spanish, French, German and Japanese clips each came back
-    // correctly transcribed in their own language, and the cleanup rewrite left
-    // the language alone. Re-measured with `stt_prompt` in play (2026-09-10): a
-    // Spanish clip still came back in Spanish with an English prompt, a Spanish
-    // one, and none at all. So the managed default detects, and setting a language
-    // here would only take that away.
+  @Test("config uses Russian plus English technical vocabulary language codes")
+  func configCarriesRussianLanguageCodes() throws {
     let object = try steeringConfig()
     #expect(object.keys.contains("language_code") == false)
-    #expect(object.keys.contains("language_codes") == false)
-    #expect(object.keys.sorted() == ["channels", "llm_instruction", "sample_rate"])
+    #expect(object["language_codes"] as? [String] == ["ru", "en"])
+    #expect(object.keys.sorted() == ["channels", "language_codes", "llm_instruction", "sample_rate"])
   }
 
   @Test("config part omits each steering field when it has nothing to say")
@@ -160,7 +135,9 @@ extension HTTPClientTests {
   /// always-present `sample_rate` and `channels` subtracted, so the expectation
   /// reads as that argument's own contribution.
   private func rewriteKeys(_ instruction: String?) throws -> [String] {
-    try rewriteConfig(instruction).keys.filter { !["sample_rate", "channels"].contains($0) }
-      .sorted()
+    try rewriteConfig(instruction).keys.filter {
+      !["sample_rate", "channels", "language_codes"].contains($0)
+    }
+    .sorted()
   }
 }

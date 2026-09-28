@@ -3,7 +3,6 @@
 // `+Press.swift` documents. Foundation's last use here went with `mic.stop()`
 // returning a byte count instead of a `Data` blob.
 import Dispatch
-import Synchronization
 
 public actor DictationSession {
   /// Off-pool home for the press-time AX field read — see its use in
@@ -45,6 +44,9 @@ public actor DictationSession {
   let mic: MicCaptureProtocol
   let transcriber: TranscriberProtocol
   let injector: InjectorProtocol
+  /// VibeDictate's dual-route pipeline. Nil keeps the original Blurt pipeline
+  /// available to package embedders and its focused unit tests.
+  let vibePipeline: VibeDictationPipeline?
   /// Supplies the user's key terms (domain vocabulary) at press time, so each
   /// utterance's request boosts those spellings — as its own `keyterms_prompt` field
   /// (`KeytermsBoost`), not as part of the conversation context. A closure, rather
@@ -168,6 +170,14 @@ public actor DictationSession {
   /// route settles the context up front, so `cancel()` is now the whole of it.
   var upload: Task<String, any Error>?
 
+  /// State shared by the short and long routes for one physical capture.
+  var routingSession: STTRoutingSession?
+  var localAudioWriter: (any LocalAudioWriter)?
+  var currentJob: DictationJob?
+  var currentRecord: DictationRecord?
+  var recordedByteCount = 0
+  var latestGeneration: UInt64 = 0
+
   /// The production entry point: the real focus capture and the real
   /// developer-mode log. Delegates to the seam-carrying initializer below, which
   /// can't be public because it names internal types.
@@ -180,6 +190,7 @@ public actor DictationSession {
     keyTermsProvider: (@Sendable () -> [String])? = nil,
     styleNameProvider: (@Sendable () -> String?)? = nil,
     textShortcutsProvider: (@Sendable () -> [TextShortcut])? = nil,
+    vibePipeline: VibeDictationPipeline? = nil,
     readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
     onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)? = nil
   ) {
@@ -187,7 +198,8 @@ public actor DictationSession {
       mic: mic, transcriber: transcriber, injector: injector,
       maxRecordingSeconds: maxRecordingSeconds, clock: clock,
       keyTermsProvider: keyTermsProvider, styleNameProvider: styleNameProvider,
-      textShortcutsProvider: textShortcutsProvider, readinessCheck: readinessCheck,
+      textShortcutsProvider: textShortcutsProvider, vibePipeline: vibePipeline,
+      readinessCheck: readinessCheck,
       onTranscriptDelivered: onTranscriptDelivered, seams: .production)
   }
 
@@ -206,6 +218,7 @@ public actor DictationSession {
     keyTermsProvider: (@Sendable () -> [String])? = nil,
     styleNameProvider: (@Sendable () -> String?)? = nil,
     textShortcutsProvider: (@Sendable () -> [TextShortcut])? = nil,
+    vibePipeline: VibeDictationPipeline? = nil,
     readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
     onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)? = nil,
     seams: Seams
@@ -213,6 +226,7 @@ public actor DictationSession {
     self.mic = mic
     self.transcriber = transcriber
     self.injector = injector
+    self.vibePipeline = vibePipeline
     self.maxRecordingSeconds = maxRecordingSeconds
     self.clock = clock
     self.keyTermsProvider = keyTermsProvider ?? { KeyTermsStore().terms }
@@ -249,6 +263,7 @@ public actor DictationSession {
     // otherwise leave its request to be wound down by continuation deallocation
     // rather than by the rule.
     upload?.cancel()
+    routingSession?.cancel()
     commandFeed.finish()
     for continuation in continuations.values {
       continuation.finish()
@@ -290,7 +305,7 @@ public actor DictationSession {
   }
 
   private func performRelease() async {
-    guard phase == .recording else { return }
+    guard phase == .recording || phase == .longMode else { return }
     cancelAutoRelease()
     // Flip the phase before stopping the mic, not after: the stop chime and
     // the pill's "Transcribing…" ride this transition, and mic.stop() waits out
@@ -311,12 +326,24 @@ public actor DictationSession {
       if cancelWonRelease() { return }
       // Audio capture/conversion failed (e.g. the recorded file couldn't be
       // read back). Surface it instead of silently transcribing an empty blob.
-      setPhase(.failed(.audioCaptureFailed(underlying: error)))
+      let captureError = BlurtError.audioCaptureFailed(underlying: error)
+      if vibePipeline != nil {
+        routingSession?.cancel()
+        await localAudioWriter?.cancelAndDelete()
+        if var record = currentRecord {
+          record.audioRelativePath = nil
+          currentRecord = record
+        }
+        await failVibeRecord(captureError)
+      } else {
+        setPhase(.failed(captureError))
+      }
       return
     }
     // Honored again here, before any pipeline exists — deterministically no
     // transcription, no paste.
     if cancelWonRelease() { return }
+    recordedByteCount = recordedBytes
     // A clip too short for the STT model (an accidental brief tap) comes back
     // 200-with-empty-text, not 400 (measured) — so drop it as a silent no-op
     // rather than paying for a request that transcribes nothing.
@@ -328,6 +355,7 @@ public actor DictationSession {
     // write the closing boundary below `minPCMBytes` — leaving this as the
     // quiet path to `.idle`, not the only thing keeping a tap off the wire.
     guard recordedBytes >= SyncSTTLimits.minPCMBytes else {
+      await discardVibeRecording()
       setPhase(.idle)
       return
     }
@@ -384,6 +412,7 @@ public actor DictationSession {
       // shouldn't be shown.
       seams.logFailure(.audioCaptureFailed(underlying: error), capturedContext)
     }
+    await discardVibeRecording()
     setPhase(.cancelled)
   }
 

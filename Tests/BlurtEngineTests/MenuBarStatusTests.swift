@@ -14,7 +14,9 @@ struct MenuBarStatusTests {
   /// since its mapping encodes a deliberate policy rather than a coarser icon.
   static let projections: [(phase: PipelinePhase, expected: MenuBarStatus)] = [
     (.recording, .recording),
+    (.longMode, .recording),
     (.transcribing, .transcribing),
+    (.normalizing, .transcribing),
     (.idle, .idle),
     // The mic is still opening, so the coarse indicator rests at idle rather
     // than claiming "recording" — the one thing `.connecting` exists to prevent.
@@ -75,8 +77,10 @@ struct PipelinePhaseIsCapturingTests {
   func capturingCoversBringUpAndRecording() {
     #expect(PipelinePhase.connecting.isCapturing)
     #expect(PipelinePhase.recording.isCapturing)
+    #expect(PipelinePhase.longMode.isCapturing)
     #expect(!PipelinePhase.idle.isCapturing)
     #expect(!PipelinePhase.transcribing.isCapturing)
+    #expect(!PipelinePhase.normalizing.isCapturing)
     #expect(!PipelinePhase.injecting.isCapturing)
     #expect(!PipelinePhase.cancelled.isCapturing)
     #expect(!PipelinePhase.pasted.isCapturing)

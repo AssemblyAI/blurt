@@ -8,7 +8,7 @@ struct OverlayView: View {
   // below); the leaf bar view (`WaveformBarsLevel`, under `WaveformMeter`) reads `bridge.level`, so
   // @Observable confines the per-tick invalidation to the bars — the rest of
   // the pill stays stable.
-  let bridge: OverlayBridge
+  @ObservedObject var bridge: OverlayBridge
 
   private var state: OverlayUIState { bridge.state }
 
@@ -108,6 +108,9 @@ struct OverlayView: View {
       }
       .padding(.horizontal, Self.contentInset)
       .transition(.opacity)
+    case .longMode:
+      waitingContent("Long mode")
+        .transition(.opacity)
     case .processing:
       // The meter stops and the ring takes over as the activity cue, so the
       // wait for the dictation API + paste reads as active work rather than a
@@ -115,6 +118,9 @@ struct OverlayView: View {
       // what's beside it changes — which is what makes the pill read as one
       // surface progressing rather than three unrelated states.
       waitingContent("Transcribing")
+        .transition(.opacity)
+    case .normalizing:
+      waitingContent("Normalizing")
         .transition(.opacity)
     case .error(let message):
       // "Try again" tells the user what to do; the full failure reason is too

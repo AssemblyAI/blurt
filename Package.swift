@@ -1,9 +1,9 @@
-// swift-tools-version:6.2
+// swift-tools-version:6.0
 import PackageDescription
 
 let package = Package(
   name: "BlurtEngine",
-  platforms: [.macOS(.v15)],
+  platforms: [.macOS(.v13)],
   products: [
     .library(name: "BlurtEngine", targets: ["BlurtEngine"])
   ],

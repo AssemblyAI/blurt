@@ -1,5 +1,3 @@
-import Synchronization
-
 /// The in-memory memo in front of the API key's storage, plus the write path that
 /// keeps the two agreeing.
 ///
