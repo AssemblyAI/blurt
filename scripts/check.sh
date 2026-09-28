@@ -649,6 +649,7 @@ else
     xcodegen generate --quiet
     AFTER="$(shasum "$PBXPROJ" 2>/dev/null || true)"
     if [ -n "$BEFORE" ] && [ "$BEFORE" != "$AFTER" ]; then
+      git --no-pager diff -- "$PBXPROJ" || true
       echo "error: $PBXPROJ is out of sync with project.yml; run 'xcodegen generate' and commit it"
       exit 1
     fi
