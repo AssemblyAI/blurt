@@ -49,9 +49,9 @@ struct VibeDictateRetentionAndSettingsTests {
   }
 
   @Test("vocabulary migrates key terms, then respects explicit saved removals")
-  func vocabulary() {
+  func vocabulary() throws {
     let suite = "VibeDictateVocabularyTests.\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
+    let defaults = try #require(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }
     defaults.set("NewTerm, Swift", forKey: KeyTermsStore.defaultsKey)
     let store = VocabularyStore(defaults: defaults)
@@ -65,9 +65,9 @@ struct VibeDictateRetentionAndSettingsTests {
   }
 
   @Test("OpenRouter model uses default, saves override and resets on blank")
-  func model() {
+  func model() throws {
     let suite = "VibeDictateModelTests.\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
+    let defaults = try #require(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }
     let store = OpenRouterModelStore(defaults: defaults)
     #expect(store.modelID == OpenRouterTextNormalizer.defaultModel)

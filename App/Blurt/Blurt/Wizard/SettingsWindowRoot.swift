@@ -379,30 +379,3 @@ private struct StyleProfileEditorSheet: View {
 /// "Check for Updates…" app-menu command and the menu-bar item; all three share
 /// the one `UpdateCheckModel` owned by `AppDelegate`, so a check from any place
 /// runs through the same controller.
-private struct UpdateSection: View {
-  @ObservedObject var model: UpdateCheckModel
-
-  var body: some View {
-    Section {
-      // "Blurt 0.1.31" — the label is the engine's (shared with the result
-      // alerts, so the two can't name the version differently).
-      SettingRow(title: model.versionLabel, systemImage: "arrow.triangle.2.circlepath") {
-        HStack(spacing: 8) {
-          // A user-initiated check that can stall on a slow connection needs
-          // visible progress, or the button reads as dead until the result
-          // alert lands. Show a spinner and disable the button while in flight
-          // (the model already ignores a second check) — the native equivalent
-          // of Sparkle's "Checking for updates…".
-          if model.isChecking {
-            ProgressView().controlSize(.small)
-          }
-          Button("Check for Updates") { model.checkForUpdates() }
-            .disabled(model.isChecking)
-            .accessibilityIdentifier(UITestIdentifiers.updateCheck)
-        }
-      }
-    } header: {
-      Text("Updates")
-    }
-  }
-}

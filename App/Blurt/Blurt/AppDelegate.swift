@@ -120,7 +120,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     // launch), so it's set by the time the hotkey fires.
     // The overlay pill isn't built here — `AppCoordinator` creates it lazily in
     // `showOverlay()` once the app is fully configured.
-    let onSetupBlocked: @MainActor () -> Void = { [weak self] in self?.surfaceMainWindow() }
+    let callbacks = makeHistoryCallbacks()
+    let coord = makeCoordinator(callbacks: callbacks)
+    let wizard = makeWizardController(coord: coord)
+    self.wizardController = wizard
+    wizard.objectWillChange
+      .sink { [weak self] _ in self?.objectWillChange.send() }
+      .store(in: &modelObservations)
+    configureCoordinator(coord, wizard: wizard)
+  }
+
+  struct HistoryCallbacks {
+    let onInsertLast: @MainActor @Sendable () -> Void
+    let onOpenHistory: @MainActor @Sendable () -> Void
+    #if UITEST_HOOKS
+      let onRecordingStarted: @MainActor @Sendable () -> Void
+      let onTranscriptSaved: @MainActor @Sendable (String) -> Void
+      let onDictationFailed: @MainActor @Sendable (String) -> Void
+      let onDictationDiscarded: @MainActor @Sendable () -> Void
+    #endif
+    let onRecordChanged: @MainActor @Sendable (DictationRecord) -> Void
+    let onRecordDiscarded: @MainActor @Sendable (UUID) -> Void
+  }
+
+  func makeHistoryCallbacks() -> HistoryCallbacks {
     let onInsertLast: @MainActor @Sendable () -> Void = { [weak self] in self?.historyModel.insertLast() }
     let onOpenHistory: @MainActor @Sendable () -> Void = { [weak self] in self?.openHistory() }
     #if UITEST_HOOKS
@@ -143,8 +166,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     let onRecordDiscarded: @MainActor @Sendable (UUID) -> Void = { [weak self] id in
       self?.historyModel.recordDiscarded(id)
     }
-    let coord: AppCoordinator
     #if UITEST_HOOKS
+      return HistoryCallbacks(
+        onInsertLast: onInsertLast, onOpenHistory: onOpenHistory,
+        onRecordingStarted: onRecordingStarted, onTranscriptSaved: onTranscriptSaved,
+        onDictationFailed: onDictationFailed, onDictationDiscarded: onDictationDiscarded,
+        onRecordChanged: onRecordChanged, onRecordDiscarded: onRecordDiscarded)
+    #else
+      return HistoryCallbacks(
+        onInsertLast: onInsertLast, onOpenHistory: onOpenHistory,
+        onRecordChanged: onRecordChanged, onRecordDiscarded: onRecordDiscarded)
+    #endif
+  }
+
+  func makeCoordinator(callbacks: HistoryCallbacks) -> AppCoordinator {
+    let onSetupBlocked: @MainActor () -> Void = { [weak self] in self?.surfaceMainWindow() }
+    #if UITEST_HOOKS
+      var coordinator: AppCoordinator
       // Under UI testing, compose the app with offline stub collaborators and an
       // in-memory key store so the suite drives the real pipeline without a mic,
       // network, Accessibility, or the production Keychain item.
@@ -157,31 +195,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         // normal launch is untouched — running the UI tests locally does reset
         // these, by design.
         PersistedSettings.resetAll()
-        coord = AppCoordinator(
-          onSetupBlocked: onSetupBlocked, onInsertLast: onInsertLast,
-          onOpenHistory: onOpenHistory,
-          onRecordingStarted: onRecordingStarted, onTranscriptSaved: onTranscriptSaved,
-          onDictationFailed: onDictationFailed, onDictationDiscarded: onDictationDiscarded,
+        coordinator = AppCoordinator(
+          onSetupBlocked: onSetupBlocked, onInsertLast: callbacks.onInsertLast,
+          onOpenHistory: callbacks.onOpenHistory,
+          onRecordingStarted: callbacks.onRecordingStarted,
+          onTranscriptSaved: callbacks.onTranscriptSaved,
+          onDictationFailed: callbacks.onDictationFailed,
+          onDictationDiscarded: callbacks.onDictationDiscarded,
           components: .uiTest(),
           apiKey: APIKeyModel(
             keyStore: InMemoryAPIKeyStore(),
             validateKey: { UITestKeyValidation.result(for: $0) }))
-        // Offline update check so the Settings "Check for Updates" button shows a
-        // stable "up to date" result without reaching GitHub. Assigned before the
-        // `lazy` default is ever read (first check), so it replaces it cleanly.
-        updateCheckModel = .uiTest()
       } else {
-        coord = AppCoordinator(
-          onSetupBlocked: onSetupBlocked, onInsertLast: onInsertLast,
-          onOpenHistory: onOpenHistory, onRecordChanged: onRecordChanged,
-          onRecordDiscarded: onRecordDiscarded)
+        coordinator = AppCoordinator(
+          onSetupBlocked: onSetupBlocked, onInsertLast: callbacks.onInsertLast,
+          onOpenHistory: callbacks.onOpenHistory, onRecordChanged: callbacks.onRecordChanged,
+          onRecordDiscarded: callbacks.onRecordDiscarded)
       }
+      if UITestMode.isActive {
+        // Offline update check so UI tests get a stable result without reaching GitHub.
+        updateCheckModel = .uiTest()
+      }
+      return coordinator
     #else
-      coord = AppCoordinator(
-        onSetupBlocked: onSetupBlocked, onInsertLast: onInsertLast,
-        onOpenHistory: onOpenHistory, onRecordChanged: onRecordChanged,
-        onRecordDiscarded: onRecordDiscarded)
+      return AppCoordinator(
+        onSetupBlocked: onSetupBlocked, onInsertLast: callbacks.onInsertLast,
+        onOpenHistory: callbacks.onOpenHistory, onRecordChanged: callbacks.onRecordChanged,
+        onRecordDiscarded: callbacks.onRecordDiscarded)
     #endif
+  }
+
+  func configureCoordinator(_ coord: AppCoordinator, wizard: WizardController) {
     self.coordinator = coord
     coord.objectWillChange
       .sink { [weak self] _ in self?.objectWillChange.send() }
@@ -204,24 +248,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     // permission check, so the user isn't stuck on a modal that never dismisses.
     // See runAccessibilityGrantMigration().
     runAccessibilityGrantMigration()
-
-    let wizard = makeWizardController(coord: coord)
-    self.wizardController = wizard
-    wizard.objectWillChange
-      .sink { [weak self] _ in self?.objectWillChange.send() }
-      .store(in: &modelObservations)
-
-    // A configured app checks for updates on its own shortly after launch —
-    // at most once a day, and silent unless a newer release exists (see
-    // `UpdateCheckModel.checkForUpdatesAtLaunch`). Still download-only: the
-    // alert offers the DMG, nothing installs itself.
-    //
-    // Gated on the wizard's readiness so a first run never gets an update modal
-    // thrown over its setup screen. Read once, here, rather than observed: this
-    // is the launch check, not a watcher that fires the moment the user finishes
-    // onboarding — someone who just installed Blurt has the newest build.
     updateCheckModel.checkForUpdatesAtLaunch(isConfigured: wizard.isReady)
-
     #if UITEST_HOOKS
       // Build the overlay pill up front under UI testing so the suite can observe
       // it during dictation. Normally `WizardController` reveals it only on the

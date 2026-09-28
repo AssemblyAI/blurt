@@ -1,6 +1,26 @@
 import Foundation
 
 extension DictationSession {
+  func startInstalledVibePipeline() {
+    pipelineTask = Task { [weak self] in await self?.runVibeTranscribeNormalizeInject() }
+  }
+
+  func setPhaseForTesting(_ phase: PipelinePhase) {
+    setPhase(phase)
+  }
+
+  func installVibeState(
+    route: STTRoutingSession, writer: any LocalAudioWriter, job: DictationJob, record: DictationRecord,
+    latestGeneration: UInt64, recordedByteCount: Int
+  ) {
+    routingSession = route
+    localAudioWriter = writer
+    currentJob = job
+    currentRecord = record
+    self.latestGeneration = latestGeneration
+    self.recordedByteCount = recordedByteCount
+  }
+
   func startVibeRouting(frames: AsyncStream<Data>) async {
     guard let pipeline = vibePipeline, let job = currentJob else { return }
     var record = DictationRecord(job: job, status: .processing)
@@ -49,41 +69,56 @@ extension DictationSession {
       setPhase(.failed(.sttFailed(underlying: DictationPipelineError.uploadNeverStarted)))
       return
     }
-    defer {
-      if currentJob?.id == job.id {
-        routingSession = nil
-        localAudioWriter = nil
-        currentJob = nil
-        currentRecord = nil
-      }
-    }
+    defer { clearCompletedVibeJob(id: job.id) }
 
-    let bytesPerSecond = Int64(
-      SyncSTTLimits.sampleRate * SyncSTTLimits.channelCount * (SyncSTTLimits.bitDepth / 8))
-    record.durationMs = Int64(recordedByteCount) * 1_000 / bytesPerSecond
-    record.targetAppName = capturedContext?.appName ?? record.targetAppName
-    record.targetWindowTitle = capturedContext?.windowTitle
-
-    let routed: RoutedTranscription
     do {
-      routed = try await route.stop(
+      let bytesPerSecond = Int64(
+        SyncSTTLimits.sampleRate * SyncSTTLimits.channelCount * (SyncSTTLimits.bitDepth / 8))
+      record.durationMs = Int64(recordedByteCount) * 1_000 / bytesPerSecond
+      record.targetAppName = capturedContext?.appName ?? record.targetAppName
+      record.targetWindowTitle = capturedContext?.windowTitle
+      let routed = try await route.stop(
         durationSeconds: Double(record.durationMs) / 1_000,
         audioFileURL: await writer.fileURL)
+      if Task.isCancelled { return }
+      await normalizeAndDeliverVibe(
+        record: completedRecord(record, routed: routed), routed: routed,
+        job: job, pipeline: pipeline)
     } catch {
       if Task.isCancelled || error is CancellationError { return }
       currentRecord = record
       await failVibeRecord(error)
       return
     }
-    if Task.isCancelled { return }
+  }
 
+  private func clearCompletedVibeJob(id: UUID) {
+    guard currentJob?.id == id else { return }
+    routingSession = nil
+    localAudioWriter = nil
+    currentJob = nil
+    currentRecord = nil
+  }
+
+  private func completedRecord(
+    _ initialRecord: DictationRecord, routed: RoutedTranscription
+  ) -> DictationRecord {
+    var record = initialRecord
     record.pipelineMode = routed.mode
     record.sttProvider =
       routed.mode == .short ? "AssemblyAI Dictation API" : "AssemblyAI Universal-2"
     record.rawTranscript = routed.raw
     record.assemblyCleanTranscript = routed.assemblyClean
     currentRecord = record
-    pipeline.onRecordChanged(record)
+    vibePipeline?.onRecordChanged(record)
+    return record
+  }
+
+  func normalizeAndDeliverVibe(
+    record initialRecord: DictationRecord, routed: RoutedTranscription, job: DictationJob,
+    pipeline: VibeDictationPipeline
+  ) async {
+    var record = initialRecord
 
     var normalized: String?
     if let normalizer = pipeline.normalizer, routed.raw.trimmedNonEmpty() != nil {

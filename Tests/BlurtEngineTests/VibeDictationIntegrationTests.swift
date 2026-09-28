@@ -108,6 +108,43 @@ struct VibeDictationIntegrationTests {
     #expect(records.discarded == records.values.first?.id)
     #expect(injector.recordID == nil)
   }
+
+  @Test("a stale job is saved but never auto-inserted")
+  func staleJobIsNotInserted() async {
+    let records = IntegrationRecordBox()
+    let injector = IntegrationInjector()
+    let (frames, feed) = AsyncStream.makeStream(of: Data.self)
+    var record = DictationRecord(job: DictationJob(generation: 1), status: .processing)
+    record.rawTranscript = "old result"
+    let route = STTRouter(
+      shortClient: IntegrationShortClient(), longClient: IntegrationLongClient(),
+      cutoverDelay: .seconds(60)
+    )
+    .start(
+      frames: frames, writer: IntegrationAudioWriter(), context: nil, vocabulary: [])
+    feed.yield(StubPCM.aboveMinimum)
+    feed.finish()
+    let session = DictationSession(
+      mic: StubMicCapture(), transcriber: StubTranscriber(mode: .transcript("unused")),
+      injector: injector,
+      vibePipeline: VibeDictationPipeline(
+        router: STTRouter(
+          shortClient: IntegrationShortClient(), longClient: IntegrationLongClient()),
+        onRecordChanged: { records.append($0) }), seams: .offline)
+    await session.installVibeState(
+      route: route, writer: IntegrationAudioWriter(),
+      job: DictationJob(id: record.id, generation: 1), record: record,
+      latestGeneration: 2, recordedByteCount: StubPCM.aboveMinimum.count)
+    await session.setPhaseForTesting(.transcribing)
+
+    await session.startInstalledVibePipeline()
+    await session.awaitPipeline()
+
+    #expect(records.values.last?.rawTranscript == "raw")
+    #expect(records.values.last?.status == .ready)
+    #expect(injector.recordID == nil)
+    #expect(await session.phase == .idle)
+  }
 }
 
 private enum IntegrationFailure: Error, Sendable { case failed }

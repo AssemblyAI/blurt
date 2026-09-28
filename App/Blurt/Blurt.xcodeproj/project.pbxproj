@@ -36,6 +36,7 @@
 		1275CFCDBF1D593B545C8A84 /* rom1b-15-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6D89280137DAC07403FB60FC /* rom1b-15-start.m4a */; };
 		15210F6BE968D3E2EF771DE0 /* rom1a-5-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2CA6F4E6A10AE93F169DF19B /* rom1a-5-stop.m4a */; };
 		152452FE264E453808327885 /* juno-122-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 9FE15281EA6DE5C2C1978C44 /* juno-122-stop.m4a */; };
+		156E3AB91222CA0744CCE695 /* UpdateSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D74FA99603A5A22A142FA2B /* UpdateSection.swift */; };
 		1678C191033752690B8D54B7 /* juno-27-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 5F23A12A7A73E12FAB6DBD14 /* juno-27-start.m4a */; };
 		1698718150B4CE4C42101647 /* rom1a-2-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4E25792AC8E46820FF270D64 /* rom1a-2-start.m4a */; };
 		175154674D668762CDAF08E1 /* rom1a-25-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = A01872064CB7D739DE6F9952 /* rom1a-25-stop.m4a */; };
@@ -92,6 +93,7 @@
 		2F42560EDE7C8F097889A32D /* juno-33-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F7FE2B1E0DFA593ACFCEDA76 /* juno-33-start.m4a */; };
 		2F5526E7BF0E08FE4E74F2B2 /* juno-69-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DED921D522FA87E2970C2EFF /* juno-69-stop.m4a */; };
 		3015C1E46AE0ECA3A96F819C /* juno-69-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6A29FFB86C18EA299EAFFCFD /* juno-69-start.m4a */; };
+		31FD09AD349C00C71B4E408F /* HistoryModel+Operations.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7D774609D4BECC7253120CC /* HistoryModel+Operations.swift */; };
 		3246BF1C37C7A027817D9458 /* juno-110-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E552326770AD5967B8128420 /* juno-110-stop.m4a */; };
 		336F75E5060815018D79ACEB /* rom1b-21-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 01B663528C4E1AFEF24675E1 /* rom1b-21-start.m4a */; };
 		33C581B5DE3847C05F540701 /* juno-81-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3FCE941C19A3FF0DC61462B7 /* juno-81-stop.m4a */; };
@@ -387,6 +389,7 @@
 		DAD3C772A4DCE75359126F27 /* juno-37-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1EA8B0FCDE5A026C5E8B5EFA /* juno-37-start.m4a */; };
 		DB035E176FF9589F745696B9 /* juno-60-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2B964C67C7B0BA077F649FDA /* juno-60-stop.m4a */; };
 		DBCB55EFCB626E8019E41DCF /* juno-98-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 116DBF12743FC77F336A7820 /* juno-98-stop.m4a */; };
+		DBCB8BE5597166B03DAE0C67 /* HistoryModel+Processing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DC8C499600CE82713480A2B /* HistoryModel+Processing.swift */; };
 		DCA5DFE1633292340DDCDDFB /* juno-11-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = B75ED921A405BB7A0B0564A1 /* juno-11-stop.m4a */; };
 		DCC3074155A615A81B77DEB6 /* rom1b-12-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = B63CC1EF220EB3463D5A4BDF /* rom1b-12-start.m4a */; };
 		DCF53FA960D33C203F3FA65C /* juno-84-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 64A66B39BC8E13D32472709A /* juno-84-stop.m4a */; };
@@ -639,6 +642,7 @@
 		5B5B261F4D195B5E6E3B5567 /* rom1b-3-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-3-stop.m4a"; sourceTree = "<group>"; };
 		5D1E0161AF60ADB6D903535E /* juno-67-start.m4a */ = {isa = PBXFileReference; path = "juno-67-start.m4a"; sourceTree = "<group>"; };
 		5DB9D5866E9743B12589DFF4 /* rom1a-21-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-21-stop.m4a"; sourceTree = "<group>"; };
+		5DC8C499600CE82713480A2B /* HistoryModel+Processing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HistoryModel+Processing.swift"; sourceTree = "<group>"; };
 		5E2309BDEF30ED9EFED5B849 /* Blurt.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Blurt.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5EE551246F92A5923CDF2F59 /* rom1b-0-start.m4a */ = {isa = PBXFileReference; path = "rom1b-0-start.m4a"; sourceTree = "<group>"; };
 		5F06797402F73A862C8DFA12 /* juno-79-start.m4a */ = {isa = PBXFileReference; path = "juno-79-start.m4a"; sourceTree = "<group>"; };
@@ -673,6 +677,7 @@
 		6AFFA1AFC4F88A35BA39CECF /* juno-103-stop.m4a */ = {isa = PBXFileReference; path = "juno-103-stop.m4a"; sourceTree = "<group>"; };
 		6B2312DE4BC0F4F070830AD7 /* WindowAccessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowAccessor.swift; sourceTree = "<group>"; };
 		6B85C5A7CB0E82C4777D2430 /* juno-44-stop.m4a */ = {isa = PBXFileReference; path = "juno-44-stop.m4a"; sourceTree = "<group>"; };
+		6D74FA99603A5A22A142FA2B /* UpdateSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateSection.swift; sourceTree = "<group>"; };
 		6D89280137DAC07403FB60FC /* rom1b-15-start.m4a */ = {isa = PBXFileReference; path = "rom1b-15-start.m4a"; sourceTree = "<group>"; };
 		6D915D3DC8930DBC79CACDDC /* juno-27-stop.m4a */ = {isa = PBXFileReference; path = "juno-27-stop.m4a"; sourceTree = "<group>"; };
 		713974B393D43087E1F51493 /* juno-28-start.m4a */ = {isa = PBXFileReference; path = "juno-28-start.m4a"; sourceTree = "<group>"; };
@@ -802,6 +807,7 @@
 		C6EFB0086ED63DB182AFFC8F /* SettingsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsUITests.swift; sourceTree = "<group>"; };
 		C7714523A92F4753092CA67C /* juno-81-start.m4a */ = {isa = PBXFileReference; path = "juno-81-start.m4a"; sourceTree = "<group>"; };
 		C7C95B4C80443E2A6EFE05E7 /* DeveloperSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperSection.swift; sourceTree = "<group>"; };
+		C7D774609D4BECC7253120CC /* HistoryModel+Operations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HistoryModel+Operations.swift"; sourceTree = "<group>"; };
 		C7DAE8C9E70F6D2232F409DE /* juno-101-start.m4a */ = {isa = PBXFileReference; path = "juno-101-start.m4a"; sourceTree = "<group>"; };
 		CA2EA070C014E19FF2FDD6FB /* VibeDictateSettingsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeDictateSettingsTab.swift; sourceTree = "<group>"; };
 		CB487BE3C821FF18E414CF4B /* juno-117-stop.m4a */ = {isa = PBXFileReference; path = "juno-117-stop.m4a"; sourceTree = "<group>"; };
@@ -921,6 +927,8 @@
 			isa = PBXGroup;
 			children = (
 				7C1F122460C9B8F5325B956B /* HistoryModel.swift */,
+				C7D774609D4BECC7253120CC /* HistoryModel+Operations.swift */,
+				5DC8C499600CE82713480A2B /* HistoryModel+Processing.swift */,
 				38AB5AB10FC5BD42D1CF0DA8 /* HistoryWindowRoot.swift */,
 			);
 			path = History;
@@ -1403,6 +1411,7 @@
 				37CBB4580F251B182A8B1937 /* SettingsWindowRoot.swift */,
 				30703F589CF213720C7E3B15 /* StyleRow.swift */,
 				3A50C85936C100F9E51CC2AD /* TextShortcutsSection.swift */,
+				6D74FA99603A5A22A142FA2B /* UpdateSection.swift */,
 				CA2EA070C014E19FF2FDD6FB /* VibeDictateSettingsTab.swift */,
 				30E57A9C9B934A2120381005 /* WizardController.swift */,
 				7F646CD07DBBA47F44CE0AD1 /* WizardView.swift */,
@@ -2043,6 +2052,8 @@
 				0F1317CCFA2A3245DAA96141 /* DictationComposition.swift in Sources */,
 				1C40B5DB92262E05808ECCEA /* DictationKeyTap.swift in Sources */,
 				B5A7CEA6517E5A1E4D77623F /* FloatingPanel.swift in Sources */,
+				31FD09AD349C00C71B4E408F /* HistoryModel+Operations.swift in Sources */,
+				DBCB8BE5597166B03DAE0C67 /* HistoryModel+Processing.swift in Sources */,
 				758EFEAEC0C232A67EDFCB2C /* HistoryModel.swift in Sources */,
 				35B9652F15F054306ECB55ED /* HistoryWindowRoot.swift in Sources */,
 				F42E6D4E62345772C5A49A08 /* HotkeyStepView.swift in Sources */,
@@ -2066,6 +2077,7 @@
 				1817ACD2F7D8F7AF3C9B1C7C /* UITestIdentifiers.swift in Sources */,
 				E1CA5C692CB2A7E1BF231928 /* UITestSupport.swift in Sources */,
 				AB6CEBDE7BE4CA99EB469D8E /* UpdateCheckModel.swift in Sources */,
+				156E3AB91222CA0744CCE695 /* UpdateSection.swift in Sources */,
 				B34CAE75564AE39C265B5D1B /* VibeDictateSettingsTab.swift in Sources */,
 				91C1257866F6E2D4EE65BD09 /* WindowAccessor.swift in Sources */,
 				B844779F8427A1225C45A9FB /* WizardController.swift in Sources */,

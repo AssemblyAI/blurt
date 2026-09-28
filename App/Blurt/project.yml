@@ -120,6 +120,12 @@ targets:
           BLURT_APP_NAME: VibeDictate
     sources:
       - path: Blurt
+      - path: Blurt/Wizard/UpdateSection.swift
+        group: Blurt/Wizard
+      - path: Blurt/History/HistoryModel+Operations.swift
+        group: Blurt/History
+      - path: Blurt/History/HistoryModel+Processing.swift
+        group: Blurt/History
       # Shared with BlurtUITests: the single source of truth for UI-test
       # identifiers/sentinels (see Shared/UITestIdentifiers.swift).
       - path: Shared

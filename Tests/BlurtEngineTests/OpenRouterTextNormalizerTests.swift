@@ -9,11 +9,11 @@ struct OpenRouterTextNormalizerTests {
   func requestEncoding() async throws {
     let response = """
       {"choices":[{"message":{"role":"assistant","content":"Готово."}}]}
-      """.data(using: .utf8) ?? Data()
+      """
     let captured = ValueBox<URLRequest?>(nil)
     let transport = FakeHTTPTransport { request in
       captured.value = request
-      return (200, response)
+      return (200, Data(response.utf8))
     }
     let normalizer = OpenRouterTextNormalizer(
       apiKeyProvider: { "secret" }, modelProvider: { "test/model" }, transport: transport)
@@ -36,8 +36,9 @@ struct OpenRouterTextNormalizerTests {
   func responseDecoding() throws {
     let data = """
       {"choices":[{"message":{"role":"assistant","content":"Текст."}}]}
-      """.data(using: .utf8) ?? Data()
-    let decoded = try JSONDecoder().decode(OpenRouterTextNormalizer.Response.self, from: data)
+      """
+    let decoded = try JSONDecoder().decode(
+      OpenRouterTextNormalizer.Response.self, from: Data(data.utf8))
     #expect(decoded.choices.first?.message.content == "Текст.")
   }
 
@@ -55,7 +56,7 @@ struct OpenRouterTextNormalizerTests {
     let blank = OpenRouterTextNormalizer(
       apiKeyProvider: { "key" },
       transport: FakeHTTPTransport { _ in
-        (200, #"{"choices":[{"message":{"role":"assistant","content":"   "}}]}"#.data(using: .utf8)!)
+        (200, Data(#"{"choices":[{"message":{"role":"assistant","content":"   "}}]}"#.utf8))
       })
     await #expect(throws: OpenRouterError.malformedResponse) {
       try await blank.normalize(rawTranscript: "raw", vocabulary: [])

@@ -146,11 +146,6 @@ public actor DictationSession {
   // doesn't work: a surviving timer wakes, calls `release()`, and `performRelease`
   // drops out on `guard phase == .recording`, so a cancelled session looks
   // identical either way and the test passes with `cancelAutoRelease()` deleted.
-  /// Handle to the auto-release timer started in `press()`. Stored so that
-  /// `release()` can cancel it — otherwise a fire-and-forget timer from a prior
-  /// press could wake and `release()` a later, unrelated session.
-  var autoReleaseTask: Task<Void, Never>?
-
   /// Handle to the transcribe→inject work spawned by `release()`. Stored so a
   /// `cancel()` arriving after recording has stopped (phase `.transcribing` or
   /// `.injecting`) can tear it down — otherwise the transcript would still be
@@ -177,6 +172,7 @@ public actor DictationSession {
   var currentRecord: DictationRecord?
   var recordedByteCount = 0
   var latestGeneration: UInt64 = 0
+  var autoReleaseTask: Task<Void, Never>?
 
   /// The production entry point: the real focus capture and the real
   /// developer-mode log. Delegates to the seam-carrying initializer below, which
@@ -300,130 +296,5 @@ public actor DictationSession {
     clearInFlightPress(task)
   }
 
-  public func release() async {
-    await enqueue { await self.performRelease() }
-  }
-
-  private func performRelease() async {
-    guard phase == .recording || phase == .longMode else { return }
-    cancelAutoRelease()
-    // Flip the phase before stopping the mic, not after: the stop chime and
-    // the pill's "Transcribing…" ride this transition, and mic.stop() waits out
-    // the Bluetooth tail linger — up to 220 ms the user's "it heard me" cue
-    // must not wait on. This also closes the double-release window: a second
-    // release arriving during the mic.stop() suspension now fails the
-    // `.recording` guard above instead of running the pipeline twice.
-    setPhase(.transcribing)
-    let recordedBytes: Int
-    do {
-      recordedBytes = try await mic.stop()
-    } catch {
-      // Both exits below set a terminal phase, and `setPhase` cancels the
-      // in-flight request there — so a conformer whose `stop()` throws without
-      // ending the feed can't leave it streaming until the idle timeout.
-      // A cancel wins over surfacing the audio error — the user asked for
-      // nothing to happen.
-      if cancelWonRelease() { return }
-      // Audio capture/conversion failed (e.g. the recorded file couldn't be
-      // read back). Surface it instead of silently transcribing an empty blob.
-      let captureError = BlurtError.audioCaptureFailed(underlying: error)
-      if vibePipeline != nil {
-        routingSession?.cancel()
-        await localAudioWriter?.cancelAndDelete()
-        if var record = currentRecord {
-          record.audioRelativePath = nil
-          currentRecord = record
-        }
-        await failVibeRecord(captureError)
-      } else {
-        setPhase(.failed(captureError))
-      }
-      return
-    }
-    // Honored again here, before any pipeline exists — deterministically no
-    // transcription, no paste.
-    if cancelWonRelease() { return }
-    recordedByteCount = recordedBytes
-    // A clip too short for the STT model (an accidental brief tap) comes back
-    // 200-with-empty-text, not 400 (measured) — so drop it as a silent no-op
-    // rather than paying for a request that transcribes nothing.
-    //
-    // Safe against the request finishing first, but no longer by winning a
-    // race: with `config` leading the body the producer closes the request as
-    // soon as `frames` ends, so it could beat this guard on a fast link. The
-    // floor is enforced on the producer's side too — `streamedBody` refuses to
-    // write the closing boundary below `minPCMBytes` — leaving this as the
-    // quiet path to `.idle`, not the only thing keeping a tap off the wire.
-    guard recordedBytes >= SyncSTTLimits.minPCMBytes else {
-      await discardVibeRecording()
-      setPhase(.idle)
-      return
-    }
-    pipelineTask = Task { [weak self] in
-      await self?.runTranscribeInject()
-    }
-  }
-
-  /// Whether a cancel beat this release across the `mic.stop()` suspension, in
-  /// which case the release must abandon the run. Both exits of `performRelease`
-  /// ask, so the composite rule lives here rather than being spelled out twice —
-  /// a new cancel route then reaches both exits by construction.
-  ///
-  /// Two routes: the cancel arrived synchronously (`cancel()` saw `.transcribing`
-  /// and claimed the phase, moving it off `.transcribing`), or it was recorded
-  /// before this release's turn and is consumed now.
-  private func cancelWonRelease() -> Bool {
-    consumeCancelRequest() || phase != .transcribing
-  }
-
-  /// Consumes a cancel requested while this release held the queue, claiming the
-  /// phase for the user's cancel. Returns whether it fired.
-  func consumeCancelRequest() -> Bool {
-    guard cancelRequested else { return false }
-    cancelRequested = false
-    setPhase(.cancelled)
-    return true
-  }
-
-  // `cancel()` and `performCancel()` — the user-intent cancel — live with the rest
-  // of the command surface in `DictationSession+Commands.swift`, beside the
-  // narrower `cancelRecording()`; both end up in `stopAndCancel` below.
-
-  /// Shared tail of the cancel ops once the guards agree there is a live
-  /// recording to tear down.
-  func stopAndCancel() async {
-    cancelAutoRelease()
-    // Before the mic teardown, not after: `cancelCapture()` finishes the frame
-    // stream, and a still-live upload would read that as "the utterance ended",
-    // write its config part and transcribe audio the user just discarded.
-    cancelUpload()
-    do {
-      // `cancelCapture`, not `stop`: the audio is being thrown away, so
-      // preserving it (the Bluetooth tail linger) is not worth delaying the
-      // user's cancel for.
-      try await mic.cancelCapture()
-    } catch {
-      // Stays out of the UI: the user asked for nothing to happen, and a cancel
-      // must not flash red (same rule as `performRelease`'s "a cancel wins over
-      // surfacing the audio error"). But a mic teardown that genuinely failed was
-      // reported nowhere at all, which made a recorder stuck mid-cancel
-      // indistinguishable from a clean one. Record it for developer mode without
-      // touching the phase — the log is exactly the channel for a fault the user
-      // shouldn't be shown.
-      seams.logFailure(.audioCaptureFailed(underlying: error), capturedContext)
-    }
-    await discardVibeRecording()
-    setPhase(.cancelled)
-  }
-
-  private func cancelAutoRelease() {
-    autoReleaseTask?.cancel()
-    autoReleaseTask = nil
-  }
-
-  // The post-release pipeline — `runTranscribeInject` and its transcribe/inject
-  // halves, plus the bounded context wait — lives in
-  // `DictationSession+Pipeline.swift`, and `setPhase` (the one place a phase
-  // change is published and a failure logged) with the rest of the observation
-  // surface in `+Observation` (see the split note at the top).
+  // Session release commands live in dedicated extension files.
 }

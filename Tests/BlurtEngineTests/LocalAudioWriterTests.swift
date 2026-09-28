@@ -12,11 +12,9 @@ struct LocalAudioWriterTests {
     let fanout = PCMFrameFanout(source: source, writer: writer)
     let shortConsumer = Task {
       var first = true
-      for await _ in fanout.shortFrames {
-        if first {
-          first = false
-          break
-        }
+      for await _ in fanout.shortFrames where first {
+        first = false
+        break
       }
     }
 

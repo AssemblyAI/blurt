@@ -169,7 +169,7 @@ extension DictationSession {
 
   /// Waits for the request opened at press. Returns the transcript, or nil if
   /// it failed (phase set to `.failed`).
-  private func awaitUpload() async -> String? {
+  func awaitUpload() async -> String? {
     guard let inFlight = upload else {
       // Reached when a cancel cleared the handle while this task was suspended
       // in the context wait — `setPhase` abandons the upload on any terminal
