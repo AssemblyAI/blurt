@@ -113,6 +113,13 @@ struct ReadyView: View {
           Text("Powered by").foregroundStyle(.secondary)
           Link("AssemblyAI", destination: url)
             .foregroundStyle(BlurtBrand.accent)
+          // The route to the repo's issue tracker, styled like the link
+          // before it. The dot is decoration, so VoiceOver skips it.
+          if let issuesURL = Self.reportBugURL {
+            Text("·").foregroundStyle(.secondary).accessibilityHidden(true)
+            Link("Report a bug", destination: issuesURL)
+              .foregroundStyle(BlurtBrand.accent)
+          }
         }
         .font(.caption)
       }
@@ -175,6 +182,9 @@ struct ReadyView: View {
 
   /// Where the "Powered by AssemblyAI" footer link points.
   private static let poweredByURL = URL(string: "https://www.assemblyai.com/blurt")
+
+  /// Where the footer's "Report a bug" link points: the repo's GitHub issues.
+  private static let reportBugURL = URL(string: "https://github.com/AssemblyAI/blurt/issues")
 
   /// The idle readout: "Tap **Right Command (⌘)** to start and stop." over
   /// "Or hold it to talk, then release." — the key spelled out and bolded
