@@ -656,7 +656,7 @@ else
         if (defined $id) {
           $text =~ s/\Q$id\E/BLURT_REPO_ROOT_ID/g;
           $text =~ s/(BLURT_REPO_ROOT_ID \/\* )[^*\r\n]+( \*\/)/${1}REPO_ROOT${2}/g;
-          $text =~ s{^(\s*)BLURT_REPO_ROOT_ID /\* [^*\r\n]+ \*/ = \{isa = PBXFileReference; lastKnownFileType = folder; name = (?:"[^"]+"|[^;]+); path = \.\.\/\.\.; sourceTree = SOURCE_ROOT; \};}{$1BLURT_REPO_ROOT_ID /* REPO_ROOT */ = {isa = PBXFileReference; lastKnownFileType = folder; name = REPO_ROOT; path = ../..; sourceTree = SOURCE_ROOT; };}m;
+          $text =~ s{^[ \t]*BLURT_REPO_ROOT_ID /\* REPO_ROOT \*/ = \{isa = PBXFileReference; lastKnownFileType = folder; name = (?:"[^"]+"|[^;]+); path = \.\.\/\.\.; sourceTree = SOURCE_ROOT; \};\r?\n}{}m;
         }
         print $text;
       ' "$1" >"$2"
