@@ -134,7 +134,7 @@ struct VibeDictationIntegrationTests {
     await session.installVibeState(
       route: route, writer: IntegrationAudioWriter(),
       job: DictationJob(id: record.id, generation: 1), record: record,
-      latestGeneration: 2, recordedByteCount: StubPCM.aboveMinimum.count)
+      measurements: (latestGeneration: 2, recordedByteCount: StubPCM.aboveMinimum.count))
     await session.setPhaseForTesting(.transcribing)
 
     await session.startInstalledVibePipeline()

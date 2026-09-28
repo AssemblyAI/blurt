@@ -11,14 +11,14 @@ extension DictationSession {
 
   func installVibeState(
     route: STTRoutingSession, writer: any LocalAudioWriter, job: DictationJob, record: DictationRecord,
-    latestGeneration: UInt64, recordedByteCount: Int
+    measurements: (latestGeneration: UInt64, recordedByteCount: Int)
   ) {
     routingSession = route
     localAudioWriter = writer
     currentJob = job
     currentRecord = record
-    self.latestGeneration = latestGeneration
-    self.recordedByteCount = recordedByteCount
+    latestGeneration = measurements.latestGeneration
+    recordedByteCount = measurements.recordedByteCount
   }
 
   func startVibeRouting(frames: AsyncStream<Data>) async {

@@ -40,8 +40,7 @@ public actor CoreDataDictationHistoryStore: DictationHistoryStore {
     description.shouldInferMappingModelAutomatically = true
     container.persistentStoreDescriptions = [description]
     self.container = container
-    try await withCheckedThrowingContinuation({
-      (continuation: CheckedContinuation<Void, any Error>) in
+    try await withCheckedThrowingContinuation({ (continuation: CheckedContinuation<Void, any Error>) in
       container.loadPersistentStores { _, error in
         if let error {
           continuation.resume(throwing: error)
