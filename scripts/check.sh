@@ -643,16 +643,36 @@ else
   cd "$APP_DIR"
   PBXPROJ="Blurt.xcodeproj/project.pbxproj"
   if command -v xcodegen >/dev/null 2>&1; then
-    # Drift check: regenerating must not change the on-disk project. If it does,
-    # the committed .pbxproj is stale vs project.yml — fail and ask for a commit.
-    BEFORE="$(shasum "$PBXPROJ" 2>/dev/null || true)"
+    # The local package's folder reference includes the checkout directory name
+    # (e.g. "blurt" on CI, a custom name for local clones). Compare a canonical
+    # form so that this path-only difference is not mistaken for real drift.
+    DRIFT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/blurt-xcodegen.XXXXXX")"
+    cp "$PBXPROJ" "$DRIFT_DIR/before.pbxproj"
     xcodegen generate --quiet
-    AFTER="$(shasum "$PBXPROJ" 2>/dev/null || true)"
-    if [ -n "$BEFORE" ] && [ "$BEFORE" != "$AFTER" ]; then
-      git --no-pager diff -- "$PBXPROJ" || true
+    normalize_package_root_reference() {
+      perl -0777 -e '
+        my $text = do { local $/; <> };
+        my ($id) = $text =~ /^\s*([A-F0-9]{24})\s+\/\* [^*\r\n]+ \*\/ = \{isa = PBXFileReference; lastKnownFileType = folder; name = (?:"[^"]+"|[^;]+); path = \.\.\/\.\.; sourceTree = SOURCE_ROOT; \};/m;
+        if (defined $id) {
+          $text =~ s/\Q$id\E/BLURT_REPO_ROOT_ID/g;
+          $text =~ s/(BLURT_REPO_ROOT_ID \/\* )[^*\r\n]+( \*\/)/${1}REPO_ROOT${2}/g;
+          $text =~ s{^(\s*)BLURT_REPO_ROOT_ID /\* [^*\r\n]+ \*/ = \{isa = PBXFileReference; lastKnownFileType = folder; name = (?:"[^"]+"|[^;]+); path = \.\.\/\.\.; sourceTree = SOURCE_ROOT; \};}{$1BLURT_REPO_ROOT_ID /* REPO_ROOT */ = {isa = PBXFileReference; lastKnownFileType = folder; name = REPO_ROOT; path = ../..; sourceTree = SOURCE_ROOT; };}m;
+        }
+        print $text;
+      ' "$1" >"$2"
+    }
+    normalize_package_root_reference "$DRIFT_DIR/before.pbxproj" "$DRIFT_DIR/before.normalized"
+    normalize_package_root_reference "$PBXPROJ" "$DRIFT_DIR/after.normalized"
+    if ! cmp -s "$DRIFT_DIR/before.normalized" "$DRIFT_DIR/after.normalized"; then
+      diff -u "$DRIFT_DIR/before.pbxproj" "$PBXPROJ" || true
+      rm -rf "$DRIFT_DIR"
       echo "error: $PBXPROJ is out of sync with project.yml; run 'xcodegen generate' and commit it"
       exit 1
     fi
+    # Keep the caller's exact project bytes (including any pre-existing local
+    # edits) when the only generated difference was the checkout's folder name.
+    cp "$DRIFT_DIR/before.pbxproj" "$PBXPROJ"
+    rm -rf "$DRIFT_DIR"
   else
     echo "note: xcodegen not installed; skipping project regeneration"
   fi
