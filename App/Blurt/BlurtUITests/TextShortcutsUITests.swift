@@ -1,13 +1,14 @@
 import XCTest
 
-/// Drives the Settings window's Text Shortcuts pane and its editor sheet: add,
-/// edit, delete, and the duplicate-phrase refusal. Offline — the pane only reads
+/// Drives the Settings window's text-shortcut table (on the Vocabulary pane)
+/// and its editor sheet: add, edit, delete, remove with −, and the
+/// duplicate-phrase refusal. Offline — the pane only reads
 /// and writes `UserDefaults`, which the UI-test launch resets, so every case
 /// starts from an empty list.
 final class TextShortcutsUITests: BlurtUITestCase {
   /// The whole lifecycle of one shortcut, asserted through the list the sheet
   /// writes back to — so the store write, the `@AppStorage` refresh and the
-  /// row identifiers are all on the path.
+  /// table's double-click route into a row are all on the path.
   func testAddEditAndDeleteShortcut() {
     let pane = openTextShortcutsPane()
 
@@ -16,7 +17,7 @@ final class TextShortcutsUITests: BlurtUITestCase {
       rowText(in: pane, reading: "me@example.com").waitForExistence(timeout: 5),
       "A saved shortcut should appear in the list")
 
-    let sheet = openSheet(in: pane, via: UITestIdentifiers.textShortcutEdit(0))
+    let sheet = openSheet(in: pane, byDoubleClicking: "me@example.com")
     let expansion = sheet.anyDescendant(identified: UITestIdentifiers.textShortcutExpansion)
     expansion.click()
     expansion.typeKey("a", modifierFlags: .command)
@@ -30,12 +31,29 @@ final class TextShortcutsUITests: BlurtUITestCase {
       rowText(in: pane, reading: "me@example.com").exists,
       "An edit should not leave the old text behind")
 
-    let deleting = openSheet(in: pane, via: UITestIdentifiers.textShortcutEdit(0))
+    let deleting = openSheet(in: pane, byDoubleClicking: "you@example.com")
     deleting.buttons[UITestIdentifiers.textShortcutDelete].click()
     XCTAssertTrue(deleting.waitForNonExistence(timeout: 5), "Delete should dismiss the sheet")
     XCTAssertTrue(
-      pane.buttons[UITestIdentifiers.textShortcutEdit(0)].waitForNonExistence(timeout: 5),
+      rowText(in: pane, reading: "you@example.com").waitForNonExistence(timeout: 5),
       "Delete should remove the row")
+  }
+
+  /// The − under the table removes the selected row, and is disabled with
+  /// nothing selected — the Text Replacements idiom, no sheet involved.
+  func testMinusRemovesSelectedShortcut() {
+    let pane = openTextShortcutsPane()
+    addShortcut(in: pane, trigger: "work email", expansion: "me@example.com")
+
+    let remove = pane.buttons[UITestIdentifiers.textShortcutRemove]
+    XCTAssertTrue(remove.waitForExistence(timeout: 5), "The − button should exist")
+    XCTAssertFalse(remove.isEnabled, "− should be disabled with no row selected")
+
+    let row = rowText(in: pane, reading: "me@example.com")
+    XCTAssertTrue(row.waitForExistence(timeout: 5), "A saved shortcut should appear in the table")
+    row.click()
+    remove.click()
+    XCTAssertTrue(row.waitForNonExistence(timeout: 5), "− should remove the selected row")
   }
 
   /// A phrase the matcher can't tell from an existing one — differing only in
@@ -55,7 +73,7 @@ final class TextShortcutsUITests: BlurtUITestCase {
     sheet.buttons[UITestIdentifiers.textShortcutCancel].click()
     XCTAssertTrue(sheet.waitForNonExistence(timeout: 5), "Cancel should dismiss the sheet")
     XCTAssertFalse(
-      pane.buttons[UITestIdentifiers.textShortcutEdit(1)].exists,
+      rowText(in: pane, reading: "other@example.com").exists,
       "A refused duplicate should not add a row")
   }
 
@@ -63,13 +81,23 @@ final class TextShortcutsUITests: BlurtUITestCase {
 
   private func openTextShortcutsPane() -> XCUIElement {
     let settings = openSettingsWindow()
-    return selectSettingsTab(settings, named: UITestIdentifiers.textShortcutsTab)
+    return selectSettingsTab(settings, named: UITestIdentifiers.vocabularySettingsTab)
   }
 
   private func openSheet(in pane: XCUIElement, via identifier: String) -> XCUIElement {
     let button = pane.buttons[identifier]
     XCTAssertTrue(button.waitForExistence(timeout: 10), "Button \(identifier) not found")
     button.click()
+    let sheet = pane.sheets.firstMatch
+    XCTAssertTrue(sheet.waitForExistence(timeout: 5), "The shortcut sheet should open")
+    return sheet
+  }
+
+  /// Opens a row's editor the way a user does: double-clicking it in the table.
+  private func openSheet(in pane: XCUIElement, byDoubleClicking text: String) -> XCUIElement {
+    let row = rowText(in: pane, reading: text)
+    XCTAssertTrue(row.waitForExistence(timeout: 10), "Row \(text) not found")
+    row.doubleClick()
     let sheet = pane.sheets.firstMatch
     XCTAssertTrue(sheet.waitForExistence(timeout: 5), "The shortcut sheet should open")
     return sheet
@@ -92,7 +120,7 @@ final class TextShortcutsUITests: BlurtUITestCase {
     XCTAssertTrue(sheet.waitForNonExistence(timeout: 5), "Save should dismiss the sheet")
   }
 
-  /// A row's read-out. Each of the row's two texts is its own static text, and
+  /// A row's read-out. Each of the row's two cells is its own static text, and
   /// the subscript matches a SwiftUI `Text` by its string, which XCUITest
   /// carries in the element's value rather than its label (see
   /// `waitForLabel`) — so a label-only predicate never finds it.

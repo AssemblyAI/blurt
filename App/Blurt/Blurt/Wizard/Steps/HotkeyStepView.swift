@@ -76,6 +76,11 @@ struct HotkeyStepView: View {
       // no longer than the tap-or-hold sentence shipped here before the picker
       // existed, so the footer never grows the pane.
       Text(TriggerActivation.fromPersisted(activationRaw).guidance)
+      // Say so when Blurt has changed a system setting on the user's behalf
+      // (`GlobeKeyOverride`), so a 🌐 key that stopped opening emoji isn't a mystery.
+      if selection.wrappedValue == .function {
+        Text("While fn is the dictation key, macOS’s “Press 🌐 key to” is set to Do Nothing.")
+      }
     }
   }
 }

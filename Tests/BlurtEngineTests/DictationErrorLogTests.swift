@@ -187,7 +187,7 @@ struct DictationErrorLogGateTests {
     #expect(readLog(url).contains("targetAppLost"))
   }
 
-  /// One switch, both logs — the Developer section shows a single toggle, so
+  /// One switch, both logs — the Advanced pane shows a single toggle, so
   /// neither half may read a different default.
   @Test("both logs answer to the same switch")
   func sharesTheDeveloperModeSwitch() {

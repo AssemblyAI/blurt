@@ -672,7 +672,7 @@ else
     -project Blurt.xcodeproj \
     -scheme Blurt \
     -configuration Debug \
-    -destination 'platform=macOS' \
+    -destination "platform=macOS,arch=$(uname -m)" \
     CODE_SIGN_IDENTITY="-" \
     CODE_SIGNING_REQUIRED=NO \
     CODE_SIGNING_ALLOWED=NO \

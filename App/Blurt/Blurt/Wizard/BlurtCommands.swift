@@ -15,9 +15,20 @@ struct BlurtCommands: Commands {
     CommandGroup(after: .appInfo) {
       Button("Check for Updates…") { appDelegate.updateCheckModel.checkForUpdates() }
     }
-    // Blurt ships no help book, so SwiftUI's default Help menu would show a
-    // dead "Blurt Help" item that opens nothing. Remove it rather than leave
-    // a control that does nothing.
-    CommandGroup(replacing: .help) {}
+    // Blurt ships no help book, so SwiftUI's default "Blurt Help" item would
+    // open nothing; it's replaced with the two outbound links that do belong
+    // here — the issue tracker (also in the main window's footer) and the
+    // share intent, which moved out of that footer so its quietest line stops
+    // reading as an ad. No ellipses: they open a page and ask nothing more, the
+    // way Apple's own Help-menu links read. Each omits itself if its URL fails
+    // to build.
+    CommandGroup(replacing: .help) {
+      if let url = BlurtLinks.reportBug {
+        Link("Report a Bug", destination: url)
+      }
+      if let url = BlurtLinks.shareOnLinkedIn {
+        Link("Share Blurt on LinkedIn", destination: url)
+      }
+    }
   }
 }

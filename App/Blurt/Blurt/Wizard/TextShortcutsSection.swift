@@ -1,14 +1,27 @@
 import BlurtEngine
 import SwiftUI
 
-/// The Text Shortcuts pane of the Settings window: spoken phrases the app
-/// replaces with saved text before pasting — say "personal email", get the
-/// address (see `TextShortcutExpander`). Its own pane rather than a General
-/// section because the list grows without a cap worth designing to, so this one
-/// pane scrolls while the others hug their content.
+/// The Vocabulary pane of the Settings window: the words Blurt should know —
+/// key terms that prime transcription spelling, and text shortcuts that replace
+/// a spoken phrase with saved text. Both are lists of words the user curates,
+/// so they share a pane rather than key terms trailing General's pickers.
+struct VocabularySettingsTab: View {
+  var body: some View {
+    SettingsPane {
+      KeyTermsStepView()
+      TextShortcutsSection()
+    }
+  }
+}
+
+/// Spoken phrases the app replaces with saved text before pasting — say
+/// "personal email", get the address (see `TextShortcutExpander`).
 ///
-/// Rows follow the Styles section's shape: each is a read-out plus an "Edit…"
-/// way in, and all editing happens in the sheet below.
+/// Shaped like System Settings › Keyboard › Text Replacements, the list users
+/// already know for exactly this: a two-column table with + / − beneath it.
+/// Double-click (or Return on) a row to edit it; editing happens in the sheet
+/// below. The table scrolls inside a fixed height, so the pane stays the same
+/// size however many shortcuts there are.
 struct TextShortcutsSection: View {
   /// Bound to observe, not to write — the store owns the JSON encoding, as with
   /// `StyleProfilesSection`.
@@ -16,42 +29,90 @@ struct TextShortcutsSection: View {
 
   /// The shortcut the sheet is editing, or nil while it's closed.
   @State private var editing: TextShortcut?
+  @State private var selection: TextShortcut.ID?
 
   var body: some View {
     let shortcuts = TextShortcutStore().shortcuts(decoding: rawShortcuts)
-    Form {
-      Section {
-        ForEach(Array(shortcuts.enumerated()), id: \.element.id) { index, shortcut in
-          HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-              Text(shortcut.trigger)
-              Text(shortcut.expansion)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            }
-            Spacer(minLength: 12)
-            Button("Edit…") { editing = shortcut }
-              .accessibilityIdentifier(UITestIdentifiers.textShortcutEdit(index))
+    Section {
+      VStack(alignment: .leading, spacing: 6) {
+        table(shortcuts)
+        HStack(spacing: 2) {
+          Button {
+            editing = TextShortcut(trigger: "", expansion: "")
+          } label: {
+            Image(systemName: "plus").frame(width: 20, height: 18)
           }
-        }
-        Button("Add Shortcut…") { editing = TextShortcut(trigger: "", expansion: "") }
           .disabled(shortcuts.count >= TextShortcutStore.shortcutLimit)
+          .help("Add Shortcut")
+          .accessibilityLabel("Add Shortcut")
           .accessibilityIdentifier(UITestIdentifiers.textShortcutAdd)
-      } header: {
-        Text("Text Shortcuts")
-      } footer: {
-        Text(
-          "Say a phrase while dictating and it's replaced with your saved text — "
-            + "for example, “personal email” becomes your address.")
+          Button {
+            if let selection { remove(selection) }
+          } label: {
+            Image(systemName: "minus").frame(width: 20, height: 18)
+          }
+          .disabled(selection == nil)
+          .help("Remove Shortcut")
+          .accessibilityLabel("Remove Shortcut")
+          .accessibilityIdentifier(UITestIdentifiers.textShortcutRemove)
+        }
+        .buttonStyle(.borderless)
       }
+    } header: {
+      Text("Text Shortcuts")
+    } footer: {
+      Text(
+        "Say a phrase while dictating and it's replaced with your saved text — "
+          + "for example, “personal email” becomes your address.")
     }
-    .formStyle(.grouped)
-    .frame(height: 440)
     .sheet(item: $editing) { shortcut in
       TextShortcutEditorSheet(shortcut: shortcut, among: shortcuts)
     }
+  }
+
+  private func table(_ shortcuts: [TextShortcut]) -> some View {
+    Table(shortcuts, selection: $selection) {
+      TableColumn("Phrase", value: \.trigger)
+      TableColumn("Replacement") { shortcut in
+        Text(shortcut.expansion)
+          .lineLimit(1)
+          .truncationMode(.middle)
+      }
+    }
+    .tableStyle(.bordered(alternatesRowBackgrounds: true))
+    // `primaryAction` is the table's double-click / Return: the native way
+    // into a row, in place of an "Edit…" button on every row.
+    .contextMenu(forSelectionType: TextShortcut.ID.self) { ids in
+      if let id = ids.first, let shortcut = shortcuts.first(where: { $0.id == id }) {
+        Button("Edit…") { editing = shortcut }
+        Button("Remove", role: .destructive) { remove(id) }
+      }
+    } primaryAction: { ids in
+      if let id = ids.first { editing = shortcuts.first { $0.id == id } }
+    }
+    // Delete removes the selected row, as in Text Replacements.
+    .onDeleteCommand { if let selection { remove(selection) } }
+    .overlay {
+      if shortcuts.isEmpty {
+        Text("No Shortcuts")
+          .foregroundStyle(.secondary)
+      }
+    }
+    .frame(height: 160)
+    // `SettingsPane` disables scrolling through the environment, which reaches
+    // this table too — without re-enabling it, rows past the fold (the store
+    // allows 200) would be unreachable.
+    .scrollDisabled(false)
+    .accessibilityIdentifier(UITestIdentifiers.textShortcutTable)
+  }
+
+  /// No confirmation, like the sheet's Delete (see `StyleProfileEditorSheet
+  /// .delete()`): a shortcut is a phrase and a line of text the user typed, and
+  /// Text Replacements' − doesn't ask either.
+  private func remove(_ id: TextShortcut.ID) {
+    let store = TextShortcutStore()
+    store.shortcuts = store.shortcuts.filter { $0.id != id }
+    if selection == id { selection = nil }
   }
 }
 

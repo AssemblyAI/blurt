@@ -296,7 +296,7 @@ struct DictationLogGateTests {
   }
 }
 
-/// The displayed log location. The Settings window's Developer section shows this
+/// The displayed log location. The Settings window's Advanced pane shows this
 /// beside the switch that enables writing, so it has to name the file the writer
 /// actually appends to — the reason the formatting moved out of the view.
 @Suite("DictationLog.defaultDisplayPath")
