@@ -13,6 +13,16 @@ Source of truth on the Mac side: `App/Blurt/Blurt/Branding/BlurtBrand.swift`
 The phone reads the meter and the ring's rotation straight from the engine, so
 they cannot drift from the Mac's.
 
+On the phone, every colour and number the views draw with lives once, in
+`Design/tokens.json`, and is fanned out from there: `Shared/DesignTokens.swift`
+(what the views read), the tables in this file marked `tokens:begin` /
+`tokens:end`, and the app's three asset-catalog colour sets are all generated
+by `scripts/design-tokens.swift`. Edit the JSON (or export it from Figma, see
+below), run `scripts/design-sync.sh`, commit; `scripts/check.sh` runs
+`design-sync.sh --check` and fails on drift. The views carry no design
+literals — the same script lints them — so a number that changes in Figma
+changes everywhere or nowhere.
+
 ## Reproducing it
 
 Every layout and state renders inside the app, from a launch argument, so a
@@ -33,6 +43,54 @@ of the keyboard's own: `keys` (the panel flipped to its keyboard page) and
 `term` (the key-term field mid-typing, e.g. `-BlurtGallery panel keys,term`). The
 gallery is `BlurtiOS/Sources/KeyboardGalleryView.swift`, debug builds only;
 the keyboard's sources are compiled into the app for it (`project.yml`).
+
+For the design loop the capture has to be the same pixels every time, and it
+has to be the keyboard's pixels alone. Two switches do that:
+`-BlurtGalleryStill` holds every motion at time zero (the ring, the meter's
+wave, the orb's fluid and its grain — what Reduce Motion does) and
+`-BlurtGalleryBare` draws the first row by itself inside a 2 pt `#FF00FF`
+registration border. `-BlurtOrb <size> <off|idle|listening|working|landed>`
+renders one orb fill the same way, for Figma's image fills. The scripts on
+top:
+
+```bash
+scripts/design-capture.sh --layout panel --states idle,recording,error,term --themes system,system-dark,ink
+    # builds once, captures each still, crops it → .build/design/captures/<layout>-<state>-<theme>@3x.png
+scripts/ios-record.sh --layout panel --theme ink --frames 0,0.35,0.7
+    # one 11.7 s loop of the `live` walk, cropped, plus stills at those seconds
+swift scripts/design-diff.swift diff figma.png sim.png --out triptych.png --json metrics.json --mask x,y,w,h
+    # both to sRGB, then AE (pixels over the threshold) and RMSE, outside the masks and per mask
+swift scripts/design-diff.swift sheet --out sheet.png --columns 4 "panel · idle · ink=a.png" …
+scripts/design-sync.sh          # tokens.json → DesignTokens.swift, these tables, the colour sets
+scripts/design-sync.sh --check  # what check.sh runs: drift and design literals
+```
+
+`ios-sim.sh --no-build` reuses the last build, so a loop of forty captures
+builds once. The capture device is the iPhone 18 Pro (402 pt → 1206 px at 3×,
+the Figma frames' width), pinned in `scripts/ios-sim.sh`; a crop that is not
+the layout's height × the scale fails rather than being resampled.
+
+## Figma
+
+The keyboard is designed in Figma and built from the export. The file is
+**Blurt Keyboard** (Neil's personal Figma space until the design moves into the
+AssemblyAI org; key and approved version in `Design/tokens.json` › `figma`),
+three pages: `01 Foundations` (the variables below as six collections, text and
+effect styles, specimens), `02 Components` (Key, LetterPopup, Orb, MicKey,
+WaveformMeter, TermField, AddTermKey, CancelKey, VoiceBar), `03 Layouts` (the
+three layouts at 402 pt — iPhone 18 Pro, the simulator this repo captures on —
+as state rows named `<layout>/<state>/<theme>` exactly as the gallery captions
+them, an Apple-keyboard reference overlay, redlines, the motion table, and the
+review boards). The file is rebuilt from the scripts in `Design/figma/`, so the
+scripts, not the file, are the durable record.
+
+The loop: design and approve in Figma (a named version) → export the variables
+to `Design/tokens.json` → `scripts/design-sync.sh` → the views → captures from
+the gallery compared against the Figma exports. The orb is the one exception
+that goes the other way: `MeshGradient` plus grain cannot be drawn natively in
+Figma, so the app renders deterministic stills that Figma uses as image fills,
+and Figma holds the parameters (`orb/*`, `opacity/orb-light`, `opacity/grain`,
+the drop timings).
 
 ## Prototype on this branch: the prism orb (`PrismOrb.swift`)
 
@@ -82,17 +140,24 @@ Partiful-style — pick from live previews in Settings → Keyboard → Theme; t
 keyboard picks it up the next time it comes up (`keyboardTheme` in the App
 Group):
 
-| Theme      | Surface               | Key               | Modifier              | Legend        | Vibe                                        |
-| ---------- | --------------------- | ----------------- | --------------------- | ------------- | ------------------------------------------- |
-| `system`   | `#D1D5DB` / `#2B2B2B` | white / `#6B6B6B` | `#ADB3BC` / `#464646` | black / white | the iPhone keyboard, light / dark (default) |
-| `ink`      | `#1D1B16`             | `#33302A`         | `#26231E`             | `#F2EEE6`     | Blurt's own                                 |
-| `paper`    | `#EBE8E8`             | white             | `#DEDBDB`             | `#1D1B16`     | warm and light                              |
-| `lavender` | `#2C2557`             | `#3F3777`         | `#352E68`             | `#F1EEFF`     | the orb's violet                            |
-| `mint`     | `#10231B`             | `#1E3F31`         | `#183429`             | `#E9F5EE`     | the orb's green                             |
-| `midnight` | `#0E1220`             | `#1D2440`         | `#161B33`             | `#E8ECFF`     | deep blue-black                             |
-| `sunset`   | `#2B1912`             | `#4B2B20`         | `#3B2119`             | `#FFEFE6`     | warm and loud                               |
+<!-- tokens:begin themes -->
 
-The orb and the ring are the same in every theme; the wave takes the
+| Theme          | Surface   | Key       | Modifier  | Legend    | Signal    | Pop-up    |
+| -------------- | --------- | --------- | --------- | --------- | --------- | --------- |
+| `system-light` | `#D1D5DB` | `#FFFFFF` | `#ADB3BC` | `#000000` | `#01762F` | `#FFFFFF` |
+| `system-dark`  | `#2B2B2B` | `#6B6B6B` | `#464646` | `#FFFFFF` | `#67AD82` | `#6B6B6B` |
+| `ink`          | `#1D1B16` | `#33302A` | `#26231E` | `#F2EEE6` | `#67AD82` | `#33302A` |
+| `paper`        | `#EBE8E8` | `#FFFFFF` | `#DEDBDB` | `#1D1B16` | `#01762F` | `#FFFFFF` |
+| `lavender`     | `#2C2557` | `#3F3777` | `#352E68` | `#F1EEFF` | `#67AD82` | `#3F3777` |
+| `mint`         | `#10231B` | `#1E3F31` | `#183429` | `#E9F5EE` | `#67AD82` | `#1E3F31` |
+| `midnight`     | `#0E1220` | `#1D2440` | `#161B33` | `#E8ECFF` | `#67AD82` | `#1D2440` |
+| `sunset`       | `#2B1912` | `#4B2B20` | `#3B2119` | `#FFEFE6` | `#67AD82` | `#4B2B20` |
+
+<!-- tokens:end themes -->
+
+The picker's one-liners (the vibes) live with the palettes in
+`KeyboardPalette.swift`; the colours are the tokens above. The orb and the ring
+are the same in every theme; the wave takes the
 palette's `signal` green — the wordmark's on the light surfaces, the lifted
 one on the dark. The picker (`ThemePickerView`) draws the real full keyboard at 0.42 scale on
 each card, the iPhone theme in the picker's own appearance. The gallery's
@@ -175,19 +240,81 @@ with a dictation it started, it releases a recording (the words still land,
 on the clipboard if no keyboard is there) and cancels anything earlier, so
 nothing records on without it.
 
-## Tokens (`Shared/BlurtBrand.swift`)
+## Tokens (`Design/tokens.json` → `Shared/DesignTokens.swift`)
 
-| Token             | Value       | Use                                                         |
-| ----------------- | ----------- | ----------------------------------------------------------- |
-| `green`           | `#01762F`   | the wordmark green, light chrome (the app's accent)         |
-| `greenOnDark`     | `#67AD82`   | the meter, the ring, anything green on ink                  |
-| `ink`             | `#1D1B16`   | the Mac pill's body; the keyboard's surface                 |
-| `errorOrange`     | `#E67F36`   | the error word — never a red body                           |
-| `key`             | `#33302A`   | an ordinary key on the ink surface (one step up)            |
-| `keyDark`         | `#26231E`   | modifier keys: shift, delete, globe, return, 123, cancel    |
-| `keyText`         | `#F2EEE6`   | key legends: warm white on warm ink                         |
-| `orbGradient`     | 8 stops     | the design's own (`App elements/Recording.svg`), bottom→top |
-| `orbRingGradient` | green→white | the ring, top-leading to bottom-trailing                    |
+The brand's colours, as the Mac defines them and as the phone extends them.
+`BlurtBrand` keeps its names (`green`, `greenOnDark`, `ink`, …) as aliases of
+these, so the Mac's vocabulary still reads at the call sites.
+
+<!-- tokens:begin brand -->
+
+| Token                  | Value     | Swift                      | Use                                                                        |
+| ---------------------- | --------- | -------------------------- | -------------------------------------------------------------------------- |
+| `apple/dark-key`       | `#6B6B6B` | `Brand.appleDarkKey`       | the iPhone keyboard's dark key                                             |
+| `apple/dark-modifier`  | `#464646` | `Brand.appleDarkModifier`  | the iPhone keyboard's dark modifier key                                    |
+| `apple/dark-surface`   | `#2B2B2B` | `Brand.appleDarkSurface`   | the iPhone keyboard's dark surface                                         |
+| `apple/light-modifier` | `#ADB3BC` | `Brand.appleLightModifier` | the iPhone keyboard's light modifier key                                   |
+| `apple/light-surface`  | `#D1D5DB` | `Brand.appleLightSurface`  | the iPhone keyboard's light surface                                        |
+| `black`                | `#000000` | `Brand.black`              | —                                                                          |
+| `card`                 | `#EBE8E8` | `Brand.card`               | the warm card fill; the paper theme's surface                              |
+| `card-border`          | `#DEDBDB` | `Brand.cardBorder`         | the card's hairline; the paper theme's modifier key                        |
+| `cobolt`               | `#3923C7` | `Brand.cobolt`             | AssemblyAI's primary violet: the drop, never a key or a surface            |
+| `green/100`            | `#CCE4D5` | `Brand.green100`           | the design system's UI-and-code green fill (unused on the phone yet)       |
+| `green/200`            | `#99C8AC` | `Brand.green200`           | the design system's UI-and-code green highlight (unused on the phone yet)  |
+| `green/400`            | `#67AD82` | `Brand.green400`           | the brand hue lifted for dark chrome: the meter, the ring, the wave on ink |
+| `green/700`            | `#01762F` | `Brand.green700`           | the wordmark green, light chrome (the app's accent in light)               |
+| `green/mist`           | `#DBF5E6` | `Brand.greenMist`          | the pale green the orb lightens into                                       |
+| `ink`                  | `#1D1B16` | `Brand.ink`                | the brand ink: the Mac pill's body, the ink theme's surface                |
+| `ink/600`              | `#3A362F` | `Brand.ink600`             | the Mac's dark card border                                                 |
+| `ink/700`              | `#33302A` | `Brand.ink700`             | an ordinary key on ink, one step up                                        |
+| `ink/800`              | `#26231E` | `Brand.ink800`             | a modifier key on ink; the Mac's dark card fill                            |
+| `orange`               | `#E67F36` | `Brand.orange`             | the error word and ring, cancel, the Full Access note; never a red body    |
+| `page`                 | `#FDFCF8` | `Brand.page`               | the design system's page background (unused on the phone)                  |
+| `violet/iris`          | `#887BDD` | `Brand.violetIris`         | the orb gradient's upper violet stop                                       |
+| `violet/lavender`      | `#D7D3F4` | `Brand.violetLavender`     | the orb's lightest violet: its top and the gradient's ends                 |
+| `violet/periwinkle`    | `#B0A7E9` | `Brand.violetPeriwinkle`   | the orb's mid violet: the drop's halo                                      |
+| `warm-white`           | `#F2EEE6` | `Brand.warmWhite`          | key legends on ink: warm white on warm ink                                 |
+| `white`                | `#FFFFFF` | `Brand.white`              | —                                                                          |
+
+<!-- tokens:end brand -->
+
+The keyboard's semantic colours — what a Figma component binds to. In Swift
+the keys read the chosen theme's palette at run time; these are the design
+theme's (ink) values, and the app's catalog colours.
+
+<!-- tokens:begin keyboard -->
+
+| Token                   | Value                                 | Swift                         | Use                                                                       |
+| ----------------------- | ------------------------------------- | ----------------------------- | ------------------------------------------------------------------------- |
+| `app/accent-dark`       | `#67AD82` (`brand.green/400`)         | `Keyboard.appAccentDark`      | the catalog's AccentColor in dark                                         |
+| `app/accent-light`      | `#01762F` (`brand.green/700`)         | `Keyboard.appAccentLight`     | the catalog's AccentColor in light                                        |
+| `app/card-border-dark`  | `#3A362F` (`brand.ink/600`)           | `Keyboard.appCardBorderDark`  | the catalog's CardBorder in dark                                          |
+| `app/card-border-light` | `#DEDBDB` (`brand.card-border`)       | `Keyboard.appCardBorderLight` | the catalog's CardBorder in light                                         |
+| `app/card-fill-dark`    | `#26231E` (`brand.ink/800`)           | `Keyboard.appCardFillDark`    | the catalog's CardFill in dark                                            |
+| `app/card-fill-light`   | `#EBE8E8` (`brand.card`)              | `Keyboard.appCardFillLight`   | the catalog's CardFill in light                                           |
+| `kb/cancel`             | `#E67F36` (`brand.orange`)            | `Keyboard.kbCancel`           | the panel's cancel ×                                                      |
+| `kb/full-access-note`   | `#E67F36` (`brand.orange`)            | `Keyboard.kbFullAccessNote`   | the one line of words the keyboard ever shows                             |
+| `kb/key`                | `#33302A` (`themes.ink/key`)          | `Keyboard.kbKey`              | an ordinary key                                                           |
+| `kb/key-modifier`       | `#26231E` (`themes.ink/key-modifier`) | `Keyboard.kbKeyModifier`      | shift, delete, globe, return, 123, cancel                                 |
+| `kb/legend`             | `#F2EEE6` (`themes.ink/legend`)       | `Keyboard.kbLegend`           | key legends and bare glyphs                                               |
+| `kb/notice-error`       | `#E67F36` (`brand.orange`)            | `Keyboard.kbNoticeError`      | the solid ring and glyph for an error                                     |
+| `kb/notice-ok`          | `#67AD82` (`brand.green/400`)         | `Keyboard.kbNoticeOk`         | the solid ring for pasted and copied                                      |
+| `kb/orb-ring-end`       | `#FFFFFF` (`brand.white`)             | `Keyboard.kbOrbRingEnd`       | the sweeping ring's gradient, bottom-trailing                             |
+| `kb/orb-ring-start`     | `#01762F` (`brand.green/700`)         | `Keyboard.kbOrbRingStart`     | the sweeping ring's gradient, top-leading                                 |
+| `kb/popup`              | `#33302A` (`themes.ink/popup`)        | `Keyboard.kbPopup`            | the letter pop-up                                                         |
+| `kb/signal`             | `#67AD82` (`themes.ink/signal`)       | `Keyboard.kbSignal`           | the wave, the caret, the saved check                                      |
+| `kb/surface`            | `#1D1B16` (`themes.ink/surface`)      | `Keyboard.kbSurface`          | the design theme's surface (Figma binds to kb/*; Swift reads the palette) |
+
+<!-- tokens:end keyboard -->
+
+Gradients:
+
+<!-- tokens:begin gradients -->
+
+- `orb` (`Gradients.orb`, bottom → top): `#D7D3F4` at 0, `#B0A7E9` at 0.0673, `#67AD82` at 0.1442, `#01762F` at 0.3029, `#3923C7` at 0.5962, `#887BDD` at 0.75, `#D7D3F4` at 0.8942, `#FFFFFF` at 1 — the Mac orb's fill, the design's own stops (App elements/Recording.svg), swept bottom to top
+- `orb-ring` (`Gradients.orbRing`, topLeading → bottomTrailing): `#01762F` at 0, `#FFFFFF` at 1 — the ring round the orb: green into white, corner to corner; spun while something is happening
+
+<!-- tokens:end gradients -->
 
 The default theme follows the host app's light or dark appearance, as the
 iPhone keyboard does; Blurt's own themes are **fixed**, whatever the host
@@ -197,8 +324,27 @@ page and a black Messages thread. Nothing on it uses `accent`.
 
 ## Type
 
-Key legends: letters 22 pt regular,
-everything else 16 pt medium. System font throughout.
+System font throughout (SF Pro; the Figma file must have it installed, never
+Inter). Sizes are fixed points, not Dynamic Type, as the system keyboard's are.
+
+<!-- tokens:begin type -->
+
+| Token              | Value      | Swift                       | Use                                                            |
+| ------------------ | ---------- | --------------------------- | -------------------------------------------------------------- |
+| `ratio/orb-glyph`  | `0.34`     | `Typography.ratioOrbGlyph`  | the clipboard and exclamation glyphs, as a fraction of the orb |
+| `size/glyph`       | `17`       | `Typography.sizeGlyph`      | the +, × and ✓                                                 |
+| `size/legend`      | `16`       | `Typography.sizeLegend`     | every other key                                                |
+| `size/letter`      | `22`       | `Typography.sizeLetter`     | letter keys                                                    |
+| `size/popup`       | `32`       | `Typography.sizePopup`      | the letter pop-up                                              |
+| `size/term`        | `17`       | `Typography.sizeTerm`       | the key-term field                                             |
+| `weight/glyph`     | `medium`   | `Typography.weightGlyph`    | —                                                              |
+| `weight/legend`    | `medium`   | `Typography.weightLegend`   | —                                                              |
+| `weight/letter`    | `regular`  | `Typography.weightLetter`   | —                                                              |
+| `weight/orb-glyph` | `semibold` | `Typography.weightOrbGlyph` | —                                                              |
+| `weight/popup`     | `regular`  | `Typography.weightPopup`    | —                                                              |
+| `weight/term`      | `regular`  | `Typography.weightTerm`     | —                                                              |
+
+<!-- tokens:end type -->
 
 ## Components (`BlurtKeyboard/Sources/`)
 
@@ -265,6 +411,117 @@ Top and bottom margin 8 (`KeyboardRootView`); 11 between rows and 3 at the sides
 The globe key appears only when iOS says another keyboard is
 installed (`needsInputModeSwitchKey`).
 
+## Metrics and motion
+
+Every size, gap, radius, opacity and duration the keyboard's views use. The
+heights in `KeyboardLayout.height` are derived from these (slim = 2 ×
+`margin/vertical` + `voicebar/height`; full adds 4 × `row/gap` + 4 ×
+`key/height`; the panel's is chosen), and `LayoutArithmeticTests` pins the
+derivation.
+
+<!-- tokens:begin metrics -->
+
+| Token                         | Points  | Swift                              | Use                                                                      |
+| ----------------------------- | ------- | ---------------------------------- | ------------------------------------------------------------------------ |
+| `addterm/inset`               | `6`     | `Metrics.addtermInset`             | the + from the panel's corner                                            |
+| `card/border`                 | `1`     | `Metrics.cardBorder`               | the card's hairline                                                      |
+| `card/radius`                 | `16`    | `Metrics.cardRadius`               | the app's cards                                                          |
+| `caret/height`                | `20`    | `Metrics.caretHeight`              | —                                                                        |
+| `caret/lead`                  | `1`     | `Metrics.caretLead`                | the caret's gap from the text                                            |
+| `caret/radius`                | `1`     | `Metrics.caretRadius`              | —                                                                        |
+| `caret/width`                 | `2`     | `Metrics.caretWidth`               | —                                                                        |
+| `gesture/swipe-min`           | `24`    | `Metrics.gestureSwipeMin`          | the carousel gesture's minimum distance                                  |
+| `glyph/hit`                   | `32`    | `Metrics.glyphHit`                 | the +, × and ✓ touch targets                                             |
+| `key/gap`                     | `6`     | `Metrics.keyGap`                   | between keys, the iPhone's                                               |
+| `key/height`                  | `42`    | `Metrics.keyHeight`                | every key                                                                |
+| `key/letter-width-402`        | `34.8`  | `Metrics.keyLetterWidth402`        | a letter key at 402 pt (iPhone 18 Pro): (width − 9 × key/gap) / 10       |
+| `key/min-width`               | `44`    | `Metrics.keyMinWidth`              | a key that isn't given a width                                           |
+| `key/pad`                     | `4`     | `Metrics.keyPad`                   | a legend's side padding on a min-width key                               |
+| `key/radius`                  | `8`     | `Metrics.keyRadius`                | flat keys, one colour at this corner                                     |
+| `key/return-width-402`        | `104.4` | `Metrics.keyReturnWidth402`        | return at 402 pt: two side keys and a gap                                |
+| `key/side-gap-factor`         | `2`     | `Metrics.keySideGapFactor`         | shift and delete stand this many key gaps from the letters               |
+| `key/side-width-402`          | `49.2`  | `Metrics.keySideWidth402`          | shift, delete, 123 and globe at 402 pt: what seven letters leave, halved |
+| `layout/full`                 | `272`   | `Metrics.layoutFull`               | 2 × margin/vertical + voicebar/height + 4 × row/gap + 4 × key/height     |
+| `layout/panel`                | `216`   | `Metrics.layoutPanel`              | chosen: room for the 96 orb over one key row                             |
+| `layout/slim`                 | `60`    | `Metrics.layoutSlim`               | 2 × margin/vertical + voicebar/height                                    |
+| `margin/side`                 | `3`     | `Metrics.marginSide`               | at the keyboard's sides                                                  |
+| `margin/vertical`             | `8`     | `Metrics.marginVertical`           | the keyboard's top and bottom                                            |
+| `opacity/dim`                 | `0.8`   | `Metrics.opacityDim`               | the orb when Blurt isn't ready                                           |
+| `opacity/dim-saturation`      | `0.35`  | `Metrics.opacityDimSaturation`     | and its saturation                                                       |
+| `opacity/disabled`            | `0.4`   | `Metrics.opacityDisabled`          | the + without Full Access                                                |
+| `opacity/grain`               | `0.5`   | `Metrics.opacityGrain`             | —                                                                        |
+| `opacity/home-dim-saturation` | `0.45`  | `Metrics.opacityHomeDimSaturation` | the home hero's saturation when not listening                            |
+| `opacity/legend-muted`        | `0.5`   | `Metrics.opacityLegendMuted`       | the + at rest                                                            |
+| `opacity/orb-light`           | `0.3`   | `Metrics.opacityOrbLight`          | —                                                                        |
+| `opacity/placeholder`         | `0.4`   | `Metrics.opacityPlaceholder`       | the field's placeholder                                                  |
+| `opacity/popup-shadow`        | `0.12`  | `Metrics.opacityPopupShadow`       | —                                                                        |
+| `opacity/press-brighten`      | `0.15`  | `Metrics.opacityPressBrighten`     | a key lightens this much while pressed                                   |
+| `opacity/term-cancel`         | `0.7`   | `Metrics.opacityTermCancel`        | the field's ×                                                            |
+| `orb/bar`                     | `40`    | `Metrics.orbBar`                   | the orb in the voice bar                                                 |
+| `orb/dissipate-blur`          | `0.16`  | `Metrics.orbDissipateBlur`         | and blurs to this fraction of its size                                   |
+| `orb/dissipate-scale`         | `1.25`  | `Metrics.orbDissipateScale`        | the orb swells to this while dissipating                                 |
+| `orb/home`                    | `112`   | `Metrics.orbHome`                  | the orb on the home screen                                               |
+| `orb/light-radius`            | `110`   | `Metrics.orbLightRadius`           | the light's reach in points (fixed, not proportional — open)             |
+| `orb/light-x`                 | `0.3`   | `Metrics.orbLightX`                | the soft light's centre, as a fraction of the orb                        |
+| `orb/light-y`                 | `0.22`  | `Metrics.orbLightY`                | —                                                                        |
+| `orb/panel`                   | `96`    | `Metrics.orbPanel`                 | the orb in the panel                                                     |
+| `panel/spacing`               | `12`    | `Metrics.panelSpacing`             | between the panel's orb and its key row                                  |
+| `picker/preview-width`        | `393`   | `Metrics.pickerPreviewWidth`       | the theme card draws the keyboard at this width                          |
+| `picker/radius`               | `10`    | `Metrics.pickerRadius`             | the theme card's preview corners                                         |
+| `picker/scale`                | `0.42`  | `Metrics.pickerScale`              | then scales it to fit two across                                         |
+| `popup/extra-width`           | `18`    | `Metrics.popupExtraWidth`          | the letter pop-up is the key width plus this                             |
+| `popup/height`                | `56`    | `Metrics.popupHeight`              | —                                                                        |
+| `popup/offset`                | `58`    | `Metrics.popupOffset`              | the pop-up sits this far above the key                                   |
+| `popup/radius`                | `10`    | `Metrics.popupRadius`              | —                                                                        |
+| `popup/shadow-radius`         | `8`     | `Metrics.popupShadowRadius`        | the one thing that floats                                                |
+| `popup/shadow-y`              | `2`     | `Metrics.popupShadowY`             | —                                                                        |
+| `press/scale`                 | `0.94`  | `Metrics.pressScale`               | the orb while pressed                                                    |
+| `ring/active`                 | `2`     | `Metrics.ringActive`               | the ring while working or noticing; the home ring                        |
+| `ring/still`                  | `1`     | `Metrics.ringStill`                | the ring at rest                                                         |
+| `row/gap`                     | `11`    | `Metrics.rowGap`                   | between rows, the iPhone's                                               |
+| `slim/spacing`                | `8`     | `Metrics.slimSpacing`              | between the slim bar's keys                                              |
+| `term/gap`                    | `8`     | `Metrics.termGap`                  | × · field · ✓                                                            |
+| `term/height`                 | `36`    | `Metrics.termHeight`               | the key-term field's capsule                                             |
+| `term/inset`                  | `2`     | `Metrics.termInset`                | the field row's side inset                                               |
+| `term/pad`                    | `14`    | `Metrics.termPad`                  | the field's side padding                                                 |
+| `voicebar/addterm-clearance`  | `12`    | `Metrics.voicebarAddtermClearance` | the wave stays this clear of the + at the trailing edge                  |
+| `voicebar/height`             | `44`    | `Metrics.voicebarHeight`           | the voice row, where the system puts its suggestion bar                  |
+| `voicebar/note-gap`           | `10`    | `Metrics.voicebarNoteGap`          | between the orb and the Full Access note                                 |
+| `wave/bar`                    | `2`     | `Metrics.waveBar`                  | a wave bar's width                                                       |
+| `wave/bar-height`             | `24`    | `Metrics.waveBarHeight`            | —                                                                        |
+| `wave/bar-width`              | `240`   | `Metrics.waveBarWidth`             | the wave in the voice bar, at most                                       |
+| `wave/gap`                    | `2`     | `Metrics.waveGap`                  | between wave bars                                                        |
+| `wave/home-height`            | `44`    | `Metrics.waveHomeHeight`           | —                                                                        |
+| `wave/home-width`             | `280`   | `Metrics.waveHomeWidth`            | —                                                                        |
+| `wave/panel-height`           | `40`    | `Metrics.wavePanelHeight`          | —                                                                        |
+| `wave/panel-width`            | `300`   | `Metrics.wavePanelWidth`           | —                                                                        |
+| `wordmark/height`             | `22`    | `Metrics.wordmarkHeight`           | —                                                                        |
+
+<!-- tokens:end metrics -->
+
+Motion, in seconds. Nothing springs or snaps; only the press answers at once.
+
+<!-- tokens:begin motion -->
+
+| Token           | Seconds | Swift                 | Use                                                           |
+| --------------- | ------- | --------------------- | ------------------------------------------------------------- |
+| `caret`         | `0.5`   | `Motion.caret`        | the caret's blink                                             |
+| `drop`          | `2.4`   | `Motion.drop`         | the violet drop is gone by                                    |
+| `drop-hold`     | `0.9`   | `Motion.dropHold`     | and held to                                                   |
+| `drop-rise`     | `0.5`   | `Motion.dropRise`     | the drop is up in                                             |
+| `drop-spread`   | `1`     | `Motion.dropSpread`   | the bloom reaches its full spread in                          |
+| `flip`          | `0.25`  | `Motion.flip`         | the panel's carousel                                          |
+| `height-change` | `0.25`  | `Motion.heightChange` | the keyboard resizing                                         |
+| `key-press`     | `0.08`  | `Motion.keyPress`     | a key lighting                                                |
+| `mood`          | `0.8`   | `Motion.mood`         | the orb's colour moving between moods                         |
+| `press`         | `0.1`   | `Motion.press`        | the orb's press; the one thing that answers at once           |
+| `ring-period`   | `1.6`   | `Motion.ringPeriod`   | one turn of the ring, the Mac's cadence                       |
+| `state-fade`    | `0.5`   | `Motion.stateFade`    | every other change on the key: the ring, a glyph, the dimming |
+| `term-swap`     | `0.4`   | `Motion.termSwap`     | the voice bar becoming the field                              |
+| `wave-fade`     | `0.7`   | `Motion.waveFade`     | the orb and the wave crossing, either way                     |
+
+<!-- tokens:end motion -->
+
 ## Feedback
 
 Haptics (`KeyboardModel.haptics`): medium impact on `recording`, light on the
@@ -286,29 +543,24 @@ The app listens and transcribes; the keyboard is a remote control. They talk
 over the App Group's `UserDefaults` (payloads as JSON) plus Darwin
 notifications that carry nothing and just say "look" (`SharedState.swift`).
 
-| Rule                   | Value                                                                                                           | Why                                                                                                      |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| presence               | heartbeat 5 s (app), 4 s (keyboard); window 15 s                                                                | more than twice a heartbeat, so one missed beat isn't absence; a killed process is absent within seconds |
-| listening              | window not lapsed **and** app seen within 15 s                                                                  | a killed app, or a phone call, with the window's end still in the future                                 |
-| result freshness       | 10 s                                                                                                            | a notification held for a suspended keyboard arrives minutes late                                        |
-| result addressing      | `recipient` = the keyboard instance last seen                                                                   | two live keyboards (two host apps) must not both insert                                                  |
-| result delivery        | the app waits 3 s (poll 250 ms) for the keyboard to take the result; else clipboard + "Copied"                  | "Pasted" is never a guess                                                                                |
-| command freshness      | 10 s                                                                                                            | a held press from minutes ago must not start a dictation on resume                                       |
-| command retry          | one re-signal after 600 ms with no phase change                                                                 | a missed Darwin notification would leave the gate latched over nothing                                   |
-| phase staleness        | notices 3 s (max dwell 2 s + 1); in flight 130 s (the 120 s cap + 10)                                           | the keyboard reads the snapshot on every appearance                                                      |
-| notice dwell           | pasted 1.2 s; copied, error 2 s                                                                                 | the Mac's 0.8 / 1.6 s, a little longer with no hover                                                     |
-| press delay on the orb | 90 ms                                                                                                           | a swipe that starts on the orb never starts a dictation it must then cancel                              |
-| tap travel             | 12 pt (keys), 24 pt (orb), swipe ≥ 48 pt horizontal and 1.5× the vertical                                       | the carousel's swipe never types or dictates                                                             |
-| level publish          | every 80 ms while recording                                                                                     | the orb's meter, off the capture path's back                                                             |
-| lexicon refresh        | hourly                                                                                                          | thousands of contacts on a keyboard memory budget                                                        |
-| height change          | 0.25 s; constraint priority 999                                                                                 | iOS honours a keyboard's height at just under required                                                   |
-| wave                   | 2 pt bars 2 pt apart; 240 × 24 (bar), 300 × 40 (panel), 280 × 44 (home)                                         | thin, dense, slim; one component for the keyboard and the home screen                                    |
-| dissipate              | scale to 1.25, blur 0.16 × the orb, opacity to 0, over the 0.7 s crossing                                       | mist, not a pop; the same in reverse                                                                     |
-| fades                  | orb ↔ wave 0.7 s; ring, glyph, dimming 0.5 s; term field 0.4 s; the drop up 0.5 s, held to 0.9 s, gone by 2.4 s | soft and slow; only the press (0.1 s) answers at once                                                    |
-| keys                   | radius 8, no drop, no edge; pop-up radius 10 with a 12 % shadow at radius 8                                     | flat and contemporary; the pop-up is the one thing that floats                                           |
-| letter pop-up          | 32 pt glyph, key width + 18 × 56, radius 10, 58 pt above                                                        | the system keyboard's geometry                                                                           |
-| term field             | 36 pt, 17 pt text, caret 0.5 s; the + is 32 pt                                                                  | —                                                                                                        |
-| term packs             | ≤ 64 KB, ≤ 100 terms, ≤ 80 characters each                                                                      | the request's cap; unbounded input from a stranger                                                       |
+| Rule                   | Value                                                                                          | Why                                                                                                      |
+| ---------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| presence               | heartbeat 5 s (app), 4 s (keyboard); window 15 s                                               | more than twice a heartbeat, so one missed beat isn't absence; a killed process is absent within seconds |
+| listening              | window not lapsed **and** app seen within 15 s                                                 | a killed app, or a phone call, with the window's end still in the future                                 |
+| result freshness       | 10 s                                                                                           | a notification held for a suspended keyboard arrives minutes late                                        |
+| result addressing      | `recipient` = the keyboard instance last seen                                                  | two live keyboards (two host apps) must not both insert                                                  |
+| result delivery        | the app waits 3 s (poll 250 ms) for the keyboard to take the result; else clipboard + "Copied" | "Pasted" is never a guess                                                                                |
+| command freshness      | 10 s                                                                                           | a held press from minutes ago must not start a dictation on resume                                       |
+| command retry          | one re-signal after 600 ms with no phase change                                                | a missed Darwin notification would leave the gate latched over nothing                                   |
+| phase staleness        | notices 3 s (max dwell 2 s + 1); in flight 130 s (the 120 s cap + 10)                          | the keyboard reads the snapshot on every appearance                                                      |
+| notice dwell           | pasted 1.2 s; copied, error 2 s                                                                | the Mac's 0.8 / 1.6 s, a little longer with no hover                                                     |
+| press delay on the orb | 90 ms                                                                                          | a swipe that starts on the orb never starts a dictation it must then cancel                              |
+| tap travel             | 12 pt (keys), 24 pt (orb), swipe ≥ 48 pt horizontal and 1.5× the vertical                      | the carousel's swipe never types or dictates                                                             |
+| level publish          | every 80 ms while recording                                                                    | the orb's meter, off the capture path's back                                                             |
+| lexicon refresh        | hourly                                                                                         | thousands of contacts on a keyboard memory budget                                                        |
+| height change          | 0.25 s; constraint priority 999                                                                | iOS honours a keyboard's height at just under required                                                   |
+| the visual numbers     | see Metrics and motion above                                                                   | generated from `Design/tokens.json`; the views carry no literals                                         |
+| term packs             | ≤ 64 KB, ≤ 100 terms, ≤ 80 characters each                                                     | the request's cap; unbounded input from a stranger                                                       |
 
 Tests pin the rules that can be pinned (`BlurtiOSTests`: the contract, the
 gate, results, the term field, the feed, the layout arithmetic); anything

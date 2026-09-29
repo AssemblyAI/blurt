@@ -11,7 +11,7 @@ import SwiftUI
 struct VoiceBar: View {
   var model: KeyboardModel
 
-  static let height: CGFloat = 44
+  static let height = DesignTokens.Metrics.voicebarHeight
 
   var body: some View {
     GeometryReader { geo in
@@ -22,8 +22,8 @@ struct VoiceBar: View {
         } else if !model.hasFullAccess {
           // The one state the orb can't show on its own: without Full Access
           // nothing here can work, and the user has to be told where to go.
-          HStack(spacing: 10) {
-            MicKey(model: model, size: 40, wave: nil)
+          HStack(spacing: DesignTokens.Metrics.voicebarNoteGap) {
+            MicKey(model: model, size: DesignTokens.Metrics.orbBar, wave: nil)
             Text("Allow Full Access in Settings → Keyboards")
               .font(.footnote)
               .foregroundStyle(BlurtBrand.errorOrange)
@@ -32,9 +32,15 @@ struct VoiceBar: View {
           }
           .transition(.opacity)
         } else {
-          // The wave stays clear of the + at the trailing edge.
-          MicKey(model: model, size: 40, wave: CGSize(width: min(240, geo.size.width - 2 * (32 + 12)), height: 24))
-            .transition(.opacity)
+          // The wave stays clear of the + at the trailing edge, on both sides so it stays centred.
+          let clearance = DesignTokens.Metrics.glyphHit + DesignTokens.Metrics.voicebarAddtermClearance
+          MicKey(
+            model: model, size: DesignTokens.Metrics.orbBar,
+            wave: CGSize(
+              width: min(DesignTokens.Metrics.waveBarWidth, geo.size.width - 2 * clearance),  // literal-ok: both sides
+              height: DesignTokens.Metrics.waveBarHeight)
+          )
+          .transition(.opacity)
         }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -43,7 +49,7 @@ struct VoiceBar: View {
     .overlay(alignment: .trailing) {
       if model.termDraft == nil, model.hasFullAccess { AddTermKey(model: model) }
     }
-    .animation(.easeInOut(duration: 0.4), value: model.termDraft == nil)
+    .animation(.easeInOut(duration: DesignTokens.Motion.termSwap), value: model.termDraft == nil)
   }
 }
 
@@ -59,16 +65,18 @@ struct AddTermKey: View {
       model.beginAddingTerm()
     } label: {
       Image(systemName: model.termSavedAt == nil ? "plus" : "checkmark")
-        .font(.system(size: 17, weight: .medium))
-        .foregroundStyle(model.termSavedAt == nil ? palette.keyText.opacity(0.5) : palette.signal)
-        .frame(width: 32, height: 32)
+        .font(.system(size: DesignTokens.Typography.sizeGlyph, weight: DesignTokens.Typography.weightGlyph))
+        .foregroundStyle(
+          model.termSavedAt == nil ? palette.keyText.opacity(DesignTokens.Metrics.opacityLegendMuted) : palette.signal
+        )
+        .frame(width: DesignTokens.Metrics.glyphHit, height: DesignTokens.Metrics.glyphHit)
         .contentShape(Circle())
         .contentTransition(.symbolEffect(.replace))
     }
     .buttonStyle(KeyPressStyle())
     .accessibilityLabel("Add a key term")
     .disabled(!model.hasFullAccess)
-    .opacity(model.hasFullAccess ? 1 : 0.4)
+    .opacity(model.hasFullAccess ? 1 : DesignTokens.Metrics.opacityDisabled)
   }
 }
 
@@ -79,23 +87,23 @@ private struct TermField: View {
   @Environment(\.keyboardPalette) private var palette
 
   var body: some View {
-    HStack(spacing: 8) {
-      round("xmark", tint: palette.keyText.opacity(0.7)) { model.cancelAddingTerm() }
+    HStack(spacing: DesignTokens.Metrics.termGap) {
+      round("xmark", tint: palette.keyText.opacity(DesignTokens.Metrics.opacityTermCancel)) { model.cancelAddingTerm() }
         .accessibilityLabel("Cancel")
       HStack(spacing: 0) {
         if let draft = model.termDraft, !draft.isEmpty {
           Text(draft).foregroundStyle(palette.keyText)
         } else {
-          Text("New key term").foregroundStyle(palette.keyText.opacity(0.4))
+          Text("New key term").foregroundStyle(palette.keyText.opacity(DesignTokens.Metrics.opacityPlaceholder))
         }
         Caret()
         Spacer(minLength: 0)
       }
-      .font(.system(size: 17))
+      .font(.system(size: DesignTokens.Typography.sizeTerm, weight: DesignTokens.Typography.weightTerm))
       .lineLimit(1)
-      .padding(.horizontal, 14)
+      .padding(.horizontal, DesignTokens.Metrics.termPad)
       .frame(maxWidth: .infinity)
-      .frame(height: 36)
+      .frame(height: DesignTokens.Metrics.termHeight)
       .background(Capsule().fill(palette.keyDark))
       .accessibilityElement(children: .ignore)
       .accessibilityLabel("Key term: \(model.termDraft ?? "")")
@@ -103,34 +111,35 @@ private struct TermField: View {
         .accessibilityLabel("Save the key term")
         .disabled(model.termDraft?.trimmingCharacters(in: .whitespaces).isEmpty ?? true)
     }
-    .padding(.horizontal, 2)
+    .padding(.horizontal, DesignTokens.Metrics.termInset)
   }
 
   /// × and ✓: bare glyphs, as the + is.
   private func round(_ symbol: String, tint: Color, action: @escaping () -> Void) -> some View {
     Button(action: action) {
       Image(systemName: symbol)
-        .font(.system(size: 17, weight: .medium))
+        .font(.system(size: DesignTokens.Typography.sizeGlyph, weight: DesignTokens.Typography.weightGlyph))
         .foregroundStyle(tint)
-        .frame(width: 32, height: 32)
+        .frame(width: DesignTokens.Metrics.glyphHit, height: DesignTokens.Metrics.glyphHit)
         .contentShape(Circle())
     }
     .buttonStyle(KeyPressStyle())
   }
 }
 
-/// A blinking caret, as a text field's.
+/// A blinking caret, as a text field's; held on while motion is held.
 private struct Caret: View {
   @Environment(\.keyboardPalette) private var palette
+  @Environment(\.keyboardMotionHeld) private var motionHeld
 
   var body: some View {
-    TimelineView(.periodic(from: .now, by: 0.5)) { timeline in
-      let on = Int(timeline.date.timeIntervalSinceReferenceDate * 2) % 2 == 0
-      RoundedRectangle(cornerRadius: 1)
+    TimelineView(.periodic(from: .now, by: DesignTokens.Motion.caret)) { timeline in
+      let on = motionHeld || Int(timeline.date.timeIntervalSinceReferenceDate / DesignTokens.Motion.caret) % 2 == 0
+      RoundedRectangle(cornerRadius: DesignTokens.Metrics.caretRadius)
         .fill(palette.signal)
-        .frame(width: 2, height: 20)
+        .frame(width: DesignTokens.Metrics.caretWidth, height: DesignTokens.Metrics.caretHeight)
         .opacity(on ? 1 : 0)
-        .padding(.leading, 1)
+        .padding(.leading, DesignTokens.Metrics.caretLead)
     }
     .accessibilityHidden(true)
   }
@@ -151,8 +160,8 @@ struct WaveformMeter: View {
   var barSpacing: CGFloat = MeterBarGeometry.barSpacing
 
   /// The keyboard's pitch: 2 pt bars, 2 pt apart.
-  static let slimBar: CGFloat = 2
-  static let slimGap: CGFloat = 2
+  static let slimBar = DesignTokens.Metrics.waveBar
+  static let slimGap = DesignTokens.Metrics.waveGap
 
   var body: some View {
     GeometryReader { geo in

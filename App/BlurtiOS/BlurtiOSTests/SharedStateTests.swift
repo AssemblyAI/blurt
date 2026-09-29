@@ -82,8 +82,8 @@ struct LayoutTests {
     let ids = KeyboardPalette.all.map(\.id)
     #expect(Set(ids).count == ids.count)
     #expect(KeyboardPalette.resolve("lavender", dark: true).id == "lavender")
-    #expect(KeyboardPalette.resolve("system", dark: false).keyText == .black)
-    #expect(KeyboardPalette.resolve("system", dark: true).keyText == .white)
+    #expect(KeyboardPalette.resolve("system", dark: false).keyText == DesignTokens.Brand.black)
+    #expect(KeyboardPalette.resolve("system", dark: true).keyText == DesignTokens.Brand.white)
     #expect(KeyboardPalette.resolve("nope", dark: false).id == "system")
   }
 }

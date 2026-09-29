@@ -11,7 +11,7 @@ struct KeyboardRootView: View {
 
   /// The keyboard's top and bottom margin: the arithmetic in
   /// `KeyboardLayout.height` is built on it and the palette's row gap.
-  static let verticalMargin: CGFloat = 8
+  static let verticalMargin = DesignTokens.Metrics.marginVertical
 
   var body: some View {
     Group {
@@ -34,10 +34,12 @@ struct KeyboardRootView: View {
     .clipped()
     .environment(\.keyboardPalette, model.palette)
     .simultaneousGesture(swipe, including: model.layout == .panel ? .all : .subviews)
-    .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: model.panelShowsKeys)
+    .animation(reduceMotion ? nil : .easeInOut(duration: DesignTokens.Motion.flip), value: model.panelShowsKeys)
   }
 
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+  @Environment(\.keyboardMotionHeld) private var motionHeld
+  private var reduceMotion: Bool { systemReduceMotion || motionHeld }
 
   /// The carousel's slide: the incoming page arrives from the side the finger
   /// moved towards, the outgoing one leaves the other way.
@@ -50,7 +52,7 @@ struct KeyboardRootView: View {
   /// A horizontal swipe anywhere on the panel flips it; taps and holds on keys
   /// never travel this far, and the keys ignore a touch that did.
   private var swipe: some Gesture {
-    DragGesture(minimumDistance: 24)
+    DragGesture(minimumDistance: DesignTokens.Metrics.gestureSwipeMin)
       .onEnded { value in
         let dx = value.translation.width
         guard abs(dx) > 48, abs(dx) > abs(value.translation.height) * 1.5 else { return }
@@ -64,7 +66,7 @@ struct SlimBarView: View {
   var model: KeyboardModel
 
   var body: some View {
-    HStack(spacing: 8) {
+    HStack(spacing: DesignTokens.Metrics.slimSpacing) {
       if model.needsGlobe { KeyCap(systemImage: "globe", dark: true) { model.globe() } }
       VoiceBar(model: model)
       KeyCap(systemImage: "delete.left", dark: true) { model.deleteBackward() }
@@ -79,9 +81,11 @@ struct PanelView: View {
   var model: KeyboardModel
 
   var body: some View {
-    VStack(spacing: 12) {
+    VStack(spacing: DesignTokens.Metrics.panelSpacing) {
       Spacer(minLength: 0)
-      MicKey(model: model, size: 96, wave: CGSize(width: 300, height: 40))
+      MicKey(
+        model: model, size: DesignTokens.Metrics.orbPanel,
+        wave: CGSize(width: DesignTokens.Metrics.wavePanelWidth, height: DesignTokens.Metrics.wavePanelHeight))
       Spacer(minLength: 0)
       HStack(spacing: KeyboardPalette.keyGap) {
         if model.needsGlobe { KeyCap(systemImage: "globe", dark: true) { model.globe() } }
@@ -97,7 +101,7 @@ struct PanelView: View {
           .transition(.opacity)
       }
     }
-    .overlay(alignment: .topLeading) { AddTermKey(model: model).padding(6) }
+    .overlay(alignment: .topLeading) { AddTermKey(model: model).padding(DesignTokens.Metrics.addtermInset) }
   }
 }
 
@@ -127,13 +131,15 @@ struct MicKey: View {
   /// answers a touch until the wave is up, then the wave's band does.
   var wave: CGSize?
   @State private var pressed = false
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+  @Environment(\.keyboardMotionHeld) private var motionHeld
   @Environment(\.keyboardPalette) private var palette
+  private var reduceMotion: Bool { systemReduceMotion || motionHeld }
 
   /// The orb and the wave crossing, either way.
-  static let waveFade: Double = 0.7
+  static let waveFade = DesignTokens.Motion.waveFade
   /// Every other change on the key: the ring, a glyph, the dimming.
-  static let stateFade: Double = 0.5
+  static let stateFade = DesignTokens.Motion.stateFade
 
   var body: some View {
     ZStack {
@@ -149,13 +155,15 @@ struct MicKey: View {
           .clipShape(Circle())
           .overlay { ring }
           .frame(width: size, height: size)
-          .saturation(isReady ? 1 : 0.35)
-          .opacity(isReady ? 1 : 0.8)
+          .saturation(isReady ? 1 : DesignTokens.Metrics.opacityDimSaturation)
+          .opacity(isReady ? 1 : DesignTokens.Metrics.opacityDim)
           .transition(reduceMotion ? .opacity : .dissipate(size: size))
       }
       if let glyph {
         Image(systemName: glyph)
-          .font(.system(size: size * 0.34, weight: .semibold))
+          .font(
+            .system(size: size * DesignTokens.Typography.ratioOrbGlyph, weight: DesignTokens.Typography.weightOrbGlyph)
+          )
           .foregroundStyle(.white)
           .transition(.opacity)
       }
@@ -164,8 +172,8 @@ struct MicKey: View {
     .animation(.easeInOut(duration: Self.waveFade), value: isRecording)
     .animation(.easeInOut(duration: Self.stateFade), value: model.snapshot.state)
     .animation(.easeInOut(duration: Self.stateFade), value: isReady)
-    .scaleEffect(pressed ? 0.94 : 1)
-    .animation(.easeOut(duration: 0.1), value: pressed)
+    .scaleEffect(pressed ? DesignTokens.Metrics.pressScale : 1)
+    .animation(.easeOut(duration: DesignTokens.Motion.press), value: pressed)
     .contentShape(showsWave ? AnyShape(Capsule()) : AnyShape(Circle()))
     .accessibilityLabel(isReady ? (isRecording ? "Stop dictation" : "Dictate") : "Start Blurt")
     .accessibilityValue(model.snapshot.state == .error ? model.snapshot.message ?? "Dictation failed." : "")
@@ -220,7 +228,7 @@ struct MicKey: View {
   /// while the mic comes up and while the words come; still, and solid green
   /// or orange, for a notice; still while recording.
   @ViewBuilder private var ring: some View {
-    let width: CGFloat = isWorking || isNotice ? 2 : 1
+    let width = isWorking || isNotice ? DesignTokens.Metrics.ringActive : DesignTokens.Metrics.ringStill
     if isWorking, !isRecording, !reduceMotion {
       TimelineView(.animation(minimumInterval: keyboardAnimationInterval)) { timeline in
         Circle()
@@ -301,7 +309,7 @@ struct KeyCap: View {
   var action: () -> Void
   @Environment(\.keyboardPalette) private var palette
 
-  static let height: CGFloat = 42
+  static let height = DesignTokens.Metrics.keyHeight
 
   init(
     title: String? = nil, systemImage: String? = nil, tint: Color? = nil, flexible: Bool = false,
@@ -325,12 +333,12 @@ struct KeyCap: View {
         Text(title ?? "")
       }
     }
-    .font(.system(size: 16, weight: .medium))
+    .font(.system(size: DesignTokens.Typography.sizeLegend, weight: DesignTokens.Typography.weightLegend))
     .foregroundStyle(tint ?? palette.keyText)
     .frame(maxWidth: flexible ? .infinity : nil)
     .frame(width: width)
-    .frame(minWidth: width == nil ? 44 : nil, minHeight: Self.height)
-    .padding(.horizontal, flexible || width != nil ? 0 : 4)
+    .frame(minWidth: width == nil ? DesignTokens.Metrics.keyMinWidth : nil, minHeight: Self.height)
+    .padding(.horizontal, flexible || width != nil ? 0 : DesignTokens.Metrics.keyPad)
     .keyCap(bare ? .clear : dark ? palette.keyDark : palette.key)
     .keyPress(action)
     .accessibilityLabel(title ?? systemImage ?? "")
@@ -355,8 +363,8 @@ struct KeyPress: ViewModifier {
 
   func body(content: Content) -> some View {
     content
-      .brightness(pressed ? 0.15 : 0)
-      .animation(.easeOut(duration: 0.08), value: pressed)
+      .brightness(pressed ? DesignTokens.Metrics.opacityPressBrighten : 0)
+      .animation(.easeOut(duration: DesignTokens.Motion.keyPress), value: pressed)
       .contentShape(Rectangle())
       .accessibilityAddTraits(.isButton)
       .simultaneousGesture(
@@ -385,7 +393,7 @@ extension View {
 struct KeyPressStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .brightness(configuration.isPressed ? 0.15 : 0)
-      .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+      .brightness(configuration.isPressed ? DesignTokens.Metrics.opacityPressBrighten : 0)
+      .animation(.easeOut(duration: DesignTokens.Motion.keyPress), value: configuration.isPressed)
   }
 }

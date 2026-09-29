@@ -17,15 +17,17 @@ extension BlurtBrand {
 extension View {
   /// The design's card: warm fill, 16 pt corners, a hairline border.
   func card() -> some View {
-    background(BlurtBrand.cardFill, in: RoundedRectangle(cornerRadius: 16))
-      .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(BlurtBrand.cardBorder, lineWidth: 1))
+    background(BlurtBrand.cardFill, in: RoundedRectangle(cornerRadius: DesignTokens.Metrics.cardRadius))
+      .overlay(
+        RoundedRectangle(cornerRadius: DesignTokens.Metrics.cardRadius)
+          .strokeBorder(BlurtBrand.cardBorder, lineWidth: DesignTokens.Metrics.cardBorder))
   }
 }
 
 /// The lowercase wordmark from the Mac's ready screen, tinted with the accent
 /// (`blurt-ready-logo.png`, shared from `App/Blurt/Blurt/Branding`).
 struct Wordmark: View {
-  private static let height: CGFloat = 22
+  private static let height = DesignTokens.Metrics.wordmarkHeight
 
   var body: some View {
     if let image = UIImage(named: "blurt-ready-logo") {

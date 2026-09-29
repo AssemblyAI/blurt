@@ -39,8 +39,8 @@ private struct ThemeCard: View {
 
   /// The preview keyboard is the full layout, drawn at a phone's width and
   /// scaled down to fit two cards across.
-  private static let previewWidth: CGFloat = 393
-  private static let scale: CGFloat = 0.42
+  private static let previewWidth = DesignTokens.Metrics.pickerPreviewWidth
+  private static let scale = DesignTokens.Metrics.pickerScale
 
   var body: some View {
     Button(action: pick) {
@@ -49,7 +49,7 @@ private struct ThemeCard: View {
           .frame(width: Self.previewWidth, height: KeyboardLayout.full.height)
           .scaleEffect(Self.scale, anchor: .topLeading)
           .frame(width: Self.previewWidth * Self.scale, height: KeyboardLayout.full.height * Self.scale)
-          .clipShape(RoundedRectangle(cornerRadius: 10))
+          .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Metrics.pickerRadius))
           .allowsHitTesting(false)
         VStack(alignment: .leading, spacing: 2) {
           Text(palette.name).font(.headline)
@@ -60,7 +60,8 @@ private struct ThemeCard: View {
       .frame(maxWidth: .infinity, alignment: .leading)
       .card()
       .overlay(
-        RoundedRectangle(cornerRadius: 16).strokeBorder(chosen ? BlurtBrand.accent : Color.clear, lineWidth: 2))
+        RoundedRectangle(cornerRadius: DesignTokens.Metrics.cardRadius)
+          .strokeBorder(chosen ? BlurtBrand.accent : Color.clear, lineWidth: 2))
     }
     .buttonStyle(.plain)
     .accessibilityLabel(palette.name)

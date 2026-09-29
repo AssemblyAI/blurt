@@ -19,13 +19,13 @@ struct FullKeyboardView: View {
       let keyWidth = (geo.size.width - 9 * gap) / 10
       // Shift and delete take what seven letters leave, standing a little
       // further from them than letters stand from each other.
-      let sideGap = gap * 2
+      let sideGap = gap * DesignTokens.Metrics.keySideGapFactor
       let sideWidth = (geo.size.width - 7 * keyWidth - 6 * gap - 2 * sideGap) / 2
       VStack(spacing: KeyboardPalette.rowGap) {
         VoiceBar(model: model)
         ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
-          HStack(spacing: index == 2 ? sideGap : gap) {
-            if index == 2 { modifierKey(width: sideWidth) }
+          HStack(spacing: index == 2 ? sideGap : gap) {  // literal-ok: the third row carries shift and delete
+            if index == 2 { modifierKey(width: sideWidth) }  // literal-ok: the third row
             HStack(spacing: gap) {
               ForEach(Array(row), id: \.self) { character in
                 LetterKey(label: label(for: character), width: keyWidth) { model.type(label(for: character)) }
@@ -44,7 +44,7 @@ struct FullKeyboardView: View {
           KeyCap(title: "space", flexible: true) { model.space() }
           KeyCap(
             title: model.returnLabel, systemImage: model.returnLabel == nil ? "return" : nil, dark: true,
-            width: sideWidth * 2 + gap
+            width: sideWidth * 2 + gap  // literal-ok: return is two modifiers wide
           ) { model.newline() }
         }
       }
@@ -79,7 +79,7 @@ private struct LetterKey: View {
 
   var body: some View {
     Text(label)
-      .font(.system(size: 22))
+      .font(.system(size: DesignTokens.Typography.sizeLetter, weight: DesignTokens.Typography.weightLetter))
       .foregroundStyle(palette.keyText)
       .frame(width: width, height: KeyCap.height)
       .keyCap(palette.key)
@@ -105,12 +105,15 @@ private struct LetterKey: View {
 
   private var popup: some View {
     Text(label)
-      .font(.system(size: 32))
+      .font(.system(size: DesignTokens.Typography.sizePopup, weight: DesignTokens.Typography.weightPopup))
       .foregroundStyle(palette.keyText)
-      .frame(width: width + 18, height: 56)
-      .background(palette.popupFill, in: RoundedRectangle(cornerRadius: 10))
-      .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
-      .offset(y: -58)
+      .frame(width: width + DesignTokens.Metrics.popupExtraWidth, height: DesignTokens.Metrics.popupHeight)
+      .background(palette.popupFill, in: RoundedRectangle(cornerRadius: DesignTokens.Metrics.popupRadius))
+      .shadow(
+        color: .black.opacity(DesignTokens.Metrics.opacityPopupShadow), radius: DesignTokens.Metrics.popupShadowRadius,
+        y: DesignTokens.Metrics.popupShadowY
+      )
+      .offset(y: -DesignTokens.Metrics.popupOffset)
       .allowsHitTesting(false)
   }
 }

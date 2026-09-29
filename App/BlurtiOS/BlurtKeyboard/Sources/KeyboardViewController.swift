@@ -55,7 +55,7 @@ final class KeyboardViewController: UIInputViewController {
   private func updateHeight(animated: Bool) {
     heightConstraint?.constant = model.effectiveLayout.height
     guard animated else { return }
-    UIView.animate(withDuration: 0.25) { self.view.superview?.layoutIfNeeded() }
+    UIView.animate(withDuration: DesignTokens.Motion.heightChange) { self.view.superview?.layoutIfNeeded() }
   }
 
   override func viewWillDisappear(_ animated: Bool) {

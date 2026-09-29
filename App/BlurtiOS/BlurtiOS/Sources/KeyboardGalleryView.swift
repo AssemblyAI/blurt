@@ -5,11 +5,17 @@
   /// reference, and the way a screenshot of the keyboard is taken without
   /// tapping through Notes. Debug builds only, reached by launch argument:
   ///
-  ///     -BlurtGallery <slimBar|panel|full> <state>[,<state>…] [theme]
+  ///     -BlurtGallery <slimBar|panel|full> <state>[,<state>…] [theme] [-BlurtGalleryStill] [-BlurtGalleryBare]
   ///
   /// The last word is a theme id (`system`, `system-dark`, `ink`, `paper`,
   /// `lavender`, `mint`, `midnight`, `sunset`); the iPhone's light face when
-  /// left out.
+  /// left out. Two switches make a capture reproducible for the design loop
+  /// (DESIGN.md › Figma): `-BlurtGalleryStill` holds every motion at time
+  /// zero — the ring, the meter's wave, the orb's fluid and grain — so two
+  /// captures of one state are the same pixels; `-BlurtGalleryBare` draws the
+  /// first row alone, no caption, inside a 2 pt `#FF00FF` registration border
+  /// that `scripts/design-diff.swift crop` cuts to. `-BlurtOrb <size> <mood>`
+  /// renders one orb fill by itself the same way, for Figma's image fills.
   /// where a state is `off` (no Full Access), `start` (app not listening),
   /// `idle`, `connecting`, `recording`, `processing`, `pasted`, `copied`,
   /// `error`, `landed` (the drop, timed for a screenshot) or `live` (a whole
@@ -29,23 +35,63 @@
       let model: KeyboardModel
     }
 
+    /// The capture switches, read from the launch arguments.
+    struct Options: Equatable {
+      /// Hold every motion at time zero, as Reduce Motion does, so a capture
+      /// is the same pixels every time.
+      var still = false
+      /// One row, no caption, a registration border round the keyboard.
+      var bare = false
+
+      static func parse(_ arguments: [String]) -> Options {
+        Options(still: arguments.contains("-BlurtGalleryStill"), bare: arguments.contains("-BlurtGalleryBare"))
+      }
+    }
+
     let rows: [Row]
+    var options = Options()
+
+    /// The registration colour and width `scripts/design-diff.swift crop` looks
+    /// for. Drawn outside the keyboard's frame, so what is inside the border
+    /// is exactly the keyboard's pixels — above and below only, so the
+    /// keyboard keeps the phone's full width (the crop reads a missing side
+    /// border as "the edge of the screen").
+    static let registration = Color(red: 1, green: 0, blue: 1)
+    static let registrationWidth: CGFloat = 2
 
     var body: some View {
-      ScrollView {
-        VStack(alignment: .leading, spacing: 16) {
-          ForEach(rows) { row in
-            VStack(alignment: .leading, spacing: 4) {
-              Text(row.caption).font(.caption.weight(.medium)).foregroundStyle(.secondary).padding(.horizontal)
-              KeyboardRootView(model: row.model)
-                .frame(height: row.model.effectiveLayout.height)
-                .clipped()
+      if options.bare, let row = rows.first {
+        VStack {
+          Spacer(minLength: 0)
+          keyboard(row)
+            .padding(.vertical, Self.registrationWidth)
+            .background(Self.registration)
+          Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(uiColor: .systemBackground))
+        .ignoresSafeArea()
+      } else {
+        ScrollView {
+          VStack(alignment: .leading, spacing: 16) {
+            ForEach(rows) { row in
+              VStack(alignment: .leading, spacing: 4) {
+                Text(row.caption).font(.caption.weight(.medium)).foregroundStyle(.secondary).padding(.horizontal)
+                keyboard(row)
+              }
             }
           }
+          .padding(.vertical, 12)
         }
-        .padding(.vertical, 12)
+        .background(Color(uiColor: .systemBackground))
       }
-      .background(Color(uiColor: .systemBackground))
+    }
+
+    private func keyboard(_ row: Row) -> some View {
+      KeyboardRootView(model: row.model)
+        .frame(height: row.model.effectiveLayout.height)
+        .clipped()
+        .environment(\.keyboardMotionHeld, options.still)
     }
 
     /// The rows named by the launch arguments; empty when they don't ask for
@@ -54,7 +100,8 @@
       guard let flag = arguments.firstIndex(of: "-BlurtGallery"), arguments.count > flag + 2,
         let layout = KeyboardLayout(rawValue: arguments[flag + 1])
       else { return [] }
-      let theme = arguments.count > flag + 3 ? arguments[flag + 3] : "system"
+      // The theme is the next word unless it is a switch.
+      let theme = arguments.count > flag + 3 && !arguments[flag + 3].hasPrefix("-") ? arguments[flag + 3] : "system"
       return arguments[flag + 2].split(separator: ",").map { name in
         Row(
           caption: "\(layout.rawValue) · \(name) · \(theme)",
@@ -122,6 +169,46 @@
           try? await Task.sleep(for: .seconds(1.2))
           set(.idle)
           try? await Task.sleep(for: .seconds(2))
+        }
+      }
+    }
+
+    /// `-BlurtOrb <size> <off|idle|listening|working|landed>`: one orb fill,
+    /// still, on the ink surface, inside the registration border — the image
+    /// Figma's `Orb/Disc` component uses, since a mesh gradient under grain is
+    /// nothing Figma can draw natively (DESIGN.md › Figma). `landed` is the
+    /// drop at its peak; `listening` is the gallery's level, 0.62.
+    struct OrbStillView: View {
+      let size: CGFloat
+      let mood: PrismOrb.Mood
+      let landedAt: Date?
+
+      var body: some View {
+        VStack {
+          Spacer(minLength: 0)
+          PrismOrb(mood: mood, landedAt: landedAt, animated: false)
+            .frame(width: size, height: size)
+            .clipShape(Circle())
+            .padding(KeyboardGalleryView.registrationWidth)
+            .background(KeyboardGalleryView.registration)
+          Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(DesignTokens.Brand.ink)
+        .ignoresSafeArea()
+      }
+
+      static func parse(_ arguments: [String]) -> OrbStillView? {
+        guard let flag = arguments.firstIndex(of: "-BlurtOrb"), arguments.count > flag + 2,
+          let size = Double(arguments[flag + 1])
+        else { return nil }
+        switch arguments[flag + 2] {
+        case "off": return OrbStillView(size: size, mood: .off, landedAt: nil)
+        case "idle": return OrbStillView(size: size, mood: .idle, landedAt: nil)
+        case "listening": return OrbStillView(size: size, mood: .listening(level: 0.62), landedAt: nil)
+        case "working": return OrbStillView(size: size, mood: .working, landedAt: nil)
+        case "landed": return OrbStillView(size: size, mood: .idle, landedAt: Date().addingTimeInterval(-0.6))
+        default: return nil
         }
       }
     }

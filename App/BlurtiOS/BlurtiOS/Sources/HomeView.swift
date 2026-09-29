@@ -86,10 +86,10 @@ struct HomeView: View {
 
   // MARK: - The orb and the listening state
 
-  private static let orbSize: CGFloat = 112
+  private static let orbSize = DesignTokens.Metrics.orbHome
   /// The wave at hero size: wide and slim, inside the card at any phone width.
-  private static let waveReach: CGFloat = 280
-  private static let waveHeight: CGFloat = 44
+  private static let waveReach = DesignTokens.Metrics.waveHomeWidth
+  private static let waveHeight = DesignTokens.Metrics.waveHomeHeight
   private var isRecording: Bool { coordinator.phase == .recording }
   private var orbWorking: Bool { coordinator.window.isOpen || coordinator.phase.isCapturing }
 
@@ -110,7 +110,7 @@ struct HomeView: View {
             .frame(width: Self.orbSize, height: Self.orbSize)
             .clipShape(Circle())
             .overlay { HeroRing(animated: orbWorking && !reduceMotion) }
-            .saturation(coordinator.window.isOpen ? 1 : 0.45)
+            .saturation(coordinator.window.isOpen ? 1 : DesignTokens.Metrics.opacityHomeDimSaturation)
             .transition(reduceMotion ? .opacity : .dissipate(size: Self.orbSize))
         }
       }
@@ -330,14 +330,14 @@ private struct HeroRing: View {
     if animated {
       TimelineView(.animation(minimumInterval: keyboardAnimationInterval)) { timeline in
         Circle()
-          .strokeBorder(BlurtBrand.orbRingGradient, lineWidth: 2)
+          .strokeBorder(BlurtBrand.orbRingGradient, lineWidth: DesignTokens.Metrics.ringActive)
           .rotationEffect(
             .degrees(
               MeterBarGeometry.rotationDegrees(
                 time: timeline.date.timeIntervalSinceReferenceDate, period: BrandOrb.period)))
       }
     } else {
-      Circle().strokeBorder(BlurtBrand.orbRingGradient, lineWidth: 2)
+      Circle().strokeBorder(BlurtBrand.orbRingGradient, lineWidth: DesignTokens.Metrics.ringActive)
     }
   }
 }

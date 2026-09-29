@@ -31,9 +31,9 @@ struct PrismOrb: View {
 
   /// The drop's life: up in 0.5 s, held to 0.9 s, gone by 2.4 s — an event,
   /// but a soft one.
-  static let dropDuration: TimeInterval = 2.4
-  static let dropRise: TimeInterval = 0.5
-  static let dropHold: TimeInterval = 0.9
+  static let dropDuration: TimeInterval = DesignTokens.Motion.drop
+  static let dropRise: TimeInterval = DesignTokens.Motion.dropRise
+  static let dropHold: TimeInterval = DesignTokens.Motion.dropHold
 
   var body: some View {
     TimelineView(.animation(minimumInterval: keyboardAnimationInterval, paused: !animated)) { timeline in
@@ -46,16 +46,17 @@ struct PrismOrb: View {
         // a flat swatch — airy, not glossy.
         Rectangle().fill(
           RadialGradient(
-            colors: [.white.opacity(0.3), .clear], center: UnitPoint(x: 0.3, y: 0.22), startRadius: 0,
-            endRadius: 110))
+            colors: [.white.opacity(DesignTokens.Metrics.opacityOrbLight), .clear],
+            center: UnitPoint(x: DesignTokens.Metrics.orbLightX, y: DesignTokens.Metrics.orbLightY), startRadius: 0,
+            endRadius: DesignTokens.Metrics.orbLightRadius))
         if drop > 0 {
           Drop(amount: drop, elapsed: elapsed)
           Sparkles(elapsed: elapsed)  // invariant-ok: the orb's star glyphs, not the Sparkle updater
         }
-        Grain(seed: animated ? Int(time * 24) : 7).opacity(0.5).blendMode(.overlay)
+        Grain(seed: animated ? Int(time * 24) : 7).opacity(DesignTokens.Metrics.opacityGrain).blendMode(.overlay)
       }
     }
-    .animation(.easeInOut(duration: 0.8), value: mood)
+    .animation(.easeInOut(duration: DesignTokens.Motion.mood), value: mood)
   }
 
   /// How much violet is in the orb `elapsed` seconds after the words landed:
@@ -120,13 +121,14 @@ struct PrismOrb: View {
     }
   }
 
+  /// The orb's colours, by the part they play; the values are the brand's.
   private enum Palette {
-    static let mist = Color(red: 0.86, green: 0.96, blue: 0.9)
-    static let lavender = Color(red: 215 / 255, green: 211 / 255, blue: 244 / 255)
-    static let periwinkle = Color(red: 176 / 255, green: 167 / 255, blue: 233 / 255)
-    static let violet = Color(red: 57 / 255, green: 35 / 255, blue: 199 / 255)
-    static let green = BlurtBrand.green
-    static let greenLight = BlurtBrand.greenOnDark
+    static let mist = DesignTokens.Brand.greenMist
+    static let lavender = DesignTokens.Brand.violetLavender
+    static let periwinkle = DesignTokens.Brand.violetPeriwinkle
+    static let violet = DesignTokens.Brand.cobolt
+    static let green = DesignTokens.Brand.green700
+    static let greenLight = DesignTokens.Brand.green400
   }
 
   /// The drop itself: a violet bloom that grows from the centre and thins as
@@ -136,7 +138,7 @@ struct PrismOrb: View {
     let elapsed: TimeInterval
 
     var body: some View {
-      let spread = min(1, elapsed / 1.0)
+      let spread = min(1, elapsed / DesignTokens.Motion.dropSpread)
       Circle()
         .fill(
           RadialGradient(

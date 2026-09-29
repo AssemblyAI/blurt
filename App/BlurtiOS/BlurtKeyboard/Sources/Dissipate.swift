@@ -8,8 +8,8 @@ private struct Dissipate: ViewModifier {
 
   func body(content: Content) -> some View {
     content
-      .scaleEffect(1 + 0.25 * amount)
-      .blur(radius: size * 0.16 * amount)
+      .scaleEffect(1 + (DesignTokens.Metrics.orbDissipateScale - 1) * amount)
+      .blur(radius: size * DesignTokens.Metrics.orbDissipateBlur * amount)
       .opacity(1 - amount)
   }
 }

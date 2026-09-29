@@ -166,6 +166,10 @@ targets:
     platform: iOS
     sources:
       - path: BlurtiOSTests
+      # The design's one source, bundled so DesignTokensTests can pin the
+      # compiled DesignTokens.swift to the file it was generated from.
+      - path: Design/tokens.json
+        buildPhase: resources
     dependencies:
       - target: BlurtiOS
     settings:

@@ -56,6 +56,20 @@ struct LayoutArithmeticTests {
     #expect(rows[2].model.termDraft == "Rizz")
     #expect(rows[0].model.palette.id == "mint")
     let dark = KeyboardGalleryView.rows(from: ["app", "-BlurtGallery", "full", "idle", "system-dark"])
-    #expect(dark[0].model.palette.keyText == .white)
+    #expect(dark[0].model.palette.keyText == DesignTokens.Brand.white)
+  }
+
+  @Test("the capture switches ride along, and a switch where the theme would be is not a theme")
+  func galleryOptions() {
+    let args = ["app", "-BlurtGallery", "panel", "idle", "-BlurtGalleryStill", "-BlurtGalleryBare"]
+    #expect(KeyboardGalleryView.rows(from: args)[0].model.palette.id == "system")
+    #expect(KeyboardGalleryView.Options.parse(args) == .init(still: true, bare: true))
+    #expect(KeyboardGalleryView.Options.parse(["app", "-BlurtGallery", "panel", "idle", "ink"]) == .init())
+    #expect(KeyboardGalleryView.OrbStillView.parse(args) == nil)
+    let orb = KeyboardGalleryView.OrbStillView.parse(["app", "-BlurtOrb", "96", "landed"])
+    #expect(orb?.size == 96)
+    #expect(orb?.landedAt != nil)
+    #expect(KeyboardGalleryView.OrbStillView.parse(["app", "-BlurtOrb", "96", "nope"]) == nil)
+    #expect(KeyboardGalleryView.OrbStillView.parse(["app", "-BlurtOrb", "big", "idle"]) == nil)
   }
 }

@@ -19,10 +19,10 @@ struct BrandOrb: View {
   /// Whether the ring sweeps. Off under Reduce Motion, where the ring is still
   /// drawn — it is part of the mark — but holds still.
   var animated: Bool
-  var ringWidth: CGFloat = 1
+  var ringWidth = DesignTokens.Metrics.ringStill
 
   /// One turn every 1.6 s: the Mac's cadence.
-  static let period: Double = 1.6
+  static let period = DesignTokens.Motion.ringPeriod
 
   var body: some View {
     Circle()

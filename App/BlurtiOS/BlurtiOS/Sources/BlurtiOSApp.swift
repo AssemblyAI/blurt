@@ -39,10 +39,12 @@ struct BlurtiOSApp: App {
     WindowGroup {
       #if DEBUG
         let rows = KeyboardGalleryView.rows(from: CommandLine.arguments)
-        if rows.isEmpty {
+        if let orb = KeyboardGalleryView.OrbStillView.parse(CommandLine.arguments) {
+          orb
+        } else if rows.isEmpty {
           home
         } else {
-          KeyboardGalleryView(rows: rows)
+          KeyboardGalleryView(rows: rows, options: .parse(CommandLine.arguments))
         }
       #else
         home
