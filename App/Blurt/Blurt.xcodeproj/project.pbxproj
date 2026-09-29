@@ -246,6 +246,7 @@
 		8FE4B9B139BB9557FBC5589B /* OverlayWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A27D7F43295DE2A81EFFDDBC /* OverlayWindowController.swift */; };
 		91C1257866F6E2D4EE65BD09 /* WindowAccessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B2312DE4BC0F4F070830AD7 /* WindowAccessor.swift */; };
 		91D775ACB2351468D47731FF /* rom1a-12-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E2BCA8E305B596F960CEE1AE /* rom1a-12-start.m4a */; };
+		92041B42C67CE21AF82B6863 /* KeyCap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48C4CFC6271703797187A269 /* KeyCap.swift */; };
 		9266EA4F50B9D46E9181FBAF /* rom1a-5-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2E64BCDB280FD0A27D965AA9 /* rom1a-5-start.m4a */; };
 		92DFEC2C8E639E4658C7E8C0 /* rom1a-10-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 45D65D0519A0D2FC47EF7DAD /* rom1a-10-start.m4a */; };
 		936E20D5FF993C8FCF0E5575 /* juno-44-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6B85C5A7CB0E82C4777D2430 /* juno-44-stop.m4a */; };
@@ -602,6 +603,7 @@
 		4830CF6168A7511FE3720746 /* juno-13-stop.m4a */ = {isa = PBXFileReference; path = "juno-13-stop.m4a"; sourceTree = "<group>"; };
 		486F5FE65FF8C13A35C28271 /* juno-116-start.m4a */ = {isa = PBXFileReference; path = "juno-116-start.m4a"; sourceTree = "<group>"; };
 		4873421ACF290B88FA257D6A /* rom1a-7-start.m4a */ = {isa = PBXFileReference; path = "rom1a-7-start.m4a"; sourceTree = "<group>"; };
+		48C4CFC6271703797187A269 /* KeyCap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyCap.swift; sourceTree = "<group>"; };
 		49A71146BDFEA07D74A6A67C /* juno-32-stop.m4a */ = {isa = PBXFileReference; path = "juno-32-stop.m4a"; sourceTree = "<group>"; };
 		49CD6A6815EDDB16BBBCCCB2 /* rom1b-3-start.m4a */ = {isa = PBXFileReference; path = "rom1b-3-start.m4a"; sourceTree = "<group>"; };
 		49F7AD1193F18CCDF17B9EBA /* juno-6-stop.m4a */ = {isa = PBXFileReference; path = "juno-6-stop.m4a"; sourceTree = "<group>"; };
@@ -1380,6 +1382,7 @@
 				D643CB1D491E00A2182907F8 /* BlurtCommands.swift */,
 				8999B37D9418B7A6923BD358 /* BoundTriggerKey.swift */,
 				C7C95B4C80443E2A6EFE05E7 /* DeveloperSection.swift */,
+				48C4CFC6271703797187A269 /* KeyCap.swift */,
 				01F10B3261EA8F8616B8595A /* MainWindowRoot.swift */,
 				383E03AB60BA21AAD92655D5 /* ReadyView.swift */,
 				A0EC4E3D73862F8E4DB6F47D /* RecentDictationsSection.swift */,
@@ -2027,6 +2030,7 @@
 				1C40B5DB92262E05808ECCEA /* DictationKeyTap.swift in Sources */,
 				B5A7CEA6517E5A1E4D77623F /* FloatingPanel.swift in Sources */,
 				F42E6D4E62345772C5A49A08 /* HotkeyStepView.swift in Sources */,
+				92041B42C67CE21AF82B6863 /* KeyCap.swift in Sources */,
 				9B7CB19D131F1374FCA0A986 /* KeyTermsStepView.swift in Sources */,
 				E8AE03AA4DCD807D2BB8D660 /* LiquidGlass.swift in Sources */,
 				7F838018EA0ACE7170FC32C4 /* MainWindowRoot.swift in Sources */,

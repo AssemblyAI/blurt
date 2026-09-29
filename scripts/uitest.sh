@@ -39,7 +39,7 @@ xcodebuild \
   -scheme Blurt \
   -testPlan Blurt \
   -configuration Debug \
-  -destination 'platform=macOS' \
+  -destination "platform=macOS,arch=$(uname -m)" \
   -only-testing:BlurtUITests \
   CODE_SIGN_IDENTITY="-" \
   CODE_SIGNING_REQUIRED=NO \

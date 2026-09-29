@@ -39,7 +39,7 @@ extension DictationLog {
   /// one "delete my logs" gesture (`scripts/reset-install.sh`) covers both.
   static var defaultErrorURL: URL { HostIdentity.current.logURL("errors.jsonl") }
 
-  /// `defaultErrorURL` as a home-abbreviated path, for the Developer section's
+  /// `defaultErrorURL` as a home-abbreviated path, for the Advanced pane's
   /// footer. Derived here next to the URL the writer uses, for the same reason
   /// as `defaultDisplayPath`: the displayed path can't drift from the write
   /// target.

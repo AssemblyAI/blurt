@@ -101,6 +101,10 @@ final class AppCoordinator {
   }
 
   func start() {
+    // Before the first read of the binding — the override below, the key tap,
+    // and every view's `@AppStorage` copy all come after `start()`.
+    TriggerKeyStore().migrateStaleFunctionBinding()
+    syncGlobeKeyOverride()
     // Absorb the one-off cost of this process's first touch of the capture
     // stack, so the first dictation doesn't pay it on the hot path (~75 ms; see
     // `MicCapture.warmUp()`, which holds no recorder and opens no device). Gated
@@ -224,6 +228,14 @@ final class AppCoordinator {
   /// to re-evaluate here.
   func dictationBindingChanged() {
     keyTap?.refreshBinding()
+    syncGlobeKeyOverride()
+  }
+
+  /// Turns macOS's own 🌐 action off while `fn` is the trigger, and back on
+  /// otherwise (see `GlobeKeyOverride`). Also run from `start()`, so the relaunch
+  /// after a settings reset restores the user's setting.
+  private func syncGlobeKeyOverride() {
+    GlobeKeyOverride().sync(boundKey: TriggerKeyStore().triggerKey)
   }
 
   // MARK: - Dictation render

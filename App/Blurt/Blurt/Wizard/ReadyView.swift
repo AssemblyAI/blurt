@@ -1,28 +1,38 @@
 import BlurtEngine
 import SwiftUI
 
-/// The "you're all set" screen shown in the main window once setup is complete.
-/// It states the dictation shortcut, the style in effect, and the recent
-/// dictations, and closes with a Settings button at the foot — the window's
-/// own door to the Settings scene, alongside the standard app-menu
-/// "Settings…" (⌘,) and the menu-bar item.
+/// The "you're all set" screen shown in the main window once setup is complete:
+/// the wordmark over a grouped form — the shortcut and the style in effect,
+/// then the recent dictations — and a bottom bar with the attribution links
+/// and a Settings button, the window's own door to the Settings scene
+/// alongside the app-menu "Settings…" (⌘,) and the menu-bar item.
+///
+/// A grouped `Form`, the same surface the Settings window's panes use, rather
+/// than hand-drawn cards: one inset-grouped style for every container means
+/// one set of fills, radii and separators — the system's, which also carry
+/// dark mode, Increase Contrast and vibrancy — instead of several custom greys
+/// that each nearly matched.
 struct ReadyView: View {
   var coordinator: AppCoordinator
   var openSettings: () -> Void
-  /// The style row's "+": opens Settings deep-linked to the Advanced pane,
-  /// where styles are edited — a separate closure from `openSettings` so the
+  /// The style row's "Edit Styles…": opens Settings deep-linked to the Styles
+  /// pane, where styles are edited — a separate closure from `openSettings` so the
   /// plain Settings button keeps opening on General (see `MainWindowRoot`).
   var editStyles: () -> Void
   // Observed (not read once) so changing the dictation key in the separate
   // Settings window re-renders this window's keycap live — see `BoundTriggerKey`.
   @BoundTriggerKey private var triggerKey
+  /// Tap or hold, tap, or hold — observed like the key, so the shortcut row's
+  /// words follow a change made in Settings. Raw slot, decoded through
+  /// `fromPersisted`, which owns the unset default.
+  @AppStorage(TriggerActivationStore.defaultsKey) private var activationRaw = ""
+  private var activation: TriggerActivation { .fromPersisted(activationRaw) }
 
   /// Observed for the same reason as the trigger key, and bound to *observe*,
   /// not to write: the store owns the decoding and the active-vs-Default rule
   /// (see `StyleProfileStore`), and `@AppStorage` is what re-renders this window
   /// when the settings sheet adds a style or the switcher changes the active
-  /// one. Hoisted here rather than into the switcher because the status block
-  /// needs the active style's name too.
+  /// one.
   @AppStorage(StyleProfileStore.defaultsKey) private var rawProfiles = ""
   @AppStorage(StyleProfileStore.activeDefaultsKey) private var rawActiveID = ""
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -35,157 +45,70 @@ struct ReadyView: View {
     // second reading here.
     let profiles = StyleProfileStore().profiles(decoding: rawProfiles)
     let active = StyleProfileStore.active(in: profiles, id: rawActiveID)
-    // The window's vertical rhythm, measured off the design rather than picked:
-    // `sectionGap` between the stacked sections and between the wordmark and
-    // the readout, `captionGap` from a caption to the card it names (captions
-    // sit *above* their card, so the pair reads as label-then-thing), and a
-    // wider `readoutGap` under the shortcut readout — the design gives that one
-    // line noticeably more air before the controls start, which is what keeps
-    // the window from reading as a single dense stack.
-    VStack(spacing: MainWindow.sectionGap) {
-      VStack(spacing: MainWindow.sectionGap) {
-        ReadyBrandingView()
+    VStack(spacing: 0) {
+      ReadyBrandingView()
+        .padding(.top, 20)
 
-        statusBlock(activeStyleName: active?.name)
-      }
-      .padding(.bottom, MainWindow.readoutGap - MainWindow.sectionGap)
-
-      // Always present, even with no custom styles: a pop-up holding Default
-      // and "Edit Styles…" is the row's empty state, so the feature is
-      // discoverable from the main window rather than only from Settings.
-      VStack(alignment: .leading, spacing: MainWindow.captionGap) {
-        Text("How Blurt cleans up your raw transcript")
-          .font(.callout)
-          .foregroundStyle(.secondary)
-          .frame(maxWidth: .infinity, alignment: .leading)
-
-        StyleRow(profiles: profiles, activeID: active?.id, editStyles: editStyles)
-          // Locked while the mic is opening or capturing: a style picked
-          // mid-utterance would disagree with what the request was built with.
-          // `.disabled` propagates to the pop-up and the hidden ⌘1–⌘5 buttons,
-          // whose shortcuts don't fire while disabled.
-          .disabled(coordinator.isCapturing)
-      }
-
-      // `displayed`, not `entries`: the ring remembers 100 dictations (they are
-      // also request context — see `ConversationContext`) and this list is three
-      // rows tall.
-      RecentDictationsSection(entries: coordinator.recentDictations.displayed)
-
-      Button(action: openSettings) {
-        Label("Settings", systemImage: "gearshape")
-          .labelStyle(.titleAndIcon)
-          .symbolRenderingMode(.hierarchical)
-      }
-      // The system Liquid Glass button — hover/press chrome, edge highlights,
-      // and accessibility fallbacks come from the style, not hand-rolled fills.
-      // Prominent, so it takes the brand-green fill the design gives it: it's
-      // the only button on the window's closing line.
-      // Falls back to `.borderedProminent` on macOS 15–25 (see glassButtonStyleCompat).
-      .glassButtonStyleCompat(prominent: true)
-
-      // The window's footer: the share line over the caption-level "Powered
-      // by AssemblyAI" line, grouped tight (4pt, not the section gap) so the
-      // two caption lines read as one closing block rather than the share
-      // line floating as a fourth stacked item. The block is a sibling of the
-      // sections rather than grouped with the button — what makes it read as
-      // a footer instead of a caption on the Settings button is the
-      // *asymmetry* below: the full section gap above it, but only half the
-      // window's usual inset beneath, so it sits against the bottom edge
-      // rather than floating between the button and the chrome.
-      VStack(spacing: 4) {
-        // A quiet share line in the footer's own voice: caption-level
-        // secondary prose with the links carrying `BlurtBrand.accent`, for
-        // the same reasons the footer's `Link` below does. Both destinations
-        // come from failable construction, so like the footer the line simply
-        // omits itself if either literal ever fails to build. Each `Link`
-        // carries an explicit accessibility label: the visible "X" is
-        // meaningless on its own in VoiceOver's links rotor.
-        if let xURL = Self.shareOnXURL, let linkedInURL = Self.shareOnLinkedInURL {
-          HStack(spacing: 3) {
-            Text("Share Blurt on").foregroundStyle(.secondary)
-            Link("X", destination: xURL)
-              .foregroundStyle(BlurtBrand.accent)
-              .accessibilityLabel("Share Blurt on X")
-            Text("or").foregroundStyle(.secondary)
-            Link("LinkedIn", destination: linkedInURL)
-              .foregroundStyle(BlurtBrand.accent)
-              .accessibilityLabel("Share Blurt on LinkedIn")
-          }
-          .font(.caption)
+      Form {
+        Section {
+          shortcutRow
+          // Always present, even with no custom styles: a pop-up holding
+          // Default and "Edit Styles…" is the row's empty state, so the
+          // feature is discoverable from the main window rather than only
+          // from Settings.
+          StyleRow(profiles: profiles, activeID: active?.id, editStyles: editStyles)
+            // Locked while the mic is opening or capturing: a style picked
+            // mid-utterance would disagree with what the request was built
+            // with. `.disabled` propagates to the pop-up and the hidden
+            // ⌘1–⌘5 buttons, whose shortcuts don't fire while disabled.
+            .disabled(coordinator.isCapturing)
+        } footer: {
+          StylesInertNotice()
         }
 
-        // Split so the linked word keeps its affordance: "Powered by" is quiet
-        // secondary prose, while the `Link` carries colour — all-secondary made
-        // the whole line indistinguishable from static text. That colour is
-        // `BlurtBrand.accent`, not the system link blue a bare `Link` draws
-        // itself in: blue would be the only instance of a second hue in a window
-        // whose sole accent is the brand green, and it landed directly under the
-        // green Settings button, giving the least important element on screen
-        // the second-loudest colour. `.foregroundStyle` rather than `.tint`
-        // because `Link` styles its own label with `NSColor.linkColor` and only
-        // an explicit foreground overrides it.
-        //
-        // `Link` routes through the environment's `openURL` — the default
-        // browser — the same road the wizard's "Get a Free Key" button takes.
-        // Built through the failable `URL` initializer (`force_unwrapping` is
-        // banned repo-wide), so like the wordmark above it simply omits itself
-        // if the literal ever fails to parse.
-        if let url = Self.poweredByURL {
-          HStack(spacing: 3) {
-            Text("Powered by").foregroundStyle(.secondary)
-            Link("AssemblyAI", destination: url)
-              .foregroundStyle(BlurtBrand.accent)
-            // The route to the repo's issue tracker, styled like the link
-            // before it. The dot is decoration, so VoiceOver skips it.
-            if let issuesURL = Self.reportBugURL {
-              Text("·").foregroundStyle(.secondary).accessibilityHidden(true)
-              Link("Report a bug", destination: issuesURL)
-                .foregroundStyle(BlurtBrand.accent)
-            }
-          }
-          .font(.caption)
-        }
+        // `displayed`, not `entries`: the ring remembers 100 dictations (they
+        // are also request context — see `ConversationContext`) and this list
+        // is three rows tall.
+        RecentDictationsSection(
+          entries: coordinator.recentDictations.displayed, triggerKey: triggerKey,
+          activation: activation)
       }
+      .formStyle(.grouped)
+      .scrollDisabled(true)
+      .fixedSize(horizontal: false, vertical: true)
+
+      bottomBar
+        // The grouped form insets its sections by 20, so the bar lines up
+        // with their edges.
+        .padding(.horizontal, 20)
+        .padding(.bottom, 16)
     }
-    .frame(maxWidth: .infinity)
-    // The design's margin on both comps (its cards run x 24.5 to 455.5 in a
-    // 480-wide window). Was 32, which made this window's cards narrower than
-    // the setup window's — the grouped `Form` there insets its rows to 20 and
-    // can't be told otherwise. Named in `MainWindow` because `StyleRow` sizes
-    // its pop-up against the width this leaves.
-    .padding(.horizontal, MainWindow.contentMargin)
-    // The standard titlebar supplies the top clearance now (the logo's
-    // transparent margin used to), so the top matches the section spacing.
-    // The bottom is deliberately *half* that: the last line in the stack is
-    // the attribution footer, and a footer only reads as one when it is closer
-    // to the window's edge than to the content above it. At an even 20 it sat
-    // almost exactly between the Settings button and the chrome, which read as
-    // a fourth stacked item rather than a footer.
-    .padding(.top, 20)
-    .padding(.bottom, 10)
     .frame(width: MainWindow.contentWidth)
     .fixedSize(horizontal: false, vertical: true)
   }
 
-  /// The window's top block: the shortcut readout at rest, swapped for the
-  /// listening state while audio is actually being captured. Both render into
-  /// one fixed-height slot (the `RecentDictationsSection` reservation trick) so
-  /// the Style row and Recent list below never move on the swap. The swap is
-  /// gated on the same phase stream the overlay pill renders
-  /// (`coordinator.menuBarStatus`, whose `.recording` deliberately excludes the
-  /// mic bring-up) — during "Connecting…" nothing is captured yet, so claiming
-  /// "Listening" would invite unrecoverable speech; the readout stays put and
-  /// the pill carries the warming-up state.
-  private func statusBlock(activeStyleName: String?) -> some View {
-    ZStack {
-      if coordinator.menuBarStatus == .recording {
-        listeningState(activeStyleName: activeStyleName)
-      } else {
-        shortcutReadout
+  /// The dictation shortcut as a form row: "Shortcut" leading, and trailing
+  /// the bound key as a keycap beside a word on what it does. The keycap fills
+  /// with the accent the moment the key goes down (`isCapturing`, which
+  /// includes the mic bring-up) — the window's proof the hotkey is registered —
+  /// while the words swap from the configured gesture ("Tap or hold", "Tap",
+  /// or "Hold" — `TriggerActivation.label`) to the live phase.
+  ///
+  /// The phase is gated on the same stream the overlay pill renders
+  /// (`coordinator.menuBarStatus`, whose `.recording` deliberately excludes
+  /// the mic bring-up) — during "Connecting…" nothing is captured yet, so
+  /// claiming "Listening" would invite unrecoverable speech.
+  private var shortcutRow: some View {
+    SettingRow(title: "Shortcut", systemImage: "keyboard") {
+      HStack(spacing: 8) {
+        phaseText
+          .foregroundStyle(.secondary)
+        KeyCap(label: triggerKey.keycapLabel, isLit: coordinator.isCapturing)
       }
     }
-    .frame(height: Self.statusBlockHeight)
+    .help(activation.guidance)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("Shortcut: \(triggerKey.spokenName). \(phaseDescription)")
     // Esc cancels the in-flight dictation — same command the overlay's owner
     // submits (`.cancel`), scoped to this window by living on a button in it.
     // Present through all of capture (not just `.recording`), so Esc during
@@ -199,112 +122,107 @@ struct ReadyView: View {
     }
   }
 
-  /// Both faces are two text lines on the shared tiers, so this is simply
-  /// enough for either with breathing room; each centers in the same slot and
-  /// nothing below moves on the swap.
-  private static let statusBlockHeight: CGFloat = 50
-
-  /// Where the "Powered by AssemblyAI" footer link points.
-  private static let poweredByURL = URL(string: "https://www.assemblyai.com/blurt")
-
-  /// Where the footer's "Report a bug" link points: the repo's GitHub issues.
-  private static let reportBugURL = URL(string: "https://github.com/AssemblyAI/blurt/issues")
-
-  /// The prefilled post the X share opens with — short, in Blurt's voice, and
-  /// carrying the link itself, since the tweet intent takes only text.
-  private static let shareText = "Loving Blurt for dictation on my Mac 🎙️ https://www.assemblyai.com/blurt"
-
-  /// Where the share line's "X" link points: the tweet intent with `shareText`
-  /// prefilled. Built through `URLComponents` so the text is percent-encoded
-  /// by the type rather than by hand.
-  private static let shareOnXURL: URL? = {
-    var components = URLComponents(string: "https://twitter.com/intent/tweet")
-    components?.queryItems = [URLQueryItem(name: "text", value: shareText)]
-    return components?.url
-  }()
-
-  /// Where the share line's "LinkedIn" link points. LinkedIn's share intent
-  /// takes only a URL to share, so this one carries no message.
-  private static let shareOnLinkedInURL: URL? = {
-    var components = URLComponents(string: "https://www.linkedin.com/sharing/share-offsite/")
-    components?.queryItems = [URLQueryItem(name: "url", value: "https://www.assemblyai.com/blurt")]
-    return components?.url
-  }()
-
-  /// The idle readout: "Tap **Right Command (⌘)** to start and stop." over
-  /// "Or hold it to talk, then release." — the key spelled out and bolded
-  /// inline (`TriggerKey.fullName`), no keycap chip. Static on purpose: which
-  /// style is in effect is the Style row's job to say — its selected button
-  /// is always visible right below — so repeating it here would be two
-  /// readouts to keep in agreement. Both lines take their ideal size: inside
-  /// the fixed-height slot a squeezed line can't fall back to wrapping, so
-  /// without this the slightest width shortfall rendered as a truncated key
-  /// name ("right…").
-  private var shortcutReadout: some View {
-    VStack(spacing: 2) {
-      (Text("Tap ") + Text(triggerKey.fullName).bold() + Text(" to start and stop."))
-        .statusPrimaryLine()
-        .fixedSize()
-      Text("Or hold it to talk, then release.")
-        .statusSecondaryLine()
-        .fixedSize()
-    }
-  }
-
-  /// The capture-in-progress face of the top block, mirroring the idle face's
-  /// shape exactly — two centered lines on the shared tiers — so the swap
-  /// reads as the same surface changing words: the pill's waveform cue in the
-  /// accent (`#01762F` on light, `#67AD82` on dark — the adaptive value, not a
-  /// pinned shade, since this glyph lives in a window that follows the system
-  /// appearance) inline with a bold "Listening…", then the way out. The style
-  /// clause names the active profile; with none active the sentence starts at
-  /// "Tap again" — "Blurting in Default." reads as if a profile by that
-  /// name existed.
-  private func listeningState(activeStyleName: String?) -> some View {
-    VStack(spacing: 2) {
-      HStack(spacing: 6) {
+  /// The shortcut row's trailing words: how to use the key at rest, then what
+  /// the dictation is doing.
+  @ViewBuilder
+  private var phaseText: some View {
+    switch coordinator.menuBarStatus {
+    case .recording:
+      HStack(spacing: 4) {
         Image(systemName: "waveform")
           .foregroundStyle(BlurtBrand.accent)
           // The pill's live-capture heartbeat (`RecordingTag`), same cadence,
           // stilled under Reduce Motion the same way.
           .pulsingOpacity(period: 1.2, minOpacity: 0.4, animated: !reduceMotion)
-        // Bold as inline emphasis, the same role the key name's bold plays on
-        // the idle face.
         Text("Listening…")
-          .bold()
       }
-      // The tier on the line, not the text, so the SF Symbol scales with the
-      // words it sits beside instead of carrying its own size.
-      .statusPrimaryLine()
-      .fixedSize()
-      Text(listeningSubtitle(activeStyleName: activeStyleName))
-        .statusSecondaryLine()
-        // One line, tail-truncated if a long style name pushes it past the
-        // content width: at the slot's fixed height a wrap would clip mid
-        // letter, and the sentence's load-bearing halves ("Blurting in
-        // <style>", Esc) front-load ahead of the cut.
-        .lineLimit(1)
+    case .transcribing:
+      Text("Transcribing…")
+    case .idle:
+      Text(activation.label)
     }
-    // One element, phrased once — the glyph is decoration and the ellipsis is
-    // not worth hearing.
-    .accessibilityElement(children: .ignore)
-    .accessibilityLabel(
-      "Listening. \(listeningSubtitle(activeStyleName: activeStyleName))")
   }
 
-  /// The escape clause covers both end mechanisms honestly: a tap-mode
-  /// dictation ends with another tap, a held key ends on release — the block
-  /// can't know which started this one, so it names both.
-  private func listeningSubtitle(activeStyleName: String?) -> String {
-    let escape = "Tap again or release to finish — Esc cancels."
-    guard let activeStyleName else { return escape }
-    return "Blurting in \(activeStyleName). \(escape)"
+  /// The phase for VoiceOver, spelled out where the row abbreviates — naming
+  /// only the gestures the configured activation responds to.
+  private var phaseDescription: String {
+    switch coordinator.menuBarStatus {
+    case .recording: "Listening. \(activation.finishHint) Escape cancels."
+    case .transcribing: "Transcribing."
+    case .idle: activation.guidance
+    }
+  }
+
+  /// The window's last row, laid out the way a macOS window's bottom bar is:
+  /// the attribution on the leading edge, the one button on the trailing edge.
+  /// A standard push button — Settings is a place visited once, and ⌘, and the
+  /// app menu already reach it, so it takes neither the accent nor glass.
+  private var bottomBar: some View {
+    HStack {
+      footerLinks
+      Spacer()
+      Button(action: openSettings) {
+        Label("Settings", systemImage: "gearshape")
+          .labelStyle(.titleAndIcon)
+      }
+    }
+  }
+
+  /// "Powered by AssemblyAI · Report a bug", caption-level.
+  ///
+  /// Split so the linked words keep their affordance: "Powered by" is quiet
+  /// secondary prose, while each `Link` carries colour — all-secondary made
+  /// the whole line indistinguishable from static text. That colour is
+  /// `BlurtBrand.accent`, not the system link blue a bare `Link` draws itself
+  /// in: blue would be the only instance of a second hue in a window whose
+  /// sole accent is the brand green. `.foregroundStyle` rather than `.tint`
+  /// because `Link` styles its own label with `NSColor.linkColor` and only an
+  /// explicit foreground overrides it.
+  ///
+  /// Sharing lives in the Help menu (`BlurtCommands`) rather than here: a
+  /// half-linked "Share Blurt on LinkedIn" read as an ad on the window's
+  /// quietest line. Each link omits itself if its URL fails to build
+  /// (`force_unwrapping` is banned repo-wide).
+  private var footerLinks: some View {
+    HStack(spacing: 3) {
+      if let url = BlurtLinks.poweredBy {
+        Text("Powered by").foregroundStyle(.secondary)
+        Link("AssemblyAI", destination: url)
+          .foregroundStyle(BlurtBrand.accent)
+      }
+      if let issuesURL = BlurtLinks.reportBug {
+        // The dot is decoration, so VoiceOver skips it.
+        Text("·").foregroundStyle(.secondary).accessibilityHidden(true)
+        Link("Report a bug", destination: issuesURL)
+          .foregroundStyle(BlurtBrand.accent)
+      }
+    }
+    .font(.caption)
   }
 }
 
-/// The `blurt` wordmark over the status block: the brand-green mark
+/// The app's outbound links, shared by the ready screen's footer and the Help
+/// menu (`BlurtCommands`). Failable construction throughout, so a caller omits
+/// its link rather than force-unwrapping.
+enum BlurtLinks {
+  /// Where "Powered by AssemblyAI" points.
+  static let poweredBy = URL(string: "https://www.assemblyai.com/blurt")
+
+  /// The repo's GitHub issues.
+  static let reportBug = URL(string: "https://github.com/AssemblyAI/blurt/issues")
+
+  /// LinkedIn's share intent. It takes only a URL to share, so this one
+  /// carries no message.
+  static let shareOnLinkedIn: URL? = {
+    var components = URLComponents(string: "https://www.linkedin.com/sharing/share-offsite/")
+    components?.queryItems = [URLQueryItem(name: "url", value: "https://www.assemblyai.com/blurt")]
+    return components?.url
+  }()
+}
+
+/// The `blurt` wordmark over the form: the brand-green mark
 /// (`Branding/blurt-ready-logo.png`, a 720×180 rasterization of the design's
-/// vector wordmark, so its 180×45 pt slot is fed 4× the pixels it needs and
+/// vector wordmark, so its 96×24 pt slot is fed 7.5× the pixels it needs and
 /// stays crisp at any display scale). Smoothly interpolated — it's curved
 /// letterforms now, not the pixel-art mark it replaced, which needed
 /// nearest-neighbor to keep its pixels square. A header mark, not the window's
@@ -341,33 +259,9 @@ private struct ReadyBrandingView: View {
         .interpolation(.high)
         .resizable()
         .scaledToFit()
-        .frame(maxWidth: 180)
+        .frame(maxWidth: 96)
         .foregroundStyle(BlurtBrand.accent)
         .accessibilityLabel("Blurt logo")
     }
-  }
-}
-
-/// The status block's two line tiers, shared by its idle and Listening faces so
-/// the swap can't drift into two designs trading places: identical size and
-/// color per tier, with weight left to inline emphasis (the idle face bolds the
-/// key name, the Listening face its "Listening…"). Private to this file — these
-/// name the top block's tiers, not an app-wide type ramp.
-extension View {
-  /// Tier 1: the sentence that says what to do (or what is happening). Set a
-  /// step above body and semibold, the weight carried by the whole line rather
-  /// than the key name alone — this is the window's headline, and the design
-  /// gives it the visual rank to match. The inline `.bold()` on the key name
-  /// still reads as emphasis against semibold.
-  fileprivate func statusPrimaryLine() -> some View {
-    font(.title2.weight(.semibold))
-  }
-
-  /// Tier 2: the supporting line beneath it, quieter in color and one tier
-  /// down in size — a step below tier 1 rather than two, so the pair reads as
-  /// one block instead of a heading with a caption.
-  fileprivate func statusSecondaryLine() -> some View {
-    font(.title3)
-      .foregroundStyle(.secondary)
   }
 }

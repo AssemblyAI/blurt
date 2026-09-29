@@ -28,13 +28,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   @ObservationIgnored lazy var updateCheckModel = UpdateCheckModel()
 
   /// One-shot deep-link into Settings, consumed by `SettingsWindowRoot`: while
-  /// true, the Settings window switches to (or opens on) the Advanced pane,
-  /// where the Styles section lives. Set by the main window's "+" (add style)
-  /// button just before it calls `openSettings`; observed (not just read on
+  /// true, the Settings window switches to (or opens on) the Styles pane.
+  /// Set by the main window's "Edit Styles…" item just before it calls `openSettings`; observed (not just read on
   /// appear) so an already-open Settings window switches too, and reset by the
   /// consumer so every other route into Settings (⌘,, the Settings buttons,
   /// the menu-bar item) still opens on General as before.
-  var settingsOpensOnAdvanced = false
+  var settingsOpensOnStyles = false
 
   /// Opens a window scene by id. The `openWindow` action lives in SwiftUI, so
   /// `MainWindowRoot` captures it here (in its launch-time `onAppear`) to give

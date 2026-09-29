@@ -9,32 +9,65 @@ import SwiftUI
 struct SettingRow<Trailing: View>: View {
   var title: String
   var systemImage: String
+  /// A secondary line under the title — a preview of what the row holds (a
+  /// style's instructions). Truncates rather than wraps, so every row keeps
+  /// one height.
+  var subtitle: String?
   @ViewBuilder var trailing: () -> Trailing
 
   var body: some View {
     HStack {
-      // The glyph carries the brand green, the title stays label-colored: the
-      // design tints only the icon, and a green title would read as a link.
-      // Built with the closure form and the color applied to the `Image` alone,
-      // rather than `.foregroundStyle(.primary, BlurtBrand.accent)` on a
-      // `Label(_:systemImage:)` — a label's icon doesn't reliably draw at the
-      // secondary style level, so the two-argument form leaves it label-colored.
-      Label {
-        Text(title)
-      } icon: {
-        Image(systemName: systemImage)
-          .foregroundStyle(BlurtBrand.accent)
-      }
-      // The row label is two or three words and names the setting, so it never
-      // wraps: when the trailing control is wide (the mic picker's "Same as
-      // system (MacBook Pro Microphone)"), the control truncates and the label
-      // stays whole. Without this the label was the compressible view and
-      // "Input device" broke across two lines, which also made that one row
-      // taller than every other row in the form.
-      .lineLimit(1)
-      .fixedSize(horizontal: true, vertical: false)
+      SettingLabel(title: title, systemImage: systemImage, subtitle: subtitle)
+        // The row label is two or three words and names the setting, so it never
+        // wraps: when the trailing control is wide (the mic picker's "Same as
+        // system (MacBook Pro Microphone)"), the control truncates and the label
+        // stays whole. Without this the label was the compressible view and
+        // "Input device" broke across two lines, which also made that one row
+        // taller than every other row in the form. A row with a subtitle stays
+        // compressible instead: the preview is the part that should give way.
+        .lineLimit(1)
+        .fixedSize(horizontal: subtitle == nil, vertical: false)
       Spacer(minLength: 12)
       trailing()
+    }
+  }
+}
+
+/// The icon-and-title label every settings row leads with — `SettingRow`'s, and
+/// the label of each settings `Toggle`, so a switch row lines up with a picker
+/// row above it.
+struct SettingLabel: View {
+  var title: String
+  var systemImage: String
+  var subtitle: String?
+
+  /// Wide enough for the widest row glyph (`keyboard`). A
+  /// bare `Label` sizes its icon slot to each symbol's own width, so a narrow
+  /// glyph (`mic`) pulled its title left of a wide one's (`keyboard`) and no two
+  /// rows' titles started at the same x.
+  private static let iconWidth: CGFloat = 22
+
+  var body: some View {
+    // The glyph carries the brand green, the title stays label-colored: the
+    // design tints only the icon, and a green title would read as a link.
+    // Built with the closure form and the color applied to the `Image` alone,
+    // rather than `.foregroundStyle(.primary, BlurtBrand.accent)` on a
+    // `Label(_:systemImage:)` — a label's icon doesn't reliably draw at the
+    // secondary style level, so the two-argument form leaves it label-colored.
+    Label {
+      VStack(alignment: .leading, spacing: 2) {
+        Text(title)
+        if let subtitle {
+          Text(subtitle)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .truncationMode(.tail)
+        }
+      }
+    } icon: {
+      Image(systemName: systemImage)
+        .foregroundStyle(BlurtBrand.accent)
+        .frame(width: Self.iconWidth)
     }
   }
 }

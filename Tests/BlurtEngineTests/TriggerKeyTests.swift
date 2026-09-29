@@ -8,6 +8,7 @@ struct TriggerKeyTests {
   func keyCodes() {
     #expect(TriggerKey.rightCommand.keyCode == 54)
     #expect(TriggerKey.rightOption.keyCode == 61)
+    #expect(TriggerKey.function.keyCode == 63)
   }
 
   @Test("every case has a non-empty label")
@@ -25,6 +26,7 @@ struct TriggerKeyTests {
     // reader.
     #expect(TriggerKey.rightCommand.fullName == "Right Command (⌘)")
     #expect(TriggerKey.rightOption.fullName == "Right Option (⌥)")
+    #expect(TriggerKey.function.fullName == "Function (fn)")
   }
 
   @Test("raw value round-trips through keyCode")
@@ -47,12 +49,11 @@ struct TriggerKeyTests {
     #expect(TriggerKey.fromPersisted(57) == .rightCommand)
   }
 
-  @Test("a persisted fn keycode (a removed option) falls back to right ⌘")
-  func removedFunctionFallsBack() {
-    // `fn` (keycode 63) was dropped as an option; anyone who had it saved must
-    // decode to the default rather than an invalid selection.
-    #expect(TriggerKey(rawValue: 63) == nil)
-    #expect(TriggerKey.fromPersisted(63) == .rightCommand)
+  @Test("a persisted fn keycode decodes to fn")
+  func persistedFunctionDecodes() {
+    // The decode itself is plain; a 63 saved before `fn` was removed is
+    // rewritten beforehand by `TriggerKeyStore.migrateStaleFunctionBinding()`.
+    #expect(TriggerKey.fromPersisted(63) == .function)
   }
 
   // The hotkey tap reads the *device-dependent* modifier bit (which physical
@@ -60,10 +61,11 @@ struct TriggerKeyTests {
   // shared by both the left and right keys. Reading the shared mask can't tell a
   // right-⌘ release from "right released but left still held," which desyncs the
   // tap's down/up tracking on keyboards with both keys in play.
-  @Test("deviceModifierMask is the right-side NX device bit")
+  @Test("deviceModifierMask is the right-side NX device bit (secondary-fn for fn)")
   func deviceMasks() {
     #expect(TriggerKey.rightCommand.deviceModifierMask == 0x10)  // NX_DEVICERCMDKEYMASK
     #expect(TriggerKey.rightOption.deviceModifierMask == 0x40)  // NX_DEVICERALTKEYMASK
+    #expect(TriggerKey.function.deviceModifierMask == 0x80_0000)  // kCGEventFlagMaskSecondaryFn
   }
 
   @Test("right-⌘ mask does not collide with the left-⌘ or generic ⌘ bit")

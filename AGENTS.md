@@ -763,7 +763,7 @@ The dictation trigger is a **single lone modifier key** (tap-to-toggle or hold-t
 in-house. Four pieces, three of them pure engine logic:
 
 - **`TriggerKey`** (`Hotkey/TriggerKey.swift`) — enum of the curated lone momentary modifiers usable
-  as the trigger (right ⌘, right ⌥), `rawValue` = the macOS virtual keycode, plus `label`
+  as the trigger (right ⌘, right ⌥, `fn`), `rawValue` = the macOS virtual keycode, plus `label`
   ("right ⌘") and the device-modifier masks the event source needs. Right-side modifiers are chosen
   because a solo press rarely collides with app shortcuts.
 - **`TriggerKeyStore`** — persists the chosen keycode in `UserDefaults` (`BlurtTriggerKeyCode`),
@@ -798,6 +798,19 @@ and silently swallow the user's next press — a latched `modifierDown` returns 
 `modifierUp` after it returns `.stop`, which no-ops on an already-terminal session. The tap
 **swallows nothing**: a lone modifier types nothing, and combos pass through so normal shortcuts keep
 working.
+
+Because the tap can't swallow `fn`, macOS's own 🌐 action ("Press 🌐 key to": emoji, input source,
+or Apple Dictation — each with its own sound or popup) would fire on every `fn` dictation. The
+engine's **`GlobeKeyOverride`** handles that: while `fn` is bound, `AppCoordinator` (at `start()`
+and on every rebind) sets `com.apple.HIToolbox` `AppleFnUsageType` to 0 (Do Nothing), and binding
+any other key restores the value it replaced. That record lives in a suite both builds share
+(`dev.alex.blurt.globe-key`) — the setting is one per login, so a per-host record let Blurt and
+Blurt Dev restore each other to Do Nothing — and outside `DefaultsKey` on purpose, so a settings
+reset doesn't erase it: the relaunch after a reset is what restores the user's setting.
+`scripts/reset-install.sh` restores from it directly, since it wipes the host domains. The write
+only takes effect at the next log-in (macOS reads it then), so the Shortcut footer says so and links
+to Keyboard Settings. A keycode 63 saved before `fn` was removed (#146) is migrated to right ⌘ once
+(`TriggerKeyStore.migrateStaleFunctionBinding()`), so restoring `fn` doesn't silently rebind it. Don't fix this with an active tap that swallows `fn`: the tap is listen-only for latency.
 
 The trigger is editable in the Shortcut section of the setup/settings UI (`HotkeyStepView`) — a
 `Picker` over `TriggerKey.allCases` that writes `TriggerKeyStore`, after which
@@ -1024,7 +1037,7 @@ sites, so a failure path added later is logged by construction; `.noTarget` and 
 `stopAndCancel`'s failing `mic.stop()`: a cancel must not flash red, so that fault is logged **without**
 a phase change rather than dropped. A failed append itself goes to `os_log` (never the entry, which
 would leak transcripts system-wide) — it's the one error that can't be reported through the error log,
-and it must never throw onto the dictation path. The Settings window's Developer section surfaces the
+and it must never throw onto the dictation path. The Settings window's Advanced pane surfaces the
 switch and both paths, and both `scripts/reset-install.sh` and the in-app reset
 (`DictationLog.removeStoredLogs()`, via `InstallReset`) remove both files — plus the directory, once
 it holds nothing else.
@@ -1053,18 +1066,23 @@ restating them.
 `App/Blurt/Blurt/App.swift` declares four scenes (five in Debug):
 
 - **Main window** (`MainWindowRoot`) — the setup wizard until the app is fully configured, then the
-  "ready" screen (`ReadyView`: the shortcut readout, swapped for a "Listening…" state while audio
-  is captured — driven by the same phase stream the pill renders, with Esc cancelling while this
-  window is key; the labeled Output Style row — one button per style, Default plus up to 4
-  profiles with the active one drawn prominent, always visible, selectable by ⌘1–⌘5, locked
-  during capture, plus a "+" that opens Settings on its Advanced pane while under the profile cap;
-  the Recent list, each row trailing a chip naming the style it was made with and the relative
-  time, swapped for a Copy affordance on hover; and a Settings button at the
-  foot). Standard titlebar, always presented at launch.
+  "ready" screen (`ReadyView`: the wordmark over a grouped `Form` — the same surface as the Settings
+  panes, no hand-drawn cards. A Shortcut row trails the bound key as a keycap that fills with the
+  accent while the key is down, beside the configured activation ("Tap or hold", "Tap" or "Hold")
+  swapped for "Listening…"/"Transcribing…" on the same phase stream the pill renders, with Esc
+  cancelling while this window is key; a Style row's
+  pop-up — Default plus up to 4 profiles and an "Edit Styles…" item that opens Settings on its Styles
+  pane, selectable by ⌘1–⌘5, locked during capture — with a footer only while enhanced transcripts
+  are off, saying styles don't apply; then a Recent section, one form row per dictation trailing the
+  style it was made with and the relative time as plain secondary text, swapped for a Copy
+  affordance on hover, and when empty a first-dictation prompt. A bottom bar
+  holds "Powered by AssemblyAI · Report a bug" and a plain Settings button; the LinkedIn share is in
+  the Help menu). Standard titlebar, always presented at launch.
 - **Settings** (`SettingsWindowRoot`) — a `TabView` reached via ⌘, / the menu bar,
-  never at launch. General holds the everyday setup (key, shortcut, cue, key terms); Advanced holds
-  the enhanced-transcripts switch, the style profiles, the update check, the developer-mode toggle,
-  and the **reset** — one destructive button running the engine's `InstallReset` (the same sweep as
+  never at launch. General holds the everyday setup (key, shortcut, mic, cue); Styles leads with the
+  enhanced-transcripts switch (styles only shape that rewrite) above the style profiles; Vocabulary
+  holds the key terms and the text-shortcut table (+ / −, double-click to edit); Advanced holds
+  the update check, the developer-mode toggle, and the **reset** — one destructive button running the engine's `InstallReset` (the same sweep as
   `scripts/reset-install.sh`: settings, Keychain key, TCC grants, dictation logs), which confirms
   first and then **restarts the app** (a detached `sh -c 'sleep 1; open -n <bundle>'`, since whatever
   reopens Blurt has to outlive it). The restart is load-bearing, not a courtesy: macOS prompts for a

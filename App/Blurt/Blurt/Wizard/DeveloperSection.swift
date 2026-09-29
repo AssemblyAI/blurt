@@ -3,39 +3,94 @@ import BlurtEngine
 import OSLog
 import SwiftUI
 
-// The Advanced pane's two standalone sections: the developer-mode switch and
-// the start-over button. Both are Settings-only (neither gates setup, so
-// neither is a wizard step), and they live here rather than in
-// `SettingsWindowRoot` because that file is at the repo's file-length limit.
+// The Advanced pane's two sections: the maintenance group (version, update
+// check, developer mode) and the start-over button. Both are Settings-only
+// (neither gates setup, so neither is a wizard step), and they live here rather
+// than in `SettingsWindowRoot` because that file is at the repo's file-length
+// limit.
 
-/// The Developer section of the Settings window: an opt-in switch for developer
-/// mode. While on, every completed dictation is appended to the local JSONL log
-/// and every failed one to a sibling error log (see `DictationLog` — both gates
-/// read the same default this toggle writes), and the footer shows where those
-/// logs live so they're easy to find. Settings-only — not a wizard step, since it
-/// never gates setup.
-struct DeveloperSection: View {
+/// The Advanced pane's first group: the running version with its update check,
+/// and the developer-mode switch. One headerless section rather than an
+/// "Updates" and a "Developer" section of one row each, whose headers only
+/// repeated the row beneath them.
+///
+/// Developer mode is an opt-in: while on, every completed dictation is appended
+/// to the local JSONL log and every failed one to a sibling error log (see
+/// `DictationLog` — both gates read the same default this toggle writes), and
+/// the section grows a "Show Logs in Finder" row and a footer naming where the
+/// logs live.
+struct MaintenanceSection: View {
+  let updateModel: UpdateCheckModel
+
   @AppStorage(DeveloperModeStore.defaultsKey) private var developerMode = false
 
   var body: some View {
     Section {
+      UpdateRow(model: updateModel)
       Toggle(isOn: $developerMode) {
-        Label("Developer mode", systemImage: "hammer")
+        SettingLabel(title: "Developer mode", systemImage: "hammer")
       }
       .accessibilityIdentifier(UITestIdentifiers.developerToggle)
-    } header: {
-      Text("Developer")
+      if developerMode {
+        SettingRow(title: "Logs", systemImage: "doc.text.magnifyingglass") {
+          Button("Show in Finder", action: showLogs)
+            .accessibilityIdentifier(UITestIdentifiers.developerShowLogs)
+        }
+      }
     } footer: {
-      // Both home-abbreviated paths are derived in the engine next to the URLs
-      // the writers append to, so this label can never drift from where the logs
-      // actually land. No trailing period: a path ends the line, so it can be
-      // selected and copied without picking up punctuation — which is also why
-      // the first path is followed by a plain space rather than a comma.
-      Text(
-        "Logs each dictation to \(DictationLog.defaultDisplayPath) "
-          + "and each failure to \(DictationLog.defaultErrorDisplayPath)"
-      )
-      .textSelection(.enabled)
+      if developerMode {
+        // Both home-abbreviated paths are derived in the engine next to the URLs
+        // the writers append to, so this label can never drift from where the
+        // logs actually land. No trailing period: a path ends the line, so it
+        // can be selected and copied without picking up punctuation — which is
+        // also why the first path is followed by a plain space, not a comma.
+        Text(
+          "Logs each dictation to \(DictationLog.defaultDisplayPath) "
+            + "and each failure to \(DictationLog.defaultErrorDisplayPath)"
+        )
+        .textSelection(.enabled)
+      } else {
+        Text("Developer mode keeps a local log of each dictation and failure.")
+      }
+    }
+  }
+
+  /// Opens the log directory in Finder. The directory only exists once the first
+  /// entry lands, and a button that silently did nothing right after the switch
+  /// went on would read as broken — so it's created here if need be (the reset
+  /// sweep removes it again once it's empty).
+  private func showLogs() {
+    let directory = DictationLog.defaultURL.deletingLastPathComponent()
+    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    NSWorkspace.shared.open(directory)
+  }
+}
+
+/// The running version and a "Check for Updates" button that runs the check and
+/// reports the result in a modal (see `UpdateCheckModel`). The same check is
+/// reachable from the "Check for Updates…" app-menu command and the menu-bar
+/// item; all three share the one `UpdateCheckModel` owned by `AppDelegate`, so a
+/// check from any place runs through the same controller.
+private struct UpdateRow: View {
+  let model: UpdateCheckModel
+
+  var body: some View {
+    // "Blurt 0.1.31" — the label is the engine's (shared with the result
+    // alerts, so the two can't name the version differently).
+    SettingRow(title: model.versionLabel, systemImage: "arrow.triangle.2.circlepath") {
+      HStack(spacing: 8) {
+        // A user-initiated check that can stall on a slow connection needs
+        // visible progress, or the button reads as dead until the result alert
+        // lands. Show a spinner and disable the button while in flight (the
+        // model already ignores a second check) — the native equivalent of
+        // Sparkle's "Checking for updates…".
+        if model.isChecking {
+          ProgressView().controlSize(.small)
+        }
+        Button("Check for Updates") { model.checkForUpdates() }
+          .disabled(model.isChecking)
+          .accessibilityIdentifier(UITestIdentifiers.updateCheck)
+      }
     }
   }
 }
@@ -83,7 +138,7 @@ struct ResetSection: View {
       switch self {
       case .confirm:
         "This can’t be undone. Your AssemblyAI API key, every setting, the dictation logs, and "
-          + "Blurt’s microphone, accessibility and input-monitoring permissions are all removed.\n\n"
+          + "Blurt’s microphone and accessibility permissions are all removed.\n\n"
           + "Blurt then restarts and takes you back through setup."
       case .failed(let content): content.message
       }
@@ -95,19 +150,30 @@ struct ResetSection: View {
   @State private var prompt: Prompt?
 
   var body: some View {
+    // No header: "Reset" over a "Reset Blurt" row only said the same word
+    // twice, and the red button and the footer already say what this is.
     Section {
       // Ellipsis for the same reason as "Connect…" and "Add Style…": the button
       // opens something rather than completing the action.
       SettingRow(title: "Reset Blurt", systemImage: "arrow.counterclockwise") {
-        Button("Reset…", role: .destructive) { prompt = .confirm }
-          .accessibilityIdentifier(UITestIdentifiers.installReset)
+        // Red text, because `role: .destructive` alone draws a bordered
+        // button no differently from "Check for Updates" in the section
+        // above — and this one deletes the key, every setting and the logs.
+        Button(role: .destructive) {
+          prompt = .confirm
+        } label: {
+          Text("Reset…").foregroundStyle(.red)
+        }
+        .accessibilityIdentifier(UITestIdentifiers.installReset)
       }
-    } header: {
-      Text("Reset")
     } footer: {
+      // The sweep still clears Input Monitoring (`PermissionsReset.sweep`), so
+      // a grant left by a build from before the hotkey stopped needing it goes
+      // too — but no current install has one, so naming it here only told
+      // users about a permission they were never asked for.
       Text(
         "Deletes your AssemblyAI API key, clears every setting, removes the dictation logs, and "
-          + "revokes Blurt’s microphone, accessibility and input-monitoring permissions.")
+          + "revokes Blurt’s microphone and accessibility permissions.")
     }
     // Alert buttons are addressed by the words on them in the UI suite, like the
     // update alert's "OK" — an identifier here wouldn't survive AppKit's alert

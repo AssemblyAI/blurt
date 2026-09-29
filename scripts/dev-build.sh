@@ -51,11 +51,14 @@ set -o pipefail
 # value, silently stripping any compilation conditions the dependency packages
 # set for themselves.
 # The build action already builds only Blurt.app, not the BlurtUITests bundle.
+# The destination pins the host's arch: the app is universal (ARCHS_STANDARD),
+# so a bare 'platform=macOS' matches both the native and the Rosetta
+# destination on Apple Silicon and xcodebuild warns before picking the first.
 xcodebuild \
   -project Blurt.xcodeproj \
   -scheme Blurt \
   -configuration Debug-Local \
-  -destination 'platform=macOS' \
+  -destination "platform=macOS,arch=$(uname -m)" \
   -derivedDataPath "$DERIVED" \
   clean build | "${PRETTY[@]}"
 

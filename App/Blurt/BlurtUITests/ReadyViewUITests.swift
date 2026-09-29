@@ -14,21 +14,18 @@ final class ReadyViewUITests: BlurtUITestCase {
   func testReadyScreenShowsShortcutAndRecent() {
     mainWindow()
 
-    // The shortcut readout: the tap line with the default key spelled out,
-    // over the hold line. One static text apiece — the key name is bolded
-    // inline, not a separate element.
+    // The shortcut row: one element naming the bound key in words (the row
+    // itself draws it as a keycap) and how to use it.
+    let shortcutPredicate = NSPredicate(
+      format: "label BEGINSWITH %@", "Shortcut: Right Command.")
     XCTAssertTrue(
-      app.staticTexts["Tap Right Command (⌘) to start and stop."].waitForExistence(timeout: 10),
+      app.descendants(matching: .any).matching(shortcutPredicate).firstMatch
+        .waitForExistence(timeout: 10),
       "Ready screen should state the dictation shortcut")
-    XCTAssertTrue(app.staticTexts["Or hold it to talk, then release."].exists)
 
     // The style row is always present — with no custom styles yet its pop-up
     // holds just Default and the "Edit Styles…" item that leads to Settings,
-    // where styles are made. The caption above the card and the row's own
-    // "Output Styles:" label both name it.
-    XCTAssertTrue(
-      app.staticTexts["How Blurt cleans up your raw transcript"].exists,
-      "Ready screen should caption the style row")
+    // where styles are made.
     let main = app.windows[UITestIdentifiers.mainWindowTitle]
     let styles = main.popUpButtons[UITestIdentifiers.styleProfilePickerFromMain]
     XCTAssertTrue(styles.waitForExistence(timeout: 10), "Style pop-up not found")
@@ -39,11 +36,11 @@ final class ReadyViewUITests: BlurtUITestCase {
       "The style pop-up should start on the Default style")
 
     // The Recent section, empty on a fresh launch, shows its header and the
-    // placeholder that fills the reserved list area.
+    // first-dictation prompt that fills the reserved list area.
     XCTAssertTrue(app.staticTexts["Recent"].exists, "Ready screen should have a Recent section")
     XCTAssertTrue(
-      app.staticTexts["Your recent blurts will appear here"].exists,
-      "An empty Recent list should show its placeholder")
+      emptyRecentPrompt(in: main).exists,
+      "An empty Recent list should prompt the first dictation")
 
     // The Settings button at the window's foot — the main window's own route
     // to the Settings scene, alongside ⌘, and the menu-bar item.
@@ -64,10 +61,7 @@ final class ReadyViewUITests: BlurtUITestCase {
     XCTAssertTrue(styles.waitForExistence(timeout: 10), "Style pop-up not found")
     styles.click()
 
-    // Matched by prefix, not equality: the item's title carries trailing
-    // non-breaking spaces, which is what sets the pop-up's width (see
-    // `StyleRow.Bar`).
-    let editPredicate = NSPredicate(format: "title BEGINSWITH %@", "Edit Styles…")
+    let editPredicate = NSPredicate(format: "title == %@", "Edit Styles…")
     XCTAssertTrue(
       app.menuItems.matching(editPredicate).firstMatch.waitForExistence(timeout: 5),
       "The style menu should offer the route to where styles are edited")
@@ -81,7 +75,7 @@ final class ReadyViewUITests: BlurtUITestCase {
 
     // The Recent list starts empty.
     XCTAssertTrue(
-      main.staticTexts["Your recent blurts will appear here"].waitForExistence(timeout: 10),
+      emptyRecentPrompt(in: main).waitForExistence(timeout: 10),
       "Recent list should start empty")
 
     driveDictation(via: harness)
@@ -92,8 +86,8 @@ final class ReadyViewUITests: BlurtUITestCase {
       row.waitForExistence(timeout: 10),
       "A completed dictation should appear in the ready screen's Recent list")
     XCTAssertFalse(
-      main.staticTexts["Your recent blurts will appear here"].exists,
-      "The empty-list placeholder should be gone once a dictation is recorded")
+      emptyRecentPrompt(in: main).exists,
+      "The empty-list prompt should be gone once a dictation is recorded")
   }
 
   func testRecentRowCopyShowsConfirmation() {
@@ -159,6 +153,12 @@ final class ReadyViewUITests: BlurtUITestCase {
     harness.buttons[UITestIdentifiers.hotkeyReleaseButton].click()
     let echo = harness.anyDescendant(identified: UITestIdentifiers.transcriptEchoLabel)
     waitForLabel(echo, equals: UITestIdentifiers.defaultCannedTranscript)
+  }
+
+  /// The empty Recent list's first-dictation prompt, one element whose label
+  /// starts "Click into any text field" and goes on to name the bound key.
+  private func emptyRecentPrompt(in main: XCUIElement) -> XCUIElement {
+    main.descendants(matching: .any)[UITestIdentifiers.recentEmptyPrompt]
   }
 
   /// The Recent row for the canned transcript (the row's VoiceOver label is

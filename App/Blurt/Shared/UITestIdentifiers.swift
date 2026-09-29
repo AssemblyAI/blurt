@@ -31,8 +31,9 @@ enum UITestIdentifiers {
   // its selected pane, so the General label doubles as the Settings window's
   // opening title (see `settingsWindowTitle` in BlurtUITestSupport).
   static let generalSettingsTab = "General"
+  static let stylesSettingsTab = "Styles"
   static let advancedSettingsTab = "Advanced"
-  static let textShortcutsTab = "Text Shortcuts"
+  static let vocabularySettingsTab = "Vocabulary"
 
   // Test-harness controls (set in `UITestSupport.swift`).
   static let transcriptField = "uitest.transcript"
@@ -66,6 +67,7 @@ enum UITestIdentifiers {
   static let micPicker = "settings.mic.picker"
   static let soundPicker = "settings.sound.picker"
   static let developerToggle = "settings.developer.toggle"
+  static let developerShowLogs = "settings.developer.showLogs"
   static let enhancedTranscriptsToggle = "settings.enhancedTranscripts.toggle"
   static let updateCheck = "settings.update.check"
   /// The Advanced pane's "Reset…" button (`SettingsWindowRoot`'s reset section).
@@ -83,15 +85,17 @@ enum UITestIdentifiers {
   static let styleProfileCancel = "settings.styleProfiles.cancel"
   static let styleProfileDelete = "settings.styleProfiles.delete"
   static func styleProfileEdit(_ index: Int) -> String { "settings.styleProfiles.edit.\(index)" }
-  // The Text Shortcuts pane and its sheet (`TextShortcutsSection`), indexed per
-  // row for the same reason as the style profiles' Edit buttons.
+  // The Vocabulary pane's text-shortcut table and its sheet
+  // (`TextShortcutsSection`). Rows are opened by double-click, so the table is
+  // identified rather than a per-row button.
+  static let textShortcutTable = "settings.textShortcuts.table"
   static let textShortcutAdd = "settings.textShortcuts.add"
+  static let textShortcutRemove = "settings.textShortcuts.remove"
   static let textShortcutTrigger = "settings.textShortcuts.trigger"
   static let textShortcutExpansion = "settings.textShortcuts.expansion"
   static let textShortcutSave = "settings.textShortcuts.save"
   static let textShortcutCancel = "settings.textShortcuts.cancel"
   static let textShortcutDelete = "settings.textShortcuts.delete"
-  static func textShortcutEdit(_ index: Int) -> String { "settings.textShortcuts.edit.\(index)" }
 
   /// The main window's style switcher (`ReadyView`): a single pop-up whose
   /// items are Default, then each defined profile, then "Edit Styles…" below a
@@ -99,6 +103,10 @@ enum UITestIdentifiers {
   /// user-named — the pop-up's own value is whichever style is in effect, so
   /// there is no stable label to address it by.
   static let styleProfilePickerFromMain = "ready.styleProfile.picker"
+  /// The empty Recent list's first-dictation prompt. One combined accessibility
+  /// element whose text is built from the bound key and activation, so it's
+  /// addressed by identifier rather than by how macOS maps its label.
+  static let recentEmptyPrompt = "ready.recent.emptyPrompt"
 
   /// The dictation overlay pill (`OverlayView`).
   static let overlayPill = "overlay.pill"
