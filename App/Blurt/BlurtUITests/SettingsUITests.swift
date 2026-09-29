@@ -122,24 +122,21 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertEqual("\(toggle.value ?? "")", "1", "Clicking should switch developer mode on")
   }
 
-  /// The Advanced pane's "Check for Updates" button runs the check and reports
-  /// the result in a modal. Under UI testing the check is stubbed offline to
-  /// always report up-to-date, so clicking it surfaces the "You’re up to date"
-  /// result sheet deterministically (no network).
-  func testCheckForUpdatesShowsResultAlert() {
+  /// UI-test builds are debug builds, which never start the Sparkle updater (a
+  /// dev build must not overwrite itself with the release the appcast
+  /// describes). The Updates section still renders, with its controls disabled
+  /// rather than offering a check that could never run.
+  func testUpdateControlsAreDisabledInDebugBuilds() {
     let settings = openSettingsWindow()
     let advanced = selectSettingsTab(settings, named: UITestIdentifiers.advancedSettingsTab)
 
     let button = advanced.anyDescendant(identified: UITestIdentifiers.updateCheck)
     XCTAssertTrue(button.waitForExistence(timeout: 10), "Check for Updates button not found")
-    button.click()
+    XCTAssertFalse(button.isEnabled, "A debug build's updater never starts, so the check is disabled")
 
-    let alert = app.sheets.firstMatch
-    XCTAssertTrue(alert.waitForExistence(timeout: 10), "The check should present a result sheet")
-    XCTAssertTrue(
-      alert.staticTexts["You’re up to date"].exists,
-      "The stubbed check should report up to date")
-    alert.buttons["OK"].click()
+    let autoCheck = advanced.anyDescendant(identified: UITestIdentifiers.updateAutoCheck)
+    XCTAssertTrue(autoCheck.waitForExistence(timeout: 10), "Automatic-check toggle not found")
+    XCTAssertFalse(autoCheck.isEnabled, "A debug build's update preferences are disabled")
   }
 
   /// The Advanced pane's reset button asks first, and dismissing the

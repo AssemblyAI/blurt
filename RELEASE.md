@@ -11,8 +11,8 @@ decisions that aren't obvious from the scripts and the workflows.
 | Stage                                                 | Where                                                             | Gate                                                                                         |
 | ----------------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
 | Bump `CFBundleShortVersionString` + `CFBundleVersion` | `release-bump` workflow on `macos-26` (`scripts/release-bump.sh`) | Lands on `main` via PR: normal review + the `check` workflow — merging it starts the release |
-| Build → sign → notarize → staple → DMG                | `release` workflow, `build` job (`scripts/release-build.sh`)      | Signer-pin, Gatekeeper assessment, mount-and-verify (all in-script)                          |
-| Tag, push, publish the GitHub Release                 | `release` workflow, `publish` job (`scripts/release-publish.sh`)  | **Required reviewer on the `release-publish` environment**                                   |
+| Build → sign → notarize → staple → DMG → appcast      | `release` workflow, `build` job (`scripts/release-build.sh`)      | Signer-pin, Gatekeeper assessment, mount-and-verify, EdDSA verify (all in-script)            |
+| Tag, push, publish the GitHub Release + appcast       | `release` workflow, `publish` job (`scripts/release-publish.sh`)  | **Required reviewer on the `release-publish` environment**                                   |
 
 Start to finish:
 
@@ -144,15 +144,16 @@ branches to `main` (optionally plus a `release-dry-run*` pattern — see
 [Dry-running the signing path](#dry-running-the-signing-path)) so a fork or a
 stray branch can never reach the Developer ID key.
 
-| Secret                 | What                                                                                  |
-| ---------------------- | ------------------------------------------------------------------------------------- |
-| `SIGNING_P12_BASE64`   | Developer ID Application cert **and** private key, exported as `.p12`, base64-encoded |
-| `SIGNING_P12_PASSWORD` | The export password for that `.p12`                                                   |
-| `NOTARY_KEY_P8_BASE64` | App Store Connect API key (`.p8`), base64-encoded — the preferred notary credential   |
-| `NOTARY_KEY_ID`        | That key's Key ID                                                                     |
-| `NOTARY_ISSUER_ID`     | That key's Issuer ID                                                                  |
-| `NOTARY_APPLE_ID`      | _Fallback only_ — Apple ID for notarization, if no API key is available               |
-| `NOTARY_PASSWORD`      | _Fallback only_ — app-specific password for that Apple ID                             |
+| Secret                   | What                                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `SIGNING_P12_BASE64`     | Developer ID Application cert **and** private key, exported as `.p12`, base64-encoded                   |
+| `SIGNING_P12_PASSWORD`   | The export password for that `.p12`                                                                     |
+| `NOTARY_KEY_P8_BASE64`   | App Store Connect API key (`.p8`), base64-encoded — the preferred notary credential                     |
+| `NOTARY_KEY_ID`          | That key's Key ID                                                                                       |
+| `NOTARY_ISSUER_ID`       | That key's Issuer ID                                                                                    |
+| `NOTARY_APPLE_ID`        | _Fallback only_ — Apple ID for notarization, if no API key is available                                 |
+| `NOTARY_PASSWORD`        | _Fallback only_ — app-specific password for that Apple ID                                               |
+| `SPARKLE_ED_PRIVATE_KEY` | Sparkle's EdDSA private key, as `generate_keys -x` exports it — see [Sparkle updates](#sparkle-updates) |
 
 Prefer the API key. It is revocable on its own (an app-specific password is tied
 to the Apple ID that owns it), it needs no keychain, and it never appears in a
@@ -259,13 +260,71 @@ revoke the old password at appleid.apple.com and mint a new one. For CI, replace
 B2VQF7Q2QY --password <new-app-specific-password>`. The profile is submit-only;
 it cannot sign.
 
+## Sparkle updates
+
+Installed copies update themselves with [Sparkle](https://sparkle-project.org).
+Each release carries an `appcast.xml` asset; every installed copy polls
+`https://github.com/AssemblyAI/blurt/releases/latest/download/appcast.xml`
+(`SUFeedURL` in `project.yml`), so the feed moves to a release at the moment
+`release-publish.sh` flips it live and repoints `/latest` — never before its
+assets are verified. The appcast's one item names the versioned
+`Blurt-X.Y.Z.dmg` on that release, with the DMG's EdDSA signature and length.
+
+`release-build.sh` produces it: after the DMG is notarized and stapled, Sparkle's
+`sign_update` (from the SPM artifact in DerivedData) signs it, and
+`scripts/verify-sparkle-signature.swift` checks that signature against the
+`SUPublicEDKey` read out of the **built app** — the key every installed copy
+will check — before the appcast is written. A private key that doesn't match
+fails the build, not users' updates. The build also refuses to start while
+`SPARKLE_PUBLIC_ED_KEY` is still the placeholder.
+
+Sparkle compares `CFBundleVersion` (`sparkle:version`), not the marketing
+version, so the build number must rise with every release — `release-bump.sh`
+already increments it on each bump.
+
+### One-time setup: the key pair
+
+The EdDSA key pair is the updater's root of trust, separate from the Developer
+ID key: an installed copy only installs an archive signed by the private half of
+the public key it shipped with. On the maintainer's Mac, with Sparkle's tools
+(in the Sparkle release tarball, or `…/SourcePackages/artifacts/sparkle/Sparkle/bin/`
+after any build):
+
+```sh
+./bin/generate_keys                  # creates the pair in the login keychain; prints the public key
+./bin/generate_keys -x sparkle.key   # exports the private key for the CI secret
+```
+
+1. Put the printed public key in `App/Blurt/project.yml` as
+   `SPARKLE_PUBLIC_ED_KEY`, replacing the placeholder, and land it through the
+   normal PR flow.
+2. Paste the contents of `sparkle.key` into the `SPARKLE_ED_PRIVATE_KEY` secret
+   on the `release-build` environment, then delete the file.
+3. Back up the keychain item (it's the "Private key for signing Sparkle
+   updates" entry) the same way as the Developer ID `.p12`: offline, never
+   synced, never committed.
+
+### Key custody and rotation
+
+**Losing the private key strands every installed copy** — nothing else can sign
+an update they will accept, so they'd have to download a new DMG by hand. Keep
+the offline backup.
+
+A **leaked** private key lets whoever holds it sign an update installed copies
+will accept — though Sparkle also requires the update to carry the same
+Developer ID signature as the running app, so the attacker would need both keys.
+To rotate: generate a new pair, ship one bridge release that is signed with the
+**old** private key but carries the **new** `SPARKLE_PUBLIC_ED_KEY` (run that one
+build with `BLURT_SPARKLE_VERIFY_PUBLIC_KEY` set to the old public key, since the
+build otherwise verifies against the key the app carries), then switch the
+secret to the new private key for every release after it.
+
 ## A bad release: roll forward, never roll back
 
-Blurt does **not** yank published releases. The update check only ever offers
-users a strictly higher version (`UpdateChecker` compares `SemanticVersion` and
-reports `.available` only when the latest tag is greater), so the fix for any bad
-build is to **ship a new patch**: dispatch `release-bump`, merge, dispatch
-`release`.
+Blurt does **not** yank published releases. Sparkle only ever offers users a
+strictly higher `CFBundleVersion` than the one they're running, so the fix for
+any bad build is to **ship a new patch**: dispatch `release-bump`, merge,
+dispatch `release`.
 
 The one exception is a fault caught **before announcing**, while the same version
 is still safe to overwrite (e.g. a corrupted upload flagged by the post-publish

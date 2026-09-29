@@ -14,8 +14,7 @@ struct HostIdentityTests {
     subsystem: "com.acme.voice",
     keychainService: "acme-voice",
     defaultsPrefix: "AcmeVoice",
-    logDirectoryName: "Acme Voice",
-    releaseURL: URL(staticString: "https://api.github.com/repos/acme/voice/releases/latest"))
+    logDirectoryName: "Acme Voice")
 
   @Test("the reverse-DNS identity matches the value scripts hard-code")
   func subsystemPinned() {
@@ -56,7 +55,6 @@ struct HostIdentityTests {
     #expect(HostIdentity.blurtDev.defaultsPrefix == HostIdentity.blurt.defaultsPrefix)
     #expect(HostIdentity.blurtDev.logDirectoryName == HostIdentity.blurt.logDirectoryName)
     #expect(HostIdentity.blurtDev.productName == HostIdentity.blurt.productName)
-    #expect(HostIdentity.blurtDev.releaseURL == HostIdentity.blurt.releaseURL)
   }
 
   @Test("an unconfigured engine is Blurt")

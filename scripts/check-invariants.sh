@@ -93,7 +93,6 @@ PATTERNS=(
   "SetUnicodeString"
   "LSUIElement"
   "import KeyboardShortcuts"
-  "AppUpdater|Sparkle|SPUUpdater"
   "KeychainStore\\(service: *(HostIdentity\\.current\\.keychainService|\"blurt\")"
   "@available\\(\\*, *deprecated"
 )
@@ -107,7 +106,6 @@ SCOPES=(
   "$ENGINE"
   "$ENGINE $APP"
   "$APP"
-  "$ENGINE $APP"
   "$ENGINE $APP"
   "$TESTS"
   "$ENGINE $APP"
@@ -123,7 +121,6 @@ ADVICE=(
   "injection is always clipboard paste (save → write → ⌘V → settle → restore)"
   "Blurt is a Dock app first; the MenuBarExtra item is layered on, never depended on"
   "the trigger is a home-grown lone modifier (CGEventTap + DictationKeyGate)"
-  "updates are download-only; extend UpdateCheckModel, don't install for the user"
   "use an isolated service (see KeychainStoreTests) or InMemoryAPIKeyStore"
   "deleted types stay deleted — no deprecated re-exports"
 )
@@ -143,7 +140,6 @@ PROBES=(
   "CGEventKeyboardSetUnicodeString(event, count, chars)"
   "    LSUIElement: true"
   "import KeyboardShortcuts"
-  "let updater = AppUpdater(owner: \"assemblyai\", repo: \"blurt\")"
   "let store = KeychainStore(service: HostIdentity.current.keychainService, account: \"AssemblyAIAPIKey\")"
   "@available(*, deprecated, renamed: \"NewName\")"
 )
@@ -165,7 +161,6 @@ TABLE_ANCHORS=(
   "Add a keystroke-typing paste path or a length threshold"
   "Add \`LSUIElement\` or a menu-bar-**only** mode"
   "Add a \`KeyboardShortcuts\` package or a key+modifier chord"
-  "Add a self-replacing install or background auto-updater"
   "Touch the real Keychain in tests"
   "Add backwards-compat shims for removed types"
 )
@@ -186,7 +181,6 @@ SKILL_ANCHORS=(
   "Injection is always a clipboard paste"
   "no \`LSUIElement\`, no menu-bar-_only_ mode"
   "No \`KeyboardShortcuts\` package"
-  "Updates are download-only"
   "the real Keychain in tests"
   "Don't add backwards-compat shims for removed types."
 )
@@ -217,12 +211,10 @@ if [ "${1:-}" = "--self-test" ]; then
   # people route around. Each of these is a real line from this tree that sits
   # one character away from a rule above — the wire key we *do* send
   # (`stt_prompt`) against the array-of-turns field we no longer do, the test
-  # keychain against the production one, the download-only checker against a
-  # self-replacing updater.
+  # keychain against the production one.
   GOOD=(
     "let prompt: NSDictionary = [\"AXTrustedCheckOptionPrompt\": true]"
     "KeychainStore(service: \"dev.alex.blurt.tests\", account: \"test-\\(UUID().uuidString)\")"
-    "@MainActor public final class UpdateCheckModel: ObservableObject {"
     "case sttPrompt = \"stt_prompt\""
   )
   for good in "${GOOD[@]}"; do

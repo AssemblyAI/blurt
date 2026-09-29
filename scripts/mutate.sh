@@ -60,9 +60,6 @@ DEFAULT_TARGETS=(
   "Sources/BlurtEngine/STT/KeytermsBoost.swift"
   "Sources/BlurtEngine/STT/SyncSTTLimits.swift"
   "Sources/BlurtEngine/StringNormalization.swift"
-  "Sources/BlurtEngine/Update/AutomaticUpdateCheck.swift"
-  "Sources/BlurtEngine/Update/SemanticVersion.swift"
-  "Sources/BlurtEngine/Update/UpdateAlertContent.swift"
 )
 
 MAX_MUTANTS=0 # 0 = no cap

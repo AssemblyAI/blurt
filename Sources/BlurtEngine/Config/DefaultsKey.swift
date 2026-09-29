@@ -9,8 +9,8 @@
 /// `allCases` rather than a hand-maintained list. That's the point: adding a store
 /// means adding a case, and a case is in the sweep the moment it exists. The list
 /// and the sweep can no longer disagree, which is what a copied-and-edited store
-/// used to get wrong (the overlay origin and the update-check stamp were both
-/// missed once, and a UI-test run inherited them).
+/// used to get wrong (the overlay origin and a since-removed update-check stamp
+/// were both missed once, and a UI-test run inherited them).
 ///
 /// A key that is *not* a user setting stays out of this enum on purpose — see
 /// `SigningIdentityMigration.lastSigningIdentityDefaultsKey`, which records what the
@@ -42,7 +42,6 @@ enum DefaultsKey: String, CaseIterable {
   /// `OverlayOriginStore` persists a point, so it owns two keys rather than one.
   case overlayCustomOriginX = "OverlayCustomOriginX"
   case overlayCustomOriginY = "OverlayCustomOriginY"
-  case lastUpdateCheck = "LastUpdateCheck"
   /// The CoreAudio UID of the input device dictation is pinned to, or empty for
   /// "same as system" (`MicDeviceStore`).
   case micDeviceUID = "MicDeviceUID"

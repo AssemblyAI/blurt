@@ -8,12 +8,12 @@ struct BlurtCommands: Commands {
   var body: some Commands {
     // "Check for Updates…" sits just below "About Blurt" in the app menu — the
     // conventional macOS spot, and the placement Sparkle's own SwiftUI guidance
-    // uses (`CommandGroup(after: .appInfo)`). It runs the same check as the
-    // Settings button and reports the result in a modal (see `UpdateCheckModel`).
-    // The ellipsis marks that it goes off and does work (and may present a
-    // dialog).
+    // uses (`CommandGroup(after: .appInfo)`). It drives the same Sparkle updater
+    // as the Settings button (see `UpdaterModel`), and is disabled while a check
+    // is already running or in builds that don't update. The ellipsis marks that
+    // it goes off and does work (and may present a dialog).
     CommandGroup(after: .appInfo) {
-      Button("Check for Updates…") { appDelegate.updateCheckModel.checkForUpdates() }
+      CheckForUpdatesButton(model: appDelegate.updaterModel)
     }
     // Blurt ships no help book, so SwiftUI's default "Blurt Help" item would
     // open nothing; it's replaced with the two outbound links that do belong

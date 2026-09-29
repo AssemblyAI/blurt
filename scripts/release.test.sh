@@ -251,6 +251,26 @@ git -C "$SCRATCH_REPO" tag nightly
 git -C "$SCRATCH_REPO" tag v3.0
 check "ignores prerelease, non-version, and short tags" "0.2.0" "$(latest_release_tag)"
 
+echo "== Sparkle helpers =="
+check "reads the public key setting" "abc123+/=" \
+  "$(printf '    SPARKLE_PUBLIC_ED_KEY: "abc123+/="\n' | parse_sparkle_public_key)"
+# The placeholder project.yml ships with must never reach a release: an app
+# built with it rejects every update signature for good.
+checkfalse "the placeholder key is not a key" sparkle_key_is_set REPLACE_WITH_SPARKLE_PUBLIC_ED_KEY
+checkfalse "an empty key is not a key" sparkle_key_is_set ""
+checktrue "a real key is a key" sparkle_key_is_set "pfIShU4dEXqPd5ObYNfDBiQWcXozk7estwzTnF9BamQ="
+SIGN_OUT='sparkle:edSignature="c2lnbmF0dXJl+/=" length="12345"'
+check "parses the signature" "c2lnbmF0dXJl+/=" "$(printf '%s\n' "$SIGN_OUT" | parse_sign_update_attr sparkle:edSignature)"
+check "parses the length" "12345" "$(printf '%s\n' "$SIGN_OUT" | parse_sign_update_attr length)"
+check "a missing attribute is empty" "" "$(printf 'garbage\n' | parse_sign_update_attr length)"
+APPCAST="$(render_appcast 1.2.3 45 https://example.invalid/Blurt-1.2.3.dmg c2ln 99 https://example.invalid/notes "Mon, 01 Jan 2026 00:00:00 +0000")"
+# Sparkle compares the build number, so it is the field that must be the
+# CFBundleVersion — a short version there would never read as newer.
+check "the appcast carries the build number as sparkle:version" "1" \
+  "$(printf '%s\n' "$APPCAST" | grep -c '<sparkle:version>45</sparkle:version>')"
+check "the enclosure carries the signature and length" "1" \
+  "$(printf '%s\n' "$APPCAST" | grep -c 'url="https://example.invalid/Blurt-1.2.3.dmg" type="application/octet-stream" sparkle:edSignature="c2ln" length="99"')"
+
 if [ "$fails" -eq 0 ]; then
   echo "release-lib.sh: all tests passed"
 else

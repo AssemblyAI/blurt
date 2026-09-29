@@ -236,3 +236,56 @@ sha_from_sums() {
 sha256_of_file() {
   shasum -a 256 "$1" | awk '{print $1}'
 }
+
+# --- Sparkle ---
+
+# Read the Sparkle public EdDSA key (the SPARKLE_PUBLIC_ED_KEY build setting)
+# from project.yml content on stdin.
+parse_sparkle_public_key() {
+  parse_yaml_scalar SPARKLE_PUBLIC_ED_KEY
+}
+
+# True when $1 is a usable Sparkle public key rather than empty or the
+# placeholder project.yml ships with before a key pair exists. Shipping the
+# placeholder would build an app that rejects every future update, so the
+# release refuses to start until a real key is in place.
+sparkle_key_is_set() {
+  case "$1" in
+    "" | REPLACE_WITH_*) return 1 ;;
+  esac
+}
+
+# Pull one attribute out of `sign_update`'s output on stdin, which is a fragment
+# of enclosure attributes: sparkle:edSignature="<b64>" length="<bytes>".
+# $1 is the attribute name (`sparkle:edSignature` or `length`); empty output if
+# it's absent.
+parse_sign_update_attr() {
+  sed -n "s/.*$1=\"\([^\"]*\)\".*/\1/p" | head -n 1
+}
+
+# Render a one-item Sparkle appcast to stdout. Arguments, in order: the short
+# version (X.Y.Z), the build number (CFBundleVersion — what Sparkle actually
+# compares), the enclosure URL, its EdDSA signature, its byte length, the
+# release-notes page, and the pubDate (RFC 822). One item is all the feed needs:
+# Sparkle offers the newest applicable item, and the feed URL resolves through
+# /releases/latest/download/, so it is always the current release's own copy.
+render_appcast() {
+  local short="$1" build="$2" url="$3" sig="$4" length="$5" notes="$6" date="$7"
+  cat <<XML
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Blurt</title>
+    <item>
+      <title>Version $short</title>
+      <pubDate>$date</pubDate>
+      <sparkle:version>$build</sparkle:version>
+      <sparkle:shortVersionString>$short</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <sparkle:fullReleaseNotesLink>$notes</sparkle:fullReleaseNotesLink>
+      <enclosure url="$url" type="application/octet-stream" sparkle:edSignature="$sig" length="$length"/>
+    </item>
+  </channel>
+</rss>
+XML
+}

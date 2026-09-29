@@ -24,8 +24,8 @@ import os
 /// lifetime of a process.
 public struct HostIdentity: Sendable, Equatable {
   /// The product name as it appears in user-facing copy ("Blurt") — distinct
-  /// from `subsystem`, which is the reverse-DNS identity. `UpdateAlertContent`
-  /// is its only reader today.
+  /// from `subsystem`, which is the reverse-DNS identity. `UserAgent` is its
+  /// only reader today.
   public let productName: String
 
   /// Reverse-DNS identity ("dev.alex.blurt"): the `os_log` subsystem for every
@@ -76,26 +76,18 @@ public struct HostIdentity: Sendable, Equatable {
   /// logs are written to (`~/Library/Logs/Blurt/{dictations,errors}.jsonl`).
   public let logDirectoryName: String
 
-  /// The "latest release" endpoint `UpdateChecker` reads, and therefore the repo
-  /// whose DMG the update alert offers. Still an initializer parameter on
-  /// `UpdateChecker` (tests substitute a local URL); this is the default a host
-  /// gets without passing one.
-  public let releaseURL: URL
-
   public init(
     productName: String,
     subsystem: String,
     keychainService: String,
     defaultsPrefix: String,
-    logDirectoryName: String,
-    releaseURL: URL
+    logDirectoryName: String
   ) {
     self.productName = productName
     self.subsystem = subsystem
     self.keychainService = keychainService
     self.defaultsPrefix = defaultsPrefix
     self.logDirectoryName = logDirectoryName
-    self.releaseURL = releaseURL
   }
 
   /// Blurt's own identity, and the value an unconfigured host inherits — so the
@@ -108,9 +100,7 @@ public struct HostIdentity: Sendable, Equatable {
     subsystem: "dev.alex.blurt",
     keychainService: "blurt",
     defaultsPrefix: "Blurt",
-    logDirectoryName: "Blurt",
-    releaseURL: URL(
-      staticString: "https://api.github.com/repos/AssemblyAI/blurt/releases/latest"))
+    logDirectoryName: "Blurt")
 
   /// The identity a **debug build** of Blurt runs under — "Blurt Dev", which
   /// macOS already treats as a separate app (its own bundle id, TCC rows and
@@ -137,8 +127,7 @@ public struct HostIdentity: Sendable, Equatable {
       subsystem: subsystem,
       keychainService: service,
       defaultsPrefix: defaultsPrefix,
-      logDirectoryName: logDirectoryName,
-      releaseURL: releaseURL)
+      logDirectoryName: logDirectoryName)
   }
 
   /// The identity every engine component reads. `.blurt` until a host calls
@@ -186,8 +175,8 @@ public struct HostIdentity: Sendable, Equatable {
   /// A `Logger` on this identity's subsystem. Spelled once here so the engine's
   /// loggers don't each restate `subsystem:` — and public because the host's own
   /// components want the same subsystem, so their lines show up under the
-  /// documented `log show` predicates too (Blurt's `DictationKeyTap` and
-  /// `UpdateCheckModel` are the in-repo examples).
+  /// documented `log show` predicates too (Blurt's `DictationKeyTap` is the
+  /// in-repo example).
   public func logger(_ category: String) -> Logger {
     Logger(subsystem: subsystem, category: category)
   }

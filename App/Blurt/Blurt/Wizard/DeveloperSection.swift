@@ -3,16 +3,52 @@ import BlurtEngine
 import OSLog
 import SwiftUI
 
-// The Advanced pane's two sections: the maintenance group (version, update
-// check, developer mode) and the start-over button. Both are Settings-only
-// (neither gates setup, so neither is a wizard step), and they live here rather
-// than in `SettingsWindowRoot` because that file is at the repo's file-length
-// limit.
+// The Advanced pane's three sections: updates (version, check, Sparkle's two
+// preferences), developer mode, and the start-over button. All are
+// Settings-only (none gates setup, so none is a wizard step), and they live here
+// rather than in `SettingsWindowRoot` because that file is at the repo's
+// file-length limit.
 
-/// The Advanced pane's first group: the running version with its update check,
-/// and the developer-mode switch. One headerless section rather than an
-/// "Updates" and a "Developer" section of one row each, whose headers only
-/// repeated the row beneath them.
+/// The running version, a "Check for Updates" button, and Sparkle's two
+/// preferences. Every control drives the one `UpdaterModel` owned by
+/// `AppDelegate` — the same updater the app-menu command and the menu-bar item
+/// use — and Sparkle presents the check's progress and result itself.
+///
+/// In a debug build the updater never starts (see `UpdaterModel`), so the
+/// controls are disabled and the footer says why rather than leaving a button
+/// that silently does nothing.
+struct UpdatesSection: View {
+  @Bindable var model: UpdaterModel
+
+  var body: some View {
+    Section {
+      SettingRow(title: model.versionLabel, systemImage: "arrow.triangle.2.circlepath") {
+        Button("Check for Updates") { model.checkForUpdates() }
+          .disabled(!model.canCheckForUpdates)
+          .accessibilityIdentifier(UITestIdentifiers.updateCheck)
+      }
+      Toggle(isOn: $model.automaticallyChecksForUpdates) {
+        SettingLabel(title: "Check for updates automatically", systemImage: "clock.arrow.circlepath")
+      }
+      .disabled(!model.isEnabled)
+      .accessibilityIdentifier(UITestIdentifiers.updateAutoCheck)
+      // Installing on its own only means anything while Blurt is looking on its
+      // own, so the second switch follows the first.
+      Toggle(isOn: $model.automaticallyDownloadsUpdates) {
+        SettingLabel(title: "Download and install automatically", systemImage: "arrow.down.circle")
+      }
+      .disabled(!model.isEnabled || !model.automaticallyChecksForUpdates)
+    } header: {
+      Text("Updates")
+    } footer: {
+      if !model.isEnabled {
+        Text("Development builds don’t update themselves.")
+      }
+    }
+  }
+}
+
+/// The Advanced pane's developer-mode switch.
 ///
 /// Developer mode is an opt-in: while on, every completed dictation is appended
 /// to the local JSONL log and every failed one to a sibling error log (see
@@ -20,13 +56,10 @@ import SwiftUI
 /// the section grows a "Show Logs in Finder" row and a footer naming where the
 /// logs live.
 struct MaintenanceSection: View {
-  let updateModel: UpdateCheckModel
-
   @AppStorage(DeveloperModeStore.defaultsKey) private var developerMode = false
 
   var body: some View {
     Section {
-      UpdateRow(model: updateModel)
       Toggle(isOn: $developerMode) {
         SettingLabel(title: "Developer mode", systemImage: "hammer")
       }
@@ -63,35 +96,6 @@ struct MaintenanceSection: View {
     let directory = DictationLog.defaultURL.deletingLastPathComponent()
     try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     NSWorkspace.shared.open(directory)
-  }
-}
-
-/// The running version and a "Check for Updates" button that runs the check and
-/// reports the result in a modal (see `UpdateCheckModel`). The same check is
-/// reachable from the "Check for Updates…" app-menu command and the menu-bar
-/// item; all three share the one `UpdateCheckModel` owned by `AppDelegate`, so a
-/// check from any place runs through the same controller.
-private struct UpdateRow: View {
-  let model: UpdateCheckModel
-
-  var body: some View {
-    // "Blurt 0.1.31" — the label is the engine's (shared with the result
-    // alerts, so the two can't name the version differently).
-    SettingRow(title: model.versionLabel, systemImage: "arrow.triangle.2.circlepath") {
-      HStack(spacing: 8) {
-        // A user-initiated check that can stall on a slow connection needs
-        // visible progress, or the button reads as dead until the result alert
-        // lands. Show a spinner and disable the button while in flight (the
-        // model already ignores a second check) — the native equivalent of
-        // Sparkle's "Checking for updates…".
-        if model.isChecking {
-          ProgressView().controlSize(.small)
-        }
-        Button("Check for Updates") { model.checkForUpdates() }
-          .disabled(model.isChecking)
-          .accessibilityIdentifier(UITestIdentifiers.updateCheck)
-      }
-    }
   }
 }
 
@@ -157,7 +161,7 @@ struct ResetSection: View {
       // opens something rather than completing the action.
       SettingRow(title: "Reset Blurt", systemImage: "arrow.counterclockwise") {
         // Red text, because `role: .destructive` alone draws a bordered
-        // button no differently from "Check for Updates" in the section
+        // button no differently from "Check for Updates" in the sections
         // above — and this one deletes the key, every setting and the logs.
         Button(role: .destructive) {
           prompt = .confirm

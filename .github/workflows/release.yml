@@ -196,9 +196,11 @@ jobs:
           P12_PASSWORD: ${{ secrets.SIGNING_P12_PASSWORD }}
           NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
           NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          SPARKLE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
           set -euo pipefail
           missing=""
+          [ -n "$SPARKLE_KEY" ] || missing="$missing SPARKLE_ED_PRIVATE_KEY"
           [ -n "$P12" ] || missing="$missing SIGNING_P12_BASE64"
           [ -n "$P12_PASSWORD" ] || missing="$missing SIGNING_P12_PASSWORD"
           [ -n "$NOTARY_KEY_P8" ] || [ -n "$NOTARY_APPLE_ID" ] \
@@ -242,6 +244,9 @@ jobs:
           BLURT_NOTARY_KEY_P8_BASE64: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
           BLURT_NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
           BLURT_NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          # Sparkle's EdDSA private key (base64, as `generate_keys -x` exports
+          # it). Signs the DMG for the appcast; handed to sign_update on stdin.
+          BLURT_SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
           # Both are dispatch-only escape hatches, so both are empty (and the
           # full checks run) on the merged-bump path. That is the right default:
           # nobody is standing there to judge whether skipping was safe.
@@ -264,6 +269,7 @@ jobs:
             blurt/build/release/Blurt-*.dmg
             blurt/build/release/Blurt-*.app.dSYM.zip
             blurt/build/release/SHA256SUMS
+            blurt/build/release/appcast.xml
             blurt/build/release/build-info.txt
             blurt/build/release/notary-*-log.json
           if-no-files-found: error

@@ -219,12 +219,14 @@ run_check() {
   return 0
 }
 
-# No-external-dependencies guard. The engine is dependency-free by rule and the
-# app carries only the local BlurtEngine package (see AGENTS.md). A third-party
-# dependency is the single biggest supply-chain risk, so fail the moment one is
+# External-dependencies guard. The engine is dependency-free by rule, and the
+# app carries the local BlurtEngine package plus exactly one remote package:
+# Sparkle, the updater (see AGENTS.md → Updates). A third-party dependency is the
+# single biggest supply-chain risk, so fail the moment any *other* one is
 # declared — in the engine's Package.swift or the app's project.yml. Extend
 # BlurtEngine rather than adding a package. Pure text parsing, so it runs in
 # both full and --portable modes and fails fast before the expensive steps.
+ALLOWED_APP_PACKAGE_URL="https://github.com/sparkle-project/Sparkle"
 check_no_external_deps() {
   cd "$REPO_ROOT" || return 1
   local violation=0
@@ -236,19 +238,24 @@ check_no_external_deps() {
     violation=1
   fi
 
-  # App: only the local BlurtEngine (path:) package is allowed. A remote package
-  # is declared with a url:/github: key inside project.yml's `packages:` block, so
-  # extract that block and reject any such key.
-  local app_packages
+  # App: the local BlurtEngine (path:) package plus the one allowlisted remote.
+  # A remote package is declared with a url:/github: key inside project.yml's
+  # `packages:` block, so extract that block and reject any such key that isn't
+  # exactly the allowlisted URL. A github: shorthand is rejected outright, so the
+  # allowlist has one spelling to match.
+  local app_packages remote allowed_re
+  allowed_re="${ALLOWED_APP_PACKAGE_URL//./\\.}"
   app_packages="$(awk '/^packages:/{f=1;next} /^[^[:space:]]/{f=0} f' "$APP_DIR/project.yml")"
-  if printf '%s\n' "$app_packages" | grep -nE '(^|[[:space:]])(url|github):' >/dev/null 2>&1; then
-    echo "error: App/Blurt/project.yml declares a remote SPM package — the app must carry only the local BlurtEngine:" >&2
-    printf '%s\n' "$app_packages" | grep -nE '(^|[[:space:]])(url|github):' >&2
+  remote="$(printf '%s\n' "$app_packages" | grep -nE '(^|[[:space:]])(url|github):' \
+    | grep -vE "^[0-9]+:[[:space:]]*url:[[:space:]]*${allowed_re}[[:space:]]*$" || true)"
+  if [ -n "$remote" ]; then
+    echo "error: App/Blurt/project.yml declares a remote SPM package other than Sparkle:" >&2
+    printf '%s\n' "$remote" >&2
     violation=1
   fi
 
   [ "$violation" -eq 0 ] || return 1
-  echo "no external dependencies (engine dependency-free; app carries only local BlurtEngine)"
+  echo "no unexpected dependencies (engine dependency-free; app carries BlurtEngine + Sparkle only)"
 }
 run_check "no-external-dependencies guard" check_no_external_deps
 

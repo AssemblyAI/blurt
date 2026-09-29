@@ -327,7 +327,7 @@ pretty_xcodebuild
 
 step "Preflight"
 require_tools --hint='brew install create-dmg if needed' \
-  xcodegen xcodebuild xcrun hdiutil codesign spctl create-dmg awk shasum openssl
+  xcodegen xcodebuild xcrun hdiutil codesign spctl create-dmg awk shasum openssl swift xmllint
 
 # Destroy every credential this build materializes, no matter how we exit
 # (success, die, or a mid-build failure). Armed before the first one exists so
@@ -386,6 +386,19 @@ fi
 step "Read version"
 VERSION="$(require_project_version "$APP_DIR/project.yml")"
 info "version: $VERSION"
+
+# Checked before anything expensive: an app built with the placeholder public
+# key would reject every future update, and a release with no private key can't
+# produce the appcast those updates arrive through.
+step "Sparkle keys"
+SPARKLE_PUBLIC_KEY="$(parse_sparkle_public_key <"$APP_DIR/project.yml")"
+sparkle_key_is_set "$SPARKLE_PUBLIC_KEY" \
+  || die "SPARKLE_PUBLIC_ED_KEY in project.yml is still the placeholder — generate the key pair first (RELEASE.md → Sparkle updates)"
+if [ -n "${BLURT_SPARKLE_ED_PRIVATE_KEY:-}" ]; then
+  info "EdDSA private key: from BLURT_SPARKLE_ED_PRIVATE_KEY"
+else
+  info "EdDSA private key: from the login keychain (where Sparkle's generate_keys stores it)"
+fi
 
 step "Initial summary"
 info "build root:  $BUILD_ROOT"
@@ -451,7 +464,22 @@ while IFS= read -r -d '' f; do
   codesign --force --sign "$IDENTITY" --options runtime --timestamp "$f"
   NESTED_COUNT=$((NESTED_COUNT + 1))
 done < <(find "$APP_STAGED" -type f \( -name "*.dylib" -o -name "*.so" \) -print0)
-# 2. Embedded framework bundles, if any. Their mach-o binary has
+# 2. Sparkle's helpers, which the framework loop below would not reach: the
+# framework bundle's signature doesn't cover separately-signed code nested in
+# it. Sparkle's documented order — XPC services, Autoupdate, Updater.app — and
+# the Downloader keeps its entitlements (it has a network client one).
+SPARKLE_B="$APP_STAGED/Contents/Frameworks/Sparkle.framework/Versions/B"
+[ -d "$SPARKLE_B" ] || die "Sparkle.framework missing from the built app at $SPARKLE_B"
+for helper in \
+  "$SPARKLE_B/XPCServices/Installer.xpc" \
+  "$SPARKLE_B/XPCServices/Downloader.xpc" \
+  "$SPARKLE_B/Autoupdate" \
+  "$SPARKLE_B/Updater.app"; do
+  [ -e "$helper" ] || continue
+  codesign --force --sign "$IDENTITY" --options runtime --timestamp --preserve-metadata=entitlements "$helper"
+  NESTED_COUNT=$((NESTED_COUNT + 1))
+done
+# 3. Embedded framework bundles, if any. Their mach-o binary has
 # no dylib/so suffix, so step 1 misses it — sign the bundle so its signature is
 # refreshed. `-depth` yields the deepest frameworks first, so a nested framework
 # is signed before any framework that contains it.
@@ -556,6 +584,51 @@ rmdir "$MOUNT_POINT" >/dev/null 2>&1 || true
 MOUNT_POINT=""
 info "dmg contents verified (Blurt.app $MOUNTED_VERSION, signed + stapled)"
 
+# The feed every installed copy polls. Built here, next to the signing key, so
+# the publish job only uploads it. The enclosure is the *versioned* DMG — a
+# permanent URL on this release — not the moving Blurt.dmg, so a feed that is
+# cached across a newer release still points at the bytes it signed.
+step "Sparkle appcast"
+SIGN_UPDATE="$(find "$DERIVED/SourcePackages/artifacts" -type f -name sign_update -path '*/bin/*' 2>/dev/null | head -n 1)"
+[ -n "$SIGN_UPDATE" ] || die "Sparkle's sign_update not found under $DERIVED/SourcePackages/artifacts — did package resolution run?"
+if [ -n "${BLURT_SPARKLE_ED_PRIVATE_KEY:-}" ]; then
+  # Over stdin, so the key never lands on disk or in a process list.
+  SIGN_OUT="$(printf '%s' "$BLURT_SPARKLE_ED_PRIVATE_KEY" | "$SIGN_UPDATE" --ed-key-file - "$DMG")"
+else
+  SIGN_OUT="$("$SIGN_UPDATE" "$DMG")"
+fi
+ED_SIGNATURE="$(printf '%s\n' "$SIGN_OUT" | parse_sign_update_attr sparkle:edSignature)"
+ED_LENGTH="$(printf '%s\n' "$SIGN_OUT" | parse_sign_update_attr length)"
+if [ -z "$ED_SIGNATURE" ] || [ -z "$ED_LENGTH" ]; then
+  die "could not parse sign_update's output: $SIGN_OUT"
+fi
+
+# Verify against the key the *built app* carries, not the one in project.yml:
+# that is what installed copies check from the next release on, so a private
+# key that doesn't match it fails here rather than on users' machines. The one
+# exception is a key rotation's bridge release, which is signed with the key the
+# *installed* copies still trust while carrying the new one — set
+# BLURT_SPARKLE_VERIFY_PUBLIC_KEY to that old public key for that single build
+# (RELEASE.md → Key custody and rotation).
+APP_PUBLIC_KEY="$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$APP_STAGED/Contents/Info.plist")"
+[ "$APP_PUBLIC_KEY" = "$SPARKLE_PUBLIC_KEY" ] \
+  || die "the built app's SUPublicEDKey ($APP_PUBLIC_KEY) is not project.yml's ($SPARKLE_PUBLIC_KEY)"
+VERIFY_PUBLIC_KEY="${BLURT_SPARKLE_VERIFY_PUBLIC_KEY:-$APP_PUBLIC_KEY}"
+[ "$VERIFY_PUBLIC_KEY" = "$APP_PUBLIC_KEY" ] \
+  || info "key rotation: verifying against BLURT_SPARKLE_VERIFY_PUBLIC_KEY, not the app's new key"
+swift "$REPO_ROOT/scripts/verify-sparkle-signature.swift" "$VERIFY_PUBLIC_KEY" "$ED_SIGNATURE" "$DMG" \
+  || die "the DMG's EdDSA signature does not verify against $VERIFY_PUBLIC_KEY — wrong private key?"
+
+BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_STAGED/Contents/Info.plist")"
+APPCAST="$BUILD_ROOT/appcast.xml"
+render_appcast "$VERSION" "$BUILD_NUMBER" \
+  "https://github.com/AssemblyAI/blurt/releases/download/v$VERSION/Blurt-$VERSION.dmg" \
+  "$ED_SIGNATURE" "$ED_LENGTH" \
+  "https://github.com/AssemblyAI/blurt/releases/tag/v$VERSION" \
+  "$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')" >"$APPCAST"
+xmllint --noout "$APPCAST" || die "generated appcast is not well-formed XML"
+info "appcast: $APPCAST (build $BUILD_NUMBER, $ED_LENGTH bytes)"
+
 step "Provenance"
 PROVENANCE="$BUILD_ROOT/build-info.txt"
 {
@@ -575,7 +648,7 @@ info "provenance: $PROVENANCE"
 
 step "Checksums"
 CHECKSUMS="$BUILD_ROOT/SHA256SUMS"
-(cd "$BUILD_ROOT" && shasum -a 256 "$(basename "$DMG")" "$(basename "$DSYM_ZIP")") >"$CHECKSUMS"
+(cd "$BUILD_ROOT" && shasum -a 256 "$(basename "$DMG")" "$(basename "$DSYM_ZIP")" "$(basename "$APPCAST")") >"$CHECKSUMS"
 info "checksums: $CHECKSUMS"
 
 step "Summary"
@@ -587,6 +660,7 @@ cat <<EOF
   Size:       $SIZE
   SHA256:     $SHA
   dSYM:       $DSYM_DST
+  Appcast:    $APPCAST
   Checksums:  $CHECKSUMS
   Provenance: $PROVENANCE
   Notary log: $NOTARY_LOG
