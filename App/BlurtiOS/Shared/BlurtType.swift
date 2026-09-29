@@ -22,6 +22,14 @@ enum BlurtType {
     Font.custom(monoName(weight), fixedSize: size)
   }
 
+  /// Oceanic Text: the app's serif headlines, sentence case, tight.
+  nonisolated static func heading(_ size: CGFloat) -> Font { Font.custom(Fonts.headingRegular, fixedSize: size) }
+
+  /// UN 11ST: the app's body text.
+  nonisolated static func body(_ size: CGFloat, bold: Bool = false) -> Font {
+    Font.custom(bold ? Fonts.bodyBold : Fonts.bodyRegular, fixedSize: size)
+  }
+
   private nonisolated static func monoName(_ weight: MonoWeight) -> String {
     switch weight {
     case .light: Fonts.monoLight

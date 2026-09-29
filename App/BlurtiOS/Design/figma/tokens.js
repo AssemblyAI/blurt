@@ -61,6 +61,16 @@ Keyboard|app/card-border-dark|COLOR|#3A362F|Brand:ink/600|STROKE_COLOR|DesignTok
 Keyboard|app/card-border-light|COLOR|#C7C3B2|Brand:paper/400|STROKE_COLOR|DesignTokens.Keyboard.appCardBorderLight|the catalog's CardBorder in light
 Keyboard|app/card-fill-dark|COLOR|#26231E|Brand:ink/800|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.appCardFillDark|the catalog's CardFill in dark
 Keyboard|app/card-fill-light|COLOR|#F5F3EB|Brand:paper/tint|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.appCardFillLight|the catalog's CardFill in light
+Keyboard|app/cta-dark|COLOR|#67AD82|Brand:green/400|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.appCtaDark|the catalog's CTA in dark: the site's button green
+Keyboard|app/cta-light|COLOR|#01762F|Brand:green/700|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.appCtaLight|the catalog's CTA in light: the one green button
+Keyboard|app/cta-text-dark|COLOR|#1D1B16|Brand:ink|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.appCtaTextDark|the catalog's CTAText in dark: ink on green, as the site
+Keyboard|app/cta-text-light|COLOR|#FFFFFF|Brand:white|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.appCtaTextLight|the catalog's CTAText in light
+Keyboard|app/muted-dark|COLOR|#A5A4A2|Brand:neutral/500|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.appMutedDark|the catalog's Muted in dark
+Keyboard|app/muted-light|COLOR|#777673|Brand:neutral/700|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.appMutedLight|the catalog's Muted in light: eyebrows, captions, secondary text
+Keyboard|app/page-dark|COLOR|#1D1B16|Brand:ink|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.appPageDark|the catalog's Page in dark: ink, the website's ground
+Keyboard|app/page-light|COLOR|#FDFCF8|Brand:paper/page|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.appPageLight|the catalog's Page in light: the design system's page
+Keyboard|app/text-dark|COLOR|#F5F3EB|Brand:paper/tint|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.appTextDark|the catalog's Text in dark
+Keyboard|app/text-light|COLOR|#1D1B16|Brand:ink|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.appTextLight|the catalog's Text in light
 Keyboard|kb/cancel|COLOR|#E67F36|Brand:orange|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.kbCancel|the panel's cancel ×
 Keyboard|kb/field|COLOR|#33302A|Themes:dark/field|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.kbField|the key-term field
 Keyboard|kb/field-border|COLOR|#3A362F|Themes:dark/field-border|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.kbFieldBorder|the field's hairline
@@ -74,8 +84,24 @@ Keyboard|kb/popup|COLOR|#33302A|Themes:dark/popup|FRAME_FILL,SHAPE_FILL|DesignTo
 Keyboard|kb/signal|COLOR|#67AD82|Themes:dark/signal|SHAPE_FILL,TEXT_FILL|DesignTokens.Keyboard.kbSignal|the wave, the caret, the saved check
 Keyboard|kb/surface|COLOR|#1D1B16|Themes:dark/surface|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.kbSurface|the design face's surface (Figma binds to kb/*; Swift reads the palette)
 Metrics|addterm/inset|FLOAT|6||GAP|DesignTokens.Metrics.addtermInset|the + from the panel's corner
+Metrics|app/button-height|FLOAT|40||WIDTH_HEIGHT|DesignTokens.Metrics.appButtonHeight|the brand's button
+Metrics|app/button-pad|FLOAT|12||WIDTH_HEIGHT|DesignTokens.Metrics.appButtonPad|its side padding
+Metrics|app/card-pad|FLOAT|16||WIDTH_HEIGHT|DesignTokens.Metrics.appCardPad|inside a card
+Metrics|app/chip-gap|FLOAT|8||GAP|DesignTokens.Metrics.appChipGap|between chips
+Metrics|app/chip-pad-x|FLOAT|12||WIDTH_HEIGHT|DesignTokens.Metrics.appChipPadX|a style chip's side padding
+Metrics|app/chip-pad-y|FLOAT|8||WIDTH_HEIGHT|DesignTokens.Metrics.appChipPadY|and its top and bottom
+Metrics|app/header-height|FLOAT|44||WIDTH_HEIGHT|DesignTokens.Metrics.appHeaderHeight|the home header: wordmark and gear
+Metrics|app/hero-gap|FLOAT|14||GAP|DesignTokens.Metrics.appHeroGap|between the hero's pieces
+Metrics|app/hero-pad|FLOAT|20||WIDTH_HEIGHT|DesignTokens.Metrics.appHeroPad|inside the hero card
+Metrics|app/icon|FLOAT|20||WIDTH_HEIGHT|DesignTokens.Metrics.appIcon|the header's gear, the copy glyph
+Metrics|app/line-gap|FLOAT|6||GAP|DesignTokens.Metrics.appLineGap|between lines of one thought
+Metrics|app/page-pad|FLOAT|20||WIDTH_HEIGHT|DesignTokens.Metrics.appPagePad|the screens' side padding
+Metrics|app/preview-gap|FLOAT|8||GAP|DesignTokens.Metrics.appPreviewGap|between the theme card's two faces
+Metrics|app/section-gap|FLOAT|24||GAP|DesignTokens.Metrics.appSectionGap|between the home screen's sections
+Metrics|app/setup-number-width|FLOAT|24||WIDTH_HEIGHT|DesignTokens.Metrics.appSetupNumberWidth|the setup steps' mono numerals
+Metrics|app/stack-gap|FLOAT|12||GAP|DesignTokens.Metrics.appStackGap|between a section's eyebrow and its content, and between cards
 Metrics|card/border|FLOAT|1||STROKE_FLOAT,WIDTH_HEIGHT|DesignTokens.Metrics.cardBorder|the card's hairline
-Metrics|card/radius|FLOAT|16||CORNER_RADIUS|DesignTokens.Metrics.cardRadius|the app's cards
+Metrics|card/radius|FLOAT|12||CORNER_RADIUS|DesignTokens.Metrics.cardRadius|the app's cards (radius/card)
 Metrics|caret/height|FLOAT|20||WIDTH_HEIGHT|DesignTokens.Metrics.caretHeight|
 Metrics|caret/lead|FLOAT|1||GAP|DesignTokens.Metrics.caretLead|the caret's gap from the text
 Metrics|caret/radius|FLOAT|1||CORNER_RADIUS|DesignTokens.Metrics.caretRadius|
@@ -123,6 +149,7 @@ Metrics|opacity/off|FLOAT|0.45||OPACITY|DesignTokens.Metrics.opacityOff|the elem
 Metrics|opacity/placeholder|FLOAT|0.4||OPACITY|DesignTokens.Metrics.opacityPlaceholder|the field's placeholder
 Metrics|opacity/popup-shadow|FLOAT|0.12||OPACITY|DesignTokens.Metrics.opacityPopupShadow|
 Metrics|opacity/press-brighten|FLOAT|0.15||OPACITY|DesignTokens.Metrics.opacityPressBrighten|a key lightens this much while pressed
+Metrics|opacity/pressed|FLOAT|0.85||OPACITY|DesignTokens.Metrics.opacityPressed|a brand button while pressed: a colour change, no lift
 Metrics|opacity/sheen|FLOAT|0.22||OPACITY|DesignTokens.Metrics.opacitySheen|the light passing over the element at rest: chrome catching light
 Metrics|opacity/surface-vignette|FLOAT|0||OPACITY|DesignTokens.Metrics.opacitySurfaceVignette|a soft darkening toward the surface's edges; 0 is none
 Metrics|opacity/term-cancel|FLOAT|0.7||OPACITY|DesignTokens.Metrics.opacityTermCancel|the field's ×

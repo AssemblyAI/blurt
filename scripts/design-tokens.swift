@@ -425,6 +425,11 @@ let colorSets: [(String, String, String)] = [
   ("AccentColor", "keyboard.app/accent-light", "keyboard.app/accent-dark"),
   ("CardFill", "keyboard.app/card-fill-light", "keyboard.app/card-fill-dark"),
   ("CardBorder", "keyboard.app/card-border-light", "keyboard.app/card-border-dark"),
+  ("Page", "keyboard.app/page-light", "keyboard.app/page-dark"),
+  ("Text", "keyboard.app/text-light", "keyboard.app/text-dark"),
+  ("Muted", "keyboard.app/muted-light", "keyboard.app/muted-dark"),
+  ("CTA", "keyboard.app/cta-light", "keyboard.app/cta-dark"),
+  ("CTAText", "keyboard.app/cta-text-light", "keyboard.app/cta-text-dark"),
 ]
 
 // MARK: - Figma

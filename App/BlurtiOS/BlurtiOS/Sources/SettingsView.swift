@@ -2,8 +2,9 @@ import BlurtEngine
 import SwiftUI
 
 /// Everything adjustable, grouped the way the Mac's Settings are: the keyboard
-/// (layout, hands-free), listening, transcription, the account, and
-/// about. Presented from the home screen's gear.
+/// (layout, theme, hands-free), listening, transcription, the account, and
+/// about — a form on the brand's page, its sections under mono eyebrows.
+/// Presented from the home screen's gear.
 struct SettingsView: View {
   var coordinator: DictationCoordinator
   @Environment(\.dismiss) private var dismiss
@@ -25,6 +26,7 @@ struct SettingsView: View {
         accountSection
         aboutSection
       }
+      .brandForm()
       .navigationTitle("Settings")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
@@ -42,7 +44,7 @@ struct SettingsView: View {
       }
       .pickerStyle(.segmented)
       .onChange(of: layout) { _, value in SharedStore.layout = value }
-      Text(layout.summary).font(.footnote).foregroundStyle(.secondary)
+      Text(layout.summary).font(BlurtType.body(DesignTokens.Typography.sizeCaption)).foregroundStyle(BlurtBrand.muted)
       NavigationLink {
         ThemePickerView()
       } label: {
@@ -51,7 +53,7 @@ struct SettingsView: View {
       Toggle("Hands-free", isOn: $autoDictate)
         .onChange(of: autoDictate) { _, value in SharedStore.autoDictate = value }
     } header: {
-      Text("Keyboard")
+      Eyebrow("Keyboard")
     } footer: {
       Text(
         "Hands-free starts dictating the moment the Blurt keyboard comes up in a text field; tap the mic to stop. "
@@ -69,7 +71,7 @@ struct SettingsView: View {
       }
       .onChange(of: windowMinutes) { _, value in SharedStore.windowMinutes = value }
     } header: {
-      Text("Listening")
+      Eyebrow("Listening")
     } footer: {
       Text("How long the mic stays open with nobody dictating, so the keyboard can start without opening Blurt.")
     }
@@ -91,7 +93,7 @@ struct SettingsView: View {
         }
       }
     } header: {
-      Text("Transcription")
+      Eyebrow("Transcription")
     } footer: {
       Text(
         "Enhanced transcripts clean up punctuation and wording. Key terms are names and jargon to spell right — "
@@ -101,19 +103,23 @@ struct SettingsView: View {
   }
 
   private var accountSection: some View {
-    Section("Account") {
+    Section {
       LabeledContent("Sign in with AssemblyAI", value: "Coming soon")
       #if DEBUG
         Button(coordinator.apiKey.hasAPIKey ? "Replace the API key" : "Use an API key") { showsKeyEntry = true }
       #endif
+    } header: {
+      Eyebrow("Account")
     }
   }
 
   private var aboutSection: some View {
-    Section("About") {
+    Section {
       LabeledContent("Version", value: Self.version)
       Link("Blurt on GitHub", destination: URL(string: "https://github.com/AssemblyAI/blurt") ?? URL(filePath: "/"))
-      Text("Powered by AssemblyAI").foregroundStyle(.secondary)
+      Text("Powered by AssemblyAI").foregroundStyle(BlurtBrand.muted)
+    } header: {
+      Eyebrow("About")
     }
   }
 

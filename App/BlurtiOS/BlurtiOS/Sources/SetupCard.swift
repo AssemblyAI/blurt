@@ -3,7 +3,8 @@ import SwiftUI
 import UIKit
 
 /// The setup checklist, on top of the home screen while anything is missing:
-/// sign in (a key, in debug builds), the microphone, the keyboard.
+/// three numbered steps — sign in (a key, in debug builds), the microphone,
+/// the keyboard — each with its control until it is done.
 struct SetupCard: View {
   let hasKey: Bool
   let microphoneGranted: Bool
@@ -14,21 +15,21 @@ struct SetupCard: View {
   let refresh: () -> Void
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 14) {
-      Text("Set up Blurt").font(.headline)
-      SetupRow(done: hasKey, title: "Sign in with AssemblyAI") {
-        VStack(alignment: .leading, spacing: 6) {
+    VStack(alignment: .leading, spacing: DesignTokens.Metrics.appStackGap) {
+      Eyebrow("Set up Blurt")
+      SetupRow(number: "01", done: hasKey, title: "Sign in with AssemblyAI") {
+        VStack(alignment: .leading, spacing: DesignTokens.Metrics.appLineGap) {
           Text("Coming soon — sign-in needs the AssemblyAI login service.")
-            .font(.footnote).foregroundStyle(.secondary)
+            .font(BlurtType.body(DesignTokens.Typography.sizeCaption)).foregroundStyle(BlurtBrand.muted)
           #if DEBUG
-            Button("Use an API key instead") { enterKey() }
+            Button("Use an API key instead") { enterKey() }.buttonStyle(BrandButtonStyle(role: .secondary))
           #endif
         }
       }
-      SetupRow(done: microphoneGranted, title: "Allow the microphone") {
+      SetupRow(number: "02", done: microphoneGranted, title: "Allow the microphone") {
         if AVAudioApplication.shared.recordPermission == .denied {
           // iOS asks once; after a refusal only Settings can change it.
-          Button("Allow in Settings") { Self.openAppSettings() }
+          Button("Allow in Settings") { Self.openAppSettings() }.buttonStyle(BrandButtonStyle(role: .primary))
         } else {
           Button("Allow") {
             Task {
@@ -36,20 +37,21 @@ struct SetupCard: View {
               refresh()
             }
           }
+          .buttonStyle(BrandButtonStyle(role: .primary))
         }
       }
-      SetupRow(done: keyboardSeen, title: "Add the Blurt keyboard") {
-        VStack(alignment: .leading, spacing: 6) {
+      SetupRow(number: "03", done: keyboardSeen, title: "Add the Blurt keyboard") {
+        VStack(alignment: .leading, spacing: DesignTokens.Metrics.appLineGap) {
           Text(
             "Settings → Keyboards: turn on Blurt and Allow Full Access. "
               + "Full Access is what lets the keyboard send your words to Blurt."
           )
-          .font(.footnote).foregroundStyle(.secondary)
-          Button("Open Settings") { Self.openAppSettings() }
+          .font(BlurtType.body(DesignTokens.Typography.sizeCaption)).foregroundStyle(BlurtBrand.muted)
+          Button("Open Settings") { Self.openAppSettings() }.buttonStyle(BrandButtonStyle(role: .secondary))
         }
       }
     }
-    .padding(20)
+    .padding(DesignTokens.Metrics.appCardPad)
     .frame(maxWidth: .infinity, alignment: .leading)
     .card()
   }
@@ -60,19 +62,23 @@ struct SetupCard: View {
   }
 }
 
-/// One line of the setup checklist: a check or a circle, the step, and its
-/// control while it is still to do.
+/// One step: its number in mono, the step, and its control while it is still
+/// to do; a check when done.
 private struct SetupRow<Action: View>: View {
+  let number: String
   let done: Bool
   let title: String
   @ViewBuilder let action: () -> Action
 
   var body: some View {
-    HStack(alignment: .top, spacing: 12) {
-      Image(systemName: done ? "checkmark.circle.fill" : "circle")
-        .foregroundStyle(done ? BlurtBrand.accent : Color.secondary)
-      VStack(alignment: .leading, spacing: 6) {
-        Text(title)
+    HStack(alignment: .top, spacing: DesignTokens.Metrics.appStackGap) {
+      Eyebrow(number, color: done ? BlurtBrand.accent : BlurtBrand.muted)
+        .frame(width: DesignTokens.Metrics.appSetupNumberWidth, alignment: .leading)
+      VStack(alignment: .leading, spacing: DesignTokens.Metrics.appLineGap) {
+        HStack {
+          Text(title).font(BlurtType.body(DesignTokens.Typography.sizeBody)).foregroundStyle(BlurtBrand.text)
+          if done { Image(systemName: "checkmark").foregroundStyle(BlurtBrand.accent) }
+        }
         if !done { action() }
       }
     }

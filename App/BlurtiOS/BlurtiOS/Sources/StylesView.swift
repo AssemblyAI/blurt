@@ -31,6 +31,8 @@ struct StylesView: View {
             Button("Edit") { editing = profile }.tint(BlurtBrand.green)
           }
         }
+      } header: {
+        Eyebrow("Styles")
       } footer: {
         Text("Tap a style to use it. Swipe a style to edit it. Up to \(StyleProfileStore.profileLimit).")
       }
@@ -39,6 +41,7 @@ struct StylesView: View {
           .disabled(profiles.count >= StyleProfileStore.profileLimit)
       }
     }
+    .brandForm()
     .navigationTitle("Output styles")
     .sheet(isPresented: $adding) { StyleEditor(profile: nil, store: store) }
     .sheet(item: $editing) { StyleEditor(profile: $0, store: store) }
@@ -54,9 +57,10 @@ private struct StyleRow: View {
   var body: some View {
     Button(action: activate) {
       HStack {
-        VStack(alignment: .leading, spacing: 3) {
-          Text(name).foregroundStyle(.primary)
-          Text(detail).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+        VStack(alignment: .leading, spacing: DesignTokens.Metrics.appLineGap) {
+          Text(name).foregroundStyle(BlurtBrand.text)
+          Text(detail).font(BlurtType.body(DesignTokens.Typography.sizeCaption)).foregroundStyle(BlurtBrand.muted)
+            .lineLimit(2)  // literal-ok: two lines of instructions
         }
         Spacer()
         if isActive { Image(systemName: "checkmark").foregroundStyle(BlurtBrand.green) }
@@ -90,23 +94,25 @@ private struct StyleEditor: View {
   var body: some View {
     NavigationStack {
       Form {
-        Section("Name") {
+        Section {
           TextField("e.g. Casual", text: $name)
             .onChange(of: name) { _, value in
               if value.count > StyleProfileStore.nameLimit { name = String(value.prefix(StyleProfileStore.nameLimit)) }
             }
+        } header: {
+          Eyebrow("Name")
         }
         Section {
           TextField(
             "e.g. add fitting emojis sparingly, or always write in lowercase", text: $instructions, axis: .vertical
           )
-          .lineLimit(3...8)
+          .lineLimit(3...8)  // literal-ok: the editor's rows
           .onChange(of: instructions) { _, value in
             let trimmed = value.prefix(maxUTF8Bytes: StyleProfileStore.characterLimit)
             if trimmed != value { instructions = trimmed }
           }
         } header: {
-          Text("Instructions")
+          Eyebrow("Instructions")
         } footer: {
           Text("\(instructions.utf8.count)/\(StyleProfileStore.characterLimit)")
         }
@@ -119,6 +125,7 @@ private struct StyleEditor: View {
           }
         }
       }
+      .brandForm()
       .navigationTitle(profile == nil ? "New style" : "Edit style")
       .toolbar {
         ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }

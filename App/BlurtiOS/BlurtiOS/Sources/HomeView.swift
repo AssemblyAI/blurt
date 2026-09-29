@@ -2,10 +2,11 @@ import AVFoundation
 import BlurtEngine
 import SwiftUI
 
-/// The app's one screen, in the shape of the Mac's ready screen: the wordmark,
-/// the orb as the hero with the listening state under it, the style chips,
-/// and the recent dictations as cards. Setup sits on top while anything is
-/// missing; everything adjustable lives behind the gear.
+/// The app's one screen: the Blurt landing page on a phone. The wordmark and
+/// the gear across the top; the status as an eyebrow, a serif headline and a
+/// line of body text over the voice element; the one green button; then the
+/// styles and the recent dictations under their eyebrows. Setup sits on top
+/// while anything is missing; everything adjustable lives behind the gear.
 struct HomeView: View {
   var coordinator: DictationCoordinator
   @Environment(\.scenePhase) private var scenePhase
@@ -13,7 +14,7 @@ struct HomeView: View {
   @State private var keyboardSeen = SharedStore.keyboardEverSeen
   @State private var showsKeyEntry = false
   @State private var showsSettings = false
-  /// When the last dictation's words landed — the hero's drop.
+  /// When the last dictation's words landed — the hero's glint.
   @State private var landedAt: Date?
 
   private var status: HomeStatus {
@@ -25,7 +26,8 @@ struct HomeView: View {
   var body: some View {
     NavigationStack {
       ScrollView {
-        VStack(spacing: 20) {
+        VStack(alignment: .leading, spacing: DesignTokens.Metrics.appSectionGap) {
+          header
           if !status.isSetUp {
             SetupCard(
               hasKey: coordinator.apiKey.hasAPIKey, microphoneGranted: microphoneGranted, keyboardSeen: keyboardSeen,
@@ -34,25 +36,14 @@ struct HomeView: View {
           HomeHero(coordinator: coordinator, status: status, landedAt: landedAt)
           StyleChips()
           RecentSection(coordinator: coordinator)
-          poweredBy
+          Eyebrow("Powered by AssemblyAI")
+            .frame(maxWidth: .infinity)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 8)
-        .padding(.bottom, 24)
+        .padding(.horizontal, DesignTokens.Metrics.appPagePad)
+        .padding(.bottom, DesignTokens.Metrics.appSectionGap)
       }
-      .background(Color(uiColor: .systemGroupedBackground))
-      .navigationBarTitleDisplayMode(.inline)
-      .toolbar {
-        ToolbarItem(placement: .principal) { Wordmark() }
-        ToolbarItem(placement: .topBarTrailing) {
-          Button {
-            showsSettings = true
-          } label: {
-            Image(systemName: "gearshape")
-          }
-          .accessibilityLabel("Settings")
-        }
-      }
+      .page()
+      .toolbar(.hidden, for: .navigationBar)
       .sheet(isPresented: $showsKeyEntry) { KeyEntryView(apiKey: coordinator.apiKey) }
       .sheet(isPresented: $showsSettings) { SettingsView(coordinator: coordinator) }
       .sheet(item: Binding(get: { coordinator.pendingTermPack }, set: { coordinator.pendingTermPack = $0 })) {
@@ -76,18 +67,26 @@ struct HomeView: View {
     .tint(BlurtBrand.accent)
   }
 
+  /// The wordmark, and the gear that opens Settings.
+  private var header: some View {
+    HStack {
+      Wordmark()
+      Spacer()
+      Button {
+        showsSettings = true
+      } label: {
+        Image(systemName: "gearshape")
+          .font(.system(size: DesignTokens.Metrics.appIcon, weight: DesignTokens.Typography.weightGlyph))
+          .foregroundStyle(BlurtBrand.muted)
+      }
+      .accessibilityLabel("Settings")
+    }
+    .frame(height: DesignTokens.Metrics.appHeaderHeight)
+  }
+
   private func refreshStatus() {
     microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
     keyboardSeen = SharedStore.keyboardEverSeen
     coordinator.apiKey.refreshStatus()
-  }
-
-  private var poweredBy: some View {
-    HStack(spacing: 3) {
-      Text("Powered by").foregroundStyle(.secondary)
-      Text("AssemblyAI").fontWeight(.medium)
-    }
-    .font(.caption)
-    .padding(.top, 4)
   }
 }

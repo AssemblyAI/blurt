@@ -1,8 +1,9 @@
 import BlurtEngine
 import SwiftUI
 
-/// The output styles as chips: Default and each profile, the active one
-/// filled with the accent; Edit opens the styles editor.
+/// The output styles as chips under their eyebrow: Default and each profile,
+/// the active one filled with the accent, rectangular like everything on the
+/// brand; Edit opens the styles editor.
 struct StyleChips: View {
   @AppStorage(StyleProfileStore.defaultsKey) private var profilesRaw = ""
   @AppStorage(StyleProfileStore.activeDefaultsKey) private var activeRaw = ""
@@ -12,10 +13,10 @@ struct StyleChips: View {
   private var activeStyle: StyleProfile? { StyleProfileStore.active(in: profiles, id: activeRaw) }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      Text("Style").font(.headline)
+    VStack(alignment: .leading, spacing: DesignTokens.Metrics.appStackGap) {
+      Eyebrow("Style")
       ScrollView(.horizontal, showsIndicators: false) {
-        HStack(spacing: 8) {
+        HStack(spacing: DesignTokens.Metrics.appChipGap) {
           StyleChip(name: StyleProfileStore.defaultStyleName, selected: activeStyle == nil) { styles.activateDefault() }
           ForEach(profiles) { profile in
             StyleChip(name: profile.name, selected: activeStyle?.id == profile.id) { styles.activate(profile) }
@@ -24,13 +25,15 @@ struct StyleChips: View {
             StylesView()
           } label: {
             Label("Edit", systemImage: "slider.horizontal.3")
-              .font(.subheadline.weight(.medium))
-              .padding(.horizontal, 14)
-              .padding(.vertical, 8)
-              .background(Capsule().strokeBorder(BlurtBrand.cardBorder, lineWidth: 1))
+              .font(BlurtType.body(DesignTokens.Typography.sizeCaption, bold: true))
+              .foregroundStyle(BlurtBrand.muted)
+              .padding(.horizontal, DesignTokens.Metrics.appChipPadX)
+              .padding(.vertical, DesignTokens.Metrics.appChipPadY)
+              .overlay(
+                RoundedRectangle(cornerRadius: DesignTokens.Metrics.radiusButton)
+                  .strokeBorder(BlurtBrand.cardBorder, lineWidth: DesignTokens.Metrics.cardBorder))
           }
         }
-        .padding(.vertical, 2)
       }
     }
   }
@@ -45,12 +48,17 @@ private struct StyleChip: View {
   var body: some View {
     Button(action: activate) {
       Text(name)
-        .font(.subheadline.weight(.medium))
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .foregroundStyle(selected ? Color.white : Color.primary)
-        .background(Capsule().fill(selected ? BlurtBrand.accent : BlurtBrand.cardFill))
-        .overlay(Capsule().strokeBorder(selected ? Color.clear : BlurtBrand.cardBorder, lineWidth: 1))
+        .font(BlurtType.body(DesignTokens.Typography.sizeCaption, bold: true))
+        .padding(.horizontal, DesignTokens.Metrics.appChipPadX)
+        .padding(.vertical, DesignTokens.Metrics.appChipPadY)
+        .foregroundStyle(selected ? BlurtBrand.ctaText : BlurtBrand.text)
+        .background(
+          selected ? BlurtBrand.cta : BlurtBrand.cardFill,
+          in: RoundedRectangle(cornerRadius: DesignTokens.Metrics.radiusButton)
+        )
+        .overlay(
+          RoundedRectangle(cornerRadius: DesignTokens.Metrics.radiusButton)
+            .strokeBorder(selected ? Color.clear : BlurtBrand.cardBorder, lineWidth: DesignTokens.Metrics.cardBorder))
     }
     .buttonStyle(.plain)
     .accessibilityAddTraits(selected ? .isSelected : [])

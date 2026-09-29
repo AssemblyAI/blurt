@@ -1,14 +1,14 @@
 import SwiftUI
 
-/// The hero: the keyboard's voice element at hero size, with the listening
-/// state in words under it and the one button that opens or closes the mic.
+/// The hero: the status as an eyebrow, a serif headline and a line of body
+/// text, the voice element at hero size, and the one green button that opens
+/// the mic (or the hairline one that closes it).
 struct HomeHero: View {
   var coordinator: DictationCoordinator
   let status: HomeStatus
-  /// When the last dictation's words landed — the hero's drop.
+  /// When the last dictation's words landed — the hero's glint.
   let landedAt: Date?
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
   @Environment(\.colorScheme) private var colorScheme
 
   private var state: VoiceState {
@@ -16,55 +16,56 @@ struct HomeHero: View {
   }
 
   var body: some View {
-    VStack(spacing: 18) {
+    VStack(alignment: .leading, spacing: DesignTokens.Metrics.appHeroGap) {
+      Eyebrow("Status")
+      Text(status.title)
+        .font(BlurtType.heading(DesignTokens.Typography.sizeTitle))
+        .foregroundStyle(BlurtBrand.text)
+      Text(status.subtitle)
+        .font(BlurtType.body(DesignTokens.Typography.sizeBody))
+        .foregroundStyle(BlurtBrand.muted)
       VoiceElementView(
         inputs: VoiceElementInputs(
           state: state, landedAt: landedAt, animated: !reduceMotion,
           palette: colorScheme == .dark ? .brandDark : .brandLight, slot: .home)
       )
       .frame(width: VoiceSlot.home.box.width, height: VoiceSlot.home.box.height)
-      .padding(.top, 6)
-      VStack(spacing: 4) {
-        Text(status.title).font(.title2.weight(.semibold)).multilineTextAlignment(.center)
-        Text(status.subtitle).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
-      }
+      .frame(maxWidth: .infinity)
       if coordinator.window.isOpen {
-        Button(role: .destructive) {
+        Button("Stop listening") {
           Task { await coordinator.stopListening() }
-        } label: {
-          Text("Stop listening").frame(maxWidth: .infinity)
         }
-        .buttonStyle(.bordered)
-        .controlSize(.large)
+        .buttonStyle(BrandButtonStyle(role: .secondary))
       } else {
-        Button {
+        Button("Start listening") {
           Task { await coordinator.startListening() }
-        } label: {
-          Text("Start listening").frame(maxWidth: .infinity)
         }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
+        .buttonStyle(BrandButtonStyle(role: .primary))
         .disabled(!coordinator.apiKey.hasAPIKey)
       }
       Button(coordinator.phase.isCapturing ? "Stop and transcribe" : "Dictate here, to the clipboard") {
         coordinator.toggleDictation()
       }
-      .font(.callout)
+      .font(BlurtType.body(DesignTokens.Typography.sizeCaption))
+      .foregroundStyle(BlurtBrand.muted)
+      .frame(maxWidth: .infinity)
       .disabled(!coordinator.window.isOpen)
       if let error = coordinator.window.lastError {
-        Text(error).font(.footnote).foregroundStyle(BlurtBrand.errorOrange).multilineTextAlignment(.center)
+        note(error)
       }
       if coordinator.microphoneDenied {
-        Text("Blurt needs the microphone. Allow it in Settings.")
-          .font(.footnote).foregroundStyle(BlurtBrand.errorOrange)
+        note("Blurt needs the microphone. Allow it in Settings.")
       }
       if coordinator.needsKey {
-        Text("Add your API key first (Settings → Account).")
-          .font(.footnote).foregroundStyle(BlurtBrand.errorOrange)
+        note("Add your API key first (Settings → Account).")
       }
     }
-    .padding(20)
-    .frame(maxWidth: .infinity)
-    .card()
+    .padding(DesignTokens.Metrics.appHeroPad)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .card(radius: DesignTokens.Metrics.radiusHero)
+  }
+
+  private func note(_ text: String) -> some View {
+    Text(text).font(BlurtType.body(DesignTokens.Typography.sizeCaption)).foregroundStyle(BlurtBrand.errorOrange)
   }
 }

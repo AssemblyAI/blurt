@@ -41,6 +41,11 @@ OUTPUTS=(
   App/BlurtiOS/BlurtiOS/Assets.xcassets/AccentColor.colorset/Contents.json
   App/BlurtiOS/BlurtiOS/Assets.xcassets/CardFill.colorset/Contents.json
   App/BlurtiOS/BlurtiOS/Assets.xcassets/CardBorder.colorset/Contents.json
+  App/BlurtiOS/BlurtiOS/Assets.xcassets/Page.colorset/Contents.json
+  App/BlurtiOS/BlurtiOS/Assets.xcassets/Text.colorset/Contents.json
+  App/BlurtiOS/BlurtiOS/Assets.xcassets/Muted.colorset/Contents.json
+  App/BlurtiOS/BlurtiOS/Assets.xcassets/CTA.colorset/Contents.json
+  App/BlurtiOS/BlurtiOS/Assets.xcassets/CTAText.colorset/Contents.json
   App/BlurtiOS/Design/figma/tokens.js
 )
 
@@ -58,8 +63,8 @@ format_outputs() {
   fi
 }
 
-# The design-literal lint. Scope: every file under the keyboard's sources
-# that draws — new views are linted by default — minus the logic (the model,
+# The design-literal lint. Scope: every file under the keyboard's and the
+# app's sources that draws — new views are linted by default — minus the logic (the model,
 # the host controller, the palette, the geometry and interaction rules, the
 # voice state) and Grain.swift, whose body is the grain's recipe (density,
 # the two shades), with only its opacity as a token. Numbers 0 and 1 pass: `Spacer(minLength: 0)`,
@@ -72,9 +77,15 @@ exempt = {
     "KeyboardViewController.swift", "KeyboardPalette.swift", "KeyGeometry.swift", "KeyboardInteraction.swift",
     "VoiceState.swift", "KeyboardMotion.swift", "MotionHeld.swift", "Grain.swift",
 }
+app_exempt = {
+    "BlurtiOSApp.swift", "DictationCoordinator.swift", "ListeningWindow.swift", "ListeningSource.swift",
+    "AudioSource.swift", "SimulatorAudioSource.swift", "KeyboardRelayInjector.swift", "APIKeyModel.swift",
+    "TermPack.swift", "HomeStatus.swift", "KeyboardGalleryView.swift", "KeyboardProbeView.swift",
+}
 files = sorted(
-    path for path in glob.glob("App/BlurtiOS/BlurtKeyboard/Sources/**/*.swift", recursive=True)
-    if os.path.basename(path) not in exempt
+    [path for path in glob.glob("App/BlurtiOS/BlurtKeyboard/Sources/**/*.swift", recursive=True)
+     if os.path.basename(path) not in exempt]
+    + [path for path in glob.glob("App/BlurtiOS/BlurtiOS/Sources/*.swift") if os.path.basename(path) not in app_exempt]
 )
 modifiers = re.compile(
     r"\.(padding|frame|font|blur|scaleEffect|offset|shadow|opacity|cornerRadius|saturation|brightness"

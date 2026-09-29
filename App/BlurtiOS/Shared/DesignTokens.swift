@@ -134,6 +134,26 @@ enum DesignTokens {
     nonisolated static let appCardFillDark: Color = Brand.ink800
     /// The catalog's CardFill in light.
     nonisolated static let appCardFillLight: Color = Brand.paperTint
+    /// The catalog's CTA in dark: the site's button green.
+    nonisolated static let appCtaDark: Color = Brand.green400
+    /// The catalog's CTA in light: the one green button.
+    nonisolated static let appCtaLight: Color = Brand.green700
+    /// The catalog's CTAText in dark: ink on green, as the site.
+    nonisolated static let appCtaTextDark: Color = Brand.ink
+    /// The catalog's CTAText in light.
+    nonisolated static let appCtaTextLight: Color = Brand.white
+    /// The catalog's Muted in dark.
+    nonisolated static let appMutedDark: Color = Brand.neutral500
+    /// The catalog's Muted in light: eyebrows, captions, secondary text.
+    nonisolated static let appMutedLight: Color = Brand.neutral700
+    /// The catalog's Page in dark: ink, the website's ground.
+    nonisolated static let appPageDark: Color = Brand.ink
+    /// The catalog's Page in light: the design system's page.
+    nonisolated static let appPageLight: Color = Brand.paperPage
+    /// The catalog's Text in dark.
+    nonisolated static let appTextDark: Color = Brand.paperTint
+    /// The catalog's Text in light.
+    nonisolated static let appTextLight: Color = Brand.ink
     /// The panel's cancel ×.
     nonisolated static let kbCancel: Color = Brand.orange
     /// The key-term field.
@@ -163,10 +183,42 @@ enum DesignTokens {
   enum Metrics {
     /// The + from the panel's corner.
     nonisolated static let addtermInset: CGFloat = 6
+    /// The brand's button.
+    nonisolated static let appButtonHeight: CGFloat = 40
+    /// Its side padding.
+    nonisolated static let appButtonPad: CGFloat = 12
+    /// Inside a card.
+    nonisolated static let appCardPad: CGFloat = 16
+    /// Between chips.
+    nonisolated static let appChipGap: CGFloat = 8
+    /// A style chip's side padding.
+    nonisolated static let appChipPadX: CGFloat = 12
+    /// And its top and bottom.
+    nonisolated static let appChipPadY: CGFloat = 8
+    /// The home header: wordmark and gear.
+    nonisolated static let appHeaderHeight: CGFloat = 44
+    /// Between the hero's pieces.
+    nonisolated static let appHeroGap: CGFloat = 14
+    /// Inside the hero card.
+    nonisolated static let appHeroPad: CGFloat = 20
+    /// The header's gear, the copy glyph.
+    nonisolated static let appIcon: CGFloat = 20
+    /// Between lines of one thought.
+    nonisolated static let appLineGap: CGFloat = 6
+    /// The screens' side padding.
+    nonisolated static let appPagePad: CGFloat = 20
+    /// Between the theme card's two faces.
+    nonisolated static let appPreviewGap: CGFloat = 8
+    /// Between the home screen's sections.
+    nonisolated static let appSectionGap: CGFloat = 24
+    /// The setup steps' mono numerals.
+    nonisolated static let appSetupNumberWidth: CGFloat = 24
+    /// Between a section's eyebrow and its content, and between cards.
+    nonisolated static let appStackGap: CGFloat = 12
     /// The card's hairline.
     nonisolated static let cardBorder: CGFloat = 1
-    /// The app's cards.
-    nonisolated static let cardRadius: CGFloat = 16
+    /// The app's cards (radius/card).
+    nonisolated static let cardRadius: CGFloat = 12
     nonisolated static let caretHeight: CGFloat = 20
     /// The caret's gap from the text.
     nonisolated static let caretLead: CGFloat = 1
@@ -253,6 +305,8 @@ enum DesignTokens {
     nonisolated static let opacityPopupShadow: CGFloat = 0.12
     /// A key lightens this much while pressed.
     nonisolated static let opacityPressBrighten: CGFloat = 0.15
+    /// A brand button while pressed: a colour change, no lift.
+    nonisolated static let opacityPressed: CGFloat = 0.85
     /// The light passing over the element at rest: chrome catching light.
     nonisolated static let opacitySheen: CGFloat = 0.22
     /// A soft darkening toward the surface's edges; 0 is none.
@@ -494,6 +548,16 @@ enum DesignTokens {
     "keyboard.app/card-border-light": "#C7C3B2",
     "keyboard.app/card-fill-dark": "#26231E",
     "keyboard.app/card-fill-light": "#F5F3EB",
+    "keyboard.app/cta-dark": "#67AD82",
+    "keyboard.app/cta-light": "#01762F",
+    "keyboard.app/cta-text-dark": "#1D1B16",
+    "keyboard.app/cta-text-light": "#FFFFFF",
+    "keyboard.app/muted-dark": "#A5A4A2",
+    "keyboard.app/muted-light": "#777673",
+    "keyboard.app/page-dark": "#1D1B16",
+    "keyboard.app/page-light": "#FDFCF8",
+    "keyboard.app/text-dark": "#F5F3EB",
+    "keyboard.app/text-light": "#1D1B16",
     "keyboard.kb/cancel": "#E67F36",
     "keyboard.kb/field": "#33302A",
     "keyboard.kb/field-border": "#3A362F",
@@ -507,8 +571,24 @@ enum DesignTokens {
     "keyboard.kb/signal": "#67AD82",
     "keyboard.kb/surface": "#1D1B16",
     "metrics.addterm/inset": "6",
+    "metrics.app/button-height": "40",
+    "metrics.app/button-pad": "12",
+    "metrics.app/card-pad": "16",
+    "metrics.app/chip-gap": "8",
+    "metrics.app/chip-pad-x": "12",
+    "metrics.app/chip-pad-y": "8",
+    "metrics.app/header-height": "44",
+    "metrics.app/hero-gap": "14",
+    "metrics.app/hero-pad": "20",
+    "metrics.app/icon": "20",
+    "metrics.app/line-gap": "6",
+    "metrics.app/page-pad": "20",
+    "metrics.app/preview-gap": "8",
+    "metrics.app/section-gap": "24",
+    "metrics.app/setup-number-width": "24",
+    "metrics.app/stack-gap": "12",
     "metrics.card/border": "1",
-    "metrics.card/radius": "16",
+    "metrics.card/radius": "12",
     "metrics.caret/height": "20",
     "metrics.caret/lead": "1",
     "metrics.caret/radius": "1",
@@ -556,6 +636,7 @@ enum DesignTokens {
     "metrics.opacity/placeholder": "0.4",
     "metrics.opacity/popup-shadow": "0.12",
     "metrics.opacity/press-brighten": "0.15",
+    "metrics.opacity/pressed": "0.85",
     "metrics.opacity/sheen": "0.22",
     "metrics.opacity/surface-vignette": "0",
     "metrics.opacity/term-cancel": "0.7",

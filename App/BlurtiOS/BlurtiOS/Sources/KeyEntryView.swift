@@ -20,12 +20,16 @@ struct KeyEntryView: View {
             .autocorrectionDisabled()
             .textInputAutocapitalization(.never)
           if let inlineError {
-            Text(inlineError).font(.footnote).foregroundStyle(BlurtBrand.errorOrange)
+            Text(inlineError).font(BlurtType.body(DesignTokens.Typography.sizeCaption)).foregroundStyle(
+              BlurtBrand.errorOrange)
           }
+        } header: {
+          Eyebrow("API key")
         } footer: {
           Text("Keys live at assemblyai.com/dashboard/api-keys. Stored in the Keychain on this phone.")
         }
       }
+      .brandForm()
       .navigationTitle("API key")
       .toolbar {
         ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
