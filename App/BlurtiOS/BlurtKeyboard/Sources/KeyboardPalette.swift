@@ -7,9 +7,9 @@ import SwiftUI
 /// lavender and green, a warm paper, a midnight, a sunset), each contemporary
 /// and fun and none off-brand, picked in the app Partiful-style from live
 /// previews. The spacing never changes (the iPhone keyboard's own — 6 pt
-/// between keys, 11 between rows, 3 at the edges, 5 pt corners, a 1 pt drop
-/// under every key), so a theme changes how the keyboard looks and never how
-/// it types.
+/// between keys, 11 between rows, 3 at the edges), so a theme changes how
+/// the keyboard looks and never how it types. The keys are flat: one colour
+/// at 8 pt corners, no drop, no edge, no gloss.
 struct KeyboardPalette: Equatable, Identifiable {
   let id: String
   let name: String
@@ -22,65 +22,56 @@ struct KeyboardPalette: Equatable, Identifiable {
   /// The voice on this surface: the wave while recording. The brand green
   /// that reads on it — the wordmark's on light, the lifted one on dark.
   let signal: Color
-  /// The drop under each key, as the system keyboard draws it.
-  let keyShadow: Color
   let popupFill: Color
-  /// A faint light edge on each key — what lifts a key off a dark surface;
-  /// the light palettes have their drop for that and no edge.
-  let keyEdge: Bool
 
   static let keyGap: CGFloat = 6
   static let rowGap: CGFloat = 11
   static let margin: CGFloat = 3
-  static let keyRadius: CGFloat = 5
+  static let keyRadius: CGFloat = 8
 
   /// The iPhone's light keyboard: `#D1D5DB` surface, white keys, `#ADB3BC`
-  /// modifiers, a `#898A8D` drop, black legends.
+  /// modifiers, black legends.
   static let systemLight = KeyboardPalette(
     id: "system", name: "iPhone", vibe: "Matches the iPhone keyboard, light or dark with the app you're in",
     surface: Color(hex: 0xD1D5DB), key: .white, keyDark: Color(hex: 0xADB3BC), keyText: .black,
-    signal: BlurtBrand.green, keyShadow: Color(hex: 0x898A8D), popupFill: .white, keyEdge: false)
+    signal: BlurtBrand.green, popupFill: .white)
 
   /// The iPhone's dark keyboard: `#2B2B2B` surface, `#6B6B6B` keys, `#464646`
-  /// modifiers, a near-black drop, white legends.
+  /// modifiers, white legends.
   static let systemDark = KeyboardPalette(
     id: "system", name: "iPhone", vibe: "Matches the iPhone keyboard, light or dark with the app you're in",
     surface: Color(hex: 0x2B2B2B), key: Color(hex: 0x6B6B6B), keyDark: Color(hex: 0x464646), keyText: .white,
-    signal: BlurtBrand.greenOnDark, keyShadow: Color(hex: 0x0D0D0D), popupFill: Color(hex: 0x6B6B6B), keyEdge: false)
+    signal: BlurtBrand.greenOnDark, popupFill: Color(hex: 0x6B6B6B))
 
   static let ink = KeyboardPalette(
     id: "ink", name: "Ink", vibe: "Blurt's own",
     surface: BlurtBrand.ink, key: BlurtBrand.key, keyDark: BlurtBrand.keyDark, keyText: BlurtBrand.keyText,
-    signal: BlurtBrand.greenOnDark, keyShadow: Color.black.opacity(0.45), popupFill: BlurtBrand.key, keyEdge: true)
+    signal: BlurtBrand.greenOnDark, popupFill: BlurtBrand.key)
 
   static let paper = KeyboardPalette(
     id: "paper", name: "Paper", vibe: "Warm and light",
     surface: Color(hex: 0xEBE8E8), key: .white, keyDark: Color(hex: 0xDEDBDB), keyText: BlurtBrand.ink,
-    signal: BlurtBrand.green, keyShadow: Color.black.opacity(0.18), popupFill: .white, keyEdge: true)
+    signal: BlurtBrand.green, popupFill: .white)
 
   static let lavender = KeyboardPalette(
     id: "lavender", name: "Lavender", vibe: "The orb's violet",
     surface: Color(hex: 0x2C2557), key: Color(hex: 0x3F3777), keyDark: Color(hex: 0x352E68),
-    keyText: Color(hex: 0xF1EEFF), signal: BlurtBrand.greenOnDark, keyShadow: Color.black.opacity(0.4),
-    popupFill: Color(hex: 0x3F3777), keyEdge: true)
+    keyText: Color(hex: 0xF1EEFF), signal: BlurtBrand.greenOnDark, popupFill: Color(hex: 0x3F3777))
 
   static let mint = KeyboardPalette(
     id: "mint", name: "Mint", vibe: "The orb's green",
     surface: Color(hex: 0x10231B), key: Color(hex: 0x1E3F31), keyDark: Color(hex: 0x183429),
-    keyText: Color(hex: 0xE9F5EE), signal: BlurtBrand.greenOnDark, keyShadow: Color.black.opacity(0.4),
-    popupFill: Color(hex: 0x1E3F31), keyEdge: true)
+    keyText: Color(hex: 0xE9F5EE), signal: BlurtBrand.greenOnDark, popupFill: Color(hex: 0x1E3F31))
 
   static let midnight = KeyboardPalette(
     id: "midnight", name: "Midnight", vibe: "Deep blue-black",
     surface: Color(hex: 0x0E1220), key: Color(hex: 0x1D2440), keyDark: Color(hex: 0x161B33),
-    keyText: Color(hex: 0xE8ECFF), signal: BlurtBrand.greenOnDark, keyShadow: Color.black.opacity(0.5),
-    popupFill: Color(hex: 0x1D2440), keyEdge: true)
+    keyText: Color(hex: 0xE8ECFF), signal: BlurtBrand.greenOnDark, popupFill: Color(hex: 0x1D2440))
 
   static let sunset = KeyboardPalette(
     id: "sunset", name: "Sunset", vibe: "Warm and loud",
     surface: Color(hex: 0x2B1912), key: Color(hex: 0x4B2B20), keyDark: Color(hex: 0x3B2119),
-    keyText: Color(hex: 0xFFEFE6), signal: BlurtBrand.greenOnDark, keyShadow: Color.black.opacity(0.4),
-    popupFill: Color(hex: 0x4B2B20), keyEdge: true)
+    keyText: Color(hex: 0xFFEFE6), signal: BlurtBrand.greenOnDark, popupFill: Color(hex: 0x4B2B20))
 
   /// The picker's order: the iPhone's own first (shown in the picker's own
   /// appearance), then Blurt's.

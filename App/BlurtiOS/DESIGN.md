@@ -50,13 +50,19 @@ bursting a beat apart, up in 0.5 s, held to 0.9 s, flowing back out into the
 green by 2.4 s. It lands with the success haptic. Under Reduce Motion the
 fluid holds still and the drop simply fades. The ring stays the Mac orb's.
 
-The orb is a circle in every state — never a pill. Recording is the **wave
-through the orb** (`SignalWave`): the meter's bars, flat on the surface with
-no container, gone at the orb's edge and whole 14 pt out from it, tapering
-away with the meter's own envelope, the orb's grain over them so they are
-the same material. The orb stays put and greens with the voice. Motion is
-soft and slow: the wave fades in and out over 0.7 s, every other change on
-the key over 0.5 s, nothing springs or snaps; only the press answers at once.
+The orb is a circle, never a pill, and while you talk it is not there at
+all: it **dissipates** — swells a little, softens to a haze, is gone
+(`Dissipate`) — and in its place the voice is a **thin wave** (`WaveformMeter`
+at the keyboard's pitch: 2 pt bars 2 pt apart, dense, slim, flat on the
+surface with no container). The wave is the key while it shows; on the stop
+it fades and the orb condenses back the same way. Motion is soft and slow:
+the crossing takes 0.7 s, every other change on the key 0.5 s, nothing
+springs or snaps; only the press answers at once.
+
+The chrome is flat and contemporary: one colour per key at 8 pt corners, no
+drop, no edge, no gloss; the +, the cancel ×, the term field's × and ✓ are
+bare glyphs; the term field a flat capsule; the letter pop-up carries only a
+whisper of shadow (12 %, radius 8), being the one thing that floats.
 
 Not merged: judge it on the simulator (`-BlurtGallery panel
 idle,recording,landed`; `-BlurtGallery panel live` walks a whole dictation
@@ -66,9 +72,9 @@ on a clock, for watching or `xcrun simctl io booted recordVideo`;
 ## Themes, at the iPhone's spacing (`BlurtKeyboard/Sources/KeyboardPalette.swift`)
 
 The keys sit exactly where the iPhone keyboard's do, so nobody's fingers are
-thrown off: 6 pt between keys, 11 pt between rows, 3 pt at the edges, 5 pt
-corners, a 1 pt drop under every key. A theme changes how the keyboard looks
-and never how it types. The **default is the iPhone keyboard's own** look,
+thrown off: 6 pt between keys, 11 pt between rows, 3 pt at the edges. The
+keys are flat — one colour at 8 pt corners, no drop, no edge. A theme changes
+how the keyboard looks and never how it types. The **default is the iPhone keyboard's own** look,
 light or dark with the app being typed in (its field's `keyboardAppearance`,
 else the app's style), so Blurt's keys sit on Apple's globe-and-mic bar as
 one keyboard and the brand lives in the orb. Six more, curated,
@@ -86,9 +92,9 @@ Group):
 | `midnight` | `#0E1220`             | `#1D2440`         | `#161B33`             | `#E8ECFF`     | deep blue-black                             |
 | `sunset`   | `#2B1912`             | `#4B2B20`         | `#3B2119`             | `#FFEFE6`     | warm and loud                               |
 
-The orb, the wave and the ring are the same in every theme. The dark palettes
-give each key a faint light edge; the light ones have their drop for that.
-The picker (`ThemePickerView`) draws the real full keyboard at 0.42 scale on
+The orb and the ring are the same in every theme; the wave takes the
+palette's `signal` green — the wordmark's on the light surfaces, the lifted
+one on the dark. The picker (`ThemePickerView`) draws the real full keyboard at 0.42 scale on
 each card, the iPhone theme in the picker's own appearance. The gallery's
 last argument is a theme id (`system-dark` for the iPhone's dark face).
 
@@ -202,49 +208,49 @@ system keyboard puts its suggestion bar. The panel has it at 96 pt, centred
 in the space above the keys; the slim bar has it between the globe and
 delete. State is the orb's ring and colour, and the wave:
 
-| State                              | Orb                                                                                                                                               | Haptic        |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
-| no Full Access / app not listening | dimmed (saturation 0.35, opacity 0.8); a tap opens Blurt                                                                                          | —             |
-| idle                               | the circle, ring still                                                                                                                            | —             |
-| connecting                         | ring 2 pt sweeping, as the app's orb does (one turn per 1.6 s)                                                                                    | —             |
-| recording                          | the orb stays a circle, greener with the voice; the wave fades in through it, flat on the surface (reach 240 in the bar, 320 in the panel; 0.7 s) | medium impact |
-| processing                         | back to the circle, ring sweeping                                                                                                                 | light impact  |
-| pasted                             | green solid ring, 1.2 s                                                                                                                           | success       |
-| copied (no field)                  | green solid ring with a clipboard glyph, 2 s                                                                                                      | success       |
-| error                              | orange solid ring with an exclamation mark, 2 s; the message on VoiceOver                                                                         | error         |
+| State                              | Orb                                                                                                                                                       | Haptic        |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| no Full Access / app not listening | dimmed (saturation 0.35, opacity 0.8); a tap opens Blurt                                                                                                  | —             |
+| idle                               | the circle, ring still                                                                                                                                    | —             |
+| connecting                         | ring 2 pt sweeping, as the app's orb does (one turn per 1.6 s)                                                                                            | —             |
+| recording                          | the orb dissipates (swells, blurs, fades; 0.7 s) into the thin wave, flat on the surface: 240 × 24 in the bar, 300 × 40 in the panel; the wave is the key | medium impact |
+| processing                         | back to the circle, ring sweeping                                                                                                                         | light impact  |
+| pasted                             | green solid ring, 1.2 s                                                                                                                                   | success       |
+| copied (no field)                  | green solid ring with a clipboard glyph, 2 s                                                                                                              | success       |
+| error                              | orange solid ring with an exclamation mark, 2 s; the message on VoiceOver                                                                                 | error         |
 
-Nothing snaps: the wave fades over 0.7 s, every other change on the key
-(ring, glyph, dimming) over 0.5 s, and the term field swaps in over 0.4 s.
-Only the press answers at once. VoiceOver keeps the words: Dictate / Stop
+Nothing snaps: the orb and the wave cross over 0.7 s, every other change on
+the key (ring, glyph, dimming) over 0.5 s, and the term field swaps in over
+0.4 s. Only the press answers at once. VoiceOver keeps the words: Dictate / Stop
 dictation / Start Blurt on the key, and the error message.
 
 **Orb** (`BrandOrb.swift`) — the gradient disc with a hairline ring that sweeps
 one turn per 1.6 s while something is happening, still otherwise. The disc
 never moves. Under Reduce Motion the ring is drawn but holds still.
 
-**Meter** (`WaveformMeter` in `VoiceBar.swift`) — bars 3 pt wide, 3 pt apart,
-count from the width, heights from `MeterBarRow` (envelope, gamma, idle wave).
-The app publishes the level at ~12 Hz; the wave keeps the row alive between.
-With `grain`, the orb's film grain shimmers over the bars. **`SignalWave`**
-is the meter given the whole reach and masked off the orb: clear to 2 pt
-past the orb's edge, whole at 14 pt (a radial fade), never tappable. The
-colour is the palette's `signal` — the wordmark green on the light surfaces,
-`greenOnDark` on the dark ones — and `accent` on the home screen.
+**Meter** (`WaveformMeter` in `VoiceBar.swift`) — the Mac pill's bars, at
+the pitch the caller sets: the keyboard and the home screen use `slimBar` /
+`slimGap` (2 pt bars, 2 pt apart), the count from the width, heights from
+`MeterBarRow(count:availableHeight:)` (the engine's envelope, gamma and idle
+wave, so it cannot drift from the Mac's). The app publishes the level at
+~12 Hz; the wave keeps the row alive between. The colour is the palette's
+`signal` on the keyboard and `accent` on the home screen.
 
-**Mic key** (`MicKey` in `KeyboardViews.swift`) — the orb _is_ the key, a
-circle at every size and in every state; the wave draws past its frame
-while recording (`waveReach`) and the circle stays the only thing that
-answers a touch. No glyph: the Mac's orb carries none and neither does this.
-No glow, no shadow — matte. Ring 2 pt while working or noticing, 1 pt
-otherwise. Pressed: scale 0.94, 0.1 s.
+**Mic key** (`MicKey` in `KeyboardViews.swift`) — the orb _is_ the key until
+it dissipates into the wave, and then the wave is (`wave: CGSize?`; nil in
+the Full Access row, where the orb stays). The key's frame is the wave's
+width throughout so nothing shifts while the two cross; the touch shape is
+the circle, then the wave's band. No glyph: the Mac's orb carries none and
+neither does this. No glow, no shadow — matte. Ring 2 pt while working or
+noticing, 1 pt otherwise. Pressed: scale 0.94, 0.1 s.
 Finger down / up drive the engine's `DictationKeyGate`, so a tap latches and
 a hold is push-to-talk exactly as on the Mac; a touch that travelled more
 than 24 pt cancels instead (it was a swipe). Cancel is the orange × in the
 panel's top-right corner while something is in flight.
 
-**Keys** (`KeyCap`, `LetterKey`) — 42 pt tall, radius 5, 6 % white hairline;
-`key` for letters and space, `keyDark` for modifiers; a key brightens 15 %
-while pressed rather than dimming.
+**Keys** (`KeyCap`, `LetterKey`) — 42 pt tall, radius 8, flat: `key` for
+letters and space, `keyDark` for modifiers, `bare` for a glyph with no cap
+(the panel's cancel); a key brightens 15 % while pressed rather than dimming.
 
 ## Layouts and their heights (`KeyboardLayout.height`)
 
@@ -280,27 +286,29 @@ The app listens and transcribes; the keyboard is a remote control. They talk
 over the App Group's `UserDefaults` (payloads as JSON) plus Darwin
 notifications that carry nothing and just say "look" (`SharedState.swift`).
 
-| Rule                   | Value                                                                                                            | Why                                                                                                      |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| presence               | heartbeat 5 s (app), 4 s (keyboard); window 15 s                                                                 | more than twice a heartbeat, so one missed beat isn't absence; a killed process is absent within seconds |
-| listening              | window not lapsed **and** app seen within 15 s                                                                   | a killed app, or a phone call, with the window's end still in the future                                 |
-| result freshness       | 10 s                                                                                                             | a notification held for a suspended keyboard arrives minutes late                                        |
-| result addressing      | `recipient` = the keyboard instance last seen                                                                    | two live keyboards (two host apps) must not both insert                                                  |
-| result delivery        | the app waits 3 s (poll 250 ms) for the keyboard to take the result; else clipboard + "Copied"                   | "Pasted" is never a guess                                                                                |
-| command freshness      | 10 s                                                                                                             | a held press from minutes ago must not start a dictation on resume                                       |
-| command retry          | one re-signal after 600 ms with no phase change                                                                  | a missed Darwin notification would leave the gate latched over nothing                                   |
-| phase staleness        | notices 3 s (max dwell 2 s + 1); in flight 130 s (the 120 s cap + 10)                                            | the keyboard reads the snapshot on every appearance                                                      |
-| notice dwell           | pasted 1.2 s; copied, error 2 s                                                                                  | the Mac's 0.8 / 1.6 s, a little longer with no hover                                                     |
-| press delay on the orb | 90 ms                                                                                                            | a swipe that starts on the orb never starts a dictation it must then cancel                              |
-| tap travel             | 12 pt (keys), 24 pt (orb), swipe ≥ 48 pt horizontal and 1.5× the vertical                                        | the carousel's swipe never types or dictates                                                             |
-| level publish          | every 80 ms while recording                                                                                      | the orb's meter, off the capture path's back                                                             |
-| lexicon refresh        | hourly                                                                                                           | thousands of contacts on a keyboard memory budget                                                        |
-| height change          | 0.25 s; constraint priority 999                                                                                  | iOS honours a keyboard's height at just under required                                                   |
-| signal wave            | reach 240 (bar), 320 (panel), 280 (home); height half the orb; clear to 2 pt past the orb's edge, whole at 14 pt | one component for the keyboard and the home screen                                                       |
-| fades                  | wave 0.7 s; ring, glyph, dimming 0.5 s; term field 0.4 s; the drop up 0.5 s, held to 0.9 s, gone by 2.4 s        | soft and slow; only the press (0.1 s) answers at once                                                    |
-| letter pop-up          | 32 pt glyph, key width + 18 × 56, radius 9, 58 pt above                                                          | the system keyboard's                                                                                    |
-| term field             | 36 pt, 17 pt text, caret 0.5 s; the + is 32 pt                                                                   | —                                                                                                        |
-| term packs             | ≤ 64 KB, ≤ 100 terms, ≤ 80 characters each                                                                       | the request's cap; unbounded input from a stranger                                                       |
+| Rule                   | Value                                                                                                           | Why                                                                                                      |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| presence               | heartbeat 5 s (app), 4 s (keyboard); window 15 s                                                                | more than twice a heartbeat, so one missed beat isn't absence; a killed process is absent within seconds |
+| listening              | window not lapsed **and** app seen within 15 s                                                                  | a killed app, or a phone call, with the window's end still in the future                                 |
+| result freshness       | 10 s                                                                                                            | a notification held for a suspended keyboard arrives minutes late                                        |
+| result addressing      | `recipient` = the keyboard instance last seen                                                                   | two live keyboards (two host apps) must not both insert                                                  |
+| result delivery        | the app waits 3 s (poll 250 ms) for the keyboard to take the result; else clipboard + "Copied"                  | "Pasted" is never a guess                                                                                |
+| command freshness      | 10 s                                                                                                            | a held press from minutes ago must not start a dictation on resume                                       |
+| command retry          | one re-signal after 600 ms with no phase change                                                                 | a missed Darwin notification would leave the gate latched over nothing                                   |
+| phase staleness        | notices 3 s (max dwell 2 s + 1); in flight 130 s (the 120 s cap + 10)                                           | the keyboard reads the snapshot on every appearance                                                      |
+| notice dwell           | pasted 1.2 s; copied, error 2 s                                                                                 | the Mac's 0.8 / 1.6 s, a little longer with no hover                                                     |
+| press delay on the orb | 90 ms                                                                                                           | a swipe that starts on the orb never starts a dictation it must then cancel                              |
+| tap travel             | 12 pt (keys), 24 pt (orb), swipe ≥ 48 pt horizontal and 1.5× the vertical                                       | the carousel's swipe never types or dictates                                                             |
+| level publish          | every 80 ms while recording                                                                                     | the orb's meter, off the capture path's back                                                             |
+| lexicon refresh        | hourly                                                                                                          | thousands of contacts on a keyboard memory budget                                                        |
+| height change          | 0.25 s; constraint priority 999                                                                                 | iOS honours a keyboard's height at just under required                                                   |
+| wave                   | 2 pt bars 2 pt apart; 240 × 24 (bar), 300 × 40 (panel), 280 × 44 (home)                                         | thin, dense, slim; one component for the keyboard and the home screen                                    |
+| dissipate              | scale to 1.25, blur 0.16 × the orb, opacity to 0, over the 0.7 s crossing                                       | mist, not a pop; the same in reverse                                                                     |
+| fades                  | orb ↔ wave 0.7 s; ring, glyph, dimming 0.5 s; term field 0.4 s; the drop up 0.5 s, held to 0.9 s, gone by 2.4 s | soft and slow; only the press (0.1 s) answers at once                                                    |
+| keys                   | radius 8, no drop, no edge; pop-up radius 10 with a 12 % shadow at radius 8                                     | flat and contemporary; the pop-up is the one thing that floats                                           |
+| letter pop-up          | 32 pt glyph, key width + 18 × 56, radius 10, 58 pt above                                                        | the system keyboard's geometry                                                                           |
+| term field             | 36 pt, 17 pt text, caret 0.5 s; the + is 32 pt                                                                  | —                                                                                                        |
+| term packs             | ≤ 64 KB, ≤ 100 terms, ≤ 80 characters each                                                                      | the request's cap; unbounded input from a stranger                                                       |
 
 Tests pin the rules that can be pinned (`BlurtiOSTests`: the contract, the
 gate, results, the term field, the feed, the layout arithmetic); anything
@@ -317,14 +325,14 @@ shared, not copied (`project.yml`).
 
 **Home** (`HomeView.swift`) — the Mac's ready screen, stacked for a phone:
 
-| Piece      | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Bar        | the wordmark (tinted accent, 22 pt tall) centred; the gear → Settings                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| Setup card | only while something is missing: sign in (stub; debug builds take a key), microphone, keyboard + Full Access                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| Hero card  | the orb, 112 pt, ring 2 pt sweeping while the mic is open or a dictation is in flight, the wave through it while recording (the keyboard's `SignalWave`, reach 280, fading as the key's does); a title2 line (Not listening · Ready to dictate · Connecting… · Listening… · Transcribing… · Pasted · Copied · the error) and a callout under it; **Start listening** (prominent; refused without a key, with a line saying so) or **Stop listening** (bordered, destructive; cancels a dictation in flight before closing, so nothing is transcribed for nobody); "Dictate here, to the clipboard" as a text button |
-| Style      | chips: Default and each profile, the active one filled with the accent; Edit → the styles editor                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| Recent     | cards: three lines of text, the style as a tinted capsule, the relative time, a copy button; an empty-state card                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| Footer     | "Powered by AssemblyAI", caption                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Piece      | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bar        | the wordmark (tinted accent, 22 pt tall) centred; the gear → Settings                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Setup card | only while something is missing: sign in (stub; debug builds take a key), microphone, keyboard + Full Access                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Hero card  | the orb, 112 pt, ring 2 pt sweeping while the mic is open or a dictation is in flight, dissipating into the thin wave (280 × 44) while recording as the keyboard's key does; a title2 line (Not listening · Ready to dictate · Connecting… · Listening… · Transcribing… · Pasted · Copied · the error) and a callout under it; **Start listening** (prominent; refused without a key, with a line saying so) or **Stop listening** (bordered, destructive; cancels a dictation in flight before closing, so nothing is transcribed for nobody); "Dictate here, to the clipboard" as a text button |
+| Style      | chips: Default and each profile, the active one filled with the accent; Edit → the styles editor                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Recent     | cards: three lines of text, the style as a tinted capsule, the relative time, a copy button; an empty-state card                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Footer     | "Powered by AssemblyAI", caption                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 **Settings** (`SettingsView.swift`) — a sheet, grouped as the Mac's: Keyboard
 (layout, theme, hands-free), Listening (the window), Transcription (enhanced

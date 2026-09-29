@@ -82,7 +82,7 @@ private struct LetterKey: View {
       .font(.system(size: 22))
       .foregroundStyle(palette.keyText)
       .frame(width: width, height: KeyCap.height)
-      .keyCap(palette.key, palette: palette)
+      .keyCap(palette.key)
       .overlay(alignment: .top) {
         if pressed { popup }
       }
@@ -108,8 +108,8 @@ private struct LetterKey: View {
       .font(.system(size: 32))
       .foregroundStyle(palette.keyText)
       .frame(width: width + 18, height: 56)
-      .background(palette.popupFill, in: RoundedRectangle(cornerRadius: 9))
-      .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
+      .background(palette.popupFill, in: RoundedRectangle(cornerRadius: 10))
+      .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
       .offset(y: -58)
       .allowsHitTesting(false)
   }

@@ -73,15 +73,15 @@ struct SlimBarView: View {
   }
 }
 
-/// A big orb, centred, with the wave through it while recording; cancel in
-/// the corner while something is in flight; one row of keys. 216 pt.
+/// A big orb, centred, that dissipates into the wave while recording; cancel
+/// in the corner while something is in flight; one row of keys. 216 pt.
 struct PanelView: View {
   var model: KeyboardModel
 
   var body: some View {
     VStack(spacing: 12) {
       Spacer(minLength: 0)
-      MicKey(model: model, size: 96, waveReach: 320)
+      MicKey(model: model, size: 96, wave: CGSize(width: 300, height: 40))
       Spacer(minLength: 0)
       HStack(spacing: KeyboardPalette.keyGap) {
         if model.needsGlobe { KeyCap(systemImage: "globe", dark: true) { model.globe() } }
@@ -92,8 +92,9 @@ struct PanelView: View {
     }
     .overlay(alignment: .topTrailing) {
       if !model.isSettled {
-        KeyCap(systemImage: "xmark", tint: BlurtBrand.errorOrange, dark: true) { model.cancel() }
+        KeyCap(systemImage: "xmark", tint: BlurtBrand.errorOrange, bare: true) { model.cancel() }
           .accessibilityLabel("Cancel dictation")
+          .transition(.opacity)
       }
     }
     .overlay(alignment: .topLeading) { AddTermKey(model: model).padding(6) }
@@ -105,46 +106,53 @@ struct PanelView: View {
 /// (push-to-talk) — `KeyboardModel` runs the engine's gate. What it does:
 /// dimmed when Blurt isn't ready (no Full Access, or the app isn't listening;
 /// the tap opens Blurt); on a tap the ring sweeps as the app's orb does while
-/// the mic comes up; then the voice fades in as a wave passing through the
-/// orb, flat on the keyboard's surface, for as long as you talk — the orb
-/// stays a circle and greens with the voice; on the stop the wave fades out
-/// and the ring sweeps while the words come; then a green ring for a moment
-/// when they landed (the violet drop with it), a clipboard on a green ring
-/// when they went to the clipboard instead, an orange ring and an exclamation
-/// mark when something failed. Each also has its haptic.
+/// the mic comes up; then the orb dissipates — swells a little, softens to a
+/// haze, is gone — and in its place the voice is a thin wave, flat on the
+/// surface, for as long as you talk, and the wave is the key; on the stop
+/// the wave fades and the orb condenses back with the ring sweeping while
+/// the words come; then a green ring for a moment when they landed (the
+/// violet drop with it), a clipboard on a green ring when they went to the
+/// clipboard instead, an orange ring and an exclamation mark when something
+/// failed. Each also has its haptic.
 ///
-/// Nothing snaps or springs: the wave fades over `waveFade`, every other
-/// change over `stateFade`. Only the press itself answers at once.
+/// Nothing snaps or springs: the orb and the wave cross over `waveFade`,
+/// every other change over `stateFade`. Only the press itself answers at
+/// once.
 struct MicKey: View {
   var model: KeyboardModel
   var size: CGFloat
-  /// How wide the wave reaches while recording, centred on the orb; 0 for
-  /// none. It draws past the key's own frame and is never tappable.
-  var waveReach: CGFloat
+  /// The wave the orb dissipates into while recording — wide and slim —
+  /// or nil for none (the orb stays). The key's frame is the wave's width
+  /// throughout, so nothing moves while the two cross; only the circle
+  /// answers a touch until the wave is up, then the wave's band does.
+  var wave: CGSize?
   @State private var pressed = false
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.keyboardPalette) private var palette
 
-  /// The wave's fade, in and out.
+  /// The orb and the wave crossing, either way.
   static let waveFade: Double = 0.7
   /// Every other change on the key: the ring, a glyph, the dimming.
   static let stateFade: Double = 0.5
 
   var body: some View {
     ZStack {
-      if isRecording, waveReach > 0 {
-        SignalWave(
-          level: Float(model.snapshot.level), animated: !reduceMotion, color: palette.signal, orbDiameter: size
+      if let wave, isRecording {
+        WaveformMeter(
+          level: Float(model.snapshot.level), animated: !reduceMotion, color: palette.signal,
+          barWidth: WaveformMeter.slimBar, barSpacing: WaveformMeter.slimGap
         )
-        .frame(width: waveReach, height: size * 0.5)
-        .allowsHitTesting(false)
+        .frame(width: wave.width, height: wave.height)
         .transition(.opacity)
+      } else {
+        PrismOrb(mood: mood, landedAt: model.resultLandedAt, animated: !reduceMotion)
+          .clipShape(Circle())
+          .overlay { ring }
+          .frame(width: size, height: size)
+          .saturation(isReady ? 1 : 0.35)
+          .opacity(isReady ? 1 : 0.8)
+          .transition(reduceMotion ? .opacity : .dissipate(size: size))
       }
-      PrismOrb(mood: mood, landedAt: model.resultLandedAt, animated: !reduceMotion)
-        .clipShape(Circle())
-        .overlay { ring }
-        .saturation(isReady ? 1 : 0.35)
-        .opacity(isReady ? 1 : 0.8)
       if let glyph {
         Image(systemName: glyph)
           .font(.system(size: size * 0.34, weight: .semibold))
@@ -152,13 +160,13 @@ struct MicKey: View {
           .transition(.opacity)
       }
     }
-    .frame(width: size, height: size)
+    .frame(width: wave.map { max($0.width, size) } ?? size, height: size)
     .animation(.easeInOut(duration: Self.waveFade), value: isRecording)
     .animation(.easeInOut(duration: Self.stateFade), value: model.snapshot.state)
     .animation(.easeInOut(duration: Self.stateFade), value: isReady)
     .scaleEffect(pressed ? 0.94 : 1)
     .animation(.easeOut(duration: 0.1), value: pressed)
-    .contentShape(Circle())
+    .contentShape(showsWave ? AnyShape(Capsule()) : AnyShape(Circle()))
     .accessibilityLabel(isReady ? (isRecording ? "Stop dictation" : "Dictate") : "Start Blurt")
     .accessibilityValue(model.snapshot.state == .error ? model.snapshot.message ?? "Dictation failed." : "")
     .accessibilityAddTraits(.isButton)
@@ -230,6 +238,8 @@ struct MicKey: View {
   }
 
   private var isReady: Bool { model.isReady }
+  /// The wave is up, and is the key.
+  private var showsWave: Bool { isRecording && wave != nil }
 
   /// The orb's story from the phase: green, greener with the voice; the
   /// violet drop is keyed to the moment the words landed, not to a phase.
@@ -277,15 +287,16 @@ struct MicKey: View {
 }
 
 /// One ordinary key: a legend on a cap in the current palette; `dark` for the
-/// modifier keys, a step darker as on the system keyboard. `flexible` keys
-/// (the space bar) take the width they're given, `width` fixes one, and the
-/// rest are 44 wide.
+/// modifier keys, a step darker as on the system keyboard; `bare` for a glyph
+/// with no cap at all (the panel's cancel). `flexible` keys (the space bar)
+/// take the width they're given, `width` fixes one, and the rest are 44 wide.
 struct KeyCap: View {
   var title: String?
   var systemImage: String?
   var tint: Color?
   var flexible = false
   var dark = false
+  var bare = false
   var width: CGFloat?
   var action: () -> Void
   @Environment(\.keyboardPalette) private var palette
@@ -294,13 +305,14 @@ struct KeyCap: View {
 
   init(
     title: String? = nil, systemImage: String? = nil, tint: Color? = nil, flexible: Bool = false,
-    dark: Bool = false, width: CGFloat? = nil, action: @escaping () -> Void
+    dark: Bool = false, bare: Bool = false, width: CGFloat? = nil, action: @escaping () -> Void
   ) {
     self.title = title
     self.systemImage = systemImage
     self.tint = tint
     self.flexible = flexible
     self.dark = dark
+    self.bare = bare
     self.width = width
     self.action = action
   }
@@ -319,7 +331,7 @@ struct KeyCap: View {
     .frame(width: width)
     .frame(minWidth: width == nil ? 44 : nil, minHeight: Self.height)
     .padding(.horizontal, flexible || width != nil ? 0 : 4)
-    .keyCap(dark ? palette.keyDark : palette.key, palette: palette)
+    .keyCap(bare ? .clear : dark ? palette.keyDark : palette.key)
     .keyPress(action)
     .accessibilityLabel(title ?? systemImage ?? "")
   }
@@ -361,20 +373,10 @@ struct KeyPress: ViewModifier {
 }
 
 extension View {
-  /// The cap under a key's legend: the palette's fill, the system keyboard's
-  /// corner radius and 1 pt drop, and on the dark palettes a hairline so the
-  /// cap reads on ink.
-  func keyCap(_ fill: Color, palette: KeyboardPalette) -> some View {
-    background {
-      RoundedRectangle(cornerRadius: KeyboardPalette.keyRadius)
-        .fill(fill)
-        .shadow(color: palette.keyShadow, radius: 0, y: 1)
-    }
-    .overlay {
-      if palette.keyEdge {
-        RoundedRectangle(cornerRadius: KeyboardPalette.keyRadius).strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
-      }
-    }
+  /// The cap under a key's legend: the palette's fill at the corner radius and
+  /// nothing else — flat. No drop, no edge, no gloss.
+  func keyCap(_ fill: Color) -> some View {
+    background(fill, in: RoundedRectangle(cornerRadius: KeyboardPalette.keyRadius))
   }
 }
 

@@ -50,7 +50,7 @@ struct PrismOrb: View {
             endRadius: 110))
         if drop > 0 {
           Drop(amount: drop, elapsed: elapsed)
-          Sparkles(elapsed: elapsed)
+          Sparkles(elapsed: elapsed)  // invariant-ok: the orb's star glyphs, not the Sparkle updater
         }
         Grain(seed: animated ? Int(time * 24) : 7).opacity(0.5).blendMode(.overlay)
       }
@@ -152,8 +152,7 @@ struct PrismOrb: View {
 
 /// Film grain: a scatter of faint dots, a new scatter each frame so it
 /// shimmers the way grain does, drawn from a seed so a frame is reproducible.
-/// The orb's, and the wave's.
-struct Grain: View {
+private struct Grain: View {
   let seed: Int
 
   var body: some View {
@@ -178,7 +177,7 @@ struct Grain: View {
 
 /// The artwork's stars: six four-point sparkles that burst once with the
 /// drop — each a beat after the last — and are gone with it.
-private struct Sparkles: View {
+private struct Sparkles: View {  // invariant-ok: the orb's star glyphs, not the Sparkle updater
   let elapsed: TimeInterval
 
   private struct Spot {

@@ -87,30 +87,35 @@ struct HomeView: View {
   // MARK: - The orb and the listening state
 
   private static let orbSize: CGFloat = 112
-  /// The wave's reach at hero size, inside the card at any phone width.
+  /// The wave at hero size: wide and slim, inside the card at any phone width.
   private static let waveReach: CGFloat = 280
+  private static let waveHeight: CGFloat = 44
   private var isRecording: Bool { coordinator.phase == .recording }
   private var orbWorking: Bool { coordinator.window.isOpen || coordinator.phase.isCapturing }
 
   private var hero: some View {
     VStack(spacing: 18) {
-      // The keyboard's mic key at hero size: the orb, and the wave through it
-      // while recording, fading as the key's does.
+      // The keyboard's mic key at hero size: the orb, dissipating into the
+      // thin wave while recording and condensing back after, as the key does.
       ZStack {
         if isRecording {
-          SignalWave(
-            level: coordinator.level, animated: !reduceMotion, color: BlurtBrand.accent, orbDiameter: Self.orbSize
+          WaveformMeter(
+            level: coordinator.level, animated: !reduceMotion, color: BlurtBrand.accent,
+            barWidth: WaveformMeter.slimBar, barSpacing: WaveformMeter.slimGap
           )
-          .frame(width: Self.waveReach, height: Self.orbSize * 0.5)
+          .frame(width: Self.waveReach, height: Self.waveHeight)
           .transition(.opacity)
+        } else {
+          PrismOrb(mood: heroMood, landedAt: landedAt, animated: !reduceMotion)
+            .frame(width: Self.orbSize, height: Self.orbSize)
+            .clipShape(Circle())
+            .overlay { HeroRing(animated: orbWorking && !reduceMotion) }
+            .saturation(coordinator.window.isOpen ? 1 : 0.45)
+            .transition(reduceMotion ? .opacity : .dissipate(size: Self.orbSize))
         }
-        PrismOrb(mood: heroMood, landedAt: landedAt, animated: !reduceMotion)
-          .frame(width: Self.orbSize, height: Self.orbSize)
-          .clipShape(Circle())
-          .overlay { HeroRing(animated: orbWorking && !reduceMotion) }
-          .saturation(coordinator.window.isOpen ? 1 : 0.45)
       }
-      .frame(width: Self.orbSize, height: Self.orbSize)
+      // The wave's width throughout, so nothing shifts while the two cross.
+      .frame(width: Self.waveReach, height: Self.orbSize)
       .animation(.easeInOut(duration: MicKey.waveFade), value: isRecording)
       .animation(.easeInOut(duration: MicKey.stateFade), value: coordinator.window.isOpen)
       .padding(.top, 6)
