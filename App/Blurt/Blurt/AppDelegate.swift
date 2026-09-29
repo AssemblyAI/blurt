@@ -35,6 +35,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// the menu-bar item) still opens on General as before.
   var settingsOpensOnStyles = false
 
+  /// The What's New sheet's content while it's up, nil otherwise. Set by the
+  /// first launch after an update and by Help → What's New in Blurt;
+  /// `MainWindowRoot` presents it over the main window and clears it on dismiss.
+  var whatsNew: WhatsNewRequest?
+
   /// Opens a window scene by id. The `openWindow` action lives in SwiftUI, so
   /// `MainWindowRoot` captures it here (in its launch-time `onAppear`) to give
   /// AppKit entry points — notably a Dock click with no open windows — a way to
@@ -61,6 +66,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       return
     }
     openMainWindow()
+  }
+
+  /// Help → What's New in Blurt: this version's notes, or the newest release's
+  /// before it. The main window is surfaced first — reopened if the user closed
+  /// it — since that is where the sheet hangs.
+  func showWhatsNew() {
+    guard let current = UpdateCheckModel.bundleVersion(), let entry = Changelog.bundled.entry(for: current)
+    else { return }
+    surfaceMainWindow()
+    whatsNew = WhatsNewRequest(entries: [entry])
   }
 
   /// True once the launch-time activation has run.
@@ -157,6 +172,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let wizard = makeWizardController(coord: coord)
     self.wizardController = wizard
 
+    // The first launch after an update opens on its release notes. Same
+    // readiness gate as the update check below, and ahead of it, because
+    // whether a check has ever completed is how an install from before this
+    // sheet existed tells itself apart from a fresh one — see
+    // `Changelog.whatsNewAtLaunch`.
+    presentWhatsNewAtLaunch(isConfigured: wizard.isReady)
+
     // A configured app checks for updates on its own shortly after launch —
     // at most once a day, and silent unless a newer release exists (see
     // `UpdateCheckModel.checkForUpdatesAtLaunch`). Still download-only: the
@@ -234,6 +256,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       }
     )
     if let persist { defaults.set(persist, forKey: key) }
+  }
+
+  /// Applies the engine's launch decision: show the notes it picked (the main
+  /// window is presented at launch, so the sheet has a host), and record this
+  /// version as seen when it says to.
+  private func presentWhatsNewAtLaunch(isConfigured: Bool) {
+    guard let current = UpdateCheckModel.bundleVersion() else { return }
+    let store = LastSeenVersionStore()
+    let decision = Changelog.bundled.whatsNewAtLaunch(
+      current: current, lastSeen: store.lastSeen, isConfigured: isConfigured,
+      hasRunBefore: LastUpdateCheckStore().lastCheck != nil)
+    if decision.recordsCurrentVersion { store.lastSeen = current }
+    if !decision.entries.isEmpty { whatsNew = WhatsNewRequest(entries: decision.entries) }
   }
 
   /// Builds the setup wizard's controller. Created before the run loop presents

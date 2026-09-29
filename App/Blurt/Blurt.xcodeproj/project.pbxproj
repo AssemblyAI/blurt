@@ -210,6 +210,7 @@
 		776B57FD593356ED09E879F2 /* rom1b-25-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 7FB45A274F0CC28BD0923634 /* rom1b-25-stop.m4a */; };
 		77ADF5811E27F7E0BE4AC895 /* rom1a-22-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = BC17D9B01FDBC9667A7CD78A /* rom1a-22-start.m4a */; };
 		787D291747E3FB4814EA7CC5 /* rom1a-13-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 482422C7CC15583570E3E869 /* rom1a-13-stop.m4a */; };
+		7AFD26BCDC9E4321D5AE5E8C /* WhatsNewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1843FE274F84EA0E1BC322D /* WhatsNewSheet.swift */; };
 		7CB462ED1AF7569FFA464439 /* rom1b-7-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = C2CB5D2E464BFD7F8BABE760 /* rom1b-7-stop.m4a */; };
 		7EECAF13B83D447177BB90C9 /* juno-42-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 79FDAA58085D83CB336E9578 /* juno-42-start.m4a */; };
 		7EF091D67076CE014C6AF679 /* juno-123-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 1467EAF745A940434A8AF18F /* juno-123-stop.m4a */; };
@@ -774,6 +775,7 @@
 		AD5F1BDEB1DB3658DDB96247 /* juno-70-start.m4a */ = {isa = PBXFileReference; path = "juno-70-start.m4a"; sourceTree = "<group>"; };
 		AFCA36ECEFBA3D7C7B1AB1B7 /* rom1a-31-start.m4a */ = {isa = PBXFileReference; path = "rom1a-31-start.m4a"; sourceTree = "<group>"; };
 		B0CB1B169A47290B83AD44C0 /* rom1b-20-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-20-stop.m4a"; sourceTree = "<group>"; };
+		B1843FE274F84EA0E1BC322D /* WhatsNewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewSheet.swift; sourceTree = "<group>"; };
 		B24D0EACA5DCC94CFCAD9753 /* rom1b-16-start.m4a */ = {isa = PBXFileReference; path = "rom1b-16-start.m4a"; sourceTree = "<group>"; };
 		B293D9F11DB3C3D268E82E4A /* rom1b-25-start.m4a */ = {isa = PBXFileReference; path = "rom1b-25-start.m4a"; sourceTree = "<group>"; };
 		B401FA111CA49F5A535366AC /* rom1b-15-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-15-stop.m4a"; sourceTree = "<group>"; };
@@ -1390,6 +1392,7 @@
 				37CBB4580F251B182A8B1937 /* SettingsWindowRoot.swift */,
 				30703F589CF213720C7E3B15 /* StyleRow.swift */,
 				3A50C85936C100F9E51CC2AD /* TextShortcutsSection.swift */,
+				B1843FE274F84EA0E1BC322D /* WhatsNewSheet.swift */,
 				30E57A9C9B934A2120381005 /* WizardController.swift */,
 				7F646CD07DBBA47F44CE0AD1 /* WizardView.swift */,
 				F61744A7BF2B24E0C8078DE6 /* Steps */,
@@ -1507,6 +1510,7 @@
 			buildConfigurationList = DD65B6019D3D8212517A7206 /* Build configuration list for PBXNativeTarget "Blurt" */;
 			buildPhases = (
 				D3EE99FB1BF094322A1363EF /* Sources */,
+				62B8938AA93F724D22671AAD /* Bundle CHANGELOG.md */,
 				97591D6CB8B701814C3DD210 /* Resources */,
 				5438DE37A9D7E9E5EEC56272 /* Frameworks */,
 				B7E6843D4868DDAA607ADE70 /* Install to /Applications */,
@@ -1972,6 +1976,26 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		62B8938AA93F724D22671AAD /* Bundle CHANGELOG.md */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/../../CHANGELOG.md",
+			);
+			name = "Bundle CHANGELOG.md";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/CHANGELOG.md",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\nmkdir -p \"$(dirname \"$SCRIPT_OUTPUT_FILE_0\")\"\ncp \"$SCRIPT_INPUT_FILE_0\" \"$SCRIPT_OUTPUT_FILE_0\"\n";
+		};
 		B7E6843D4868DDAA607ADE70 /* Install to /Applications */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -2051,6 +2075,7 @@
 				1817ACD2F7D8F7AF3C9B1C7C /* UITestIdentifiers.swift in Sources */,
 				E1CA5C692CB2A7E1BF231928 /* UITestSupport.swift in Sources */,
 				AB6CEBDE7BE4CA99EB469D8E /* UpdateCheckModel.swift in Sources */,
+				7AFD26BCDC9E4321D5AE5E8C /* WhatsNewSheet.swift in Sources */,
 				91C1257866F6E2D4EE65BD09 /* WindowAccessor.swift in Sources */,
 				B844779F8427A1225C45A9FB /* WizardController.swift in Sources */,
 				DD800E4A2657C87DD45E4AF8 /* WizardView.swift in Sources */,

@@ -21,8 +21,10 @@ struct BlurtCommands: Commands {
     // share intent, which moved out of that footer so its quietest line stops
     // reading as an ad. No ellipses: they open a page and ask nothing more, the
     // way Apple's own Help-menu links read. Each omits itself if its URL fails
-    // to build.
+    // to build. Above them, the release notes the first launch after an update
+    // shows, reopened over the main window (see `AppDelegate.showWhatsNew`).
     CommandGroup(replacing: .help) {
+      Button("What’s New in Blurt") { appDelegate.showWhatsNew() }
       if let url = BlurtLinks.reportBug {
         Link("Report a Bug", destination: url)
       }

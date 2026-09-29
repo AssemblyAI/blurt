@@ -43,6 +43,8 @@ enum DefaultsKey: String, CaseIterable {
   case overlayCustomOriginX = "OverlayCustomOriginX"
   case overlayCustomOriginY = "OverlayCustomOriginY"
   case lastUpdateCheck = "LastUpdateCheck"
+  /// The app version the What's New sheet last dealt with (`LastSeenVersionStore`).
+  case lastSeenVersion = "LastSeenVersion"
   /// The CoreAudio UID of the input device dictation is pinned to, or empty for
   /// "same as system" (`MicDeviceStore`).
   case micDeviceUID = "MicDeviceUID"

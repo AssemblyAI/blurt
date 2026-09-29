@@ -57,6 +57,8 @@ struct MainWindowRoot: View {
           WizardView(controller: controller, coordinator: coordinator)
         }
       }
+      // The release notes after an update, or from Help → What's New in Blurt.
+      .sheet(item: Bindable(appDelegate).whatsNew) { WhatsNewSheet(entries: $0.entries) }
       .onAppear {
         // Capture the open action so AppKit entry points (a Dock click with no
         // open windows, the missing-key hotkey nudge) can reopen the main

@@ -143,6 +143,19 @@ targets:
     dependencies:
       - package: BlurtEngine
         product: BlurtEngine
+    # The What's New sheet's release notes (`Changelog.bundled`). CHANGELOG.md
+    # lives at the repo root, outside this target's sources, so it's copied into
+    # the bundle's Resources after compiling rather than listed as a resource.
+    postCompileScripts:
+      - name: Bundle CHANGELOG.md
+        script: |
+          set -e
+          mkdir -p "$(dirname "$SCRIPT_OUTPUT_FILE_0")"
+          cp "$SCRIPT_INPUT_FILE_0" "$SCRIPT_OUTPUT_FILE_0"
+        inputFiles:
+          - $(SRCROOT)/../../CHANGELOG.md
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/CHANGELOG.md
     postBuildScripts:
       - name: Install to /Applications
         script: |

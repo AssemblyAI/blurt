@@ -1227,6 +1227,9 @@ matches `project.yml`.
 
 ## Releasing
 
+Before the bump, add the release's entry to [`CHANGELOG.md`](./CHANGELOG.md) (format at its top) —
+the What's New sheet shows it after the update.
+
 Releases run entirely in GitHub Actions, so they can be driven from a browser or a chat session with
 no terminal, and without permission to dispatch a workflow. Start `release-bump` by pushing a marker
 branch at main — `git push origin main:refs/heads/release/v0.1.37`, which names the version and

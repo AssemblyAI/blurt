@@ -35,6 +35,9 @@ struct PersistedSettingsTests {
     // The launch update check's throttle: left out of the sweep, a UI-test run
     // (or a "clean install") would inherit yesterday's stamp and skip the check.
     #expect(PersistedSettings.allDefaultsKeys.contains(LastUpdateCheckStore.defaultsKey))
+    // The What's New sheet's last-seen version: left out, a reset "clean install"
+    // would still carry the version history of the install it replaced.
+    #expect(PersistedSettings.allDefaultsKeys.contains(LastSeenVersionStore.defaultsKey))
     // The pinned microphone: left out, a reset "clean install" would keep
     // recording from a previously pinned device.
     #expect(PersistedSettings.allDefaultsKeys.contains(MicDeviceStore.defaultsKey))
@@ -45,10 +48,10 @@ struct PersistedSettingsTests {
 
   @Test("the roster carries no stale or duplicate keys")
   func rosterHasNoStrays() {
-    // Exactly the eleven known stores' keys (OverlayOriginStore contributes two,
+    // Exactly the twelve known stores' keys (OverlayOriginStore contributes two,
     // StyleProfileStore three): a removed store must leave the roster in the same
     // change, and a key listed twice would hint at a copy-paste slip.
-    #expect(PersistedSettings.allDefaultsKeys.count == 14)
+    #expect(PersistedSettings.allDefaultsKeys.count == 15)
     #expect(Set(PersistedSettings.allDefaultsKeys).count == PersistedSettings.allDefaultsKeys.count)
   }
 
@@ -73,13 +76,14 @@ struct PersistedSettingsTests {
       OverlayOriginStore.xDefaultsKey,
       OverlayOriginStore.yDefaultsKey,
       LastUpdateCheckStore.defaultsKey,
+      LastSeenVersionStore.defaultsKey,
       MicDeviceStore.defaultsKey,
       TextShortcutStore.defaultsKey,
     ]
     #expect(storeKeys == Set(DefaultsKey.allCases.map(\.key)))
     // No two stores sharing a slot — the Set above would have quietly absorbed a
     // collision, and two stores on one key means each overwrites the other.
-    #expect(storeKeys.count == 14)
+    #expect(storeKeys.count == 15)
   }
 
   @Test("resetAll clears every roster key and leaves unrelated ones alone")

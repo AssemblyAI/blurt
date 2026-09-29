@@ -211,6 +211,9 @@ enum BlurtLinks {
   /// The repo's GitHub issues.
   static let reportBug = URL(string: "https://github.com/AssemblyAI/blurt/issues")
 
+  /// Every release's notes on GitHub — the What's New sheet's "See all releases".
+  static let releases = URL(string: "https://github.com/AssemblyAI/blurt/releases")
+
   /// LinkedIn's share intent. It takes only a URL to share, so this one
   /// carries no message.
   static let shareOnLinkedIn: URL? = {

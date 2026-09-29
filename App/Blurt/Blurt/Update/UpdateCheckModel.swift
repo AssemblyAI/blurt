@@ -200,7 +200,8 @@ final class UpdateCheckModel {
     }
   }
 
-  private static func bundleVersion() -> SemanticVersion? {
+  /// The running version, also read by the What's New sheet (`AppDelegate`).
+  static func bundleVersion() -> SemanticVersion? {
     let raw = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
     return raw.flatMap(SemanticVersion.init)
   }
