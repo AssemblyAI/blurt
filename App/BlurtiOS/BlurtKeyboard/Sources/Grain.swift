@@ -2,12 +2,13 @@ import SwiftUI
 
 /// Film grain: a scatter of faint dots drawn from a seed, so a frame is
 /// reproducible — the brand's texture, on the keyboard's surface
-/// (`SurfaceFinish`), still, one seed.
+/// (`SurfaceFinish`), still, one seed. Drawn synchronously: a canvas that
+/// renders asynchronously never presents inside a keyboard extension.
 struct BlurtiOSGrain: View {
   let seed: Int
 
   var body: some View {
-    Canvas(rendersAsynchronously: true) { context, size in
+    Canvas { context, size in
       var state = UInt64(truncatingIfNeeded: seed &* 6_364_136_223_846_793_005 &+ 1)
       func next() -> CGFloat {
         state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407

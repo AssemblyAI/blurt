@@ -20,7 +20,7 @@ struct VoiceGrille: View {
     let box = Self.box(inputs.slot)
     TimelineView(.animation(minimumInterval: keyboardAnimationInterval, paused: !inputs.animated)) { timeline in
       let now = inputs.animated ? timeline.date : Date(timeIntervalSinceReferenceDate: 0)
-      Canvas(rendersAsynchronously: true) { context, size in
+      Canvas { context, size in
         draw(&context, size: size, now: now)
       }
     }

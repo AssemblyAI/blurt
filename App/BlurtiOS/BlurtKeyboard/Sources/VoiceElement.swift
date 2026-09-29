@@ -39,6 +39,10 @@ nonisolated enum VoiceSlot: String, CaseIterable, Sendable {
   }
 }
 
+/// Every candidate draws with a synchronous `Canvas`: one that renders
+/// asynchronously never presents inside a keyboard extension, and the
+/// keyboard is where these live.
+///
 /// Everything a candidate draws from — nothing else reaches it: the state,
 /// the level inside it, the moment the words landed, whether motion is
 /// allowed, the face's colours, and where it sits.

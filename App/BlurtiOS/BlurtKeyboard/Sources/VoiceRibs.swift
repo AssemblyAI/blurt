@@ -33,7 +33,7 @@ struct VoiceRibs: View {
       } else {
         TimelineView(.animation(minimumInterval: keyboardAnimationInterval, paused: !inputs.animated)) { timeline in
           let now = inputs.animated ? timeline.date : Date(timeIntervalSinceReferenceDate: 0)
-          Canvas(rendersAsynchronously: true) { context, size in
+          Canvas { context, size in
             Self.ribs(&context, size: size, inputs: inputs, now: now)
           }
         }

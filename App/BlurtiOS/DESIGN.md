@@ -57,6 +57,9 @@ scripts/ios-record.sh --layout panel --theme dark [--voice a]
 swift scripts/design-diff.swift diff a.png b.png --out triptych.png --json metrics.json
     # sRGB, AE and RMSE; `sheet` makes a contact sheet; `measure` reads a keyboard's caps off a screenshot
 scripts/apple-geometry.sh          # measures the iPhone's own keyboard → Design/apple-geometry.json
+scripts/ios-keyboard-shot.sh --face dark --voice b --layout panel
+    # the real keyboard — the extension in its own process — over a field in the app: what the gallery
+    # cannot vouch for (a canvas that renders asynchronously never presents in an extension)
 scripts/design-sync.sh [--check]   # tokens.json → DesignTokens.swift, these tables, the colour sets
 ```
 

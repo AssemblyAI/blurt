@@ -11,10 +11,18 @@
   struct KeyboardProbeView: View {
     let dark: Bool
 
+    /// `-BlurtProbeField light|dark [a|b|c] [slimBar|panel|full]`: the words
+    /// after the face set the mic concept and the layout in the App Group,
+    /// so the Blurt keyboard — which reads both on every appearance — comes up
+    /// that way for a capture of the real extension (`scripts/ios-keyboard-shot.sh`).
     static func parse(_ arguments: [String]) -> KeyboardProbeView? {
       guard let flag = arguments.firstIndex(of: "-BlurtProbeField") else { return nil }
       let face = arguments.count > flag + 1 ? arguments[flag + 1] : "light"
       guard face == "light" || face == "dark" else { return nil }
+      for word in arguments.dropFirst(flag + 2).prefix(while: { !$0.hasPrefix("-") }) {
+        if let kind = VoiceElementKind(rawValue: word) { SharedStore.voiceElementKind = kind }
+        if let layout = KeyboardLayout(rawValue: word) { SharedStore.layout = layout }
+      }
       return KeyboardProbeView(dark: face == "dark")
     }
 

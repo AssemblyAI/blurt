@@ -17,7 +17,7 @@ struct VoiceStreak: View {
     let box = inputs.slot.box
     TimelineView(.animation(minimumInterval: keyboardAnimationInterval, paused: !inputs.animated)) { timeline in
       let now = inputs.animated ? timeline.date : Date(timeIntervalSinceReferenceDate: 0)
-      Canvas(rendersAsynchronously: true) { context, size in
+      Canvas { context, size in
         Self.draw(&context, size: size, inputs: inputs, now: now)
       }
     }
