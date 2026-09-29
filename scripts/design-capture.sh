@@ -8,6 +8,7 @@
 #
 #   scripts/design-capture.sh                                  # panel × the golden states × both faces
 #   scripts/design-capture.sh --layout full --states idle,recording,error --themes dark
+#   scripts/design-capture.sh --voice b                        # the ribs candidate (-BlurtGalleryVoice)
 #   scripts/design-capture.sh --out .build/design/captures --no-build
 #
 # Writes <out>/<layout>-<state>-<theme>@3x.png (1206 px wide on iPhone 18 Pro,
@@ -22,6 +23,7 @@ LAYOUT=panel
 STATES=idle,recording,error,term
 THEMES=light,dark
 OUT="$REPO_ROOT/.build/design/captures"
+VOICE=""
 BUILD=1
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -41,12 +43,16 @@ while [ $# -gt 0 ]; do
       OUT="${2:?}"
       shift 2
       ;;
+    --voice)
+      VOICE="${2:?}"
+      shift 2
+      ;;
     --no-build)
       BUILD=0
       shift
       ;;
     *)
-      echo "usage: design-capture.sh [--layout slimBar|panel|full] [--states a,b] [--themes a,b] [--out DIR] [--no-build]" >&2
+      echo "usage: design-capture.sh [--layout slimBar|panel|full] [--states a,b] [--themes a,b] [--voice a|b|c] [--out DIR] [--no-build]" >&2
       exit 2
       ;;
   esac
@@ -71,7 +77,7 @@ IFS=, read -ra STATE_LIST <<<"$STATES"
 IFS=, read -ra THEME_LIST <<<"$THEMES"
 for theme in "${THEME_LIST[@]}"; do
   for state in "${STATE_LIST[@]}"; do
-    name="$LAYOUT-$state-$theme"
+    name="$LAYOUT-$state-$theme${VOICE:+-$VOICE}"
     raw="$OUT/$name.raw.png"
     flags=(--screenshot "$raw")
     if [ "$first" -eq 0 ] || [ "$BUILD" -eq 0 ]; then flags=(--no-build "${flags[@]}"); fi
@@ -86,7 +92,7 @@ for theme in "${THEME_LIST[@]}"; do
       still=""
     fi
     echo "==> $name"
-    BLURT_LAUNCH_ARGS="-BlurtGallery $LAYOUT $state $theme $still -BlurtGalleryBare" \
+    BLURT_LAUNCH_ARGS="-BlurtGallery $LAYOUT $state $theme $still -BlurtGalleryBare${VOICE:+ -BlurtGalleryVoice $VOICE}" \
       BLURT_SHOT_DELAY="$delay" scripts/ios-sim.sh "${flags[@]}" >/dev/null
     # The capture's scale: pixels across ÷ the device's points across.
     scale="$(python3 -c '

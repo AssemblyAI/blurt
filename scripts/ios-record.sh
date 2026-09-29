@@ -21,6 +21,7 @@ LAYOUT=panel
 THEME=dark
 OUT="$REPO_ROOT/.build/design/loops"
 FRAMES=""
+VOICE=""
 CYCLE=11.7
 BUILD=()
 while [ $# -gt 0 ]; do
@@ -41,12 +42,16 @@ while [ $# -gt 0 ]; do
       FRAMES="${2:?}"
       shift 2
       ;;
+    --voice)
+      VOICE="${2:?}"
+      shift 2
+      ;;
     --no-build)
       BUILD=(--no-build)
       shift
       ;;
     *)
-      echo "usage: ios-record.sh [--layout L] [--theme T] [--out DIR] [--frames s,s,…] [--no-build]" >&2
+      echo "usage: ios-record.sh [--layout L] [--theme T] [--voice a|b|c] [--out DIR] [--frames s,s,…] [--no-build]" >&2
       exit 2
       ;;
   esac
@@ -56,12 +61,12 @@ command -v ffmpeg >/dev/null || {
   exit 1
 }
 mkdir -p "$OUT"
-name="$LAYOUT-$THEME"
+name="$LAYOUT-$THEME${VOICE:+-$VOICE}"
 
 # A still first: it builds, boots, and gives the crop rectangle.
 scripts/design-capture.sh --layout "$LAYOUT" --states idle --themes "$THEME" --out "$OUT/.still" \
-  ${BUILD[@]+"${BUILD[@]}"} >/dev/null
-raw="$OUT/.still/$LAYOUT-idle-$THEME.raw.png"
+  ${VOICE:+--voice "$VOICE"} ${BUILD[@]+"${BUILD[@]}"} >/dev/null
+raw="$OUT/.still/$LAYOUT-idle-$THEME${VOICE:+-$VOICE}.raw.png"
 read -r CROP_W CROP_H CROP_X CROP_Y < <(swift scripts/design-diff.swift crop "$raw" "$OUT/.still/crop-probe.png" \
   | sed -E 's/crop: ([0-9]+)×([0-9]+) at \(([0-9]+),([0-9]+)\).*/\1 \2 \3 \4/')
 [ -n "${CROP_W:-}" ] || {
@@ -80,7 +85,8 @@ rm -f "$movie"
 xcrun simctl io "$UDID" recordVideo --codec h264 --force "$movie" &
 REC=$!
 sleep 1
-xcrun simctl launch "$UDID" "$BUNDLE_ID" -BlurtGallery "$LAYOUT" live "$THEME" -BlurtGalleryBare >/dev/null
+xcrun simctl launch "$UDID" "$BUNDLE_ID" -BlurtGallery "$LAYOUT" live "$THEME" -BlurtGalleryBare \
+  ${VOICE:+-BlurtGalleryVoice "$VOICE"} >/dev/null
 LAUNCH_AT=1
 sleep "$(python3 -c "print(2 * $CYCLE + 3)")"
 kill -INT "$REC"

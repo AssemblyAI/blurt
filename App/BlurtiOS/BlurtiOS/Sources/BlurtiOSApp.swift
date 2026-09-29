@@ -41,8 +41,8 @@ struct BlurtiOSApp: App {
         let rows = KeyboardGalleryView.rows(from: CommandLine.arguments)
         if let probe = KeyboardProbeView.parse(CommandLine.arguments) {
           probe
-        } else if let orb = KeyboardGalleryView.OrbStillView.parse(CommandLine.arguments) {
-          orb
+        } else if let voice = KeyboardGalleryView.VoiceStillView.parse(CommandLine.arguments) {
+          voice
         } else if rows.isEmpty {
           home
         } else {

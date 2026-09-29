@@ -17,13 +17,6 @@ import SwiftUI
 enum BlurtBrand {
   /// `#01762F` — the wordmark green, for light chrome.
   nonisolated static let green = DesignTokens.Brand.green700
-  /// `#67AD82` — the brand hue lifted for dark chrome: the pill's text and
-  /// meter, the ring, the wordmark on the icon.
-  nonisolated static let greenOnDark = DesignTokens.Brand.green400
   /// `#E67F36` — the error word. The body stays ink; the word carries the alarm.
   nonisolated static let errorOrange = DesignTokens.Brand.orange
-
-  /// The ring round the orb: green into white, corner to corner; spun while
-  /// something is happening.
-  nonisolated static let orbRingGradient = DesignTokens.Gradients.orbRing
 }

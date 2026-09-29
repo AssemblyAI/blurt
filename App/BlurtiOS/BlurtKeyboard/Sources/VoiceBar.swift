@@ -1,4 +1,3 @@
-import BlurtEngine
 import SwiftUI
 
 /// The keyboard's voice row, and the only place voice lives: the orb, which
@@ -10,6 +9,7 @@ import SwiftUI
 /// as a key term. The bar then becomes the field the keys type into.
 struct VoiceBar: View {
   var model: KeyboardModel
+  @Environment(\.keyboardPalette) private var palette
 
   static let height = DesignTokens.Metrics.voicebarHeight
 
@@ -20,25 +20,29 @@ struct VoiceBar: View {
           TermField(model: model)
             .transition(.opacity)
         } else if !model.hasFullAccess {
-          // The one state the orb can't show on its own: without Full Access
-          // nothing here can work, and the user has to be told where to go.
-          HStack(spacing: DesignTokens.Metrics.voicebarNoteGap) {
-            MicControl(model: model, size: DesignTokens.Metrics.orbBar, wave: nil)
+          // The one state the element can't show on its own: without Full
+          // Access nothing here can work, and the user has to be told where
+          // to go. The line is the key: a tap opens Blurt, whose checklist
+          // says the rest.
+          Button {
+            model.openApp()
+          } label: {
             Text("Allow Full Access in Settings → Keyboards")
               .font(.footnote)
-              .foregroundStyle(BlurtBrand.errorOrange)
+              .foregroundStyle(palette.notice)
               .lineLimit(1)
-              .minimumScaleFactor(0.8)
+              .minimumScaleFactor(0.8)  // literal-ok: the note may shrink a little on a narrow phone
+              .frame(maxWidth: .infinity, maxHeight: .infinity)
           }
+          .buttonStyle(KeyPressStyle())
+          .accessibilityLabel("Start Blurt")
           .transition(.opacity)
         } else {
-          // The wave stays clear of the + at the trailing edge, on both sides so it stays centred.
+          // The element stays clear of the + at the trailing edge, on both sides so it stays centred.
           let clearance = DesignTokens.Metrics.glyphHit + DesignTokens.Metrics.voicebarAddtermClearance
           MicControl(
-            model: model, size: DesignTokens.Metrics.orbBar,
-            wave: CGSize(
-              width: min(DesignTokens.Metrics.waveBarWidth, geo.size.width - 2 * clearance),  // literal-ok: both sides
-              height: DesignTokens.Metrics.waveBarHeight)
+            model: model, slot: .bar,
+            width: min(DesignTokens.Metrics.voiceBarWidth, geo.size.width - 2 * clearance)  // literal-ok: both sides
           )
           .transition(.opacity)
         }

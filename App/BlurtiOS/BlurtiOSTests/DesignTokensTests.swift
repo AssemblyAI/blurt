@@ -160,13 +160,4 @@ struct DesignTokensTests {
       #expect(UIFont(name: name, size: 12) != nil, "\(name) is not registered (UIAppFonts / Design/fonts)")
     }
   }
-
-  @Test("the drop is up at drop-rise, held to drop-hold, gone at drop")
-  func drop() {
-    #expect(PrismOrb.dropAmount(at: 0) == 0)
-    #expect(PrismOrb.dropAmount(at: DesignTokens.Motion.dropRise) == 1)
-    #expect(PrismOrb.dropAmount(at: DesignTokens.Motion.dropHold) == 1)
-    #expect(PrismOrb.dropAmount(at: DesignTokens.Motion.drop) == 0)
-    #expect(PrismOrb.dropAmount(at: -1) == 0)
-  }
 }

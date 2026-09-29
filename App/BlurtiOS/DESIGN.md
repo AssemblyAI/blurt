@@ -303,9 +303,6 @@ theme's (ink) values, and the app's catalog colours.
 | `kb/legend`             | `#F5F3EB` (`themes.dark/legend`)           | `Keyboard.kbLegend`           | key legends and bare glyphs                                              |
 | `kb/legend-secondary`   | `#A5A4A2` (`themes.dark/legend-secondary`) | `Keyboard.kbLegendSecondary`  | the mono word labels (123, ABC, return, space) and the + at rest         |
 | `kb/notice-error`       | `#E67F36` (`brand.orange`)                 | `Keyboard.kbNoticeError`      | the solid ring and glyph for an error                                    |
-| `kb/notice-ok`          | `#67AD82` (`brand.green/400`)              | `Keyboard.kbNoticeOk`         | the solid ring for pasted and copied                                     |
-| `kb/orb-ring-end`       | `#FFFFFF` (`brand.white`)                  | `Keyboard.kbOrbRingEnd`       | the sweeping ring's gradient, bottom-trailing                            |
-| `kb/orb-ring-start`     | `#01762F` (`brand.green/700`)              | `Keyboard.kbOrbRingStart`     | the sweeping ring's gradient, top-leading                                |
 | `kb/popup`              | `#33302A` (`themes.dark/popup`)            | `Keyboard.kbPopup`            | the letter pop-up                                                        |
 | `kb/signal`             | `#67AD82` (`themes.dark/signal`)           | `Keyboard.kbSignal`           | the wave, the caret, the saved check                                     |
 | `kb/surface`            | `#1D1B16` (`themes.dark/surface`)          | `Keyboard.kbSurface`          | the design face's surface (Figma binds to kb/*; Swift reads the palette) |
@@ -315,9 +312,6 @@ theme's (ink) values, and the app's catalog colours.
 Gradients:
 
 <!-- tokens:begin gradients -->
-
-- `orb` (`Gradients.orb`, bottom → top): `#D7D3F4` at 0, `#B0A7E9` at 0.0673, `#67AD82` at 0.1442, `#01762F` at 0.3029, `#3923C7` at 0.5962, `#887BDD` at 0.75, `#D7D3F4` at 0.8942, `#FFFFFF` at 1 — the Mac orb's fill, the design's own stops (App elements/Recording.svg), swept bottom to top
-- `orb-ring` (`Gradients.orbRing`, topLeading → bottomTrailing): `#01762F` at 0, `#FFFFFF` at 1 — the ring round the orb: green into white, corner to corner; spun while something is happening
 
 <!-- tokens:end gradients -->
 
@@ -334,29 +328,29 @@ Inter). Sizes are fixed points, not Dynamic Type, as the system keyboard's are.
 
 <!-- tokens:begin type -->
 
-| Token              | Value      | Swift                        | Use                                                                         |
-| ------------------ | ---------- | ---------------------------- | --------------------------------------------------------------------------- |
-| `ratio/orb-glyph`  | `0.34`     | `Typography.ratioOrbGlyph`   | the clipboard and exclamation glyphs, as a fraction of the orb              |
-| `size/body`        | `16`       | `Typography.sizeBody`        | the app's body text                                                         |
-| `size/caption`     | `14`       | `Typography.sizeCaption`     | the app's small text                                                        |
-| `size/cta`         | `14`       | `Typography.sizeCta`         | a mono button label in the app (E2)                                         |
-| `size/eyebrow`     | `12`       | `Typography.sizeEyebrow`     | a mono eyebrow in the app (E1)                                              |
-| `size/glyph`       | `17`       | `Typography.sizeGlyph`       | the +, × and ✓                                                              |
-| `size/label`       | `12`       | `Typography.sizeLabel`       | the mono word labels on keys: 123, ABC, #+=, space, the return label        |
-| `size/legend`      | `16`       | `Typography.sizeLegend`      | every other key                                                             |
-| `size/letter`      | `24`       | `Typography.sizeLetter`      | letter keys: the iPhone's (estimated from the l glyph, apple-geometry.json) |
-| `size/popup`       | `32`       | `Typography.sizePopup`       | the letter pop-up                                                           |
-| `size/term`        | `17`       | `Typography.sizeTerm`        | the key-term field                                                          |
-| `size/title`       | `34`       | `Typography.sizeTitle`       | the app's serif headline                                                    |
-| `tracking/cta`     | `1.4`      | `Typography.trackingCta`     | uppercase mono at 14: the brand's E2 tracking                               |
-| `tracking/eyebrow` | `1.2`      | `Typography.trackingEyebrow` | uppercase mono at 12: the brand's E1 tracking                               |
-| `weight/glyph`     | `medium`   | `Typography.weightGlyph`     | —                                                                           |
-| `weight/label`     | `medium`   | `Typography.weightLabel`     | —                                                                           |
-| `weight/legend`    | `medium`   | `Typography.weightLegend`    | —                                                                           |
-| `weight/letter`    | `regular`  | `Typography.weightLetter`    | —                                                                           |
-| `weight/orb-glyph` | `semibold` | `Typography.weightOrbGlyph`  | —                                                                           |
-| `weight/popup`     | `regular`  | `Typography.weightPopup`     | —                                                                           |
-| `weight/term`      | `regular`  | `Typography.weightTerm`      | —                                                                           |
+| Token                | Value      | Swift                         | Use                                                                               |
+| -------------------- | ---------- | ----------------------------- | --------------------------------------------------------------------------------- |
+| `ratio/voice-glyph`  | `0.34`     | `Typography.ratioVoiceGlyph`  | the clipboard and exclamation glyphs, as a fraction of the voice element's height |
+| `size/body`          | `16`       | `Typography.sizeBody`         | the app's body text                                                               |
+| `size/caption`       | `14`       | `Typography.sizeCaption`      | the app's small text                                                              |
+| `size/cta`           | `14`       | `Typography.sizeCta`          | a mono button label in the app (E2)                                               |
+| `size/eyebrow`       | `12`       | `Typography.sizeEyebrow`      | a mono eyebrow in the app (E1)                                                    |
+| `size/glyph`         | `17`       | `Typography.sizeGlyph`        | the +, × and ✓                                                                    |
+| `size/label`         | `12`       | `Typography.sizeLabel`        | the mono word labels on keys: 123, ABC, #+=, space, the return label              |
+| `size/legend`        | `16`       | `Typography.sizeLegend`       | every other key                                                                   |
+| `size/letter`        | `24`       | `Typography.sizeLetter`       | letter keys: the iPhone's (estimated from the l glyph, apple-geometry.json)       |
+| `size/popup`         | `32`       | `Typography.sizePopup`        | the letter pop-up                                                                 |
+| `size/term`          | `17`       | `Typography.sizeTerm`         | the key-term field                                                                |
+| `size/title`         | `34`       | `Typography.sizeTitle`        | the app's serif headline                                                          |
+| `tracking/cta`       | `1.4`      | `Typography.trackingCta`      | uppercase mono at 14: the brand's E2 tracking                                     |
+| `tracking/eyebrow`   | `1.2`      | `Typography.trackingEyebrow`  | uppercase mono at 12: the brand's E1 tracking                                     |
+| `weight/glyph`       | `medium`   | `Typography.weightGlyph`      | —                                                                                 |
+| `weight/label`       | `medium`   | `Typography.weightLabel`      | —                                                                                 |
+| `weight/legend`      | `medium`   | `Typography.weightLegend`     | —                                                                                 |
+| `weight/letter`      | `regular`  | `Typography.weightLetter`     | —                                                                                 |
+| `weight/popup`       | `regular`  | `Typography.weightPopup`      | —                                                                                 |
+| `weight/term`        | `regular`  | `Typography.weightTerm`       | —                                                                                 |
+| `weight/voice-glyph` | `semibold` | `Typography.weightVoiceGlyph` | —                                                                                 |
 
 <!-- tokens:end type -->
 
@@ -459,90 +453,104 @@ derivation.
 
 <!-- tokens:begin metrics -->
 
-| Token                         | Points    | Swift                              | Use                                                                                            |
-| ----------------------------- | --------- | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `addterm/inset`               | `6`       | `Metrics.addtermInset`             | the + from the panel's corner                                                                  |
-| `card/border`                 | `1`       | `Metrics.cardBorder`               | the card's hairline                                                                            |
-| `card/radius`                 | `16`      | `Metrics.cardRadius`               | the app's cards                                                                                |
-| `caret/height`                | `20`      | `Metrics.caretHeight`              | —                                                                                              |
-| `caret/lead`                  | `1`       | `Metrics.caretLead`                | the caret's gap from the text                                                                  |
-| `caret/radius`                | `1`       | `Metrics.caretRadius`              | —                                                                                              |
-| `caret/width`                 | `2`       | `Metrics.caretWidth`               | —                                                                                              |
-| `gesture/swipe-min`           | `24`      | `Metrics.gestureSwipeMin`          | the carousel gesture's minimum distance                                                        |
-| `glyph/hit`                   | `32`      | `Metrics.glyphHit`                 | the +, × and ✓ touch targets                                                                   |
-| `key/abc-width-402`           | `43.333`  | `Metrics.keyAbcWidth402`           | 123 and the globe at 402 pt: the iPhone's                                                      |
-| `key/gap`                     | `6`       | `Metrics.keyGap`                   | between keys, the iPhone's                                                                     |
-| `key/height`                  | `43`      | `Metrics.keyHeight`                | every key: the iPhone's cap height (apple-geometry.json)                                       |
-| `key/letter-width-402`        | `33.5`    | `Metrics.keyLetterWidth402`        | a letter key at 402 pt: (width − 2 × margin/side − 9 × key/gap) / 10                           |
-| `key/min-width`               | `43.333`  | `Metrics.keyMinWidth`              | a key that isn't given a width: the iPhone's 123 key at 402 pt                                 |
-| `key/pad`                     | `4`       | `Metrics.keyPad`                   | a legend's side padding on a min-width key                                                     |
-| `key/radius`                  | `8`       | `Metrics.keyRadius`                | flat keys, one colour at this corner: the iPhone's (fitted 8.17)                               |
-| `key/reference-width`         | `402`     | `Metrics.keyReferenceWidth`        | the width the @402 tokens were measured at (iPhone 18 Pro); widths scale from it               |
-| `key/return-width-402`        | `92.667`  | `Metrics.keyReturnWidth402`        | return at 402 pt: two 123 keys and a gap                                                       |
-| `key/side-gap`                | `13.667`  | `Metrics.keySideGap`               | shift and delete stand this far from the letters: the iPhone's                                 |
-| `key/side-width-402`          | `45.583`  | `Metrics.keySideWidth402`          | shift and delete at 402 pt: what seven letters and the side gaps leave, halved (measured 45.5) |
-| `key/space-width-402`         | `191.667` | `Metrics.keySpaceWidth402`         | space at 402 pt beside 123, the globe and return: what is left (measured 191.333)              |
-| `layout/full`                 | `270`     | `Metrics.layoutFull`               | margin/vertical + voicebar/height + 4 × key/height + 3 × row/gap + margin/bottom-keys          |
-| `layout/panel`                | `216`     | `Metrics.layoutPanel`              | chosen: room for the 96 orb over one key row                                                   |
-| `layout/slim`                 | `60`      | `Metrics.layoutSlim`               | 2 × margin/vertical + voicebar/height                                                          |
-| `margin/bottom-keys`          | `13`      | `Metrics.marginBottomKeys`         | under a bottom row of keys (the full keyboard, the panel): the iPhone's                        |
-| `margin/side`                 | `6.5`     | `Metrics.marginSide`               | at the keyboard's sides: the iPhone's cap margin, (402 − 10 letters − 9 gaps) / 2              |
-| `margin/vertical`             | `8`       | `Metrics.marginVertical`           | the keyboard's top, and the slim bar's bottom                                                  |
-| `opacity/dim`                 | `0.8`     | `Metrics.opacityDim`               | the orb when Blurt isn't ready                                                                 |
-| `opacity/dim-saturation`      | `0.35`    | `Metrics.opacityDimSaturation`     | and its saturation                                                                             |
-| `opacity/disabled`            | `0.4`     | `Metrics.opacityDisabled`          | the + without Full Access                                                                      |
-| `opacity/grain`               | `0.5`     | `Metrics.opacityGrain`             | —                                                                                              |
-| `opacity/home-dim-saturation` | `0.45`    | `Metrics.opacityHomeDimSaturation` | the home hero's saturation when not listening                                                  |
-| `opacity/legend`              | `1`       | `Metrics.opacityLegend`            | key legends over the cap; below 1 they sit back                                                |
-| `opacity/legend-muted`        | `0.5`     | `Metrics.opacityLegendMuted`       | the + at rest                                                                                  |
-| `opacity/orb-light`           | `0.3`     | `Metrics.opacityOrbLight`          | —                                                                                              |
-| `opacity/placeholder`         | `0.4`     | `Metrics.opacityPlaceholder`       | the field's placeholder                                                                        |
-| `opacity/popup-shadow`        | `0.12`    | `Metrics.opacityPopupShadow`       | —                                                                                              |
-| `opacity/press-brighten`      | `0.15`    | `Metrics.opacityPressBrighten`     | a key lightens this much while pressed                                                         |
-| `opacity/surface-grain`       | `0.14`    | `Metrics.opacitySurfaceGrain`      | film grain over the whole keyboard surface: matte, the brand's texture                         |
-| `opacity/surface-vignette`    | `0`       | `Metrics.opacitySurfaceVignette`   | a soft darkening toward the surface's edges; 0 is none                                         |
-| `opacity/term-cancel`         | `0.7`     | `Metrics.opacityTermCancel`        | the field's ×                                                                                  |
-| `orb/bar`                     | `40`      | `Metrics.orbBar`                   | the orb in the voice bar                                                                       |
-| `orb/dissipate-blur`          | `0.16`    | `Metrics.orbDissipateBlur`         | and blurs to this fraction of its size                                                         |
-| `orb/dissipate-scale`         | `1.25`    | `Metrics.orbDissipateScale`        | the orb swells to this while dissipating                                                       |
-| `orb/home`                    | `112`     | `Metrics.orbHome`                  | the orb on the home screen                                                                     |
-| `orb/light-reach`             | `0.9`     | `Metrics.orbLightReach`            | the soft light's reach, as a fraction of the orb (was a fixed 110 pt, flat on a 40 pt orb)     |
-| `orb/light-x`                 | `0.3`     | `Metrics.orbLightX`                | the soft light's centre, as a fraction of the orb                                              |
-| `orb/light-y`                 | `0.22`    | `Metrics.orbLightY`                | —                                                                                              |
-| `orb/panel`                   | `96`      | `Metrics.orbPanel`                 | the orb in the panel                                                                           |
-| `panel/spacing`               | `12`      | `Metrics.panelSpacing`             | between the panel's orb and its key row                                                        |
-| `picker/preview-width`        | `393`     | `Metrics.pickerPreviewWidth`       | the theme card draws the keyboard at this width                                                |
-| `picker/radius`               | `10`      | `Metrics.pickerRadius`             | the theme card's preview corners                                                               |
-| `picker/scale`                | `0.42`    | `Metrics.pickerScale`              | then scales it to fit two across                                                               |
-| `popup/extra-width`           | `18`      | `Metrics.popupExtraWidth`          | the letter pop-up is the key width plus this                                                   |
-| `popup/height`                | `56`      | `Metrics.popupHeight`              | —                                                                                              |
-| `popup/offset`                | `58`      | `Metrics.popupOffset`              | the pop-up sits this far above the key                                                         |
-| `popup/radius`                | `10`      | `Metrics.popupRadius`              | —                                                                                              |
-| `popup/shadow-radius`         | `8`       | `Metrics.popupShadowRadius`        | the one thing that floats                                                                      |
-| `popup/shadow-y`              | `2`       | `Metrics.popupShadowY`             | —                                                                                              |
-| `press/scale`                 | `0.94`    | `Metrics.pressScale`               | the orb while pressed                                                                          |
-| `ring/active`                 | `2`       | `Metrics.ringActive`               | the ring while working or noticing; the home ring                                              |
-| `ring/still`                  | `1`       | `Metrics.ringStill`                | the ring at rest                                                                               |
-| `row/gap`                     | `11`      | `Metrics.rowGap`                   | between rows, the iPhone's                                                                     |
-| `slim/spacing`                | `8`       | `Metrics.slimSpacing`              | between the slim bar's keys                                                                    |
-| `surface/vignette-end`        | `0.75`    | `Metrics.surfaceVignetteEnd`       | where it is full                                                                               |
-| `surface/vignette-start`      | `0.3`     | `Metrics.surfaceVignetteStart`     | where the vignette begins, as a fraction of the keyboard's width                               |
-| `term/gap`                    | `8`       | `Metrics.termGap`                  | × · field · ✓                                                                                  |
-| `term/height`                 | `36`      | `Metrics.termHeight`               | the key-term field's capsule                                                                   |
-| `term/inset`                  | `2`       | `Metrics.termInset`                | the field row's side inset                                                                     |
-| `term/pad`                    | `14`      | `Metrics.termPad`                  | the field's side padding                                                                       |
-| `voicebar/addterm-clearance`  | `12`      | `Metrics.voicebarAddtermClearance` | the wave stays this clear of the + at the trailing edge                                        |
-| `voicebar/height`             | `44`      | `Metrics.voicebarHeight`           | the voice row, where the system puts its suggestion bar                                        |
-| `voicebar/note-gap`           | `10`      | `Metrics.voicebarNoteGap`          | between the orb and the Full Access note                                                       |
-| `wave/bar`                    | `2`       | `Metrics.waveBar`                  | a wave bar's width                                                                             |
-| `wave/bar-height`             | `24`      | `Metrics.waveBarHeight`            | —                                                                                              |
-| `wave/bar-width`              | `240`     | `Metrics.waveBarWidth`             | the wave in the voice bar, at most                                                             |
-| `wave/gap`                    | `2`       | `Metrics.waveGap`                  | between wave bars                                                                              |
-| `wave/home-height`            | `44`      | `Metrics.waveHomeHeight`           | —                                                                                              |
-| `wave/home-width`             | `280`     | `Metrics.waveHomeWidth`            | —                                                                                              |
-| `wave/panel-height`           | `40`      | `Metrics.wavePanelHeight`          | —                                                                                              |
-| `wave/panel-width`            | `300`     | `Metrics.wavePanelWidth`           | —                                                                                              |
-| `wordmark/height`             | `22`      | `Metrics.wordmarkHeight`           | —                                                                                              |
+| Token                        | Points    | Swift                              | Use                                                                                            |
+| ---------------------------- | --------- | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `addterm/inset`              | `6`       | `Metrics.addtermInset`             | the + from the panel's corner                                                                  |
+| `card/border`                | `1`       | `Metrics.cardBorder`               | the card's hairline                                                                            |
+| `card/radius`                | `16`      | `Metrics.cardRadius`               | the app's cards                                                                                |
+| `caret/height`               | `20`      | `Metrics.caretHeight`              | —                                                                                              |
+| `caret/lead`                 | `1`       | `Metrics.caretLead`                | the caret's gap from the text                                                                  |
+| `caret/radius`               | `1`       | `Metrics.caretRadius`              | —                                                                                              |
+| `caret/width`                | `2`       | `Metrics.caretWidth`               | —                                                                                              |
+| `gesture/swipe-min`          | `24`      | `Metrics.gestureSwipeMin`          | the carousel gesture's minimum distance                                                        |
+| `glyph/hit`                  | `32`      | `Metrics.glyphHit`                 | the +, × and ✓ touch targets                                                                   |
+| `grille/bar-height`          | `28`      | `Metrics.grilleBarHeight`          | —                                                                                              |
+| `grille/bar-width`           | `64`      | `Metrics.grilleBarWidth`           | the grille in the voice bar                                                                    |
+| `grille/dot`                 | `2`       | `Metrics.grilleDot`                | a dot's diameter                                                                               |
+| `grille/glint-arm`           | `1.6`     | `Metrics.grilleGlintArm`           | the cross glint's vertical arm, as a fraction of the grille's height                           |
+| `grille/glint-width`         | `1`       | `Metrics.grilleGlintWidth`         | the glint's arms                                                                               |
+| `grille/home-height`         | `108`     | `Metrics.grilleHomeHeight`         | —                                                                                              |
+| `grille/home-width`          | `240`     | `Metrics.grilleHomeWidth`          | the grille on the home screen                                                                  |
+| `grille/panel-height`        | `72`      | `Metrics.grillePanelHeight`        | —                                                                                              |
+| `grille/panel-width`         | `160`     | `Metrics.grillePanelWidth`         | the grille in the panel                                                                        |
+| `grille/pitch`               | `4`       | `Metrics.grillePitch`              | the dot lattice: one dot every                                                                 |
+| `grille/sheen-width`         | `0.35`    | `Metrics.grilleSheenWidth`         | the sheen's band, as a fraction of the width                                                   |
+| `key/abc-width-402`          | `43.333`  | `Metrics.keyAbcWidth402`           | 123 and the globe at 402 pt: the iPhone's                                                      |
+| `key/gap`                    | `6`       | `Metrics.keyGap`                   | between keys, the iPhone's                                                                     |
+| `key/height`                 | `43`      | `Metrics.keyHeight`                | every key: the iPhone's cap height (apple-geometry.json)                                       |
+| `key/letter-width-402`       | `33.5`    | `Metrics.keyLetterWidth402`        | a letter key at 402 pt: (width − 2 × margin/side − 9 × key/gap) / 10                           |
+| `key/min-width`              | `43.333`  | `Metrics.keyMinWidth`              | a key that isn't given a width: the iPhone's 123 key at 402 pt                                 |
+| `key/pad`                    | `4`       | `Metrics.keyPad`                   | a legend's side padding on a min-width key                                                     |
+| `key/radius`                 | `8`       | `Metrics.keyRadius`                | flat keys, one colour at this corner: the iPhone's (fitted 8.17)                               |
+| `key/reference-width`        | `402`     | `Metrics.keyReferenceWidth`        | the width the @402 tokens were measured at (iPhone 18 Pro); widths scale from it               |
+| `key/return-width-402`       | `92.667`  | `Metrics.keyReturnWidth402`        | return at 402 pt: two 123 keys and a gap                                                       |
+| `key/side-gap`               | `13.667`  | `Metrics.keySideGap`               | shift and delete stand this far from the letters: the iPhone's                                 |
+| `key/side-width-402`         | `45.583`  | `Metrics.keySideWidth402`          | shift and delete at 402 pt: what seven letters and the side gaps leave, halved (measured 45.5) |
+| `key/space-width-402`        | `191.667` | `Metrics.keySpaceWidth402`         | space at 402 pt beside 123, the globe and return: what is left (measured 191.333)              |
+| `layout/full`                | `270`     | `Metrics.layoutFull`               | margin/vertical + voicebar/height + 4 × key/height + 3 × row/gap + margin/bottom-keys          |
+| `layout/panel`               | `216`     | `Metrics.layoutPanel`              | chosen: room for the 96 orb over one key row                                                   |
+| `layout/slim`                | `60`      | `Metrics.layoutSlim`               | 2 × margin/vertical + voicebar/height                                                          |
+| `margin/bottom-keys`         | `13`      | `Metrics.marginBottomKeys`         | under a bottom row of keys (the full keyboard, the panel): the iPhone's                        |
+| `margin/side`                | `6.5`     | `Metrics.marginSide`               | at the keyboard's sides: the iPhone's cap margin, (402 − 10 letters − 9 gaps) / 2              |
+| `margin/vertical`            | `8`       | `Metrics.marginVertical`           | the keyboard's top, and the slim bar's bottom                                                  |
+| `opacity/disabled`           | `0.4`     | `Metrics.opacityDisabled`          | the + without Full Access                                                                      |
+| `opacity/glint`              | `0.95`    | `Metrics.opacityGlint`             | the cross glint when the words land                                                            |
+| `opacity/grille-rest`        | `0.55`    | `Metrics.opacityGrilleRest`        | the dots at rest, over the key colour                                                          |
+| `opacity/hairline`           | `0.5`     | `Metrics.opacityHairline`          | —                                                                                              |
+| `opacity/legend`             | `1`       | `Metrics.opacityLegend`            | key legends over the cap; below 1 they sit back                                                |
+| `opacity/legend-muted`       | `0.5`     | `Metrics.opacityLegendMuted`       | the + at rest                                                                                  |
+| `opacity/off`                | `0.45`    | `Metrics.opacityOff`               | the element when Blurt isn't ready: a tap opens the app                                        |
+| `opacity/placeholder`        | `0.4`     | `Metrics.opacityPlaceholder`       | the field's placeholder                                                                        |
+| `opacity/popup-shadow`       | `0.12`    | `Metrics.opacityPopupShadow`       | —                                                                                              |
+| `opacity/press-brighten`     | `0.15`    | `Metrics.opacityPressBrighten`     | a key lightens this much while pressed                                                         |
+| `opacity/sheen`              | `0.22`    | `Metrics.opacitySheen`             | the light passing over the element at rest: chrome catching light                              |
+| `opacity/surface-grain`      | `0.14`    | `Metrics.opacitySurfaceGrain`      | film grain over the whole keyboard surface: matte, the brand's texture                         |
+| `opacity/surface-vignette`   | `0`       | `Metrics.opacitySurfaceVignette`   | a soft darkening toward the surface's edges; 0 is none                                         |
+| `opacity/term-cancel`        | `0.7`     | `Metrics.opacityTermCancel`        | the field's ×                                                                                  |
+| `panel/spacing`              | `12`      | `Metrics.panelSpacing`             | between the panel's orb and its key row                                                        |
+| `picker/preview-width`       | `393`     | `Metrics.pickerPreviewWidth`       | the theme card draws the keyboard at this width                                                |
+| `picker/radius`              | `10`      | `Metrics.pickerRadius`             | the theme card's preview corners                                                               |
+| `picker/scale`               | `0.42`    | `Metrics.pickerScale`              | then scales it to fit two across                                                               |
+| `popup/extra-width`          | `18`      | `Metrics.popupExtraWidth`          | the letter pop-up is the key width plus this                                                   |
+| `popup/height`               | `56`      | `Metrics.popupHeight`              | —                                                                                              |
+| `popup/offset`               | `58`      | `Metrics.popupOffset`              | the pop-up sits this far above the key                                                         |
+| `popup/radius`               | `10`      | `Metrics.popupRadius`              | —                                                                                              |
+| `popup/shadow-radius`        | `8`       | `Metrics.popupShadowRadius`        | the one thing that floats                                                                      |
+| `popup/shadow-y`             | `2`       | `Metrics.popupShadowY`             | —                                                                                              |
+| `radius/button`              | `4`       | `Metrics.radiusButton`             | the brand's buttons and the grille: rectangular, never a pill                                  |
+| `radius/card`                | `12`      | `Metrics.radiusCard`               | the brand's cards                                                                              |
+| `radius/hero`                | `16`      | `Metrics.radiusHero`               | the brand's featured cards                                                                     |
+| `radius/input`               | `8`       | `Metrics.radiusInput`              | the brand's inputs: the key-term field                                                         |
+| `ribs/rest-height`           | `16`      | `Metrics.ribsRestHeight`           | —                                                                                              |
+| `ribs/rest-width`            | `40`      | `Metrics.ribsRestWidth`            | the ribs asleep: the wave's own bars at rest                                                   |
+| `row/gap`                    | `11`      | `Metrics.rowGap`                   | between rows, the iPhone's                                                                     |
+| `slim/spacing`               | `8`       | `Metrics.slimSpacing`              | between the slim bar's keys                                                                    |
+| `streak/arm`                 | `1.4`     | `Metrics.streakArm`                | the landing flash's vertical arm, as a fraction of the box's height                            |
+| `streak/height`              | `2`       | `Metrics.streakHeight`             | the light streak while recording                                                               |
+| `streak/line`                | `1`       | `Metrics.streakLine`               | the hairline at rest                                                                           |
+| `streak/point`               | `4`       | `Metrics.streakPoint`              | the bright point at the centre                                                                 |
+| `surface/vignette-end`       | `0.75`    | `Metrics.surfaceVignetteEnd`       | where it is full                                                                               |
+| `surface/vignette-start`     | `0.3`     | `Metrics.surfaceVignetteStart`     | where the vignette begins, as a fraction of the keyboard's width                               |
+| `term/gap`                   | `8`       | `Metrics.termGap`                  | × · field · ✓                                                                                  |
+| `term/height`                | `36`      | `Metrics.termHeight`               | the key-term field's capsule                                                                   |
+| `term/inset`                 | `2`       | `Metrics.termInset`                | the field row's side inset                                                                     |
+| `term/pad`                   | `14`      | `Metrics.termPad`                  | the field's side padding                                                                       |
+| `voice/bar-height`           | `32`      | `Metrics.voiceBarHeight`           | —                                                                                              |
+| `voice/bar-width`            | `240`     | `Metrics.voiceBarWidth`            | the voice element's box in the voice bar: what the wave gets                                   |
+| `voice/home-height`          | `112`     | `Metrics.voiceHomeHeight`          | —                                                                                              |
+| `voice/home-width`           | `280`     | `Metrics.voiceHomeWidth`           | the box on the home screen                                                                     |
+| `voice/panel-height`         | `88`      | `Metrics.voicePanelHeight`         | —                                                                                              |
+| `voice/panel-width`          | `300`     | `Metrics.voicePanelWidth`          | the box in the panel                                                                           |
+| `voice/press-scale`          | `0.94`    | `Metrics.voicePressScale`          | the element while pressed                                                                      |
+| `voicebar/addterm-clearance` | `12`      | `Metrics.voicebarAddtermClearance` | the wave stays this clear of the + at the trailing edge                                        |
+| `voicebar/height`            | `44`      | `Metrics.voicebarHeight`           | the voice row, where the system puts its suggestion bar                                        |
+| `voicebar/note-gap`          | `10`      | `Metrics.voicebarNoteGap`          | between the orb and the Full Access note                                                       |
+| `wave/bar`                   | `2`       | `Metrics.waveBar`                  | a wave bar's width                                                                             |
+| `wave/bar-height`            | `24`      | `Metrics.waveBarHeight`            | —                                                                                              |
+| `wave/gap`                   | `2`       | `Metrics.waveGap`                  | between wave bars                                                                              |
+| `wave/home-height`           | `44`      | `Metrics.waveHomeHeight`           | —                                                                                              |
+| `wave/panel-height`          | `40`      | `Metrics.wavePanelHeight`          | —                                                                                              |
+| `wordmark/height`            | `22`      | `Metrics.wordmarkHeight`           | —                                                                                              |
 
 <!-- tokens:end metrics -->
 
@@ -554,18 +562,16 @@ Motion, in seconds. Nothing springs or snaps; only the press answers at once.
 | ---------------- | --------------- | ---------------------- | ------------------------------------------------------------- |
 | `caret`          | `0.5`           | `Motion.caret`         | the caret's blink                                             |
 | `colour`         | `0.2`           | `Motion.colour`        | a colour or fill changing state: the brand's transition       |
-| `drop`           | `2.4`           | `Motion.drop`          | the violet drop is gone by                                    |
-| `drop-hold`      | `0.9`           | `Motion.dropHold`      | and held to                                                   |
-| `drop-rise`      | `0.5`           | `Motion.dropRise`      | the drop is up in                                             |
-| `drop-spread`    | `1`             | `Motion.dropSpread`    | the bloom reaches its full spread in                          |
 | `ease/signature` | `0.22,1,0.36,1` | `Motion.easeSignature` | the house curve for everything that moves; nothing springs    |
 | `flip`           | `0.25`          | `Motion.flip`          | the panel's carousel                                          |
+| `glint-life`     | `0.5`           | `Motion.glintLife`     | a facet's flash while recording                               |
 | `height-change`  | `0.25`          | `Motion.heightChange`  | the keyboard resizing                                         |
 | `key-press`      | `0.08`          | `Motion.keyPress`      | a key lighting                                                |
 | `landing`        | `0.6`           | `Motion.landing`       | the glint when the words land                                 |
-| `mood`           | `0.8`           | `Motion.mood`          | the orb's colour moving between moods                         |
 | `press`          | `0.1`           | `Motion.press`         | the orb's press; the one thing that answers at once           |
 | `ring-period`    | `1.6`           | `Motion.ringPeriod`    | one turn of the ring, the Mac's cadence                       |
+| `sheen`          | `4`             | `Motion.sheen`         | one pass of the light over the element at rest                |
+| `sheen-working`  | `1.6`           | `Motion.sheenWorking`  | and while something is happening: the ring's cadence          |
 | `state-fade`     | `0.5`           | `Motion.stateFade`     | every other change on the key: the ring, a glyph, the dimming |
 | `term-swap`      | `0.4`           | `Motion.termSwap`      | the voice bar becoming the field                              |
 | `wave-fade`      | `0.7`           | `Motion.waveFade`      | the orb and the wave crossing, either way                     |

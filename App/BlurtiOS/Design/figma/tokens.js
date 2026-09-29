@@ -70,9 +70,6 @@ Keyboard|kb/key-modifier|COLOR|#26231E|Themes:dark/key-modifier|FRAME_FILL,SHAPE
 Keyboard|kb/legend|COLOR|#F5F3EB|Themes:dark/legend|TEXT_FILL|DesignTokens.Keyboard.kbLegend|key legends and bare glyphs
 Keyboard|kb/legend-secondary|COLOR|#A5A4A2|Themes:dark/legend-secondary|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.kbLegendSecondary|the mono word labels (123, ABC, return, space) and the + at rest
 Keyboard|kb/notice-error|COLOR|#E67F36|Brand:orange|STROKE_COLOR|DesignTokens.Keyboard.kbNoticeError|the solid ring and glyph for an error
-Keyboard|kb/notice-ok|COLOR|#67AD82|Brand:green/400|STROKE_COLOR|DesignTokens.Keyboard.kbNoticeOk|the solid ring for pasted and copied
-Keyboard|kb/orb-ring-end|COLOR|#FFFFFF|Brand:white|STROKE_COLOR|DesignTokens.Keyboard.kbOrbRingEnd|the sweeping ring's gradient, bottom-trailing
-Keyboard|kb/orb-ring-start|COLOR|#01762F|Brand:green/700|STROKE_COLOR|DesignTokens.Keyboard.kbOrbRingStart|the sweeping ring's gradient, top-leading
 Keyboard|kb/popup|COLOR|#33302A|Themes:dark/popup|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.kbPopup|the letter pop-up
 Keyboard|kb/signal|COLOR|#67AD82|Themes:dark/signal|SHAPE_FILL,TEXT_FILL|DesignTokens.Keyboard.kbSignal|the wave, the caret, the saved check
 Keyboard|kb/surface|COLOR|#1D1B16|Themes:dark/surface|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.kbSurface|the design face's surface (Figma binds to kb/*; Swift reads the palette)
@@ -85,6 +82,17 @@ Metrics|caret/radius|FLOAT|1||CORNER_RADIUS|DesignTokens.Metrics.caretRadius|
 Metrics|caret/width|FLOAT|2||STROKE_FLOAT,WIDTH_HEIGHT|DesignTokens.Metrics.caretWidth|
 Metrics|gesture/swipe-min|FLOAT|24|||DesignTokens.Metrics.gestureSwipeMin|the carousel gesture's minimum distance
 Metrics|glyph/hit|FLOAT|32||WIDTH_HEIGHT|DesignTokens.Metrics.glyphHit|the +, × and ✓ touch targets
+Metrics|grille/bar-height|FLOAT|28||WIDTH_HEIGHT|DesignTokens.Metrics.grilleBarHeight|
+Metrics|grille/bar-width|FLOAT|64||WIDTH_HEIGHT|DesignTokens.Metrics.grilleBarWidth|the grille in the voice bar
+Metrics|grille/dot|FLOAT|2||WIDTH_HEIGHT|DesignTokens.Metrics.grilleDot|a dot's diameter
+Metrics|grille/glint-arm|FLOAT|1.6||WIDTH_HEIGHT|DesignTokens.Metrics.grilleGlintArm|the cross glint's vertical arm, as a fraction of the grille's height
+Metrics|grille/glint-width|FLOAT|1||WIDTH_HEIGHT|DesignTokens.Metrics.grilleGlintWidth|the glint's arms
+Metrics|grille/home-height|FLOAT|108||WIDTH_HEIGHT|DesignTokens.Metrics.grilleHomeHeight|
+Metrics|grille/home-width|FLOAT|240||WIDTH_HEIGHT|DesignTokens.Metrics.grilleHomeWidth|the grille on the home screen
+Metrics|grille/panel-height|FLOAT|72||WIDTH_HEIGHT|DesignTokens.Metrics.grillePanelHeight|
+Metrics|grille/panel-width|FLOAT|160||WIDTH_HEIGHT|DesignTokens.Metrics.grillePanelWidth|the grille in the panel
+Metrics|grille/pitch|FLOAT|4||WIDTH_HEIGHT|DesignTokens.Metrics.grillePitch|the dot lattice: one dot every
+Metrics|grille/sheen-width|FLOAT|0.35||WIDTH_HEIGHT|DesignTokens.Metrics.grilleSheenWidth|the sheen's band, as a fraction of the width
 Metrics|key/abc-width-402|FLOAT|43.333||WIDTH_HEIGHT|DesignTokens.Metrics.keyAbcWidth402|123 and the globe at 402 pt: the iPhone's
 Metrics|key/gap|FLOAT|6||GAP|DesignTokens.Metrics.keyGap|between keys, the iPhone's
 Metrics|key/height|FLOAT|43||WIDTH_HEIGHT|DesignTokens.Metrics.keyHeight|every key: the iPhone's cap height (apple-geometry.json)
@@ -103,28 +111,20 @@ Metrics|layout/slim|FLOAT|60||WIDTH_HEIGHT|DesignTokens.Metrics.layoutSlim|2 × 
 Metrics|margin/bottom-keys|FLOAT|13||WIDTH_HEIGHT|DesignTokens.Metrics.marginBottomKeys|under a bottom row of keys (the full keyboard, the panel): the iPhone's
 Metrics|margin/side|FLOAT|6.5||WIDTH_HEIGHT|DesignTokens.Metrics.marginSide|at the keyboard's sides: the iPhone's cap margin, (402 − 10 letters − 9 gaps) / 2
 Metrics|margin/vertical|FLOAT|8||WIDTH_HEIGHT|DesignTokens.Metrics.marginVertical|the keyboard's top, and the slim bar's bottom
-Metrics|opacity/dim|FLOAT|0.8||OPACITY|DesignTokens.Metrics.opacityDim|the orb when Blurt isn't ready
-Metrics|opacity/dim-saturation|FLOAT|0.35||OPACITY|DesignTokens.Metrics.opacityDimSaturation|and its saturation
 Metrics|opacity/disabled|FLOAT|0.4||OPACITY|DesignTokens.Metrics.opacityDisabled|the + without Full Access
-Metrics|opacity/grain|FLOAT|0.5||OPACITY|DesignTokens.Metrics.opacityGrain|
-Metrics|opacity/home-dim-saturation|FLOAT|0.45||OPACITY|DesignTokens.Metrics.opacityHomeDimSaturation|the home hero's saturation when not listening
+Metrics|opacity/glint|FLOAT|0.95||OPACITY|DesignTokens.Metrics.opacityGlint|the cross glint when the words land
+Metrics|opacity/grille-rest|FLOAT|0.55||OPACITY|DesignTokens.Metrics.opacityGrilleRest|the dots at rest, over the key colour
+Metrics|opacity/hairline|FLOAT|0.5||OPACITY|DesignTokens.Metrics.opacityHairline|
 Metrics|opacity/legend|FLOAT|1||OPACITY|DesignTokens.Metrics.opacityLegend|key legends over the cap; below 1 they sit back
 Metrics|opacity/legend-muted|FLOAT|0.5||OPACITY|DesignTokens.Metrics.opacityLegendMuted|the + at rest
-Metrics|opacity/orb-light|FLOAT|0.3||OPACITY|DesignTokens.Metrics.opacityOrbLight|
+Metrics|opacity/off|FLOAT|0.45||OPACITY|DesignTokens.Metrics.opacityOff|the element when Blurt isn't ready: a tap opens the app
 Metrics|opacity/placeholder|FLOAT|0.4||OPACITY|DesignTokens.Metrics.opacityPlaceholder|the field's placeholder
 Metrics|opacity/popup-shadow|FLOAT|0.12||OPACITY|DesignTokens.Metrics.opacityPopupShadow|
 Metrics|opacity/press-brighten|FLOAT|0.15||OPACITY|DesignTokens.Metrics.opacityPressBrighten|a key lightens this much while pressed
+Metrics|opacity/sheen|FLOAT|0.22||OPACITY|DesignTokens.Metrics.opacitySheen|the light passing over the element at rest: chrome catching light
 Metrics|opacity/surface-grain|FLOAT|0.14||OPACITY|DesignTokens.Metrics.opacitySurfaceGrain|film grain over the whole keyboard surface: matte, the brand's texture
 Metrics|opacity/surface-vignette|FLOAT|0||OPACITY|DesignTokens.Metrics.opacitySurfaceVignette|a soft darkening toward the surface's edges; 0 is none
 Metrics|opacity/term-cancel|FLOAT|0.7||OPACITY|DesignTokens.Metrics.opacityTermCancel|the field's ×
-Metrics|orb/bar|FLOAT|40||WIDTH_HEIGHT|DesignTokens.Metrics.orbBar|the orb in the voice bar
-Metrics|orb/dissipate-blur|FLOAT|0.16|||DesignTokens.Metrics.orbDissipateBlur|and blurs to this fraction of its size
-Metrics|orb/dissipate-scale|FLOAT|1.25|||DesignTokens.Metrics.orbDissipateScale|the orb swells to this while dissipating
-Metrics|orb/home|FLOAT|112||WIDTH_HEIGHT|DesignTokens.Metrics.orbHome|the orb on the home screen
-Metrics|orb/light-reach|FLOAT|0.9|||DesignTokens.Metrics.orbLightReach|the soft light's reach, as a fraction of the orb (was a fixed 110 pt, flat on a 40 pt orb)
-Metrics|orb/light-x|FLOAT|0.3|||DesignTokens.Metrics.orbLightX|the soft light's centre, as a fraction of the orb
-Metrics|orb/light-y|FLOAT|0.22|||DesignTokens.Metrics.orbLightY|
-Metrics|orb/panel|FLOAT|96||WIDTH_HEIGHT|DesignTokens.Metrics.orbPanel|the orb in the panel
 Metrics|panel/spacing|FLOAT|12||GAP|DesignTokens.Metrics.panelSpacing|between the panel's orb and its key row
 Metrics|picker/preview-width|FLOAT|393||WIDTH_HEIGHT|DesignTokens.Metrics.pickerPreviewWidth|the theme card draws the keyboard at this width
 Metrics|picker/radius|FLOAT|10||CORNER_RADIUS|DesignTokens.Metrics.pickerRadius|the theme card's preview corners
@@ -135,30 +135,41 @@ Metrics|popup/offset|FLOAT|58||WIDTH_HEIGHT|DesignTokens.Metrics.popupOffset|the
 Metrics|popup/radius|FLOAT|10||CORNER_RADIUS|DesignTokens.Metrics.popupRadius|
 Metrics|popup/shadow-radius|FLOAT|8||WIDTH_HEIGHT|DesignTokens.Metrics.popupShadowRadius|the one thing that floats
 Metrics|popup/shadow-y|FLOAT|2||WIDTH_HEIGHT|DesignTokens.Metrics.popupShadowY|
-Metrics|press/scale|FLOAT|0.94|||DesignTokens.Metrics.pressScale|the orb while pressed
-Metrics|ring/active|FLOAT|2||STROKE_FLOAT,WIDTH_HEIGHT|DesignTokens.Metrics.ringActive|the ring while working or noticing; the home ring
-Metrics|ring/still|FLOAT|1||STROKE_FLOAT,WIDTH_HEIGHT|DesignTokens.Metrics.ringStill|the ring at rest
+Metrics|radius/button|FLOAT|4||WIDTH_HEIGHT|DesignTokens.Metrics.radiusButton|the brand's buttons and the grille: rectangular, never a pill
+Metrics|radius/card|FLOAT|12||WIDTH_HEIGHT|DesignTokens.Metrics.radiusCard|the brand's cards
+Metrics|radius/hero|FLOAT|16||WIDTH_HEIGHT|DesignTokens.Metrics.radiusHero|the brand's featured cards
+Metrics|radius/input|FLOAT|8||WIDTH_HEIGHT|DesignTokens.Metrics.radiusInput|the brand's inputs: the key-term field
+Metrics|ribs/rest-height|FLOAT|16||WIDTH_HEIGHT|DesignTokens.Metrics.ribsRestHeight|
+Metrics|ribs/rest-width|FLOAT|40||WIDTH_HEIGHT|DesignTokens.Metrics.ribsRestWidth|the ribs asleep: the wave's own bars at rest
 Metrics|row/gap|FLOAT|11||GAP|DesignTokens.Metrics.rowGap|between rows, the iPhone's
 Metrics|slim/spacing|FLOAT|8||GAP|DesignTokens.Metrics.slimSpacing|between the slim bar's keys
+Metrics|streak/arm|FLOAT|1.4||WIDTH_HEIGHT|DesignTokens.Metrics.streakArm|the landing flash's vertical arm, as a fraction of the box's height
+Metrics|streak/height|FLOAT|2||WIDTH_HEIGHT|DesignTokens.Metrics.streakHeight|the light streak while recording
+Metrics|streak/line|FLOAT|1||WIDTH_HEIGHT|DesignTokens.Metrics.streakLine|the hairline at rest
+Metrics|streak/point|FLOAT|4||WIDTH_HEIGHT|DesignTokens.Metrics.streakPoint|the bright point at the centre
 Metrics|surface/vignette-end|FLOAT|0.75||WIDTH_HEIGHT|DesignTokens.Metrics.surfaceVignetteEnd|where it is full
 Metrics|surface/vignette-start|FLOAT|0.3||WIDTH_HEIGHT|DesignTokens.Metrics.surfaceVignetteStart|where the vignette begins, as a fraction of the keyboard's width
 Metrics|term/gap|FLOAT|8||GAP|DesignTokens.Metrics.termGap|× · field · ✓
 Metrics|term/height|FLOAT|36||WIDTH_HEIGHT|DesignTokens.Metrics.termHeight|the key-term field's capsule
 Metrics|term/inset|FLOAT|2||GAP|DesignTokens.Metrics.termInset|the field row's side inset
 Metrics|term/pad|FLOAT|14||GAP|DesignTokens.Metrics.termPad|the field's side padding
+Metrics|voice/bar-height|FLOAT|32||WIDTH_HEIGHT|DesignTokens.Metrics.voiceBarHeight|
+Metrics|voice/bar-width|FLOAT|240||WIDTH_HEIGHT|DesignTokens.Metrics.voiceBarWidth|the voice element's box in the voice bar: what the wave gets
+Metrics|voice/home-height|FLOAT|112||WIDTH_HEIGHT|DesignTokens.Metrics.voiceHomeHeight|
+Metrics|voice/home-width|FLOAT|280||WIDTH_HEIGHT|DesignTokens.Metrics.voiceHomeWidth|the box on the home screen
+Metrics|voice/panel-height|FLOAT|88||WIDTH_HEIGHT|DesignTokens.Metrics.voicePanelHeight|
+Metrics|voice/panel-width|FLOAT|300||WIDTH_HEIGHT|DesignTokens.Metrics.voicePanelWidth|the box in the panel
+Metrics|voice/press-scale|FLOAT|0.94||WIDTH_HEIGHT|DesignTokens.Metrics.voicePressScale|the element while pressed
 Metrics|voicebar/addterm-clearance|FLOAT|12||GAP|DesignTokens.Metrics.voicebarAddtermClearance|the wave stays this clear of the + at the trailing edge
 Metrics|voicebar/height|FLOAT|44||WIDTH_HEIGHT|DesignTokens.Metrics.voicebarHeight|the voice row, where the system puts its suggestion bar
 Metrics|voicebar/note-gap|FLOAT|10||GAP|DesignTokens.Metrics.voicebarNoteGap|between the orb and the Full Access note
 Metrics|wave/bar|FLOAT|2||STROKE_FLOAT,WIDTH_HEIGHT|DesignTokens.Metrics.waveBar|a wave bar's width
 Metrics|wave/bar-height|FLOAT|24||WIDTH_HEIGHT|DesignTokens.Metrics.waveBarHeight|
-Metrics|wave/bar-width|FLOAT|240||WIDTH_HEIGHT|DesignTokens.Metrics.waveBarWidth|the wave in the voice bar, at most
 Metrics|wave/gap|FLOAT|2||GAP|DesignTokens.Metrics.waveGap|between wave bars
 Metrics|wave/home-height|FLOAT|44||WIDTH_HEIGHT|DesignTokens.Metrics.waveHomeHeight|
-Metrics|wave/home-width|FLOAT|280||WIDTH_HEIGHT|DesignTokens.Metrics.waveHomeWidth|
 Metrics|wave/panel-height|FLOAT|40||WIDTH_HEIGHT|DesignTokens.Metrics.wavePanelHeight|
-Metrics|wave/panel-width|FLOAT|300||WIDTH_HEIGHT|DesignTokens.Metrics.wavePanelWidth|
 Metrics|wordmark/height|FLOAT|22||WIDTH_HEIGHT|DesignTokens.Metrics.wordmarkHeight|
-Typography|ratio/orb-glyph|FLOAT|0.34|||DesignTokens.Typography.ratioOrbGlyph|the clipboard and exclamation glyphs, as a fraction of the orb
+Typography|ratio/voice-glyph|FLOAT|0.34|||DesignTokens.Typography.ratioVoiceGlyph|the clipboard and exclamation glyphs, as a fraction of the voice element's height
 Typography|size/body|FLOAT|16||FONT_SIZE|DesignTokens.Typography.sizeBody|the app's body text
 Typography|size/caption|FLOAT|14||FONT_SIZE|DesignTokens.Typography.sizeCaption|the app's small text
 Typography|size/cta|FLOAT|14||FONT_SIZE|DesignTokens.Typography.sizeCta|a mono button label in the app (E2)
@@ -176,23 +187,21 @@ Typography|weight/glyph|STRING|medium||FONT_STYLE|DesignTokens.Typography.weight
 Typography|weight/label|STRING|medium||FONT_STYLE|DesignTokens.Typography.weightLabel|
 Typography|weight/legend|STRING|medium||FONT_STYLE|DesignTokens.Typography.weightLegend|
 Typography|weight/letter|STRING|regular||FONT_STYLE|DesignTokens.Typography.weightLetter|
-Typography|weight/orb-glyph|STRING|semibold||FONT_STYLE|DesignTokens.Typography.weightOrbGlyph|
 Typography|weight/popup|STRING|regular||FONT_STYLE|DesignTokens.Typography.weightPopup|
 Typography|weight/term|STRING|regular||FONT_STYLE|DesignTokens.Typography.weightTerm|
+Typography|weight/voice-glyph|STRING|semibold||FONT_STYLE|DesignTokens.Typography.weightVoiceGlyph|
 Motion|caret|FLOAT|0.5|||DesignTokens.Motion.caret|the caret's blink
 Motion|colour|FLOAT|0.2|||DesignTokens.Motion.colour|a colour or fill changing state: the brand's transition
-Motion|drop|FLOAT|2.4|||DesignTokens.Motion.drop|the violet drop is gone by
-Motion|drop-hold|FLOAT|0.9|||DesignTokens.Motion.dropHold|and held to
-Motion|drop-rise|FLOAT|0.5|||DesignTokens.Motion.dropRise|the drop is up in
-Motion|drop-spread|FLOAT|1|||DesignTokens.Motion.dropSpread|the bloom reaches its full spread in
 Motion|ease/signature|STRING|0.22,1,0.36,1|||DesignTokens.Motion.easeSignature|the house curve for everything that moves; nothing springs
 Motion|flip|FLOAT|0.25|||DesignTokens.Motion.flip|the panel's carousel
+Motion|glint-life|FLOAT|0.5|||DesignTokens.Motion.glintLife|a facet's flash while recording
 Motion|height-change|FLOAT|0.25|||DesignTokens.Motion.heightChange|the keyboard resizing
 Motion|key-press|FLOAT|0.08|||DesignTokens.Motion.keyPress|a key lighting
 Motion|landing|FLOAT|0.6|||DesignTokens.Motion.landing|the glint when the words land
-Motion|mood|FLOAT|0.8|||DesignTokens.Motion.mood|the orb's colour moving between moods
 Motion|press|FLOAT|0.1|||DesignTokens.Motion.press|the orb's press; the one thing that answers at once
 Motion|ring-period|FLOAT|1.6|||DesignTokens.Motion.ringPeriod|one turn of the ring, the Mac's cadence
+Motion|sheen|FLOAT|4|||DesignTokens.Motion.sheen|one pass of the light over the element at rest
+Motion|sheen-working|FLOAT|1.6|||DesignTokens.Motion.sheenWorking|and while something is happening: the ring's cadence
 Motion|state-fade|FLOAT|0.5|||DesignTokens.Motion.stateFade|every other change on the key: the ring, a glyph, the dimming
 Motion|term-swap|FLOAT|0.4|||DesignTokens.Motion.termSwap|the voice bar becoming the field
 Motion|wave-fade|FLOAT|0.7|||DesignTokens.Motion.waveFade|the orb and the wave crossing, either way
@@ -204,7 +213,5 @@ Fonts|heading/regular|STRING|OceanicText-Regular|||DesignTokens.Fonts.headingReg
 Fonts|mono/family|STRING|Modern Gothic Mono||FONT_FAMILY|DesignTokens.Fonts.monoFamily|eyebrows, CTAs, the keyboard's word labels
 Fonts|mono/light|STRING|ModernGothicMono-Light|||DesignTokens.Fonts.monoLight|
 Fonts|mono/medium|STRING|ModernGothicMono-Medium|||DesignTokens.Fonts.monoMedium|
-Fonts|mono/regular|STRING|ModernGothicMono-Regular|||DesignTokens.Fonts.monoRegular|
-GRADIENT|orb|bottom|top|#D7D3F4@0,#B0A7E9@0.0673,#67AD82@0.1442,#01762F@0.3029,#3923C7@0.5962,#887BDD@0.75,#D7D3F4@0.8942,#FFFFFF@1|the Mac orb's fill, the design's own stops (App elements/Recording.svg), swept bottom to top
-GRADIENT|orb-ring|topLeading|bottomTrailing|#01762F@0,#FFFFFF@1|the ring round the orb: green into white, corner to corner; spun while something is happening`;
+Fonts|mono/regular|STRING|ModernGothicMono-Regular|||DesignTokens.Fonts.monoRegular|`;
 const GROUPS = ["Brand", "Themes", "Keyboard", "Metrics", "Typography", "Motion", "Fonts"];

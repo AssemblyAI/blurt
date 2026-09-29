@@ -61,9 +61,8 @@ format_outputs() {
 # The design-literal lint. Scope: every file under the keyboard's sources
 # that draws — new views are linted by default — minus the logic (the model,
 # the host controller, the palette, the geometry and interaction rules, the
-# voice state) and PrismOrb.swift, whose body is the orb's recipe (mesh drift,
-# sparkle spots, grain density), documented as text in Figma, with only its
-# parameters as tokens. Numbers 0 and 1 pass: `Spacer(minLength: 0)`,
+# voice state) and Grain.swift, whose body is the grain's recipe (density,
+# the two shades), with only its opacity as a token. Numbers 0 and 1 pass: `Spacer(minLength: 0)`,
 # `.opacity(on ? 1 : 0)` and `scaleEffect(1 + …)` are structure, not design.
 lint_literals() {
   python3 - <<'PY'
@@ -71,7 +70,7 @@ import glob, os, re, sys
 exempt = {
     "KeyboardModel.swift", "KeyboardModel+Mic.swift", "KeyboardModel+Phase.swift", "KeyboardModel+Typing.swift",
     "KeyboardViewController.swift", "KeyboardPalette.swift", "KeyGeometry.swift", "KeyboardInteraction.swift",
-    "VoiceState.swift", "KeyboardMotion.swift", "MotionHeld.swift", "PrismOrb.swift",
+    "VoiceState.swift", "KeyboardMotion.swift", "MotionHeld.swift", "Grain.swift",
 }
 files = sorted(
     path for path in glob.glob("App/BlurtiOS/BlurtKeyboard/Sources/**/*.swift", recursive=True)

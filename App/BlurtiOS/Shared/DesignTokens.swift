@@ -152,12 +152,6 @@ enum DesignTokens {
     nonisolated static let kbLegendSecondary: Color = Themes.darkLegendSecondary
     /// The solid ring and glyph for an error.
     nonisolated static let kbNoticeError: Color = Brand.orange
-    /// The solid ring for pasted and copied.
-    nonisolated static let kbNoticeOk: Color = Brand.green400
-    /// The sweeping ring's gradient, bottom-trailing.
-    nonisolated static let kbOrbRingEnd: Color = Brand.white
-    /// The sweeping ring's gradient, top-leading.
-    nonisolated static let kbOrbRingStart: Color = Brand.green700
     /// The letter pop-up.
     nonisolated static let kbPopup: Color = Themes.darkPopup
     /// The wave, the caret, the saved check.
@@ -182,6 +176,25 @@ enum DesignTokens {
     nonisolated static let gestureSwipeMin: CGFloat = 24
     /// The +, × and ✓ touch targets.
     nonisolated static let glyphHit: CGFloat = 32
+    nonisolated static let grilleBarHeight: CGFloat = 28
+    /// The grille in the voice bar.
+    nonisolated static let grilleBarWidth: CGFloat = 64
+    /// A dot's diameter.
+    nonisolated static let grilleDot: CGFloat = 2
+    /// The cross glint's vertical arm, as a fraction of the grille's height.
+    nonisolated static let grilleGlintArm: CGFloat = 1.6
+    /// The glint's arms.
+    nonisolated static let grilleGlintWidth: CGFloat = 1
+    nonisolated static let grilleHomeHeight: CGFloat = 108
+    /// The grille on the home screen.
+    nonisolated static let grilleHomeWidth: CGFloat = 240
+    nonisolated static let grillePanelHeight: CGFloat = 72
+    /// The grille in the panel.
+    nonisolated static let grillePanelWidth: CGFloat = 160
+    /// The dot lattice: one dot every.
+    nonisolated static let grillePitch: CGFloat = 4
+    /// The sheen's band, as a fraction of the width.
+    nonisolated static let grilleSheenWidth: CGFloat = 0.35
     /// 123 and the globe at 402 pt: the iPhone's.
     nonisolated static let keyAbcWidth402: CGFloat = 43.333
     /// Between keys, the iPhone's.
@@ -218,46 +231,32 @@ enum DesignTokens {
     nonisolated static let marginSide: CGFloat = 6.5
     /// The keyboard's top, and the slim bar's bottom.
     nonisolated static let marginVertical: CGFloat = 8
-    /// The orb when Blurt isn't ready.
-    nonisolated static let opacityDim: CGFloat = 0.8
-    /// And its saturation.
-    nonisolated static let opacityDimSaturation: CGFloat = 0.35
     /// The + without Full Access.
     nonisolated static let opacityDisabled: CGFloat = 0.4
-    nonisolated static let opacityGrain: CGFloat = 0.5
-    /// The home hero's saturation when not listening.
-    nonisolated static let opacityHomeDimSaturation: CGFloat = 0.45
+    /// The cross glint when the words land.
+    nonisolated static let opacityGlint: CGFloat = 0.95
+    /// The dots at rest, over the key colour.
+    nonisolated static let opacityGrilleRest: CGFloat = 0.55
+    nonisolated static let opacityHairline: CGFloat = 0.5
     /// Key legends over the cap; below 1 they sit back.
     nonisolated static let opacityLegend: CGFloat = 1
     /// The + at rest.
     nonisolated static let opacityLegendMuted: CGFloat = 0.5
-    nonisolated static let opacityOrbLight: CGFloat = 0.3
+    /// The element when Blurt isn't ready: a tap opens the app.
+    nonisolated static let opacityOff: CGFloat = 0.45
     /// The field's placeholder.
     nonisolated static let opacityPlaceholder: CGFloat = 0.4
     nonisolated static let opacityPopupShadow: CGFloat = 0.12
     /// A key lightens this much while pressed.
     nonisolated static let opacityPressBrighten: CGFloat = 0.15
+    /// The light passing over the element at rest: chrome catching light.
+    nonisolated static let opacitySheen: CGFloat = 0.22
     /// Film grain over the whole keyboard surface: matte, the brand's texture.
     nonisolated static let opacitySurfaceGrain: CGFloat = 0.14
     /// A soft darkening toward the surface's edges; 0 is none.
     nonisolated static let opacitySurfaceVignette: CGFloat = 0
     /// The field's ×.
     nonisolated static let opacityTermCancel: CGFloat = 0.7
-    /// The orb in the voice bar.
-    nonisolated static let orbBar: CGFloat = 40
-    /// And blurs to this fraction of its size.
-    nonisolated static let orbDissipateBlur: CGFloat = 0.16
-    /// The orb swells to this while dissipating.
-    nonisolated static let orbDissipateScale: CGFloat = 1.25
-    /// The orb on the home screen.
-    nonisolated static let orbHome: CGFloat = 112
-    /// The soft light's reach, as a fraction of the orb (was a fixed 110 pt, flat on a 40 pt orb).
-    nonisolated static let orbLightReach: CGFloat = 0.9
-    /// The soft light's centre, as a fraction of the orb.
-    nonisolated static let orbLightX: CGFloat = 0.3
-    nonisolated static let orbLightY: CGFloat = 0.22
-    /// The orb in the panel.
-    nonisolated static let orbPanel: CGFloat = 96
     /// Between the panel's orb and its key row.
     nonisolated static let panelSpacing: CGFloat = 12
     /// The theme card draws the keyboard at this width.
@@ -275,16 +274,29 @@ enum DesignTokens {
     /// The one thing that floats.
     nonisolated static let popupShadowRadius: CGFloat = 8
     nonisolated static let popupShadowY: CGFloat = 2
-    /// The orb while pressed.
-    nonisolated static let pressScale: CGFloat = 0.94
-    /// The ring while working or noticing; the home ring.
-    nonisolated static let ringActive: CGFloat = 2
-    /// The ring at rest.
-    nonisolated static let ringStill: CGFloat = 1
+    /// The brand's buttons and the grille: rectangular, never a pill.
+    nonisolated static let radiusButton: CGFloat = 4
+    /// The brand's cards.
+    nonisolated static let radiusCard: CGFloat = 12
+    /// The brand's featured cards.
+    nonisolated static let radiusHero: CGFloat = 16
+    /// The brand's inputs: the key-term field.
+    nonisolated static let radiusInput: CGFloat = 8
+    nonisolated static let ribsRestHeight: CGFloat = 16
+    /// The ribs asleep: the wave's own bars at rest.
+    nonisolated static let ribsRestWidth: CGFloat = 40
     /// Between rows, the iPhone's.
     nonisolated static let rowGap: CGFloat = 11
     /// Between the slim bar's keys.
     nonisolated static let slimSpacing: CGFloat = 8
+    /// The landing flash's vertical arm, as a fraction of the box's height.
+    nonisolated static let streakArm: CGFloat = 1.4
+    /// The light streak while recording.
+    nonisolated static let streakHeight: CGFloat = 2
+    /// The hairline at rest.
+    nonisolated static let streakLine: CGFloat = 1
+    /// The bright point at the centre.
+    nonisolated static let streakPoint: CGFloat = 4
     /// Where it is full.
     nonisolated static let surfaceVignetteEnd: CGFloat = 0.75
     /// Where the vignette begins, as a fraction of the keyboard's width.
@@ -297,6 +309,17 @@ enum DesignTokens {
     nonisolated static let termInset: CGFloat = 2
     /// The field's side padding.
     nonisolated static let termPad: CGFloat = 14
+    nonisolated static let voiceBarHeight: CGFloat = 32
+    /// The voice element's box in the voice bar: what the wave gets.
+    nonisolated static let voiceBarWidth: CGFloat = 240
+    nonisolated static let voiceHomeHeight: CGFloat = 112
+    /// The box on the home screen.
+    nonisolated static let voiceHomeWidth: CGFloat = 280
+    nonisolated static let voicePanelHeight: CGFloat = 88
+    /// The box in the panel.
+    nonisolated static let voicePanelWidth: CGFloat = 300
+    /// The element while pressed.
+    nonisolated static let voicePressScale: CGFloat = 0.94
     /// The wave stays this clear of the + at the trailing edge.
     nonisolated static let voicebarAddtermClearance: CGFloat = 12
     /// The voice row, where the system puts its suggestion bar.
@@ -306,20 +329,16 @@ enum DesignTokens {
     /// A wave bar's width.
     nonisolated static let waveBar: CGFloat = 2
     nonisolated static let waveBarHeight: CGFloat = 24
-    /// The wave in the voice bar, at most.
-    nonisolated static let waveBarWidth: CGFloat = 240
     /// Between wave bars.
     nonisolated static let waveGap: CGFloat = 2
     nonisolated static let waveHomeHeight: CGFloat = 44
-    nonisolated static let waveHomeWidth: CGFloat = 280
     nonisolated static let wavePanelHeight: CGFloat = 40
-    nonisolated static let wavePanelWidth: CGFloat = 300
     nonisolated static let wordmarkHeight: CGFloat = 22
   }
 
   enum Typography {
-    /// The clipboard and exclamation glyphs, as a fraction of the orb.
-    nonisolated static let ratioOrbGlyph: CGFloat = 0.34
+    /// The clipboard and exclamation glyphs, as a fraction of the voice element's height.
+    nonisolated static let ratioVoiceGlyph: CGFloat = 0.34
     /// The app's body text.
     nonisolated static let sizeBody: CGFloat = 16
     /// The app's small text.
@@ -350,9 +369,9 @@ enum DesignTokens {
     nonisolated static let weightLabel: Font.Weight = .medium
     nonisolated static let weightLegend: Font.Weight = .medium
     nonisolated static let weightLetter: Font.Weight = .regular
-    nonisolated static let weightOrbGlyph: Font.Weight = .semibold
     nonisolated static let weightPopup: Font.Weight = .regular
     nonisolated static let weightTerm: Font.Weight = .regular
+    nonisolated static let weightVoiceGlyph: Font.Weight = .semibold
   }
 
   enum Motion {
@@ -360,31 +379,27 @@ enum DesignTokens {
     nonisolated static let caret: Double = 0.5
     /// A colour or fill changing state: the brand's transition.
     nonisolated static let colour: Double = 0.2
-    /// The violet drop is gone by.
-    nonisolated static let drop: Double = 2.4
-    /// And held to.
-    nonisolated static let dropHold: Double = 0.9
-    /// The drop is up in.
-    nonisolated static let dropRise: Double = 0.5
-    /// The bloom reaches its full spread in.
-    nonisolated static let dropSpread: Double = 1
     /// The house curve for everything that moves; nothing springs.
     nonisolated static let easeSignature: UnitCurve = UnitCurve.bezier(
       startControlPoint: UnitPoint(x: 0.22, y: 1), endControlPoint: UnitPoint(x: 0.36, y: 1))
     /// The panel's carousel.
     nonisolated static let flip: Double = 0.25
+    /// A facet's flash while recording.
+    nonisolated static let glintLife: Double = 0.5
     /// The keyboard resizing.
     nonisolated static let heightChange: Double = 0.25
     /// A key lighting.
     nonisolated static let keyPress: Double = 0.08
     /// The glint when the words land.
     nonisolated static let landing: Double = 0.6
-    /// The orb's colour moving between moods.
-    nonisolated static let mood: Double = 0.8
     /// The orb's press; the one thing that answers at once.
     nonisolated static let press: Double = 0.1
     /// One turn of the ring, the Mac's cadence.
     nonisolated static let ringPeriod: Double = 1.6
+    /// One pass of the light over the element at rest.
+    nonisolated static let sheen: Double = 4
+    /// And while something is happening: the ring's cadence.
+    nonisolated static let sheenWorking: Double = 1.6
     /// Every other change on the key: the ring, a glyph, the dimming.
     nonisolated static let stateFade: Double = 0.5
     /// The voice bar becoming the field.
@@ -409,26 +424,6 @@ enum DesignTokens {
   }
 
   enum Gradients {
-    /// The Mac orb's fill, the design's own stops (App elements/Recording.svg), swept bottom to top.
-    nonisolated static let orb = LinearGradient(
-      stops: [
-        .init(color: Brand.violetLavender, location: 0),
-        .init(color: Brand.violetPeriwinkle, location: 0.0673),
-        .init(color: Brand.green400, location: 0.1442),
-        .init(color: Brand.green700, location: 0.3029),
-        .init(color: Brand.cobolt, location: 0.5962),
-        .init(color: Brand.violetIris, location: 0.75),
-        .init(color: Brand.violetLavender, location: 0.8942),
-        .init(color: Brand.white, location: 1),
-      ],
-      startPoint: .bottom, endPoint: .top)
-    /// The ring round the orb: green into white, corner to corner; spun while something is happening.
-    nonisolated static let orbRing = LinearGradient(
-      stops: [
-        .init(color: Brand.green700, location: 0),
-        .init(color: Brand.white, location: 1),
-      ],
-      startPoint: .topLeading, endPoint: .bottomTrailing)
   }
 
   /// Every token as `group.name: value`, the way tokens.json renders it, so a
@@ -502,9 +497,6 @@ enum DesignTokens {
     "keyboard.kb/legend": "#F5F3EB",
     "keyboard.kb/legend-secondary": "#A5A4A2",
     "keyboard.kb/notice-error": "#E67F36",
-    "keyboard.kb/notice-ok": "#67AD82",
-    "keyboard.kb/orb-ring-end": "#FFFFFF",
-    "keyboard.kb/orb-ring-start": "#01762F",
     "keyboard.kb/popup": "#33302A",
     "keyboard.kb/signal": "#67AD82",
     "keyboard.kb/surface": "#1D1B16",
@@ -517,6 +509,17 @@ enum DesignTokens {
     "metrics.caret/width": "2",
     "metrics.gesture/swipe-min": "24",
     "metrics.glyph/hit": "32",
+    "metrics.grille/bar-height": "28",
+    "metrics.grille/bar-width": "64",
+    "metrics.grille/dot": "2",
+    "metrics.grille/glint-arm": "1.6",
+    "metrics.grille/glint-width": "1",
+    "metrics.grille/home-height": "108",
+    "metrics.grille/home-width": "240",
+    "metrics.grille/panel-height": "72",
+    "metrics.grille/panel-width": "160",
+    "metrics.grille/pitch": "4",
+    "metrics.grille/sheen-width": "0.35",
     "metrics.key/abc-width-402": "43.333",
     "metrics.key/gap": "6",
     "metrics.key/height": "43",
@@ -535,28 +538,20 @@ enum DesignTokens {
     "metrics.margin/bottom-keys": "13",
     "metrics.margin/side": "6.5",
     "metrics.margin/vertical": "8",
-    "metrics.opacity/dim": "0.8",
-    "metrics.opacity/dim-saturation": "0.35",
     "metrics.opacity/disabled": "0.4",
-    "metrics.opacity/grain": "0.5",
-    "metrics.opacity/home-dim-saturation": "0.45",
+    "metrics.opacity/glint": "0.95",
+    "metrics.opacity/grille-rest": "0.55",
+    "metrics.opacity/hairline": "0.5",
     "metrics.opacity/legend": "1",
     "metrics.opacity/legend-muted": "0.5",
-    "metrics.opacity/orb-light": "0.3",
+    "metrics.opacity/off": "0.45",
     "metrics.opacity/placeholder": "0.4",
     "metrics.opacity/popup-shadow": "0.12",
     "metrics.opacity/press-brighten": "0.15",
+    "metrics.opacity/sheen": "0.22",
     "metrics.opacity/surface-grain": "0.14",
     "metrics.opacity/surface-vignette": "0",
     "metrics.opacity/term-cancel": "0.7",
-    "metrics.orb/bar": "40",
-    "metrics.orb/dissipate-blur": "0.16",
-    "metrics.orb/dissipate-scale": "1.25",
-    "metrics.orb/home": "112",
-    "metrics.orb/light-reach": "0.9",
-    "metrics.orb/light-x": "0.3",
-    "metrics.orb/light-y": "0.22",
-    "metrics.orb/panel": "96",
     "metrics.panel/spacing": "12",
     "metrics.picker/preview-width": "393",
     "metrics.picker/radius": "10",
@@ -567,30 +562,41 @@ enum DesignTokens {
     "metrics.popup/radius": "10",
     "metrics.popup/shadow-radius": "8",
     "metrics.popup/shadow-y": "2",
-    "metrics.press/scale": "0.94",
-    "metrics.ring/active": "2",
-    "metrics.ring/still": "1",
+    "metrics.radius/button": "4",
+    "metrics.radius/card": "12",
+    "metrics.radius/hero": "16",
+    "metrics.radius/input": "8",
+    "metrics.ribs/rest-height": "16",
+    "metrics.ribs/rest-width": "40",
     "metrics.row/gap": "11",
     "metrics.slim/spacing": "8",
+    "metrics.streak/arm": "1.4",
+    "metrics.streak/height": "2",
+    "metrics.streak/line": "1",
+    "metrics.streak/point": "4",
     "metrics.surface/vignette-end": "0.75",
     "metrics.surface/vignette-start": "0.3",
     "metrics.term/gap": "8",
     "metrics.term/height": "36",
     "metrics.term/inset": "2",
     "metrics.term/pad": "14",
+    "metrics.voice/bar-height": "32",
+    "metrics.voice/bar-width": "240",
+    "metrics.voice/home-height": "112",
+    "metrics.voice/home-width": "280",
+    "metrics.voice/panel-height": "88",
+    "metrics.voice/panel-width": "300",
+    "metrics.voice/press-scale": "0.94",
     "metrics.voicebar/addterm-clearance": "12",
     "metrics.voicebar/height": "44",
     "metrics.voicebar/note-gap": "10",
     "metrics.wave/bar": "2",
     "metrics.wave/bar-height": "24",
-    "metrics.wave/bar-width": "240",
     "metrics.wave/gap": "2",
     "metrics.wave/home-height": "44",
-    "metrics.wave/home-width": "280",
     "metrics.wave/panel-height": "40",
-    "metrics.wave/panel-width": "300",
     "metrics.wordmark/height": "22",
-    "type.ratio/orb-glyph": "0.34",
+    "type.ratio/voice-glyph": "0.34",
     "type.size/body": "16",
     "type.size/caption": "14",
     "type.size/cta": "14",
@@ -608,23 +614,21 @@ enum DesignTokens {
     "type.weight/label": "medium",
     "type.weight/legend": "medium",
     "type.weight/letter": "regular",
-    "type.weight/orb-glyph": "semibold",
     "type.weight/popup": "regular",
     "type.weight/term": "regular",
+    "type.weight/voice-glyph": "semibold",
     "motion.caret": "0.5",
     "motion.colour": "0.2",
-    "motion.drop": "2.4",
-    "motion.drop-hold": "0.9",
-    "motion.drop-rise": "0.5",
-    "motion.drop-spread": "1",
     "motion.ease/signature": "0.22,1,0.36,1",
     "motion.flip": "0.25",
+    "motion.glint-life": "0.5",
     "motion.height-change": "0.25",
     "motion.key-press": "0.08",
     "motion.landing": "0.6",
-    "motion.mood": "0.8",
     "motion.press": "0.1",
     "motion.ring-period": "1.6",
+    "motion.sheen": "4",
+    "motion.sheen-working": "1.6",
     "motion.state-fade": "0.5",
     "motion.term-swap": "0.4",
     "motion.wave-fade": "0.7",
@@ -637,9 +641,6 @@ enum DesignTokens {
     "fonts.mono/light": "ModernGothicMono-Light",
     "fonts.mono/medium": "ModernGothicMono-Medium",
     "fonts.mono/regular": "ModernGothicMono-Regular",
-    "gradients.orb":
-      "#D7D3F4@0 #B0A7E9@0.0673 #67AD82@0.1442 #01762F@0.3029 #3923C7@0.5962 #887BDD@0.75 #D7D3F4@0.8942 #FFFFFF@1 bottom>top",
-    "gradients.orb-ring": "#01762F@0 #FFFFFF@1 topLeading>bottomTrailing",
   ]
 }
 // swiftlint:enable type_body_length

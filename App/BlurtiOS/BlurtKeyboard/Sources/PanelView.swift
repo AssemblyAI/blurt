@@ -1,16 +1,15 @@
 import SwiftUI
 
-/// A big orb, centred, that dissipates into the wave while recording; cancel
-/// in the corner while something is in flight; one row of keys. 216 pt.
+/// The voice element, centred, big; cancel in the corner while something is
+/// in flight; one row of keys. 216 pt.
 struct PanelView: View {
   var model: KeyboardModel
+  @Environment(\.keyboardPalette) private var palette
 
   var body: some View {
     VStack(spacing: DesignTokens.Metrics.panelSpacing) {
       Spacer(minLength: 0)
-      MicControl(
-        model: model, size: DesignTokens.Metrics.orbPanel,
-        wave: CGSize(width: DesignTokens.Metrics.wavePanelWidth, height: DesignTokens.Metrics.wavePanelHeight))
+      MicControl(model: model, slot: .panel)
       Spacer(minLength: 0)
       HStack(spacing: KeyboardPalette.keyGap) {
         if model.needsGlobe { KeyCap(systemImage: "globe", dark: true) { model.globe() } }
@@ -21,7 +20,7 @@ struct PanelView: View {
     }
     .overlay(alignment: .topTrailing) {
       if model.voiceState.canCancel {
-        KeyCap(systemImage: "xmark", tint: BlurtBrand.errorOrange, bare: true) { model.cancel() }
+        KeyCap(systemImage: "xmark", tint: palette.notice, bare: true) { model.cancel() }
           .accessibilityLabel("Cancel dictation")
           .transition(.opacity)
       }

@@ -5,7 +5,7 @@
   /// reference, and the way a screenshot of the keyboard is taken without
   /// tapping through Notes. Debug builds only, reached by launch argument:
   ///
-  ///     -BlurtGallery <slimBar|panel|full> <state>[,<state>…] [theme] [-BlurtGalleryStill] [-BlurtGalleryBare]
+  ///     -BlurtGallery <slimBar|panel|full> <state>[,<state>…] [face] [-BlurtGalleryStill] [-BlurtGalleryBare] [-BlurtGalleryVoice a|b|c]
   ///
   /// The last word is a face, `light` or `dark` (the older theme words still
   /// land: `system` and `paper` are light, `system-dark` and `ink` dark); the
@@ -14,8 +14,9 @@
   /// zero — the ring, the meter's wave, the orb's fluid and grain — so two
   /// captures of one state are the same pixels; `-BlurtGalleryBare` draws the
   /// first row alone, no caption, inside a 2 pt `#FF00FF` registration border
-  /// that `scripts/design-diff.swift crop` cuts to. `-BlurtOrb <size> <mood>`
-  /// renders one orb fill by itself the same way, for Figma's image fills.
+  /// that `scripts/design-diff.swift crop` cuts to. `-BlurtGalleryVoice a|b|c`
+  /// picks which mic concept draws (`VoiceElementKind`); `-BlurtVoice <a|b|c>
+  /// <bar|panel|home> <state> [light|dark]` renders that element by itself.
   /// where a state is `off` (no Full Access), `start` (app not listening),
   /// `idle`, `connecting`, `recording`, `processing`, `pasted`, `copied`,
   /// `error`, `landed` (the drop, timed for a screenshot) or `live` (a whole
@@ -42,9 +43,13 @@
       var still = false
       /// One row, no caption, a registration border round the keyboard.
       var bare = false
+      /// Which mic concept draws.
+      var voice = VoiceElementKind.shipped
 
       static func parse(_ arguments: [String]) -> Options {
-        Options(still: arguments.contains("-BlurtGalleryStill"), bare: arguments.contains("-BlurtGalleryBare"))
+        Options(
+          still: arguments.contains("-BlurtGalleryStill"), bare: arguments.contains("-BlurtGalleryBare"),
+          voice: VoiceElementKind.parse(arguments) ?? .shipped)
       }
     }
 
@@ -92,6 +97,7 @@
         .frame(height: row.model.effectiveLayout.height)
         .clipped()
         .environment(\.keyboardMotionHeld, options.still)
+        .environment(\.voiceElementKind, options.voice)
     }
 
     /// The rows named by the launch arguments; empty when they don't ask for
@@ -112,6 +118,13 @@
     /// The words that ask for the dark face; anything else is the light one.
     static let darkFaces: Set<String> = ["dark", "system-dark", "ink"]
 
+    /// The pipeline's phases by gallery name; `landed` is pasted, the moment
+    /// the words went in.
+    private static let phases: [String: PhaseSnapshot.State] = [
+      "connecting": .connecting, "recording": .recording, "processing": .processing, "pasted": .pasted,
+      "copied": .copied, "error": .error, "landed": .pasted,
+    ]
+
     private static func model(layout: KeyboardLayout, state: String, theme: String) -> KeyboardModel {
       let model = KeyboardModel()
       model.layout = layout
@@ -120,22 +133,13 @@
       // `term` the voice bar as the key-term field, mid-typing.
       model.panelShowsKeys = state == "keys"
       if state == "term" { model.termDraft = "Rizz" }
-      // `landed`: the words go in 2.4 s after launch, so a screenshot taken 3 s
-      // in (scripts/ios-sim.sh) catches the drop at its fullest.
-      if state == "landed" { model.resultLandedAt = Date().addingTimeInterval(2.4) }
+      // `landed`: the words go in 2.75 s after launch, so a screenshot taken
+      // 3 s in (scripts/ios-sim.sh) catches the glint mid-sweep.
+      if state == "landed" { model.resultLandedAt = Date().addingTimeInterval(2.75) }
       if state == "live" { walk(model) }
       model.hasFullAccess = state != "off"
       model.isListening = state != "off" && state != "start"
-      let phase: PhaseSnapshot.State =
-        switch state {
-        case "connecting": .connecting
-        case "recording": .recording
-        case "processing": .processing
-        case "pasted": .pasted
-        case "copied": .copied
-        case "error": .error
-        default: .idle
-        }
+      let phase = Self.phases[state] ?? .idle
       model.snapshot = PhaseSnapshot(
         state: phase, message: phase == .error ? "The microphone didn't start." : nil,
         level: phase == .recording ? 0.62 : 0, at: Date())
@@ -175,43 +179,62 @@
       }
     }
 
-    /// `-BlurtOrb <size> <off|idle|listening|working|landed>`: one orb fill,
-    /// still, on the ink surface, inside the registration border — the image
-    /// Figma's `Orb/Disc` component uses, since a mesh gradient under grain is
-    /// nothing Figma can draw natively (DESIGN.md › Figma). `landed` is the
-    /// drop at its peak; `listening` is the gallery's level, 0.62.
-    struct OrbStillView: View {
-      let size: CGFloat
-      let mood: PrismOrb.Mood
+    /// `-BlurtVoice <a|b|c> <bar|panel|home> <state> [light|dark]`: one voice
+    /// element by itself, in its slot's box, on the face's surface, inside the
+    /// registration border — for the review sheet and for Figma. States are
+    /// the pipeline's plus `off` (not ready) and `landed` (the glint, timed
+    /// for a 3 s screenshot).
+    struct VoiceStillView: View {
+      let kind: VoiceElementKind
+      let slot: VoiceSlot
+      let state: VoiceState
       let landedAt: Date?
+      let dark: Bool
 
       var body: some View {
+        let palette: KeyboardPalette = dark ? .brandDark : .brandLight
         VStack {
           Spacer(minLength: 0)
-          PrismOrb(mood: mood, landedAt: landedAt, animated: false)
-            .frame(width: size, height: size)
-            .clipShape(Circle())
-            .padding(KeyboardGalleryView.registrationWidth)
-            .background(KeyboardGalleryView.registration)
+          VoiceElementView(
+            inputs: VoiceElementInputs(state: state, landedAt: landedAt, animated: true, palette: palette, slot: slot)
+          )
+          .frame(width: slot.box.width, height: slot.box.height)
+          .padding(KeyboardGalleryView.registrationWidth)
+          .background(KeyboardGalleryView.registration)
+          .environment(\.voiceElementKind, kind)
           Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(DesignTokens.Brand.ink)
+        .background(palette.surface)
         .ignoresSafeArea()
       }
 
-      static func parse(_ arguments: [String]) -> OrbStillView? {
-        guard let flag = arguments.firstIndex(of: "-BlurtOrb"), arguments.count > flag + 2,
-          let size = Double(arguments[flag + 1])
+      static func parse(_ arguments: [String]) -> VoiceStillView? {
+        guard let flag = arguments.firstIndex(of: "-BlurtVoice"), arguments.count > flag + 3,
+          let kind = VoiceElementKind(rawValue: arguments[flag + 1]),
+          let slot = VoiceSlot(rawValue: arguments[flag + 2])
         else { return nil }
-        switch arguments[flag + 2] {
-        case "off": return OrbStillView(size: size, mood: .off, landedAt: nil)
-        case "idle": return OrbStillView(size: size, mood: .idle, landedAt: nil)
-        case "listening": return OrbStillView(size: size, mood: .listening(level: 0.62), landedAt: nil)
-        case "working": return OrbStillView(size: size, mood: .working, landedAt: nil)
-        case "landed": return OrbStillView(size: size, mood: .idle, landedAt: Date().addingTimeInterval(-0.6))
-        default: return nil
-        }
+        let dark = arguments.count > flag + 4 && darkFaces.contains(arguments[flag + 4])
+        guard let (state, landedAt) = Self.state(named: arguments[flag + 3]) else { return nil }
+        return VoiceStillView(kind: kind, slot: slot, state: state, landedAt: landedAt, dark: dark)
+      }
+
+      /// The states by name: the pipeline's, `off` (not ready) and `landed`
+      /// (pasted, with the glint timed for the screenshot).
+      private static func state(named name: String) -> (VoiceState, Date?)? {
+        let states: [String: VoiceState] = [
+          "off": VoiceState(phase: .idle, isReady: false),
+          "idle": VoiceState(phase: .idle, isReady: true),
+          "connecting": VoiceState(phase: .connecting, isReady: true),
+          "recording": VoiceState(phase: .recording, isReady: true, level: 0.62),
+          "processing": VoiceState(phase: .processing, isReady: true),
+          "pasted": VoiceState(phase: .pasted, isReady: true),
+          "copied": VoiceState(phase: .copied, isReady: true),
+          "error": VoiceState(phase: .error, isReady: true, message: "The microphone didn't start."),
+          "landed": VoiceState(phase: .pasted, isReady: true),
+        ]
+        guard let state = states[name] else { return nil }
+        return (state, name == "landed" ? Date().addingTimeInterval(2.75) : nil)
       }
     }
   }
