@@ -195,6 +195,11 @@ struct DictationSessionContextTests {
     // request goes out with no context at all — the case being tested.
     await clock.waitUntilSleeping(for: DictationSession.contextWaitBudget)
     clock.advance(by: DictationSession.contextWaitBudget)
+    // `advance` only resumes the budget's sleeper; the upload's race is not
+    // decided until that child runs. Wait for the request to actually open
+    // before unblocking the read, or a fast capture queue can win the race and
+    // the request goes out primed after all.
+    while await transcriber.receivedContexts.isEmpty { await Task.yield() }
     // Only now let the read finish. Waiting on the box rather than sleeping, so
     // this asserts the recovery instead of racing the capture queue.
     gate.signal()
