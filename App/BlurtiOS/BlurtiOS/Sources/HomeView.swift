@@ -87,30 +87,36 @@ struct HomeView: View {
   // MARK: - The orb and the listening state
 
   private static let orbSize: CGFloat = 112
-  private var level: CGFloat { CGFloat(coordinator.level) }
+  /// The wave's reach at hero size, inside the card at any phone width.
+  private static let waveReach: CGFloat = 280
   private var isRecording: Bool { coordinator.phase == .recording }
   private var orbWorking: Bool { coordinator.window.isOpen || coordinator.phase.isCapturing }
 
   private var hero: some View {
     VStack(spacing: 18) {
-      PrismOrb(mood: heroMood, landedAt: landedAt, animated: !reduceMotion)
-        .frame(width: Self.orbSize, height: Self.orbSize)
-        .clipShape(Circle())
-        .overlay { HeroRing(animated: orbWorking && !reduceMotion) }
-        .saturation(coordinator.window.isOpen ? 1 : 0.45)
-        .shadow(
-          color: BlurtBrand.greenOnDark.opacity(isRecording ? 0.35 + 0.45 * level : 0),
-          radius: isRecording ? Self.orbSize * 0.1 + level * Self.orbSize * 0.25 : 0
-        )
-        .animation(.easeOut(duration: 0.08), value: level)
-        .padding(.top, 6)
+      // The keyboard's mic key at hero size: the orb, and the wave through it
+      // while recording, fading as the key's does.
+      ZStack {
+        if isRecording {
+          SignalWave(
+            level: coordinator.level, animated: !reduceMotion, color: BlurtBrand.accent, orbDiameter: Self.orbSize
+          )
+          .frame(width: Self.waveReach, height: Self.orbSize * 0.5)
+          .transition(.opacity)
+        }
+        PrismOrb(mood: heroMood, landedAt: landedAt, animated: !reduceMotion)
+          .frame(width: Self.orbSize, height: Self.orbSize)
+          .clipShape(Circle())
+          .overlay { HeroRing(animated: orbWorking && !reduceMotion) }
+          .saturation(coordinator.window.isOpen ? 1 : 0.45)
+      }
+      .frame(width: Self.orbSize, height: Self.orbSize)
+      .animation(.easeInOut(duration: MicKey.waveFade), value: isRecording)
+      .animation(.easeInOut(duration: MicKey.stateFade), value: coordinator.window.isOpen)
+      .padding(.top, 6)
       VStack(spacing: 4) {
         Text(heroTitle).font(.title2.weight(.semibold)).multilineTextAlignment(.center)
         Text(heroSubtitle).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
-      }
-      if isRecording {
-        WaveformMeter(level: coordinator.level, animated: !reduceMotion, color: BlurtBrand.accent)
-          .frame(width: 180, height: 28)
       }
       if coordinator.window.isOpen {
         Button(role: .destructive) {

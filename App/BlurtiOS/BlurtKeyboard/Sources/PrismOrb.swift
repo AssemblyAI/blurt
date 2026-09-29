@@ -25,12 +25,15 @@ struct PrismOrb: View {
   }
 
   var mood: Mood
-  /// When the words landed — the drop falls then and is gone 1.6 s later.
+  /// When the words landed — the drop falls then and is gone 2.4 s later.
   var landedAt: Date?
   var animated: Bool
 
-  /// The drop's life: up in 0.35 s, held to 0.6 s, gone by 1.6 s.
-  static let dropDuration: TimeInterval = 1.6
+  /// The drop's life: up in 0.5 s, held to 0.9 s, gone by 2.4 s — an event,
+  /// but a soft one.
+  static let dropDuration: TimeInterval = 2.4
+  static let dropRise: TimeInterval = 0.5
+  static let dropHold: TimeInterval = 0.9
 
   var body: some View {
     TimelineView(.animation(minimumInterval: keyboardAnimationInterval, paused: !animated)) { timeline in
@@ -52,7 +55,7 @@ struct PrismOrb: View {
         Grain(seed: animated ? Int(time * 24) : 7).opacity(0.5).blendMode(.overlay)
       }
     }
-    .animation(.easeInOut(duration: 0.6), value: mood)
+    .animation(.easeInOut(duration: 0.8), value: mood)
   }
 
   /// How much violet is in the orb `elapsed` seconds after the words landed:
@@ -63,9 +66,9 @@ struct PrismOrb: View {
       let t = min(max(x, 0), 1)
       return t * t * (3 - 2 * t)
     }
-    if elapsed < 0.35 { return smooth(elapsed / 0.35) }
-    if elapsed < 0.6 { return 1 }
-    return 1 - smooth((elapsed - 0.6) / (dropDuration - 0.6))
+    if elapsed < dropRise { return smooth(elapsed / dropRise) }
+    if elapsed < dropHold { return 1 }
+    return 1 - smooth((elapsed - dropHold) / (dropDuration - dropHold))
   }
 
   // MARK: The fluid
@@ -133,7 +136,7 @@ struct PrismOrb: View {
     let elapsed: TimeInterval
 
     var body: some View {
-      let spread = min(1, elapsed / 0.7)
+      let spread = min(1, elapsed / 1.0)
       Circle()
         .fill(
           RadialGradient(
@@ -149,7 +152,8 @@ struct PrismOrb: View {
 
 /// Film grain: a scatter of faint dots, a new scatter each frame so it
 /// shimmers the way grain does, drawn from a seed so a frame is reproducible.
-private struct Grain: View {
+/// The orb's, and the wave's.
+struct Grain: View {
   let seed: Int
 
   var body: some View {
@@ -177,15 +181,23 @@ private struct Grain: View {
 private struct Sparkles: View {
   let elapsed: TimeInterval
 
-  private static let spots: [(x: CGFloat, y: CGFloat, size: CGFloat, delay: Double)] = [
-    (0.5, 0.5, 0.14, 0.05), (0.24, 0.3, 0.16, 0.15), (0.76, 0.22, 0.11, 0.25), (0.8, 0.64, 0.14, 0.32),
-    (0.3, 0.74, 0.1, 0.4), (0.56, 0.84, 0.12, 0.48),
+  private struct Spot {
+    let x: CGFloat
+    let y: CGFloat
+    let size: CGFloat
+    let delay: Double
+  }
+
+  private static let spots: [Spot] = [
+    Spot(x: 0.5, y: 0.5, size: 0.14, delay: 0.08), Spot(x: 0.24, y: 0.3, size: 0.16, delay: 0.24),
+    Spot(x: 0.76, y: 0.22, size: 0.11, delay: 0.4), Spot(x: 0.8, y: 0.64, size: 0.14, delay: 0.5),
+    Spot(x: 0.3, y: 0.74, size: 0.1, delay: 0.64), Spot(x: 0.56, y: 0.84, size: 0.12, delay: 0.77),
   ]
 
   var body: some View {
     GeometryReader { geo in
       ForEach(Array(Self.spots.enumerated()), id: \.offset) { _, spot in
-        let life = (elapsed - spot.delay) / 0.9
+        let life = (elapsed - spot.delay) / 1.3
         let up = min(max(life, 0), 1)
         let shine = up < 0.3 ? up / 0.3 : max(0, 1 - (up - 0.3) / 0.7)
         Image(systemName: "sparkle")

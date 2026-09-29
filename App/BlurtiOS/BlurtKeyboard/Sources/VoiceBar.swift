@@ -2,9 +2,10 @@ import BlurtEngine
 import SwiftUI
 
 /// The keyboard's voice row, and the only place voice lives: the orb, which
-/// is the mic key — tap to start and stop, hold to talk — growing into the
-/// wave while recording. No words: the orb's ring, shape and glow say what is
-/// happening, and the haptics confirm it (see `MicKey`). Beside it, a small
+/// is the mic key — tap to start and stop, hold to talk — with the wave
+/// passing through it while recording. No words: the orb's ring and colour
+/// and the wave say what is happening, and the haptics confirm it (see
+/// `MicKey`). Beside it, a small
 /// + for the one thing people want the instant Blurt mishears a word: add it
 /// as a key term. The bar then becomes the field the keys type into.
 struct VoiceBar: View {
@@ -22,7 +23,7 @@ struct VoiceBar: View {
           // The one state the orb can't show on its own: without Full Access
           // nothing here can work, and the user has to be told where to go.
           HStack(spacing: 10) {
-            MicKey(model: model, size: 40, expandedWidth: 40)
+            MicKey(model: model, size: 40, waveReach: 0)
             Text("Allow Full Access in Settings → Keyboards")
               .font(.footnote)
               .foregroundStyle(BlurtBrand.errorOrange)
@@ -31,8 +32,8 @@ struct VoiceBar: View {
           }
           .transition(.opacity)
         } else {
-          // The wave's capsule stays clear of the + at the trailing edge.
-          MicKey(model: model, size: 40, expandedWidth: min(200, geo.size.width - 2 * (32 + 12)))
+          // The wave stays clear of the + at the trailing edge.
+          MicKey(model: model, size: 40, waveReach: min(240, geo.size.width - 2 * (32 + 12)))
             .transition(.opacity)
         }
       }
@@ -42,7 +43,7 @@ struct VoiceBar: View {
     .overlay(alignment: .trailing) {
       if model.termDraft == nil, model.hasFullAccess { AddTermKey(model: model) }
     }
-    .animation(.easeInOut(duration: 0.15), value: model.termDraft == nil)
+    .animation(.easeInOut(duration: 0.4), value: model.termDraft == nil)
   }
 }
 
@@ -137,11 +138,14 @@ private struct Caret: View {
 /// The Mac pill's live meter: a row of bars that fills the width it is given
 /// and tracks the current level, with the engine's envelope and idle wave
 /// (`MeterBarGeometry`, unit-tested there). The keyboard hears the level from
-/// the app at ~12 Hz; the wave keeps the row alive between ticks.
+/// the app at ~12 Hz; the wave keeps the row alive between ticks. With
+/// `grain`, the orb's film grain shimmers over the bars, so the wave is the
+/// orb's own material and not a flat swatch.
 struct WaveformMeter: View {
   let level: Float
   let animated: Bool
   let color: Color
+  var grain = false
 
   var body: some View {
     GeometryReader { geo in
@@ -161,7 +165,7 @@ struct WaveformMeter: View {
   }
 
   private func bars(layout: MeterBarRow, time: TimeInterval) -> some View {
-    HStack(spacing: MeterBarGeometry.barSpacing) {
+    let row = HStack(spacing: MeterBarGeometry.barSpacing) {
       ForEach(0..<layout.count, id: \.self) { index in
         Capsule()
           .fill(color)
@@ -171,5 +175,39 @@ struct WaveformMeter: View {
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
+    return row.overlay {
+      if grain {
+        Grain(seed: animated ? Int(time * 24) : 7)
+          .opacity(0.5)
+          .mask { row }
+          .blendMode(.overlay)
+      }
+    }
+  }
+}
+
+/// The voice as a signal passing through the orb: the meter's bars, flat on
+/// the surface with no container, gone where they meet the orb and whole a
+/// little way out from it, tapering away with the meter's own envelope, the
+/// orb's grain over them. Given the whole reach; the caller draws the orb on
+/// top. Never tappable — the orb stays the key.
+struct SignalWave: View {
+  let level: Float
+  let animated: Bool
+  let color: Color
+  /// The orb's diameter: the bars fade in from its edge.
+  let orbDiameter: CGFloat
+
+  /// How far out from the orb's edge the bars are whole.
+  static let clearance: CGFloat = 14
+
+  var body: some View {
+    WaveformMeter(level: level, animated: animated, color: color, grain: true)
+      .mask {
+        RadialGradient(
+          colors: [.clear, .white], center: .center,
+          startRadius: orbDiameter / 2 + 2, endRadius: orbDiameter / 2 + Self.clearance)
+      }
+      .accessibilityHidden(true)
   }
 }

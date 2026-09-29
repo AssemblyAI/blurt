@@ -73,7 +73,7 @@ struct SlimBarView: View {
   }
 }
 
-/// A big orb, centred, that grows into the wave while recording; cancel in
+/// A big orb, centred, with the wave through it while recording; cancel in
 /// the corner while something is in flight; one row of keys. 216 pt.
 struct PanelView: View {
   var model: KeyboardModel
@@ -81,7 +81,7 @@ struct PanelView: View {
   var body: some View {
     VStack(spacing: 12) {
       Spacer(minLength: 0)
-      MicKey(model: model, size: 96, expandedWidth: 260)
+      MicKey(model: model, size: 96, waveReach: 320)
       Spacer(minLength: 0)
       HStack(spacing: KeyboardPalette.keyGap) {
         if model.needsGlobe { KeyCap(systemImage: "globe", dark: true) { model.globe() } }
@@ -105,53 +105,60 @@ struct PanelView: View {
 /// (push-to-talk) — `KeyboardModel` runs the engine's gate. What it does:
 /// dimmed when Blurt isn't ready (no Full Access, or the app isn't listening;
 /// the tap opens Blurt); on a tap the ring sweeps as the app's orb does while
-/// the mic comes up; then the orb grows sideways into a capsule holding the
-/// live wave for as long as you talk, glowing with your voice; on the stop it
-/// shrinks back to the circle with the ring sweeping while the words come;
-/// then a green ring for a moment when they landed, a clipboard on a green
-/// ring when they went to the clipboard instead, an orange ring and an
-/// exclamation mark when something failed. Each also has its haptic.
+/// the mic comes up; then the voice fades in as a wave passing through the
+/// orb, flat on the keyboard's surface, for as long as you talk — the orb
+/// stays a circle and greens with the voice; on the stop the wave fades out
+/// and the ring sweeps while the words come; then a green ring for a moment
+/// when they landed (the violet drop with it), a clipboard on a green ring
+/// when they went to the clipboard instead, an orange ring and an exclamation
+/// mark when something failed. Each also has its haptic.
+///
+/// Nothing snaps or springs: the wave fades over `waveFade`, every other
+/// change over `stateFade`. Only the press itself answers at once.
 struct MicKey: View {
   var model: KeyboardModel
   var size: CGFloat
-  /// How wide the orb grows while recording, to hold the wave.
-  var expandedWidth: CGFloat
+  /// How wide the wave reaches while recording, centred on the orb; 0 for
+  /// none. It draws past the key's own frame and is never tappable.
+  var waveReach: CGFloat
   @State private var pressed = false
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.keyboardPalette) private var palette
+
+  /// The wave's fade, in and out.
+  static let waveFade: Double = 0.7
+  /// Every other change on the key: the ring, a glyph, the dimming.
+  static let stateFade: Double = 0.5
 
   var body: some View {
-    let level = CGFloat(model.snapshot.level)
-    let width = isRecording ? expandedWidth : size
     ZStack {
+      if isRecording, waveReach > 0 {
+        SignalWave(
+          level: Float(model.snapshot.level), animated: !reduceMotion, color: palette.signal, orbDiameter: size
+        )
+        .frame(width: waveReach, height: size * 0.5)
+        .allowsHitTesting(false)
+        .transition(.opacity)
+      }
       PrismOrb(mood: mood, landedAt: model.resultLandedAt, animated: !reduceMotion)
-        .clipShape(Capsule())
+        .clipShape(Circle())
         .overlay { ring }
         .saturation(isReady ? 1 : 0.35)
         .opacity(isReady ? 1 : 0.8)
-      if isRecording {
-        WaveformMeter(level: Float(model.snapshot.level), animated: !reduceMotion, color: .white.opacity(0.92))
-          .frame(width: expandedWidth - size * 0.7, height: size * 0.5)
-          .transition(.opacity)
-      }
       if let glyph {
         Image(systemName: glyph)
           .font(.system(size: size * 0.34, weight: .semibold))
           .foregroundStyle(.white)
-          .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
           .transition(.opacity)
       }
     }
-    .frame(width: width, height: size)
-    .shadow(
-      color: BlurtBrand.greenOnDark.opacity(isRecording ? 0.35 + 0.45 * level : 0),
-      radius: isRecording ? size * 0.1 + level * size * 0.25 : 0
-    )
-    .animation(.easeOut(duration: 0.08), value: level)
-    .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: isRecording)
-    .animation(.easeInOut(duration: 0.15), value: model.snapshot.state)
+    .frame(width: size, height: size)
+    .animation(.easeInOut(duration: Self.waveFade), value: isRecording)
+    .animation(.easeInOut(duration: Self.stateFade), value: model.snapshot.state)
+    .animation(.easeInOut(duration: Self.stateFade), value: isReady)
     .scaleEffect(pressed ? 0.94 : 1)
     .animation(.easeOut(duration: 0.1), value: pressed)
-    .contentShape(Capsule())
+    .contentShape(Circle())
     .accessibilityLabel(isReady ? (isRecording ? "Stop dictation" : "Dictate") : "Start Blurt")
     .accessibilityValue(model.snapshot.state == .error ? model.snapshot.message ?? "Dictation failed." : "")
     .accessibilityAddTraits(.isButton)
@@ -203,12 +210,12 @@ struct MicKey: View {
 
   /// The ring: the app orb's sweep (one turn per 1.6 s, engine geometry)
   /// while the mic comes up and while the words come; still, and solid green
-  /// or orange, for a notice; still on the capsule while recording.
+  /// or orange, for a notice; still while recording.
   @ViewBuilder private var ring: some View {
     let width: CGFloat = isWorking || isNotice ? 2 : 1
     if isWorking, !isRecording, !reduceMotion {
       TimelineView(.animation(minimumInterval: keyboardAnimationInterval)) { timeline in
-        Capsule()
+        Circle()
           .strokeBorder(BlurtBrand.orbRingGradient, lineWidth: width)
           .rotationEffect(
             .degrees(
@@ -216,9 +223,9 @@ struct MicKey: View {
                 time: timeline.date.timeIntervalSinceReferenceDate, period: BrandOrb.period)))
       }
     } else if let ringColor {
-      Capsule().strokeBorder(ringColor, lineWidth: width)
+      Circle().strokeBorder(ringColor, lineWidth: width)
     } else {
-      Capsule().strokeBorder(BlurtBrand.orbRingGradient, lineWidth: width)
+      Circle().strokeBorder(BlurtBrand.orbRingGradient, lineWidth: width)
     }
   }
 

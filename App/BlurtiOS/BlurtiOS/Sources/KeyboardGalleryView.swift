@@ -11,8 +11,10 @@
   /// `lavender`, `mint`, `midnight`, `sunset`); the iPhone's light face when
   /// left out.
   /// where a state is `off` (no Full Access), `start` (app not listening),
-  /// `idle`, `connecting`, `recording`, `processing`, `pasted`, `copied` or
-  /// `error`. `scripts/ios-sim.sh` passes `BLURT_LAUNCH_ARGS` through, so
+  /// `idle`, `connecting`, `recording`, `processing`, `pasted`, `copied`,
+  /// `error`, `landed` (the drop, timed for a screenshot) or `live` (a whole
+  /// dictation walked on a clock, over and over, for watching or recording
+  /// the motion). `scripts/ios-sim.sh` passes `BLURT_LAUNCH_ARGS` through, so
   ///
   ///     BLURT_LAUNCH_ARGS="-BlurtGallery panel idle,recording,processing" \
   ///       scripts/ios-sim.sh --screenshot panel.png
@@ -69,9 +71,10 @@
       // `term` the voice bar as the key-term field, mid-typing.
       model.panelShowsKeys = state == "keys"
       if state == "term" { model.termDraft = "Rizz" }
-      // `landed`: the words go in 2.6 s after launch, so a screenshot taken 3 s
+      // `landed`: the words go in 2.4 s after launch, so a screenshot taken 3 s
       // in (scripts/ios-sim.sh) catches the drop at its fullest.
-      if state == "landed" { model.resultLandedAt = Date().addingTimeInterval(2.6) }
+      if state == "landed" { model.resultLandedAt = Date().addingTimeInterval(2.4) }
+      if state == "live" { walk(model) }
       model.hasFullAccess = state != "off"
       model.isListening = state != "off" && state != "start"
       let phase: PhaseSnapshot.State =
@@ -88,6 +91,39 @@
         state: phase, message: phase == .error ? "The microphone didn't start." : nil,
         level: phase == .recording ? 0.62 : 0, at: Date())
       return model
+    }
+
+    /// `live`: the key walks a whole dictation, again and again — idle for
+    /// 1.5 s, connecting for 1 s, 4.5 s of recording with a made-up voice at
+    /// the app's 12 Hz, processing for 1.5 s, the words landing, the pasted
+    /// notice, idle again — so the fades can be watched, or recorded with
+    /// `xcrun simctl io booted recordVideo`.
+    private static func walk(_ model: KeyboardModel) {
+      Task { @MainActor in
+        @MainActor func set(_ state: PhaseSnapshot.State, level: Double = 0) {
+          model.snapshot = PhaseSnapshot(state: state, message: nil, level: level, at: Date())
+        }
+        while !Task.isCancelled {
+          set(.idle)
+          try? await Task.sleep(for: .seconds(1.5))
+          set(.connecting)
+          try? await Task.sleep(for: .seconds(1))
+          let start = Date()
+          while Date().timeIntervalSince(start) < 4.5 {
+            let t = Date().timeIntervalSince(start)
+            let voice = 0.15 + 0.55 * abs(sin(t * 2.6)) * (0.55 + 0.45 * sin(t * 7.1))
+            set(.recording, level: min(1, max(0, voice)))
+            try? await Task.sleep(for: .milliseconds(80))
+          }
+          set(.processing)
+          try? await Task.sleep(for: .seconds(1.5))
+          model.resultLandedAt = Date()
+          set(.pasted)
+          try? await Task.sleep(for: .seconds(1.2))
+          set(.idle)
+          try? await Task.sleep(for: .seconds(2))
+        }
+      }
     }
   }
 #endif
