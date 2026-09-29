@@ -200,6 +200,22 @@ struct KeyInjectorInsertTests {
     #expect(pasted.values == ["First.", " Second."])
   }
 
+  @Test("opaque editor: typing or clicking after a paste drops the same-window separator")
+  func opaqueEditorUserInputDropsSeparator() async throws {
+    // Issue #206: in Google Docs the user dictates a sentence, presses Return
+    // twice for a new paragraph, and dictates again. The window title hasn't
+    // changed, but the caret no longer follows our paste — a leading space
+    // there is a stray indent. Input "0 seconds ago" is always newer than the
+    // first paste, which is what pressing Return between dictations looks like.
+    let (injector, pasted) = makeRecordingInjector(secondsSinceUserInput: { 0 })
+    await injector.setTargetApp(try liveTargetApp())
+
+    try await injector.insert("First.", after: nil, windowTitle: "Doc - Google Docs")
+    try await injector.insert("Second.", after: nil, windowTitle: "Doc - Google Docs")
+
+    #expect(pasted.values == ["First.", "Second."])
+  }
+
   @Test("overlapping inserts still restore the user's original clipboard")
   func overlappingInsertsRestoreOriginal() async throws {
     let clip = FakeClipboard(string: "user-clipboard")

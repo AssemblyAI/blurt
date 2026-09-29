@@ -41,6 +41,19 @@ extension KeyInjector {
     AXIsProcessTrusted()
   }
 
+  /// Seconds since the user last pressed a key or clicked, anywhere. Reads the
+  /// HID system state's idle counters: no permission needed (no event tap, no
+  /// Input Monitoring), and only hardware input moves them — verified that our
+  /// own synthesized ⌘V leaves them untouched, so a paste can't make it look
+  /// like the user typed after it. Relies on every `TriggerKey` being a modifier
+  /// (`flagsChanged`, not `keyDown`): a non-modifier trigger would count as input
+  /// on every dictation and silently disable the same-window separator.
+  static func secondsSinceHardwareInput() -> TimeInterval {
+    let types: [CGEventType] = [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown]
+    return types.map { CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: $0) }
+      .min() ?? .infinity
+  }
+
   /// The Cmd-V key-down/key-up pair, or `nil` when CoreGraphics refuses to build
   /// them. Split from `postCmdV` because only the *posting* is untestable: building
   /// an event needs no Accessibility trust, while posting one sends a live
