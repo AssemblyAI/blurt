@@ -83,8 +83,7 @@ private struct GeneralSettingsTab: View {
   }
 }
 
-/// The occasional stuff: the enhanced-transcripts switch and the
-/// speak-all-punctuation mode, the style profiles,
+/// The occasional stuff: the enhanced-transcripts switch, the style profiles,
 /// checking for an update, the developer-mode log toggle, and the
 /// start-over button.
 /// Kept out of General so the common pane stays short.
@@ -104,15 +103,19 @@ private struct AdvancedSettingsTab: View {
 }
 
 /// The Transcription section of the Settings window: the enhanced-transcripts
-/// switch and the "speak all punctuation" mode. Every dictation request asks
-/// AssemblyAI's dictation API for its server-side cleanup rewrite, so the
-/// response always holds both versions; while enhanced transcripts are on (the
-/// default) the polished one is pasted, and turned off the verbatim transcript
-/// is pasted exactly as spoken. Speaking punctuation formats the verbatim
-/// transcript itself, so it overrides the first switch, which is disabled while
-/// it is on (`EnhancedTranscriptsStore.pastesRewrite`). Both are read at every
-/// dictation, so a change applies to the next one. Settings-only — not a wizard
-/// step, since neither gates setup.
+/// switch. Every dictation request asks AssemblyAI's dictation API for its
+/// server-side cleanup rewrite, so the response always holds both versions;
+/// while this is on (the default) the polished one is pasted, and turned off
+/// the verbatim transcript is pasted exactly as spoken. "Speak all punctuation"
+/// (on the Text Shortcuts pane) formats the verbatim transcript itself, so it
+/// overrides this switch, which is disabled while it is on
+/// (`EnhancedTranscriptsStore.pastesRewrite`). The transcriber reads the same
+/// default this toggle writes at every request, so a change applies to the next
+/// dictation. Settings-only — not a wizard step, since it never gates setup.
+///
+/// Nothing here may grow the pane: Advanced is a non-scrolling form, and one
+/// extra row here was enough to push its Reset button out of reach on the CI
+/// runner's display (`testResetAsksBeforeDoingAnything`, "Not hittable").
 private struct TranscriptionSection: View {
   // The unset default comes from the store, not a literal here: the transcriber
   // reads the same slot per request, and two spellings of "unset means on" would let
@@ -129,10 +132,6 @@ private struct TranscriptionSection: View {
       .disabled(spokenPunctuation)
       .help(spokenPunctuation ? "Off while Speak all punctuation is on." : "")
       .accessibilityIdentifier(UITestIdentifiers.enhancedTranscriptsToggle)
-      Toggle(isOn: $spokenPunctuation) {
-        Label("Speak all punctuation", systemImage: "quote.opening")
-      }
-      .accessibilityIdentifier(UITestIdentifiers.spokenPunctuationToggle)
     } header: {
       Text("Transcription")
     } footer: {
@@ -142,11 +141,11 @@ private struct TranscriptionSection: View {
 
   private var footer: String {
     if spokenPunctuation {
-      return "Punctuation appears only where you say it — “comma”, “period”, “question mark”, "
-        + "“new line”. Overrides Enhanced transcripts."
+      return "Off while Speak all punctuation is on, which pastes your words as spoken with only "
+        + "the punctuation you say."
     }
-    return "Enhanced transcripts remove filler words and fix punctuation; turn off to paste your words "
-      + "exactly as spoken. Speak all punctuation adds punctuation only where you say it."
+    return "Polishes each dictation before pasting — removing filler words and fixing punctuation. "
+      + "Turn off to paste your words exactly as spoken."
   }
 }
 
@@ -385,39 +384,5 @@ private struct StyleProfileEditorSheet: View {
     let store = StyleProfileStore()
     store.profiles = store.profiles.filter { $0.id != profile.id }
     dismiss()
-  }
-}
-
-/// The Updates section of the Settings window: the running version and a
-/// "Check for Updates" button that runs the check and reports the result in a
-/// modal (see `UpdateCheckModel`). The same check is reachable from the
-/// "Check for Updates…" app-menu command and the menu-bar item; all three share
-/// the one `UpdateCheckModel` owned by `AppDelegate`, so a check from any place
-/// runs through the same controller.
-private struct UpdateSection: View {
-  let model: UpdateCheckModel
-
-  var body: some View {
-    Section {
-      // "Blurt 0.1.31" — the label is the engine's (shared with the result
-      // alerts, so the two can't name the version differently).
-      SettingRow(title: model.versionLabel, systemImage: "arrow.triangle.2.circlepath") {
-        HStack(spacing: 8) {
-          // A user-initiated check that can stall on a slow connection needs
-          // visible progress, or the button reads as dead until the result
-          // alert lands. Show a spinner and disable the button while in flight
-          // (the model already ignores a second check) — the native equivalent
-          // of Sparkle's "Checking for updates…".
-          if model.isChecking {
-            ProgressView().controlSize(.small)
-          }
-          Button("Check for Updates") { model.checkForUpdates() }
-            .disabled(model.isChecking)
-            .accessibilityIdentifier(UITestIdentifiers.updateCheck)
-        }
-      }
-    } header: {
-      Text("Updates")
-    }
   }
 }

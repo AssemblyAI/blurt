@@ -122,21 +122,23 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertEqual("\(toggle.value ?? "")", "1", "Clicking should switch developer mode on")
   }
 
-  /// "Speak all punctuation" starts off, and switching it on disables the
-  /// enhanced-transcripts switch it overrides (`EnhancedTranscriptsStore.pastesRewrite`).
+  /// "Speak all punctuation" (Text Shortcuts pane) starts off, and switching it
+  /// on disables the enhanced-transcripts switch it overrides on the Advanced
+  /// pane (`EnhancedTranscriptsStore.pastesRewrite`).
   func testSpokenPunctuationDisablesEnhancedTranscripts() {
     let settings = openSettingsWindow()
-    let advanced = selectSettingsTab(settings, named: UITestIdentifiers.advancedSettingsTab)
+    let shortcuts = selectSettingsTab(settings, named: UITestIdentifiers.textShortcutsTab)
 
-    let toggle = advanced.anyDescendant(identified: UITestIdentifiers.spokenPunctuationToggle)
-    let enhanced = advanced.anyDescendant(identified: UITestIdentifiers.enhancedTranscriptsToggle)
+    let toggle = shortcuts.anyDescendant(identified: UITestIdentifiers.spokenPunctuationToggle)
     XCTAssertTrue(toggle.waitForExistence(timeout: 10), "Speak all punctuation toggle not found")
     XCTAssertEqual("\(toggle.value ?? "")", "0", "Speak all punctuation should start switched off")
-    XCTAssertTrue(enhanced.isEnabled, "Enhanced transcripts should start enabled")
 
     toggle.click()
-
     XCTAssertEqual("\(toggle.value ?? "")", "1", "Clicking should switch spoken punctuation on")
+
+    let advanced = selectSettingsTab(settings, named: UITestIdentifiers.advancedSettingsTab)
+    let enhanced = advanced.anyDescendant(identified: UITestIdentifiers.enhancedTranscriptsToggle)
+    XCTAssertTrue(enhanced.waitForExistence(timeout: 10), "Enhanced transcripts toggle not found")
     XCTAssertFalse(enhanced.isEnabled, "Spoken punctuation overrides enhanced transcripts")
   }
 

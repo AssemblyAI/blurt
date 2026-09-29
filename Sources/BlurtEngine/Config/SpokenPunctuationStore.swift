@@ -1,7 +1,7 @@
 import Foundation
 
 /// Persists the "speak all punctuation" switch in `UserDefaults`. Off by
-/// default; the Settings window's Transcription section flips it.
+/// default; the Settings window's Text Shortcuts pane flips it.
 ///
 /// While on, the pipeline pastes only the punctuation the user *said*: every
 /// mark the service inserted is stripped and spoken ones ("comma", "question
