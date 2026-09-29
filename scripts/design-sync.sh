@@ -103,8 +103,10 @@ bundle_plugin() {
   local dir="$REPO_ROOT/.build/figma-plugin"
   mkdir -p "$dir"
   cp App/BlurtiOS/Design/figma/manifest.json "$dir/manifest.json"
-  cat App/BlurtiOS/Design/figma/tokens.js App/BlurtiOS/Design/figma/lib.js App/BlurtiOS/Design/figma/plugin.js \
-    >"$dir/code.js"
+  (
+    cd App/BlurtiOS/Design/figma \
+      && cat tokens.js core.js foundations.js components.js layouts.js themes.js exports.js plugin.js
+  ) >"$dir/code.js"
   echo "design-sync: Figma plugin bundled at $dir (Plugins → Development → Import plugin from manifest)"
 }
 

@@ -32,6 +32,22 @@ writes `.build/figma-plugin/{manifest.json,code.js}`; in Figma desktop,
 Plugins → Development → Import plugin from manifest…, then run the menu items
 in order. Results print to the plugin console (Plugins → Development → Open console).
 
+## What the first run taught (2026-09-29)
+
+- The AssemblyAI View seat **can** write to a draft Neil created, and SF Pro
+  and the SF Symbol helper are there. It cannot do it for long: after roughly a
+  dozen `use_figma` calls Figma returned "You've reached the Figma MCP tool call
+  limit for your View seat on the Organization plan". Writes count. Foundations
+  and components landed before the cap; layouts did not. Either run the rest as
+  the development plugin (no quota) or re-authenticate the connector to a
+  personal Figma account.
+- Under the MCP runtime every SF Pro text node reports `hasMissingFont`, and
+  `setProperties` on a TEXT property then refuses with "the component uses a
+  font that isn't available", while writing `characters` on the instance's text
+  node works. The layout builders write labels that way (`setLabel`).
+- `componentPropertyDefinitions` must be read on the component **set**, never
+  on a variant.
+
 ## Order
 
 1. `buildFoundations` — the six one-mode collections (`Brand`, `Themes`,
