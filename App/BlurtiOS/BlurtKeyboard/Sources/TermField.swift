@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// The voice bar as a field: × to leave, what has been typed with a caret,
-/// ✓ to save. Return saves too.
+/// The voice bar as a field — the brand's input, a rectangle with a hairline,
+/// never a capsule: × to leave, what has been typed with a caret, ✓ to save.
+/// Return saves too.
 struct TermField: View {
   var model: KeyboardModel
   @Environment(\.keyboardPalette) private var palette
@@ -24,7 +25,11 @@ struct TermField: View {
       .padding(.horizontal, DesignTokens.Metrics.termPad)
       .frame(maxWidth: .infinity)
       .frame(height: DesignTokens.Metrics.termHeight)
-      .background(Capsule().fill(palette.keyDark))
+      .background(
+        RoundedRectangle(cornerRadius: DesignTokens.Metrics.termRadius)
+          .fill(palette.field)
+          .strokeBorder(palette.fieldBorder, lineWidth: DesignTokens.Metrics.termBorder)
+      )
       .accessibilityElement(children: .ignore)
       .accessibilityLabel("Key term: \(model.termDraft ?? "")")
       round("checkmark", tint: palette.signal) { model.saveTerm() }

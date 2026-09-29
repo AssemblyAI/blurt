@@ -27,7 +27,7 @@ struct VoiceBar: View {
           Button {
             model.openApp()
           } label: {
-            Text("Allow Full Access in Settings → Keyboards")
+            Text("Allow Full Access in Settings")
               .font(.footnote)
               .foregroundStyle(palette.notice)
               .lineLimit(1)

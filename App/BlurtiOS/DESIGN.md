@@ -495,6 +495,8 @@ derivation.
 | `margin/vertical`            | `8`       | `Metrics.marginVertical`           | the keyboard's top, and the slim bar's bottom                                                  |
 | `opacity/disabled`           | `0.4`     | `Metrics.opacityDisabled`          | the + without Full Access                                                                      |
 | `opacity/glint`              | `0.95`    | `Metrics.opacityGlint`             | the cross glint when the words land                                                            |
+| `opacity/grain-dark`         | `0.14`    | `Metrics.opacityGrainDark`         | film grain over the dark face: matte, the brand's texture                                      |
+| `opacity/grain-light`        | `0.08`    | `Metrics.opacityGrainLight`        | film grain over the light face: paper, lighter                                                 |
 | `opacity/grille-rest`        | `0.55`    | `Metrics.opacityGrilleRest`        | the dots at rest, over the key colour                                                          |
 | `opacity/hairline`           | `0.5`     | `Metrics.opacityHairline`          | —                                                                                              |
 | `opacity/legend`             | `1`       | `Metrics.opacityLegend`            | key legends over the cap; below 1 they sit back                                                |
@@ -504,7 +506,6 @@ derivation.
 | `opacity/popup-shadow`       | `0.12`    | `Metrics.opacityPopupShadow`       | —                                                                                              |
 | `opacity/press-brighten`     | `0.15`    | `Metrics.opacityPressBrighten`     | a key lightens this much while pressed                                                         |
 | `opacity/sheen`              | `0.22`    | `Metrics.opacitySheen`             | the light passing over the element at rest: chrome catching light                              |
-| `opacity/surface-grain`      | `0.14`    | `Metrics.opacitySurfaceGrain`      | film grain over the whole keyboard surface: matte, the brand's texture                         |
 | `opacity/surface-vignette`   | `0`       | `Metrics.opacitySurfaceVignette`   | a soft darkening toward the surface's edges; 0 is none                                         |
 | `opacity/term-cancel`        | `0.7`     | `Metrics.opacityTermCancel`        | the field's ×                                                                                  |
 | `panel/spacing`              | `12`      | `Metrics.panelSpacing`             | between the panel's orb and its key row                                                        |
@@ -531,10 +532,12 @@ derivation.
 | `streak/point`               | `4`       | `Metrics.streakPoint`              | the bright point at the centre                                                                 |
 | `surface/vignette-end`       | `0.75`    | `Metrics.surfaceVignetteEnd`       | where it is full                                                                               |
 | `surface/vignette-start`     | `0.3`     | `Metrics.surfaceVignetteStart`     | where the vignette begins, as a fraction of the keyboard's width                               |
+| `term/border`                | `1`       | `Metrics.termBorder`               | the field's hairline                                                                           |
 | `term/gap`                   | `8`       | `Metrics.termGap`                  | × · field · ✓                                                                                  |
 | `term/height`                | `36`      | `Metrics.termHeight`               | the key-term field's capsule                                                                   |
 | `term/inset`                 | `2`       | `Metrics.termInset`                | the field row's side inset                                                                     |
 | `term/pad`                   | `14`      | `Metrics.termPad`                  | the field's side padding                                                                       |
+| `term/radius`                | `8`       | `Metrics.termRadius`               | the key-term field: the brand's input corners (radius/input)                                   |
 | `voice/bar-height`           | `32`      | `Metrics.voiceBarHeight`           | —                                                                                              |
 | `voice/bar-width`            | `240`     | `Metrics.voiceBarWidth`            | the voice element's box in the voice bar: what the wave gets                                   |
 | `voice/home-height`          | `112`     | `Metrics.voiceHomeHeight`          | —                                                                                              |

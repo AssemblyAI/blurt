@@ -39,6 +39,11 @@ struct KeyboardRootView: View {
     .environment(\.keyboardPalette, model.palette)
     .simultaneousGesture(swipe, including: model.layout == .panel ? .all : .subviews)
     .animation(reduceMotion ? nil : .easeInOut(duration: DesignTokens.Motion.flip), value: model.panelShowsKeys)
+    .onAppear {
+      // `Font.custom` falls back to the system font in silence; the bundle
+      // must know the brand's faces (UIAppFonts + Design/fonts).
+      assert(BlurtType.missing().isEmpty, "fonts not registered: \(BlurtType.missing())")
+    }
   }
 
   @Environment(\.accessibilityReduceMotion) private var systemReduceMotion

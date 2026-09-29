@@ -39,6 +39,8 @@ struct KeyboardPalette: Equatable, Identifiable {
   let fieldBorder: Color
   /// The error word, the cancel ×, the Full Access note: orange on both faces.
   let notice: Color
+  /// How much film grain lies over the surface: the brand's texture, matte.
+  let grain: Double
 
   static let keyGap = DesignTokens.Metrics.keyGap
   static let rowGap = DesignTokens.Metrics.rowGap
@@ -59,7 +61,7 @@ struct KeyboardPalette: Equatable, Identifiable {
     surface: Themes.lightSurface, key: Themes.lightKey, keyDark: Themes.lightKeyModifier,
     keyText: Themes.lightLegend, keyTextSecondary: Themes.lightLegendSecondary, signal: Themes.lightSignal,
     popupFill: Themes.lightPopup, field: Themes.lightField, fieldBorder: Themes.lightFieldBorder,
-    notice: Themes.lightNotice)
+    notice: Themes.lightNotice, grain: DesignTokens.Metrics.opacityGrainLight)
 
   /// The dark face: ink `#1D1B16`, `#33302A` keys, `#26231E` modifiers, warm
   /// white legends, the lifted green.
@@ -68,7 +70,7 @@ struct KeyboardPalette: Equatable, Identifiable {
     surface: Themes.darkSurface, key: Themes.darkKey, keyDark: Themes.darkKeyModifier,
     keyText: Themes.darkLegend, keyTextSecondary: Themes.darkLegendSecondary, signal: Themes.darkSignal,
     popupFill: Themes.darkPopup, field: Themes.darkField, fieldBorder: Themes.darkFieldBorder,
-    notice: Themes.darkNotice)
+    notice: Themes.darkNotice, grain: DesignTokens.Metrics.opacityGrainDark)
 
   /// The picker's list, one entry per theme (a theme's two faces share an id).
   static let all: [KeyboardPalette] = [brandLight]

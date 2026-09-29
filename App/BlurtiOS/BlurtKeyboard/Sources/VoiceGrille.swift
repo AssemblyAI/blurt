@@ -55,7 +55,8 @@ struct VoiceGrille: View {
     let sheenPhase = VoiceClock.sheen(time: time, working: state.isWorking && !state.isRecording)
     let sheenBand = size.width * Metrics.grilleSheenWidth
     let sheenCentre = sheenPhase * (size.width + size.height + sheenBand) - sheenBand
-    let runner = Self.runnerIndex(time: time, columns: columns, rows: rows)
+    let runner =
+      state.isWorking && !state.isRecording ? Self.runnerIndex(time: time, columns: columns, rows: rows) : nil
     let (glintTick, glintPhase) = Self.glintClock(time)
     let (restColour, restOpacity) = Self.rest(state: state, palette: palette)
     let sheen = inputs.animated && !state.isRecording ? (centre: sheenCentre, band: sheenBand) : nil
@@ -127,7 +128,7 @@ struct VoiceGrille: View {
   }
 
   /// The perimeter dot the runner is on while something is happening.
-  private static func runnerIndex(time: TimeInterval, columns: Int, rows: Int) -> Int? {
+  private static func runnerIndex(time: TimeInterval, columns: Int, rows: Int) -> Int {
     let perimeter = max(1, 2 * columns + 2 * rows - 4)
     let phase = VoiceClock.sheen(time: time, working: true)
     return Int(phase * Double(perimeter)) % perimeter

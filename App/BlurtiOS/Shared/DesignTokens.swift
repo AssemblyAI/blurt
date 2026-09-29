@@ -235,6 +235,10 @@ enum DesignTokens {
     nonisolated static let opacityDisabled: CGFloat = 0.4
     /// The cross glint when the words land.
     nonisolated static let opacityGlint: CGFloat = 0.95
+    /// Film grain over the dark face: matte, the brand's texture.
+    nonisolated static let opacityGrainDark: CGFloat = 0.14
+    /// Film grain over the light face: paper, lighter.
+    nonisolated static let opacityGrainLight: CGFloat = 0.08
     /// The dots at rest, over the key colour.
     nonisolated static let opacityGrilleRest: CGFloat = 0.55
     nonisolated static let opacityHairline: CGFloat = 0.5
@@ -251,8 +255,6 @@ enum DesignTokens {
     nonisolated static let opacityPressBrighten: CGFloat = 0.15
     /// The light passing over the element at rest: chrome catching light.
     nonisolated static let opacitySheen: CGFloat = 0.22
-    /// Film grain over the whole keyboard surface: matte, the brand's texture.
-    nonisolated static let opacitySurfaceGrain: CGFloat = 0.14
     /// A soft darkening toward the surface's edges; 0 is none.
     nonisolated static let opacitySurfaceVignette: CGFloat = 0
     /// The field's ×.
@@ -301,6 +303,8 @@ enum DesignTokens {
     nonisolated static let surfaceVignetteEnd: CGFloat = 0.75
     /// Where the vignette begins, as a fraction of the keyboard's width.
     nonisolated static let surfaceVignetteStart: CGFloat = 0.3
+    /// The field's hairline.
+    nonisolated static let termBorder: CGFloat = 1
     /// × · field · ✓.
     nonisolated static let termGap: CGFloat = 8
     /// The key-term field's capsule.
@@ -309,6 +313,8 @@ enum DesignTokens {
     nonisolated static let termInset: CGFloat = 2
     /// The field's side padding.
     nonisolated static let termPad: CGFloat = 14
+    /// The key-term field: the brand's input corners (radius/input).
+    nonisolated static let termRadius: CGFloat = 8
     nonisolated static let voiceBarHeight: CGFloat = 32
     /// The voice element's box in the voice bar: what the wave gets.
     nonisolated static let voiceBarWidth: CGFloat = 240
@@ -540,6 +546,8 @@ enum DesignTokens {
     "metrics.margin/vertical": "8",
     "metrics.opacity/disabled": "0.4",
     "metrics.opacity/glint": "0.95",
+    "metrics.opacity/grain-dark": "0.14",
+    "metrics.opacity/grain-light": "0.08",
     "metrics.opacity/grille-rest": "0.55",
     "metrics.opacity/hairline": "0.5",
     "metrics.opacity/legend": "1",
@@ -549,7 +557,6 @@ enum DesignTokens {
     "metrics.opacity/popup-shadow": "0.12",
     "metrics.opacity/press-brighten": "0.15",
     "metrics.opacity/sheen": "0.22",
-    "metrics.opacity/surface-grain": "0.14",
     "metrics.opacity/surface-vignette": "0",
     "metrics.opacity/term-cancel": "0.7",
     "metrics.panel/spacing": "12",
@@ -576,10 +583,12 @@ enum DesignTokens {
     "metrics.streak/point": "4",
     "metrics.surface/vignette-end": "0.75",
     "metrics.surface/vignette-start": "0.3",
+    "metrics.term/border": "1",
     "metrics.term/gap": "8",
     "metrics.term/height": "36",
     "metrics.term/inset": "2",
     "metrics.term/pad": "14",
+    "metrics.term/radius": "8",
     "metrics.voice/bar-height": "32",
     "metrics.voice/bar-width": "240",
     "metrics.voice/home-height": "112",

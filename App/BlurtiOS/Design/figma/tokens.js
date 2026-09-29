@@ -113,6 +113,8 @@ Metrics|margin/side|FLOAT|6.5||WIDTH_HEIGHT|DesignTokens.Metrics.marginSide|at t
 Metrics|margin/vertical|FLOAT|8||WIDTH_HEIGHT|DesignTokens.Metrics.marginVertical|the keyboard's top, and the slim bar's bottom
 Metrics|opacity/disabled|FLOAT|0.4||OPACITY|DesignTokens.Metrics.opacityDisabled|the + without Full Access
 Metrics|opacity/glint|FLOAT|0.95||OPACITY|DesignTokens.Metrics.opacityGlint|the cross glint when the words land
+Metrics|opacity/grain-dark|FLOAT|0.14||OPACITY|DesignTokens.Metrics.opacityGrainDark|film grain over the dark face: matte, the brand's texture
+Metrics|opacity/grain-light|FLOAT|0.08||OPACITY|DesignTokens.Metrics.opacityGrainLight|film grain over the light face: paper, lighter
 Metrics|opacity/grille-rest|FLOAT|0.55||OPACITY|DesignTokens.Metrics.opacityGrilleRest|the dots at rest, over the key colour
 Metrics|opacity/hairline|FLOAT|0.5||OPACITY|DesignTokens.Metrics.opacityHairline|
 Metrics|opacity/legend|FLOAT|1||OPACITY|DesignTokens.Metrics.opacityLegend|key legends over the cap; below 1 they sit back
@@ -122,7 +124,6 @@ Metrics|opacity/placeholder|FLOAT|0.4||OPACITY|DesignTokens.Metrics.opacityPlace
 Metrics|opacity/popup-shadow|FLOAT|0.12||OPACITY|DesignTokens.Metrics.opacityPopupShadow|
 Metrics|opacity/press-brighten|FLOAT|0.15||OPACITY|DesignTokens.Metrics.opacityPressBrighten|a key lightens this much while pressed
 Metrics|opacity/sheen|FLOAT|0.22||OPACITY|DesignTokens.Metrics.opacitySheen|the light passing over the element at rest: chrome catching light
-Metrics|opacity/surface-grain|FLOAT|0.14||OPACITY|DesignTokens.Metrics.opacitySurfaceGrain|film grain over the whole keyboard surface: matte, the brand's texture
 Metrics|opacity/surface-vignette|FLOAT|0||OPACITY|DesignTokens.Metrics.opacitySurfaceVignette|a soft darkening toward the surface's edges; 0 is none
 Metrics|opacity/term-cancel|FLOAT|0.7||OPACITY|DesignTokens.Metrics.opacityTermCancel|the field's ×
 Metrics|panel/spacing|FLOAT|12||GAP|DesignTokens.Metrics.panelSpacing|between the panel's orb and its key row
@@ -149,10 +150,12 @@ Metrics|streak/line|FLOAT|1||WIDTH_HEIGHT|DesignTokens.Metrics.streakLine|the ha
 Metrics|streak/point|FLOAT|4||WIDTH_HEIGHT|DesignTokens.Metrics.streakPoint|the bright point at the centre
 Metrics|surface/vignette-end|FLOAT|0.75||WIDTH_HEIGHT|DesignTokens.Metrics.surfaceVignetteEnd|where it is full
 Metrics|surface/vignette-start|FLOAT|0.3||WIDTH_HEIGHT|DesignTokens.Metrics.surfaceVignetteStart|where the vignette begins, as a fraction of the keyboard's width
+Metrics|term/border|FLOAT|1||WIDTH_HEIGHT|DesignTokens.Metrics.termBorder|the field's hairline
 Metrics|term/gap|FLOAT|8||GAP|DesignTokens.Metrics.termGap|× · field · ✓
 Metrics|term/height|FLOAT|36||WIDTH_HEIGHT|DesignTokens.Metrics.termHeight|the key-term field's capsule
 Metrics|term/inset|FLOAT|2||GAP|DesignTokens.Metrics.termInset|the field row's side inset
 Metrics|term/pad|FLOAT|14||GAP|DesignTokens.Metrics.termPad|the field's side padding
+Metrics|term/radius|FLOAT|8||CORNER_RADIUS|DesignTokens.Metrics.termRadius|the key-term field: the brand's input corners (radius/input)
 Metrics|voice/bar-height|FLOAT|32||WIDTH_HEIGHT|DesignTokens.Metrics.voiceBarHeight|
 Metrics|voice/bar-width|FLOAT|240||WIDTH_HEIGHT|DesignTokens.Metrics.voiceBarWidth|the voice element's box in the voice bar: what the wave gets
 Metrics|voice/home-height|FLOAT|112||WIDTH_HEIGHT|DesignTokens.Metrics.voiceHomeHeight|

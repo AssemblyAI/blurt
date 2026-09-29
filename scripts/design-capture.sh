@@ -103,7 +103,7 @@ print(3 if px > 1000 else 2)
 ' "$raw")"
     # `term` and `keys` show the full keyboard whatever layout was asked for.
     expect=$((HEIGHT_PT * scale))
-    case "$state" in term | keys) expect=$(($(height_pt full) * scale)) ;; esac
+    case "$state" in term | keys | symbols) expect=$(($(height_pt full) * scale)) ;; esac
     swift scripts/design-diff.swift crop "$raw" "$OUT/$name@${scale}x.png" --expect-height "$expect"
   done
 done

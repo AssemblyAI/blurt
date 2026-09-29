@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// One ordinary key: a legend on a cap in the current palette; `dark` for the
-/// modifier keys, a step darker as on the system keyboard; `bare` for a glyph
-/// with no cap at all (the panel's cancel). `flexible` keys (the space bar)
-/// take the width they're given, `width` fixes one, and the rest are the
-/// iPhone's 123 key wide.
+/// One ordinary key: a glyph (SF Symbols, as the system keyboard's) or a
+/// word (the brand's mono eyebrow) on a cap in the current face; `dark` for
+/// the modifier keys, a step darker as on the system keyboard; `bare` for a
+/// glyph with no cap at all (the panel's cancel). `flexible` keys (the space
+/// bar) take the width they're given, `width` fixes one, and the rest are
+/// the iPhone's 123 key wide.
 struct KeyCap: View {
   var title: String?
   var systemImage: String?
@@ -36,12 +37,18 @@ struct KeyCap: View {
     Group {
       if let systemImage {
         Image(systemName: systemImage)
+          .font(.system(size: DesignTokens.Typography.sizeLegend, weight: DesignTokens.Typography.weightLegend))
+          .foregroundStyle(tint ?? palette.keyText)
       } else {
-        Text(title ?? "")
+        // A word on a key — 123, ABC, #+=, space, the return label — is the
+        // brand's eyebrow: Modern Gothic Mono, uppercase, tracked, a step
+        // quieter than a letter.
+        Text((title ?? "").uppercased())
+          .font(BlurtType.mono(DesignTokens.Typography.sizeLabel, weight: .medium))
+          .tracking(DesignTokens.Typography.trackingEyebrow)
+          .foregroundStyle(tint ?? palette.keyTextSecondary)
       }
     }
-    .font(.system(size: DesignTokens.Typography.sizeLegend, weight: DesignTokens.Typography.weightLegend))
-    .foregroundStyle(tint ?? palette.keyText)
     .opacity(DesignTokens.Metrics.opacityLegend)
     .frame(maxWidth: flexible ? .infinity : nil)
     .frame(width: width)

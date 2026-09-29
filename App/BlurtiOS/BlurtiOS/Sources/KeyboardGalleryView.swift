@@ -21,7 +21,10 @@
   /// `idle`, `connecting`, `recording`, `processing`, `pasted`, `copied`,
   /// `error`, `landed` (the drop, timed for a screenshot) or `live` (a whole
   /// dictation walked on a clock, over and over, for watching or recording
-  /// the motion). `scripts/ios-sim.sh` passes `BLURT_LAUNCH_ARGS` through, so
+  /// the motion), plus the keyboard's own `keys` (the panel flipped to its
+  /// keyboard page), `symbols`, `term` (the key-term field mid-typing),
+  /// `send` (a return key with a label) and `saved` (the + just after a term
+  /// was saved). `scripts/ios-sim.sh` passes `BLURT_LAUNCH_ARGS` through, so
   ///
   ///     BLURT_LAUNCH_ARGS="-BlurtGallery panel idle,recording,processing" \
   ///       scripts/ios-sim.sh --screenshot panel.png
@@ -131,8 +134,13 @@
       model.paletteOverride = .resolve(KeyboardPalette.brandID, dark: Self.darkFaces.contains(theme))
       // `keys` shows the panel's carousel flipped to its keyboard page;
       // `term` the voice bar as the key-term field, mid-typing.
-      model.panelShowsKeys = state == "keys"
+      model.panelShowsKeys = state == "keys" || state == "symbols"
       if state == "term" { model.termDraft = "Rizz" }
+      // `symbols`: the keys on their symbols page; `send`: a field whose
+      // return key says so; `saved`: the + a moment after a term was saved.
+      model.symbolsPage = state == "symbols"
+      if state == "send" { model.returnLabel = "send" }
+      if state == "saved" { model.termSavedAt = Date() }
       // `landed`: the words go in 2.75 s after launch, so a screenshot taken
       // 3 s in (scripts/ios-sim.sh) catches the glint mid-sweep.
       if state == "landed" { model.resultLandedAt = Date().addingTimeInterval(2.75) }
