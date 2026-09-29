@@ -9,17 +9,10 @@ import SwiftUI
 ///
 /// Rows follow the Styles section's shape: each is a read-out plus an "Edit…"
 /// way in, and all editing happens in the sheet below.
-///
-/// The "Speak all punctuation" switch sits above the list: it is the other
-/// local rewrite of what was said (`SpokenPunctuationFormatter`, run just
-/// before the shortcuts), and this is the one pane that scrolls — the Advanced
-/// pane, beside the enhanced-transcripts switch it overrides, hugs its content
-/// and had no height to spare (see `TranscriptionSection`).
 struct TextShortcutsSection: View {
   /// Bound to observe, not to write — the store owns the JSON encoding, as with
   /// `StyleProfilesSection`.
   @AppStorage(TextShortcutStore.defaultsKey) private var rawShortcuts = ""
-  @AppStorage(SpokenPunctuationStore.defaultsKey) private var spokenPunctuation = false
 
   /// The shortcut the sheet is editing, or nil while it's closed.
   @State private var editing: TextShortcut?
@@ -27,18 +20,6 @@ struct TextShortcutsSection: View {
   var body: some View {
     let shortcuts = TextShortcutStore().shortcuts(decoding: rawShortcuts)
     Form {
-      Section {
-        Toggle(isOn: $spokenPunctuation) {
-          Label("Speak all punctuation", systemImage: "quote.opening")
-        }
-        .accessibilityIdentifier(UITestIdentifiers.spokenPunctuationToggle)
-      } header: {
-        Text("Punctuation")
-      } footer: {
-        Text(
-          "Punctuation appears only where you say it — “comma”, “period”, “question mark”, "
-            + "“new line”. Overrides Enhanced transcripts.")
-      }
       Section {
         ForEach(Array(shortcuts.enumerated()), id: \.element.id) { index, shortcut in
           HStack(spacing: 12) {
