@@ -106,30 +106,46 @@ private struct AdvancedSettingsTab: View {
 /// switch. Every dictation request asks AssemblyAI's dictation API for its
 /// server-side cleanup rewrite, so the response always holds both versions;
 /// while this is on (the default) the polished one is pasted, and turned off
-/// the verbatim transcript is pasted exactly as spoken. The transcriber reads
-/// the same default this toggle writes at every request, so a change applies to
-/// the next dictation — see `AssemblyAITranscriber.transcript(from:)`.
-/// Settings-only — not a wizard step, since it never gates setup.
+/// the verbatim transcript is pasted exactly as spoken. "Speak all punctuation"
+/// (on the Text Shortcuts pane) formats the verbatim transcript itself, so it
+/// overrides this switch, which is disabled while it is on
+/// (`EnhancedTranscriptsStore.pastesRewrite`). The transcriber reads the same
+/// default this toggle writes at every request, so a change applies to the next
+/// dictation. Settings-only — not a wizard step, since it never gates setup.
+///
+/// Nothing here may grow the pane: Advanced is a non-scrolling form, and one
+/// extra row here was enough to push its Reset button out of reach on the CI
+/// runner's display (`testResetAsksBeforeDoingAnything`, "Not hittable").
 private struct TranscriptionSection: View {
   // The unset default comes from the store, not a literal here: the transcriber
   // reads the same slot per request, and two spellings of "unset means on" would let
   // the toggle and the request disagree about an untouched install.
   @AppStorage(EnhancedTranscriptsStore.defaultsKey)
   private var enhancedTranscripts = EnhancedTranscriptsStore.defaultValue
+  @AppStorage(SpokenPunctuationStore.defaultsKey) private var spokenPunctuation = false
 
   var body: some View {
     Section {
       Toggle(isOn: $enhancedTranscripts) {
         Label("Enhanced transcripts", systemImage: "wand.and.stars")
       }
+      .disabled(spokenPunctuation)
+      .help(spokenPunctuation ? "Off while Speak all punctuation is on." : "")
       .accessibilityIdentifier(UITestIdentifiers.enhancedTranscriptsToggle)
     } header: {
       Text("Transcription")
     } footer: {
-      Text(
-        "Polishes each dictation before pasting — removing filler words and fixing punctuation. "
-          + "Turn off to paste your words exactly as spoken.")
+      Text(footer)
     }
+  }
+
+  private var footer: String {
+    if spokenPunctuation {
+      return "Off while Speak all punctuation is on, which pastes your words as spoken with only "
+        + "the punctuation you say."
+    }
+    return "Polishes each dictation before pasting — removing filler words and fixing punctuation. "
+      + "Turn off to paste your words exactly as spoken."
   }
 }
 
@@ -139,8 +155,8 @@ private struct TranscriptionSection: View {
 /// request (see `CleanupInstruction.sendable(appending:)` / `StyleProfileStore`),
 /// so the enhanced-transcript polish also applies the user's formatting
 /// preferences. Optional — with none defined the request is exactly what ships
-/// today. Disabled while enhanced transcripts are off, since the instruction
-/// they extend is not sent at all then.
+/// today. Disabled while enhanced transcripts are off (or overridden by spoken
+/// punctuation), since the rewrite they shape is not pasted then.
 ///
 /// Each row is a name and a way in: all editing happens in the sheet below, for
 /// the reasons on `APIKeyStepView`'s. Which style is *active* is deliberately
@@ -150,6 +166,10 @@ private struct TranscriptionSection: View {
 private struct StyleProfilesSection: View {
   @AppStorage(EnhancedTranscriptsStore.defaultsKey)
   private var enhancedTranscripts = EnhancedTranscriptsStore.defaultValue
+  @AppStorage(SpokenPunctuationStore.defaultsKey) private var spokenPunctuation = false
+
+  /// The view-side spelling of `EnhancedTranscriptsStore.pastesRewrite`.
+  private var stylesApply: Bool { enhancedTranscripts && !spokenPunctuation }
 
   /// Bound to observe, not to write: the store owns the JSON encoding, so it
   /// decodes this slot and the sheet writes through it, while `@AppStorage` is
@@ -185,11 +205,13 @@ private struct StyleProfilesSection: View {
       // enhanced transcripts off the rewrite a style shapes is discarded
       // unread, so describing the limit is the less useful half.
       Text(
-        enhancedTranscripts
+        stylesApply
           ? "Up to \(StyleProfileStore.profileLimit) styles."
-          : "Style preferences need enhanced transcripts turned on.")
+          : spokenPunctuation
+            ? "Styles don’t apply while Speak all punctuation is on."
+            : "Style preferences need enhanced transcripts turned on.")
     }
-    .disabled(!enhancedTranscripts)
+    .disabled(!stylesApply)
     .sheet(item: $editing) { profile in
       StyleProfileEditorSheet(profile: profile, isExisting: profiles.contains(profile))
     }
@@ -362,39 +384,5 @@ private struct StyleProfileEditorSheet: View {
     let store = StyleProfileStore()
     store.profiles = store.profiles.filter { $0.id != profile.id }
     dismiss()
-  }
-}
-
-/// The Updates section of the Settings window: the running version and a
-/// "Check for Updates" button that runs the check and reports the result in a
-/// modal (see `UpdateCheckModel`). The same check is reachable from the
-/// "Check for Updates…" app-menu command and the menu-bar item; all three share
-/// the one `UpdateCheckModel` owned by `AppDelegate`, so a check from any place
-/// runs through the same controller.
-private struct UpdateSection: View {
-  let model: UpdateCheckModel
-
-  var body: some View {
-    Section {
-      // "Blurt 0.1.31" — the label is the engine's (shared with the result
-      // alerts, so the two can't name the version differently).
-      SettingRow(title: model.versionLabel, systemImage: "arrow.triangle.2.circlepath") {
-        HStack(spacing: 8) {
-          // A user-initiated check that can stall on a slow connection needs
-          // visible progress, or the button reads as dead until the result
-          // alert lands. Show a spinner and disable the button while in flight
-          // (the model already ignores a second check) — the native equivalent
-          // of Sparkle's "Checking for updates…".
-          if model.isChecking {
-            ProgressView().controlSize(.small)
-          }
-          Button("Check for Updates") { model.checkForUpdates() }
-            .disabled(model.isChecking)
-            .accessibilityIdentifier(UITestIdentifiers.updateCheck)
-        }
-      }
-    } header: {
-      Text("Updates")
-    }
   }
 }

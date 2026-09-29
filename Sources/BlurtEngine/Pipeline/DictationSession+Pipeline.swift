@@ -70,9 +70,11 @@ extension DictationSession {
     if Task.isCancelled { return }
 
     // The log keeps what the service returned; the paste and the Recent list
-    // get the expanded text, and the ring also keeps the spoken version (see
-    // `RecentDictations.Entry.spoken`).
-    let expanded = TextShortcutExpander.expand(text, using: textShortcutsProvider())
+    // get the formatted, expanded text, and the ring also keeps the spoken
+    // version (see `RecentDictations.Entry.spoken`). Spoken punctuation runs
+    // first so a shortcut's saved text keeps its own punctuation.
+    let punctuated = spokenPunctuationProvider() ? SpokenPunctuationFormatter.format(text) : text
+    let expanded = TextShortcutExpander.expand(punctuated, using: textShortcutsProvider())
     guard let spoken = text.trimmedNonEmpty(), let trimmed = expanded.trimmedNonEmpty() else {
       setPhase(.idle)
       return

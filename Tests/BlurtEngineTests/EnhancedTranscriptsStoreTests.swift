@@ -26,4 +26,16 @@ struct EnhancedTranscriptsStoreTests {
     defaults.set(true, forKey: EnhancedTranscriptsStore.defaultsKey)
     #expect(store.isEnabled)
   }
+
+  /// Spoken punctuation formats the verbatim transcript, so while it is on the
+  /// rewrite is never what gets pasted, whatever this switch says.
+  @Test("spoken punctuation overrides the switch")
+  func spokenPunctuationPastesVerbatim() {
+    let defaults = freshDefaults()
+    let store = EnhancedTranscriptsStore(defaults: defaults)
+    #expect(store.pastesRewrite)
+    defaults.set(true, forKey: SpokenPunctuationStore.defaultsKey)
+    #expect(store.isEnabled)
+    #expect(!store.pastesRewrite)
+  }
 }

@@ -90,7 +90,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     self.apiKeyProvider = apiKeyProvider
     self.baseURL = baseURL
     self.transport = transport
-    self.enhancedTranscriptsEnabled = enhancedTranscripts ?? { EnhancedTranscriptsStore().isEnabled }
+    self.enhancedTranscriptsEnabled = enhancedTranscripts ?? { EnhancedTranscriptsStore().pastesRewrite }
     self.customStyle = customStyle ?? { StyleProfileStore().activeInstructions }
   }
 

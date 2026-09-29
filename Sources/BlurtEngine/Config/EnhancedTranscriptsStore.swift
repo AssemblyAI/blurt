@@ -39,4 +39,13 @@ public struct EnhancedTranscriptsStore {
   var isEnabled: Bool {
     defaults.object(forKey: Self.defaultsKey) as? Bool ?? Self.defaultValue
   }
+
+  /// Whether the rewrite is what gets pasted: this switch, unless "speak all
+  /// punctuation" is on — that mode formats the verbatim transcript, since the
+  /// rewrite is told to fix punctuation and may already have turned a spoken
+  /// "comma" into a mark the formatter would then strip (`SpokenPunctuationStore`).
+  /// The one rule both the transcriber and the Recent row's style chip read.
+  var pastesRewrite: Bool {
+    isEnabled && !SpokenPunctuationStore(defaults: defaults).isEnabled
+  }
 }

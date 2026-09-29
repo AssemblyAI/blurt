@@ -37,6 +37,13 @@ struct KeyInjectorLeadingSeparatorTests {
     #expect(KeyInjector.withLeadingSeparator(" Second.", after: "First.") == " Second.")
   }
 
+  @Test("no separator before text that opens with a closing mark")
+  func textStartsWithClosingMark() {
+    #expect(KeyInjector.withLeadingSeparator(", and then", after: "First") == ", and then")
+    #expect(KeyInjector.withLeadingSeparator(".", after: "First") == ".")
+    #expect(KeyInjector.withLeadingSeparator("(aside)", after: "First") == " (aside)")
+  }
+
   @Test("returns empty text unchanged")
   func emptyText() {
     #expect(KeyInjector.withLeadingSeparator("", after: "First.") == "")

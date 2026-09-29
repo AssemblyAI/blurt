@@ -48,6 +48,8 @@ enum DefaultsKey: String, CaseIterable {
   case micDeviceUID = "MicDeviceUID"
   /// The JSON list of spoken-phrase → text expansions (`TextShortcutStore`).
   case textShortcuts = "TextShortcuts"
+  /// The "speak all punctuation" switch (`SpokenPunctuationStore`).
+  case spokenPunctuation = "SpokenPunctuation"
 
   /// The key this case actually reads and writes, under the configured host
   /// identity. A computed property rather than a stored string because the
