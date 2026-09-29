@@ -41,7 +41,7 @@ settings:
     # SUPublicEDKey. Generated once with Sparkle's `generate_keys`; the private
     # half never leaves the maintainer's keychain and the release-build secret.
     # release-build.sh refuses to ship while this is still the placeholder.
-    SPARKLE_PUBLIC_ED_KEY: "REPLACE_WITH_SPARKLE_PUBLIC_ED_KEY"
+    SPARKLE_PUBLIC_ED_KEY: "3RdSHCmCH/BOqgV/FR01c4VZDi6uylEigDq4PFBaCpQ="
   configs:
     Release:
       VALIDATE_PRODUCT: YES
