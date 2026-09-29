@@ -136,7 +136,9 @@ final class SettingsUITests: BlurtUITestCase {
     toggle.click()
     XCTAssertEqual("\(toggle.value ?? "")", "1", "Clicking should switch spoken punctuation on")
 
-    let advanced = selectSettingsTab(settings, named: UITestIdentifiers.advancedSettingsTab)
+    // Switched from `shortcuts`, not `settings`: selecting a pane retitles the
+    // window, so the proxy from before the first switch is stale.
+    let advanced = selectSettingsTab(shortcuts, named: UITestIdentifiers.advancedSettingsTab)
     let enhanced = advanced.anyDescendant(identified: UITestIdentifiers.enhancedTranscriptsToggle)
     XCTAssertTrue(enhanced.waitForExistence(timeout: 10), "Enhanced transcripts toggle not found")
     XCTAssertFalse(enhanced.isEnabled, "Spoken punctuation overrides enhanced transcripts")
