@@ -70,6 +70,19 @@ struct KeyInjectorSystemActionsTests {
     #expect(KeyInjector.accessibilityTrusted() == AXIsProcessTrusted())
   }
 
+  // MARK: - User-input idle probe
+
+  @Test("secondsSinceHardwareInput reports the newest key or click across types")
+  func secondsSinceHardwareInputIsNewestOfTypes() {
+    // The host's real input history isn't ours to set, so the assertable claim is
+    // that the seam takes the *newest* input (the minimum idle time) — a keypress
+    // alone must be enough to drop the same-window separator fallback.
+    let keyIdle = CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: .keyDown)
+    let idle = KeyInjector.secondsSinceHardwareInput()
+    #expect(idle >= 0)
+    #expect(idle <= keyIdle + 1)
+  }
+
   // MARK: - Frontmost wait
 
   @Test("waitUntilFrontmost reports failure for an app that never comes frontmost")

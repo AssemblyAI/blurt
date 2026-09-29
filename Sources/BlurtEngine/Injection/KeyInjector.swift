@@ -52,7 +52,19 @@ public actor KeyInjector: InjectorProtocol {
   /// it drives the separator decision (see `separatorBasis`). A different window
   /// — a different tab, a different file, or an unreadable title — means a
   /// different field, so the fallback doesn't fire.
-  private var lastInserted: ResolvedInsert?
+  ///
+  /// `at` is when the paste was posted, so `performInsert` can tell whether the
+  /// user has typed or clicked since (see `secondsSinceUserInput`): pressing
+  /// Return for a new paragraph, or clicking elsewhere, leaves the window title
+  /// unchanged while the caret no longer follows our paste.
+  private var lastInserted: (resolved: ResolvedInsert, at: ContinuousClock.Instant)?
+
+  /// Seconds since the user last pressed a key or clicked. Once that input is
+  /// newer than the last paste, the caret may be anywhere (a fresh line in
+  /// Google Docs, issue #206), so the same-window fallback is dropped rather
+  /// than risk a stray leading space. Injectable so tests don't depend on the
+  /// host's real keyboard and mouse (defaults to "no input" there).
+  private let secondsSinceUserInput: @Sendable () -> TimeInterval
 
   /// Tail of the paste chain: each insert links behind the previous insert's
   /// ENTIRE critical section — paste *plus* its backgrounded settle/restore — so
@@ -115,7 +127,8 @@ public actor KeyInjector: InjectorProtocol {
       waitForTargetActivation: KeyInjector.waitUntilFrontmost,
       isAccessibilityTrusted: KeyInjector.accessibilityTrusted,
       hasEditableTarget: FocusCapture.hasEditableFocusedElement,
-      isAXOpaqueApp: FocusCapture.isAXOpaqueApp)
+      isAXOpaqueApp: FocusCapture.isAXOpaqueApp,
+      secondsSinceUserInput: KeyInjector.secondsSinceHardwareInput)
   }
 
   init(
@@ -126,6 +139,7 @@ public actor KeyInjector: InjectorProtocol {
     isAccessibilityTrusted: @escaping @Sendable () -> Bool = { true },
     hasEditableTarget: @escaping @Sendable () -> Bool = { true },
     isAXOpaqueApp: @escaping @Sendable (NSRunningApplication?) -> Bool = { _ in false },
+    secondsSinceUserInput: @escaping @Sendable () -> TimeInterval = { .infinity },
     clipboard: any ClipboardAccess = SystemClipboard()
   ) {
     self.pasteSettleDuration = pasteSettleDuration
@@ -135,6 +149,7 @@ public actor KeyInjector: InjectorProtocol {
     self.isAccessibilityTrusted = isAccessibilityTrusted
     self.hasEditableTarget = hasEditableTarget
     self.isAXOpaqueApp = isAXOpaqueApp
+    self.secondsSinceUserInput = secondsSinceUserInput
     self.clipboard = clipboard
   }
 
@@ -204,10 +219,15 @@ public actor KeyInjector: InjectorProtocol {
     // setTargetApp() interleaving mid-insert must not make us activate one app
     // while judging editability and recording `lastInserted` for another.
     let target = targetApp
+    // Our last paste only still precedes the caret if the user hasn't typed or
+    // clicked since; otherwise forget it, same as a window change.
+    let continuity = lastInserted.flatMap { last in
+      secondsSinceUserInput() >= last.at.duration(to: .now) / .seconds(1) ? last.resolved : nil
+    }
     let resolved = KeyInjector.resolveInsert(
       text: text, priorText: priorText, windowTitle: windowTitle,
       targetPID: target?.processIdentifier,
-      lastInserted: lastInserted)
+      lastInserted: continuity)
     let finalText = resolved.text
     do {
       try await activateTargetApp(target)
@@ -252,7 +272,7 @@ public actor KeyInjector: InjectorProtocol {
     // deferred restore back to the chain link (see `insert`). `insert` returns
     // now — so the pipeline reaches `.idle` and re-arms without waiting out the
     // restore window — while the next paste still serializes behind the settle.
-    lastInserted = resolved
+    lastInserted = (resolved, .now)
     return restore
   }
 
