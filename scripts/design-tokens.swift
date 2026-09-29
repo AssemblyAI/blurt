@@ -1,6 +1,4 @@
-#!/usr/bin/env swift  // The design's one source of numbers and colours, fanned out: reads
-// App/BlurtiOS/Design/tokens.json (exported from the Figma file, hand-written
-// before it existed) and writes everything that used to repeat those values by
+#!/usr/bin/env swift  // The design's one source of numbers and colours, fanned out: reads  // App/BlurtiOS/Design/tokens.json (exported from the Figma file, hand-written  // before it existed) and writes everything that used to repeat those values by
 // hand — `App/BlurtiOS/Shared/DesignTokens.swift`, the generated tables in
 // `App/BlurtiOS/DESIGN.md`, and the app's three asset-catalog colour sets. Run
 // through scripts/design-sync.sh, which also formats the output and, with
@@ -42,6 +40,7 @@ let tokensPath = "App/BlurtiOS/Design/tokens.json"
 let swiftPath = "App/BlurtiOS/Shared/DesignTokens.swift"
 let designPath = "App/BlurtiOS/DESIGN.md"
 let catalogPath = "App/BlurtiOS/BlurtiOS/Assets.xcassets"
+let figmaTokensPath = "App/BlurtiOS/Design/figma/tokens.js"
 
 func fail(_ message: String) -> Never {
   FileHandle.standardError.write(Data("design-tokens: \(message)\n".utf8))
@@ -412,6 +411,103 @@ let colorSets: [(String, String, String)] = [
   ("CardBorder", "keyboard.app/card-border-light", "keyboard.app/card-border-dark"),
 ]
 
+// MARK: - Figma
+
+/// What the Figma build scripts (Design/figma/lib.js) need: every token with
+/// its resolved value, its alias if any, the scopes its collection gives it and
+/// the iOS code syntax that is its Swift name. Scopes follow the token's role
+/// by name, which is the one place that rule is written down.
+func figmaScopes(_ token: Token) -> [String] {
+  let name = token.name
+  switch token.group {
+  case "brand", "themes", "motion": return []
+  case "keyboard":
+    if name.hasSuffix("legend") || name.hasSuffix("full-access-note") { return ["TEXT_FILL"] }
+    if name.contains("notice-") || name.contains("orb-ring-") || name.contains("card-border") {
+      return ["STROKE_COLOR"]
+    }
+    if name.hasSuffix("signal") { return ["SHAPE_FILL", "TEXT_FILL"] }
+    return ["FRAME_FILL", "SHAPE_FILL"]
+  case "metrics":
+    if name.hasPrefix("opacity/") { return ["OPACITY"] }
+    if name.hasSuffix("/radius") { return ["CORNER_RADIUS"] }
+    if name.hasSuffix("/gap") || name.hasSuffix("/spacing") || name.hasSuffix("/pad") || name.hasSuffix("/inset")
+      || name.hasSuffix("/lead") || name.hasSuffix("-gap") || name.hasSuffix("-clearance")
+    {
+      return ["GAP"]
+    }
+    if name.hasPrefix("ring/") || name == "card/border" || name == "caret/width" || name == "wave/bar" {
+      return ["STROKE_FLOAT", "WIDTH_HEIGHT"]
+    }
+    if name.hasPrefix("press/") || name.hasPrefix("gesture/") || name.contains("factor") || name.contains("light-")
+      || name.contains("dissipate") || name == "picker/scale"
+    {
+      return []
+    }
+    return ["WIDTH_HEIGHT"]
+  case "type":
+    if name.hasPrefix("size/") { return ["FONT_SIZE"] }
+    if name.hasPrefix("weight/") { return ["FONT_STYLE"] }
+    return []
+  default: return []
+  }
+}
+
+func figmaJSON() -> String {
+  var collections: [String: Any] = [:]
+  for group in groups {
+    let variables: [[String: Any]] = tokens.filter { $0.group == group }.map { token in
+      var entry: [String: Any] = [
+        "name": token.name,
+        "codeSyntax": "DesignTokens.\(typeName(group)).\(token.swiftName)",
+        "scopes": figmaScopes(token),
+        "use": token.use ?? "",
+      ]
+      switch resolve(token).value {
+      case .color(let hex):
+        entry["type"] = "COLOR"
+        entry["value"] = hex
+      case .number(let number):
+        entry["type"] = "FLOAT"
+        entry["value"] = number
+      case .word(let word):
+        entry["type"] = "STRING"
+        entry["value"] = word
+      case .alias: fatalError("unreachable")
+      }
+      if case .alias(let target) = token.value, let other = byQualified[target] {
+        entry["alias"] = "\(typeName(other.group)):\(other.name)"
+      }
+      return entry
+    }
+    collections[typeName(group)] = ["mode": "Value", "variables": variables]
+  }
+  var gradientEntries: [String: Any] = [:]
+  for gradient in gradients {
+    gradientEntries[gradient.name] = [
+      "start": gradient.start, "end": gradient.end, "use": gradient.use ?? "",
+      "stops": gradient.stops.map { stop -> [String: Any] in
+        var entry: [String: Any] = ["location": stop.location, "value": resolveColor(stop.color)]
+        if case .alias(let target) = parseValue(stop.color), let other = byQualified[target] {
+          entry["alias"] = "\(typeName(other.group)):\(other.name)"
+        }
+        return entry
+      },
+    ]
+  }
+  let root: [String: Any] = ["collections": collections, "gradients": gradientEntries, "groups": groups.map(typeName)]
+  guard let data = try? JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys]),
+    let text = String(data: data, encoding: .utf8)
+  else { fail("could not encode the Figma token data") }
+  return """
+    // Generated by scripts/design-tokens.swift from App/BlurtiOS/Design/tokens.json — do not edit.
+    // The build scripts in this folder (lib.js) read this; a use_figma call is
+    // tokens.js + lib.js + one line that returns a builder's result.
+    const TOKENS = \(text);
+
+    """
+}
+
 // MARK: - Write
 
 func write(_ text: String, to relative: String) {
@@ -426,6 +522,7 @@ func write(_ text: String, to relative: String) {
 
 write(swift, to: swiftPath)
 write(design, to: designPath)
+write(figmaJSON(), to: figmaTokensPath)
 for (set, light, dark) in colorSets {
   guard let lightToken = byQualified[light], let darkToken = byQualified[dark] else {
     fail("\(set) needs \(light) and \(dark)")
@@ -434,5 +531,5 @@ for (set, light, dark) in colorSets {
     catalog(light: rendered(lightToken), dark: rendered(darkToken)), to: "\(catalogPath)/\(set).colorset/Contents.json")
 }
 print(
-  "design-tokens: \(tokens.count) tokens, \(gradients.count) gradients → \(swiftPath), \(designPath) (\(replaced.count) blocks), \(colorSets.count) colour sets"
-)
+  "design-tokens: \(tokens.count) tokens, \(gradients.count) gradients → \(swiftPath), \(designPath) "
+    + "(\(replaced.count) blocks), \(colorSets.count) colour sets, \(figmaTokensPath)")

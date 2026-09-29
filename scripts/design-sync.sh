@@ -41,6 +41,7 @@ OUTPUTS=(
   App/BlurtiOS/BlurtiOS/Assets.xcassets/AccentColor.colorset/Contents.json
   App/BlurtiOS/BlurtiOS/Assets.xcassets/CardFill.colorset/Contents.json
   App/BlurtiOS/BlurtiOS/Assets.xcassets/CardBorder.colorset/Contents.json
+  App/BlurtiOS/Design/figma/tokens.js
 )
 
 # Format the generated files the way check.sh expects the tree to be formatted,
@@ -95,10 +96,23 @@ print(f"design-sync: no design literals in {len(files)} view files")
 PY
 }
 
+# The Figma development-plugin bundle: the same scripts a use_figma call
+# carries, concatenated behind a manifest, for running from Figma desktop
+# without the MCP read quota (Design/figma/README.md).
+bundle_plugin() {
+  local dir="$REPO_ROOT/.build/figma-plugin"
+  mkdir -p "$dir"
+  cp App/BlurtiOS/Design/figma/manifest.json "$dir/manifest.json"
+  cat App/BlurtiOS/Design/figma/tokens.js App/BlurtiOS/Design/figma/lib.js App/BlurtiOS/Design/figma/plugin.js \
+    >"$dir/code.js"
+  echo "design-sync: Figma plugin bundled at $dir (Plugins → Development → Import plugin from manifest)"
+}
+
 if [ "$CHECK" -eq 0 ]; then
   swift scripts/design-tokens.swift
   format_outputs "$REPO_ROOT"
   lint_literals
+  bundle_plugin
   exit 0
 fi
 
