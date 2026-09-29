@@ -9,7 +9,7 @@ import SwiftUI
 // rather than in `SettingsWindowRoot` because that file is at the repo's
 // file-length limit.
 
-/// The running version, a "Check for Updates" button, and Sparkle's two
+/// The running version, a "Check for Updates…" button, and Sparkle's two
 /// preferences. Every control drives the one `UpdaterModel` owned by
 /// `AppDelegate` — the same updater the app-menu command and the menu-bar item
 /// use — and Sparkle presents the check's progress and result itself.
@@ -22,27 +22,29 @@ struct UpdatesSection: View {
 
   var body: some View {
     Section {
-      SettingRow(title: model.versionLabel, systemImage: "arrow.triangle.2.circlepath") {
-        Button("Check for Updates") { model.checkForUpdates() }
+      // Ellipsis: it opens Sparkle's window, where an update still waits on the
+      // user's go-ahead — the same rule as "Reset…" below.
+      SettingRow(title: model.versionLabel, systemImage: "info.circle") {
+        Button("Check for Updates…") { model.checkForUpdates() }
           .disabled(!model.canCheckForUpdates)
           .accessibilityIdentifier(UITestIdentifiers.updateCheck)
       }
       Toggle(isOn: $model.automaticallyChecksForUpdates) {
-        SettingLabel(title: "Check for updates automatically", systemImage: "clock.arrow.circlepath")
+        SettingLabel(title: "Check for updates automatically", systemImage: "clock")
       }
       .disabled(!model.isEnabled)
       .accessibilityIdentifier(UITestIdentifiers.updateAutoCheck)
       // Installing on its own only means anything while Blurt is looking on its
       // own, so the second switch follows the first.
       Toggle(isOn: $model.automaticallyDownloadsUpdates) {
-        SettingLabel(title: "Download and install automatically", systemImage: "arrow.down.circle")
+        SettingLabel(title: "Download and install updates automatically", systemImage: "arrow.down.circle")
       }
       .disabled(!model.isEnabled || !model.automaticallyChecksForUpdates)
     } header: {
       Text("Updates")
     } footer: {
       if !model.isEnabled {
-        Text("Development builds don’t update themselves.")
+        Text("This development build doesn’t update itself.")
       }
     }
   }
@@ -161,7 +163,7 @@ struct ResetSection: View {
       // opens something rather than completing the action.
       SettingRow(title: "Reset Blurt", systemImage: "arrow.counterclockwise") {
         // Red text, because `role: .destructive` alone draws a bordered
-        // button no differently from "Check for Updates" in the sections
+        // button no differently from "Check for Updates…" in the sections
         // above — and this one deletes the key, every setting and the logs.
         Button(role: .destructive) {
           prompt = .confirm

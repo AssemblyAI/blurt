@@ -11,7 +11,7 @@ struct BlurtCommands: Commands {
     // uses (`CommandGroup(after: .appInfo)`). It drives the same Sparkle updater
     // as the Settings button (see `UpdaterModel`), and is disabled while a check
     // is already running or in builds that don't update. The ellipsis marks that
-    // it goes off and does work (and may present a dialog).
+    // it opens Sparkle's window, where an update still needs the user's go-ahead.
     CommandGroup(after: .appInfo) {
       CheckForUpdatesButton(model: appDelegate.updaterModel)
     }
