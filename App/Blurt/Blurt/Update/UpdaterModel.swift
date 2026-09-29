@@ -29,7 +29,7 @@ import Sparkle
 @Observable
 final class UpdaterModel {
   @ObservationIgnored private let controller: SPUStandardUpdaterController
-  @ObservationIgnored private var canCheckObservation: NSKeyValueObservation?
+  @ObservationIgnored private var observations: [NSKeyValueObservation] = []
 
   /// Whether a user-initiated check can start right now. False while one is
   /// already in flight (Sparkle is showing its own progress UI) and always false
@@ -49,11 +49,22 @@ final class UpdaterModel {
     controller = SPUStandardUpdaterController(
       startingUpdater: isEnabled, updaterDelegate: nil, userDriverDelegate: nil)
     versionLabel = Self.bundleVersionLabel()
-    // Sparkle publishes `canCheckForUpdates` on the main thread.
+    // Sparkle publishes these on the main thread. The two preferences are read
+    // live from Sparkle, so their observers only invalidate: Sparkle's own update
+    // alert can flip "install automatically", and an open Settings pane should
+    // show it.
     let updater = controller.updater
-    canCheckObservation = updater.observe(\.canCheckForUpdates, options: [.initial, .new]) { [weak self] observed, _ in
-      MainActor.assumeIsolated { self?.canCheckForUpdates = observed.canCheckForUpdates }
-    }
+    observations = [
+      updater.observe(\.canCheckForUpdates, options: [.initial, .new]) { [weak self] observed, _ in
+        MainActor.assumeIsolated { self?.canCheckForUpdates = observed.canCheckForUpdates }
+      },
+      updater.observe(\.automaticallyChecksForUpdates) { [weak self] _, _ in
+        MainActor.assumeIsolated { self?.withMutation(keyPath: \.automaticallyChecksForUpdates) {} }
+      },
+      updater.observe(\.automaticallyDownloadsUpdates) { [weak self] _, _ in
+        MainActor.assumeIsolated { self?.withMutation(keyPath: \.automaticallyDownloadsUpdates) {} }
+      },
+    ]
   }
 
   /// Runs a user-initiated check; Sparkle presents the result either way.
