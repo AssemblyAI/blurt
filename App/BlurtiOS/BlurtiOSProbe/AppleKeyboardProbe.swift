@@ -43,7 +43,7 @@ final class AppleKeyboardProbe: XCTestCase {
       }
       out["others"] = others
       let data = try JSONSerialization.data(withJSONObject: out, options: [.prettyPrinted, .sortedKeys])
-      let text = String(decoding: data, as: UTF8.self)
+      let text = try XCTUnwrap(String(bytes: data, encoding: .utf8))
       let json = XCTAttachment(string: text)
       json.name = "apple-geometry-\(face).json"
       json.lifetime = .keepAlways

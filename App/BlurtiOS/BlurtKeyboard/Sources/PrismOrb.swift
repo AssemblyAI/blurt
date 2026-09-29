@@ -1,4 +1,3 @@
-import BlurtEngine
 import SwiftUI
 
 /// The brand's artwork in motion. In the illustration a green beam goes into

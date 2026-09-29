@@ -76,7 +76,9 @@ struct KeyboardPalette: Equatable, Identifiable {
   /// The theme with this id in the given appearance, or the brand's for an id
   /// that no longer exists (the old `system` default, a retired theme).
   static func resolve(_ id: String, dark: Bool) -> KeyboardPalette {
-    dark ? brandDark : brandLight
+    // One theme so far: a known id and a retired one land in the same place.
+    guard all.contains(where: { $0.id == id }) else { return dark ? brandDark : brandLight }
+    return dark ? brandDark : brandLight
   }
 
   static func == (lhs: KeyboardPalette, rhs: KeyboardPalette) -> Bool { lhs.id == rhs.id && lhs.face == rhs.face }

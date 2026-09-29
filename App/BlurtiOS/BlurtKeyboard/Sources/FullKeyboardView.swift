@@ -103,8 +103,7 @@ private struct LetterKey: View {
           .onEnded { value in
             pressed = false
             // A touch that travelled was a swipe (the panel's carousel), not a tap.
-            guard abs(value.translation.width) < KeyPress.tapTravel, abs(value.translation.height) < KeyPress.tapTravel
-            else { return }
+            guard KeyboardInteraction.isTap(value.translation) else { return }
             action()
           }
       )

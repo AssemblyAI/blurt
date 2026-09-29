@@ -8,6 +8,9 @@ extension KeyboardModel {
   /// Whether a tap on the orb can do anything but open the app.
   var isReady: Bool { hasFullAccess && isListening }
 
+  /// What the voice control shows, from the phase the app published.
+  var voiceState: VoiceState { VoiceState(snapshot: snapshot, isReady: isReady) }
+
   /// Finger down on the orb. Ignored, with a buzz, while the last dictation
   /// is still being transcribed: a press then would be dropped by the engine
   /// and the user would talk into nothing.

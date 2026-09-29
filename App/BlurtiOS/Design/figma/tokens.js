@@ -155,7 +155,6 @@ Metrics|wave/bar-width|FLOAT|240||WIDTH_HEIGHT|DesignTokens.Metrics.waveBarWidth
 Metrics|wave/gap|FLOAT|2||GAP|DesignTokens.Metrics.waveGap|between wave bars
 Metrics|wave/home-height|FLOAT|44||WIDTH_HEIGHT|DesignTokens.Metrics.waveHomeHeight|
 Metrics|wave/home-width|FLOAT|280||WIDTH_HEIGHT|DesignTokens.Metrics.waveHomeWidth|
-Metrics|wave/liquid|FLOAT|0||WIDTH_HEIGHT|DesignTokens.Metrics.waveLiquid|1 draws the wave as one liquid shape through the bar heights instead of the bars themselves
 Metrics|wave/panel-height|FLOAT|40||WIDTH_HEIGHT|DesignTokens.Metrics.wavePanelHeight|
 Metrics|wave/panel-width|FLOAT|300||WIDTH_HEIGHT|DesignTokens.Metrics.wavePanelWidth|
 Metrics|wordmark/height|FLOAT|22||WIDTH_HEIGHT|DesignTokens.Metrics.wordmarkHeight|

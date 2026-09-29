@@ -312,8 +312,6 @@ enum DesignTokens {
     nonisolated static let waveGap: CGFloat = 2
     nonisolated static let waveHomeHeight: CGFloat = 44
     nonisolated static let waveHomeWidth: CGFloat = 280
-    /// 1 draws the wave as one liquid shape through the bar heights instead of the bars themselves.
-    nonisolated static let waveLiquid: CGFloat = 0
     nonisolated static let wavePanelHeight: CGFloat = 40
     nonisolated static let wavePanelWidth: CGFloat = 300
     nonisolated static let wordmarkHeight: CGFloat = 22
@@ -589,7 +587,6 @@ enum DesignTokens {
     "metrics.wave/gap": "2",
     "metrics.wave/home-height": "44",
     "metrics.wave/home-width": "280",
-    "metrics.wave/liquid": "0",
     "metrics.wave/panel-height": "40",
     "metrics.wave/panel-width": "300",
     "metrics.wordmark/height": "22",

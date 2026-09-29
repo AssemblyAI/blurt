@@ -20,25 +20,8 @@ enum BlurtBrand {
   /// `#67AD82` — the brand hue lifted for dark chrome: the pill's text and
   /// meter, the ring, the wordmark on the icon.
   nonisolated static let greenOnDark = DesignTokens.Brand.green400
-  /// `#1D1B16` — the brand ink: the pill's body in every state, and the
-  /// keyboard's surface.
-  nonisolated static let ink = DesignTokens.Brand.ink
   /// `#E67F36` — the error word. The body stays ink; the word carries the alarm.
   nonisolated static let errorOrange = DesignTokens.Brand.orange
-
-  // MARK: Keyboard surface — the ink family, one and two steps up
-
-  /// `#33302A` — an ordinary key on the ink surface.
-  nonisolated static let key = DesignTokens.Brand.ink700
-  /// `#26231E` — a modifier key (shift, delete, globe, return): a step darker
-  /// than a letter, as the system keyboard does it. The Mac's dark card fill.
-  nonisolated static let keyDark = DesignTokens.Brand.ink800
-  /// `#F2EEE6` — key legends: a warm white, not a cold one, on the warm ink.
-  nonisolated static let keyText = DesignTokens.Brand.warmWhite
-
-  /// The orb's fill: the design's own stops (`App elements/Recording.svg`),
-  /// swept bottom to top.
-  nonisolated static let orbGradient = DesignTokens.Gradients.orb
 
   /// The ring round the orb: green into white, corner to corner; spun while
   /// something is happening.

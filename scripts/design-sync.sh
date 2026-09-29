@@ -58,22 +58,25 @@ format_outputs() {
   fi
 }
 
-# The design-literal lint. Scope: the keyboard's view files. PrismOrb.swift is
-# deliberately out — its body is the orb's recipe (mesh drift, sparkle spots,
-# grain density), documented as text in Figma, and only its parameters are
-# tokens. Numbers 0 and 1 pass: `Spacer(minLength: 0)`, `.opacity(on ? 1 : 0)`
-# and `scaleEffect(1 + …)` are structure, not design.
+# The design-literal lint. Scope: every file under the keyboard's sources
+# that draws — new views are linted by default — minus the logic (the model,
+# the host controller, the palette, the geometry and interaction rules, the
+# voice state) and PrismOrb.swift, whose body is the orb's recipe (mesh drift,
+# sparkle spots, grain density), documented as text in Figma, with only its
+# parameters as tokens. Numbers 0 and 1 pass: `Spacer(minLength: 0)`,
+# `.opacity(on ? 1 : 0)` and `scaleEffect(1 + …)` are structure, not design.
 lint_literals() {
   python3 - <<'PY'
-import re, sys
-files = [
-    "App/BlurtiOS/BlurtKeyboard/Sources/KeyboardViews.swift",
-    "App/BlurtiOS/BlurtKeyboard/Sources/VoiceBar.swift",
-    "App/BlurtiOS/BlurtKeyboard/Sources/FullKeyboardView.swift",
-    "App/BlurtiOS/BlurtKeyboard/Sources/Dissipate.swift",
-    "App/BlurtiOS/BlurtKeyboard/Sources/BrandOrb.swift",
-    "App/BlurtiOS/BlurtKeyboard/Sources/SurfaceFinish.swift",
-]
+import glob, os, re, sys
+exempt = {
+    "KeyboardModel.swift", "KeyboardModel+Mic.swift", "KeyboardModel+Phase.swift", "KeyboardModel+Typing.swift",
+    "KeyboardViewController.swift", "KeyboardPalette.swift", "KeyGeometry.swift", "KeyboardInteraction.swift",
+    "VoiceState.swift", "KeyboardMotion.swift", "MotionHeld.swift", "PrismOrb.swift",
+}
+files = sorted(
+    path for path in glob.glob("App/BlurtiOS/BlurtKeyboard/Sources/**/*.swift", recursive=True)
+    if os.path.basename(path) not in exempt
+)
 modifiers = re.compile(
     r"\.(padding|frame|font|blur|scaleEffect|offset|shadow|opacity|cornerRadius|saturation|brightness"
     r"|strokeBorder|stroke|lineWidth)\(|\b(spacing|duration|minimumDistance|lineWidth|radius|size|width|height|by):"

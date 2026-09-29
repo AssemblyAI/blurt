@@ -540,7 +540,6 @@ derivation.
 | `wave/gap`                    | `2`       | `Metrics.waveGap`                  | between wave bars                                                                              |
 | `wave/home-height`            | `44`      | `Metrics.waveHomeHeight`           | —                                                                                              |
 | `wave/home-width`             | `280`     | `Metrics.waveHomeWidth`            | —                                                                                              |
-| `wave/liquid`                 | `0`       | `Metrics.waveLiquid`               | 1 draws the wave as one liquid shape through the bar heights instead of the bars themselves    |
 | `wave/panel-height`           | `40`      | `Metrics.wavePanelHeight`          | —                                                                                              |
 | `wave/panel-width`            | `300`     | `Metrics.wavePanelWidth`           | —                                                                                              |
 | `wordmark/height`             | `22`      | `Metrics.wordmarkHeight`           | —                                                                                              |
