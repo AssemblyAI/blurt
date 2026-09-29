@@ -22,6 +22,9 @@ nonisolated enum BlurtShared {
     static let layout = "keyboardLayout"
     static let autoDictate = "autoDictate"
     static let theme = "keyboardTheme"
+    /// TEMPORARY: which mic concept draws (a, b or c), while the three are
+    /// tried in use. Goes with the losers once one is picked.
+    static let voiceElement = "voiceElement"
     static let listeningUntil = "listeningUntil"
     static let windowMinutes = "listeningWindowMinutes"
     static let phase = "phase"
@@ -233,6 +236,14 @@ nonisolated enum SharedStore {
   static var themeID: String {
     get { defaults.string(forKey: BlurtShared.Key.theme) ?? "system" }
     set { defaults.set(newValue, forKey: BlurtShared.Key.theme) }
+  }
+
+  /// TEMPORARY: the mic concept to draw — `VoiceElementKind.rawValue`, the
+  /// shipped one until Settings says otherwise. Read by the keyboard on every
+  /// appearance and by the home screen live. Goes with the losers.
+  static var voiceElementKind: VoiceElementKind {
+    get { VoiceElementKind(rawValue: defaults.string(forKey: BlurtShared.Key.voiceElement) ?? "") ?? .shipped }
+    set { defaults.set(newValue.rawValue, forKey: BlurtShared.Key.voiceElement) }
   }
 
   /// Hands-free: the keyboard starts a dictation the moment it appears in a

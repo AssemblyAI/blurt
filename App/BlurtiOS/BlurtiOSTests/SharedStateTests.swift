@@ -59,6 +59,20 @@ struct PhaseSnapshotTests {
   }
 }
 
+@Suite("Voice element setting")
+struct VoiceElementSettingTests {
+  @Test("the mic concept round-trips through the App Group; unset or unknown is the shipped one")
+  func roundTrip() {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    #expect(SharedStore.voiceElementKind == .shipped)
+    SharedStore.voiceElementKind = .streak
+    #expect(SharedStore.voiceElementKind == .streak)
+    SharedStore.defaults.set("z", forKey: BlurtShared.Key.voiceElement)
+    #expect(SharedStore.voiceElementKind == .shipped)
+  }
+}
+
 @Suite("Layouts and palettes")
 struct LayoutTests {
   @Test("heights are the rows at the iPhone keyboard's spacing (DESIGN.md)")

@@ -37,6 +37,7 @@ struct KeyboardRootView: View {
     .overlay { SurfaceFinish.Grain() }
     .clipped()
     .environment(\.keyboardPalette, model.palette)
+    .environment(\.voiceElementKind, model.voiceKind)
     .simultaneousGesture(swipe, including: model.layout == .panel ? .all : .subviews)
     .animation(reduceMotion ? nil : .easeInOut(duration: DesignTokens.Motion.flip), value: model.panelShowsKeys)
     .onAppear {

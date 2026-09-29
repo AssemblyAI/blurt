@@ -16,6 +16,10 @@ struct HomeView: View {
   @State private var showsSettings = false
   /// When the last dictation's words landed — the hero's glint.
   @State private var landedAt: Date?
+  /// TEMPORARY: the mic concept from Settings, so the hero shows the one
+  /// the keyboard will. Goes with the losers.
+  @AppStorage(BlurtShared.Key.voiceElement, store: SharedStore.defaults) private var voiceRaw =
+    VoiceElementKind.shipped.rawValue
 
   private var status: HomeStatus {
     HomeStatus(
@@ -43,6 +47,7 @@ struct HomeView: View {
         .padding(.bottom, DesignTokens.Metrics.appSectionGap)
       }
       .page()
+      .environment(\.voiceElementKind, VoiceElementKind(rawValue: voiceRaw) ?? .shipped)
       .toolbar(.hidden, for: .navigationBar)
       .sheet(isPresented: $showsKeyEntry) { KeyEntryView(apiKey: coordinator.apiKey) }
       .sheet(isPresented: $showsSettings) { SettingsView(coordinator: coordinator) }

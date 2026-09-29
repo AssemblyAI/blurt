@@ -205,6 +205,11 @@ that makes the glints random to the eye and the same in every capture.
 | **b — Ribs** (`VoiceRibs`)     | a short block of the wave's own bars under a cosine envelope, the sheen passing rib to rib     | the ribs are the wave: they widen to the box and follow the voice                                                                               | the ribs breathe with the sheen                      | a white glint runs the ribs                                               | the ribs orange                                 |
 | **c — Streak** (`VoiceStreak`) | a hairline the width of the box with a bright point at its centre                              | the point blooms into a light streak whose reach follows the level, green along it, white at the heart, violet at the tips                      | a short streak sweeps the line back and forth        | the cross's vertical arm flashes through the point                        | the line orange                                 |
 
+**Temporary, while one is chosen:** Settings → Keyboard → Mic switches the
+concept in use (`SharedStore.voiceElementKind`, read by the keyboard on every
+appearance and by the home screen live). The switch, the two losers and
+`-BlurtGalleryVoice` go together once the direction is picked.
+
 What is common: the box (`voice/*`), dimming to `opacity/off` when Blurt
 isn't ready (a tap opens the app), the two glyphs that need saying (a
 clipboard when the words went there, an exclamation mark on a failure) drawn

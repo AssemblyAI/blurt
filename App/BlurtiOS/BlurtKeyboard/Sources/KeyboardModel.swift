@@ -90,6 +90,11 @@ final class KeyboardModel {
   var palette: KeyboardPalette { paletteOverride ?? .resolve(themeID, dark: isDark) }
   var themeID = SharedStore.themeID
   var paletteOverride: KeyboardPalette?
+  /// TEMPORARY: which mic concept draws, from Settings — or, for a preview
+  /// or a gallery row, whatever it is told. Goes with the losers.
+  var voiceKind: VoiceElementKind { voiceKindOverride ?? storedVoiceKind }
+  var storedVoiceKind = SharedStore.voiceElementKind
+  var voiceKindOverride: VoiceElementKind?
   /// Whether the app being typed in wants a dark keyboard: what its field
   /// asks for, else the app's own light or dark appearance.
   var isDark = false
@@ -156,6 +161,7 @@ final class KeyboardModel {
     guard hasFullAccess else { return }
     layout = SharedStore.layout
     themeID = SharedStore.themeID
+    storedVoiceKind = SharedStore.voiceElementKind
     SharedStore.keyboardEverSeen = true
     refresh(haptics: false)
     startHeartbeat()

@@ -12,6 +12,9 @@ struct SettingsView: View {
   @State private var autoDictate = SharedStore.autoDictate
   @State private var windowMinutes = SharedStore.windowMinutes
   @AppStorage(BlurtShared.Key.theme, store: SharedStore.defaults) private var themeID = "system"
+  /// TEMPORARY: which mic concept to try. Goes with the losers.
+  @AppStorage(BlurtShared.Key.voiceElement, store: SharedStore.defaults) private var voiceRaw =
+    VoiceElementKind.shipped.rawValue
   @State private var showsKeyEntry = false
   @AppStorage(SharedStore.keyTermsKey, store: SharedStore.defaults) private var keyTerms = ""
   @AppStorage(EnhancedTranscriptsStore.defaultsKey) private var enhancedTranscripts =
@@ -52,11 +55,19 @@ struct SettingsView: View {
       }
       Toggle("Hands-free", isOn: $autoDictate)
         .onChange(of: autoDictate) { _, value in SharedStore.autoDictate = value }
+      // TEMPORARY: the three mic concepts, to try each in use. Goes with the losers.
+      Picker("Mic", selection: $voiceRaw) {
+        Text("Grille").tag(VoiceElementKind.grille.rawValue)
+        Text("Ribs").tag(VoiceElementKind.ribs.rawValue)
+        Text("Streak").tag(VoiceElementKind.streak.rawValue)
+      }
+      .pickerStyle(.segmented)
     } header: {
       Eyebrow("Keyboard")
     } footer: {
       Text(
         "Hands-free starts dictating the moment the Blurt keyboard comes up in a text field; tap the mic to stop. "
+          + "Mic is a temporary switch between the three concepts while one is chosen. "
           + "The keyboard picks up changes the next time it appears.")
     }
   }

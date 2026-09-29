@@ -46,13 +46,8 @@
       var still = false
       /// One row, no caption, a registration border round the keyboard.
       var bare = false
-      /// Which mic concept draws.
-      var voice = VoiceElementKind.shipped
-
       static func parse(_ arguments: [String]) -> Options {
-        Options(
-          still: arguments.contains("-BlurtGalleryStill"), bare: arguments.contains("-BlurtGalleryBare"),
-          voice: VoiceElementKind.parse(arguments) ?? .shipped)
+        Options(still: arguments.contains("-BlurtGalleryStill"), bare: arguments.contains("-BlurtGalleryBare"))
       }
     }
 
@@ -100,7 +95,6 @@
         .frame(height: row.model.effectiveLayout.height)
         .clipped()
         .environment(\.keyboardMotionHeld, options.still)
-        .environment(\.voiceElementKind, options.voice)
     }
 
     /// The rows named by the launch arguments; empty when they don't ask for
@@ -111,10 +105,11 @@
       else { return [] }
       // The theme is the next word unless it is a switch.
       let theme = arguments.count > flag + 3 && !arguments[flag + 3].hasPrefix("-") ? arguments[flag + 3] : "light"
+      let voice = VoiceElementKind.parse(arguments) ?? .shipped
       return arguments[flag + 2].split(separator: ",").map { name in
         Row(
-          caption: "\(layout.rawValue) · \(name) · \(theme)",
-          model: model(layout: layout, state: String(name), theme: theme))
+          caption: "\(layout.rawValue) · \(name) · \(theme) · \(voice.rawValue)",
+          model: model(layout: layout, state: String(name), theme: theme, voice: voice))
       }
     }
 
@@ -128,9 +123,12 @@
       "copied": .copied, "error": .error, "landed": .pasted,
     ]
 
-    private static func model(layout: KeyboardLayout, state: String, theme: String) -> KeyboardModel {
+    private static func model(
+      layout: KeyboardLayout, state: String, theme: String, voice: VoiceElementKind
+    ) -> KeyboardModel {
       let model = KeyboardModel()
       model.layout = layout
+      model.voiceKindOverride = voice
       model.paletteOverride = .resolve(KeyboardPalette.brandID, dark: Self.darkFaces.contains(theme))
       // `keys` shows the panel's carousel flipped to its keyboard page;
       // `term` the voice bar as the key-term field, mid-typing.
