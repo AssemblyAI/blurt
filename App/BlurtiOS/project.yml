@@ -191,6 +191,10 @@ targets:
       # compiled DesignTokens.swift to the file it was generated from.
       - path: Design/tokens.json
         buildPhase: resources
+      # The iPhone keyboard's measured geometry, so AppleGeometryTests can pin
+      # the key/* tokens to what scripts/apple-geometry.sh read off the phone.
+      - path: Design/apple-geometry.json
+        buildPhase: resources
     dependencies:
       - target: BlurtiOS
     settings:
@@ -199,6 +203,24 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+  # The Apple-keyboard probe: one XCUITest that launches the app on
+  # `-BlurtProbeField` and reads the system keyboard's key frames, so the
+  # keyboard's geometry tokens are measured, not assumed
+  # (scripts/apple-geometry.sh → Design/apple-geometry.json). Its own scheme,
+  # so `xcodebuild test -scheme BlurtiOS` and the periphery scan never see it.
+  BlurtiOSProbe:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: BlurtiOSProbe
+    dependencies:
+      - target: BlurtiOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt.ios.probe
+        TEST_TARGET_NAME: BlurtiOS
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
 # XcodeGen emits a scheme only where one is declared, and `xcodebuild -scheme`
 # needs a shared one. Building the app builds the keyboard it embeds; testing
 # runs the unit tests against it.
@@ -214,3 +236,14 @@ schemes:
       config: Debug
       targets:
         - BlurtiOSTests
+  BlurtiOSProbe:
+    build:
+      targets:
+        BlurtiOS: all
+        BlurtiOSProbe: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - BlurtiOSProbe

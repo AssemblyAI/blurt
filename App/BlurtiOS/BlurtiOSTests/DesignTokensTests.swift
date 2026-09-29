@@ -88,21 +88,21 @@ struct DesignTokensTests {
     #expect(KeyboardLayout.panel.height == metrics.layoutPanel)
     #expect(
       KeyboardLayout.full.height
-        == 2 * metrics.marginVertical + metrics.voicebarHeight + 4 * metrics.rowGap + 4 * metrics.keyHeight)
+        == metrics.marginVertical + metrics.voicebarHeight + 4 * metrics.keyHeight + 3 * metrics.rowGap
+        + metrics.marginBottomKeys)
     #expect(KeyboardLayout.full.height == metrics.layoutFull)
   }
 
   @Test("the full layout at 402 pt matches the @402 tokens the Figma frames are drawn with")
   func fullLayoutAt402() {
-    let width: CGFloat = 402
-    let gap = DesignTokens.Metrics.keyGap
-    // The same arithmetic as FullKeyboardView.
-    let keyWidth = (width - 9 * gap) / 10
-    let sideGap = gap * DesignTokens.Metrics.keySideGapFactor
-    let sideWidth = (width - 7 * keyWidth - 6 * gap - 2 * sideGap) / 2
-    #expect(abs(keyWidth - DesignTokens.Metrics.keyLetterWidth402) < 0.001)
-    #expect(abs(sideWidth - DesignTokens.Metrics.keySideWidth402) < 0.001)
-    #expect(abs(sideWidth * 2 + gap - DesignTokens.Metrics.keyReturnWidth402) < 0.001)
+    // The tokens are written to a thousandth of a point; the row's thirds
+    // round either way at the last digit.
+    let geometry = KeyGeometry(width: DesignTokens.Metrics.keyReferenceWidth)
+    #expect(abs(geometry.letterWidth - DesignTokens.Metrics.keyLetterWidth402) < 0.005)
+    #expect(abs(geometry.sideWidth - DesignTokens.Metrics.keySideWidth402) < 0.005)
+    #expect(abs(geometry.abcWidth - DesignTokens.Metrics.keyAbcWidth402) < 0.005)
+    #expect(abs(geometry.returnWidth - DesignTokens.Metrics.keyReturnWidth402) < 0.005)
+    #expect(abs(geometry.spaceWidth(globe: true) - DesignTokens.Metrics.keySpaceWidth402) < 0.005)
   }
 
   /// Each face beside the ten theme tokens it must equal, in role order:

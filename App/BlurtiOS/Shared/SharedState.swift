@@ -83,7 +83,9 @@ nonisolated enum KeyboardLayout: String, CaseIterable, Codable, Sendable, Identi
     return switch self {
     case .slimBar: 2 * metrics.marginVertical + metrics.voicebarHeight
     case .panel: metrics.layoutPanel
-    case .full: 2 * metrics.marginVertical + metrics.voicebarHeight + 4 * metrics.rowGap + 4 * metrics.keyHeight
+    case .full:
+      metrics.marginVertical + metrics.voicebarHeight + 4 * metrics.keyHeight + 3 * metrics.rowGap
+        + metrics.marginBottomKeys
     }
   }
 }

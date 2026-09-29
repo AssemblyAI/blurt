@@ -1,9 +1,4 @@
-#!/usr/bin/env swift  // Pixel tools for the design loop, with no dependencies beyond AppKit — the  // same shape as beautify.swift and screenshot.swift. Three commands:
-//
-//   swift scripts/design-diff.swift crop <in.png> <out.png> [--expect-height <px>]
-//       Cuts the keyboard out of a whole-screen simulator capture: finds the
-//       magenta (#FF00FF) registration border the gallery's -BlurtGalleryBare
-//       mode draws round the row and writes what is inside it. With
+#!/usr/bin/env swift  // Pixel tools for the design loop, with no dependencies beyond AppKit — the  // same shape as beautify.swift and screenshot.swift. Four commands:  //  //   swift scripts/design-diff.swift crop <in.png> <out.png> [--expect-height <px>]  //       Cuts the keyboard out of a whole-screen simulator capture: finds the  //       magenta (#FF00FF) registration border the gallery's -BlurtGalleryBare  //       mode draws round the row and writes what is inside it. With
 //       --expect-height, fails unless the crop is that tall (±1 px).
 //
 //   swift scripts/design-diff.swift diff <a.png> <b.png> --out <triptych.png> --json <metrics.json>
@@ -19,6 +14,10 @@
 //
 //   swift scripts/design-diff.swift sheet --out <sheet.png> --columns <n> [--scale <f>] <caption>=<png>...
 //       A contact sheet: the images in a grid with their captions under them.
+//
+//   swift scripts/design-diff.swift measure <shot.png> --scale 3 --surface x,y --probe x,y... [--column x:y0:y1]...
+//       The visual geometry of the keys in a screenshot of the system keyboard
+//       (widths, gaps, heights, corner radius, the surface's edges), in points.
 //
 // Every image is read into an 8-bit sRGB RGBA buffer through CoreGraphics, so
 // the numbers do not depend on how the PNG was tagged.
@@ -286,12 +285,166 @@ func sheet(_ args: [String]) {
 
 // MARK: - main
 
+// MARK: - measure
+
+/// The system keyboard's visual geometry off a screenshot, for
+/// scripts/apple-geometry.sh: XCUITest reports touch cells, which tile the
+/// row with no gaps, so the caps' widths, gaps, heights and corner radius are
+/// read from the pixels. Every coordinate on the command line is in points;
+/// `--scale` is the capture's pixels per point.
+///
+///   measure <png> --scale 3 --surface x,y --probe x,y [--probe x,y]... [--column x:y0:y1]...
+///
+/// `--surface` samples the keyboard's ground colour; a pixel that differs
+/// from it by more than the threshold is part of a cap. Each `--probe` names a
+/// point inside a cap: the cap's top and bottom are found up and down that
+/// column, then the row 3 pt below the top is scanned for every cap on it
+/// (left, width, and the gap to the next), and the corner radius is fitted
+/// from the cap's top-left inset over its first rows. `--column` lists where
+/// the colour changes along a column, for finding the surface's top edge.
+func measure(_ args: [String]) {
+  var args = args
+  guard let scaleText = flag("--scale", in: &args), let scale = Double(scaleText),
+    let surfaceText = flag("--surface", in: &args)
+  else { fail("measure <png> --scale <n> --surface x,y [--probe x,y]... [--column x:y0:y1]...") }
+  let probes = flags("--probe", in: &args)
+  let columns = flags("--column", in: &args)
+  guard args.count == 1 else { fail("measure: one png") }
+  let image = load(args[0])
+  func point(_ text: String) -> (x: Int, y: Int) {
+    let parts = text.split(separator: ",").compactMap { Double($0) }
+    guard parts.count == 2 else { fail("measure: a point is x,y in points, got \(text)") }
+    return (Int((parts[0] * scale).rounded()), Int((parts[1] * scale).rounded()))
+  }
+  let surfaceAt = point(surfaceText)
+  let surface = image[surfaceAt.x, surfaceAt.y]
+  let threshold = 14
+  func isCap(_ x: Int, _ y: Int) -> Bool {
+    guard x >= 0, y >= 0, x < image.width, y < image.height else { return false }
+    let p = image[x, y]
+    return max(abs(p.r - surface.r), abs(p.g - surface.g), abs(p.b - surface.b)) > threshold
+  }
+  func pt(_ px: Int) -> Double { (Double(px) / scale * 1000).rounded() / 1000 }
+  var report: [String: Any] = [
+    "surface": String(format: "#%02X%02X%02X", surface.r, surface.g, surface.b), "scale": scale,
+  ]
+  var caps: [[String: Any]] = []
+  for probeText in probes {
+    let probe = point(probeText)
+    guard isCap(probe.x, probe.y) else {
+      caps.append(["probe": probeText, "error": "not on a cap"])
+      continue
+    }
+    // The cap's top and bottom along the probe's column. A glyph's
+    // anti-aliased edge can land on the surface's colour for a pixel, so an
+    // edge is only an edge when the surface holds for a few pixels.
+    let hold = Int(scale) + 1
+    func surfaceHolds(_ x: Int, _ y: Int, step: Int) -> Bool {
+      (0..<hold).allSatisfy { !isCap(x, y + step * $0) }
+    }
+    var top = probe.y
+    while top > 0, !surfaceHolds(probe.x, top - 1, step: -1) { top -= 1 }
+    var bottom = probe.y
+    while bottom < image.height - 1, !surfaceHolds(probe.x, bottom + 1, step: 1) { bottom += 1 }
+    // Every cap along the row through the cap's middle (a glyph is inside a
+    // cap, never the surface's colour for long): runs of cap pixels, merged
+    // across glyph pixels, with the gaps between.
+    let scanY = (top + bottom) / 2
+    var runs: [(left: Int, right: Int)] = []
+    var x = 0
+    while x < image.width {
+      guard isCap(x, scanY) else {
+        x += 1
+        continue
+      }
+      let left = x
+      var lastCap = x
+      while x < image.width {
+        if isCap(x, scanY) {
+          lastCap = x
+        } else if x - lastCap >= hold {
+          break
+        }
+        x += 1
+      }
+      runs.append((left, lastCap))
+      x = lastCap + 1
+    }
+    guard let own = runs.first(where: { $0.left <= probe.x && probe.x <= $0.right }) else {
+      caps.append(["probe": probeText, "error": "no run under the probe"])
+      continue
+    }
+    // The top-left corner: the inset of the first cap pixel on each of the
+    // first rows, fitted to a circle of radius r (inset = r − √(2ry − y²)).
+    var insets: [(y: Double, inset: Double)] = []
+    let rowsToFit = Int(12 * scale)
+    for i in 0..<rowsToFit {
+      let y = top + i
+      guard y <= bottom else { break }
+      var first = own.left
+      while first <= own.right, !isCap(first, y) { first += 1 }
+      insets.append((Double(i) + 0.5, Double(first - own.left)))
+    }
+    var bestRadius = 0.0
+    var bestError = Double.infinity
+    var candidate = 0.0
+    while candidate <= 24 * scale {
+      let error = insets.reduce(0.0) { sum, sample in
+        let predicted =
+          sample.y >= candidate ? 0 : candidate - (2 * candidate * sample.y - sample.y * sample.y).squareRoot()
+        return sum + (predicted - sample.inset) * (predicted - sample.inset)
+      }
+      if error < bestError {
+        bestError = error
+        bestRadius = candidate
+      }
+      candidate += 0.25
+    }
+    // The fill, read just under the top edge where no glyph is.
+    let color = image[probe.x, min(bottom, top + Int(3 * scale))]
+    caps.append([
+      "probe": probeText,
+      "fill": String(format: "#%02X%02X%02X", color.r, color.g, color.b),
+      "top": pt(top), "bottom": pt(bottom + 1), "height": pt(bottom + 1 - top),
+      "left": pt(own.left), "width": pt(own.right + 1 - own.left),
+      "radius": (bestRadius / scale * 100).rounded() / 100,
+      "row": runs.map { ["left": pt($0.left), "width": pt($0.right + 1 - $0.left)] },
+      "gaps": zip(runs, runs.dropFirst()).map { pt($1.left - $0.right - 1) },
+    ])
+  }
+  report["caps"] = caps
+  var edges: [[String: Any]] = []
+  for columnText in columns {
+    let parts = columnText.split(separator: ":").compactMap { Double($0) }
+    guard parts.count == 3 else { fail("measure: a column is x:y0:y1 in points") }
+    let x = Int((parts[0] * scale).rounded())
+    var changes: [[String: Any]] = []
+    let y0 = max(0, min(Int((parts[1] * scale).rounded()), image.height - 1))
+    let y1 = max(y0, min(Int((parts[2] * scale).rounded()), image.height - 1))
+    var previous = image[x, y0]
+    for y in y0...y1 {
+      let p = image[x, y]
+      if max(abs(p.r - previous.r), abs(p.g - previous.g), abs(p.b - previous.b)) > threshold {
+        changes.append(["y": pt(y), "to": String(format: "#%02X%02X%02X", p.r, p.g, p.b)])
+      }
+      previous = p
+    }
+    edges.append(["column": columnText, "changes": changes])
+  }
+  report["columns"] = edges
+  guard let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) else {
+    fail("measure: could not encode the report")
+  }
+  print(String(decoding: data, as: UTF8.self))
+}
+
 var arguments = Array(CommandLine.arguments.dropFirst())
-guard let command = arguments.first else { fail("usage: design-diff.swift crop|diff|sheet …") }
+guard let command = arguments.first else { fail("usage: design-diff.swift crop|diff|sheet|measure …") }
 arguments.removeFirst()
 switch command {
 case "crop": crop(arguments)
 case "diff": diff(arguments)
 case "sheet": sheet(arguments)
+case "measure": measure(arguments)
 default: fail("unknown command \(command)")
 }

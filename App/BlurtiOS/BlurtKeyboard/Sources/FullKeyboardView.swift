@@ -3,8 +3,9 @@ import SwiftUI
 /// A complete keyboard laid out as the iPhone's own — ten letter keys across
 /// at one width, the middle row centred, shift and delete flanking the bottom
 /// letters, then 123 · globe · space · return, at the system keyboard's
-/// spacing — with the voice bar where the suggestion bar would be. Every key is 42 pt tall. Letters pop up
-/// while pressed, sentences capitalise themselves, a double space ends one.
+/// measured spacing (`KeyGeometry`) — with the voice bar where the suggestion
+/// bar would be. Letters pop up while pressed, sentences capitalise
+/// themselves, a double space ends one.
 /// No autocorrect or suggestions yet. iOS swaps in its own keyboard for
 /// password fields, so those never reach here.
 struct FullKeyboardView: View {
@@ -14,38 +15,44 @@ struct FullKeyboardView: View {
 
   var body: some View {
     GeometryReader { geo in
-      let gap = KeyboardPalette.keyGap
-      // Ten keys and nine gaps across the row.
-      let keyWidth = (geo.size.width - 9 * gap) / 10
-      // Shift and delete take what seven letters leave, standing a little
-      // further from them than letters stand from each other.
-      let sideGap = gap * DesignTokens.Metrics.keySideGapFactor
-      let sideWidth = (geo.size.width - 7 * keyWidth - 6 * gap - 2 * sideGap) / 2
-      VStack(spacing: KeyboardPalette.rowGap) {
+      // The root has already taken the side margins off; the rest is the row.
+      let geometry = KeyGeometry(rowWidth: geo.size.width)
+      let gap = geometry.gap
+      VStack(spacing: 0) {
+        // The voice row sits where the system's suggestion bar does, and the
+        // first key row starts right under it, as the iPhone's does.
         VoiceBar(model: model)
-        ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
-          HStack(spacing: index == 2 ? sideGap : gap) {  // literal-ok: the third row carries shift and delete
-            if index == 2 { modifierKey(width: sideWidth) }  // literal-ok: the third row
-            HStack(spacing: gap) {
-              ForEach(Array(row), id: \.self) { character in
-                LetterKey(label: label(for: character), width: keyWidth) { model.type(label(for: character)) }
+        VStack(spacing: KeyboardPalette.rowGap) {
+          ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+            HStack(spacing: index == 2 ? geometry.sideGap : gap) {  // literal-ok: the third row carries shift and delete
+              if index == 2 { modifierKey(width: geometry.sideWidth) }  // literal-ok: the third row
+              HStack(spacing: gap) {
+                ForEach(Array(row), id: \.self) { character in
+                  LetterKey(label: label(for: character), width: geometry.letterWidth) {
+                    model.type(label(for: character))
+                  }
+                }
+              }
+              if index == 2 {
+                KeyCap(systemImage: "delete.left", dark: true, width: geometry.sideWidth) { model.deleteBackward() }
               }
             }
-            if index == 2 {
-              KeyCap(systemImage: "delete.left", dark: true, width: sideWidth) { model.deleteBackward() }
-            }
+            .frame(maxWidth: .infinity)
           }
-          .frame(maxWidth: .infinity)
-        }
-        // The stock bottom row; voice lives only in the bar above.
-        HStack(spacing: gap) {
-          KeyCap(title: model.symbolsPage ? "ABC" : "123", dark: true, width: sideWidth) { model.toggleSymbols() }
-          if model.needsGlobe { KeyCap(systemImage: "globe", dark: true, width: sideWidth) { model.globe() } }
-          KeyCap(title: "space", flexible: true) { model.space() }
-          KeyCap(
-            title: model.returnLabel, systemImage: model.returnLabel == nil ? "return" : nil, dark: true,
-            width: sideWidth * 2 + gap  // literal-ok: return is two modifiers wide
-          ) { model.newline() }
+          // The stock bottom row; voice lives only in the bar above.
+          HStack(spacing: gap) {
+            KeyCap(title: model.symbolsPage ? "ABC" : "123", dark: true, width: geometry.abcWidth) {
+              model.toggleSymbols()
+            }
+            if model.needsGlobe {
+              KeyCap(systemImage: "globe", dark: true, width: geometry.abcWidth) { model.globe() }
+            }
+            KeyCap(title: "space", flexible: true) { model.space() }
+            KeyCap(
+              title: model.returnLabel, systemImage: model.returnLabel == nil ? "return" : nil, dark: true,
+              width: geometry.returnWidth
+            ) { model.newline() }
+          }
         }
       }
     }

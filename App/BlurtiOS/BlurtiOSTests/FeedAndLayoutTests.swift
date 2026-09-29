@@ -41,7 +41,8 @@ struct LayoutArithmeticTests {
   @Test("the full layout's height is its rows at the theme spacing (DESIGN.md)")
   func fullHeight() {
     let expected =
-      2 * KeyboardRootView.verticalMargin + VoiceBar.height + 4 * KeyboardPalette.rowGap + 4 * KeyCap.height
+      KeyboardRootView.verticalMargin + VoiceBar.height + 4 * KeyCap.height + 3 * KeyboardPalette.rowGap
+      + KeyboardRootView.bottomMarginKeys
     #expect(KeyboardLayout.full.height == expected)
   }
 
@@ -60,7 +61,8 @@ struct LayoutArithmeticTests {
     #expect(dark[0].model.palette.keyText == DesignTokens.Themes.darkLegend)
     let ink = KeyboardGalleryView.rows(from: ["app", "-BlurtGallery", "full", "idle", "ink"])
     #expect(ink[0].model.palette.face == .dark)
-    #expect(KeyboardGalleryView.rows(from: ["app", "-BlurtGallery", "full", "idle", "paper"])[0].model.palette.face == .light)
+    #expect(
+      KeyboardGalleryView.rows(from: ["app", "-BlurtGallery", "full", "idle", "paper"])[0].model.palette.face == .light)
   }
 
   @Test("the capture switches ride along, and a switch where the theme would be is not a theme")

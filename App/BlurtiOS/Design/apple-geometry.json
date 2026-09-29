@@ -1,0 +1,58 @@
+{
+  "cap": {
+    "abc": 43.333,
+    "bottomMargin": 13.0,
+    "gap": 6.0,
+    "height": 43,
+    "keyboardHeight": 270.667,
+    "letter": 33.5,
+    "marginRight": 6.333,
+    "marginSide": 6.667,
+    "radius": 8.17,
+    "return": 93,
+    "rowGap": 11.0,
+    "side": 45.5,
+    "sideGap": 13.667,
+    "space": 191.333,
+    "systemBarBelow": 58.0,
+    "topBand": 52.667
+  },
+  "cell": {
+    "delete": 51.667,
+    "firstRowTop": 597.0,
+    "keyboardHeight": 226.0,
+    "keyboardTop": 590.0,
+    "letter": 39.333,
+    "more": 49.333,
+    "return": 99.0,
+    "row": 54.0,
+    "shift": 51.333,
+    "space": 197.333
+  },
+  "colors": {
+    "dark": {
+      "key": "#575757",
+      "modifier": "#575757",
+      "surface": "#373737"
+    },
+    "light": {
+      "key": "#FFFFFF",
+      "modifier": "#FFFFFF",
+      "surface": "#E2E3E8"
+    }
+  },
+  "darkFaceIdentical": true,
+  "device": "iPhone 18 Pro",
+  "legend": {
+    "lHeight": 17.667,
+    "pointSizeEstimate": 24.201
+  },
+  "measured": "2026-09-29",
+  "sources": {
+    "caps": "pixel scan of the light screenshot (scripts/design-diff.swift measure)",
+    "cells": "XCUITest key frames (BlurtiOSProbe) \u2014 touch cells, no gaps",
+    "legend": "the l glyph's height on the light face; the point size is an estimate (\u00f7 0.73, SF's ascender)",
+    "radius": "circle fitted to the top-left inset of the q cap over its first 12 pt (\u00b10.25)"
+  },
+  "width": 402
+}

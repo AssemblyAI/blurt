@@ -9,9 +9,11 @@ import SwiftUI
 struct KeyboardRootView: View {
   var model: KeyboardModel
 
-  /// The keyboard's top and bottom margin: the arithmetic in
+  /// The keyboard's top margin (and the slim bar's bottom): the arithmetic in
   /// `KeyboardLayout.height` is built on it and the palette's row gap.
   static let verticalMargin = DesignTokens.Metrics.marginVertical
+  /// Under a bottom row of keys, the iPhone's own margin.
+  static let bottomMarginKeys = DesignTokens.Metrics.marginBottomKeys
 
   var body: some View {
     Group {
@@ -28,7 +30,8 @@ struct KeyboardRootView: View {
       }
     }
     .padding(.horizontal, KeyboardPalette.margin)
-    .padding(.vertical, Self.verticalMargin)
+    .padding(.top, Self.verticalMargin)
+    .padding(.bottom, model.effectiveLayout == .slimBar ? Self.verticalMargin : Self.bottomMarginKeys)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background { SurfaceFinish.Ground(surface: model.palette.surface) }
     .overlay { SurfaceFinish.Grain() }

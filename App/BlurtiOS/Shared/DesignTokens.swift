@@ -182,33 +182,41 @@ enum DesignTokens {
     nonisolated static let gestureSwipeMin: CGFloat = 24
     /// The +, × and ✓ touch targets.
     nonisolated static let glyphHit: CGFloat = 32
+    /// 123 and the globe at 402 pt: the iPhone's.
+    nonisolated static let keyAbcWidth402: CGFloat = 43.333
     /// Between keys, the iPhone's.
     nonisolated static let keyGap: CGFloat = 6
-    /// Every key.
-    nonisolated static let keyHeight: CGFloat = 42
-    /// A letter key at 402 pt (iPhone 18 Pro): (width − 9 × key/gap) / 10.
-    nonisolated static let keyLetterWidth402: CGFloat = 34.8
-    /// A key that isn't given a width.
-    nonisolated static let keyMinWidth: CGFloat = 44
+    /// Every key: the iPhone's cap height (apple-geometry.json).
+    nonisolated static let keyHeight: CGFloat = 43
+    /// A letter key at 402 pt: (width − 2 × margin/side − 9 × key/gap) / 10.
+    nonisolated static let keyLetterWidth402: CGFloat = 33.5
+    /// A key that isn't given a width: the iPhone's 123 key at 402 pt.
+    nonisolated static let keyMinWidth: CGFloat = 43.333
     /// A legend's side padding on a min-width key.
     nonisolated static let keyPad: CGFloat = 4
-    /// Flat keys, one colour at this corner.
+    /// Flat keys, one colour at this corner: the iPhone's (fitted 8.17).
     nonisolated static let keyRadius: CGFloat = 8
-    /// Return at 402 pt: two side keys and a gap.
-    nonisolated static let keyReturnWidth402: CGFloat = 104.4
-    /// Shift and delete stand this many key gaps from the letters.
-    nonisolated static let keySideGapFactor: CGFloat = 2
-    /// Shift, delete, 123 and globe at 402 pt: what seven letters leave, halved.
-    nonisolated static let keySideWidth402: CGFloat = 49.2
-    /// 2 × margin/vertical + voicebar/height + 4 × row/gap + 4 × key/height.
-    nonisolated static let layoutFull: CGFloat = 272
+    /// The width the @402 tokens were measured at (iPhone 18 Pro); widths scale from it.
+    nonisolated static let keyReferenceWidth: CGFloat = 402
+    /// Return at 402 pt: two 123 keys and a gap.
+    nonisolated static let keyReturnWidth402: CGFloat = 92.667
+    /// Shift and delete stand this far from the letters: the iPhone's.
+    nonisolated static let keySideGap: CGFloat = 13.667
+    /// Shift and delete at 402 pt: what seven letters and the side gaps leave, halved (measured 45.5).
+    nonisolated static let keySideWidth402: CGFloat = 45.583
+    /// Space at 402 pt beside 123, the globe and return: what is left (measured 191.333).
+    nonisolated static let keySpaceWidth402: CGFloat = 191.667
+    /// Margin/vertical + voicebar/height + 4 × key/height + 3 × row/gap + margin/bottom-keys.
+    nonisolated static let layoutFull: CGFloat = 270
     /// Chosen: room for the 96 orb over one key row.
     nonisolated static let layoutPanel: CGFloat = 216
     /// 2 × margin/vertical + voicebar/height.
     nonisolated static let layoutSlim: CGFloat = 60
-    /// At the keyboard's sides.
-    nonisolated static let marginSide: CGFloat = 3
-    /// The keyboard's top and bottom.
+    /// Under a bottom row of keys (the full keyboard, the panel): the iPhone's.
+    nonisolated static let marginBottomKeys: CGFloat = 13
+    /// At the keyboard's sides: the iPhone's cap margin, (402 − 10 letters − 9 gaps) / 2.
+    nonisolated static let marginSide: CGFloat = 6.5
+    /// The keyboard's top, and the slim bar's bottom.
     nonisolated static let marginVertical: CGFloat = 8
     /// The orb when Blurt isn't ready.
     nonisolated static let opacityDim: CGFloat = 0.8
@@ -328,8 +336,8 @@ enum DesignTokens {
     nonisolated static let sizeLabel: CGFloat = 12
     /// Every other key.
     nonisolated static let sizeLegend: CGFloat = 16
-    /// Letter keys.
-    nonisolated static let sizeLetter: CGFloat = 22
+    /// Letter keys: the iPhone's (estimated from the l glyph, apple-geometry.json).
+    nonisolated static let sizeLetter: CGFloat = 24
     /// The letter pop-up.
     nonisolated static let sizePopup: CGFloat = 32
     /// The key-term field.
@@ -511,19 +519,23 @@ enum DesignTokens {
     "metrics.caret/width": "2",
     "metrics.gesture/swipe-min": "24",
     "metrics.glyph/hit": "32",
+    "metrics.key/abc-width-402": "43.333",
     "metrics.key/gap": "6",
-    "metrics.key/height": "42",
-    "metrics.key/letter-width-402": "34.8",
-    "metrics.key/min-width": "44",
+    "metrics.key/height": "43",
+    "metrics.key/letter-width-402": "33.5",
+    "metrics.key/min-width": "43.333",
     "metrics.key/pad": "4",
     "metrics.key/radius": "8",
-    "metrics.key/return-width-402": "104.4",
-    "metrics.key/side-gap-factor": "2",
-    "metrics.key/side-width-402": "49.2",
-    "metrics.layout/full": "272",
+    "metrics.key/reference-width": "402",
+    "metrics.key/return-width-402": "92.667",
+    "metrics.key/side-gap": "13.667",
+    "metrics.key/side-width-402": "45.583",
+    "metrics.key/space-width-402": "191.667",
+    "metrics.layout/full": "270",
     "metrics.layout/panel": "216",
     "metrics.layout/slim": "60",
-    "metrics.margin/side": "3",
+    "metrics.margin/bottom-keys": "13",
+    "metrics.margin/side": "6.5",
     "metrics.margin/vertical": "8",
     "metrics.opacity/dim": "0.8",
     "metrics.opacity/dim-saturation": "0.35",
@@ -589,7 +601,7 @@ enum DesignTokens {
     "type.size/glyph": "17",
     "type.size/label": "12",
     "type.size/legend": "16",
-    "type.size/letter": "22",
+    "type.size/letter": "24",
     "type.size/popup": "32",
     "type.size/term": "17",
     "type.size/title": "34",

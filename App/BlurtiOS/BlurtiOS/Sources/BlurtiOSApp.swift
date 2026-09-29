@@ -39,7 +39,9 @@ struct BlurtiOSApp: App {
     WindowGroup {
       #if DEBUG
         let rows = KeyboardGalleryView.rows(from: CommandLine.arguments)
-        if let orb = KeyboardGalleryView.OrbStillView.parse(CommandLine.arguments) {
+        if let probe = KeyboardProbeView.parse(CommandLine.arguments) {
+          probe
+        } else if let orb = KeyboardGalleryView.OrbStillView.parse(CommandLine.arguments) {
           orb
         } else if rows.isEmpty {
           home

@@ -85,20 +85,24 @@ Metrics|caret/radius|FLOAT|1||CORNER_RADIUS|DesignTokens.Metrics.caretRadius|
 Metrics|caret/width|FLOAT|2||STROKE_FLOAT,WIDTH_HEIGHT|DesignTokens.Metrics.caretWidth|
 Metrics|gesture/swipe-min|FLOAT|24|||DesignTokens.Metrics.gestureSwipeMin|the carousel gesture's minimum distance
 Metrics|glyph/hit|FLOAT|32||WIDTH_HEIGHT|DesignTokens.Metrics.glyphHit|the +, × and ✓ touch targets
+Metrics|key/abc-width-402|FLOAT|43.333||WIDTH_HEIGHT|DesignTokens.Metrics.keyAbcWidth402|123 and the globe at 402 pt: the iPhone's
 Metrics|key/gap|FLOAT|6||GAP|DesignTokens.Metrics.keyGap|between keys, the iPhone's
-Metrics|key/height|FLOAT|42||WIDTH_HEIGHT|DesignTokens.Metrics.keyHeight|every key
-Metrics|key/letter-width-402|FLOAT|34.8||WIDTH_HEIGHT|DesignTokens.Metrics.keyLetterWidth402|a letter key at 402 pt (iPhone 18 Pro): (width − 9 × key/gap) / 10
-Metrics|key/min-width|FLOAT|44||WIDTH_HEIGHT|DesignTokens.Metrics.keyMinWidth|a key that isn't given a width
+Metrics|key/height|FLOAT|43||WIDTH_HEIGHT|DesignTokens.Metrics.keyHeight|every key: the iPhone's cap height (apple-geometry.json)
+Metrics|key/letter-width-402|FLOAT|33.5||WIDTH_HEIGHT|DesignTokens.Metrics.keyLetterWidth402|a letter key at 402 pt: (width − 2 × margin/side − 9 × key/gap) / 10
+Metrics|key/min-width|FLOAT|43.333||WIDTH_HEIGHT|DesignTokens.Metrics.keyMinWidth|a key that isn't given a width: the iPhone's 123 key at 402 pt
 Metrics|key/pad|FLOAT|4||GAP|DesignTokens.Metrics.keyPad|a legend's side padding on a min-width key
-Metrics|key/radius|FLOAT|8||CORNER_RADIUS|DesignTokens.Metrics.keyRadius|flat keys, one colour at this corner
-Metrics|key/return-width-402|FLOAT|104.4||WIDTH_HEIGHT|DesignTokens.Metrics.keyReturnWidth402|return at 402 pt: two side keys and a gap
-Metrics|key/side-gap-factor|FLOAT|2|||DesignTokens.Metrics.keySideGapFactor|shift and delete stand this many key gaps from the letters
-Metrics|key/side-width-402|FLOAT|49.2||WIDTH_HEIGHT|DesignTokens.Metrics.keySideWidth402|shift, delete, 123 and globe at 402 pt: what seven letters leave, halved
-Metrics|layout/full|FLOAT|272||WIDTH_HEIGHT|DesignTokens.Metrics.layoutFull|2 × margin/vertical + voicebar/height + 4 × row/gap + 4 × key/height
+Metrics|key/radius|FLOAT|8||CORNER_RADIUS|DesignTokens.Metrics.keyRadius|flat keys, one colour at this corner: the iPhone's (fitted 8.17)
+Metrics|key/reference-width|FLOAT|402||WIDTH_HEIGHT|DesignTokens.Metrics.keyReferenceWidth|the width the @402 tokens were measured at (iPhone 18 Pro); widths scale from it
+Metrics|key/return-width-402|FLOAT|92.667||WIDTH_HEIGHT|DesignTokens.Metrics.keyReturnWidth402|return at 402 pt: two 123 keys and a gap
+Metrics|key/side-gap|FLOAT|13.667||GAP|DesignTokens.Metrics.keySideGap|shift and delete stand this far from the letters: the iPhone's
+Metrics|key/side-width-402|FLOAT|45.583||WIDTH_HEIGHT|DesignTokens.Metrics.keySideWidth402|shift and delete at 402 pt: what seven letters and the side gaps leave, halved (measured 45.5)
+Metrics|key/space-width-402|FLOAT|191.667||WIDTH_HEIGHT|DesignTokens.Metrics.keySpaceWidth402|space at 402 pt beside 123, the globe and return: what is left (measured 191.333)
+Metrics|layout/full|FLOAT|270||WIDTH_HEIGHT|DesignTokens.Metrics.layoutFull|margin/vertical + voicebar/height + 4 × key/height + 3 × row/gap + margin/bottom-keys
 Metrics|layout/panel|FLOAT|216||WIDTH_HEIGHT|DesignTokens.Metrics.layoutPanel|chosen: room for the 96 orb over one key row
 Metrics|layout/slim|FLOAT|60||WIDTH_HEIGHT|DesignTokens.Metrics.layoutSlim|2 × margin/vertical + voicebar/height
-Metrics|margin/side|FLOAT|3||WIDTH_HEIGHT|DesignTokens.Metrics.marginSide|at the keyboard's sides
-Metrics|margin/vertical|FLOAT|8||WIDTH_HEIGHT|DesignTokens.Metrics.marginVertical|the keyboard's top and bottom
+Metrics|margin/bottom-keys|FLOAT|13||WIDTH_HEIGHT|DesignTokens.Metrics.marginBottomKeys|under a bottom row of keys (the full keyboard, the panel): the iPhone's
+Metrics|margin/side|FLOAT|6.5||WIDTH_HEIGHT|DesignTokens.Metrics.marginSide|at the keyboard's sides: the iPhone's cap margin, (402 − 10 letters − 9 gaps) / 2
+Metrics|margin/vertical|FLOAT|8||WIDTH_HEIGHT|DesignTokens.Metrics.marginVertical|the keyboard's top, and the slim bar's bottom
 Metrics|opacity/dim|FLOAT|0.8||OPACITY|DesignTokens.Metrics.opacityDim|the orb when Blurt isn't ready
 Metrics|opacity/dim-saturation|FLOAT|0.35||OPACITY|DesignTokens.Metrics.opacityDimSaturation|and its saturation
 Metrics|opacity/disabled|FLOAT|0.4||OPACITY|DesignTokens.Metrics.opacityDisabled|the + without Full Access
@@ -163,7 +167,7 @@ Typography|size/eyebrow|FLOAT|12||FONT_SIZE|DesignTokens.Typography.sizeEyebrow|
 Typography|size/glyph|FLOAT|17||FONT_SIZE|DesignTokens.Typography.sizeGlyph|the +, × and ✓
 Typography|size/label|FLOAT|12||FONT_SIZE|DesignTokens.Typography.sizeLabel|the mono word labels on keys: 123, ABC, #+=, space, the return label
 Typography|size/legend|FLOAT|16||FONT_SIZE|DesignTokens.Typography.sizeLegend|every other key
-Typography|size/letter|FLOAT|22||FONT_SIZE|DesignTokens.Typography.sizeLetter|letter keys
+Typography|size/letter|FLOAT|24||FONT_SIZE|DesignTokens.Typography.sizeLetter|letter keys: the iPhone's (estimated from the l glyph, apple-geometry.json)
 Typography|size/popup|FLOAT|32||FONT_SIZE|DesignTokens.Typography.sizePopup|the letter pop-up
 Typography|size/term|FLOAT|17||FONT_SIZE|DesignTokens.Typography.sizeTerm|the key-term field
 Typography|size/title|FLOAT|34||FONT_SIZE|DesignTokens.Typography.sizeTitle|the app's serif headline

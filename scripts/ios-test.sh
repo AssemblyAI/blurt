@@ -8,7 +8,9 @@
 # this Mac (or CI runner) has. The engine's own tests are `swift test`
 # (scripts/check.sh); these cover the iPhone code's pure logic — the App Group
 # contract, the keyboard's rules, term packs. The per-test log is in the
-# result bundle the last line names.
+# result bundle the last line names. A failure never triggers xcodebuild's
+# sysdiagnose collection (`-collect-test-diagnostics never`): that step takes
+# ten minutes on this simulator and the result bundle already says what failed.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -29,7 +31,7 @@ ios_wait_booted "$UDID"
 RESULTS="$DERIVED/BlurtiOSTests-$(date +%Y%m%d-%H%M%S).xcresult"
 xcodebuild test -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOS \
   -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$DERIVED" \
-  -resultBundlePath "$RESULTS" "${IOS_SIM_SIGNING[@]}" -quiet
+  -resultBundlePath "$RESULTS" "${IOS_SIM_SIGNING[@]}" -collect-test-diagnostics never -quiet
 xcrun xcresulttool get test-results summary --path "$RESULTS" 2>/dev/null | python3 -c '
 import json, sys
 d = json.load(sys.stdin)

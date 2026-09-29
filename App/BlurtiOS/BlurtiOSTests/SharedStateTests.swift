@@ -65,7 +65,7 @@ struct LayoutTests {
   func heights() {
     #expect(KeyboardLayout.slimBar.height == 60)
     #expect(KeyboardLayout.panel.height == 216)
-    #expect(KeyboardLayout.full.height == 272)
+    #expect(KeyboardLayout.full.height == 270)
   }
 
   @Test("letter rows follow the phone's first language")
