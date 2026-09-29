@@ -47,10 +47,26 @@ enum DesignTokens {
     nonisolated static let ink700: Color = Color(hex: 0x33302A)
     /// A modifier key on ink; the Mac's dark card fill.
     nonisolated static let ink800: Color = Color(hex: 0x26231E)
+    /// Black-100: the lightest warm grey.
+    nonisolated static let neutral300: Color = Color(hex: 0xD2D1D0)
+    /// Black-200: mono labels on the dark face.
+    nonisolated static let neutral500: Color = Color(hex: 0xA5A4A2)
+    /// Black-300: muted text and mono labels on the light face.
+    nonisolated static let neutral700: Color = Color(hex: 0x777673)
+    /// Black-400: body text on the light face.
+    nonisolated static let neutral900: Color = Color(hex: 0x4A4945)
     /// The error word and ring, cancel, the Full Access note; never a red body.
     nonisolated static let orange: Color = Color(hex: 0xE67F36)
-    /// The design system's page background (unused on the phone).
-    nonisolated static let page: Color = Color(hex: 0xFDFCF8)
+    /// Neutral-100: the light face's surface.
+    nonisolated static let paper200: Color = Color(hex: 0xECEBE5)
+    /// Neutral-200: a modifier key on the light face.
+    nonisolated static let paper300: Color = Color(hex: 0xDAD7CB)
+    /// Neutral-300: hairlines and field borders on the light face.
+    nonisolated static let paper400: Color = Color(hex: 0xC7C3B2)
+    /// The design system's page: the app's light ground.
+    nonisolated static let paperPage: Color = Color(hex: 0xFDFCF8)
+    /// The warm off-white one step in: light cards, dark legends.
+    nonisolated static let paperTint: Color = Color(hex: 0xF5F3EB)
     /// The orb gradient's upper violet stop.
     nonisolated static let violetIris: Color = Color(hex: 0x887BDD)
     /// The orb's lightest violet: its top and the gradient's ends.
@@ -64,81 +80,45 @@ enum DesignTokens {
 
   enum Themes {
     /// `brand.ink/700`.
-    nonisolated static let inkKey: Color = Brand.ink700
-    /// `brand.ink/800`.
-    nonisolated static let inkKeyModifier: Color = Brand.ink800
-    /// `brand.warm-white`.
-    nonisolated static let inkLegend: Color = Brand.warmWhite
+    nonisolated static let darkField: Color = Brand.ink700
+    /// `brand.ink/600`.
+    nonisolated static let darkFieldBorder: Color = Brand.ink600
     /// `brand.ink/700`.
-    nonisolated static let inkPopup: Color = Brand.ink700
+    nonisolated static let darkKey: Color = Brand.ink700
+    /// `brand.ink/800`.
+    nonisolated static let darkKeyModifier: Color = Brand.ink800
+    /// `brand.paper/tint`.
+    nonisolated static let darkLegend: Color = Brand.paperTint
+    /// `brand.neutral/500`.
+    nonisolated static let darkLegendSecondary: Color = Brand.neutral500
+    /// `brand.orange`.
+    nonisolated static let darkNotice: Color = Brand.orange
+    /// `brand.ink/700`.
+    nonisolated static let darkPopup: Color = Brand.ink700
     /// `brand.green/400`.
-    nonisolated static let inkSignal: Color = Brand.green400
+    nonisolated static let darkSignal: Color = Brand.green400
     /// `brand.ink`.
-    nonisolated static let inkSurface: Color = Brand.ink
-    nonisolated static let lavenderKey: Color = Color(hex: 0x3F3777)
-    nonisolated static let lavenderKeyModifier: Color = Color(hex: 0x352E68)
-    nonisolated static let lavenderLegend: Color = Color(hex: 0xF1EEFF)
-    nonisolated static let lavenderPopup: Color = Color(hex: 0x3F3777)
-    /// `brand.green/400`.
-    nonisolated static let lavenderSignal: Color = Brand.green400
-    nonisolated static let lavenderSurface: Color = Color(hex: 0x2C2557)
-    nonisolated static let midnightKey: Color = Color(hex: 0x1D2440)
-    nonisolated static let midnightKeyModifier: Color = Color(hex: 0x161B33)
-    nonisolated static let midnightLegend: Color = Color(hex: 0xE8ECFF)
-    nonisolated static let midnightPopup: Color = Color(hex: 0x1D2440)
-    /// `brand.green/400`.
-    nonisolated static let midnightSignal: Color = Brand.green400
-    nonisolated static let midnightSurface: Color = Color(hex: 0x0E1220)
-    nonisolated static let mintKey: Color = Color(hex: 0x1E3F31)
-    nonisolated static let mintKeyModifier: Color = Color(hex: 0x183429)
-    nonisolated static let mintLegend: Color = Color(hex: 0xE9F5EE)
-    nonisolated static let mintPopup: Color = Color(hex: 0x1E3F31)
-    /// `brand.green/400`.
-    nonisolated static let mintSignal: Color = Brand.green400
-    nonisolated static let mintSurface: Color = Color(hex: 0x10231B)
+    nonisolated static let darkSurface: Color = Brand.ink
     /// `brand.white`.
-    nonisolated static let paperKey: Color = Brand.white
-    /// `brand.card-border`.
-    nonisolated static let paperKeyModifier: Color = Brand.cardBorder
+    nonisolated static let lightField: Color = Brand.white
+    /// `brand.paper/400`.
+    nonisolated static let lightFieldBorder: Color = Brand.paper400
+    /// `brand.white`.
+    nonisolated static let lightKey: Color = Brand.white
+    /// `brand.paper/300`.
+    nonisolated static let lightKeyModifier: Color = Brand.paper300
     /// `brand.ink`.
-    nonisolated static let paperLegend: Color = Brand.ink
+    nonisolated static let lightLegend: Color = Brand.ink
+    /// `brand.neutral/700`.
+    nonisolated static let lightLegendSecondary: Color = Brand.neutral700
+    /// `brand.orange`.
+    nonisolated static let lightNotice: Color = Brand.orange
     /// `brand.white`.
-    nonisolated static let paperPopup: Color = Brand.white
+    nonisolated static let lightPopup: Color = Brand.white
     /// `brand.green/700`.
-    nonisolated static let paperSignal: Color = Brand.green700
-    /// `brand.card`.
-    nonisolated static let paperSurface: Color = Brand.card
-    nonisolated static let sunsetKey: Color = Color(hex: 0x4B2B20)
-    nonisolated static let sunsetKeyModifier: Color = Color(hex: 0x3B2119)
-    nonisolated static let sunsetLegend: Color = Color(hex: 0xFFEFE6)
-    nonisolated static let sunsetPopup: Color = Color(hex: 0x4B2B20)
-    /// `brand.green/400`.
-    nonisolated static let sunsetSignal: Color = Brand.green400
-    nonisolated static let sunsetSurface: Color = Color(hex: 0x2B1912)
-    /// `brand.apple/dark-key`.
-    nonisolated static let systemDarkKey: Color = Brand.appleDarkKey
-    /// `brand.apple/dark-modifier`.
-    nonisolated static let systemDarkKeyModifier: Color = Brand.appleDarkModifier
-    /// `brand.white`.
-    nonisolated static let systemDarkLegend: Color = Brand.white
-    /// `brand.apple/dark-key`.
-    nonisolated static let systemDarkPopup: Color = Brand.appleDarkKey
-    /// `brand.green/400`.
-    nonisolated static let systemDarkSignal: Color = Brand.green400
-    /// `brand.apple/dark-surface`.
-    nonisolated static let systemDarkSurface: Color = Brand.appleDarkSurface
-    /// `brand.white`.
-    nonisolated static let systemLightKey: Color = Brand.white
-    /// `brand.apple/light-modifier`.
-    nonisolated static let systemLightKeyModifier: Color = Brand.appleLightModifier
-    /// `brand.black`.
-    nonisolated static let systemLightLegend: Color = Brand.black
-    /// `brand.white`.
-    nonisolated static let systemLightPopup: Color = Brand.white
-    /// `brand.green/700`.
-    nonisolated static let systemLightSignal: Color = Brand.green700
-    /// `brand.apple/light-surface`.
-    nonisolated static let systemLightSurface: Color = Brand.appleLightSurface
+    nonisolated static let lightSignal: Color = Brand.green700
+    /// `brand.paper/200`.
+    nonisolated static let lightSurface: Color = Brand.paper200
   }
 
   enum Keyboard {
@@ -149,21 +129,27 @@ enum DesignTokens {
     /// The catalog's CardBorder in dark.
     nonisolated static let appCardBorderDark: Color = Brand.ink600
     /// The catalog's CardBorder in light.
-    nonisolated static let appCardBorderLight: Color = Brand.cardBorder
+    nonisolated static let appCardBorderLight: Color = Brand.paper400
     /// The catalog's CardFill in dark.
     nonisolated static let appCardFillDark: Color = Brand.ink800
     /// The catalog's CardFill in light.
-    nonisolated static let appCardFillLight: Color = Brand.card
+    nonisolated static let appCardFillLight: Color = Brand.paperTint
     /// The panel's cancel ×.
     nonisolated static let kbCancel: Color = Brand.orange
+    /// The key-term field.
+    nonisolated static let kbField: Color = Themes.darkField
+    /// The field's hairline.
+    nonisolated static let kbFieldBorder: Color = Themes.darkFieldBorder
     /// The one line of words the keyboard ever shows.
     nonisolated static let kbFullAccessNote: Color = Brand.orange
     /// An ordinary key.
-    nonisolated static let kbKey: Color = Themes.inkKey
+    nonisolated static let kbKey: Color = Themes.darkKey
     /// Shift, delete, globe, return, 123, cancel.
-    nonisolated static let kbKeyModifier: Color = Themes.inkKeyModifier
+    nonisolated static let kbKeyModifier: Color = Themes.darkKeyModifier
     /// Key legends and bare glyphs.
-    nonisolated static let kbLegend: Color = Themes.inkLegend
+    nonisolated static let kbLegend: Color = Themes.darkLegend
+    /// The mono word labels (123, ABC, return, space) and the + at rest.
+    nonisolated static let kbLegendSecondary: Color = Themes.darkLegendSecondary
     /// The solid ring and glyph for an error.
     nonisolated static let kbNoticeError: Color = Brand.orange
     /// The solid ring for pasted and copied.
@@ -173,11 +159,11 @@ enum DesignTokens {
     /// The sweeping ring's gradient, top-leading.
     nonisolated static let kbOrbRingStart: Color = Brand.green700
     /// The letter pop-up.
-    nonisolated static let kbPopup: Color = Themes.inkPopup
+    nonisolated static let kbPopup: Color = Themes.darkPopup
     /// The wave, the caret, the saved check.
-    nonisolated static let kbSignal: Color = Themes.inkSignal
-    /// The design theme's surface (Figma binds to kb/*; Swift reads the palette).
-    nonisolated static let kbSurface: Color = Themes.inkSurface
+    nonisolated static let kbSignal: Color = Themes.darkSignal
+    /// The design face's surface (Figma binds to kb/*; Swift reads the palette).
+    nonisolated static let kbSurface: Color = Themes.darkSurface
   }
 
   enum Metrics {
@@ -328,8 +314,18 @@ enum DesignTokens {
   enum Typography {
     /// The clipboard and exclamation glyphs, as a fraction of the orb.
     nonisolated static let ratioOrbGlyph: CGFloat = 0.34
+    /// The app's body text.
+    nonisolated static let sizeBody: CGFloat = 16
+    /// The app's small text.
+    nonisolated static let sizeCaption: CGFloat = 14
+    /// A mono button label in the app (E2).
+    nonisolated static let sizeCta: CGFloat = 14
+    /// A mono eyebrow in the app (E1).
+    nonisolated static let sizeEyebrow: CGFloat = 12
     /// The +, × and ✓.
     nonisolated static let sizeGlyph: CGFloat = 17
+    /// The mono word labels on keys: 123, ABC, #+=, space, the return label.
+    nonisolated static let sizeLabel: CGFloat = 12
     /// Every other key.
     nonisolated static let sizeLegend: CGFloat = 16
     /// Letter keys.
@@ -338,7 +334,14 @@ enum DesignTokens {
     nonisolated static let sizePopup: CGFloat = 32
     /// The key-term field.
     nonisolated static let sizeTerm: CGFloat = 17
+    /// The app's serif headline.
+    nonisolated static let sizeTitle: CGFloat = 34
+    /// Uppercase mono at 14: the brand's E2 tracking.
+    nonisolated static let trackingCta: CGFloat = 1.4
+    /// Uppercase mono at 12: the brand's E1 tracking.
+    nonisolated static let trackingEyebrow: CGFloat = 1.2
     nonisolated static let weightGlyph: Font.Weight = .medium
+    nonisolated static let weightLabel: Font.Weight = .medium
     nonisolated static let weightLegend: Font.Weight = .medium
     nonisolated static let weightLetter: Font.Weight = .regular
     nonisolated static let weightOrbGlyph: Font.Weight = .semibold
@@ -349,6 +352,8 @@ enum DesignTokens {
   enum Motion {
     /// The caret's blink.
     nonisolated static let caret: Double = 0.5
+    /// A colour or fill changing state: the brand's transition.
+    nonisolated static let colour: Double = 0.2
     /// The violet drop is gone by.
     nonisolated static let drop: Double = 2.4
     /// And held to.
@@ -357,12 +362,17 @@ enum DesignTokens {
     nonisolated static let dropRise: Double = 0.5
     /// The bloom reaches its full spread in.
     nonisolated static let dropSpread: Double = 1
+    /// The house curve for everything that moves; nothing springs.
+    nonisolated static let easeSignature: UnitCurve = UnitCurve.bezier(
+      startControlPoint: UnitPoint(x: 0.22, y: 1), endControlPoint: UnitPoint(x: 0.36, y: 1))
     /// The panel's carousel.
     nonisolated static let flip: Double = 0.25
     /// The keyboard resizing.
     nonisolated static let heightChange: Double = 0.25
     /// A key lighting.
     nonisolated static let keyPress: Double = 0.08
+    /// The glint when the words land.
+    nonisolated static let landing: Double = 0.6
     /// The orb's colour moving between moods.
     nonisolated static let mood: Double = 0.8
     /// The orb's press; the one thing that answers at once.
@@ -375,6 +385,21 @@ enum DesignTokens {
     nonisolated static let termSwap: Double = 0.4
     /// The orb and the wave crossing, either way.
     nonisolated static let waveFade: Double = 0.7
+  }
+
+  enum Fonts {
+    nonisolated static let bodyBold: String = "UN-11ST-Bold"
+    /// The app's body text.
+    nonisolated static let bodyFamily: String = "UN-11 ST"
+    nonisolated static let bodyRegular: String = "UN-11ST-Regular"
+    /// The app's serif headlines, sentence case, tight.
+    nonisolated static let headingFamily: String = "Oceanic Text"
+    nonisolated static let headingRegular: String = "OceanicText-Regular"
+    /// Eyebrows, CTAs, the keyboard's word labels.
+    nonisolated static let monoFamily: String = "Modern Gothic Mono"
+    nonisolated static let monoLight: String = "ModernGothicMono-Light"
+    nonisolated static let monoMedium: String = "ModernGothicMono-Medium"
+    nonisolated static let monoRegular: String = "ModernGothicMono-Regular"
   }
 
   enum Gradients {
@@ -421,72 +446,55 @@ enum DesignTokens {
     "brand.ink/600": "#3A362F",
     "brand.ink/700": "#33302A",
     "brand.ink/800": "#26231E",
+    "brand.neutral/300": "#D2D1D0",
+    "brand.neutral/500": "#A5A4A2",
+    "brand.neutral/700": "#777673",
+    "brand.neutral/900": "#4A4945",
     "brand.orange": "#E67F36",
-    "brand.page": "#FDFCF8",
+    "brand.paper/200": "#ECEBE5",
+    "brand.paper/300": "#DAD7CB",
+    "brand.paper/400": "#C7C3B2",
+    "brand.paper/page": "#FDFCF8",
+    "brand.paper/tint": "#F5F3EB",
     "brand.violet/iris": "#887BDD",
     "brand.violet/lavender": "#D7D3F4",
     "brand.violet/periwinkle": "#B0A7E9",
     "brand.warm-white": "#F2EEE6",
     "brand.white": "#FFFFFF",
-    "themes.ink/key": "#33302A",
-    "themes.ink/key-modifier": "#26231E",
-    "themes.ink/legend": "#F2EEE6",
-    "themes.ink/popup": "#33302A",
-    "themes.ink/signal": "#67AD82",
-    "themes.ink/surface": "#1D1B16",
-    "themes.lavender/key": "#3F3777",
-    "themes.lavender/key-modifier": "#352E68",
-    "themes.lavender/legend": "#F1EEFF",
-    "themes.lavender/popup": "#3F3777",
-    "themes.lavender/signal": "#67AD82",
-    "themes.lavender/surface": "#2C2557",
-    "themes.midnight/key": "#1D2440",
-    "themes.midnight/key-modifier": "#161B33",
-    "themes.midnight/legend": "#E8ECFF",
-    "themes.midnight/popup": "#1D2440",
-    "themes.midnight/signal": "#67AD82",
-    "themes.midnight/surface": "#0E1220",
-    "themes.mint/key": "#1E3F31",
-    "themes.mint/key-modifier": "#183429",
-    "themes.mint/legend": "#E9F5EE",
-    "themes.mint/popup": "#1E3F31",
-    "themes.mint/signal": "#67AD82",
-    "themes.mint/surface": "#10231B",
-    "themes.paper/key": "#FFFFFF",
-    "themes.paper/key-modifier": "#DEDBDB",
-    "themes.paper/legend": "#1D1B16",
-    "themes.paper/popup": "#FFFFFF",
-    "themes.paper/signal": "#01762F",
-    "themes.paper/surface": "#EBE8E8",
-    "themes.sunset/key": "#4B2B20",
-    "themes.sunset/key-modifier": "#3B2119",
-    "themes.sunset/legend": "#FFEFE6",
-    "themes.sunset/popup": "#4B2B20",
-    "themes.sunset/signal": "#67AD82",
-    "themes.sunset/surface": "#2B1912",
-    "themes.system-dark/key": "#6B6B6B",
-    "themes.system-dark/key-modifier": "#464646",
-    "themes.system-dark/legend": "#FFFFFF",
-    "themes.system-dark/popup": "#6B6B6B",
-    "themes.system-dark/signal": "#67AD82",
-    "themes.system-dark/surface": "#2B2B2B",
-    "themes.system-light/key": "#FFFFFF",
-    "themes.system-light/key-modifier": "#ADB3BC",
-    "themes.system-light/legend": "#000000",
-    "themes.system-light/popup": "#FFFFFF",
-    "themes.system-light/signal": "#01762F",
-    "themes.system-light/surface": "#D1D5DB",
+    "themes.dark/field": "#33302A",
+    "themes.dark/field-border": "#3A362F",
+    "themes.dark/key": "#33302A",
+    "themes.dark/key-modifier": "#26231E",
+    "themes.dark/legend": "#F5F3EB",
+    "themes.dark/legend-secondary": "#A5A4A2",
+    "themes.dark/notice": "#E67F36",
+    "themes.dark/popup": "#33302A",
+    "themes.dark/signal": "#67AD82",
+    "themes.dark/surface": "#1D1B16",
+    "themes.light/field": "#FFFFFF",
+    "themes.light/field-border": "#C7C3B2",
+    "themes.light/key": "#FFFFFF",
+    "themes.light/key-modifier": "#DAD7CB",
+    "themes.light/legend": "#1D1B16",
+    "themes.light/legend-secondary": "#777673",
+    "themes.light/notice": "#E67F36",
+    "themes.light/popup": "#FFFFFF",
+    "themes.light/signal": "#01762F",
+    "themes.light/surface": "#ECEBE5",
     "keyboard.app/accent-dark": "#67AD82",
     "keyboard.app/accent-light": "#01762F",
     "keyboard.app/card-border-dark": "#3A362F",
-    "keyboard.app/card-border-light": "#DEDBDB",
+    "keyboard.app/card-border-light": "#C7C3B2",
     "keyboard.app/card-fill-dark": "#26231E",
-    "keyboard.app/card-fill-light": "#EBE8E8",
+    "keyboard.app/card-fill-light": "#F5F3EB",
     "keyboard.kb/cancel": "#E67F36",
+    "keyboard.kb/field": "#33302A",
+    "keyboard.kb/field-border": "#3A362F",
     "keyboard.kb/full-access-note": "#E67F36",
     "keyboard.kb/key": "#33302A",
     "keyboard.kb/key-modifier": "#26231E",
-    "keyboard.kb/legend": "#F2EEE6",
+    "keyboard.kb/legend": "#F5F3EB",
+    "keyboard.kb/legend-secondary": "#A5A4A2",
     "keyboard.kb/notice-error": "#E67F36",
     "keyboard.kb/notice-ok": "#67AD82",
     "keyboard.kb/orb-ring-end": "#FFFFFF",
@@ -574,31 +582,52 @@ enum DesignTokens {
     "metrics.wave/panel-width": "300",
     "metrics.wordmark/height": "22",
     "type.ratio/orb-glyph": "0.34",
+    "type.size/body": "16",
+    "type.size/caption": "14",
+    "type.size/cta": "14",
+    "type.size/eyebrow": "12",
     "type.size/glyph": "17",
+    "type.size/label": "12",
     "type.size/legend": "16",
     "type.size/letter": "22",
     "type.size/popup": "32",
     "type.size/term": "17",
+    "type.size/title": "34",
+    "type.tracking/cta": "1.4",
+    "type.tracking/eyebrow": "1.2",
     "type.weight/glyph": "medium",
+    "type.weight/label": "medium",
     "type.weight/legend": "medium",
     "type.weight/letter": "regular",
     "type.weight/orb-glyph": "semibold",
     "type.weight/popup": "regular",
     "type.weight/term": "regular",
     "motion.caret": "0.5",
+    "motion.colour": "0.2",
     "motion.drop": "2.4",
     "motion.drop-hold": "0.9",
     "motion.drop-rise": "0.5",
     "motion.drop-spread": "1",
+    "motion.ease/signature": "0.22,1,0.36,1",
     "motion.flip": "0.25",
     "motion.height-change": "0.25",
     "motion.key-press": "0.08",
+    "motion.landing": "0.6",
     "motion.mood": "0.8",
     "motion.press": "0.1",
     "motion.ring-period": "1.6",
     "motion.state-fade": "0.5",
     "motion.term-swap": "0.4",
     "motion.wave-fade": "0.7",
+    "fonts.body/bold": "UN-11ST-Bold",
+    "fonts.body/family": "UN-11 ST",
+    "fonts.body/regular": "UN-11ST-Regular",
+    "fonts.heading/family": "Oceanic Text",
+    "fonts.heading/regular": "OceanicText-Regular",
+    "fonts.mono/family": "Modern Gothic Mono",
+    "fonts.mono/light": "ModernGothicMono-Light",
+    "fonts.mono/medium": "ModernGothicMono-Medium",
+    "fonts.mono/regular": "ModernGothicMono-Regular",
     "gradients.orb":
       "#D7D3F4@0 #B0A7E9@0.0673 #67AD82@0.1442 #01762F@0.3029 #3923C7@0.5962 #887BDD@0.75 #D7D3F4@0.8942 #FFFFFF@1 bottom>top",
     "gradients.orb-ring": "#01762F@0 #FFFFFF@1 topLeading>bottomTrailing",

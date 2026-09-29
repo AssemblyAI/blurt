@@ -20,79 +20,62 @@ Brand|ink|COLOR|#1D1B16|||DesignTokens.Brand.ink|the brand ink: the Mac pill's b
 Brand|ink/600|COLOR|#3A362F|||DesignTokens.Brand.ink600|the Mac's dark card border
 Brand|ink/700|COLOR|#33302A|||DesignTokens.Brand.ink700|an ordinary key on ink, one step up
 Brand|ink/800|COLOR|#26231E|||DesignTokens.Brand.ink800|a modifier key on ink; the Mac's dark card fill
+Brand|neutral/300|COLOR|#D2D1D0|||DesignTokens.Brand.neutral300|black-100: the lightest warm grey
+Brand|neutral/500|COLOR|#A5A4A2|||DesignTokens.Brand.neutral500|black-200: mono labels on the dark face
+Brand|neutral/700|COLOR|#777673|||DesignTokens.Brand.neutral700|black-300: muted text and mono labels on the light face
+Brand|neutral/900|COLOR|#4A4945|||DesignTokens.Brand.neutral900|black-400: body text on the light face
 Brand|orange|COLOR|#E67F36|||DesignTokens.Brand.orange|the error word and ring, cancel, the Full Access note; never a red body
-Brand|page|COLOR|#FDFCF8|||DesignTokens.Brand.page|the design system's page background (unused on the phone)
+Brand|paper/200|COLOR|#ECEBE5|||DesignTokens.Brand.paper200|neutral-100: the light face's surface
+Brand|paper/300|COLOR|#DAD7CB|||DesignTokens.Brand.paper300|neutral-200: a modifier key on the light face
+Brand|paper/400|COLOR|#C7C3B2|||DesignTokens.Brand.paper400|neutral-300: hairlines and field borders on the light face
+Brand|paper/page|COLOR|#FDFCF8|||DesignTokens.Brand.paperPage|the design system's page: the app's light ground
+Brand|paper/tint|COLOR|#F5F3EB|||DesignTokens.Brand.paperTint|the warm off-white one step in: light cards, dark legends
 Brand|violet/iris|COLOR|#887BDD|||DesignTokens.Brand.violetIris|the orb gradient's upper violet stop
 Brand|violet/lavender|COLOR|#D7D3F4|||DesignTokens.Brand.violetLavender|the orb's lightest violet: its top and the gradient's ends
 Brand|violet/periwinkle|COLOR|#B0A7E9|||DesignTokens.Brand.violetPeriwinkle|the orb's mid violet: the drop's halo
 Brand|warm-white|COLOR|#F2EEE6|||DesignTokens.Brand.warmWhite|key legends on ink: warm white on warm ink
 Brand|white|COLOR|#FFFFFF|||DesignTokens.Brand.white|
-Themes|ink/key|COLOR|#33302A|Brand:ink/700||DesignTokens.Themes.inkKey|
-Themes|ink/key-modifier|COLOR|#26231E|Brand:ink/800||DesignTokens.Themes.inkKeyModifier|
-Themes|ink/legend|COLOR|#F2EEE6|Brand:warm-white||DesignTokens.Themes.inkLegend|
-Themes|ink/popup|COLOR|#33302A|Brand:ink/700||DesignTokens.Themes.inkPopup|
-Themes|ink/signal|COLOR|#67AD82|Brand:green/400||DesignTokens.Themes.inkSignal|
-Themes|ink/surface|COLOR|#1D1B16|Brand:ink||DesignTokens.Themes.inkSurface|
-Themes|lavender/key|COLOR|#3F3777|||DesignTokens.Themes.lavenderKey|
-Themes|lavender/key-modifier|COLOR|#352E68|||DesignTokens.Themes.lavenderKeyModifier|
-Themes|lavender/legend|COLOR|#F1EEFF|||DesignTokens.Themes.lavenderLegend|
-Themes|lavender/popup|COLOR|#3F3777|||DesignTokens.Themes.lavenderPopup|
-Themes|lavender/signal|COLOR|#67AD82|Brand:green/400||DesignTokens.Themes.lavenderSignal|
-Themes|lavender/surface|COLOR|#2C2557|||DesignTokens.Themes.lavenderSurface|
-Themes|midnight/key|COLOR|#1D2440|||DesignTokens.Themes.midnightKey|
-Themes|midnight/key-modifier|COLOR|#161B33|||DesignTokens.Themes.midnightKeyModifier|
-Themes|midnight/legend|COLOR|#E8ECFF|||DesignTokens.Themes.midnightLegend|
-Themes|midnight/popup|COLOR|#1D2440|||DesignTokens.Themes.midnightPopup|
-Themes|midnight/signal|COLOR|#67AD82|Brand:green/400||DesignTokens.Themes.midnightSignal|
-Themes|midnight/surface|COLOR|#0E1220|||DesignTokens.Themes.midnightSurface|
-Themes|mint/key|COLOR|#1E3F31|||DesignTokens.Themes.mintKey|
-Themes|mint/key-modifier|COLOR|#183429|||DesignTokens.Themes.mintKeyModifier|
-Themes|mint/legend|COLOR|#E9F5EE|||DesignTokens.Themes.mintLegend|
-Themes|mint/popup|COLOR|#1E3F31|||DesignTokens.Themes.mintPopup|
-Themes|mint/signal|COLOR|#67AD82|Brand:green/400||DesignTokens.Themes.mintSignal|
-Themes|mint/surface|COLOR|#10231B|||DesignTokens.Themes.mintSurface|
-Themes|paper/key|COLOR|#FFFFFF|Brand:white||DesignTokens.Themes.paperKey|
-Themes|paper/key-modifier|COLOR|#DEDBDB|Brand:card-border||DesignTokens.Themes.paperKeyModifier|
-Themes|paper/legend|COLOR|#1D1B16|Brand:ink||DesignTokens.Themes.paperLegend|
-Themes|paper/popup|COLOR|#FFFFFF|Brand:white||DesignTokens.Themes.paperPopup|
-Themes|paper/signal|COLOR|#01762F|Brand:green/700||DesignTokens.Themes.paperSignal|
-Themes|paper/surface|COLOR|#EBE8E8|Brand:card||DesignTokens.Themes.paperSurface|
-Themes|sunset/key|COLOR|#4B2B20|||DesignTokens.Themes.sunsetKey|
-Themes|sunset/key-modifier|COLOR|#3B2119|||DesignTokens.Themes.sunsetKeyModifier|
-Themes|sunset/legend|COLOR|#FFEFE6|||DesignTokens.Themes.sunsetLegend|
-Themes|sunset/popup|COLOR|#4B2B20|||DesignTokens.Themes.sunsetPopup|
-Themes|sunset/signal|COLOR|#67AD82|Brand:green/400||DesignTokens.Themes.sunsetSignal|
-Themes|sunset/surface|COLOR|#2B1912|||DesignTokens.Themes.sunsetSurface|
-Themes|system-dark/key|COLOR|#6B6B6B|Brand:apple/dark-key||DesignTokens.Themes.systemDarkKey|
-Themes|system-dark/key-modifier|COLOR|#464646|Brand:apple/dark-modifier||DesignTokens.Themes.systemDarkKeyModifier|
-Themes|system-dark/legend|COLOR|#FFFFFF|Brand:white||DesignTokens.Themes.systemDarkLegend|
-Themes|system-dark/popup|COLOR|#6B6B6B|Brand:apple/dark-key||DesignTokens.Themes.systemDarkPopup|
-Themes|system-dark/signal|COLOR|#67AD82|Brand:green/400||DesignTokens.Themes.systemDarkSignal|
-Themes|system-dark/surface|COLOR|#2B2B2B|Brand:apple/dark-surface||DesignTokens.Themes.systemDarkSurface|
-Themes|system-light/key|COLOR|#FFFFFF|Brand:white||DesignTokens.Themes.systemLightKey|
-Themes|system-light/key-modifier|COLOR|#ADB3BC|Brand:apple/light-modifier||DesignTokens.Themes.systemLightKeyModifier|
-Themes|system-light/legend|COLOR|#000000|Brand:black||DesignTokens.Themes.systemLightLegend|
-Themes|system-light/popup|COLOR|#FFFFFF|Brand:white||DesignTokens.Themes.systemLightPopup|
-Themes|system-light/signal|COLOR|#01762F|Brand:green/700||DesignTokens.Themes.systemLightSignal|
-Themes|system-light/surface|COLOR|#D1D5DB|Brand:apple/light-surface||DesignTokens.Themes.systemLightSurface|
+Themes|dark/field|COLOR|#33302A|Brand:ink/700||DesignTokens.Themes.darkField|
+Themes|dark/field-border|COLOR|#3A362F|Brand:ink/600||DesignTokens.Themes.darkFieldBorder|
+Themes|dark/key|COLOR|#33302A|Brand:ink/700||DesignTokens.Themes.darkKey|
+Themes|dark/key-modifier|COLOR|#26231E|Brand:ink/800||DesignTokens.Themes.darkKeyModifier|
+Themes|dark/legend|COLOR|#F5F3EB|Brand:paper/tint||DesignTokens.Themes.darkLegend|
+Themes|dark/legend-secondary|COLOR|#A5A4A2|Brand:neutral/500||DesignTokens.Themes.darkLegendSecondary|
+Themes|dark/notice|COLOR|#E67F36|Brand:orange||DesignTokens.Themes.darkNotice|
+Themes|dark/popup|COLOR|#33302A|Brand:ink/700||DesignTokens.Themes.darkPopup|
+Themes|dark/signal|COLOR|#67AD82|Brand:green/400||DesignTokens.Themes.darkSignal|
+Themes|dark/surface|COLOR|#1D1B16|Brand:ink||DesignTokens.Themes.darkSurface|
+Themes|light/field|COLOR|#FFFFFF|Brand:white||DesignTokens.Themes.lightField|
+Themes|light/field-border|COLOR|#C7C3B2|Brand:paper/400||DesignTokens.Themes.lightFieldBorder|
+Themes|light/key|COLOR|#FFFFFF|Brand:white||DesignTokens.Themes.lightKey|
+Themes|light/key-modifier|COLOR|#DAD7CB|Brand:paper/300||DesignTokens.Themes.lightKeyModifier|
+Themes|light/legend|COLOR|#1D1B16|Brand:ink||DesignTokens.Themes.lightLegend|
+Themes|light/legend-secondary|COLOR|#777673|Brand:neutral/700||DesignTokens.Themes.lightLegendSecondary|
+Themes|light/notice|COLOR|#E67F36|Brand:orange||DesignTokens.Themes.lightNotice|
+Themes|light/popup|COLOR|#FFFFFF|Brand:white||DesignTokens.Themes.lightPopup|
+Themes|light/signal|COLOR|#01762F|Brand:green/700||DesignTokens.Themes.lightSignal|
+Themes|light/surface|COLOR|#ECEBE5|Brand:paper/200||DesignTokens.Themes.lightSurface|
 Keyboard|app/accent-dark|COLOR|#67AD82|Brand:green/400|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.appAccentDark|the catalog's AccentColor in dark
 Keyboard|app/accent-light|COLOR|#01762F|Brand:green/700|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.appAccentLight|the catalog's AccentColor in light
 Keyboard|app/card-border-dark|COLOR|#3A362F|Brand:ink/600|STROKE_COLOR|DesignTokens.Keyboard.appCardBorderDark|the catalog's CardBorder in dark
-Keyboard|app/card-border-light|COLOR|#DEDBDB|Brand:card-border|STROKE_COLOR|DesignTokens.Keyboard.appCardBorderLight|the catalog's CardBorder in light
+Keyboard|app/card-border-light|COLOR|#C7C3B2|Brand:paper/400|STROKE_COLOR|DesignTokens.Keyboard.appCardBorderLight|the catalog's CardBorder in light
 Keyboard|app/card-fill-dark|COLOR|#26231E|Brand:ink/800|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.appCardFillDark|the catalog's CardFill in dark
-Keyboard|app/card-fill-light|COLOR|#EBE8E8|Brand:card|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.appCardFillLight|the catalog's CardFill in light
+Keyboard|app/card-fill-light|COLOR|#F5F3EB|Brand:paper/tint|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.appCardFillLight|the catalog's CardFill in light
 Keyboard|kb/cancel|COLOR|#E67F36|Brand:orange|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.kbCancel|the panel's cancel ×
+Keyboard|kb/field|COLOR|#33302A|Themes:dark/field|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.kbField|the key-term field
+Keyboard|kb/field-border|COLOR|#3A362F|Themes:dark/field-border|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.kbFieldBorder|the field's hairline
 Keyboard|kb/full-access-note|COLOR|#E67F36|Brand:orange|TEXT_FILL|DesignTokens.Keyboard.kbFullAccessNote|the one line of words the keyboard ever shows
-Keyboard|kb/key|COLOR|#33302A|Themes:ink/key|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.kbKey|an ordinary key
-Keyboard|kb/key-modifier|COLOR|#26231E|Themes:ink/key-modifier|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.kbKeyModifier|shift, delete, globe, return, 123, cancel
-Keyboard|kb/legend|COLOR|#F2EEE6|Themes:ink/legend|TEXT_FILL|DesignTokens.Keyboard.kbLegend|key legends and bare glyphs
+Keyboard|kb/key|COLOR|#33302A|Themes:dark/key|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.kbKey|an ordinary key
+Keyboard|kb/key-modifier|COLOR|#26231E|Themes:dark/key-modifier|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.kbKeyModifier|shift, delete, globe, return, 123, cancel
+Keyboard|kb/legend|COLOR|#F5F3EB|Themes:dark/legend|TEXT_FILL|DesignTokens.Keyboard.kbLegend|key legends and bare glyphs
+Keyboard|kb/legend-secondary|COLOR|#A5A4A2|Themes:dark/legend-secondary|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.kbLegendSecondary|the mono word labels (123, ABC, return, space) and the + at rest
 Keyboard|kb/notice-error|COLOR|#E67F36|Brand:orange|STROKE_COLOR|DesignTokens.Keyboard.kbNoticeError|the solid ring and glyph for an error
 Keyboard|kb/notice-ok|COLOR|#67AD82|Brand:green/400|STROKE_COLOR|DesignTokens.Keyboard.kbNoticeOk|the solid ring for pasted and copied
 Keyboard|kb/orb-ring-end|COLOR|#FFFFFF|Brand:white|STROKE_COLOR|DesignTokens.Keyboard.kbOrbRingEnd|the sweeping ring's gradient, bottom-trailing
 Keyboard|kb/orb-ring-start|COLOR|#01762F|Brand:green/700|STROKE_COLOR|DesignTokens.Keyboard.kbOrbRingStart|the sweeping ring's gradient, top-leading
-Keyboard|kb/popup|COLOR|#33302A|Themes:ink/popup|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.kbPopup|the letter pop-up
-Keyboard|kb/signal|COLOR|#67AD82|Themes:ink/signal|SHAPE_FILL,TEXT_FILL|DesignTokens.Keyboard.kbSignal|the wave, the caret, the saved check
-Keyboard|kb/surface|COLOR|#1D1B16|Themes:ink/surface|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.kbSurface|the design theme's surface (Figma binds to kb/*; Swift reads the palette)
+Keyboard|kb/popup|COLOR|#33302A|Themes:dark/popup|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.kbPopup|the letter pop-up
+Keyboard|kb/signal|COLOR|#67AD82|Themes:dark/signal|SHAPE_FILL,TEXT_FILL|DesignTokens.Keyboard.kbSignal|the wave, the caret, the saved check
+Keyboard|kb/surface|COLOR|#1D1B16|Themes:dark/surface|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.kbSurface|the design face's surface (Figma binds to kb/*; Swift reads the palette)
 Metrics|addterm/inset|FLOAT|6||GAP|DesignTokens.Metrics.addtermInset|the + from the panel's corner
 Metrics|card/border|FLOAT|1||STROKE_FLOAT,WIDTH_HEIGHT|DesignTokens.Metrics.cardBorder|the card's hairline
 Metrics|card/radius|FLOAT|16||CORNER_RADIUS|DesignTokens.Metrics.cardRadius|the app's cards
@@ -173,31 +156,52 @@ Metrics|wave/panel-height|FLOAT|40||WIDTH_HEIGHT|DesignTokens.Metrics.wavePanelH
 Metrics|wave/panel-width|FLOAT|300||WIDTH_HEIGHT|DesignTokens.Metrics.wavePanelWidth|
 Metrics|wordmark/height|FLOAT|22||WIDTH_HEIGHT|DesignTokens.Metrics.wordmarkHeight|
 Typography|ratio/orb-glyph|FLOAT|0.34|||DesignTokens.Typography.ratioOrbGlyph|the clipboard and exclamation glyphs, as a fraction of the orb
+Typography|size/body|FLOAT|16||FONT_SIZE|DesignTokens.Typography.sizeBody|the app's body text
+Typography|size/caption|FLOAT|14||FONT_SIZE|DesignTokens.Typography.sizeCaption|the app's small text
+Typography|size/cta|FLOAT|14||FONT_SIZE|DesignTokens.Typography.sizeCta|a mono button label in the app (E2)
+Typography|size/eyebrow|FLOAT|12||FONT_SIZE|DesignTokens.Typography.sizeEyebrow|a mono eyebrow in the app (E1)
 Typography|size/glyph|FLOAT|17||FONT_SIZE|DesignTokens.Typography.sizeGlyph|the +, × and ✓
+Typography|size/label|FLOAT|12||FONT_SIZE|DesignTokens.Typography.sizeLabel|the mono word labels on keys: 123, ABC, #+=, space, the return label
 Typography|size/legend|FLOAT|16||FONT_SIZE|DesignTokens.Typography.sizeLegend|every other key
 Typography|size/letter|FLOAT|22||FONT_SIZE|DesignTokens.Typography.sizeLetter|letter keys
 Typography|size/popup|FLOAT|32||FONT_SIZE|DesignTokens.Typography.sizePopup|the letter pop-up
 Typography|size/term|FLOAT|17||FONT_SIZE|DesignTokens.Typography.sizeTerm|the key-term field
+Typography|size/title|FLOAT|34||FONT_SIZE|DesignTokens.Typography.sizeTitle|the app's serif headline
+Typography|tracking/cta|FLOAT|1.4||LETTER_SPACING|DesignTokens.Typography.trackingCta|uppercase mono at 14: the brand's E2 tracking
+Typography|tracking/eyebrow|FLOAT|1.2||LETTER_SPACING|DesignTokens.Typography.trackingEyebrow|uppercase mono at 12: the brand's E1 tracking
 Typography|weight/glyph|STRING|medium||FONT_STYLE|DesignTokens.Typography.weightGlyph|
+Typography|weight/label|STRING|medium||FONT_STYLE|DesignTokens.Typography.weightLabel|
 Typography|weight/legend|STRING|medium||FONT_STYLE|DesignTokens.Typography.weightLegend|
 Typography|weight/letter|STRING|regular||FONT_STYLE|DesignTokens.Typography.weightLetter|
 Typography|weight/orb-glyph|STRING|semibold||FONT_STYLE|DesignTokens.Typography.weightOrbGlyph|
 Typography|weight/popup|STRING|regular||FONT_STYLE|DesignTokens.Typography.weightPopup|
 Typography|weight/term|STRING|regular||FONT_STYLE|DesignTokens.Typography.weightTerm|
 Motion|caret|FLOAT|0.5|||DesignTokens.Motion.caret|the caret's blink
+Motion|colour|FLOAT|0.2|||DesignTokens.Motion.colour|a colour or fill changing state: the brand's transition
 Motion|drop|FLOAT|2.4|||DesignTokens.Motion.drop|the violet drop is gone by
 Motion|drop-hold|FLOAT|0.9|||DesignTokens.Motion.dropHold|and held to
 Motion|drop-rise|FLOAT|0.5|||DesignTokens.Motion.dropRise|the drop is up in
 Motion|drop-spread|FLOAT|1|||DesignTokens.Motion.dropSpread|the bloom reaches its full spread in
+Motion|ease/signature|STRING|0.22,1,0.36,1|||DesignTokens.Motion.easeSignature|the house curve for everything that moves; nothing springs
 Motion|flip|FLOAT|0.25|||DesignTokens.Motion.flip|the panel's carousel
 Motion|height-change|FLOAT|0.25|||DesignTokens.Motion.heightChange|the keyboard resizing
 Motion|key-press|FLOAT|0.08|||DesignTokens.Motion.keyPress|a key lighting
+Motion|landing|FLOAT|0.6|||DesignTokens.Motion.landing|the glint when the words land
 Motion|mood|FLOAT|0.8|||DesignTokens.Motion.mood|the orb's colour moving between moods
 Motion|press|FLOAT|0.1|||DesignTokens.Motion.press|the orb's press; the one thing that answers at once
 Motion|ring-period|FLOAT|1.6|||DesignTokens.Motion.ringPeriod|one turn of the ring, the Mac's cadence
 Motion|state-fade|FLOAT|0.5|||DesignTokens.Motion.stateFade|every other change on the key: the ring, a glyph, the dimming
 Motion|term-swap|FLOAT|0.4|||DesignTokens.Motion.termSwap|the voice bar becoming the field
 Motion|wave-fade|FLOAT|0.7|||DesignTokens.Motion.waveFade|the orb and the wave crossing, either way
+Fonts|body/bold|STRING|UN-11ST-Bold|||DesignTokens.Fonts.bodyBold|
+Fonts|body/family|STRING|UN-11 ST||FONT_FAMILY|DesignTokens.Fonts.bodyFamily|the app's body text
+Fonts|body/regular|STRING|UN-11ST-Regular|||DesignTokens.Fonts.bodyRegular|
+Fonts|heading/family|STRING|Oceanic Text||FONT_FAMILY|DesignTokens.Fonts.headingFamily|the app's serif headlines, sentence case, tight
+Fonts|heading/regular|STRING|OceanicText-Regular|||DesignTokens.Fonts.headingRegular|
+Fonts|mono/family|STRING|Modern Gothic Mono||FONT_FAMILY|DesignTokens.Fonts.monoFamily|eyebrows, CTAs, the keyboard's word labels
+Fonts|mono/light|STRING|ModernGothicMono-Light|||DesignTokens.Fonts.monoLight|
+Fonts|mono/medium|STRING|ModernGothicMono-Medium|||DesignTokens.Fonts.monoMedium|
+Fonts|mono/regular|STRING|ModernGothicMono-Regular|||DesignTokens.Fonts.monoRegular|
 GRADIENT|orb|bottom|top|#D7D3F4@0,#B0A7E9@0.0673,#67AD82@0.1442,#01762F@0.3029,#3923C7@0.5962,#887BDD@0.75,#D7D3F4@0.8942,#FFFFFF@1|the Mac orb's fill, the design's own stops (App elements/Recording.svg), swept bottom to top
 GRADIENT|orb-ring|topLeading|bottomTrailing|#01762F@0,#FFFFFF@1|the ring round the orb: green into white, corner to corner; spun while something is happening`;
-const GROUPS = ["Brand", "Themes", "Keyboard", "Metrics", "Typography", "Motion"];
+const GROUPS = ["Brand", "Themes", "Keyboard", "Metrics", "Typography", "Motion", "Fonts"];

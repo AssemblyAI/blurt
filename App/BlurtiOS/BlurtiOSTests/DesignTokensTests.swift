@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Testing
+import UIKit
 
 @testable import BlurtiOS
 
@@ -26,7 +27,7 @@ struct DesignTokensTests {
   /// rendering the generator writes into `DesignTokens.manifest`.
   private static func expectedManifest() throws -> [String: String] {
     let json = try tokensJSON()
-    let groups = ["brand", "themes", "keyboard", "metrics", "type", "motion"]
+    let groups = ["brand", "themes", "keyboard", "metrics", "type", "motion", "fonts"]
     var raw: [String: Any] = [:]
     for group in groups {
       let entries = try #require(json[group] as? [String: Any])
@@ -38,6 +39,7 @@ struct DesignTokensTests {
       let value = try #require(raw[qualified], "\(qualified) is not a token")
       try #require(depth < 8, "alias cycle at \(qualified)")
       if let number = value as? NSNumber { return format(number.doubleValue) }
+      if let curve = value as? [NSNumber] { return curve.map { format($0.doubleValue) }.joined(separator: ",") }
       let string = try #require(value as? String)
       if string.hasPrefix("{"), string.hasSuffix("}") {
         return try render(String(string.dropFirst().dropLast()), depth: depth + 1)
@@ -103,73 +105,59 @@ struct DesignTokensTests {
     #expect(abs(sideWidth * 2 + gap - DesignTokens.Metrics.keyReturnWidth402) < 0.001)
   }
 
-  /// Each palette beside the six theme tokens it must equal, in role order:
-  /// surface, key, modifier, legend, signal, pop-up.
+  /// Each face beside the ten theme tokens it must equal, in role order:
+  /// surface, key, modifier, legend, secondary legend, signal, pop-up, field,
+  /// field border, notice.
   private static let paletteTokens: [(KeyboardPalette, [Color])] = {
     typealias Themes = DesignTokens.Themes
     return [
       (
-        .systemLight,
+        .brandLight,
         [
-          Themes.systemLightSurface, Themes.systemLightKey, Themes.systemLightKeyModifier, Themes.systemLightLegend,
-          Themes.systemLightSignal, Themes.systemLightPopup,
+          Themes.lightSurface, Themes.lightKey, Themes.lightKeyModifier, Themes.lightLegend,
+          Themes.lightLegendSecondary, Themes.lightSignal, Themes.lightPopup, Themes.lightField,
+          Themes.lightFieldBorder, Themes.lightNotice,
         ]
       ),
       (
-        .systemDark,
+        .brandDark,
         [
-          Themes.systemDarkSurface, Themes.systemDarkKey, Themes.systemDarkKeyModifier, Themes.systemDarkLegend,
-          Themes.systemDarkSignal, Themes.systemDarkPopup,
-        ]
-      ),
-      (
-        .ink,
-        [Themes.inkSurface, Themes.inkKey, Themes.inkKeyModifier, Themes.inkLegend, Themes.inkSignal, Themes.inkPopup]
-      ),
-      (
-        .paper,
-        [
-          Themes.paperSurface, Themes.paperKey, Themes.paperKeyModifier, Themes.paperLegend, Themes.paperSignal,
-          Themes.paperPopup,
-        ]
-      ),
-      (
-        .lavender,
-        [
-          Themes.lavenderSurface, Themes.lavenderKey, Themes.lavenderKeyModifier, Themes.lavenderLegend,
-          Themes.lavenderSignal, Themes.lavenderPopup,
-        ]
-      ),
-      (
-        .mint,
-        [
-          Themes.mintSurface, Themes.mintKey, Themes.mintKeyModifier, Themes.mintLegend, Themes.mintSignal,
-          Themes.mintPopup,
-        ]
-      ),
-      (
-        .midnight,
-        [
-          Themes.midnightSurface, Themes.midnightKey, Themes.midnightKeyModifier, Themes.midnightLegend,
-          Themes.midnightSignal, Themes.midnightPopup,
-        ]
-      ),
-      (
-        .sunset,
-        [
-          Themes.sunsetSurface, Themes.sunsetKey, Themes.sunsetKeyModifier, Themes.sunsetLegend, Themes.sunsetSignal,
-          Themes.sunsetPopup,
+          Themes.darkSurface, Themes.darkKey, Themes.darkKeyModifier, Themes.darkLegend, Themes.darkLegendSecondary,
+          Themes.darkSignal, Themes.darkPopup, Themes.darkField, Themes.darkFieldBorder, Themes.darkNotice,
         ]
       ),
     ]
   }()
 
-  @Test("every palette is its theme's tokens, role by role")
+  @Test("every face is its theme's tokens, role by role")
   func palettes() {
     #expect(Self.paletteTokens.count == KeyboardPalette.all.count + 1)
     for (palette, colors) in Self.paletteTokens {
-      let roles = [palette.surface, palette.key, palette.keyDark, palette.keyText, palette.signal, palette.popupFill]
-      #expect(roles == colors, "\(palette.id)")
+      let roles = [
+        palette.surface, palette.key, palette.keyDark, palette.keyText, palette.keyTextSecondary, palette.signal,
+        palette.popupFill, palette.field, palette.fieldBorder, palette.notice,
+      ]
+      #expect(roles == colors, "\(palette.id) \(palette.face)")
+    }
+  }
+
+  @Test("the brand's faces carry the brand: ink under the dark face, paper under the light, green as the signal")
+  func faces() {
+    #expect(DesignTokens.Themes.darkSurface == DesignTokens.Brand.ink)
+    #expect(DesignTokens.Themes.lightSurface == DesignTokens.Brand.paper200)
+    #expect(DesignTokens.Themes.darkSignal == DesignTokens.Brand.green400)
+    #expect(DesignTokens.Themes.lightSignal == DesignTokens.Brand.green700)
+    #expect(DesignTokens.Themes.lightNotice == DesignTokens.Brand.orange)
+    #expect(DesignTokens.Themes.darkNotice == DesignTokens.Brand.orange)
+  }
+
+  @Test("the fonts are named by PostScript name and the bundle knows them")
+  func fonts() {
+    typealias Fonts = DesignTokens.Fonts
+    for name in [
+      Fonts.monoLight, Fonts.monoRegular, Fonts.monoMedium, Fonts.headingRegular, Fonts.bodyRegular, Fonts.bodyBold,
+    ] {
+      #expect(UIFont(name: name, size: 12) != nil, "\(name) is not registered (UIAppFonts / Design/fonts)")
     }
   }
 

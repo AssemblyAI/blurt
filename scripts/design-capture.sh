@@ -6,8 +6,8 @@
 # -BlurtGalleryBare draws one row with a magenta registration border that
 # scripts/design-diff.swift crops to.
 #
-#   scripts/design-capture.sh                                  # panel × the golden states × three themes
-#   scripts/design-capture.sh --layout full --states idle,recording,error --themes ink
+#   scripts/design-capture.sh                                  # panel × the golden states × both faces
+#   scripts/design-capture.sh --layout full --states idle,recording,error --themes dark
 #   scripts/design-capture.sh --out .build/design/captures --no-build
 #
 # Writes <out>/<layout>-<state>-<theme>@3x.png (1206 px wide on iPhone 18 Pro,
@@ -20,7 +20,7 @@ cd "$REPO_ROOT"
 
 LAYOUT=panel
 STATES=idle,recording,error,term
-THEMES=system,system-dark,ink
+THEMES=light,dark
 OUT="$REPO_ROOT/.build/design/captures"
 BUILD=1
 while [ $# -gt 0 ]; do

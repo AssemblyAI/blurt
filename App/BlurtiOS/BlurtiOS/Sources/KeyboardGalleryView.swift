@@ -7,9 +7,9 @@
   ///
   ///     -BlurtGallery <slimBar|panel|full> <state>[,<state>…] [theme] [-BlurtGalleryStill] [-BlurtGalleryBare]
   ///
-  /// The last word is a theme id (`system`, `system-dark`, `ink`, `paper`,
-  /// `lavender`, `mint`, `midnight`, `sunset`); the iPhone's light face when
-  /// left out. Two switches make a capture reproducible for the design loop
+  /// The last word is a face, `light` or `dark` (the older theme words still
+  /// land: `system` and `paper` are light, `system-dark` and `ink` dark); the
+  /// light face when left out. Two switches make a capture reproducible for the design loop
   /// (DESIGN.md › Figma): `-BlurtGalleryStill` holds every motion at time
   /// zero — the ring, the meter's wave, the orb's fluid and grain — so two
   /// captures of one state are the same pixels; `-BlurtGalleryBare` draws the
@@ -101,7 +101,7 @@
         let layout = KeyboardLayout(rawValue: arguments[flag + 1])
       else { return [] }
       // The theme is the next word unless it is a switch.
-      let theme = arguments.count > flag + 3 && !arguments[flag + 3].hasPrefix("-") ? arguments[flag + 3] : "system"
+      let theme = arguments.count > flag + 3 && !arguments[flag + 3].hasPrefix("-") ? arguments[flag + 3] : "light"
       return arguments[flag + 2].split(separator: ",").map { name in
         Row(
           caption: "\(layout.rawValue) · \(name) · \(theme)",
@@ -109,11 +109,13 @@
       }
     }
 
+    /// The words that ask for the dark face; anything else is the light one.
+    static let darkFaces: Set<String> = ["dark", "system-dark", "ink"]
+
     private static func model(layout: KeyboardLayout, state: String, theme: String) -> KeyboardModel {
       let model = KeyboardModel()
       model.layout = layout
-      // `system` is the iPhone's light face, `system-dark` its dark one.
-      model.paletteOverride = .resolve(theme == "system-dark" ? "system" : theme, dark: theme == "system-dark")
+      model.paletteOverride = .resolve(KeyboardPalette.brandID, dark: Self.darkFaces.contains(theme))
       // `keys` shows the panel's carousel flipped to its keyboard page;
       // `term` the voice bar as the key-term field, mid-typing.
       model.panelShowsKeys = state == "keys"

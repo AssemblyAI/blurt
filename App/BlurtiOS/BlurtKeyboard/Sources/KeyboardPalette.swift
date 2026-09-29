@@ -1,17 +1,24 @@
 import SwiftUI
 
-/// The colors the keys draw with — a theme. The default is the iPhone
-/// keyboard's own, light or dark with the app being typed in, so Blurt's keys
-/// sit on Apple's globe-and-mic bar as one keyboard and the brand lives in the
-/// orb. Then Blurt's ink and five more cut from the same cloth (the orb's
-/// lavender and green, a warm paper, a midnight, a sunset), each contemporary
-/// and fun and none off-brand, picked in the app Partiful-style from live
-/// previews. The spacing never changes (the iPhone keyboard's own — 6 pt
-/// between keys, 11 between rows, 3 at the edges), so a theme changes how
-/// the keyboard looks and never how it types. The keys are flat: one colour
-/// at 8 pt corners, no drop, no edge, no gloss.
+/// The colours the keys draw with: the brand's two faces. The keyboard follows
+/// the field it is typing into — ink with the brand's film grain when the
+/// host app is dark, warm paper when it is light — so Blurt sits on any app
+/// as one keyboard, on the brand and off Apple's grey. The spacing never
+/// changes (the iPhone keyboard's own — 6 pt between keys, 11 between rows,
+/// 3 at the edges), so a face changes how the keyboard looks and never how it
+/// types. The keys are flat: one colour, no drop, no edge, no gloss.
+///
+/// One theme for now, with two faces. The curated themes come back later as
+/// value sets through the same shape: `all` is the picker's list, `resolve`
+/// the keyboard's lookup, and neither needs to change for a third entry.
 struct KeyboardPalette: Equatable, Identifiable {
+  enum Face: String {
+    case light
+    case dark
+  }
+
   let id: String
+  let face: Face
   let name: String
   /// One line for the picker.
   let vibe: String
@@ -19,10 +26,19 @@ struct KeyboardPalette: Equatable, Identifiable {
   let key: Color
   let keyDark: Color
   let keyText: Color
-  /// The voice on this surface: the wave while recording. The brand green
-  /// that reads on it — the wordmark's on light, the lifted one on dark.
+  /// The word labels (123, ABC, return, space) in mono, and the + at rest:
+  /// a step quieter than a letter.
+  let keyTextSecondary: Color
+  /// The voice on this surface: the wave, the caret, the saved check. The
+  /// brand green that reads on it — the wordmark's on paper, the lifted one
+  /// on ink.
   let signal: Color
   let popupFill: Color
+  /// The key-term field and its hairline.
+  let field: Color
+  let fieldBorder: Color
+  /// The error word, the cancel ×, the Full Access note: orange on both faces.
+  let notice: Color
 
   static let keyGap = DesignTokens.Metrics.keyGap
   static let rowGap = DesignTokens.Metrics.rowGap
@@ -31,62 +47,39 @@ struct KeyboardPalette: Equatable, Identifiable {
 
   private typealias Themes = DesignTokens.Themes
 
-  /// The iPhone's light keyboard: `#D1D5DB` surface, white keys, `#ADB3BC`
-  /// modifiers, black legends.
-  static let systemLight = KeyboardPalette(
-    id: "system", name: "iPhone", vibe: "Matches the iPhone keyboard, light or dark with the app you're in",
-    surface: Themes.systemLightSurface, key: Themes.systemLightKey, keyDark: Themes.systemLightKeyModifier,
-    keyText: Themes.systemLightLegend, signal: Themes.systemLightSignal, popupFill: Themes.systemLightPopup)
+  /// The brand theme's id, and what any unknown id resolves to.
+  static let brandID = "blurt"
+  private static let brandName = "Blurt"
+  private static let brandVibe = "Ink or paper, with the app you're in"
 
-  /// The iPhone's dark keyboard: `#2B2B2B` surface, `#6B6B6B` keys, `#464646`
-  /// modifiers, white legends.
-  static let systemDark = KeyboardPalette(
-    id: "system", name: "iPhone", vibe: "Matches the iPhone keyboard, light or dark with the app you're in",
-    surface: Themes.systemDarkSurface, key: Themes.systemDarkKey, keyDark: Themes.systemDarkKeyModifier,
-    keyText: Themes.systemDarkLegend, signal: Themes.systemDarkSignal, popupFill: Themes.systemDarkPopup)
+  /// The light face: paper `#ECEBE5`, white keys, `#DAD7CB` modifiers, ink
+  /// legends, the wordmark green.
+  static let brandLight = KeyboardPalette(
+    id: brandID, face: .light, name: brandName, vibe: brandVibe,
+    surface: Themes.lightSurface, key: Themes.lightKey, keyDark: Themes.lightKeyModifier,
+    keyText: Themes.lightLegend, keyTextSecondary: Themes.lightLegendSecondary, signal: Themes.lightSignal,
+    popupFill: Themes.lightPopup, field: Themes.lightField, fieldBorder: Themes.lightFieldBorder,
+    notice: Themes.lightNotice)
 
-  static let ink = KeyboardPalette(
-    id: "ink", name: "Ink", vibe: "Blurt's own",
-    surface: Themes.inkSurface, key: Themes.inkKey, keyDark: Themes.inkKeyModifier, keyText: Themes.inkLegend,
-    signal: Themes.inkSignal, popupFill: Themes.inkPopup)
+  /// The dark face: ink `#1D1B16`, `#33302A` keys, `#26231E` modifiers, warm
+  /// white legends, the lifted green.
+  static let brandDark = KeyboardPalette(
+    id: brandID, face: .dark, name: brandName, vibe: brandVibe,
+    surface: Themes.darkSurface, key: Themes.darkKey, keyDark: Themes.darkKeyModifier,
+    keyText: Themes.darkLegend, keyTextSecondary: Themes.darkLegendSecondary, signal: Themes.darkSignal,
+    popupFill: Themes.darkPopup, field: Themes.darkField, fieldBorder: Themes.darkFieldBorder,
+    notice: Themes.darkNotice)
 
-  static let paper = KeyboardPalette(
-    id: "paper", name: "Paper", vibe: "Warm and light",
-    surface: Themes.paperSurface, key: Themes.paperKey, keyDark: Themes.paperKeyModifier, keyText: Themes.paperLegend,
-    signal: Themes.paperSignal, popupFill: Themes.paperPopup)
+  /// The picker's list, one entry per theme (a theme's two faces share an id).
+  static let all: [KeyboardPalette] = [brandLight]
 
-  static let lavender = KeyboardPalette(
-    id: "lavender", name: "Lavender", vibe: "The orb's violet",
-    surface: Themes.lavenderSurface, key: Themes.lavenderKey, keyDark: Themes.lavenderKeyModifier,
-    keyText: Themes.lavenderLegend, signal: Themes.lavenderSignal, popupFill: Themes.lavenderPopup)
-
-  static let mint = KeyboardPalette(
-    id: "mint", name: "Mint", vibe: "The orb's green",
-    surface: Themes.mintSurface, key: Themes.mintKey, keyDark: Themes.mintKeyModifier,
-    keyText: Themes.mintLegend, signal: Themes.mintSignal, popupFill: Themes.mintPopup)
-
-  static let midnight = KeyboardPalette(
-    id: "midnight", name: "Midnight", vibe: "Deep blue-black",
-    surface: Themes.midnightSurface, key: Themes.midnightKey, keyDark: Themes.midnightKeyModifier,
-    keyText: Themes.midnightLegend, signal: Themes.midnightSignal, popupFill: Themes.midnightPopup)
-
-  static let sunset = KeyboardPalette(
-    id: "sunset", name: "Sunset", vibe: "Warm and loud",
-    surface: Themes.sunsetSurface, key: Themes.sunsetKey, keyDark: Themes.sunsetKeyModifier,
-    keyText: Themes.sunsetLegend, signal: Themes.sunsetSignal, popupFill: Themes.sunsetPopup)
-
-  /// The picker's order: the iPhone's own first (shown in the picker's own
-  /// appearance), then Blurt's.
-  static let all: [KeyboardPalette] = [systemLight, ink, paper, lavender, mint, midnight, sunset]
-
-  /// The theme with this id in the given appearance — only the iPhone theme
-  /// has two faces — or the iPhone's for an id that no longer exists.
+  /// The theme with this id in the given appearance, or the brand's for an id
+  /// that no longer exists (the old `system` default, a retired theme).
   static func resolve(_ id: String, dark: Bool) -> KeyboardPalette {
-    if id == systemLight.id { return dark ? systemDark : systemLight }
-    return all.first { $0.id == id } ?? (dark ? systemDark : systemLight)
+    dark ? brandDark : brandLight
   }
 
-  static func == (lhs: KeyboardPalette, rhs: KeyboardPalette) -> Bool { lhs.id == rhs.id }
+  static func == (lhs: KeyboardPalette, rhs: KeyboardPalette) -> Bool { lhs.id == rhs.id && lhs.face == rhs.face }
 }
 
 extension Color {
@@ -99,7 +92,7 @@ extension Color {
 }
 
 private struct KeyboardPaletteKey: EnvironmentKey {
-  static let defaultValue = KeyboardPalette.systemLight
+  static let defaultValue = KeyboardPalette.brandLight
 }
 
 extension EnvironmentValues {

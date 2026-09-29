@@ -50,21 +50,25 @@ struct LayoutArithmeticTests {
     #expect(KeyboardGalleryView.rows(from: ["app"]).isEmpty)
     #expect(KeyboardGalleryView.rows(from: ["app", "-BlurtGallery", "panel"]).isEmpty)
     #expect(KeyboardGalleryView.rows(from: ["app", "-BlurtGallery", "nope", "idle"]).isEmpty)
-    let rows = KeyboardGalleryView.rows(from: ["app", "-BlurtGallery", "panel", "idle,keys,term", "mint"])
+    let rows = KeyboardGalleryView.rows(from: ["app", "-BlurtGallery", "panel", "idle,keys,term", "dark"])
     #expect(rows.count == 3)
     #expect(rows[1].model.effectiveLayout == .full)
     #expect(rows[2].model.termDraft == "Rizz")
-    #expect(rows[0].model.palette.id == "mint")
+    #expect(rows[0].model.palette.face == .dark)
+    // The old theme words still land on a face, so a capture script never breaks.
     let dark = KeyboardGalleryView.rows(from: ["app", "-BlurtGallery", "full", "idle", "system-dark"])
-    #expect(dark[0].model.palette.keyText == DesignTokens.Brand.white)
+    #expect(dark[0].model.palette.keyText == DesignTokens.Themes.darkLegend)
+    let ink = KeyboardGalleryView.rows(from: ["app", "-BlurtGallery", "full", "idle", "ink"])
+    #expect(ink[0].model.palette.face == .dark)
+    #expect(KeyboardGalleryView.rows(from: ["app", "-BlurtGallery", "full", "idle", "paper"])[0].model.palette.face == .light)
   }
 
   @Test("the capture switches ride along, and a switch where the theme would be is not a theme")
   func galleryOptions() {
     let args = ["app", "-BlurtGallery", "panel", "idle", "-BlurtGalleryStill", "-BlurtGalleryBare"]
-    #expect(KeyboardGalleryView.rows(from: args)[0].model.palette.id == "system")
+    #expect(KeyboardGalleryView.rows(from: args)[0].model.palette.face == .light)
     #expect(KeyboardGalleryView.Options.parse(args) == .init(still: true, bare: true))
-    #expect(KeyboardGalleryView.Options.parse(["app", "-BlurtGallery", "panel", "idle", "ink"]) == .init())
+    #expect(KeyboardGalleryView.Options.parse(["app", "-BlurtGallery", "panel", "idle", "dark"]) == .init())
     #expect(KeyboardGalleryView.OrbStillView.parse(args) == nil)
     let orb = KeyboardGalleryView.OrbStillView.parse(["app", "-BlurtOrb", "96", "landed"])
     #expect(orb?.size == 96)

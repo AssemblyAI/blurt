@@ -142,16 +142,10 @@ Group):
 
 <!-- tokens:begin themes -->
 
-| Theme          | Surface   | Key       | Modifier  | Legend    | Signal    | Pop-up    |
-| -------------- | --------- | --------- | --------- | --------- | --------- | --------- |
-| `system-light` | `#D1D5DB` | `#FFFFFF` | `#ADB3BC` | `#000000` | `#01762F` | `#FFFFFF` |
-| `system-dark`  | `#2B2B2B` | `#6B6B6B` | `#464646` | `#FFFFFF` | `#67AD82` | `#6B6B6B` |
-| `ink`          | `#1D1B16` | `#33302A` | `#26231E` | `#F2EEE6` | `#67AD82` | `#33302A` |
-| `paper`        | `#EBE8E8` | `#FFFFFF` | `#DEDBDB` | `#1D1B16` | `#01762F` | `#FFFFFF` |
-| `lavender`     | `#2C2557` | `#3F3777` | `#352E68` | `#F1EEFF` | `#67AD82` | `#3F3777` |
-| `mint`         | `#10231B` | `#1E3F31` | `#183429` | `#E9F5EE` | `#67AD82` | `#1E3F31` |
-| `midnight`     | `#0E1220` | `#1D2440` | `#161B33` | `#E8ECFF` | `#67AD82` | `#1D2440` |
-| `sunset`       | `#2B1912` | `#4B2B20` | `#3B2119` | `#FFEFE6` | `#67AD82` | `#4B2B20` |
+| Face    | Surface   | Key       | Modifier  | Legend    | Secondary | Signal    | Pop-up    | Field     | Field border | Notice    |
+| ------- | --------- | --------- | --------- | --------- | --------- | --------- | --------- | --------- | ------------ | --------- |
+| `light` | `#ECEBE5` | `#FFFFFF` | `#DAD7CB` | `#1D1B16` | `#777673` | `#01762F` | `#FFFFFF` | `#FFFFFF` | `#C7C3B2`    | `#E67F36` |
+| `dark`  | `#1D1B16` | `#33302A` | `#26231E` | `#F5F3EB` | `#A5A4A2` | `#67AD82` | `#33302A` | `#33302A` | `#3A362F`    | `#E67F36` |
 
 <!-- tokens:end themes -->
 
@@ -268,8 +262,16 @@ these, so the Mac's vocabulary still reads at the call sites.
 | `ink/600`              | `#3A362F` | `Brand.ink600`             | the Mac's dark card border                                                 |
 | `ink/700`              | `#33302A` | `Brand.ink700`             | an ordinary key on ink, one step up                                        |
 | `ink/800`              | `#26231E` | `Brand.ink800`             | a modifier key on ink; the Mac's dark card fill                            |
+| `neutral/300`          | `#D2D1D0` | `Brand.neutral300`         | black-100: the lightest warm grey                                          |
+| `neutral/500`          | `#A5A4A2` | `Brand.neutral500`         | black-200: mono labels on the dark face                                    |
+| `neutral/700`          | `#777673` | `Brand.neutral700`         | black-300: muted text and mono labels on the light face                    |
+| `neutral/900`          | `#4A4945` | `Brand.neutral900`         | black-400: body text on the light face                                     |
 | `orange`               | `#E67F36` | `Brand.orange`             | the error word and ring, cancel, the Full Access note; never a red body    |
-| `page`                 | `#FDFCF8` | `Brand.page`               | the design system's page background (unused on the phone)                  |
+| `paper/200`            | `#ECEBE5` | `Brand.paper200`           | neutral-100: the light face's surface                                      |
+| `paper/300`            | `#DAD7CB` | `Brand.paper300`           | neutral-200: a modifier key on the light face                              |
+| `paper/400`            | `#C7C3B2` | `Brand.paper400`           | neutral-300: hairlines and field borders on the light face                 |
+| `paper/page`           | `#FDFCF8` | `Brand.paperPage`          | the design system's page: the app's light ground                           |
+| `paper/tint`           | `#F5F3EB` | `Brand.paperTint`          | the warm off-white one step in: light cards, dark legends                  |
 | `violet/iris`          | `#887BDD` | `Brand.violetIris`         | the orb gradient's upper violet stop                                       |
 | `violet/lavender`      | `#D7D3F4` | `Brand.violetLavender`     | the orb's lightest violet: its top and the gradient's ends                 |
 | `violet/periwinkle`    | `#B0A7E9` | `Brand.violetPeriwinkle`   | the orb's mid violet: the drop's halo                                      |
@@ -284,26 +286,29 @@ theme's (ink) values, and the app's catalog colours.
 
 <!-- tokens:begin keyboard -->
 
-| Token                   | Value                                 | Swift                         | Use                                                                       |
-| ----------------------- | ------------------------------------- | ----------------------------- | ------------------------------------------------------------------------- |
-| `app/accent-dark`       | `#67AD82` (`brand.green/400`)         | `Keyboard.appAccentDark`      | the catalog's AccentColor in dark                                         |
-| `app/accent-light`      | `#01762F` (`brand.green/700`)         | `Keyboard.appAccentLight`     | the catalog's AccentColor in light                                        |
-| `app/card-border-dark`  | `#3A362F` (`brand.ink/600`)           | `Keyboard.appCardBorderDark`  | the catalog's CardBorder in dark                                          |
-| `app/card-border-light` | `#DEDBDB` (`brand.card-border`)       | `Keyboard.appCardBorderLight` | the catalog's CardBorder in light                                         |
-| `app/card-fill-dark`    | `#26231E` (`brand.ink/800`)           | `Keyboard.appCardFillDark`    | the catalog's CardFill in dark                                            |
-| `app/card-fill-light`   | `#EBE8E8` (`brand.card`)              | `Keyboard.appCardFillLight`   | the catalog's CardFill in light                                           |
-| `kb/cancel`             | `#E67F36` (`brand.orange`)            | `Keyboard.kbCancel`           | the panel's cancel ×                                                      |
-| `kb/full-access-note`   | `#E67F36` (`brand.orange`)            | `Keyboard.kbFullAccessNote`   | the one line of words the keyboard ever shows                             |
-| `kb/key`                | `#33302A` (`themes.ink/key`)          | `Keyboard.kbKey`              | an ordinary key                                                           |
-| `kb/key-modifier`       | `#26231E` (`themes.ink/key-modifier`) | `Keyboard.kbKeyModifier`      | shift, delete, globe, return, 123, cancel                                 |
-| `kb/legend`             | `#F2EEE6` (`themes.ink/legend`)       | `Keyboard.kbLegend`           | key legends and bare glyphs                                               |
-| `kb/notice-error`       | `#E67F36` (`brand.orange`)            | `Keyboard.kbNoticeError`      | the solid ring and glyph for an error                                     |
-| `kb/notice-ok`          | `#67AD82` (`brand.green/400`)         | `Keyboard.kbNoticeOk`         | the solid ring for pasted and copied                                      |
-| `kb/orb-ring-end`       | `#FFFFFF` (`brand.white`)             | `Keyboard.kbOrbRingEnd`       | the sweeping ring's gradient, bottom-trailing                             |
-| `kb/orb-ring-start`     | `#01762F` (`brand.green/700`)         | `Keyboard.kbOrbRingStart`     | the sweeping ring's gradient, top-leading                                 |
-| `kb/popup`              | `#33302A` (`themes.ink/popup`)        | `Keyboard.kbPopup`            | the letter pop-up                                                         |
-| `kb/signal`             | `#67AD82` (`themes.ink/signal`)       | `Keyboard.kbSignal`           | the wave, the caret, the saved check                                      |
-| `kb/surface`            | `#1D1B16` (`themes.ink/surface`)      | `Keyboard.kbSurface`          | the design theme's surface (Figma binds to kb/*; Swift reads the palette) |
+| Token                   | Value                                      | Swift                         | Use                                                                      |
+| ----------------------- | ------------------------------------------ | ----------------------------- | ------------------------------------------------------------------------ |
+| `app/accent-dark`       | `#67AD82` (`brand.green/400`)              | `Keyboard.appAccentDark`      | the catalog's AccentColor in dark                                        |
+| `app/accent-light`      | `#01762F` (`brand.green/700`)              | `Keyboard.appAccentLight`     | the catalog's AccentColor in light                                       |
+| `app/card-border-dark`  | `#3A362F` (`brand.ink/600`)                | `Keyboard.appCardBorderDark`  | the catalog's CardBorder in dark                                         |
+| `app/card-border-light` | `#C7C3B2` (`brand.paper/400`)              | `Keyboard.appCardBorderLight` | the catalog's CardBorder in light                                        |
+| `app/card-fill-dark`    | `#26231E` (`brand.ink/800`)                | `Keyboard.appCardFillDark`    | the catalog's CardFill in dark                                           |
+| `app/card-fill-light`   | `#F5F3EB` (`brand.paper/tint`)             | `Keyboard.appCardFillLight`   | the catalog's CardFill in light                                          |
+| `kb/cancel`             | `#E67F36` (`brand.orange`)                 | `Keyboard.kbCancel`           | the panel's cancel ×                                                     |
+| `kb/field`              | `#33302A` (`themes.dark/field`)            | `Keyboard.kbField`            | the key-term field                                                       |
+| `kb/field-border`       | `#3A362F` (`themes.dark/field-border`)     | `Keyboard.kbFieldBorder`      | the field's hairline                                                     |
+| `kb/full-access-note`   | `#E67F36` (`brand.orange`)                 | `Keyboard.kbFullAccessNote`   | the one line of words the keyboard ever shows                            |
+| `kb/key`                | `#33302A` (`themes.dark/key`)              | `Keyboard.kbKey`              | an ordinary key                                                          |
+| `kb/key-modifier`       | `#26231E` (`themes.dark/key-modifier`)     | `Keyboard.kbKeyModifier`      | shift, delete, globe, return, 123, cancel                                |
+| `kb/legend`             | `#F5F3EB` (`themes.dark/legend`)           | `Keyboard.kbLegend`           | key legends and bare glyphs                                              |
+| `kb/legend-secondary`   | `#A5A4A2` (`themes.dark/legend-secondary`) | `Keyboard.kbLegendSecondary`  | the mono word labels (123, ABC, return, space) and the + at rest         |
+| `kb/notice-error`       | `#E67F36` (`brand.orange`)                 | `Keyboard.kbNoticeError`      | the solid ring and glyph for an error                                    |
+| `kb/notice-ok`          | `#67AD82` (`brand.green/400`)              | `Keyboard.kbNoticeOk`         | the solid ring for pasted and copied                                     |
+| `kb/orb-ring-end`       | `#FFFFFF` (`brand.white`)                  | `Keyboard.kbOrbRingEnd`       | the sweeping ring's gradient, bottom-trailing                            |
+| `kb/orb-ring-start`     | `#01762F` (`brand.green/700`)              | `Keyboard.kbOrbRingStart`     | the sweeping ring's gradient, top-leading                                |
+| `kb/popup`              | `#33302A` (`themes.dark/popup`)            | `Keyboard.kbPopup`            | the letter pop-up                                                        |
+| `kb/signal`             | `#67AD82` (`themes.dark/signal`)           | `Keyboard.kbSignal`           | the wave, the caret, the saved check                                     |
+| `kb/surface`            | `#1D1B16` (`themes.dark/surface`)          | `Keyboard.kbSurface`          | the design face's surface (Figma binds to kb/*; Swift reads the palette) |
 
 <!-- tokens:end keyboard -->
 
@@ -329,22 +334,55 @@ Inter). Sizes are fixed points, not Dynamic Type, as the system keyboard's are.
 
 <!-- tokens:begin type -->
 
-| Token              | Value      | Swift                       | Use                                                            |
-| ------------------ | ---------- | --------------------------- | -------------------------------------------------------------- |
-| `ratio/orb-glyph`  | `0.34`     | `Typography.ratioOrbGlyph`  | the clipboard and exclamation glyphs, as a fraction of the orb |
-| `size/glyph`       | `17`       | `Typography.sizeGlyph`      | the +, × and ✓                                                 |
-| `size/legend`      | `16`       | `Typography.sizeLegend`     | every other key                                                |
-| `size/letter`      | `22`       | `Typography.sizeLetter`     | letter keys                                                    |
-| `size/popup`       | `32`       | `Typography.sizePopup`      | the letter pop-up                                              |
-| `size/term`        | `17`       | `Typography.sizeTerm`       | the key-term field                                             |
-| `weight/glyph`     | `medium`   | `Typography.weightGlyph`    | —                                                              |
-| `weight/legend`    | `medium`   | `Typography.weightLegend`   | —                                                              |
-| `weight/letter`    | `regular`  | `Typography.weightLetter`   | —                                                              |
-| `weight/orb-glyph` | `semibold` | `Typography.weightOrbGlyph` | —                                                              |
-| `weight/popup`     | `regular`  | `Typography.weightPopup`    | —                                                              |
-| `weight/term`      | `regular`  | `Typography.weightTerm`     | —                                                              |
+| Token              | Value      | Swift                        | Use                                                                  |
+| ------------------ | ---------- | ---------------------------- | -------------------------------------------------------------------- |
+| `ratio/orb-glyph`  | `0.34`     | `Typography.ratioOrbGlyph`   | the clipboard and exclamation glyphs, as a fraction of the orb       |
+| `size/body`        | `16`       | `Typography.sizeBody`        | the app's body text                                                  |
+| `size/caption`     | `14`       | `Typography.sizeCaption`     | the app's small text                                                 |
+| `size/cta`         | `14`       | `Typography.sizeCta`         | a mono button label in the app (E2)                                  |
+| `size/eyebrow`     | `12`       | `Typography.sizeEyebrow`     | a mono eyebrow in the app (E1)                                       |
+| `size/glyph`       | `17`       | `Typography.sizeGlyph`       | the +, × and ✓                                                       |
+| `size/label`       | `12`       | `Typography.sizeLabel`       | the mono word labels on keys: 123, ABC, #+=, space, the return label |
+| `size/legend`      | `16`       | `Typography.sizeLegend`      | every other key                                                      |
+| `size/letter`      | `22`       | `Typography.sizeLetter`      | letter keys                                                          |
+| `size/popup`       | `32`       | `Typography.sizePopup`       | the letter pop-up                                                    |
+| `size/term`        | `17`       | `Typography.sizeTerm`        | the key-term field                                                   |
+| `size/title`       | `34`       | `Typography.sizeTitle`       | the app's serif headline                                             |
+| `tracking/cta`     | `1.4`      | `Typography.trackingCta`     | uppercase mono at 14: the brand's E2 tracking                        |
+| `tracking/eyebrow` | `1.2`      | `Typography.trackingEyebrow` | uppercase mono at 12: the brand's E1 tracking                        |
+| `weight/glyph`     | `medium`   | `Typography.weightGlyph`     | —                                                                    |
+| `weight/label`     | `medium`   | `Typography.weightLabel`     | —                                                                    |
+| `weight/legend`    | `medium`   | `Typography.weightLegend`    | —                                                                    |
+| `weight/letter`    | `regular`  | `Typography.weightLetter`    | —                                                                    |
+| `weight/orb-glyph` | `semibold` | `Typography.weightOrbGlyph`  | —                                                                    |
+| `weight/popup`     | `regular`  | `Typography.weightPopup`     | —                                                                    |
+| `weight/term`      | `regular`  | `Typography.weightTerm`      | —                                                                    |
 
 <!-- tokens:end type -->
+
+## Fonts (`Design/fonts/`, `DesignTokens.Fonts`)
+
+The brand's three faces, bundled in both targets and named by PostScript name
+(what `Font.custom` takes). Letter keys stay in SF Pro; everything that is a
+word label on the keyboard, and the app's eyebrows and buttons, is Modern
+Gothic Mono in uppercase; the app's headlines are Oceanic Text, its body
+UN 11ST.
+
+<!-- tokens:begin fonts -->
+
+| Token             | Value                      | Swift                  | Use                                             |
+| ----------------- | -------------------------- | ---------------------- | ----------------------------------------------- |
+| `body/bold`       | `UN-11ST-Bold`             | `Fonts.bodyBold`       | —                                               |
+| `body/family`     | `UN-11 ST`                 | `Fonts.bodyFamily`     | the app's body text                             |
+| `body/regular`    | `UN-11ST-Regular`          | `Fonts.bodyRegular`    | —                                               |
+| `heading/family`  | `Oceanic Text`             | `Fonts.headingFamily`  | the app's serif headlines, sentence case, tight |
+| `heading/regular` | `OceanicText-Regular`      | `Fonts.headingRegular` | —                                               |
+| `mono/family`     | `Modern Gothic Mono`       | `Fonts.monoFamily`     | eyebrows, CTAs, the keyboard's word labels      |
+| `mono/light`      | `ModernGothicMono-Light`   | `Fonts.monoLight`      | —                                               |
+| `mono/medium`     | `ModernGothicMono-Medium`  | `Fonts.monoMedium`     | —                                               |
+| `mono/regular`    | `ModernGothicMono-Regular` | `Fonts.monoRegular`    | —                                               |
+
+<!-- tokens:end fonts -->
 
 ## Components (`BlurtKeyboard/Sources/`)
 
@@ -509,22 +547,25 @@ Motion, in seconds. Nothing springs or snaps; only the press answers at once.
 
 <!-- tokens:begin motion -->
 
-| Token           | Seconds | Swift                 | Use                                                           |
-| --------------- | ------- | --------------------- | ------------------------------------------------------------- |
-| `caret`         | `0.5`   | `Motion.caret`        | the caret's blink                                             |
-| `drop`          | `2.4`   | `Motion.drop`         | the violet drop is gone by                                    |
-| `drop-hold`     | `0.9`   | `Motion.dropHold`     | and held to                                                   |
-| `drop-rise`     | `0.5`   | `Motion.dropRise`     | the drop is up in                                             |
-| `drop-spread`   | `1`     | `Motion.dropSpread`   | the bloom reaches its full spread in                          |
-| `flip`          | `0.25`  | `Motion.flip`         | the panel's carousel                                          |
-| `height-change` | `0.25`  | `Motion.heightChange` | the keyboard resizing                                         |
-| `key-press`     | `0.08`  | `Motion.keyPress`     | a key lighting                                                |
-| `mood`          | `0.8`   | `Motion.mood`         | the orb's colour moving between moods                         |
-| `press`         | `0.1`   | `Motion.press`        | the orb's press; the one thing that answers at once           |
-| `ring-period`   | `1.6`   | `Motion.ringPeriod`   | one turn of the ring, the Mac's cadence                       |
-| `state-fade`    | `0.5`   | `Motion.stateFade`    | every other change on the key: the ring, a glyph, the dimming |
-| `term-swap`     | `0.4`   | `Motion.termSwap`     | the voice bar becoming the field                              |
-| `wave-fade`     | `0.7`   | `Motion.waveFade`     | the orb and the wave crossing, either way                     |
+| Token            | Value           | Swift                  | Use                                                           |
+| ---------------- | --------------- | ---------------------- | ------------------------------------------------------------- |
+| `caret`          | `0.5`           | `Motion.caret`         | the caret's blink                                             |
+| `colour`         | `0.2`           | `Motion.colour`        | a colour or fill changing state: the brand's transition       |
+| `drop`           | `2.4`           | `Motion.drop`          | the violet drop is gone by                                    |
+| `drop-hold`      | `0.9`           | `Motion.dropHold`      | and held to                                                   |
+| `drop-rise`      | `0.5`           | `Motion.dropRise`      | the drop is up in                                             |
+| `drop-spread`    | `1`             | `Motion.dropSpread`    | the bloom reaches its full spread in                          |
+| `ease/signature` | `0.22,1,0.36,1` | `Motion.easeSignature` | the house curve for everything that moves; nothing springs    |
+| `flip`           | `0.25`          | `Motion.flip`          | the panel's carousel                                          |
+| `height-change`  | `0.25`          | `Motion.heightChange`  | the keyboard resizing                                         |
+| `key-press`      | `0.08`          | `Motion.keyPress`      | a key lighting                                                |
+| `landing`        | `0.6`           | `Motion.landing`       | the glint when the words land                                 |
+| `mood`           | `0.8`           | `Motion.mood`          | the orb's colour moving between moods                         |
+| `press`          | `0.1`           | `Motion.press`         | the orb's press; the one thing that answers at once           |
+| `ring-period`    | `1.6`           | `Motion.ringPeriod`    | one turn of the ring, the Mac's cadence                       |
+| `state-fade`     | `0.5`           | `Motion.stateFade`     | every other change on the key: the ring, a glyph, the dimming |
+| `term-swap`      | `0.4`           | `Motion.termSwap`      | the voice bar becoming the field                              |
+| `wave-fade`      | `0.7`           | `Motion.waveFade`      | the orb and the wave crossing, either way                     |
 
 <!-- tokens:end motion -->
 

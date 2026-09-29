@@ -4,8 +4,8 @@
 # cycles and cuts one clean loop, cropped to the keyboard, for the review packet
 # and for the Figma motion page's keyframes (DESIGN.md › Figma).
 #
-#   scripts/ios-record.sh                          # panel, ink → .build/design/loops/panel-ink.mp4
-#   scripts/ios-record.sh --layout slimBar --theme system --out ~/Desktop/blurt-review
+#   scripts/ios-record.sh                          # panel, dark → .build/design/loops/panel-dark.mp4
+#   scripts/ios-record.sh --layout slimBar --theme light --out ~/Desktop/blurt-review
 #   scripts/ios-record.sh --frames 0,0.35,0.7      # also grab stills at these seconds into the loop
 #
 # Needs ffmpeg (Brewfile). The crop comes from a still capture of the same
@@ -18,7 +18,7 @@ cd "$REPO_ROOT"
 source "$REPO_ROOT/scripts/ios-lib.sh"
 
 LAYOUT=panel
-THEME=ink
+THEME=dark
 OUT="$REPO_ROOT/.build/design/loops"
 FRAMES=""
 CYCLE=11.7

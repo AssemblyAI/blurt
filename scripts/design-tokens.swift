@@ -51,14 +51,16 @@ enum Value {
   case color(String)  // "#RRGGBB"
   case number(Double)
   case word(String)  // a font weight
+  case string(String)  // a font name (the `fonts` group)
+  case curve([Double])  // a cubic-bezier easing: four numbers
   case alias(String)  // "group.name"
 }
 
 struct Token {
-  let group: String
-  let name: String
-  let value: Value
-  let use: String?
+  var group: String
+  var name: String
+  var value: Value
+  var use: String?
 
   var qualified: String { "\(group).\(name)" }
   var swiftName: String { camel(name) }
@@ -94,6 +96,10 @@ func parseValue(_ raw: Any) -> Value {
   if let number = raw as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() {
     return .number(number.doubleValue)
   }
+  if let numbers = raw as? [NSNumber] {
+    guard numbers.count == 4 else { fail("a curve is four numbers, got \(numbers)") }
+    return .curve(numbers.map(\.doubleValue))
+  }
   guard let string = raw as? String else { fail("a token value must be a string or a number, got \(raw)") }
   if string.hasPrefix("{"), string.hasSuffix("}") { return .alias(String(string.dropFirst().dropLast())) }
   if string.hasPrefix("#") {
@@ -110,19 +116,23 @@ guard let data = FileManager.default.contents(atPath: tokensURL.path),
   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
 else { fail("could not read \(tokensPath)") }
 
-let groups = ["brand", "themes", "keyboard", "metrics", "type", "motion"]
+let groups = ["brand", "themes", "keyboard", "metrics", "type", "motion", "fonts"]
 var tokens: [Token] = []
 var byQualified: [String: Token] = [:]
 for group in groups {
   guard let entries = json[group] as? [String: Any] else { fail("tokens.json has no \(group) group") }
   for name in entries.keys.sorted() {
     let entry = entries[name]!
-    let token: Token
+    var token: Token
     if let wrapped = entry as? [String: Any] {
       guard let raw = wrapped["value"] else { fail("\(group).\(name) has no value") }
       token = Token(group: group, name: name, value: parseValue(raw), use: wrapped["use"] as? String)
     } else {
       token = Token(group: group, name: name, value: parseValue(entry), use: nil)
+    }
+    // A bare word in `fonts` is a font's name, not a weight.
+    if group == "fonts", case .word(let word) = token.value {
+      token = Token(group: group, name: name, value: .string(word), use: token.use)
     }
     tokens.append(token)
     byQualified[token.qualified] = token
@@ -180,6 +190,8 @@ func rendered(_ token: Token) -> String {
   case .color(let hex): return hex
   case .number(let number): return format(number)
   case .word(let word): return word
+  case .string(let string): return string
+  case .curve(let numbers): return numbers.map(format).joined(separator: ",")
   case .alias: fatalError("unreachable")
   }
 }
@@ -198,6 +210,14 @@ func swiftLiteral(_ token: Token) -> (type: String, literal: String) {
   case .word(let word):
     guard weights.contains(word) else { fail("\(token.qualified): \(word) is not a font weight") }
     return ("Font.Weight", ".\(word)")
+  case .string(let string): return ("String", "\"\(string)\"")
+  case .curve(let numbers):
+    let n = numbers.map(format)
+    return (
+      "UnitCurve",
+      "UnitCurve.bezier(startControlPoint: UnitPoint(x: \(n[0]), y: \(n[1])), "
+        + "endControlPoint: UnitPoint(x: \(n[2]), y: \(n[3])))"
+    )
   case .alias(let target):
     guard let other = byQualified[target] else { fail("\(target) does not exist") }
     return (swiftLiteral(other).type, "\(typeName(other.group)).\(other.swiftName)")
@@ -311,18 +331,16 @@ blocks["brand"] = tokenRows("brand", valueLabel: "Value")
 blocks["keyboard"] = tokenRows("keyboard", valueLabel: "Value")
 blocks["metrics"] = tokenRows("metrics", valueLabel: "Points")
 blocks["type"] = tokenRows("type", valueLabel: "Value")
-blocks["motion"] = tokenRows("motion", valueLabel: "Seconds")
+blocks["motion"] = tokenRows("motion", valueLabel: "Value")
+blocks["fonts"] = tokenRows("fonts", valueLabel: "Value")
 
 let themeNames = tokens.filter { $0.group == "themes" }.map { String($0.name.split(separator: "/")[0]) }
-let themeOrder =
-  ["system-light", "system-dark", "ink", "paper", "lavender", "mint", "midnight", "sunset"]
-  + Set(themeNames).subtracting([
-    "system-light", "system-dark", "ink", "paper", "lavender", "mint", "midnight", "sunset",
-  ])
-  .sorted()
-let roles = ["surface", "key", "key-modifier", "legend", "signal", "popup"]
+let themeOrder = ["light", "dark"] + Set(themeNames).subtracting(["light", "dark"]).sorted()
+let roles = [
+  "surface", "key", "key-modifier", "legend", "legend-secondary", "signal", "popup", "field", "field-border", "notice",
+]
 blocks["themes"] = table(
-  ["Theme", "Surface", "Key", "Modifier", "Legend", "Signal", "Pop-up"],
+  ["Face", "Surface", "Key", "Modifier", "Legend", "Secondary", "Signal", "Pop-up", "Field", "Field border", "Notice"],
   themeOrder.compactMap { theme -> [String]? in
     let cells = roles.compactMap { role in byQualified["themes.\(theme)/\(role)"].map { code(rendered($0)) } }
     guard cells.count == roles.count else { return nil }
@@ -446,7 +464,10 @@ func figmaScopes(_ token: Token) -> [String] {
   case "type":
     if name.hasPrefix("size/") { return ["FONT_SIZE"] }
     if name.hasPrefix("weight/") { return ["FONT_STYLE"] }
+    if name.hasPrefix("tracking/") { return ["LETTER_SPACING"] }
     return []
+  case "fonts":
+    return name.hasSuffix("/family") ? ["FONT_FAMILY"] : []
   default: return []
   }
 }
@@ -459,13 +480,7 @@ func figmaJSON() -> String {
   var lines: [String] = []
   for group in groups {
     for token in tokens where token.group == group {
-      var value = ""
-      switch resolve(token).value {
-      case .color(let hex): value = hex
-      case .number(let number): value = format(number)
-      case .word(let word): value = word
-      case .alias: fatalError("unreachable")
-      }
+      let value = rendered(token)
       let type: String
       switch resolve(token).value {
       case .color: type = "COLOR"

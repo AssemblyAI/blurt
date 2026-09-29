@@ -77,13 +77,15 @@ struct LayoutTests {
     #expect(LetterLayout.forPreferredLanguages([]) == LetterLayout.qwerty)
   }
 
-  @Test("every theme has a distinct id; the iPhone theme has two faces; an unknown id is the iPhone's")
+  @Test("every theme has a distinct id; the brand has two faces; an unknown or retired id is the brand's")
   func palettes() {
     let ids = KeyboardPalette.all.map(\.id)
     #expect(Set(ids).count == ids.count)
-    #expect(KeyboardPalette.resolve("lavender", dark: true).id == "lavender")
-    #expect(KeyboardPalette.resolve("system", dark: false).keyText == DesignTokens.Brand.black)
-    #expect(KeyboardPalette.resolve("system", dark: true).keyText == DesignTokens.Brand.white)
-    #expect(KeyboardPalette.resolve("nope", dark: false).id == "system")
+    #expect(KeyboardPalette.resolve("blurt", dark: true).face == .dark)
+    #expect(KeyboardPalette.resolve("blurt", dark: false).keyText == DesignTokens.Themes.lightLegend)
+    #expect(KeyboardPalette.resolve("blurt", dark: true).keyText == DesignTokens.Themes.darkLegend)
+    #expect(KeyboardPalette.resolve("nope", dark: false).id == "blurt")
+    #expect(KeyboardPalette.resolve("system", dark: true) == .brandDark)
+    #expect(KeyboardPalette.brandLight != KeyboardPalette.brandDark)
   }
 }
