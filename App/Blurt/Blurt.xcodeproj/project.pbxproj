@@ -565,7 +565,6 @@
 		3751D3C923F3614E866B947C /* juno-106-start.m4a */ = {isa = PBXFileReference; path = "juno-106-start.m4a"; sourceTree = "<group>"; };
 		37CBB4580F251B182A8B1937 /* SettingsWindowRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowRoot.swift; sourceTree = "<group>"; };
 		383E03AB60BA21AAD92655D5 /* ReadyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadyView.swift; sourceTree = "<group>"; };
-		38CAFC7A39E679F1CA3A9692 /* blurt */ = {isa = PBXFileReference; lastKnownFileType = folder; name = blurt; path = ../..; sourceTree = SOURCE_ROOT; };
 		3996A11A62CD49D6CB89CB8E /* rom1b-6-start.m4a */ = {isa = PBXFileReference; path = "rom1b-6-start.m4a"; sourceTree = "<group>"; };
 		3A0683C1BE5AD05E4C724956 /* BlurtUITestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlurtUITestSupport.swift; sourceTree = "<group>"; };
 		3A50C85936C100F9E51CC2AD /* TextShortcutsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextShortcutsSection.swift; sourceTree = "<group>"; };
@@ -798,6 +797,7 @@
 		C50DFA42CE97C3AF322B12FA /* juno-43-start.m4a */ = {isa = PBXFileReference; path = "juno-43-start.m4a"; sourceTree = "<group>"; };
 		C59092F9220BBE7465068325 /* KeyTermsStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyTermsStepView.swift; sourceTree = "<group>"; };
 		C6EFB0086ED63DB182AFFC8F /* SettingsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsUITests.swift; sourceTree = "<group>"; };
+		C73C6B133915F6B24D1A8988 /* blurt-fn */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "blurt-fn"; path = ../..; sourceTree = SOURCE_ROOT; };
 		C7714523A92F4753092CA67C /* juno-81-start.m4a */ = {isa = PBXFileReference; path = "juno-81-start.m4a"; sourceTree = "<group>"; };
 		C7C95B4C80443E2A6EFE05E7 /* DeveloperSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperSection.swift; sourceTree = "<group>"; };
 		C7DAE8C9E70F6D2232F409DE /* juno-101-start.m4a */ = {isa = PBXFileReference; path = "juno-101-start.m4a"; sourceTree = "<group>"; };
@@ -964,7 +964,7 @@
 		4B1375E36CD42DBEFF08BC7E /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				38CAFC7A39E679F1CA3A9692 /* blurt */,
+				C73C6B133915F6B24D1A8988 /* blurt-fn */,
 			);
 			name = Packages;
 			sourceTree = "<group>";

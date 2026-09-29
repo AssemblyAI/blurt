@@ -94,6 +94,7 @@ struct RecentDictationsSection: View {
       "Click into any text field, \(activation.startVerb) \(triggerKey.spokenName), and say “Hello from Blurt.”"
     )
     .accessibilityAddTraits(.isStaticText)
+    .accessibilityIdentifier(UITestIdentifiers.recentEmptyPrompt)
   }
 }
 

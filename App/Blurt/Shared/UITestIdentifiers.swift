@@ -103,6 +103,10 @@ enum UITestIdentifiers {
   /// user-named — the pop-up's own value is whichever style is in effect, so
   /// there is no stable label to address it by.
   static let styleProfilePickerFromMain = "ready.styleProfile.picker"
+  /// The empty Recent list's first-dictation prompt. One combined accessibility
+  /// element whose text is built from the bound key and activation, so it's
+  /// addressed by identifier rather than by how macOS maps its label.
+  static let recentEmptyPrompt = "ready.recent.emptyPrompt"
 
   /// The dictation overlay pill (`OverlayView`).
   static let overlayPill = "overlay.pill"

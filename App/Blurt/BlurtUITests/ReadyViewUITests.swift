@@ -157,12 +157,8 @@ final class ReadyViewUITests: BlurtUITestCase {
 
   /// The empty Recent list's first-dictation prompt, one element whose label
   /// starts "Click into any text field" and goes on to name the bound key.
-  /// Matched on any element type, like `recentRow`: the prompt is one combined
-  /// accessibility element (`children: .ignore`), and on macOS the static-text
-  /// trait doesn't change its role, so it isn't among `staticTexts`.
   private func emptyRecentPrompt(in main: XCUIElement) -> XCUIElement {
-    let predicate = NSPredicate(format: "label BEGINSWITH %@", "Click into any text field")
-    return main.descendants(matching: .any).matching(predicate).firstMatch
+    main.descendants(matching: .any)[UITestIdentifiers.recentEmptyPrompt]
   }
 
   /// The Recent row for the canned transcript (the row's VoiceOver label is
