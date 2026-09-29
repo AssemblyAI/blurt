@@ -108,6 +108,26 @@ struct AXOpaqueAppTests {
     #expect(!FocusCapture.isElectronBundle(bundle))
   }
 
+  @Test("a rebranded Electron bundle is detected by its asar-integrity key")
+  func rebrandedElectronBundleDetected() throws {
+    let bundle = URL.temporaryDirectory.appending(path: "Blurt-\(UUID().uuidString).app")
+    defer { try? FileManager.default.removeItem(at: bundle) }
+    // Codex renames the framework to `Codex Framework.framework`, so only the
+    // Info.plist key identifies it as Electron.
+    let contents = bundle.appending(path: "Contents")
+    try FileManager.default.createDirectory(
+      at: contents.appending(path: "Frameworks/Codex Framework.framework"),
+      withIntermediateDirectories: true)
+    let plist: [String: Any] = [
+      "CFBundleIdentifier": "com.example.rebranded",
+      "CFBundlePackageType": "APPL",
+      "ElectronAsarIntegrity": ["Resources/app.asar": ["algorithm": "SHA256"]],
+    ]
+    let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+    try data.write(to: contents.appending(path: "Info.plist"))
+    #expect(FocusCapture.isElectronBundle(bundle))
+  }
+
   @Test("a bundle URL that doesn't exist is not Electron")
   func missingBundleRejected() {
     #expect(!FocusCapture.isElectronBundle(URL(filePath: "/nonexistent/Ghost.app")))
