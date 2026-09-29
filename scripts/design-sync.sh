@@ -72,6 +72,7 @@ files = [
     "App/BlurtiOS/BlurtKeyboard/Sources/FullKeyboardView.swift",
     "App/BlurtiOS/BlurtKeyboard/Sources/Dissipate.swift",
     "App/BlurtiOS/BlurtKeyboard/Sources/BrandOrb.swift",
+    "App/BlurtiOS/BlurtKeyboard/Sources/SurfaceFinish.swift",
 ]
 modifiers = re.compile(
     r"\.(padding|frame|font|blur|scaleEffect|offset|shadow|opacity|cornerRadius|saturation|brightness"

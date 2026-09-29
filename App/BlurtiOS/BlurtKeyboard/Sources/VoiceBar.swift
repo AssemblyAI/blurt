@@ -181,14 +181,55 @@ struct WaveformMeter: View {
     .accessibilityHidden(true)
   }
 
-  private func bars(layout: MeterBarRow, time: TimeInterval) -> some View {
-    HStack(spacing: barSpacing) {
-      ForEach(0..<layout.count, id: \.self) { index in
-        Capsule()
-          .fill(color)
-          .frame(width: barWidth, height: layout.height(at: index, level: level, time: time, animated: animated))
+  @ViewBuilder private func bars(layout: MeterBarRow, time: TimeInterval) -> some View {
+    if DesignTokens.Metrics.waveLiquid > 0 {
+      liquid(layout: layout, time: time)
+    } else {
+      HStack(spacing: barSpacing) {
+        ForEach(0..<layout.count, id: \.self) { index in
+          Capsule()
+            .fill(color)
+            .frame(width: barWidth, height: layout.height(at: index, level: level, time: time, animated: animated))
+        }
       }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
+  }
+
+  /// The same heights as one liquid shape: a smooth envelope through the bar
+  /// tops, mirrored below the middle, filled with the signal — the beam of the
+  /// brand artwork rather than a picket fence.
+  private func liquid(layout: MeterBarRow, time: TimeInterval) -> some View {
+    GeometryReader { geo in
+      let pitch = barWidth + barSpacing
+      // literal-ok: centring the row, and the middle of the bar
+      let inset = (geo.size.width - CGFloat(layout.count) * pitch + barSpacing) / 2 + barWidth / 2  // literal-ok: ½
+      let mid = geo.size.height / 2  // literal-ok: the middle
+      let points = (0..<layout.count).map { index -> CGPoint in
+        let h = layout.height(at: index, level: level, time: time, animated: animated)
+        return CGPoint(x: inset + CGFloat(index) * pitch, y: h / 2)  // literal-ok: half height
+      }
+      Path { path in
+        guard let first = points.first, let last = points.last else { return }
+        path.move(to: CGPoint(x: first.x, y: mid - first.y))
+        for i in 1..<points.count {
+          let previous = points[i - 1]
+          let current = points[i]
+          let half = CGPoint(x: (previous.x + current.x) / 2, y: (previous.y + current.y) / 2)  // literal-ok: ½
+          let control = CGPoint(x: half.x, y: mid - half.y)
+          path.addQuadCurve(to: CGPoint(x: current.x, y: mid - current.y), control: control)
+        }
+        path.addLine(to: CGPoint(x: last.x, y: mid + last.y))
+        for i in stride(from: points.count - 2, through: 0, by: -1) {  // literal-ok: back from the second-last point
+          let next = points[i + 1]
+          let current = points[i]
+          let half = CGPoint(x: (next.x + current.x) / 2, y: (next.y + current.y) / 2)  // literal-ok: ½
+          let control = CGPoint(x: half.x, y: mid + half.y)
+          path.addQuadCurve(to: CGPoint(x: current.x, y: mid + current.y), control: control)
+        }
+        path.closeSubpath()
+      }
+      .fill(color)
+    }
   }
 }

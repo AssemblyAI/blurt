@@ -44,16 +44,19 @@ struct PrismOrb: View {
         Rectangle().fill(mesh(at: time, drop: drop))
         // A soft light from the upper left, so the disc reads as a body, not
         // a flat swatch — airy, not glossy.
-        Rectangle().fill(
-          RadialGradient(
-            colors: [.white.opacity(DesignTokens.Metrics.opacityOrbLight), .clear],
-            center: UnitPoint(x: DesignTokens.Metrics.orbLightX, y: DesignTokens.Metrics.orbLightY), startRadius: 0,
-            endRadius: DesignTokens.Metrics.orbLightRadius))
+        GeometryReader { geo in
+          Rectangle().fill(
+            RadialGradient(
+              colors: [.white.opacity(DesignTokens.Metrics.opacityOrbLight), .clear],
+              center: UnitPoint(x: DesignTokens.Metrics.orbLightX, y: DesignTokens.Metrics.orbLightY), startRadius: 0,
+              endRadius: min(geo.size.width, geo.size.height) * DesignTokens.Metrics.orbLightReach))
+        }
         if drop > 0 {
           Drop(amount: drop, elapsed: elapsed)
           Sparkles(elapsed: elapsed)  // invariant-ok: the orb's star glyphs, not the Sparkle updater
         }
-        Grain(seed: animated ? Int(time * 24) : 7).opacity(DesignTokens.Metrics.opacityGrain).blendMode(.overlay)
+        BlurtiOSGrain(seed: animated ? Int(time * 24) : 7).opacity(DesignTokens.Metrics.opacityGrain).blendMode(
+          .overlay)
       }
     }
     .animation(.easeInOut(duration: DesignTokens.Motion.mood), value: mood)
@@ -154,7 +157,8 @@ struct PrismOrb: View {
 
 /// Film grain: a scatter of faint dots, a new scatter each frame so it
 /// shimmers the way grain does, drawn from a seed so a frame is reproducible.
-private struct Grain: View {
+/// The orb's, and — still, one seed — the keyboard surface's (`SurfaceFinish`).
+struct BlurtiOSGrain: View {
   let seed: Int
 
   var body: some View {

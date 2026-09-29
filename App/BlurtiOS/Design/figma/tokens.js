@@ -121,17 +121,20 @@ Metrics|opacity/dim-saturation|FLOAT|0.35||OPACITY|DesignTokens.Metrics.opacityD
 Metrics|opacity/disabled|FLOAT|0.4||OPACITY|DesignTokens.Metrics.opacityDisabled|the + without Full Access
 Metrics|opacity/grain|FLOAT|0.5||OPACITY|DesignTokens.Metrics.opacityGrain|
 Metrics|opacity/home-dim-saturation|FLOAT|0.45||OPACITY|DesignTokens.Metrics.opacityHomeDimSaturation|the home hero's saturation when not listening
+Metrics|opacity/legend|FLOAT|1||OPACITY|DesignTokens.Metrics.opacityLegend|key legends over the cap; below 1 they sit back
 Metrics|opacity/legend-muted|FLOAT|0.5||OPACITY|DesignTokens.Metrics.opacityLegendMuted|the + at rest
 Metrics|opacity/orb-light|FLOAT|0.3||OPACITY|DesignTokens.Metrics.opacityOrbLight|
 Metrics|opacity/placeholder|FLOAT|0.4||OPACITY|DesignTokens.Metrics.opacityPlaceholder|the field's placeholder
 Metrics|opacity/popup-shadow|FLOAT|0.12||OPACITY|DesignTokens.Metrics.opacityPopupShadow|
 Metrics|opacity/press-brighten|FLOAT|0.15||OPACITY|DesignTokens.Metrics.opacityPressBrighten|a key lightens this much while pressed
+Metrics|opacity/surface-grain|FLOAT|0.14||OPACITY|DesignTokens.Metrics.opacitySurfaceGrain|film grain over the whole keyboard surface: matte, the brand's texture
+Metrics|opacity/surface-vignette|FLOAT|0||OPACITY|DesignTokens.Metrics.opacitySurfaceVignette|a soft darkening toward the surface's edges; 0 is none
 Metrics|opacity/term-cancel|FLOAT|0.7||OPACITY|DesignTokens.Metrics.opacityTermCancel|the field's ×
 Metrics|orb/bar|FLOAT|40||WIDTH_HEIGHT|DesignTokens.Metrics.orbBar|the orb in the voice bar
 Metrics|orb/dissipate-blur|FLOAT|0.16|||DesignTokens.Metrics.orbDissipateBlur|and blurs to this fraction of its size
 Metrics|orb/dissipate-scale|FLOAT|1.25|||DesignTokens.Metrics.orbDissipateScale|the orb swells to this while dissipating
 Metrics|orb/home|FLOAT|112||WIDTH_HEIGHT|DesignTokens.Metrics.orbHome|the orb on the home screen
-Metrics|orb/light-radius|FLOAT|110|||DesignTokens.Metrics.orbLightRadius|the light's reach in points (fixed, not proportional — open)
+Metrics|orb/light-reach|FLOAT|0.9|||DesignTokens.Metrics.orbLightReach|the soft light's reach, as a fraction of the orb (was a fixed 110 pt, flat on a 40 pt orb)
 Metrics|orb/light-x|FLOAT|0.3|||DesignTokens.Metrics.orbLightX|the soft light's centre, as a fraction of the orb
 Metrics|orb/light-y|FLOAT|0.22|||DesignTokens.Metrics.orbLightY|
 Metrics|orb/panel|FLOAT|96||WIDTH_HEIGHT|DesignTokens.Metrics.orbPanel|the orb in the panel
@@ -150,6 +153,8 @@ Metrics|ring/active|FLOAT|2||STROKE_FLOAT,WIDTH_HEIGHT|DesignTokens.Metrics.ring
 Metrics|ring/still|FLOAT|1||STROKE_FLOAT,WIDTH_HEIGHT|DesignTokens.Metrics.ringStill|the ring at rest
 Metrics|row/gap|FLOAT|11||GAP|DesignTokens.Metrics.rowGap|between rows, the iPhone's
 Metrics|slim/spacing|FLOAT|8||GAP|DesignTokens.Metrics.slimSpacing|between the slim bar's keys
+Metrics|surface/vignette-end|FLOAT|0.75||WIDTH_HEIGHT|DesignTokens.Metrics.surfaceVignetteEnd|where it is full
+Metrics|surface/vignette-start|FLOAT|0.3||WIDTH_HEIGHT|DesignTokens.Metrics.surfaceVignetteStart|where the vignette begins, as a fraction of the keyboard's width
 Metrics|term/gap|FLOAT|8||GAP|DesignTokens.Metrics.termGap|× · field · ✓
 Metrics|term/height|FLOAT|36||WIDTH_HEIGHT|DesignTokens.Metrics.termHeight|the key-term field's capsule
 Metrics|term/inset|FLOAT|2||GAP|DesignTokens.Metrics.termInset|the field row's side inset
@@ -163,6 +168,7 @@ Metrics|wave/bar-width|FLOAT|240||WIDTH_HEIGHT|DesignTokens.Metrics.waveBarWidth
 Metrics|wave/gap|FLOAT|2||GAP|DesignTokens.Metrics.waveGap|between wave bars
 Metrics|wave/home-height|FLOAT|44||WIDTH_HEIGHT|DesignTokens.Metrics.waveHomeHeight|
 Metrics|wave/home-width|FLOAT|280||WIDTH_HEIGHT|DesignTokens.Metrics.waveHomeWidth|
+Metrics|wave/liquid|FLOAT|0||WIDTH_HEIGHT|DesignTokens.Metrics.waveLiquid|1 draws the wave as one liquid shape through the bar heights instead of the bars themselves
 Metrics|wave/panel-height|FLOAT|40||WIDTH_HEIGHT|DesignTokens.Metrics.wavePanelHeight|
 Metrics|wave/panel-width|FLOAT|300||WIDTH_HEIGHT|DesignTokens.Metrics.wavePanelWidth|
 Metrics|wordmark/height|FLOAT|22||WIDTH_HEIGHT|DesignTokens.Metrics.wordmarkHeight|

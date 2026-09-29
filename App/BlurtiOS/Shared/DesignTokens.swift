@@ -233,6 +233,8 @@ enum DesignTokens {
     nonisolated static let opacityGrain: CGFloat = 0.5
     /// The home hero's saturation when not listening.
     nonisolated static let opacityHomeDimSaturation: CGFloat = 0.45
+    /// Key legends over the cap; below 1 they sit back.
+    nonisolated static let opacityLegend: CGFloat = 1
     /// The + at rest.
     nonisolated static let opacityLegendMuted: CGFloat = 0.5
     nonisolated static let opacityOrbLight: CGFloat = 0.3
@@ -241,6 +243,10 @@ enum DesignTokens {
     nonisolated static let opacityPopupShadow: CGFloat = 0.12
     /// A key lightens this much while pressed.
     nonisolated static let opacityPressBrighten: CGFloat = 0.15
+    /// Film grain over the whole keyboard surface: matte, the brand's texture.
+    nonisolated static let opacitySurfaceGrain: CGFloat = 0.14
+    /// A soft darkening toward the surface's edges; 0 is none.
+    nonisolated static let opacitySurfaceVignette: CGFloat = 0
     /// The field's ×.
     nonisolated static let opacityTermCancel: CGFloat = 0.7
     /// The orb in the voice bar.
@@ -251,8 +257,8 @@ enum DesignTokens {
     nonisolated static let orbDissipateScale: CGFloat = 1.25
     /// The orb on the home screen.
     nonisolated static let orbHome: CGFloat = 112
-    /// The light's reach in points (fixed, not proportional — open).
-    nonisolated static let orbLightRadius: CGFloat = 110
+    /// The soft light's reach, as a fraction of the orb (was a fixed 110 pt, flat on a 40 pt orb).
+    nonisolated static let orbLightReach: CGFloat = 0.9
     /// The soft light's centre, as a fraction of the orb.
     nonisolated static let orbLightX: CGFloat = 0.3
     nonisolated static let orbLightY: CGFloat = 0.22
@@ -285,6 +291,10 @@ enum DesignTokens {
     nonisolated static let rowGap: CGFloat = 11
     /// Between the slim bar's keys.
     nonisolated static let slimSpacing: CGFloat = 8
+    /// Where it is full.
+    nonisolated static let surfaceVignetteEnd: CGFloat = 0.75
+    /// Where the vignette begins, as a fraction of the keyboard's width.
+    nonisolated static let surfaceVignetteStart: CGFloat = 0.3
     /// × · field · ✓.
     nonisolated static let termGap: CGFloat = 8
     /// The key-term field's capsule.
@@ -308,6 +318,8 @@ enum DesignTokens {
     nonisolated static let waveGap: CGFloat = 2
     nonisolated static let waveHomeHeight: CGFloat = 44
     nonisolated static let waveHomeWidth: CGFloat = 280
+    /// 1 draws the wave as one liquid shape through the bar heights instead of the bars themselves.
+    nonisolated static let waveLiquid: CGFloat = 0
     nonisolated static let wavePanelHeight: CGFloat = 40
     nonisolated static let wavePanelWidth: CGFloat = 300
     nonisolated static let wordmarkHeight: CGFloat = 22
@@ -510,17 +522,20 @@ enum DesignTokens {
     "metrics.opacity/disabled": "0.4",
     "metrics.opacity/grain": "0.5",
     "metrics.opacity/home-dim-saturation": "0.45",
+    "metrics.opacity/legend": "1",
     "metrics.opacity/legend-muted": "0.5",
     "metrics.opacity/orb-light": "0.3",
     "metrics.opacity/placeholder": "0.4",
     "metrics.opacity/popup-shadow": "0.12",
     "metrics.opacity/press-brighten": "0.15",
+    "metrics.opacity/surface-grain": "0.14",
+    "metrics.opacity/surface-vignette": "0",
     "metrics.opacity/term-cancel": "0.7",
     "metrics.orb/bar": "40",
     "metrics.orb/dissipate-blur": "0.16",
     "metrics.orb/dissipate-scale": "1.25",
     "metrics.orb/home": "112",
-    "metrics.orb/light-radius": "110",
+    "metrics.orb/light-reach": "0.9",
     "metrics.orb/light-x": "0.3",
     "metrics.orb/light-y": "0.22",
     "metrics.orb/panel": "96",
@@ -539,6 +554,8 @@ enum DesignTokens {
     "metrics.ring/still": "1",
     "metrics.row/gap": "11",
     "metrics.slim/spacing": "8",
+    "metrics.surface/vignette-end": "0.75",
+    "metrics.surface/vignette-start": "0.3",
     "metrics.term/gap": "8",
     "metrics.term/height": "36",
     "metrics.term/inset": "2",
@@ -552,6 +569,7 @@ enum DesignTokens {
     "metrics.wave/gap": "2",
     "metrics.wave/home-height": "44",
     "metrics.wave/home-width": "280",
+    "metrics.wave/liquid": "0",
     "metrics.wave/panel-height": "40",
     "metrics.wave/panel-width": "300",
     "metrics.wordmark/height": "22",

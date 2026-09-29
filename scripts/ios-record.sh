@@ -22,6 +22,7 @@ THEME=ink
 OUT="$REPO_ROOT/.build/design/loops"
 FRAMES=""
 CYCLE=11.7
+BUILD=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --layout)
@@ -40,8 +41,12 @@ while [ $# -gt 0 ]; do
       FRAMES="${2:?}"
       shift 2
       ;;
+    --no-build)
+      BUILD=(--no-build)
+      shift
+      ;;
     *)
-      echo "usage: ios-record.sh [--layout L] [--theme T] [--out DIR] [--frames s,s,…]" >&2
+      echo "usage: ios-record.sh [--layout L] [--theme T] [--out DIR] [--frames s,s,…] [--no-build]" >&2
       exit 2
       ;;
   esac
@@ -54,7 +59,8 @@ mkdir -p "$OUT"
 name="$LAYOUT-$THEME"
 
 # A still first: it builds, boots, and gives the crop rectangle.
-scripts/design-capture.sh --layout "$LAYOUT" --states idle --themes "$THEME" --out "$OUT/.still" >/dev/null
+scripts/design-capture.sh --layout "$LAYOUT" --states idle --themes "$THEME" --out "$OUT/.still" \
+  ${BUILD[@]+"${BUILD[@]}"} >/dev/null
 raw="$OUT/.still/$LAYOUT-idle-$THEME.raw.png"
 read -r CROP_W CROP_H CROP_X CROP_Y < <(swift scripts/design-diff.swift crop "$raw" "$OUT/.still/crop-probe.png" \
   | sed -E 's/crop: ([0-9]+)×([0-9]+) at \(([0-9]+),([0-9]+)\).*/\1 \2 \3 \4/')

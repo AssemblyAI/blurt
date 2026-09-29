@@ -30,7 +30,8 @@ struct KeyboardRootView: View {
     .padding(.horizontal, KeyboardPalette.margin)
     .padding(.vertical, Self.verticalMargin)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(model.palette.surface)
+    .background { SurfaceFinish.Ground(surface: model.palette.surface) }
+    .overlay { SurfaceFinish.Grain() }
     .clipped()
     .environment(\.keyboardPalette, model.palette)
     .simultaneousGesture(swipe, including: model.layout == .panel ? .all : .subviews)
@@ -335,6 +336,7 @@ struct KeyCap: View {
     }
     .font(.system(size: DesignTokens.Typography.sizeLegend, weight: DesignTokens.Typography.weightLegend))
     .foregroundStyle(tint ?? palette.keyText)
+    .opacity(DesignTokens.Metrics.opacityLegend)
     .frame(maxWidth: flexible ? .infinity : nil)
     .frame(width: width)
     .frame(minWidth: width == nil ? DesignTokens.Metrics.keyMinWidth : nil, minHeight: Self.height)
@@ -377,23 +379,5 @@ struct KeyPress: ViewModifier {
             action()
           }
       )
-  }
-}
-
-extension View {
-  /// The cap under a key's legend: the palette's fill at the corner radius and
-  /// nothing else — flat. No drop, no edge, no gloss.
-  func keyCap(_ fill: Color) -> some View {
-    background(fill, in: RoundedRectangle(cornerRadius: KeyboardPalette.keyRadius))
-  }
-}
-
-/// A key lightens while the finger is on it, the way the system's change
-/// shade, instead of the default button dimming.
-struct KeyPressStyle: ButtonStyle {
-  func makeBody(configuration: Configuration) -> some View {
-    configuration.label
-      .brightness(configuration.isPressed ? DesignTokens.Metrics.opacityPressBrighten : 0)
-      .animation(.easeOut(duration: DesignTokens.Motion.keyPress), value: configuration.isPressed)
   }
 }
