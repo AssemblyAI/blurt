@@ -6,8 +6,8 @@ import Testing
 @Suite("GlobeKeyOverride")
 struct GlobeKeyOverrideTests {
   private let system = freshDefaults()
-  private let own = freshDefaults()
-  private var override: GlobeKeyOverride { GlobeKeyOverride(system: system, own: own) }
+  private let record = freshDefaults()
+  private var override: GlobeKeyOverride { GlobeKeyOverride(system: system, record: record) }
   private var usage: Int? { system.object(forKey: GlobeKeyOverride.usageKey) as? Int }
 
   @Test("binding fn sets the 🌐 action to Do Nothing, and rebinding restores it")
@@ -17,7 +17,7 @@ struct GlobeKeyOverrideTests {
     #expect(usage == GlobeKeyOverride.doNothing)
     override.sync(boundKey: .rightCommand)
     #expect(usage == 2)
-    #expect(own.object(forKey: GlobeKeyOverride.replacedUsageKey) == nil)
+    #expect(record.object(forKey: GlobeKeyOverride.replacedUsageKey) == nil)
   }
 
   @Test("an unset system value is restored as unset, not pinned")
@@ -53,10 +53,24 @@ struct GlobeKeyOverrideTests {
     // The relaunch after Reset is what restores the setting (the trigger resets to
     // right ⌘), so the record must not be in the swept roster.
     #expect(!DefaultsKey.allCases.map(\.key).contains(GlobeKeyOverride.replacedUsageKey))
+    let own = freshDefaults()
     system.set(2, forKey: GlobeKeyOverride.usageKey)
     override.sync(boundKey: .function)
     PersistedSettings.resetAll(in: own)
     override.sync(boundKey: TriggerKeyStore(defaults: own).triggerKey)
+    #expect(usage == 2)
+  }
+
+  @Test("two builds binding fn share one record, so neither restores the other's override")
+  func buildsShareOneRecord() {
+    // Blurt and Blurt Dev are separate hosts over the same system setting. The
+    // second to bind fn must not record the first's Do Nothing as the original.
+    system.set(2, forKey: GlobeKeyOverride.usageKey)
+    override.sync(boundKey: .function)  // one build
+    override.sync(boundKey: .function)  // the other
+    override.sync(boundKey: .rightCommand)
+    #expect(usage == 2)
+    override.sync(boundKey: .rightOption)  // the other rebinds too: nothing left to undo
     #expect(usage == 2)
   }
 }

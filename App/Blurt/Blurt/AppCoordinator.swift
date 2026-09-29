@@ -101,6 +101,9 @@ final class AppCoordinator {
   }
 
   func start() {
+    // Before the first read of the binding — the override below, the key tap,
+    // and every view's `@AppStorage` copy all come after `start()`.
+    TriggerKeyStore().migrateStaleFunctionBinding()
     syncGlobeKeyOverride()
     // Absorb the one-off cost of this process's first touch of the capture
     // stack, so the first dictation doesn't pay it on the hot path (~75 ms; see

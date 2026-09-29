@@ -63,6 +63,23 @@ if [ -x "$LSREGISTER" ]; then
   done
 fi
 
+# While `fn` is the dictation key, Blurt sets macOS's "Press 🌐 key to" to Do
+# Nothing and keeps the value it replaced in a suite both builds share (see
+# `GlobeKeyOverride.sharedSuite`: the subsystem, which is the first bundle id,
+# plus `.globe-key`). The app puts it back when another key is bound — but a
+# wiped install never does, so restore it here, then drop the record.
+# `-1` is `GlobeKeyOverride.wasUnset`: the key was absent, so remove it again.
+GLOBE_SUITE="${BUNDLE_IDS[0]}.globe-key"
+if replaced=$(defaults read "$GLOBE_SUITE" hotkey.replacedGlobeKeyUsage 2>/dev/null); then
+  echo "==> Restoring the 🌐 key setting Blurt replaced"
+  if [ "$replaced" = "-1" ]; then
+    defaults delete com.apple.HIToolbox AppleFnUsageType 2>/dev/null || true
+  else
+    defaults write com.apple.HIToolbox AppleFnUsageType -int "$replaced"
+  fi
+fi
+defaults delete "$GLOBE_SUITE" 2>/dev/null || true
+
 for bundle_id in "${BUNDLE_IDS[@]}"; do
   echo "==> Clearing UserDefaults for $bundle_id"
   defaults delete "$bundle_id" 2>/dev/null || true

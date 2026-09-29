@@ -20,41 +20,53 @@ public struct GlobeKeyOverride {
   /// `AppleFnUsageType`'s "Do Nothing".
   static let doNothing = 0
 
-  /// Where the replaced value is kept, in the host's own domain. Deliberately not
-  /// a `DefaultsKey` case: `PersistedSettings.resetAll` sweeps those, and a reset
-  /// that forgot this would strand the user's setting at "Do Nothing" — the
-  /// relaunch after a reset is exactly when it gets restored.
+  /// Where the replaced value is kept: a suite of its own, shared by every build
+  /// (`sharedSuite`), not the host's domain. The system setting is one value for
+  /// the whole login, so its record must be too — kept per host, Blurt and Blurt
+  /// Dev each recorded the other's override as "the original" and could restore
+  /// each other to Do Nothing for good. Also why it isn't a `DefaultsKey` case:
+  /// `PersistedSettings.resetAll` sweeps those, and a reset that forgot this
+  /// would strand the user's setting at "Do Nothing" — the relaunch after a reset
+  /// is exactly when it gets restored. `scripts/reset-install.sh` restores from
+  /// and deletes this suite, since it wipes the host domains outright.
   static let replacedUsageKey = "hotkey.replacedGlobeKeyUsage"
+  static var sharedSuite: String { HostIdentity.current.subsystem + ".globe-key" }
   /// Recorded when the system key was unset, so restoring removes it rather than
   /// pinning whatever macOS's default happened to be.
   static let wasUnset = -1
 
-  private let system: UserDefaults
-  private let own: UserDefaults
+  private let system: UserDefaults?
+  private let record: UserDefaults?
 
-  /// `system` defaults to the real `com.apple.HIToolbox` domain (reachable because
-  /// the app isn't sandboxed); tests pass throwaway suites for both.
-  public init(system: UserDefaults? = nil, own: UserDefaults = .standard) {
+  /// Both default to the real domains (reachable because the app isn't
+  /// sandboxed); tests pass throwaway suites. If either can't be opened, `sync`
+  /// does nothing rather than write the override somewhere macOS never reads it.
+  public init(system: UserDefaults? = nil, record: UserDefaults? = nil) {
     // `init(suiteName:)` refuses only the caller's own bundle id and the global
-    // domain, neither of which this is.
-    self.system = system ?? UserDefaults(suiteName: Self.systemDomain) ?? .standard
-    self.own = own
+    // domain, neither of which these are.
+    self.system = system ?? UserDefaults(suiteName: Self.systemDomain)
+    self.record = record ?? UserDefaults(suiteName: Self.sharedSuite)
   }
 
+  /// A raw write to another app's domain isn't picked up live: macOS reads
+  /// `AppleFnUsageType` at login (System Settings applies it through its own
+  /// path), so the override lands after the next log-out. The Shortcut footer
+  /// says so and links to Keyboard Settings for changing it right away.
   public func sync(boundKey: TriggerKey) {
+    guard let system, let record else { return }
     if boundKey == .function {
-      if own.object(forKey: Self.replacedUsageKey) == nil {
+      if record.object(forKey: Self.replacedUsageKey) == nil {
         let current = system.object(forKey: Self.usageKey) as? Int ?? Self.wasUnset
-        own.set(current, forKey: Self.replacedUsageKey)
+        record.set(current, forKey: Self.replacedUsageKey)
       }
       system.set(Self.doNothing, forKey: Self.usageKey)
-    } else if let replaced = own.object(forKey: Self.replacedUsageKey) as? Int {
+    } else if let replaced = record.object(forKey: Self.replacedUsageKey) as? Int {
       if replaced == Self.wasUnset {
         system.removeObject(forKey: Self.usageKey)
       } else {
         system.set(replaced, forKey: Self.usageKey)
       }
-      own.removeObject(forKey: Self.replacedUsageKey)
+      record.removeObject(forKey: Self.replacedUsageKey)
     }
   }
 }

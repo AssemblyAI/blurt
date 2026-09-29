@@ -43,7 +43,7 @@ struct RecentDictationsSection: View {
   /// the `displayCapacity` it depends on.
   private var emptyStateHeight: CGFloat {
     RecentDictations.reservedHeight(
-      rowHeight: Self.rowHeight, separatorThickness: Self.interRowSpacing)
+      rowHeight: Self.rowHeight, rowSpacing: Self.interRowSpacing)
   }
 
   var body: some View {

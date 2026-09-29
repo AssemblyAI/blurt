@@ -51,8 +51,8 @@ struct TriggerKeyTests {
 
   @Test("a persisted fn keycode decodes to fn")
   func persistedFunctionDecodes() {
-    // `fn` was removed once and restored; a binding saved before the removal
-    // must come back as `fn`, not the right-⌘ fallback.
+    // The decode itself is plain; a 63 saved before `fn` was removed is
+    // rewritten beforehand by `TriggerKeyStore.migrateStaleFunctionBinding()`.
     #expect(TriggerKey.fromPersisted(63) == .function)
   }
 

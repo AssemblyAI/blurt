@@ -803,9 +803,14 @@ Because the tap can't swallow `fn`, macOS's own 🌐 action ("Press 🌐 key to"
 or Apple Dictation — each with its own sound or popup) would fire on every `fn` dictation. The
 engine's **`GlobeKeyOverride`** handles that: while `fn` is bound, `AppCoordinator` (at `start()`
 and on every rebind) sets `com.apple.HIToolbox` `AppleFnUsageType` to 0 (Do Nothing), and binding
-any other key restores the value it replaced. That record lives outside `DefaultsKey` on purpose,
-so a settings reset doesn't erase it — the relaunch after a reset is what restores the user's
-setting. Don't fix this with an active tap that swallows `fn`: the tap is listen-only for latency.
+any other key restores the value it replaced. That record lives in a suite both builds share
+(`dev.alex.blurt.globe-key`) — the setting is one per login, so a per-host record let Blurt and
+Blurt Dev restore each other to Do Nothing — and outside `DefaultsKey` on purpose, so a settings
+reset doesn't erase it: the relaunch after a reset is what restores the user's setting.
+`scripts/reset-install.sh` restores from it directly, since it wipes the host domains. The write
+only takes effect at the next log-in (macOS reads it then), so the Shortcut footer says so and links
+to Keyboard Settings. A keycode 63 saved before `fn` was removed (#146) is migrated to right ⌘ once
+(`TriggerKeyStore.migrateStaleFunctionBinding()`), so restoring `fn` doesn't silently rebind it. Don't fix this with an active tap that swallows `fn`: the tap is listen-only for latency.
 
 The trigger is editable in the Shortcut section of the setup/settings UI (`HotkeyStepView`) — a
 `Picker` over `TriggerKey.allCases` that writes `TriggerKeyStore`, after which

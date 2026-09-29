@@ -68,6 +68,14 @@ struct TextShortcutsSection: View {
     .sheet(item: $editing) { shortcut in
       TextShortcutEditorSheet(shortcut: shortcut, among: shortcuts)
     }
+    // However a row goes — −, Delete, or the sheet's Delete — a selection naming
+    // it would leave − enabled over nothing.
+    .onChange(of: rawShortcuts) { _, raw in
+      let remaining = TextShortcutStore().shortcuts(decoding: raw)
+      if let selection, !remaining.contains(where: { $0.id == selection }) {
+        self.selection = nil
+      }
+    }
   }
 
   private func table(_ shortcuts: [TextShortcut]) -> some View {
@@ -112,7 +120,6 @@ struct TextShortcutsSection: View {
   private func remove(_ id: TextShortcut.ID) {
     let store = TextShortcutStore()
     store.shortcuts = store.shortcuts.filter { $0.id != id }
-    if selection == id { selection = nil }
   }
 }
 

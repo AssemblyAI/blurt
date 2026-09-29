@@ -96,11 +96,11 @@ struct RecentDictationsTests {
     // The ready window's real metrics: displayCapacity 3 × 28 pt rows
     // (transcript beside the trailing style-chip/time slot) + 2 × 1 pt rules —
     // the *display* count, not the 100-deep history.
-    #expect(RecentDictations.reservedHeight(rowHeight: 28, separatorThickness: 1) == 86)
+    #expect(RecentDictations.reservedHeight(rowHeight: 28, rowSpacing: 1) == 86)
     // Each term isolated, so a wrong count shows up as which half is off. A change
     // to `displayCapacity` fails all three, which is what pins the two together.
-    #expect(RecentDictations.reservedHeight(rowHeight: 10, separatorThickness: 0) == 30)
-    #expect(RecentDictations.reservedHeight(rowHeight: 0, separatorThickness: 2) == 4)
+    #expect(RecentDictations.reservedHeight(rowHeight: 10, rowSpacing: 0) == 30)
+    #expect(RecentDictations.reservedHeight(rowHeight: 0, rowSpacing: 2) == 4)
   }
 }
 
