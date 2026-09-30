@@ -28,7 +28,7 @@ struct KeyTermsStepView: View {
       // accessibility without repeating the section header inline.
       TextField(
         text: $text,
-        prompt: Text("e.g. AssemblyAI, Kubernetes, Anthropic, Blurt"),
+        prompt: Text("AssemblyAI, Kubernetes, Anthropic, Blurt"),
         axis: .vertical
       ) {
         Text("Key Terms")
@@ -41,7 +41,7 @@ struct KeyTermsStepView: View {
     } header: {
       Text("Key Terms")
     } footer: {
-      Text("Names, jargon, and product terms to prime transcription spelling.")
+      Text("Add names, jargon, and product terms to help Blurt spell them correctly.")
     }
   }
 }

@@ -24,14 +24,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   /// with the delegate, so Sparkle starts its scheduled checks at launch.
   @ObservationIgnored let updaterModel = UpdaterModel()
 
-  /// One-shot deep-link into Settings, consumed by `SettingsWindowRoot`: while
-  /// true, the Settings window switches to (or opens on) the Styles pane.
-  /// Set by the main window's "Edit Styles…" item just before it calls `openSettings`; observed (not just read on
-  /// appear) so an already-open Settings window switches too, and reset by the
-  /// consumer so every other route into Settings (⌘,, the Settings buttons,
-  /// the menu-bar item) still opens on General as before.
-  var settingsOpensOnStyles = false
-
   /// Opens a window scene by id. The `openWindow` action lives in SwiftUI, so
   /// `MainWindowRoot` captures it here (in its launch-time `onAppear`) to give
   /// AppKit entry points — notably a Dock click with no open windows — a way to

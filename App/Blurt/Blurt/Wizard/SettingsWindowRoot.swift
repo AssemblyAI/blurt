@@ -12,46 +12,24 @@ import SwiftUI
 struct SettingsWindowRoot: View {
   var appDelegate: AppDelegate
 
-  private enum Tab: Hashable { case general, styles, vocabulary, advanced }
-
-  /// Drives the selected pane from `@State` (not the OS's persisted preference
-  /// tab), so the window always opens on General. Without an explicit binding
-  /// macOS restores the last-used pane across launches, which retitles the
-  /// window ("General" → "Advanced") and made the settings window unfindable in
-  /// UI tests from one run to the next. The one exception is the main window's
-  /// "Edit Styles…" deep-link, consumed below.
-  @State private var tab: Tab = .general
-
   var body: some View {
     if let coordinator = appDelegate.coordinator {
-      TabView(selection: $tab) {
+      // Leave selection to the system: macOS Settings windows conventionally
+      // restore the most recently viewed pane. UI tests navigate to General in
+      // their helper instead of changing production behavior for determinism.
+      TabView {
         GeneralSettingsTab(coordinator: coordinator)
           .tabItem { Label(UITestIdentifiers.generalSettingsTab, systemImage: "gearshape") }
-          .tag(Tab.general)
         StylesSettingsTab()
           .tabItem { Label(UITestIdentifiers.stylesSettingsTab, systemImage: "textformat") }
-          .tag(Tab.styles)
         VocabularySettingsTab()
           .tabItem {
             Label(UITestIdentifiers.vocabularySettingsTab, systemImage: "character.book.closed")
           }
-          .tag(Tab.vocabulary)
         AdvancedSettingsTab(coordinator: coordinator, updaterModel: appDelegate.updaterModel)
           .tabItem { Label(UITestIdentifiers.advancedSettingsTab, systemImage: "gearshape.2") }
-          .tag(Tab.advanced)
       }
       .frame(width: MainWindow.contentWidth)
-      // Consumes the "Edit Styles…" deep-link (`AppDelegate.settingsOpensOnStyles`):
-      // switch to Styles, then reset the flag so it's one-shot — every other
-      // route into Settings (⌘,, the Settings buttons, the menu-bar item)
-      // still opens on General. `initial: true` covers the window being
-      // (re)created after the flag was set; the observed change covers an
-      // already-open Settings window, which switches panes in place.
-      .onChange(of: appDelegate.settingsOpensOnStyles, initial: true) {
-        guard appDelegate.settingsOpensOnStyles else { return }
-        tab = .styles
-        appDelegate.settingsOpensOnStyles = false
-      }
     } else {
       Color.clear.frame(width: MainWindow.contentWidth, height: 240)
     }
@@ -89,8 +67,7 @@ private struct GeneralSettingsTab: View {
 }
 
 /// The enhanced-transcripts switch and the user's style profiles — their own
-/// pane rather than an Advanced section, so the main window's "Edit Styles…"
-/// lands on exactly the thing it names. The switch leads because styles only
+/// pane rather than an Advanced section. The switch leads because styles only
 /// shape the enhanced rewrite: with it off they're disabled, and the switch that
 /// re-enables them sits directly above rather than on another pane.
 private struct StylesSettingsTab: View {
@@ -203,9 +180,9 @@ private struct StyleProfilesSection: View {
       // unread, so pointing at the switch just above is the useful half.
       Text(
         enhancedTranscripts
-          ? "A style tells the polish how to write — for example, “casual, all lowercase” for "
-            + "chat. Switch between styles in the main window. Up to "
-            + "\(StyleProfileStore.profileLimit)."
+          ? "A style tells Blurt how to polish your dictations — for example, “casual, all "
+            + "lowercase” for chat. Switch between styles in the main window. Create up to "
+            + "\(StyleProfileStore.profileLimit) styles."
           : "Turn on Enhanced transcripts to use styles.")
     }
     .disabled(!enhancedTranscripts)
@@ -257,7 +234,7 @@ private struct StyleProfileEditorSheet: View {
       VStack(alignment: .leading, spacing: 6) {
         Text("Custom Style")
           .font(.headline)
-        Text("Applied while polishing each dictation — casing, tone, emoji use.")
+        Text("Tell Blurt how to polish each dictation, including its casing, tone, and emoji use.")
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
       }
@@ -280,7 +257,7 @@ private struct StyleProfileEditorSheet: View {
     VStack(alignment: .leading, spacing: 6) {
       Text("Name")
         .font(.subheadline.weight(.semibold))
-      TextField("", text: $name, prompt: Text("e.g. Casual"))
+      TextField("", text: $name, prompt: Text("Casual"))
         .lineLimit(1)
         .disableAutocorrection(true)
         .focused($nameFocused)
@@ -306,7 +283,7 @@ private struct StyleProfileEditorSheet: View {
       // there's no faked placeholder over a TextEditor.
       TextField(
         text: $instructions,
-        prompt: Text("e.g. add fitting emojis sparingly, or always write in lowercase"),
+        prompt: Text("Add fitting emojis sparingly, or always write in lowercase"),
         axis: .vertical
       ) {
         Text("Instructions")

@@ -2,17 +2,15 @@ import Accessibility
 import BlurtEngine
 import SwiftUI
 
-/// The "Recent" section of the ready screen's grouped form: the last few
-/// dictations, newest first, one form row apiece — a truncated transcript
-/// line with the style and a live relative time as plain secondary text on
-/// the trailing edge, the way System Settings and Mail show a row's details.
-/// Real form rows, so the separators, insets and type size are the form's own
-/// and match the Shortcut and Style rows above.
+/// The "Recent dictations" section of the ready screen's grouped form: the
+/// last few dictations, newest first — a truncated transcript line with the
+/// style and a live relative time as plain secondary text on the trailing
+/// edge, the way System Settings and Mail show a row's details.
 ///
-/// The section holds its height as dictations arrive, so the window never
-/// resizes: every row's content is pinned to `rowHeight`, and the empty state
-/// (the first-dictation prompt) is one row pinned to the height of a full
-/// list — `displayCapacity` rows plus the form's spacing between them.
+/// The list lives inside one form row and holds its height as dictations
+/// arrive, so the window never resizes. This avoids the old blank form rows:
+/// those preserved height, but their separators made an almost-empty history
+/// look like a broken table. Only real dictations now get dividers.
 struct RecentDictationsSection: View {
   let entries: [RecentDictations.Entry]
   /// The bound key, for the empty state's instruction — drawn as the same
@@ -22,54 +20,39 @@ struct RecentDictationsSection: View {
   /// says "tap" or "hold" to match.
   let activation: TriggerActivation
 
-  /// Content height of one row: a line of body text, with the hover Copy
-  /// swap happening inside the trailing slot so revealing it never changes
-  /// the row height.
-  private static let rowHeight: CGFloat = 22
-  /// What the grouped form adds between two rows' content — its vertical row
-  /// padding and the separator. Measured off a build (a filled list against
-  /// the empty state at the same window height) rather than derived: the
-  /// form doesn't publish it.
-  private static let interRowSpacing: CGFloat = 21
+  /// Each transcript gets a comfortable pointer target even though its text
+  /// stays one line. Three of these slots preserve the section's height.
+  private static let rowHeight: CGFloat = 36
 
   /// How often the relative timestamps re-render. Half the engine's "just now"
   /// window, so a row can't read as stale for longer than that window lasts —
   /// derived from the threshold rather than a bare `30` in case it changes.
   private static let timestampRefresh = RecentDictations.Entry.justNowThreshold / 2
 
-  /// Content height of the empty state's single row: a full list's worth of
-  /// rows and the spacing between them, so the prompt row and a filled list
-  /// stand the same height. The row-count arithmetic is the engine's, next to
-  /// the `displayCapacity` it depends on.
-  private var emptyStateHeight: CGFloat {
-    RecentDictations.reservedHeight(
-      rowHeight: Self.rowHeight, rowSpacing: Self.interRowSpacing)
-  }
+  private static let listHeight = rowHeight * CGFloat(RecentDictations.displayCapacity)
 
   var body: some View {
-    Section("Recent") {
+    Section("Recent dictations") {
       if entries.isEmpty {
         emptyPrompt
           .frame(maxWidth: .infinity)
-          .frame(height: emptyStateHeight)
+          .frame(height: Self.listHeight)
       } else {
-        // Live relative timestamps ("2 minutes ago") without a stored clock:
-        // the TimelineView re-renders on a coarse cadence (`timestampRefresh`)
-        // and each row formats against its current date. One per row, so each
-        // stays a direct child of the section and the form draws it as a row.
-        ForEach(entries) { entry in
-          TimelineView(.periodic(from: .now, by: Self.timestampRefresh)) { timeline in
-            RecentDictationRow(entry: entry, now: timeline.date)
-              .frame(height: Self.rowHeight)
+        VStack(spacing: 0) {
+          // Live relative timestamps ("2 minutes ago") without a stored clock:
+          // the TimelineView re-renders on a coarse cadence (`timestampRefresh`)
+          // and each row formats against its current date.
+          ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+            TimelineView(.periodic(from: .now, by: Self.timestampRefresh)) { timeline in
+              RecentDictationRow(entry: entry, now: timeline.date)
+                .frame(height: Self.rowHeight)
+            }
+            if index < entries.count - 1 {
+              Divider()
+            }
           }
         }
-        // Blank rows hold the slots a short list hasn't filled, so the
-        // section is a full list's height from the first dictation on.
-        ForEach(entries.count..<RecentDictations.displayCapacity, id: \.self) { _ in
-          Color.clear
-            .frame(height: Self.rowHeight)
-            .accessibilityHidden(true)
-        }
+        .frame(maxWidth: .infinity, minHeight: Self.listHeight, alignment: .top)
       }
     }
   }
@@ -78,20 +61,20 @@ struct RecentDictationsSection: View {
   /// only says nothing has happened yet: it names the one thing to try, in the
   /// order the user does it.
   private var emptyPrompt: some View {
-    VStack(spacing: 4) {
-      // Two lines, broken after the keycap: on one the sentence runs past
-      // the row's width.
-      HStack(spacing: 4) {
-        Text("Click into any text field, \(activation.startVerb)")
+    VStack(spacing: 7) {
+      Text("Start your first dictation")
+        .font(.headline)
+        .foregroundStyle(.primary)
+      HStack(spacing: 5) {
+        Text("Focus a text field, then \(activation.startVerb)")
         KeyCap(label: triggerKey.keycapLabel)
       }
-      Text("and say “Hello from Blurt.”")
     }
     .foregroundStyle(.secondary)
     .fixedSize()
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(
-      "Click into any text field, \(activation.startVerb) \(triggerKey.spokenName), and say “Hello from Blurt.”"
+      "Start your first dictation. Focus a text field, then \(activation.startVerb) \(triggerKey.spokenName)."
     )
     .accessibilityAddTraits(.isStaticText)
     .accessibilityIdentifier(UITestIdentifiers.recentEmptyPrompt)

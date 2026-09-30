@@ -45,14 +45,7 @@ struct MainWindowRoot: View {
         if controller.isReady {
           ReadyView(
             coordinator: coordinator,
-            openSettings: { openSettings() },
-            editStyles: {
-              // "Edit Styles…" deep-links: flag the Styles pane before
-              // opening, so the user lands there instead of on General — see
-              // `SettingsWindowRoot`.
-              appDelegate.settingsOpensOnStyles = true
-              openSettings()
-            })
+            openSettings: { openSettings() })
         } else {
           WizardView(controller: controller, coordinator: coordinator)
         }

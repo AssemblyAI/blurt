@@ -6,15 +6,6 @@ import XCTest
 // values are declared once there and referenced from both sides, so the app's
 // production views and these suites can no longer drift out of sync.
 
-extension UITestIdentifiers {
-  /// The Settings window's title. The `Settings` scene hosts a `TabView`, and
-  /// macOS titles a preference window after its selected pane — so the window
-  /// opens titled after the first tab, not "<bundle name> Settings". The label
-  /// itself lives in the shared file; only this framework-derived aliasing is
-  /// test-bundle knowledge.
-  static let settingsWindowTitle = generalSettingsTab
-}
-
 /// Base case that launches Blurt in UI-test mode before each test and tears it
 /// down after. Subclasses get a ready `app` plus a couple of shared helpers.
 ///
@@ -57,20 +48,29 @@ class BlurtUITestCase: XCTestCase {
     try await super.tearDown()
   }
 
-  /// Opens the Settings window via the standard ⌘, command and returns it. The
-  /// command is app-global, so it works regardless of which window has focus.
-  /// (Unlike the harness, Settings opens frontmost via ⌘,, so its controls are
-  /// hittable without closing the other windows.)
+  /// Opens the Settings window via the standard ⌘, command and returns its
+  /// General pane. Production restores the last-used pane, per the macOS HIG;
+  /// tests explicitly select General here so each case starts deterministically.
+  /// The command is app-global, so it works regardless of which window has
+  /// focus. Unlike the harness, Settings opens frontmost via ⌘,, so its
+  /// controls are hittable without closing the other windows.
   @discardableResult
   func openSettingsWindow(timeout: TimeInterval = 10) -> XCUIElement {
-    let settings = app.windows[UITestIdentifiers.settingsWindowTitle]
+    let paneTitles = [
+      UITestIdentifiers.generalSettingsTab,
+      UITestIdentifiers.stylesSettingsTab,
+      UITestIdentifiers.vocabularySettingsTab,
+      UITestIdentifiers.advancedSettingsTab,
+    ]
+    let settings = app.windows.matching(NSPredicate(format: "title IN %@", paneTitles)).firstMatch
     if !settings.exists {
       app.typeKey(",", modifierFlags: .command)
     }
     XCTAssertTrue(
       settings.waitForExistence(timeout: timeout),
       "Settings window did not open after ⌘,")
-    return settings
+    guard settings.title != UITestIdentifiers.generalSettingsTab else { return settings }
+    return selectSettingsTab(settings, named: UITestIdentifiers.generalSettingsTab)
   }
 
   /// Selects a Settings pane (a `TabView` tab in the preferences toolbar) by its

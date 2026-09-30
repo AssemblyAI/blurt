@@ -23,21 +23,18 @@ final class ReadyViewUITests: BlurtUITestCase {
         .waitForExistence(timeout: 10),
       "Ready screen should state the dictation shortcut")
 
-    // The style row is always present — with no custom styles yet its pop-up
-    // holds just Default and the "Edit Styles…" item that leads to Settings,
-    // where styles are made.
+    // The style row is always present. With no custom styles there isn't a real
+    // choice, so it reads Default without drawing a one-item pop-up.
     let main = app.windows[UITestIdentifiers.mainWindowTitle]
-    let styles = main.popUpButtons[UITestIdentifiers.styleProfilePickerFromMain]
-    XCTAssertTrue(styles.waitForExistence(timeout: 10), "Style pop-up not found")
-    // The value is `StyleProfileStore.defaultStyleName`, spelled out because
-    // this bundle can't import the engine.
-    XCTAssertEqual(
-      styles.value as? String, "Default",
-      "The style pop-up should start on the Default style")
-
+    XCTAssertTrue(main.staticTexts["Default"].exists, "The style row should show Default")
+    XCTAssertFalse(
+      main.popUpButtons[UITestIdentifiers.styleProfilePickerFromMain].exists,
+      "The style row should not offer a pop-up until there is another choice")
     // The Recent section, empty on a fresh launch, shows its header and the
     // first-dictation prompt that fills the reserved list area.
-    XCTAssertTrue(app.staticTexts["Recent"].exists, "Ready screen should have a Recent section")
+    XCTAssertTrue(
+      app.staticTexts["Recent dictations"].exists,
+      "Ready screen should have a Recent dictations section")
     XCTAssertTrue(
       emptyRecentPrompt(in: main).exists,
       "An empty Recent list should prompt the first dictation")
@@ -45,29 +42,8 @@ final class ReadyViewUITests: BlurtUITestCase {
     // The Settings button at the window's foot — the main window's own route
     // to the Settings scene, alongside ⌘, and the menu-bar item.
     XCTAssertTrue(
-      main.buttons["Settings"].exists,
+      main.buttons["Settings…"].exists,
       "Ready screen should offer its Settings button")
-  }
-
-  /// The style pop-up's menu: the styles, then "Edit Styles…" past a divider.
-  /// The separator itself isn't an accessibility element, so what's asserted is
-  /// that both kinds of item share the one menu. The menu is dismissed rather
-  /// than clicked through — choosing that item opens Settings, which is
-  /// `SettingsUITests`' ground.
-  func testStylePopUpOffersEditStyles() {
-    let main = mainWindow()
-
-    let styles = main.popUpButtons[UITestIdentifiers.styleProfilePickerFromMain]
-    XCTAssertTrue(styles.waitForExistence(timeout: 10), "Style pop-up not found")
-    styles.click()
-
-    let editPredicate = NSPredicate(format: "title == %@", "Edit Styles…")
-    XCTAssertTrue(
-      app.menuItems.matching(editPredicate).firstMatch.waitForExistence(timeout: 5),
-      "The style menu should offer the route to where styles are edited")
-    XCTAssertTrue(app.menuItems["Default"].exists, "The style menu should list the Default style")
-
-    app.typeKey(.escape, modifierFlags: [])
   }
 
   func testCompletedDictationPopulatesRecentList() {
@@ -130,6 +106,39 @@ final class ReadyViewUITests: BlurtUITestCase {
       "Copying a recent transcript should put it on the pasteboard")
   }
 
+  /// The ready and Settings windows are separate SwiftUI scenes. Deleting the
+  /// final profile must still update the already-open ready window immediately;
+  /// otherwise its now-one-item pop-up lingers until Blurt is relaunched.
+  func testDeletingFinalStyleRemovesPickerWithoutRelaunch() {
+    let (_, main) = readyScreenWindows()
+    let settings = openSettingsWindow()
+    let styles = selectSettingsTab(settings, named: UITestIdentifiers.stylesSettingsTab)
+
+    styles.buttons[UITestIdentifiers.styleProfileAdd].click()
+    let addSheet = styles.sheets.firstMatch
+    XCTAssertTrue(addSheet.waitForExistence(timeout: 5), "The Add Style sheet should open")
+    addSheet.textFields[UITestIdentifiers.styleProfileName].typeText("Casual")
+    addSheet.textFields[UITestIdentifiers.styleProfileInstructions].typeText("Use a casual tone")
+    addSheet.buttons[UITestIdentifiers.styleProfileSave].click()
+    XCTAssertTrue(addSheet.waitForNonExistence(timeout: 5), "Saving should dismiss the style sheet")
+
+    let picker = main.popUpButtons[UITestIdentifiers.styleProfilePickerFromMain]
+    XCTAssertTrue(
+      picker.waitForExistence(timeout: 5),
+      "Adding a custom style should give the ready window a real choice")
+
+    styles.buttons[UITestIdentifiers.styleProfileEdit(0)].click()
+    let editSheet = styles.sheets.firstMatch
+    XCTAssertTrue(editSheet.waitForExistence(timeout: 5), "The Edit Style sheet should open")
+    editSheet.buttons[UITestIdentifiers.styleProfileDelete].click()
+    XCTAssertTrue(editSheet.waitForNonExistence(timeout: 5), "Deleting should dismiss the style sheet")
+
+    XCTAssertTrue(
+      picker.waitForNonExistence(timeout: 5),
+      "Deleting the final custom style should remove the ready-window pop-up immediately")
+    XCTAssertTrue(main.staticTexts["Default"].exists, "The style row should fall back to Default")
+  }
+
   // MARK: - Shared choreography
 
   /// The two windows a ready-state launch presents. The harness sits in the
@@ -156,7 +165,7 @@ final class ReadyViewUITests: BlurtUITestCase {
   }
 
   /// The empty Recent list's first-dictation prompt, one element whose label
-  /// starts "Click into any text field" and goes on to name the bound key.
+  /// starts "Start your first dictation" and goes on to name the bound key.
   private func emptyRecentPrompt(in main: XCUIElement) -> XCUIElement {
     main.descendants(matching: .any)[UITestIdentifiers.recentEmptyPrompt]
   }

@@ -144,7 +144,7 @@ struct ResetSection: View {
       switch self {
       case .confirm:
         "This can’t be undone. Your AssemblyAI API key, every setting, the dictation logs, and "
-          + "Blurt’s microphone and accessibility permissions are all removed.\n\n"
+          + "Blurt’s microphone and accessibility permissions will all be removed.\n\n"
           + "Blurt then restarts and takes you back through setup."
       case .failed(let content): content.message
       }
