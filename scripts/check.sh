@@ -391,6 +391,17 @@ check_invariants() {
 }
 run_check "settled decisions (AGENTS.md invariants)" check_invariants
 
+# Mutation-testing target list. The full run stays out of this script (minutes, and
+# survivors need judgement — see mutate.sh's header), but that also meant nothing
+# noticed when #186 renamed ConversationContext.swift out from under its default
+# targets: the script was dead for weeks until someone next ran it by hand. `--list`
+# validates every target and enumerates the mutants without building or testing,
+# so it is cheap enough for every run. Pure text + python, so --portable too.
+check_mutation_targets() {
+  bash scripts/mutate.sh --list >/dev/null
+}
+run_check "mutation targets exist (mutate.sh --list)" check_mutation_targets
+
 # ---------------------------------------------------------------------------
 # Source-only checks run BEFORE the Swift build below, not after it.
 #

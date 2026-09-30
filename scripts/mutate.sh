@@ -56,8 +56,8 @@ DEFAULT_TARGETS=(
   "Sources/BlurtEngine/Pipeline/OverlayPlacement.swift"
   "Sources/BlurtEngine/Pipeline/PipelinePhase.swift"
   "Sources/BlurtEngine/Pipeline/RecordingCueGate.swift"
-  "Sources/BlurtEngine/STT/ConversationContext.swift"
   "Sources/BlurtEngine/STT/KeytermsBoost.swift"
+  "Sources/BlurtEngine/STT/STTPrompt.swift"
   "Sources/BlurtEngine/STT/SyncSTTLimits.swift"
   "Sources/BlurtEngine/StringNormalization.swift"
 )
@@ -118,7 +118,9 @@ mkdir -p "$BACKUP"
 restore_all() {
   for file in "${TARGETS[@]}"; do
     saved="$BACKUP/$(printf '%s' "$file" | tr '/' '_')"
-    [ -f "$saved" ] && cp "$saved" "$file"
+    # An `if`, not `&&`: with no backup (--list) a false test would be the loop's
+    # last status and, under errexit, fail the EXIT trap and so the whole script.
+    if [ -f "$saved" ]; then cp "$saved" "$file"; fi
   done
 }
 # The group kill is necessary but not sufficient: `xctest` puts itself in a *new*
@@ -145,9 +147,14 @@ reap_orphaned_xctest() {
 # Ctrl-C during a hung suite has to sweep too, or the orphan outlives the script.
 trap 'restore_all; reap_orphaned_xctest; rm -rf "$WORK"' EXIT INT TERM
 
-for file in "${TARGETS[@]}"; do
-  cp "$file" "$BACKUP/$(printf '%s' "$file" | tr '/' '_')"
-done
+# --list never edits a target, so it skips the backup — and with it the restore's
+# `cp` back over each file, which would bump every target's mtime and cost
+# check.sh (which runs --list ahead of its Swift build) a needless recompile.
+if [ "$LIST_ONLY" -eq 0 ]; then
+  for file in "${TARGETS[@]}"; do
+    cp "$file" "$BACKUP/$(printf '%s' "$file" | tr '/' '_')"
+  done
+fi
 
 # ---------------------------------------------------------------------------
 # Enumeration
