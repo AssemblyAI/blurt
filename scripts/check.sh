@@ -552,7 +552,7 @@ run_check "release-lib.sh unit tests" bash scripts/release.test.sh
 # The update-window notes are user-facing copy, so they get linted like code: the
 # bump PR's TODO scaffold fails here until someone writes the notes, and the
 # rules reject filler and developer jargon. Pure bash + perl, so --portable too.
-run_check "release notes (docs/release-notes)" bash scripts/check-release-notes.sh
+run_check "release notes (release-notes)" bash scripts/check-release-notes.sh
 
 # A failure above does NOT skip the block below, deliberately. A lint violation
 # and a failing test are independent facts about the branch, and stopping here
