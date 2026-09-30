@@ -66,8 +66,8 @@ info "built at: $BUILT_SHA (matches HEAD)"
 # prerelease; shipping it would leave every user updating from a feed nobody
 # publishes to.
 BUILT_CHANNEL="$(parse_build_info_channel <"$BUILD_INFO")"
-[ "${BUILT_CHANNEL:-release}" = release ] \
-  || die "these artifacts are a $BUILT_CHANNEL build — stage them with scripts/release-stage.sh, or rebuild without --staging to publish"
+[ "$BUILT_CHANNEL" = release ] \
+  || die "these artifacts are a '${BUILT_CHANNEL:-no channel}' build, not a release — rebuild without --staging to publish (a staging build goes to scripts/release-stage.sh)"
 
 step "Validate staple"
 xcrun stapler validate "$DMG" >/dev/null || die "DMG not stapled — rebuild with release-build.sh"
@@ -185,21 +185,13 @@ trap 'rm -rf "$VERIFY_DIR"' EXIT
 gh release download "$TAG" --dir "$VERIFY_DIR" \
   --pattern "Blurt-$VERSION.dmg" --pattern "Blurt.dmg" --pattern "appcast.xml"
 
-WANT_SHA="$(sha_from_sums "Blurt-$VERSION.dmg" <"$CHECKSUMS")"
-[ -n "$WANT_SHA" ] || die "no checksum for Blurt-$VERSION.dmg in $CHECKSUMS"
-GOT_SHA="$(sha256_of_file "$VERIFY_DIR/Blurt-$VERSION.dmg")"
-[ "$WANT_SHA" = "$GOT_SHA" ] \
-  || die "published Blurt-$VERSION.dmg sha mismatch (want $WANT_SHA got $GOT_SHA) — re-run with --republish"
+# A mismatch here means a corrupted upload: re-run with --republish.
+verify_against_sums "$CHECKSUMS" "$VERIFY_DIR" "Blurt-$VERSION.dmg" appcast.xml
 
 LOCAL_STABLE_SHA="$(sha256_of_file "$DMG")"
 GOT_STABLE_SHA="$(sha256_of_file "$VERIFY_DIR/Blurt.dmg")"
 [ "$LOCAL_STABLE_SHA" = "$GOT_STABLE_SHA" ] \
   || die "published Blurt.dmg differs from local build — re-run with --republish"
-
-WANT_APPCAST_SHA="$(sha_from_sums appcast.xml <"$CHECKSUMS")"
-[ -n "$WANT_APPCAST_SHA" ] || die "no checksum for appcast.xml in $CHECKSUMS"
-[ "$WANT_APPCAST_SHA" = "$(sha256_of_file "$VERIFY_DIR/appcast.xml")" ] \
-  || die "published appcast.xml differs from the one built — re-run with --republish"
 
 xcrun stapler validate "$VERIFY_DIR/Blurt-$VERSION.dmg" >/dev/null \
   || die "published Blurt-$VERSION.dmg is not stapled"

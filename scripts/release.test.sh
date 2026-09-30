@@ -144,8 +144,8 @@ check "ignores a longer key sharing the prefix" "32" \
 echo "== parse_build_info_channel =="
 check "reads the channel" "staging" \
   "$(printf 'Blurt 0.1.7\nchannel:      staging\nbuilt: today\n' | parse_build_info_channel)"
-# Pre-channel build-info files must read as empty, which publish treats as a
-# release — not as an unknown channel that blocks shipping a rebuilt artifact.
+# Empty, not a default: publish and stage compare exactly, so a build-info
+# missing the line is refused by both rather than shipped as either channel.
 check "a build-info without a channel is empty" "" \
   "$(printf 'Blurt 0.1.7\nbuilt: today\n' | parse_build_info_channel)"
 
@@ -268,6 +268,13 @@ check "a republished version measures from the one before it" "0.1.10" "$(previo
 check "numerically, not lexically" "0.1.9" "$(previous_release_tag 0.1.10)"
 check "nothing below the first release" "" "$(previous_release_tag 0.1.9)"
 
+echo "== scaffold_release_notes =="
+SCAFFOLD="$(scaffold_release_notes 0.2.1)"
+check "writes the scaffold where the build looks" "$SCRATCH_REPO/release-notes/0.2.1.md" "$SCAFFOLD"
+check "measures from the release below" "1" "$(grep -c '^<!-- Commits since v0.2.0 ' "$SCAFFOLD")"
+rm -rf "$SCRATCH_REPO/release-notes"
+checkdie "no earlier release is refused" "no release tag below 0.1.9" scaffold_release_notes 0.1.9
+
 echo "== Sparkle channels =="
 check "the release feed follows /latest" \
   "https://github.com/AssemblyAI/blurt/releases/latest/download/appcast.xml" "$(sparkle_feed_url release)"
@@ -277,7 +284,23 @@ check "a release enclosure names its own versioned DMG" \
   "https://github.com/AssemblyAI/blurt/releases/download/v1.2.3/Blurt-1.2.3.dmg" "$(sparkle_enclosure_url release 1.2.3)"
 check "a staging enclosure names the staged DMG" \
   "https://github.com/AssemblyAI/blurt/releases/download/sparkle-staging/Blurt-1.2.3.dmg" "$(sparkle_enclosure_url staging 1.2.3)"
+check "a release page is its own tag" \
+  "https://github.com/AssemblyAI/blurt/releases/tag/v1.2.3" "$(sparkle_release_page_url release 1.2.3)"
+check "a staging page is the staging prerelease" \
+  "https://github.com/AssemblyAI/blurt/releases/tag/sparkle-staging" "$(sparkle_release_page_url staging 1.2.3)"
 checkdie "an unknown channel is refused" "unknown Sparkle channel: beta" sparkle_feed_url beta
+checkdie "an unknown channel has no release tag" "unknown Sparkle channel: beta" sparkle_release_tag beta 1.2.3
+
+echo "== verify_against_sums =="
+printf 'dmg bytes' >"$FIXTURES/Blurt-1.2.3.dmg"
+printf '<rss/>' >"$FIXTURES/appcast.xml"
+(cd "$FIXTURES" && shasum -a 256 Blurt-1.2.3.dmg appcast.xml) >"$TMP/SUMS"
+checkrc 0 "matching downloads pass" verify_against_sums "$TMP/SUMS" "$FIXTURES" Blurt-1.2.3.dmg appcast.xml
+checkdie "a file missing from the sums is refused" "no checksum for other.bin" \
+  verify_against_sums "$TMP/SUMS" "$FIXTURES" other.bin
+printf 'truncated' >"$FIXTURES/appcast.xml"
+checkdie "a changed download is refused" "uploaded appcast.xml differs" \
+  verify_against_sums "$TMP/SUMS" "$FIXTURES" Blurt-1.2.3.dmg appcast.xml
 # The feed every shipped copy polls is written twice — the build-setting default
 # in project.yml and the release channel here, which release-build.sh checks the
 # built app against. Drift fails every release build, so catch it at test time.
@@ -303,7 +326,7 @@ check "a revert of something outside the range is dropped on its own" "- Keep th
   "$(printf '%s\n' 'Revert "Older change (#1)" (#2)' 'Keep this (#3)' | release_notes_from_subjects)"
 
 echo "== release notes =="
-TEMPLATE="$(printf '%s\n' 'Add fn as a trigger key (#209)' 'Odd -- subject' | release_notes_template 0.1.56)"
+TEMPLATE="$(printf '%s\n' 'Add fn as a trigger key (#209)' 'Odd -- subject' 'Arrow ---> and ---- runs' | release_notes_template 0.1.56)"
 check "the scaffold lists the commits as context" "1" "$(printf '%s\n' "$TEMPLATE" | grep -c '^     Add fn as a trigger key (#209)$')"
 # "--" can't appear inside an HTML comment; left alone it ends the comment early
 # on some renderers and the commit list would ship.

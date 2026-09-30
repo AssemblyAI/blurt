@@ -427,7 +427,7 @@ elif [ "$CHANNEL" = release ]; then
 else
   PREV_VERSION="$(previous_release_tag "$VERSION")"
   if [ -n "$PREV_VERSION" ]; then
-    CHANGELOG="$(git -C "$REPO_ROOT" log --format=%s "v$PREV_VERSION..HEAD" | release_notes_from_subjects)"
+    CHANGELOG="$(commit_subjects_since "$PREV_VERSION" | release_notes_from_subjects)"
     info "release notes: none written — staging falls back to commits since v$PREV_VERSION"
   elif [ "$(git -C "$REPO_ROOT" rev-parse --is-shallow-repository)" = "true" ]; then
     die "shallow checkout: no release tags to measure the changelog from — check out with fetch-depth: 0"
@@ -670,15 +670,10 @@ swift "$REPO_ROOT/scripts/verify-sparkle-signature.swift" "$VERIFY_PUBLIC_KEY" "
 
 BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_STAGED/Contents/Info.plist")"
 APPCAST="$BUILD_ROOT/appcast.xml"
-if [ "$CHANNEL" = staging ]; then
-  RELEASE_PAGE="$BLURT_RELEASES_URL/tag/$SPARKLE_STAGING_TAG"
-else
-  RELEASE_PAGE="$BLURT_RELEASES_URL/tag/v$VERSION"
-fi
 render_appcast "$VERSION" "$BUILD_NUMBER" \
   "$(sparkle_enclosure_url "$CHANNEL" "$VERSION")" \
   "$ED_SIGNATURE" "$ED_LENGTH" \
-  "$RELEASE_PAGE" \
+  "$(sparkle_release_page_url "$CHANNEL" "$VERSION")" \
   "$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')" \
   "$CHANGELOG" >"$APPCAST"
 xmllint --noout "$APPCAST" || die "generated appcast is not well-formed XML"

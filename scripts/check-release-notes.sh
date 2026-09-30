@@ -19,12 +19,8 @@ source "$REPO_ROOT/scripts/release-lib.sh"
 
 if [ "${1:-}" = "--new" ]; then
   if [ $# -ne 2 ] || ! is_semver "$2"; then die "usage: $(basename "$0") --new X.Y.Z"; fi
-  NOTES_FILE="$(release_notes_path "$2")"
-  [ ! -f "$NOTES_FILE" ] || die "$NOTES_FILE already exists"
-  PREV_VERSION="$(previous_release_tag "$2")"
-  [ -n "$PREV_VERSION" ] || die "no release tag below $2 to list commits from — fetch tags"
-  mkdir -p "$(dirname "$NOTES_FILE")"
-  git -C "$REPO_ROOT" log --format=%s "v$PREV_VERSION..HEAD" | release_notes_template "$PREV_VERSION" >"$NOTES_FILE"
+  [ ! -f "$(release_notes_path "$2")" ] || die "$(release_notes_path "$2") already exists"
+  NOTES_FILE="$(scaffold_release_notes "$2")"
   info "scaffolded $NOTES_FILE — replace the TODO, then commit it"
   exit 0
 fi

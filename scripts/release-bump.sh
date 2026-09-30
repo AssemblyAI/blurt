@@ -39,6 +39,13 @@ if tag_exists_on_origin "v$NEW_VERSION"; then
   die "tag v$NEW_VERSION already exists on origin"
 fi
 
+# Checked here, before anything is edited: the notes scaffold lists commits
+# since the previous release tag, and failing for want of one after project.yml
+# is rewritten would leave a dirty tree that blocks the re-run.
+if [ ! -f "$(release_notes_path "$NEW_VERSION")" ] && [ -z "$(previous_release_tag "$NEW_VERSION")" ]; then
+  die "no release tag below $NEW_VERSION to list commits from — fetch tags (fetch-depth: 0)"
+fi
+
 NEW_BUILD=$((CURRENT_BUILD + 1))
 info "version: $CURRENT_VERSION → $NEW_VERSION"
 info "build:   $CURRENT_BUILD → $NEW_BUILD"
@@ -67,10 +74,7 @@ NOTES_FILE="$(release_notes_path "$NEW_VERSION")"
 if [ -f "$NOTES_FILE" ]; then
   info "keeping existing $NOTES_FILE"
 else
-  PREV_VERSION="$(previous_release_tag "$NEW_VERSION")"
-  [ -n "$PREV_VERSION" ] || die "no release tag below $NEW_VERSION to list commits from — fetch tags (fetch-depth: 0)"
-  mkdir -p "$(dirname "$NOTES_FILE")"
-  git -C "$REPO_ROOT" log --format=%s "v$PREV_VERSION..HEAD" | release_notes_template "$PREV_VERSION" >"$NOTES_FILE"
+  NOTES_FILE="$(scaffold_release_notes "$NEW_VERSION")"
   info "scaffolded $NOTES_FILE — write the notes in the bump PR"
 fi
 

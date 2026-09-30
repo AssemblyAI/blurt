@@ -39,7 +39,7 @@ for f in "$DMG" "$APPCAST" "$CHECKSUMS" "$BUILD_INFO"; do
 done
 CHANNEL="$(parse_build_info_channel <"$BUILD_INFO")"
 [ "$CHANNEL" = staging ] \
-  || die "$BUILD_INFO says channel '${CHANNEL:-release}' — only a --staging build may be staged (its feed must point here)"
+  || die "$BUILD_INFO says channel '${CHANNEL:-none}' — only a --staging build may be staged (its feed must point here)"
 info "version: $VERSION (channel: staging)"
 
 step "Staging prerelease"
@@ -65,10 +65,6 @@ step "Verify"
 VERIFY_DIR="$(mktemp -d /tmp/blurt-stage.XXXXXX)"
 trap 'rm -rf "$VERIFY_DIR"' EXIT
 gh release download "$TAG" --dir "$VERIFY_DIR" --pattern "Blurt-$VERSION.dmg" --pattern appcast.xml
-for name in "Blurt-$VERSION.dmg" appcast.xml; do
-  want="$(sha_from_sums "$name" <"$CHECKSUMS")"
-  [ -n "$want" ] || die "no checksum for $name in $CHECKSUMS"
-  [ "$want" = "$(sha256_of_file "$VERIFY_DIR/$name")" ] || die "staged $name differs from the one built — re-run"
-done
+verify_against_sums "$CHECKSUMS" "$VERIFY_DIR" "Blurt-$VERSION.dmg" appcast.xml
 info "staged assets verified against SHA256SUMS"
 info "feed: $(sparkle_feed_url staging)"

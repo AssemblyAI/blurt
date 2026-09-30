@@ -70,7 +70,15 @@ public struct InstallReset {
   /// grants.
   public init(bundleID: String, keyStore: any APIKeyGateway) {
     self.init(
-      clearSettings: { PersistedSettings.resetAll() },
+      clearSettings: {
+        PersistedSettings.resetAll()
+        // Then the rest of the app's own domain, the way reset-install.sh's
+        // `defaults delete <bundle id>` does: chiefly Sparkle's SU* keys
+        // (auto-check, auto-install, last check, skipped version), which no
+        // DefaultsKey names — without this, "install updates automatically"
+        // would survive a reset.
+        UserDefaults.standard.removePersistentDomain(forName: bundleID)
+      },
       clearAPIKey: { keyStore.save(nil) },
       resetPermissions: { PermissionsReset.resetAll(bundleID: bundleID) },
       clearLogs: { DictationLog.removeStoredLogs() })

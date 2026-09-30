@@ -173,9 +173,10 @@ jobs:
           # job checks out the same sha, so the tag can never land on a commit
           # other than the one that was actually built.
           ref: ${{ github.sha }}
-          # The appcast's changelog is the commits since the previous release
-          # tag, so the build needs history and tags — release-build.sh fails
-          # fast on a shallow clone rather than shipping an empty one.
+          # History and tags, for one path only: a staging build with no
+          # release-notes file falls back to the commits since the previous
+          # release tag (release-build.sh fails fast on a shallow clone there).
+          # A release reads its hand-written notes and needs neither.
           fetch-depth: 0
           persist-credentials: false
 

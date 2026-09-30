@@ -239,12 +239,13 @@ If the key is compromised (or the cert expires):
    `SIGNING_P12_PASSWORD` on the `release-build` environment.
 5. Cut a fresh notarized release.
 
-Rotating to a new cert **within the same team** (`B2VQF7Q2QY`) is seamless for
-users — Gatekeeper accepts any valid Developer ID from any team, and updates are
-a manual DMG download (see [Updates in AGENTS.md](./AGENTS.md#updates)), so there
-is no signing-requirement pin to break. A **team change** (new Team ID) is still
-worth avoiding on principle and announcing, but it no longer strands existing
-users the way the former in-app updater's team-pinned requirement did.
+Rotating to a new cert **within the same team** (`B2VQF7Q2QY`) is invisible to
+users: Gatekeeper accepts any valid Developer ID, and Sparkle (see
+[Sparkle updates](#sparkle-updates)) installs an update whose EdDSA signature
+verifies against the key the running copy carries. Rotate the certificate and
+the EdDSA key in **separate** releases, never together — Sparkle tolerates a
+change to one of the two, not both. A **team change** (new Team ID) is worth
+avoiding on principle; rehearse it on the staging feed before shipping it.
 
 ## Rotating the notary credential
 
@@ -307,16 +308,16 @@ The update window shows the appcast item's `<description>`, which
   - bullets only, at most **6**, each at most **100** characters;
   - each starts with a capital letter — lead with the verb ("Add…", "Fix…",
     "Paste now works in…") — and none with "We";
-  - no filler: _seamless, robust, enhanced, streamlined, leverage, elevate,
-    delve, a variety of, various improvements, under the hood, we're excited_,
-    and more (`RELEASE_NOTES_BANNED` — add to it when a new tic shows up);
+  - no filler phrases — _seamless_, _under the hood_, _various improvements_
+    and the rest of `RELEASE_NOTES_BANNED` in `release-lib.sh`, the one list
+    to extend when a new tic shows up;
   - no emoji;
   - no developer leakage: PR numbers, `chore:`/`fix:` prefixes, backticks,
     filenames, `snake_case` or `camelCase` identifiers (real product names like
     macOS or YouTube are allow-listed in `RELEASE_NOTES_PROPER_NOUNS`).
 
-Because the rehearsal fallback and the bump scaffold both measure from tags, the
-build job checks out with full history; a shallow checkout fails fast.
+The staging fallback measures from tags, so the build job checks out with full
+history; on a shallow checkout that path fails fast.
 
 #### Writing them
 

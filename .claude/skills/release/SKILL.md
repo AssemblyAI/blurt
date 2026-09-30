@@ -104,8 +104,6 @@ There is no local orchestrator script — the workflows are the only path.
   (RELEASE.md → Rehearsing an update): `release` dispatched with `staging`
   checked builds for the `sparkle-staging` pre-release, and `publish` is skipped.
   A shipped build with a broken updater can't be fixed by an update.
-- v0.1.57 and earlier have no updater, so the first Sparkle release (v0.1.58)
-  reaches existing users only by manual download. Say so when announcing it.
 - A `release` dispatch from a non-`main` ref is build-only (publish is skipped),
   but it only starts if `release-build`'s deployment-branch policy allows that
   ref — with the environment restricted to `main`, there is no branch dry run.
