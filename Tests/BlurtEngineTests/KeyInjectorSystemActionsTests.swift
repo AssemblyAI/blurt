@@ -33,6 +33,16 @@ struct KeyInjectorSystemActionsTests {
     #expect(events.up.getIntegerValueField(.keyboardEventKeycode) == 0x09)
   }
 
+  @Test("cmdCEvents builds a ⌘C pair on kVK_ANSI_C")
+  func cmdCEventsBuildsPair() throws {
+    let events = try #require(KeyInjector.cmdCEvents())
+    #expect(events.down.type == .keyDown)
+    #expect(events.up.type == .keyUp)
+    #expect(events.down.getIntegerValueField(.keyboardEventKeycode) == 0x08)
+    #expect(events.down.flags.contains(.maskCommand))
+    #expect(events.up.flags.contains(.maskCommand))
+  }
+
   @Test("both Cmd-V events carry the command flag")
   func cmdVEventsCarryCommand() throws {
     let events = try #require(KeyInjector.cmdVEvents())

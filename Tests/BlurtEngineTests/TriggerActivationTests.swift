@@ -38,6 +38,8 @@ struct TriggerActivationTests {
     #expect(Set(TriggerActivation.allCases.map(\.label)).count == TriggerActivation.allCases.count)
     #expect(
       Set(TriggerActivation.allCases.map(\.guidance)).count == TriggerActivation.allCases.count)
+    #expect(
+      Set(TriggerActivation.allCases.map(\.stopHint)).count == TriggerActivation.allCases.count)
     // The default's footer is the sentence that shipped before the picker
     // existed — the unset experience must not reword itself.
     #expect(

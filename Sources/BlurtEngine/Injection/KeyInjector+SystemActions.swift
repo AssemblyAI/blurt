@@ -63,10 +63,18 @@ extension KeyInjector {
   /// paste) is asserted in `KeyInjectorSystemActionsTests`, and only the two
   /// `.post` calls below stay covered by running the app.
   static func cmdVEvents() -> (down: CGEvent, up: CGEvent)? {
-    let vKey: CGKeyCode = 0x09  // kVK_ANSI_V
+    commandEvents(virtualKey: 0x09)  // kVK_ANSI_V
+  }
+
+  /// The Cmd-C pair, for the read-aloud press's copy fallback (`SelectionCopy`).
+  static func cmdCEvents() -> (down: CGEvent, up: CGEvent)? {
+    commandEvents(virtualKey: 0x08)  // kVK_ANSI_C
+  }
+
+  private static func commandEvents(virtualKey: CGKeyCode) -> (down: CGEvent, up: CGEvent)? {
     guard let source = CGEventSource(stateID: .combinedSessionState),
-      let down = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: true),
-      let up = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: false)
+      let down = CGEvent(keyboardEventSource: source, virtualKey: virtualKey, keyDown: true),
+      let up = CGEvent(keyboardEventSource: source, virtualKey: virtualKey, keyDown: false)
     else { return nil }
     // Set on both: a key-up carrying no ⌘ reads as the modifier having been
     // released mid-chord, which some apps treat as cancelling the shortcut.
@@ -79,7 +87,19 @@ extension KeyInjector {
   /// effect (a keystroke into the focused app) is why this is the injectable seam
   /// tests replace.
   static func postCmdV() -> Bool {
-    guard let (down, up) = cmdVEvents() else { return false }
+    post(cmdVEvents())
+  }
+
+  /// Posts Cmd-C, the same way and for the same reasons as `postCmdV`. The
+  /// annotated session tap also sits *after* the trigger's own session tap, so
+  /// `DictationKeyTap` never sees this keystroke. Otherwise its `keyDown` would
+  /// read as a ⌘-combo and cancel the very press that asked for the copy.
+  static func postCmdC() -> Bool {
+    post(cmdCEvents())
+  }
+
+  private static func post(_ events: (down: CGEvent, up: CGEvent)?) -> Bool {
+    guard let (down, up) = events else { return false }
     // Post to the annotated session tap rather than the HID tap: the session tap
     // honors exactly the flags set above instead of OR-ing in the live hardware
     // modifier state, so a still-held hotkey modifier can't corrupt Cmd-V into a

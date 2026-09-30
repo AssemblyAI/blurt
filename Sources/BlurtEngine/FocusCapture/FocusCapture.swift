@@ -74,16 +74,7 @@ enum FocusCapture {
   nonisolated static func captureFieldContext(maxPriorChars: Int = 320, maxSelectedChars: Int = 320)
     -> FocusedFieldContext
   {
-    guard AXIsProcessTrusted() else { return .empty }
-    guard let element = systemFocusedElement() else { return .empty }
-
-    // Don't read the value of a password field into the request. The whole
-    // decision — including the fail-closed arm — lives in `mustRedactContents`,
-    // where it is unit-tested; this function needs a live AX element, so anything
-    // decided inline here would be covered by nothing.
-    let isSecure = mustRedactContents(
-      role: stringValue(element, kAXRoleAttribute),
-      subrole: stringValue(element, kAXSubroleAttribute))
+    guard let (element, isSecure) = focusedElementForReading() else { return .empty }
     // Both text slices stay nil for a secure field — the whole point of the guard
     // above — so the reads that feed them are skipped wholesale rather than each
     // being individually conditional.
@@ -108,6 +99,53 @@ enum FocusCapture {
       windowTitle: clip(windowTitle(of: element), to: 120),
       fieldLabel: clip(fieldLabel(of: element), to: 80),
       isSecure: isSecure)
+  }
+
+  /// What an Accessibility read of the selection found.
+  enum SelectionRead: Equatable {
+    case text(String)
+    /// A readable focused element with no selection (a bare caret), or a secure
+    /// field. A definite answer: the press should dictate.
+    case none
+    /// No focused element could be reached. Electron apps such as Claude.app
+    /// answer the system-wide focus query with `cannotComplete`, and the
+    /// selection in their web content is invisible to AX. Only here may the
+    /// caller fall back to copying (`SelectionCopy`).
+    case unreadable
+  }
+
+  /// Just the focused field's selected text, up to `maxChars` — the read the
+  /// experimental read-aloud press makes (`SelectionSpeaker.focusedSelection`).
+  /// A narrower traversal than `captureFieldContext` because it sits on the
+  /// press path ahead of the dictate-or-speak decision, so every round trip it
+  /// skips is latency a dictation press doesn't pay. Same secure-field guard,
+  /// same off-main rule.
+  nonisolated static func captureSelectedText(maxChars: Int) -> SelectionRead {
+    guard AXIsProcessTrusted() else { return .none }
+    guard let (element, isSecure) = focusedElementForReading() else { return .unreadable }
+    guard !isSecure else { return .none }
+    let selection = selectedTextRange(of: element)
+    // A bare caret is the common case (every dictation press while read-aloud
+    // is on), so skip `selectedText`'s `kAXSelectedText` fallback read for it.
+    // That fallback is for elements that expose no range at all.
+    if let selection, selection.length == 0 { return .none }
+    let text = visibleTextOrNil(selectedText(of: element, selection: selection, maxChars: maxChars))
+    return text.map(SelectionRead.text) ?? .none
+  }
+
+  /// The focused element and whether its contents must stay unread, or nil when
+  /// the process isn't trusted or nothing is focused. Shared by both captures,
+  /// so the password-field guard is spelled once.
+  ///
+  /// The whole decision, including the fail-closed arm, lives in
+  /// `mustRedactContents`, where it is unit-tested. This needs a live AX element,
+  /// so anything decided inline here would be covered by nothing.
+  private nonisolated static func focusedElementForReading() -> (element: AXUIElement, isSecure: Bool)? {
+    guard AXIsProcessTrusted(), let element = systemFocusedElement() else { return nil }
+    let isSecure = mustRedactContents(
+      role: stringValue(element, kAXRoleAttribute),
+      subrole: stringValue(element, kAXSubroleAttribute))
+    return (element, isSecure)
   }
 
   /// Cap on each cross-process AX round trip this process makes. An unresponsive

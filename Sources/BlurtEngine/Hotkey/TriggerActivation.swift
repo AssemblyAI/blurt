@@ -66,6 +66,16 @@ public enum TriggerActivation: String, CaseIterable, Sendable {
     }
   }
 
+  /// How to stop something the trigger started that isn't a dictation, today
+  /// a read-aloud (see `SelectionSpeechRouting`): "Tap again or release to stop."
+  public var stopHint: String {
+    switch self {
+    case .tapOrHold: return "Tap again or release to stop."
+    case .tap: return "Tap again to stop."
+    case .hold: return "Release to stop."
+    }
+  }
+
   /// Whether releasing the trigger latches the recording on (tap-to-toggle)
   /// rather than stopping it, given how long this press was held. Only presses
   /// that *started* the recording ask — a release over an already-latched

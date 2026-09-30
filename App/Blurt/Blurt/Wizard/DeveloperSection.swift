@@ -3,8 +3,8 @@ import BlurtEngine
 import OSLog
 import SwiftUI
 
-// The Advanced pane's three sections: updates (version, check, Sparkle's two
-// preferences), developer mode, and the start-over button. All are
+// The Advanced pane's four sections: updates (version, check, Sparkle's two
+// preferences), experimental features, developer mode, and the start-over button. All are
 // Settings-only (none gates setup, so none is a wizard step), and they live here
 // rather than in `SettingsWindowRoot` because that file is at the repo's
 // file-length limit.
@@ -46,6 +46,35 @@ struct UpdatesSection: View {
       if !model.isEnabled {
         Text("This development build doesn’t update itself.")
       }
+    }
+  }
+}
+
+/// The Advanced pane's experimental features — today just read-aloud (see
+/// `SelectionSpeechStore`). The router reads the same default this toggle writes
+/// at every press, so a change applies to the next one.
+struct ExperimentalSection: View {
+  @AppStorage(SelectionSpeechStore.defaultsKey) private var selectionSpeech = false
+  @BoundTriggerKey private var triggerKey
+  @AppStorage(TriggerActivationStore.defaultsKey) private var activationRaw = ""
+
+  /// Read-aloud rides the trigger's own tap/hold gate, so its instructions
+  /// follow the activation mode.
+  private var howToUse: String {
+    let activation = TriggerActivation.fromPersisted(activationRaw)
+    return "Select text and \(activation.startVerb) \(triggerKey.label) to hear it. \(activation.stopHint)"
+  }
+
+  var body: some View {
+    Section {
+      Toggle(isOn: $selectionSpeech) {
+        SettingLabel(title: "Read selected text aloud", systemImage: "speaker.wave.2")
+      }
+      .accessibilityIdentifier(UITestIdentifiers.selectionSpeechToggle)
+    } header: {
+      Text("Experimental")
+    } footer: {
+      Text("\(howToUse) With nothing selected, the key dictates as usual.")
     }
   }
 }

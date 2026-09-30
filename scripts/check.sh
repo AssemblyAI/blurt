@@ -633,8 +633,14 @@ else
   #                        (MicCaptureLevelsTests, AudioInputDevicesTests). The
   #                        transport and liveness *policy* it serves stays
   #                        covered, in AudioTransport and MicLiveness.
+  #  - StreamingPCMPlayer.swift : the read-aloud playback renderer, an AV shell
+  #                        only. It plays only through a real output device,
+  #                        and its clock doesn't advance without one. Same justification as MicCapture:
+  #                        the timing policy it serves stays covered, in
+  #                        PCMSchedule, and SelectionSpeaker's stop/drain/error
+  #                        handling is covered through the PCMSink seam.
   COVERAGE="$(xcrun llvm-cov export -summary-only -instr-profile "$PROFDATA" "$XCTEST_BIN" \
-    -ignore-filename-regex='Tests/|Audio/MicCapture\.swift|Audio/AudioRoute(Monitor)?\.swift|Audio/AudioInputDevices\.swift|Audio/CaptureSessionRecorder\.swift' \
+    -ignore-filename-regex='Tests/|Audio/MicCapture\.swift|Audio/AudioRoute(Monitor)?\.swift|Audio/AudioInputDevices\.swift|Audio/CaptureSessionRecorder\.swift|TTS/StreamingPCMPlayer\.swift' \
     | python3 -c 'import sys,json; print(round(json.load(sys.stdin)["data"][0]["totals"]["lines"]["percent"],2))')"
   echo "engine line coverage: ${COVERAGE}%"
   if ! awk -v c="$COVERAGE" -v min="$MIN_COVERAGE" 'BEGIN{ exit (c+0 < min+0) }'; then
