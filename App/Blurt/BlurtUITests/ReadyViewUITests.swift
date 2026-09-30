@@ -117,8 +117,12 @@ final class ReadyViewUITests: BlurtUITestCase {
     styles.buttons[UITestIdentifiers.styleProfileAdd].click()
     let addSheet = styles.sheets.firstMatch
     XCTAssertTrue(addSheet.waitForExistence(timeout: 5), "The Add Style sheet should open")
-    addSheet.textFields[UITestIdentifiers.styleProfileName].typeText("Casual")
-    addSheet.textFields[UITestIdentifiers.styleProfileInstructions].typeText("Use a casual tone")
+    let name = addSheet.textFields[UITestIdentifiers.styleProfileName]
+    name.click()
+    name.typeText("Casual")
+    let instructions = addSheet.textFields[UITestIdentifiers.styleProfileInstructions]
+    instructions.click()
+    instructions.typeText("Use a casual tone")
     addSheet.buttons[UITestIdentifiers.styleProfileSave].click()
     XCTAssertTrue(addSheet.waitForNonExistence(timeout: 5), "Saving should dismiss the style sheet")
 
