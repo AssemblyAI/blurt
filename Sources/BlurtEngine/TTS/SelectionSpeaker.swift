@@ -27,18 +27,29 @@ public struct SelectionSpeaker: Sendable {
     self.makeSink = makeSink
   }
 
-  /// The focused field's selected text, or nil when there is none, when the
-  /// field is secure, or when it can't be read.
+  /// The selected text in the frontmost app, or nil when there is none, when
+  /// the field is secure, or when it can't be read.
   ///
-  /// The read is synchronous cross-process Accessibility IPC that can block a
-  /// thread for the AX timeout against a hung app. So it runs on
+  /// Accessibility first. The read is synchronous cross-process IPC that can
+  /// block a thread for the AX timeout against a hung app, so it runs on
   /// `DictationSession.contextQueue`, the press-time capture's queue, and never
-  /// on the cooperative pool. That queue's doc explains why.
+  /// on the cooperative pool. When AX can't reach a focused element at all, it
+  /// falls back to copying the selection (`SelectionCopy`).
   public static func focusedSelection() async -> String? {
-    await withCheckedContinuation { continuation in
+    let read = await withCheckedContinuation { continuation in
       DictationSession.contextQueue.async {
         continuation.resume(returning: FocusCapture.captureSelectedText(maxChars: maxCharacters))
       }
+    }
+    return await resolve(read, copy: SelectionCopy())
+  }
+
+  /// Split from `focusedSelection` so the fallback rule is testable without AX.
+  static func resolve(_ read: FocusCapture.SelectionRead, copy: SelectionCopy) async -> String? {
+    switch read {
+    case .text(let text): text
+    case .none: nil
+    case .unreadable: await copy.copySelection(maxCharacters: maxCharacters)
     }
   }
 

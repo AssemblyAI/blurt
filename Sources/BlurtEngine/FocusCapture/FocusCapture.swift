@@ -101,20 +101,36 @@ enum FocusCapture {
       isSecure: isSecure)
   }
 
+  /// What an Accessibility read of the selection found.
+  enum SelectionRead: Equatable {
+    case text(String)
+    /// A readable focused element with no selection (a bare caret), or a secure
+    /// field. A definite answer: the press should dictate.
+    case none
+    /// No focused element could be reached. Electron apps such as Claude.app
+    /// answer the system-wide focus query with `cannotComplete`, and the
+    /// selection in their web content is invisible to AX. Only here may the
+    /// caller fall back to copying (`SelectionCopy`).
+    case unreadable
+  }
+
   /// Just the focused field's selected text, up to `maxChars` — the read the
   /// experimental read-aloud press makes (`SelectionSpeaker.focusedSelection`).
   /// A narrower traversal than `captureFieldContext` because it sits on the
   /// press path ahead of the dictate-or-speak decision, so every round trip it
   /// skips is latency a dictation press doesn't pay. Same secure-field guard,
   /// same off-main rule.
-  nonisolated static func captureSelectedText(maxChars: Int) -> String? {
-    guard let (element, isSecure) = focusedElementForReading(), !isSecure else { return nil }
+  nonisolated static func captureSelectedText(maxChars: Int) -> SelectionRead {
+    guard AXIsProcessTrusted() else { return .none }
+    guard let (element, isSecure) = focusedElementForReading() else { return .unreadable }
+    guard !isSecure else { return .none }
     let selection = selectedTextRange(of: element)
     // A bare caret is the common case (every dictation press while read-aloud
     // is on), so skip `selectedText`'s `kAXSelectedText` fallback read for it.
     // That fallback is for elements that expose no range at all.
-    if let selection, selection.length == 0 { return nil }
-    return visibleTextOrNil(selectedText(of: element, selection: selection, maxChars: maxChars))
+    if let selection, selection.length == 0 { return .none }
+    let text = visibleTextOrNil(selectedText(of: element, selection: selection, maxChars: maxChars))
+    return text.map(SelectionRead.text) ?? .none
   }
 
   /// The focused element and whether its contents must stay unread, or nil when

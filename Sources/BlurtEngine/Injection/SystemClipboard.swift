@@ -152,3 +152,8 @@ struct SystemClipboard: ClipboardAccess {
     }
   }
 }
+
+/// The read-aloud copy fallback's view of the pasteboard (see `SelectionCopy`).
+extension SystemClipboard: CopyPasteboard {
+  func currentString() -> String? { NSPasteboard.general.string(forType: .string) }
+}
