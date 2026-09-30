@@ -47,6 +47,16 @@
         }
         .accessibilityIdentifier("probe-dismiss")
         .foregroundStyle(dark ? Color.white : Color.black)
+        // What Settings does while a keyboard is up elsewhere: the layout
+        // changes in the App Group, and the keyboard reads it when it next
+        // appears. One button per layout, so a flow can switch and re-show.
+        HStack {
+          ForEach(KeyboardLayout.allCases) { layout in
+            Button(layout.rawValue) { SharedStore.layout = layout }
+              .accessibilityIdentifier("probe-layout-\(layout.rawValue)")
+          }
+        }
+        .foregroundStyle(dark ? Color.white : Color.black)
         Spacer(minLength: 0)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
