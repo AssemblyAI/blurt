@@ -270,11 +270,14 @@ slim bar 8.
 | `full`    | voice row 44, then the first key row right under it as the iPhone's sits under its suggestions · three letter rows 43 · 123 / globe / space / return                                                                                                                                                                                                                                                                                                                                                                                                                                                | 270                      |
 
 The voice row (`VoiceBar`) is where the system keyboard puts its suggestion
-bar: the element with the + a clearance beside it, the pair centred on what
-the element _shows_ (`VoiceElementKind.visibleWidth`, tested: the grille's
-own width, the ribs asleep or the wave awake, the streak's line — never the
-slot's box, which would put the + off at the edge; the mic key is never
-narrower than a key), or the key-term field. A swipe flips the panel past
+bar: the element dead centre with the + a clearance beside it — an unseen
+twin of the + balances the other side, so the + hangs off the element rather
+than shifting it (a pair centred as a whole read as off) — or, for one hand,
+the element at an edge with the + inside it (One hand, below). The mic key
+is as wide as the element _shows_ (`VoiceElementKind.visibleWidth`, tested:
+the grille's own width, the ribs asleep or the wave awake, the streak's line
+— never the slot's box, which would put the + off at the edge; never
+narrower than a key). Or the row is the key-term field. A swipe flips the panel past
 48 pt sideways and more sideways than up or down by 1.5×; a key acts on
 release and only under 12 pt of travel (`KeyboardInteraction`, tested). The
 swipe is recognised on the input view itself (`KeyboardViewController`), not

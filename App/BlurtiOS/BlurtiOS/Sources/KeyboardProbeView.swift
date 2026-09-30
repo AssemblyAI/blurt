@@ -20,6 +20,9 @@
       guard let flag = arguments.firstIndex(of: "-BlurtProbeField") else { return nil }
       let face = arguments.count > flag + 1 ? arguments[flag + 1] : "light"
       guard face == "light" || face == "dark" else { return nil }
+      // The mic's side is the middle unless a word says otherwise: the App
+      // Group outlives a run, and an earlier `left` must not leak into this one.
+      SharedStore.micAlignment = .center
       for word in arguments.dropFirst(flag + 2).prefix(while: { !$0.hasPrefix("-") }) {
         if let kind = VoiceElementKind(rawValue: word) { SharedStore.voiceElementKind = kind }
         if let layout = KeyboardLayout(rawValue: word) { SharedStore.layout = layout }
@@ -36,6 +39,14 @@
         ProbeField(dark: dark)
           .frame(height: DesignTokens.Metrics.keyMinWidth)
           .padding()
+        // Puts the keyboard away without leaving the field, so a flow can
+        // bring it back into the same host and see what a re-appearance
+        // in a living extension keeps or loses.
+        Button("Dismiss keyboard") {
+          UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
+        .accessibilityIdentifier("probe-dismiss")
+        .foregroundStyle(dark ? Color.white : Color.black)
         Spacer(minLength: 0)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)

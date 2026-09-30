@@ -42,25 +42,37 @@ struct VoiceBar: View {
           .accessibilityLabel("Start Blurt")
           .transition(.opacity)
         } else {
-          // The element and the + together, centred on what shows: the mic
-          // key is as wide as the element is (never narrower than a key, so
-          // the ribs asleep are still a target), the + a clearance beside it.
-          // When the ribs wake into the wave the + slides out of its way. A
-          // highlighted word makes the + a chip: the bar keeps it a minimum,
-          // the element gives way, and the chip hugs its word inside what is
-          // left, so the pair stays centred.
+          // The element where Settings put it, the + a clearance beside it.
+          // In the middle the element itself is dead centre — an unseen twin
+          // of the + balances the row on the other side, so the + hangs off
+          // the element rather than shifting it. The mic key is as wide as
+          // the element is (never narrower than a key, so the ribs asleep are
+          // still a target); when the ribs wake into the wave the + slides
+          // out of its way. A highlighted word makes the + a chip: the bar
+          // keeps it a minimum, the element gives way, and the chip hugs its
+          // word inside what is left. At the right edge the + comes first, so
+          // the mic is the thing at the edge and the + sits on its inner side.
           let clearance = DesignTokens.Metrics.voicebarAddtermClearance
           let chip = model.selectedTerm != nil
+          let centred = model.micAlignment == .center
+          let plusLeads = model.micAlignment.plusLeads(in: direction)
           let beside = chip ? DesignTokens.Metrics.addtermChipMinWidth : DesignTokens.Metrics.glyphHit
           let recording = model.voiceState.isRecording
           let shown = kind.visibleWidth(slot: .bar, recording: recording)
-          let width = min(max(shown, DesignTokens.Metrics.keyMinWidth), geo.size.width - beside - clearance)
-          // At the right edge the + comes first, so the mic is the thing
-          // at the edge and the + sits on its inner side.
+          let room = geo.size.width - (beside + clearance) * (centred ? 2 : 1)  // literal-ok: a twin on each side
+          let width = min(max(shown, DesignTokens.Metrics.keyMinWidth), room)
           HStack(spacing: clearance) {
-            if model.micAlignment.plusLeads(in: direction) { AddTermKey(model: model) }
+            if plusLeads {
+              AddTermKey(model: model)
+            } else if centred {
+              AddTermKey(model: model).hidden()
+            }
             MicControl(model: model, slot: .bar, width: width)
-            if !model.micAlignment.plusLeads(in: direction) { AddTermKey(model: model) }
+            if !plusLeads {
+              AddTermKey(model: model)
+            } else if centred {
+              AddTermKey(model: model).hidden()
+            }
           }
           .animation(.easeInOut(duration: DesignTokens.Motion.waveFade), value: recording)
           .animation(.easeInOut(duration: DesignTokens.Motion.stateFade), value: chip)

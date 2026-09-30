@@ -55,11 +55,14 @@ final class BlurtKeyboardFlows: XCTestCase {
         check(abs(centre - width / 2) < 4, "mic centred in the panel (\(centre) of \(width))")
         check(plus.frame.midX < 60, "the + in the panel's top-left corner (\(plus.frame.midX))")
       } else {
-        // The pair is centred in the voice bar's own width: the whole row in
-        // the full keyboard, the room left of delete and return in the slim bar.
-        let pair = (mic.frame.minX + plus.frame.maxX) / 2
-        let room = layout == "slimBar" ? app.buttons["delete.left"].firstMatch.frame.minX : width
-        check(abs(pair - room / 2) < 20, "mic and + centred as a pair (\(pair) in \(room))")
+        // The element itself is centred in the voice bar's own width — the
+        // whole row in the full keyboard, the room between the globe (if any)
+        // and delete in the slim bar — with the + hanging beside it.
+        let globe = app.buttons["globe"].firstMatch
+        let from = layout == "slimBar" && globe.exists ? globe.frame.maxX : 0
+        let to = layout == "slimBar" ? app.buttons["delete.left"].firstMatch.frame.minX : width
+        check(abs(centre - (from + to) / 2) < 8, "mic centred in its row (\(centre) in \(from)…\(to))")
+        check(plus.frame.minX > mic.frame.maxX, "the + beside the mic, to its right")
       }
     }
     switch layout {
@@ -69,6 +72,138 @@ final class BlurtKeyboardFlows: XCTestCase {
     }
     try termFlow()
     try dictationFlow()
+    try switchAwayAndBack()
+  }
+
+  // MARK: Helpers
+
+  private func bringUpBlurt() throws {
+    let blurt = app.buttons["Add a key term"]
+    let system = app.keyboards.firstMatch
+    let deadline = Date().addingTimeInterval(15)
+    while !blurt.exists, !system.exists, Date() < deadline { Thread.sleep(forTimeInterval: 0.5) }
+    var hops = 0
+    while !blurt.waitForExistence(timeout: 2), hops < 4 {
+      let globe = app.buttons["Next keyboard"]
+      XCTAssertTrue(globe.waitForExistence(timeout: 5), "no globe key")
+      globe.tap()
+      hops += 1
+    }
+    XCTAssertTrue(blurt.exists, "Blurt never came up")
+    Thread.sleep(forTimeInterval: 1.5)
+  }
+
+  /// Blurt's mic key, by its identifier: the system's own bottom bar has a
+  /// "Dictate" button too, and a label query lands on it.
+  private func micKey() -> XCUIElement {
+    app.buttons.matching(NSPredicate(format: "identifier == %@", "blurt-mic")).firstMatch
+  }
+
+  private func micKey(labelled label: String) -> XCUIElement {
+    app.buttons.matching(NSPredicate(format: "identifier == %@ AND label == %@", "blurt-mic", label)).firstMatch
+  }
+
+  private func letterKey(_ letter: String) -> XCUIElement {
+    app.buttons.matching(NSPredicate(format: "label == %@", letter)).firstMatch
+  }
+
+  private func check(_ condition: Bool, _ what: String) {
+    print("FLOW-\(condition ? "OK" : "FAIL"): \(what)")
+    XCTAssertTrue(condition, what)
+  }
+
+  private func shot(_ name: String) {
+    shots += 1
+    let attachment = XCTAttachment(screenshot: app.screenshot())
+    attachment.name = "flow-\(String(format: "%02d", shots))-\(name).png"
+    attachment.lifetime = .keepAlways
+    add(attachment)
+  }
+}
+
+// MARK: - Switching keyboards
+
+extension BlurtKeyboardFlows {
+  /// The globe under the keyboard: away to the system keyboard and back to
+  /// Blurt. The mic key must be there again, drawn and full size — the one
+  /// thing a fresh appearance in a living extension process can lose.
+  private func switchAwayAndBack() throws {
+    let globe = app.buttons["Next keyboard"].firstMatch
+    guard globe.exists else {
+      check(false, "no globe under the keyboard to switch with")
+      return
+    }
+    // Once from the page that is up, and — on the panel — once more from its
+    // keys page, the way a swipe leaves it: the panel must come back on its
+    // mic page, at its own height, with the mic drawn.
+    try switchAwayAndBack(globe: globe, from: "the mic page")
+    if micKey().exists, app.buttons["space"].exists, !keysUp {
+      flipToKeys()
+      if keysUp { try switchAwayAndBack(globe: globe, from: "the keys page") }
+    }
+    // And the other way a keyboard comes back: put away and brought up again
+    // in the same field, from the mic page and from the keys page.
+    try dismissAndReturn(from: "the mic page")
+    if micKey().exists, app.buttons["space"].exists, !keysUp {
+      flipToKeys()
+      if keysUp { try dismissAndReturn(from: "the keys page") }
+    }
+  }
+
+  /// A swipe on the panel's gap, to its keys page.
+  private func flipToKeys() {
+    let gap = micKey().coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 1.15))
+    gap.press(forDuration: 0.05, thenDragTo: gap.withOffset(CGVector(dx: -160, dy: 0)))
+    Thread.sleep(forTimeInterval: 1.2)
+  }
+
+  private func dismissAndReturn(from page: String) throws {
+    let dismiss = app.buttons["probe-dismiss"]
+    guard dismiss.exists else { return }
+    let plus = app.buttons["Add a key term"]
+    dismiss.tap()
+    Thread.sleep(forTimeInterval: 1.5)
+    check(!plus.exists && !micKey().exists, "the keyboard goes away (from \(page))")
+    app.textFields.firstMatch.tap()
+    let back = plus.waitForExistence(timeout: 5) || micKey().waitForExistence(timeout: 2)
+    Thread.sleep(forTimeInterval: 1.5)
+    let mic = micKey()
+    let frame = mic.exists ? mic.frame : .zero
+    check(back && frame.width > 40 && frame.height > 20, "brought back from \(page) the mic key is there, full size (\(frame))")
+    if frame == .zero { print("FLOW-TREE (mic missing after the return):\n\(app.debugDescription)") }
+    if page == "the keys page" { check(!keysUp, "the panel is back on its mic page after being put away") }
+    shot("returned-\(page == "the mic page" ? "mic" : "keys")")
+  }
+
+  private func switchAwayAndBack(globe: XCUIElement, from page: String) throws {
+    // XCUITest has no Keyboard element for a custom keyboard: the + at the
+    // panel's top corner stands in for where the keyboard begins.
+    let plus = app.buttons["Add a key term"]
+    let topBefore = plus.exists ? plus.frame.minY : 0
+    globe.tap()
+    Thread.sleep(forTimeInterval: 2)
+    check(!plus.exists, "the globe switches away from Blurt (from \(page))")
+    shot("switched-away")
+    var hops = 0
+    while !plus.waitForExistence(timeout: 2), hops < 4 {
+      app.buttons["Next keyboard"].firstMatch.tap()
+      hops += 1
+    }
+    Thread.sleep(forTimeInterval: 1.5)
+    let mic = micKey()
+    let top = plus.exists ? plus.frame.minY : 0
+    // One snapshot: an element that flickers would throw between two.
+    let frame = mic.exists ? mic.frame : .zero
+    check(
+      frame.width > 40 && frame.height > 20,
+      "back on Blurt from \(page) the mic key is there, full size (\(frame); top \(topBefore) → \(top))")
+    if frame == .zero { print("FLOW-TREE (mic missing after the switch):\n\(app.debugDescription)") }
+    if page == "the keys page" {
+      check(!keysUp, "the panel is back on its mic page after the switch")
+      // The keys page was up before, so the keyboard was 54 pt taller then.
+      check(abs(top - topBefore - 54) < 4, "the panel is back at its own height (top \(topBefore) → \(top))")
+    }
+    shot("switched-back")
   }
 
   // MARK: Flows
@@ -238,50 +373,5 @@ final class BlurtKeyboardFlows: XCTestCase {
     let back = micKey(labelled: "Dictate")
     check(back.waitForExistence(timeout: 12), "a second tap stops it and the key settles")
     shot("settled")
-  }
-
-  // MARK: Helpers
-
-  private func bringUpBlurt() throws {
-    let blurt = app.buttons["Add a key term"]
-    let system = app.keyboards.firstMatch
-    let deadline = Date().addingTimeInterval(15)
-    while !blurt.exists, !system.exists, Date() < deadline { Thread.sleep(forTimeInterval: 0.5) }
-    var hops = 0
-    while !blurt.waitForExistence(timeout: 2), hops < 4 {
-      let globe = app.buttons["Next keyboard"]
-      XCTAssertTrue(globe.waitForExistence(timeout: 5), "no globe key")
-      globe.tap()
-      hops += 1
-    }
-    XCTAssertTrue(blurt.exists, "Blurt never came up")
-    Thread.sleep(forTimeInterval: 1.5)
-  }
-
-  /// Blurt's mic key, by its identifier: the system's own bottom bar has a
-  /// "Dictate" button too, and a label query lands on it.
-  private func micKey() -> XCUIElement {
-    app.buttons.matching(NSPredicate(format: "identifier == %@", "blurt-mic")).firstMatch
-  }
-
-  private func micKey(labelled label: String) -> XCUIElement {
-    app.buttons.matching(NSPredicate(format: "identifier == %@ AND label == %@", "blurt-mic", label)).firstMatch
-  }
-
-  private func letterKey(_ letter: String) -> XCUIElement {
-    app.buttons.matching(NSPredicate(format: "label == %@", letter)).firstMatch
-  }
-
-  private func check(_ condition: Bool, _ what: String) {
-    print("FLOW-\(condition ? "OK" : "FAIL"): \(what)")
-    XCTAssertTrue(condition, what)
-  }
-
-  private func shot(_ name: String) {
-    shots += 1
-    let attachment = XCTAttachment(screenshot: app.screenshot())
-    attachment.name = "flow-\(String(format: "%02d", shots))-\(name).png"
-    attachment.lifetime = .keepAlways
-    add(attachment)
   }
 }
