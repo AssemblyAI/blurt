@@ -85,9 +85,13 @@ project.yml edit that adds a source file doesn't build a release, and a re-merge
 after a shipped version doesn't republish one. Both jobs still check out
 `github.sha`, so the tag cannot land on a commit other than the one built.
 
-The merged-bump path never passes `skip_checks`, `skip_smoke`, or `republish` —
-those are dispatch-only, because nobody is standing there to judge whether
-skipping was safe.
+The merged-bump path skips `scripts/check.sh` in the build rather than run it a
+second time: the push to `main` runs `check` on the same commit, and `publish`
+refuses to tag until that run has passed (waiting up to 15 minutes for one still
+in progress). A green PR alone isn't enough — an admin can merge past a red
+`check`, and without a merge queue the squashed commit isn't the one the PR
+tested. `skip_smoke` and `republish` stay dispatch-only, because nobody is
+standing there to judge whether skipping was safe.
 
 One `GITHUB_TOKEN` caveat, the mirror of the one that keeps `release-bump` from
 opening the PR: a merge performed **by** Actions with `GITHUB_TOKEN` doesn't

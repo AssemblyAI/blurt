@@ -256,10 +256,11 @@ jobs:
           # Sparkle's EdDSA private key (base64, as `generate_keys -x` exports
           # it). Signs the DMG for the appcast; handed to sign_update on stdin.
           BLURT_SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
-          # Both are dispatch-only escape hatches, so both are empty (and the
-          # full checks run) on the merged-bump path. That is the right default:
-          # nobody is standing there to judge whether skipping was safe.
-          SKIP_CHECKS: ${{ inputs.skip_checks }}
+          # On the merged-bump path check.sh is skipped: the push to main runs
+          # `check` on this exact commit, and publish refuses to tag until that
+          # run has passed — the gate moves rather than goes. On a dispatch both
+          # stay escape hatches, off by default.
+          SKIP_CHECKS: ${{ github.event_name == 'push' || inputs.skip_checks }}
           SKIP_SMOKE: ${{ inputs.skip_smoke }}
           STAGING: ${{ inputs.staging }}
         run: |
@@ -305,8 +306,47 @@ jobs:
       # contents: write is what lets the tag push and the release create land.
       contents: write
       actions: read
+      # Reading the `check` run on github.sha, below.
+      checks: read
 
     steps:
+      - name: Require check to have passed on this commit
+        # The build skips check.sh on the merged-bump path, and a green PR is
+        # not proof on its own: an admin can merge past a red `check`, and
+        # without a merge queue the squashed commit is not the one the PR
+        # tested. The push to main runs `check` on exactly github.sha, so that
+        # run is the one that must pass before anything is tagged. Only the
+        # github-actions app's run counts — any app with checks: write can
+        # post a check run named `check`.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # check normally finishes long before a human approves this gate;
+          # the wait covers an approval that beats it.
+          for _ in $(seq 1 30); do
+            result="$(gh api "repos/$REPO/commits/$SHA/check-runs?check_name=check" \
+              --jq '[.check_runs[] | select(.app.slug == "github-actions")]
+                    | sort_by(.started_at) | last
+                    | if . == null then "missing" else "\(.status)/\(.conclusion)" end')"
+            case "$result" in
+              completed/success)
+                echo "check passed on $SHA"
+                exit 0
+                ;;
+              completed/*)
+                echo "::error::check finished as ${result#completed/} on $SHA — fix main and roll forward to a new patch, or re-run check if it was a flake, then re-run this job"
+                exit 1
+                ;;
+            esac
+            echo "check on $SHA is $result; waiting"
+            sleep 30
+          done
+          echo "::error::check did not finish on $SHA within 15 minutes — re-run this job once it has"
+          exit 1
+
       - name: Checkout blurt
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
