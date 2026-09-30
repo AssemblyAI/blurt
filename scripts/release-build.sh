@@ -411,7 +411,7 @@ info "channel: $CHANNEL (feed: $FEED_URL)"
 
 # What the update window shows. Worked out here, before the build, so missing
 # or sloppy notes fail in seconds rather than after notarization. A release
-# ships only hand-written notes (docs/release-notes/X.Y.Z.md, which the bump PR
+# ships only hand-written notes (release-notes/X.Y.Z.md, which the bump PR
 # scaffolds) that pass lint_release_notes. A staging rehearsal uses the file if
 # there is one and otherwise falls back to the filtered commit subjects since
 # the previous release — only the tester ever sees those.

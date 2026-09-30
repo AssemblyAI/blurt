@@ -288,7 +288,7 @@ already increments it on each bump.
 
 The update window shows the appcast item's `<description>`, which
 `release-build.sh` writes as Markdown (Sparkle renders it natively) from
-**`docs/release-notes/X.Y.Z.md`** — written by a person, every release:
+**`release-notes/X.Y.Z.md`** — written by a person, every release:
 
 - **The bump PR scaffolds it.** `release-bump.sh` commits the file with the
   commits since the previous release in an HTML comment (context for the writer
@@ -349,7 +349,7 @@ and `release-publish.sh` refuses to publish a staging build.
    would. Grant its permissions and dictate once.
 3. On the same branch, raise `CFBundleVersion` in `project.yml` by one (Sparkle
    compares the build number), add or edit
-   `docs/release-notes/X.Y.Z.md` to see the real notes (without it, a staging
+   `release-notes/X.Y.Z.md` to see the real notes (without it, a staging
    build shows filtered commit subjects), push, and dispatch again with
    **staging** checked. This is **rc2**, and it replaces rc1 on the feed.
 4. In rc1, choose **Check for Updates…**.
@@ -358,7 +358,7 @@ Check, in order:
 
 - The update window names rc2 and shows the changelog — and the notes read
   well there: short enough to take in at a glance, nothing a user would have to
-  look up. Adjust `docs/release-notes/X.Y.Z.md` until they do.
+  look up. Adjust `release-notes/X.Y.Z.md` until they do.
 - It downloads, installs, and relaunches as rc2 (Settings → Updates shows the
   version).
 - **Accessibility survives**: dictate into another app right after the

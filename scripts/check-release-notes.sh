@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Lint every docs/release-notes/X.Y.Z.md — the text Blurt's update window shows
+# Lint every release-notes/X.Y.Z.md — the text Blurt's update window shows
 # (RELEASE.md → Release notes). Fails on a leftover TODO from the bump PR's
 # scaffold and on anything `lint_release_notes` in release-lib.sh rejects.
 # Run by check.sh; also useful on its own while writing notes.
@@ -31,7 +31,7 @@ fi
 [ $# -eq 0 ] || die "unknown argument: $1 (the only flag is --new X.Y.Z)"
 
 shopt -s nullglob
-files=("$REPO_ROOT"/docs/release-notes/*.md)
+files=("$REPO_ROOT"/release-notes/*.md)
 if [ "${#files[@]}" -eq 0 ]; then
   echo "no release notes to lint"
   exit 0

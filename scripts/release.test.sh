@@ -342,6 +342,11 @@ lint_rule "a snake_case identifier" "snake_case" '- Fix the word_boost setting'
 lint_rule "a camelCase identifier" "camelCase" '- Fix a crash in pasteText'
 lint_rule "an emoji" "emoji" '- Add fn as a trigger key 🎉'
 lint_rule "more than six bullets" "7 bullets (max 6)" "$(printf -- '- Add thing %s\n' 1 2 3 4 5 6 7)"
+# Notes are committed in the bump PR, so their directory must not be ignored —
+# they once lived under docs/, which .gitignore keeps local-only, and neither
+# the bump nor the notes commit could add them.
+checkfalse "release notes are not gitignored" \
+  git -C "$DIR/.." check-ignore -q "$(REPO_ROOT="$DIR/.." release_notes_path 9.9.9)"
 # The setting's real name has to be sayable; a banned "enhanced" once blocked it.
 checktrue "Blurt's own feature names pass" lint_release_notes <<<'- Fix styles not applying when Enhanced transcripts is on'
 # Reported line numbers must point at the file, not at the comment-stripped text

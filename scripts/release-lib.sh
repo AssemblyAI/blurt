@@ -323,7 +323,7 @@ sparkle_enclosure_url() {
 # together with its revert. Trailing PR numbers — "(#207)", or "(#206) (#208)" on
 # a cherry-pick — are stripped. Empty output when nothing is left, which leaves
 # the appcast without a description. Only a staging rehearsal ever ships this;
-# a release requires hand-written docs/release-notes/X.Y.Z.md (see below).
+# a release requires hand-written release-notes/X.Y.Z.md (see below).
 release_notes_from_subjects() {
   awk '
     function bare(s) {
@@ -351,7 +351,7 @@ release_notes_from_subjects() {
     }'
 }
 
-# --- Release notes (docs/release-notes/X.Y.Z.md) ---
+# --- Release notes (release-notes/X.Y.Z.md) ---
 #
 # What the update window shows, written by a person: a release build refuses to
 # run without the file, the bump PR scaffolds it with a TODO that check.sh fails
@@ -361,7 +361,7 @@ release_notes_from_subjects() {
 
 # Path of the notes file for version $1.
 release_notes_path() {
-  printf '%s\n' "$REPO_ROOT/docs/release-notes/$1.md"
+  printf '%s\n' "$REPO_ROOT/release-notes/$1.md"
 }
 
 # Emit the scaffold release-bump.sh commits: the commits since v$1 as an HTML
