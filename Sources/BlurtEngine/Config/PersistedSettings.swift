@@ -3,7 +3,8 @@ import Foundation
 /// The "reset to a clean state" sweep over every `UserDefaults` key the engine's
 /// settings stores persist — trigger key, sound pack, key terms, developer mode,
 /// enhanced transcripts, style profiles (list, active id, and the legacy single
-/// field), overlay origin, and the timestamp throttling the automatic update check.
+/// field), and overlay origin. (Sparkle's own keys aren't engine settings;
+/// `InstallReset` clears them with the rest of the app's defaults domain.)
 ///
 /// The keys themselves live in `DefaultsKey`, which each store reads its own key
 /// from, so adding a store and adding it to the sweep are not merely the *same*

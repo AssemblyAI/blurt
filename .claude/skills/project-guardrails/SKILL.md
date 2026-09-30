@@ -141,14 +141,12 @@ only one of stt_prompt or prompt; they are the same field`, before the audio is
 - The dictation trigger is a **single lone modifier** (right ⌘ default), home-
   grown via `CGEventTap` + `DictationKeyGate`. No `KeyboardShortcuts` package, no
   key+modifier chord.
-- **Updates are download-only** — check → open the DMG in the browser → the user
-  installs it. The `mxcl/AppUpdater` dependency and its in-place self-updater
-  were removed; don't reintroduce a self-replacing install path, a timer-driven
-  poll, or anything that installs on the user's behalf. Checking automatically
-  once at launch on a configured app (`AutomaticUpdateCheck`, ≤ once a day,
-  silent unless a newer release exists) is the one automatic part, and it still
-  ends in the same Download/Later alert. Extend `UpdateChecker` /
-  `UpdateCheckModel`.
+- **Updates go through Sparkle** (`UpdaterModel`, app-side only) — an
+  EdDSA-signed `appcast.xml` published with each release, Sparkle's own UI,
+  daily checks. Don't hand-roll a second updater or a GitHub-API checker beside
+  it, don't put update code back in the engine, and don't start the updater in
+  anything but the shipping bundle id (a dev build must never replace itself
+  with the release). Silent install stays opt-in.
 
 ## Build / tests
 
@@ -156,7 +154,8 @@ only one of stt_prompt or prompt; they are the same field`, before the audio is
   generated from `project.yml`; edit that and run `xcodegen generate`. check.sh
   fails on pbxproj drift (a PreToolUse hook also blocks edits to it).
 - The engine has **no external SPM dependencies** (Foundation/Security/
-  AVFoundation/CoreAudio only). Don't add one to `Sources/BlurtEngine/`.
+  AVFoundation/CoreAudio only). Don't add one to `Sources/BlurtEngine/`. The app
+  carries exactly one remote package, Sparkle; check.sh rejects any other.
 - Unit tests use **Swift Testing**, not XCTest (the `BlurtUITests` XCUITest
   bundle is the one exception — XCUIAutomation requires XCTest). **Never touch
   the real Keychain in tests** — `APIKeyStore` is the production item; use an

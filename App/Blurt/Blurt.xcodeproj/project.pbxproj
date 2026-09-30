@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		00A485EC5E147DCCF0B8B275 /* juno-85-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3BCCE1D8752C6A3A2AEF9009 /* juno-85-start.m4a */; };
 		00E120625DDB12DDC4043C9F /* rom1a-9-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4B9209100F5A6E8514AF6FA7 /* rom1a-9-stop.m4a */; };
+		00F638EAD518C06C239EF51E /* UpdaterModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1CBD49CFC9AD1BF802F4625 /* UpdaterModel.swift */; };
 		0132B51969D4F1FF318C01E0 /* juno-125-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 286A4475154226AC60716712 /* juno-125-start.m4a */; };
 		0148EF067F8AF351D2B7F2C0 /* rom1b-16-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E617272806BFEB303D94F315 /* rom1b-16-stop.m4a */; };
 		01A96FAF2732876CBC4F5E30 /* rom1b-0-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 0618C6EE1B8864C57F02CC1E /* rom1b-0-stop.m4a */; };
@@ -77,6 +78,7 @@
 		282E843FAECCBCA0CDB04E48 /* juno-93-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D85C603DADD81B58F7D390F7 /* juno-93-stop.m4a */; };
 		2836B2C93B93114A056AF5D9 /* juno-97-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 763E3951E68EBB37F89C7F84 /* juno-97-start.m4a */; };
 		286523D07CE6F05381799EDB /* juno-96-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D06381A69EEEC336CB847783 /* juno-96-stop.m4a */; };
+		28CA968C0302328A8C1EDA74 /* CheckForUpdatesButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1EC0DD9824FEF14E25A22FE /* CheckForUpdatesButton.swift */; };
 		2A078AE336A8297310D41DEE /* juno-80-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E8BB482E825AD5C65B170E18 /* juno-80-stop.m4a */; };
 		2A83AE5BD416B1FD22E6AFC9 /* juno-104-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2D862CB0D203330C1F8F58B0 /* juno-104-stop.m4a */; };
 		2BF2181C1FB5401C449F61DA /* rom1b-30-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 45E6CF05E1334B3D2901E516 /* rom1b-30-stop.m4a */; };
@@ -283,6 +285,7 @@
 		A0DEFAB5DF5E5C7A6146A559 /* juno-90-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DA27B927EB6616D017D910CD /* juno-90-stop.m4a */; };
 		A13335FE97FA2E60A4F5CABC /* ReadyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 383E03AB60BA21AAD92655D5 /* ReadyView.swift */; };
 		A1C101543CA3972691DF5367 /* rom1a-30-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 7FC3A25550C39659E3E00A11 /* rom1a-30-start.m4a */; };
+		A34A51EDE26BC24EB08A3900 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 3BE06CE59B6A662701C56CE5 /* Sparkle */; };
 		A3D012E25BD52949E2452B7B /* juno-17-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F37D9EAC78D140EE0CD438F2 /* juno-17-start.m4a */; };
 		A487D7B801A44C51807E0DCB /* rom1a-28-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = AC2E79FB5ACE247FF90F50E4 /* rom1a-28-stop.m4a */; };
 		A5D51CD762229A68757463C8 /* CueSoundPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D222ED050CC93DEB330E773 /* CueSoundPlayer.swift */; };
@@ -294,7 +297,6 @@
 		AA61D851350DECC5A7045594 /* rom1a-27-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = A8FCDA16949B9CE1323E24F8 /* rom1a-27-start.m4a */; };
 		AAD6D2EADCA8C241332764AD /* blurt-ready-logo.png in Resources */ = {isa = PBXBuildFile; fileRef = 350F18C964DCA2DDCA296ED4 /* blurt-ready-logo.png */; };
 		AB1C0077FA26EEDEA3542A07 /* juno-89-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 00768AE8171902B439F0602F /* juno-89-start.m4a */; };
-		AB6CEBDE7BE4CA99EB469D8E /* UpdateCheckModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A988A975044942D7A9BA19FE /* UpdateCheckModel.swift */; };
 		AC402D2E4BC71A0F8324DCFD /* juno-109-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = EB08EC40A267C71B185EC782 /* juno-109-stop.m4a */; };
 		AD32046355138298E7FC40D0 /* MenuBarScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBA9C9322D0AF3D9C529F06F /* MenuBarScene.swift */; };
 		AD6EA7A1932A9946A2EAE2E3 /* juno-55-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 0FB812876EC4870E9A74BB50 /* juno-55-start.m4a */; };
@@ -762,7 +764,6 @@
 		A8AB9F55940B496EF7A8B633 /* juno-91-start.m4a */ = {isa = PBXFileReference; path = "juno-91-start.m4a"; sourceTree = "<group>"; };
 		A8FCDA16949B9CE1323E24F8 /* rom1a-27-start.m4a */ = {isa = PBXFileReference; path = "rom1a-27-start.m4a"; sourceTree = "<group>"; };
 		A95FFA1F1C07E8FAF8FEC0B8 /* juno-36-start.m4a */ = {isa = PBXFileReference; path = "juno-36-start.m4a"; sourceTree = "<group>"; };
-		A988A975044942D7A9BA19FE /* UpdateCheckModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateCheckModel.swift; sourceTree = "<group>"; };
 		AA1892B0DE69A5B9E8983A5D /* rom1a-23-start.m4a */ = {isa = PBXFileReference; path = "rom1a-23-start.m4a"; sourceTree = "<group>"; };
 		AA55EF35D8FFB4A5EF7A8557 /* rom1a-16-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-16-stop.m4a"; sourceTree = "<group>"; };
 		AAE4557FD2700BDA0EA11D6E /* juno-57-start.m4a */ = {isa = PBXFileReference; path = "juno-57-start.m4a"; sourceTree = "<group>"; };
@@ -774,6 +775,7 @@
 		AD5F1BDEB1DB3658DDB96247 /* juno-70-start.m4a */ = {isa = PBXFileReference; path = "juno-70-start.m4a"; sourceTree = "<group>"; };
 		AFCA36ECEFBA3D7C7B1AB1B7 /* rom1a-31-start.m4a */ = {isa = PBXFileReference; path = "rom1a-31-start.m4a"; sourceTree = "<group>"; };
 		B0CB1B169A47290B83AD44C0 /* rom1b-20-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-20-stop.m4a"; sourceTree = "<group>"; };
+		B1CBD49CFC9AD1BF802F4625 /* UpdaterModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdaterModel.swift; sourceTree = "<group>"; };
 		B24D0EACA5DCC94CFCAD9753 /* rom1b-16-start.m4a */ = {isa = PBXFileReference; path = "rom1b-16-start.m4a"; sourceTree = "<group>"; };
 		B293D9F11DB3C3D268E82E4A /* rom1b-25-start.m4a */ = {isa = PBXFileReference; path = "rom1b-25-start.m4a"; sourceTree = "<group>"; };
 		B401FA111CA49F5A535366AC /* rom1b-15-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-15-stop.m4a"; sourceTree = "<group>"; };
@@ -811,6 +813,7 @@
 		D06381A69EEEC336CB847783 /* juno-96-stop.m4a */ = {isa = PBXFileReference; path = "juno-96-stop.m4a"; sourceTree = "<group>"; };
 		D19740AC9AF44D8E172CFD37 /* juno-46-stop.m4a */ = {isa = PBXFileReference; path = "juno-46-stop.m4a"; sourceTree = "<group>"; };
 		D1D56A6899994805C9F0DBBD /* juno-71-stop.m4a */ = {isa = PBXFileReference; path = "juno-71-stop.m4a"; sourceTree = "<group>"; };
+		D1EC0DD9824FEF14E25A22FE /* CheckForUpdatesButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckForUpdatesButton.swift; sourceTree = "<group>"; };
 		D220A3AC36DCE278804F81A1 /* rom1b-18-start.m4a */ = {isa = PBXFileReference; path = "rom1b-18-start.m4a"; sourceTree = "<group>"; };
 		D27DAF2436D272EEF031303B /* juno-47-start.m4a */ = {isa = PBXFileReference; path = "juno-47-start.m4a"; sourceTree = "<group>"; };
 		D3681457B0FB13FF3FD6BAF6 /* juno-74-stop.m4a */ = {isa = PBXFileReference; path = "juno-74-stop.m4a"; sourceTree = "<group>"; };
@@ -907,6 +910,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0A7FB8A90BB7E7A5110A4F4D /* BlurtEngine in Frameworks */,
+				A34A51EDE26BC24EB08A3900 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1462,7 +1466,8 @@
 		E7D37943B6B2CE3C0692AA48 /* Update */ = {
 			isa = PBXGroup;
 			children = (
-				A988A975044942D7A9BA19FE /* UpdateCheckModel.swift */,
+				D1EC0DD9824FEF14E25A22FE /* CheckForUpdatesButton.swift */,
+				B1CBD49CFC9AD1BF802F4625 /* UpdaterModel.swift */,
 			);
 			path = Update;
 			sourceTree = "<group>";
@@ -1518,6 +1523,7 @@
 			name = Blurt;
 			packageProductDependencies = (
 				371215E93A9C2CE60C6347BB /* BlurtEngine */,
+				3BE06CE59B6A662701C56CE5 /* Sparkle */,
 			);
 			productName = Blurt;
 			productReference = 5E2309BDEF30ED9EFED5B849 /* Blurt.app */;
@@ -1553,6 +1559,7 @@
 			mainGroup = 37EA71F5138E2E63171AFFBD;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				1F23C462C4138D3EA5BFA25E /* XCRemoteSwiftPackageReference "Sparkle" */,
 				BFFF3588F0D8C2D0EEF7BC75 /* XCLocalSwiftPackageReference "../.." */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -2024,6 +2031,7 @@
 				76C1876DB538F8E190EB509E /* BlurtCommands.swift in Sources */,
 				121DC6CD82DEAC7CC0F5AC24 /* BoundTriggerKey.swift in Sources */,
 				68990A3D1D120CC927789338 /* BrandOrb.swift in Sources */,
+				28CA968C0302328A8C1EDA74 /* CheckForUpdatesButton.swift in Sources */,
 				A5D51CD762229A68757463C8 /* CueSoundPlayer.swift in Sources */,
 				4290831AB516CD38229449D8 /* DeveloperSection.swift in Sources */,
 				0F1317CCFA2A3245DAA96141 /* DictationComposition.swift in Sources */,
@@ -2050,7 +2058,7 @@
 				F30578AA785CAE98E944F6B7 /* TextShortcutsSection.swift in Sources */,
 				1817ACD2F7D8F7AF3C9B1C7C /* UITestIdentifiers.swift in Sources */,
 				E1CA5C692CB2A7E1BF231928 /* UITestSupport.swift in Sources */,
-				AB6CEBDE7BE4CA99EB469D8E /* UpdateCheckModel.swift in Sources */,
+				00F638EAD518C06C239EF51E /* UpdaterModel.swift in Sources */,
 				91C1257866F6E2D4EE65BD09 /* WindowAccessor.swift in Sources */,
 				B844779F8427A1225C45A9FB /* WizardController.swift in Sources */,
 				DD800E4A2657C87DD45E4AF8 /* WizardView.swift in Sources */,
@@ -2097,6 +2105,7 @@
 				ARCHS = "$(ARCHS_STANDARD)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				BLURT_SPARKLE_FEED_URL = "https://github.com/AssemblyAI/blurt/releases/latest/download/appcast.xml";
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -2155,6 +2164,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
+				SPARKLE_PUBLIC_ED_KEY = "3RdSHCmCH/BOqgV/FR01c4VZDi6uylEigDq4PFBaCpQ=";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
@@ -2168,6 +2178,7 @@
 				ARCHS = "$(ARCHS_STANDARD)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				BLURT_SPARKLE_FEED_URL = "https://github.com/AssemblyAI/blurt/releases/latest/download/appcast.xml";
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -2219,6 +2230,7 @@
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
+				SPARKLE_PUBLIC_ED_KEY = "3RdSHCmCH/BOqgV/FR01c4VZDi6uylEigDq4PFBaCpQ=";
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 6.0;
@@ -2274,6 +2286,7 @@
 				ARCHS = "$(ARCHS_STANDARD)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				BLURT_SPARKLE_FEED_URL = "https://github.com/AssemblyAI/blurt/releases/latest/download/appcast.xml";
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -2332,6 +2345,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
+				SPARKLE_PUBLIC_ED_KEY = "3RdSHCmCH/BOqgV/FR01c4VZDi6uylEigDq4PFBaCpQ=";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
@@ -2442,10 +2456,26 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		1F23C462C4138D3EA5BFA25E /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = exactVersion;
+				version = 2.10.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		371215E93A9C2CE60C6347BB /* BlurtEngine */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = BlurtEngine;
+		};
+		3BE06CE59B6A662701C56CE5 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1F23C462C4138D3EA5BFA25E /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

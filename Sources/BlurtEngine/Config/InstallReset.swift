@@ -40,9 +40,8 @@ public struct InstallReset {
     let logsCleared: Bool
 
     /// What to tell the user when part of the reset didn't land, or `nil` when
-    /// it all did. Owned here rather than at the `NSAlert` call site for the
-    /// reason `UpdateAlertContent` is: it's a pure projection of a result into
-    /// wording, and the shell that draws it has no test target — so a step
+    /// it all did. Owned here rather than at the `NSAlert` call site because
+    /// it's a pure projection of a result into wording, and the shell that draws it has no test target — so a step
     /// added later can't ship with an alert that forgets to name it.
     var failureAlert: AlertContent? {
       let survivors = [
@@ -71,7 +70,15 @@ public struct InstallReset {
   /// grants.
   public init(bundleID: String, keyStore: any APIKeyGateway) {
     self.init(
-      clearSettings: { PersistedSettings.resetAll() },
+      clearSettings: {
+        PersistedSettings.resetAll()
+        // Then the rest of the app's own domain, the way reset-install.sh's
+        // `defaults delete <bundle id>` does: chiefly Sparkle's SU* keys
+        // (auto-check, auto-install, last check, skipped version), which no
+        // DefaultsKey names — without this, "install updates automatically"
+        // would survive a reset.
+        UserDefaults.standard.removePersistentDomain(forName: bundleID)
+      },
       clearAPIKey: { keyStore.save(nil) },
       resetPermissions: { PermissionsReset.resetAll(bundleID: bundleID) },
       clearLogs: { DictationLog.removeStoredLogs() })

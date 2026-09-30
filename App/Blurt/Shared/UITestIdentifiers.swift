@@ -70,6 +70,7 @@ enum UITestIdentifiers {
   static let developerShowLogs = "settings.developer.showLogs"
   static let enhancedTranscriptsToggle = "settings.enhancedTranscripts.toggle"
   static let updateCheck = "settings.update.check"
+  static let updateAutoCheck = "settings.update.autoCheck"
   /// The Advanced pane's "Reset…" button (`SettingsWindowRoot`'s reset section).
   /// Only the row button is identified: the confirmation it opens is an alert,
   /// whose buttons the suite addresses by title.

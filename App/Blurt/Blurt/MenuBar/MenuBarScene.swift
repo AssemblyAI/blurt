@@ -49,10 +49,7 @@ struct MenuBarContent: View {
       NSApp.activate()
       openSettings()
     }
-    Button("Check for Updates…") {
-      NSApp.activate()
-      appDelegate.updateCheckModel.checkForUpdates()
-    }
+    CheckForUpdatesButton(model: appDelegate.updaterModel, activatesApp: true)
 
     Divider()
 

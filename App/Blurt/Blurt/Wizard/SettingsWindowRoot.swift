@@ -36,7 +36,7 @@ struct SettingsWindowRoot: View {
             Label(UITestIdentifiers.vocabularySettingsTab, systemImage: "character.book.closed")
           }
           .tag(Tab.vocabulary)
-        AdvancedSettingsTab(coordinator: coordinator, updateModel: appDelegate.updateCheckModel)
+        AdvancedSettingsTab(coordinator: coordinator, updaterModel: appDelegate.updaterModel)
           .tabItem { Label(UITestIdentifiers.advancedSettingsTab, systemImage: "gearshape.2") }
           .tag(Tab.advanced)
       }
@@ -106,11 +106,12 @@ private struct StylesSettingsTab: View {
 /// and the start-over button. Kept out of General so the common pane stays short.
 private struct AdvancedSettingsTab: View {
   let coordinator: AppCoordinator
-  let updateModel: UpdateCheckModel
+  let updaterModel: UpdaterModel
 
   var body: some View {
     SettingsPane {
-      MaintenanceSection(updateModel: updateModel)
+      UpdatesSection(model: updaterModel)
+      MaintenanceSection()
       ResetSection(coordinator: coordinator)
     }
   }

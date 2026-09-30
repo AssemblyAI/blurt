@@ -11,8 +11,8 @@ decisions that aren't obvious from the scripts and the workflows.
 | Stage                                                 | Where                                                             | Gate                                                                                         |
 | ----------------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
 | Bump `CFBundleShortVersionString` + `CFBundleVersion` | `release-bump` workflow on `macos-26` (`scripts/release-bump.sh`) | Lands on `main` via PR: normal review + the `check` workflow — merging it starts the release |
-| Build → sign → notarize → staple → DMG                | `release` workflow, `build` job (`scripts/release-build.sh`)      | Signer-pin, Gatekeeper assessment, mount-and-verify (all in-script)                          |
-| Tag, push, publish the GitHub Release                 | `release` workflow, `publish` job (`scripts/release-publish.sh`)  | **Required reviewer on the `release-publish` environment**                                   |
+| Build → sign → notarize → staple → DMG → appcast      | `release` workflow, `build` job (`scripts/release-build.sh`)      | Signer-pin, Gatekeeper assessment, mount-and-verify, EdDSA verify (all in-script)            |
+| Tag, push, publish the GitHub Release + appcast       | `release` workflow, `publish` job (`scripts/release-publish.sh`)  | **Required reviewer on the `release-publish` environment**                                   |
 
 Start to finish:
 
@@ -144,15 +144,16 @@ branches to `main` (optionally plus a `release-dry-run*` pattern — see
 [Dry-running the signing path](#dry-running-the-signing-path)) so a fork or a
 stray branch can never reach the Developer ID key.
 
-| Secret                 | What                                                                                  |
-| ---------------------- | ------------------------------------------------------------------------------------- |
-| `SIGNING_P12_BASE64`   | Developer ID Application cert **and** private key, exported as `.p12`, base64-encoded |
-| `SIGNING_P12_PASSWORD` | The export password for that `.p12`                                                   |
-| `NOTARY_KEY_P8_BASE64` | App Store Connect API key (`.p8`), base64-encoded — the preferred notary credential   |
-| `NOTARY_KEY_ID`        | That key's Key ID                                                                     |
-| `NOTARY_ISSUER_ID`     | That key's Issuer ID                                                                  |
-| `NOTARY_APPLE_ID`      | _Fallback only_ — Apple ID for notarization, if no API key is available               |
-| `NOTARY_PASSWORD`      | _Fallback only_ — app-specific password for that Apple ID                             |
+| Secret                   | What                                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `SIGNING_P12_BASE64`     | Developer ID Application cert **and** private key, exported as `.p12`, base64-encoded                   |
+| `SIGNING_P12_PASSWORD`   | The export password for that `.p12`                                                                     |
+| `NOTARY_KEY_P8_BASE64`   | App Store Connect API key (`.p8`), base64-encoded — the preferred notary credential                     |
+| `NOTARY_KEY_ID`          | That key's Key ID                                                                                       |
+| `NOTARY_ISSUER_ID`       | That key's Issuer ID                                                                                    |
+| `NOTARY_APPLE_ID`        | _Fallback only_ — Apple ID for notarization, if no API key is available                                 |
+| `NOTARY_PASSWORD`        | _Fallback only_ — app-specific password for that Apple ID                                               |
+| `SPARKLE_ED_PRIVATE_KEY` | Sparkle's EdDSA private key, as `generate_keys -x` exports it — see [Sparkle updates](#sparkle-updates) |
 
 Prefer the API key. It is revocable on its own (an app-specific password is tied
 to the Apple ID that owns it), it needs no keychain, and it never appears in a
@@ -238,12 +239,13 @@ If the key is compromised (or the cert expires):
    `SIGNING_P12_PASSWORD` on the `release-build` environment.
 5. Cut a fresh notarized release.
 
-Rotating to a new cert **within the same team** (`B2VQF7Q2QY`) is seamless for
-users — Gatekeeper accepts any valid Developer ID from any team, and updates are
-a manual DMG download (see [Updates in AGENTS.md](./AGENTS.md#updates)), so there
-is no signing-requirement pin to break. A **team change** (new Team ID) is still
-worth avoiding on principle and announcing, but it no longer strands existing
-users the way the former in-app updater's team-pinned requirement did.
+Rotating to a new cert **within the same team** (`B2VQF7Q2QY`) is invisible to
+users: Gatekeeper accepts any valid Developer ID, and Sparkle (see
+[Sparkle updates](#sparkle-updates)) installs an update whose EdDSA signature
+verifies against the key the running copy carries. Rotate the certificate and
+the EdDSA key in **separate** releases, never together — Sparkle tolerates a
+change to one of the two, not both. A **team change** (new Team ID) is worth
+avoiding on principle; rehearse it on the staging feed before shipping it.
 
 ## Rotating the notary credential
 
@@ -259,13 +261,221 @@ revoke the old password at appleid.apple.com and mint a new one. For CI, replace
 B2VQF7Q2QY --password <new-app-specific-password>`. The profile is submit-only;
 it cannot sign.
 
+## Sparkle updates
+
+Installed copies update themselves with [Sparkle](https://sparkle-project.org).
+Each release carries an `appcast.xml` asset; every installed copy polls
+`https://github.com/AssemblyAI/blurt/releases/latest/download/appcast.xml`
+(`SUFeedURL`, from the `BLURT_SPARKLE_FEED_URL` build setting in `project.yml`),
+so the feed moves to a release at the moment
+`release-publish.sh` flips it live and repoints `/latest` — never before its
+assets are verified. The appcast's one item names the versioned
+`Blurt-X.Y.Z.dmg` on that release, with the DMG's EdDSA signature and length.
+
+`release-build.sh` produces it: after the DMG is notarized and stapled, Sparkle's
+`sign_update` (from the SPM artifact in DerivedData) signs it, and
+`scripts/verify-sparkle-signature.swift` checks that signature against the
+`SUPublicEDKey` read out of the **built app** — the key every installed copy
+will check — before the appcast is written. A private key that doesn't match
+fails the build, not users' updates. The build reads `SUFeedURL` back out of
+the built app the same way, and refuses to start while `SPARKLE_PUBLIC_ED_KEY`
+is still the placeholder.
+
+Sparkle compares `CFBundleVersion` (`sparkle:version`), not the marketing
+version, so the build number must rise with every release — `release-bump.sh`
+already increments it on each bump.
+
+### Release notes
+
+The update window shows the appcast item's `<description>`, which
+`release-build.sh` writes as Markdown (Sparkle renders it natively) from
+**`release-notes/X.Y.Z.md`** — written by a person, every release:
+
+- **The bump PR scaffolds it.** `release-bump.sh` commits the file with the
+  commits since the previous release in an HTML comment (context for the writer
+  and the reviewer; comments never ship) and a `TODO` where the notes go.
+  `check` fails while the `TODO` is there, so the bump PR can't merge until the
+  notes are written — and approving that PR is the editorial review.
+- **A release build refuses to run without it.** There is no automatic
+  fallback for a release; commit subjects are written for reviewers, not users.
+  To build a version that didn't come through `release-bump.sh` — re-running or
+  republishing one bumped before notes were required —
+  `scripts/check-release-notes.sh --new X.Y.Z` writes the same scaffold.
+  (A `--staging` rehearsal alone falls back to filtered commit subjects, since
+  only the tester sees them.)
+- **`scripts/check-release-notes.sh` lints it** (via `check.sh`, and again in the
+  build), using `lint_release_notes` in `release-lib.sh`:
+  - bullets only, at most **6**, each at most **100** characters;
+  - each starts with a capital letter — lead with the verb ("Add…", "Fix…",
+    "Paste now works in…") — and none with "We";
+  - no filler phrases — _seamless_, _under the hood_, _various improvements_
+    and the rest of `RELEASE_NOTES_BANNED` in `release-lib.sh`, the one list
+    to extend when a new tic shows up;
+  - no emoji;
+  - no developer leakage: PR numbers, `chore:`/`fix:` prefixes, backticks,
+    filenames, `snake_case` or `camelCase` identifiers (real product names like
+    macOS or YouTube are allow-listed in `RELEASE_NOTES_PROPER_NOUNS`).
+
+The staging fallback measures from tags, so the build job checks out with full
+history; on a shallow checkout that path fails fast.
+
+#### Writing them
+
+The lint only catches the obvious. These are the rules it can't check, and
+they apply equally to a person or an agent drafting the notes.
+
+**The reader** uses Blurt to dictate and has never seen this repo. They're
+reading a small window between them and the app they just tried to open, so
+they want one glance: what's different for me, and should I install it now?
+
+**Translate each commit into what the user notices.** Describe what they can
+now do, or what stopped going wrong, never what the code does.
+
+| Commit subject                                            | Note                                               |
+| --------------------------------------------------------- | -------------------------------------------------- |
+| Paste into rebranded Electron apps like Codex             | Paste into Codex and other Electron apps           |
+| Add Intel (x86_64) Mac support — build universal binaries | Run Blurt on Intel Macs                            |
+| Drop the same-window separator after the user types       | Fix a stray space before dictated text             |
+| Switch auto-updating to Sparkle                           | Get new versions automatically: Blurt checks daily |
+
+**Leave out** anything a user wouldn't notice: refactors, CI, tests, docs and
+README changes, dependency bumps, work reverted in the same release, and fixes
+for bugs that never shipped. Six bullets is a ceiling, not a target — a
+release with one real change gets one bullet.
+
+**Order** by how much a user notices it: new things they can do, then fixes to
+things they hit, then everything else.
+
+**Word it** plainly and specifically:
+
+- Name the actual thing: the app (Google Docs, Codex), the key (fn), the
+  setting, as it's spelled in the app ("Enhanced transcripts").
+- Start with the verb in the imperative — "Add", "Fix", "Paste", "Run" — or
+  with the thing now working ("Paste now works in…").
+- One fact per bullet. No "and more", no "various", no adjectives doing the
+  work of a fact ("faster" only with what got faster).
+- No sales voice: nothing a user would read as marketing, and no apology or
+  internal backstory for a fix.
+- A fix says what was wrong in the user's words ("Fix a stray space before
+  dictated text in Google Docs"), not the mechanism.
+
+**The model** — v0.1.57's notes, from the first rehearsal:
+
+```md
+- Get new versions automatically: Blurt checks daily and installs updates when you say so
+- Use the fn key to start dictating
+- Add text shortcuts: say a phrase and Blurt pastes the saved text in its place
+- Paste into Codex and other Electron apps
+- Run Blurt on Intel Macs
+- Report a bug from the main window
+```
+
+Then read them where users will — the rehearsal below shows the real window.
+
+### Rehearsing an update
+
+A shipped build whose updater is broken can't be fixed by an update, so every
+user it reaches has to download again by hand. Before the first Sparkle release
+— and before any change to the updater, the feed, the signing, or the appcast —
+prove that an installed build updates itself, using the real pipeline:
+Developer ID, notarization, the CI secret, and GitHub's download redirects.
+
+The one difference is the feed. `release-build.sh --staging` builds an app that
+polls the **`sparkle-staging`** prerelease instead of `/latest`, with an appcast
+whose DMG lives there too. That prerelease is never marked latest, so
+`/releases/latest/download/` — every shipped copy's feed — can't resolve to it,
+and `release-publish.sh` refuses to publish a staging build.
+
+1. Push the rehearsal to a branch matching `release-dry-run*`, and temporarily
+   add that pattern to the `release-build` environment's deployment branches
+   (see [Dry-running the signing path](#dry-running-the-signing-path) — with the
+   recommended `main`-only policy, a dispatch from any other branch is blocked
+   before it builds). Dispatch **release** from that branch with **staging**
+   checked (and the version the branch carries). The build signs and notarizes as
+   usual; the `stage` job then uploads the DMG and appcast to `sparkle-staging`,
+   creating it the first time. This is **rc1**.
+2. Download rc1's DMG from the run's artifacts (not from the prerelease, which
+   the next step overwrites) and install it into `/Applications`, the way a user
+   would. Grant its permissions and dictate once.
+3. On the same branch, raise `CFBundleVersion` in `project.yml` by one (Sparkle
+   compares the build number), add or edit
+   `release-notes/X.Y.Z.md` to see the real notes (without it, a staging
+   build shows filtered commit subjects), push, and dispatch again with
+   **staging** checked. This is **rc2**, and it replaces rc1 on the feed.
+4. In rc1, choose **Check for Updates…**.
+
+Check, in order:
+
+- The update window names rc2 and shows the changelog — and the notes read
+  well there: short enough to take in at a glance, nothing a user would have to
+  look up. Adjust `release-notes/X.Y.Z.md` until they do.
+- It downloads, installs, and relaunches as rc2 (Settings → Updates shows the
+  version).
+- **Accessibility survives**: dictate into another app right after the
+  relaunch. If the paste fails, the update broke the grant — don't ship.
+- **Install on quit**: stage an rc3, turn on "Download and install updates
+  automatically", quit, relaunch, and confirm it is rc3.
+- An update found mid-dictation doesn't interrupt the recording.
+- Launched from `~/Downloads` instead of `/Applications` (App Translocation),
+  Sparkle either updates or says why — it doesn't fail silently.
+- From a standard (non-admin) account, it asks for an administrator password
+  rather than failing.
+
+Remove the branch pattern from `release-build` when you're done. A rehearsed
+copy keeps polling `sparkle-staging`. Delete it afterwards and
+install the real release, or it will only ever see staged builds.
+
+For fast iteration on the update window's look alone, a local loop is quicker:
+two locally signed builds with the shipping bundle id, a hand-written appcast,
+and `python3 -m http.server`. It skips everything the rehearsal exists to
+prove, so it is no substitute.
+
+### One-time setup: the key pair
+
+The EdDSA key pair is the updater's root of trust, separate from the Developer
+ID key: an installed copy only installs an archive signed by the private half of
+the public key it shipped with. On the maintainer's Mac, with Sparkle's tools
+(in the Sparkle release tarball, or `…/SourcePackages/artifacts/sparkle/Sparkle/bin/`
+after any build):
+
+```sh
+./bin/generate_keys                  # creates the pair in the login keychain; prints the public key
+./bin/generate_keys -x sparkle.key   # exports the private key for the CI secret
+```
+
+1. Put the printed public key in `App/Blurt/project.yml` as
+   `SPARKLE_PUBLIC_ED_KEY`, replacing the placeholder, and land it through the
+   normal PR flow.
+2. Paste the contents of `sparkle.key` into the `SPARKLE_ED_PRIVATE_KEY` secret
+   on the `release-build` environment, then delete the file.
+3. Back up the private key outside the keychain and never commit it. The
+   current backup is a 1Password document, "Blurt Sparkle EdDSA private key",
+   in the maintainer's private vault — not a shared one, since anyone holding
+   the key can sign an update installed copies accept (together with the
+   Developer ID key; see below). An offline copy beside the Developer ID `.p12`
+   is a sensible second.
+
+### Key custody and rotation
+
+**Losing the private key strands every installed copy** — nothing else can sign
+an update they will accept, so they'd have to download a new DMG by hand. Keep
+the offline backup.
+
+A **leaked** private key lets whoever holds it sign an update installed copies
+will accept — though Sparkle also requires the update to carry the same
+Developer ID signature as the running app, so the attacker would need both keys.
+To rotate: generate a new pair, ship one bridge release that is signed with the
+**old** private key but carries the **new** `SPARKLE_PUBLIC_ED_KEY` (run that one
+build with `BLURT_SPARKLE_VERIFY_PUBLIC_KEY` set to the old public key, since the
+build otherwise verifies against the key the app carries), then switch the
+secret to the new private key for every release after it.
+
 ## A bad release: roll forward, never roll back
 
-Blurt does **not** yank published releases. The update check only ever offers
-users a strictly higher version (`UpdateChecker` compares `SemanticVersion` and
-reports `.available` only when the latest tag is greater), so the fix for any bad
-build is to **ship a new patch**: dispatch `release-bump`, merge, dispatch
-`release`.
+Blurt does **not** yank published releases. Sparkle only ever offers users a
+strictly higher `CFBundleVersion` than the one they're running, so the fix for
+any bad build is to **ship a new patch**: dispatch `release-bump`, merge,
+dispatch `release`.
 
 The one exception is a fault caught **before announcing**, while the same version
 is still safe to overwrite (e.g. a corrupted upload flagged by the post-publish

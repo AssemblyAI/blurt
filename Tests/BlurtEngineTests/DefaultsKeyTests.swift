@@ -44,8 +44,7 @@ struct DefaultsKeyTests {
     // the unprefixed half, so nothing here says "Blurt".
     let acme = HostIdentity(
       productName: "Acme Voice", subsystem: "com.acme.voice", keychainService: "acme-voice",
-      defaultsPrefix: "AcmeVoice", logDirectoryName: "Acme Voice",
-      releaseURL: HostIdentity.blurt.releaseURL)
+      defaultsPrefix: "AcmeVoice", logDirectoryName: "Acme Voice")
     #expect(DefaultsKey.soundPack.key(in: acme) == "AcmeVoiceSoundPack")
     #expect(DefaultsKey.soundPack.key(in: .blurt) == "BlurtSoundPack")
   }

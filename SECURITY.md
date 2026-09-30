@@ -34,7 +34,11 @@ permissions it uses are in scope here.
 
 Blurt sends no telemetry — no crash reporting, no analytics, and no usage
 tracking. The only network traffic the app produces is the dictation audio it
-sends to AssemblyAI and the GitHub Releases check for self-updates.
+sends to AssemblyAI and the update check: Sparkle fetches `appcast.xml` from the
+latest GitHub Release and, when you install an update, downloads the DMG it
+names. Sparkle verifies each update's EdDSA signature against the public key
+built into the app before installing it, on top of the Developer ID signature
+and notarization.
 
 ## Supported versions
 
