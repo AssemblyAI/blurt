@@ -51,6 +51,10 @@ enum DesignTokens {
     nonisolated static let materialDarkKey: Color = Color(hex: 0x575757)
     /// A modifier key on the system's dark material.
     nonisolated static let materialDarkModifier: Color = Color(hex: 0x474747)
+    /// The system's dark keyboard material (measured, iOS 27).
+    nonisolated static let materialDarkSurface: Color = Color(hex: 0x373737)
+    /// The system's light keyboard material (measured, iOS 27): what the gallery stands under a clear surface.
+    nonisolated static let materialLightSurface: Color = Color(hex: 0xE2E3E8)
     /// Black-100: the lightest warm grey.
     nonisolated static let neutral300: Color = Color(hex: 0xD2D1D0)
     /// Black-200: mono labels on the dark face.
@@ -99,6 +103,8 @@ enum DesignTokens {
     nonisolated static let darkLegend: Color = Brand.paperTint
     /// `brand.neutral/500`.
     nonisolated static let darkLegendSecondary: Color = Brand.neutral500
+    /// `brand.material/dark-surface`.
+    nonisolated static let darkMaterial: Color = Brand.materialDarkSurface
     /// `brand.orange`.
     nonisolated static let darkNotice: Color = Brand.orange
     /// `brand.ink/700`.
@@ -123,6 +129,8 @@ enum DesignTokens {
     nonisolated static let lightLegend: Color = Brand.ink
     /// `brand.neutral/700`.
     nonisolated static let lightLegendSecondary: Color = Brand.neutral700
+    /// `brand.material/light-surface`.
+    nonisolated static let lightMaterial: Color = Brand.materialLightSurface
     /// `brand.orange`.
     nonisolated static let lightNotice: Color = Brand.orange
     /// `brand.white`.
@@ -384,8 +392,8 @@ enum DesignTokens {
     /// The key-term field: the brand's input corners (radius/input).
     nonisolated static let termRadius: CGFloat = 8
     nonisolated static let voiceBarHeight: CGFloat = 32
-    /// The voice element's box in the voice bar: what the wave gets.
-    nonisolated static let voiceBarWidth: CGFloat = 240
+    /// The voice element's box in the voice bar; with the + beside it the pair sits centred.
+    nonisolated static let voiceBarWidth: CGFloat = 160
     nonisolated static let voiceHomeHeight: CGFloat = 112
     /// The box on the home screen.
     nonisolated static let voiceHomeWidth: CGFloat = 280
@@ -394,7 +402,7 @@ enum DesignTokens {
     nonisolated static let voicePanelWidth: CGFloat = 300
     /// The element while pressed.
     nonisolated static let voicePressScale: CGFloat = 0.94
-    /// The wave stays this clear of the + at the trailing edge.
+    /// Between the element and the +.
     nonisolated static let voicebarAddtermClearance: CGFloat = 12
     /// The voice row, where the system puts its suggestion bar.
     nonisolated static let voicebarHeight: CGFloat = 44
@@ -523,6 +531,8 @@ enum DesignTokens {
     "brand.ink/800": "#26231E",
     "brand.material/dark-key": "#575757",
     "brand.material/dark-modifier": "#474747",
+    "brand.material/dark-surface": "#373737",
+    "brand.material/light-surface": "#E2E3E8",
     "brand.neutral/300": "#D2D1D0",
     "brand.neutral/500": "#A5A4A2",
     "brand.neutral/700": "#777673",
@@ -546,6 +556,7 @@ enum DesignTokens {
     "themes.dark/key-modifier": "#26231E",
     "themes.dark/legend": "#F5F3EB",
     "themes.dark/legend-secondary": "#A5A4A2",
+    "themes.dark/material": "#373737",
     "themes.dark/notice": "#E67F36",
     "themes.dark/popup": "#33302A",
     "themes.dark/signal": "#67AD82",
@@ -558,6 +569,7 @@ enum DesignTokens {
     "themes.light/key-modifier": "#DAD7CB",
     "themes.light/legend": "#1D1B16",
     "themes.light/legend-secondary": "#777673",
+    "themes.light/material": "#E2E3E8",
     "themes.light/notice": "#E67F36",
     "themes.light/popup": "#FFFFFF",
     "themes.light/signal": "#01762F",
@@ -692,7 +704,7 @@ enum DesignTokens {
     "metrics.term/pad": "14",
     "metrics.term/radius": "8",
     "metrics.voice/bar-height": "32",
-    "metrics.voice/bar-width": "240",
+    "metrics.voice/bar-width": "160",
     "metrics.voice/home-height": "112",
     "metrics.voice/home-width": "280",
     "metrics.voice/panel-height": "88",

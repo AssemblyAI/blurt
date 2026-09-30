@@ -38,21 +38,19 @@ struct VoiceBar: View {
           .accessibilityLabel("Start Blurt")
           .transition(.opacity)
         } else {
-          // The element stays clear of the + at the trailing edge, on both sides so it stays centred.
-          let clearance = DesignTokens.Metrics.glyphHit + DesignTokens.Metrics.voicebarAddtermClearance
-          MicControl(
-            model: model, slot: .bar,
-            width: min(DesignTokens.Metrics.voiceBarWidth, geo.size.width - 2 * clearance)  // literal-ok: both sides
-          )
+          // The element and the + together, centred: the + rides beside the
+          // element, a clearance away, never off at the edge.
+          let plus = DesignTokens.Metrics.glyphHit + DesignTokens.Metrics.voicebarAddtermClearance
+          HStack(spacing: DesignTokens.Metrics.voicebarAddtermClearance) {
+            MicControl(model: model, slot: .bar, width: min(DesignTokens.Metrics.voiceBarWidth, geo.size.width - plus))
+            AddTermKey(model: model)
+          }
           .transition(.opacity)
         }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     .frame(height: Self.height)
-    .overlay(alignment: .trailing) {
-      if model.termDraft == nil, model.hasFullAccess { AddTermKey(model: model) }
-    }
     .animation(.easeInOut(duration: DesignTokens.Motion.termSwap), value: model.termDraft == nil)
   }
 }

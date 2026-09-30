@@ -65,6 +65,7 @@ private struct ThemeCard: View {
   private func preview(_ face: KeyboardPalette) -> some View {
     KeyboardRootView(model: Self.model(for: face))
       .frame(width: Self.previewWidth, height: KeyboardLayout.full.height)
+      .background(face.standIn)
       .scaleEffect(Self.scale, anchor: .topLeading)
       .frame(width: Self.previewWidth * Self.scale, height: KeyboardLayout.full.height * Self.scale)
       .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Metrics.pickerRadius))

@@ -9,7 +9,7 @@ struct SlimBarView: View {
       if model.needsGlobe { KeyCap(systemImage: "globe", dark: true) { model.globe() } }
       VoiceBar(model: model)
       KeyCap(systemImage: "delete.left", dark: true) { model.deleteBackward() }
-      KeyCap(systemImage: "return", dark: true) { model.newline() }
+      KeyCap(title: model.returnLabel ?? "return", dark: true) { model.newline() }
     }
   }
 }

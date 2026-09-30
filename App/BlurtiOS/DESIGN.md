@@ -80,10 +80,10 @@ the brand's face. Ten roles each (`BlurtKeyboard/Sources/KeyboardPalette.swift`)
 
 <!-- tokens:begin themes -->
 
-| Face    | Surface   | Key       | Modifier  | Legend    | Secondary | Signal    | Pop-up    | Field     | Field border | Notice    | Key in container | Modifier in container |
-| ------- | --------- | --------- | --------- | --------- | --------- | --------- | --------- | --------- | ------------ | --------- | ---------------- | --------------------- |
-| `light` | `#ECEBE5` | `#FFFFFF` | `#DAD7CB` | `#1D1B16` | `#777673` | `#01762F` | `#FFFFFF` | `#FFFFFF` | `#C7C3B2`    | `#E67F36` | `#FFFFFF`        | `#DAD7CB`             |
-| `dark`  | `#1D1B16` | `#33302A` | `#26231E` | `#F5F3EB` | `#A5A4A2` | `#67AD82` | `#33302A` | `#33302A` | `#3A362F`    | `#E67F36` | `#575757`        | `#474747`             |
+| Face    | Surface   | Key       | Modifier  | Legend    | Secondary | Signal    | Pop-up    | Field     | Field border | Notice    | Key in container | Modifier in container | Host material |
+| ------- | --------- | --------- | --------- | --------- | --------- | --------- | --------- | --------- | ------------ | --------- | ---------------- | --------------------- | ------------- |
+| `light` | `#ECEBE5` | `#FFFFFF` | `#DAD7CB` | `#1D1B16` | `#777673` | `#01762F` | `#FFFFFF` | `#FFFFFF` | `#C7C3B2`    | `#E67F36` | `#FFFFFF`        | `#DAD7CB`             | `#E2E3E8`     |
+| `dark`  | `#1D1B16` | `#33302A` | `#26231E` | `#F5F3EB` | `#A5A4A2` | `#67AD82` | `#33302A` | `#33302A` | `#3A362F`    | `#E67F36` | `#575757`        | `#474747`             | `#373737`     |
 
 <!-- tokens:end themes -->
 
@@ -142,9 +142,9 @@ pop-up carries the one shadow on the keyboard, a whisper (12 %, radius 8),
 being the one thing that floats.
 
 Type: the letters are SF Pro at the iPhone's size, and the glyph keys — shift,
-delete, globe, return, the +, × and ✓ — SF Symbols, so the keyboard feels
-native under the fingers. Every **word** on a key — `123`, `ABC`, `#+=`,
-`space`, the return key's `send` / `go` / `done` / `search` / `next` / `join` —
+delete, globe, the +, × and ✓ — SF Symbols, so the keyboard feels native
+under the fingers. Every **word** on a key — `123`, `ABC`, `#+=`, `space`,
+`return` and the field's own `send` / `go` / `done` / `search` / `next` / `join` —
 is the brand's eyebrow: Modern Gothic Mono, medium, 12 pt, uppercase, +1.2
 tracking, in the face's secondary legend, a step quieter than a letter. Fixed
 point sizes throughout, as the system keyboard's; no Dynamic Type.
@@ -267,7 +267,7 @@ slim bar 8.
 | `full`    | voice row 44, then the first key row right under it as the iPhone's sits under its suggestions · three letter rows 43 · 123 / globe / space / return                                                                                                                  | 270                      |
 
 The voice row (`VoiceBar`) is where the system keyboard puts its suggestion
-bar: the element, the + beside it at the trailing edge, or the key-term
+bar: the element with the + beside it, the pair centred, or the key-term
 field. A swipe flips the panel past 48 pt sideways and more sideways than up
 or down by 1.5×; a key acts on release and only under 12 pt of travel
 (`KeyboardInteraction`, tested).
@@ -312,7 +312,7 @@ term, name or sender over 80 characters.
 
 Nothing to configure: key clicks play only if the user has keyboard clicks
 on; the return key says what the field asks — send, search, go, done, next,
-join — with the glyph otherwise; a number, decimal or phone field opens on
+join — and `return` otherwise; a number, decimal or phone field opens on
 the symbols page; capitalisation follows the field's `autocapitalizationType`;
 the letter rows follow the phone's first language (AZERTY for French, QWERTZ
 for German, Czech, Slovak and Hungarian, QWERTY otherwise); the face follows
@@ -335,43 +335,45 @@ uses them. `BlurtBrand` keeps a few of the Mac's names as aliases.
 
 <!-- tokens:begin brand -->
 
-| Token                    | Value     | Swift                        | Use                                                                                 |
-| ------------------------ | --------- | ---------------------------- | ----------------------------------------------------------------------------------- |
-| `apple/dark-key`         | `#6B6B6B` | `Brand.appleDarkKey`         | the iPhone keyboard's dark key                                                      |
-| `apple/dark-modifier`    | `#464646` | `Brand.appleDarkModifier`    | the iPhone keyboard's dark modifier key                                             |
-| `apple/dark-surface`     | `#2B2B2B` | `Brand.appleDarkSurface`     | the iPhone keyboard's dark surface                                                  |
-| `apple/light-modifier`   | `#ADB3BC` | `Brand.appleLightModifier`   | the iPhone keyboard's light modifier key                                            |
-| `apple/light-surface`    | `#D1D5DB` | `Brand.appleLightSurface`    | the iPhone keyboard's light surface                                                 |
-| `black`                  | `#000000` | `Brand.black`                | —                                                                                   |
-| `card`                   | `#EBE8E8` | `Brand.card`                 | the warm card fill; the paper theme's surface                                       |
-| `card-border`            | `#DEDBDB` | `Brand.cardBorder`           | the card's hairline; the paper theme's modifier key                                 |
-| `cobolt`                 | `#3923C7` | `Brand.cobolt`               | AssemblyAI's primary violet: the drop, never a key or a surface                     |
-| `green/100`              | `#CCE4D5` | `Brand.green100`             | the design system's UI-and-code green fill (unused on the phone yet)                |
-| `green/200`              | `#99C8AC` | `Brand.green200`             | the design system's UI-and-code green highlight (unused on the phone yet)           |
-| `green/400`              | `#67AD82` | `Brand.green400`             | the brand hue lifted for dark chrome: the meter, the ring, the wave on ink          |
-| `green/700`              | `#01762F` | `Brand.green700`             | the wordmark green, light chrome (the app's accent in light)                        |
-| `green/mist`             | `#DBF5E6` | `Brand.greenMist`            | the pale green the orb lightens into                                                |
-| `ink`                    | `#1D1B16` | `Brand.ink`                  | the brand ink: the Mac pill's body, the ink theme's surface                         |
-| `ink/600`                | `#3A362F` | `Brand.ink600`               | the Mac's dark card border                                                          |
-| `ink/700`                | `#33302A` | `Brand.ink700`               | an ordinary key on ink, one step up                                                 |
-| `ink/800`                | `#26231E` | `Brand.ink800`               | a modifier key on ink; the Mac's dark card fill                                     |
-| `material/dark-key`      | `#575757` | `Brand.materialDarkKey`      | a key on the system's dark keyboard material (measured, iOS 27): the container case |
-| `material/dark-modifier` | `#474747` | `Brand.materialDarkModifier` | a modifier key on the system's dark material                                        |
-| `neutral/300`            | `#D2D1D0` | `Brand.neutral300`           | black-100: the lightest warm grey                                                   |
-| `neutral/500`            | `#A5A4A2` | `Brand.neutral500`           | black-200: mono labels on the dark face                                             |
-| `neutral/700`            | `#777673` | `Brand.neutral700`           | black-300: muted text and mono labels on the light face                             |
-| `neutral/900`            | `#4A4945` | `Brand.neutral900`           | black-400: body text on the light face                                              |
-| `orange`                 | `#E67F36` | `Brand.orange`               | the error word and ring, cancel, the Full Access note; never a red body             |
-| `paper/200`              | `#ECEBE5` | `Brand.paper200`             | neutral-100: the light face's surface                                               |
-| `paper/300`              | `#DAD7CB` | `Brand.paper300`             | neutral-200: a modifier key on the light face                                       |
-| `paper/400`              | `#C7C3B2` | `Brand.paper400`             | neutral-300: hairlines and field borders on the light face                          |
-| `paper/page`             | `#FDFCF8` | `Brand.paperPage`            | the design system's page: the app's light ground                                    |
-| `paper/tint`             | `#F5F3EB` | `Brand.paperTint`            | the warm off-white one step in: light cards, dark legends                           |
-| `violet/iris`            | `#887BDD` | `Brand.violetIris`           | the orb gradient's upper violet stop                                                |
-| `violet/lavender`        | `#D7D3F4` | `Brand.violetLavender`       | the orb's lightest violet: its top and the gradient's ends                          |
-| `violet/periwinkle`      | `#B0A7E9` | `Brand.violetPeriwinkle`     | the orb's mid violet: the drop's halo                                               |
-| `warm-white`             | `#F2EEE6` | `Brand.warmWhite`            | key legends on ink: warm white on warm ink                                          |
-| `white`                  | `#FFFFFF` | `Brand.white`                | —                                                                                   |
+| Token                    | Value     | Swift                        | Use                                                                                                    |
+| ------------------------ | --------- | ---------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `apple/dark-key`         | `#6B6B6B` | `Brand.appleDarkKey`         | the iPhone keyboard's dark key                                                                         |
+| `apple/dark-modifier`    | `#464646` | `Brand.appleDarkModifier`    | the iPhone keyboard's dark modifier key                                                                |
+| `apple/dark-surface`     | `#2B2B2B` | `Brand.appleDarkSurface`     | the iPhone keyboard's dark surface                                                                     |
+| `apple/light-modifier`   | `#ADB3BC` | `Brand.appleLightModifier`   | the iPhone keyboard's light modifier key                                                               |
+| `apple/light-surface`    | `#D1D5DB` | `Brand.appleLightSurface`    | the iPhone keyboard's light surface                                                                    |
+| `black`                  | `#000000` | `Brand.black`                | —                                                                                                      |
+| `card`                   | `#EBE8E8` | `Brand.card`                 | the warm card fill; the paper theme's surface                                                          |
+| `card-border`            | `#DEDBDB` | `Brand.cardBorder`           | the card's hairline; the paper theme's modifier key                                                    |
+| `cobolt`                 | `#3923C7` | `Brand.cobolt`               | AssemblyAI's primary violet: the drop, never a key or a surface                                        |
+| `green/100`              | `#CCE4D5` | `Brand.green100`             | the design system's UI-and-code green fill (unused on the phone yet)                                   |
+| `green/200`              | `#99C8AC` | `Brand.green200`             | the design system's UI-and-code green highlight (unused on the phone yet)                              |
+| `green/400`              | `#67AD82` | `Brand.green400`             | the brand hue lifted for dark chrome: the meter, the ring, the wave on ink                             |
+| `green/700`              | `#01762F` | `Brand.green700`             | the wordmark green, light chrome (the app's accent in light)                                           |
+| `green/mist`             | `#DBF5E6` | `Brand.greenMist`            | the pale green the orb lightens into                                                                   |
+| `ink`                    | `#1D1B16` | `Brand.ink`                  | the brand ink: the Mac pill's body, the ink theme's surface                                            |
+| `ink/600`                | `#3A362F` | `Brand.ink600`               | the Mac's dark card border                                                                             |
+| `ink/700`                | `#33302A` | `Brand.ink700`               | an ordinary key on ink, one step up                                                                    |
+| `ink/800`                | `#26231E` | `Brand.ink800`               | a modifier key on ink; the Mac's dark card fill                                                        |
+| `material/dark-key`      | `#575757` | `Brand.materialDarkKey`      | a key on the system's dark keyboard material (measured, iOS 27): the container case                    |
+| `material/dark-modifier` | `#474747` | `Brand.materialDarkModifier` | a modifier key on the system's dark material                                                           |
+| `material/dark-surface`  | `#373737` | `Brand.materialDarkSurface`  | the system's dark keyboard material (measured, iOS 27)                                                 |
+| `material/light-surface` | `#E2E3E8` | `Brand.materialLightSurface` | the system's light keyboard material (measured, iOS 27): what the gallery stands under a clear surface |
+| `neutral/300`            | `#D2D1D0` | `Brand.neutral300`           | black-100: the lightest warm grey                                                                      |
+| `neutral/500`            | `#A5A4A2` | `Brand.neutral500`           | black-200: mono labels on the dark face                                                                |
+| `neutral/700`            | `#777673` | `Brand.neutral700`           | black-300: muted text and mono labels on the light face                                                |
+| `neutral/900`            | `#4A4945` | `Brand.neutral900`           | black-400: body text on the light face                                                                 |
+| `orange`                 | `#E67F36` | `Brand.orange`               | the error word and ring, cancel, the Full Access note; never a red body                                |
+| `paper/200`              | `#ECEBE5` | `Brand.paper200`             | neutral-100: the light face's surface                                                                  |
+| `paper/300`              | `#DAD7CB` | `Brand.paper300`             | neutral-200: a modifier key on the light face                                                          |
+| `paper/400`              | `#C7C3B2` | `Brand.paper400`             | neutral-300: hairlines and field borders on the light face                                             |
+| `paper/page`             | `#FDFCF8` | `Brand.paperPage`            | the design system's page: the app's light ground                                                       |
+| `paper/tint`             | `#F5F3EB` | `Brand.paperTint`            | the warm off-white one step in: light cards, dark legends                                              |
+| `violet/iris`            | `#887BDD` | `Brand.violetIris`           | the orb gradient's upper violet stop                                                                   |
+| `violet/lavender`        | `#D7D3F4` | `Brand.violetLavender`       | the orb's lightest violet: its top and the gradient's ends                                             |
+| `violet/periwinkle`      | `#B0A7E9` | `Brand.violetPeriwinkle`     | the orb's mid violet: the drop's halo                                                                  |
+| `warm-white`             | `#F2EEE6` | `Brand.warmWhite`            | key legends on ink: warm white on warm ink                                                             |
+| `white`                  | `#FFFFFF` | `Brand.white`                | —                                                                                                      |
 
 <!-- tokens:end brand -->
 
@@ -529,13 +531,13 @@ pins the derivation.
 | `term/pad`                   | `14`      | `Metrics.termPad`                  | the field's side padding                                                                                                                                                                                                                                            |
 | `term/radius`                | `8`       | `Metrics.termRadius`               | the key-term field: the brand's input corners (radius/input)                                                                                                                                                                                                        |
 | `voice/bar-height`           | `32`      | `Metrics.voiceBarHeight`           | —                                                                                                                                                                                                                                                                   |
-| `voice/bar-width`            | `240`     | `Metrics.voiceBarWidth`            | the voice element's box in the voice bar: what the wave gets                                                                                                                                                                                                        |
+| `voice/bar-width`            | `160`     | `Metrics.voiceBarWidth`            | the voice element's box in the voice bar; with the + beside it the pair sits centred                                                                                                                                                                                |
 | `voice/home-height`          | `112`     | `Metrics.voiceHomeHeight`          | —                                                                                                                                                                                                                                                                   |
 | `voice/home-width`           | `280`     | `Metrics.voiceHomeWidth`           | the box on the home screen                                                                                                                                                                                                                                          |
 | `voice/panel-height`         | `88`      | `Metrics.voicePanelHeight`         | —                                                                                                                                                                                                                                                                   |
 | `voice/panel-width`          | `300`     | `Metrics.voicePanelWidth`          | the box in the panel                                                                                                                                                                                                                                                |
 | `voice/press-scale`          | `0.94`    | `Metrics.voicePressScale`          | the element while pressed                                                                                                                                                                                                                                           |
-| `voicebar/addterm-clearance` | `12`      | `Metrics.voicebarAddtermClearance` | the wave stays this clear of the + at the trailing edge                                                                                                                                                                                                             |
+| `voicebar/addterm-clearance` | `12`      | `Metrics.voicebarAddtermClearance` | between the element and the +                                                                                                                                                                                                                                       |
 | `voicebar/height`            | `44`      | `Metrics.voicebarHeight`           | the voice row, where the system puts its suggestion bar                                                                                                                                                                                                             |
 | `voicebar/note-gap`          | `10`      | `Metrics.voicebarNoteGap`          | between the orb and the Full Access note                                                                                                                                                                                                                            |
 | `wave/bar`                   | `2`       | `Metrics.waveBar`                  | a wave bar's width                                                                                                                                                                                                                                                  |

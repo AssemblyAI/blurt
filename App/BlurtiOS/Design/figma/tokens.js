@@ -22,6 +22,8 @@ Brand|ink/700|COLOR|#33302A|||DesignTokens.Brand.ink700|an ordinary key on ink, 
 Brand|ink/800|COLOR|#26231E|||DesignTokens.Brand.ink800|a modifier key on ink; the Mac's dark card fill
 Brand|material/dark-key|COLOR|#575757|||DesignTokens.Brand.materialDarkKey|a key on the system's dark keyboard material (measured, iOS 27): the container case
 Brand|material/dark-modifier|COLOR|#474747|||DesignTokens.Brand.materialDarkModifier|a modifier key on the system's dark material
+Brand|material/dark-surface|COLOR|#373737|||DesignTokens.Brand.materialDarkSurface|the system's dark keyboard material (measured, iOS 27)
+Brand|material/light-surface|COLOR|#E2E3E8|||DesignTokens.Brand.materialLightSurface|the system's light keyboard material (measured, iOS 27): what the gallery stands under a clear surface
 Brand|neutral/300|COLOR|#D2D1D0|||DesignTokens.Brand.neutral300|black-100: the lightest warm grey
 Brand|neutral/500|COLOR|#A5A4A2|||DesignTokens.Brand.neutral500|black-200: mono labels on the dark face
 Brand|neutral/700|COLOR|#777673|||DesignTokens.Brand.neutral700|black-300: muted text and mono labels on the light face
@@ -45,6 +47,7 @@ Themes|dark/key|COLOR|#33302A|Brand:ink/700||DesignTokens.Themes.darkKey|
 Themes|dark/key-modifier|COLOR|#26231E|Brand:ink/800||DesignTokens.Themes.darkKeyModifier|
 Themes|dark/legend|COLOR|#F5F3EB|Brand:paper/tint||DesignTokens.Themes.darkLegend|
 Themes|dark/legend-secondary|COLOR|#A5A4A2|Brand:neutral/500||DesignTokens.Themes.darkLegendSecondary|
+Themes|dark/material|COLOR|#373737|Brand:material/dark-surface||DesignTokens.Themes.darkMaterial|
 Themes|dark/notice|COLOR|#E67F36|Brand:orange||DesignTokens.Themes.darkNotice|
 Themes|dark/popup|COLOR|#33302A|Brand:ink/700||DesignTokens.Themes.darkPopup|
 Themes|dark/signal|COLOR|#67AD82|Brand:green/400||DesignTokens.Themes.darkSignal|
@@ -57,6 +60,7 @@ Themes|light/key|COLOR|#FFFFFF|Brand:white||DesignTokens.Themes.lightKey|
 Themes|light/key-modifier|COLOR|#DAD7CB|Brand:paper/300||DesignTokens.Themes.lightKeyModifier|
 Themes|light/legend|COLOR|#1D1B16|Brand:ink||DesignTokens.Themes.lightLegend|
 Themes|light/legend-secondary|COLOR|#777673|Brand:neutral/700||DesignTokens.Themes.lightLegendSecondary|
+Themes|light/material|COLOR|#E2E3E8|Brand:material/light-surface||DesignTokens.Themes.lightMaterial|
 Themes|light/notice|COLOR|#E67F36|Brand:orange||DesignTokens.Themes.lightNotice|
 Themes|light/popup|COLOR|#FFFFFF|Brand:white||DesignTokens.Themes.lightPopup|
 Themes|light/signal|COLOR|#01762F|Brand:green/700||DesignTokens.Themes.lightSignal|
@@ -191,13 +195,13 @@ Metrics|term/inset|FLOAT|2||GAP|DesignTokens.Metrics.termInset|the field row's s
 Metrics|term/pad|FLOAT|14||GAP|DesignTokens.Metrics.termPad|the field's side padding
 Metrics|term/radius|FLOAT|8||CORNER_RADIUS|DesignTokens.Metrics.termRadius|the key-term field: the brand's input corners (radius/input)
 Metrics|voice/bar-height|FLOAT|32||WIDTH_HEIGHT|DesignTokens.Metrics.voiceBarHeight|
-Metrics|voice/bar-width|FLOAT|240||WIDTH_HEIGHT|DesignTokens.Metrics.voiceBarWidth|the voice element's box in the voice bar: what the wave gets
+Metrics|voice/bar-width|FLOAT|160||WIDTH_HEIGHT|DesignTokens.Metrics.voiceBarWidth|the voice element's box in the voice bar; with the + beside it the pair sits centred
 Metrics|voice/home-height|FLOAT|112||WIDTH_HEIGHT|DesignTokens.Metrics.voiceHomeHeight|
 Metrics|voice/home-width|FLOAT|280||WIDTH_HEIGHT|DesignTokens.Metrics.voiceHomeWidth|the box on the home screen
 Metrics|voice/panel-height|FLOAT|88||WIDTH_HEIGHT|DesignTokens.Metrics.voicePanelHeight|
 Metrics|voice/panel-width|FLOAT|300||WIDTH_HEIGHT|DesignTokens.Metrics.voicePanelWidth|the box in the panel
 Metrics|voice/press-scale|FLOAT|0.94||WIDTH_HEIGHT|DesignTokens.Metrics.voicePressScale|the element while pressed
-Metrics|voicebar/addterm-clearance|FLOAT|12||GAP|DesignTokens.Metrics.voicebarAddtermClearance|the wave stays this clear of the + at the trailing edge
+Metrics|voicebar/addterm-clearance|FLOAT|12||GAP|DesignTokens.Metrics.voicebarAddtermClearance|between the element and the +
 Metrics|voicebar/height|FLOAT|44||WIDTH_HEIGHT|DesignTokens.Metrics.voicebarHeight|the voice row, where the system puts its suggestion bar
 Metrics|voicebar/note-gap|FLOAT|10||GAP|DesignTokens.Metrics.voicebarNoteGap|between the orb and the Full Access note
 Metrics|wave/bar|FLOAT|2||STROKE_FLOAT,WIDTH_HEIGHT|DesignTokens.Metrics.waveBar|a wave bar's width

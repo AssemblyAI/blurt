@@ -93,6 +93,8 @@
     private func keyboard(_ row: Row) -> some View {
       KeyboardRootView(model: row.model)
         .frame(height: row.model.effectiveLayout.height)
+        // The host's material, under a clear surface, as the app stands in for it.
+        .background(row.model.palette.standIn)
         .clipped()
         .environment(\.keyboardMotionHeld, options.still)
     }
@@ -211,7 +213,7 @@
           Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(palette.surface)
+        .background(palette.standIn)
         .ignoresSafeArea()
       }
 

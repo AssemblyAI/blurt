@@ -48,10 +48,7 @@ struct FullKeyboardView: View {
               KeyCap(systemImage: "globe", dark: true, width: geometry.abcWidth) { model.globe() }
             }
             KeyCap(title: "space", flexible: true) { model.space() }
-            KeyCap(
-              title: model.returnLabel, systemImage: model.returnLabel == nil ? "return" : nil, dark: true,
-              width: geometry.returnWidth
-            ) { model.newline() }
+            KeyCap(title: model.returnLabel ?? "return", dark: true, width: geometry.returnWidth) { model.newline() }
           }
         }
       }

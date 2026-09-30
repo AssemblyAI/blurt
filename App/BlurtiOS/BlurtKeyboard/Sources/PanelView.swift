@@ -15,7 +15,7 @@ struct PanelView: View {
         if model.needsGlobe { KeyCap(systemImage: "globe", dark: true) { model.globe() } }
         KeyCap(title: "space", flexible: true) { model.space() }
         KeyCap(systemImage: "delete.left", dark: true) { model.deleteBackward() }
-        KeyCap(systemImage: "return", dark: true) { model.newline() }
+        KeyCap(title: model.returnLabel ?? "return", dark: true) { model.newline() }
       }
     }
     .overlay(alignment: .topTrailing) {

@@ -46,6 +46,9 @@ struct KeyboardPalette: Equatable, Identifiable {
   /// colours that read on the system's light or dark material.
   let containerKey: Color
   let containerKeyModifier: Color
+  /// The host's material under a clear surface, as the gallery and the home
+  /// screen stand in for it (the system's own keyboard colour, measured).
+  let material: Color
 
   static let keyGap = DesignTokens.Metrics.keyGap
   static let rowGap = DesignTokens.Metrics.rowGap
@@ -67,7 +70,8 @@ struct KeyboardPalette: Equatable, Identifiable {
     keyText: Themes.lightLegend, keyTextSecondary: Themes.lightLegendSecondary, signal: Themes.lightSignal,
     popupFill: Themes.lightPopup, field: Themes.lightField, fieldBorder: Themes.lightFieldBorder,
     notice: Themes.lightNotice, grain: DesignTokens.Metrics.opacityGrainLight,
-    containerKey: Themes.lightContainerKey, containerKeyModifier: Themes.lightContainerKeyModifier)
+    containerKey: Themes.lightContainerKey, containerKeyModifier: Themes.lightContainerKeyModifier,
+    material: Themes.lightMaterial)
 
   /// The dark face: ink `#1D1B16`, `#33302A` keys, `#26231E` modifiers, warm
   /// white legends, the lifted green.
@@ -77,7 +81,8 @@ struct KeyboardPalette: Equatable, Identifiable {
     keyText: Themes.darkLegend, keyTextSecondary: Themes.darkLegendSecondary, signal: Themes.darkSignal,
     popupFill: Themes.darkPopup, field: Themes.darkField, fieldBorder: Themes.darkFieldBorder,
     notice: Themes.darkNotice, grain: DesignTokens.Metrics.opacityGrainDark,
-    containerKey: Themes.darkContainerKey, containerKeyModifier: Themes.darkContainerKeyModifier)
+    containerKey: Themes.darkContainerKey, containerKeyModifier: Themes.darkContainerKeyModifier,
+    material: Themes.darkMaterial)
 
   /// The picker's list, one entry per theme (a theme's two faces share an id).
   static let all: [KeyboardPalette] = [brandLight]
@@ -89,6 +94,11 @@ struct KeyboardPalette: Equatable, Identifiable {
     guard all.contains(where: { $0.id == id }) else { return dark ? brandDark : brandLight }
     return dark ? brandDark : brandLight
   }
+
+  /// What stands under the keyboard where the host's material would be
+  /// (the gallery, a preview): the face's surface when it is painted, else
+  /// the material.
+  var standIn: Color { KeyboardRootView.paintsSurface ? surface : material }
 
   /// A key's fill: the face's, or the container's when the host's material
   /// is the surface.
