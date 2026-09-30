@@ -15,10 +15,6 @@ import SwiftUI
 struct ReadyView: View {
   var coordinator: AppCoordinator
   var openSettings: () -> Void
-  /// The style row's "Edit Styles…": opens Settings deep-linked to the Styles
-  /// pane, where styles are edited — a separate closure from `openSettings` so the
-  /// plain Settings button keeps opening on General (see `MainWindowRoot`).
-  var editStyles: () -> Void
   // Observed (not read once) so changing the dictation key in the separate
   // Settings window re-renders this window's keycap live — see `BoundTriggerKey`.
   @BoundTriggerKey private var triggerKey
@@ -28,12 +24,12 @@ struct ReadyView: View {
   @AppStorage(TriggerActivationStore.defaultsKey) private var activationRaw = ""
   private var activation: TriggerActivation { .fromPersisted(activationRaw) }
 
-  /// Observed for the same reason as the trigger key, and bound to *observe*,
-  /// not to write: the store owns the decoding and the active-vs-Default rule
-  /// (see `StyleProfileStore`), and `@AppStorage` is what re-renders this window
-  /// when the settings sheet adds a style or the switcher changes the active
-  /// one.
-  @AppStorage(StyleProfileStore.defaultsKey) private var rawProfiles = ""
+  /// Kept as view state because Settings is a separate scene: its defaults
+  /// write can otherwise leave this already-open window displaying the old
+  /// pop-up until relaunch. The store posts an explicit change notification
+  /// after each list write, and this window reloads through the store so its
+  /// decoding and normalization rules remain the single source of truth.
+  @State private var profiles = StyleProfileStore().profiles
   @AppStorage(StyleProfileStore.activeDefaultsKey) private var rawActiveID = ""
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -43,20 +39,18 @@ struct ReadyView: View {
     // style is active is the engine's rule — the stored pointer, `nil` for the
     // Default sentinel, or the first profile when it names nothing — never a
     // second reading here.
-    let profiles = StyleProfileStore().profiles(decoding: rawProfiles)
     let active = StyleProfileStore.active(in: profiles, id: rawActiveID)
     VStack(spacing: 0) {
       ReadyBrandingView()
-        .padding(.top, 20)
+        .padding(.top, 24)
+        .padding(.bottom, 2)
 
       Form {
         Section {
           shortcutRow
-          // Always present, even with no custom styles: a pop-up holding
-          // Default and "Edit Styles…" is the row's empty state, so the
-          // feature is discoverable from the main window rather than only
-          // from Settings.
-          StyleRow(profiles: profiles, activeID: active?.id, editStyles: editStyles)
+          // Always present, even with no custom styles, so the active treatment
+          // remains visible from the main window.
+          StyleRow(profiles: profiles, activeID: active?.id)
             // Locked while the mic is opening or capturing: a style picked
             // mid-utterance would disagree with what the request was built
             // with. `.disabled` propagates to the pop-up and the hidden
@@ -85,6 +79,11 @@ struct ReadyView: View {
     }
     .frame(width: MainWindow.contentWidth)
     .fixedSize(horizontal: false, vertical: true)
+    .onReceive(
+      NotificationCenter.default.publisher(for: StyleProfileStore.profilesDidChangeNotification)
+    ) { _ in
+      profiles = StyleProfileStore().profiles
+    }
   }
 
   /// The dictation shortcut as a form row: "Shortcut" leading, and trailing
@@ -162,22 +161,20 @@ struct ReadyView: View {
       footerLinks
       Spacer()
       Button(action: openSettings) {
-        Label("Settings", systemImage: "gearshape")
+        Label("Settings…", systemImage: "gearshape")
           .labelStyle(.titleAndIcon)
       }
     }
   }
 
-  /// "Powered by AssemblyAI · Report a bug", caption-level.
+  /// "Powered by AssemblyAI · Report a bug", caption-level. Links retain
+  /// the system's semantic link color instead of reusing the brand accent that
+  /// also colors noninteractive glyphs elsewhere in the window.
   ///
   /// Split so the linked words keep their affordance: "Powered by" is quiet
-  /// secondary prose, while each `Link` carries colour — all-secondary made
-  /// the whole line indistinguishable from static text. That colour is
-  /// `BlurtBrand.accent`, not the system link blue a bare `Link` draws itself
-  /// in: blue would be the only instance of a second hue in a window whose
-  /// sole accent is the brand green. `.foregroundStyle` rather than `.tint`
-  /// because `Link` styles its own label with `NSColor.linkColor` and only an
-  /// explicit foreground overrides it.
+  /// secondary prose, while each `Link` carries the platform's link color;
+  /// making the entire line secondary leaves the interactive words
+  /// indistinguishable from static attribution.
   ///
   /// Sharing lives in the Help menu (`BlurtCommands`) rather than here: a
   /// half-linked "Share Blurt on LinkedIn" read as an ad on the window's
@@ -188,13 +185,11 @@ struct ReadyView: View {
       if let url = BlurtLinks.poweredBy {
         Text("Powered by").foregroundStyle(.secondary)
         Link("AssemblyAI", destination: url)
-          .foregroundStyle(BlurtBrand.accent)
       }
       if let issuesURL = BlurtLinks.reportBug {
         // The dot is decoration, so VoiceOver skips it.
         Text("·").foregroundStyle(.secondary).accessibilityHidden(true)
         Link("Report a bug", destination: issuesURL)
-          .foregroundStyle(BlurtBrand.accent)
       }
     }
     .font(.caption)
@@ -222,7 +217,7 @@ enum BlurtLinks {
 
 /// The `blurt` wordmark over the form: the brand-green mark
 /// (`Branding/blurt-ready-logo.png`, a 720×180 rasterization of the design's
-/// vector wordmark, so its 96×24 pt slot is fed 7.5× the pixels it needs and
+/// vector wordmark, so its 104×26 pt slot is fed nearly 7× the pixels it needs and
 /// stays crisp at any display scale). Smoothly interpolated — it's curved
 /// letterforms now, not the pixel-art mark it replaced, which needed
 /// nearest-neighbor to keep its pixels square. A header mark, not the window's
@@ -259,7 +254,7 @@ private struct ReadyBrandingView: View {
         .interpolation(.high)
         .resizable()
         .scaledToFit()
-        .frame(maxWidth: 96)
+        .frame(maxWidth: 104)
         .foregroundStyle(BlurtBrand.accent)
         .accessibilityLabel("Blurt logo")
     }

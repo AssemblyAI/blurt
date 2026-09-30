@@ -98,11 +98,10 @@ enum UITestIdentifiers {
   static let textShortcutCancel = "settings.textShortcuts.cancel"
   static let textShortcutDelete = "settings.textShortcuts.delete"
 
-  /// The main window's style switcher (`ReadyView`): a single pop-up whose
-  /// items are Default, then each defined profile, then "Edit Styles…" below a
-  /// divider. It needs an identifier because everything else about it is
-  /// user-named — the pop-up's own value is whichever style is in effect, so
-  /// there is no stable label to address it by.
+  /// The main window's style switcher (`ReadyView`). It needs an identifier
+  /// because everything else about it is user-named — the pop-up's own value
+  /// is whichever style is in effect, so there is no stable label to address
+  /// it by.
   static let styleProfilePickerFromMain = "ready.styleProfile.picker"
   /// The empty Recent list's first-dictation prompt. One combined accessibility
   /// element whose text is built from the bound key and activation, so it's

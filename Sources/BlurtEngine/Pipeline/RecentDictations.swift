@@ -58,22 +58,9 @@ public struct RecentDictations: Equatable, Sendable {
   /// was 99; nothing enforces either figure now.
   public static let capacity = 100
 
-  /// How many rows the ready window's "Recent" list renders. The list area
-  /// reserves space for exactly this many, so it is the number the height
-  /// arithmetic below is about.
+  /// How many rows the ready window's "Recent dictations" list renders. The
+  /// list area reserves space for exactly this many.
   public static let displayCapacity = 3
-
-  /// Height a list showing a full `displayCapacity` rows occupies: every row,
-  /// plus the spacing *between* each adjacent pair (padding and separator). The ready window pins its
-  /// list area to this whether it holds 0, 1, or `displayCapacity` entries, so
-  /// nothing above it shifts as dictations arrive.
-  ///
-  /// The row metrics come from the view; what lives here is the count arithmetic,
-  /// which is a fact about `displayCapacity` — including the `- 1` that a change
-  /// to that number is most likely to get wrong.
-  public static func reservedHeight(rowHeight: CGFloat, rowSpacing: CGFloat) -> CGFloat {
-    CGFloat(displayCapacity) * rowHeight + CGFloat(displayCapacity - 1) * rowSpacing
-  }
 
   /// Most-recent-first, capped at `capacity`.
   public private(set) var entries: [Entry] = []

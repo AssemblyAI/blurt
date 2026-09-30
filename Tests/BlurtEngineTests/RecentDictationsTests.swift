@@ -88,20 +88,6 @@ struct RecentDictationsTests {
     #expect(recent.entries[1].style == "Casual")
   }
 
-  @Test("reserved height counts separators between rows, not after every row")
-  func reservedHeightCountsInteriorSeparators() {
-    // The off-by-one a row-count change is most likely to introduce: 3 rows have
-    // 2 separators, not 3. Getting it wrong leaves the ready window's list area a
-    // hair too tall and everything above it shifts when the first dictation lands.
-    // The ready window's real metrics: displayCapacity 3 × 28 pt rows
-    // (transcript beside the trailing style-chip/time slot) + 2 × 1 pt rules —
-    // the *display* count, not the 100-deep history.
-    #expect(RecentDictations.reservedHeight(rowHeight: 28, rowSpacing: 1) == 86)
-    // Each term isolated, so a wrong count shows up as which half is off. A change
-    // to `displayCapacity` fails all three, which is what pins the two together.
-    #expect(RecentDictations.reservedHeight(rowHeight: 10, rowSpacing: 0) == 30)
-    #expect(RecentDictations.reservedHeight(rowHeight: 0, rowSpacing: 2) == 4)
-  }
 }
 
 /// The Recent row's relative timestamp: "just now" for the first minute, then

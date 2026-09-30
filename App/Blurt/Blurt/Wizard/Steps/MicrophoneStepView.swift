@@ -74,7 +74,9 @@ struct MicrophoneStepView: View {
     } header: {
       Text("Microphone")
     } footer: {
-      Text("Dictation records from this microphone. While it isn't connected, the system default is used.")
+      Text(
+        "Blurt uses this microphone for dictation. If it’s unavailable, Blurt uses the system default."
+      )
     }
     // Off the main actor, and `.task` rather than `.onAppear` to have somewhere
     // to await: enumerating devices is the first thing to touch AVFoundation's

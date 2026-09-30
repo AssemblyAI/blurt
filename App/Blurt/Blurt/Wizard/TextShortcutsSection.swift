@@ -40,20 +40,20 @@ struct TextShortcutsSection: View {
           Button {
             editing = TextShortcut(trigger: "", expansion: "")
           } label: {
-            Image(systemName: "plus").frame(width: 20, height: 18)
+            Image(systemName: "plus").frame(width: 20, height: 20)
           }
           .disabled(shortcuts.count >= TextShortcutStore.shortcutLimit)
-          .help("Add Shortcut")
-          .accessibilityLabel("Add Shortcut")
+          .help("Add shortcut")
+          .accessibilityLabel("Add shortcut")
           .accessibilityIdentifier(UITestIdentifiers.textShortcutAdd)
           Button {
             if let selection { remove(selection) }
           } label: {
-            Image(systemName: "minus").frame(width: 20, height: 18)
+            Image(systemName: "minus").frame(width: 20, height: 20)
           }
           .disabled(selection == nil)
-          .help("Remove Shortcut")
-          .accessibilityLabel("Remove Shortcut")
+          .help("Remove shortcut")
+          .accessibilityLabel("Remove shortcut")
           .accessibilityIdentifier(UITestIdentifiers.textShortcutRemove)
         }
         .buttonStyle(.borderless)
@@ -102,7 +102,7 @@ struct TextShortcutsSection: View {
     .onDeleteCommand { if let selection { remove(selection) } }
     .overlay {
       if shortcuts.isEmpty {
-        Text("No Shortcuts")
+        Text("No shortcuts")
           .foregroundStyle(.secondary)
       }
     }
@@ -176,7 +176,7 @@ private struct TextShortcutEditorSheet: View {
       VStack(alignment: .leading, spacing: 6) {
         Text("Phrase")
           .font(.subheadline.weight(.semibold))
-        TextField("", text: $trigger, prompt: Text("e.g. personal email"))
+        TextField("", text: $trigger, prompt: Text("Personal email"))
           .lineLimit(1)
           .disableAutocorrection(true)
           .focused($triggerFocused)
@@ -198,7 +198,7 @@ private struct TextShortcutEditorSheet: View {
         Text("Replacement")
           .font(.subheadline.weight(.semibold))
         TextField(
-          text: $expansion, prompt: Text("e.g. me@example.com"), axis: .vertical
+          text: $expansion, prompt: Text("me@example.com"), axis: .vertical
         ) {
           Text("Replacement")
         }
