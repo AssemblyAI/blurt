@@ -35,7 +35,12 @@ final class FakeCopyPasteboard: CopyPasteboard {
   /// What the target app does on ⌘C.
   func answerCopy(with copied: String?) -> @Sendable () -> Bool {
     { [self] in
-      if let copied { self.state.withLock { $0.string = copied; $0.changeCount += 1 } }
+      if let copied {
+        self.state.withLock {
+          $0.string = copied
+          $0.changeCount += 1
+        }
+      }
       return true
     }
   }
@@ -69,7 +74,12 @@ struct SelectionCopyTests {
   func unreadableClipboard() async {
     let pasteboard = FakeCopyPasteboard(readable: false)
     let posted = Mutex(false)
-    let copy = SelectionCopy(pasteboard: pasteboard, postCopy: { posted.withLock { $0 = true }; return true })
+    let copy = SelectionCopy(
+      pasteboard: pasteboard,
+      postCopy: {
+        posted.withLock { $0 = true }
+        return true
+      })
     #expect(await copy.copySelection(maxCharacters: 100) == nil)
     #expect(!posted.withLock { $0 })
   }

@@ -1,5 +1,3 @@
-import Foundation
-
 /// The read-aloud press's fallback for apps whose selection Accessibility can't
 /// see. It sends ⌘C, reads what landed on the clipboard, and puts the user's
 /// clipboard back.
