@@ -256,10 +256,11 @@ jobs:
           # Sparkle's EdDSA private key (base64, as `generate_keys -x` exports
           # it). Signs the DMG for the appcast; handed to sign_update on stdin.
           BLURT_SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
-          # Both are dispatch-only escape hatches, so both are empty (and the
-          # full checks run) on the merged-bump path. That is the right default:
-          # nobody is standing there to judge whether skipping was safe.
-          SKIP_CHECKS: ${{ inputs.skip_checks }}
+          # On the merged-bump path check.sh is skipped: the push to main runs
+          # `check` on this exact commit, and publish refuses to tag until that
+          # run has passed — the gate moves rather than goes. On a dispatch both
+          # stay escape hatches, off by default.
+          SKIP_CHECKS: ${{ github.event_name == 'push' || inputs.skip_checks }}
           SKIP_SMOKE: ${{ inputs.skip_smoke }}
           STAGING: ${{ inputs.staging }}
         run: |
