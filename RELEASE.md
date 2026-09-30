@@ -59,8 +59,11 @@ everywhere else here: the bump commit the job force-pushes does **not** re-fire
 the push trigger that started it, which is what keeps it from looping. Don't
 move this job to a PAT or an app token without adding a loop guard.
 
-Re-pushing a marker that already carries the bump commit fails the ancestor
-check with a message saying so — the job already ran; open the PR.
+Only the push that **creates** the branch starts a bump. Later pushes to it —
+the release notes, any fix-up — skip the job instead of failing the ancestor
+check, so the release PR has no red `bump` run on it. To re-request a bump,
+delete the branch and push the marker again; force-pushing a marker over an
+existing branch is skipped too.
 
 ### What starts a release
 

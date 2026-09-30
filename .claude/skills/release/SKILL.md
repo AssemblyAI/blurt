@@ -88,7 +88,9 @@ There is no local orchestrator script — the workflows are the only path.
 - `release-bump.yml`'s marker trigger is safe only because of its ancestor check
   (the branch carries nothing of its own) and because a `GITHUB_TOKEN` push
   doesn't re-fire the trigger. Don't drop either, and don't move that job to a
-  PAT or app token without adding a loop guard.
+  PAT or app token without adding a loop guard. Only the push that creates the
+  branch runs the job, so committing the notes onto it is a skip, not a red
+  `bump` — to re-request a bump, delete the branch and push the marker again.
 - Notarization rejects any nested mach-o/framework lacking a **secure
   timestamp**; the build re-signs frameworks for this reason — don't remove that.
 - The signer-pin (`verify_signer`) checks the produced artifacts against a
