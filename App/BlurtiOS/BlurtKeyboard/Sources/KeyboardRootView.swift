@@ -19,16 +19,12 @@ struct KeyboardRootView: View {
 
   var body: some View {
     Group {
-      switch model.effectiveLayout {
-      case .slimBar: SlimBarView(model: model)
-      case .panel:
-        PanelView(model: model)
-          .id("panel")
-          .transition(flip)
-      case .full:
-        FullKeyboardView(model: model)
-          .id(model.layout == .panel ? "panel-keys" : "full")
-          .transition(flip)
+      switch model.layout {
+      case .panel: PanelCarousel(model: model, reduceMotion: reduceMotion)
+      case .full: FullKeyboardView(model: model)
+      case .slimBar:
+        // The keys come up for a key term; the bar is back when it closes.
+        if model.termDraft == nil { SlimBarView(model: model) } else { FullKeyboardView(model: model) }
       }
     }
     .padding(.horizontal, KeyboardPalette.margin)
@@ -59,7 +55,7 @@ struct KeyboardRootView: View {
     // painted pixels: `KeyboardViewController` paints a floor the eye can't
     // see and recognises the swipe on the input view itself, which sees
     // every touch the keyboard gets, the panel's empty space included.
-    .animation(reduceMotion ? nil : .easeInOut(duration: DesignTokens.Motion.flip), value: model.panelShowsKeys)
+    // The slide itself is `PanelCarousel`'s.
     .onAppear {
       // `Font.custom` falls back to the system font in silence; the bundle
       // must know the brand's faces (UIAppFonts + Design/fonts).
@@ -70,12 +66,4 @@ struct KeyboardRootView: View {
   @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
   @Environment(\.keyboardMotionHeld) private var motionHeld
   private var reduceMotion: Bool { systemReduceMotion || motionHeld }
-
-  /// The carousel's slide: the incoming page arrives from the side the finger
-  /// moved towards, the outgoing one leaves the other way.
-  private var flip: AnyTransition {
-    model.flipTowardsLeading
-      ? .asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .leading))
-      : .asymmetric(insertion: .move(edge: .leading), removal: .move(edge: .trailing))
-  }
 }

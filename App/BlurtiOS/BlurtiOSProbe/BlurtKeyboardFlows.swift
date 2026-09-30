@@ -87,6 +87,34 @@ final class BlurtKeyboardFlows: XCTestCase {
       }
     }
     check(!keysUp && micKey().frame.width > 200, "the panel is showing again, its mic full size")
+    // Pairs from one fixed screen point (an element mid-slide is no anchor):
+    // a flip and a flip back, and two the same way — with no wait between,
+    // so the second lands mid-slide, and again after the slide has settled.
+    // Each pair lands on the panel, the cards never having crossed.
+    let anchor = gap().screenPoint
+    let fixed = app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: anchor.x, dy: anchor.y))
+    let pairs = [
+      Pair(name: "left then right, mid-slide", first: -160, second: 160, pause: 0),
+      Pair(name: "left twice, mid-slide", first: -160, second: -160, pause: 0),
+      Pair(name: "left then right, settled", first: -160, second: 160, pause: 0.5),
+      Pair(name: "left twice, settled", first: -160, second: -160, pause: 0.5),
+    ]
+    for pair in pairs {
+      fixed.press(forDuration: 0.05, thenDragTo: fixed.withOffset(CGVector(dx: pair.first, dy: 0)))
+      if pair.pause > 0 { Thread.sleep(forTimeInterval: pair.pause) }
+      fixed.press(forDuration: 0.05, thenDragTo: fixed.withOffset(CGVector(dx: pair.second, dy: 0)))
+      Thread.sleep(forTimeInterval: 1.5)
+      check(!keysUp && micKey().frame.width > 200, "two quick swipes, \(pair.name), land back on the panel")
+      shot("panel-pair-\(pair.name.replacingOccurrences(of: ", ", with: "-").replacingOccurrences(of: " ", with: "-"))")
+    }
+  }
+
+  /// Two swipes from one point: how far each goes, and the wait between.
+  private struct Pair {
+    let name: String
+    let first: CGFloat
+    let second: CGFloat
+    let pause: TimeInterval
   }
 
   /// Where a swipe starts and how far it goes.
