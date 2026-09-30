@@ -44,11 +44,15 @@ publishing is hard to undo.
    comment, and a `TODO` where the notes go. They are what Sparkle's update
    window shows every user, `check` fails while the `TODO` is there, and the
    release build refuses to run without them — there is no automatic fallback.
-   Draft a few bullets from the commit list (at most 6, ≤100 characters, each
-   starting with a verb, written for users — no PR numbers, filenames, or code
-   names), run `scripts/check-release-notes.sh`, and **show the draft to the user
-   and get their go-ahead before committing it** to the release branch. Their
-   judgment is the point of the rule; see RELEASE.md → Release notes.
+   Read RELEASE.md → Release notes → **Writing them** first and follow it:
+   translate each commit into what a user notices, drop what they wouldn't
+   (refactors, CI, docs, reverted work), order by how noticeable it is, and match
+   the length and voice of the model notes there. Fewer bullets is better than
+   padding. Before drafting, skim the merged PRs behind the subjects
+   (`gh pr view <n>`) when a subject doesn't say what the user sees. Run
+   `scripts/check-release-notes.sh`, then **show the draft to the user — with
+   the commits you left out and why — and get their go-ahead before committing
+   it** to the release branch. Their judgment is the point of the rule.
 3. **Open the PR** for that branch and hand it to the user to merge. The workflow
    does not open it, on purpose: a PR created by `GITHUB_TOKEN` never triggers
    `check` and so can never merge. Opening it from here works — an agent's own

@@ -315,12 +315,61 @@ The update window shows the appcast item's `<description>`, which
     filenames, `snake_case` or `camelCase` identifiers (real product names like
     macOS or YouTube are allow-listed in `RELEASE_NOTES_PROPER_NOUNS`).
 
-The lint only catches the obvious. Write for someone who has never seen the
-repo: what changed for them, in plain words, most important first. Then read
-it where users will — the rehearsal below shows the real window.
-
 Because the rehearsal fallback and the bump scaffold both measure from tags, the
 build job checks out with full history; a shallow checkout fails fast.
+
+#### Writing them
+
+The lint only catches the obvious. These are the rules it can't check, and
+they apply equally to a person or an agent drafting the notes.
+
+**The reader** uses Blurt to dictate and has never seen this repo. They're
+reading a small window between them and the app they just tried to open, so
+they want one glance: what's different for me, and should I install it now?
+
+**Translate each commit into what the user notices.** Describe what they can
+now do, or what stopped going wrong, never what the code does.
+
+| Commit subject                                            | Note                                               |
+| --------------------------------------------------------- | -------------------------------------------------- |
+| Paste into rebranded Electron apps like Codex             | Paste into Codex and other Electron apps           |
+| Add Intel (x86_64) Mac support — build universal binaries | Run Blurt on Intel Macs                            |
+| Drop the same-window separator after the user types       | Fix a stray space before dictated text             |
+| Switch auto-updating to Sparkle                           | Get new versions automatically: Blurt checks daily |
+
+**Leave out** anything a user wouldn't notice: refactors, CI, tests, docs and
+README changes, dependency bumps, work reverted in the same release, and fixes
+for bugs that never shipped. Six bullets is a ceiling, not a target — a
+release with one real change gets one bullet.
+
+**Order** by how much a user notices it: new things they can do, then fixes to
+things they hit, then everything else.
+
+**Word it** plainly and specifically:
+
+- Name the actual thing: the app (Google Docs, Codex), the key (fn), the
+  setting, as it's spelled in the app ("Enhanced transcripts").
+- Start with the verb in the imperative — "Add", "Fix", "Paste", "Run" — or
+  with the thing now working ("Paste now works in…").
+- One fact per bullet. No "and more", no "various", no adjectives doing the
+  work of a fact ("faster" only with what got faster).
+- No sales voice: nothing a user would read as marketing, and no apology or
+  internal backstory for a fix.
+- A fix says what was wrong in the user's words ("Fix a stray space before
+  dictated text in Google Docs"), not the mechanism.
+
+**The model** — v0.1.57's notes, from the first rehearsal:
+
+```md
+- Get new versions automatically: Blurt checks daily and installs updates when you say so
+- Use the fn key to start dictating
+- Add text shortcuts: say a phrase and Blurt pastes the saved text in its place
+- Paste into Codex and other Electron apps
+- Run Blurt on Intel Macs
+- Report a bug from the main window
+```
+
+Then read them where users will — the rehearsal below shows the real window.
 
 ### Rehearsing an update
 
