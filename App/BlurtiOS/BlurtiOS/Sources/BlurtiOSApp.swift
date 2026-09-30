@@ -40,7 +40,9 @@ struct BlurtiOSApp: App {
       #if DEBUG
         let rows = KeyboardGalleryView.rows(from: CommandLine.arguments)
         if let probe = KeyboardProbeView.parse(CommandLine.arguments) {
-          probe
+          // The keyboard over this field is only live if the app runs as it
+          // does under the home screen: the coordinator up, listening on request.
+          probe.task { await start() }
         } else if let voice = KeyboardGalleryView.VoiceStillView.parse(CommandLine.arguments) {
           voice
         } else if CommandLine.arguments.contains("-BlurtSettings") {
@@ -60,14 +62,16 @@ struct BlurtiOSApp: App {
   private var home: some View {
     HomeView(coordinator: coordinator)
       .onOpenURL { coordinator.handle($0) }
-      .task {
-        guard !Self.isTestHost else { return }
-        coordinator.start()
-        #if DEBUG
-          // `-BlurtStartListening` opens the mic at launch, so the listening
-          // state can be screenshotted without a tap (see scripts/ios-sim.sh).
-          if CommandLine.arguments.contains("-BlurtStartListening") { await coordinator.startListening() }
-        #endif
-      }
+      .task { await start() }
+  }
+
+  private func start() async {
+    guard !Self.isTestHost else { return }
+    coordinator.start()
+    #if DEBUG
+      // `-BlurtStartListening` opens the mic at launch, so the listening
+      // state can be screenshotted without a tap (see scripts/ios-sim.sh).
+      if CommandLine.arguments.contains("-BlurtStartListening") { await coordinator.startListening() }
+    #endif
   }
 }

@@ -51,6 +51,7 @@ struct MicControl: View {
     .accessibilityLabel(state.accessibilityLabel)
     .accessibilityValue(state.accessibilityValue)
     .accessibilityAddTraits(.isButton)
+    .accessibilityIdentifier("blurt-mic")
     .simultaneousGesture(
       DragGesture(minimumDistance: 0)
         .onChanged { value in
