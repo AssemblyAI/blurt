@@ -148,7 +148,7 @@ targets:
         # "Blurt Dev" wherever macOS names it and the release stays "Blurt".
         CFBundleName: $(BLURT_APP_NAME)
         CFBundleDisplayName: $(BLURT_APP_NAME)
-        CFBundleVersion: "56"
+        CFBundleVersion: "57"
         CFBundleShortVersionString: "0.1.57"
         LSMinimumSystemVersion: "15.0"
         LSApplicationCategoryType: public.app-category.productivity
