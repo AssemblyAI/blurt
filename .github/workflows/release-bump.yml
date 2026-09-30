@@ -57,6 +57,12 @@ permissions:
 
 jobs:
   bump:
+    # On the push path, only the push that creates the marker is a request.
+    # Every later push to the branch — the release notes, a fix-up — is the
+    # PR's own history, and would otherwise re-run this job only to fail the
+    # ancestor guard below, leaving a red check on every release PR. Skipping
+    # here narrows the trigger; the guard still vets the creating push.
+    if: github.event_name == 'workflow_dispatch' || github.event.created
     runs-on: macos-26
     timeout-minutes: 30
     permissions:
