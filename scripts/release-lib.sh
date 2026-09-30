@@ -382,16 +382,24 @@ TODO: write the release notes
 EOF
 }
 
+# Content on stdin with each HTML comment blanked out but its newlines kept, so
+# line N of the output is line N of the file — what the linter reports against.
+release_notes_uncommented() {
+  perl -0777 -pe 's/<!--.*?-->/"\n" x ($& =~ tr{\n}{})/gse'
+}
+
 # Content on stdin with HTML comments removed and surrounding blank lines
 # trimmed: the text that actually ships in the appcast.
 release_notes_body() {
-  perl -0777 -pe 's/<!--.*?-->//gs; s/\A\s+//; s/\s+\z/\n/'
+  release_notes_uncommented | perl -0777 -pe 's/\A\s+//; s/\s+\z/\n/'
 }
 
 # Words and phrases that read as filler or generated copy. Matched
-# case-insensitively as substrings; extend it when a new tic shows up.
+# case-insensitively as substrings; extend it when a new tic shows up. Nothing
+# here may be part of a real Blurt feature name — "enhanced" is deliberately
+# absent because "Enhanced transcripts" is a setting notes need to name.
 RELEASE_NOTES_BANNED=(
-  "seamless" "robust" "enhanced" "enhancement" "streamline" "leverag" "elevate"
+  "seamless" "robust" "enhancement" "streamline" "leverag" "elevate"
   "delve" "a variety of" "various improvements" "various fixes" "under the hood"
   "we're excited" "we are excited" "excited to" "game-changer" "game changer"
   "cutting-edge" "effortless" "supercharge" "unlock" "empower" "revolutioniz"
@@ -405,12 +413,14 @@ RELEASE_NOTES_PROPER_NOUNS=(macOS iOS iCloud iPhone iPad visionOS watchOS Assemb
 # first). Prints one "line N: problem" per violation to stdout; returns 1 if any.
 lint_release_notes() {
   local body line n=0 bullets=0 problems=0 lower phrase word stripped
-  body="$(release_notes_body)"
+  # Line-preserving, so "line N" is the file's line N. $(...) drops trailing
+  # blank lines, which no reported line can be on.
+  body="$(release_notes_uncommented)"
   _notes_problem() {
     printf 'line %s: %s\n' "$1" "$2"
     problems=$((problems + 1))
   }
-  if [ -z "$body" ]; then
+  if [ -z "${body//[[:space:]]/}" ]; then
     printf 'line 0: no release notes — write at least one bullet\n'
     return 1
   fi

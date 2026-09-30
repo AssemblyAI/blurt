@@ -297,6 +297,9 @@ The update window shows the appcast item's `<description>`, which
   notes are written — and approving that PR is the editorial review.
 - **A release build refuses to run without it.** There is no automatic
   fallback for a release; commit subjects are written for reviewers, not users.
+  To build a version that didn't come through `release-bump.sh` — re-running or
+  republishing one bumped before notes were required —
+  `scripts/check-release-notes.sh --new X.Y.Z` writes the same scaffold.
   (A `--staging` rehearsal alone falls back to filtered commit subjects, since
   only the tester sees them.)
 - **`scripts/check-release-notes.sh` lints it** (via `check.sh`, and again in the

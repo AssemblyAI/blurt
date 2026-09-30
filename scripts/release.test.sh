@@ -342,6 +342,12 @@ lint_rule "a snake_case identifier" "snake_case" '- Fix the word_boost setting'
 lint_rule "a camelCase identifier" "camelCase" '- Fix a crash in pasteText'
 lint_rule "an emoji" "emoji" '- Add fn as a trigger key 🎉'
 lint_rule "more than six bullets" "7 bullets (max 6)" "$(printf -- '- Add thing %s\n' 1 2 3 4 5 6 7)"
+# The setting's real name has to be sayable; a banned "enhanced" once blocked it.
+checktrue "Blurt's own feature names pass" lint_release_notes <<<'- Fix styles not applying when Enhanced transcripts is on'
+# Reported line numbers must point at the file, not at the comment-stripped text
+# — the bump scaffold opens with a long comment.
+check "line numbers count the comment's lines" "line 5: still has the TODO — write the notes" \
+  "$(printf '%s\n' '<!-- one' 'two' 'three -->' '' 'TODO: write' | lint_release_notes)"
 checktrue "proper nouns aren't identifiers" lint_release_notes <<<'- Support macOS 15 and paste into YouTube and ChatGPT'
 
 echo "== Sparkle helpers =="

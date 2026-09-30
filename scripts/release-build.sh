@@ -423,7 +423,7 @@ if [ -f "$NOTES_FILE" ]; then
   CHANGELOG="$(release_notes_body <"$NOTES_FILE")"
   info "release notes: $NOTES_FILE"
 elif [ "$CHANNEL" = release ]; then
-  die "no release notes at $NOTES_FILE — a release ships only hand-written notes (RELEASE.md → Release notes)"
+  die "no release notes at $NOTES_FILE — a release ships only hand-written notes. Scaffold them with scripts/check-release-notes.sh --new $VERSION, write and commit them, then re-run (RELEASE.md → Release notes)"
 else
   PREV_VERSION="$(previous_release_tag "$VERSION")"
   if [ -n "$PREV_VERSION" ]; then
