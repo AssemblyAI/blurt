@@ -103,6 +103,11 @@ final class KeyboardModel {
   var voiceKind: VoiceElementKind { voiceKindOverride ?? storedVoiceKind }
   var storedVoiceKind = SharedStore.voiceElementKind
   var voiceKindOverride: VoiceElementKind?
+  /// Where the mic key sits across the row, from Settings (one hand: at the
+  /// thumb's edge) — or, for a preview or a gallery row, whatever it is told.
+  var micAlignment: MicAlignment { micAlignmentOverride ?? storedMicAlignment }
+  var storedMicAlignment = SharedStore.micAlignment
+  var micAlignmentOverride: MicAlignment?
   /// Whether the app being typed in wants a dark keyboard: what its field
   /// asks for, else the app's own light or dark appearance.
   var isDark = false
@@ -172,6 +177,7 @@ final class KeyboardModel {
     layout = SharedStore.layout
     themeID = SharedStore.themeID
     storedVoiceKind = SharedStore.voiceElementKind
+    storedMicAlignment = SharedStore.micAlignment
     SharedStore.keyboardEverSeen = true
     refresh(haptics: false)
     startHeartbeat()

@@ -1,7 +1,42 @@
 import Foundation
+import SwiftUI
 import Testing
 
 @testable import BlurtiOS
+
+@Suite("Mic alignment setting")
+struct MicAlignmentSettingTests {
+  @Test("the mic's side round-trips through the App Group; unset or unknown is the middle")
+  func roundTrip() {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    #expect(SharedStore.micAlignment == .center)
+    SharedStore.micAlignment = .right
+    #expect(SharedStore.micAlignment == .right)
+    SharedStore.defaults.set("sideways", forKey: BlurtShared.Key.micAlignment)
+    #expect(SharedStore.micAlignment == .center)
+  }
+
+  @Test("left and right are the phone's sides whatever the language reads in; the + leads only at the trailing edge")
+  func sides() {
+    #expect(MicAlignment.left.alignment(in: .leftToRight) == .leading)
+    #expect(MicAlignment.left.alignment(in: .rightToLeft) == .trailing)
+    #expect(MicAlignment.right.alignment(in: .leftToRight) == .trailing)
+    #expect(MicAlignment.right.alignment(in: .rightToLeft) == .leading)
+    #expect(MicAlignment.center.alignment(in: .rightToLeft) == .center)
+    #expect(MicAlignment.right.plusLeads(in: .leftToRight))
+    #expect(MicAlignment.left.plusLeads(in: .rightToLeft))
+    #expect(!MicAlignment.left.plusLeads(in: .leftToRight))
+    #expect(!MicAlignment.center.plusLeads(in: .leftToRight))
+  }
+
+  @Test("the gallery and probe words name a side")
+  func parse() {
+    #expect(MicAlignment.parse(["-BlurtGallery", "panel", "idle", "-BlurtGalleryAlign", "right"]) == .right)
+    #expect(MicAlignment.parse(["-BlurtGallery", "panel", "idle"]) == nil)
+    #expect(MicAlignment(rawValue: "left") == .left)
+  }
+}
 
 @Suite("Key term list")
 struct KeyTermListTests {

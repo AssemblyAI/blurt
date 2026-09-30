@@ -9,6 +9,7 @@ struct SettingsView: View {
   var coordinator: DictationCoordinator
   @Environment(\.dismiss) private var dismiss
   @State private var layout = SharedStore.layout
+  @State private var micAlignment = SharedStore.micAlignment
   @State private var autoDictate = SharedStore.autoDictate
   @State private var windowMinutes = SharedStore.windowMinutes
   @AppStorage(BlurtShared.Key.theme, store: SharedStore.defaults) private var themeID = "system"
@@ -48,6 +49,15 @@ struct SettingsView: View {
       .pickerStyle(.segmented)
       .onChange(of: layout) { _, value in SharedStore.layout = value }
       Text(layout.summary).font(BlurtType.body(DesignTokens.Typography.sizeCaption)).foregroundStyle(BlurtBrand.muted)
+      // The mic's side, for one hand — the same shape as the layout above: three
+      // segments and a line saying what the choice does.
+      Picker("Mic alignment", selection: $micAlignment) {
+        ForEach(MicAlignment.allCases) { Text($0.title).tag($0) }
+      }
+      .pickerStyle(.segmented)
+      .onChange(of: micAlignment) { _, value in SharedStore.micAlignment = value }
+      Text(micAlignment.summary).font(BlurtType.body(DesignTokens.Typography.sizeCaption))
+        .foregroundStyle(BlurtBrand.muted)
       NavigationLink {
         ThemePickerView()
       } label: {

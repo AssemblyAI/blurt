@@ -13,6 +13,7 @@ struct VoiceBar: View {
   var model: KeyboardModel
   @Environment(\.keyboardPalette) private var palette
   @Environment(\.voiceElementKind) private var kind
+  @Environment(\.layoutDirection) private var direction
 
   static let height = DesignTokens.Metrics.voicebarHeight
 
@@ -54,16 +55,21 @@ struct VoiceBar: View {
           let recording = model.voiceState.isRecording
           let shown = kind.visibleWidth(slot: .bar, recording: recording)
           let width = min(max(shown, DesignTokens.Metrics.keyMinWidth), geo.size.width - beside - clearance)
+          // At the right edge the + comes first, so the mic is the thing
+          // at the edge and the + sits on its inner side.
           HStack(spacing: clearance) {
+            if model.micAlignment.plusLeads(in: direction) { AddTermKey(model: model) }
             MicControl(model: model, slot: .bar, width: width)
-            AddTermKey(model: model)
+            if !model.micAlignment.plusLeads(in: direction) { AddTermKey(model: model) }
           }
           .animation(.easeInOut(duration: DesignTokens.Motion.waveFade), value: recording)
           .animation(.easeInOut(duration: DesignTokens.Motion.stateFade), value: chip)
           .transition(.opacity)
         }
       }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      // The pair sits where Settings put the mic — the middle, or the edge
+      // under the thumb (`MicAlignment`); the field and the note fill the row.
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: model.micAlignment.alignment(in: direction))
     }
     .frame(height: Self.height)
     .animation(.easeInOut(duration: DesignTokens.Motion.termSwap), value: model.termDraft == nil)

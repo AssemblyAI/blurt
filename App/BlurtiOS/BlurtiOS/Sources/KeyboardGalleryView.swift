@@ -5,7 +5,7 @@
   /// reference, and the way a screenshot of the keyboard is taken without
   /// tapping through Notes. Debug builds only, reached by launch argument:
   ///
-  ///     -BlurtGallery <slimBar|panel|full> <state>[,<state>…] [face] [-BlurtGalleryStill] [-BlurtGalleryBare] [-BlurtGalleryVoice a|b|c]
+  ///     -BlurtGallery <slimBar|panel|full> <state>[,<state>…] [face] [-BlurtGalleryStill] [-BlurtGalleryBare] [-BlurtGalleryVoice a|b|c] [-BlurtGalleryAlign left|center|right]
   ///
   /// The last word is a face, `light` or `dark` (the older theme words still
   /// land: `system` and `paper` are light, `system-dark` and `ink` dark); the
@@ -15,7 +15,9 @@
   /// captures of one state are the same pixels; `-BlurtGalleryBare` draws the
   /// first row alone, no caption, inside a 2 pt `#FF00FF` registration border
   /// that `scripts/design-diff.swift crop` cuts to. `-BlurtGalleryVoice a|b|c`
-  /// picks which mic concept draws (`VoiceElementKind`); `-BlurtVoice <a|b|c>
+  /// picks which mic concept draws (`VoiceElementKind`); `-BlurtGalleryAlign
+  /// left|center|right` puts the mic at a side (`MicAlignment`, as Settings →
+  /// Mic side does); `-BlurtVoice <a|b|c>
   /// <bar|panel|home> <state> [light|dark]` renders that element by itself.
   /// where a state is `off` (no Full Access), `start` (app not listening),
   /// `idle`, `connecting`, `recording`, `processing`, `pasted`, `copied`,
@@ -110,10 +112,11 @@
       // The theme is the next word unless it is a switch.
       let theme = arguments.count > flag + 3 && !arguments[flag + 3].hasPrefix("-") ? arguments[flag + 3] : "light"
       let voice = VoiceElementKind.parse(arguments) ?? .shipped
+      let align = MicAlignment.parse(arguments) ?? .center
       return arguments[flag + 2].split(separator: ",").map { name in
         Row(
-          caption: "\(layout.rawValue) · \(name) · \(theme) · \(voice.rawValue)",
-          model: model(layout: layout, state: String(name), theme: theme, voice: voice))
+          caption: "\(layout.rawValue) · \(name) · \(theme) · \(voice.rawValue) · \(align.rawValue)",
+          model: model(layout: layout, state: String(name), theme: theme, voice: voice, align: align))
       }
     }
 
@@ -128,11 +131,12 @@
     ]
 
     private static func model(
-      layout: KeyboardLayout, state: String, theme: String, voice: VoiceElementKind
+      layout: KeyboardLayout, state: String, theme: String, voice: VoiceElementKind, align: MicAlignment
     ) -> KeyboardModel {
       let model = KeyboardModel()
       model.layout = layout
       model.voiceKindOverride = voice
+      model.micAlignmentOverride = align
       model.paletteOverride = .resolve(KeyboardPalette.brandID, dark: Self.darkFaces.contains(theme))
       // `keys` shows the panel's carousel flipped to its keyboard page;
       // `term` the voice bar as the key-term field, mid-typing.

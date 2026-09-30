@@ -40,7 +40,8 @@ flipped to its keyboard page), `symbols`, `term` (the key-term field
 mid-typing), `send` (a return key with a label), `saved` (the + just after a
 term was saved), `selected` (a word highlighted in the text: the + is the chip
 holding it) and `known` (the same, for a word already in the key terms).
-`-BlurtGalleryVoice a|b|c` picks the mic concept
+`-BlurtGalleryVoice a|b|c` picks the mic concept and `-BlurtGalleryAlign
+left|center|right` the mic's side (One hand, below)
 (below). The gallery is `BlurtiOS/Sources/KeyboardGalleryView.swift`, debug
 builds only; the keyboard's sources are compiled into the app for it.
 
@@ -262,11 +263,11 @@ push-to-talk exactly as on the Mac.
 Side margins 6.5; top 8; under a row of keys 13 (the iPhone's), under the
 slim bar 8.
 
-| Layout    | Rows                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Height                   |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| `slimBar` | globe · voice bar · delete · return                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 60                       |
-| `panel`   | the voice element, centred (the + top-left; cancel top-right while in flight) · globe · space · delete · return. A two-page carousel: a horizontal swipe flips between the panel and the full keyboard, and it is back to the element each time the keyboard appears. The pages are a strip one page wide (`PanelCarousel`): the other page is set down a page away on the side the finger moved towards and the strip slides, so the two never cross whichever way the flips come; a flip back mid-slide retreats (`PanelCarouselState`, tested). | 216, or 270 when flipped |
-| `full`    | voice row 44, then the first key row right under it as the iPhone's sits under its suggestions · three letter rows 43 · 123 / globe / space / return                                                                                                                                                                                                                                                                                                                                                                                               | 270                      |
+| Layout    | Rows                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Height                   |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `slimBar` | globe · voice bar · delete · return                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 60                       |
+| `panel`   | the voice element, centred — or at an edge for one hand (Settings, below) — (the + top-left; cancel top-right while in flight) · globe · space · delete · return. A two-page carousel: a horizontal swipe flips between the panel and the full keyboard, and it is back to the element each time the keyboard appears. The pages are a strip one page wide (`PanelCarousel`): the other page is set down a page away on the side the finger moved towards and the strip slides, so the two never cross whichever way the flips come; a flip back mid-slide retreats (`PanelCarouselState`, tested). | 216, or 270 when flipped |
+| `full`    | voice row 44, then the first key row right under it as the iPhone's sits under its suggestions · three letter rows 43 · 123 / globe / space / return                                                                                                                                                                                                                                                                                                                                                                                                                                                | 270                      |
 
 The voice row (`VoiceBar`) is where the system keyboard puts its suggestion
 bar: the element with the + a clearance beside it, the pair centred on what
@@ -356,6 +357,24 @@ when the app is listening and nothing is in flight; otherwise the element
 sits dimmed and the first tap opens Blurt. When the keyboard leaves the
 screen with a dictation it started, it releases a recording (the words still
 land, on the clipboard if no keyboard is there) and cancels anything earlier.
+
+## One hand: the mic at an edge
+
+Settings → Keyboard, under the layout, the same three-segment shape with a
+line beneath: **Left alignment · Default · Right alignment** (`MicAlignment`,
+`micAlignment` in the App Group, read on every appearance like the layout).
+Default is the middle, as everywhere above. At an edge the mic key is the
+thing at the edge. In the bar and the slim bar the pair slides there and the
+add key (+) moves to the mic's inner side, so at the right edge it comes
+first. The panel becomes a big voice bar: the element sits at the edge as
+wide as it _shows_ (`visibleWidth`, so the grille is under the thumb, not an
+empty half of its 300 pt box), the add key beside it on its inner side rather
+than in the corner, and cancel in the far top corner, clear of them both.
+Left and right are the phone's sides: in a right-to-left language the
+leading/trailing mapping flips so the mic stays under the thumb chosen
+(`Shared/MicAlignment.swift`, tested). Gallery: `-BlurtGalleryAlign
+left|center|right`; the real extension: `scripts/ios-keyboard-flows.sh
+--align left|right` checks the mic is at that edge with the add key inside it.
 
 ## Tokens (`Design/tokens.json` → `Shared/DesignTokens.swift`)
 

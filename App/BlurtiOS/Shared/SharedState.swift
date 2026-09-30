@@ -25,6 +25,8 @@ nonisolated enum BlurtShared {
     /// TEMPORARY: which mic concept draws (a, b or c), while the three are
     /// tried in use. Goes with the losers once one is picked.
     static let voiceElement = "voiceElement"
+    /// Where the mic key sits across the keyboard (`MicAlignment`).
+    static let micAlignment = "micAlignment"
     static let listeningUntil = "listeningUntil"
     static let windowMinutes = "listeningWindowMinutes"
     static let phase = "phase"
@@ -244,6 +246,12 @@ nonisolated enum SharedStore {
   static var voiceElementKind: VoiceElementKind {
     get { VoiceElementKind(rawValue: defaults.string(forKey: BlurtShared.Key.voiceElement) ?? "") ?? .shipped }
     set { defaults.set(newValue.rawValue, forKey: BlurtShared.Key.voiceElement) }
+  }
+
+  /// Where the mic key sits across the keyboard; the middle until chosen.
+  static var micAlignment: MicAlignment {
+    get { MicAlignment(rawValue: defaults.string(forKey: BlurtShared.Key.micAlignment) ?? "") ?? .center }
+    set { defaults.set(newValue.rawValue, forKey: BlurtShared.Key.micAlignment) }
   }
 
   /// Hands-free: the keyboard starts a dictation the moment it appears in a

@@ -7,6 +7,7 @@
 #
 #   scripts/ios-keyboard-flows.sh                       # the whole matrix
 #   scripts/ios-keyboard-flows.sh --face dark --voice a --layout panel
+#   scripts/ios-keyboard-flows.sh --layout full --align right   # the mic at an edge (Settings › alignment)
 #
 # Prints one FLOW-OK / FLOW-FAIL line per step; screenshots land in
 # .build/design/flows/<face>-<voice>-<layout>/, with a sheet.png of every
@@ -22,6 +23,7 @@ DERIVED="${BLURT_DERIVED_DATA:-$REPO_ROOT/.build/ios-sim}"
 FACES="light dark"
 VOICES="a b c"
 LAYOUTS="panel full slimBar"
+ALIGN=""
 OUT="$REPO_ROOT/.build/design/flows"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -41,8 +43,12 @@ while [ $# -gt 0 ]; do
       OUT="${2:?}"
       shift 2
       ;;
+    --align)
+      ALIGN="${2:?}"
+      shift 2
+      ;;
     *)
-      echo "usage: ios-keyboard-flows.sh [--face light|dark] [--voice a|b|c] [--layout slimBar|panel|full] [--out DIR]" >&2
+      echo "usage: ios-keyboard-flows.sh [--face light|dark] [--voice a|b|c] [--layout slimBar|panel|full] [--align left|right] [--out DIR]" >&2
       exit 2
       ;;
   esac
@@ -66,12 +72,12 @@ for face in $FACES; do
   xcrun simctl ui "$UDID" appearance "$face"
   for voice in $VOICES; do
     for layout in $LAYOUTS; do
-      name="$face-$voice-$layout"
+      name="$face-$voice-$layout${ALIGN:+-$ALIGN}"
       dir="$OUT/$name"
       rm -rf "$dir"
       mkdir -p "$dir"
       echo "==> $name"
-      TEST_RUNNER_BLURT_PROBE_ARGS="$face $voice $layout" xcodebuild test \
+      TEST_RUNNER_BLURT_PROBE_ARGS="$face $voice $layout${ALIGN:+ $ALIGN}" xcodebuild test \
         -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOSProbe \
         -only-testing:BlurtiOSProbe/BlurtKeyboardFlows \
         -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$DERIVED" \
