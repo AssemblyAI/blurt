@@ -62,6 +62,12 @@ HEAD_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD)"
 [ "$BUILT_SHA" = "$HEAD_SHA" ] \
   || die "DMG was built from $BUILT_SHA but HEAD is $HEAD_SHA — rebuild with scripts/release-build.sh before publishing"
 info "built at: $BUILT_SHA (matches HEAD)"
+# A staging build polls the staging feed and names a DMG on the staging
+# prerelease; shipping it would leave every user updating from a feed nobody
+# publishes to.
+BUILT_CHANNEL="$(parse_build_info_channel <"$BUILD_INFO")"
+[ "${BUILT_CHANNEL:-release}" = release ] \
+  || die "these artifacts are a $BUILT_CHANNEL build — stage them with scripts/release-stage.sh, or rebuild without --staging to publish"
 
 step "Validate staple"
 xcrun stapler validate "$DMG" >/dev/null || die "DMG not stapled — rebuild with release-build.sh"

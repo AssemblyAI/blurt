@@ -42,6 +42,13 @@ settings:
     # half never leaves the maintainer's keychain and the release-build secret.
     # release-build.sh refuses to ship while this is still the placeholder.
     SPARKLE_PUBLIC_ED_KEY: "3RdSHCmCH/BOqgV/FR01c4VZDi6uylEigDq4PFBaCpQ="
+    # The appcast every copy polls, baked into Info.plist as SUFeedURL. A build
+    # setting rather than a literal only so `release-build.sh --staging` can
+    # point an update rehearsal at the sparkle-staging prerelease instead; every
+    # other build — and every release — gets this value, and release-build.sh
+    # reads it back out of the built app against `sparkle_feed_url` in
+    # release-lib.sh.
+    BLURT_SPARKLE_FEED_URL: https://github.com/AssemblyAI/blurt/releases/latest/download/appcast.xml
   configs:
     Release:
       VALIDATE_PRODUCT: YES
@@ -146,15 +153,16 @@ targets:
         LSMinimumSystemVersion: "15.0"
         LSApplicationCategoryType: public.app-category.productivity
         NSMicrophoneUsageDescription: Blurt uses your microphone to transcribe your dictation with AssemblyAI.
-        # Sparkle. The feed is a stable release-asset URL: release-publish.sh
-        # attaches appcast.xml to every release, so /latest/download/ always
-        # resolves to the newest one. The public EdDSA key verifies each update
+        # Sparkle. The feed is a stable release-asset URL (the
+        # BLURT_SPARKLE_FEED_URL setting above): release-publish.sh attaches
+        # appcast.xml to every release, so /latest/download/ always resolves to
+        # the newest one. The public EdDSA key verifies each update
         # before it is installed — its private half is the SPARKLE_ED_PRIVATE_KEY
         # secret release-build.sh signs with (see RELEASE.md). Checks are on by
         # default (which also skips Sparkle's "check automatically?" prompt) and
         # daily; installing without asking stays opt-in. Only the shipping bundle
         # id starts the updater at all (see UpdaterModel).
-        SUFeedURL: https://github.com/AssemblyAI/blurt/releases/latest/download/appcast.xml
+        SUFeedURL: $(BLURT_SPARKLE_FEED_URL)
         SUPublicEDKey: $(SPARKLE_PUBLIC_ED_KEY)
         SUEnableAutomaticChecks: true
         SUScheduledCheckInterval: 86400

@@ -25,10 +25,16 @@ readonly NOTARY_PROFILE="blurt-notary"
 
 SKIP_CHECKS=0
 SKIP_SMOKE=0
+# `release` builds what ships. `staging` is the update rehearsal (RELEASE.md →
+# Rehearsing an update): the same signed, notarized build, but its feed and its
+# appcast enclosure point at the sparkle-staging prerelease instead of the
+# release, and release-publish.sh refuses to ship it.
+CHANNEL=release
 for arg in "$@"; do
   case "$arg" in
     --skip-checks) SKIP_CHECKS=1 ;;
     --skip-smoke) SKIP_SMOKE=1 ;;
+    --staging) CHANNEL=staging ;;
     *)
       echo "unknown arg: $arg" >&2
       exit 2
@@ -400,6 +406,42 @@ else
   info "EdDSA private key: from the login keychain (where Sparkle's generate_keys stores it)"
 fi
 
+FEED_URL="$(sparkle_feed_url "$CHANNEL")"
+info "channel: $CHANNEL (feed: $FEED_URL)"
+
+# What the update window shows. Worked out here, before the build, so missing
+# or sloppy notes fail in seconds rather than after notarization. A release
+# ships only hand-written notes (docs/release-notes/X.Y.Z.md, which the bump PR
+# scaffolds) that pass lint_release_notes. A staging rehearsal uses the file if
+# there is one and otherwise falls back to the filtered commit subjects since
+# the previous release — only the tester ever sees those.
+step "Release notes"
+NOTES_FILE="$(release_notes_path "$VERSION")"
+if [ -f "$NOTES_FILE" ]; then
+  lint_release_notes <"$NOTES_FILE" \
+    || die "$NOTES_FILE fails the release-notes rules above — fix it (RELEASE.md → Release notes)"
+  CHANGELOG="$(release_notes_body <"$NOTES_FILE")"
+  info "release notes: $NOTES_FILE"
+elif [ "$CHANNEL" = release ]; then
+  die "no release notes at $NOTES_FILE — a release ships only hand-written notes (RELEASE.md → Release notes)"
+else
+  PREV_VERSION="$(previous_release_tag "$VERSION")"
+  if [ -n "$PREV_VERSION" ]; then
+    CHANGELOG="$(git -C "$REPO_ROOT" log --format=%s "v$PREV_VERSION..HEAD" | release_notes_from_subjects)"
+    info "release notes: none written — staging falls back to commits since v$PREV_VERSION"
+  elif [ "$(git -C "$REPO_ROOT" rev-parse --is-shallow-repository)" = "true" ]; then
+    die "shallow checkout: no release tags to measure the changelog from — check out with fetch-depth: 0"
+  else
+    CHANGELOG=""
+    info "release notes: none (no earlier release tag)"
+  fi
+fi
+if [ -n "$CHANGELOG" ]; then
+  printf '%s\n' "$CHANGELOG" | sed 's/^/    /'
+else
+  info "the update window will show no notes"
+fi
+
 step "Initial summary"
 info "build root:  $BUILD_ROOT"
 info "identity:    $IDENTITY"
@@ -429,6 +471,7 @@ xcodebuild \
   CODE_SIGN_STYLE=Manual \
   CODE_SIGN_IDENTITY="$IDENTITY" \
   DEVELOPMENT_TEAM="$TEAM_ID" \
+  BLURT_SPARKLE_FEED_URL="$FEED_URL" \
   build | "${PRETTY[@]}"
 
 APP_BUILT="$DERIVED/Build/Products/Release/Blurt.app"
@@ -613,6 +656,12 @@ fi
 APP_PUBLIC_KEY="$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$APP_STAGED/Contents/Info.plist")"
 [ "$APP_PUBLIC_KEY" = "$SPARKLE_PUBLIC_KEY" ] \
   || die "the built app's SUPublicEDKey ($APP_PUBLIC_KEY) is not project.yml's ($SPARKLE_PUBLIC_KEY)"
+# Same idea for the feed: a release build that polls the staging feed (or the
+# reverse) would pass every other check and strand its users, so read it back
+# out of the built app too.
+APP_FEED_URL="$(/usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$APP_STAGED/Contents/Info.plist")"
+[ "$APP_FEED_URL" = "$FEED_URL" ] \
+  || die "the built app's SUFeedURL ($APP_FEED_URL) is not the $CHANNEL feed ($FEED_URL)"
 VERIFY_PUBLIC_KEY="${BLURT_SPARKLE_VERIFY_PUBLIC_KEY:-$APP_PUBLIC_KEY}"
 [ "$VERIFY_PUBLIC_KEY" = "$APP_PUBLIC_KEY" ] \
   || info "key rotation: verifying against BLURT_SPARKLE_VERIFY_PUBLIC_KEY, not the app's new key"
@@ -621,11 +670,17 @@ swift "$REPO_ROOT/scripts/verify-sparkle-signature.swift" "$VERIFY_PUBLIC_KEY" "
 
 BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_STAGED/Contents/Info.plist")"
 APPCAST="$BUILD_ROOT/appcast.xml"
+if [ "$CHANNEL" = staging ]; then
+  RELEASE_PAGE="$BLURT_RELEASES_URL/tag/$SPARKLE_STAGING_TAG"
+else
+  RELEASE_PAGE="$BLURT_RELEASES_URL/tag/v$VERSION"
+fi
 render_appcast "$VERSION" "$BUILD_NUMBER" \
-  "https://github.com/AssemblyAI/blurt/releases/download/v$VERSION/Blurt-$VERSION.dmg" \
+  "$(sparkle_enclosure_url "$CHANNEL" "$VERSION")" \
   "$ED_SIGNATURE" "$ED_LENGTH" \
-  "https://github.com/AssemblyAI/blurt/releases/tag/v$VERSION" \
-  "$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')" >"$APPCAST"
+  "$RELEASE_PAGE" \
+  "$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')" \
+  "$CHANGELOG" >"$APPCAST"
 xmllint --noout "$APPCAST" || die "generated appcast is not well-formed XML"
 info "appcast: $APPCAST (build $BUILD_NUMBER, $ED_LENGTH bytes)"
 
@@ -633,6 +688,7 @@ step "Provenance"
 PROVENANCE="$BUILD_ROOT/build-info.txt"
 {
   echo "Blurt $VERSION"
+  echo "channel:      $CHANNEL"
   echo "built:        $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "git:          $(git -C "$REPO_ROOT" rev-parse HEAD) ($(git -C "$REPO_ROOT" rev-parse --short HEAD))"
   echo "xcode:        $(xcodebuild -version | tr '\n' ' ')"
@@ -652,6 +708,16 @@ CHECKSUMS="$BUILD_ROOT/SHA256SUMS"
 info "checksums: $CHECKSUMS"
 
 step "Summary"
+if [ "$CHANNEL" = staging ]; then
+  NEXT="  A staging build: it polls and names the $SPARKLE_STAGING_TAG prerelease, and
+  release-publish.sh will refuse it. Put it on the staging feed with:
+    scripts/release-stage.sh      # upload the DMG + appcast to $SPARKLE_STAGING_TAG"
+else
+  NEXT="  In CI the release workflow uploads these as run artifacts and the gated
+  publish job takes it from here. Running locally, install to test and publish:
+    scripts/release-install.sh    # install the notarized build to /Applications
+    scripts/release-publish.sh    # tag, push, publish the GitHub Release"
+fi
 SIZE="$(du -h "$DMG" | cut -f1)"
 SHA="$(sha256_of_file "$DMG")"
 cat <<EOF
@@ -665,8 +731,5 @@ cat <<EOF
   Provenance: $PROVENANCE
   Notary log: $NOTARY_LOG
 
-  In CI the release workflow uploads these as run artifacts and the gated
-  publish job takes it from here. Running locally, install to test and publish:
-    scripts/release-install.sh    # install the notarized build to /Applications
-    scripts/release-publish.sh    # tag, push, publish the GitHub Release
+$NEXT
 EOF

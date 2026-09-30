@@ -58,17 +58,34 @@ VERIFY_BUILD="$(parse_bundle_version <"$PROJECT_YML")"
 step "xcodegen"
 (cd "$APP_DIR" && xcodegen generate --quiet)
 
+# The notes the update window will show. Scaffolded here with the commits since
+# the previous release as context and a TODO that check.sh fails on, so the bump
+# PR can't merge until a person has written them — reviewing that PR is the
+# editorial pass. Notes someone already wrote ahead of the bump are kept.
+step "Release notes"
+NOTES_FILE="$(release_notes_path "$NEW_VERSION")"
+if [ -f "$NOTES_FILE" ]; then
+  info "keeping existing $NOTES_FILE"
+else
+  PREV_VERSION="$(previous_release_tag "$NEW_VERSION")"
+  [ -n "$PREV_VERSION" ] || die "no release tag below $NEW_VERSION to list commits from — fetch tags (fetch-depth: 0)"
+  mkdir -p "$(dirname "$NOTES_FILE")"
+  git -C "$REPO_ROOT" log --format=%s "v$PREV_VERSION..HEAD" | release_notes_template "$PREV_VERSION" >"$NOTES_FILE"
+  info "scaffolded $NOTES_FILE — write the notes in the bump PR"
+fi
+
 step "Commit"
 # xcodegen regenerates the (tracked) Info.plist from project.yml's version
 # properties, so it must be committed alongside the project files — otherwise
 # the bump leaves it dirty and the next build/publish trips the clean-tree gate.
-git -C "$REPO_ROOT" add "$PROJECT_YML" "$APP_DIR/Blurt.xcodeproj" "$APP_DIR/Blurt/Info.plist"
+git -C "$REPO_ROOT" add "$PROJECT_YML" "$APP_DIR/Blurt.xcodeproj" "$APP_DIR/Blurt/Info.plist" "$NOTES_FILE"
 git -C "$REPO_ROOT" commit -m "chore: bump to v$NEW_VERSION"
 
 step "Next steps"
 cat <<EOF
 
   Bumped to v$NEW_VERSION (build $NEW_BUILD). Next:
+    \$EDITOR ${NOTES_FILE#"$REPO_ROOT"/}   # write the update-window notes
     scripts/release-build.sh      # build, sign, notarize, staple DMG
     scripts/release-publish.sh    # tag v$NEW_VERSION, push, publish GitHub Release
 

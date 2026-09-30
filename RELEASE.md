@@ -265,7 +265,8 @@ it cannot sign.
 Installed copies update themselves with [Sparkle](https://sparkle-project.org).
 Each release carries an `appcast.xml` asset; every installed copy polls
 `https://github.com/AssemblyAI/blurt/releases/latest/download/appcast.xml`
-(`SUFeedURL` in `project.yml`), so the feed moves to a release at the moment
+(`SUFeedURL`, from the `BLURT_SPARKLE_FEED_URL` build setting in `project.yml`),
+so the feed moves to a release at the moment
 `release-publish.sh` flips it live and repoints `/latest` — never before its
 assets are verified. The appcast's one item names the versioned
 `Blurt-X.Y.Z.dmg` on that release, with the DMG's EdDSA signature and length.
@@ -275,12 +276,106 @@ assets are verified. The appcast's one item names the versioned
 `scripts/verify-sparkle-signature.swift` checks that signature against the
 `SUPublicEDKey` read out of the **built app** — the key every installed copy
 will check — before the appcast is written. A private key that doesn't match
-fails the build, not users' updates. The build also refuses to start while
-`SPARKLE_PUBLIC_ED_KEY` is still the placeholder.
+fails the build, not users' updates. The build reads `SUFeedURL` back out of
+the built app the same way, and refuses to start while `SPARKLE_PUBLIC_ED_KEY`
+is still the placeholder.
 
 Sparkle compares `CFBundleVersion` (`sparkle:version`), not the marketing
 version, so the build number must rise with every release — `release-bump.sh`
 already increments it on each bump.
+
+### Release notes
+
+The update window shows the appcast item's `<description>`, which
+`release-build.sh` writes as Markdown (Sparkle renders it natively) from
+**`docs/release-notes/X.Y.Z.md`** — written by a person, every release:
+
+- **The bump PR scaffolds it.** `release-bump.sh` commits the file with the
+  commits since the previous release in an HTML comment (context for the writer
+  and the reviewer; comments never ship) and a `TODO` where the notes go.
+  `check` fails while the `TODO` is there, so the bump PR can't merge until the
+  notes are written — and approving that PR is the editorial review.
+- **A release build refuses to run without it.** There is no automatic
+  fallback for a release; commit subjects are written for reviewers, not users.
+  (A `--staging` rehearsal alone falls back to filtered commit subjects, since
+  only the tester sees them.)
+- **`scripts/check-release-notes.sh` lints it** (via `check.sh`, and again in the
+  build), using `lint_release_notes` in `release-lib.sh`:
+  - bullets only, at most **6**, each at most **100** characters;
+  - each starts with a capital letter — lead with the verb ("Add…", "Fix…",
+    "Paste now works in…") — and none with "We";
+  - no filler: _seamless, robust, enhanced, streamlined, leverage, elevate,
+    delve, a variety of, various improvements, under the hood, we're excited_,
+    and more (`RELEASE_NOTES_BANNED` — add to it when a new tic shows up);
+  - no emoji;
+  - no developer leakage: PR numbers, `chore:`/`fix:` prefixes, backticks,
+    filenames, `snake_case` or `camelCase` identifiers (real product names like
+    macOS or YouTube are allow-listed in `RELEASE_NOTES_PROPER_NOUNS`).
+
+The lint only catches the obvious. Write for someone who has never seen the
+repo: what changed for them, in plain words, most important first. Then read
+it where users will — the rehearsal below shows the real window.
+
+Because the rehearsal fallback and the bump scaffold both measure from tags, the
+build job checks out with full history; a shallow checkout fails fast.
+
+### Rehearsing an update
+
+A shipped build whose updater is broken can't be fixed by an update, so every
+user it reaches has to download again by hand. Before the first Sparkle release
+— and before any change to the updater, the feed, the signing, or the appcast —
+prove that an installed build updates itself, using the real pipeline:
+Developer ID, notarization, the CI secret, and GitHub's download redirects.
+
+The one difference is the feed. `release-build.sh --staging` builds an app that
+polls the **`sparkle-staging`** prerelease instead of `/latest`, with an appcast
+whose DMG lives there too. That prerelease is never marked latest, so
+`/releases/latest/download/` — every shipped copy's feed — can't resolve to it,
+and `release-publish.sh` refuses to publish a staging build.
+
+1. Push the rehearsal to a branch matching `release-dry-run*`, and temporarily
+   add that pattern to the `release-build` environment's deployment branches
+   (see [Dry-running the signing path](#dry-running-the-signing-path) — with the
+   recommended `main`-only policy, a dispatch from any other branch is blocked
+   before it builds). Dispatch **release** from that branch with **staging**
+   checked (and the version the branch carries). The build signs and notarizes as
+   usual; the `stage` job then uploads the DMG and appcast to `sparkle-staging`,
+   creating it the first time. This is **rc1**.
+2. Download rc1's DMG from the run's artifacts (not from the prerelease, which
+   the next step overwrites) and install it into `/Applications`, the way a user
+   would. Grant its permissions and dictate once.
+3. On the same branch, raise `CFBundleVersion` in `project.yml` by one (Sparkle
+   compares the build number), add or edit
+   `docs/release-notes/X.Y.Z.md` to see the real notes (without it, a staging
+   build shows filtered commit subjects), push, and dispatch again with
+   **staging** checked. This is **rc2**, and it replaces rc1 on the feed.
+4. In rc1, choose **Check for Updates…**.
+
+Check, in order:
+
+- The update window names rc2 and shows the changelog — and the notes read
+  well there: short enough to take in at a glance, nothing a user would have to
+  look up. Adjust `docs/release-notes/X.Y.Z.md` until they do.
+- It downloads, installs, and relaunches as rc2 (Settings → Updates shows the
+  version).
+- **Accessibility survives**: dictate into another app right after the
+  relaunch. If the paste fails, the update broke the grant — don't ship.
+- **Install on quit**: stage an rc3, turn on "Download and install updates
+  automatically", quit, relaunch, and confirm it is rc3.
+- An update found mid-dictation doesn't interrupt the recording.
+- Launched from `~/Downloads` instead of `/Applications` (App Translocation),
+  Sparkle either updates or says why — it doesn't fail silently.
+- From a standard (non-admin) account, it asks for an administrator password
+  rather than failing.
+
+Remove the branch pattern from `release-build` when you're done. A rehearsed
+copy keeps polling `sparkle-staging`. Delete it afterwards and
+install the real release, or it will only ever see staged builds.
+
+For fast iteration on the update window's look alone, a local loop is quicker:
+two locally signed builds with the shipping bundle id, a hand-written appcast,
+and `python3 -m http.server`. It skips everything the rehearsal exists to
+prove, so it is no substitute.
 
 ### One-time setup: the key pair
 
@@ -300,9 +395,12 @@ after any build):
    normal PR flow.
 2. Paste the contents of `sparkle.key` into the `SPARKLE_ED_PRIVATE_KEY` secret
    on the `release-build` environment, then delete the file.
-3. Back up the keychain item (it's the "Private key for signing Sparkle
-   updates" entry) the same way as the Developer ID `.p12`: offline, never
-   synced, never committed.
+3. Back up the private key outside the keychain and never commit it. The
+   current backup is a 1Password document, "Blurt Sparkle EdDSA private key",
+   in the maintainer's private vault — not a shared one, since anyone holding
+   the key can sign an update installed copies accept (together with the
+   Developer ID key; see below). An offline copy beside the Developer ID `.p12`
+   is a sensible second.
 
 ### Key custody and rotation
 
