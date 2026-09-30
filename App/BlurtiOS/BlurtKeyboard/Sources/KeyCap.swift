@@ -16,6 +16,7 @@ struct KeyCap: View {
   var width: CGFloat?
   var action: () -> Void
   @Environment(\.keyboardPalette) private var palette
+  @Environment(\.keyboardInContainer) private var inContainer
 
   static let height = DesignTokens.Metrics.keyHeight
 
@@ -54,7 +55,7 @@ struct KeyCap: View {
     .frame(width: width)
     .frame(minWidth: width == nil ? DesignTokens.Metrics.keyMinWidth : nil, minHeight: Self.height)
     .padding(.horizontal, flexible || width != nil ? 0 : DesignTokens.Metrics.keyPad)
-    .keyCap(bare ? .clear : dark ? palette.keyDark : palette.key)
+    .keyCap(bare ? .clear : palette.keyFill(modifier: dark, inContainer: inContainer))
     .keyPress(action)
     .accessibilityLabel(title ?? systemImage ?? "")
   }

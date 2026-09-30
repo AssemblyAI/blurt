@@ -83,13 +83,14 @@ private struct LetterKey: View {
   let action: () -> Void
   @State private var pressed = false
   @Environment(\.keyboardPalette) private var palette
+  @Environment(\.keyboardInContainer) private var inContainer
 
   var body: some View {
     Text(label)
       .font(.system(size: DesignTokens.Typography.sizeLetter, weight: DesignTokens.Typography.weightLetter))
       .foregroundStyle(palette.keyText)
       .frame(width: width, height: KeyCap.height)
-      .keyCap(palette.key)
+      .keyCap(palette.keyFill(modifier: false, inContainer: inContainer))
       .overlay(alignment: .top) {
         if pressed { popup }
       }

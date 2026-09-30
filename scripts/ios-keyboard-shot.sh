@@ -61,6 +61,11 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 (cd "$REPO_ROOT/App/BlurtiOS" && xcodegen generate --quiet)
+# `xcodebuild test` does not reinstall a host app it thinks it has installed;
+# the keyboard is inside it, so the last build is put on the simulator first.
+xcodebuild build -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOS \
+  -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$DERIVED" "${IOS_SIM_SIGNING[@]}" -quiet
+xcrun simctl install "$UDID" "$DERIVED/Build/Products/Debug-iphonesimulator/BlurtiOS.app"
 # xcodebuild hands the test runner only the environment variables prefixed
 # TEST_RUNNER_; the test reads BLURT_PROBE_ARGS.
 if ! TEST_RUNNER_BLURT_PROBE_ARGS="$FACE $VOICE $LAYOUT" xcodebuild test -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" \

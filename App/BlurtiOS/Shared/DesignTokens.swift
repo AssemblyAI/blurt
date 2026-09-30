@@ -47,6 +47,10 @@ enum DesignTokens {
     nonisolated static let ink700: Color = Color(hex: 0x33302A)
     /// A modifier key on ink; the Mac's dark card fill.
     nonisolated static let ink800: Color = Color(hex: 0x26231E)
+    /// A key on the system's dark keyboard material (measured, iOS 27): the container case.
+    nonisolated static let materialDarkKey: Color = Color(hex: 0x575757)
+    /// A modifier key on the system's dark material.
+    nonisolated static let materialDarkModifier: Color = Color(hex: 0x474747)
     /// Black-100: the lightest warm grey.
     nonisolated static let neutral300: Color = Color(hex: 0xD2D1D0)
     /// Black-200: mono labels on the dark face.
@@ -79,6 +83,10 @@ enum DesignTokens {
   }
 
   enum Themes {
+    /// `brand.material/dark-key`.
+    nonisolated static let darkContainerKey: Color = Brand.materialDarkKey
+    /// `brand.material/dark-modifier`.
+    nonisolated static let darkContainerKeyModifier: Color = Brand.materialDarkModifier
     /// `brand.ink/700`.
     nonisolated static let darkField: Color = Brand.ink700
     /// `brand.ink/600`.
@@ -99,6 +107,10 @@ enum DesignTokens {
     nonisolated static let darkSignal: Color = Brand.green400
     /// `brand.ink`.
     nonisolated static let darkSurface: Color = Brand.ink
+    /// `brand.white`.
+    nonisolated static let lightContainerKey: Color = Brand.white
+    /// `brand.paper/300`.
+    nonisolated static let lightContainerKeyModifier: Color = Brand.paper300
     /// `brand.white`.
     nonisolated static let lightField: Color = Brand.white
     /// `brand.paper/400`.
@@ -353,6 +365,8 @@ enum DesignTokens {
     nonisolated static let streakLine: CGFloat = 1
     /// The bright point at the centre.
     nonisolated static let streakPoint: CGFloat = 4
+    /// 1 paints the face's surface under the keys; 0 leaves it clear, so the host's own keyboard material (iOS 26's rounded container, which insets a third-party keyboard and cannot be painted over) is the surface, seamlessly, and the keys take the container colours.
+    nonisolated static let surfacePaint: CGFloat = 0
     /// Where it is full.
     nonisolated static let surfaceVignetteEnd: CGFloat = 0.75
     /// Where the vignette begins, as a fraction of the keyboard's width.
@@ -507,6 +521,8 @@ enum DesignTokens {
     "brand.ink/600": "#3A362F",
     "brand.ink/700": "#33302A",
     "brand.ink/800": "#26231E",
+    "brand.material/dark-key": "#575757",
+    "brand.material/dark-modifier": "#474747",
     "brand.neutral/300": "#D2D1D0",
     "brand.neutral/500": "#A5A4A2",
     "brand.neutral/700": "#777673",
@@ -522,6 +538,8 @@ enum DesignTokens {
     "brand.violet/periwinkle": "#B0A7E9",
     "brand.warm-white": "#F2EEE6",
     "brand.white": "#FFFFFF",
+    "themes.dark/container-key": "#575757",
+    "themes.dark/container-key-modifier": "#474747",
     "themes.dark/field": "#33302A",
     "themes.dark/field-border": "#3A362F",
     "themes.dark/key": "#33302A",
@@ -532,6 +550,8 @@ enum DesignTokens {
     "themes.dark/popup": "#33302A",
     "themes.dark/signal": "#67AD82",
     "themes.dark/surface": "#1D1B16",
+    "themes.light/container-key": "#FFFFFF",
+    "themes.light/container-key-modifier": "#DAD7CB",
     "themes.light/field": "#FFFFFF",
     "themes.light/field-border": "#C7C3B2",
     "themes.light/key": "#FFFFFF",
@@ -662,6 +682,7 @@ enum DesignTokens {
     "metrics.streak/height": "2",
     "metrics.streak/line": "1",
     "metrics.streak/point": "4",
+    "metrics.surface/paint": "0",
     "metrics.surface/vignette-end": "0.75",
     "metrics.surface/vignette-start": "0.3",
     "metrics.term/border": "1",

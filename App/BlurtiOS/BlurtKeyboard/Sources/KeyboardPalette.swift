@@ -41,6 +41,11 @@ struct KeyboardPalette: Equatable, Identifiable {
   let notice: Color
   /// How much film grain lies over the surface: the brand's texture, matte.
   let grain: Double
+  /// The keys when the host wraps the keyboard in its own material (iOS 26's
+  /// Liquid Glass apps: Messages, Notes, Safari) and the surface goes clear:
+  /// colours that read on the system's light or dark material.
+  let containerKey: Color
+  let containerKeyModifier: Color
 
   static let keyGap = DesignTokens.Metrics.keyGap
   static let rowGap = DesignTokens.Metrics.rowGap
@@ -61,7 +66,8 @@ struct KeyboardPalette: Equatable, Identifiable {
     surface: Themes.lightSurface, key: Themes.lightKey, keyDark: Themes.lightKeyModifier,
     keyText: Themes.lightLegend, keyTextSecondary: Themes.lightLegendSecondary, signal: Themes.lightSignal,
     popupFill: Themes.lightPopup, field: Themes.lightField, fieldBorder: Themes.lightFieldBorder,
-    notice: Themes.lightNotice, grain: DesignTokens.Metrics.opacityGrainLight)
+    notice: Themes.lightNotice, grain: DesignTokens.Metrics.opacityGrainLight,
+    containerKey: Themes.lightContainerKey, containerKeyModifier: Themes.lightContainerKeyModifier)
 
   /// The dark face: ink `#1D1B16`, `#33302A` keys, `#26231E` modifiers, warm
   /// white legends, the lifted green.
@@ -70,7 +76,8 @@ struct KeyboardPalette: Equatable, Identifiable {
     surface: Themes.darkSurface, key: Themes.darkKey, keyDark: Themes.darkKeyModifier,
     keyText: Themes.darkLegend, keyTextSecondary: Themes.darkLegendSecondary, signal: Themes.darkSignal,
     popupFill: Themes.darkPopup, field: Themes.darkField, fieldBorder: Themes.darkFieldBorder,
-    notice: Themes.darkNotice, grain: DesignTokens.Metrics.opacityGrainDark)
+    notice: Themes.darkNotice, grain: DesignTokens.Metrics.opacityGrainDark,
+    containerKey: Themes.darkContainerKey, containerKeyModifier: Themes.darkContainerKeyModifier)
 
   /// The picker's list, one entry per theme (a theme's two faces share an id).
   static let all: [KeyboardPalette] = [brandLight]
@@ -83,6 +90,13 @@ struct KeyboardPalette: Equatable, Identifiable {
     return dark ? brandDark : brandLight
   }
 
+  /// A key's fill: the face's, or the container's when the host's material
+  /// is the surface.
+  func keyFill(modifier: Bool, inContainer: Bool) -> Color {
+    if inContainer { return modifier ? containerKeyModifier : containerKey }
+    return modifier ? keyDark : key
+  }
+
   static func == (lhs: KeyboardPalette, rhs: KeyboardPalette) -> Bool { lhs.id == rhs.id && lhs.face == rhs.face }
 }
 
@@ -92,6 +106,22 @@ extension Color {
   nonisolated init(hex: UInt32) {
     self.init(
       red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
+  }
+}
+
+private struct KeyboardInContainerKey: EnvironmentKey {
+  static let defaultValue = false
+}
+
+extension EnvironmentValues {
+  /// Whether the host wraps the keyboard in its own material (iOS 26's
+  /// Liquid Glass apps inset a third-party keyboard inside a rounded
+  /// container nothing can paint over): the surface goes clear and the keys
+  /// take the palette's container colours, so there is no band of a
+  /// different grey above the keyboard.
+  var keyboardInContainer: Bool {
+    get { self[KeyboardInContainerKey.self] }
+    set { self[KeyboardInContainerKey.self] = newValue }
   }
 }
 

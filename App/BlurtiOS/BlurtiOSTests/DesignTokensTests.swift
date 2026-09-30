@@ -116,7 +116,7 @@ struct DesignTokensTests {
         [
           Themes.lightSurface, Themes.lightKey, Themes.lightKeyModifier, Themes.lightLegend,
           Themes.lightLegendSecondary, Themes.lightSignal, Themes.lightPopup, Themes.lightField,
-          Themes.lightFieldBorder, Themes.lightNotice,
+          Themes.lightFieldBorder, Themes.lightNotice, Themes.lightContainerKey, Themes.lightContainerKeyModifier,
         ]
       ),
       (
@@ -124,6 +124,7 @@ struct DesignTokensTests {
         [
           Themes.darkSurface, Themes.darkKey, Themes.darkKeyModifier, Themes.darkLegend, Themes.darkLegendSecondary,
           Themes.darkSignal, Themes.darkPopup, Themes.darkField, Themes.darkFieldBorder, Themes.darkNotice,
+          Themes.darkContainerKey, Themes.darkContainerKeyModifier,
         ]
       ),
     ]
@@ -135,7 +136,8 @@ struct DesignTokensTests {
     for (palette, colors) in Self.paletteTokens {
       let roles = [
         palette.surface, palette.key, palette.keyDark, palette.keyText, palette.keyTextSecondary, palette.signal,
-        palette.popupFill, palette.field, palette.fieldBorder, palette.notice,
+        palette.popupFill, palette.field, palette.fieldBorder, palette.notice, palette.containerKey,
+        palette.containerKeyModifier,
       ]
       #expect(roles == colors, "\(palette.id) \(palette.face)")
     }

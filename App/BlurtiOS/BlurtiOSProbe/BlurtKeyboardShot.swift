@@ -19,7 +19,7 @@ final class BlurtKeyboardShot: XCTestCase {
     // keyboard has. XCUITest sees the system keyboard as a keyboard and a
     // custom one only through its controls, so wait for either; then the
     // globe cycles the enabled keyboards until Blurt is up.
-    let blurt = app.buttons["Add a key term"]
+    let blurt = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Add a key term")).firstMatch
     let system = app.keyboards.firstMatch
     let deadline = Date().addingTimeInterval(15)
     while !blurt.exists, !system.exists, Date() < deadline { Thread.sleep(forTimeInterval: 0.5) }

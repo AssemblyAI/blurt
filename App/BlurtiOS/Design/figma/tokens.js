@@ -20,6 +20,8 @@ Brand|ink|COLOR|#1D1B16|||DesignTokens.Brand.ink|the brand ink: the Mac pill's b
 Brand|ink/600|COLOR|#3A362F|||DesignTokens.Brand.ink600|the Mac's dark card border
 Brand|ink/700|COLOR|#33302A|||DesignTokens.Brand.ink700|an ordinary key on ink, one step up
 Brand|ink/800|COLOR|#26231E|||DesignTokens.Brand.ink800|a modifier key on ink; the Mac's dark card fill
+Brand|material/dark-key|COLOR|#575757|||DesignTokens.Brand.materialDarkKey|a key on the system's dark keyboard material (measured, iOS 27): the container case
+Brand|material/dark-modifier|COLOR|#474747|||DesignTokens.Brand.materialDarkModifier|a modifier key on the system's dark material
 Brand|neutral/300|COLOR|#D2D1D0|||DesignTokens.Brand.neutral300|black-100: the lightest warm grey
 Brand|neutral/500|COLOR|#A5A4A2|||DesignTokens.Brand.neutral500|black-200: mono labels on the dark face
 Brand|neutral/700|COLOR|#777673|||DesignTokens.Brand.neutral700|black-300: muted text and mono labels on the light face
@@ -35,6 +37,8 @@ Brand|violet/lavender|COLOR|#D7D3F4|||DesignTokens.Brand.violetLavender|the orb'
 Brand|violet/periwinkle|COLOR|#B0A7E9|||DesignTokens.Brand.violetPeriwinkle|the orb's mid violet: the drop's halo
 Brand|warm-white|COLOR|#F2EEE6|||DesignTokens.Brand.warmWhite|key legends on ink: warm white on warm ink
 Brand|white|COLOR|#FFFFFF|||DesignTokens.Brand.white|
+Themes|dark/container-key|COLOR|#575757|Brand:material/dark-key||DesignTokens.Themes.darkContainerKey|
+Themes|dark/container-key-modifier|COLOR|#474747|Brand:material/dark-modifier||DesignTokens.Themes.darkContainerKeyModifier|
 Themes|dark/field|COLOR|#33302A|Brand:ink/700||DesignTokens.Themes.darkField|
 Themes|dark/field-border|COLOR|#3A362F|Brand:ink/600||DesignTokens.Themes.darkFieldBorder|
 Themes|dark/key|COLOR|#33302A|Brand:ink/700||DesignTokens.Themes.darkKey|
@@ -45,6 +49,8 @@ Themes|dark/notice|COLOR|#E67F36|Brand:orange||DesignTokens.Themes.darkNotice|
 Themes|dark/popup|COLOR|#33302A|Brand:ink/700||DesignTokens.Themes.darkPopup|
 Themes|dark/signal|COLOR|#67AD82|Brand:green/400||DesignTokens.Themes.darkSignal|
 Themes|dark/surface|COLOR|#1D1B16|Brand:ink||DesignTokens.Themes.darkSurface|
+Themes|light/container-key|COLOR|#FFFFFF|Brand:white||DesignTokens.Themes.lightContainerKey|
+Themes|light/container-key-modifier|COLOR|#DAD7CB|Brand:paper/300||DesignTokens.Themes.lightContainerKeyModifier|
 Themes|light/field|COLOR|#FFFFFF|Brand:white||DesignTokens.Themes.lightField|
 Themes|light/field-border|COLOR|#C7C3B2|Brand:paper/400||DesignTokens.Themes.lightFieldBorder|
 Themes|light/key|COLOR|#FFFFFF|Brand:white||DesignTokens.Themes.lightKey|
@@ -175,6 +181,7 @@ Metrics|streak/arm|FLOAT|1.4||WIDTH_HEIGHT|DesignTokens.Metrics.streakArm|the la
 Metrics|streak/height|FLOAT|2||WIDTH_HEIGHT|DesignTokens.Metrics.streakHeight|the light streak while recording
 Metrics|streak/line|FLOAT|1||WIDTH_HEIGHT|DesignTokens.Metrics.streakLine|the hairline at rest
 Metrics|streak/point|FLOAT|4||WIDTH_HEIGHT|DesignTokens.Metrics.streakPoint|the bright point at the centre
+Metrics|surface/paint|FLOAT|0||WIDTH_HEIGHT|DesignTokens.Metrics.surfacePaint|1 paints the face's surface under the keys; 0 leaves it clear, so the host's own keyboard material (iOS 26's rounded container, which insets a third-party keyboard and cannot be painted over) is the surface, seamlessly, and the keys take the container colours
 Metrics|surface/vignette-end|FLOAT|0.75||WIDTH_HEIGHT|DesignTokens.Metrics.surfaceVignetteEnd|where it is full
 Metrics|surface/vignette-start|FLOAT|0.3||WIDTH_HEIGHT|DesignTokens.Metrics.surfaceVignetteStart|where the vignette begins, as a fraction of the keyboard's width
 Metrics|term/border|FLOAT|1||WIDTH_HEIGHT|DesignTokens.Metrics.termBorder|the field's hairline

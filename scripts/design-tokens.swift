@@ -338,9 +338,13 @@ let themeNames = tokens.filter { $0.group == "themes" }.map { String($0.name.spl
 let themeOrder = ["light", "dark"] + Set(themeNames).subtracting(["light", "dark"]).sorted()
 let roles = [
   "surface", "key", "key-modifier", "legend", "legend-secondary", "signal", "popup", "field", "field-border", "notice",
+  "container-key", "container-key-modifier",
 ]
 blocks["themes"] = table(
-  ["Face", "Surface", "Key", "Modifier", "Legend", "Secondary", "Signal", "Pop-up", "Field", "Field border", "Notice"],
+  [
+    "Face", "Surface", "Key", "Modifier", "Legend", "Secondary", "Signal", "Pop-up", "Field", "Field border", "Notice",
+    "Key in container", "Modifier in container",
+  ],
   themeOrder.compactMap { theme -> [String]? in
     let cells = roles.compactMap { role in byQualified["themes.\(theme)/\(role)"].map { code(rendered($0)) } }
     guard cells.count == roles.count else { return nil }
