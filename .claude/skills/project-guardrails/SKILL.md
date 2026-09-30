@@ -55,6 +55,10 @@ genuinely correct, and reaching for it means it's time to stop and ask.
   that is about the **upload**: the service starts inferring as the audio
   arrives, and still answers with one final transcript. No deltas, no partial
   results, no WebSocket — don't read the route name as permission to add them.
+  The one socket in the tree is the experimental read-selection-aloud feature's
+  AssemblyAI streaming **TTS** client (`TTS/AssemblyAISpeechSynthesizer.swift`,
+  the only file `check-invariants.sh` exempts); it speaks text, never
+  transcribes, so it is not a door back to streaming STT.
 - **No separate LLM cleanup pass.** Cleanup rides in the same dictation request,
   as `config.llm_instruction` (`CleanupInstruction`). No LLM Gateway
   client, no `StylerProtocol`, no post-transcription styling stage.

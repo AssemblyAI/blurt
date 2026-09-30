@@ -69,6 +69,7 @@ enum UITestIdentifiers {
   static let developerToggle = "settings.developer.toggle"
   static let developerShowLogs = "settings.developer.showLogs"
   static let enhancedTranscriptsToggle = "settings.enhancedTranscripts.toggle"
+  static let selectionSpeechToggle = "settings.selectionSpeech.toggle"
   static let updateCheck = "settings.update.check"
   static let updateAutoCheck = "settings.update.autoCheck"
   /// The Advanced pane's "Reset…" button (`SettingsWindowRoot`'s reset section).

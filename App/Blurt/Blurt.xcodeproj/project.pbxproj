@@ -133,6 +133,7 @@
 		44A8D4A3DD256E9D02A79C27 /* rom1a-15-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3BA1B8BBEEC6B5A2960688C3 /* rom1a-15-start.m4a */; };
 		44ECD071FA8B324584F31F23 /* rom1b-28-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 562C5F709DE00A5F38F045A5 /* rom1b-28-start.m4a */; };
 		454ADE9A9137F4E0A0AF4C24 /* juno-2-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 40A711B3442D9CBE0189BEF3 /* juno-2-stop.m4a */; };
+		4563B6FCC9AA36F95CFD9D88 /* SelectionSpeechRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10286F2D7AD2A279FBBEBFC /* SelectionSpeechRouter.swift */; };
 		45BB291D75223AC958B137BF /* juno-36-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E6A271DA085CFB136745066C /* juno-36-stop.m4a */; };
 		468547FA48D3745D73230860 /* rom1b-26-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6A9A4B58A6524D4F954DFE65 /* rom1b-26-stop.m4a */; };
 		46D3EBAEB518E57ADDC45A40 /* juno-63-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 0DBB595A2AB7221F408B4775 /* juno-63-start.m4a */; };
@@ -792,6 +793,7 @@
 		BCE9C2C9715E2C1C96683AE0 /* juno-40-stop.m4a */ = {isa = PBXFileReference; path = "juno-40-stop.m4a"; sourceTree = "<group>"; };
 		BD38CC94DC42A35A4174316A /* rom1b-1-start.m4a */ = {isa = PBXFileReference; path = "rom1b-1-start.m4a"; sourceTree = "<group>"; };
 		BEEF91CD94662F4344ECFDE9 /* rom1b-27-start.m4a */ = {isa = PBXFileReference; path = "rom1b-27-start.m4a"; sourceTree = "<group>"; };
+		C10286F2D7AD2A279FBBEBFC /* SelectionSpeechRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionSpeechRouter.swift; sourceTree = "<group>"; };
 		C19DBE4661B752927D16B261 /* BlurtBrand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlurtBrand.swift; sourceTree = "<group>"; };
 		C1BD23E2476F46A7BD75BAB9 /* rom1b-31-start.m4a */ = {isa = PBXFileReference; path = "rom1b-31-start.m4a"; sourceTree = "<group>"; };
 		C2CB5D2E464BFD7F8BABE760 /* rom1b-7-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-7-stop.m4a"; sourceTree = "<group>"; };
@@ -1459,6 +1461,7 @@
 			isa = PBXGroup;
 			children = (
 				3258A84E37C372993B1572EE /* DictationKeyTap.swift */,
+				C10286F2D7AD2A279FBBEBFC /* SelectionSpeechRouter.swift */,
 			);
 			path = Hotkey;
 			sourceTree = "<group>";
@@ -2050,6 +2053,7 @@
 				D750C1BF16502EEC92182ECD /* PermissionsStepView.swift in Sources */,
 				A13335FE97FA2E60A4F5CABC /* ReadyView.swift in Sources */,
 				B5ADC67B78CA3EA70D6BAEB3 /* RecentDictationsSection.swift in Sources */,
+				4563B6FCC9AA36F95CFD9D88 /* SelectionSpeechRouter.swift in Sources */,
 				6A1402BFED3758AAD9C84ADF /* SettingRow.swift in Sources */,
 				1D1100AB3D47EFC80D47B04B /* SettingsWindowRoot.swift in Sources */,
 				8F3F1CC7203A148A68DFCCFF /* SoundPackCatalog.swift in Sources */,

@@ -77,6 +77,11 @@ GUARDRAILS=".claude/skills/project-guardrails/SKILL.md"
 ENGINE="Sources/*.swift"
 APP="App/Blurt/*.swift App/Blurt/*.yml App/Blurt/*.plist :!App/Blurt/Blurt.xcodeproj"
 TESTS="Tests/*.swift App/Blurt/BlurtUITests/*.swift"
+# The streaming-STT rule's one carve-out: the experimental read-selection-aloud
+# feature speaks through AssemblyAI's streaming TTS, which is WebSocket-only.
+# The rule is about *dictation* staying one request/one response, so the TTS
+# client — that one file — is excluded; a socket anywhere else still fails.
+NOT_TTS=":!Sources/BlurtEngine/TTS/AssemblyAISpeechSynthesizer.swift"
 
 # Four parallel arrays rather than one delimited list, for the reason
 # check-portability.sh gives: the patterns contain `|`, so splitting on it
@@ -98,7 +103,7 @@ PATTERNS=(
 )
 SCOPES=(
   "$ENGINE $APP"
-  "$ENGINE $APP"
+  "$ENGINE $APP $NOT_TTS"
   "$ENGINE $APP"
   "$ENGINE $APP"
   "$ENGINE"
@@ -112,7 +117,7 @@ SCOPES=(
 )
 ADVICE=(
   "MicCapture builds a fresh AVCaptureSession recorder per capture — a long-lived engine goes stale on a device switch"
-  "the dictation API returns the full text in one response; there is no streaming path"
+  "the dictation API returns the full text in one response; there is no streaming path (the one socket is the TTS client, AssemblyAISpeechSynthesizer.swift)"
   "cleanup is the API's server-side rewrite via config.llm_instruction on the same /v1/transcribe/live call"
   "transcription is a remote AssemblyAI call — no on-device ASR/LLM, no model cache"
   "leave language to the model's own detection; setting the field takes that away"
