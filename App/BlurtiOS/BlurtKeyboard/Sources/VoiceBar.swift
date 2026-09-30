@@ -6,7 +6,9 @@ import SwiftUI
 /// wave, say what is happening, and the haptics confirm it (see `MicControl`).
 /// Beside it, a small
 /// + for the one thing people want the instant Blurt mishears a word: add it
-/// as a key term. The bar then becomes the field the keys type into.
+/// as a key term. The bar then becomes the field the keys type into — or,
+/// when a word is highlighted in the text, the + is already a chip holding
+/// that word, and one tap adds it (`AddTermKey`).
 struct VoiceBar: View {
   var model: KeyboardModel
   @Environment(\.keyboardPalette) private var palette
@@ -42,16 +44,22 @@ struct VoiceBar: View {
           // The element and the + together, centred on what shows: the mic
           // key is as wide as the element is (never narrower than a key, so
           // the ribs asleep are still a target), the + a clearance beside it.
-          // When the ribs wake into the wave the + slides out of its way.
-          let plus = DesignTokens.Metrics.glyphHit + DesignTokens.Metrics.voicebarAddtermClearance
+          // When the ribs wake into the wave the + slides out of its way. A
+          // highlighted word makes the + a chip: the bar keeps it a minimum,
+          // the element gives way, and the chip hugs its word inside what is
+          // left, so the pair stays centred.
+          let clearance = DesignTokens.Metrics.voicebarAddtermClearance
+          let chip = model.selectedTerm != nil
+          let beside = chip ? DesignTokens.Metrics.addtermChipMinWidth : DesignTokens.Metrics.glyphHit
           let recording = model.voiceState.isRecording
           let shown = kind.visibleWidth(slot: .bar, recording: recording)
-          let width = min(max(shown, DesignTokens.Metrics.keyMinWidth), geo.size.width - plus)
-          HStack(spacing: DesignTokens.Metrics.voicebarAddtermClearance) {
+          let width = min(max(shown, DesignTokens.Metrics.keyMinWidth), geo.size.width - beside - clearance)
+          HStack(spacing: clearance) {
             MicControl(model: model, slot: .bar, width: width)
             AddTermKey(model: model)
           }
           .animation(.easeInOut(duration: DesignTokens.Motion.waveFade), value: recording)
+          .animation(.easeInOut(duration: DesignTokens.Motion.stateFade), value: chip)
           .transition(.opacity)
         }
       }

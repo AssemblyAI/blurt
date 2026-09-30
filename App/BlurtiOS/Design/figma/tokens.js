@@ -93,6 +93,10 @@ Keyboard|kb/notice-error|COLOR|#E67F36|Brand:orange|STROKE_COLOR|DesignTokens.Ke
 Keyboard|kb/popup|COLOR|#33302A|Themes:dark/popup|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.kbPopup|the letter pop-up
 Keyboard|kb/signal|COLOR|#67AD82|Themes:dark/signal|SHAPE_FILL,TEXT_FILL|DesignTokens.Keyboard.kbSignal|the wave, the caret, the saved check
 Keyboard|kb/surface|COLOR|#1D1B16|Themes:dark/surface|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.kbSurface|the design face's surface (Figma binds to kb/*; Swift reads the palette)
+Metrics|addterm/chip-gap|FLOAT|6||GAP|DesignTokens.Metrics.addtermChipGap|between the chip's glyph and the word
+Metrics|addterm/chip-max-width|FLOAT|240||WIDTH_HEIGHT|DesignTokens.Metrics.addtermChipMaxWidth|the most the chip may take in the panel's corner, clear of the cancel ×
+Metrics|addterm/chip-min-width|FLOAT|96||WIDTH_HEIGHT|DesignTokens.Metrics.addtermChipMinWidth|the room the voice bar keeps for the chip; the element gives way beyond it
+Metrics|addterm/chip-pad|FLOAT|10||WIDTH_HEIGHT|DesignTokens.Metrics.addtermChipPad|the selected-word chip's side padding
 Metrics|addterm/inset|FLOAT|6||GAP|DesignTokens.Metrics.addtermInset|the + from the panel's corner
 Metrics|app/button-height|FLOAT|40||WIDTH_HEIGHT|DesignTokens.Metrics.appButtonHeight|the brand's button
 Metrics|app/button-pad|FLOAT|12||WIDTH_HEIGHT|DesignTokens.Metrics.appButtonPad|its side padding
@@ -231,6 +235,7 @@ Typography|weight/popup|STRING|regular||FONT_STYLE|DesignTokens.Typography.weigh
 Typography|weight/term|STRING|regular||FONT_STYLE|DesignTokens.Typography.weightTerm|
 Typography|weight/voice-glyph|STRING|semibold||FONT_STYLE|DesignTokens.Typography.weightVoiceGlyph|
 Motion|caret|FLOAT|0.5|||DesignTokens.Motion.caret|the caret's blink
+Motion|chip-hold|FLOAT|0.4|||DesignTokens.Motion.chipHold|holding the chip opens the field instead of adding
 Motion|colour|FLOAT|0.2|||DesignTokens.Motion.colour|a colour or fill changing state: the brand's transition
 Motion|ease/signature|STRING|0.22,1,0.36,1|||DesignTokens.Motion.easeSignature|the house curve for everything that moves; nothing springs
 Motion|flip|FLOAT|0.25|||DesignTokens.Motion.flip|the panel's carousel

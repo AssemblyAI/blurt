@@ -144,4 +144,81 @@ struct KeyboardModelTypingTests {
     model.contextChanged()
     #expect(model.returnLabel == nil)
   }
+
+  // MARK: The chip for a highlighted word
+
+  @Test("a selection is a key-term candidate when trimmed, on one line and short")
+  func termCandidate() {
+    #expect(KeyboardModel.termCandidate(from: " Rizz ") == "Rizz")
+    #expect(KeyboardModel.termCandidate(from: "Neil Bisht") == "Neil Bisht")
+    #expect(KeyboardModel.termCandidate(from: nil) == nil)
+    #expect(KeyboardModel.termCandidate(from: "   ") == nil)
+    #expect(KeyboardModel.termCandidate(from: "two\nlines") == nil)
+    #expect(KeyboardModel.termCandidate(from: String(repeating: "a", count: KeyboardModel.termLengthCap)) != nil)
+    #expect(KeyboardModel.termCandidate(from: String(repeating: "a", count: KeyboardModel.termLengthCap + 1)) == nil)
+  }
+
+  @Test("a highlighted word is the chip; one tap adds it as it stands and leaves the text alone")
+  func addSelectedTerm() {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    let (model, proxy) = model(before: "he said ", selected: "Rizz")
+    model.hasFullAccess = true
+    model.contextChanged()
+    #expect(model.selectedTerm == "Rizz")
+    #expect(!model.selectedTermIsKnown)
+    model.addSelectedTerm()
+    #expect(SharedStore.keyTerms == ["Rizz"])
+    #expect(model.selectedTermIsKnown)
+    #expect(model.termSavedAt != nil)
+    #expect(model.termDraft == nil)
+    #expect(proxy.before == "he said ")
+    #expect(proxy.selected == "Rizz")
+    // A second tap adds nothing twice.
+    model.addSelectedTerm()
+    #expect(SharedStore.keyTerms == ["Rizz"])
+  }
+
+  @Test("a word already in the key terms is known on selection; clearing the highlight takes the chip away")
+  func knownSelection() {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    SharedStore.addKeyTerm("rizz")
+    let (model, proxy) = model(before: "he said ", selected: "Rizz")
+    model.hasFullAccess = true
+    model.contextChanged()
+    #expect(model.selectedTerm == "Rizz")
+    #expect(model.selectedTermIsKnown)
+    proxy.selected = nil
+    model.contextChanged()
+    #expect(model.selectedTerm == nil)
+    #expect(!model.selectedTermIsKnown)
+  }
+
+  @Test("no chip without Full Access, or for a selection that is no term")
+  func noChip() {
+    let (model, proxy) = model(before: "", selected: "Rizz")
+    model.contextChanged()
+    #expect(model.selectedTerm == nil)
+    model.hasFullAccess = true
+    proxy.selected = "a whole\nparagraph"
+    model.contextChanged()
+    #expect(model.selectedTerm == nil)
+  }
+
+  @Test("holding the chip opens the field with the word; saving it as it is leaves the chip knowing it")
+  func chipToField() {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    let (model, proxy) = model(before: "he said ", selected: "riz")
+    model.hasFullAccess = true
+    model.contextChanged()
+    model.beginAddingTerm()
+    #expect(model.termDraft == "riz")
+    model.saveTerm()
+    #expect(SharedStore.keyTerms == ["riz"])
+    #expect(proxy.before == "he said ")
+    #expect(model.selectedTerm == "riz")
+    #expect(model.selectedTermIsKnown)
+  }
 }

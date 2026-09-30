@@ -201,6 +201,14 @@ enum DesignTokens {
   }
 
   enum Metrics {
+    /// Between the chip's glyph and the word.
+    nonisolated static let addtermChipGap: CGFloat = 6
+    /// The most the chip may take in the panel's corner, clear of the cancel ×.
+    nonisolated static let addtermChipMaxWidth: CGFloat = 240
+    /// The room the voice bar keeps for the chip; the element gives way beyond it.
+    nonisolated static let addtermChipMinWidth: CGFloat = 96
+    /// The selected-word chip's side padding.
+    nonisolated static let addtermChipPad: CGFloat = 10
     /// The + from the panel's corner.
     nonisolated static let addtermInset: CGFloat = 6
     /// The brand's button.
@@ -457,6 +465,8 @@ enum DesignTokens {
   enum Motion {
     /// The caret's blink.
     nonisolated static let caret: Double = 0.5
+    /// Holding the chip opens the field instead of adding.
+    nonisolated static let chipHold: Double = 0.4
     /// A colour or fill changing state: the brand's transition.
     nonisolated static let colour: Double = 0.2
     /// The house curve for everything that moves; nothing springs.
@@ -600,6 +610,10 @@ enum DesignTokens {
     "keyboard.kb/popup": "#33302A",
     "keyboard.kb/signal": "#67AD82",
     "keyboard.kb/surface": "#1D1B16",
+    "metrics.addterm/chip-gap": "6",
+    "metrics.addterm/chip-max-width": "240",
+    "metrics.addterm/chip-min-width": "96",
+    "metrics.addterm/chip-pad": "10",
     "metrics.addterm/inset": "6",
     "metrics.app/button-height": "40",
     "metrics.app/button-pad": "12",
@@ -738,6 +752,7 @@ enum DesignTokens {
     "type.weight/term": "regular",
     "type.weight/voice-glyph": "semibold",
     "motion.caret": "0.5",
+    "motion.chip-hold": "0.4",
     "motion.colour": "0.2",
     "motion.ease/signature": "0.22,1,0.36,1",
     "motion.flip": "0.25",

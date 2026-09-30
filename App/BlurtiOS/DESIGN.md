@@ -38,7 +38,9 @@ for a 3 s screenshot); `live` (a whole dictation walked on a clock, over and
 over, for watching or recording); and the keyboard's own `keys` (the panel
 flipped to its keyboard page), `symbols`, `term` (the key-term field
 mid-typing), `send` (a return key with a label), `saved` (the + just after a
-term was saved). `-BlurtGalleryVoice a|b|c` picks the mic concept
+term was saved), `selected` (a word highlighted in the text: the + is the chip
+holding it) and `known` (the same, for a word already in the key terms).
+`-BlurtGalleryVoice a|b|c` picks the mic concept
 (below). The gallery is `BlurtiOS/Sources/KeyboardGalleryView.swift`, debug
 builds only; the keyboard's sources are compiled into the app for it.
 
@@ -286,20 +288,36 @@ gap, the mic, the space key and the letters, both ways).
 ## Quick-add key term
 
 The most-asked-for thing: Blurt mishears a niche word, and the fix has to take
-seconds, inside the app you're typing in, never a trip to Settings.
+seconds, inside the app you're typing in, never a trip to Settings. Two ways
+in, both from the small **+** beside the element (trailing edge of the bar;
+top-left corner of the panel).
 
-1. Select the misheard word in your text (or select nothing).
-2. Tap the small **+** beside the element (trailing edge of the bar; top-left
-   corner of the panel). The bar becomes a field — × · what you type · ✓ — the
-   brand's input, a rectangle at 8 pt with a hairline — pre-filled with the
-   selection, and the keys type into it (the panel and slim bar flip to the
-   letter keys for it). Shift is on for the first letter.
-3. Type the right spelling; return or ✓ saves. The term goes into Blurt's key
-   terms (`BlurtKeyTerms` in the App Group, `KeyTermList` rules: trimmed,
-   deduplicated case-insensitively) and rides `keyterms_prompt` on the very
-   next dictation. If it began as a selection and you changed it, the
-   misheard word in your text is replaced with what you typed. A success
-   haptic, and the + shows a check for 1.2 s.
+**Highlight a word, tap once.** Select a word (or a short phrase) in your text
+and the + grows into a chip — the field's shape, a rectangle at 8 pt with a
+hairline — holding the word, with a green **+** before it (`AddTermKey`,
+`KeyboardModel.selectedTerm`). One tap adds the word as it stands to Blurt's
+key terms; the text is not touched, a success haptic, and the + becomes a ✓
+for 1.2 s. The word stays highlighted and the chip now shows a quiet ✓: Blurt
+knows it. A word already in the list shows that ✓ from the start, so
+selecting anything tells you whether Blurt has it. The selection is read off
+the host field on every change (`selectionDidChange`, `textDidChange`); what
+counts as a word is trimmed, one line, at most 48 characters
+(`termCandidate`, tested), and only with Full Access, since the list lives in
+the App Group. In the bar the chip keeps a 96 pt minimum and the element
+gives way to it; in the panel it grows from the corner up to 240 pt, clear of
+the cancel ×. **Hold the chip** (0.4 s) to open the field with the word in it
+instead — for the case below.
+
+**Type it.** Tap the + with nothing selected (or hold the chip) and the bar
+becomes a field — × · what you type · ✓ — pre-filled with the selection if
+there was one, and the keys type into it (the panel and slim bar flip to the
+letter keys for it). Shift is on for the first letter. Type the right
+spelling; return or ✓ saves. The term goes into Blurt's key terms
+(`BlurtKeyTerms` in the App Group, `KeyTermList` rules: trimmed, deduplicated
+case-insensitively) and rides `keyterms_prompt` on the very next dictation. If
+it began as a selection and you changed it, the misheard word in your text is
+replaced with what you typed. A success haptic, and the + shows a check for
+1.2 s.
 
 × or an empty save leaves the mode, and so does the keyboard going away. A
 hardware keyboard types past the on-screen keys into the app's field; while
@@ -440,6 +458,10 @@ pins the derivation.
 
 | Token                        | Points    | Swift                              | Use                                                                                                                                                                                                                                                                 |
 | ---------------------------- | --------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `addterm/chip-gap`           | `6`       | `Metrics.addtermChipGap`           | between the chip's glyph and the word                                                                                                                                                                                                                               |
+| `addterm/chip-max-width`     | `240`     | `Metrics.addtermChipMaxWidth`      | the most the chip may take in the panel's corner, clear of the cancel ×                                                                                                                                                                                             |
+| `addterm/chip-min-width`     | `96`      | `Metrics.addtermChipMinWidth`      | the room the voice bar keeps for the chip; the element gives way beyond it                                                                                                                                                                                          |
+| `addterm/chip-pad`           | `10`      | `Metrics.addtermChipPad`           | the selected-word chip's side padding                                                                                                                                                                                                                               |
 | `addterm/inset`              | `6`       | `Metrics.addtermInset`             | the + from the panel's corner                                                                                                                                                                                                                                       |
 | `app/button-height`          | `40`      | `Metrics.appButtonHeight`          | the brand's button                                                                                                                                                                                                                                                  |
 | `app/button-pad`             | `12`      | `Metrics.appButtonPad`             | its side padding                                                                                                                                                                                                                                                    |
@@ -568,6 +590,7 @@ house curve (`ease/signature`, `cubic-bezier(0.22, 1, 0.36, 1)`).
 | Token            | Value           | Swift                  | Use                                                           |
 | ---------------- | --------------- | ---------------------- | ------------------------------------------------------------- |
 | `caret`          | `0.5`           | `Motion.caret`         | the caret's blink                                             |
+| `chip-hold`      | `0.4`           | `Motion.chipHold`      | holding the chip opens the field instead of adding            |
 | `colour`         | `0.2`           | `Motion.colour`        | a colour or fill changing state: the brand's transition       |
 | `ease/signature` | `0.22,1,0.36,1` | `Motion.easeSignature` | the house curve for everything that moves; nothing springs    |
 | `flip`           | `0.25`          | `Motion.flip`          | the panel's carousel                                          |

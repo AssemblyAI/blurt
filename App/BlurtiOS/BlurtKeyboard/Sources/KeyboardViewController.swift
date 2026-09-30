@@ -138,4 +138,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // The field's appearance can change with the field.
     paintFloor()
   }
+
+  /// The highlight moved without the text changing — a word selected, or the
+  /// selection cleared: the + follows it (`KeyboardModel.selectedTerm`).
+  override func selectionDidChange(_ textInput: (any UITextInput)?) {
+    super.selectionDidChange(textInput)
+    model.contextChanged()
+  }
 }

@@ -140,6 +140,25 @@ final class BlurtKeyboardFlows: XCTestCase {
       app.buttons["return"].exists || app.buttons["RETURN"].exists || app.buttons["Return"].exists,
       "return key labelled")
     shot("full-typed")
+    try selectionFlow(field)
+  }
+
+  /// Highlight the word in the field: the + becomes a chip holding it, one
+  /// tap adds it, and the chip then says Blurt has it.
+  private func selectionFlow(_ field: XCUIElement) throws {
+    field.doubleTap()
+    let chip = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Add “")).firstMatch
+    check(chip.waitForExistence(timeout: 3), "highlighting a word shows the add chip (\(chip.label))")
+    shot("full-selected")
+    guard chip.exists else { return }
+    let word = chip.label.dropFirst("Add “".count).prefix { $0 != "”" }
+    chip.tap()
+    let known = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "“\(word)” is a key term"))
+      .firstMatch
+    check(known.waitForExistence(timeout: 3), "one tap adds “\(word)”; the chip shows the check")
+    shot("full-added")
+    // Put the cursor back at the end so the flows after this type, not replace.
+    field.tap()
   }
 
   private func slimFlows() throws {

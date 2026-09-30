@@ -25,6 +25,11 @@ struct PanelView: View {
           .transition(.opacity)
       }
     }
-    .overlay(alignment: .topLeading) { AddTermKey(model: model).padding(DesignTokens.Metrics.addtermInset) }
+    .overlay(alignment: .topLeading) {
+      // The +, or the chip for a highlighted word, growing from the corner
+      // and never as far as the cancel × in the other one.
+      AddTermKey(model: model, maxWidth: DesignTokens.Metrics.addtermChipMaxWidth)
+        .padding(DesignTokens.Metrics.addtermInset)
+    }
   }
 }

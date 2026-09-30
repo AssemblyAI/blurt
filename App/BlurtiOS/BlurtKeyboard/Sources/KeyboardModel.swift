@@ -39,6 +39,14 @@ final class KeyboardModel {
   var termDraft: String?
   /// When the last term was saved, so the bar can show a check for a moment.
   var termSavedAt: Date?
+  /// The word highlighted in the host's text, when it could be a key term
+  /// (`termCandidate`) and the key terms are in reach (Full Access): the +
+  /// grows into a chip holding it, and one tap adds it. Read off the proxy
+  /// on every context change (`readSelection`); the gallery sets it.
+  var selectedTerm: String?
+  /// Whether `selectedTerm` is already one of Blurt's key terms: the chip
+  /// shows a check and adds nothing.
+  var selectedTermIsKnown = false
   /// The field's own return key, as iOS labels it: "send", "search", "go"…
   var returnLabel: String?
   /// The letter rows for the user's first keyboard language (AZERTY for
@@ -156,6 +164,7 @@ final class KeyboardModel {
     symbolsPage = Self.wantsSymbols(proxy?.keyboardType)
     readAppearance()
     readField()
+    readSelection()
     updateShift()
     // Without Full Access the App Group is out of reach: the keyboard still
     // types, and says what it needs (see `VoiceBar`), but nothing below can run.
@@ -213,6 +222,7 @@ final class KeyboardModel {
   func contextChanged() {
     readAppearance()
     readField()
+    readSelection()
     claimHostTypingForTerm()
     updateShift()
   }
@@ -241,6 +251,19 @@ final class KeyboardModel {
   /// return key's own word, and the symbols page first for a number field.
   private func readField() {
     returnLabel = proxy?.returnKeyType.flatMap(Self.returnLabel)
+  }
+
+  /// What is highlighted in the host's text, as a key-term candidate, and
+  /// whether Blurt has it already. The list lives in the App Group, so only
+  /// with Full Access — without it there is nothing the chip could do.
+  func readSelection() {
+    guard hasFullAccess, let term = Self.termCandidate(from: proxy?.selectedText) else {
+      selectedTerm = nil
+      selectedTermIsKnown = false
+      return
+    }
+    selectedTerm = term
+    selectedTermIsKnown = SharedStore.keyTerms.contains { $0.caseInsensitiveCompare(term) == .orderedSame }
   }
 
   private func readAppearance() {

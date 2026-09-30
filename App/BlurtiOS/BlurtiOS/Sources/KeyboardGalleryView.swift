@@ -23,8 +23,10 @@
   /// dictation walked on a clock, over and over, for watching or recording
   /// the motion), plus the keyboard's own `keys` (the panel flipped to its
   /// keyboard page), `symbols`, `term` (the key-term field mid-typing),
-  /// `send` (a return key with a label) and `saved` (the + just after a term
-  /// was saved). `scripts/ios-sim.sh` passes `BLURT_LAUNCH_ARGS` through, so
+  /// `send` (a return key with a label), `saved` (the + just after a term
+  /// was saved), `selected` (a word highlighted in the text: the + is the
+  /// chip holding it) and `known` (the same, for a word already in the key
+  /// terms). `scripts/ios-sim.sh` passes `BLURT_LAUNCH_ARGS` through, so
   ///
   ///     BLURT_LAUNCH_ARGS="-BlurtGallery panel idle,recording,processing" \
   ///       scripts/ios-sim.sh --screenshot panel.png
@@ -141,6 +143,10 @@
       model.symbolsPage = state == "symbols"
       if state == "send" { model.returnLabel = "send" }
       if state == "saved" { model.termSavedAt = Date() }
+      // `selected`: a word is highlighted in the text, so the + is the chip
+      // holding it; `known`: the same word, already one of the key terms.
+      if state == "selected" || state == "known" { model.selectedTerm = "Rizz" }
+      model.selectedTermIsKnown = state == "known"
       // `landed`: the words go in 2.75 s after launch, so a screenshot taken
       // 3 s in (scripts/ios-sim.sh) catches the glint mid-sweep.
       if state == "landed" { model.resultLandedAt = Date().addingTimeInterval(2.75) }

@@ -37,12 +37,34 @@ extension KeyboardModel {
 
   // MARK: Quick-add key term
 
+  /// The most characters a highlighted word may have and still be offered as
+  /// a key term: a name or a phrase, not a sentence.
+  static let termLengthCap = 48
+
+  /// A selection as a key term: trimmed, on one line, short enough to be a
+  /// name or a phrase. Nil when it is none of those, or nothing is selected.
+  static func termCandidate(from selected: String?) -> String? {
+    guard let trimmed = selected?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty,
+      trimmed.count <= termLengthCap, !trimmed.contains(where: \.isNewline)
+    else { return nil }
+    return trimmed
+  }
+
+  /// The chip: the highlighted word goes into Blurt's key terms as it stands
+  /// — one tap, no typing, the text untouched. Nothing to do for a word Blurt
+  /// already has.
+  func addSelectedTerm() {
+    guard let term = selectedTerm, !selectedTermIsKnown else { return }
+    SharedStore.addKeyTerm(term)
+    selectedTermIsKnown = true
+    noteTermSaved()
+  }
+
   /// The voice bar becomes a field and the keys type into it. If the user
   /// had selected a word — the one Blurt got wrong — it is the starting
   /// point, and saving also replaces it in the text with what they typed.
   func beginAddingTerm() {
-    let selected = proxy?.selectedText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    let seed = selected.count <= 48 && !selected.contains("\n") ? selected : ""
+    let seed = Self.termCandidate(from: proxy?.selectedText) ?? ""
     termDraftFromSelection = seed.isEmpty ? nil : seed
     termHostBaseline = proxy?.documentContextBeforeInput ?? ""
     termHostBaselineAfter = proxy?.documentContextAfterInput ?? ""
@@ -56,6 +78,8 @@ extension KeyboardModel {
     termDraftFromSelection = nil
     termHostBaseline = nil
     termHostBaselineAfter = nil
+    // The highlight may still stand: the chip comes back as it is now.
+    readSelection()
     updateShift()
     onLayoutChange?()
   }
@@ -84,6 +108,15 @@ extension KeyboardModel {
       let trail = selected.reversed().prefix { $0.isWhitespace }.reversed()
       proxy?.insertText(String(lead) + draft + String(trail))
     }
+    // Saved as selected, the word is still highlighted: the chip knows it now.
+    readSelection()
+    noteTermSaved()
+    updateShift()
+    onLayoutChange?()
+  }
+
+  /// A success haptic, and the + (or the chip) shows a check for a moment.
+  private func noteTermSaved() {
     if hasFullAccess { UINotificationFeedbackGenerator().notificationOccurred(.success) }
     termSavedAt = Date()
     termNotice?.cancel()
@@ -92,8 +125,6 @@ extension KeyboardModel {
       guard !Task.isCancelled else { return }
       self?.termSavedAt = nil
     }
-    updateShift()
-    onLayoutChange?()
   }
 
   /// A space — or, tapped twice quickly after a word, the system keyboard's
