@@ -19,9 +19,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   private var heightConstraint: NSLayoutConstraint?
   private var hasAppeared = false
+  private let floor = UIView()
 
   /// The least the floor can be painted and still be the keyboard's to the
-  /// host: 1 % black, invisible on either material, never zero.
+  /// host — never zero. In the host material's own colour, so the 1 % adds
+  /// nothing the eye can see: 1 % black over the light material was a
+  /// keyboard a shade darker than the border around it.
   private static let floorAlpha: CGFloat = 0.01
 
   override func loadView() {
@@ -37,10 +40,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // never reaches this process at all (its hit test is not even asked),
     // and goes to the host's keyboard chrome instead. So the panel's empty
     // space, where a finger swipes the carousel, must be painted, if only
-    // just: a floor the eye cannot see but the compositor can.
-    let floor = UIView()
+    // just: a floor the eye cannot see but the compositor can (`paintFloor`).
     floor.translatesAutoresizingMaskIntoConstraints = false
-    floor.backgroundColor = UIColor.black.withAlphaComponent(Self.floorAlpha)
     view.addSubview(floor)
     let host = UIHostingController(rootView: KeyboardRootView(model: model))
     addChild(host)
@@ -100,8 +101,16 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
     model.appeared()
+    paintFloor()
     hasAppeared = true
     view.setNeedsUpdateConstraints()
+  }
+
+  /// The floor in the face's material at `floorAlpha`: the host's own
+  /// keyboard colour, measured, so nothing shows through the paint but the
+  /// touches reach the keyboard.
+  private func paintFloor() {
+    floor.backgroundColor = UIColor(model.palette.material).withAlphaComponent(Self.floorAlpha)
   }
 
   override func updateViewConstraints() {
@@ -126,5 +135,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   override func textDidChange(_ textInput: (any UITextInput)?) {
     super.textDidChange(textInput)
     model.contextChanged()
+    // The field's appearance can change with the field.
+    paintFloor()
   }
 }

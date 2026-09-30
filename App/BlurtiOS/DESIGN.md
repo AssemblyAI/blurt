@@ -275,7 +275,9 @@ narrower than a key), or the key-term field. A swipe flips the panel past
 48 pt sideways and more sideways than up or down by 1.5×; a key acts on
 release and only under 12 pt of travel (`KeyboardInteraction`, tested). The
 swipe is recognised on the input view itself (`KeyboardViewController`), not
-in SwiftUI, and the keyboard paints a floor at 1 % black under everything:
+in SwiftUI, and the keyboard paints a floor under everything at 1 % of the
+host material's own colour (`material/*`, so nothing shows; 1 % black read as
+a shade darker than the border around it):
 the host hands a keyboard only the touches that land on pixels it drew, so
 with the surface clear a swipe that started on the panel's empty space never
 reached the keyboard at all (`scripts/ios-keyboard-flows.sh` swipes from the
