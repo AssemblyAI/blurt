@@ -8,16 +8,13 @@ import XCTest
 /// One run per face × mic concept × layout (`TEST_RUNNER_BLURT_PROBE_ARGS`);
 /// every step prints a FLOW line and attaches a screenshot, and
 /// `scripts/ios-keyboard-flows.sh` runs the matrix and collects them.
+@MainActor
 final class BlurtKeyboardFlows: XCTestCase {
   private var app = XCUIApplication()
   private var shots = 0
 
-  override func setUp() {
-    continueAfterFailure = true
-  }
-
-  @MainActor
   func testFlows() throws {
+    continueAfterFailure = true
     let arguments =
       ProcessInfo.processInfo.environment["BLURT_PROBE_ARGS"]?.split(separator: " ").map(String.init) ?? ["light"]
     let layout = arguments.first { ["slimBar", "panel", "full"].contains($0) } ?? "panel"

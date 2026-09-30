@@ -9,8 +9,9 @@
 #   scripts/ios-keyboard-flows.sh --face dark --voice a --layout panel
 #
 # Prints one FLOW-OK / FLOW-FAIL line per step; screenshots land in
-# .build/design/flows/<face>-<voice>-<layout>/. Blurt must be enabled as a
-# keyboard on the simulator once by hand.
+# .build/design/flows/<face>-<voice>-<layout>/, with a sheet.png of every
+# step's keyboard side by side. Blurt must be enabled as a keyboard on the
+# simulator once by hand.
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -91,6 +92,25 @@ for test in manifest:
         if name.startswith("flow-"):
             shutil.copy(os.path.join(d, "attachments", a["exportedFileName"]), os.path.join(d, name.split("_")[0] + ".png"))
 PY
+      # The sheet: the bottom of every step's screenshot — the field is at
+      # the top, the keyboard at the bottom — captioned with the step.
+      captions=()
+      for shot in "$dir"/flow-*.png; do
+        [ -e "$shot" ] || continue
+        case "$shot" in *-crop.png) continue ;; esac
+        crop="${shot%.png}-crop.png"
+        h=$(sips -g pixelHeight "$shot" | awk '/pixelHeight/ {print $2}')
+        w=$(sips -g pixelWidth "$shot" | awk '/pixelWidth/ {print $2}')
+        ch=$((h * 45 / 100))
+        # sips wants the offset plus the height strictly inside the image.
+        sips -c "$ch" "$w" --cropOffset $((h - ch - 1)) 0 "$shot" --out "$crop" >/dev/null
+        step=$(basename "$shot" .png)
+        captions+=("${step#flow-??-}=$crop")
+      done
+      if [ ${#captions[@]} -gt 0 ]; then
+        swift "$REPO_ROOT/scripts/design-diff.swift" sheet --out "$dir/sheet.png" --columns 3 --scale 0.5 \
+          "${captions[@]}" >/dev/null
+      fi
     done
   done
 done
