@@ -38,8 +38,9 @@ struct VoiceStreak: View {
       case .idle, .connecting, .recording, .processing: palette.keyTextSecondary
       }
     // The hairline.
+    let line = Metrics.streakLine
     context.fill(
-      Path(CGRect(x: 0, y: midY - Metrics.streakLine / 2, width: size.width, height: Metrics.streakLine)),  // literal-ok: centred on the line
+      Path(CGRect(x: 0, y: midY - line / 2, width: size.width, height: line)),  // literal-ok: centred on the line
       with: .color(lineColour.opacity(Metrics.opacityHairline)))
     if state.isRecording {
       streak(&context, size: size, level: state.level, palette: palette)
@@ -48,9 +49,9 @@ struct VoiceStreak: View {
     }
     // The point.
     let point = Metrics.streakPoint
-    context.fill(
-      Path(ellipseIn: CGRect(x: (size.width - point) / 2, y: midY - point / 2, width: point, height: point)),  // literal-ok: centred
-      with: .color(state.isRecording ? DesignTokens.Brand.white : palette.keyText))
+    let half = point / 2
+    let dot = CGRect(x: size.width / 2 - half, y: midY - half, width: point, height: point)  // literal-ok: centred
+    context.fill(Path(ellipseIn: dot), with: .color(state.isRecording ? DesignTokens.Brand.white : palette.keyText))
     if let progress = VoiceClock.landing(landedAt: inputs.landedAt, now: now) {
       flash(&context, size: size, progress: progress)
     }
@@ -61,10 +62,11 @@ struct VoiceStreak: View {
   private static func streak(_ context: inout GraphicsContext, size: CGSize, level: Float, palette: KeyboardPalette) {
     let midY = size.height / 2
     let reach = size.width * CGFloat(pow(Double(level), 0.7))  // literal-ok: the ear's curve
-    let rect = CGRect(
-      x: (size.width - reach) / 2, y: midY - Metrics.streakHeight / 2, width: reach, height: Metrics.streakHeight)  // literal-ok: centred
+    let thick = Metrics.streakHeight
+    let x = (size.width - reach) / 2
+    let rect = CGRect(x: x, y: midY - thick / 2, width: reach, height: thick)  // literal-ok: centred
     context.fill(
-      Path(roundedRect: rect, cornerRadius: Metrics.streakHeight / 2),  // literal-ok: capsule ends
+      Path(roundedRect: rect, cornerRadius: thick / 2),  // literal-ok: capsule ends
       with: .linearGradient(
         Gradient(stops: [
           .init(color: DesignTokens.Brand.violetPeriwinkle.opacity(0), location: 0),
@@ -86,9 +88,10 @@ struct VoiceStreak: View {
     let position = phase < 0.5 ? phase * 2 : 2 - phase * 2  // literal-ok: there and back
     let length = size.width * 0.25  // literal-ok: a quarter of the line
     let x = (size.width - length) * position
-    let rect = CGRect(x: x, y: midY - Metrics.streakHeight / 2, width: length, height: Metrics.streakHeight)  // literal-ok: centred
+    let thick = Metrics.streakHeight
+    let rect = CGRect(x: x, y: midY - thick / 2, width: length, height: thick)  // literal-ok: centred
     context.fill(
-      Path(roundedRect: rect, cornerRadius: Metrics.streakHeight / 2),  // literal-ok: capsule ends
+      Path(roundedRect: rect, cornerRadius: thick / 2),  // literal-ok: capsule ends
       with: .linearGradient(
         Gradient(colors: [palette.signal.opacity(0), palette.signal, palette.signal.opacity(0)]),
         startPoint: CGPoint(x: rect.minX, y: midY), endPoint: CGPoint(x: rect.maxX, y: midY)))
@@ -104,8 +107,9 @@ struct VoiceStreak: View {
     path.move(to: CGPoint(x: size.width / 2, y: midY - arm / 2))
     path.addLine(to: CGPoint(x: size.width / 2, y: midY + arm / 2))
     context.stroke(path, with: .color(DesignTokens.Brand.white.opacity(alpha)), lineWidth: Metrics.grilleGlintWidth)
+    let line = Metrics.streakLine
     context.fill(
-      Path(CGRect(x: 0, y: midY - Metrics.streakLine / 2, width: size.width, height: Metrics.streakLine)),  // literal-ok: centred on the line
+      Path(CGRect(x: 0, y: midY - line / 2, width: size.width, height: line)),  // literal-ok: centred on the line
       with: .color(DesignTokens.Brand.white.opacity(alpha)))
   }
 }

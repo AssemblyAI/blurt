@@ -6,7 +6,7 @@ import UIKit
 /// to the layout the user chose, and forwards the lifecycle to `KeyboardModel`,
 /// which does the talking to the app. It never hears anything: iOS lets no
 /// keyboard use the microphone, so the app listens and this inserts.
-final class KeyboardViewController: UIInputViewController {
+final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDelegate {
   private let model = KeyboardModel()
 
   /// The input view says it wants clicks, so `UIDevice.playInputClick()` on
@@ -14,10 +14,15 @@ final class KeyboardViewController: UIInputViewController {
   /// user has keyboard clicks on in Settings. Their setting, not ours.
   private final class ClickingInputView: UIInputView, UIInputViewAudioFeedback {
     var enableInputClicksWhenVisible: Bool { true }
+
   }
 
   private var heightConstraint: NSLayoutConstraint?
   private var hasAppeared = false
+
+  /// The least the floor can be painted and still be the keyboard's to the
+  /// host: 1 % black, invisible on either material, never zero.
+  private static let floorAlpha: CGFloat = 0.01
 
   override func loadView() {
     view = ClickingInputView(frame: .zero, inputViewStyle: .keyboard)
@@ -26,12 +31,27 @@ final class KeyboardViewController: UIInputViewController {
   override func viewDidLoad() {
     super.viewDidLoad()
     model.attach(to: self)
+    // The floor. The host hands the keyboard only the touches that land on
+    // pixels it drew: where the keyboard is fully transparent — and the
+    // surface is clear, the host's own material showing through — a touch
+    // never reaches this process at all (its hit test is not even asked),
+    // and goes to the host's keyboard chrome instead. So the panel's empty
+    // space, where a finger swipes the carousel, must be painted, if only
+    // just: a floor the eye cannot see but the compositor can.
+    let floor = UIView()
+    floor.translatesAutoresizingMaskIntoConstraints = false
+    floor.backgroundColor = UIColor.black.withAlphaComponent(Self.floorAlpha)
+    view.addSubview(floor)
     let host = UIHostingController(rootView: KeyboardRootView(model: model))
     addChild(host)
     host.view.translatesAutoresizingMaskIntoConstraints = false
     host.view.backgroundColor = .clear
     view.addSubview(host.view)
     NSLayoutConstraint.activate([
+      floor.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      floor.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      floor.topAnchor.constraint(equalTo: view.topAnchor),
+      floor.bottomAnchor.constraint(equalTo: view.bottomAnchor),
       host.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
       host.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
       host.view.topAnchor.constraint(equalTo: view.topAnchor),
@@ -49,6 +69,32 @@ final class KeyboardViewController: UIInputViewController {
     heightConstraint = height
     // The panel's carousel changes the keyboard's height when it flips.
     model.onLayoutChange = { [weak self] in self?.updateHeight(animated: true) }
+    // The carousel's swipe, on the input view itself: it sees every touch the
+    // keyboard gets — a key, the mic, the floor — where a SwiftUI gesture on
+    // the hosted root only sees what SwiftUI hit-tests. It runs beside
+    // SwiftUI's own gestures and cancels none of them: the keys and the mic
+    // keep their touch and apply their travel rules (`KeyboardInteraction`),
+    // so a swipe across a key never types and one across the mic never
+    // dictates.
+    let swipe = UIPanGestureRecognizer(target: self, action: #selector(swiped))
+    swipe.cancelsTouchesInView = false
+    swipe.delaysTouchesBegan = false
+    swipe.delaysTouchesEnded = false
+    swipe.delegate = self
+    view.addGestureRecognizer(swipe)
+  }
+
+  @objc private func swiped(_ swipe: UIPanGestureRecognizer) {
+    guard swipe.state == .ended else { return }
+    let travel = swipe.translation(in: view)
+    guard let direction = KeyboardInteraction.flip(CGSize(width: travel.x, height: travel.y)) else { return }
+    model.flipPanel(towardsLeading: direction == .towardsLeading)
+  }
+
+  func gestureRecognizer(
+    _ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
+  ) -> Bool {
+    true
   }
 
   override func viewWillAppear(_ animated: Bool) {

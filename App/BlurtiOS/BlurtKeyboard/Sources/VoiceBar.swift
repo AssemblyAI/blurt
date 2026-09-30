@@ -10,6 +10,7 @@ import SwiftUI
 struct VoiceBar: View {
   var model: KeyboardModel
   @Environment(\.keyboardPalette) private var palette
+  @Environment(\.voiceElementKind) private var kind
 
   static let height = DesignTokens.Metrics.voicebarHeight
 
@@ -38,13 +39,19 @@ struct VoiceBar: View {
           .accessibilityLabel("Start Blurt")
           .transition(.opacity)
         } else {
-          // The element and the + together, centred: the + rides beside the
-          // element, a clearance away, never off at the edge.
+          // The element and the + together, centred on what shows: the mic
+          // key is as wide as the element is (never narrower than a key, so
+          // the ribs asleep are still a target), the + a clearance beside it.
+          // When the ribs wake into the wave the + slides out of its way.
           let plus = DesignTokens.Metrics.glyphHit + DesignTokens.Metrics.voicebarAddtermClearance
+          let recording = model.voiceState.isRecording
+          let shown = kind.visibleWidth(slot: .bar, recording: recording)
+          let width = min(max(shown, DesignTokens.Metrics.keyMinWidth), geo.size.width - plus)
           HStack(spacing: DesignTokens.Metrics.voicebarAddtermClearance) {
-            MicControl(model: model, slot: .bar, width: min(DesignTokens.Metrics.voiceBarWidth, geo.size.width - plus))
+            MicControl(model: model, slot: .bar, width: width)
             AddTermKey(model: model)
           }
+          .animation(.easeInOut(duration: DesignTokens.Motion.waveFade), value: recording)
           .transition(.opacity)
         }
       }

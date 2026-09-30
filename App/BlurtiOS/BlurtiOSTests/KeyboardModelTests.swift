@@ -97,6 +97,22 @@ struct KeyboardModelTypingTests {
     #expect(model.termDraft == nil)
   }
 
+  @Test("a swipe while a term is open flips nothing; the panel is back on the mic when the term closes")
+  func noFlipDuringTerm() {
+    let (model, _) = model()
+    model.layout = .panel
+    model.flipPanel(towardsLeading: true)
+    #expect(model.panelShowsKeys)
+    model.flipPanel(towardsLeading: false)
+    #expect(!model.panelShowsKeys)
+    model.beginAddingTerm()
+    model.flipPanel(towardsLeading: true)
+    #expect(!model.panelShowsKeys)
+    #expect(model.effectiveLayout == .full)
+    model.cancelAddingTerm()
+    #expect(model.effectiveLayout == .panel)
+  }
+
   @Test("a selection seeds the term and is replaced on save")
   func termFromSelection() {
     let (model, proxy) = model(before: "he said ", selected: "riz")

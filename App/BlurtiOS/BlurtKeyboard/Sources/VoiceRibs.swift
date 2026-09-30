@@ -80,14 +80,17 @@ struct VoiceRibs: View {
       let height = size.height * envelope
       let x = inset + CGFloat(index) * pitch
       var opacity = 1.0
-      if inputs.animated {
-        // The sheen: a band of light passing rib to rib.
-        let distance = abs(unit - sheen * 1.4 + 0.2)  // literal-ok: the band runs past both ends
-        if distance < 0.18 { opacity += Metrics.opacitySheen * (1 - distance / 0.18) * 2 }  // literal-ok: the band's width
+      if inputs.animated, state.isReady {
+        // The sheen: a band of light 0.18 wide passing rib to rib, running
+        // past both ends — still when Blurt isn't ready.
+        let distance = abs(unit - sheen * 1.4 + 0.2)
+        if distance < 0.18 { opacity += Metrics.opacitySheen * (1 - distance / 0.18) * 2 }
       }
-      let rect = CGRect(x: x, y: (size.height - height) / 2, width: Metrics.waveBar, height: height)  // literal-ok: centred
+      let bar = Metrics.waveBar
+      let rect = CGRect(x: x, y: (size.height - height) / 2, width: bar, height: height)  // literal-ok: centred
       context.fill(
-        Path(roundedRect: rect, cornerRadius: Metrics.waveBar / 2), with: .color(colour.opacity(min(1, opacity))))  // literal-ok: capsule ends
+        Path(roundedRect: rect, cornerRadius: bar / 2),  // literal-ok: capsule ends
+        with: .color(colour.opacity(min(1, opacity))))
     }
   }
 

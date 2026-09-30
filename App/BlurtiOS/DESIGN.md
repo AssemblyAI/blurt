@@ -267,10 +267,19 @@ slim bar 8.
 | `full`    | voice row 44, then the first key row right under it as the iPhone's sits under its suggestions · three letter rows 43 · 123 / globe / space / return                                                                                                                  | 270                      |
 
 The voice row (`VoiceBar`) is where the system keyboard puts its suggestion
-bar: the element with the + beside it, the pair centred, or the key-term
-field. A swipe flips the panel past 48 pt sideways and more sideways than up
-or down by 1.5×; a key acts on release and only under 12 pt of travel
-(`KeyboardInteraction`, tested).
+bar: the element with the + a clearance beside it, the pair centred on what
+the element _shows_ (`VoiceElementKind.visibleWidth`, tested: the grille's
+own width, the ribs asleep or the wave awake, the streak's line — never the
+slot's box, which would put the + off at the edge; the mic key is never
+narrower than a key), or the key-term field. A swipe flips the panel past
+48 pt sideways and more sideways than up or down by 1.5×; a key acts on
+release and only under 12 pt of travel (`KeyboardInteraction`, tested). The
+swipe is recognised on the input view itself (`KeyboardViewController`), not
+in SwiftUI, and the keyboard paints a floor at 1 % black under everything:
+the host hands a keyboard only the touches that land on pixels it drew, so
+with the surface clear a swipe that started on the panel's empty space never
+reached the keyboard at all (`scripts/ios-keyboard-flows.sh` swipes from the
+gap, the mic, the space key and the letters, both ways).
 
 ## Quick-add key term
 
@@ -452,7 +461,6 @@ pins the derivation.
 | `caret/lead`                 | `1`       | `Metrics.caretLead`                | the caret's gap from the text                                                                                                                                                                                                                                       |
 | `caret/radius`               | `1`       | `Metrics.caretRadius`              | —                                                                                                                                                                                                                                                                   |
 | `caret/width`                | `2`       | `Metrics.caretWidth`               | —                                                                                                                                                                                                                                                                   |
-| `gesture/swipe-min`          | `24`      | `Metrics.gestureSwipeMin`          | the carousel gesture's minimum distance                                                                                                                                                                                                                             |
 | `glyph/hit`                  | `32`      | `Metrics.glyphHit`                 | the +, × and ✓ touch targets                                                                                                                                                                                                                                        |
 | `grille/bar-height`          | `28`      | `Metrics.grilleBarHeight`          | —                                                                                                                                                                                                                                                                   |
 | `grille/bar-width`           | `64`      | `Metrics.grilleBarWidth`           | the grille in the voice bar                                                                                                                                                                                                                                         |
@@ -491,7 +499,7 @@ pins the derivation.
 | `opacity/hairline`           | `0.5`     | `Metrics.opacityHairline`          | —                                                                                                                                                                                                                                                                   |
 | `opacity/legend`             | `1`       | `Metrics.opacityLegend`            | key legends over the cap; below 1 they sit back                                                                                                                                                                                                                     |
 | `opacity/legend-muted`       | `0.5`     | `Metrics.opacityLegendMuted`       | the + at rest                                                                                                                                                                                                                                                       |
-| `opacity/off`                | `0.45`    | `Metrics.opacityOff`               | the element when Blurt isn't ready: a tap opens the app                                                                                                                                                                                                             |
+| `opacity/off`                | `0.6`     | `Metrics.opacityOff`               | the element when Blurt isn't ready — dim and still, but there: a tap opens the app                                                                                                                                                                                  |
 | `opacity/placeholder`        | `0.4`     | `Metrics.opacityPlaceholder`       | the field's placeholder                                                                                                                                                                                                                                             |
 | `opacity/popup-shadow`       | `0.12`    | `Metrics.opacityPopupShadow`       | —                                                                                                                                                                                                                                                                   |
 | `opacity/press-brighten`     | `0.15`    | `Metrics.opacityPressBrighten`     | a key lightens this much while pressed                                                                                                                                                                                                                              |
@@ -531,7 +539,7 @@ pins the derivation.
 | `term/pad`                   | `14`      | `Metrics.termPad`                  | the field's side padding                                                                                                                                                                                                                                            |
 | `term/radius`                | `8`       | `Metrics.termRadius`               | the key-term field: the brand's input corners (radius/input)                                                                                                                                                                                                        |
 | `voice/bar-height`           | `32`      | `Metrics.voiceBarHeight`           | —                                                                                                                                                                                                                                                                   |
-| `voice/bar-width`            | `160`     | `Metrics.voiceBarWidth`            | the voice element's box in the voice bar; with the + beside it the pair sits centred                                                                                                                                                                                |
+| `voice/bar-width`            | `160`     | `Metrics.voiceBarWidth`            | the voice element's box in the voice bar — the most it takes (the ribs awake, the streak); the + sits beside what shows                                                                                                                                             |
 | `voice/home-height`          | `112`     | `Metrics.voiceHomeHeight`          | —                                                                                                                                                                                                                                                                   |
 | `voice/home-width`           | `280`     | `Metrics.voiceHomeWidth`           | the box on the home screen                                                                                                                                                                                                                                          |
 | `voice/panel-height`         | `88`      | `Metrics.voicePanelHeight`         | —                                                                                                                                                                                                                                                                   |

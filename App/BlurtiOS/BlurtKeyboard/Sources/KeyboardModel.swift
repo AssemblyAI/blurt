@@ -112,7 +112,8 @@ final class KeyboardModel {
   /// A horizontal swipe on the panel: flip to the other page, sliding the way
   /// the finger went.
   func flipPanel(towardsLeading: Bool) {
-    guard layout == .panel else { return }
+    // Only the panel has two pages, and not while the keys are up for a term.
+    guard layout == .panel, termDraft == nil else { return }
     flipTowardsLeading = towardsLeading
     panelShowsKeys.toggle()
     onLayoutChange?()

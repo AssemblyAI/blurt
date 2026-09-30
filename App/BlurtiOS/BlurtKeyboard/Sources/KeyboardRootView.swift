@@ -54,7 +54,11 @@ struct KeyboardRootView: View {
     .environment(\.keyboardPalette, model.palette)
     .environment(\.keyboardInContainer, !Self.paintsSurface)
     .environment(\.voiceElementKind, model.voiceKind)
-    .simultaneousGesture(swipe, including: model.layout == .panel ? .all : .subviews)
+    // The carousel's swipe is not a SwiftUI gesture here. The surface is
+    // clear, and the host hands the keyboard only the touches that land on
+    // painted pixels: `KeyboardViewController` paints a floor the eye can't
+    // see and recognises the swipe on the input view itself, which sees
+    // every touch the keyboard gets, the panel's empty space included.
     .animation(reduceMotion ? nil : .easeInOut(duration: DesignTokens.Motion.flip), value: model.panelShowsKeys)
     .onAppear {
       // `Font.custom` falls back to the system font in silence; the bundle
@@ -73,16 +77,5 @@ struct KeyboardRootView: View {
     model.flipTowardsLeading
       ? .asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .leading))
       : .asymmetric(insertion: .move(edge: .leading), removal: .move(edge: .trailing))
-  }
-
-  /// A horizontal swipe anywhere on the panel flips it; taps and holds on keys
-  /// never travel this far, and the keys ignore a touch that did
-  /// (`KeyboardInteraction`).
-  private var swipe: some Gesture {
-    DragGesture(minimumDistance: DesignTokens.Metrics.gestureSwipeMin)
-      .onEnded { value in
-        guard let direction = KeyboardInteraction.flip(value.translation) else { return }
-        model.flipPanel(towardsLeading: direction == .towardsLeading)
-      }
   }
 }

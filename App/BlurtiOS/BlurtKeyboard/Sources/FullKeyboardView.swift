@@ -24,7 +24,7 @@ struct FullKeyboardView: View {
         VoiceBar(model: model)
         VStack(spacing: KeyboardPalette.rowGap) {
           ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
-            HStack(spacing: index == 2 ? geometry.sideGap : gap) {  // literal-ok: the third row carries shift and delete
+            HStack(spacing: index == 2 ? geometry.sideGap : gap) {  // literal-ok: the third row
               if index == 2 { modifierKey(width: geometry.sideWidth) }  // literal-ok: the third row
               HStack(spacing: gap) {
                 ForEach(Array(row), id: \.self) { character in

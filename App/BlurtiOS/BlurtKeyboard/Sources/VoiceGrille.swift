@@ -59,11 +59,13 @@ struct VoiceGrille: View {
       state.isWorking && !state.isRecording ? Self.runnerIndex(time: time, columns: columns, rows: rows) : nil
     let (glintTick, glintPhase) = Self.glintClock(time)
     let (restColour, restOpacity) = Self.rest(state: state, palette: palette)
-    let sheen = inputs.animated && !state.isRecording ? (centre: sheenCentre, band: sheenBand) : nil
+    // No sheen while Blurt isn't ready: the grille sits still as well as dim.
+    let sheen = inputs.animated && state.isReady && !state.isRecording ? (centre: sheenCentre, band: sheenBand) : nil
     for column in 0..<columns {
       let height = state.isRecording ? meter.height(at: column, level: level, time: time, animated: inputs.animated) : 0
       let lit = state.isRecording ? Int((height / size.height * CGFloat(rows)).rounded()) : 0
-      let glints = Double(level) > 0.35 && VoiceClock.hash(column, glintTick) < Double(level) * 0.5  // literal-ok: how often a facet catches the light
+      // How often a facet catches the light: the louder, the more.
+      let glints = Double(level) > 0.35 && VoiceClock.hash(column, glintTick) < Double(level) * 0.5
       for row in 0..<rows {
         let x = origin.x + CGFloat(column) * pitch
         let y = origin.y + CGFloat(row) * pitch
@@ -82,9 +84,10 @@ struct VoiceGrille: View {
           colour = palette.signal
           opacity = 1
         } else if let sheen {
-          // The sheen: a diagonal band of light passing over the lattice.
+          // The sheen: a diagonal band of light passing over the lattice,
+          // half the band each side of its centre.
           let distance = abs(x + y - sheen.centre)
-          if distance < sheen.band / 2 { opacity += Metrics.opacitySheen * (1 - distance / (sheen.band / 2)) }  // literal-ok: half the band each side
+          if distance < sheen.band / 2 { opacity += Metrics.opacitySheen * (1 - distance / (sheen.band / 2)) }
         }
         let rect = CGRect(x: x - dot / 2, y: y - dot / 2, width: dot, height: dot)  // literal-ok: centred dots
         context.fill(Path(ellipseIn: rect), with: .color(colour.opacity(min(1, opacity))))
@@ -108,7 +111,7 @@ struct VoiceGrille: View {
     return Lattice(
       columns: columns, rows: rows,
       origin: CGPoint(
-        x: (size.width - CGFloat(columns - 1) * pitch) / 2, y: (size.height - CGFloat(rows - 1) * pitch) / 2))  // literal-ok: centred
+        x: (size.width - CGFloat(columns - 1) * pitch) / 2, y: (size.height - CGFloat(rows - 1) * pitch) / 2))
   }
 
   /// Which flash we are in, and how far through it.
@@ -168,8 +171,9 @@ struct VoiceGrille: View {
     line(
       CGPoint(x: x, y: midY - arm / 2), CGPoint(x: x, y: midY + arm / 2), colour: DesignTokens.Brand.white,
       opacity: alpha)
+    // The horizontal arm sits back.
     line(
-      CGPoint(x: 0, y: midY), CGPoint(x: size.width, y: midY), colour: DesignTokens.Brand.white, opacity: alpha * 0.7)  // literal-ok: the horizontal arm sits back
+      CGPoint(x: 0, y: midY), CGPoint(x: size.width, y: midY), colour: DesignTokens.Brand.white, opacity: alpha * 0.7)
     let core = Metrics.grilleDot * 2  // literal-ok: the flare's centre is a double dot
     context.fill(
       Path(ellipseIn: CGRect(x: x - core / 2, y: midY - core / 2, width: core, height: core)),  // literal-ok: centred

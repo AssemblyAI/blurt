@@ -116,7 +116,6 @@ Metrics|caret/height|FLOAT|20||WIDTH_HEIGHT|DesignTokens.Metrics.caretHeight|
 Metrics|caret/lead|FLOAT|1||GAP|DesignTokens.Metrics.caretLead|the caret's gap from the text
 Metrics|caret/radius|FLOAT|1||CORNER_RADIUS|DesignTokens.Metrics.caretRadius|
 Metrics|caret/width|FLOAT|2||STROKE_FLOAT,WIDTH_HEIGHT|DesignTokens.Metrics.caretWidth|
-Metrics|gesture/swipe-min|FLOAT|24|||DesignTokens.Metrics.gestureSwipeMin|the carousel gesture's minimum distance
 Metrics|glyph/hit|FLOAT|32||WIDTH_HEIGHT|DesignTokens.Metrics.glyphHit|the +, × and ✓ touch targets
 Metrics|grille/bar-height|FLOAT|28||WIDTH_HEIGHT|DesignTokens.Metrics.grilleBarHeight|
 Metrics|grille/bar-width|FLOAT|64||WIDTH_HEIGHT|DesignTokens.Metrics.grilleBarWidth|the grille in the voice bar
@@ -155,7 +154,7 @@ Metrics|opacity/grille-rest|FLOAT|0.55||OPACITY|DesignTokens.Metrics.opacityGril
 Metrics|opacity/hairline|FLOAT|0.5||OPACITY|DesignTokens.Metrics.opacityHairline|
 Metrics|opacity/legend|FLOAT|1||OPACITY|DesignTokens.Metrics.opacityLegend|key legends over the cap; below 1 they sit back
 Metrics|opacity/legend-muted|FLOAT|0.5||OPACITY|DesignTokens.Metrics.opacityLegendMuted|the + at rest
-Metrics|opacity/off|FLOAT|0.45||OPACITY|DesignTokens.Metrics.opacityOff|the element when Blurt isn't ready: a tap opens the app
+Metrics|opacity/off|FLOAT|0.6||OPACITY|DesignTokens.Metrics.opacityOff|the element when Blurt isn't ready — dim and still, but there: a tap opens the app
 Metrics|opacity/placeholder|FLOAT|0.4||OPACITY|DesignTokens.Metrics.opacityPlaceholder|the field's placeholder
 Metrics|opacity/popup-shadow|FLOAT|0.12||OPACITY|DesignTokens.Metrics.opacityPopupShadow|
 Metrics|opacity/press-brighten|FLOAT|0.15||OPACITY|DesignTokens.Metrics.opacityPressBrighten|a key lightens this much while pressed
@@ -195,7 +194,7 @@ Metrics|term/inset|FLOAT|2||GAP|DesignTokens.Metrics.termInset|the field row's s
 Metrics|term/pad|FLOAT|14||GAP|DesignTokens.Metrics.termPad|the field's side padding
 Metrics|term/radius|FLOAT|8||CORNER_RADIUS|DesignTokens.Metrics.termRadius|the key-term field: the brand's input corners (radius/input)
 Metrics|voice/bar-height|FLOAT|32||WIDTH_HEIGHT|DesignTokens.Metrics.voiceBarHeight|
-Metrics|voice/bar-width|FLOAT|160||WIDTH_HEIGHT|DesignTokens.Metrics.voiceBarWidth|the voice element's box in the voice bar; with the + beside it the pair sits centred
+Metrics|voice/bar-width|FLOAT|160||WIDTH_HEIGHT|DesignTokens.Metrics.voiceBarWidth|the voice element's box in the voice bar — the most it takes (the ribs awake, the streak); the + sits beside what shows
 Metrics|voice/home-height|FLOAT|112||WIDTH_HEIGHT|DesignTokens.Metrics.voiceHomeHeight|
 Metrics|voice/home-width|FLOAT|280||WIDTH_HEIGHT|DesignTokens.Metrics.voiceHomeWidth|the box on the home screen
 Metrics|voice/panel-height|FLOAT|88||WIDTH_HEIGHT|DesignTokens.Metrics.voicePanelHeight|

@@ -244,8 +244,6 @@ enum DesignTokens {
     nonisolated static let caretLead: CGFloat = 1
     nonisolated static let caretRadius: CGFloat = 1
     nonisolated static let caretWidth: CGFloat = 2
-    /// The carousel gesture's minimum distance.
-    nonisolated static let gestureSwipeMin: CGFloat = 24
     /// The +, × and ✓ touch targets.
     nonisolated static let glyphHit: CGFloat = 32
     nonisolated static let grilleBarHeight: CGFloat = 28
@@ -318,8 +316,8 @@ enum DesignTokens {
     nonisolated static let opacityLegend: CGFloat = 1
     /// The + at rest.
     nonisolated static let opacityLegendMuted: CGFloat = 0.5
-    /// The element when Blurt isn't ready: a tap opens the app.
-    nonisolated static let opacityOff: CGFloat = 0.45
+    /// The element when Blurt isn't ready — dim and still, but there: a tap opens the app.
+    nonisolated static let opacityOff: CGFloat = 0.6
     /// The field's placeholder.
     nonisolated static let opacityPlaceholder: CGFloat = 0.4
     nonisolated static let opacityPopupShadow: CGFloat = 0.12
@@ -392,7 +390,7 @@ enum DesignTokens {
     /// The key-term field: the brand's input corners (radius/input).
     nonisolated static let termRadius: CGFloat = 8
     nonisolated static let voiceBarHeight: CGFloat = 32
-    /// The voice element's box in the voice bar; with the + beside it the pair sits centred.
+    /// The voice element's box in the voice bar — the most it takes (the ribs awake, the streak); the + sits beside what shows.
     nonisolated static let voiceBarWidth: CGFloat = 160
     nonisolated static let voiceHomeHeight: CGFloat = 112
     /// The box on the home screen.
@@ -625,7 +623,6 @@ enum DesignTokens {
     "metrics.caret/lead": "1",
     "metrics.caret/radius": "1",
     "metrics.caret/width": "2",
-    "metrics.gesture/swipe-min": "24",
     "metrics.glyph/hit": "32",
     "metrics.grille/bar-height": "28",
     "metrics.grille/bar-width": "64",
@@ -664,7 +661,7 @@ enum DesignTokens {
     "metrics.opacity/hairline": "0.5",
     "metrics.opacity/legend": "1",
     "metrics.opacity/legend-muted": "0.5",
-    "metrics.opacity/off": "0.45",
+    "metrics.opacity/off": "0.6",
     "metrics.opacity/placeholder": "0.4",
     "metrics.opacity/popup-shadow": "0.12",
     "metrics.opacity/press-brighten": "0.15",

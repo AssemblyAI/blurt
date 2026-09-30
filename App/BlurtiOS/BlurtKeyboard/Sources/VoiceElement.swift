@@ -39,6 +39,20 @@ nonisolated enum VoiceSlot: String, CaseIterable, Sendable {
   }
 }
 
+extension VoiceElementKind {
+  /// How wide the element shows in a slot — what the + sits beside and the
+  /// pair is centred on. The slot's box is the most it takes (the ribs awake,
+  /// the streak); at rest the grille and the ribs are narrower, and a pair
+  /// centred on the box would put the + off at the edge.
+  func visibleWidth(slot: VoiceSlot, recording: Bool) -> CGFloat {
+    switch self {
+    case .grille: VoiceGrille.box(slot).width
+    case .ribs: recording ? slot.box.width : DesignTokens.Metrics.ribsRestWidth
+    case .streak: slot.box.width
+    }
+  }
+}
+
 /// Every candidate draws with a synchronous `Canvas`: one that renders
 /// asynchronously never presents inside a keyboard extension, and the
 /// keyboard is where these live.

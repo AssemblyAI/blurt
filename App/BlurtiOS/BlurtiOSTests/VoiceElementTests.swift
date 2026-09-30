@@ -37,6 +37,24 @@ struct VoiceElementTests {
     #expect((0..<64).allSatisfy { (0...1).contains(VoiceClock.hash($0, 1)) })
   }
 
+  @Test("the bar pairs the + with what shows: the grille's own width, the ribs asleep or awake, the streak's line")
+  func visibleWidth() {
+    let metrics = DesignTokens.Metrics.self
+    #expect(VoiceElementKind.grille.visibleWidth(slot: .bar, recording: false) == metrics.grilleBarWidth)
+    #expect(VoiceElementKind.grille.visibleWidth(slot: .bar, recording: true) == metrics.grilleBarWidth)
+    #expect(VoiceElementKind.grille.visibleWidth(slot: .panel, recording: false) == metrics.grillePanelWidth)
+    #expect(VoiceElementKind.ribs.visibleWidth(slot: .bar, recording: false) == metrics.ribsRestWidth)
+    #expect(VoiceElementKind.ribs.visibleWidth(slot: .bar, recording: true) == metrics.voiceBarWidth)
+    #expect(VoiceElementKind.streak.visibleWidth(slot: .bar, recording: false) == metrics.voiceBarWidth)
+    // Every candidate fits its slot's box.
+    for kind in VoiceElementKind.allCases {
+      for slot in VoiceSlot.allCases {
+        #expect(kind.visibleWidth(slot: slot, recording: false) <= slot.box.width)
+        #expect(kind.visibleWidth(slot: slot, recording: true) <= slot.box.width)
+      }
+    }
+  }
+
   @Test("every slot has a box, from the tokens")
   func slots() {
     #expect(VoiceSlot.bar.box.width == DesignTokens.Metrics.voiceBarWidth)
