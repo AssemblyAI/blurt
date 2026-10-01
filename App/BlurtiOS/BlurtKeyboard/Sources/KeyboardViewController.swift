@@ -10,6 +10,17 @@ final class KeyboardViewController: UIInputViewController {
   private let model = KeyboardModel()
   private var heightConstraint: NSLayoutConstraint?
 
+  /// The input view says it wants clicks, so `UIDevice.playInputClick()` on
+  /// each key press plays the system's keyboard click — and only if the
+  /// user has keyboard clicks on in Settings. Their setting, not ours.
+  private final class ClickingInputView: UIInputView, UIInputViewAudioFeedback {
+    var enableInputClicksWhenVisible: Bool { true }
+  }
+
+  override func loadView() {
+    view = ClickingInputView(frame: .zero, inputViewStyle: .keyboard)
+  }
+
   override func viewDidLoad() {
     super.viewDidLoad()
     model.attach(to: self)
@@ -27,16 +38,24 @@ final class KeyboardViewController: UIInputViewController {
     host.didMove(toParent: self)
     // The keyboard's height is ours to declare; iOS honours a constraint on the
     // input view at just under required priority.
-    let height = view.heightAnchor.constraint(equalToConstant: model.layout.height)
+    let height = view.heightAnchor.constraint(equalToConstant: model.effectiveLayout.height)
     height.priority = UILayoutPriority(999)
     height.isActive = true
     heightConstraint = height
+    // The panel's carousel changes the keyboard's height when it flips.
+    model.onLayoutChange = { [weak self] in self?.updateHeight(animated: true) }
   }
 
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
     model.appeared()
-    heightConstraint?.constant = model.layout.height
+    updateHeight(animated: false)
+  }
+
+  private func updateHeight(animated: Bool) {
+    heightConstraint?.constant = model.effectiveLayout.height
+    guard animated else { return }
+    UIView.animate(withDuration: 0.25) { self.view.superview?.layoutIfNeeded() }
   }
 
   override func viewWillDisappear(_ animated: Bool) {

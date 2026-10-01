@@ -3,41 +3,71 @@ import BlurtEngine
 import SwiftUI
 import UIKit
 
-/// The app's one screen: setup while anything is missing, then the listening
-/// window, a way to try a dictation right here, the keyboard choice, and the
-/// settings the request reads. Plain SwiftUI on purpose — the design pass comes
-/// once the loop works on a phone.
+/// The app's one screen, in the shape of the Mac's ready screen: the wordmark,
+/// the orb as the hero with the listening state under it, the style chips,
+/// and the recent dictations as cards. Setup sits on top while anything is
+/// missing; everything adjustable lives behind the gear.
 struct HomeView: View {
   var coordinator: DictationCoordinator
   @Environment(\.scenePhase) private var scenePhase
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
   @State private var keyboardSeen = SharedStore.keyboardEverSeen
-  @State private var layout = SharedStore.layout
-  @State private var windowMinutes = SharedStore.windowMinutes
   @State private var showsKeyEntry = false
-  @AppStorage(KeyTermsStore.defaultsKey) private var keyTerms = ""
-  @AppStorage(EnhancedTranscriptsStore.defaultsKey) private var enhancedTranscripts =
-    EnhancedTranscriptsStore.defaultValue
+  @State private var showsSettings = false
+  @AppStorage(StyleProfileStore.defaultsKey) private var profilesRaw = ""
+  @AppStorage(StyleProfileStore.activeDefaultsKey) private var activeRaw = ""
+  private let styles = StyleProfileStore()
 
   private var isSetUp: Bool { coordinator.apiKey.hasAPIKey && microphoneGranted && keyboardSeen }
+  private var profiles: [StyleProfile] { styles.profiles(decoding: profilesRaw) }
+  private var activeStyle: StyleProfile? { StyleProfileStore.active(in: profiles, id: activeRaw) }
 
   var body: some View {
     NavigationStack {
-      List {
-        if !isSetUp { setupSection }
-        listeningSection
-        tryItSection
-        keyboardSection
-        settingsSection
-        recentSection
+      ScrollView {
+        VStack(spacing: 20) {
+          if !isSetUp { setupCard }
+          hero
+          styleChips
+          recent
+          poweredBy
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 24)
       }
-      .navigationTitle("Blurt")
+      .background(Color(uiColor: .systemGroupedBackground))
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .principal) { Wordmark() }
+        ToolbarItem(placement: .topBarTrailing) {
+          Button {
+            showsSettings = true
+          } label: {
+            Image(systemName: "gearshape")
+          }
+          .accessibilityLabel("Settings")
+        }
+      }
+      .sheet(isPresented: $showsKeyEntry) { KeyEntryView(apiKey: coordinator.apiKey) }
+      .sheet(isPresented: $showsSettings) { SettingsView(coordinator: coordinator) }
+      .sheet(item: Binding(get: { coordinator.pendingTermPack }, set: { coordinator.pendingTermPack = $0 })) {
+        ImportTermsView(pack: $0)
+      }
+      .alert(
+        "Couldn't read that list",
+        isPresented: Binding(get: { coordinator.termPackUnreadable }, set: { coordinator.termPackUnreadable = $0 })
+      ) {
+        Button("OK") {}
+      } message: {
+        Text("It isn't a Blurt key-term list, or it's too big.")
+      }
       .onChange(of: scenePhase) { _, phase in
         if phase == .active { refreshStatus() }
       }
-      .sheet(isPresented: $showsKeyEntry) { KeyEntryView(apiKey: coordinator.apiKey) }
     }
-    .tint(BlurtBrand.green)
+    .tint(BlurtBrand.accent)
   }
 
   private func refreshStatus() {
@@ -46,10 +76,134 @@ struct HomeView: View {
     coordinator.apiKey.refreshStatus()
   }
 
+  // MARK: - The orb and the listening state
+
+  private static let orbSize: CGFloat = 112
+  private var level: CGFloat { CGFloat(coordinator.level) }
+  private var isRecording: Bool { coordinator.phase == .recording }
+  private var orbWorking: Bool { coordinator.window.isOpen || coordinator.phase.isCapturing }
+
+  private var hero: some View {
+    VStack(spacing: 18) {
+      BrandOrb(diameter: 112, animated: orbWorking && !reduceMotion, ringWidth: 2)
+        .shadow(
+          color: BlurtBrand.greenOnDark.opacity(isRecording ? 0.35 + 0.45 * level : 0),
+          radius: isRecording ? 14 + 30 * level : 0
+        )
+        .animation(.easeOut(duration: 0.08), value: level)
+        .padding(.top, 6)
+      VStack(spacing: 4) {
+        Text(heroTitle).font(.title2.weight(.semibold)).multilineTextAlignment(.center)
+        Text(heroSubtitle).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+      }
+      if isRecording {
+        WaveformMeter(level: coordinator.level, animated: !reduceMotion, color: BlurtBrand.accent)
+          .frame(width: 180, height: 28)
+      }
+      if coordinator.window.isOpen {
+        Button(role: .destructive) {
+          Task { await coordinator.stopListening() }
+        } label: {
+          Text("Stop listening").frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.large)
+      } else {
+        Button {
+          Task { await coordinator.startListening() }
+        } label: {
+          Text("Start listening").frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .disabled(!coordinator.apiKey.hasAPIKey)
+      }
+      Button(coordinator.phase.isCapturing ? "Stop and transcribe" : "Dictate here, to the clipboard") {
+        coordinator.toggleDictation()
+      }
+      .font(.callout)
+      .disabled(!coordinator.window.isOpen)
+      if let error = coordinator.window.lastError {
+        Text(error).font(.footnote).foregroundStyle(BlurtBrand.errorOrange).multilineTextAlignment(.center)
+      }
+      if coordinator.microphoneDenied {
+        Text("Blurt needs the microphone. Allow it in Settings.")
+          .font(.footnote).foregroundStyle(BlurtBrand.errorOrange)
+      }
+      if coordinator.needsKey {
+        Text("Add your API key first (Settings → Account).")
+          .font(.footnote).foregroundStyle(BlurtBrand.errorOrange)
+      }
+    }
+    .padding(20)
+    .frame(maxWidth: .infinity)
+    .card()
+  }
+
+  private var heroTitle: String {
+    switch coordinator.phase.overlayState {
+    case .connecting: return "Connecting…"
+    case .recording: return "Listening…"
+    case .processing: return "Transcribing…"
+    case .pasted: return "Pasted"
+    case .noTarget: return "Copied"
+    case .error(let message): return message
+    case .idle: return coordinator.window.isOpen ? "Ready to dictate" : "Not listening"
+    }
+  }
+
+  private var heroSubtitle: String {
+    guard coordinator.window.isOpen else {
+      return "Open the mic so the Blurt keyboard can dictate anywhere you type."
+    }
+    if let until = coordinator.window.until, until != .distantFuture {
+      return "Until \(until.formatted(date: .omitted, time: .shortened)) · tap the mic on the Blurt keyboard."
+    }
+    return "Until you stop it · tap the mic on the Blurt keyboard."
+  }
+
+  // MARK: - Styles
+
+  private var styleChips: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      Text("Style").font(.headline)
+      ScrollView(.horizontal, showsIndicators: false) {
+        HStack(spacing: 8) {
+          StyleChip(name: StyleProfileStore.defaultStyleName, selected: activeStyle == nil) { styles.activateDefault() }
+          ForEach(profiles) { profile in
+            StyleChip(name: profile.name, selected: activeStyle?.id == profile.id) { styles.activate(profile) }
+          }
+          NavigationLink {
+            StylesView()
+          } label: {
+            Label("Edit", systemImage: "slider.horizontal.3")
+              .font(.subheadline.weight(.medium))
+              .padding(.horizontal, 14)
+              .padding(.vertical, 8)
+              .background(Capsule().strokeBorder(BlurtBrand.cardBorder, lineWidth: 1))
+          }
+        }
+        .padding(.vertical, 2)
+      }
+    }
+  }
+
+  private var recent: some View { RecentSection(coordinator: coordinator) }
+
+  private var poweredBy: some View {
+    HStack(spacing: 3) {
+      Text("Powered by").foregroundStyle(.secondary)
+      Text("AssemblyAI").fontWeight(.medium)
+    }
+    .font(.caption)
+    .padding(.top, 4)
+  }
+
   // MARK: - Setup
 
-  private var setupSection: some View {
-    Section("Set up") {
+  private var setupCard: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      Text("Set up Blurt").font(.headline)
       SetupRow(done: coordinator.apiKey.hasAPIKey, title: "Sign in with AssemblyAI") {
         VStack(alignment: .leading, spacing: 6) {
           Text("Coming soon — sign-in needs the AssemblyAI login service.")
@@ -60,10 +214,15 @@ struct HomeView: View {
         }
       }
       SetupRow(done: microphoneGranted, title: "Allow the microphone") {
-        Button("Allow") {
-          Task {
-            await coordinator.startListening()
-            refreshStatus()
+        if AVAudioApplication.shared.recordPermission == .denied {
+          // iOS asks once; after a refusal only Settings can change it.
+          Button("Allow in Settings") { openAppSettings() }
+        } else {
+          Button("Allow") {
+            Task {
+              _ = await AVAudioApplication.requestRecordPermission()
+              refreshStatus()
+            }
           }
         }
       }
@@ -78,117 +237,35 @@ struct HomeView: View {
         }
       }
     }
+    .padding(20)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .card()
   }
 
   private func openAppSettings() {
     guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
     UIApplication.shared.open(url)
   }
+}
 
-  // MARK: - Listening
+/// One style, as a chip: filled with the accent while active.
+private struct StyleChip: View {
+  let name: String
+  let selected: Bool
+  let activate: () -> Void
 
-  private var listeningSection: some View {
-    Section("Listening") {
-      if coordinator.window.isOpen {
-        VStack(alignment: .leading, spacing: 6) {
-          Label(listeningLabel, systemImage: "mic.fill").foregroundStyle(BlurtBrand.green)
-          Text("Go back to the app you're typing in and tap the mic on the Blurt keyboard.")
-            .font(.footnote).foregroundStyle(.secondary)
-        }
-        Button("Stop listening", role: .destructive) { coordinator.stopListening() }
-      } else {
-        Button("Start listening") { Task { await coordinator.startListening() } }
-          .disabled(!coordinator.apiKey.hasAPIKey)
-        Text("Opens the mic for \(windowLabel) so the keyboard can dictate without opening Blurt each time.")
-          .font(.footnote).foregroundStyle(.secondary)
-      }
-      if let error = coordinator.window.lastError {
-        Text(error).font(.footnote).foregroundStyle(BlurtBrand.errorOrange)
-      }
-      if coordinator.microphoneDenied {
-        Text("Blurt needs the microphone. Allow it in Settings.").font(.footnote)
-          .foregroundStyle(BlurtBrand.errorOrange)
-      }
+  var body: some View {
+    Button(action: activate) {
+      Text(name)
+        .font(.subheadline.weight(.medium))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .foregroundStyle(selected ? Color.white : Color.primary)
+        .background(Capsule().fill(selected ? BlurtBrand.accent : BlurtBrand.cardFill))
+        .overlay(Capsule().strokeBorder(selected ? Color.clear : BlurtBrand.cardBorder, lineWidth: 1))
     }
-  }
-
-  private var listeningLabel: String {
-    guard let until = coordinator.window.until, until != .distantFuture else { return "Listening" }
-    return "Listening until \(until.formatted(date: .omitted, time: .shortened))"
-  }
-
-  private var windowLabel: String {
-    windowMinutes == 0 ? "as long as you like" : "\(windowMinutes) minutes at a time"
-  }
-
-  // MARK: - Try it
-
-  private var tryItSection: some View {
-    Section("Try it here") {
-      Button(coordinator.phase.isCapturing ? "Stop and transcribe" : "Dictate to the clipboard") {
-        coordinator.toggleDictation()
-      }
-      .disabled(!coordinator.window.isOpen)
-      PhaseLine(phase: coordinator.phase, level: coordinator.level)
-    }
-  }
-
-  // MARK: - Keyboard
-
-  private var keyboardSection: some View {
-    Section {
-      Picker("Layout", selection: $layout) {
-        ForEach(KeyboardLayout.allCases) { Text($0.title).tag($0) }
-      }
-      .pickerStyle(.segmented)
-      .onChange(of: layout) { _, value in SharedStore.layout = value }
-      Text(layout.summary).font(.footnote).foregroundStyle(.secondary)
-    } header: {
-      Text("Keyboard")
-    } footer: {
-      Text("Any of the three works the same underneath; pick the one that fits how you type.")
-    }
-  }
-
-  // MARK: - Settings
-
-  private var settingsSection: some View {
-    Section("Dictation") {
-      Picker("Keep listening for", selection: $windowMinutes) {
-        Text("5 minutes").tag(5)
-        Text("15 minutes").tag(15)
-        Text("1 hour").tag(60)
-        Text("Until I stop it").tag(0)
-      }
-      .onChange(of: windowMinutes) { _, value in SharedStore.windowMinutes = value }
-      Toggle("Enhanced transcripts", isOn: $enhancedTranscripts)
-      NavigationLink("Output styles") { StylesView() }
-      TextField("Key terms, comma-separated", text: $keyTerms, axis: .vertical)
-        .autocorrectionDisabled()
-      Text(
-        "Names and jargon to spell right. \(coordinator.lexiconNameCount) contact names come along automatically."
-      )
-      .font(.footnote).foregroundStyle(.secondary)
-    }
-  }
-
-  // MARK: - Recent
-
-  private var recentSection: some View {
-    Section("Recent") {
-      if coordinator.recent.entries.isEmpty {
-        Text("Your recent blurts will appear here").foregroundStyle(.secondary)
-      }
-      ForEach(coordinator.recent.displayed) { entry in
-        VStack(alignment: .leading, spacing: 4) {
-          Text(entry.text).lineLimit(3)
-          Text(entry.relativeLabel(now: Date())).font(.caption).foregroundStyle(.secondary)
-        }
-        .contextMenu {
-          Button("Copy") { UIPasteboard.general.string = entry.text }
-        }
-      }
-    }
+    .buttonStyle(.plain)
+    .accessibilityAddTraits(selected ? .isSelected : [])
   }
 }
 
@@ -202,7 +279,7 @@ private struct SetupRow<Action: View>: View {
   var body: some View {
     HStack(alignment: .top, spacing: 12) {
       Image(systemName: done ? "checkmark.circle.fill" : "circle")
-        .foregroundStyle(done ? BlurtBrand.green : Color.secondary)
+        .foregroundStyle(done ? BlurtBrand.accent : Color.secondary)
       VStack(alignment: .leading, spacing: 6) {
         Text(title)
         if !done { action() }
@@ -211,17 +288,45 @@ private struct SetupRow<Action: View>: View {
   }
 }
 
-/// The pipeline phase as one line, with a small level meter while recording.
-private struct PhaseLine: View {
-  let phase: PipelinePhase
-  let level: Float
+/// The recent dictations as cards, with a copy button each.
+private struct RecentSection: View {
+  var coordinator: DictationCoordinator
 
   var body: some View {
-    HStack(spacing: 10) {
-      Text(phase.overlayState.accessibilityLabel).font(.footnote).foregroundStyle(.secondary)
-      if phase == .recording {
-        ProgressView(value: Double(level)).tint(BlurtBrand.green).frame(width: 80)
+    VStack(alignment: .leading, spacing: 10) {
+      Text("Recent").font(.headline)
+      if coordinator.recent.displayed.isEmpty {
+        Text("Your recent blurts will appear here.")
+          .font(.callout).foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(16)
+          .card()
+      }
+      ForEach(coordinator.recent.displayed) { entry in
+        VStack(alignment: .leading, spacing: 8) {
+          Text(entry.text).font(.body).lineLimit(3)
+          HStack(spacing: 8) {
+            if let style = entry.style {
+              Text(style)
+                .font(.caption.weight(.medium))
+                .padding(.horizontal, 8).padding(.vertical, 3)
+                .background(Capsule().fill(BlurtBrand.accent.opacity(0.15)))
+            }
+            Text(entry.relativeLabel(now: Date())).font(.caption).foregroundStyle(.secondary)
+            Spacer()
+            Button {
+              UIPasteboard.general.string = entry.text
+            } label: {
+              Image(systemName: "doc.on.doc")
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Copy")
+          }
+        }
+        .padding(16)
+        .card()
       }
     }
   }
+
 }

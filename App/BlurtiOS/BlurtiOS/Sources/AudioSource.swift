@@ -22,29 +22,19 @@ import Foundation
 /// The output's native format is converted to the 16 kHz mono 16-bit the
 /// dictation API wants by `PCMConverter` (`audioSettings`, which does that on
 /// the Mac, is not in the iOS SDK). `@unchecked Sendable` by confinement, the
-/// same way the Mac recorder is: the feed and its tally live behind `UtteranceFeed`'s lock,
-/// the converter is touched only on the serial delivery queue, and the session
-/// is configured once and then only started and stopped.
+/// same way the Mac recorder is: the feed and its tally live behind
+/// `UtteranceFeed`'s lock, the converter is touched only on the serial delivery
+/// queue, and the session is configured, started and stopped only on the
+/// serial control queue.
 nonisolated final class WindowedAudioSource: NSObject, ListeningSource, @unchecked Sendable {
-  enum Failure: Error, LocalizedError {
-    /// A press arrived with no listening window open — the keyboard's job is to
-    /// open the app first, so this is a plumbing fault, not a user error.
-    case windowClosed
-    case noInputDevice
-
-    var errorDescription: String? {
-      switch self {
-      case .windowClosed: "Blurt isn't listening. Open Blurt to start."
-      case .noInputDevice: "No microphone is available."
-      }
-    }
-  }
-
   private let feed = UtteranceFeed()
   private let session = AVCaptureSession()
   private let output = AVCaptureAudioDataOutput()
   /// Serial, so the converter below needs no lock.
   private let deliveryQueue = DispatchQueue(label: "dev.alex.blurt.ios.capture")
+  /// Where the session is started and stopped — both block for a while on a
+  /// phone — so the main actor never waits on the capture stack.
+  private let controlQueue = DispatchQueue(label: "dev.alex.blurt.ios.capture.control")
   private nonisolated(unsafe) var converter: PCMConverter?
 
   var levels: AsyncStream<Float> { feed.levels }
@@ -60,35 +50,63 @@ nonisolated final class WindowedAudioSource: NSObject, ListeningSource, @uncheck
 
   /// Opens the microphone. Only works from the foreground; the audio session
   /// must already be active (`ListeningWindow` does both, in that order).
-  func open() throws {
+  func open() async throws {
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+      controlQueue.async {
+        do {
+          try self.openOnControlQueue()
+          continuation.resume()
+        } catch {
+          continuation.resume(throwing: error)
+        }
+      }
+    }
+  }
+
+  private func openOnControlQueue() throws {
+    // A session left "running" through an interruption resumes on its own
+    // terms; stopping it first makes the reopen deterministic.
+    if session.isRunning, session.isInterrupted { session.stopRunning() }
     guard !session.isRunning else { return }
+    try configure()
+    session.startRunning()
+    guard session.isRunning else { throw ListeningSourceFailure.noInputDevice }
+  }
+
+  /// Adds the input and output once. `commitConfiguration` runs on every
+  /// path out, including a throw, so a failed attempt never leaves the
+  /// session mid-configuration for the next one.
+  private func configure() throws {
     session.beginConfiguration()
+    defer { session.commitConfiguration() }
     session.automaticallyConfiguresApplicationAudioSession = false
     if session.inputs.isEmpty {
-      guard let device = AVCaptureDevice.default(for: .audio) else {
-        session.commitConfiguration()
-        throw Failure.noInputDevice
-      }
+      guard let device = AVCaptureDevice.default(for: .audio) else { throw ListeningSourceFailure.noInputDevice }
       let input = try AVCaptureDeviceInput(device: device)
       if session.canAddInput(input) { session.addInput(input) }
     }
     if session.outputs.isEmpty, session.canAddOutput(output) { session.addOutput(output) }
-    session.commitConfiguration()
-    session.startRunning()
-    guard session.isRunning else { throw Failure.noInputDevice }
   }
 
   /// Releases the microphone and ends any utterance in flight.
-  func close() {
-    if session.isRunning { session.stopRunning() }
-    feed.end()
+  func close() async {
+    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+      controlQueue.async {
+        if self.session.isRunning { self.session.stopRunning() }
+        self.feed.end()
+        continuation.resume()
+      }
+    }
   }
 
   // MARK: MicCaptureProtocol
 
   func start() throws -> AsyncStream<Data> {
-    guard session.isRunning else {
-      throw BlurtError.audioCaptureFailed(underlying: Failure.windowClosed)
+    // An interrupted session is "running" and delivering nothing: a feed from
+    // it would claim `.recording` over a dead mic, which the engine's timing
+    // contract forbids.
+    guard session.isRunning, !session.isInterrupted else {
+      throw BlurtError.audioCaptureFailed(underlying: ListeningSourceFailure.windowClosed)
     }
     return feed.begin()
   }

@@ -11,7 +11,9 @@ import Observation
 /// no window is open. Once open, `UIBackgroundModes: audio` plus the active
 /// audio session keep it alive after the user swipes back. Every dictation
 /// extends the window; it closes on its own after `SharedStore.windowMinutes`
-/// of silence (0 means never), or when the user closes it in the app.
+/// of silence (0 means never), when the user closes it in the app, or when a
+/// phone call, Siri or another app takes the microphone: the window is over
+/// then, and saying so beats a mic that looks open and hears nothing.
 @MainActor
 @Observable
 final class ListeningWindow {
@@ -25,11 +27,12 @@ final class ListeningWindow {
   private(set) var lastError: String?
   @ObservationIgnored private var expiry: Task<Void, Never>?
   @ObservationIgnored private var heartbeat: Task<Void, Never>?
+  @ObservationIgnored private var interruptions: Task<Void, Never>?
 
   var isOpen: Bool { source.isOpen && (until.map { $0 > Date() } ?? false) }
 
   /// Opens the microphone for `SharedStore.windowMinutes`. Foreground only.
-  func open() {
+  func open() async {
     do {
       let audioSession = AVAudioSession.sharedInstance()
       // `.mixWithOthers` so the window doesn't silence whatever the user is
@@ -39,13 +42,14 @@ final class ListeningWindow {
       try audioSession.setCategory(
         .playAndRecord, mode: .default, options: [.allowBluetoothHFP, .mixWithOthers, .defaultToSpeaker])
       try audioSession.setActive(true)
-      try source.open()
+      try await source.open()
       lastError = nil
       extend()
       startHeartbeat()
+      watchInterruptions()
     } catch {
       lastError = error.localizedDescription
-      close()
+      await close()
     }
   }
 
@@ -61,31 +65,51 @@ final class ListeningWindow {
     expiry = Task { [weak self] in
       try? await Task.sleep(for: .seconds(end.timeIntervalSinceNow))
       guard !Task.isCancelled else { return }
-      self?.close()
+      await self?.close()
     }
   }
 
   /// Tells the keyboard the app is alive and the microphone really is open —
   /// `SharedStore.isListening` needs both. Stops reporting the moment capture
-  /// is interrupted (a phone call), so the keyboard's next tap reopens the app
-  /// instead of sending a press into silence.
+  /// is interrupted, so the keyboard's next tap reopens the app instead of
+  /// sending a press into silence.
   private func startHeartbeat() {
     heartbeat?.cancel()
     heartbeat = Task { [weak self] in
       while !Task.isCancelled {
         guard let self else { return }
         SharedStore.appSeenAt = source.isOpen ? Date() : nil
-        try? await Task.sleep(for: .seconds(5))
+        try? await Task.sleep(for: .seconds(SharedStore.appHeartbeatInterval))
       }
     }
   }
 
-  func close() {
+  /// A phone call, Siri, an alarm: iOS takes the microphone and tells us. The
+  /// window closes rather than pretending; the user reopens it in Blurt.
+  private func watchInterruptions() {
+    interruptions?.cancel()
+    interruptions = Task { [weak self] in
+      let began = NotificationCenter.default.notifications(named: AVAudioSession.interruptionNotification)
+        .filter { notification in
+          let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
+          return raw.flatMap(AVAudioSession.InterruptionType.init(rawValue:)) == .began
+        }
+      for await _ in began {
+        guard !Task.isCancelled else { return }
+        await self?.close()
+        return
+      }
+    }
+  }
+
+  func close() async {
     expiry?.cancel()
     expiry = nil
     heartbeat?.cancel()
     heartbeat = nil
-    source.close()
+    interruptions?.cancel()
+    interruptions = nil
+    await source.close()
     until = nil
     SharedStore.listeningUntil = nil
     SharedStore.appSeenAt = nil

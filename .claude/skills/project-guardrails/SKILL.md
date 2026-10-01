@@ -37,7 +37,7 @@ genuinely correct, and reaching for it means it's time to stop and ask.
   a second time inside the capture lock and held a duplicate of the whole
   utterance (~3.7 MB at the cap) until release. Don't reintroduce a buffered
   copy "just in case" — there is no retry-from-buffer path, by design.
-- **Don't pre-open the mic to make presses feel faster.** `MicCapture.warmUp()`
+- **(macOS shell) Don't pre-open the mic to make presses feel faster.** `MicCapture.warmUp()`
   is stateless on purpose — build a session, drop it — and there is no warm or
   prepared recorder to reuse. Measured on hardware: building a session (or the
   retired `prepareToRecord()`) leaves the device closed and costs ~15 ms, while
@@ -125,7 +125,7 @@ only one of stt_prompt or prompt; they are the same field`, before the audio is
   default does not describe the behaviour. Note the plural is the documented
   spelling, but the singular `language_code` is accepted too (a 200, not an
   unknown-key 400), so both are live and `KeytermsWireTests` pins both absent.
-- **Injection is always a clipboard paste** (save → write → ⌘V → settle →
+- **(macOS shell) Injection is always a clipboard paste** (save → write → ⌘V → settle →
   restore), degrading to "left it on the clipboard" when the target is lost. No
   keystroke-by-keystroke typing path, no length threshold.
 
@@ -176,3 +176,14 @@ only one of stt_prompt or prompt; they are the same field`, before the audio is
   hardened runtime and a **secure timestamp** (`--options runtime --timestamp`),
   or notarization rejects the build. `release-build.sh` re-signs frameworks for
   this — don't remove it.
+
+## iPhone (App/BlurtiOS)
+
+- **The keyboard never hears anything.** iOS lets no keyboard use the microphone; the app
+  listens and transcribes, the keyboard is a remote control over the App Group that inserts
+  the words. No `AVFoundation` in `BlurtKeyboard/` or `Shared/` (mechanized).
+- The app's microphone is a _listening window_, opened once while the app is in front and
+  kept open, not a per-press capture — the two rows marked "(macOS shell)" above do not apply.
+- Insertion is the keyboard's `textDocumentProxy`; the clipboard is only the fallback when no
+  keyboard is there to take the words, and the phase then says "Copied", never "Pasted".
+- The full list, with every number, is `App/BlurtiOS/DESIGN.md`.

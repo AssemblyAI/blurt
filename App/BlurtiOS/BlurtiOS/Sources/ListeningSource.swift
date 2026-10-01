@@ -8,10 +8,28 @@ import Synchronization
 /// where the simulator has no capture session.
 nonisolated protocol ListeningSource: MicCaptureProtocol {
   var isOpen: Bool { get }
-  /// The 0…1 meter the keyboard pill renders, one value per chunk.
+  /// The 0…1 meter the orb and the home screen render, one value per chunk
+  /// of an open utterance.
   var levels: AsyncStream<Float> { get }
-  func open() throws
-  func close()
+  /// Opens the microphone. Async because opening a capture session blocks for
+  /// hundreds of milliseconds on a phone and must not do so on the main actor.
+  func open() async throws
+  func close() async
+}
+
+/// Why a microphone couldn't open or start.
+nonisolated enum ListeningSourceFailure: Error, LocalizedError {
+  /// A press arrived with no listening window open — the keyboard's job is to
+  /// open the app first, so this is a plumbing fault, not a user error.
+  case windowClosed
+  case noInputDevice
+
+  var errorDescription: String? {
+    switch self {
+    case .windowClosed: "Blurt isn't listening. Open Blurt to start."
+    case .noInputDevice: "No microphone is available."
+    }
+  }
 }
 
 /// The per-utterance feed both microphones push into: the engine gets one
@@ -61,12 +79,15 @@ nonisolated final class UtteranceFeed: Sendable {
   /// thread the microphone delivers on.
   func deliver(_ chunk: Data) {
     guard !chunk.isEmpty else { return }
-    levelsContinuation.yield(Self.level(of: chunk))
-    state.withLock { state in
-      guard let sink = state.sink else { return }
+    // Nothing to report between utterances: a window sits open for minutes,
+    // and a level a dozen times a second would only keep views redrawing.
+    let delivered = state.withLock { state -> Bool in
+      guard let sink = state.sink else { return false }
       state.bytes += chunk.count
       sink.yield(chunk)
+      return true
     }
+    if delivered { levelsContinuation.yield(Self.level(of: chunk)) }
   }
 
   /// dBFS of a chunk of 16-bit PCM, mapped to 0…1 with the Mac meter's -50 dB

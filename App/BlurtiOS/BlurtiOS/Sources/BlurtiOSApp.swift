@@ -22,7 +22,17 @@ struct BlurtiOSApp: App {
         defaultsPrefix: "Blurt",
         logDirectoryName: "Blurt",
         releaseURL: HostIdentity.blurt.releaseURL))
-    _coordinator = State(initialValue: DictationCoordinator())
+    // The unit tests are hosted by this app: they get a coordinator that
+    // touches neither the Keychain nor the App Group (the Mac's UITestSupport
+    // does the same for its harness), and `start()` below never runs.
+    let coordinator =
+      Self.isTestHost
+      ? DictationCoordinator(apiKey: APIKeyModel(keyStore: InMemoryAPIKeyStore())) : DictationCoordinator()
+    _coordinator = State(initialValue: coordinator)
+  }
+
+  private static var isTestHost: Bool {
+    ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
   }
 
   var body: some Scene {
@@ -43,6 +53,14 @@ struct BlurtiOSApp: App {
   private var home: some View {
     HomeView(coordinator: coordinator)
       .onOpenURL { coordinator.handle($0) }
-      .task { coordinator.start() }
+      .task {
+        guard !Self.isTestHost else { return }
+        coordinator.start()
+        #if DEBUG
+          // `-BlurtStartListening` opens the mic at launch, so the listening
+          // state can be screenshotted without a tap (see scripts/ios-sim.sh).
+          if CommandLine.arguments.contains("-BlurtStartListening") { await coordinator.startListening() }
+        #endif
+      }
   }
 }

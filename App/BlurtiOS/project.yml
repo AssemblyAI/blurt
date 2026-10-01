@@ -44,19 +44,33 @@ targets:
     platform: iOS
     sources:
       - path: BlurtiOS/Sources
+      # The Mac's brand colours (accent, card fill and border), copied verbatim
+      # from App/Blurt/Blurt/Assets.xcassets — JSON can't reference JSON.
+      - path: BlurtiOS/Assets.xcassets
+      # The Mac's app icon and ready-screen wordmark, shared rather than copied:
+      # the Icon Composer file targets iOS too (`squares: shared`).
+      - path: ../Blurt/Blurt/AppIcon.icon
+      - path: ../Blurt/Blurt/Branding/blurt-ready-logo.png
+        buildPhase: resources
       # The App Group contract, compiled into BOTH the app and the keyboard (an
       # extension can't import the app's module) — one source, no duplication,
       # the same shape as App/Blurt/Shared.
       - path: Shared
-      # The keyboard's views and model, so debug builds can render every layout
-      # and state in-app (KeyboardGalleryView) for design work and screenshots.
-      # Only the extension's entry point stays out; the keyboard never runs here.
+      # The keyboard's views and model: the theme picker draws the real keyboard
+      # on its cards, the home screen draws the orb and the meter, and debug
+      # builds render every layout and state (KeyboardGalleryView) for design
+      # work and screenshots. Only the extension's entry point stays out; the
+      # keyboard itself never runs here.
       - path: BlurtKeyboard/Sources
         excludes:
           - KeyboardViewController.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt.ios
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # The app-level accent, from the catalog, so system-drawn chrome and our
+        # views agree (see the Mac's project.yml and BlurtBrand).
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         # Warnings are failures for our own code, scoped to the target for the
         # reason App/Blurt/project.yml gives (the project base collides with the
         # -suppress-warnings Xcode applies to SPM packages).
@@ -85,6 +99,20 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: dev.alex.blurt.ios
             CFBundleURLSchemes: [blurt]
+        # A shared key-term list (`.blurtterms`, JSON): declared so a tap on
+        # one in Messages offers Blurt, which opens it as an import.
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Blurt key terms
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Owner
+            LSItemContentTypes: [dev.alex.blurt.terms]
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: dev.alex.blurt.terms
+            UTTypeDescription: Blurt key terms
+            UTTypeConformsTo: [public.json]
+            UTTypeTagSpecification:
+              public.filename-extension: [blurtterms]
+              public.mime-type: application/vnd.blurt.terms+json
     entitlements:
       path: BlurtiOS/BlurtiOS.entitlements
       properties:
@@ -129,12 +157,35 @@ targets:
     dependencies:
       - package: BlurtEngine
         product: BlurtEngine
+  # Unit tests for the iPhone code's pure logic — the App Group contract, the
+  # keyboard's rules, term packs — hosted by the app so `@testable import
+  # BlurtiOS` reaches everything (the keyboard's sources are compiled into the
+  # app too). Swift Testing; `scripts/ios-test.sh` runs them on a simulator.
+  BlurtiOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: BlurtiOSTests
+    dependencies:
+      - target: BlurtiOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt.ios.tests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
 # XcodeGen emits a scheme only where one is declared, and `xcodebuild -scheme`
-# needs a shared one. Building the app builds the keyboard it embeds.
+# needs a shared one. Building the app builds the keyboard it embeds; testing
+# runs the unit tests against it.
 schemes:
   BlurtiOS:
     build:
       targets:
         BlurtiOS: all
+        BlurtiOSTests: [test]
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - BlurtiOSTests

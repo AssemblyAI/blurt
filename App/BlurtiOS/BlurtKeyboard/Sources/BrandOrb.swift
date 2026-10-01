@@ -12,8 +12,8 @@ let keyboardAnimationInterval = MicCapture.meterIntervalSeconds
 /// is happening. It spins rather than pulses — a pulse says "alive", a sweep
 /// says "working, and still going" — and the disc underneath never moves.
 ///
-/// Sized by the caller, because the keyboard draws it at two scales: inside
-/// the status pill, and as the mic key itself.
+/// Sized by the caller: the app's home screen draws it as the hero; the
+/// keyboard's mic key draws its own capsule so it can grow into the wave.
 struct BrandOrb: View {
   var diameter: CGFloat
   /// Whether the ring sweeps. Off under Reduce Motion, where the ring is still
@@ -50,28 +50,5 @@ struct BrandOrb: View {
   /// `strokeBorder` so the ring sits inside the disc instead of fringing it.
   private var ringShape: some View {
     Circle().strokeBorder(BlurtBrand.orbRingGradient, lineWidth: ringWidth)
-  }
-}
-
-/// The pill's status word — "Transcribing", "Pasted", "Error" — in the Mac's
-/// tracked uppercase, scaled from the pill's 9 pt to 11 pt for a phone held at
-/// arm's length. Brand green, except the error word's orange.
-struct StatusLineText: View {
-  let text: String
-  var color: Color = BlurtBrand.greenOnDark
-
-  init(_ text: String, color: Color = BlurtBrand.greenOnDark) {
-    self.text = text
-    self.color = color
-  }
-
-  var body: some View {
-    Text(text)
-      .font(.system(size: 11, weight: .semibold))
-      .textCase(.uppercase)
-      .tracking(1.1)
-      .lineLimit(1)
-      .minimumScaleFactor(0.7)
-      .foregroundStyle(color)
   }
 }

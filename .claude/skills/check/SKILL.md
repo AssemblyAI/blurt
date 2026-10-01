@@ -123,3 +123,11 @@ hides every lint finding behind it — expect to fix a batch, not a queue.
   missing tool. A local run that ends `ok (UI suite + leak scan NOT run …)` is
   green for everything it covered — just don't claim the integration suite
   passed. That answer comes from `check.yml` on the PR.
+
+## The iPhone app
+
+`check.sh` covers `App/BlurtiOS` only by the dependency guard, the invariants and the linters.
+Its build and tests run in CI's `ios-build` job (the authority). Locally: `scripts/ios-typecheck.sh`
+typechecks both iPhone targets on a Mac with only the Command Line Tools (run by `check.sh` when
+the SDK carries the Mac Catalyst frameworks), `scripts/ios-test.sh` runs `BlurtiOSTests` on a
+simulator when Xcode is installed, and `scripts/ios-sim.sh` builds and launches the app there.

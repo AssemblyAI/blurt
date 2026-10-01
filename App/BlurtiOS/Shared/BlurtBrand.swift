@@ -4,11 +4,11 @@ import SwiftUI
 /// from the 2026-08-31 comps), plus the handful of shades the keyboard needs
 /// for a surface the Mac never draws. Compiled into the app and the keyboard.
 ///
-/// The keyboard is a fixed dark surface the way the Mac's overlay pill is: it
-/// floats over whatever app the user is typing in, so it cannot take its cue
-/// from that app's appearance, and it must read the same on a white Notes page
-/// and a black Messages thread. Everything on it therefore names the raw
-/// shades — `greenOnDark`, `ink` — and never `accent`.
+/// The keyboard's surface is fixed per theme, the way the Mac's overlay pill is
+/// fixed: it floats over whatever app the user is typing in, so it cannot take
+/// its cue from that app's appearance, and it must read the same on a white
+/// Notes page and a black Messages thread. Everything on it therefore names
+/// the raw shades — `greenOnDark`, `ink` — and never `accent`.
 enum BlurtBrand {
   /// `#01762F` — the wordmark green, for light chrome.
   nonisolated static let green = Color(red: 1 / 255, green: 118 / 255, blue: 47 / 255)
