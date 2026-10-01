@@ -33,7 +33,11 @@
   /// restore) into the returned box — for the end-to-end case that pins `insert`
   /// threading its resolution through to the paste. (The continuity rules
   /// themselves are cases of `resolveInsert` and need no injector at all.)
-  func makeRecordingInjector() -> (injector: KeyInjector, pasted: StringListBox) {
+  /// `secondsSinceUserInput` stands in for the HID idle counters; the default
+  /// reports no keyboard or mouse input ever.
+  func makeRecordingInjector(
+    secondsSinceUserInput: @escaping @Sendable () -> TimeInterval = { .infinity }
+  ) -> (injector: KeyInjector, pasted: StringListBox) {
     let clip = FakeClipboard(string: nil)
     let pasted = StringListBox()
     let injector = KeyInjector(
@@ -50,6 +54,7 @@
       // for reasons unrelated to separator logic). It needs a stable non-nil app
       // identity, not activation.
       activateTarget: { _ in true },
+      secondsSinceUserInput: secondsSinceUserInput,
       clipboard: clip)
     return (injector, pasted)
   }

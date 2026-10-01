@@ -219,12 +219,14 @@ run_check() {
   return 0
 }
 
-# No-external-dependencies guard. The engine is dependency-free by rule and the
-# app carries only the local BlurtEngine package (see AGENTS.md). A third-party
-# dependency is the single biggest supply-chain risk, so fail the moment one is
+# External-dependencies guard. The engine is dependency-free by rule, and the
+# app carries the local BlurtEngine package plus exactly one remote package:
+# Sparkle, the updater (see AGENTS.md → Updates). A third-party dependency is the
+# single biggest supply-chain risk, so fail the moment any *other* one is
 # declared — in the engine's Package.swift or the app's project.yml. Extend
 # BlurtEngine rather than adding a package. Pure text parsing, so it runs in
 # both full and --portable modes and fails fast before the expensive steps.
+ALLOWED_APP_PACKAGE_URL="https://github.com/sparkle-project/Sparkle"
 check_no_external_deps() {
   cd "$REPO_ROOT" || return 1
   local violation=0
@@ -236,26 +238,32 @@ check_no_external_deps() {
     violation=1
   fi
 
-  # Apps: only the local BlurtEngine (path:) package is allowed. A remote package
-  # is declared with a url:/github: key inside project.yml's `packages:` block, so
-  # extract that block and reject any such key.
+  # Apps: the local BlurtEngine (path:) package plus the one allowlisted remote
+  # (Sparkle, the Mac app's updater). A remote package is declared with a
+  # url:/github: key inside project.yml's `packages:` block, so extract that
+  # block and reject any such key that isn't exactly the allowlisted URL. A
+  # github: shorthand is rejected outright, so the allowlist has one spelling to
+  # match.
   #
   # Every App/*/project.yml, not just the mac app's: the iOS app carries its own
   # spec with its own `packages:` block, and a guard that names one file is a
   # guard the next app walks around without anyone noticing.
-  local spec spec_path app_packages
+  local spec spec_path app_packages remote allowed_re
+  allowed_re="${ALLOWED_APP_PACKAGE_URL//./\\.}"
   for spec in "$REPO_ROOT"/App/*/project.yml; do
     spec_path="${spec#"$REPO_ROOT"/}"
     app_packages="$(awk '/^packages:/{f=1;next} /^[^[:space:]]/{f=0} f' "$spec")"
-    if printf '%s\n' "$app_packages" | grep -nE '(^|[[:space:]])(url|github):' >/dev/null 2>&1; then
-      echo "error: $spec_path declares a remote SPM package — the app must carry only the local BlurtEngine:" >&2
-      printf '%s\n' "$app_packages" | grep -nE '(^|[[:space:]])(url|github):' >&2
+    remote="$(printf '%s\n' "$app_packages" | grep -nE '(^|[[:space:]])(url|github):' \
+      | grep -vE "^[0-9]+:[[:space:]]*url:[[:space:]]*${allowed_re}[[:space:]]*$" || true)"
+    if [ -n "$remote" ]; then
+      echo "error: $spec_path declares a remote SPM package other than Sparkle:" >&2
+      printf '%s\n' "$remote" >&2
       violation=1
     fi
   done
 
   [ "$violation" -eq 0 ] || return 1
-  echo "no external dependencies (engine dependency-free; app carries only local BlurtEngine)"
+  echo "no unexpected dependencies (engine dependency-free; app carries BlurtEngine + Sparkle only)"
 }
 run_check "no-external-dependencies guard" check_no_external_deps
 
@@ -413,6 +421,17 @@ if [ "$PORTABLE" -eq 0 ]; then
 else
   echo "==> design-sync.sh --check skipped in portable mode (needs swift)"
 fi
+
+# Mutation-testing target list. The full run stays out of this script (minutes, and
+# survivors need judgement — see mutate.sh's header), but that also meant nothing
+# noticed when #186 renamed ConversationContext.swift out from under its default
+# targets: the script was dead for weeks until someone next ran it by hand. `--list`
+# validates every target and enumerates the mutants without building or testing,
+# so it is cheap enough for every run. Pure text + python, so --portable too.
+check_mutation_targets() {
+  bash scripts/mutate.sh --list >/dev/null
+}
+run_check "mutation targets exist (mutate.sh --list)" check_mutation_targets
 
 # ---------------------------------------------------------------------------
 # Source-only checks run BEFORE the Swift build below, not after it.
@@ -572,6 +591,11 @@ cd "$REPO_ROOT"
 # or network dependencies, so they run everywhere check.sh runs.
 run_check "release-lib.sh unit tests" bash scripts/release.test.sh
 
+# The update-window notes are user-facing copy, so they get linted like code: the
+# bump PR's TODO scaffold fails here until someone writes the notes, and the
+# rules reject filler and developer jargon. Pure bash + perl, so --portable too.
+run_check "release notes (release-notes)" bash scripts/check-release-notes.sh
+
 # A failure above does NOT skip the block below, deliberately. A lint violation
 # and a failing test are independent facts about the branch, and stopping here
 # would put them back on separate runs — which is the thing this script's
@@ -642,8 +666,14 @@ else
   #                        (MicCaptureLevelsTests, AudioInputDevicesTests). The
   #                        transport and liveness *policy* it serves stays
   #                        covered, in AudioTransport and MicLiveness.
+  #  - StreamingPCMPlayer.swift : the read-aloud playback renderer, an AV shell
+  #                        only. It plays only through a real output device,
+  #                        and its clock doesn't advance without one. Same justification as MicCapture:
+  #                        the timing policy it serves stays covered, in
+  #                        PCMSchedule, and SelectionSpeaker's stop/drain/error
+  #                        handling is covered through the PCMSink seam.
   COVERAGE="$(xcrun llvm-cov export -summary-only -instr-profile "$PROFDATA" "$XCTEST_BIN" \
-    -ignore-filename-regex='Tests/|Audio/MicCapture\.swift|Audio/AudioRoute(Monitor)?\.swift|Audio/AudioInputDevices\.swift|Audio/CaptureSessionRecorder\.swift' \
+    -ignore-filename-regex='Tests/|Audio/MicCapture\.swift|Audio/AudioRoute(Monitor)?\.swift|Audio/AudioInputDevices\.swift|Audio/CaptureSessionRecorder\.swift|TTS/StreamingPCMPlayer\.swift' \
     | python3 -c 'import sys,json; print(round(json.load(sys.stdin)["data"][0]["totals"]["lines"]["percent"],2))')"
   echo "engine line coverage: ${COVERAGE}%"
   if ! awk -v c="$COVERAGE" -v min="$MIN_COVERAGE" 'BEGIN{ exit (c+0 < min+0) }'; then
@@ -704,7 +734,7 @@ else
     -project Blurt.xcodeproj \
     -scheme Blurt \
     -configuration Debug \
-    -destination 'platform=macOS' \
+    -destination "platform=macOS,arch=$(uname -m)" \
     CODE_SIGN_IDENTITY="-" \
     CODE_SIGNING_REQUIRED=NO \
     CODE_SIGNING_ALLOWED=NO \

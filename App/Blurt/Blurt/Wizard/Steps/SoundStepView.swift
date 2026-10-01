@@ -44,7 +44,7 @@ struct SoundStepView: View {
     } header: {
       Text("Sound")
     } footer: {
-      Text("Set to None to silence start and stop cues.")
+      Text("Choose None to turn off start and stop sounds.")
     }
   }
 }

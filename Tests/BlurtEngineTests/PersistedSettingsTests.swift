@@ -32,20 +32,20 @@ struct PersistedSettingsTests {
     // during a UI-test run survived into later runs.
     #expect(PersistedSettings.allDefaultsKeys.contains(OverlayOriginStore.xDefaultsKey))
     #expect(PersistedSettings.allDefaultsKeys.contains(OverlayOriginStore.yDefaultsKey))
-    // The launch update check's throttle: left out of the sweep, a UI-test run
-    // (or a "clean install") would inherit yesterday's stamp and skip the check.
-    #expect(PersistedSettings.allDefaultsKeys.contains(LastUpdateCheckStore.defaultsKey))
     // The pinned microphone: left out, a reset "clean install" would keep
     // recording from a previously pinned device.
     #expect(PersistedSettings.allDefaultsKeys.contains(MicDeviceStore.defaultsKey))
+    // The text shortcuts: left out, a reset would keep expanding the user's
+    // phrases into their old snippets.
+    #expect(PersistedSettings.allDefaultsKeys.contains(TextShortcutStore.defaultsKey))
   }
 
   @Test("the roster carries no stale or duplicate keys")
   func rosterHasNoStrays() {
-    // Exactly the ten known stores' keys (OverlayOriginStore contributes two,
+    // Exactly the eleven known stores' keys (OverlayOriginStore contributes two,
     // StyleProfileStore three): a removed store must leave the roster in the same
     // change, and a key listed twice would hint at a copy-paste slip.
-    #expect(PersistedSettings.allDefaultsKeys.count == 13)
+    #expect(PersistedSettings.allDefaultsKeys.count == 14)
     #expect(Set(PersistedSettings.allDefaultsKeys).count == PersistedSettings.allDefaultsKeys.count)
   }
 
@@ -69,13 +69,14 @@ struct PersistedSettingsTests {
       StyleProfileStore.legacyDefaultsKey,
       OverlayOriginStore.xDefaultsKey,
       OverlayOriginStore.yDefaultsKey,
-      LastUpdateCheckStore.defaultsKey,
       MicDeviceStore.defaultsKey,
+      TextShortcutStore.defaultsKey,
+      SelectionSpeechStore.defaultsKey,
     ]
     #expect(storeKeys == Set(DefaultsKey.allCases.map(\.key)))
     // No two stores sharing a slot — the Set above would have quietly absorbed a
     // collision, and two stores on one key means each overwrites the other.
-    #expect(storeKeys.count == 13)
+    #expect(storeKeys.count == 14)
   }
 
   @Test("resetAll clears every roster key and leaves unrelated ones alone")

@@ -28,6 +28,10 @@ final class AppCoordinator {
   @ObservationIgnored private var phaseObserver: Task<Void, Never>?
   @ObservationIgnored private var levelsObserver: Task<Void, Never>?
   @ObservationIgnored var keyTap: DictationKeyTap?
+  /// Routes the trigger's commands to dictation, or to read-aloud when the
+  /// experimental switch is on and text is selected. It also decides the gate
+  /// resets (see `SelectionSpeechRouting`).
+  @ObservationIgnored private var speechRouter: SelectionSpeechRouter?
 
   @ObservationIgnored private let transcriptStream: AsyncStream<RecentDictations>
   @ObservationIgnored private var transcriptObserver: Task<Void, Never>?
@@ -101,6 +105,10 @@ final class AppCoordinator {
   }
 
   func start() {
+    // Before the first read of the binding — the override below, the key tap,
+    // and every view's `@AppStorage` copy all come after `start()`.
+    TriggerKeyStore().migrateStaleFunctionBinding()
+    syncGlobeKeyOverride()
     // Absorb the one-off cost of this process's first touch of the capture
     // stack, so the first dictation doesn't pay it on the hot path (~75 ms; see
     // `MicCapture.warmUp()`, which holds no recorder and opens no device). Gated
@@ -126,14 +134,20 @@ final class AppCoordinator {
   /// than a Carbon global hotkey: the latter leaks the trigger's auto-repeat key
   /// events into the focused app while held.
   private func startDictationDriver() {
-    let session = session
+    // Every trigger command goes through the read-aloud router. With the
+    // experimental switch off, it forwards each one to `session.submit` exactly
+    // as before.
+    let router = SelectionSpeechRouter(session: session)
     keyTap = DictationKeyTap(
-      onStart: { session.submit(.press) },
-      onStop: { session.submit(.release) },
-      onCancel: { session.submit(.cancel) },
+      onStart: { router.submit(.press) },
+      onStop: { router.submit(.release) },
+      onCancel: { router.submit(.cancel) },
       // Recovery-only teardown; `cancelRecording()`'s doc owns the rationale.
-      onRecordingDiscarded: { session.submit(.cancelRecording) }
+      onRecordingDiscarded: { router.submit(.cancelRecording) }
     )
+    router.syncGateAfterSession = { [weak self] in self?.keyTap?.syncAfterTerminalPhase() }
+    router.resetGate = { [weak self] in self?.keyTap?.resetGate() }
+    speechRouter = router
     // Deliberately *not* installed here: `CGEvent.tapCreate` for keystrokes is
     // itself what surfaces the system permission prompt, so creating the tap at
     // launch pops that prompt before the user ever reaches the "Grant
@@ -224,6 +238,14 @@ final class AppCoordinator {
   /// to re-evaluate here.
   func dictationBindingChanged() {
     keyTap?.refreshBinding()
+    syncGlobeKeyOverride()
+  }
+
+  /// Turns macOS's own 🌐 action off while `fn` is the trigger, and back on
+  /// otherwise (see `GlobeKeyOverride`). Also run from `start()`, so the relaunch
+  /// after a settings reset restores the user's setting.
+  private func syncGlobeKeyOverride() {
+    GlobeKeyOverride().sync(boundKey: TriggerKeyStore().triggerKey)
   }
 
   // MARK: - Dictation render
@@ -265,9 +287,10 @@ final class AppCoordinator {
     // user's next press entirely. Clearing it here — the one place that sees every
     // phase — keeps the tap's state honest without the gate needing to know about
     // pipeline phases. No-op whenever the gate is already idle, which is every
-    // normal flow.
+    // normal flow. Asked through the router, because while a read-aloud owns the
+    // gate the reset isn't this dictation's to make (see `SelectionSpeechRouting`).
     if phase.isTerminal {
-      keyTap?.syncAfterTerminalPhase()
+      speechRouter?.sessionReachedTerminalPhase()
     }
   }
 }

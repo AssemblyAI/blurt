@@ -38,10 +38,25 @@ struct TriggerActivationTests {
     #expect(Set(TriggerActivation.allCases.map(\.label)).count == TriggerActivation.allCases.count)
     #expect(
       Set(TriggerActivation.allCases.map(\.guidance)).count == TriggerActivation.allCases.count)
+    #expect(
+      Set(TriggerActivation.allCases.map(\.stopHint)).count == TriggerActivation.allCases.count)
     // The default's footer is the sentence that shipped before the picker
     // existed — the unset experience must not reword itself.
     #expect(
       TriggerActivation.tapOrHold.guidance
         == "Tap to start and tap again to stop, or hold the key and release to dictate.")
+    #expect(
+      Set(TriggerActivation.allCases.map(\.finishHint)).count == TriggerActivation.allCases.count)
+  }
+
+  @Test func mainWindowWordingNamesOnlyTheConfiguredGestures() {
+    // The ready screen must not tell a hold-only user to tap, or a tap-only
+    // user to release — each gesture it names has to actually work.
+    #expect(TriggerActivation.tapOrHold.startVerb == "tap")
+    #expect(TriggerActivation.tap.startVerb == "tap")
+    #expect(TriggerActivation.hold.startVerb == "hold")
+    #expect(TriggerActivation.tapOrHold.finishHint == "Tap again or release to finish.")
+    #expect(TriggerActivation.tap.finishHint == "Tap again to finish.")
+    #expect(TriggerActivation.hold.finishHint == "Release to finish.")
   }
 }

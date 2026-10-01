@@ -32,11 +32,14 @@ struct MenuBarContent: View {
   // Observed (as the ready screen does) so the reminder line updates live when
   // the dictation key is rebound in Settings — see `BoundTriggerKey`.
   @BoundTriggerKey private var triggerKey
+  @AppStorage(TriggerActivationStore.defaultsKey) private var activationRaw = ""
+
+  private var activation: TriggerActivation { .fromPersisted(activationRaw) }
 
   var body: some View {
     // Disabled informational row: the dictation trigger is an invisible lone
     // modifier, so spell it out here as the menu bar's discoverability anchor.
-    Text("Tap or hold \(triggerKey.label) to dictate and paste")
+    Text("\(activation.label) \(triggerKey.label) to dictate and paste")
 
     Divider()
 
@@ -49,10 +52,7 @@ struct MenuBarContent: View {
       NSApp.activate()
       openSettings()
     }
-    Button("Check for Updates…") {
-      NSApp.activate()
-      appDelegate.updateCheckModel.checkForUpdates()
-    }
+    CheckForUpdatesButton(model: appDelegate.updaterModel, activatesApp: true)
 
     Divider()
 

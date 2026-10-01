@@ -46,6 +46,36 @@ public enum TriggerActivation: String, CaseIterable, Sendable {
     }
   }
 
+  /// The verb for pressing the key to start, lowercase for mid-sentence use:
+  /// "Click into any text field, tap ⌘ …". Tap-or-hold says "tap" — the
+  /// quicker of its two gestures, and the one a first try reaches for.
+  public var startVerb: String {
+    switch self {
+    case .tapOrHold, .tap: return "tap"
+    case .hold: return "hold"
+    }
+  }
+
+  /// How to finish a dictation that is recording, e.g. "Tap again or release
+  /// to finish." — only the gestures this mode actually stops on.
+  public var finishHint: String {
+    switch self {
+    case .tapOrHold: return "Tap again or release to finish."
+    case .tap: return "Tap again to finish."
+    case .hold: return "Release to finish."
+    }
+  }
+
+  /// How to stop something the trigger started that isn't a dictation, today
+  /// a read-aloud (see `SelectionSpeechRouting`): "Tap again or release to stop."
+  public var stopHint: String {
+    switch self {
+    case .tapOrHold: return "Tap again or release to stop."
+    case .tap: return "Tap again to stop."
+    case .hold: return "Release to stop."
+    }
+  }
+
   /// Whether releasing the trigger latches the recording on (tap-to-toggle)
   /// rather than stopping it, given how long this press was held. Only presses
   /// that *started* the recording ask — a release over an already-latched

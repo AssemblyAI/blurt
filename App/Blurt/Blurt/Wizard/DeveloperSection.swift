@@ -3,40 +3,130 @@ import BlurtEngine
 import OSLog
 import SwiftUI
 
-// The Advanced pane's two standalone sections: the developer-mode switch and
-// the start-over button. Both are Settings-only (neither gates setup, so
-// neither is a wizard step), and they live here rather than in
-// `SettingsWindowRoot` because that file is at the repo's file-length limit.
+// The Advanced pane's four sections: updates (version, check, Sparkle's two
+// preferences), experimental features, developer mode, and the start-over button. All are
+// Settings-only (none gates setup, so none is a wizard step), and they live here
+// rather than in `SettingsWindowRoot` because that file is at the repo's
+// file-length limit.
 
-/// The Developer section of the Settings window: an opt-in switch for developer
-/// mode. While on, every completed dictation is appended to the local JSONL log
-/// and every failed one to a sibling error log (see `DictationLog` — both gates
-/// read the same default this toggle writes), and the footer shows where those
-/// logs live so they're easy to find. Settings-only — not a wizard step, since it
-/// never gates setup.
-struct DeveloperSection: View {
+/// The running version, a "Check for Updates…" button, and Sparkle's two
+/// preferences. Every control drives the one `UpdaterModel` owned by
+/// `AppDelegate` — the same updater the app-menu command and the menu-bar item
+/// use — and Sparkle presents the check's progress and result itself.
+///
+/// In a debug build the updater never starts (see `UpdaterModel`), so the
+/// controls are disabled and the footer says why rather than leaving a button
+/// that silently does nothing.
+struct UpdatesSection: View {
+  @Bindable var model: UpdaterModel
+
+  var body: some View {
+    Section {
+      // Ellipsis: it opens Sparkle's window, where an update still waits on the
+      // user's go-ahead — the same rule as "Reset…" below.
+      SettingRow(title: model.versionLabel, systemImage: "info.circle") {
+        Button("Check for Updates…") { model.checkForUpdates() }
+          .disabled(!model.canCheckForUpdates)
+          .accessibilityIdentifier(UITestIdentifiers.updateCheck)
+      }
+      Toggle(isOn: $model.automaticallyChecksForUpdates) {
+        SettingLabel(title: "Check for updates automatically", systemImage: "clock")
+      }
+      .disabled(!model.isEnabled)
+      .accessibilityIdentifier(UITestIdentifiers.updateAutoCheck)
+      // Installing on its own only means anything while Blurt is looking on its
+      // own, so the second switch follows the first.
+      Toggle(isOn: $model.automaticallyDownloadsUpdates) {
+        SettingLabel(title: "Download and install updates automatically", systemImage: "arrow.down.circle")
+      }
+      .disabled(!model.isEnabled || !model.automaticallyChecksForUpdates)
+    } header: {
+      Text("Updates")
+    } footer: {
+      if !model.isEnabled {
+        Text("This development build doesn’t update itself.")
+      }
+    }
+  }
+}
+
+/// The Advanced pane's experimental features — today just read-aloud (see
+/// `SelectionSpeechStore`). The router reads the same default this toggle writes
+/// at every press, so a change applies to the next one.
+struct ExperimentalSection: View {
+  @AppStorage(SelectionSpeechStore.defaultsKey) private var selectionSpeech = false
+  @BoundTriggerKey private var triggerKey
+  @AppStorage(TriggerActivationStore.defaultsKey) private var activationRaw = ""
+
+  /// Read-aloud rides the trigger's own tap/hold gate, so its instructions
+  /// follow the activation mode.
+  private var howToUse: String {
+    let activation = TriggerActivation.fromPersisted(activationRaw)
+    return "Select text and \(activation.startVerb) \(triggerKey.label) to hear it. \(activation.stopHint)"
+  }
+
+  var body: some View {
+    Section {
+      Toggle(isOn: $selectionSpeech) {
+        SettingLabel(title: "Read selected text aloud", systemImage: "speaker.wave.2")
+      }
+      .accessibilityIdentifier(UITestIdentifiers.selectionSpeechToggle)
+    } header: {
+      Text("Experimental")
+    } footer: {
+      Text("\(howToUse) With nothing selected, the key dictates as usual.")
+    }
+  }
+}
+
+/// The Advanced pane's developer-mode switch.
+///
+/// Developer mode is an opt-in: while on, every completed dictation is appended
+/// to the local JSONL log and every failed one to a sibling error log (see
+/// `DictationLog` — both gates read the same default this toggle writes), and
+/// the section grows a "Show Logs in Finder" row and a footer naming where the
+/// logs live.
+struct MaintenanceSection: View {
   @AppStorage(DeveloperModeStore.defaultsKey) private var developerMode = false
 
   var body: some View {
     Section {
       Toggle(isOn: $developerMode) {
-        Label("Developer mode", systemImage: "hammer")
+        SettingLabel(title: "Developer mode", systemImage: "hammer")
       }
       .accessibilityIdentifier(UITestIdentifiers.developerToggle)
-    } header: {
-      Text("Developer")
+      if developerMode {
+        SettingRow(title: "Logs", systemImage: "doc.text.magnifyingglass") {
+          Button("Show in Finder", action: showLogs)
+            .accessibilityIdentifier(UITestIdentifiers.developerShowLogs)
+        }
+      }
     } footer: {
-      // Both home-abbreviated paths are derived in the engine next to the URLs
-      // the writers append to, so this label can never drift from where the logs
-      // actually land. No trailing period: a path ends the line, so it can be
-      // selected and copied without picking up punctuation — which is also why
-      // the first path is followed by a plain space rather than a comma.
-      Text(
-        "Logs each dictation to \(DictationLog.defaultDisplayPath) "
-          + "and each failure to \(DictationLog.defaultErrorDisplayPath)"
-      )
-      .textSelection(.enabled)
+      if developerMode {
+        // Both home-abbreviated paths are derived in the engine next to the URLs
+        // the writers append to, so this label can never drift from where the
+        // logs actually land. No trailing period: a path ends the line, so it
+        // can be selected and copied without picking up punctuation — which is
+        // also why the first path is followed by a plain space, not a comma.
+        Text(
+          "Logs each dictation to \(DictationLog.defaultDisplayPath) "
+            + "and each failure to \(DictationLog.defaultErrorDisplayPath)"
+        )
+        .textSelection(.enabled)
+      } else {
+        Text("Developer mode keeps a local log of each dictation and failure.")
+      }
     }
+  }
+
+  /// Opens the log directory in Finder. The directory only exists once the first
+  /// entry lands, and a button that silently did nothing right after the switch
+  /// went on would read as broken — so it's created here if need be (the reset
+  /// sweep removes it again once it's empty).
+  private func showLogs() {
+    let directory = DictationLog.defaultURL.deletingLastPathComponent()
+    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    NSWorkspace.shared.open(directory)
   }
 }
 
@@ -83,7 +173,7 @@ struct ResetSection: View {
       switch self {
       case .confirm:
         "This can’t be undone. Your AssemblyAI API key, every setting, the dictation logs, and "
-          + "Blurt’s microphone, accessibility and input-monitoring permissions are all removed.\n\n"
+          + "Blurt’s microphone and accessibility permissions will all be removed.\n\n"
           + "Blurt then restarts and takes you back through setup."
       case .failed(let content): content.message
       }
@@ -95,19 +185,30 @@ struct ResetSection: View {
   @State private var prompt: Prompt?
 
   var body: some View {
+    // No header: "Reset" over a "Reset Blurt" row only said the same word
+    // twice, and the red button and the footer already say what this is.
     Section {
       // Ellipsis for the same reason as "Connect…" and "Add Style…": the button
       // opens something rather than completing the action.
       SettingRow(title: "Reset Blurt", systemImage: "arrow.counterclockwise") {
-        Button("Reset…", role: .destructive) { prompt = .confirm }
-          .accessibilityIdentifier(UITestIdentifiers.installReset)
+        // Red text, because `role: .destructive` alone draws a bordered
+        // button no differently from "Check for Updates…" in the sections
+        // above — and this one deletes the key, every setting and the logs.
+        Button(role: .destructive) {
+          prompt = .confirm
+        } label: {
+          Text("Reset…").foregroundStyle(.red)
+        }
+        .accessibilityIdentifier(UITestIdentifiers.installReset)
       }
-    } header: {
-      Text("Reset")
     } footer: {
+      // The sweep still clears Input Monitoring (`PermissionsReset.sweep`), so
+      // a grant left by a build from before the hotkey stopped needing it goes
+      // too — but no current install has one, so naming it here only told
+      // users about a permission they were never asked for.
       Text(
         "Deletes your AssemblyAI API key, clears every setting, removes the dictation logs, and "
-          + "revokes Blurt’s microphone, accessibility and input-monitoring permissions.")
+          + "revokes Blurt’s microphone and accessibility permissions.")
     }
     // Alert buttons are addressed by the words on them in the UI suite, like the
     // update alert's "OK" — an identifier here wouldn't survive AppKit's alert

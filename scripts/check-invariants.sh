@@ -84,6 +84,11 @@ TESTS="Tests/*.swift App/Blurt/BlurtUITests/*.swift App/BlurtiOS/BlurtiOSTests/*
 # microphone, and the design keeps every audio type out of it, so an import
 # there is a decision being reversed by accident.
 KEYBOARD="App/BlurtiOS/BlurtKeyboard/*.swift App/BlurtiOS/Shared/*.swift"
+# The streaming-STT rule's one carve-out: the experimental read-selection-aloud
+# feature speaks through AssemblyAI's streaming TTS, which is WebSocket-only.
+# The rule is about *dictation* staying one request/one response, so the TTS
+# client — that one file — is excluded; a socket anywhere else still fails.
+NOT_TTS=":!Sources/BlurtEngine/TTS/AssemblyAISpeechSynthesizer.swift"
 
 # Four parallel arrays rather than one delimited list, for the reason
 # check-portability.sh gives: the patterns contain `|`, so splitting on it
@@ -100,14 +105,13 @@ PATTERNS=(
   "SetUnicodeString"
   "LSUIElement"
   "import KeyboardShortcuts"
-  "AppUpdater|Sparkle|SPUUpdater"
   "KeychainStore\\(service: *(HostIdentity\\.current\\.keychainService|\"blurt\")"
   "@available\\(\\*, *deprecated"
   "import AVFoundation|import AVFAudio|AVCaptureSession|AVAudioSession|AVAudioApplication|AudioQueueNewInput"
 )
 SCOPES=(
   "$ENGINE $APP"
-  "$ENGINE $APP"
+  "$ENGINE $APP $NOT_TTS"
   "$ENGINE $APP"
   "$ENGINE $APP"
   "$ENGINE"
@@ -116,14 +120,13 @@ SCOPES=(
   "$ENGINE $APP"
   "$APP"
   "$ENGINE $APP"
-  "$ENGINE $APP"
   "$TESTS"
   "$ENGINE $APP"
   "$KEYBOARD"
 )
 ADVICE=(
   "MicCapture builds a fresh AVCaptureSession recorder per capture — a long-lived engine goes stale on a device switch"
-  "the dictation API returns the full text in one response; there is no streaming path"
+  "the dictation API returns the full text in one response; there is no streaming path (the one socket is the TTS client, AssemblyAISpeechSynthesizer.swift)"
   "cleanup is the API's server-side rewrite via config.llm_instruction on the same /v1/transcribe/live call"
   "transcription is a remote AssemblyAI call — no on-device ASR/LLM, no model cache"
   "leave language to the model's own detection; setting the field takes that away"
@@ -132,7 +135,6 @@ ADVICE=(
   "injection is always clipboard paste (save → write → ⌘V → settle → restore)"
   "Blurt is a Dock app first; the MenuBarExtra item is layered on, never depended on"
   "the trigger is a home-grown lone modifier (CGEventTap + DictationKeyGate)"
-  "updates are download-only; extend UpdateCheckModel, don't install for the user"
   "use an isolated service (see KeychainStoreTests) or InMemoryAPIKeyStore"
   "deleted types stay deleted — no deprecated re-exports"
   "the keyboard never hears anything: the app listens and transcribes, the keyboard inserts (KeyboardRelayInjector)"
@@ -153,7 +155,6 @@ PROBES=(
   "CGEventKeyboardSetUnicodeString(event, count, chars)"
   "    LSUIElement: true"
   "import KeyboardShortcuts"
-  "let updater = AppUpdater(owner: \"assemblyai\", repo: \"blurt\")"
   "let store = KeychainStore(service: HostIdentity.current.keychainService, account: \"AssemblyAIAPIKey\")"
   "@available(*, deprecated, renamed: \"NewName\")"
   "let session = AVCaptureSession()"
@@ -176,7 +177,6 @@ TABLE_ANCHORS=(
   "Add a keystroke-typing paste path or a length threshold"
   "Add \`LSUIElement\` or a menu-bar-**only** mode"
   "Add a \`KeyboardShortcuts\` package or a key+modifier chord"
-  "Add a self-replacing install or background auto-updater"
   "Touch the real Keychain in tests"
   "Add backwards-compat shims for removed types"
   "Give the keyboard extension a microphone or any audio type"
@@ -198,7 +198,6 @@ SKILL_ANCHORS=(
   "Injection is always a clipboard paste"
   "no \`LSUIElement\`, no menu-bar-_only_ mode"
   "No \`KeyboardShortcuts\` package"
-  "Updates are download-only"
   "the real Keychain in tests"
   "Don't add backwards-compat shims for removed types."
   "The keyboard never hears anything."
@@ -230,12 +229,10 @@ if [ "${1:-}" = "--self-test" ]; then
   # people route around. Each of these is a real line from this tree that sits
   # one character away from a rule above — the wire key we *do* send
   # (`stt_prompt`) against the array-of-turns field we no longer do, the test
-  # keychain against the production one, the download-only checker against a
-  # self-replacing updater.
+  # keychain against the production one.
   GOOD=(
     "let prompt: NSDictionary = [\"AXTrustedCheckOptionPrompt\": true]"
     "KeychainStore(service: \"dev.alex.blurt.tests\", account: \"test-\\(UUID().uuidString)\")"
-    "@MainActor public final class UpdateCheckModel: ObservableObject {"
     "case sttPrompt = \"stt_prompt\""
   )
   for good in "${GOOD[@]}"; do

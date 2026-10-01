@@ -28,7 +28,13 @@ public struct RecentDictations: Equatable, Sendable {
     /// Stable identity for SwiftUI list diffing — assigned once at creation, so
     /// an entry keeps its id as newer dictations push in ahead of it.
     public let id = UUID()
+    /// What was pasted, text shortcuts expanded — what the Recent row shows
+    /// and copies.
     public let text: String
+    /// What the service returned, before any text shortcut was expanded. This,
+    /// not `text`, is what rides the next request's `stt_prompt`: a shortcut's
+    /// saved replacement stays on the machine.
+    let spoken: String
     public let timestamp: Date
     /// Display name of the **custom** style this dictation was made with (the
     /// active profile's name). `nil` otherwise — the base Default styling,
@@ -52,22 +58,9 @@ public struct RecentDictations: Equatable, Sendable {
   /// was 99; nothing enforces either figure now.
   public static let capacity = 100
 
-  /// How many rows the ready window's "Recent" list renders. The list area
-  /// reserves space for exactly this many, so it is the number the height
-  /// arithmetic below is about.
+  /// How many rows the ready window's "Recent dictations" list renders. The
+  /// list area reserves space for exactly this many.
   public static let displayCapacity = 3
-
-  /// Height a list showing a full `displayCapacity` rows occupies: every row,
-  /// plus a separator *between* each adjacent pair. The ready window pins its
-  /// list area to this whether it holds 0, 1, or `displayCapacity` entries, so
-  /// nothing above it shifts as dictations arrive.
-  ///
-  /// The row metrics come from the view; what lives here is the count arithmetic,
-  /// which is a fact about `displayCapacity` — including the `- 1` that a change
-  /// to that number is most likely to get wrong.
-  public static func reservedHeight(rowHeight: CGFloat, separatorThickness: CGFloat) -> CGFloat {
-    CGFloat(displayCapacity) * rowHeight + CGFloat(displayCapacity - 1) * separatorThickness
-  }
 
   /// Most-recent-first, capped at `capacity`.
   public private(set) var entries: [Entry] = []
@@ -80,16 +73,22 @@ public struct RecentDictations: Equatable, Sendable {
 
   /// Every remembered transcript **oldest first** — the order
   /// `config.stt_prompt` wants, since `entries` is newest-first for the
-  /// UI. Text only: the timestamps are a display concern.
-  public var transcriptsOldestFirst: [String] { entries.reversed().map(\.text) }
+  /// UI. Text only: the timestamps are a display concern. The *spoken* text,
+  /// never the expanded one — see `Entry.spoken`.
+  public var spokenOldestFirst: [String] { entries.reversed().map(\.spoken) }
 
   public init() {}
 
   /// Records a dictation made at `time` with `style` (see `Entry.style`),
   /// pushing it to the front and dropping the oldest entries beyond `capacity`.
   /// `time` is injected (not read from the clock) so tests are deterministic.
-  public mutating func record(_ text: String, style: String? = nil, at time: Date) {
-    entries.insert(Entry(text: text, timestamp: time, style: style), at: 0)
+  /// `spoken` is the pre-expansion transcript when text shortcuts changed it;
+  /// omitted, the two are the same.
+  public mutating func record(
+    _ text: String, spoken: String? = nil, style: String? = nil, at time: Date
+  ) {
+    entries.insert(
+      Entry(text: text, spoken: spoken ?? text, timestamp: time, style: style), at: 0)
     if entries.count > Self.capacity {
       entries.removeLast(entries.count - Self.capacity)
     }

@@ -42,6 +42,19 @@
       AXIsProcessTrusted()
     }
 
+    /// Seconds since the user last pressed a key or clicked, anywhere. Reads the
+    /// HID system state's idle counters: no permission needed (no event tap, no
+    /// Input Monitoring), and only hardware input moves them — verified that our
+    /// own synthesized ⌘V leaves them untouched, so a paste can't make it look
+    /// like the user typed after it. Relies on every `TriggerKey` being a modifier
+    /// (`flagsChanged`, not `keyDown`): a non-modifier trigger would count as input
+    /// on every dictation and silently disable the same-window separator.
+    static func secondsSinceHardwareInput() -> TimeInterval {
+      let types: [CGEventType] = [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown]
+      return types.map { CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: $0) }
+        .min() ?? .infinity
+    }
+
     /// The Cmd-V key-down/key-up pair, or `nil` when CoreGraphics refuses to build
     /// them. Split from `postCmdV` because only the *posting* is untestable: building
     /// an event needs no Accessibility trust, while posting one sends a live
@@ -51,10 +64,18 @@
     /// paste) is asserted in `KeyInjectorSystemActionsTests`, and only the two
     /// `.post` calls below stay covered by running the app.
     static func cmdVEvents() -> (down: CGEvent, up: CGEvent)? {
-      let vKey: CGKeyCode = 0x09  // kVK_ANSI_V
+      commandEvents(virtualKey: 0x09)  // kVK_ANSI_V
+    }
+
+    /// The Cmd-C pair, for the read-aloud press's copy fallback (`SelectionCopy`).
+    static func cmdCEvents() -> (down: CGEvent, up: CGEvent)? {
+      commandEvents(virtualKey: 0x08)  // kVK_ANSI_C
+    }
+
+    private static func commandEvents(virtualKey: CGKeyCode) -> (down: CGEvent, up: CGEvent)? {
       guard let source = CGEventSource(stateID: .combinedSessionState),
-        let down = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: true),
-        let up = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: false)
+        let down = CGEvent(keyboardEventSource: source, virtualKey: virtualKey, keyDown: true),
+        let up = CGEvent(keyboardEventSource: source, virtualKey: virtualKey, keyDown: false)
       else { return nil }
       // Set on both: a key-up carrying no ⌘ reads as the modifier having been
       // released mid-chord, which some apps treat as cancelling the shortcut.
@@ -67,7 +88,19 @@
     /// effect (a keystroke into the focused app) is why this is the injectable seam
     /// tests replace.
     static func postCmdV() -> Bool {
-      guard let (down, up) = cmdVEvents() else { return false }
+      post(cmdVEvents())
+    }
+
+    /// Posts Cmd-C, the same way and for the same reasons as `postCmdV`. The
+    /// annotated session tap also sits *after* the trigger's own session tap, so
+    /// `DictationKeyTap` never sees this keystroke. Otherwise its `keyDown` would
+    /// read as a ⌘-combo and cancel the very press that asked for the copy.
+    static func postCmdC() -> Bool {
+      post(cmdCEvents())
+    }
+
+    private static func post(_ events: (down: CGEvent, up: CGEvent)?) -> Bool {
+      guard let (down, up) = events else { return false }
       // Post to the annotated session tap rather than the HID tap: the session tap
       // honors exactly the flags set above instead of OR-ing in the live hardware
       // modifier state, so a still-held hotkey modifier can't corrupt Cmd-V into a

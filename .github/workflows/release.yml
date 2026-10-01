@@ -37,6 +37,10 @@ on:
         description: "Skip the launch smoke test (use if the runner has no usable GUI session)"
         type: boolean
         default: false
+      staging:
+        description: "Update rehearsal: build for the sparkle-staging feed and stage it there instead of publishing (RELEASE.md → Rehearsing an update)"
+        type: boolean
+        default: false
   push:
     branches: [main]
     # Narrow on purpose. project.yml is the only file a version bump touches
@@ -169,6 +173,11 @@ jobs:
           # job checks out the same sha, so the tag can never land on a commit
           # other than the one that was actually built.
           ref: ${{ github.sha }}
+          # History and tags, for one path only: a staging build with no
+          # release-notes file falls back to the commits since the previous
+          # release tag (release-build.sh fails fast on a shallow clone there).
+          # A release reads its hand-written notes and needs neither.
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Guard the release version
@@ -196,9 +205,11 @@ jobs:
           P12_PASSWORD: ${{ secrets.SIGNING_P12_PASSWORD }}
           NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
           NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          SPARKLE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
           set -euo pipefail
           missing=""
+          [ -n "$SPARKLE_KEY" ] || missing="$missing SPARKLE_ED_PRIVATE_KEY"
           [ -n "$P12" ] || missing="$missing SIGNING_P12_BASE64"
           [ -n "$P12_PASSWORD" ] || missing="$missing SIGNING_P12_PASSWORD"
           [ -n "$NOTARY_KEY_P8" ] || [ -n "$NOTARY_APPLE_ID" ] \
@@ -242,16 +253,22 @@ jobs:
           BLURT_NOTARY_KEY_P8_BASE64: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
           BLURT_NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
           BLURT_NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
-          # Both are dispatch-only escape hatches, so both are empty (and the
-          # full checks run) on the merged-bump path. That is the right default:
-          # nobody is standing there to judge whether skipping was safe.
-          SKIP_CHECKS: ${{ inputs.skip_checks }}
+          # Sparkle's EdDSA private key (base64, as `generate_keys -x` exports
+          # it). Signs the DMG for the appcast; handed to sign_update on stdin.
+          BLURT_SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          # On the merged-bump path check.sh is skipped: the push to main runs
+          # `check` on this exact commit, and publish refuses to tag until that
+          # run has passed — the gate moves rather than goes. On a dispatch both
+          # stay escape hatches, off by default.
+          SKIP_CHECKS: ${{ github.event_name == 'push' || inputs.skip_checks }}
           SKIP_SMOKE: ${{ inputs.skip_smoke }}
+          STAGING: ${{ inputs.staging }}
         run: |
           set -euo pipefail
           args=()
           if [ "$SKIP_CHECKS" = "true" ]; then args+=(--skip-checks); fi
           if [ "$SKIP_SMOKE" = "true" ]; then args+=(--skip-smoke); fi
+          if [ "$STAGING" = "true" ]; then args+=(--staging); fi
           scripts/release-build.sh ${args[@]+"${args[@]}"}
 
       - name: Upload release artifacts
@@ -264,6 +281,7 @@ jobs:
             blurt/build/release/Blurt-*.dmg
             blurt/build/release/Blurt-*.app.dSYM.zip
             blurt/build/release/SHA256SUMS
+            blurt/build/release/appcast.xml
             blurt/build/release/build-info.txt
             blurt/build/release/notary-*-log.json
           if-no-files-found: error
@@ -277,8 +295,10 @@ jobs:
   publish:
     needs: [resolve, build]
     # Releases ship from main. A dispatch from any other ref stops after the
-    # build job, which makes this workflow safe to exercise as a dry run.
-    if: github.ref == 'refs/heads/main'
+    # build job, which makes this workflow safe to exercise as a dry run. A
+    # staging build never publishes — `stage` below takes it instead (and
+    # release-publish.sh would refuse it anyway).
+    if: github.ref == 'refs/heads/main' && inputs.staging != true
     runs-on: macos-26
     timeout-minutes: 30
     environment: release-publish
@@ -286,8 +306,47 @@ jobs:
       # contents: write is what lets the tag push and the release create land.
       contents: write
       actions: read
+      # Reading the `check` run on github.sha, below.
+      checks: read
 
     steps:
+      - name: Require check to have passed on this commit
+        # The build skips check.sh on the merged-bump path, and a green PR is
+        # not proof on its own: an admin can merge past a red `check`, and
+        # without a merge queue the squashed commit is not the one the PR
+        # tested. The push to main runs `check` on exactly github.sha, so that
+        # run is the one that must pass before anything is tagged. Only the
+        # github-actions app's run counts — any app with checks: write can
+        # post a check run named `check`.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # check normally finishes long before a human approves this gate;
+          # the wait covers an approval that beats it.
+          for _ in $(seq 1 30); do
+            result="$(gh api "repos/$REPO/commits/$SHA/check-runs?check_name=check" \
+              --jq '[.check_runs[] | select(.app.slug == "github-actions")]
+                    | sort_by(.started_at) | last
+                    | if . == null then "missing" else "\(.status)/\(.conclusion)" end')"
+            case "$result" in
+              completed/success)
+                echo "check passed on $SHA"
+                exit 0
+                ;;
+              completed/*)
+                echo "::error::check finished as ${result#completed/} on $SHA — fix main and roll forward to a new patch, or re-run check if it was a flake, then re-run this job"
+                exit 1
+                ;;
+            esac
+            echo "check on $SHA is $result; waiting"
+            sleep 30
+          done
+          echo "::error::check did not finish on $SHA within 15 minutes — re-run this job once it has"
+          exit 1
+
       - name: Checkout blurt
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -319,3 +378,38 @@ jobs:
           args=(--yes)
           if [ "$REPUBLISH" = "true" ]; then args+=(--republish); fi
           scripts/release-publish.sh "${args[@]}"
+
+  # Update rehearsal: put a --staging build on the sparkle-staging prerelease,
+  # the feed its app polls (RELEASE.md → Rehearsing an update). Runs from any
+  # ref the build job could — a rehearsal lives on a release-dry-run* branch,
+  # temporarily allowed on release-build — and needs no approval gate:
+  # the prerelease is never marked latest, so no shipped copy can see it. Holds
+  # no signing secrets; contents: write is only for the prerelease upload.
+  stage:
+    needs: [resolve, build]
+    if: inputs.staging == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-${{ needs.resolve.outputs.version }}
+          path: blurt/build/release
+
+      - name: Stage
+        working-directory: blurt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: scripts/release-stage.sh

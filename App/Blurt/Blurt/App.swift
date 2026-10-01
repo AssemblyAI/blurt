@@ -8,7 +8,7 @@ struct BlurtApp: App {
 
   /// Tell the engine which app it is running inside — the Keychain item, the
   /// logging subsystem, the `UserDefaults` prefix, the log directory, the product
-  /// name in update alerts, and the release feed the update check reads.
+  /// name in user-facing copy.
   ///
   /// This is the composition root: the identity belongs to the host, and a fork
   /// or a second embedder replaces exactly these lines rather than hunting

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Shared helpers for the repo's bash scripts — the release pipeline (release.sh,
-# release-bump.sh, release-build.sh, release-install.sh, release-publish.sh) plus
+# release-bump.sh, release-build.sh, release-install.sh, release-publish.sh,
+# release-stage.sh) plus
 # dev-build.sh, which reuses the logging and tool-preflight helpers. Sourced,
 # never executed. Everything here must stay side-effect-free at source time —
 # release.test.sh sources release.sh (which sources this) to unit-test the
@@ -86,9 +87,26 @@ tag_exists_on_origin() {
 # there are none. Assumes tags are fetched — a shallow clone has none, so a
 # caller that gates on this must check out with fetch-depth: 0.
 latest_release_tag() {
+  release_versions | tail -n1
+}
+
+# Highest release tag strictly below version $1 ("v" stripped); empty if none.
+# The release a build's changelog is measured from — not `latest_release_tag`,
+# which on a republish is the version being rebuilt. Same fetch-depth caveat.
+previous_release_tag() {
+  local v prev=""
+  while IFS= read -r v; do
+    if version_gt "$1" "$v"; then prev="$v"; fi
+  done < <(release_versions)
+  printf '%s\n' "$prev"
+}
+
+# Every vX.Y.Z tag with the "v" stripped, oldest first. Anything else — a
+# prerelease, sparkle-staging, a moving pointer — is not a release.
+release_versions() {
   git -C "$REPO_ROOT" tag --list 'v[0-9]*' \
     | sed -n 's/^v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$/\1/p' \
-    | sort -V | tail -n1
+    | sort -V
 }
 
 # True if codesigning identity $1 (a SHA-1 hash) appears in the
@@ -222,6 +240,13 @@ parse_build_info_git_sha() {
   awk '/^git:[[:space:]]+/ {print $2; exit}'
 }
 
+# Read the build channel (`release` or `staging`) from build-info.txt content on
+# stdin; empty if the line is missing. Callers compare it exactly, so a missing
+# channel is refused rather than read as either.
+parse_build_info_channel() {
+  awk '/^channel:[[:space:]]+/ {print $2; exit}'
+}
+
 # Echo the SHA-256 hex for filename $1 from SHA256SUMS content on stdin (shasum's
 # "<hash>  <name>" format; a leading "*" binary marker on the name is tolerated).
 # Empty output if the name isn't listed.
@@ -235,4 +260,300 @@ sha_from_sums() {
 # compares the uploaded artifact against it.
 sha256_of_file() {
   shasum -a 256 "$1" | awk '{print $1}'
+}
+
+# Die unless each file named after the first two arguments, in directory $2,
+# matches its digest in the SHA256SUMS file $1. How publish and stage confirm
+# that what they re-downloaded is byte-for-byte what was built.
+verify_against_sums() {
+  local sums="$1" dir="$2" name want
+  shift 2
+  for name in "$@"; do
+    want="$(sha_from_sums "$name" <"$sums")"
+    [ -n "$want" ] || die "no checksum for $name in $sums"
+    [ "$want" = "$(sha256_of_file "$dir/$name")" ] \
+      || die "uploaded $name differs from the one built ($sums) — upload it again"
+  done
+}
+
+# --- Sparkle ---
+
+# Read the Sparkle public EdDSA key (the SPARKLE_PUBLIC_ED_KEY build setting)
+# from project.yml content on stdin.
+parse_sparkle_public_key() {
+  parse_yaml_scalar SPARKLE_PUBLIC_ED_KEY
+}
+
+# True when $1 is a usable Sparkle public key rather than empty or the
+# placeholder project.yml ships with before a key pair exists. Shipping the
+# placeholder would build an app that rejects every future update, so the
+# release refuses to start until a real key is in place.
+sparkle_key_is_set() {
+  case "$1" in
+    "" | REPLACE_WITH_*) return 1 ;;
+  esac
+}
+
+# Pull one attribute out of `sign_update`'s output on stdin, which is a fragment
+# of enclosure attributes: sparkle:edSignature="<b64>" length="<bytes>".
+# $1 is the attribute name (`sparkle:edSignature` or `length`); empty output if
+# it's absent.
+parse_sign_update_attr() {
+  sed -n "s/.*$1=\"\([^\"]*\)\".*/\1/p" | head -n 1
+}
+
+# Where the updater looks, per build channel. `release` is the feed every
+# shipped copy polls: /latest/download/ follows whichever release is marked
+# latest, so it moves only when release-publish.sh flips one live. `staging` is
+# the rehearsal feed (RELEASE.md → Rehearsing an update): a fixed prerelease
+# that /latest never resolves to, so nothing staged can reach a shipped copy.
+BLURT_RELEASES_URL="https://github.com/AssemblyAI/blurt/releases"
+SPARKLE_STAGING_TAG="sparkle-staging"
+
+# Echo the appcast URL for channel $1 (`release` or `staging`).
+sparkle_feed_url() {
+  case "$1" in
+    release) printf '%s\n' "$BLURT_RELEASES_URL/latest/download/appcast.xml" ;;
+    staging) printf '%s\n' "$BLURT_RELEASES_URL/download/$SPARKLE_STAGING_TAG/appcast.xml" ;;
+    *) die "unknown Sparkle channel: $1" ;;
+  esac
+}
+
+# Echo the GitHub release tag that channel $1's assets live on for version $2:
+# a release's own vX.Y.Z, or the staging prerelease each staged build overwrites.
+# The one place the channels differ apart from the feed's /latest/ shape.
+sparkle_release_tag() {
+  case "$1" in
+    release) printf 'v%s\n' "$2" ;;
+    staging) printf '%s\n' "$SPARKLE_STAGING_TAG" ;;
+    *) die "unknown Sparkle channel: $1" ;;
+  esac
+}
+
+# Echo the DMG URL the appcast's enclosure names, for channel $1 and version $2.
+sparkle_enclosure_url() {
+  local tag
+  tag="$(sparkle_release_tag "$1" "$2")" || return 1
+  printf '%s\n' "$BLURT_RELEASES_URL/download/$tag/Blurt-$2.dmg"
+}
+
+# Echo the release page the appcast's "Version History" link opens.
+sparkle_release_page_url() {
+  local tag
+  tag="$(sparkle_release_tag "$1" "$2")" || return 1
+  printf '%s\n' "$BLURT_RELEASES_URL/tag/$tag"
+}
+
+# Turn commit subjects on stdin (newest first, as `git log --format=%s` prints
+# them) into the Markdown bullet list the update window shows. Drops what a user
+# has no use for: conventional-commit housekeeping (chore/ci/docs/test/build/
+# refactor/style), merge commits, and any change reverted within the same range
+# together with its revert. Trailing PR numbers — "(#207)", or "(#206) (#208)" on
+# a cherry-pick — are stripped. Empty output when nothing is left, which leaves
+# the appcast without a description. Only a staging rehearsal ever ships this;
+# a release requires hand-written release-notes/X.Y.Z.md (see below).
+release_notes_from_subjects() {
+  awk '
+    function bare(s) {
+      while (sub(/[[:space:]]*\(#[0-9]+\)[[:space:]]*$/, "", s)) {}
+      return s
+    }
+    { subj[NR] = bare($0) }
+    END {
+      for (i = 1; i <= NR; i++) {
+        if (subj[i] ~ /^Revert "/) {
+          inner = subj[i]
+          sub(/^Revert "/, "", inner)
+          sub(/"$/, "", inner)
+          reverted[bare(inner)] = 1
+          is_revert[i] = 1
+        }
+      }
+      for (i = 1; i <= NR; i++) {
+        s = subj[i]
+        if (s == "" || (i in is_revert) || (s in reverted)) continue
+        if (tolower(s) ~ /^(chore|ci|docs|test|tests|build|refactor|style)(\(|:|!)/) continue
+        if (s ~ /^Merge /) continue
+        print "- " s
+      }
+    }'
+}
+
+# --- Release notes (release-notes/X.Y.Z.md) ---
+#
+# What the update window shows, written by a person: a release build refuses to
+# run without the file, the bump PR scaffolds it with a TODO that check.sh fails
+# on, and `lint_release_notes` rejects the usual generated-copy tells. Commit
+# subjects are only ever the raw material (and the automatic fallback for a
+# staging rehearsal, which nobody but the tester sees).
+
+# Path of the notes file for version $1.
+release_notes_path() {
+  printf '%s\n' "$REPO_ROOT/release-notes/$1.md"
+}
+
+# Emit the scaffold release-bump.sh commits: the commits since v$1 as an HTML
+# comment (context for the writer and the reviewer; stripped before shipping, so
+# it can stay) and a TODO where the notes go. Subjects on stdin.
+release_notes_template() {
+  local subjects
+  # "--" can't appear inside an HTML comment, and a single s///g leaves one
+  # behind in a run of three ("---" -> "- --"), so repeat until none remain.
+  subjects="$(sed -e ':a' -e 's/--/- -/g' -e 'ta' -e 's/^/     /')"
+  cat <<EOF
+<!-- Commits since v$1 (not shipped; context only):
+${subjects:-     (none)}
+
+Replace the TODO below with a short bullet list for users: what changed for
+them, in plain words. At most 6 bullets of 100 characters each, each starting
+with a capitalized verb. scripts/check-release-notes.sh enforces the rules. -->
+
+TODO: write the release notes
+EOF
+}
+
+# Commit subjects since the release tag v$1, newest first — the raw material for
+# both the notes scaffold and the staging fallback.
+commit_subjects_since() {
+  git -C "$REPO_ROOT" log --format=%s "v$1..HEAD"
+}
+
+# Write the notes scaffold for version $1, listing the commits since the release
+# below it, and echo its path. The one definition behind release-bump.sh and
+# `check-release-notes.sh --new`. Call as a plain assignment (see
+# require_project_version) so its die fails the caller.
+scaffold_release_notes() {
+  local file prev
+  file="$(release_notes_path "$1")"
+  prev="$(previous_release_tag "$1")"
+  [ -n "$prev" ] || die "no release tag below $1 to list commits from — fetch tags (fetch-depth: 0)"
+  mkdir -p "$(dirname "$file")"
+  commit_subjects_since "$prev" | release_notes_template "$prev" >"$file"
+  printf '%s\n' "$file"
+}
+
+# Content on stdin with each HTML comment blanked out but its newlines kept, so
+# line N of the output is line N of the file — what the linter reports against.
+release_notes_uncommented() {
+  perl -0777 -pe 's/<!--.*?-->/"\n" x ($& =~ tr{\n}{})/gse'
+}
+
+# Content on stdin with HTML comments removed and surrounding blank lines
+# trimmed: the text that actually ships in the appcast.
+release_notes_body() {
+  release_notes_uncommented | perl -0777 -pe 's/\A\s+//; s/\s+\z/\n/'
+}
+
+# Words and phrases that read as filler or generated copy. Matched
+# case-insensitively as substrings; extend it when a new tic shows up. Nothing
+# here may be part of a real Blurt feature name — "enhanced" is deliberately
+# absent because "Enhanced transcripts" is a setting notes need to name.
+RELEASE_NOTES_BANNED=(
+  "seamless" "robust" "enhancement" "streamline" "leverag" "elevate"
+  "delve" "a variety of" "various improvements" "various fixes" "under the hood"
+  "we're excited" "we are excited" "excited to" "game-changer" "game changer"
+  "cutting-edge" "effortless" "supercharge" "unlock" "empower" "revolutioniz"
+  "bug fixes and improvements" "and more" "overall experience" "user experience"
+)
+
+# Allowed despite matching the code-identifier check (lowercase-then-uppercase).
+RELEASE_NOTES_PROPER_NOUNS=(macOS iOS iCloud iPhone iPad visionOS watchOS AssemblyAI YouTube GitHub WhatsApp LinkedIn ChatGPT JetBrains PyCharm IntelliJ VoiceOver FaceTime AirPods)
+
+# Lint release-notes content on stdin (the whole file; comments are stripped
+# first). Prints one "line N: problem" per violation to stdout; returns 1 if any.
+lint_release_notes() {
+  local body line n=0 bullets=0 problems=0 phrase word stripped emoji_lines restore_case
+  # Line-preserving, so "line N" is the file's line N. $(...) drops trailing
+  # blank lines, which no reported line can be on.
+  body="$(release_notes_uncommented)"
+  _notes_problem() {
+    printf 'line %s: %s\n' "$1" "$2"
+    problems=$((problems + 1))
+  }
+  if [ -z "${body//[[:space:]]/}" ]; then
+    printf 'line 0: no release notes — write at least one bullet\n'
+    return 1
+  fi
+  # One perl pass for the whole file rather than one per line: " 3 7 " style.
+  emoji_lines=" $(printf '%s\n' "$body" \
+    | perl -CS -ne 'print "$. " if /[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{FE0F}]/') "
+  restore_case="$(shopt -p nocasematch || true)"
+  while IFS= read -r line; do
+    n=$((n + 1))
+    [ -n "$line" ] || continue
+    if [[ "$line" == *TODO* ]]; then
+      _notes_problem "$n" "still has the TODO — write the notes"
+      continue
+    fi
+    if [[ "$line" != "- "* ]]; then
+      _notes_problem "$n" "every line must be a '- ' bullet (no headings or prose): $line"
+      continue
+    fi
+    bullets=$((bullets + 1))
+    line="${line#- }"
+    [ "${#line}" -le 100 ] || _notes_problem "$n" "${#line} characters (max 100) — say less: $line"
+    [[ "$line" =~ ^[A-Z] ]] || _notes_problem "$n" "start with a capitalized verb (\"Add…\", \"Fix…\"): $line"
+    [[ ! "$line" =~ ^[Ww]e[[:space:]\'] ]] || _notes_problem "$n" "say what changed, not what \"we\" did: $line"
+    # Case-insensitive only for the phrase and prefix checks — the capital-letter
+    # and camelCase checks above and below depend on case.
+    shopt -s nocasematch
+    for phrase in "${RELEASE_NOTES_BANNED[@]}"; do
+      [[ "$line" != *"$phrase"* ]] || _notes_problem "$n" "filler phrase \"$phrase\": $line"
+    done
+    [[ ! "$line" =~ ^(chore|ci|docs|test|tests|build|refactor|style|feat|fix|perf)(\(.*\))?!?: ]] \
+      || _notes_problem "$n" "commit-style prefix: $line"
+    $restore_case
+    [[ ! "$line" =~ \#[0-9]+ ]] || _notes_problem "$n" "PR/issue number — users can't use it: $line"
+    [[ "$line" != *'`'* ]] || _notes_problem "$n" "code formatting — describe it in words: $line"
+    [[ ! "$line" =~ [A-Za-z0-9_]\.(swift|sh|ya?ml|json|plist|md|py|m|h)([^A-Za-z]|$) ]] \
+      || _notes_problem "$n" "filename: $line"
+    [[ ! "$line" =~ [A-Za-z0-9]_[A-Za-z0-9] ]] || _notes_problem "$n" "snake_case identifier: $line"
+    stripped="$line"
+    for word in "${RELEASE_NOTES_PROPER_NOUNS[@]}"; do stripped="${stripped//$word/}"; done
+    [[ ! "$stripped" =~ [a-z][A-Z] ]] || _notes_problem "$n" "camelCase identifier (or add a proper noun to RELEASE_NOTES_PROPER_NOUNS): $line"
+    [[ "$emoji_lines" != *" $n "* ]] || _notes_problem "$n" "emoji: $line"
+  done <<<"$body"
+  [ "$bullets" -le 6 ] || _notes_problem 0 "$bullets bullets (max 6) — keep what matters most to users"
+  [ "$problems" -eq 0 ]
+}
+
+# Render a one-item Sparkle appcast to stdout. Arguments, in order: the short
+# version (X.Y.Z), the build number (CFBundleVersion — what Sparkle actually
+# compares), the enclosure URL, its EdDSA signature, its byte length, the
+# release-notes page, the pubDate (RFC 822), and the changelog as Markdown
+# (optional). One item is all the feed needs: Sparkle offers the newest
+# applicable item, and the feed URL is always the current release's own copy.
+#
+# The changelog is what the update window shows. It goes inline as a Markdown
+# <description> (Sparkle renders it natively, no web view) because the appcast
+# is built, signed off, and checksummed before the release page exists — a
+# `releaseNotesLink` to the GitHub page would load all of github.com's chrome
+# into the window. `fullReleaseNotesLink` stays the "Version History" link.
+render_appcast() {
+  local short="$1" build="$2" url="$3" sig="$4" length="$5" notes="$6" date="$7" changelog="${8:-}"
+  cat <<XML
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Blurt</title>
+    <item>
+      <title>Version $short</title>
+      <pubDate>$date</pubDate>
+      <sparkle:version>$build</sparkle:version>
+      <sparkle:shortVersionString>$short</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <sparkle:fullReleaseNotesLink>$notes</sparkle:fullReleaseNotesLink>
+XML
+  if [ -n "$changelog" ]; then
+    # CDATA can hold anything but its own terminator; split any "]]>" across two
+    # sections so a subject containing one can't end the block early.
+    printf '      <description sparkle:format="markdown"><![CDATA[%s\n]]></description>\n' \
+      "${changelog//]]>/]]]]><![CDATA[>}"
+  fi
+  cat <<XML
+      <enclosure url="$url" type="application/octet-stream" sparkle:edSignature="$sig" length="$length"/>
+    </item>
+  </channel>
+</rss>
+XML
 }

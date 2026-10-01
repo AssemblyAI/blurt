@@ -34,6 +34,16 @@
       #expect(events.up.getIntegerValueField(.keyboardEventKeycode) == 0x09)
     }
 
+    @Test("cmdCEvents builds a ⌘C pair on kVK_ANSI_C")
+    func cmdCEventsBuildsPair() throws {
+      let events = try #require(KeyInjector.cmdCEvents())
+      #expect(events.down.type == .keyDown)
+      #expect(events.up.type == .keyUp)
+      #expect(events.down.getIntegerValueField(.keyboardEventKeycode) == 0x08)
+      #expect(events.down.flags.contains(.maskCommand))
+      #expect(events.up.flags.contains(.maskCommand))
+    }
+
     @Test("both Cmd-V events carry the command flag")
     func cmdVEventsCarryCommand() throws {
       let events = try #require(KeyInjector.cmdVEvents())
@@ -69,6 +79,19 @@
       // that the seam is a pass-through and not, say, a hard-coded `true` that would
       // make `KeyInjector` skip its permission check in production.
       #expect(KeyInjector.accessibilityTrusted() == AXIsProcessTrusted())
+    }
+
+    // MARK: - User-input idle probe
+
+    @Test("secondsSinceHardwareInput reports the newest key or click across types")
+    func secondsSinceHardwareInputIsNewestOfTypes() {
+      // The host's real input history isn't ours to set, so the assertable claim is
+      // that the seam takes the *newest* input (the minimum idle time) — a keypress
+      // alone must be enough to drop the same-window separator fallback.
+      let keyIdle = CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: .keyDown)
+      let idle = KeyInjector.secondsSinceHardwareInput()
+      #expect(idle >= 0)
+      #expect(idle <= keyIdle + 1)
     }
 
     // MARK: - Frontmost wait

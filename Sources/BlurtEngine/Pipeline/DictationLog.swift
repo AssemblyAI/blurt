@@ -5,7 +5,7 @@ import os
 /// `~/Library/Logs/<host>/dictations.jsonl` (`~/Library/Logs/Blurt/…` under the
 /// default `HostIdentity`). Used to build a real-world
 /// corpus for prompt iteration. Written only while developer mode is switched
-/// on (`DeveloperModeStore` — the Settings window's Developer section, which
+/// on (`DeveloperModeStore` — the Settings window's Advanced pane, which
 /// also displays this path), so a user who never opts in has no dictation
 /// text on disk.
 ///
@@ -92,7 +92,7 @@ public enum DictationLog {
     }
   }
 
-  /// Where the log lives. Public so the Settings window's Developer section
+  /// Where the log lives. Public so the Settings window's Advanced pane
   /// can display the path next to the switch that enables writing to it. The
   /// file (and its directory) are only created when the first entry is
   /// appended, so reading this never touches the disk.

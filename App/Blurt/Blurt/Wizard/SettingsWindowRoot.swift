@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Root view of the `Settings` scene. A `TabView` at the root of a `Settings`
 /// scene renders as the standard macOS preferences window — a segmented toolbar
-/// of panes (General / Advanced), each sized to its own content. This is the
+/// of panes (General / Styles / Vocabulary / Advanced), each sized to its own content. This is the
 /// HIG-native answer to a settings screen that outgrows one pane: keeping every
 /// pane short means the window never has to grow past a small display (a single
 /// stacked `Form` did, stranding the bottom section off-screen). Each pane
@@ -12,38 +12,24 @@ import SwiftUI
 struct SettingsWindowRoot: View {
   var appDelegate: AppDelegate
 
-  private enum Tab: Hashable { case general, advanced }
-
-  /// Drives the selected pane from `@State` (not the OS's persisted preference
-  /// tab), so the window always opens on General. Without an explicit binding
-  /// macOS restores the last-used pane across launches, which retitles the
-  /// window ("General" → "Advanced") and made the settings window unfindable in
-  /// UI tests from one run to the next. The one exception is the main window's
-  /// "+" (add style) deep-link, consumed below.
-  @State private var tab: Tab = .general
-
   var body: some View {
     if let coordinator = appDelegate.coordinator {
-      TabView(selection: $tab) {
+      // Leave selection to the system: macOS Settings windows conventionally
+      // restore the most recently viewed pane. UI tests navigate to General in
+      // their helper instead of changing production behavior for determinism.
+      TabView {
         GeneralSettingsTab(coordinator: coordinator)
           .tabItem { Label(UITestIdentifiers.generalSettingsTab, systemImage: "gearshape") }
-          .tag(Tab.general)
-        AdvancedSettingsTab(coordinator: coordinator, updateModel: appDelegate.updateCheckModel)
+        StylesSettingsTab()
+          .tabItem { Label(UITestIdentifiers.stylesSettingsTab, systemImage: "textformat") }
+        VocabularySettingsTab()
+          .tabItem {
+            Label(UITestIdentifiers.vocabularySettingsTab, systemImage: "character.book.closed")
+          }
+        AdvancedSettingsTab(coordinator: coordinator, updaterModel: appDelegate.updaterModel)
           .tabItem { Label(UITestIdentifiers.advancedSettingsTab, systemImage: "gearshape.2") }
-          .tag(Tab.advanced)
       }
       .frame(width: MainWindow.contentWidth)
-      // Consumes the "+" deep-link (`AppDelegate.settingsOpensOnAdvanced`):
-      // switch to Advanced, then reset the flag so it's one-shot — every other
-      // route into Settings (⌘,, the Settings buttons, the menu-bar item)
-      // still opens on General. `initial: true` covers the window being
-      // (re)created after the flag was set; the observed change covers an
-      // already-open Settings window, which switches panes in place.
-      .onChange(of: appDelegate.settingsOpensOnAdvanced, initial: true) {
-        guard appDelegate.settingsOpensOnAdvanced else { return }
-        tab = .advanced
-        appDelegate.settingsOpensOnAdvanced = false
-      }
     } else {
       Color.clear.frame(width: MainWindow.contentWidth, height: 240)
     }
@@ -53,7 +39,7 @@ struct SettingsWindowRoot: View {
 /// The chrome every settings pane shares: a grouped, non-scrolling `Form` that
 /// hugs its content, so each pane sizes the window to exactly its sections and
 /// the panes can't drift apart in layout.
-private struct SettingsPane<Content: View>: View {
+struct SettingsPane<Content: View>: View {
   @ViewBuilder var content: Content
 
   var body: some View {
@@ -65,7 +51,8 @@ private struct SettingsPane<Content: View>: View {
 }
 
 /// The everyday setup a user changes: the AssemblyAI key, the dictation
-/// shortcut, the microphone, the cue sound, and the transcription key terms.
+/// shortcut, the microphone, and the cue sound. Key terms live on Vocabulary,
+/// beside the text shortcuts — both are "words Blurt should know".
 private struct GeneralSettingsTab: View {
   let coordinator: AppCoordinator
 
@@ -75,32 +62,40 @@ private struct GeneralSettingsTab: View {
       HotkeyStepView(coordinator: coordinator)
       MicrophoneStepView()
       SoundStepView(coordinator: coordinator)
-      KeyTermsStepView()
     }
   }
 }
 
-/// The occasional stuff: the enhanced-transcripts switch, the style profiles,
-/// checking for an update, the developer-mode log toggle, and the
-/// start-over button.
-/// Kept out of General so the common pane stays short.
-private struct AdvancedSettingsTab: View {
-  let coordinator: AppCoordinator
-  let updateModel: UpdateCheckModel
-
+/// The enhanced-transcripts switch and the user's style profiles — their own
+/// pane rather than an Advanced section. The switch leads because styles only
+/// shape the enhanced rewrite: with it off they're disabled, and the switch that
+/// re-enables them sits directly above rather than on another pane.
+private struct StylesSettingsTab: View {
   var body: some View {
     SettingsPane {
       TranscriptionSection()
       StyleProfilesSection()
-      UpdateSection(model: updateModel)
-      DeveloperSection()
+    }
+  }
+}
+
+/// The occasional stuff: checking for an update, the developer-mode log toggle,
+/// and the start-over button. Kept out of General so the common pane stays short.
+private struct AdvancedSettingsTab: View {
+  let coordinator: AppCoordinator
+  let updaterModel: UpdaterModel
+
+  var body: some View {
+    SettingsPane {
+      UpdatesSection(model: updaterModel)
+      ExperimentalSection()
+      MaintenanceSection()
       ResetSection(coordinator: coordinator)
     }
   }
 }
 
-/// The Transcription section of the Settings window: the enhanced-transcripts
-/// switch. Every dictation request asks AssemblyAI's dictation API for its
+/// The Styles pane's leading section: the enhanced-transcripts switch. Every dictation request asks AssemblyAI's dictation API for its
 /// server-side cleanup rewrite, so the response always holds both versions;
 /// while this is on (the default) the polished one is pasted, and turned off
 /// the verbatim transcript is pasted exactly as spoken. The transcriber reads
@@ -117,11 +112,9 @@ private struct TranscriptionSection: View {
   var body: some View {
     Section {
       Toggle(isOn: $enhancedTranscripts) {
-        Label("Enhanced transcripts", systemImage: "wand.and.stars")
+        SettingLabel(title: "Enhanced transcripts", systemImage: "wand.and.stars")
       }
       .accessibilityIdentifier(UITestIdentifiers.enhancedTranscriptsToggle)
-    } header: {
-      Text("Transcription")
     } footer: {
       Text(
         "Polishes each dictation before pasting — removing filler words and fixing punctuation. "
@@ -165,7 +158,12 @@ private struct StyleProfilesSection: View {
       // Enumerated for the accessibility identifier only — identity is the
       // profile's own stable id, so a rename doesn't rebuild the row.
       ForEach(Array(profiles.enumerated()), id: \.element.id) { index, profile in
-        SettingRow(title: profile.name, systemImage: "textformat") {
+        // The instructions' first line as a preview, so styles can be told
+        // apart without opening each one.
+        SettingRow(
+          title: profile.name, systemImage: "textformat",
+          subtitle: profile.instructions.split(whereSeparator: \.isNewline).first.map(String.init)
+        ) {
           Button("Edit…") { editing = profile }
             .accessibilityIdentifier(UITestIdentifiers.styleProfileEdit(index))
         }
@@ -178,13 +176,15 @@ private struct StyleProfilesSection: View {
     } header: {
       Text("Custom Styles")
     } footer: {
-      // The caveat *replaces* the help sentence rather than joining it: with
+      // The caveat *replaces* the explanation rather than joining it: with
       // enhanced transcripts off the rewrite a style shapes is discarded
-      // unread, so describing the limit is the less useful half.
+      // unread, so pointing at the switch just above is the useful half.
       Text(
         enhancedTranscripts
-          ? "Up to \(StyleProfileStore.profileLimit) styles."
-          : "Style preferences need enhanced transcripts turned on.")
+          ? "A style tells Blurt how to polish your dictations — for example, “casual, all "
+            + "lowercase” for chat. Switch between styles in the main window. Create up to "
+            + "\(StyleProfileStore.profileLimit) styles."
+          : "Turn on Enhanced transcripts to use styles.")
     }
     .disabled(!enhancedTranscripts)
     .sheet(item: $editing) { profile in
@@ -235,7 +235,7 @@ private struct StyleProfileEditorSheet: View {
       VStack(alignment: .leading, spacing: 6) {
         Text("Custom Style")
           .font(.headline)
-        Text("Applied while polishing each dictation — casing, tone, emoji use.")
+        Text("Tell Blurt how to polish each dictation, including its casing, tone, and emoji use.")
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
       }
@@ -258,7 +258,7 @@ private struct StyleProfileEditorSheet: View {
     VStack(alignment: .leading, spacing: 6) {
       Text("Name")
         .font(.subheadline.weight(.semibold))
-      TextField("", text: $name, prompt: Text("e.g. Casual"))
+      TextField("", text: $name, prompt: Text("Casual"))
         .lineLimit(1)
         .disableAutocorrection(true)
         .focused($nameFocused)
@@ -284,7 +284,7 @@ private struct StyleProfileEditorSheet: View {
       // there's no faked placeholder over a TextEditor.
       TextField(
         text: $instructions,
-        prompt: Text("e.g. add fitting emojis sparingly, or always write in lowercase"),
+        prompt: Text("Add fitting emojis sparingly, or always write in lowercase"),
         axis: .vertical
       ) {
         Text("Instructions")
@@ -359,39 +359,5 @@ private struct StyleProfileEditorSheet: View {
     let store = StyleProfileStore()
     store.profiles = store.profiles.filter { $0.id != profile.id }
     dismiss()
-  }
-}
-
-/// The Updates section of the Settings window: the running version and a
-/// "Check for Updates" button that runs the check and reports the result in a
-/// modal (see `UpdateCheckModel`). The same check is reachable from the
-/// "Check for Updates…" app-menu command and the menu-bar item; all three share
-/// the one `UpdateCheckModel` owned by `AppDelegate`, so a check from any place
-/// runs through the same controller.
-private struct UpdateSection: View {
-  let model: UpdateCheckModel
-
-  var body: some View {
-    Section {
-      // "Blurt 0.1.31" — the label is the engine's (shared with the result
-      // alerts, so the two can't name the version differently).
-      SettingRow(title: model.versionLabel, systemImage: "arrow.triangle.2.circlepath") {
-        HStack(spacing: 8) {
-          // A user-initiated check that can stall on a slow connection needs
-          // visible progress, or the button reads as dead until the result
-          // alert lands. Show a spinner and disable the button while in flight
-          // (the model already ignores a second check) — the native equivalent
-          // of Sparkle's "Checking for updates…".
-          if model.isChecking {
-            ProgressView().controlSize(.small)
-          }
-          Button("Check for Updates") { model.checkForUpdates() }
-            .disabled(model.isChecking)
-            .accessibilityIdentifier(UITestIdentifiers.updateCheck)
-        }
-      }
-    } header: {
-      Text("Updates")
-    }
   }
 }

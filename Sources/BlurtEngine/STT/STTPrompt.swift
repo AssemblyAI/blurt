@@ -125,7 +125,12 @@ enum STTPrompt {
   static func text(context: TranscriptionContext?) -> String {
     guard let context else { return "" }
     let recent = context.recentTranscripts.compactMap { $0.trimmedNonEmpty() }
-    guard let prior = context.priorText.trimmedNonEmpty() else {
+    // Scrubbed here, where the wire string is built, rather than at capture:
+    // the log's `prior` and the paste separator read the field text as it was.
+    let scrubbed = context.priorText.map {
+      TextShortcutExpander.redactingExpansions(in: $0, using: context.textShortcuts)
+    }
+    guard let prior = scrubbed.trimmedNonEmpty() else {
       return fitted(recent)
     }
     // Dedupe before fitting: the prior chunk is the tail of the focused field, so

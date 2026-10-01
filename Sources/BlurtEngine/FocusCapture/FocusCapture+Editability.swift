@@ -54,11 +54,16 @@
     /// reason as `isBrowserBundleID` — the detection is then unit-testable against a
     /// fixture bundle, instead of requiring an Electron app to be installed *and*
     /// running on the machine under test.
+    ///
+    /// Rebranded Electron apps rename the framework (Codex ships
+    /// `Codex Framework.framework`), so the `ElectronAsarIntegrity` Info.plist key
+    /// Electron's packager writes is checked as a fallback.
     static func isElectronBundle(_ bundleURL: URL?) -> Bool {
       guard let bundleURL else { return false }
       let electronFramework = bundleURL.appendingPathComponent(
         "Contents/Frameworks/Electron Framework.framework")
-      return FileManager.default.fileExists(atPath: electronFramework.path)
+      if FileManager.default.fileExists(atPath: electronFramework.path) { return true }
+      return Bundle(url: bundleURL)?.object(forInfoDictionaryKey: "ElectronAsarIntegrity") != nil
     }
 
     /// Bundle-identifier prefixes of known web browsers. Prefix-matched so channel

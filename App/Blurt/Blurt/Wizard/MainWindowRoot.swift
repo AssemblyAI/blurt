@@ -29,28 +29,6 @@ enum MainWindow {
   /// jumps on the transition, and the `Color.clear` placeholders have to match them
   /// or the defensive branch resizes it.
   static let contentWidth: CGFloat = 480
-
-  /// The main window's vertical rhythm, read off the design's own geometry (the
-  /// "Blurt hub" comp, measured at 1×) rather than chosen: stacked sections and
-  /// the wordmark-to-readout gap at 26, a caption to the card it names at 12,
-  /// and 45 under the shortcut readout before the controls begin.
-  ///
-  /// Here rather than private to `ReadyView` because its content views own
-  /// their own captions — `RecentDictationsSection` draws the "Recent" label
-  /// above its card exactly as `ReadyView` draws the Style row's caption — so a
-  /// number private to one of them left the two captions sitting at different
-  /// distances from the thing they label.
-  static let sectionGap: CGFloat = 26
-  static let captionGap: CGFloat = 12
-  static let readoutGap: CGFloat = 45
-
-  /// The margin the main window's content keeps on both sides — 24, the value
-  /// the design keeps on both comps (its cards run x 24.5 to 455.5 in a
-  /// 480-wide window). `ReadyView` pads with it; `StyleRow` subtracts it,
-  /// because the width its pop-up may occupy is `contentWidth` less this
-  /// margin, and a number those two disagreed on would put the control's edge
-  /// somewhere other than the card's.
-  static let contentMargin: CGFloat = 24
 }
 
 /// Root view of the main `Window` scene. It pulls the long-lived models off the
@@ -67,14 +45,7 @@ struct MainWindowRoot: View {
         if controller.isReady {
           ReadyView(
             coordinator: coordinator,
-            openSettings: { openSettings() },
-            editStyles: {
-              // "Edit Styles…" deep-links: flag the Advanced pane (where
-              // styles are edited) before opening, so the user lands on the
-              // Styles section instead of General — see `SettingsWindowRoot`.
-              appDelegate.settingsOpensOnAdvanced = true
-              openSettings()
-            })
+            openSettings: { openSettings() })
         } else {
           WizardView(controller: controller, coordinator: coordinator)
         }

@@ -50,6 +50,9 @@ struct HotkeyStepView: View {
       })
   }
 
+  private static let keyboardSettingsURL = URL(
+    string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!
+
   var body: some View {
     Section {
       PickerSettingRow(
@@ -76,6 +79,16 @@ struct HotkeyStepView: View {
       // no longer than the tap-or-hold sentence shipped here before the picker
       // existed, so the footer never grows the pane.
       Text(TriggerActivation.fromPersisted(activationRaw).guidance)
+      // Say so when Blurt has changed a system setting on the user's behalf
+      // (`GlobeKeyOverride`), so a 🌐 key that stopped opening emoji isn't a mystery.
+      // That write only lands at the next log-in, so link to the pane that
+      // applies it now.
+      if selection.wrappedValue == .function {
+        Text(
+          "While fn is the dictation key, macOS’s “Press 🌐 key to” is set to Do Nothing "
+            + "from your next log-in. To stop 🌐 firing sooner, set it in Keyboard Settings.")
+        Link("Open Keyboard Settings…", destination: Self.keyboardSettingsURL)
+      }
     }
   }
 }

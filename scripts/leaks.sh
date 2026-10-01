@@ -53,7 +53,7 @@ xcodebuild \
   -project Blurt.xcodeproj \
   -scheme Blurt \
   -configuration Debug \
-  -destination 'platform=macOS' \
+  -destination "platform=macOS,arch=$(uname -m)" \
   -derivedDataPath "$DERIVED" \
   CODE_SIGN_IDENTITY="-" \
   CODE_SIGNING_REQUIRED=NO \

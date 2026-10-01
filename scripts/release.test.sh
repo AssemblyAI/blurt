@@ -141,6 +141,14 @@ check "ignores a commented-out key" "32" \
 check "ignores a longer key sharing the prefix" "32" \
   "$(printf '        CFBundleVersionSomethingElse: "99"\n        CFBundleVersion: "32"\n' | parse_bundle_version)"
 
+echo "== parse_build_info_channel =="
+check "reads the channel" "staging" \
+  "$(printf 'Blurt 0.1.7\nchannel:      staging\nbuilt: today\n' | parse_build_info_channel)"
+# Empty, not a default: publish and stage compare exactly, so a build-info
+# missing the line is refused by both rather than shipped as either channel.
+check "a build-info without a channel is empty" "" \
+  "$(printf 'Blurt 0.1.7\nbuilt: today\n' | parse_build_info_channel)"
+
 echo "== parse_build_info_git_sha =="
 check "parses build provenance sha" "0123456789abcdef0123456789abcdef01234567" \
   "$(printf 'Blurt 0.1.7\nbuilt: today\ngit:          0123456789abcdef0123456789abcdef01234567 (0123456)\n' | parse_build_info_git_sha)"
@@ -250,6 +258,156 @@ git -C "$SCRATCH_REPO" tag v1.0.0-rc1
 git -C "$SCRATCH_REPO" tag nightly
 git -C "$SCRATCH_REPO" tag v3.0
 check "ignores prerelease, non-version, and short tags" "0.2.0" "$(latest_release_tag)"
+
+echo "== previous_release_tag =="
+git -C "$SCRATCH_REPO" tag sparkle-staging
+check "the release below a new version" "0.2.0" "$(previous_release_tag 0.2.1)"
+# A republish rebuilds a version that is already tagged; its changelog must
+# still run from the release before it, not be empty.
+check "a republished version measures from the one before it" "0.1.10" "$(previous_release_tag 0.2.0)"
+check "numerically, not lexically" "0.1.9" "$(previous_release_tag 0.1.10)"
+check "nothing below the first release" "" "$(previous_release_tag 0.1.9)"
+
+echo "== scaffold_release_notes =="
+SCAFFOLD="$(scaffold_release_notes 0.2.1)"
+check "writes the scaffold where the build looks" "$SCRATCH_REPO/release-notes/0.2.1.md" "$SCAFFOLD"
+check "measures from the release below" "1" "$(grep -c '^<!-- Commits since v0.2.0 ' "$SCAFFOLD")"
+rm -rf "$SCRATCH_REPO/release-notes"
+checkdie "no earlier release is refused" "no release tag below 0.1.9" scaffold_release_notes 0.1.9
+
+echo "== Sparkle channels =="
+check "the release feed follows /latest" \
+  "https://github.com/AssemblyAI/blurt/releases/latest/download/appcast.xml" "$(sparkle_feed_url release)"
+check "the staging feed is the staging prerelease" \
+  "https://github.com/AssemblyAI/blurt/releases/download/sparkle-staging/appcast.xml" "$(sparkle_feed_url staging)"
+check "a release enclosure names its own versioned DMG" \
+  "https://github.com/AssemblyAI/blurt/releases/download/v1.2.3/Blurt-1.2.3.dmg" "$(sparkle_enclosure_url release 1.2.3)"
+check "a staging enclosure names the staged DMG" \
+  "https://github.com/AssemblyAI/blurt/releases/download/sparkle-staging/Blurt-1.2.3.dmg" "$(sparkle_enclosure_url staging 1.2.3)"
+check "a release page is its own tag" \
+  "https://github.com/AssemblyAI/blurt/releases/tag/v1.2.3" "$(sparkle_release_page_url release 1.2.3)"
+check "a staging page is the staging prerelease" \
+  "https://github.com/AssemblyAI/blurt/releases/tag/sparkle-staging" "$(sparkle_release_page_url staging 1.2.3)"
+checkdie "an unknown channel is refused" "unknown Sparkle channel: beta" sparkle_feed_url beta
+checkdie "an unknown channel has no release tag" "unknown Sparkle channel: beta" sparkle_release_tag beta 1.2.3
+
+echo "== verify_against_sums =="
+printf 'dmg bytes' >"$FIXTURES/Blurt-1.2.3.dmg"
+printf '<rss/>' >"$FIXTURES/appcast.xml"
+(cd "$FIXTURES" && shasum -a 256 Blurt-1.2.3.dmg appcast.xml) >"$TMP/SUMS"
+checkrc 0 "matching downloads pass" verify_against_sums "$TMP/SUMS" "$FIXTURES" Blurt-1.2.3.dmg appcast.xml
+checkdie "a file missing from the sums is refused" "no checksum for other.bin" \
+  verify_against_sums "$TMP/SUMS" "$FIXTURES" other.bin
+printf 'truncated' >"$FIXTURES/appcast.xml"
+checkdie "a changed download is refused" "uploaded appcast.xml differs" \
+  verify_against_sums "$TMP/SUMS" "$FIXTURES" Blurt-1.2.3.dmg appcast.xml
+# The feed every shipped copy polls is written twice — the build-setting default
+# in project.yml and the release channel here, which release-build.sh checks the
+# built app against. Drift fails every release build, so catch it at test time.
+check "project.yml's default feed is the release feed" "$(sparkle_feed_url release)" \
+  "$(parse_yaml_scalar BLURT_SPARKLE_FEED_URL <"$DIR/../App/Blurt/project.yml")"
+
+echo "== release_notes_from_subjects =="
+NOTES="$(printf '%s\n' \
+  'chore: bump to v0.1.57 (#212)' \
+  'Add fn as a trigger key (#209)' \
+  'Revert "Add "Speak all punctuation" mode (#207)" (#210)' \
+  'Add "Speak all punctuation" mode (#207)' \
+  'Drop the same-window separator (#206) (#208)' \
+  'ci: Bump the github-actions group (#202)' \
+  'docs(readme): refresh screenshots' \
+  'Merge branch main into feature' \
+  'Paste into Electron apps like Codex' | release_notes_from_subjects)"
+check "keeps user-facing changes, newest first, without PR numbers" \
+  "$(printf '%s\n' '- Add fn as a trigger key' '- Drop the same-window separator' '- Paste into Electron apps like Codex')" \
+  "$NOTES"
+check "housekeeping only -> empty" "" "$(printf 'chore: bump\nci: pin actions\n' | release_notes_from_subjects)"
+check "a revert of something outside the range is dropped on its own" "- Keep this" \
+  "$(printf '%s\n' 'Revert "Older change (#1)" (#2)' 'Keep this (#3)' | release_notes_from_subjects)"
+
+echo "== release notes =="
+TEMPLATE="$(printf '%s\n' 'Add fn as a trigger key (#209)' 'Odd -- subject' 'Arrow ---> and ---- runs' | release_notes_template 0.1.56)"
+check "the scaffold lists the commits as context" "1" "$(printf '%s\n' "$TEMPLATE" | grep -c '^     Add fn as a trigger key (#209)$')"
+# "--" can't appear inside an HTML comment; left alone it ends the comment early
+# on some renderers and the commit list would ship.
+check "the scaffold defuses -- inside the comment" "0" \
+  "$(printf '%s\n' "$TEMPLATE" | sed -n '/<!--/,/-->/p' | sed '1d;$d' | grep -c -- '--')"
+# The whole point of the scaffold: the bump PR can't pass check until it's written.
+checkfalse "the untouched scaffold fails lint" lint_release_notes <<<"$TEMPLATE"
+check "the context comment never ships" "- Add fn as a trigger key" \
+  "$(printf '%s\n' '<!-- commits:' '     chore: x -->' '' '- Add fn as a trigger key' '' | release_notes_body)"
+checktrue "good notes pass" lint_release_notes <<<"$(printf '%s\n' \
+  '<!-- context -->' \
+  '- Add fn as a trigger key' \
+  '- Paste now works in Codex and other Electron apps on macOS' \
+  '- Fix a stray space before dictated text in Google Docs')"
+checkfalse "no bullets fails" lint_release_notes <<<'<!-- only a comment -->'
+# Each rule gets its own offender, so a rule that silently stops matching fails
+# here rather than letting that kind of copy through.
+lint_rule() { # <label> <expected message substring> <notes line>
+  local out
+  out="$(lint_release_notes <<<"$3")"
+  check "$1" "1" "$(printf '%s\n' "$out" | grep -c -F -- "$2")"
+}
+lint_rule "a leftover TODO" "still has the TODO" 'TODO: write the release notes'
+lint_rule "a heading or prose line" "must be a '- ' bullet" '## New in this version'
+lint_rule "an over-long bullet" "characters (max 100)" "- Add $(printf 'x%.0s' {1..100})"
+lint_rule "a lowercase start" "capitalized verb" '- added fn as a trigger key'
+lint_rule "a \"we\" bullet" "not what \"we\" did" '- We added fn as a trigger key'
+lint_rule "a banned phrase" 'filler phrase "seamless"' '- Add seamless pasting'
+lint_rule "banned phrases ignore case" 'filler phrase "under the hood"' '- Improve things Under The Hood'
+lint_rule "a PR number" "PR/issue number" '- Add fn as a trigger key (#209)'
+lint_rule "a commit prefix" "commit-style prefix" '- Fix: paste in Codex'
+# shellcheck disable=SC2016  # literal backticks are the offender under test
+lint_rule "code formatting" "code formatting" '- Fix `paste` in Codex'
+lint_rule "a filename" "filename" '- Fix a crash in KeyInjector.swift'
+lint_rule "a snake_case identifier" "snake_case" '- Fix the word_boost setting'
+lint_rule "a camelCase identifier" "camelCase" '- Fix a crash in pasteText'
+lint_rule "an emoji" "emoji" '- Add fn as a trigger key 🎉'
+lint_rule "more than six bullets" "7 bullets (max 6)" "$(printf -- '- Add thing %s\n' 1 2 3 4 5 6 7)"
+# Notes are committed in the bump PR, so their directory must not be ignored —
+# they once lived under docs/, which .gitignore keeps local-only, and neither
+# the bump nor the notes commit could add them.
+checkfalse "release notes are not gitignored" \
+  git -C "$DIR/.." check-ignore -q "$(REPO_ROOT="$DIR/.." release_notes_path 9.9.9)"
+# The setting's real name has to be sayable; a banned "enhanced" once blocked it.
+checktrue "Blurt's own feature names pass" lint_release_notes <<<'- Fix styles not applying when Enhanced transcripts is on'
+# Reported line numbers must point at the file, not at the comment-stripped text
+# — the bump scaffold opens with a long comment.
+check "line numbers count the comment's lines" "line 5: still has the TODO — write the notes" \
+  "$(printf '%s\n' '<!-- one' 'two' 'three -->' '' 'TODO: write' | lint_release_notes)"
+checktrue "proper nouns aren't identifiers" lint_release_notes <<<'- Support macOS 15 and paste into YouTube and ChatGPT'
+
+echo "== Sparkle helpers =="
+check "reads the public key setting" "abc123+/=" \
+  "$(printf '    SPARKLE_PUBLIC_ED_KEY: "abc123+/="\n' | parse_sparkle_public_key)"
+# The placeholder project.yml ships with must never reach a release: an app
+# built with it rejects every update signature for good.
+checkfalse "the placeholder key is not a key" sparkle_key_is_set REPLACE_WITH_SPARKLE_PUBLIC_ED_KEY
+checkfalse "an empty key is not a key" sparkle_key_is_set ""
+checktrue "a real key is a key" sparkle_key_is_set "pfIShU4dEXqPd5ObYNfDBiQWcXozk7estwzTnF9BamQ="
+SIGN_OUT='sparkle:edSignature="c2lnbmF0dXJl+/=" length="12345"'
+check "parses the signature" "c2lnbmF0dXJl+/=" "$(printf '%s\n' "$SIGN_OUT" | parse_sign_update_attr sparkle:edSignature)"
+check "parses the length" "12345" "$(printf '%s\n' "$SIGN_OUT" | parse_sign_update_attr length)"
+check "a missing attribute is empty" "" "$(printf 'garbage\n' | parse_sign_update_attr length)"
+APPCAST="$(render_appcast 1.2.3 45 https://example.invalid/Blurt-1.2.3.dmg c2ln 99 https://example.invalid/notes "Mon, 01 Jan 2026 00:00:00 +0000")"
+# Sparkle compares the build number, so it is the field that must be the
+# CFBundleVersion — a short version there would never read as newer.
+check "the appcast carries the build number as sparkle:version" "1" \
+  "$(printf '%s\n' "$APPCAST" | grep -c '<sparkle:version>45</sparkle:version>')"
+check "the enclosure carries the signature and length" "1" \
+  "$(printf '%s\n' "$APPCAST" | grep -c 'url="https://example.invalid/Blurt-1.2.3.dmg" type="application/octet-stream" sparkle:edSignature="c2ln" length="99"')"
+check "no changelog -> no description" "0" "$(printf '%s\n' "$APPCAST" | grep -c '<description')"
+APPCAST="$(render_appcast 1.2.3 45 https://example.invalid/Blurt-1.2.3.dmg c2ln 99 https://example.invalid/notes \
+  "Mon, 01 Jan 2026 00:00:00 +0000" "$(printf '%s\n' '- Faster paste' '- Handles a ]]> in a subject')")"
+check "the changelog is a Markdown description" "1" \
+  "$(printf '%s\n' "$APPCAST" | grep -c '<description sparkle:format="markdown"><!\[CDATA\[- Faster paste')"
+if command -v xmllint >/dev/null; then
+  # A "]]>" in a subject would end the CDATA early and break the whole feed.
+  checkrc 0 "a changelog containing ]]> stays well-formed XML" xmllint --noout - <<<"$APPCAST"
+  check "and reads back verbatim" "- Handles a ]]> in a subject" \
+    "$(xmllint --xpath 'string(//item/description)' - <<<"$APPCAST" | grep -F ']]>')"
+fi
 
 if [ "$fails" -eq 0 ]; then
   echo "release-lib.sh: all tests passed"

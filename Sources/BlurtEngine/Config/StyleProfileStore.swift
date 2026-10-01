@@ -62,6 +62,14 @@ public struct StyleProfile: Codable, Identifiable, Hashable, Sendable {
 /// run before the user's defaults are readable, whereas a read-side fallback is
 /// correct on every read and needs no ordering guarantee.
 public struct StyleProfileStore {
+  /// Posted synchronously after the encoded profile list changes. SwiftUI's
+  /// `@AppStorage` normally propagates that write between windows, but separate
+  /// scenes can retain their last value until they become active again. The
+  /// ready window observes this explicit signal so deleting the final custom
+  /// style replaces its pop-up with the passive **Default** value immediately.
+  public static let profilesDidChangeNotification = Notification.Name(
+    "dev.alex.blurt.styleProfilesDidChange")
+
   /// `UserDefaults` key holding the JSON-encoded profile list. Public so SwiftUI
   /// views can observe it directly (e.g. `@AppStorage`) and re-render on change.
   /// Stored as a `String` rather than `Data` for exactly that reason —
@@ -157,6 +165,7 @@ public struct StyleProfileStore {
         let json = String(data: data, encoding: .utf8)
       else { return }
       defaults.set(json, forKey: Self.defaultsKey)
+      NotificationCenter.default.post(name: Self.profilesDidChangeNotification, object: defaults)
     }
   }
 

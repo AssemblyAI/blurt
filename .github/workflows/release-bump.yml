@@ -57,6 +57,12 @@ permissions:
 
 jobs:
   bump:
+    # On the push path, only the push that creates the marker is a request.
+    # Every later push to the branch — the release notes, a fix-up — is the
+    # PR's own history, and would otherwise re-run this job only to fail the
+    # ancestor guard below, leaving a red check on every release PR. Skipping
+    # here narrows the trigger; the guard still vets the creating push.
+    if: github.event_name == 'workflow_dispatch' || github.event.created
     runs-on: macos-26
     timeout-minutes: 30
     permissions:
@@ -207,6 +213,10 @@ jobs:
             echo "request yet — one opened from inside Actions would never run \`check\`."
             echo
             echo "[**Open the pull request**](https://github.com/$REPO/compare/main...release/v$VERSION?expand=1)"
+            echo
+            echo "First write the update-window notes: replace the TODO in"
+            echo "\`release-notes/$VERSION.md\` on that branch. \`check\` fails until you do,"
+            echo "and the release build refuses to run without them (RELEASE.md → Release notes)."
             echo
             echo "Merging it starts the \`release\` workflow by itself — the version landing on"
             echo "\`main\` is the trigger, so there is nothing left to dispatch. Publishing then"

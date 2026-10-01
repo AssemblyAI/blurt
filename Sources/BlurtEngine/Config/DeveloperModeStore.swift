@@ -1,7 +1,7 @@
 import Foundation
 
 /// Persists the developer-mode switch in `UserDefaults`. Off by default; the
-/// Settings window's Developer section flips it. While on, each completed
+/// Settings window's Advanced pane flips it. While on, each completed
 /// dictation is appended to `DictationLog` — that gate is the switch's only
 /// effect, so a user who never opts in has no dictation text on disk.
 /// Same shape as `TriggerKeyStore` / `SoundPackStore`.

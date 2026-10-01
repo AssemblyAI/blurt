@@ -82,9 +82,10 @@ utterance.
   restored around it. If the target app quit while you were speaking, the text
   stays on the clipboard instead of vanishing.
 - **One key, no chords** — dictation is triggered by a single lone modifier
-  (right ⌘ by default; right ⌥ also available). Tap to toggle, hold
-  for push-to-talk. The event tap swallows nothing: a lone modifier types
-  nothing anyway, and combos like ⌘C pass through untouched.
+  (right ⌘ by default; right ⌥ and `fn` also available). Tap to toggle, hold
+  for push-to-talk — or narrow it to tap-only or hold-only in Settings. The
+  event tap swallows nothing: a lone modifier types nothing anyway, and combos
+  like ⌘C pass through untouched.
 - **Polished in one step** — each utterance rides to AssemblyAI's dictation API
   with a little context and nothing more; the same call runs a server-side LLM
   cleanup (disfluencies out, punctuation fixed), so the text comes back already
@@ -93,6 +94,14 @@ utterance.
   your cursor — and nothing else about your screen goes with it: not the app, not
   the window title, not the field, not your selection. See
   [Privacy](#privacy).
+- **Styles** — save up to four custom styles, each a short set of free-text
+  instructions ("always write in lowercase"), and switch between them from the
+  **Style** menu in the main window; the selected style shapes that same
+  server-side cleanup. Turn off **Enhanced transcripts** in Settings → Styles to
+  paste the verbatim transcript instead.
+- **Your vocabulary** — key terms bias the spelling of names and jargon, and text
+  shortcuts swap a spoken phrase for saved text (say "personal email", get the
+  address) on your Mac before the paste. Both live in Settings → Vocabulary.
 - **Fast** — transcription and cleanup share one round trip that typically
   finishes in about a second. Blurt pre-warms the HTTPS connection while
   you're still speaking and flips to "transcribing" at key-up, so polished
@@ -106,15 +115,18 @@ utterance.
   meter and the pipeline phase; a menu bar indicator mirrors it from anywhere.
 - **Actual synth cues** — start and stop can be cued by real Yamaha DX7 or
   Roland Juno-106 sounds, or turned off.
-- **Guided setup** — a first-run wizard walks through Microphone permission,
-  Accessibility trust, and your API key; the same window later hosts settings
-  for the trigger key, key terms, and sound pack. Settings → Advanced also has a
-  **Reset** that deletes the key, the settings and the permission grants, then
-  restarts Blurt into first-run setup — so an install whose permissions have got
-  stuck can start clean.
-- **No surprises** — installing an update is always yours to do: Blurt looks for
-  a newer release once a day (and whenever you ask) and, if there is one, offers
-  to open the DMG — it never replaces itself. There's no telemetry of any kind.
+- **Guided setup** — on first launch a single setup screen takes your API key
+  and walks through the Microphone and Accessibility permissions. Everything else
+  — trigger key, microphone, cue sound, styles, vocabulary — lives in the
+  Settings window. Settings → Advanced also has a **Reset** that deletes the
+  key, the settings and the permission grants, then restarts Blurt into
+  first-run setup — so an install whose permissions have got stuck can start
+  clean.
+- **Updates in place** — Blurt checks for a newer release once a day (and
+  whenever you ask) with [Sparkle](https://sparkle-project.org), and installs it
+  when you say so. Every update is signed and verified before it's installed;
+  Settings → Advanced can turn the daily check off, or let updates install on
+  their own. There's no telemetry of any kind.
 
 ## Requirements
 
@@ -139,8 +151,8 @@ From a fresh install to dictated text in your editor:
 3. **Tap right ⌘ and speak** — the overlay pill shows the live mic level. Tap
    again to stop, or hold the key and release for push-to-talk.
 4. **Read what you said** — the polished transcript is pasted at your cursor.
-5. **Tune it** — open Settings to change the trigger key or pick a synth sound
-   pack.
+5. **Tune it** — pick a style from the main window's **Style** menu, or open
+   Settings to change the trigger key, microphone, or synth sound pack.
 
 ## Privacy
 
@@ -152,7 +164,9 @@ came before: your recent dictations from this session, and a short run of the te
 immediately before your cursor — never the contents of a password field, which
 Blurt refuses to read. Anything you dictate _into_ a password field is likewise
 never kept as context. Your key terms from Settings ride along too, to bias
-spelling. Nothing else about your screen is sent: not the app you are in, not the
+spelling, as do the instructions of the style you have selected, if any. Text
+shortcuts are expanded on your Mac after the response arrives and are never
+sent. Nothing else about your screen is sent: not the app you are in, not the
 window title, not the field you are typing in, not what you have selected.
 
 That recent-dictation history lives in memory only — it is never written to disk,
@@ -160,8 +174,9 @@ it is cleared when you quit Blurt, and it is capped (100 dictations, and about
 4096 characters per request, oldest dropped first). Note what it means while Blurt
 is running: text you dictated in one app can be sent as context with a later
 dictation in another. Quit and reopen Blurt to clear it. Blurt stores no audio and
-no transcripts, and sends no telemetry — no crash reporting, no analytics, no
-usage tracking.
+no transcripts (the one exception is the opt-in **Developer mode** in Settings →
+Advanced, off by default, which keeps a local log of each dictation on your Mac),
+and sends no telemetry — no crash reporting, no analytics, no usage tracking.
 
 Requests do say which app is asking: every call to AssemblyAI carries a
 `User-Agent` naming Blurt, its version, and your macOS version — so a problem on
@@ -178,11 +193,15 @@ that audio.
 
 ## Build from source
 
-Blurt is MIT-licensed and needs only Xcode and Homebrew to build:
+Blurt is MIT-licensed. To build it you need a Mac with full **Xcode 26+** (not
+just the Command Line Tools), [Homebrew](https://brew.sh), and an Apple
+Development certificate — adding any Apple ID under Xcode → Settings → Accounts
+gets you one for free. Then:
 
 ```bash
-scripts/bootstrap.sh   # install the local toolchain
+scripts/bootstrap.sh   # one-time: install the toolchain from Brewfile
 scripts/dev-build.sh   # build + install "Blurt Dev" to /Applications
+open -a "Blurt Dev"    # run it
 scripts/check.sh       # full repo health check — the same script CI runs
 swift test             # engine unit tests only
 ```
@@ -214,12 +233,13 @@ Sources/BlurtEngine/     Swift 6 package owning the pipeline — no external dep
   Injection/             KeyInjector: save clipboard → paste via synthesized ⌘V → restore
   FocusCapture/          Accessibility reads of the focused app/window/field, kept local:
                          paste spacing and the developer-mode log
-  Config/, Update/       Keychain API-key store, key terms, download-only release check
+  Config/                Keychain API-key store, key terms, styles, text shortcuts
 
 App/Blurt/               AppKit/SwiftUI shell (Xcode project generated by XcodeGen)
   AppCoordinator.swift   the one place the engine is composed for the real app
   Hotkey/                DictationKeyTap: the CGEventTap feeding the engine's key gate
   Overlay/, MenuBar/     floating status pill, menu bar dictation indicator
+  Update/                UpdaterModel: the Sparkle updater behind every "Check for Updates"
   Wizard/                setup wizard + settings window
 ```
 

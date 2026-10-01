@@ -27,9 +27,9 @@ import os
 final class DictationKeyTap {
   private static let logger = HostIdentity.current.logger("DictationKeyTap")
 
-  private let onStart: @Sendable () -> Void
-  private let onStop: @Sendable () -> Void
-  private let onCancel: @Sendable () -> Void
+  private let onStart: @MainActor () -> Void
+  private let onStop: @MainActor () -> Void
+  private let onCancel: @MainActor () -> Void
   /// Fired when a *state-recovery* reset (disabled-tap recovery, trigger
   /// rebinding) discards a live gate state: the key events that would have ended
   /// that dictation can no longer arrive, so the owner must end the capture —
@@ -37,7 +37,7 @@ final class DictationKeyTap {
   /// pastes an unprompted transcript. Distinct from `onCancel` (a user-intent
   /// cancel from the gate): recovery must only cancel a live *recording*, never
   /// a transcript already in flight — see `DictationSession.cancelRecording`.
-  private let onRecordingDiscarded: @Sendable () -> Void
+  private let onRecordingDiscarded: @MainActor () -> Void
 
   /// The engine-side event router (keycode relevance, down/up edge dedup, and
   /// the gate's tap/hold state machine — all unit-tested in BlurtEngine).
@@ -63,10 +63,10 @@ final class DictationKeyTap {
   nonisolated(unsafe) private var tap: CFMachPort?
 
   init(
-    onStart: @escaping @Sendable () -> Void,
-    onStop: @escaping @Sendable () -> Void,
-    onCancel: @escaping @Sendable () -> Void,
-    onRecordingDiscarded: @escaping @Sendable () -> Void
+    onStart: @escaping @MainActor () -> Void,
+    onStop: @escaping @MainActor () -> Void,
+    onCancel: @escaping @MainActor () -> Void,
+    onRecordingDiscarded: @escaping @MainActor () -> Void
   ) {
     self.onStart = onStart
     self.onStop = onStop
@@ -173,6 +173,14 @@ final class DictationKeyTap {
   /// terminal phase lands.
   func syncAfterTerminalPhase() {
     if router.reset() { onRecordingDiscarded() }
+  }
+
+  /// Clear the gate after a read-aloud that ended on its own (see
+  /// `SelectionSpeechRouting`). Unlike `syncAfterTerminalPhase`, this reports
+  /// nothing: the latch belonged to a read, not a recording, so there is no
+  /// capture to discard.
+  func resetGate() {
+    _ = router.reset()
   }
 
   /// Re-read the bound trigger key and activation mode into the router. Call
