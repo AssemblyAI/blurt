@@ -50,7 +50,6 @@ struct KeyboardPalette: Equatable, Identifiable {
   /// screen stand in for it (the system's own keyboard colour, measured).
   let material: Color
 
-  static let keyGap = DesignTokens.Metrics.keyGap
   static let rowGap = DesignTokens.Metrics.rowGap
   static let margin = DesignTokens.Metrics.marginSide
   static let keyRadius = DesignTokens.Metrics.keyRadius

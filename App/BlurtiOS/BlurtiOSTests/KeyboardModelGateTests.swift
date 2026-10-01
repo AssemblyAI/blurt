@@ -12,7 +12,6 @@ import UIKit
 struct KeyboardModelGateTests {
   struct Rig {
     let model: KeyboardModel
-    let proxy: FakeProxy
     let commands: Commands
   }
 
@@ -31,7 +30,7 @@ struct KeyboardModelGateTests {
     model.isListening = true
     let commands = Commands()
     model.transport = { commands.sent.append($0) }
-    return Rig(model: model, proxy: proxy, commands: commands)
+    return Rig(model: model, commands: commands)
   }
 
   private func snapshot(_ state: PhaseSnapshot.State, level: Double = 0) -> PhaseSnapshot {
