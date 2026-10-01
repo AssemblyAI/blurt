@@ -57,6 +57,8 @@ final class KeyboardModel {
   var needsGlobe = true
   var shifted = true
   var symbolsPage = false
+  /// The symbols' second page (#+=), only while `symbolsPage`.
+  var morePage = false
 
   // Internal, not private: the model's typing, mic and phase halves live in
   // KeyboardModel+Typing/+Mic/+Phase.swift.
@@ -80,6 +82,10 @@ final class KeyboardModel {
   static let commandRetryDelay: Duration = .milliseconds(600)
   @ObservationIgnored var commandRetry: Task<Void, Never>?
   @ObservationIgnored var termDraftFromSelection: String?
+  /// A highlighted word the chip is done with — added, or its ✓ tapped —
+  /// while the host still shows it highlighted: the + is back, and stays
+  /// back until the highlight moves to another word or goes.
+  @ObservationIgnored var dismissedSelection: String?
   /// The text before and after the cursor when the term field opened, so
   /// typing that reaches the host field anyway (a hardware keyboard: an
   /// iPad's, a Bluetooth one, the simulator's Mac) can be pulled into the
@@ -88,6 +94,16 @@ final class KeyboardModel {
   @ObservationIgnored var termHostBaseline: String?
   @ObservationIgnored var termHostBaselineAfter: String?
   @ObservationIgnored var termNotice: Task<Void, Never>?
+  /// A release made while the mic was still coming up (the engine drops
+  /// one before it records): held, and sent on the first recording phase.
+  @ObservationIgnored var releasePending = false
+  /// The press the app has not answered yet. A settled phase that does not
+  /// answer it (the previous dictation's notice landing late) leaves the
+  /// gate alone; anything in flight, or a phase carrying its id, answers it.
+  @ObservationIgnored var unansweredPress: UUID?
+  /// The `at` of a notice the keyboard already let go of: a re-read of the
+  /// same snapshot cannot replay it.
+  @ObservationIgnored var dismissedNoticeAt: Date?
 
   /// The host's text field. Tests hand in a fake in place of a controller.
   var proxy: (any UITextDocumentProxy)? { proxyOverride ?? controller?.textDocumentProxy }
@@ -156,7 +172,8 @@ final class KeyboardModel {
   }
 
   func appeared() {
-    hasFullAccess = controller?.hasFullAccess ?? false
+    // Without a controller (a test's model) the access stays as it was set.
+    hasFullAccess = controller?.hasFullAccess ?? hasFullAccess
     needsGlobe = controller?.needsInputModeSwitchKey ?? true
     letterRows = LetterLayout.forPreferredLanguages()
     // Every appearance starts on the mic page with no term half-typed, and on
@@ -166,14 +183,29 @@ final class KeyboardModel {
     termDraftFromSelection = nil
     termHostBaseline = nil
     termHostBaselineAfter = nil
+    dismissedSelection = nil
+    termNotice?.cancel()
+    termSavedAt = nil
+    releasePending = false
+    // `unansweredPress` is not reset here: an appearance can follow another
+    // with no disappearance between (iOS does that), and a press still out
+    // must keep the gate latched so hands-free does not press again over it.
     symbolsPage = Self.wantsSymbols(proxy?.keyboardType)
+    morePage = false
     readAppearance()
     readField()
     readSelection()
     updateShift()
     // Without Full Access the App Group is out of reach: the keyboard still
-    // types, and says what it needs (see `VoiceBar`), but nothing below can run.
-    guard hasFullAccess else { return }
+    // types, and says what it needs (see `VoiceBar`), but nothing below can
+    // run — and nothing from a previous appearance (a phase, a latched gate)
+    // may linger over a keyboard that can't hear the app.
+    guard hasFullAccess else {
+      snapshot = .idle
+      gate.reset()
+      noticeDwell?.cancel()
+      return
+    }
     layout = SharedStore.layout
     themeID = SharedStore.themeID
     storedVoiceKind = SharedStore.voiceElementKind
@@ -237,73 +269,38 @@ final class KeyboardModel {
   /// (a hardware keyboard types past the on-screen keys) belong to the term:
   /// move them over and take them back out of the field. Only a short,
   /// appended run right after where the cursor was; anything else is left.
+  /// Never when the field opened over a highlighted word: a tap that
+  /// collapses that highlight to its end grows the text before the cursor
+  /// by exactly the word, which is not typing, and taking it would delete
+  /// the user's word.
   private func claimHostTypingForTerm() {
-    guard termDraft != nil, let baseline = termHostBaseline, let proxy else { return }
+    guard termDraft != nil, termDraftFromSelection == nil, let baseline = termHostBaseline, let proxy else {
+      return
+    }
     let now = proxy.documentContextBeforeInput ?? ""
     let delta = now.count - baseline.count
-    // Typing lengthens the text before the cursor and leaves the text after
-    // it alone; a cursor move changes both; a selection is neither.
-    guard delta > 0, delta <= 8, proxy.selectedText == nil,
+    // Typing lengthens the text before the cursor by one character at a time
+    // and leaves the text after it alone; a cursor move changes both; a
+    // selection is neither; a block (a paste, the system's own dictation
+    // under the keyboard) is never typing and stays in the field.
+    guard delta == 1, proxy.selectedText == nil,
       (proxy.documentContextAfterInput ?? "") == (termHostBaselineAfter ?? ""),
       now.dropLast(delta).hasSuffix(baseline.suffix(24))
     else { return }
     let typed = String(now.suffix(delta))
-    for _ in 0..<delta { proxy.deleteBackward() }
+    proxy.deleteBackward()
     termDraft?.append(typed)
     termHostBaseline = proxy.documentContextBeforeInput ?? ""
   }
-
-  /// What the field asked for, the way the system keyboard honours it: the
-  /// return key's own word, and the symbols page first for a number field.
-  private func readField() {
-    returnLabel = proxy?.returnKeyType.flatMap(Self.returnLabel)
-  }
-
-  /// What is highlighted in the host's text, as a key-term candidate, and
-  /// whether Blurt has it already. The list lives in the App Group, so only
-  /// with Full Access — without it there is nothing the chip could do.
-  func readSelection() {
-    guard hasFullAccess, let term = Self.termCandidate(from: proxy?.selectedText) else {
-      selectedTerm = nil
-      selectedTermIsKnown = false
-      return
-    }
-    selectedTerm = term
-    selectedTermIsKnown = SharedStore.keyTerms.contains { $0.caseInsensitiveCompare(term) == .orderedSame }
-  }
-
-  private func readAppearance() {
-    switch proxy?.keyboardAppearance {
-    case .dark: isDark = true
-    case .light: isDark = false
-    default: isDark = controller?.traitCollection.userInterfaceStyle == .dark
-    }
-  }
-
-  /// Number, decimal and phone fields open on the symbols page, as the system
-  /// keyboard would show a number pad.
-  static func wantsSymbols(_ type: UIKeyboardType?) -> Bool {
-    switch type {
-    case .numberPad, .decimalPad, .phonePad, .numbersAndPunctuation, .asciiCapableNumberPad: true
-    default: false
-    }
-  }
-
-  /// iOS's own words for the return key, by the type the field asked for.
-  private static let returnLabels: [UIReturnKeyType: String] = [
-    .go: "go", .google: "search", .yahoo: "search", .search: "search", .join: "join", .next: "next",
-    .route: "route", .send: "send", .done: "done", .emergencyCall: "call", .continue: "continue",
-  ]
-
-  private static func returnLabel(_ type: UIReturnKeyType) -> String? { returnLabels[type] }
 
   /// Auto-capitalisation, as the system keyboard does it: shift comes on at
   /// the start of a sentence (or of every word, or always) according to what
   /// the field asks for, and goes off after one letter.
   func updateShift() {
     if let termDraft {
-      // A key term is usually a name: capitalised to start, then as typed.
-      shifted = termDraft.isEmpty
+      // A key term is usually a name, or two: capitalised to start and after
+      // a space, then as typed.
+      shifted = termDraft.isEmpty || termDraft.last == " "
       return
     }
     guard let proxy else { return }
@@ -324,12 +321,13 @@ final class KeyboardModel {
   }
 
   /// Catches up with whatever the app last published. No haptics: nothing
-  /// just happened, the keyboard merely came up.
+  /// just happened, the keyboard merely came up. A notice (pasted, copied,
+  /// error) was for the keyboard that was up when it happened, not this
+  /// appearance; a dictation in flight with the app gone is over.
   private func refresh(haptics: Bool) {
     isListening = SharedStore.isListening
-    if let current = SharedStore.read(PhaseSnapshot.self, forKey: BlurtShared.Key.phase) {
-      apply(current.isStale ? .idle : current, haptics: haptics)
-    }
+    guard let current = SharedStore.read(PhaseSnapshot.self, forKey: BlurtShared.Key.phase) else { return }
+    apply(current.isStale || current.noticeDwellSeconds != nil ? .idle : current, haptics: haptics)
   }
 
   /// Tells the app the keyboard is on screen, so a finished dictation is

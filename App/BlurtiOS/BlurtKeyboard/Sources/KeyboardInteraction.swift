@@ -37,6 +37,19 @@ nonisolated enum KeyboardInteraction {
     abs(translation.width) < tapTravel && abs(translation.height) < tapTravel
   }
 
+  /// How far past a key's edge a finger may end and still have tapped it.
+  static let tapSlop: CGFloat = 8
+
+  /// A key's tap: the finger barely moved, or it ended on the key (within
+  /// `tapSlop` of its edges) wherever it went in between — a thumb that rolls
+  /// still types, as on the system keyboard, while a swipe that left the key
+  /// (the panel's carousel) does not. `location` is in the key's own space.
+  static func isTap(_ translation: CGSize, endedAt location: CGPoint, in size: CGSize) -> Bool {
+    if isTap(translation) { return true }
+    guard size.width > 0, size.height > 0 else { return false }
+    return CGRect(origin: .zero, size: size).insetBy(dx: -tapSlop, dy: -tapSlop).contains(location)
+  }
+
   static func micTravelled(_ translation: CGSize) -> Bool {
     abs(translation.width) > micTravel || abs(translation.height) > micTravel
   }

@@ -44,6 +44,8 @@ final class DictationCoordinator {
   /// dictation in flight, read by the engine's context seam — and cleared once
   /// used, so nothing from another app's field primes a later request.
   nonisolated private static let pressContext = Mutex<FocusedFieldContext>(.empty)
+  /// The keyboard process that pressed, for the words to go back to it.
+  nonisolated private static let pressKeyboard = Mutex<String?>(nil)
   /// Contact names, parsed once per lexicon refresh rather than on the press.
   nonisolated private static let lexiconNames = Mutex<[String]>([])
   /// A press command older than this was held while the app was suspended.
@@ -59,7 +61,7 @@ final class DictationCoordinator {
     session = DictationSession(
       mic: window.source,
       transcriber: AssemblyAITranscriber(),
-      injector: KeyboardRelayInjector(),
+      injector: KeyboardRelayInjector(presser: { Self.pressKeyboard.withLock { $0 } }),
       keyTermsProvider: { Self.keyTerms() },
       readinessCheck: apiKey.readinessCheck(),
       onTranscriptDelivered: { _, ring in continuation.yield(ring) },
@@ -133,6 +135,7 @@ final class DictationCoordinator {
   /// prior text primes it.
   func toggleDictation() {
     Self.pressContext.withLock { $0 = .empty }
+    Self.pressKeyboard.withLock { $0 = nil }
     session.submit(phase.isCapturing ? .release : .press)
   }
 
@@ -155,6 +158,7 @@ final class DictationCoordinator {
         $0 = FocusedFieldContext(
           priorText: command.priorText, selectedText: command.selectedText, windowTitle: nil, fieldLabel: nil)
       }
+      Self.pressKeyboard.withLock { $0 = command.keyboard }
       session.submit(.press)
     case .release: session.submit(.release)
     case .cancel: session.submit(.cancel)
@@ -249,7 +253,8 @@ final class DictationCoordinator {
 
   private func publish(_ state: OverlayUIState) {
     let snapshot = PhaseSnapshot(
-      state: Self.snapshotState(state), message: Self.message(state), level: Double(level), at: Date())
+      state: Self.snapshotState(state), message: Self.message(state), level: Double(level), at: Date(),
+      command: lastCommandID)
     SharedStore.write(snapshot, forKey: BlurtShared.Key.phase)
     SharedStore.post(BlurtShared.Signal.phase)
   }

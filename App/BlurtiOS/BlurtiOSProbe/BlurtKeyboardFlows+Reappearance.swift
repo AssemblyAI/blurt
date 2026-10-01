@@ -55,11 +55,11 @@ extension BlurtKeyboardFlows {
     check(keysUp, "a slow swipe from the mic flips to the keys (\(micKey().label))")
     swipeBackFromLetters()
     var frame = micKey().exists ? micKey().frame : .zero
-    check(
-      frame.width > 200, "after a slow swipe from the mic and back, the mic is there (\(frame), \(micKey().label))")
+    check(panelMicUp, "after a slow swipe from the mic and back, the mic is there (\(frame), \(micKey().label))")
     shot("rough-slow")
-    guard micKey().exists, micKey().label == "Dictate" else { return }
-    micKey().tap()
+    guard micKey().exists, micKey().label != "Start Blurt" else { return }
+    // Hands-free may have it recording already; otherwise a tap starts one.
+    if micKey().label == "Dictate" { micKey().tap() }
     check(micKey(labelled: "Stop dictation").waitForExistence(timeout: 4), "a tap starts a dictation")
     let gap = micKey().coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 1.15))
     gap.press(forDuration: 0.05, thenDragTo: gap.withOffset(CGVector(dx: -160, dy: 0)))
@@ -67,7 +67,7 @@ extension BlurtKeyboardFlows {
     check(keysUp, "a swipe while recording flips to the keys")
     swipeBackFromLetters()
     frame = micKey().exists ? micKey().frame : .zero
-    check(frame.width > 200, "back on the panel while recording, the mic is there (\(frame), \(micKey().label))")
+    check(panelMicUp, "back on the panel while recording, the mic is there (\(frame), \(micKey().label))")
     shot("rough-recording")
     if micKey(labelled: "Stop dictation").exists { micKey().tap() }
     _ = micKey(labelled: "Dictate").waitForExistence(timeout: 12)
@@ -102,14 +102,17 @@ extension BlurtKeyboardFlows {
     check(
       back && frame.width > 40 && frame.height > 20,
       "brought back from \(page) the mic key is there, full size (\(frame))")
+    checkDrawn(micKey(), "brought back from \(page)")
     if frame == .zero { print("FLOW-TREE (mic missing after the return):\n\(app.debugDescription)") }
     if page == "the keys page" { check(!keysUp, "the panel is back on its mic page after being put away") }
     shot("returned-\(page.replacingOccurrences(of: " ", with: "-"))")
   }
 
   private func switchAwayAndBack(globe: XCUIElement, from page: String) throws {
-    // XCUITest has no Keyboard element for a custom keyboard: the + at the
-    // panel's top corner stands in for where the keyboard begins.
+    // XCUITest has no Keyboard element for a custom keyboard: the + stands in
+    // for where the keyboard begins — 8 pt under its top on the keys page
+    // (the voice bar), 58 on the panel (the mic's centre line, 80, less half
+    // its 44 pt hit).
     let plus = app.buttons["Add a key term"]
     let topBefore = plus.exists ? plus.frame.minY : 0
     globe.tap()
@@ -129,11 +132,13 @@ extension BlurtKeyboardFlows {
     check(
       frame.width > 40 && frame.height > 20,
       "back on Blurt from \(page) the mic key is there, full size (\(frame); top \(topBefore) → \(top))")
+    checkDrawn(mic, "back on Blurt from \(page)")
     if frame == .zero { print("FLOW-TREE (mic missing after the switch):\n\(app.debugDescription)") }
     if page == "the keys page" {
       check(!keysUp, "the panel is back on its mic page after the switch")
-      // The keys page was up before, so the keyboard was 54 pt taller then.
-      check(abs(top - topBefore - 54) < 4, "the panel is back at its own height (top \(topBefore) → \(top))")
+      // The keys page was up before, so the keyboard was 54 pt taller then
+      // (270 − 216), and the + sat 50 pt nearer its top (8 against 58).
+      check(abs(top - topBefore - 104) < 4, "the panel is back at its own height (top \(topBefore) → \(top))")
     }
     shot("switched-back")
   }

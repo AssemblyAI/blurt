@@ -203,13 +203,11 @@ enum DesignTokens {
   enum Metrics {
     /// Between the chip's glyph and the word.
     nonisolated static let addtermChipGap: CGFloat = 6
-    /// The most the chip may take in the panel's corner, clear of the cancel ×.
-    nonisolated static let addtermChipMaxWidth: CGFloat = 240
-    /// The room the voice bar keeps for the chip; the element gives way beyond it.
+    /// The least room a chip needs beside a centred mic; with less, the mic and the chip centre as a pair.
     nonisolated static let addtermChipMinWidth: CGFloat = 96
     /// The selected-word chip's side padding.
     nonisolated static let addtermChipPad: CGFloat = 10
-    /// The + from the panel's corner.
+    /// The cancel × from the panel's far corner when the mic is at an edge.
     nonisolated static let addtermInset: CGFloat = 6
     /// The brand's button.
     nonisolated static let appButtonHeight: CGFloat = 40
@@ -252,8 +250,8 @@ enum DesignTokens {
     nonisolated static let caretLead: CGFloat = 1
     nonisolated static let caretRadius: CGFloat = 1
     nonisolated static let caretWidth: CGFloat = 2
-    /// The +, × and ✓ touch targets.
-    nonisolated static let glyphHit: CGFloat = 32
+    /// The +, × and ✓ touch targets: the HIG's 44 pt square around a size/glyph symbol.
+    nonisolated static let glyphHit: CGFloat = 44
     nonisolated static let grilleBarHeight: CGFloat = 28
     /// The grille in the voice bar.
     nonisolated static let grilleBarWidth: CGFloat = 64
@@ -339,8 +337,8 @@ enum DesignTokens {
     nonisolated static let opacitySurfaceVignette: CGFloat = 0
     /// The field's ×.
     nonisolated static let opacityTermCancel: CGFloat = 0.7
-    /// Between the panel's orb and its key row.
-    nonisolated static let panelSpacing: CGFloat = 12
+    /// Under the panel's voice row, above its keys: the top margin again, so the mic is centred between the keyboard's top edge and the keys.
+    nonisolated static let panelSpacing: CGFloat = 8
     /// The theme card draws the keyboard at this width.
     nonisolated static let pickerPreviewWidth: CGFloat = 393
     /// The theme card's preview corners.
@@ -350,8 +348,8 @@ enum DesignTokens {
     /// The letter pop-up is the key width plus this.
     nonisolated static let popupExtraWidth: CGFloat = 18
     nonisolated static let popupHeight: CGFloat = 56
-    /// The pop-up sits this far above the key.
-    nonisolated static let popupOffset: CGFloat = 58
+    /// The pop-up rises this far from the key's top: it overlaps the key by popup/height minus this and stays inside the keyboard on the top row.
+    nonisolated static let popupOffset: CGFloat = 50
     nonisolated static let popupRadius: CGFloat = 10
     /// The one thing that floats.
     nonisolated static let popupShadowRadius: CGFloat = 8
@@ -369,8 +367,6 @@ enum DesignTokens {
     nonisolated static let ribsRestWidth: CGFloat = 40
     /// Between rows, the iPhone's.
     nonisolated static let rowGap: CGFloat = 11
-    /// Between the slim bar's keys.
-    nonisolated static let slimSpacing: CGFloat = 8
     /// The landing flash's vertical arm, as a fraction of the box's height.
     nonisolated static let streakArm: CGFloat = 1.4
     /// The light streak while recording.
@@ -408,8 +404,8 @@ enum DesignTokens {
     nonisolated static let voicePanelWidth: CGFloat = 300
     /// The element while pressed.
     nonisolated static let voicePressScale: CGFloat = 0.94
-    /// Between the element and the +.
-    nonisolated static let voicebarAddtermClearance: CGFloat = 12
+    /// Between the mic key's edge and the add key's box (the + or the chip), the key gap.
+    nonisolated static let voicebarAddtermClearance: CGFloat = 6
     /// The voice row, where the system puts its suggestion bar.
     nonisolated static let voicebarHeight: CGFloat = 44
     /// Between the orb and the Full Access note.
@@ -465,8 +461,8 @@ enum DesignTokens {
   enum Motion {
     /// The caret's blink.
     nonisolated static let caret: Double = 0.5
-    /// Holding the chip opens the field instead of adding.
-    nonisolated static let chipHold: Double = 0.4
+    /// Holding the chip opens the field instead of adding; longer than a firm tap.
+    nonisolated static let chipHold: Double = 0.6
     /// A colour or fill changing state: the brand's transition.
     nonisolated static let colour: Double = 0.2
     /// The house curve for everything that moves; nothing springs.
@@ -611,7 +607,6 @@ enum DesignTokens {
     "keyboard.kb/signal": "#67AD82",
     "keyboard.kb/surface": "#1D1B16",
     "metrics.addterm/chip-gap": "6",
-    "metrics.addterm/chip-max-width": "240",
     "metrics.addterm/chip-min-width": "96",
     "metrics.addterm/chip-pad": "10",
     "metrics.addterm/inset": "6",
@@ -637,7 +632,7 @@ enum DesignTokens {
     "metrics.caret/lead": "1",
     "metrics.caret/radius": "1",
     "metrics.caret/width": "2",
-    "metrics.glyph/hit": "32",
+    "metrics.glyph/hit": "44",
     "metrics.grille/bar-height": "28",
     "metrics.grille/bar-width": "64",
     "metrics.grille/dot": "2",
@@ -683,13 +678,13 @@ enum DesignTokens {
     "metrics.opacity/sheen": "0.22",
     "metrics.opacity/surface-vignette": "0",
     "metrics.opacity/term-cancel": "0.7",
-    "metrics.panel/spacing": "12",
+    "metrics.panel/spacing": "8",
     "metrics.picker/preview-width": "393",
     "metrics.picker/radius": "10",
     "metrics.picker/scale": "0.42",
     "metrics.popup/extra-width": "18",
     "metrics.popup/height": "56",
-    "metrics.popup/offset": "58",
+    "metrics.popup/offset": "50",
     "metrics.popup/radius": "10",
     "metrics.popup/shadow-radius": "8",
     "metrics.popup/shadow-y": "2",
@@ -700,7 +695,6 @@ enum DesignTokens {
     "metrics.ribs/rest-height": "16",
     "metrics.ribs/rest-width": "40",
     "metrics.row/gap": "11",
-    "metrics.slim/spacing": "8",
     "metrics.streak/arm": "1.4",
     "metrics.streak/height": "2",
     "metrics.streak/line": "1",
@@ -721,7 +715,7 @@ enum DesignTokens {
     "metrics.voice/panel-height": "88",
     "metrics.voice/panel-width": "300",
     "metrics.voice/press-scale": "0.94",
-    "metrics.voicebar/addterm-clearance": "12",
+    "metrics.voicebar/addterm-clearance": "6",
     "metrics.voicebar/height": "44",
     "metrics.voicebar/note-gap": "10",
     "metrics.wave/bar": "2",
@@ -752,7 +746,7 @@ enum DesignTokens {
     "type.weight/term": "regular",
     "type.weight/voice-glyph": "semibold",
     "motion.caret": "0.5",
-    "motion.chip-hold": "0.4",
+    "motion.chip-hold": "0.6",
     "motion.colour": "0.2",
     "motion.ease/signature": "0.22,1,0.36,1",
     "motion.flip": "0.25",

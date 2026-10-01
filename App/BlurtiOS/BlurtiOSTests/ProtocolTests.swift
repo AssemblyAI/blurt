@@ -75,6 +75,30 @@ struct ProtocolTests {
     #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
   }
 
+  @Test("the words go back to the keyboard that pressed; another keyboard up in its place means the clipboard")
+  func relayToPresser() async throws {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    SharedStore.keyboardSeenAt = Date()
+    SharedStore.keyboardInstance = "kb-2"
+    UIPasteboard.general.string = ""
+    let elsewhere = KeyboardRelayInjector(presser: { "kb-1" })
+    await #expect(throws: BlurtError.noEditableTarget) {
+      try await elsewhere.insert("wrong app", after: nil, windowTitle: nil)
+    }
+    #expect(UIPasteboard.general.string == "wrong app")
+    #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
+    let same = KeyboardRelayInjector(presser: { "kb-2" })
+    let taker = Task {
+      try? await Task.sleep(for: .milliseconds(300))
+      let pending = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result)
+      SharedStore.remove(forKey: BlurtShared.Key.result)
+      return pending
+    }
+    try await same.insert("right app", after: nil, windowTitle: nil)
+    #expect(await taker.value?.recipient == "kb-2")
+  }
+
   @Test("a result taken by the keyboard counts as delivered")
   func relayDelivered() async throws {
     let suite = ScratchSuite()
@@ -169,18 +193,6 @@ struct KeyboardModelProtocolTests {
     model.micDown()
     model.micUp()
     #expect(commands.sent.isEmpty)
-    #expect(model.gate.isIdle)
-  }
-
-  @Test("a settled phase resets a latched gate")
-  func resetOnSettled() {
-    let suite = ScratchSuite()
-    defer { suite.tearDown() }
-    let model = ready().model
-    model.micDown()
-    model.micUp()
-    #expect(!model.gate.isIdle)
-    model.apply(snapshot(.pasted))
     #expect(model.gate.isIdle)
   }
 

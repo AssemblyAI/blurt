@@ -25,6 +25,9 @@ nonisolated struct KeyGeometry: Equatable {
   /// stand from each other.
   var sideGap: CGFloat { Metrics.keySideGap }
   var sideWidth: CGFloat { (rowWidth - 7 * letterWidth - 6 * gap - 2 * sideGap) / 2 }
+  /// On the symbol pages the third row holds five punctuation keys between
+  /// shift's and delete's places, filling the same span seven letters do.
+  var punctuationWidth: CGFloat { (rowWidth - 2 * sideWidth - 2 * sideGap - 4 * gap) / 5 }
   /// The widths measured at the reference width scale with the keyboard.
   private var scale: CGFloat { (rowWidth + 2 * Metrics.marginSide) / Metrics.keyReferenceWidth }
   /// 123 (or ABC), and the globe when there is one.

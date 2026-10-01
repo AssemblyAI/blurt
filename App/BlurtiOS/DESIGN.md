@@ -92,6 +92,11 @@ the brand's face. Ten roles each (`BlurtKeyboard/Sources/KeyboardPalette.swift`)
 
 **The surface is the host's.** iOS 26 wraps a third-party keyboard in the host
 app's own rounded keyboard material, inset above and below by about 16 pt,
+and the host's traits arrive on their own schedule: the face is read in
+`viewWillAppear` and again in `viewIsAppearing`, never from a trait-change
+registration — that callback runs inside the host's layout pass, and a model
+change made there left the mic element's drawing uncommitted in Messages
+(the grille never drew, every time; the probe app never fires it),
 and nothing the keyboard draws reaches the inset (Apple: working as
 intended). A painted surface therefore shows a band of the host's grey above
 it, in every Liquid Glass app. So the surface is **clear** by default
@@ -140,9 +145,19 @@ keyboard on a Face ID phone (58 pt), so the globe appears in ours only when
 ## Keys
 
 Flat, one colour, at the iPhone's corner (8); no edge, no drop, no gloss. A
-key brightens 15 % while pressed (0.08 s) rather than dimming; the letter
-pop-up carries the one shadow on the keyboard, a whisper (12 %, radius 8),
-being the one thing that floats.
+key brightens 15 % while pressed (0.08 s) rather than dimming — a gesture
+state, so a touch the system takes away (a call, the keyboard dismissed
+mid-press) unlights it too; the letter pop-up carries the one shadow on the
+keyboard, a whisper (12 %, radius 8), being the one thing that floats, and
+rises `popup/offset` from the key's top so it overlaps the key and never
+leaves the keyboard on the top row. A key acts on release when the finger
+barely moved or ended on the key within `tapSlop` (8) of its edges — a thumb
+that rolls still types, a swipe that left the key does not
+(`KeyboardInteraction.isTap`, tested). Every layout's keys are `KeyGeometry`
+widths: 123, globe and delete 43.33, return 92.67, so a key is the same size
+on every page. 123 opens the numbers and symbols, #+= the second symbol page
+(brackets, currency), 123 there the first, ABC the letters; on the symbol
+pages the third row's five punctuation keys fill what seven letters do.
 
 Type: the letters are SF Pro at the iPhone's size, and the glyph keys — shift,
 delete, globe, the +, × and ✓ — SF Symbols, so the keyboard feels native
@@ -236,7 +251,16 @@ What is common: the box (`voice/*`), dimming to `opacity/off` when Blurt
 isn't ready (a tap opens the app), the two glyphs that need saying (a
 clipboard when the words went there, an exclamation mark on a failure) drawn
 by `MicControl` over the element, every change fading over `state-fade`, and
-the press answering at once. Under Reduce Motion the sheen and the glints
+the press answering at once. **The grille is drawn as plain SwiftUI paths,
+never a `Canvas`**: a Canvas has its own render surface, and in a keyboard
+extension that surface has failed to present three times (asynchronous
+first; then in Messages, whose host swaps scenes as the keyboard appears) —
+the key was there, the dots were not. The frame is a handful of `Path`
+layers, one per colour, with the sheen's lift quantised to four steps. The
+two candidates still draw with a Canvas and inherit the risk; they go, or get
+the same treatment, when one is picked. The probes check the element's
+_pixels_ (`MicPixels`, the share of the key's box that is not the material),
+not only its accessibility frame, on appearance and after every return. Under Reduce Motion the sheen and the glints
 hold still; the level still drives the meter. The home screen draws the same
 element at home size in the app's face.
 
@@ -245,7 +269,7 @@ element at home size in the app's face.
 | no Full Access          | the note "Allow Full Access in Settings" is the key; a tap opens Blurt | —                            |
 | app not listening       | the element at `opacity/off`; a tap opens Blurt                        | —                            |
 | idle                    | at rest, the sheen                                                     | —                            |
-| connecting / processing | working                                                                | — / light impact on the stop |
+| connecting / processing | working; the cancel × only while the app is there to stop it           | — / light impact on the stop |
 | recording               | the meter                                                              | medium impact                |
 | pasted                  | the landing glint, the element in green for 1.2 s                      | success                      |
 | copied                  | the same, with the clipboard glyph, 2 s                                | success                      |
@@ -254,30 +278,51 @@ element at home size in the app's face.
 The gesture is `MicPressSequencer` (`KeyboardInteraction.swift`), tested: a
 press waits 90 ms so a swipe that starts on the key never starts a dictation
 it must then cancel; a tap quicker than that is still a tap; a swipe past
-24 pt cancels the timer, or undoes a press that went out. Finger down and up
-drive the engine's `DictationKeyGate`, so a tap latches and a hold is
-push-to-talk exactly as on the Mac.
+24 pt cancels the timer, or undoes a press that went out; a touch the system
+takes away before the timer fires presses nothing. Finger down and up drive
+the engine's `DictationKeyGate`, so a tap latches and a hold is push-to-talk
+exactly as on the Mac. A release made while the mic is still coming up (the
+engine drops one before it records) is held and sent on the first recording
+phase, so a short hold over a slow mic still stops. Every phase the app
+publishes carries the id of the keyboard command it last took
+(`PhaseSnapshot.command`), and the keyboard settles its gate only for a phase
+that answers the press it is waiting on — the previous dictation's notice
+landing a moment after a new press used to reset the gate and turn the next
+tap into a second press instead of the stop. An in-flight phase with
+the app gone (killed, the mic taken) reads as idle, a notice is never
+replayed once its dwell ran out, and a keyboard that comes up without Full
+Access starts from idle with the gate reset. `KeyboardModelFuzzTests` drives
+the model through ten thousand random event sequences and checks these
+invariants after every one.
 
 ## Layouts and their heights (`KeyboardLayout.height`)
 
 Side margins 6.5; top 8; under a row of keys 13 (the iPhone's), under the
 slim bar 8.
 
-| Layout    | Rows                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Height                   |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| `slimBar` | globe · voice bar · delete · return                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 60                       |
-| `panel`   | the voice element, centred — or at an edge for one hand (Settings, below) — (the + top-left; cancel top-right while in flight) · globe · space · delete · return. A two-page carousel: a horizontal swipe flips between the panel and the full keyboard, and it is back to the element each time the keyboard appears. The pages are a strip one page wide (`PanelCarousel`): the other page is set down a page away on the side the finger moved towards and the strip slides, so the two never cross whichever way the flips come; a flip back mid-slide retreats (`PanelCarouselState`, tested). | 216, or 270 when flipped |
-| `full`    | voice row 44, then the first key row right under it as the iPhone's sits under its suggestions · three letter rows 43 · 123 / globe / space / return                                                                                                                                                                                                                                                                                                                                                                                                                                                | 270                      |
+| Layout    | Rows                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Height                   |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `slimBar` | globe (when the phone draws none) · voice bar · delete · return, at the full keyboard's widths and gap, the keys as tall as the row                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 60                       |
+| `panel`   | the voice element, dead centre between the keyboard's top edge and the keys — or at an edge for one hand (Settings, below) — with the + beside it on its centre line and the cancel × mirroring the + on the other side while something is in flight (× · mic · +) · globe · space · delete · return at the full keyboard's widths (43.33 / 92.67), so nothing changes size when the carousel flips. A two-page carousel: a horizontal swipe flips between the panel and the full keyboard, and it is back to the element each time the keyboard appears. The pages are a strip one page wide (`PanelCarousel`): the other page is set down a page away on the side the finger moved towards and the strip slides, so the two never cross whichever way the flips come; a flip back mid-slide retreats (`PanelCarouselState`, tested). | 216, or 270 when flipped |
+| `full`    | voice row 44, then the first key row right under it as the iPhone's sits under its suggestions · three letter rows 43 · 123 / globe / space / return                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | 270                      |
 
 The voice row (`VoiceBar`) is where the system keyboard puts its suggestion
-bar: the element dead centre with the + a clearance beside it — an unseen
-twin of the + balances the other side, so the + hangs off the element rather
-than shifting it (a pair centred as a whole read as off) — or, for one hand,
-the element at an edge with the + inside it (One hand, below). The mic key
-is as wide as the element _shows_ (`VoiceElementKind.visibleWidth`, tested:
-the grille's own width, the ribs asleep or the wave awake, the streak's line
-— never the slot's box, which would put the + off at the edge; never
-narrower than a key). Or the row is the key-term field. A swipe flips the panel past
+bar. One rule places it everywhere (`VoiceRowLayout`, tested; `VoiceRow`
+draws it in the bar and the panel): the mic key is what is placed — dead
+centre of the row, or at the edge Settings chose — and the add key (the +,
+or the chip for a highlighted word) hangs off it a clearance away on its
+centre line: on its trailing side in the middle, on its inner side at an
+edge, so the mic is always the thing at the edge. A chip grows away from the
+mic as far as the row allows; when that is less than `addterm/chip-min-width`
+beside a centred mic (the slim bar's row), the mic and the chip centre as a
+pair instead, the mic moving over rather than the chip collapsing onto it.
+The mic key is as wide as the element _shows_ (`VoiceElementKind.visibleWidth`,
+tested: the grille's own width, the ribs asleep or the wave awake, the
+streak's line — never the slot's box, which would put the + off at the edge;
+never narrower than a key, never wider than the row) and as tall as the row,
+so the whole row under the element is the key. The +, × and ✓ are one glyph
+key (`GlyphKey`): a `size/glyph` symbol in a `glyph/hit` square, the HIG's
+44 pt. Or the row is the key-term field. A swipe flips the panel past
 48 pt sideways and more sideways than up or down by 1.5×; a key acts on
 release and only under 12 pt of travel (`KeyboardInteraction`, tested). The
 swipe is recognised on the input view itself (`KeyboardViewController`), not
@@ -293,42 +338,56 @@ gap, the mic, the space key and the letters, both ways).
 
 The most-asked-for thing: Blurt mishears a niche word, and the fix has to take
 seconds, inside the app you're typing in, never a trip to Settings. Two ways
-in, both from the small **+** beside the element (trailing edge of the bar;
-top-left corner of the panel).
+in, both from the small **+** beside the element, on its centre line, in
+every layout.
 
 **Highlight a word, tap once.** Select a word (or a short phrase) in your text
 and the + grows into a chip — the field's shape, a rectangle at 8 pt with a
 hairline — holding the word, with a green **+** before it (`AddTermKey`,
 `KeyboardModel.selectedTerm`). One tap adds the word as it stands to Blurt's
-key terms; the text is not touched, a success haptic, and the + becomes a ✓
-for 1.2 s. The word stays highlighted and the chip now shows a quiet ✓: Blurt
-knows it. A word already in the list shows that ✓ from the start, so
-selecting anything tells you whether Blurt has it. The selection is read off
-the host field on every change (`selectionDidChange`, `textDidChange`); what
-counts as a word is trimmed, one line, at most 48 characters
-(`termCandidate`, tested), and only with Full Access, since the list lives in
-the App Group. In the bar the chip keeps a 96 pt minimum and the element
-gives way to it; in the panel it grows from the corner up to 240 pt, clear of
-the cancel ×. **Hold the chip** (0.4 s) to open the field with the word in it
-instead — for the case below.
+key terms; the text is not touched, a success haptic, and the chip shows ✓
+for 1.2 s — then gives way to the + even though the host may keep the word
+highlighted for as long as you leave it (a chip that stayed with the
+highlight read as stuck; `dismissedSelection`, tested). Only that word's
+chip: another word highlighted within the 1.2 s keeps its own. A word already in the
+list shows a quiet ✓ from the start, so selecting anything tells you whether
+Blurt has it; a tap on that ✓ puts the + back. Highlight another word and
+the chip is back for it. The selection is read off the host field on every
+change (`selectionDidChange`, `textDidChange`); what counts as a word is
+trimmed, one line, at most 48 characters (`termCandidate`, tested), and only
+with Full Access, since the list lives in the App Group. The chip grows away
+from the mic to the row's edge (`VoiceRowLayout`, above). **Hold the chip**
+(0.6 s, the system's long press, so a touch the system takes away never
+opens it) to open the field with the word in it instead — for the case
+below.
 
 **Type it.** Tap the + with nothing selected (or hold the chip) and the bar
 becomes a field — × · what you type · ✓ — pre-filled with the selection if
 there was one, and the keys type into it (the panel and slim bar flip to the
-letter keys for it). Shift is on for the first letter. Type the right
+letter keys for it). The field takes the mic key's row, so a dictation in
+flight is closed first rather than running on with no key to stop it: from
+the plain + a recording is released and the words still land; from a
+highlighted word it is cancelled, since a result replaces the selection and
+would land over the very word being fixed (tested). Shift is on for the first letter and after a space. Type the right
 spelling; return or ✓ saves. The term goes into Blurt's key terms
 (`BlurtKeyTerms` in the App Group, `KeyTermList` rules: trimmed, deduplicated
 case-insensitively) and rides `keyterms_prompt` on the very next dictation. If
 it began as a selection and you changed it, the misheard word in your text is
-replaced with what you typed. A success haptic, and the + shows a check for
-1.2 s.
+replaced with what you typed — only while that highlight still stands where
+it was (a host can report a selection a moment after the cursor moved, and
+inserting then would put the word in twice). A success haptic, and the +
+shows a check for 1.2 s.
 
 × or an empty save leaves the mode, and so does the keyboard going away. A
 hardware keyboard types past the on-screen keys into the app's field; while
 the term field is open a short run that appears there right after where the
-cursor was is moved into the term and taken back out of the field. The list
-itself is edited in Settings → Transcription, which shows the count against
-the request's cap of 100 terms.
+cursor was is moved into the term and taken back out of the field — one
+character at a time, as a key types; a block (a paste, the system's own
+dictation under the keyboard) is never typing and stays — and never when the
+field opened over a highlighted word, since collapsing that highlight grows
+the text before the cursor by exactly the word (tested). The
+list itself is edited in Settings → Transcription, which shows the count
+against the request's cap of 100 terms.
 
 ## Sharing key terms
 
@@ -367,12 +426,11 @@ Settings → Keyboard, under the layout, the same three-segment shape with a
 line beneath: **Left alignment · Default · Right alignment** (`MicAlignment`,
 `micAlignment` in the App Group, read on every appearance like the layout).
 Default is the middle, as everywhere above. At an edge the mic key is the
-thing at the edge. In the bar and the slim bar the pair slides there and the
-add key (+) moves to the mic's inner side, so at the right edge it comes
-first. The panel becomes a big voice bar: the element sits at the edge as
-wide as it _shows_ (`visibleWidth`, so the grille is under the thumb, not an
-empty half of its 300 pt box), the add key beside it on its inner side rather
-than in the corner, and cancel in the far top corner, clear of them both.
+thing at the edge, in every layout (`VoiceRowLayout`): the element sits at
+the edge as wide as it _shows_ (`visibleWidth`, so the grille is under the
+thumb, not an empty half of its box), the add key beside it on its inner
+side, and — in the panel — cancel in the far top corner, clear of them both,
+where in the middle it mirrors the + on the mic's other side.
 Left and right are the phone's sides: in a right-to-left language the
 leading/trailing mapping flips so the mic stays under the thumb chosen
 (`Shared/MicAlignment.swift`, tested). Gallery: `-BlurtGalleryAlign
@@ -481,10 +539,9 @@ pins the derivation.
 | Token                        | Points    | Swift                              | Use                                                                                                                                                                                                                                                                 |
 | ---------------------------- | --------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `addterm/chip-gap`           | `6`       | `Metrics.addtermChipGap`           | between the chip's glyph and the word                                                                                                                                                                                                                               |
-| `addterm/chip-max-width`     | `240`     | `Metrics.addtermChipMaxWidth`      | the most the chip may take in the panel's corner, clear of the cancel ×                                                                                                                                                                                             |
-| `addterm/chip-min-width`     | `96`      | `Metrics.addtermChipMinWidth`      | the room the voice bar keeps for the chip; the element gives way beyond it                                                                                                                                                                                          |
+| `addterm/chip-min-width`     | `96`      | `Metrics.addtermChipMinWidth`      | the least room a chip needs beside a centred mic; with less, the mic and the chip centre as a pair                                                                                                                                                                  |
 | `addterm/chip-pad`           | `10`      | `Metrics.addtermChipPad`           | the selected-word chip's side padding                                                                                                                                                                                                                               |
-| `addterm/inset`              | `6`       | `Metrics.addtermInset`             | the + from the panel's corner                                                                                                                                                                                                                                       |
+| `addterm/inset`              | `6`       | `Metrics.addtermInset`             | the cancel × from the panel's far corner when the mic is at an edge                                                                                                                                                                                                 |
 | `app/button-height`          | `40`      | `Metrics.appButtonHeight`          | the brand's button                                                                                                                                                                                                                                                  |
 | `app/button-pad`             | `12`      | `Metrics.appButtonPad`             | its side padding                                                                                                                                                                                                                                                    |
 | `app/card-pad`               | `16`      | `Metrics.appCardPad`               | inside a card                                                                                                                                                                                                                                                       |
@@ -507,7 +564,7 @@ pins the derivation.
 | `caret/lead`                 | `1`       | `Metrics.caretLead`                | the caret's gap from the text                                                                                                                                                                                                                                       |
 | `caret/radius`               | `1`       | `Metrics.caretRadius`              | —                                                                                                                                                                                                                                                                   |
 | `caret/width`                | `2`       | `Metrics.caretWidth`               | —                                                                                                                                                                                                                                                                   |
-| `glyph/hit`                  | `32`      | `Metrics.glyphHit`                 | the +, × and ✓ touch targets                                                                                                                                                                                                                                        |
+| `glyph/hit`                  | `44`      | `Metrics.glyphHit`                 | the +, × and ✓ touch targets: the HIG's 44 pt square around a size/glyph symbol                                                                                                                                                                                     |
 | `grille/bar-height`          | `28`      | `Metrics.grilleBarHeight`          | —                                                                                                                                                                                                                                                                   |
 | `grille/bar-width`           | `64`      | `Metrics.grilleBarWidth`           | the grille in the voice bar                                                                                                                                                                                                                                         |
 | `grille/dot`                 | `2`       | `Metrics.grilleDot`                | a dot's diameter                                                                                                                                                                                                                                                    |
@@ -553,13 +610,13 @@ pins the derivation.
 | `opacity/sheen`              | `0.22`    | `Metrics.opacitySheen`             | the light passing over the element at rest: chrome catching light                                                                                                                                                                                                   |
 | `opacity/surface-vignette`   | `0`       | `Metrics.opacitySurfaceVignette`   | a soft darkening toward the surface's edges; 0 is none                                                                                                                                                                                                              |
 | `opacity/term-cancel`        | `0.7`     | `Metrics.opacityTermCancel`        | the field's ×                                                                                                                                                                                                                                                       |
-| `panel/spacing`              | `12`      | `Metrics.panelSpacing`             | between the panel's orb and its key row                                                                                                                                                                                                                             |
+| `panel/spacing`              | `8`       | `Metrics.panelSpacing`             | under the panel's voice row, above its keys: the top margin again, so the mic is centred between the keyboard's top edge and the keys                                                                                                                               |
 | `picker/preview-width`       | `393`     | `Metrics.pickerPreviewWidth`       | the theme card draws the keyboard at this width                                                                                                                                                                                                                     |
 | `picker/radius`              | `10`      | `Metrics.pickerRadius`             | the theme card's preview corners                                                                                                                                                                                                                                    |
 | `picker/scale`               | `0.42`    | `Metrics.pickerScale`              | then scales it to fit two across                                                                                                                                                                                                                                    |
 | `popup/extra-width`          | `18`      | `Metrics.popupExtraWidth`          | the letter pop-up is the key width plus this                                                                                                                                                                                                                        |
 | `popup/height`               | `56`      | `Metrics.popupHeight`              | —                                                                                                                                                                                                                                                                   |
-| `popup/offset`               | `58`      | `Metrics.popupOffset`              | the pop-up sits this far above the key                                                                                                                                                                                                                              |
+| `popup/offset`               | `50`      | `Metrics.popupOffset`              | the pop-up rises this far from the key's top: it overlaps the key by popup/height minus this and stays inside the keyboard on the top row                                                                                                                           |
 | `popup/radius`               | `10`      | `Metrics.popupRadius`              | —                                                                                                                                                                                                                                                                   |
 | `popup/shadow-radius`        | `8`       | `Metrics.popupShadowRadius`        | the one thing that floats                                                                                                                                                                                                                                           |
 | `popup/shadow-y`             | `2`       | `Metrics.popupShadowY`             | —                                                                                                                                                                                                                                                                   |
@@ -570,7 +627,6 @@ pins the derivation.
 | `ribs/rest-height`           | `16`      | `Metrics.ribsRestHeight`           | —                                                                                                                                                                                                                                                                   |
 | `ribs/rest-width`            | `40`      | `Metrics.ribsRestWidth`            | the ribs asleep: the wave's own bars at rest                                                                                                                                                                                                                        |
 | `row/gap`                    | `11`      | `Metrics.rowGap`                   | between rows, the iPhone's                                                                                                                                                                                                                                          |
-| `slim/spacing`               | `8`       | `Metrics.slimSpacing`              | between the slim bar's keys                                                                                                                                                                                                                                         |
 | `streak/arm`                 | `1.4`     | `Metrics.streakArm`                | the landing flash's vertical arm, as a fraction of the box's height                                                                                                                                                                                                 |
 | `streak/height`              | `2`       | `Metrics.streakHeight`             | the light streak while recording                                                                                                                                                                                                                                    |
 | `streak/line`                | `1`       | `Metrics.streakLine`               | the hairline at rest                                                                                                                                                                                                                                                |
@@ -591,7 +647,7 @@ pins the derivation.
 | `voice/panel-height`         | `88`      | `Metrics.voicePanelHeight`         | —                                                                                                                                                                                                                                                                   |
 | `voice/panel-width`          | `300`     | `Metrics.voicePanelWidth`          | the box in the panel                                                                                                                                                                                                                                                |
 | `voice/press-scale`          | `0.94`    | `Metrics.voicePressScale`          | the element while pressed                                                                                                                                                                                                                                           |
-| `voicebar/addterm-clearance` | `12`      | `Metrics.voicebarAddtermClearance` | between the element and the +                                                                                                                                                                                                                                       |
+| `voicebar/addterm-clearance` | `6`       | `Metrics.voicebarAddtermClearance` | between the mic key's edge and the add key's box (the + or the chip), the key gap                                                                                                                                                                                   |
 | `voicebar/height`            | `44`      | `Metrics.voicebarHeight`           | the voice row, where the system puts its suggestion bar                                                                                                                                                                                                             |
 | `voicebar/note-gap`          | `10`      | `Metrics.voicebarNoteGap`          | between the orb and the Full Access note                                                                                                                                                                                                                            |
 | `wave/bar`                   | `2`       | `Metrics.waveBar`                  | a wave bar's width                                                                                                                                                                                                                                                  |
@@ -609,24 +665,24 @@ house curve (`ease/signature`, `cubic-bezier(0.22, 1, 0.36, 1)`).
 
 <!-- tokens:begin motion -->
 
-| Token            | Value           | Swift                  | Use                                                           |
-| ---------------- | --------------- | ---------------------- | ------------------------------------------------------------- |
-| `caret`          | `0.5`           | `Motion.caret`         | the caret's blink                                             |
-| `chip-hold`      | `0.4`           | `Motion.chipHold`      | holding the chip opens the field instead of adding            |
-| `colour`         | `0.2`           | `Motion.colour`        | a colour or fill changing state: the brand's transition       |
-| `ease/signature` | `0.22,1,0.36,1` | `Motion.easeSignature` | the house curve for everything that moves; nothing springs    |
-| `flip`           | `0.25`          | `Motion.flip`          | the panel's carousel                                          |
-| `glint-life`     | `0.5`           | `Motion.glintLife`     | a facet's flash while recording                               |
-| `height-change`  | `0.25`          | `Motion.heightChange`  | the keyboard resizing                                         |
-| `key-press`      | `0.08`          | `Motion.keyPress`      | a key lighting                                                |
-| `landing`        | `0.6`           | `Motion.landing`       | the glint when the words land                                 |
-| `press`          | `0.1`           | `Motion.press`         | the orb's press; the one thing that answers at once           |
-| `ring-period`    | `1.6`           | `Motion.ringPeriod`    | one turn of the ring, the Mac's cadence                       |
-| `sheen`          | `4`             | `Motion.sheen`         | one pass of the light over the element at rest                |
-| `sheen-working`  | `1.6`           | `Motion.sheenWorking`  | and while something is happening: the ring's cadence          |
-| `state-fade`     | `0.5`           | `Motion.stateFade`     | every other change on the key: the ring, a glyph, the dimming |
-| `term-swap`      | `0.4`           | `Motion.termSwap`      | the voice bar becoming the field                              |
-| `wave-fade`      | `0.7`           | `Motion.waveFade`      | the orb and the wave crossing, either way                     |
+| Token            | Value           | Swift                  | Use                                                                        |
+| ---------------- | --------------- | ---------------------- | -------------------------------------------------------------------------- |
+| `caret`          | `0.5`           | `Motion.caret`         | the caret's blink                                                          |
+| `chip-hold`      | `0.6`           | `Motion.chipHold`      | holding the chip opens the field instead of adding; longer than a firm tap |
+| `colour`         | `0.2`           | `Motion.colour`        | a colour or fill changing state: the brand's transition                    |
+| `ease/signature` | `0.22,1,0.36,1` | `Motion.easeSignature` | the house curve for everything that moves; nothing springs                 |
+| `flip`           | `0.25`          | `Motion.flip`          | the panel's carousel                                                       |
+| `glint-life`     | `0.5`           | `Motion.glintLife`     | a facet's flash while recording                                            |
+| `height-change`  | `0.25`          | `Motion.heightChange`  | the keyboard resizing                                                      |
+| `key-press`      | `0.08`          | `Motion.keyPress`      | a key lighting                                                             |
+| `landing`        | `0.6`           | `Motion.landing`       | the glint when the words land                                              |
+| `press`          | `0.1`           | `Motion.press`         | the orb's press; the one thing that answers at once                        |
+| `ring-period`    | `1.6`           | `Motion.ringPeriod`    | one turn of the ring, the Mac's cadence                                    |
+| `sheen`          | `4`             | `Motion.sheen`         | one pass of the light over the element at rest                             |
+| `sheen-working`  | `1.6`           | `Motion.sheenWorking`  | and while something is happening: the ring's cadence                       |
+| `state-fade`     | `0.5`           | `Motion.stateFade`     | every other change on the key: the ring, a glyph, the dimming              |
+| `term-swap`      | `0.4`           | `Motion.termSwap`      | the voice bar becoming the field                                           |
+| `wave-fade`      | `0.7`           | `Motion.waveFade`      | the orb and the wave crossing, either way                                  |
 
 <!-- tokens:end motion -->
 

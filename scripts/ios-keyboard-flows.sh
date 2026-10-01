@@ -9,6 +9,10 @@
 #   scripts/ios-keyboard-flows.sh --face dark --voice a --layout panel
 #   scripts/ios-keyboard-flows.sh --layout full --align right   # the mic at an edge (Settings › alignment)
 #
+# The probe app sets the layout, mic concept and side in the App Group for
+# each run; a run with --align puts the side back to the middle at the end,
+# so Neil's own keyboard on this simulator never inherits a probe's setting.
+#
 # Prints one FLOW-OK / FLOW-FAIL line per step; screenshots land in
 # .build/design/flows/<face>-<voice>-<layout>/, with a sheet.png of every
 # step's keyboard side by side. Blurt must be enabled as a keyboard on the
@@ -122,3 +126,14 @@ PY
 done
 xcrun simctl ui "$UDID" appearance light
 echo "ios-keyboard-flows: screenshots in $OUT"
+
+# An --align run leaves the App Group's side where the probe set it: put it
+# back through the simulator's own defaults daemon (a plist edit alone is
+# not seen until cfprefsd reloads).
+if [ -n "$ALIGN" ]; then
+  GROUP="$(xcrun simctl get_app_container "$UDID" dev.alex.blurt.ios groups 2>/dev/null | awk -F'\t' '/group.dev.alex.blurt/ {print $2}')"
+  if [ -n "$GROUP" ]; then
+    xcrun simctl spawn "$UDID" defaults write "$GROUP/Library/Preferences/group.dev.alex.blurt" micAlignment center
+    echo "ios-keyboard-flows: mic alignment back to the middle"
+  fi
+fi

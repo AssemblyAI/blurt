@@ -5,13 +5,15 @@ import SwiftUI
 /// letters, then 123 · globe · space · return, at the system keyboard's
 /// measured spacing (`KeyGeometry`) — with the voice bar where the suggestion
 /// bar would be. Letters pop up while pressed, sentences capitalise
-/// themselves, a double space ends one.
+/// themselves, a double space ends one. 123 opens the numbers and symbols,
+/// #+= the rest of them, as the system keyboard's pages go.
 /// No autocorrect or suggestions yet. iOS swaps in its own keyboard for
 /// password fields, so those never reach here.
 struct FullKeyboardView: View {
   var model: KeyboardModel
 
   private static let symbols = ["1234567890", "-/:;()$&@\"", ".,?!'"]
+  private static let more = ["[]{}#%^*+=", "_\\|~<>€£¥•", ".,?!'"]
 
   var body: some View {
     GeometryReader { geo in
@@ -24,16 +26,21 @@ struct FullKeyboardView: View {
         VoiceBar(model: model)
         VStack(spacing: KeyboardPalette.rowGap) {
           ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
-            HStack(spacing: index == 2 ? geometry.sideGap : gap) {  // literal-ok: the third row
-              if index == 2 { modifierKey(width: geometry.sideWidth) }  // literal-ok: the third row
+            let third = index == 2  // literal-ok: the third row
+            // The third row's keys fill what shift and delete leave: seven
+            // letters at the letter width, or the five punctuation keys, wider,
+            // as the system keyboard has them on its symbol pages.
+            let keyWidth = third && model.symbolsPage ? geometry.punctuationWidth : geometry.letterWidth
+            HStack(spacing: third ? geometry.sideGap : gap) {
+              if third { modifierKey(width: geometry.sideWidth) }
               HStack(spacing: gap) {
                 ForEach(Array(row), id: \.self) { character in
-                  LetterKey(label: label(for: character), width: geometry.letterWidth) {
+                  LetterKey(label: label(for: character), width: keyWidth) {
                     model.type(label(for: character))
                   }
                 }
               }
-              if index == 2 {
+              if third {
                 KeyCap(systemImage: "delete.left", dark: true, width: geometry.sideWidth) { model.deleteBackward() }
               }
             }
@@ -55,30 +62,37 @@ struct FullKeyboardView: View {
     }
   }
 
-  private var rows: [String] { model.symbolsPage ? Self.symbols : model.letterRows }
+  private var rows: [String] {
+    guard model.symbolsPage else { return model.letterRows }
+    return model.morePage ? Self.more : Self.symbols
+  }
 
   private func label(for character: Character) -> String {
     let text = String(character)
     return model.shifted && !model.symbolsPage ? text.uppercased() : text
   }
 
+  /// Shift on the letters; on the symbol pages the key that swaps between
+  /// the two of them, labelled with where it goes, as the iPhone's is.
   @ViewBuilder private func modifierKey(width: CGFloat) -> some View {
     if model.symbolsPage {
-      KeyCap(title: "#+=", dark: true, width: width) { model.toggleSymbols() }
+      KeyCap(title: model.morePage ? "123" : "#+=", dark: true, width: width) { model.toggleMore() }
     } else {
       KeyCap(systemImage: model.shifted ? "shift.fill" : "shift", dark: true, width: width) { model.toggleShift() }
     }
   }
 }
 
-/// A letter key with the system keyboard's 22 pt legend and its pop-up: a
+/// A letter key with the system keyboard's 24 pt legend and its pop-up: a
 /// larger copy of the letter above the key while the finger is down, so the
 /// finger doesn't hide what it's pressing. Typed on release, as iOS does.
 private struct LetterKey: View {
   let label: String
   let width: CGFloat
   let action: () -> Void
-  @State private var pressed = false
+  /// A gesture state, so a touch the system takes away unlights the key and
+  /// drops its pop-up; a plain state would leave both up.
+  @GestureState private var pressed = false
   @Environment(\.keyboardPalette) private var palette
   @Environment(\.keyboardInContainer) private var inContainer
 
@@ -97,11 +111,14 @@ private struct LetterKey: View {
       .accessibilityAddTraits(.isButton)
       .simultaneousGesture(
         DragGesture(minimumDistance: 0)
-          .onChanged { _ in pressed = true }
+          .updating($pressed) { _, state, _ in state = true }
           .onEnded { value in
-            pressed = false
-            // A touch that travelled was a swipe (the panel's carousel), not a tap.
-            guard KeyboardInteraction.isTap(value.translation) else { return }
+            // A touch that swiped away (the panel's carousel) was not a tap;
+            // one that ended on the key was, wherever the thumb rolled.
+            guard
+              KeyboardInteraction.isTap(
+                value.translation, endedAt: value.location, in: CGSize(width: width, height: KeyCap.height))
+            else { return }
             action()
           }
       )

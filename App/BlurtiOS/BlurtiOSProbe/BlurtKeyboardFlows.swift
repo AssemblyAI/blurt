@@ -27,58 +27,69 @@ final class BlurtKeyboardFlows: XCTestCase {
     side = arguments.first { ["left", "right"].contains($0) }
     app = XCUIApplication()
     // The app listens from launch, so the keyboard's mic key is live.
-    app.launchArguments = ["-BlurtProbeField"] + arguments + ["-BlurtStartListening", "-BlurtProbeResetTerms"]
+    app.launchArguments =
+      ["-BlurtProbeField"] + arguments + ["-BlurtStartListening", "-BlurtProbeResetTerms", "-BlurtProbeText", "Rizz"]
     app.launch()
     try bringUpBlurt()
     shot("up")
     let mic = micKey()
     check(mic.exists, "mic key present (\(mic.label))")
-    check(mic.label == "Dictate", "mic key ready: the app is listening (\(mic.label))")
+    // "Stop dictation" is hands-free already recording: ready too.
+    check(mic.label != "Start Blurt", "mic key ready: the app is listening (\(mic.label))")
     let plus = app.buttons["Add a key term"]
     check(plus.exists, "the + present")
-    if mic.exists, plus.exists {
-      let width = app.windows.firstMatch.frame.width
-      let centre = mic.frame.midX
-      if let side {
-        // One hand: the mic at the chosen edge, the + on its inner side. The
-        // slim bar's row is bounded by the globe (when Blurt draws one; on a
-        // Face ID phone the system puts it under the keyboard) and delete
-        // keys, so there the mic is next to that key rather than the edge.
-        let left = side == "left"
-        let globe = app.buttons["globe"].firstMatch
-        let bound =
-          layout == "slimBar"
-          ? (left ? (globe.exists ? globe.frame.maxX : 0) : app.buttons["delete.left"].firstMatch.frame.minX)
-          : (left ? 0 : width)
-        let edge = left ? mic.frame.minX - bound : bound - mic.frame.maxX
-        let inner = left ? plus.frame.minX > mic.frame.maxX : plus.frame.maxX < mic.frame.minX
-        check(edge < 12, "mic at the \(side) edge (\(edge) pt in)")
-        check(inner, "the + on the mic's inner side")
-      } else if layout == "panel" {
-        check(abs(centre - width / 2) < 4, "mic centred in the panel (\(centre) of \(width))")
-        check(plus.frame.midX < 60, "the + in the panel's top-left corner (\(plus.frame.midX))")
-      } else {
-        // The element itself is centred in the voice bar's own width — the
-        // whole row in the full keyboard, the room between the globe (if any)
-        // and delete in the slim bar — with the + hanging beside it.
-        let globe = app.buttons["globe"].firstMatch
-        let from = layout == "slimBar" && globe.exists ? globe.frame.maxX : 0
-        let to = layout == "slimBar" ? app.buttons["delete.left"].firstMatch.frame.minX : width
-        check(abs(centre - (from + to) / 2) < 8, "mic centred in its row (\(centre) in \(from)…\(to))")
-        check(plus.frame.minX > mic.frame.maxX, "the + beside the mic, to its right")
-      }
-    }
+    checkDrawn(mic, "on appearance")
+    if mic.exists, plus.exists { checkPlacement(layout: layout, mic: mic, plus: plus) }
     switch layout {
     case "panel": try panelFlows()
     case "full": try fullFlows()
     default: try slimFlows()
     }
+    try selectionFlow(app.textFields.firstMatch)
     try termFlow()
     try dictationFlow()
     try switchAwayAndBack()
   }
 
   // MARK: Helpers
+
+  /// Where the mic and the + sit, for this run's layout and side.
+  private func checkPlacement(layout: String, mic: XCUIElement, plus: XCUIElement) {
+    let width = app.windows.firstMatch.frame.width
+    let centre = mic.frame.midX
+    // Wherever the mic is, the + sits on its centre line.
+    check(
+      abs(plus.frame.midY - mic.frame.midY) < 4,
+      "the + at the mic's centre line (\(plus.frame.midY) vs \(mic.frame.midY))")
+    if let side {
+      // One hand: the mic at the chosen edge, the + on its inner side. The
+      // slim bar's row is bounded by the globe (when Blurt draws one; on a
+      // Face ID phone the system puts it under the keyboard) and delete
+      // keys, so there the mic is next to that key rather than the edge.
+      let left = side == "left"
+      let globe = app.buttons["globe"].firstMatch
+      let bound =
+        layout == "slimBar"
+        ? (left ? (globe.exists ? globe.frame.maxX : 0) : app.buttons["delete.left"].firstMatch.frame.minX)
+        : (left ? 0 : width)
+      let edge = left ? mic.frame.minX - bound : bound - mic.frame.maxX
+      let inner = left ? plus.frame.minX > mic.frame.maxX : plus.frame.maxX < mic.frame.minX
+      check(edge < 12, "mic at the \(side) edge (\(edge) pt in)")
+      check(inner, "the + on the mic's inner side")
+    } else if layout == "panel" {
+      check(abs(centre - width / 2) < 4, "mic centred in the panel (\(centre) of \(width))")
+      check(plus.frame.minX > mic.frame.maxX, "the + beside the mic, to its right")
+    } else {
+      // The element itself is centred in the voice bar's own width — the
+      // whole row in the full keyboard, the room between the globe (if any)
+      // and delete in the slim bar — with the + hanging beside it.
+      let globe = app.buttons["globe"].firstMatch
+      let from = layout == "slimBar" && globe.exists ? globe.frame.maxX : 0
+      let to = layout == "slimBar" ? app.buttons["delete.left"].firstMatch.frame.minX : width
+      check(abs(centre - (from + to) / 2) < 8, "mic centred in its row (\(centre) in \(from)…\(to))")
+      check(plus.frame.minX > mic.frame.maxX, "the + beside the mic, to its right")
+    }
+  }
 
   private func bringUpBlurt() throws {
     let blurt = app.buttons["Add a key term"]
@@ -113,6 +124,13 @@ final class BlurtKeyboardFlows: XCTestCase {
   func check(_ condition: Bool, _ what: String) {
     print("FLOW-\(condition ? "OK" : "FAIL"): \(what)")
     XCTAssertTrue(condition, what)
+  }
+
+  /// The mic element's pixels are there — a key with nothing drawn in it is
+  /// the failure the frame checks cannot see.
+  func checkDrawn(_ mic: XCUIElement, _ when: String) {
+    let ink = MicPixels.ink(app, mic: mic) ?? 0
+    check(ink > MicPixels.drawnThreshold, "the mic is drawn \(when) (ink \(ink))")
   }
 
   func shot(_ name: String) {
@@ -161,7 +179,8 @@ extension BlurtKeyboardFlows {
         if index == 0 { shot("panel-back") }
       }
     }
-    check(!keysUp && micKey().frame.width > panelMicWidth, "the panel is showing again, its mic full size")
+    check(!keysUp && panelMicUp, "the panel is showing again, its mic full size")
+    checkDrawn(micKey(), "after the swipes back")
     // Pairs from one fixed screen point (an element mid-slide is no anchor):
     // a flip and a flip back, and two the same way — with no wait between,
     // so the second lands mid-slide, and again after the slide has settled.
@@ -179,7 +198,7 @@ extension BlurtKeyboardFlows {
       if pair.pause > 0 { Thread.sleep(forTimeInterval: pair.pause) }
       fixed.press(forDuration: 0.05, thenDragTo: fixed.withOffset(CGVector(dx: pair.second, dy: 0)))
       Thread.sleep(forTimeInterval: 1.5)
-      check(!keysUp && micKey().frame.width > panelMicWidth, "two quick swipes, \(pair.name), land back on the panel")
+      check(!keysUp && panelMicUp, "two quick swipes, \(pair.name), land back on the panel")
       shot("panel-pair-\(pair.name.replacingOccurrences(of: ", ", with: "-").replacingOccurrences(of: " ", with: "-"))")
     }
   }
@@ -202,9 +221,10 @@ extension BlurtKeyboardFlows {
   /// Whether the letter keys are on screen (either shift state).
   var keysUp: Bool { letterKey("Q").exists || letterKey("q").exists }
 
-  /// The least the panel's mic key is wide when the panel is up: its whole
-  /// 300 pt slot in the middle, the element's own width at an edge.
-  private var panelMicWidth: CGFloat { side == nil ? 200 : 60 }
+  /// Whether the mic key on screen is the panel's: as tall as the panel's
+  /// element box (88), where the bar's is the row (44). The width says
+  /// nothing — the key is as wide as the element shows, whichever concept.
+  var panelMicUp: Bool { micKey().exists && micKey().frame.height > 60 }
 
   private func fullFlows() throws {
     let q = letterKey("Q")
@@ -219,7 +239,6 @@ extension BlurtKeyboardFlows {
       app.buttons["return"].exists || app.buttons["RETURN"].exists || app.buttons["Return"].exists,
       "return key labelled")
     shot("full-typed")
-    try selectionFlow(field)
   }
 
   /// Highlight the word in the field: the + becomes a chip holding it, one
@@ -233,27 +252,54 @@ extension BlurtKeyboardFlows {
     let chip = app.buttons.matching(
       NSPredicate(format: "label BEGINSWITH %@ OR label ENDSWITH %@", "Add “", "” is a key term")
     ).firstMatch
+    let mic = micKey()
     for attempt in 1...2 where !chip.exists {
       field.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.5)).doubleTap()
       if chip.waitForExistence(timeout: 3) { break }
-      shot("full-select-miss-\(attempt)")
+      shot("\(layoutName)-select-miss-\(attempt)")
     }
     let label = chip.exists ? chip.label : "-"
     check(chip.exists, "highlighting a word shows the chip (\(label))")
-    shot("full-selected")
+    if chip.exists, mic.exists {
+      check(abs(chip.frame.midY - mic.frame.midY) < 4, "the chip at the mic's centre line")
+      check(
+        chip.frame.minX >= mic.frame.maxX - 1 || chip.frame.maxX <= mic.frame.minX + 1,
+        "the chip clear of the mic (\(chip.frame) vs \(mic.frame))")
+    }
+    shot("\(layoutName)-selected")
+    let plus = app.buttons["Add a key term"]
     if label.hasPrefix("Add “") {
       let word = label.dropFirst("Add “".count).prefix { $0 != "”" }
       chip.tap()
       let known = app.descendants(matching: .any)
         .matching(NSPredicate(format: "label == %@", "“\(word)” is a key term")).firstMatch
-      check(known.waitForExistence(timeout: 3), "one tap adds “\(word)”; the chip shows the check")
-      shot("full-added")
+      // The check shows for 1.2 s; XCUITest's snapshot of another process
+      // can miss it, so the proof of the add is below: the word re-selected
+      // is a word Blurt knows.
+      if known.waitForExistence(timeout: 2) { shot("\(layoutName)-added") }
+      // The highlight still stands in the field; the chip gives way to the +
+      // on its own after the check, so the row is never stuck on the word.
+      check(plus.waitForExistence(timeout: 4), "after the check the + is back while the word stays highlighted")
+      check(mic.exists && mic.label != "Start Blurt", "the mic is still the mic after adding (\(mic.label))")
+      shot("\(layoutName)-after-add")
+      // Cleared and highlighted again: Blurt knows the word now, and a tap on
+      // that chip puts the + back at once.
+      field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+      Thread.sleep(forTimeInterval: 0.5)
+      field.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.5)).doubleTap()
+      check(known.waitForExistence(timeout: 4), "one tap added “\(word)”: highlighted again, the chip knows it")
+      shot("\(layoutName)-known")
+      if known.exists {
+        known.tap()
+        check(plus.waitForExistence(timeout: 3), "a tap on the known chip puts the + back")
+      }
     } else if chip.exists {
       check(false, "the word was already a key term before this run (\(label)) — the list was not reset")
     }
-    // Clear the highlight, cursor at the end, so the + is back for the flows
-    // after this and typing appends rather than replaces.
+    // Clear the highlight, cursor at the end, so typing appends rather than
+    // replaces; the + is there either way.
     field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+    check(plus.waitForExistence(timeout: 3), "the + present once the highlight is cleared")
     Thread.sleep(forTimeInterval: 0.5)
   }
 

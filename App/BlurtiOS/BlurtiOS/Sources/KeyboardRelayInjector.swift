@@ -19,12 +19,20 @@ nonisolated struct KeyboardRelayInjector: InjectorProtocol {
   static let deliveryTimeout: TimeInterval = 3
   static let deliveryPoll: Duration = .milliseconds(250)
 
+  /// The keyboard the dictation in flight was pressed in
+  /// (`KeyboardCommand.keyboard`), or nil for whichever keyboard is up.
+  var presser: @Sendable () -> String? = { nil }
+
   func setTarget(_ focus: CapturedFocus?) async {}
 
   func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws {
-    guard SharedStore.isKeyboardPresent else { try await copyOut(text) }
-    let result = DictationResult(
-      id: UUID(), text: text, deliveredAt: Date(), recipient: SharedStore.keyboardInstance)
+    // The words go to the keyboard that asked for them. If the user has
+    // moved on — another app's keyboard is the one on screen now — they go
+    // to the clipboard rather than into a field nobody dictated into.
+    let onScreen = SharedStore.keyboardInstance
+    let recipient = presser() ?? onScreen
+    guard SharedStore.isKeyboardPresent, recipient == onScreen else { try await copyOut(text) }
+    let result = DictationResult(id: UUID(), text: text, deliveredAt: Date(), recipient: recipient)
     SharedStore.write(result, forKey: BlurtShared.Key.result)
     SharedStore.post(BlurtShared.Signal.result)
     let deadline = Date().addingTimeInterval(Self.deliveryTimeout)

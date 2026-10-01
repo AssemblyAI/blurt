@@ -109,7 +109,9 @@ nonisolated struct VoiceState: Equatable {
     }
   }
 
-  var canCancel: Bool { !isSettled }
+  /// Something is in flight and Blurt is there to stop it: no × beside a
+  /// dimmed mic whose app is gone.
+  var canCancel: Bool { !isSettled && isReady }
 
   var ring: Ring {
     switch phase {

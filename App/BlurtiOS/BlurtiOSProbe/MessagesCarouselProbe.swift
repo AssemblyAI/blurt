@@ -19,6 +19,8 @@ final class MessagesCarouselProbe: XCTestCase {
     let mic = messages.buttons.matching(NSPredicate(format: "identifier == %@", "blurt-mic")).firstMatch
     XCTAssertTrue(mic.exists, "no mic key")
     print("FLOW-INFO mic \(mic.frame) plus \(plus.frame)")
+    let inkUp = MicPixels.ink(messages, mic: mic) ?? 0
+    print("FLOW-\(inkUp > MicPixels.drawnThreshold ? "OK" : "FAIL"): the mic is drawn on appearance (ink \(inkUp))")
     shot(messages, "up")
     // One fixed point: the gap under the panel's mic.
     let anchor = mic.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 1.15)).screenPoint
@@ -36,7 +38,25 @@ final class MessagesCarouselProbe: XCTestCase {
       // The panel's mic is element-wide when aligned to an edge, so its
       // presence, not its width, says the panel is up.
       let up = keys.exists ? "keys" : (mic.exists ? "panel" : "NEITHER")
-      print("FLOW-INFO after \(index + 1) (\(swipe.name)): \(up)")
+      let micFrame = mic.exists ? mic.frame : .zero
+      let plusFrame = plus.exists ? plus.frame : .zero
+      print("FLOW-INFO after \(index + 1) (\(swipe.name)): \(up) mic \(micFrame) plus \(plusFrame)")
+      if up == "panel" {
+        // The panel's mic key is the grille's box, the + beside it: anything
+        // else is the vanished-mic state Neil sees in Messages.
+        let beside = plusFrame.minX >= micFrame.maxX - 1 || plusFrame.maxX <= micFrame.minX + 1
+        let sound = micFrame.width > 100 && micFrame.height > 60 && beside && abs(plusFrame.midY - micFrame.midY) < 4
+        print("FLOW-\(sound ? "OK" : "FAIL"): panel back with the mic full size and the + beside it (\(index + 1))")
+        let ink = MicPixels.ink(messages, mic: mic) ?? 0
+        print(
+          "FLOW-\(ink > MicPixels.drawnThreshold ? "OK" : "FAIL"): the mic is drawn after the return (\(index + 1), ink \(ink))"
+        )
+        if !sound {
+          print(
+            "FLOW-TREE\n\(messages.debugDescription.split(separator: "\n").filter { $0.contains("Button") || $0.contains("Other") }.prefix(60).joined(separator: "\n"))"
+          )
+        }
+      }
       shot(messages, "\(index + 1)-\(swipe.name)")
     }
   }

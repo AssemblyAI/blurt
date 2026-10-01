@@ -24,6 +24,25 @@ struct KeyboardInteractionTests {
     #expect(KeyboardInteraction.micTravelled(CGSize(width: 0, height: -24.1)))
   }
 
+  @Test("a touch that ends on the key is a tap wherever the thumb rolled; one that left it is not")
+  func endsOnKey() {
+    let key = CGSize(width: 33.5, height: 43)
+    // Barely moved: a tap wherever it ended.
+    #expect(KeyboardInteraction.isTap(CGSize(width: 5, height: 5), endedAt: CGPoint(x: -100, y: -100), in: key))
+    // Rolled 20 pt but ended inside the key.
+    #expect(KeyboardInteraction.isTap(CGSize(width: 0, height: 20), endedAt: CGPoint(x: 16, y: 30), in: key))
+    // Ended just past the edge, within the slop.
+    #expect(
+      KeyboardInteraction.isTap(
+        CGSize(width: 15, height: 0), endedAt: CGPoint(x: key.width + KeyboardInteraction.tapSlop - 0.1, y: 20),
+        in: key))
+    // Left the key: a swipe.
+    #expect(!KeyboardInteraction.isTap(CGSize(width: 60, height: 0), endedAt: CGPoint(x: 80, y: 20), in: key))
+    #expect(!KeyboardInteraction.isTap(CGSize(width: 0, height: -60), endedAt: CGPoint(x: 16, y: -40), in: key))
+    // With no size known yet, only the travel rule applies.
+    #expect(!KeyboardInteraction.isTap(CGSize(width: 15, height: 0), endedAt: CGPoint(x: 16, y: 20), in: .zero))
+  }
+
   // `#expect` captures its expression immutably, so each mutating step lands
   // in a local first.
   @Test("a quick tap presses and releases together")

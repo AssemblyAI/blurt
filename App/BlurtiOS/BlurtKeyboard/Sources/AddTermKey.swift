@@ -1,22 +1,22 @@
 import SwiftUI
 
-/// The small + beside the element (and in the panel's corner): a new key
-/// term. A bare glyph, quiet until it is needed; a check for a moment after
-/// one was saved.
+/// The small + beside the mic: a new key term. A bare glyph, quiet until it
+/// is needed; a check for a moment after one was saved.
 ///
 /// Highlight a word in the text and the + is a chip instead — the field's
 /// shape, holding the word — and one tap adds the word as it stands: + for a
-/// word Blurt doesn't know yet, ✓ once it does. Holding the chip opens the
-/// field pre-filled instead, to fix the spelling first (`KeyboardModel`:
-/// `selectedTerm`, `addSelectedTerm`, `beginAddingTerm`).
+/// word Blurt doesn't know yet, ✓ once it does. After the check the + comes
+/// back, highlight or not; a tap on a ✓ chip puts it back at once. Holding
+/// the chip opens the field pre-filled instead, to fix the spelling first
+/// (`KeyboardModel`: `selectedTerm`, `addSelectedTerm`, `beginAddingTerm`).
+/// The row it hangs in (`VoiceRow`) decides how wide the chip may grow.
 struct AddTermKey: View {
   var model: KeyboardModel
-  /// The most the chip may take, where nothing else bounds it (the panel's
-  /// corner); nil where the row's own room does (the bar).
-  var maxWidth: CGFloat?
   @Environment(\.keyboardPalette) private var palette
-  @State private var pressed = false
-  @State private var hold: Task<Void, Never>?
+  /// Lit while a finger is on the chip. A gesture state, so a touch the
+  /// system takes away (a call, the keyboard dismissed mid-press) unlights it
+  /// too; a plain state would stay lit.
+  @GestureState private var pressed = false
   @State private var held = false
 
   var body: some View {
@@ -36,15 +36,9 @@ struct AddTermKey: View {
 
   /// The bare +: a new term typed from nothing (or from the selection, seeded).
   private var plain: some View {
-    Button {
+    GlyphKey(symbol: saved ? "checkmark" : "plus", tint: saved ? palette.signal : mutedTint, label: "Add a key term") {
       model.beginAddingTerm()
-    } label: {
-      glyph(saved ? "checkmark" : "plus", tint: saved ? palette.signal : mutedTint)
-        .frame(width: DesignTokens.Metrics.glyphHit, height: DesignTokens.Metrics.glyphHit)
-        .contentShape(Circle())
     }
-    .buttonStyle(KeyPressStyle())
-    .accessibilityLabel("Add a key term")
   }
 
   /// The chip: the highlighted word, ready to add with one tap.
@@ -72,44 +66,30 @@ struct AddTermKey: View {
     .contentShape(Rectangle())
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(known ? "“\(term)” is a key term" : "Add “\(term)” as a key term")
-    .accessibilityHint(known ? "" : "Hold to edit it first")
+    .accessibilityHint(known ? "Tap to put the + back" : "Hold to edit it first")
     .accessibilityAddTraits(.isButton)
     .accessibilityIdentifier("blurt-add-selected")
-    .simultaneousGesture(tapOrHold)
-    // The chip hugs the word — a shorter word, a shorter chip — and only
-    // shrinks, truncating the word, when the room it is offered is less:
-    // the bar's remainder beside the element, or this cap in the panel. The
-    // cap is an outer, invisible frame, so the chip never stretches to it.
-    .frame(maxWidth: maxWidth, alignment: .leading)
-  }
-
-  /// A tap adds; a hold opens the field with the word in it; a touch that
-  /// travelled (the panel's carousel) does neither.
-  private var tapOrHold: some Gesture {
-    DragGesture(minimumDistance: 0)
-      .onChanged { value in
-        if !pressed {
-          pressed = true
-          held = false
-          hold = Task { [model] in
-            try? await Task.sleep(for: .seconds(DesignTokens.Motion.chipHold))
-            guard !Task.isCancelled else { return }
-            held = true
-            model.beginAddingTerm()
-          }
+    // A hold opens the field with the word in it. The system's long press:
+    // it fails on its own when the finger travels or the touch is taken
+    // away, so no timer of ours can open the field after the finger is gone.
+    .simultaneousGesture(
+      LongPressGesture(minimumDuration: DesignTokens.Motion.chipHold, maximumDistance: KeyboardInteraction.tapTravel)
+        .onEnded { _ in
+          held = true
+          model.beginAddingTerm()
         }
-        if !KeyboardInteraction.isTap(value.translation) {
-          hold?.cancel()
-          hold = nil
+    )
+    // A tap adds; a touch that travelled (the panel's carousel), or one the
+    // hold already answered, does nothing.
+    .simultaneousGesture(
+      DragGesture(minimumDistance: 0)
+        .updating($pressed) { _, state, _ in state = true }
+        .onEnded { value in
+          defer { held = false }
+          guard !held, KeyboardInteraction.isTap(value.translation) else { return }
+          model.addSelectedTerm()
         }
-      }
-      .onEnded { value in
-        pressed = false
-        hold?.cancel()
-        hold = nil
-        guard !held, KeyboardInteraction.isTap(value.translation) else { return }
-        model.addSelectedTerm()
-      }
+    )
   }
 
   private var mutedTint: Color { palette.keyText.opacity(DesignTokens.Metrics.opacityLegendMuted) }

@@ -15,9 +15,14 @@ import SwiftUI
 struct MicControl: View {
   var model: KeyboardModel
   let slot: VoiceSlot
-  /// A narrower box than the slot's, when the bar hasn't the room.
+  /// The key's width: as wide as the element shows (`VoiceRowLayout`).
   var width: CGFloat?
-  @State private var pressed = false
+  /// The key's touch target is at least this tall — the row's height — so
+  /// the whole row under the element is the key, not just the element's box.
+  var hitHeight: CGFloat?
+  /// Down while the finger is on the key. A gesture state, so a touch the
+  /// system takes away lets the key back up; a plain state would hold it down.
+  @GestureState private var pressed = false
   @State private var press = MicPressSequencer()
   @State private var pressTask: Task<Void, Never>?
   @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
@@ -27,7 +32,8 @@ struct MicControl: View {
 
   var body: some View {
     let state = model.voiceState
-    let box = CGSize(width: width ?? slot.box.width, height: slot.box.height)
+    let box = slot.box
+    let hit = CGSize(width: width ?? box.width, height: max(box.height, hitHeight ?? 0))
     ZStack {
       VoiceElementView(
         inputs: VoiceElementInputs(
@@ -43,7 +49,7 @@ struct MicControl: View {
           .transition(.opacity)
       }
     }
-    .frame(width: box.width, height: box.height)
+    .frame(width: hit.width, height: hit.height)
     .animation(.easeInOut(duration: DesignTokens.Motion.stateFade), value: state.phase)
     .scaleEffect(pressed ? DesignTokens.Metrics.voicePressScale : 1)
     .animation(.easeOut(duration: DesignTokens.Motion.press), value: pressed)
@@ -52,16 +58,26 @@ struct MicControl: View {
     .accessibilityValue(state.accessibilityValue)
     .accessibilityAddTraits(.isButton)
     .accessibilityIdentifier("blurt-mic")
+    .onDisappear {
+      pressTask?.cancel()
+      pressTask = nil
+      press = MicPressSequencer()
+    }
     .simultaneousGesture(
       DragGesture(minimumDistance: 0)
+        .updating($pressed) { _, state, _ in state = true }
         .onChanged { value in
-          pressed = true
           if press.began() {
             // The press waits a beat, so a swipe that starts on the key (the
             // panel's carousel) never starts a dictation it must then cancel.
             pressTask = Task { [model] in
               try? await Task.sleep(for: KeyboardInteraction.micPressDelay)
-              guard !Task.isCancelled else { return }
+              // A touch the system took away in the meantime (the gesture
+              // state is down again) presses nothing.
+              guard !Task.isCancelled, pressed else {
+                press = MicPressSequencer()
+                return
+              }
               if press.delayFired() { model.micDown() }
             }
           }
@@ -71,7 +87,6 @@ struct MicControl: View {
           }
         }
         .onEnded { value in
-          pressed = false
           pressTask?.cancel()
           pressTask = nil
           switch press.ended(travelled: KeyboardInteraction.micTravelled(value.translation)) {

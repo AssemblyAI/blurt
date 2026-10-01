@@ -2,15 +2,17 @@ import SwiftUI
 
 /// The voice bar as a field — the brand's input, a rectangle with a hairline,
 /// never a capsule: × to leave, what has been typed with a caret, ✓ to save.
-/// Return saves too.
+/// Return saves too. × and ✓ are the same glyph keys as the +.
 struct TermField: View {
   var model: KeyboardModel
   @Environment(\.keyboardPalette) private var palette
 
   var body: some View {
     HStack(spacing: DesignTokens.Metrics.termGap) {
-      round("xmark", tint: palette.keyText.opacity(DesignTokens.Metrics.opacityTermCancel)) { model.cancelAddingTerm() }
-        .accessibilityLabel("Cancel")
+      GlyphKey(symbol: "xmark", tint: palette.keyText.opacity(DesignTokens.Metrics.opacityTermCancel), label: "Cancel")
+      {
+        model.cancelAddingTerm()
+      }
       HStack(spacing: 0) {
         if let draft = model.termDraft, !draft.isEmpty {
           Text(draft).foregroundStyle(palette.keyText)
@@ -32,23 +34,10 @@ struct TermField: View {
       )
       .accessibilityElement(children: .ignore)
       .accessibilityLabel("Key term: \(model.termDraft ?? "")")
-      round("checkmark", tint: palette.signal) { model.saveTerm() }
-        .accessibilityLabel("Save the key term")
+      GlyphKey(symbol: "checkmark", tint: palette.signal, label: "Save the key term") { model.saveTerm() }
         .disabled(model.termDraft?.trimmingCharacters(in: .whitespaces).isEmpty ?? true)
     }
     .padding(.horizontal, DesignTokens.Metrics.termInset)
-  }
-
-  /// × and ✓: bare glyphs, as the + is.
-  private func round(_ symbol: String, tint: Color, action: @escaping () -> Void) -> some View {
-    Button(action: action) {
-      Image(systemName: symbol)
-        .font(.system(size: DesignTokens.Typography.sizeGlyph, weight: DesignTokens.Typography.weightGlyph))
-        .foregroundStyle(tint)
-        .frame(width: DesignTokens.Metrics.glyphHit, height: DesignTokens.Metrics.glyphHit)
-        .contentShape(Circle())
-    }
-    .buttonStyle(KeyPressStyle())
   }
 }
 

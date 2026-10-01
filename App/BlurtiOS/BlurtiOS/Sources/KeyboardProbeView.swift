@@ -10,6 +10,9 @@
   /// builds only; the keyboard itself never runs here.
   struct KeyboardProbeView: View {
     let dark: Bool
+    /// `-BlurtProbeText <word>`: the field starts with this in it, so a flow
+    /// can highlight a word in any layout, letter keys or not.
+    var text = ""
 
     /// `-BlurtProbeField light|dark [a|b|c] [slimBar|panel|full] [left|center|right]`:
     /// the words after the face set the mic concept, the layout and the mic's
@@ -31,12 +34,16 @@
       // `-BlurtProbeResetTerms`: an empty key-term list, so a flow that adds a
       // word finds it new on every run (the App Group outlives the test).
       if arguments.contains("-BlurtProbeResetTerms") { SharedStore.keyTerms = [] }
-      return KeyboardProbeView(dark: face == "dark")
+      var text = ""
+      if let flag = arguments.firstIndex(of: "-BlurtProbeText"), arguments.count > flag + 1 {
+        text = arguments[flag + 1]
+      }
+      return KeyboardProbeView(dark: face == "dark", text: text)
     }
 
     var body: some View {
       VStack {
-        ProbeField(dark: dark)
+        ProbeField(dark: dark, text: text)
           .frame(height: DesignTokens.Metrics.keyMinWidth)
           .padding()
         // Puts the keyboard away without leaving the field, so a flow can
@@ -70,10 +77,12 @@
   /// keyboard's voice row stands in for.
   private struct ProbeField: UIViewRepresentable {
     let dark: Bool
+    let text: String
 
     func makeUIView(context: Context) -> UITextField {
       let field = UITextField()
       field.accessibilityIdentifier = "probe-field"
+      field.text = text
       field.keyboardAppearance = dark ? .dark : .light
       field.autocorrectionType = .yes
       field.autocapitalizationType = .none

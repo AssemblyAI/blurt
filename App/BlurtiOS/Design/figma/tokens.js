@@ -94,10 +94,9 @@ Keyboard|kb/popup|COLOR|#33302A|Themes:dark/popup|FRAME_FILL,SHAPE_FILL|DesignTo
 Keyboard|kb/signal|COLOR|#67AD82|Themes:dark/signal|SHAPE_FILL,TEXT_FILL|DesignTokens.Keyboard.kbSignal|the wave, the caret, the saved check
 Keyboard|kb/surface|COLOR|#1D1B16|Themes:dark/surface|FRAME_FILL,SHAPE_FILL|DesignTokens.Keyboard.kbSurface|the design face's surface (Figma binds to kb/*; Swift reads the palette)
 Metrics|addterm/chip-gap|FLOAT|6||GAP|DesignTokens.Metrics.addtermChipGap|between the chip's glyph and the word
-Metrics|addterm/chip-max-width|FLOAT|240||WIDTH_HEIGHT|DesignTokens.Metrics.addtermChipMaxWidth|the most the chip may take in the panel's corner, clear of the cancel ×
-Metrics|addterm/chip-min-width|FLOAT|96||WIDTH_HEIGHT|DesignTokens.Metrics.addtermChipMinWidth|the room the voice bar keeps for the chip; the element gives way beyond it
+Metrics|addterm/chip-min-width|FLOAT|96||WIDTH_HEIGHT|DesignTokens.Metrics.addtermChipMinWidth|the least room a chip needs beside a centred mic; with less, the mic and the chip centre as a pair
 Metrics|addterm/chip-pad|FLOAT|10||WIDTH_HEIGHT|DesignTokens.Metrics.addtermChipPad|the selected-word chip's side padding
-Metrics|addterm/inset|FLOAT|6||GAP|DesignTokens.Metrics.addtermInset|the + from the panel's corner
+Metrics|addterm/inset|FLOAT|6||GAP|DesignTokens.Metrics.addtermInset|the cancel × from the panel's far corner when the mic is at an edge
 Metrics|app/button-height|FLOAT|40||WIDTH_HEIGHT|DesignTokens.Metrics.appButtonHeight|the brand's button
 Metrics|app/button-pad|FLOAT|12||WIDTH_HEIGHT|DesignTokens.Metrics.appButtonPad|its side padding
 Metrics|app/card-pad|FLOAT|16||WIDTH_HEIGHT|DesignTokens.Metrics.appCardPad|inside a card
@@ -120,7 +119,7 @@ Metrics|caret/height|FLOAT|20||WIDTH_HEIGHT|DesignTokens.Metrics.caretHeight|
 Metrics|caret/lead|FLOAT|1||GAP|DesignTokens.Metrics.caretLead|the caret's gap from the text
 Metrics|caret/radius|FLOAT|1||CORNER_RADIUS|DesignTokens.Metrics.caretRadius|
 Metrics|caret/width|FLOAT|2||STROKE_FLOAT,WIDTH_HEIGHT|DesignTokens.Metrics.caretWidth|
-Metrics|glyph/hit|FLOAT|32||WIDTH_HEIGHT|DesignTokens.Metrics.glyphHit|the +, × and ✓ touch targets
+Metrics|glyph/hit|FLOAT|44||WIDTH_HEIGHT|DesignTokens.Metrics.glyphHit|the +, × and ✓ touch targets: the HIG's 44 pt square around a size/glyph symbol
 Metrics|grille/bar-height|FLOAT|28||WIDTH_HEIGHT|DesignTokens.Metrics.grilleBarHeight|
 Metrics|grille/bar-width|FLOAT|64||WIDTH_HEIGHT|DesignTokens.Metrics.grilleBarWidth|the grille in the voice bar
 Metrics|grille/dot|FLOAT|2||WIDTH_HEIGHT|DesignTokens.Metrics.grilleDot|a dot's diameter
@@ -166,13 +165,13 @@ Metrics|opacity/pressed|FLOAT|0.85||OPACITY|DesignTokens.Metrics.opacityPressed|
 Metrics|opacity/sheen|FLOAT|0.22||OPACITY|DesignTokens.Metrics.opacitySheen|the light passing over the element at rest: chrome catching light
 Metrics|opacity/surface-vignette|FLOAT|0||OPACITY|DesignTokens.Metrics.opacitySurfaceVignette|a soft darkening toward the surface's edges; 0 is none
 Metrics|opacity/term-cancel|FLOAT|0.7||OPACITY|DesignTokens.Metrics.opacityTermCancel|the field's ×
-Metrics|panel/spacing|FLOAT|12||GAP|DesignTokens.Metrics.panelSpacing|between the panel's orb and its key row
+Metrics|panel/spacing|FLOAT|8||GAP|DesignTokens.Metrics.panelSpacing|under the panel's voice row, above its keys: the top margin again, so the mic is centred between the keyboard's top edge and the keys
 Metrics|picker/preview-width|FLOAT|393||WIDTH_HEIGHT|DesignTokens.Metrics.pickerPreviewWidth|the theme card draws the keyboard at this width
 Metrics|picker/radius|FLOAT|10||CORNER_RADIUS|DesignTokens.Metrics.pickerRadius|the theme card's preview corners
 Metrics|picker/scale|FLOAT|0.42|||DesignTokens.Metrics.pickerScale|then scales it to fit two across
 Metrics|popup/extra-width|FLOAT|18||WIDTH_HEIGHT|DesignTokens.Metrics.popupExtraWidth|the letter pop-up is the key width plus this
 Metrics|popup/height|FLOAT|56||WIDTH_HEIGHT|DesignTokens.Metrics.popupHeight|
-Metrics|popup/offset|FLOAT|58||WIDTH_HEIGHT|DesignTokens.Metrics.popupOffset|the pop-up sits this far above the key
+Metrics|popup/offset|FLOAT|50||WIDTH_HEIGHT|DesignTokens.Metrics.popupOffset|the pop-up rises this far from the key's top: it overlaps the key by popup/height minus this and stays inside the keyboard on the top row
 Metrics|popup/radius|FLOAT|10||CORNER_RADIUS|DesignTokens.Metrics.popupRadius|
 Metrics|popup/shadow-radius|FLOAT|8||WIDTH_HEIGHT|DesignTokens.Metrics.popupShadowRadius|the one thing that floats
 Metrics|popup/shadow-y|FLOAT|2||WIDTH_HEIGHT|DesignTokens.Metrics.popupShadowY|
@@ -183,7 +182,6 @@ Metrics|radius/input|FLOAT|8||WIDTH_HEIGHT|DesignTokens.Metrics.radiusInput|the 
 Metrics|ribs/rest-height|FLOAT|16||WIDTH_HEIGHT|DesignTokens.Metrics.ribsRestHeight|
 Metrics|ribs/rest-width|FLOAT|40||WIDTH_HEIGHT|DesignTokens.Metrics.ribsRestWidth|the ribs asleep: the wave's own bars at rest
 Metrics|row/gap|FLOAT|11||GAP|DesignTokens.Metrics.rowGap|between rows, the iPhone's
-Metrics|slim/spacing|FLOAT|8||GAP|DesignTokens.Metrics.slimSpacing|between the slim bar's keys
 Metrics|streak/arm|FLOAT|1.4||WIDTH_HEIGHT|DesignTokens.Metrics.streakArm|the landing flash's vertical arm, as a fraction of the box's height
 Metrics|streak/height|FLOAT|2||WIDTH_HEIGHT|DesignTokens.Metrics.streakHeight|the light streak while recording
 Metrics|streak/line|FLOAT|1||WIDTH_HEIGHT|DesignTokens.Metrics.streakLine|the hairline at rest
@@ -204,7 +202,7 @@ Metrics|voice/home-width|FLOAT|280||WIDTH_HEIGHT|DesignTokens.Metrics.voiceHomeW
 Metrics|voice/panel-height|FLOAT|88||WIDTH_HEIGHT|DesignTokens.Metrics.voicePanelHeight|
 Metrics|voice/panel-width|FLOAT|300||WIDTH_HEIGHT|DesignTokens.Metrics.voicePanelWidth|the box in the panel
 Metrics|voice/press-scale|FLOAT|0.94||WIDTH_HEIGHT|DesignTokens.Metrics.voicePressScale|the element while pressed
-Metrics|voicebar/addterm-clearance|FLOAT|12||GAP|DesignTokens.Metrics.voicebarAddtermClearance|between the element and the +
+Metrics|voicebar/addterm-clearance|FLOAT|6||GAP|DesignTokens.Metrics.voicebarAddtermClearance|between the mic key's edge and the add key's box (the + or the chip), the key gap
 Metrics|voicebar/height|FLOAT|44||WIDTH_HEIGHT|DesignTokens.Metrics.voicebarHeight|the voice row, where the system puts its suggestion bar
 Metrics|voicebar/note-gap|FLOAT|10||GAP|DesignTokens.Metrics.voicebarNoteGap|between the orb and the Full Access note
 Metrics|wave/bar|FLOAT|2||STROKE_FLOAT,WIDTH_HEIGHT|DesignTokens.Metrics.waveBar|a wave bar's width
@@ -235,7 +233,7 @@ Typography|weight/popup|STRING|regular||FONT_STYLE|DesignTokens.Typography.weigh
 Typography|weight/term|STRING|regular||FONT_STYLE|DesignTokens.Typography.weightTerm|
 Typography|weight/voice-glyph|STRING|semibold||FONT_STYLE|DesignTokens.Typography.weightVoiceGlyph|
 Motion|caret|FLOAT|0.5|||DesignTokens.Motion.caret|the caret's blink
-Motion|chip-hold|FLOAT|0.4|||DesignTokens.Motion.chipHold|holding the chip opens the field instead of adding
+Motion|chip-hold|FLOAT|0.6|||DesignTokens.Motion.chipHold|holding the chip opens the field instead of adding; longer than a firm tap
 Motion|colour|FLOAT|0.2|||DesignTokens.Motion.colour|a colour or fill changing state: the brand's transition
 Motion|ease/signature|STRING|0.22,1,0.36,1|||DesignTokens.Motion.easeSignature|the house curve for everything that moves; nothing springs
 Motion|flip|FLOAT|0.25|||DesignTokens.Motion.flip|the panel's carousel

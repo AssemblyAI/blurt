@@ -106,6 +106,18 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     view.setNeedsUpdateConstraints()
   }
 
+  /// The host's traits are resolved by now where they may not have been in
+  /// `viewWillAppear`: the face is read again here, so a dark host is dark
+  /// from the first frame. Never from a trait-change registration — that
+  /// callback runs inside the host's layout pass, and a model change made
+  /// there left the mic element's drawing uncommitted in Messages (nothing
+  /// drew, every time).
+  override func viewIsAppearing(_ animated: Bool) {
+    super.viewIsAppearing(animated)
+    model.contextChanged()
+    paintFloor()
+  }
+
   /// The floor in the face's material at `floorAlpha`: the host's own
   /// keyboard colour, measured, so nothing shows through the paint but the
   /// touches reach the keyboard.
