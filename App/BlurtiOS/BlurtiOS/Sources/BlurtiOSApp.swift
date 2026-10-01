@@ -20,8 +20,7 @@ struct BlurtiOSApp: App {
         subsystem: "dev.alex.blurt.ios",
         keychainService: "blurt-ios",
         defaultsPrefix: "Blurt",
-        logDirectoryName: "Blurt",
-        releaseURL: HostIdentity.blurt.releaseURL))
+        logDirectoryName: "Blurt"))
     // The unit tests are hosted by this app: they get a coordinator that
     // touches neither the Keychain nor the App Group (the Mac's UITestSupport
     // does the same for its harness), and `start()` below never runs.

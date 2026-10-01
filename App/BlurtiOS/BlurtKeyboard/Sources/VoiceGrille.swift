@@ -205,7 +205,8 @@ struct VoiceGrille: View {
     let fringe = alpha * 0.4  // literal-ok: the fringe is a fraction of the flare
     let core = Metrics.grilleDot * 2  // literal-ok: the flare's centre is a double dot
     var centre = Layer(id: firstID + 4, colour: DesignTokens.Brand.white, opacity: alpha)
-    centre.path.addEllipse(in: CGRect(x: x - core / 2, y: midY - core / 2, width: core, height: core))  // literal-ok: centred
+    let centreRect = CGRect(x: x - core / 2, y: midY - core / 2, width: core, height: core)  // literal-ok: centred
+    centre.path.addEllipse(in: centreRect)
     return [
       line(
         firstID, CGPoint(x: x + width, y: midY - arm / 2), CGPoint(x: x + width, y: midY + arm / 2),
