@@ -51,7 +51,7 @@ DEFAULT_TARGETS=(
   "Sources/BlurtEngine/Hotkey/DictationKeyGate.swift"
   "Sources/BlurtEngine/Hotkey/DictationKeyRouter.swift"
   "Sources/BlurtEngine/Hotkey/TriggerKey.swift"
-  "Sources/BlurtEngine/Injection/KeyInjector+Separator.swift"
+  "Sources/BlurtEngine/Injection/InsertionSeparator.swift"
   "Sources/BlurtEngine/Pipeline/MeterBarGeometry.swift"
   "Sources/BlurtEngine/Pipeline/OverlayPlacement.swift"
   "Sources/BlurtEngine/Pipeline/PipelinePhase.swift"
