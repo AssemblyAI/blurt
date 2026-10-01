@@ -18,13 +18,14 @@ struct ImportTermsView: View {
             Toggle(term, isOn: binding(for: term))
           }
         } header: {
-          Text(pack.from.map { "From \($0)" } ?? "Shared with you")
+          Eyebrow(pack.from.map { "From \($0)" } ?? "Shared with you")
         } footer: {
           Text(
             "They'll ride along with every dictation so Blurt spells them right. Terms you already have are skipped; "
               + "the first \(TermPack.termCap) terms ride each request, so keep the list to what matters.")
         }
       }
+      .brandForm()
       .navigationTitle(pack.name)
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {

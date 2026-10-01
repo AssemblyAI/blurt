@@ -14,6 +14,14 @@ extension KeyboardModel {
     }
     proxy?.insertText(text)
     if shifted, !symbolsPage { shifted = false }
+    typedIntoHost()
+  }
+
+  /// The keyboard's own edit to the host's text replaces whatever was
+  /// highlighted: the picture follows at once, not on the host's next
+  /// notification.
+  private func typedIntoHost() {
+    readSelection()
   }
 
   func deleteBackward() {
@@ -24,6 +32,7 @@ extension KeyboardModel {
       return
     }
     proxy?.deleteBackward()
+    typedIntoHost()
   }
 
   func newline() {
@@ -33,16 +42,92 @@ extension KeyboardModel {
       return
     }
     proxy?.insertText("\n")
+    typedIntoHost()
   }
 
   // MARK: Quick-add key term
 
+  /// The most characters a highlighted word may have and still be offered as
+  /// a key term: a name or a phrase, not a sentence.
+  static let termLengthCap = 48
+
+  /// A selection as a key term: trimmed, on one line, short enough to be a
+  /// name or a phrase. Nil when it is none of those, or nothing is selected.
+  static func termCandidate(from selected: String?) -> String? {
+    guard let trimmed = selected?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty,
+      trimmed.count <= termLengthCap, !trimmed.contains(where: \.isNewline)
+    else { return nil }
+    return trimmed
+  }
+
+  /// What is highlighted in the host's text, as a key-term candidate, and
+  /// whether Blurt has it already. The list lives in the App Group, so only
+  /// with Full Access — without it there is nothing the chip could do. A word
+  /// the chip is done with (`dismissedSelection`) shows no chip while the
+  /// same highlight stands.
+  func readSelection() {
+    guard hasFullAccess, let term = Self.termCandidate(from: proxy?.selectedText) else {
+      selectedTerm = nil
+      selectedTermIsKnown = false
+      dismissedSelection = nil
+      return
+    }
+    if let dismissed = dismissedSelection {
+      guard dismissed.caseInsensitiveCompare(term) != .orderedSame else {
+        selectedTerm = nil
+        selectedTermIsKnown = false
+        return
+      }
+      dismissedSelection = nil
+    }
+    selectedTerm = term
+    selectedTermIsKnown = SharedStore.keyTerms.contains { $0.caseInsensitiveCompare(term) == .orderedSame }
+  }
+
+  /// The chip: the highlighted word goes into Blurt's key terms as it stands
+  /// — one tap, no typing, the text untouched. The chip shows its check for
+  /// the notice's moment and then gives way to the + (`dismissSelection`),
+  /// highlight or not: the host may keep the word highlighted for as long as
+  /// the user leaves it, and a chip that stayed with it read as stuck. A tap
+  /// on a chip for a word Blurt already has puts the + back at once.
+  func addSelectedTerm() {
+    guard let term = selectedTerm else { return }
+    guard !selectedTermIsKnown else {
+      dismissSelection()
+      return
+    }
+    SharedStore.addKeyTerm(term)
+    selectedTermIsKnown = true
+    noteTermSaved(thenDismissChip: true)
+  }
+
+  /// The chip is done with the highlighted word: the + comes back and stays
+  /// back while that highlight stands (`KeyboardModel.dismissedSelection`).
+  func dismissSelection() {
+    dismissedSelection = selectedTerm
+    selectedTerm = nil
+    selectedTermIsKnown = false
+  }
+
   /// The voice bar becomes a field and the keys type into it. If the user
   /// had selected a word — the one Blurt got wrong — it is the starting
   /// point, and saving also replaces it in the text with what they typed.
+  /// The field takes the mic key's row, so a dictation in flight is closed
+  /// first — nothing runs on with no key to stop it. From the plain + a
+  /// recording is released and the words still land; from a highlighted
+  /// word it is cancelled: the words would land *over* the word being fixed
+  /// (a result replaces the selection), and the user's intent is the word.
   func beginAddingTerm() {
-    let selected = proxy?.selectedText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    let seed = selected.count <= 48 && !selected.contains("\n") ? selected : ""
+    let seed = Self.termCandidate(from: proxy?.selectedText) ?? ""
+    switch snapshot.state {
+    case .recording: perform(seed.isEmpty ? .stop : .cancel)
+    case .connecting: perform(.cancel)
+    case .idle, .processing, .pasted, .copied, .error:
+      // A press the app hasn't answered yet would start a dictation under
+      // the field: it is taken back.
+      if unansweredPress != nil || !gate.isIdle { perform(.cancel) }
+    }
+    gate.reset()
     termDraftFromSelection = seed.isEmpty ? nil : seed
     termHostBaseline = proxy?.documentContextBeforeInput ?? ""
     termHostBaselineAfter = proxy?.documentContextAfterInput ?? ""
@@ -56,6 +141,8 @@ extension KeyboardModel {
     termDraftFromSelection = nil
     termHostBaseline = nil
     termHostBaselineAfter = nil
+    // The highlight may still stand: the chip comes back as it is now.
+    readSelection()
     updateShift()
     onLayoutChange?()
   }
@@ -72,29 +159,55 @@ extension KeyboardModel {
     // Out of the mode before touching the text, so the field's own change
     // notification can't read the replacement as typing to claim.
     let original = termDraftFromSelection
+    let baseline = termHostBaseline
     termDraft = nil
     termDraftFromSelection = nil
     termHostBaseline = nil
     termHostBaselineAfter = nil
+    // Only while the highlight the field opened over still stands where it
+    // was: the host may report a selection a moment after the user moved on,
+    // and inserting then would put the word in twice.
     if let original, original != draft, let selected = proxy?.selectedText,
-      selected.trimmingCharacters(in: .whitespacesAndNewlines) == original
+      selected.trimmingCharacters(in: .whitespacesAndNewlines) == original,
+      (proxy?.documentContextBeforeInput ?? "") == (baseline ?? "")
     {
       // The selection may have carried the spaces around the word; keep them.
       let lead = selected.prefix { $0.isWhitespace }
       let trail = selected.reversed().prefix { $0.isWhitespace }.reversed()
       proxy?.insertText(String(lead) + draft + String(trail))
     }
-    if hasFullAccess { UINotificationFeedbackGenerator().notificationOccurred(.success) }
-    termSavedAt = Date()
-    termNotice?.cancel()
-    termNotice = Task { [weak self] in
-      try? await Task.sleep(for: .seconds(1.2))
-      guard !Task.isCancelled else { return }
-      self?.termSavedAt = nil
-    }
+    // The word is saved; whatever is still highlighted, the + is back with
+    // its check, not a chip for the word just dealt with.
+    readSelection()
+    dismissSelection()
+    noteTermSaved(thenDismissChip: false)
     updateShift()
     onLayoutChange?()
   }
+
+  /// A success haptic, and the + (or the chip) shows a check for a moment;
+  /// after it, the chip gives way to the + when asked — only if it is still
+  /// the chip for the word that was saved: a word highlighted meanwhile
+  /// keeps its own chip.
+  private func noteTermSaved(thenDismissChip: Bool) {
+    if hasFullAccess { UINotificationFeedbackGenerator().notificationOccurred(.success) }
+    termSavedAt = Date()
+    termNotice?.cancel()
+    let saved = selectedTerm
+    termNotice = Task { [weak self] in
+      try? await Task.sleep(for: .seconds(Self.termNoticeDwell))
+      guard !Task.isCancelled, let self else { return }
+      termSavedAt = nil
+      if thenDismissChip, let saved, let current = selectedTerm,
+        current.caseInsensitiveCompare(saved) == .orderedSame
+      {
+        dismissSelection()
+      }
+    }
+  }
+
+  /// How long the + (or the chip) shows its check after a term was saved.
+  static let termNoticeDwell: TimeInterval = 1.2
 
   /// A space — or, tapped twice quickly after a word, the system keyboard's
   /// "." shortcut: the first space becomes a full stop and a space.
@@ -102,6 +215,7 @@ extension KeyboardModel {
     UIDevice.current.playInputClick()
     if termDraft != nil {
       if termDraft?.isEmpty == false, termDraft?.hasSuffix(" ") == false { termDraft?.append(" ") }
+      updateShift()
       return
     }
     let now = ContinuousClock.now
@@ -116,12 +230,23 @@ extension KeyboardModel {
       proxy?.insertText(" ")
       lastSpaceAt = now
     }
+    typedIntoHost()
     updateShift()
   }
 
   func toggleShift() { shifted.toggle() }
 
-  func toggleSymbols() { symbolsPage.toggle() }
+  /// 123 / ABC: the symbols come up on their first page, or the letters return.
+  func toggleSymbols() {
+    symbolsPage.toggle()
+    morePage = false
+  }
+
+  /// #+= / 123: between the two symbol pages; nothing on the letters.
+  func toggleMore() {
+    guard symbolsPage else { return }
+    morePage.toggle()
+  }
 
   func globe() { controller?.advanceToNextInputMode() }
 

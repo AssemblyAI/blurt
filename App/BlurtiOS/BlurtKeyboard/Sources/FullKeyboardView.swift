@@ -3,86 +3,105 @@ import SwiftUI
 /// A complete keyboard laid out as the iPhone's own — ten letter keys across
 /// at one width, the middle row centred, shift and delete flanking the bottom
 /// letters, then 123 · globe · space · return, at the system keyboard's
-/// spacing — with the voice bar where the suggestion bar would be. Every key is 42 pt tall. Letters pop up
-/// while pressed, sentences capitalise themselves, a double space ends one.
+/// measured spacing (`KeyGeometry`) — with the voice bar where the suggestion
+/// bar would be. Letters pop up while pressed, sentences capitalise
+/// themselves, a double space ends one. 123 opens the numbers and symbols,
+/// #+= the rest of them, as the system keyboard's pages go.
 /// No autocorrect or suggestions yet. iOS swaps in its own keyboard for
 /// password fields, so those never reach here.
 struct FullKeyboardView: View {
   var model: KeyboardModel
 
   private static let symbols = ["1234567890", "-/:;()$&@\"", ".,?!'"]
+  private static let more = ["[]{}#%^*+=", "_\\|~<>€£¥•", ".,?!'"]
 
   var body: some View {
     GeometryReader { geo in
-      let gap = KeyboardPalette.keyGap
-      // Ten keys and nine gaps across the row.
-      let keyWidth = (geo.size.width - 9 * gap) / 10
-      // Shift and delete take what seven letters leave, standing a little
-      // further from them than letters stand from each other.
-      let sideGap = gap * 2
-      let sideWidth = (geo.size.width - 7 * keyWidth - 6 * gap - 2 * sideGap) / 2
-      VStack(spacing: KeyboardPalette.rowGap) {
+      // The root has already taken the side margins off; the rest is the row.
+      let geometry = KeyGeometry(rowWidth: geo.size.width)
+      let gap = geometry.gap
+      VStack(spacing: 0) {
+        // The voice row sits where the system's suggestion bar does, and the
+        // first key row starts right under it, as the iPhone's does.
         VoiceBar(model: model)
-        ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
-          HStack(spacing: index == 2 ? sideGap : gap) {
-            if index == 2 { modifierKey(width: sideWidth) }
-            HStack(spacing: gap) {
-              ForEach(Array(row), id: \.self) { character in
-                LetterKey(label: label(for: character), width: keyWidth) { model.type(label(for: character)) }
+        VStack(spacing: KeyboardPalette.rowGap) {
+          ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+            let third = index == 2  // literal-ok: the third row
+            // The third row's keys fill what shift and delete leave: seven
+            // letters at the letter width, or the five punctuation keys, wider,
+            // as the system keyboard has them on its symbol pages.
+            let keyWidth = third && model.symbolsPage ? geometry.punctuationWidth : geometry.letterWidth
+            HStack(spacing: third ? geometry.sideGap : gap) {
+              if third { modifierKey(width: geometry.sideWidth) }
+              HStack(spacing: gap) {
+                ForEach(Array(row), id: \.self) { character in
+                  LetterKey(label: label(for: character), width: keyWidth) {
+                    model.type(label(for: character))
+                  }
+                }
+              }
+              if third {
+                KeyCap(systemImage: "delete.left", dark: true, width: geometry.sideWidth) { model.deleteBackward() }
               }
             }
-            if index == 2 {
-              KeyCap(systemImage: "delete.left", dark: true, width: sideWidth) { model.deleteBackward() }
-            }
+            .frame(maxWidth: .infinity)
           }
-          .frame(maxWidth: .infinity)
-        }
-        // The stock bottom row; voice lives only in the bar above.
-        HStack(spacing: gap) {
-          KeyCap(title: model.symbolsPage ? "ABC" : "123", dark: true, width: sideWidth) { model.toggleSymbols() }
-          if model.needsGlobe { KeyCap(systemImage: "globe", dark: true, width: sideWidth) { model.globe() } }
-          KeyCap(title: "space", flexible: true) { model.space() }
-          KeyCap(
-            title: model.returnLabel, systemImage: model.returnLabel == nil ? "return" : nil, dark: true,
-            width: sideWidth * 2 + gap
-          ) { model.newline() }
+          // The stock bottom row; voice lives only in the bar above.
+          HStack(spacing: gap) {
+            KeyCap(title: model.symbolsPage ? "ABC" : "123", dark: true, width: geometry.abcWidth) {
+              model.toggleSymbols()
+            }
+            if model.needsGlobe {
+              KeyCap(systemImage: "globe", dark: true, width: geometry.abcWidth) { model.globe() }
+            }
+            KeyCap(title: "space", flexible: true) { model.space() }
+            KeyCap(title: model.returnLabel ?? "return", dark: true, width: geometry.returnWidth) { model.newline() }
+          }
         }
       }
     }
   }
 
-  private var rows: [String] { model.symbolsPage ? Self.symbols : model.letterRows }
+  private var rows: [String] {
+    guard model.symbolsPage else { return model.letterRows }
+    return model.morePage ? Self.more : Self.symbols
+  }
 
   private func label(for character: Character) -> String {
     let text = String(character)
     return model.shifted && !model.symbolsPage ? text.uppercased() : text
   }
 
+  /// Shift on the letters; on the symbol pages the key that swaps between
+  /// the two of them, labelled with where it goes, as the iPhone's is.
   @ViewBuilder private func modifierKey(width: CGFloat) -> some View {
     if model.symbolsPage {
-      KeyCap(title: "#+=", dark: true, width: width) { model.toggleSymbols() }
+      KeyCap(title: model.morePage ? "123" : "#+=", dark: true, width: width) { model.toggleMore() }
     } else {
       KeyCap(systemImage: model.shifted ? "shift.fill" : "shift", dark: true, width: width) { model.toggleShift() }
     }
   }
 }
 
-/// A letter key with the system keyboard's 22 pt legend and its pop-up: a
+/// A letter key with the system keyboard's 24 pt legend and its pop-up: a
 /// larger copy of the letter above the key while the finger is down, so the
 /// finger doesn't hide what it's pressing. Typed on release, as iOS does.
 private struct LetterKey: View {
   let label: String
   let width: CGFloat
   let action: () -> Void
-  @State private var pressed = false
+  /// A gesture state, so a touch the system takes away unlights the key and
+  /// drops its pop-up; a plain state would leave both up.
+  @GestureState private var pressed = false
   @Environment(\.keyboardPalette) private var palette
+  @Environment(\.keyboardInContainer) private var inContainer
 
   var body: some View {
     Text(label)
-      .font(.system(size: 22))
+      .font(.system(size: DesignTokens.Typography.sizeLetter, weight: DesignTokens.Typography.weightLetter))
       .foregroundStyle(palette.keyText)
       .frame(width: width, height: KeyCap.height)
-      .keyCap(palette.key, palette: palette)
+      .keyCap(palette.keyFill(modifier: false, inContainer: inContainer))
       .overlay(alignment: .top) {
         if pressed { popup }
       }
@@ -92,11 +111,13 @@ private struct LetterKey: View {
       .accessibilityAddTraits(.isButton)
       .simultaneousGesture(
         DragGesture(minimumDistance: 0)
-          .onChanged { _ in pressed = true }
+          .updating($pressed) { _, state, _ in state = true }
           .onEnded { value in
-            pressed = false
-            // A touch that travelled was a swipe (the panel's carousel), not a tap.
-            guard abs(value.translation.width) < KeyPress.tapTravel, abs(value.translation.height) < KeyPress.tapTravel
+            // A touch that swiped away (the panel's carousel) was not a tap;
+            // one that ended on the key was, wherever the thumb rolled.
+            guard
+              KeyboardInteraction.isTap(
+                value.translation, endedAt: value.location, in: CGSize(width: width, height: KeyCap.height))
             else { return }
             action()
           }
@@ -105,12 +126,15 @@ private struct LetterKey: View {
 
   private var popup: some View {
     Text(label)
-      .font(.system(size: 32))
+      .font(.system(size: DesignTokens.Typography.sizePopup, weight: DesignTokens.Typography.weightPopup))
       .foregroundStyle(palette.keyText)
-      .frame(width: width + 18, height: 56)
-      .background(palette.popupFill, in: RoundedRectangle(cornerRadius: 9))
-      .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
-      .offset(y: -58)
+      .frame(width: width + DesignTokens.Metrics.popupExtraWidth, height: DesignTokens.Metrics.popupHeight)
+      .background(palette.popupFill, in: RoundedRectangle(cornerRadius: DesignTokens.Metrics.popupRadius))
+      .shadow(
+        color: .black.opacity(DesignTokens.Metrics.opacityPopupShadow), radius: DesignTokens.Metrics.popupShadowRadius,
+        y: DesignTokens.Metrics.popupShadowY
+      )
+      .offset(y: -DesignTokens.Metrics.popupOffset)
       .allowsHitTesting(false)
   }
 }

@@ -1,7 +1,42 @@
 import Foundation
+import SwiftUI
 import Testing
 
 @testable import BlurtiOS
+
+@Suite("Mic alignment setting")
+struct MicAlignmentSettingTests {
+  @Test("the mic's side round-trips through the App Group; unset or unknown is the middle")
+  func roundTrip() {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    #expect(SharedStore.micAlignment == .center)
+    SharedStore.micAlignment = .right
+    #expect(SharedStore.micAlignment == .right)
+    SharedStore.defaults.set("sideways", forKey: BlurtShared.Key.micAlignment)
+    #expect(SharedStore.micAlignment == .center)
+  }
+
+  @Test("left and right are the phone's sides whatever the language reads in; the + leads only at the trailing edge")
+  func sides() {
+    #expect(MicAlignment.left.alignment(in: .leftToRight) == .leading)
+    #expect(MicAlignment.left.alignment(in: .rightToLeft) == .trailing)
+    #expect(MicAlignment.right.alignment(in: .leftToRight) == .trailing)
+    #expect(MicAlignment.right.alignment(in: .rightToLeft) == .leading)
+    #expect(MicAlignment.center.alignment(in: .rightToLeft) == .center)
+    #expect(MicAlignment.right.plusLeads(in: .leftToRight))
+    #expect(MicAlignment.left.plusLeads(in: .rightToLeft))
+    #expect(!MicAlignment.left.plusLeads(in: .leftToRight))
+    #expect(!MicAlignment.center.plusLeads(in: .leftToRight))
+  }
+
+  @Test("the gallery and probe words name a side")
+  func parse() {
+    #expect(MicAlignment.parse(["-BlurtGallery", "panel", "idle", "-BlurtGalleryAlign", "right"]) == .right)
+    #expect(MicAlignment.parse(["-BlurtGallery", "panel", "idle"]) == nil)
+    #expect(MicAlignment(rawValue: "left") == .left)
+  }
+}
 
 @Suite("Key term list")
 struct KeyTermListTests {
@@ -59,13 +94,27 @@ struct PhaseSnapshotTests {
   }
 }
 
+@Suite("Voice element setting")
+struct VoiceElementSettingTests {
+  @Test("the mic concept round-trips through the App Group; unset or unknown is the shipped one")
+  func roundTrip() {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    #expect(SharedStore.voiceElementKind == .shipped)
+    SharedStore.voiceElementKind = .streak
+    #expect(SharedStore.voiceElementKind == .streak)
+    SharedStore.defaults.set("z", forKey: BlurtShared.Key.voiceElement)
+    #expect(SharedStore.voiceElementKind == .shipped)
+  }
+}
+
 @Suite("Layouts and palettes")
 struct LayoutTests {
   @Test("heights are the rows at the iPhone keyboard's spacing (DESIGN.md)")
   func heights() {
     #expect(KeyboardLayout.slimBar.height == 60)
     #expect(KeyboardLayout.panel.height == 216)
-    #expect(KeyboardLayout.full.height == 272)
+    #expect(KeyboardLayout.full.height == 270)
   }
 
   @Test("letter rows follow the phone's first language")
@@ -77,13 +126,15 @@ struct LayoutTests {
     #expect(LetterLayout.forPreferredLanguages([]) == LetterLayout.qwerty)
   }
 
-  @Test("every theme has a distinct id; the iPhone theme has two faces; an unknown id is the iPhone's")
+  @Test("every theme has a distinct id; the brand has two faces; an unknown or retired id is the brand's")
   func palettes() {
     let ids = KeyboardPalette.all.map(\.id)
     #expect(Set(ids).count == ids.count)
-    #expect(KeyboardPalette.resolve("lavender", dark: true).id == "lavender")
-    #expect(KeyboardPalette.resolve("system", dark: false).keyText == .black)
-    #expect(KeyboardPalette.resolve("system", dark: true).keyText == .white)
-    #expect(KeyboardPalette.resolve("nope", dark: false).id == "system")
+    #expect(KeyboardPalette.resolve("blurt", dark: true).face == .dark)
+    #expect(KeyboardPalette.resolve("blurt", dark: false).keyText == DesignTokens.Themes.lightLegend)
+    #expect(KeyboardPalette.resolve("blurt", dark: true).keyText == DesignTokens.Themes.darkLegend)
+    #expect(KeyboardPalette.resolve("nope", dark: false).id == "blurt")
+    #expect(KeyboardPalette.resolve("system", dark: true) == .brandDark)
+    #expect(KeyboardPalette.brandLight != KeyboardPalette.brandDark)
   }
 }

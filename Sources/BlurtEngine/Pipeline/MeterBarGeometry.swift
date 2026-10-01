@@ -122,9 +122,19 @@ public struct MeterBarRow: Sendable, Equatable {
 
   /// Resolves the row for the frame the meter has been given.
   public init(availableSize: CGSize) {
-    let count = MeterBarGeometry.barCount(availableWidth: availableSize.width)
+    self.init(
+      count: MeterBarGeometry.barCount(availableWidth: availableSize.width),
+      availableHeight: availableSize.height)
+  }
+
+  // periphery:ignore - public for the iOS keyboard (App/BlurtiOS), which the Mac scan doesn't index.
+  /// Resolves the row for a caller that lays out its own pitch — the iPhone
+  /// keyboard's thin wave draws 2 pt bars 2 pt apart — with `count` bars in a
+  /// frame `availableHeight` tall. Never fewer than `minBarCount` bars.
+  public init(count: Int, availableHeight: CGFloat) {
+    let count = max(MeterBarGeometry.minBarCount, count)
     self.count = count
-    self.maxBarHeight = MeterBarGeometry.maxBarHeight(availableHeight: availableSize.height)
+    self.maxBarHeight = MeterBarGeometry.maxBarHeight(availableHeight: availableHeight)
     self.weights = (0..<count).map { MeterBarGeometry.envelopeWeight(index: $0, count: count) }
   }
 

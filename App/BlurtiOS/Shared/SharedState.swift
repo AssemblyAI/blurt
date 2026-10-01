@@ -22,6 +22,11 @@ nonisolated enum BlurtShared {
     static let layout = "keyboardLayout"
     static let autoDictate = "autoDictate"
     static let theme = "keyboardTheme"
+    /// TEMPORARY: which mic concept draws (a, b or c), while the three are
+    /// tried in use. Goes with the losers once one is picked.
+    static let voiceElement = "voiceElement"
+    /// Where the mic key sits across the keyboard (`MicAlignment`).
+    static let micAlignment = "micAlignment"
     static let listeningUntil = "listeningUntil"
     static let windowMinutes = "listeningWindowMinutes"
     static let phase = "phase"
@@ -79,10 +84,13 @@ nonisolated enum KeyboardLayout: String, CaseIterable, Codable, Sendable, Identi
   /// The keyboard's height on screen, from the layout's rows at the iPhone
   /// keyboard's own spacing: see `App/BlurtiOS/DESIGN.md` for the arithmetic.
   var height: CGFloat {
-    switch self {
-    case .slimBar: 60
-    case .panel: 216
-    case .full: 272
+    let metrics = DesignTokens.Metrics.self
+    return switch self {
+    case .slimBar: 2 * metrics.marginVertical + metrics.voicebarHeight
+    case .panel: metrics.layoutPanel
+    case .full:
+      metrics.marginVertical + metrics.voicebarHeight + 4 * metrics.keyHeight + 3 * metrics.rowGap
+        + metrics.marginBottomKeys
     }
   }
 }
@@ -108,6 +116,9 @@ nonisolated struct KeyboardCommand: Codable, Sendable {
   let priorText: String?
   let selectedText: String?
   let sentAt: Date
+  /// The keyboard process that sent it (`KeyboardModel.instanceID`): the
+  /// words come back to the field the press was made in, not whichever is up.
+  let keyboard: String?
 }
 
 /// The words the app got back, for the keyboard to insert. The keyboard joins
@@ -140,6 +151,20 @@ nonisolated struct PhaseSnapshot: Codable, Sendable, Equatable {
   let message: String?
   let level: Double
   let at: Date
+  /// The keyboard command the app last took when it published this — the
+  /// press this phase answers, or the release or cancel that ended it. The
+  /// keyboard settles its gate only for the press it is waiting on: a notice
+  /// from the *previous* dictation landing a moment after a new press must
+  /// not read as that press being over.
+  let command: UUID?
+
+  init(state: State, message: String?, level: Double, at: Date, command: UUID? = nil) {
+    self.state = state
+    self.message = message
+    self.level = level
+    self.at = at
+    self.command = command
+  }
 
   static let idle = PhaseSnapshot(state: .idle, message: nil, level: 0, at: .distantPast)
 
@@ -230,6 +255,20 @@ nonisolated enum SharedStore {
   static var themeID: String {
     get { defaults.string(forKey: BlurtShared.Key.theme) ?? "system" }
     set { defaults.set(newValue, forKey: BlurtShared.Key.theme) }
+  }
+
+  /// TEMPORARY: the mic concept to draw — `VoiceElementKind.rawValue`, the
+  /// shipped one until Settings says otherwise. Read by the keyboard on every
+  /// appearance and by the home screen live. Goes with the losers.
+  static var voiceElementKind: VoiceElementKind {
+    get { VoiceElementKind(rawValue: defaults.string(forKey: BlurtShared.Key.voiceElement) ?? "") ?? .shipped }
+    set { defaults.set(newValue.rawValue, forKey: BlurtShared.Key.voiceElement) }
+  }
+
+  /// Where the mic key sits across the keyboard; the middle until chosen.
+  static var micAlignment: MicAlignment {
+    get { MicAlignment(rawValue: defaults.string(forKey: BlurtShared.Key.micAlignment) ?? "") ?? .center }
+    set { defaults.set(newValue.rawValue, forKey: BlurtShared.Key.micAlignment) }
   }
 
   /// Hands-free: the keyboard starts a dictation the moment it appears in a
@@ -349,27 +388,5 @@ nonisolated enum SharedStore {
   static func post(_ signal: String) {
     CFNotificationCenterPostNotification(
       CFNotificationCenterGetDarwinNotifyCenter(), CFNotificationName(signal as CFString), nil, nil, true)
-  }
-}
-
-// MARK: - Brand
-
-/// The comma-separated key-term list, as the engine's `KeyTermsStore` reads
-/// it: split, trimmed, emptied of blanks, deduplicated case-insensitively in
-/// first-seen order.
-nonisolated enum KeyTermList {
-  static func parse(_ raw: String) -> [String] {
-    var seen = Set<String>()
-    var terms: [String] = []
-    for piece in raw.split(separator: ",") {
-      let term = piece.trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !term.isEmpty, seen.insert(term.lowercased()).inserted else { continue }
-      terms.append(term)
-    }
-    return terms
-  }
-
-  static func join(_ terms: [String]) -> String {
-    terms.joined(separator: ", ")
   }
 }

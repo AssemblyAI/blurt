@@ -52,6 +52,11 @@ targets:
       - path: ../Blurt/Blurt/AppIcon.icon
       - path: ../Blurt/Blurt/Branding/blurt-ready-logo.png
         buildPhase: resources
+      # The brand's faces (Modern Gothic Mono, UN 11ST, Oceanic Text), from the
+      # website repo's public/_aai/fonts/rebrand, converted to TTF for iOS.
+      # The keyboard carries its own copy: an extension can't read the app's.
+      - path: Design/fonts
+        buildPhase: resources
       # The App Group contract, compiled into BOTH the app and the keyboard (an
       # extension can't import the app's module) — one source, no duplication,
       # the same shape as App/Blurt/Shared.
@@ -90,6 +95,13 @@ targets:
         # they are typing in: iOS ends a backgrounded app's capture without it.
         UIBackgroundModes: [audio]
         UILaunchScreen: {}
+        UIAppFonts:
+          - ModernGothicMono-Light.ttf
+          - ModernGothicMono-Regular.ttf
+          - ModernGothicMono-Medium.ttf
+          - UN_11ST_Regular.ttf
+          - UN_11ST_Bold.ttf
+          - OceanicText-Regular.otf
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
@@ -130,6 +142,8 @@ targets:
     sources:
       - path: BlurtKeyboard/Sources
       - path: Shared
+      - path: Design/fonts
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt.ios.keyboard
@@ -142,6 +156,13 @@ targets:
         CFBundleDisplayName: Blurt
         CFBundleShortVersionString: "0.1.0"
         CFBundleVersion: "1"
+        UIAppFonts:
+          - ModernGothicMono-Light.ttf
+          - ModernGothicMono-Regular.ttf
+          - ModernGothicMono-Medium.ttf
+          - UN_11ST_Regular.ttf
+          - UN_11ST_Bold.ttf
+          - OceanicText-Regular.otf
         NSExtension:
           NSExtensionPointIdentifier: com.apple.keyboard-service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
@@ -166,6 +187,14 @@ targets:
     platform: iOS
     sources:
       - path: BlurtiOSTests
+      # The design's one source, bundled so DesignTokensTests can pin the
+      # compiled DesignTokens.swift to the file it was generated from.
+      - path: Design/tokens.json
+        buildPhase: resources
+      # The iPhone keyboard's measured geometry, so AppleGeometryTests can pin
+      # the key/* tokens to what scripts/apple-geometry.sh read off the phone.
+      - path: Design/apple-geometry.json
+        buildPhase: resources
     dependencies:
       - target: BlurtiOS
     settings:
@@ -174,6 +203,24 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+  # The Apple-keyboard probe: one XCUITest that launches the app on
+  # `-BlurtProbeField` and reads the system keyboard's key frames, so the
+  # keyboard's geometry tokens are measured, not assumed
+  # (scripts/apple-geometry.sh → Design/apple-geometry.json). Its own scheme,
+  # so `xcodebuild test -scheme BlurtiOS` and the periphery scan never see it.
+  BlurtiOSProbe:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: BlurtiOSProbe
+    dependencies:
+      - target: BlurtiOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt.ios.probe
+        TEST_TARGET_NAME: BlurtiOS
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
 # XcodeGen emits a scheme only where one is declared, and `xcodebuild -scheme`
 # needs a shared one. Building the app builds the keyboard it embeds; testing
 # runs the unit tests against it.
@@ -189,3 +236,14 @@ schemes:
       config: Debug
       targets:
         - BlurtiOSTests
+  BlurtiOSProbe:
+    build:
+      targets:
+        BlurtiOS: all
+        BlurtiOSProbe: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - BlurtiOSProbe

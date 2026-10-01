@@ -39,10 +39,19 @@ struct BlurtiOSApp: App {
     WindowGroup {
       #if DEBUG
         let rows = KeyboardGalleryView.rows(from: CommandLine.arguments)
-        if rows.isEmpty {
+        if let probe = KeyboardProbeView.parse(CommandLine.arguments) {
+          // The keyboard over this field is only live if the app runs as it
+          // does under the home screen: the coordinator up, listening on request.
+          probe.task { await start() }
+        } else if let voice = KeyboardGalleryView.VoiceStillView.parse(CommandLine.arguments) {
+          voice
+        } else if CommandLine.arguments.contains("-BlurtSettings") {
+          // The settings sheet as the root, for a screenshot without a tap.
+          SettingsView(coordinator: coordinator)
+        } else if rows.isEmpty {
           home
         } else {
-          KeyboardGalleryView(rows: rows)
+          KeyboardGalleryView(rows: rows, options: .parse(CommandLine.arguments))
         }
       #else
         home
@@ -53,14 +62,16 @@ struct BlurtiOSApp: App {
   private var home: some View {
     HomeView(coordinator: coordinator)
       .onOpenURL { coordinator.handle($0) }
-      .task {
-        guard !Self.isTestHost else { return }
-        coordinator.start()
-        #if DEBUG
-          // `-BlurtStartListening` opens the mic at launch, so the listening
-          // state can be screenshotted without a tap (see scripts/ios-sim.sh).
-          if CommandLine.arguments.contains("-BlurtStartListening") { await coordinator.startListening() }
-        #endif
-      }
+      .task { await start() }
+  }
+
+  private func start() async {
+    guard !Self.isTestHost else { return }
+    coordinator.start()
+    #if DEBUG
+      // `-BlurtStartListening` opens the mic at launch, so the listening
+      // state can be screenshotted without a tap (see scripts/ios-sim.sh).
+      if CommandLine.arguments.contains("-BlurtStartListening") { await coordinator.startListening() }
+    #endif
   }
 }

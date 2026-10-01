@@ -2,15 +2,20 @@ import BlurtEngine
 import SwiftUI
 
 /// Everything adjustable, grouped the way the Mac's Settings are: the keyboard
-/// (layout, hands-free), listening, transcription, the account, and
-/// about. Presented from the home screen's gear.
+/// (layout, theme, hands-free), listening, transcription, the account, and
+/// about — a form on the brand's page, its sections under mono eyebrows.
+/// Presented from the home screen's gear.
 struct SettingsView: View {
   var coordinator: DictationCoordinator
   @Environment(\.dismiss) private var dismiss
   @State private var layout = SharedStore.layout
+  @State private var micAlignment = SharedStore.micAlignment
   @State private var autoDictate = SharedStore.autoDictate
   @State private var windowMinutes = SharedStore.windowMinutes
   @AppStorage(BlurtShared.Key.theme, store: SharedStore.defaults) private var themeID = "system"
+  /// TEMPORARY: which mic concept to try. Goes with the losers.
+  @AppStorage(BlurtShared.Key.voiceElement, store: SharedStore.defaults) private var voiceRaw =
+    VoiceElementKind.shipped.rawValue
   @State private var showsKeyEntry = false
   @AppStorage(SharedStore.keyTermsKey, store: SharedStore.defaults) private var keyTerms = ""
   @AppStorage(EnhancedTranscriptsStore.defaultsKey) private var enhancedTranscripts =
@@ -25,6 +30,7 @@ struct SettingsView: View {
         accountSection
         aboutSection
       }
+      .brandForm()
       .navigationTitle("Settings")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
@@ -42,7 +48,16 @@ struct SettingsView: View {
       }
       .pickerStyle(.segmented)
       .onChange(of: layout) { _, value in SharedStore.layout = value }
-      Text(layout.summary).font(.footnote).foregroundStyle(.secondary)
+      Text(layout.summary).font(BlurtType.body(DesignTokens.Typography.sizeCaption)).foregroundStyle(BlurtBrand.muted)
+      // The mic's side, for one hand — the same shape as the layout above: three
+      // segments and a line saying what the choice does.
+      Picker("Mic alignment", selection: $micAlignment) {
+        ForEach(MicAlignment.allCases) { Text($0.title).tag($0) }
+      }
+      .pickerStyle(.segmented)
+      .onChange(of: micAlignment) { _, value in SharedStore.micAlignment = value }
+      Text(micAlignment.summary).font(BlurtType.body(DesignTokens.Typography.sizeCaption))
+        .foregroundStyle(BlurtBrand.muted)
       NavigationLink {
         ThemePickerView()
       } label: {
@@ -50,11 +65,19 @@ struct SettingsView: View {
       }
       Toggle("Hands-free", isOn: $autoDictate)
         .onChange(of: autoDictate) { _, value in SharedStore.autoDictate = value }
+      // TEMPORARY: the three mic concepts, to try each in use. Goes with the losers.
+      Picker("Mic", selection: $voiceRaw) {
+        Text("Grille").tag(VoiceElementKind.grille.rawValue)
+        Text("Ribs").tag(VoiceElementKind.ribs.rawValue)
+        Text("Streak").tag(VoiceElementKind.streak.rawValue)
+      }
+      .pickerStyle(.segmented)
     } header: {
-      Text("Keyboard")
+      Eyebrow("Keyboard")
     } footer: {
       Text(
         "Hands-free starts dictating the moment the Blurt keyboard comes up in a text field; tap the mic to stop. "
+          + "Mic is a temporary switch between the three concepts while one is chosen. "
           + "The keyboard picks up changes the next time it appears.")
     }
   }
@@ -69,7 +92,7 @@ struct SettingsView: View {
       }
       .onChange(of: windowMinutes) { _, value in SharedStore.windowMinutes = value }
     } header: {
-      Text("Listening")
+      Eyebrow("Listening")
     } footer: {
       Text("How long the mic stays open with nobody dictating, so the keyboard can start without opening Blurt.")
     }
@@ -91,7 +114,7 @@ struct SettingsView: View {
         }
       }
     } header: {
-      Text("Transcription")
+      Eyebrow("Transcription")
     } footer: {
       Text(
         "Enhanced transcripts clean up punctuation and wording. Key terms are names and jargon to spell right — "
@@ -101,19 +124,23 @@ struct SettingsView: View {
   }
 
   private var accountSection: some View {
-    Section("Account") {
+    Section {
       LabeledContent("Sign in with AssemblyAI", value: "Coming soon")
       #if DEBUG
         Button(coordinator.apiKey.hasAPIKey ? "Replace the API key" : "Use an API key") { showsKeyEntry = true }
       #endif
+    } header: {
+      Eyebrow("Account")
     }
   }
 
   private var aboutSection: some View {
-    Section("About") {
+    Section {
       LabeledContent("Version", value: Self.version)
       Link("Blurt on GitHub", destination: URL(string: "https://github.com/AssemblyAI/blurt") ?? URL(filePath: "/"))
-      Text("Powered by AssemblyAI").foregroundStyle(.secondary)
+      Text("Powered by AssemblyAI").foregroundStyle(BlurtBrand.muted)
+    } header: {
+      Eyebrow("About")
     }
   }
 
