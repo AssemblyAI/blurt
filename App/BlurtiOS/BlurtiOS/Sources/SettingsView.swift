@@ -108,7 +108,7 @@ struct SettingsView: View {
     } header: {
       Eyebrow("Transcription")
     } footer: {
-      Text("Enhanced transcripts clean up punctuation and wording. Key terms and text shortcuts are on the Words tab.")
+      Text("Enhanced transcripts clean up punctuation and wording.")
     }
   }
 
