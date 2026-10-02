@@ -45,6 +45,9 @@ struct BlurtiOSApp: App {
           probe.task { await start() }
         } else if let voice = KeyboardGalleryView.VoiceStillView.parse(CommandLine.arguments) {
           voice
+        } else if CommandLine.arguments.contains("-BlurtTypingTest") {
+          // The easter egg as the root, for a screenshot without a tap.
+          TypingTestView()
         } else if CommandLine.arguments.contains("-BlurtSettings") {
           // The settings sheet as the root, for a screenshot without a tap.
           SettingsView(coordinator: coordinator)
