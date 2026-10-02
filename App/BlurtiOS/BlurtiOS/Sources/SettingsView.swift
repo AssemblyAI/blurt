@@ -42,6 +42,14 @@ struct SettingsView: View {
         ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
       }
       .sheet(isPresented: $showsKeyEntry) { KeyEntryView(apiKey: coordinator.apiKey) }
+      // On the form, not on a section: a section's modifiers apply to each of
+      // its rows, so a cover there was presented once per row at the same time.
+      .fullScreenCover(isPresented: $showsTypingTest) { TypingTestView() }
+      .confirmationDialog("Reset statistics?", isPresented: $confirmsStatsReset, titleVisibility: .visible) {
+        Button("Reset", role: .destructive) { DictationStats.reset() }
+      } message: {
+        Text("Your dictation, word and time-saved totals go back to zero.")
+      }
     }
     .tint(BlurtBrand.accent)
   }
@@ -132,11 +140,6 @@ struct SettingsView: View {
     } footer: {
       Text("Dictations, words and time saved are counted on this phone and never sent.")
     }
-    .confirmationDialog("Reset statistics?", isPresented: $confirmsStatsReset, titleVisibility: .visible) {
-      Button("Reset", role: .destructive) { DictationStats.reset() }
-    } message: {
-      Text("Your dictation, word and time-saved totals go back to zero.")
-    }
   }
 
   private var aboutSection: some View {
@@ -161,7 +164,6 @@ struct SettingsView: View {
     } header: {
       Eyebrow("About")
     }
-    .fullScreenCover(isPresented: $showsTypingTest) { TypingTestView() }
   }
 
   private static var version: String {
