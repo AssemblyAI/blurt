@@ -90,7 +90,40 @@ package struct BrandButtonStyle: ButtonStyle {
             role == .secondary ? BlurtBrand.cardBorder : Color.clear, lineWidth: DesignTokens.Metrics.cardBorder)
       )
       .opacity(configuration.isPressed ? DesignTokens.Metrics.opacityPressed : 1)
+      .modifier(FadedWhenDisabled())
       .animation(.easeInOut(duration: DesignTokens.Motion.colour), value: configuration.isPressed)
+  }
+}
+
+/// A brand button that can't be pressed yet sits back rather than looking live.
+/// A modifier because a `ButtonStyle` can't read the environment itself.
+private struct FadedWhenDisabled: ViewModifier {
+  @Environment(\.isEnabled) private var isEnabled
+
+  func body(content: Content) -> some View {
+    content.opacity(isEnabled ? 1 : DesignTokens.Metrics.opacityDisabled)
+  }
+}
+
+extension View {
+  /// The brand's input: the page colour inside the card, 8 pt corners, the
+  /// card's hairline, the body face.
+  package func brandInput() -> some View {
+    font(BlurtType.body(DesignTokens.Typography.sizeBody))
+      .foregroundStyle(BlurtBrand.text)
+      .padding(.horizontal, DesignTokens.Metrics.appChipPadX)
+      .padding(.vertical, DesignTokens.Metrics.appInputPadY)
+      .background(BlurtBrand.page, in: RoundedRectangle(cornerRadius: DesignTokens.Metrics.radiusInput))
+      .overlay(
+        RoundedRectangle(cornerRadius: DesignTokens.Metrics.radiusInput)
+          .strokeBorder(BlurtBrand.cardBorder, lineWidth: DesignTokens.Metrics.cardBorder))
+  }
+
+  /// The brand's small print under a card: the caption size, muted.
+  package func brandFootnote() -> some View {
+    font(BlurtType.body(DesignTokens.Typography.sizeCaption))
+      .foregroundStyle(BlurtBrand.muted)
+      .fixedSize(horizontal: false, vertical: true)
   }
 }
 
