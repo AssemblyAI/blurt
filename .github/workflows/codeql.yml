@@ -134,7 +134,9 @@ jobs:
       # The iPhone app, its keyboard and BlurtiOSCore, traced in the same
       # database: CodeQL analyses whatever the job compiles between init and
       # analyze, so the Mac build alone would leave App/BlurtiOS unscanned.
-      # Simulator, signing off — nothing here needs a device or a team.
+      # Simulator, signing off — nothing here needs a device or a team. One
+      # architecture: CodeQL extracts every compile, and a second slice would
+      # compile and extract every file again for nothing new.
       - name: Build Swift (iPhone)
         working-directory: App/BlurtiOS
         run: |
@@ -144,6 +146,7 @@ jobs:
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$DERIVED-ios" \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \

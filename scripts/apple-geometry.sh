@@ -18,7 +18,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 # shellcheck source=scripts/ios-lib.sh
 source "$REPO_ROOT/scripts/ios-lib.sh"
-DERIVED="${BLURT_DERIVED_DATA:-$REPO_ROOT/.build/ios-sim}"
+DERIVED="$IOS_DERIVED"
 OUT="$REPO_ROOT/App/BlurtiOS/Design/apple-geometry.json"
 WORK="$REPO_ROOT/.build/design/probe"
 while [ $# -gt 0 ]; do

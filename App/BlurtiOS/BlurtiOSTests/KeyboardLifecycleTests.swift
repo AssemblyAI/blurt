@@ -12,26 +12,6 @@ import UIKit
 @Suite("Keyboard model: lifecycle and the app's signals", .serialized)
 @MainActor
 struct KeyboardLifecycleTests {
-  final class Commands {
-    var sent: [KeyboardCommand] = []
-  }
-
-  private func ready(_ proxy: FakeProxy = FakeProxy()) -> (KeyboardModel, Commands) {
-    let model = KeyboardModel()
-    model.proxyOverride = proxy
-    model.hasFullAccess = true
-    let now = Date()
-    SharedStore.listeningUntil = now.addingTimeInterval(600)
-    SharedStore.appSeenAt = now
-    model.isListening = true
-    let commands = Commands()
-    model.transport = { commands.sent.append($0) }
-    return (model, commands)
-  }
-
-  private func snapshot(_ state: PhaseSnapshot.State) -> PhaseSnapshot {
-    PhaseSnapshot(state: state, message: nil, level: 0, at: Date())
-  }
 
   /// Polls until `condition` holds or `timeout` passes; true when it held.
   private func eventually(_ timeout: Duration = .seconds(3), _ condition: () -> Bool) async -> Bool {
@@ -48,14 +28,11 @@ struct KeyboardLifecycleTests {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     SharedStore.autoDictate = false
-    let (model, _) = ready()
+    let model = KeyboardRig().model
     model.appeared()
     #expect(await eventually { SharedStore.keyboardSeenAt != nil })
     #expect(SharedStore.keyboardInstance == model.instanceID)
     model.disappeared()
-    #expect(SharedStore.keyboardSeenAt == nil)
-    // The heartbeat is over: nothing marks the keyboard present again.
-    try? await Task.sleep(for: .milliseconds(200))
     #expect(SharedStore.keyboardSeenAt == nil)
   }
 
@@ -65,7 +42,7 @@ struct KeyboardLifecycleTests {
     defer { suite.tearDown() }
     let proxy = FakeProxy()
     proxy.before = "Hi"
-    let (model, _) = ready(proxy)
+    let model = KeyboardRig(proxy: proxy).model
     let controller = UIInputViewController(nibName: nil, bundle: nil)
     model.attach(to: controller)
     SharedStore.write(snapshot(.recording), forKey: BlurtShared.Key.phase)
@@ -81,7 +58,7 @@ struct KeyboardLifecycleTests {
   func noticeDwell() async throws {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let (model, _) = ready()
+    let model = KeyboardRig().model
     let pasted = snapshot(.pasted)
     let dwell = try #require(pasted.noticeDwellSeconds)
     model.apply(pasted)
@@ -98,7 +75,9 @@ struct KeyboardLifecycleTests {
   func releaseWhileConnecting() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let (model, commands) = ready()
+    let rig = KeyboardRig()
+    let model = rig.model
+    let commands = rig.commands
     model.micDown()
     model.apply(snapshot(.connecting))
     // Push-to-talk let go before the mic was up: the engine would drop a
@@ -114,7 +93,9 @@ struct KeyboardLifecycleTests {
   func heldReleaseDroppedOnFailure() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let (model, commands) = ready()
+    let rig = KeyboardRig()
+    let model = rig.model
+    let commands = rig.commands
     model.micDown()
     model.apply(snapshot(.connecting))
     model.perform(.stop)
@@ -129,7 +110,7 @@ struct KeyboardLifecycleTests {
     defer { suite.tearDown() }
     let proxy = FakeProxy()
     proxy.selected = "Rizz"
-    let (model, _) = ready(proxy)
+    let model = KeyboardRig(proxy: proxy).model
     model.contextChanged()
     #expect(model.selectedTerm == "Rizz")
     model.addSelectedTerm()

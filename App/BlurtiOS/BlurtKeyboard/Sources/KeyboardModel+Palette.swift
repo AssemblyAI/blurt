@@ -1,11 +1,8 @@
 import BlurtiOSCore
 
 extension KeyboardModel {
-  /// The chosen theme's palette in the host's appearance — or, for a
-  /// preview, the face it is told (`faceOverride`).
-  var palette: KeyboardPalette {
-    .resolve(faceOverride?.themeID ?? themeID, dark: faceOverride?.dark ?? isDark)
-  }
+  /// The palette for the face the model draws (`KeyboardModel.face`).
+  var palette: KeyboardPalette { .resolve(face.themeID, dark: face.dark) }
 }
 
 extension ThemeFace {

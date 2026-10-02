@@ -8,6 +8,12 @@
 # shellcheck disable=SC2034 # used by the scripts that source this file
 IOS_SIM_SIGNING=(CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM=)
 
+# The iPhone build's derived data, shared so each script's build reuses the
+# last one's (ios-check.sh's probe build relies on it). Needs REPO_ROOT set by
+# the sourcing script; BLURT_DERIVED_DATA moves it (CI puts it in RUNNER_TEMP).
+# shellcheck disable=SC2034 # used by the scripts that source this file
+IOS_DERIVED="${BLURT_DERIVED_DATA:-$REPO_ROOT/.build/ios-sim}"
+
 # ios_pick_device NAME → prints "udid<TAB>name" for the available simulator
 # called NAME on the newest iOS runtime, else for whichever iPhone this Mac
 # (or CI runner) has; prints nothing if there is none.

@@ -118,18 +118,16 @@ final class DictationCoordinator {
 
   /// The window is closing without the user — its time ran out, or a call or
   /// Siri took the microphone. Unlike `stopListening`, what was already said
-  /// still counts: a recording is released, so its words land (on the
-  /// clipboard when no keyboard is up), and a mic still coming up is
-  /// cancelled — the keyboard's own rule when it leaves the screen. Awaited
-  /// before the feed closes, so the release still finds the audio. Without
-  /// this the session sat in `.recording` over a dead feed until its
-  /// auto-release, while the keyboard, seeing no app, showed idle.
-  func windowClosingOnItsOwn() async {
-    switch phase {
-    case .recording: await session.release()
-    case .connecting: await session.cancel()
-    case .idle, .transcribing, .injecting, .failed, .cancelled, .pasted, .noTarget: break
-    }
+  /// still counts, so this releases rather than cancels — and leaves the
+  /// deciding to the session. Its commands run in order and a release checks
+  /// the session's own phase on its turn: a recording is released and its
+  /// words land (on the clipboard when no keyboard is up); a mic still coming
+  /// up finishes, then releases a capture too short to transcribe; anything
+  /// later is untouched. Not this coordinator's `phase`, a copy that trails
+  /// the session and could still say `.connecting` over a live recording.
+  /// Awaited before the feed closes, so the release still finds the audio.
+  private func windowClosingOnItsOwn() async {
+    await session.release()
   }
 
   func handle(_ url: URL) {
@@ -167,7 +165,7 @@ final class DictationCoordinator {
     SharedStore.remove(forKey: BlurtShared.Key.command)
     // A notification held while the app was suspended delivers a press from
     // minutes ago; the user has long since moved on.
-    guard Date().timeIntervalSince(command.sentAt) < BlurtShared.commandFreshnessWindow else { return }
+    guard command.isFresh() else { return }
     switch command.kind {
     case .press:
       Self.pressContext.withLock {

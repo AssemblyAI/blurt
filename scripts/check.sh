@@ -267,11 +267,30 @@ check_no_external_deps() {
 }
 run_check "no-external-dependencies guard" check_no_external_deps
 
+# Whether this run builds the iPhone app for real (scripts/ios-check.sh, near
+# the end): off CI — there the ios-build job runs the same script, and running
+# it here too would double the macos-26 bill — and only with an iPhone simulator
+# on the runtime this Xcode's SDK builds for (an older one is refused at the
+# destination). The list is read into a variable before it is searched: piped
+# into `grep -q` under pipefail, an early match could leave simctl writing into
+# a closed pipe and read as "no runtime".
+IOS_GATES=0
+if [ "$PORTABLE" -eq 0 ] && ! is_ci; then
+  IOS_SDK_VERSION="$(xcrun --sdk iphonesimulator --show-sdk-version 2>/dev/null || true)"
+  IOS_RUNTIMES="$(xcrun simctl list runtimes available 2>/dev/null || true)"
+  if [ -n "$IOS_SDK_VERSION" ] && grep -q "^iOS $IOS_SDK_VERSION " <<<"$IOS_RUNTIMES"; then
+    IOS_GATES=1
+  fi
+fi
+
 # The iPhone targets, typechecked against the Mac Catalyst frameworks — the
 # closest thing to an iOS SDK a Mac without Xcode has (scripts/ios-typecheck.sh
-# explains). Skipped, not failed, where those frameworks are absent; CI's
-# ios-build job builds and tests the real thing.
-if [ -d "$(xcrun --show-sdk-path 2>/dev/null)/System/iOSSupport/System/Library/Frameworks/UIKit.framework" ]; then
+# explains). Not when ios-check.sh builds them for real below: that build
+# catches all this does. Skipped, not failed, where those frameworks are
+# absent; CI's ios-build job builds and tests the real thing.
+if [ "$IOS_GATES" -eq 1 ]; then
+  echo "==> ios-typecheck skipped: ios-check builds App/BlurtiOS for real below"
+elif [ -d "$(xcrun --show-sdk-path 2>/dev/null)/System/iOSSupport/System/Library/Frameworks/UIKit.framework" ]; then
   run_check "ios-typecheck (App/BlurtiOS, Mac Catalyst stand-in)" "$REPO_ROOT/scripts/ios-typecheck.sh"
 else
   echo "==> ios-typecheck skipped: no Mac Catalyst frameworks in the selected SDK"
@@ -818,20 +837,13 @@ fi
 
 # The iPhone code's gates — its tests with BlurtiOSCore's coverage gate,
 # `swiftlint analyze` and periphery over App/BlurtiOS (scripts/ios-check.sh) — so
-# a local green covers both platforms. Off CI only: there the ios-build job runs
-# the same script, and running it here too would double the macos-26 bill. It
-# needs an iPhone simulator on the runtime this Xcode's SDK builds for (an older
-# one is refused at the destination); without one it is skipped with a note, as
-# the UI suite is, and CI stays the authority.
-if [ "$PORTABLE" -eq 0 ] && ! is_ci; then
-  IOS_SDK_VERSION="$(xcrun --sdk iphonesimulator --show-sdk-version 2>/dev/null || true)"
-  if [ -n "$IOS_SDK_VERSION" ] && xcrun simctl list runtimes available 2>/dev/null \
-    | grep -q "^iOS $IOS_SDK_VERSION "; then
-    run_check "ios-check (App/BlurtiOS tests, coverage, analyze, periphery)" "$REPO_ROOT/scripts/ios-check.sh"
-  else
-    IOS_SKIPPED=1
-    echo "==> ios-check skipped: no iOS ${IOS_SDK_VERSION:-?} simulator runtime (xcodebuild -downloadPlatform iOS)"
-  fi
+# a local green covers both platforms. When IOS_GATES (above) says no, skipped
+# with a note, as the UI suite is, and CI stays the authority.
+if [ "$IOS_GATES" -eq 1 ]; then
+  run_check "ios-check (App/BlurtiOS tests, coverage, analyze, periphery)" "$REPO_ROOT/scripts/ios-check.sh"
+elif [ "$PORTABLE" -eq 0 ] && ! is_ci; then
+  IOS_SKIPPED=1
+  echo "==> ios-check skipped: no iOS ${IOS_SDK_VERSION:-?} simulator runtime (xcodebuild -downloadPlatform iOS)"
 fi
 
 # The closing line, and only when there is nothing to report — otherwise the exit

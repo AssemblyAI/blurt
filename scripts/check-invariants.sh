@@ -218,7 +218,7 @@ fi
 if [ "${1:-}" = "--self-test" ]; then
   failed=0
   for i in "${!PATTERNS[@]}"; do
-    if printf '%s\n' "${PROBES[$i]}" | grep -qE "${PATTERNS[$i]}"; then
+    if grep -qE -- "${PATTERNS[$i]}" <<<"${PROBES[$i]}"; then
       echo "  ok   rule $i flags: ${PROBES[$i]}"
     else
       echo "  FAIL rule $i does not match its own probe: ${PROBES[$i]}" >&2
@@ -239,7 +239,7 @@ if [ "${1:-}" = "--self-test" ]; then
   for good in "${GOOD[@]}"; do
     hit=""
     for i in "${!PATTERNS[@]}"; do
-      if printf '%s\n' "$good" | grep -qE "${PATTERNS[$i]}"; then
+      if grep -qE -- "${PATTERNS[$i]}" <<<"$good"; then
         hit="$i"
         break
       fi
@@ -265,10 +265,10 @@ if [ "${1:-}" = "--self-test" ]; then
     exit 1
   fi
 
-  # A here-string, not `printf | grep -q`: the table is ~30 KB, past a macOS
-  # pipe's 16 KB first buffer, so grep -q exiting at an early match left printf
-  # writing into a closed pipe — EPIPE, and under pipefail a "missing" row that
-  # was there all along (seen on CI as rule 3 failing at random).
+  # Here-strings, never `printf | grep -q`, throughout this file: grep -q
+  # exits at its first match, and a producer still writing gets EPIPE —
+  # under pipefail, a false "no match". The table (~30 KB, past a macOS pipe's
+  # 16 KB first buffer) did exactly that on CI: rule 3 failing at random.
   for i in "${!PATTERNS[@]}"; do
     if grep -qF -- "${TABLE_ANCHORS[$i]}" <<<"$TABLE"; then
       echo "  ok   rule $i is pinned to its $GUIDE row"

@@ -255,17 +255,13 @@ jobs:
         # is in the Brewfile too, so this is the version check.sh uses.
         run: brew install xcodegen
 
-      - name: Generate the iPhone app's project
-        working-directory: blurt/App/BlurtiOS
-        # Generated here rather than committed, unlike App/Blurt/Blurt.xcodeproj:
-        # that project is committed because people open it; this one is generated
-        # a second before every build, so it can never go stale against its yml.
-        run: xcodegen generate --quiet
-
-      - name: Install the iPhone gates' linters
-        # swiftlint for `swiftlint analyze`, periphery for the unused-code scan;
-        # both are in the Brewfile too, so these are the versions check.sh uses.
-        run: brew install swiftlint periphery
+      - name: Install the iPhone gates' tools
+        # swiftlint for `swiftlint analyze`, periphery for the unused-code scan,
+        # xcbeautify for the build output; all in the Brewfile too, so these are
+        # the versions check.sh uses. The project itself is generated, not
+        # committed (people open App/Blurt's; this one is regenerated a second
+        # before every build by ios-test.sh, so it can never go stale).
+        run: brew install swiftlint periphery xcbeautify
 
       - name: Build the iPhone app and its keyboard, and run its quality gates
         working-directory: blurt
@@ -298,8 +294,8 @@ jobs:
           path: blurt
           persist-credentials: false
 
-      - name: Install XcodeGen
-        run: brew install xcodegen
+      - name: Install XcodeGen and xcbeautify
+        run: brew install xcodegen xcbeautify
 
       - name: Run the iPhone unit tests under the ${{ matrix.sanitizer }} sanitizer
         working-directory: blurt

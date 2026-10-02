@@ -105,11 +105,10 @@ package final class KeyboardModel {
   /// The press the app has not answered yet. A settled phase that does not
   /// answer it (the previous dictation's notice landing late) leaves the
   /// gate alone; anything in flight, or a phase carrying its id, answers it.
-  @ObservationIgnored package var unansweredPress: UUID?
-  /// When `unansweredPress` went out. Past `BlurtShared.commandFreshnessWindow`
-  /// the app drops it unread (or was never there to read it), so no answer
-  /// is coming: see `expireUnansweredPress`.
-  @ObservationIgnored package var unansweredPressSentAt: Date?
+  /// Kept whole, so its id and its age can't disagree: one too old for the
+  /// app to take is never answered (`expireUnansweredPress`).
+  @ObservationIgnored package var unansweredPressCommand: KeyboardCommand?
+  package var unansweredPress: UUID? { unansweredPressCommand?.id }
   /// What the picture showed when the orb last sent a press — whether that
   /// press could have started a dictation at all (see `undoPress`).
   @ObservationIgnored package var pressSentOver: PhaseSnapshot.State?
@@ -126,6 +125,9 @@ package final class KeyboardModel {
   package var themeID = SharedStore.themeID
   /// For a preview: this theme face, whatever Settings and the host say.
   package var faceOverride: ThemeFace?
+  /// The face to draw: the preview's, else the chosen theme in the host's
+  /// appearance — as `voiceKind` and `micAlignment` resolve theirs.
+  package var face: ThemeFace { faceOverride ?? ThemeFace(themeID: themeID, dark: isDark) }
   /// TEMPORARY: which mic concept draws, from Settings — or, for a preview
   /// or a gallery row, whatever it is told. Goes with the losers.
   package var voiceKind: VoiceElementKind { voiceKindOverride ?? storedVoiceKind }
@@ -230,7 +232,7 @@ package final class KeyboardModel {
     // `refresh` may apply no phase at all (none stored, or a notice already
     // let go of), so a press the app will never answer is let go of here too:
     // otherwise its latch would skip hands-free on every appearance after.
-    if expireUnansweredPress(), isSettled { gate.reset() }
+    letGoOfExpiredPress()
     startHeartbeat()
     requestLexicon()
     // Words that landed while this keyboard was away, still fresh and meant

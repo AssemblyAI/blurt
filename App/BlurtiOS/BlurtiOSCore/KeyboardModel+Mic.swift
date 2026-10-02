@@ -67,8 +67,7 @@ extension KeyboardModel {
       id: UUID(), kind: kind, priorText: proxy?.documentContextBeforeInput,
       selectedText: proxy?.selectedText, sentAt: Date(), keyboard: instanceID)
     transport(command)
-    unansweredPress = kind == .press ? command.id : nil
-    unansweredPressSentAt = kind == .press ? command.sentAt : nil
+    unansweredPressCommand = kind == .press ? command : nil
     // A press the app never answers would leave the gate latched over
     // nothing. Either notification can be missed: first catch up with a phase
     // the app may have published unheard; if the picture is still as it was,
@@ -91,13 +90,16 @@ extension KeyboardModel {
   /// than `BlurtShared.commandFreshnessWindow` unread, and an app that was
   /// killed answers nothing — so its latch can't outlive it. True when it did.
   @discardableResult
-  package func expireUnansweredPress(now: Date = Date()) -> Bool {
-    guard unansweredPress != nil, let sentAt = unansweredPressSentAt,
-      now.timeIntervalSince(sentAt) >= BlurtShared.commandFreshnessWindow
-    else { return false }
-    unansweredPress = nil
-    unansweredPressSentAt = nil
+  package func expireUnansweredPress() -> Bool {
+    guard let press = unansweredPressCommand, !press.isFresh() else { return false }
+    unansweredPressCommand = nil
     return true
+  }
+
+  /// The gate's half of the same rule: a latch held only for an expired
+  /// press goes with it, once nothing is in flight.
+  func letGoOfExpiredPress() {
+    if expireUnansweredPress(), isSettled { gate.reset() }
   }
 
   /// A swipe that began on the orb (the panel's carousel) after its press

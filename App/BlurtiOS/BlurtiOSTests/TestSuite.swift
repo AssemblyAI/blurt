@@ -19,3 +19,44 @@ struct ScratchSuite {
     SharedStore.override = nil
   }
 }
+
+/// A keyboard that is ready to dictate — a fake field, Full Access, the app
+/// listening for the next ten minutes — with every command it sends captured
+/// instead of reaching the App Group. Build it after `ScratchSuite`: the
+/// listening window it opens is written to the store.
+@MainActor
+struct KeyboardRig {
+  final class Commands {
+    var sent: [KeyboardCommand] = []
+  }
+
+  let model: KeyboardModel
+  let proxy: FakeProxy
+  let commands: Commands
+
+  init(proxy: FakeProxy = FakeProxy()) {
+    let model = KeyboardModel()
+    model.proxyOverride = proxy
+    model.hasFullAccess = true
+    Self.listening(true)
+    model.isListening = true
+    let commands = Commands()
+    model.transport = { commands.sent.append($0) }
+    self.model = model
+    self.proxy = proxy
+    self.commands = commands
+  }
+
+  /// The app listening — an open window and a fresh heartbeat — or not.
+  static func listening(_ on: Bool) {
+    let now = Date()
+    SharedStore.listeningUntil = on ? now.addingTimeInterval(600) : nil
+    SharedStore.appSeenAt = on ? now : nil
+  }
+}
+
+/// A phase as the app would publish it, now.
+@MainActor
+func snapshot(_ state: PhaseSnapshot.State, level: Double = 0) -> PhaseSnapshot {
+  PhaseSnapshot(state: state, message: nil, level: level, at: Date())
+}

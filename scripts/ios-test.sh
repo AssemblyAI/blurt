@@ -23,6 +23,8 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=scripts/release-lib.sh
+source "$REPO_ROOT/scripts/release-lib.sh"
 # shellcheck source=scripts/ios-lib.sh
 source "$REPO_ROOT/scripts/ios-lib.sh"
 
@@ -33,24 +35,23 @@ source "$REPO_ROOT/scripts/ios-lib.sh"
 # the Mac shell is by its XCUITest suite, not by this number. Raise it as
 # coverage grows; never lower it to land a change.
 MIN_IOS_COVERAGE=88
+# Every core file counts: nothing in it needs a device. A file that ever does
+# gets an exclusion here, with its reason, the way check.sh lists the engine's.
 IOS_CORE="App/BlurtiOS/BlurtiOSCore/"
 
-# Core files the figure leaves out. None today; keep it that way unless a file
-# genuinely cannot run without a device, as check.sh's engine list does.
-IOS_COVERAGE_EXCLUDE='^$'
-
+# A plain run measures coverage; a sanitizer run instruments for its sanitizer
+# instead. Exactly one, so the array is never empty.
 SANITIZER="${BLURT_IOS_SANITIZER:-}"
-SANITIZE_FLAGS=()
 case "$SANITIZER" in
-  "") ;;
-  thread) SANITIZE_FLAGS=(-enableThreadSanitizer YES) ;;
-  address) SANITIZE_FLAGS=(-enableAddressSanitizer YES) ;;
+  "") TEST_FLAGS=(-enableCodeCoverage YES) ;;
+  thread) TEST_FLAGS=(-enableThreadSanitizer YES) ;;
+  address) TEST_FLAGS=(-enableAddressSanitizer YES) ;;
   *)
     echo "ios-test: BLURT_IOS_SANITIZER must be thread or address, not '$SANITIZER'" >&2
     exit 1
     ;;
 esac
-DERIVED="${BLURT_DERIVED_DATA:-$REPO_ROOT/.build/ios-sim}${SANITIZER:+-$SANITIZER}"
+DERIVED="$IOS_DERIVED${SANITIZER:+-$SANITIZER}"
 
 PICKED="$(ios_pick_device "${BLURT_SIM_DEVICE:-iPhone 18 Pro}")"
 if [ -z "$PICKED" ]; then
@@ -65,20 +66,18 @@ ios_wait_booted "$UDID"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 RESULTS="$DERIVED/BlurtiOSTests-$STAMP.xcresult"
 # The whole xcodebuild log, kept rather than `-quiet`ed away: ios-check.sh feeds
-# its compiler invocations to `swiftlint analyze`. Only diagnostics and the
-# outcome reach the terminal; the log path is printed at the end.
+# its compiler invocations to `swiftlint analyze`. The terminal gets it through
+# xcbeautify, as check.sh's app build does; the log path is printed at the end.
 BUILD_LOG="${BLURT_IOS_BUILD_LOG:-$DERIVED/BlurtiOSTests-$STAMP.log}"
 mkdir -p "$(dirname "$BUILD_LOG")"
-COVERAGE_FLAGS=()
-[ -z "$SANITIZER" ] && COVERAGE_FLAGS=(-enableCodeCoverage YES)
-# The `${a[@]+...}` form: macOS bash 3.2 calls an empty array unbound under `set -u`.
+pretty_xcodebuild
 # Serial for the reason project.yml's scheme gives (the tests share one global
 # App Group override); said here too so no test plan or default can undo it.
 xcodebuild test -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOS \
   -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$DERIVED" \
-  -resultBundlePath "$RESULTS" "${IOS_SIM_SIGNING[@]}" ${COVERAGE_FLAGS[@]+"${COVERAGE_FLAGS[@]}"} ${SANITIZE_FLAGS[@]+"${SANITIZE_FLAGS[@]}"} \
+  -resultBundlePath "$RESULTS" "${IOS_SIM_SIGNING[@]}" "${TEST_FLAGS[@]}" \
   -parallel-testing-enabled NO -collect-test-diagnostics never 2>&1 \
-  | tee "$BUILD_LOG" | { grep -E 'error:|warning:|\*\* (BUILD|TEST) [A-Z]+ \*\*|✘' || true; }
+  | tee "$BUILD_LOG" | "${PRETTY[@]}"
 xcrun xcresulttool get test-results summary --path "$RESULTS" 2>/dev/null | python3 -c '
 import json, sys
 d = json.load(sys.stdin)
@@ -94,14 +93,14 @@ echo "==> coverage gate (>= ${MIN_IOS_COVERAGE}% BlurtiOSCore lines)"
 # can appear under either binary: each is counted once, at the better figure
 # (the tests run in the app's process; the keyboard's copy is never reached).
 COVERAGE="$(xcrun xccov view --report --json "$RESULTS" | python3 -c '
-import json, re, sys
-root, core, exclude = sys.argv[1], sys.argv[2], re.compile(sys.argv[3])
+import json, sys
+root, core = sys.argv[1], sys.argv[2]
 files = {}
 for target in json.load(sys.stdin)["targets"]:
     for f in target["files"]:
         path = f["path"]
         rel = path[len(root) + 1:] if path.startswith(root + "/") else path
-        if not rel.startswith(core) or exclude.search(rel):
+        if not rel.startswith(core):
             continue
         best = files.get(rel, (0, 0))
         if f["coveredLines"] >= best[0]:
@@ -111,7 +110,7 @@ if not files:
 covered = sum(c for c, _ in files.values())
 total = sum(t for _, t in files.values())
 print(round(100 * covered / total, 2))
-' "$REPO_ROOT" "$IOS_CORE" "$IOS_COVERAGE_EXCLUDE")"
+' "$REPO_ROOT" "$IOS_CORE")"
 echo "BlurtiOSCore line coverage: ${COVERAGE}%"
 if ! awk -v c="$COVERAGE" -v min="$MIN_IOS_COVERAGE" 'BEGIN{ exit (c+0 < min+0) }'; then
   echo "error: coverage ${COVERAGE}% is below the ${MIN_IOS_COVERAGE}% floor" >&2

@@ -9,38 +9,20 @@ import Testing
 @Suite("Keyboard model: the gate and the app's answers", .serialized)
 @MainActor
 struct KeyboardModelGateTests {
-  struct Rig {
-    let model: KeyboardModel
-    let commands: Commands
-  }
 
-  final class Commands {
-    var sent: [KeyboardCommand] = []
-  }
-
-  private func ready() -> Rig {
-    let proxy = FakeProxy()
-    let model = KeyboardModel()
-    model.proxyOverride = proxy
-    model.hasFullAccess = true
-    let now = Date()
-    SharedStore.listeningUntil = now.addingTimeInterval(600)
-    SharedStore.appSeenAt = now
-    model.isListening = true
-    let commands = Commands()
-    model.transport = { commands.sent.append($0) }
-    return Rig(model: model, commands: commands)
-  }
-
-  private func snapshot(_ state: PhaseSnapshot.State, level: Double = 0) -> PhaseSnapshot {
-    PhaseSnapshot(state: state, message: nil, level: level, at: Date())
+  /// The press still out, aged past the window the app would take it in.
+  private func agePress(_ model: KeyboardModel) {
+    guard let press = model.unansweredPressCommand else { return }
+    model.unansweredPressCommand = KeyboardCommand(
+      id: press.id, kind: press.kind, priorText: press.priorText, selectedText: press.selectedText,
+      sentAt: Date().addingTimeInterval(-BlurtShared.commandFreshnessWindow - 1), keyboard: press.keyboard)
   }
 
   @Test("a settled phase resets a latched gate — once it answers the press; an older notice does not")
   func resetOnSettled() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let rig = ready()
+    let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
     model.micDown()
@@ -73,7 +55,7 @@ struct KeyboardModelGateTests {
   func commandCarriesSender() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let rig = ready()
+    let rig = KeyboardRig()
     rig.model.micDown()
     rig.model.micUp()
     #expect(rig.commands.sent.map(\.keyboard) == [rig.model.instanceID])
@@ -83,7 +65,7 @@ struct KeyboardModelGateTests {
   func pressRetried() async throws {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let rig = ready()
+    let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
     model.micDown()
@@ -106,7 +88,7 @@ struct KeyboardModelGateTests {
   func termFieldClosesDictation() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let rig = ready()
+    let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
     model.micDown()
@@ -135,7 +117,7 @@ struct KeyboardModelGateTests {
   func termFieldDuringProcessing() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let rig = ready()
+    let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
     // A tap latched the gate; the app auto-released, with no finger event.
@@ -148,7 +130,7 @@ struct KeyboardModelGateTests {
     #expect(commands.sent.map(\.kind) == [.press])
     #expect(model.gate.isIdle)
     model.cancelAddingTerm()
-    (model.proxyOverride as? FakeProxy)?.selected = "Rizz"
+    rig.proxy.selected = "Rizz"
     model.beginAddingTerm()
     #expect(commands.sent.map(\.kind) == [.press, .cancel])
   }
@@ -157,7 +139,7 @@ struct KeyboardModelGateTests {
   func disappearDuringProcessing() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let rig = ready()
+    let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
     model.micDown()
@@ -175,7 +157,7 @@ struct KeyboardModelGateTests {
   func undoPress() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let rig = ready()
+    let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
     // A swipe whose press went out from idle: taken back.
@@ -202,7 +184,7 @@ struct KeyboardModelGateTests {
   func undoPressOverReleasedRecording() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let rig = ready()
+    let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
     model.micDown()
@@ -224,7 +206,7 @@ struct KeyboardModelGateTests {
   func unansweredPressExpires() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let rig = ready()
+    let rig = KeyboardRig()
     let model = rig.model
     model.micDown()
     model.micUp()
@@ -234,7 +216,7 @@ struct KeyboardModelGateTests {
     model.apply(snapshot(.pasted))
     #expect(!model.gate.isIdle)
     // …and lets it go once the app would drop it unread.
-    model.unansweredPressSentAt = Date().addingTimeInterval(-BlurtShared.commandFreshnessWindow - 1)
+    agePress(model)
     model.apply(snapshot(.idle))
     #expect(model.unansweredPress == nil)
     #expect(model.gate.isIdle)
@@ -244,13 +226,13 @@ struct KeyboardModelGateTests {
   func appearanceExpiresPress() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let rig = ready()
+    let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
     SharedStore.autoDictate = true
     model.micDown()
     model.micUp()
-    model.unansweredPressSentAt = Date().addingTimeInterval(-BlurtShared.commandFreshnessWindow - 1)
+    agePress(model)
     model.appeared()
     // Hands-free pressed afresh rather than skipping over a dead latch.
     #expect(commands.sent.map(\.kind) == [.press, .press])

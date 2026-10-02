@@ -109,6 +109,13 @@ package nonisolated struct KeyboardCommand: Codable, Sendable {
   /// The keyboard process that sent it (`KeyboardModel.instanceID`): the
   /// words come back to the field the press was made in, not whichever is up.
   package let keyboard: String?
+
+  /// Young enough for the app to act on. A notification held while the app
+  /// was suspended can deliver one from minutes ago, which the app drops
+  /// unread — so the keyboard stops waiting for an answer to it, too.
+  package func isFresh(now: Date = Date()) -> Bool {
+    now.timeIntervalSince(sentAt) < BlurtShared.commandFreshnessWindow
+  }
 }
 
 /// The words the app got back, for the keyboard to insert. The keyboard joins

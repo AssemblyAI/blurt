@@ -23,7 +23,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT" || exit 1
 # shellcheck source=scripts/ios-lib.sh
 source "$REPO_ROOT/scripts/ios-lib.sh"
-DERIVED="${BLURT_DERIVED_DATA:-$REPO_ROOT/.build/ios-sim}"
+DERIVED="$IOS_DERIVED"
 FACES="light dark"
 VOICES="a b c"
 LAYOUTS="panel full slimBar"

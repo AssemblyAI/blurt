@@ -21,7 +21,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=scripts/ios-lib.sh
 source "$REPO_ROOT/scripts/ios-lib.sh"
-DERIVED="${BLURT_DERIVED_DATA:-$REPO_ROOT/.build/ios-sim}"
+DERIVED="$IOS_DERIVED"
 # PRODUCT_BUNDLE_IDENTIFIER in App/BlurtiOS/project.yml.
 BUNDLE_ID=dev.alex.blurt.ios
 SHOT=""

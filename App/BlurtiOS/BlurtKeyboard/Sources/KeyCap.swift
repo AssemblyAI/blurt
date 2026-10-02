@@ -52,7 +52,7 @@ struct KeyCap: View {
         // quieter than a letter. Tracking adds its space after the last
         // letter too; the same again before the first keeps the word centred.
         Text((title ?? "").uppercased())
-          .font(BlurtType.mono(DesignTokens.Typography.sizeLabel, weight: .medium))
+          .font(BlurtType.mono(DesignTokens.Typography.sizeLabel, weight: DesignTokens.Typography.weightLabel))
           .tracking(DesignTokens.Typography.trackingEyebrow)
           .padding(.leading, DesignTokens.Typography.trackingEyebrow)
           .foregroundStyle(tint ?? palette.keyTextSecondary)

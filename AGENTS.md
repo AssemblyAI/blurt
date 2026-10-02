@@ -225,8 +225,8 @@ the iPhone code to the bar the engine and the Mac shell meet in `check.sh`: `Blu
 warnings as errors and a **line-coverage gate** on `BlurtiOSCore`, the iPhone code's logic
 (≥ `MIN_IOS_COVERAGE` in `scripts/ios-test.sh`, the engine's 88%; raise it as coverage grows), then
 **`swiftlint analyze`** over that from-scratch build's log and **periphery** over the iPhone
-project; `check.sh`'s swift-format, `swiftlint lint`, invariants and `ios-typecheck.sh` already read
-every Swift file there. In the sibling
+project; `check.sh`'s swift-format, `swiftlint lint` and invariants already read every Swift file
+there. In the sibling
 **`ios-sanitizers`** job, one runner per sanitizer — **ThreadSanitizer** and **AddressSanitizer**
 passes run the same tests. `codeql.yml`'s Swift analysis builds the iPhone app as well as the Mac
 one, so both are in its database. `gate` fails unless all of them are green (or skipped for a docs-only change). Two sibling jobs exist purely to shorten the loop for whoever is

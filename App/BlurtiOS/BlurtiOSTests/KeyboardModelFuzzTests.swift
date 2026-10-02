@@ -40,10 +40,6 @@ struct KeyboardModelFuzzTests {
     mutating func pick<T>(_ items: [T]) -> T { items[Int(next() % UInt64(items.count))] }
   }
 
-  final class Commands {
-    var sent: [KeyboardCommand] = []
-  }
-
   /// Set by an event after which the command ledger starts over.
   private final class Flag {
     var value = false
@@ -52,16 +48,6 @@ struct KeyboardModelFuzzTests {
   private var epoch: Bool {
     get { epochFlag.value }
     nonmutating set { epochFlag.value = newValue }
-  }
-
-  private func snapshot(_ state: PhaseSnapshot.State) -> PhaseSnapshot {
-    PhaseSnapshot(state: state, message: nil, level: 0, at: Date())
-  }
-
-  private func listening(_ on: Bool) {
-    let now = Date()
-    SharedStore.listeningUntil = on ? now.addingTimeInterval(600) : nil
-    SharedStore.appSeenAt = on ? now : nil
   }
 
   @Test(
@@ -74,9 +60,9 @@ struct KeyboardModelFuzzTests {
     let model = KeyboardModel()
     model.proxyOverride = proxy
     model.hasFullAccess = true
-    let commands = Commands()
+    let commands = KeyboardRig.Commands()
     model.transport = { commands.sent.append($0) }
-    listening(true)
+    KeyboardRig.listening(true)
     model.appeared()
     var trace: [Event] = []
     // The press the app has not taken yet: closed by our release or cancel,
@@ -141,7 +127,7 @@ struct KeyboardModelFuzzTests {
 
   /// What must be true after every event, whatever came before.
   private func check(
-    _ model: KeyboardModel, _ proxy: FakeProxy, _ commands: Commands, after event: Event, _ context: String
+    _ model: KeyboardModel, _ proxy: FakeProxy, _ commands: KeyboardRig.Commands, after event: Event, _ context: String
   ) {
     // The term field's bookkeeping lives and dies with the field.
     let fieldOpen = model.termDraft != nil
@@ -200,9 +186,9 @@ struct KeyboardModelFuzzTests {
     let model = KeyboardModel()
     model.proxyOverride = proxy
     model.hasFullAccess = true
-    let commands = Commands()
+    let commands = KeyboardRig.Commands()
     model.transport = { commands.sent.append($0) }
-    listening(true)
+    KeyboardRig.listening(true)
     // Hands-free off: a tap must be the press here, not the stop of one the
     // appearance started.
     SharedStore.autoDictate = false
@@ -212,7 +198,7 @@ struct KeyboardModelFuzzTests {
       // The keyboard goes away and comes back, the app idle and listening.
       model.disappeared()
       SharedStore.write(snapshot(.idle), forKey: BlurtShared.Key.phase)
-      listening(true)
+      KeyboardRig.listening(true)
       model.hasFullAccess = true
       model.appeared()
       #expect(model.termDraft == nil, "field open after an appearance (round \(round))")
@@ -263,10 +249,10 @@ extension KeyboardModelFuzzTests {
     case .answerError:
       model.apply(PhaseSnapshot(state: .error, message: nil, level: 0, at: Date(), command: model.unansweredPress))
     case .appNotListening:
-      listening(false)
+      KeyboardRig.listening(false)
       model.apply(model.snapshot)
     case .appListening:
-      listening(true)
+      KeyboardRig.listening(true)
       model.apply(model.snapshot)
     case .beginTerm: model.beginAddingTerm()
     case .cancelTerm: model.cancelAddingTerm()

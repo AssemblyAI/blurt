@@ -62,8 +62,8 @@ extension KeyboardModel {
     // in another app, or a previous keyboard process) must latch it, so the
     // next tap is the stop rather than a press the engine drops.
     // A press too old for the app to take will never be answered at all.
-    expireUnansweredPress()
-    if !isSettled || current.command == unansweredPress { unansweredPress = nil }
+    letGoOfExpiredPress()
+    if !isSettled || current.command == unansweredPress { unansweredPressCommand = nil }
     if isSettled, !gate.isIdle {
       if unansweredPress == nil { gate.reset() }
     } else if !isSettled, gate.isIdle, current.state != .processing {

@@ -122,41 +122,12 @@ struct ProtocolTests {
 @Suite("Keyboard model: the mic, the phase and results", .serialized)
 @MainActor
 struct KeyboardModelProtocolTests {
-  /// A keyboard that is ready to dictate, wired to a fake field and a
-  /// capture of the commands it sends.
-  struct Rig {
-    let model: KeyboardModel
-    let proxy: FakeProxy
-    let commands: Commands
-  }
-
-  private func ready() -> Rig {
-    let proxy = FakeProxy()
-    let model = KeyboardModel()
-    model.proxyOverride = proxy
-    model.hasFullAccess = true
-    let now = Date()
-    SharedStore.listeningUntil = now.addingTimeInterval(600)
-    SharedStore.appSeenAt = now
-    model.isListening = true
-    let commands = Commands()
-    model.transport = { commands.sent.append($0) }
-    return Rig(model: model, proxy: proxy, commands: commands)
-  }
-
-  final class Commands {
-    var sent: [KeyboardCommand] = []
-  }
-
-  private func snapshot(_ state: PhaseSnapshot.State, level: Double = 0) -> PhaseSnapshot {
-    PhaseSnapshot(state: state, message: nil, level: level, at: Date())
-  }
 
   @Test("a tap presses and latches; the next tap releases")
   func tapThenTap() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let rig = ready()
+    let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
     model.micDown()
@@ -172,7 +143,7 @@ struct KeyboardModelProtocolTests {
   func latchOnInFlight() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let rig = ready()
+    let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
     model.apply(snapshot(.recording))
@@ -186,7 +157,7 @@ struct KeyboardModelProtocolTests {
   func noPressWhileProcessing() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let rig = ready()
+    let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
     model.apply(snapshot(.processing))
@@ -200,7 +171,7 @@ struct KeyboardModelProtocolTests {
   func disappearEndsDictation() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let rig = ready()
+    let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
     model.micDown()
@@ -216,7 +187,7 @@ struct KeyboardModelProtocolTests {
   func results() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let rig = ready()
+    let rig = KeyboardRig()
     let model = rig.model
     let proxy = rig.proxy
     proxy.before = "Hi"
@@ -244,7 +215,7 @@ struct KeyboardModelProtocolTests {
   func termFieldIgnoresCursorMoves() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let rig = ready()
+    let rig = KeyboardRig()
     let model = rig.model
     let proxy = rig.proxy
     proxy.before = "Hello wor"
@@ -270,7 +241,7 @@ struct KeyboardModelProtocolTests {
   func termReplaceKeepsSpaces() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let rig = ready()
+    let rig = KeyboardRig()
     let model = rig.model
     let proxy = rig.proxy
     proxy.before = "he said"
@@ -287,7 +258,7 @@ struct KeyboardModelProtocolTests {
   func shiftModes() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let rig = ready()
+    let rig = KeyboardRig()
     let model = rig.model
     let proxy = rig.proxy
     proxy.before = "hello "

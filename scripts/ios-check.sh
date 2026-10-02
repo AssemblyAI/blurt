@@ -15,8 +15,8 @@
 #   4. The probe's XCUITest bundle (BlurtiOSProbe), compiled: its own scheme,
 #      run only by hand (the screenshot and keyboard-flow scripts), so nothing
 #      else ever builds it — and it went uncompiled through a Swift 6 change.
-# swift-format, `swiftlint lint`, the invariants and ios-typecheck.sh already
-# cover App/BlurtiOS from check.sh, which reads every tracked Swift file.
+# swift-format, `swiftlint lint` and the invariants already cover App/BlurtiOS
+# from check.sh, which reads every tracked Swift file.
 #
 # CI's ios-build job runs this; check.sh runs it too on a Mac with an iPhone
 # simulator, so a local green means the same thing on both platforms. Like
@@ -29,53 +29,56 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
+# shellcheck source=scripts/release-lib.sh
+source "$REPO_ROOT/scripts/release-lib.sh"
+# shellcheck source=scripts/ios-lib.sh
+source "$REPO_ROOT/scripts/ios-lib.sh"
 
-for tool in swiftlint periphery xcodegen; do
-  if ! command -v "$tool" >/dev/null 2>&1; then
-    echo "ios-check: $tool not found — scripts/bootstrap.sh installs it" >&2
-    exit 1
-  fi
-done
+require_tools --hint='scripts/bootstrap.sh installs it' swiftlint periphery xcodegen
 
 FAILED=()
 BUILD_LOG="$(mktemp -t blurt-ios-build)"
-trap 'rm -f "$BUILD_LOG"' EXIT
+APP_LOG="$(mktemp -t blurt-ios-build-app)"
+trap 'rm -f "$BUILD_LOG" "$APP_LOG"' EXIT
 
 echo "==> ios-test (BlurtiOSTests + BlurtiOSCore coverage gate)"
 BLURT_IOS_BUILD_LOG="$BUILD_LOG" "$REPO_ROOT/scripts/ios-test.sh" || FAILED+=("ios-test")
 
 echo "==> swiftlint analyze (unused imports, App/BlurtiOS)"
 if [ -s "$BUILD_LOG" ]; then
-  # App/BlurtiOS only. The log also compiles the engine — for iOS, where its
-  # `#if os(macOS)` files are inactive and SourceKit can't resolve them — and
-  # check.sh already analyzes the engine from the Mac build, where they're live.
-  # SourceKit still loads those engine files to resolve the iPhone ones and
-  # prints their unresolvable macOS imports to stderr — a diagnostic line, then
-  # the source line and a caret. They are not findings (violations go to
-  # stdout, and the exit status is the verdict), so each such block is dropped
-  # whole; any other line, swiftlint's own errors included, still shows.
-  swiftlint analyze --strict --quiet --compiler-log-path "$BUILD_LOG" App/BlurtiOS \
-    2> >(awk -v engine="$REPO_ROOT/Sources/BlurtEngine/" '
-      /^\// || /^(Error|error|warning|Fatal)/ { skip = (index($0, engine) == 1) }
-      !skip { print }' >&2) || FAILED+=("swiftlint analyze")
+  # The iPhone modules' compile commands only. The build also compiles the
+  # engine — for iOS, where its `#if os(macOS)` files are inactive and
+  # SourceKit can't resolve them — and check.sh analyzes the engine from the
+  # Mac build, where they are live.
+  grep -v -- '-module-name BlurtEngine ' "$BUILD_LOG" >"$APP_LOG" || true
+  swiftlint analyze --strict --quiet --compiler-log-path "$APP_LOG" App/BlurtiOS || FAILED+=("swiftlint analyze")
 else
   echo "error: no build log to analyze — the build above did not run" >&2
   FAILED+=("swiftlint analyze")
 fi
 
 echo "==> build-for-testing (BlurtiOSProbe)"
-# The same derived data as the tests, so only the probe's own files compile.
-# shellcheck source=scripts/ios-lib.sh
-source "$REPO_ROOT/scripts/ios-lib.sh"
-xcodebuild build-for-testing -project App/BlurtiOS/BlurtiOS.xcodeproj -scheme BlurtiOSProbe \
-  -destination 'generic/platform=iOS Simulator' -derivedDataPath "${BLURT_DERIVED_DATA:-$REPO_ROOT/.build/ios-sim}" \
-  "${IOS_SIM_SIGNING[@]}" -quiet || FAILED+=("build-for-testing (BlurtiOSProbe)")
+# The tests' destination, flags and derived data, so the build above is
+# reused and only the probe's own files compile (a generic destination would
+# rebuild everything for a second architecture).
+UDID="$(ios_pick_device "${BLURT_SIM_DEVICE:-iPhone 18 Pro}" | cut -f1)"
+if [ -n "$UDID" ]; then
+  xcodebuild build-for-testing -project App/BlurtiOS/BlurtiOS.xcodeproj -scheme BlurtiOSProbe \
+    -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$IOS_DERIVED" \
+    "${IOS_SIM_SIGNING[@]}" -enableCodeCoverage YES -quiet || FAILED+=("build-for-testing (BlurtiOSProbe)")
+else
+  echo "error: no iPhone simulator to build the probe for" >&2
+  FAILED+=("build-for-testing (BlurtiOSProbe)")
+fi
 
 echo "==> periphery (App/BlurtiOS)"
-# `--retain-public`: the engine's public API is used by the Mac app this scan
-# can't see, and the engine's own findings are excluded from the report, so only
-# the iPhone code's dead declarations are reported. BlurtiOSCore's API is
-# `package`, not public, so it is still scanned.
+# Its own build, for a device: the tests' simulator index would report the
+# phone's capture path (WindowedAudioSource) as unused, since the simulator
+# builds SimulatorAudioSource in its place. `--retain-public`: the engine's
+# public API is used by the Mac app this scan can't see, and the engine's own
+# findings are excluded from the report, so only the iPhone code's dead
+# declarations are reported. BlurtiOSCore's API is `package`, not public, so
+# it is still scanned.
 periphery scan --project App/BlurtiOS/BlurtiOS.xcodeproj --schemes BlurtiOS \
   --retain-public --retain-unused-protocol-func-params \
   --report-exclude 'Sources/**' --strict --quiet || FAILED+=("periphery")

@@ -7,15 +7,9 @@ import SwiftUI
 /// a face. Fixed point sizes throughout, as the system keyboard's are — no
 /// Dynamic Type.
 enum BlurtType {
-  enum MonoWeight {
-    case light
-    case regular
-    case medium
-  }
-
   /// Eyebrows, CTAs, the keyboard's word labels.
-  nonisolated static func mono(_ size: CGFloat, weight: MonoWeight = .regular) -> Font {
-    .system(size: size, weight: fontWeight(weight), design: .monospaced)
+  nonisolated static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+    .system(size: size, weight: weight, design: .monospaced)
   }
 
   /// The app's headlines, sentence case.
@@ -24,13 +18,5 @@ enum BlurtType {
   /// The app's body text.
   nonisolated static func body(_ size: CGFloat, bold: Bool = false) -> Font {
     .system(size: size, weight: bold ? .bold : .regular)
-  }
-
-  private nonisolated static func fontWeight(_ weight: MonoWeight) -> Font.Weight {
-    switch weight {
-    case .light: .light
-    case .regular: .regular
-    case .medium: .medium
-    }
   }
 }
