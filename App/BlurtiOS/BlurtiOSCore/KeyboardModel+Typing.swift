@@ -5,7 +5,7 @@ import UIKit
 // MARK: - Typing and the app
 
 extension KeyboardModel {
-  func type(_ text: String) {
+  package func type(_ text: String) {
     UIDevice.current.playInputClick()
     if termDraft != nil {
       termDraft?.append(text)
@@ -24,7 +24,7 @@ extension KeyboardModel {
     readSelection()
   }
 
-  func deleteBackward() {
+  package func deleteBackward() {
     UIDevice.current.playInputClick()
     if termDraft != nil {
       _ = termDraft?.popLast()
@@ -35,7 +35,7 @@ extension KeyboardModel {
     typedIntoHost()
   }
 
-  func newline() {
+  package func newline() {
     UIDevice.current.playInputClick()
     if termDraft != nil {
       saveTerm()
@@ -49,11 +49,11 @@ extension KeyboardModel {
 
   /// The most characters a highlighted word may have and still be offered as
   /// a key term: a name or a phrase, not a sentence.
-  static let termLengthCap = 48
+  package static let termLengthCap = 48
 
   /// A selection as a key term: trimmed, on one line, short enough to be a
   /// name or a phrase. Nil when it is none of those, or nothing is selected.
-  static func termCandidate(from selected: String?) -> String? {
+  package static func termCandidate(from selected: String?) -> String? {
     guard let trimmed = selected?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty,
       trimmed.count <= termLengthCap, !trimmed.contains(where: \.isNewline)
     else { return nil }
@@ -65,7 +65,7 @@ extension KeyboardModel {
   /// with Full Access — without it there is nothing the chip could do. A word
   /// the chip is done with (`dismissedSelection`) shows no chip while the
   /// same highlight stands.
-  func readSelection() {
+  package func readSelection() {
     guard hasFullAccess, let term = Self.termCandidate(from: proxy?.selectedText) else {
       selectedTerm = nil
       selectedTermIsKnown = false
@@ -90,7 +90,7 @@ extension KeyboardModel {
   /// highlight or not: the host may keep the word highlighted for as long as
   /// the user leaves it, and a chip that stayed with it read as stuck. A tap
   /// on a chip for a word Blurt already has puts the + back at once.
-  func addSelectedTerm() {
+  package func addSelectedTerm() {
     guard let term = selectedTerm else { return }
     guard !selectedTermIsKnown else {
       dismissSelection()
@@ -103,7 +103,7 @@ extension KeyboardModel {
 
   /// The chip is done with the highlighted word: the + comes back and stays
   /// back while that highlight stands (`KeyboardModel.dismissedSelection`).
-  func dismissSelection() {
+  package func dismissSelection() {
     dismissedSelection = selectedTerm
     selectedTerm = nil
     selectedTermIsKnown = false
@@ -120,7 +120,7 @@ extension KeyboardModel {
   /// Words already being transcribed follow the same rule: from the plain +
   /// they still land (the mic is off; there is nothing to stop), from a
   /// highlighted word they are cancelled.
-  func beginAddingTerm() {
+  package func beginAddingTerm() {
     let seed = Self.termCandidate(from: proxy?.selectedText) ?? ""
     switch snapshot.state {
     case .recording: perform(seed.isEmpty ? .stop : .cancel)
@@ -144,7 +144,7 @@ extension KeyboardModel {
     onLayoutChange?()
   }
 
-  func cancelAddingTerm() {
+  package func cancelAddingTerm() {
     termDraft = nil
     termDraftFromSelection = nil
     termHostBaseline = nil
@@ -158,7 +158,7 @@ extension KeyboardModel {
   /// Saves the term to Blurt's key terms — read on the very next dictation —
   /// and, when it began as a selection, puts it into the text in place of the
   /// misheard word.
-  func saveTerm() {
+  package func saveTerm() {
     guard let draft = termDraft?.trimmingCharacters(in: .whitespacesAndNewlines), !draft.isEmpty else {
       cancelAddingTerm()
       return
@@ -215,11 +215,11 @@ extension KeyboardModel {
   }
 
   /// How long the + (or the chip) shows its check after a term was saved.
-  static let termNoticeDwell: TimeInterval = 1.2
+  package static let termNoticeDwell: TimeInterval = 1.2
 
   /// A space — or, tapped twice quickly after a word, the system keyboard's
   /// "." shortcut: the first space becomes a full stop and a space.
-  func space() {
+  package func space() {
     UIDevice.current.playInputClick()
     if termDraft != nil {
       if termDraft?.isEmpty == false, termDraft?.hasSuffix(" ") == false { termDraft?.append(" ") }
@@ -242,21 +242,21 @@ extension KeyboardModel {
     updateShift()
   }
 
-  func toggleShift() { shifted.toggle() }
+  package func toggleShift() { shifted.toggle() }
 
   /// 123 / ABC: the symbols come up on their first page, or the letters return.
-  func toggleSymbols() {
+  package func toggleSymbols() {
     symbolsPage.toggle()
     morePage = false
   }
 
   /// #+= / 123: between the two symbol pages; nothing on the letters.
-  func toggleMore() {
+  package func toggleMore() {
     guard symbolsPage else { return }
     morePage.toggle()
   }
 
-  func globe() { controller?.advanceToNextInputMode() }
+  package func globe() { controller?.advanceToNextInputMode() }
 
   /// Brings the app forward to open the microphone — the one thing a keyboard
   /// cannot do for itself. iOS gives extensions no `UIApplication.shared`, so
@@ -264,14 +264,14 @@ extension KeyboardModel {
   /// way every keyboard that opens its app does. With `open(_:options:)`: since
   /// iOS 18 the old `openURL:` only logs "BUG IN CLIENT OF UIKIT" and opens
   /// nothing.
-  func openApp() {
+  package func openApp() {
     guard let controller,
       let url = URL(string: "\(BlurtShared.urlScheme)://\(BlurtShared.startHost)")
     else { return }
     var responder: UIResponder? = controller
     while let current = responder {
       if let application = current as? UIApplication {
-        application.open(url, options: [:], completionHandler: nil)
+        urlOpener(application, url)
         return
       }
       responder = current.next
@@ -280,13 +280,13 @@ extension KeyboardModel {
 }
 
 /// The three letter rows, by the language the user types in most.
-nonisolated enum LetterLayout {
-  static let qwerty = ["qwertyuiop", "asdfghjkl", "zxcvbnm"]
-  static let azerty = ["azertyuiop", "qsdfghjklm", "wxcvbn"]
-  static let qwertz = ["qwertzuiop", "asdfghjkl", "yxcvbnm"]
+package nonisolated enum LetterLayout {
+  package static let qwerty = ["qwertyuiop", "asdfghjkl", "zxcvbnm"]
+  package static let azerty = ["azertyuiop", "qsdfghjklm", "wxcvbn"]
+  package static let qwertz = ["qwertzuiop", "asdfghjkl", "yxcvbnm"]
 
   /// From the phone's own language order — no setting to make.
-  static func forPreferredLanguages(_ languages: [String] = Locale.preferredLanguages) -> [String] {
+  package static func forPreferredLanguages(_ languages: [String] = Locale.preferredLanguages) -> [String] {
     guard let first = languages.first?.lowercased() else { return qwerty }
     if first.hasPrefix("fr") { return azerty }
     if ["de", "cs", "sk", "hu"].contains(where: { first.hasPrefix($0) }) { return qwertz }

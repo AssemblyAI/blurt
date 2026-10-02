@@ -2,7 +2,7 @@ import BlurtEngine
 import Foundation
 import Testing
 
-@testable import BlurtiOS
+@testable import BlurtiOSCore
 
 @Suite("Voice state")
 struct VoiceStateTests {

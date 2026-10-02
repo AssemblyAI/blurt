@@ -1,3 +1,5 @@
+import BlurtiOSCore
+
 #if DEBUG
   import SwiftUI
 
@@ -137,7 +139,7 @@
       model.layout = layout
       model.voiceKindOverride = voice
       model.micAlignmentOverride = align
-      model.paletteOverride = .resolve(KeyboardPalette.brandID, dark: Self.darkFaces.contains(theme))
+      model.faceOverride = ThemeFace(themeID: KeyboardPalette.brandID, dark: Self.darkFaces.contains(theme))
       // `keys` shows the panel's carousel flipped to its keyboard page;
       // `term` the voice bar as the key-term field, mid-typing.
       model.panelShowsKeys = state == "keys" || state == "symbols"

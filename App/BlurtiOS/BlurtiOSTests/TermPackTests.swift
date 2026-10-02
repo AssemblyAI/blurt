@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-@testable import BlurtiOS
+@testable import BlurtiOSCore
 
 @Suite("Term packs")
 struct TermPackTests {
@@ -30,6 +30,27 @@ struct TermPackTests {
     let read = try #require(TermPack.from(url))
     #expect(read.terms == ["Rizz", "Blurt"])
     #expect(read.name == "Chat")
+  }
+
+  @Test("the shared file is named for the list, with what a file name can't carry taken out")
+  func fileName() {
+    #expect(TermPack(name: "Gym / crew!", from: nil, terms: ["a"]).fileStem == "Gym  crew")
+    #expect(TermPack(name: "  ", from: nil, terms: ["a"]).fileStem == "Blurt key terms")
+    #expect(TermPack(name: "../../", from: nil, terms: ["a"]).fileStem == "Blurt key terms")
+  }
+
+  @Test("the share sheet's file is the pack, as JSON a friend's Blurt reads back")
+  func shared() async throws {
+    // `exported(as:)` is iOS 18.2; the suite runs on the current simulator.
+    guard #available(iOS 18.2, *) else {
+      Issue.record("needs iOS 18.2 to export a Transferable")
+      return
+    }
+    let pack = TermPack(name: "Chat", from: "Neil", terms: ["Rizz", "Blurt"])
+    let data = try await pack.exported(as: .blurtTerms)
+    let read = try JSONDecoder().decode(TermPack.self, from: data)
+    #expect(read.id == pack.id)
+    #expect(TermPack(name: "Chat", from: "Neil", terms: ["Blurt", "Rizz"]).id != pack.id)
   }
 
   @Test("the plain text names the sender and lists the words")

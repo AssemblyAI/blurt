@@ -3,6 +3,7 @@ import Testing
 import UIKit
 
 @testable import BlurtiOS
+@testable import BlurtiOSCore
 
 /// A host text field the model can type into, remembering what it did.
 final class FakeProxy: NSObject, UITextDocumentProxy {

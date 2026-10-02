@@ -130,4 +130,6 @@ hides every lint finding behind it — expect to fix a batch, not a queue.
 Its build and tests run in CI's `ios-build` job (the authority). Locally: `scripts/ios-typecheck.sh`
 typechecks both iPhone targets on a Mac with only the Command Line Tools (run by `check.sh` when
 the SDK carries the Mac Catalyst frameworks), `scripts/ios-test.sh` runs `BlurtiOSTests` on a
-simulator when Xcode is installed, and `scripts/ios-sim.sh` builds and launches the app there.
+simulator when Xcode is installed and enforces `BlurtiOSCore`'s line-coverage floor (`MIN_IOS_COVERAGE`, 88%;
+`BLURT_IOS_SANITIZER=thread` or `address` runs the TSan / ASan pass CI's `ios-sanitizers` job
+runs), and `scripts/ios-sim.sh` builds and launches the app there.

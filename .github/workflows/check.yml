@@ -282,6 +282,36 @@ jobs:
             --retain-public --retain-unused-protocol-func-params \
             --report-exclude 'Sources/**' --strict --quiet
 
+  # The iPhone suite under each sanitizer, as check.sh runs the engine's. A job
+  # of its own, one runner per sanitizer, rather than more steps in ios-build:
+  # each is a full instrumented rebuild, and ios-build is already near its
+  # timeout. The coverage gate runs in ios-build's plain pass only.
+  ios-sanitizers:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: macos-26
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [thread, address]
+
+    steps:
+      - name: Checkout blurt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: blurt
+          persist-credentials: false
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Run the iPhone unit tests under the ${{ matrix.sanitizer }} sanitizer
+        working-directory: blurt
+        env:
+          BLURT_IOS_SANITIZER: ${{ matrix.sanitizer }}
+        run: BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-test.sh
+
   # Always-runs summary job, so a *skipped* `check` can't be mistaken for a pass.
   # GitHub reports a skipped required check to branch protection as successful, so
   # anything that makes `check` skip — the `changes` filter erroring, a `needs`
@@ -292,18 +322,19 @@ jobs:
   # NOTE: this only protects the repo once branch protection requires `gate`
   # instead of (or as well as) `check` — that's a repo settings change.
   gate:
-    needs: [changes, check, ios-build]
+    needs: [changes, check, ios-build, ios-sanitizers]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Assert the macOS and iOS gates ran or were intentionally skipped
+      - name: Assert the macOS, iOS and iOS-sanitizer gates ran or were intentionally skipped
         env:
           CHECK_RESULT: ${{ needs.check.result }}
           IOS_RESULT: ${{ needs.ios-build.result }}
+          IOS_SANITIZERS_RESULT: ${{ needs.ios-sanitizers.result }}
           CHANGES_RESULT: ${{ needs.changes.result }}
           CODE_CHANGED: ${{ needs.changes.outputs.code }}
         run: |
-          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED check=$CHECK_RESULT ios-build=$IOS_RESULT"
+          echo "changes=$CHANGES_RESULT code=$CODE_CHANGED check=$CHECK_RESULT ios-build=$IOS_RESULT ios-sanitizers=$IOS_SANITIZERS_RESULT"
           if [ "$CHANGES_RESULT" != "success" ]; then
             echo "error: the changes filter did not succeed, so the gate cannot be trusted" >&2
             exit 1
@@ -327,3 +358,4 @@ jobs:
           }
           assert_gate macOS "$CHECK_RESULT"
           assert_gate iOS "$IOS_RESULT"
+          assert_gate "iOS sanitizers" "$IOS_SANITIZERS_RESULT"

@@ -3,6 +3,7 @@ import Testing
 import UIKit
 
 @testable import BlurtiOS
+@testable import BlurtiOSCore
 
 /// The mic key's gate against the app's phases: which phase settles which
 /// press, the retry, the sender on every command, and the term field closing

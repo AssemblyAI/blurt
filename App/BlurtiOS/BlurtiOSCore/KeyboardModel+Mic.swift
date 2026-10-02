@@ -6,15 +6,15 @@ import UIKit
 
 extension KeyboardModel {
   /// Whether a tap on the orb can do anything but open the app.
-  var isReady: Bool { hasFullAccess && isListening }
+  package var isReady: Bool { hasFullAccess && isListening }
 
   /// What the voice control shows, from the phase the app published.
-  var voiceState: VoiceState { VoiceState(snapshot: snapshot, isReady: isReady) }
+  package var voiceState: VoiceState { VoiceState(snapshot: snapshot, isReady: isReady) }
 
   /// Finger down on the orb. Ignored, with a buzz, while the last dictation
   /// is still being transcribed: a press then would be dropped by the engine
   /// and the user would talk into nothing.
-  func micDown() {
+  package func micDown() {
     guard isReady else { return }
     switch snapshot.state {
     case .connecting, .processing:
@@ -30,19 +30,19 @@ extension KeyboardModel {
   /// is missing (opening the app needs no Full Access; everything else does).
   /// The gate comes up either way, so a press the finger made while the app
   /// was still there is never left armed.
-  func micUp() {
+  package func micUp() {
     perform(gate.modifierUp(at: elapsed))
     if !isReady { openApp() }
   }
 
-  func cancel() {
+  package func cancel() {
     gate.reset()
     send(.cancel)
   }
 
-  var elapsed: Duration { clockStart.duration(to: ContinuousClock.now) }
+  package var elapsed: Duration { clockStart.duration(to: ContinuousClock.now) }
 
-  func perform(_ action: DictationKeyGate.Action) {
+  package func perform(_ action: DictationKeyGate.Action) {
     switch action {
     case .start: send(.press)
     case .stop:
@@ -60,7 +60,7 @@ extension KeyboardModel {
     }
   }
 
-  func send(_ kind: KeyboardCommand.Kind) {
+  package func send(_ kind: KeyboardCommand.Kind) {
     let command = KeyboardCommand(
       id: UUID(), kind: kind, priorText: proxy?.documentContextBeforeInput,
       selectedText: proxy?.selectedText, sentAt: Date(), keyboard: instanceID)
@@ -89,7 +89,7 @@ extension KeyboardModel {
   /// than `BlurtShared.commandFreshnessWindow` unread, and an app that was
   /// killed answers nothing — so its latch can't outlive it. True when it did.
   @discardableResult
-  func expireUnansweredPress(now: Date = Date()) -> Bool {
+  package func expireUnansweredPress(now: Date = Date()) -> Bool {
     guard unansweredPress != nil, let sentAt = unansweredPressSentAt,
       now.timeIntervalSince(sentAt) >= BlurtShared.commandFreshnessWindow
     else { return false }
@@ -103,7 +103,7 @@ extension KeyboardModel {
   /// a press over a recording a tap had latched only re-latches it, so
   /// flipping to the keys mid-dictation doesn't throw the words away; a press
   /// the orb ignored (busy, or Blurt not ready) undoes nothing.
-  func undoPress() {
+  package func undoPress() {
     perform(gate.otherKeyDown())
   }
 }

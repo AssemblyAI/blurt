@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import BlurtiOS
+@testable import BlurtiOSCore
 
 @Suite("Utterance feed")
 struct UtteranceFeedTests {

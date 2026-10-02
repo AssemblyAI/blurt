@@ -7,8 +7,8 @@ import Foundation
 /// snapshot, the app from the engine's overlay state; every visual decision
 /// — the ring, a glyph, dimming, whether the meter is up — is a property here
 /// and tested, not a branch in a view.
-nonisolated struct VoiceState: Equatable {
-  enum Phase: Equatable {
+package nonisolated struct VoiceState: Equatable {
+  package enum Phase: Equatable {
     case idle
     case connecting
     case recording
@@ -18,7 +18,7 @@ nonisolated struct VoiceState: Equatable {
     case error
   }
 
-  enum Ring: Equatable {
+  package enum Ring: Equatable {
     /// At rest, or while recording (the meter says it all).
     case still
     /// The mic coming up, the words being made.
@@ -27,26 +27,26 @@ nonisolated struct VoiceState: Equatable {
     case solid(Tone)
   }
 
-  enum Tone: Equatable {
+  package enum Tone: Equatable {
     case ok
     case error
   }
 
-  enum Glyph: Equatable {
+  package enum Glyph: Equatable {
     case clipboard
     case exclamation
   }
 
-  let phase: Phase
+  package let phase: Phase
   /// Whether a press can do anything but open the app: Full Access and the
   /// app listening (the keyboard), the mic window open (the app).
-  let isReady: Bool
+  package let isReady: Bool
   /// The voice level while recording, 0…1.
-  let level: Float
+  package let level: Float
   /// The error's own words, for VoiceOver.
-  let message: String?
+  package let message: String?
 
-  init(phase: Phase, isReady: Bool, level: Float = 0, message: String? = nil) {
+  package init(phase: Phase, isReady: Bool, level: Float = 0, message: String? = nil) {
     self.phase = phase
     self.isReady = isReady
     self.level = level
@@ -54,7 +54,7 @@ nonisolated struct VoiceState: Equatable {
   }
 
   /// The keyboard's: from the phase the app published.
-  init(snapshot: PhaseSnapshot, isReady: Bool) {
+  package init(snapshot: PhaseSnapshot, isReady: Bool) {
     let phase: Phase =
       switch snapshot.state {
       case .idle: .idle
@@ -70,7 +70,7 @@ nonisolated struct VoiceState: Equatable {
 
   /// The app's: from the engine's overlay state. "No target" is the words
   /// going to the clipboard — the keyboard's "copied".
-  init(overlay: OverlayUIState, windowOpen: Bool, level: Float) {
+  package init(overlay: OverlayUIState, windowOpen: Bool, level: Float) {
     switch overlay {
     case .idle: self.init(phase: .idle, isReady: windowOpen)
     case .connecting: self.init(phase: .connecting, isReady: windowOpen)
@@ -83,10 +83,10 @@ nonisolated struct VoiceState: Equatable {
   }
 
   /// The meter is up and is the key.
-  var isRecording: Bool { isReady && phase == .recording }
+  package var isRecording: Bool { isReady && phase == .recording }
 
   /// Something is in flight: the mic coming up, the voice, the words being made.
-  var isWorking: Bool {
+  package var isWorking: Bool {
     guard isReady else { return false }
     switch phase {
     case .connecting, .recording, .processing: return true
@@ -94,7 +94,7 @@ nonisolated struct VoiceState: Equatable {
     }
   }
 
-  var isNotice: Bool {
+  package var isNotice: Bool {
     switch phase {
     case .pasted, .copied, .error: true
     case .idle, .connecting, .recording, .processing: false
@@ -102,7 +102,7 @@ nonisolated struct VoiceState: Equatable {
   }
 
   /// Nothing in flight — the moments the cancel control has nothing to cancel.
-  var isSettled: Bool {
+  package var isSettled: Bool {
     switch phase {
     case .idle, .pasted, .copied, .error: true
     case .connecting, .recording, .processing: false
@@ -111,9 +111,9 @@ nonisolated struct VoiceState: Equatable {
 
   /// Something is in flight and Blurt is there to stop it: no × beside a
   /// dimmed mic whose app is gone.
-  var canCancel: Bool { !isSettled && isReady }
+  package var canCancel: Bool { !isSettled && isReady }
 
-  var ring: Ring {
+  package var ring: Ring {
     switch phase {
     case .error: return .solid(.error)
     case .pasted, .copied: return .solid(.ok)
@@ -123,7 +123,7 @@ nonisolated struct VoiceState: Equatable {
   }
 
   /// Only the two notices that need saying carry a glyph.
-  var glyph: Glyph? {
+  package var glyph: Glyph? {
     guard isReady else { return nil }
     switch phase {
     case .copied: return .clipboard
@@ -133,14 +133,14 @@ nonisolated struct VoiceState: Equatable {
   }
 
   /// Blurt isn't ready: the control sits back, and a tap opens the app.
-  var dimmed: Bool { !isReady }
+  package var dimmed: Bool { !isReady }
 
-  var accessibilityLabel: String {
+  package var accessibilityLabel: String {
     guard isReady else { return "Start Blurt" }
     return isRecording ? "Stop dictation" : "Dictate"
   }
 
-  var accessibilityValue: String {
+  package var accessibilityValue: String {
     phase == .error ? message ?? "Dictation failed." : ""
   }
 }

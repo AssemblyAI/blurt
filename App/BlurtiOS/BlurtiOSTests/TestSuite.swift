@@ -1,6 +1,6 @@
 import Foundation
 
-@testable import BlurtiOS
+@testable import BlurtiOSCore
 
 /// A throwaway App Group for one test: nothing a test writes reaches the real
 /// suite the installed app and keyboard share (the engine's own rule about

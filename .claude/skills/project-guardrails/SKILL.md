@@ -184,7 +184,8 @@ only one of stt_prompt or prompt; they are the same field`, before the audio is
 
 - **The keyboard never hears anything.** iOS lets no keyboard use the microphone; the app
   listens and transcribes, the keyboard is a remote control over the App Group that inserts
-  the words. No `AVFoundation` in `BlurtKeyboard/` or `Shared/` (mechanized).
+  the words. No `AVFoundation` in `BlurtKeyboard/`, `Shared/` or `BlurtiOSCore/` (the keyboard
+  links it) (mechanized).
 - The app's microphone is a _listening window_, opened once while the app is in front and
   kept open, not a per-press capture — the two rows marked "(macOS shell)" above do not apply.
 - Insertion is the keyboard's `textDocumentProxy`; the clipboard is only the fallback when no

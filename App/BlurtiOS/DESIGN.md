@@ -433,7 +433,7 @@ side, and — in the panel — cancel in the far top corner, clear of them both,
 where in the middle it mirrors the + on the mic's other side.
 Left and right are the phone's sides: in a right-to-left language the
 leading/trailing mapping flips so the mic stays under the thumb chosen
-(`Shared/MicAlignment.swift`, tested). Gallery: `-BlurtGalleryAlign
+(`BlurtiOSCore/MicAlignment.swift` and `Shared/MicAlignment+Layout.swift`, tested). Gallery: `-BlurtGalleryAlign
 left|center|right`; the real extension: `scripts/ios-keyboard-flows.sh
 --align left|right` checks the mic is at that edge with the add key inside it.
 
@@ -735,7 +735,7 @@ still follow the level.
 
 The app listens and transcribes; the keyboard is a remote control. They talk
 over the App Group's `UserDefaults` (payloads as JSON) plus Darwin
-notifications that carry nothing and just say "look" (`SharedState.swift`).
+notifications that carry nothing and just say "look" (`BlurtiOSCore/SharedState.swift`).
 
 | Rule                   | Value                                                                                          | Why                                                                                                      |
 | ---------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |

@@ -6,11 +6,11 @@ import UIKit
 extension KeyboardModel {
   /// What the field asked for, the way the system keyboard honours it: the
   /// return key's own word, and the symbols page first for a number field.
-  func readField() {
+  package func readField() {
     returnLabel = proxy?.returnKeyType.flatMap(Self.returnLabel)
   }
 
-  func readAppearance() {
+  package func readAppearance() {
     switch proxy?.keyboardAppearance {
     case .dark: isDark = true
     case .light: isDark = false
@@ -20,7 +20,7 @@ extension KeyboardModel {
 
   /// Number, decimal and phone fields open on the symbols page, as the system
   /// keyboard would show a number pad.
-  static func wantsSymbols(_ type: UIKeyboardType?) -> Bool {
+  package static func wantsSymbols(_ type: UIKeyboardType?) -> Bool {
     switch type {
     case .numberPad, .decimalPad, .phonePad, .numbersAndPunctuation, .asciiCapableNumberPad: true
     default: false
@@ -28,10 +28,10 @@ extension KeyboardModel {
   }
 
   /// iOS's own words for the return key, by the type the field asked for.
-  static let returnLabels: [UIReturnKeyType: String] = [
+  package static let returnLabels: [UIReturnKeyType: String] = [
     .go: "go", .google: "search", .yahoo: "search", .search: "search", .join: "join", .next: "next",
     .route: "route", .send: "send", .done: "done", .emergencyCall: "call", .continue: "continue",
   ]
 
-  static func returnLabel(_ type: UIReturnKeyType) -> String? { returnLabels[type] }
+  package static func returnLabel(_ type: UIReturnKeyType) -> String? { returnLabels[type] }
 }

@@ -14,18 +14,22 @@ import UIKit
 /// The text goes over as returned: the keyboard applies
 /// `InsertionSeparator.withLeadingSeparator` against the *live* text before the
 /// cursor, which may have moved since the press.
-nonisolated struct KeyboardRelayInjector: InjectorProtocol {
+package nonisolated struct KeyboardRelayInjector: InjectorProtocol {
   /// How long the keyboard gets to insert before the clipboard takes over.
-  static let deliveryTimeout: TimeInterval = 3
-  static let deliveryPoll: Duration = .milliseconds(250)
+  package static let deliveryTimeout: TimeInterval = 3
+  package static let deliveryPoll: Duration = .milliseconds(250)
 
   /// The keyboard the dictation in flight was pressed in
   /// (`KeyboardCommand.keyboard`), or nil for whichever keyboard is up.
-  var presser: @Sendable () -> String? = { nil }
+  package var presser: @Sendable () -> String? = { nil }
 
-  func setTarget(_ focus: CapturedFocus?) async {}
+  package init(presser: @escaping @Sendable () -> String? = { nil }) {
+    self.presser = presser
+  }
 
-  func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws {
+  package func setTarget(_ focus: CapturedFocus?) async {}
+
+  package func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws {
     // The words go to the keyboard that asked for them. If the user has
     // moved on — another app's keyboard is the one on screen now — they go
     // to the clipboard rather than into a field nobody dictated into.

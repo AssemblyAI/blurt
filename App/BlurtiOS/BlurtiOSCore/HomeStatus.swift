@@ -4,15 +4,15 @@ import Foundation
 /// What the home screen says about the app's state, in words: the headline,
 /// the line under it, whether setup is complete, whether the last dictation
 /// just landed. Pure, so the wording is tested and the view only lays it out.
-nonisolated struct HomeStatus: Equatable {
-  let title: String
-  let subtitle: String
+package nonisolated struct HomeStatus: Equatable {
+  package let title: String
+  package let subtitle: String
   /// A key, the microphone and the keyboard, all in place.
-  let isSetUp: Bool
+  package let isSetUp: Bool
   /// The words just went in (or to the clipboard): the hero's moment.
-  let landed: Bool
+  package let landed: Bool
 
-  init(
+  package init(
     overlay: OverlayUIState, windowOpen: Bool, until: Date?, hasKey: Bool, micGranted: Bool, keyboardSeen: Bool
   ) {
     title = Self.title(overlay, windowOpen: windowOpen)

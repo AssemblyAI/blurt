@@ -1,3 +1,4 @@
+import BlurtiOSCore
 import SwiftUI
 
 /// Pick a keyboard theme from live previews: a card per theme, each the real
@@ -78,7 +79,7 @@ private struct ThemeCard: View {
     model.hasFullAccess = true
     model.isListening = true
     model.needsGlobe = true
-    model.paletteOverride = palette
+    model.faceOverride = ThemeFace(palette)
     return model
   }
 }

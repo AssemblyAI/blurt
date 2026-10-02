@@ -1,4 +1,5 @@
 import BlurtEngine
+import BlurtiOSCore
 import SwiftUI
 
 @main

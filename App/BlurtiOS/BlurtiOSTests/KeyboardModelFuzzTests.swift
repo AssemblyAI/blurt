@@ -2,6 +2,7 @@ import Foundation
 import Testing
 
 @testable import BlurtiOS
+@testable import BlurtiOSCore
 
 /// The keyboard model driven through thousands of random event sequences —
 /// every finger, phase, host and lifecycle event the real keyboard sees, in

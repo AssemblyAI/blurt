@@ -64,23 +64,22 @@ format_outputs() {
 }
 
 # The design-literal lint. Scope: every file under the keyboard's and the
-# app's sources that draws — new views are linted by default — minus the logic (the model,
-# the host controller, the palette, the geometry and interaction rules, the
-# voice state) and Grain.swift, whose body is the grain's recipe (density,
+# app's sources that draws — new views are linted by default — minus the few
+# that compute rather than draw (the host controller, the palette, the
+# geometry) and Grain.swift, whose body is the grain's recipe (density,
 # the two shades), with only its opacity as a token. Numbers 0 and 1 pass: `Spacer(minLength: 0)`,
 # `.opacity(on ? 1 : 0)` and `scaleEffect(1 + …)` are structure, not design.
 lint_literals() {
   python3 - <<'PY'
 import glob, os, re, sys
+# BlurtiOSCore (the model, the voice state, the interaction rules) is not
+# globbed at all: it draws nothing, so it has no design literals to carry.
 exempt = {
-    "KeyboardModel.swift", "KeyboardModel+Mic.swift", "KeyboardModel+Phase.swift", "KeyboardModel+Typing.swift",
-    "KeyboardViewController.swift", "KeyboardPalette.swift", "KeyGeometry.swift", "KeyboardInteraction.swift",
-    "VoiceState.swift", "KeyboardMotion.swift", "MotionHeld.swift", "Grain.swift",
+    "KeyboardViewController.swift", "KeyboardPalette.swift", "KeyGeometry.swift", "MotionHeld.swift", "Grain.swift",
 }
 app_exempt = {
     "BlurtiOSApp.swift", "DictationCoordinator.swift", "ListeningWindow.swift", "ListeningSource.swift",
-    "AudioSource.swift", "SimulatorAudioSource.swift", "KeyboardRelayInjector.swift", "APIKeyModel.swift",
-    "TermPack.swift", "HomeStatus.swift", "KeyboardGalleryView.swift", "KeyboardProbeView.swift",
+    "AudioSource.swift", "SimulatorAudioSource.swift", "KeyboardGalleryView.swift", "KeyboardProbeView.swift",
 }
 files = sorted(
     [path for path in glob.glob("App/BlurtiOS/BlurtKeyboard/Sources/**/*.swift", recursive=True)

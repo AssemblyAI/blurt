@@ -5,12 +5,12 @@ import UIKit
 // MARK: - What comes back from the app: phase, results, haptics
 
 extension KeyboardModel {
-  func phaseChanged() {
+  package func phaseChanged() {
     guard let current = SharedStore.read(PhaseSnapshot.self, forKey: BlurtShared.Key.phase) else { return }
     apply(current.isStale ? .idle : current)
   }
 
-  func apply(_ current: PhaseSnapshot, haptics wantsHaptics: Bool = true) {
+  package func apply(_ current: PhaseSnapshot, haptics wantsHaptics: Bool = true) {
     // A notice the keyboard already let go of (its dwell ran out) is not
     // replayed by a second read of the same snapshot.
     if let dismissedNoticeAt, current.at == dismissedNoticeAt { return }
@@ -74,7 +74,7 @@ extension KeyboardModel {
     }
   }
 
-  func resultArrived() {
+  package func resultArrived() {
     guard let result = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result),
       result.id != lastResultID, let proxy,
       Date().timeIntervalSince(result.deliveredAt) < Self.resultFreshnessWindow,
@@ -96,7 +96,7 @@ extension KeyboardModel {
     readSelection()
   }
 
-  func haptics(from previous: PhaseSnapshot.State, to state: PhaseSnapshot.State) {
+  package func haptics(from previous: PhaseSnapshot.State, to state: PhaseSnapshot.State) {
     guard hasFullAccess else { return }
     switch state {
     case .recording:

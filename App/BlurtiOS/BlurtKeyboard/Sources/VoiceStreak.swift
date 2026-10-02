@@ -1,3 +1,4 @@
+import BlurtiOSCore
 import SwiftUI
 
 /// Candidate C — the streak. The flare as the meter: at rest a hairline the

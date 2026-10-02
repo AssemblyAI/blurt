@@ -3,6 +3,7 @@ import SwiftUI
 import Testing
 
 @testable import BlurtiOS
+@testable import BlurtiOSCore
 
 @Suite("Mic alignment setting")
 struct MicAlignmentSettingTests {
@@ -108,8 +109,67 @@ struct VoiceElementSettingTests {
   }
 }
 
+@Suite("Shared defaults")
+@MainActor
+struct SharedDefaultsTests {
+  @Test("a payload round-trips through the App Group; unreadable or removed is nothing")
+  func payloads() {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    let result = DictationResult(id: UUID(), text: "hi", deliveredAt: Date(), recipient: "kb")
+    SharedStore.write(result, forKey: BlurtShared.Key.result)
+    #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result)?.id == result.id)
+    SharedStore.defaults.set(Data("not json".utf8), forKey: BlurtShared.Key.result)
+    #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
+    SharedStore.write(result, forKey: BlurtShared.Key.result)
+    SharedStore.remove(forKey: BlurtShared.Key.result)
+    #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
+  }
+
+  @Test("each setting has its default until chosen, and keeps what was chosen")
+  func settings() {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    #expect(SharedStore.layout == .panel)
+    SharedStore.layout = .full
+    #expect(SharedStore.layout == .full)
+    #expect(SharedStore.themeID == "system")
+    SharedStore.themeID = "blurt"
+    #expect(SharedStore.themeID == "blurt")
+    #expect(SharedStore.autoDictate)
+    SharedStore.autoDictate = false
+    #expect(!SharedStore.autoDictate)
+    #expect(SharedStore.windowMinutes == 15)
+    // 0 is a real choice (until closed), not the unset default.
+    SharedStore.windowMinutes = 0
+    #expect(SharedStore.windowMinutes == 0)
+    #expect(SharedStore.lexiconRefreshedAt == nil)
+  }
+
+  @Test("a contact name has both sides equal; a text replacement does not")
+  func lexiconEntries() {
+    #expect(LexiconEntry(userInput: "Neil Bisht", documentText: "Neil Bisht").isName)
+    #expect(!LexiconEntry(userInput: "omw", documentText: "On my way!").isName)
+  }
+}
+
 @Suite("Layouts and palettes")
 struct LayoutTests {
+  @Test("every layout and mic side has its own name and description for Settings")
+  func settingsCopy() {
+    for cases in [
+      KeyboardLayout.allCases.map { ($0.id, $0.title, $0.summary) },
+      MicAlignment.allCases.map { ($0.id, $0.title, $0.summary) },
+    ] {
+      #expect(Set(cases.map(\.0)).count == cases.count)
+      #expect(Set(cases.map(\.1)).count == cases.count)
+      #expect(Set(cases.map(\.2)).count == cases.count)
+      #expect(cases.allSatisfy { !$0.1.isEmpty && !$0.2.isEmpty })
+    }
+    #expect(KeyboardLayout.full.id == "full")
+    #expect(MicAlignment.left.id == "left")
+  }
+
   @Test("heights are the rows at the iPhone keyboard's spacing (DESIGN.md)")
   func heights() {
     #expect(KeyboardLayout.slimBar.height == 60)

@@ -4,6 +4,7 @@ import Testing
 import UIKit
 
 @testable import BlurtiOS
+@testable import BlurtiOSCore
 
 /// The compiled tokens against the file they were generated from. check.sh's
 /// `design-sync.sh --check` catches drift in the tree; this catches it in the

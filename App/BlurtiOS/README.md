@@ -14,7 +14,7 @@ The iPhone app and the keyboard it ships. Same engine as the Mac app
   shows the phase the app publishes, inserts the words that come back through
   `textDocumentProxy`, and reads the phone's word list (`UILexicon`: contact names
   and text replacements) so names come back spelled right with no setup.
-- **They talk through an App Group** (`Shared/SharedState.swift`): payloads in the
+- **They talk through an App Group** (`BlurtiOSCore/SharedState.swift`): payloads in the
   shared defaults, Darwin notifications to wake each other. Full Access is what
   lets the keyboard reach the group — without it the keyboard still types, and says
   what it needs.
@@ -56,13 +56,36 @@ the Apple Developer Agreement at developer.apple.com/account; a company-managed 
 download. The archive lands in `~/Library/Application Support/com.robotsandpencils.xcodes/`;
 an 83 KB "xip" there is a saved error page, delete it and retry.
 
+## Logic and UI
+
+The iPhone code splits the way the Mac's does. **`BlurtiOSCore/`** is the logic — the App Group
+contract, the keyboard's model and rules, the voice state, term packs, the relay injector — and
+plays the part `BlurtEngine` plays for the Mac shell: no SwiftUI, no views, no audio (the keyboard
+links it, and the keyboard never hears anything; `check-invariants.sh` enforces the last). The
+app (`BlurtiOS/Sources`) and the keyboard (`BlurtKeyboard/Sources`) are the UI on top of it, with
+`Shared/` holding what both draw with (design tokens, type, brand colours).
+
+It is a static framework, so the app and the keyboard each link their own copy beside the
+engine's, and its API is `package` (one `SWIFT_PACKAGE_NAME` across the project), not `public`:
+nothing outside this project can see it, and periphery still reports what nothing uses. A
+preview hands the model a `ThemeFace`, not a palette — the colours are the UI's
+(`KeyboardModel+Palette.swift`).
+
 ## Unit tests
 
 `scripts/ios-test.sh` runs `BlurtiOSTests` on a simulator (CI's `ios-build` job runs it after
-the build): the iPhone code's pure logic — the App Group contract (`KeyTermList`, stale
-snapshots, layouts), the keyboard's rules (sentence start, the double space, the term field,
-return labels, letter rows) against a fake text field, term packs, palettes. The engine's own
-tests stay `swift test`. Anything with a rule in `DESIGN.md` should have a test here.
+the build): the core's logic — the App Group contract (`KeyTermList`, stale snapshots, layouts),
+the keyboard's rules (sentence start, the double space, the term field, return labels, letter
+rows) against a fake text field, the gate against the app's phases, the Darwin signals, term
+packs — and what the UI builds on it (palettes, the voice element, the gallery). The engine's
+own tests stay `swift test`. Anything with a rule in `DESIGN.md` should have a test here.
+
+The suite holds the same gates as the engine's: warnings are errors, a plain run fails when
+`BlurtiOSCore` drops below the engine's own line-coverage floor (`MIN_IOS_COVERAGE`, 88%, in the
+script — raise it as coverage grows, never lower it to land a change), and CI's `ios-sanitizers`
+job runs it again under ThreadSanitizer and AddressSanitizer (`BLURT_IOS_SANITIZER=thread` or
+`address` locally). The views are not in that figure, as the Mac shell's aren't in the engine's:
+they are checked on sight, through the gallery and the probe's screenshot flows.
 
 ## Testing in the simulator
 

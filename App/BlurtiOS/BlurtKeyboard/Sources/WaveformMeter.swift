@@ -1,4 +1,5 @@
 import BlurtEngine
+import BlurtiOSCore
 import SwiftUI
 
 /// The Mac pill's live meter: a row of bars that fills the width it is given

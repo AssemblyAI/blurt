@@ -1,7 +1,7 @@
 import CoreGraphics
 import Testing
 
-@testable import BlurtiOS
+@testable import BlurtiOSCore
 
 @Suite("Keyboard interaction rules")
 struct KeyboardInteractionTests {

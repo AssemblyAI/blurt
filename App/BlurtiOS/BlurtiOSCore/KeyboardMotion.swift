@@ -5,4 +5,4 @@ import Foundation
 /// meter's idle wave, the glints. The Mac pill reads the same number from
 /// the engine: the level feed moves at this cadence, so drawing faster only
 /// burns the keyboard's tight energy and memory budget.
-let keyboardAnimationInterval = MicCapture.meterIntervalSeconds
+package let keyboardAnimationInterval = MicCapture.meterIntervalSeconds

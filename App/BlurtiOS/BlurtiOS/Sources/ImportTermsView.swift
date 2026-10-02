@@ -1,3 +1,4 @@
+import BlurtiOSCore
 import SwiftUI
 
 /// "Add these key terms?" — what a shared list opens into. Every term is

@@ -16,7 +16,7 @@ import Observation
 /// themselves live in the engine's `APIKeySubmission`, where `swift test` covers
 /// them; this type just forwards and mirrors the result into `hasAPIKey`.
 @Observable
-final class APIKeyModel {
+package final class APIKeyModel {
   /// Storage for the API key. Production hits the Keychain via `APIKeyStore`;
   /// UI tests inject an in-memory store so the real key is never touched.
   @ObservationIgnored private let keyStore: any APIKeyGateway
@@ -28,7 +28,7 @@ final class APIKeyModel {
 
   /// Whether an AssemblyAI API key is currently saved. Drives the wizard (which
   /// gates dictation on having a key) and the Settings UI.
-  private(set) var hasAPIKey: Bool
+  package private(set) var hasAPIKey: Bool
 
   /// `validateKey` defaults to the engine's real AssemblyAI check; UI tests
   /// inject an offline validator so the settings flow needs no network.
@@ -36,7 +36,7 @@ final class APIKeyModel {
   /// The `hasKey` read below also loads the Keychain memo (`APIKeyStore.current`),
   /// so every later readiness check on the press→recording latency path is
   /// served from memory instead of paying a cold `SecItemCopyMatching`.
-  init(
+  package init(
     keyStore: any APIKeyGateway = ProductionAPIKeyStore(),
     validateKey: @escaping @Sendable (String) async -> APIKeyValidator.Result = {
       await APIKeyValidator().validate($0)
@@ -51,7 +51,7 @@ final class APIKeyModel {
   /// with no key saved fails fast as `.failed(.apiKeyMissing)` before any capture.
   /// Captures the (Sendable) store, not this main-actor model, so it can cross
   /// into the session's `@Sendable` closure.
-  func readinessCheck() -> @Sendable () -> BlurtError? {
+  package func readinessCheck() -> @Sendable () -> BlurtError? {
     let keyStore = keyStore
     return { keyStore.hasKey ? nil : .apiKeyMissing }
   }
@@ -64,7 +64,7 @@ final class APIKeyModel {
   /// already present flips `hasAPIKey` true, so the wizard advances to the ready
   /// screen instead of stranding the user on a setup step whose only control (a
   /// *changed*-key "Update") is disabled.
-  func refreshStatus() {
+  package func refreshStatus() {
     let hasKey = keyStore.hasKey
     if hasKey != hasAPIKey { hasAPIKey = hasKey }
   }
@@ -73,7 +73,7 @@ final class APIKeyModel {
   /// actively accepts it (`.valid`) — the engine's `APIKeySubmission` owns
   /// (and unit-tests) that never-persist-an-unverified-key rule. Mirrors the
   /// outcome into `hasAPIKey` so the wizard/Settings UI reacts.
-  func submit(_ key: String) async -> APIKeySubmission.Outcome {
+  package func submit(_ key: String) async -> APIKeySubmission.Outcome {
     let outcome = await submission.submit(key)
     refreshStatus()
     return outcome

@@ -1,3 +1,4 @@
+import BlurtiOSCore
 import SwiftUI
 
 /// The hero: the status as an eyebrow, a serif headline and a line of body

@@ -40,10 +40,18 @@ find "$REPO_ROOT/Sources/BlurtEngine" -name '*.swift' -print0 \
     -emit-module -emit-module-path "$WORK/BlurtEngine.swiftmodule"
 
 IOS="$REPO_ROOT/App/BlurtiOS"
-TARGET_FLAGS=(
-  "${COMMON[@]}" -typecheck -I "$WORK" -warnings-as-errors
+# project.yml's SWIFT_PACKAGE_NAME, so BlurtiOSCore's `package` API resolves.
+IOS_FLAGS=(
+  "${COMMON[@]}" -I "$WORK" -warnings-as-errors -package-name BlurtiOS
   -Xfrontend -default-isolation -Xfrontend MainActor
 )
+TARGET_FLAGS=("${IOS_FLAGS[@]}" -typecheck)
+
+# The logic both targets link: emitted, not just checked, so they import it.
+# Extension-safe, since the keyboard links it (APPLICATION_EXTENSION_API_ONLY).
+echo "BlurtiOSCore"
+xcrun swiftc "${IOS_FLAGS[@]}" -application-extension -D DEBUG -module-name BlurtiOSCore \
+  -emit-module -emit-module-path "$WORK/BlurtiOSCore.swiftmodule" "$IOS"/BlurtiOSCore/*.swift
 
 # The app also compiles the keyboard's sources, all but its entry point
 # (project.yml: the theme picker and the home screen draw the real keyboard

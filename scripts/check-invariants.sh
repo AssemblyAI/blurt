@@ -80,10 +80,11 @@ ENGINE="Sources/*.swift"
 # next one.
 APP="App/*.swift App/*.yml App/*.plist :!App/Blurt/Blurt.xcodeproj :!App/BlurtiOS/BlurtiOSTests"
 TESTS="Tests/*.swift App/Blurt/BlurtUITests/*.swift App/BlurtiOS/BlurtiOSTests/*.swift"
-# The keyboard extension and what it compiles: iOS lets no keyboard use the
-# microphone, and the design keeps every audio type out of it, so an import
-# there is a decision being reversed by accident.
-KEYBOARD="App/BlurtiOS/BlurtKeyboard/*.swift App/BlurtiOS/Shared/*.swift"
+# The keyboard extension and what it compiles or links — its own sources, the
+# Shared UI, and BlurtiOSCore: iOS lets no keyboard use the microphone, and the
+# design keeps every audio type out of it, so an import there is a decision
+# being reversed by accident.
+KEYBOARD="App/BlurtiOS/BlurtKeyboard/*.swift App/BlurtiOS/Shared/*.swift App/BlurtiOS/BlurtiOSCore/*.swift"
 # The streaming-STT rule's one carve-out: the experimental read-selection-aloud
 # feature speaks through AssemblyAI's streaming TTS, which is WebSocket-only.
 # The rule is about *dictation* staying one request/one response, so the TTS

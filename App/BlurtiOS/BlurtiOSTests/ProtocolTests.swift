@@ -4,6 +4,7 @@ import Testing
 import UIKit
 
 @testable import BlurtiOS
+@testable import BlurtiOSCore
 
 @Suite("The two-process contract", .serialized)
 @MainActor

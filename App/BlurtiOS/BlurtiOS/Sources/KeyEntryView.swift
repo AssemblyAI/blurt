@@ -1,4 +1,5 @@
 import BlurtEngine
+import BlurtiOSCore
 import SwiftUI
 
 /// Paste an AssemblyAI API key, verified against the API before it is saved

@@ -6,11 +6,11 @@ import Foundation
 /// `@Sendable` for that reason; hop to the main actor inside it when the work
 /// is UI. A class rather than a token so `deinit` can deregister — a listener
 /// left behind outlives its owner, since the system holds the callback.
-nonisolated final class DarwinObserver: Sendable {
+package nonisolated final class DarwinObserver: Sendable {
   private let name: String
   private let handler: @Sendable () -> Void
 
-  init(name: String, handler: @escaping @Sendable () -> Void) {
+  package init(name: String, handler: @escaping @Sendable () -> Void) {
     self.name = name
     self.handler = handler
     let observer = Unmanaged.passUnretained(self).toOpaque()

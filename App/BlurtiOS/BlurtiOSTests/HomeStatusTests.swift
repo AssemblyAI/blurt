@@ -2,7 +2,7 @@ import BlurtEngine
 import Foundation
 import Testing
 
-@testable import BlurtiOS
+@testable import BlurtiOSCore
 
 @Suite("Home status")
 struct HomeStatusTests {

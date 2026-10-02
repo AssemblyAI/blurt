@@ -33,12 +33,39 @@ settings:
     # what CI wants — it builds with signing off. App Groups need a paid team.
     DEVELOPMENT_TEAM: ${BLURT_TEAM}
     CODE_SIGN_STYLE: Automatic
+    # One package access identifier for every target, so BlurtiOSCore's
+    # `package` declarations reach the app, the keyboard and the tests (and
+    # nothing outside them) without becoming `public` API.
+    SWIFT_PACKAGE_NAME: BlurtiOS
 packages:
   # The same local package the Mac app carries, reached from App/BlurtiOS. No
   # remote packages: check.sh's dependency guard reads every App/*/project.yml.
   BlurtEngine:
     path: ../..
 targets:
+  # The iPhone code's logic, apart from its UI, the way BlurtEngine sits apart
+  # from the Mac shell: the App Group contract, the keyboard's model and rules,
+  # the voice state, term packs. No SwiftUI and no views (those stay in the app
+  # and the keyboard), and no audio: the keyboard links this, and it never
+  # hears anything. Static, so the app and the keyboard each carry their own
+  # copy alongside the engine's, with no framework to embed and no second copy
+  # of the engine inside one process. ios-test.sh gates its line coverage.
+  BlurtiOSCore:
+    type: framework.static
+    platform: iOS
+    sources:
+      - path: BlurtiOSCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt.ios.core
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        # The keyboard links it, so only extension-safe API.
+        APPLICATION_EXTENSION_API_ONLY: YES
+    dependencies:
+      - package: BlurtEngine
+        product: BlurtEngine
   BlurtiOS:
     type: application
     platform: iOS
@@ -57,9 +84,9 @@ targets:
       # The keyboard carries its own copy: an extension can't read the app's.
       - path: Design/fonts
         buildPhase: resources
-      # The App Group contract, compiled into BOTH the app and the keyboard (an
-      # extension can't import the app's module) — one source, no duplication,
-      # the same shape as App/Blurt/Shared.
+      # The UI both the app and the keyboard draw with (design tokens, type,
+      # brand colours), compiled into each — an extension can't import the
+      # app's module. The App Group contract itself is BlurtiOSCore.
       - path: Shared
       # The keyboard's views and model: the theme picker draws the real keyboard
       # on its cards, the home screen draws the orb and the meter, and debug
@@ -132,6 +159,8 @@ targets:
     dependencies:
       - package: BlurtEngine
         product: BlurtEngine
+      - target: BlurtiOSCore
+        embed: false
       - target: BlurtKeyboard
   # The keyboard. It types, it starts and stops a dictation, it inserts the
   # words; it never hears anything. `RequestsOpenAccess` asks the user for Full
@@ -178,10 +207,13 @@ targets:
     dependencies:
       - package: BlurtEngine
         product: BlurtEngine
-  # Unit tests for the iPhone code's pure logic — the App Group contract, the
-  # keyboard's rules, term packs — hosted by the app so `@testable import
-  # BlurtiOS` reaches everything (the keyboard's sources are compiled into the
-  # app too). Swift Testing; `scripts/ios-test.sh` runs them on a simulator.
+      - target: BlurtiOSCore
+        embed: false
+  # Unit tests for the iPhone code — BlurtiOSCore's logic, and what the app and
+  # keyboard build on it — hosted by the app so `@testable import BlurtiOS`
+  # reaches the shell too (the keyboard's sources are compiled into the app).
+  # Core is linked into the host already, so the bundle only imports it.
+  # Swift Testing; `scripts/ios-test.sh` runs them on a simulator.
   BlurtiOSTests:
     type: bundle.unit-test
     platform: iOS
@@ -235,7 +267,12 @@ schemes:
     test:
       config: Debug
       targets:
-        - BlurtiOSTests
+        # Serial, on purpose: tests swap `SharedStore.override` (a global) for a
+        # scratch App Group, and an async test suspended mid-await would read
+        # another suite's — or the real one — if a second ran in the gap.
+        # `.serialized` only orders tests inside one suite.
+        - name: BlurtiOSTests
+          parallelizable: false
   BlurtiOSProbe:
     build:
       targets:

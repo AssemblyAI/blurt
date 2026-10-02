@@ -1,5 +1,6 @@
 import AVFoundation
 import BlurtEngine
+import BlurtiOSCore
 import SwiftUI
 
 /// The app's one screen: the Blurt landing page on a phone. The wordmark and

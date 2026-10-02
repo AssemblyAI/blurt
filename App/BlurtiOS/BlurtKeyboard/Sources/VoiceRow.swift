@@ -1,3 +1,4 @@
+import BlurtiOSCore
 import SwiftUI
 
 /// The voice row's arithmetic, out of the views, so the bar, the panel and
