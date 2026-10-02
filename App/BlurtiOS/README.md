@@ -134,7 +134,7 @@ shows its console.
    owns them.
 4. Plug the phone in (Developer Mode on: Settings → Privacy & Security), pick it as the run
    destination, run the `BlurtiOS` scheme. On the phone, trust the developer app (Settings →
-   General → VPN & Device Management). In the app: **Paste your key**, **Allow** the microphone, then **Open Settings** and go to **Apps › Blurt › Keyboards**
+   General → VPN & Device Management). In the app: **Paste your key**, **Allow** sending your voice to AssemblyAI, **Allow** the microphone, then **Open Settings** and go to **Apps › Blurt › Keyboards**
    (a phone may open straight on Blurt's page): turn on Blurt and **Allow Full Access**.
 5. Back in the app, **Start listening**, then go to Messages, hold the globe key, pick Blurt,
    and tap the mic. Tap again to stop, or hold it while you talk. The words land in the field.

@@ -690,14 +690,21 @@ time, a copy button); `POWERED BY ASSEMBLYAI`.
 **Settings** (`SettingsView`): a form on the page, its sections under
 eyebrows — Keyboard (layout, theme, hands-free), Listening (the window),
 Transcription (enhanced transcripts, output styles, key terms with the
-contact-name count, sharing), Account (sign-in stub; the API key in debug
-builds), About. The theme picker shows each theme's two faces side by side.
-Styles, the import sheet and the key entry share the form's chrome
-(`brandForm()`).
+contact-name count, sharing), Account (the API key, and where to get one),
+About (with AssemblyAI's privacy policy). The theme picker shows each theme's
+two faces side by side. Styles, the import sheet, the key entry and the consent
+sheet share the form's chrome (`brandForm()`).
+
+**Consent** (`ConsentView`, `AIConsent`): before the listening window first
+opens, a sheet names AssemblyAI, lists what is sent (the voice while
+dictating, the text before the cursor, recent dictations, key terms with
+contact names) and links the privacy policy; `ALLOW` records it and opens the
+window. App Review 5.1.2(i). The list is what `AIConsent.version` covers:
+sending anything new means a new version, and everyone is asked again.
 
 `-BlurtSettings` opens Settings as the root for a screenshot; `xcrun simctl
 ui booted appearance dark` before any capture for the dark appearance;
-`-BlurtStartListening` opens the mic at launch.
+`-BlurtStartListening` opens the mic at launch (and grants AI consent, which a scripted run can't tap through).
 
 ## Feedback and accessibility
 
