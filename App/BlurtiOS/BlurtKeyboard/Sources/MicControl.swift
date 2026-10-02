@@ -95,7 +95,7 @@ struct MicControl: View {
             if needsDown { model.micDown() }
             model.micUp()
           case .cancelSentPress:
-            model.cancel()
+            model.undoPress()
           case .nothing:
             break
           }

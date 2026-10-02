@@ -117,12 +117,20 @@ extension KeyboardModel {
   /// recording is released and the words still land; from a highlighted
   /// word it is cancelled: the words would land *over* the word being fixed
   /// (a result replaces the selection), and the user's intent is the word.
+  /// Words already being transcribed follow the same rule: from the plain +
+  /// they still land (the mic is off; there is nothing to stop), from a
+  /// highlighted word they are cancelled.
   func beginAddingTerm() {
     let seed = Self.termCandidate(from: proxy?.selectedText) ?? ""
     switch snapshot.state {
     case .recording: perform(seed.isEmpty ? .stop : .cancel)
     case .connecting: perform(.cancel)
-    case .idle, .processing, .pasted, .copied, .error:
+    case .processing:
+      // The gate may still be latched from the tap that started it (an
+      // auto-release has no finger event to close it): that is no reason to
+      // cancel.
+      if !seed.isEmpty { perform(.cancel) }
+    case .idle, .pasted, .copied, .error:
       // A press the app hasn't answered yet would start a dictation under
       // the field: it is taken back.
       if unansweredPress != nil || !gate.isIdle { perform(.cancel) }
@@ -251,18 +259,19 @@ extension KeyboardModel {
   func globe() { controller?.advanceToNextInputMode() }
 
   /// Brings the app forward to open the microphone — the one thing a keyboard
-  /// cannot do for itself. iOS gives extensions no `open(_:)`, so this walks the
-  /// responder chain to the application object and asks it, the way every
-  /// keyboard that opens its app does.
+  /// cannot do for itself. iOS gives extensions no `UIApplication.shared`, so
+  /// this walks the responder chain to the application object and asks it, the
+  /// way every keyboard that opens its app does. With `open(_:options:)`: since
+  /// iOS 18 the old `openURL:` only logs "BUG IN CLIENT OF UIKIT" and opens
+  /// nothing.
   func openApp() {
     guard let controller,
       let url = URL(string: "\(BlurtShared.urlScheme)://\(BlurtShared.startHost)")
     else { return }
-    let selector = sel_registerName("openURL:")
     var responder: UIResponder? = controller
     while let current = responder {
-      if current.responds(to: selector) {
-        _ = current.perform(selector, with: url)
+      if let application = current as? UIApplication {
+        application.open(url, options: [:], completionHandler: nil)
         return
       }
       responder = current.next

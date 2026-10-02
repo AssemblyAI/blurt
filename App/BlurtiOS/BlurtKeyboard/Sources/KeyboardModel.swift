@@ -101,6 +101,10 @@ final class KeyboardModel {
   /// answer it (the previous dictation's notice landing late) leaves the
   /// gate alone; anything in flight, or a phase carrying its id, answers it.
   @ObservationIgnored var unansweredPress: UUID?
+  /// When `unansweredPress` went out. Past `BlurtShared.commandFreshnessWindow`
+  /// the app drops it unread (or was never there to read it), so no answer
+  /// is coming: see `expireUnansweredPress`.
+  @ObservationIgnored var unansweredPressSentAt: Date?
   /// The `at` of a notice the keyboard already let go of: a re-read of the
   /// same snapshot cannot replay it.
   @ObservationIgnored var dismissedNoticeAt: Date?
@@ -190,6 +194,7 @@ final class KeyboardModel {
     // `unansweredPress` is not reset here: an appearance can follow another
     // with no disappearance between (iOS does that), and a press still out
     // must keep the gate latched so hands-free does not press again over it.
+    // One too old for the app to take is over, though (`expireUnansweredPress`).
     symbolsPage = Self.wantsSymbols(proxy?.keyboardType)
     morePage = false
     readAppearance()
@@ -212,6 +217,10 @@ final class KeyboardModel {
     storedMicAlignment = SharedStore.micAlignment
     SharedStore.keyboardEverSeen = true
     refresh(haptics: false)
+    // `refresh` may apply no phase at all (none stored, or a notice already
+    // let go of), so a press the app will never answer is let go of here too:
+    // otherwise its latch would skip hands-free on every appearance after.
+    if expireUnansweredPress(), isSettled { gate.reset() }
     startHeartbeat()
     requestLexicon()
     // Words that landed while this keyboard was away, still fresh and meant
@@ -235,14 +244,20 @@ final class KeyboardModel {
   /// The keyboard is leaving the screen. A dictation it started must not run
   /// on without it: a latched recording is released (the words still land, on
   /// the clipboard if no keyboard is there to take them), anything earlier is
-  /// cancelled. Presence ends, so a result that finishes after this goes to
-  /// the clipboard rather than to a keyboard nobody can see.
+  /// cancelled. Words already being transcribed are left to finish — the mic
+  /// is off, and a cancel would throw them away. Presence ends, so a result
+  /// that finishes after this goes to the clipboard rather than to a keyboard
+  /// nobody can see.
   func disappeared() {
     heartbeat?.cancel()
     heartbeat = nil
     commandRetry?.cancel()
     if !gate.isIdle || !isSettled {
-      send(snapshot.state == .recording ? .release : .cancel)
+      switch snapshot.state {
+      case .recording: send(.release)
+      case .processing: break
+      case .idle, .connecting, .pasted, .copied, .error: send(.cancel)
+      }
       gate.reset()
     }
     SharedStore.keyboardSeenAt = nil

@@ -17,6 +17,9 @@ nonisolated enum BlurtShared {
   /// the one moment iOS insists on before the microphone may open.
   static let urlScheme = "blurt"
   static let startHost = "start"
+  /// A press command older than this was held while the app was suspended:
+  /// the app drops it unanswered, and the keyboard stops waiting for an answer.
+  static let commandFreshnessWindow: TimeInterval = 10
 
   nonisolated enum Key {
     static let layout = "keyboardLayout"

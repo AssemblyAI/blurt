@@ -66,6 +66,7 @@ extension KeyboardModel {
       selectedText: proxy?.selectedText, sentAt: Date(), keyboard: instanceID)
     transport(command)
     unansweredPress = kind == .press ? command.id : nil
+    unansweredPressSentAt = kind == .press ? command.sentAt : nil
     // A press the app never answers would leave the gate latched over
     // nothing. Either notification can be missed: first catch up with a phase
     // the app may have published unheard; if the picture is still as it was,
@@ -84,4 +85,25 @@ extension KeyboardModel {
     }
   }
 
+  /// Lets go of a press the app can no longer answer — it drops one older
+  /// than `BlurtShared.commandFreshnessWindow` unread, and an app that was
+  /// killed answers nothing — so its latch can't outlive it. True when it did.
+  @discardableResult
+  func expireUnansweredPress(now: Date = Date()) -> Bool {
+    guard unansweredPress != nil, let sentAt = unansweredPressSentAt,
+      now.timeIntervalSince(sentAt) >= BlurtShared.commandFreshnessWindow
+    else { return false }
+    unansweredPress = nil
+    unansweredPressSentAt = nil
+    return true
+  }
+
+  /// A swipe that began on the orb (the panel's carousel) after its press
+  /// went out: undo exactly what that press did. A fresh press is cancelled;
+  /// a press over a recording a tap had latched only re-latches it, so
+  /// flipping to the keys mid-dictation doesn't throw the words away; a press
+  /// the orb ignored (busy, or Blurt not ready) undoes nothing.
+  func undoPress() {
+    perform(gate.otherKeyDown())
+  }
 }

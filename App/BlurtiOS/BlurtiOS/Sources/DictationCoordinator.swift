@@ -48,8 +48,6 @@ final class DictationCoordinator {
   nonisolated private static let pressKeyboard = Mutex<String?>(nil)
   /// Contact names, parsed once per lexicon refresh rather than on the press.
   nonisolated private static let lexiconNames = Mutex<[String]>([])
-  /// A press command older than this was held while the app was suspended.
-  static let commandFreshnessWindow: TimeInterval = 10
 
   init(apiKey: APIKeyModel = APIKeyModel()) {
     let window = ListeningWindow()
@@ -151,7 +149,7 @@ final class DictationCoordinator {
     SharedStore.remove(forKey: BlurtShared.Key.command)
     // A notification held while the app was suspended delivers a press from
     // minutes ago; the user has long since moved on.
-    guard Date().timeIntervalSince(command.sentAt) < Self.commandFreshnessWindow else { return }
+    guard Date().timeIntervalSince(command.sentAt) < BlurtShared.commandFreshnessWindow else { return }
     switch command.kind {
     case .press:
       Self.pressContext.withLock {
