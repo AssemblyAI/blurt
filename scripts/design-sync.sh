@@ -36,7 +36,7 @@ else
 fi
 
 OUTPUTS=(
-  App/BlurtiOS/Shared/DesignTokens.swift
+  App/BlurtiOS/BlurtDesign/DesignTokens.swift
   App/BlurtiOS/DESIGN.md
   App/BlurtiOS/BlurtiOS/Assets.xcassets/AccentColor.colorset/Contents.json
   App/BlurtiOS/BlurtiOS/Assets.xcassets/CardFill.colorset/Contents.json
@@ -55,17 +55,17 @@ OUTPUTS=(
 format_outputs() {
   local root="$1"
   if [ "${#SWIFT_FORMAT[@]}" -gt 0 ]; then
-    "${SWIFT_FORMAT[@]}" format --in-place "$root/App/BlurtiOS/Shared/DesignTokens.swift"
+    "${SWIFT_FORMAT[@]}" format --in-place "$root/App/BlurtiOS/BlurtDesign/DesignTokens.swift"
   fi
   if command -v prettier >/dev/null 2>&1; then
     prettier --log-level warn --ignore-path /dev/null --write "$root/App/BlurtiOS/DESIGN.md" >/dev/null
   fi
 }
 
-# The design-literal lint. Scope: every file under the keyboard's and the
-# app's sources that draws — new views are linted by default — minus the few
+# The design-literal lint. Scope: every file under the keyboard's, the app's
+# and BlurtDesign's sources that draws — new views are linted by default — minus the few
 # that compute rather than draw (the host controller, the palette, the
-# geometry) and Grain.swift, whose body is the grain's recipe (density,
+# geometry) and FilmGrain.swift, whose body is the grain's recipe (density,
 # the two shades), with only its opacity as a token. Numbers 0 and 1 pass: `Spacer(minLength: 0)`,
 # `.opacity(on ? 1 : 0)` and `scaleEffect(1 + …)` are structure, not design.
 lint_literals() {
@@ -74,7 +74,7 @@ import glob, os, re, sys
 # BlurtiOSCore (the model, the voice state, the interaction rules) is not
 # globbed at all: it draws nothing, so it has no design literals to carry.
 exempt = {
-    "KeyboardViewController.swift", "KeyboardPalette.swift", "KeyGeometry.swift", "MotionHeld.swift", "Grain.swift",
+    "KeyboardViewController.swift", "KeyboardPalette.swift", "KeyGeometry.swift", "MotionHeld.swift", "FilmGrain.swift",
 }
 app_exempt = {
     "BlurtiOSApp.swift", "DictationCoordinator.swift", "ListeningWindow.swift", "ListeningSource.swift",
@@ -84,6 +84,9 @@ files = sorted(
     [path for path in glob.glob("App/BlurtiOS/BlurtKeyboard/Sources/**/*.swift", recursive=True)
      if os.path.basename(path) not in exempt]
     + [path for path in glob.glob("App/BlurtiOS/BlurtiOS/Sources/*.swift") if os.path.basename(path) not in app_exempt]
+    # The component library draws too; its generated tokens are the literals' home.
+    + [path for path in glob.glob("App/BlurtiOS/BlurtDesign/*.swift")
+       if os.path.basename(path) not in exempt | {"DesignTokens.swift"}]
 )
 modifiers = re.compile(
     r"\.(padding|frame|font|blur|scaleEffect|offset|shadow|opacity|cornerRadius|saturation|brightness"

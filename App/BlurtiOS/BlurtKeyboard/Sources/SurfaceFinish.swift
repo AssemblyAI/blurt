@@ -1,3 +1,4 @@
+import BlurtDesign
 import SwiftUI
 
 /// The surface's finish. Under the keys: the face's flat colour and, when
@@ -30,7 +31,7 @@ enum SurfaceFinish {
     @Environment(\.keyboardPalette) private var palette
 
     var body: some View {
-      BlurtiOSGrain(seed: 7)
+      FilmGrain(seed: 7)
         .opacity(palette.grain)
         .blendMode(.overlay)
         .allowsHitTesting(false)

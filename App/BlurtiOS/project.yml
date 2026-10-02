@@ -70,13 +70,31 @@ targets:
       # The AssemblyAI SDK library (the key validator's types live there).
       - package: BlurtEngine
         product: AssemblyAI
+  # The component library: the generated design tokens, the type roles, the
+  # brand colours, and the pieces every screen is built from (card, page, form,
+  # eyebrow, button, wordmark, film grain). SwiftUI only — no BlurtiOSCore, no
+  # engine — so it reads as the design system and nothing else. iPhone only for
+  # now: the Mac app keeps its own Branding/. Static and extension-safe for the
+  # reasons BlurtiOSCore is: the keyboard links it too.
+  BlurtDesign:
+    type: framework.static
+    platform: iOS
+    sources:
+      - path: BlurtDesign
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.assemblyai.blurt.ios.design
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        APPLICATION_EXTENSION_API_ONLY: YES
   BlurtiOS:
     type: application
     platform: iOS
     sources:
       - path: BlurtiOS/Sources
-      # The Mac's brand colours (accent, card fill and border), copied verbatim
-      # from App/Blurt/Blurt/Assets.xcassets — JSON can't reference JSON.
+      # The app's colour sets, generated from Design/tokens.json: the
+      # system-drawn accent and the launch screen's page colour read them.
       - path: BlurtiOS/Assets.xcassets
       # Apple's required-reason declarations: App Group UserDefaults (1C8F.1)
       # and the bundle's own (CA92.1), the only such API either target uses.
@@ -87,10 +105,6 @@ targets:
       - path: ../../Design/brand/AppIcon.icon
       - path: ../../Design/brand/blurt-ready-logo.png
         buildPhase: resources
-      # The UI both the app and the keyboard draw with (design tokens, type,
-      # brand colours), compiled into each — an extension can't import the
-      # app's module. The App Group contract itself is BlurtiOSCore.
-      - path: Shared
       # The keyboard's views and model: the theme picker draws the real keyboard
       # on its cards, the home screen draws the orb and the meter, and debug
       # builds render every layout and state (KeyboardGalleryView) for design
@@ -165,6 +179,8 @@ targets:
         product: BlurtEngine
       - target: BlurtiOSCore
         embed: false
+      - target: BlurtDesign
+        embed: false
       - target: BlurtKeyboard
   # The keyboard. It types, it starts and stops a dictation, it inserts the
   # words; it never hears anything. `RequestsOpenAccess` asks the user for Full
@@ -174,7 +190,6 @@ targets:
     platform: iOS
     sources:
       - path: BlurtKeyboard/Sources
-      - path: Shared
       - path: BlurtKeyboard/PrivacyInfo.xcprivacy
         buildPhase: resources
     settings:
@@ -206,10 +221,13 @@ targets:
         product: BlurtEngine
       - target: BlurtiOSCore
         embed: false
+      - target: BlurtDesign
+        embed: false
   # Unit tests for the iPhone code — BlurtiOSCore's logic, and what the app and
   # keyboard build on it — hosted by the app so `@testable import BlurtiOS`
   # reaches the shell too (the keyboard's sources are compiled into the app).
-  # Core is linked into the host already, so the bundle only imports it.
+  # Core and BlurtDesign are linked into the host already, so the bundle only
+  # imports them.
   # Swift Testing; `scripts/ios-test.sh` runs them on a simulator.
   BlurtiOSTests:
     type: bundle.unit-test

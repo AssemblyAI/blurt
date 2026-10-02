@@ -9,496 +9,497 @@ import SwiftUI
 /// (`Design/tokens.json`): what the views draw with, what DESIGN.md's tables
 /// say, and what the asset catalog holds, all from the same file. Swift names
 /// follow the token names by one rule (`kb/key-modifier` → `kbKeyModifier`).
-enum DesignTokens {
-  enum Brand {
+/// `package`: BlurtDesign's, read by the app, the keyboard and the tests.
+package enum DesignTokens {
+  package enum Brand {
     /// The iPhone keyboard's dark key.
-    nonisolated static let appleDarkKey: Color = Color(hex: 0x6B6B6B)
+    package nonisolated static let appleDarkKey: Color = Color(hex: 0x6B6B6B)
     /// The iPhone keyboard's dark modifier key.
-    nonisolated static let appleDarkModifier: Color = Color(hex: 0x464646)
+    package nonisolated static let appleDarkModifier: Color = Color(hex: 0x464646)
     /// The iPhone keyboard's dark surface.
-    nonisolated static let appleDarkSurface: Color = Color(hex: 0x2B2B2B)
+    package nonisolated static let appleDarkSurface: Color = Color(hex: 0x2B2B2B)
     /// The iPhone keyboard's light modifier key.
-    nonisolated static let appleLightModifier: Color = Color(hex: 0xADB3BC)
+    package nonisolated static let appleLightModifier: Color = Color(hex: 0xADB3BC)
     /// The iPhone keyboard's light surface.
-    nonisolated static let appleLightSurface: Color = Color(hex: 0xD1D5DB)
-    nonisolated static let black: Color = Color(hex: 0x000000)
+    package nonisolated static let appleLightSurface: Color = Color(hex: 0xD1D5DB)
+    package nonisolated static let black: Color = Color(hex: 0x000000)
     /// The warm card fill; the paper theme's surface.
-    nonisolated static let card: Color = Color(hex: 0xEBE8E8)
+    package nonisolated static let card: Color = Color(hex: 0xEBE8E8)
     /// The card's hairline; the paper theme's modifier key.
-    nonisolated static let cardBorder: Color = Color(hex: 0xDEDBDB)
+    package nonisolated static let cardBorder: Color = Color(hex: 0xDEDBDB)
     /// AssemblyAI's primary violet: the drop, never a key or a surface.
-    nonisolated static let cobolt: Color = Color(hex: 0x3923C7)
+    package nonisolated static let cobolt: Color = Color(hex: 0x3923C7)
     /// The design system's UI-and-code green fill (unused on the phone yet).
-    nonisolated static let green100: Color = Color(hex: 0xCCE4D5)
+    package nonisolated static let green100: Color = Color(hex: 0xCCE4D5)
     /// The design system's UI-and-code green highlight (unused on the phone yet).
-    nonisolated static let green200: Color = Color(hex: 0x99C8AC)
+    package nonisolated static let green200: Color = Color(hex: 0x99C8AC)
     /// The brand hue lifted for dark chrome: the meter, the ring, the wave on ink.
-    nonisolated static let green400: Color = Color(hex: 0x67AD82)
+    package nonisolated static let green400: Color = Color(hex: 0x67AD82)
     /// The wordmark green, light chrome (the app's accent in light).
-    nonisolated static let green700: Color = Color(hex: 0x01762F)
+    package nonisolated static let green700: Color = Color(hex: 0x01762F)
     /// The pale green the orb lightens into.
-    nonisolated static let greenMist: Color = Color(hex: 0xDBF5E6)
+    package nonisolated static let greenMist: Color = Color(hex: 0xDBF5E6)
     /// The brand ink: the Mac pill's body, the ink theme's surface.
-    nonisolated static let ink: Color = Color(hex: 0x1D1B16)
+    package nonisolated static let ink: Color = Color(hex: 0x1D1B16)
     /// The Mac's dark card border.
-    nonisolated static let ink600: Color = Color(hex: 0x3A362F)
+    package nonisolated static let ink600: Color = Color(hex: 0x3A362F)
     /// An ordinary key on ink, one step up.
-    nonisolated static let ink700: Color = Color(hex: 0x33302A)
+    package nonisolated static let ink700: Color = Color(hex: 0x33302A)
     /// A modifier key on ink; the Mac's dark card fill.
-    nonisolated static let ink800: Color = Color(hex: 0x26231E)
+    package nonisolated static let ink800: Color = Color(hex: 0x26231E)
     /// A key on the system's dark keyboard material (measured, iOS 27): the container case.
-    nonisolated static let materialDarkKey: Color = Color(hex: 0x575757)
+    package nonisolated static let materialDarkKey: Color = Color(hex: 0x575757)
     /// A modifier key on the system's dark material.
-    nonisolated static let materialDarkModifier: Color = Color(hex: 0x474747)
+    package nonisolated static let materialDarkModifier: Color = Color(hex: 0x474747)
     /// The system's dark keyboard material (measured, iOS 27).
-    nonisolated static let materialDarkSurface: Color = Color(hex: 0x373737)
+    package nonisolated static let materialDarkSurface: Color = Color(hex: 0x373737)
     /// The system's light keyboard material (measured, iOS 27): what the gallery stands under a clear surface.
-    nonisolated static let materialLightSurface: Color = Color(hex: 0xE2E3E8)
+    package nonisolated static let materialLightSurface: Color = Color(hex: 0xE2E3E8)
     /// Black-100: the lightest warm grey.
-    nonisolated static let neutral300: Color = Color(hex: 0xD2D1D0)
+    package nonisolated static let neutral300: Color = Color(hex: 0xD2D1D0)
     /// Black-200: mono labels on the dark face.
-    nonisolated static let neutral500: Color = Color(hex: 0xA5A4A2)
+    package nonisolated static let neutral500: Color = Color(hex: 0xA5A4A2)
     /// Black-300: muted text and mono labels on the light face.
-    nonisolated static let neutral700: Color = Color(hex: 0x777673)
+    package nonisolated static let neutral700: Color = Color(hex: 0x777673)
     /// Black-400: body text on the light face.
-    nonisolated static let neutral900: Color = Color(hex: 0x4A4945)
+    package nonisolated static let neutral900: Color = Color(hex: 0x4A4945)
     /// The error word and ring, cancel, the Full Access note; never a red body.
-    nonisolated static let orange: Color = Color(hex: 0xE67F36)
+    package nonisolated static let orange: Color = Color(hex: 0xE67F36)
     /// Neutral-100: the light face's surface.
-    nonisolated static let paper200: Color = Color(hex: 0xECEBE5)
+    package nonisolated static let paper200: Color = Color(hex: 0xECEBE5)
     /// Neutral-200: a modifier key on the light face.
-    nonisolated static let paper300: Color = Color(hex: 0xDAD7CB)
+    package nonisolated static let paper300: Color = Color(hex: 0xDAD7CB)
     /// Neutral-300: hairlines and field borders on the light face.
-    nonisolated static let paper400: Color = Color(hex: 0xC7C3B2)
+    package nonisolated static let paper400: Color = Color(hex: 0xC7C3B2)
     /// The design system's page: the app's light ground.
-    nonisolated static let paperPage: Color = Color(hex: 0xFDFCF8)
+    package nonisolated static let paperPage: Color = Color(hex: 0xFDFCF8)
     /// The warm off-white one step in: light cards, dark legends.
-    nonisolated static let paperTint: Color = Color(hex: 0xF5F3EB)
+    package nonisolated static let paperTint: Color = Color(hex: 0xF5F3EB)
     /// The orb gradient's upper violet stop.
-    nonisolated static let violetIris: Color = Color(hex: 0x887BDD)
+    package nonisolated static let violetIris: Color = Color(hex: 0x887BDD)
     /// The orb's lightest violet: its top and the gradient's ends.
-    nonisolated static let violetLavender: Color = Color(hex: 0xD7D3F4)
+    package nonisolated static let violetLavender: Color = Color(hex: 0xD7D3F4)
     /// The orb's mid violet: the drop's halo.
-    nonisolated static let violetPeriwinkle: Color = Color(hex: 0xB0A7E9)
+    package nonisolated static let violetPeriwinkle: Color = Color(hex: 0xB0A7E9)
     /// Key legends on ink: warm white on warm ink.
-    nonisolated static let warmWhite: Color = Color(hex: 0xF2EEE6)
-    nonisolated static let white: Color = Color(hex: 0xFFFFFF)
+    package nonisolated static let warmWhite: Color = Color(hex: 0xF2EEE6)
+    package nonisolated static let white: Color = Color(hex: 0xFFFFFF)
   }
 
-  enum Themes {
+  package enum Themes {
     /// `brand.material/dark-key`.
-    nonisolated static let darkContainerKey: Color = Brand.materialDarkKey
+    package nonisolated static let darkContainerKey: Color = Brand.materialDarkKey
     /// `brand.material/dark-modifier`.
-    nonisolated static let darkContainerKeyModifier: Color = Brand.materialDarkModifier
+    package nonisolated static let darkContainerKeyModifier: Color = Brand.materialDarkModifier
     /// `brand.ink/700`.
-    nonisolated static let darkField: Color = Brand.ink700
+    package nonisolated static let darkField: Color = Brand.ink700
     /// `brand.ink/600`.
-    nonisolated static let darkFieldBorder: Color = Brand.ink600
+    package nonisolated static let darkFieldBorder: Color = Brand.ink600
     /// `brand.ink/700`.
-    nonisolated static let darkKey: Color = Brand.ink700
+    package nonisolated static let darkKey: Color = Brand.ink700
     /// `brand.ink/800`.
-    nonisolated static let darkKeyModifier: Color = Brand.ink800
+    package nonisolated static let darkKeyModifier: Color = Brand.ink800
     /// `brand.paper/tint`.
-    nonisolated static let darkLegend: Color = Brand.paperTint
+    package nonisolated static let darkLegend: Color = Brand.paperTint
     /// `brand.neutral/500`.
-    nonisolated static let darkLegendSecondary: Color = Brand.neutral500
+    package nonisolated static let darkLegendSecondary: Color = Brand.neutral500
     /// `brand.material/dark-surface`.
-    nonisolated static let darkMaterial: Color = Brand.materialDarkSurface
+    package nonisolated static let darkMaterial: Color = Brand.materialDarkSurface
     /// `brand.orange`.
-    nonisolated static let darkNotice: Color = Brand.orange
+    package nonisolated static let darkNotice: Color = Brand.orange
     /// `brand.ink/700`.
-    nonisolated static let darkPopup: Color = Brand.ink700
+    package nonisolated static let darkPopup: Color = Brand.ink700
     /// `brand.green/400`.
-    nonisolated static let darkSignal: Color = Brand.green400
+    package nonisolated static let darkSignal: Color = Brand.green400
     /// `brand.ink`.
-    nonisolated static let darkSurface: Color = Brand.ink
+    package nonisolated static let darkSurface: Color = Brand.ink
     /// `brand.white`.
-    nonisolated static let lightContainerKey: Color = Brand.white
+    package nonisolated static let lightContainerKey: Color = Brand.white
     /// `brand.paper/300`.
-    nonisolated static let lightContainerKeyModifier: Color = Brand.paper300
+    package nonisolated static let lightContainerKeyModifier: Color = Brand.paper300
     /// `brand.white`.
-    nonisolated static let lightField: Color = Brand.white
+    package nonisolated static let lightField: Color = Brand.white
     /// `brand.paper/400`.
-    nonisolated static let lightFieldBorder: Color = Brand.paper400
+    package nonisolated static let lightFieldBorder: Color = Brand.paper400
     /// `brand.white`.
-    nonisolated static let lightKey: Color = Brand.white
+    package nonisolated static let lightKey: Color = Brand.white
     /// `brand.paper/300`.
-    nonisolated static let lightKeyModifier: Color = Brand.paper300
+    package nonisolated static let lightKeyModifier: Color = Brand.paper300
     /// `brand.ink`.
-    nonisolated static let lightLegend: Color = Brand.ink
+    package nonisolated static let lightLegend: Color = Brand.ink
     /// `brand.neutral/700`.
-    nonisolated static let lightLegendSecondary: Color = Brand.neutral700
+    package nonisolated static let lightLegendSecondary: Color = Brand.neutral700
     /// `brand.material/light-surface`.
-    nonisolated static let lightMaterial: Color = Brand.materialLightSurface
+    package nonisolated static let lightMaterial: Color = Brand.materialLightSurface
     /// `brand.orange`.
-    nonisolated static let lightNotice: Color = Brand.orange
+    package nonisolated static let lightNotice: Color = Brand.orange
     /// `brand.white`.
-    nonisolated static let lightPopup: Color = Brand.white
+    package nonisolated static let lightPopup: Color = Brand.white
     /// `brand.green/700`.
-    nonisolated static let lightSignal: Color = Brand.green700
+    package nonisolated static let lightSignal: Color = Brand.green700
     /// `brand.paper/200`.
-    nonisolated static let lightSurface: Color = Brand.paper200
+    package nonisolated static let lightSurface: Color = Brand.paper200
   }
 
-  enum Keyboard {
+  package enum Keyboard {
     /// The catalog's AccentColor in dark.
-    nonisolated static let appAccentDark: Color = Brand.green400
-    /// The catalog's AccentColor in light.
-    nonisolated static let appAccentLight: Color = Brand.green700
+    package nonisolated static let appAccentDark: Color = Brand.green400
+    /// The catalog's AccentColor in light: Blurt green, the one accent every screen and the CTA take.
+    package nonisolated static let appAccentLight: Color = Brand.green700
     /// The catalog's CardBorder in dark.
-    nonisolated static let appCardBorderDark: Color = Brand.ink600
+    package nonisolated static let appCardBorderDark: Color = Brand.ink600
     /// The catalog's CardBorder in light.
-    nonisolated static let appCardBorderLight: Color = Brand.paper400
+    package nonisolated static let appCardBorderLight: Color = Brand.paper400
     /// The catalog's CardFill in dark.
-    nonisolated static let appCardFillDark: Color = Brand.ink800
+    package nonisolated static let appCardFillDark: Color = Brand.ink800
     /// The catalog's CardFill in light.
-    nonisolated static let appCardFillLight: Color = Brand.paperTint
-    /// The catalog's CTA in dark: the site's button green.
-    nonisolated static let appCtaDark: Color = Brand.green400
-    /// The catalog's CTA in light: the one green button.
-    nonisolated static let appCtaLight: Color = Brand.green700
+    package nonisolated static let appCardFillLight: Color = Brand.paperTint
+    /// The catalog's CTA in dark: the one accent button.
+    package nonisolated static let appCtaDark: Color = Keyboard.appAccentDark
+    /// The catalog's CTA in light: the one accent button.
+    package nonisolated static let appCtaLight: Color = Keyboard.appAccentLight
     /// The catalog's CTAText in dark: ink on green, as the site.
-    nonisolated static let appCtaTextDark: Color = Brand.ink
+    package nonisolated static let appCtaTextDark: Color = Brand.ink
     /// The catalog's CTAText in light.
-    nonisolated static let appCtaTextLight: Color = Brand.white
+    package nonisolated static let appCtaTextLight: Color = Brand.white
     /// The catalog's Muted in dark.
-    nonisolated static let appMutedDark: Color = Brand.neutral500
+    package nonisolated static let appMutedDark: Color = Brand.neutral500
     /// The catalog's Muted in light: eyebrows, captions, secondary text.
-    nonisolated static let appMutedLight: Color = Brand.neutral700
+    package nonisolated static let appMutedLight: Color = Brand.neutral700
     /// The catalog's Page in dark: ink, the website's ground.
-    nonisolated static let appPageDark: Color = Brand.ink
+    package nonisolated static let appPageDark: Color = Brand.ink
     /// The catalog's Page in light: the design system's page.
-    nonisolated static let appPageLight: Color = Brand.paperPage
+    package nonisolated static let appPageLight: Color = Brand.paperPage
     /// The catalog's Text in dark.
-    nonisolated static let appTextDark: Color = Brand.paperTint
+    package nonisolated static let appTextDark: Color = Brand.paperTint
     /// The catalog's Text in light.
-    nonisolated static let appTextLight: Color = Brand.ink
+    package nonisolated static let appTextLight: Color = Brand.ink
     /// The panel's cancel ×.
-    nonisolated static let kbCancel: Color = Brand.orange
+    package nonisolated static let kbCancel: Color = Brand.orange
     /// The key-term field.
-    nonisolated static let kbField: Color = Themes.darkField
+    package nonisolated static let kbField: Color = Themes.darkField
     /// The field's hairline.
-    nonisolated static let kbFieldBorder: Color = Themes.darkFieldBorder
+    package nonisolated static let kbFieldBorder: Color = Themes.darkFieldBorder
     /// The one line of words the keyboard ever shows.
-    nonisolated static let kbFullAccessNote: Color = Brand.orange
+    package nonisolated static let kbFullAccessNote: Color = Brand.orange
     /// An ordinary key.
-    nonisolated static let kbKey: Color = Themes.darkKey
+    package nonisolated static let kbKey: Color = Themes.darkKey
     /// Shift, delete, globe, return, 123, cancel.
-    nonisolated static let kbKeyModifier: Color = Themes.darkKeyModifier
+    package nonisolated static let kbKeyModifier: Color = Themes.darkKeyModifier
     /// Key legends and bare glyphs.
-    nonisolated static let kbLegend: Color = Themes.darkLegend
+    package nonisolated static let kbLegend: Color = Themes.darkLegend
     /// The mono word labels (123, ABC, return, space) and the + at rest.
-    nonisolated static let kbLegendSecondary: Color = Themes.darkLegendSecondary
+    package nonisolated static let kbLegendSecondary: Color = Themes.darkLegendSecondary
     /// The solid ring and glyph for an error.
-    nonisolated static let kbNoticeError: Color = Brand.orange
+    package nonisolated static let kbNoticeError: Color = Brand.orange
     /// The letter pop-up.
-    nonisolated static let kbPopup: Color = Themes.darkPopup
+    package nonisolated static let kbPopup: Color = Themes.darkPopup
     /// The wave, the caret, the saved check.
-    nonisolated static let kbSignal: Color = Themes.darkSignal
+    package nonisolated static let kbSignal: Color = Themes.darkSignal
     /// The design face's surface (Swift reads the palette).
-    nonisolated static let kbSurface: Color = Themes.darkSurface
+    package nonisolated static let kbSurface: Color = Themes.darkSurface
   }
 
-  enum Metrics {
+  package enum Metrics {
     /// Between the chip's glyph and the word.
-    nonisolated static let addtermChipGap: CGFloat = 6
+    package nonisolated static let addtermChipGap: CGFloat = 6
     /// The least room a chip needs beside a centred mic; with less, the mic and the chip centre as a pair.
-    nonisolated static let addtermChipMinWidth: CGFloat = 96
+    package nonisolated static let addtermChipMinWidth: CGFloat = 96
     /// The selected-word chip's side padding.
-    nonisolated static let addtermChipPad: CGFloat = 10
+    package nonisolated static let addtermChipPad: CGFloat = 10
     /// The cancel × from the panel's far corner when the mic is at an edge.
-    nonisolated static let addtermInset: CGFloat = 6
+    package nonisolated static let addtermInset: CGFloat = 6
     /// The brand's button.
-    nonisolated static let appButtonHeight: CGFloat = 40
+    package nonisolated static let appButtonHeight: CGFloat = 40
     /// Its side padding.
-    nonisolated static let appButtonPad: CGFloat = 12
+    package nonisolated static let appButtonPad: CGFloat = 12
     /// Inside a card.
-    nonisolated static let appCardPad: CGFloat = 16
+    package nonisolated static let appCardPad: CGFloat = 16
     /// Between chips.
-    nonisolated static let appChipGap: CGFloat = 8
+    package nonisolated static let appChipGap: CGFloat = 8
     /// A style chip's side padding.
-    nonisolated static let appChipPadX: CGFloat = 12
+    package nonisolated static let appChipPadX: CGFloat = 12
     /// And its top and bottom.
-    nonisolated static let appChipPadY: CGFloat = 8
+    package nonisolated static let appChipPadY: CGFloat = 8
     /// The home header: wordmark and gear.
-    nonisolated static let appHeaderHeight: CGFloat = 44
+    package nonisolated static let appHeaderHeight: CGFloat = 44
     /// Between the hero's pieces.
-    nonisolated static let appHeroGap: CGFloat = 14
+    package nonisolated static let appHeroGap: CGFloat = 14
     /// Inside the hero card.
-    nonisolated static let appHeroPad: CGFloat = 20
+    package nonisolated static let appHeroPad: CGFloat = 20
     /// The header's gear, the copy glyph.
-    nonisolated static let appIcon: CGFloat = 20
+    package nonisolated static let appIcon: CGFloat = 20
     /// Between lines of one thought.
-    nonisolated static let appLineGap: CGFloat = 6
+    package nonisolated static let appLineGap: CGFloat = 6
     /// The screens' side padding.
-    nonisolated static let appPagePad: CGFloat = 20
+    package nonisolated static let appPagePad: CGFloat = 20
     /// Between the theme card's two faces.
-    nonisolated static let appPreviewGap: CGFloat = 8
+    package nonisolated static let appPreviewGap: CGFloat = 8
     /// Between the home screen's sections.
-    nonisolated static let appSectionGap: CGFloat = 24
+    package nonisolated static let appSectionGap: CGFloat = 24
     /// The setup steps' mono numerals.
-    nonisolated static let appSetupNumberWidth: CGFloat = 24
+    package nonisolated static let appSetupNumberWidth: CGFloat = 24
     /// Between a section's eyebrow and its content, and between cards.
-    nonisolated static let appStackGap: CGFloat = 12
+    package nonisolated static let appStackGap: CGFloat = 12
     /// The card's hairline.
-    nonisolated static let cardBorder: CGFloat = 1
+    package nonisolated static let cardBorder: CGFloat = 1
     /// The app's cards (radius/card).
-    nonisolated static let cardRadius: CGFloat = 12
-    nonisolated static let caretHeight: CGFloat = 20
+    package nonisolated static let cardRadius: CGFloat = 12
+    package nonisolated static let caretHeight: CGFloat = 20
     /// The caret's gap from the text.
-    nonisolated static let caretLead: CGFloat = 1
-    nonisolated static let caretRadius: CGFloat = 1
-    nonisolated static let caretWidth: CGFloat = 2
+    package nonisolated static let caretLead: CGFloat = 1
+    package nonisolated static let caretRadius: CGFloat = 1
+    package nonisolated static let caretWidth: CGFloat = 2
     /// The +, × and ✓ touch targets: the HIG's 44 pt square around a size/glyph symbol.
-    nonisolated static let glyphHit: CGFloat = 44
-    nonisolated static let grilleBarHeight: CGFloat = 28
+    package nonisolated static let glyphHit: CGFloat = 44
+    package nonisolated static let grilleBarHeight: CGFloat = 28
     /// The grille in the voice bar.
-    nonisolated static let grilleBarWidth: CGFloat = 64
+    package nonisolated static let grilleBarWidth: CGFloat = 64
     /// A dot's diameter.
-    nonisolated static let grilleDot: CGFloat = 2
+    package nonisolated static let grilleDot: CGFloat = 2
     /// The cross glint's vertical arm, as a fraction of the grille's height.
-    nonisolated static let grilleGlintArm: CGFloat = 1.6
+    package nonisolated static let grilleGlintArm: CGFloat = 1.6
     /// The glint's arms.
-    nonisolated static let grilleGlintWidth: CGFloat = 1
-    nonisolated static let grilleHomeHeight: CGFloat = 108
+    package nonisolated static let grilleGlintWidth: CGFloat = 1
+    package nonisolated static let grilleHomeHeight: CGFloat = 108
     /// The grille on the home screen.
-    nonisolated static let grilleHomeWidth: CGFloat = 240
-    nonisolated static let grillePanelHeight: CGFloat = 72
+    package nonisolated static let grilleHomeWidth: CGFloat = 240
+    package nonisolated static let grillePanelHeight: CGFloat = 72
     /// The grille in the panel.
-    nonisolated static let grillePanelWidth: CGFloat = 160
+    package nonisolated static let grillePanelWidth: CGFloat = 160
     /// The dot lattice: one dot every.
-    nonisolated static let grillePitch: CGFloat = 4
+    package nonisolated static let grillePitch: CGFloat = 4
     /// The sheen's band, as a fraction of the width.
-    nonisolated static let grilleSheenWidth: CGFloat = 0.35
+    package nonisolated static let grilleSheenWidth: CGFloat = 0.35
     /// 123 and the globe at 402 pt: the iPhone's.
-    nonisolated static let keyAbcWidth402: CGFloat = 43.333
+    package nonisolated static let keyAbcWidth402: CGFloat = 43.333
     /// Between keys, the iPhone's.
-    nonisolated static let keyGap: CGFloat = 6
+    package nonisolated static let keyGap: CGFloat = 6
     /// Every key: the iPhone's cap height (apple-geometry.json).
-    nonisolated static let keyHeight: CGFloat = 43
+    package nonisolated static let keyHeight: CGFloat = 43
     /// A letter key at 402 pt: (width − 2 × margin/side − 9 × key/gap) / 10.
-    nonisolated static let keyLetterWidth402: CGFloat = 33.5
+    package nonisolated static let keyLetterWidth402: CGFloat = 33.5
     /// A key that isn't given a width: the iPhone's 123 key at 402 pt.
-    nonisolated static let keyMinWidth: CGFloat = 43.333
+    package nonisolated static let keyMinWidth: CGFloat = 43.333
     /// A legend's side padding on a min-width key.
-    nonisolated static let keyPad: CGFloat = 4
+    package nonisolated static let keyPad: CGFloat = 4
     /// Flat keys, one colour at this corner: the iPhone's (fitted 8.17).
-    nonisolated static let keyRadius: CGFloat = 8
+    package nonisolated static let keyRadius: CGFloat = 8
     /// The width the @402 tokens were measured at (iPhone 18 Pro); widths scale from it.
-    nonisolated static let keyReferenceWidth: CGFloat = 402
+    package nonisolated static let keyReferenceWidth: CGFloat = 402
     /// Return at 402 pt: two 123 keys and a gap.
-    nonisolated static let keyReturnWidth402: CGFloat = 92.667
+    package nonisolated static let keyReturnWidth402: CGFloat = 92.667
     /// Shift and delete stand this far from the letters: the iPhone's.
-    nonisolated static let keySideGap: CGFloat = 13.667
+    package nonisolated static let keySideGap: CGFloat = 13.667
     /// Shift and delete at 402 pt: what seven letters and the side gaps leave, halved (measured 45.5).
-    nonisolated static let keySideWidth402: CGFloat = 45.583
+    package nonisolated static let keySideWidth402: CGFloat = 45.583
     /// Space at 402 pt beside 123, the globe and return: what is left (measured 191.333).
-    nonisolated static let keySpaceWidth402: CGFloat = 191.667
+    package nonisolated static let keySpaceWidth402: CGFloat = 191.667
     /// Margin/vertical + voicebar/height + 4 × key/height + 3 × row/gap + margin/bottom-keys.
-    nonisolated static let layoutFull: CGFloat = 270
+    package nonisolated static let layoutFull: CGFloat = 270
     /// Chosen: room for the 96 orb over one key row.
-    nonisolated static let layoutPanel: CGFloat = 216
+    package nonisolated static let layoutPanel: CGFloat = 216
     /// 2 × margin/vertical + voicebar/height.
-    nonisolated static let layoutSlim: CGFloat = 60
+    package nonisolated static let layoutSlim: CGFloat = 60
     /// Under a bottom row of keys (the full keyboard, the panel): the iPhone's.
-    nonisolated static let marginBottomKeys: CGFloat = 13
+    package nonisolated static let marginBottomKeys: CGFloat = 13
     /// At the keyboard's sides: the iPhone's cap margin, (402 − 10 letters − 9 gaps) / 2.
-    nonisolated static let marginSide: CGFloat = 6.5
+    package nonisolated static let marginSide: CGFloat = 6.5
     /// The keyboard's top, and the slim bar's bottom.
-    nonisolated static let marginVertical: CGFloat = 8
+    package nonisolated static let marginVertical: CGFloat = 8
     /// The + without Full Access.
-    nonisolated static let opacityDisabled: CGFloat = 0.4
+    package nonisolated static let opacityDisabled: CGFloat = 0.4
     /// The cross glint when the words land.
-    nonisolated static let opacityGlint: CGFloat = 0.95
+    package nonisolated static let opacityGlint: CGFloat = 0.95
     /// Film grain over the dark face: matte, the brand's texture.
-    nonisolated static let opacityGrainDark: CGFloat = 0.14
+    package nonisolated static let opacityGrainDark: CGFloat = 0.14
     /// Film grain over the light face: paper, lighter.
-    nonisolated static let opacityGrainLight: CGFloat = 0.08
+    package nonisolated static let opacityGrainLight: CGFloat = 0.08
     /// The dots at rest, over the key colour.
-    nonisolated static let opacityGrilleRest: CGFloat = 0.55
-    nonisolated static let opacityHairline: CGFloat = 0.5
+    package nonisolated static let opacityGrilleRest: CGFloat = 0.55
+    package nonisolated static let opacityHairline: CGFloat = 0.5
     /// Key legends over the cap; below 1 they sit back.
-    nonisolated static let opacityLegend: CGFloat = 1
+    package nonisolated static let opacityLegend: CGFloat = 1
     /// The + at rest.
-    nonisolated static let opacityLegendMuted: CGFloat = 0.5
+    package nonisolated static let opacityLegendMuted: CGFloat = 0.5
     /// The element when Blurt isn't ready — dim and still, but there: a tap opens the app.
-    nonisolated static let opacityOff: CGFloat = 0.6
+    package nonisolated static let opacityOff: CGFloat = 0.6
     /// The field's placeholder.
-    nonisolated static let opacityPlaceholder: CGFloat = 0.4
-    nonisolated static let opacityPopupShadow: CGFloat = 0.12
+    package nonisolated static let opacityPlaceholder: CGFloat = 0.4
+    package nonisolated static let opacityPopupShadow: CGFloat = 0.12
     /// A key lightens this much while pressed.
-    nonisolated static let opacityPressBrighten: CGFloat = 0.15
+    package nonisolated static let opacityPressBrighten: CGFloat = 0.15
     /// A brand button while pressed: a colour change, no lift.
-    nonisolated static let opacityPressed: CGFloat = 0.85
+    package nonisolated static let opacityPressed: CGFloat = 0.85
     /// The light passing over the element at rest: chrome catching light.
-    nonisolated static let opacitySheen: CGFloat = 0.22
+    package nonisolated static let opacitySheen: CGFloat = 0.22
     /// A soft darkening toward the surface's edges; 0 is none.
-    nonisolated static let opacitySurfaceVignette: CGFloat = 0
+    package nonisolated static let opacitySurfaceVignette: CGFloat = 0
     /// The field's ×.
-    nonisolated static let opacityTermCancel: CGFloat = 0.7
+    package nonisolated static let opacityTermCancel: CGFloat = 0.7
     /// Under the panel's voice row, above its keys: the top margin again, so the mic is centred between the keyboard's top edge and the keys.
-    nonisolated static let panelSpacing: CGFloat = 8
+    package nonisolated static let panelSpacing: CGFloat = 8
     /// The theme card draws the keyboard at this width.
-    nonisolated static let pickerPreviewWidth: CGFloat = 393
+    package nonisolated static let pickerPreviewWidth: CGFloat = 393
     /// The theme card's preview corners.
-    nonisolated static let pickerRadius: CGFloat = 10
+    package nonisolated static let pickerRadius: CGFloat = 10
     /// Then scales it to fit two across.
-    nonisolated static let pickerScale: CGFloat = 0.42
+    package nonisolated static let pickerScale: CGFloat = 0.42
     /// The letter pop-up is the key width plus this.
-    nonisolated static let popupExtraWidth: CGFloat = 18
-    nonisolated static let popupHeight: CGFloat = 56
+    package nonisolated static let popupExtraWidth: CGFloat = 18
+    package nonisolated static let popupHeight: CGFloat = 56
     /// The pop-up rises this far from the key's top: it overlaps the key by popup/height minus this and stays inside the keyboard on the top row.
-    nonisolated static let popupOffset: CGFloat = 50
-    nonisolated static let popupRadius: CGFloat = 10
+    package nonisolated static let popupOffset: CGFloat = 50
+    package nonisolated static let popupRadius: CGFloat = 10
     /// The one thing that floats.
-    nonisolated static let popupShadowRadius: CGFloat = 8
-    nonisolated static let popupShadowY: CGFloat = 2
+    package nonisolated static let popupShadowRadius: CGFloat = 8
+    package nonisolated static let popupShadowY: CGFloat = 2
     /// The brand's buttons and the grille: rectangular, never a pill.
-    nonisolated static let radiusButton: CGFloat = 4
+    package nonisolated static let radiusButton: CGFloat = 4
     /// The brand's cards.
-    nonisolated static let radiusCard: CGFloat = 12
+    package nonisolated static let radiusCard: CGFloat = 12
     /// The brand's featured cards.
-    nonisolated static let radiusHero: CGFloat = 16
+    package nonisolated static let radiusHero: CGFloat = 16
     /// The brand's inputs: the key-term field.
-    nonisolated static let radiusInput: CGFloat = 8
-    nonisolated static let ribsRestHeight: CGFloat = 16
+    package nonisolated static let radiusInput: CGFloat = 8
+    package nonisolated static let ribsRestHeight: CGFloat = 16
     /// The ribs asleep: the wave's own bars at rest.
-    nonisolated static let ribsRestWidth: CGFloat = 40
+    package nonisolated static let ribsRestWidth: CGFloat = 40
     /// Between rows, the iPhone's.
-    nonisolated static let rowGap: CGFloat = 11
+    package nonisolated static let rowGap: CGFloat = 11
     /// The landing flash's vertical arm, as a fraction of the box's height.
-    nonisolated static let streakArm: CGFloat = 1.4
+    package nonisolated static let streakArm: CGFloat = 1.4
     /// The light streak while recording.
-    nonisolated static let streakHeight: CGFloat = 2
+    package nonisolated static let streakHeight: CGFloat = 2
     /// The hairline at rest.
-    nonisolated static let streakLine: CGFloat = 1
+    package nonisolated static let streakLine: CGFloat = 1
     /// The bright point at the centre.
-    nonisolated static let streakPoint: CGFloat = 4
+    package nonisolated static let streakPoint: CGFloat = 4
     /// 1 paints the face's surface under the keys; 0 leaves it clear, so the host's own keyboard material (iOS 26's rounded container, which insets a third-party keyboard and cannot be painted over) is the surface, seamlessly, and the keys take the container colours.
-    nonisolated static let surfacePaint: CGFloat = 0
+    package nonisolated static let surfacePaint: CGFloat = 0
     /// Where it is full.
-    nonisolated static let surfaceVignetteEnd: CGFloat = 0.75
+    package nonisolated static let surfaceVignetteEnd: CGFloat = 0.75
     /// Where the vignette begins, as a fraction of the keyboard's width.
-    nonisolated static let surfaceVignetteStart: CGFloat = 0.3
+    package nonisolated static let surfaceVignetteStart: CGFloat = 0.3
     /// The field's hairline.
-    nonisolated static let termBorder: CGFloat = 1
+    package nonisolated static let termBorder: CGFloat = 1
     /// × · field · ✓.
-    nonisolated static let termGap: CGFloat = 8
+    package nonisolated static let termGap: CGFloat = 8
     /// The key-term field's capsule.
-    nonisolated static let termHeight: CGFloat = 36
+    package nonisolated static let termHeight: CGFloat = 36
     /// The field row's side inset.
-    nonisolated static let termInset: CGFloat = 2
+    package nonisolated static let termInset: CGFloat = 2
     /// The field's side padding.
-    nonisolated static let termPad: CGFloat = 14
+    package nonisolated static let termPad: CGFloat = 14
     /// The key-term field: the brand's input corners (radius/input).
-    nonisolated static let termRadius: CGFloat = 8
-    nonisolated static let voiceBarHeight: CGFloat = 32
+    package nonisolated static let termRadius: CGFloat = 8
+    package nonisolated static let voiceBarHeight: CGFloat = 32
     /// The voice element's box in the voice bar — the most it takes (the ribs awake, the streak); the + sits beside what shows.
-    nonisolated static let voiceBarWidth: CGFloat = 160
-    nonisolated static let voiceHomeHeight: CGFloat = 112
+    package nonisolated static let voiceBarWidth: CGFloat = 160
+    package nonisolated static let voiceHomeHeight: CGFloat = 112
     /// The box on the home screen.
-    nonisolated static let voiceHomeWidth: CGFloat = 280
-    nonisolated static let voicePanelHeight: CGFloat = 88
+    package nonisolated static let voiceHomeWidth: CGFloat = 280
+    package nonisolated static let voicePanelHeight: CGFloat = 88
     /// The box in the panel.
-    nonisolated static let voicePanelWidth: CGFloat = 300
+    package nonisolated static let voicePanelWidth: CGFloat = 300
     /// The element while pressed.
-    nonisolated static let voicePressScale: CGFloat = 0.94
+    package nonisolated static let voicePressScale: CGFloat = 0.94
     /// Between the mic key's edge and the add key's box (the + or the chip), the key gap.
-    nonisolated static let voicebarAddtermClearance: CGFloat = 6
+    package nonisolated static let voicebarAddtermClearance: CGFloat = 6
     /// The voice row, where the system puts its suggestion bar.
-    nonisolated static let voicebarHeight: CGFloat = 44
+    package nonisolated static let voicebarHeight: CGFloat = 44
     /// Between the orb and the Full Access note.
-    nonisolated static let voicebarNoteGap: CGFloat = 10
+    package nonisolated static let voicebarNoteGap: CGFloat = 10
     /// A wave bar's width.
-    nonisolated static let waveBar: CGFloat = 2
-    nonisolated static let waveBarHeight: CGFloat = 24
+    package nonisolated static let waveBar: CGFloat = 2
+    package nonisolated static let waveBarHeight: CGFloat = 24
     /// Between wave bars.
-    nonisolated static let waveGap: CGFloat = 2
-    nonisolated static let waveHomeHeight: CGFloat = 44
-    nonisolated static let wavePanelHeight: CGFloat = 40
-    nonisolated static let wordmarkHeight: CGFloat = 22
+    package nonisolated static let waveGap: CGFloat = 2
+    package nonisolated static let waveHomeHeight: CGFloat = 44
+    package nonisolated static let wavePanelHeight: CGFloat = 40
+    package nonisolated static let wordmarkHeight: CGFloat = 22
   }
 
-  enum Typography {
+  package enum Typography {
     /// The clipboard and exclamation glyphs, as a fraction of the voice element's height.
-    nonisolated static let ratioVoiceGlyph: CGFloat = 0.34
+    package nonisolated static let ratioVoiceGlyph: CGFloat = 0.34
     /// The app's body text.
-    nonisolated static let sizeBody: CGFloat = 16
+    package nonisolated static let sizeBody: CGFloat = 16
     /// The app's small text.
-    nonisolated static let sizeCaption: CGFloat = 14
+    package nonisolated static let sizeCaption: CGFloat = 14
     /// A mono button label in the app (E2).
-    nonisolated static let sizeCta: CGFloat = 14
+    package nonisolated static let sizeCta: CGFloat = 14
     /// A mono eyebrow in the app (E1).
-    nonisolated static let sizeEyebrow: CGFloat = 12
+    package nonisolated static let sizeEyebrow: CGFloat = 12
     /// The +, × and ✓.
-    nonisolated static let sizeGlyph: CGFloat = 17
+    package nonisolated static let sizeGlyph: CGFloat = 17
     /// The mono word labels on keys: 123, ABC, #+=, space, the return label.
-    nonisolated static let sizeLabel: CGFloat = 12
+    package nonisolated static let sizeLabel: CGFloat = 12
     /// Every other key.
-    nonisolated static let sizeLegend: CGFloat = 16
+    package nonisolated static let sizeLegend: CGFloat = 16
     /// Letter keys: the iPhone's (estimated from the l glyph, apple-geometry.json).
-    nonisolated static let sizeLetter: CGFloat = 24
+    package nonisolated static let sizeLetter: CGFloat = 24
     /// The letter pop-up.
-    nonisolated static let sizePopup: CGFloat = 32
+    package nonisolated static let sizePopup: CGFloat = 32
     /// The key-term field.
-    nonisolated static let sizeTerm: CGFloat = 17
+    package nonisolated static let sizeTerm: CGFloat = 17
     /// The app's serif headline.
-    nonisolated static let sizeTitle: CGFloat = 34
+    package nonisolated static let sizeTitle: CGFloat = 34
     /// Uppercase mono at 14: the brand's E2 tracking.
-    nonisolated static let trackingCta: CGFloat = 1.4
+    package nonisolated static let trackingCta: CGFloat = 1.4
     /// Uppercase mono at 12: the brand's E1 tracking.
-    nonisolated static let trackingEyebrow: CGFloat = 1.2
-    nonisolated static let weightGlyph: Font.Weight = .medium
-    nonisolated static let weightLabel: Font.Weight = .medium
-    nonisolated static let weightLegend: Font.Weight = .medium
-    nonisolated static let weightLetter: Font.Weight = .regular
-    nonisolated static let weightPopup: Font.Weight = .regular
-    nonisolated static let weightTerm: Font.Weight = .regular
-    nonisolated static let weightVoiceGlyph: Font.Weight = .semibold
+    package nonisolated static let trackingEyebrow: CGFloat = 1.2
+    package nonisolated static let weightGlyph: Font.Weight = .medium
+    package nonisolated static let weightLabel: Font.Weight = .medium
+    package nonisolated static let weightLegend: Font.Weight = .medium
+    package nonisolated static let weightLetter: Font.Weight = .regular
+    package nonisolated static let weightPopup: Font.Weight = .regular
+    package nonisolated static let weightTerm: Font.Weight = .regular
+    package nonisolated static let weightVoiceGlyph: Font.Weight = .semibold
   }
 
-  enum Motion {
+  package enum Motion {
     /// The caret's blink.
-    nonisolated static let caret: Double = 0.5
+    package nonisolated static let caret: Double = 0.5
     /// Holding the chip opens the field instead of adding; longer than a firm tap.
-    nonisolated static let chipHold: Double = 0.6
+    package nonisolated static let chipHold: Double = 0.6
     /// A colour or fill changing state: the brand's transition.
-    nonisolated static let colour: Double = 0.2
+    package nonisolated static let colour: Double = 0.2
     /// The house curve for everything that moves; nothing springs.
-    nonisolated static let easeSignature: UnitCurve = UnitCurve.bezier(
+    package nonisolated static let easeSignature: UnitCurve = UnitCurve.bezier(
       startControlPoint: UnitPoint(x: 0.22, y: 1), endControlPoint: UnitPoint(x: 0.36, y: 1))
     /// The panel's carousel.
-    nonisolated static let flip: Double = 0.25
+    package nonisolated static let flip: Double = 0.25
     /// A facet's flash while recording.
-    nonisolated static let glintLife: Double = 0.5
+    package nonisolated static let glintLife: Double = 0.5
     /// The keyboard resizing.
-    nonisolated static let heightChange: Double = 0.25
+    package nonisolated static let heightChange: Double = 0.25
     /// A key lighting.
-    nonisolated static let keyPress: Double = 0.08
+    package nonisolated static let keyPress: Double = 0.08
     /// The glint when the words land.
-    nonisolated static let landing: Double = 0.6
+    package nonisolated static let landing: Double = 0.6
     /// The orb's press; the one thing that answers at once.
-    nonisolated static let press: Double = 0.1
+    package nonisolated static let press: Double = 0.1
     /// One turn of the ring, the Mac's cadence.
-    nonisolated static let ringPeriod: Double = 1.6
+    package nonisolated static let ringPeriod: Double = 1.6
     /// One pass of the light over the element at rest.
-    nonisolated static let sheen: Double = 4
+    package nonisolated static let sheen: Double = 4
     /// And while something is happening: the ring's cadence.
-    nonisolated static let sheenWorking: Double = 1.6
+    package nonisolated static let sheenWorking: Double = 1.6
     /// Every other change on the key: the ring, a glyph, the dimming.
-    nonisolated static let stateFade: Double = 0.5
+    package nonisolated static let stateFade: Double = 0.5
     /// The voice bar becoming the field.
-    nonisolated static let termSwap: Double = 0.4
+    package nonisolated static let termSwap: Double = 0.4
     /// The orb and the wave crossing, either way.
-    nonisolated static let waveFade: Double = 0.7
+    package nonisolated static let waveFade: Double = 0.7
   }
 
-  enum Gradients {
+  package enum Gradients {
   }
 
   /// Every token as `group.name: value`, the way tokens.json renders it, so a
   /// test can pin the compiled values to the file (`DesignTokensTests`).
-  nonisolated static let manifest: [String: String] = [
+  package nonisolated static let manifest: [String: String] = [
     "brand.apple/dark-key": "#6B6B6B",
     "brand.apple/dark-modifier": "#464646",
     "brand.apple/dark-surface": "#2B2B2B",
