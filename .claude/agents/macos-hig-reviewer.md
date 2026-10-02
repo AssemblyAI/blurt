@@ -1,6 +1,6 @@
 ---
 name: macos-hig-reviewer
-description: Reviews SwiftUI/AppKit UI changes against macOS Human Interface Guidelines — modality, alerts vs inline validation, grouped-form structure, controls, and native idioms. Use after editing views in App/Blurt (wizard, settings, overlay).
+description: Reviews SwiftUI/AppKit UI changes against macOS Human Interface Guidelines — modality, alerts vs inline validation, grouped-form structure, controls, and native idioms. Use after editing views in App/Blurt (wizard, settings, overlay). Mac only — not for App/BlurtiOS, whose views follow App/BlurtiOS/DESIGN.md.
 tools: Read, Grep, Glob
 ---
 

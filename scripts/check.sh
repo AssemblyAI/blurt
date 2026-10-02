@@ -238,26 +238,63 @@ check_no_external_deps() {
     violation=1
   fi
 
-  # App: the local BlurtEngine (path:) package plus the one allowlisted remote.
-  # A remote package is declared with a url:/github: key inside project.yml's
-  # `packages:` block, so extract that block and reject any such key that isn't
-  # exactly the allowlisted URL. A github: shorthand is rejected outright, so the
-  # allowlist has one spelling to match.
-  local app_packages remote allowed_re
+  # Apps: the local BlurtEngine (path:) package plus the one allowlisted remote
+  # (Sparkle, the Mac app's updater). A remote package is declared with a
+  # url:/github: key inside project.yml's `packages:` block, so extract that
+  # block and reject any such key that isn't exactly the allowlisted URL. A
+  # github: shorthand is rejected outright, so the allowlist has one spelling to
+  # match.
+  #
+  # Every App/*/project.yml, not just the mac app's: the iOS app carries its own
+  # spec with its own `packages:` block, and a guard that names one file is a
+  # guard the next app walks around without anyone noticing.
+  local spec spec_path app_packages remote allowed_re
   allowed_re="${ALLOWED_APP_PACKAGE_URL//./\\.}"
-  app_packages="$(awk '/^packages:/{f=1;next} /^[^[:space:]]/{f=0} f' "$APP_DIR/project.yml")"
-  remote="$(printf '%s\n' "$app_packages" | grep -nE '(^|[[:space:]])(url|github):' \
-    | grep -vE "^[0-9]+:[[:space:]]*url:[[:space:]]*${allowed_re}[[:space:]]*$" || true)"
-  if [ -n "$remote" ]; then
-    echo "error: App/Blurt/project.yml declares a remote SPM package other than Sparkle:" >&2
-    printf '%s\n' "$remote" >&2
-    violation=1
-  fi
+  for spec in "$REPO_ROOT"/App/*/project.yml; do
+    spec_path="${spec#"$REPO_ROOT"/}"
+    app_packages="$(awk '/^packages:/{f=1;next} /^[^[:space:]]/{f=0} f' "$spec")"
+    remote="$(printf '%s\n' "$app_packages" | grep -nE '(^|[[:space:]])(url|github):' \
+      | grep -vE "^[0-9]+:[[:space:]]*url:[[:space:]]*${allowed_re}[[:space:]]*$" || true)"
+    if [ -n "$remote" ]; then
+      echo "error: $spec_path declares a remote SPM package other than Sparkle:" >&2
+      printf '%s\n' "$remote" >&2
+      violation=1
+    fi
+  done
 
   [ "$violation" -eq 0 ] || return 1
   echo "no unexpected dependencies (engine dependency-free; app carries BlurtEngine + Sparkle only)"
 }
 run_check "no-external-dependencies guard" check_no_external_deps
+
+# Whether this run builds the iPhone app for real (scripts/ios-check.sh, near
+# the end): off CI — there the ios-build job runs the same script, and running
+# it here too would double the macos-26 bill — and only with an iPhone simulator
+# on the runtime this Xcode's SDK builds for (an older one is refused at the
+# destination). The list is read into a variable before it is searched: piped
+# into `grep -q` under pipefail, an early match could leave simctl writing into
+# a closed pipe and read as "no runtime".
+IOS_GATES=0
+if [ "$PORTABLE" -eq 0 ] && ! is_ci; then
+  IOS_SDK_VERSION="$(xcrun --sdk iphonesimulator --show-sdk-version 2>/dev/null || true)"
+  IOS_RUNTIMES="$(xcrun simctl list runtimes available 2>/dev/null || true)"
+  if [ -n "$IOS_SDK_VERSION" ] && grep -q "^iOS $IOS_SDK_VERSION " <<<"$IOS_RUNTIMES"; then
+    IOS_GATES=1
+  fi
+fi
+
+# The iPhone targets, typechecked against the Mac Catalyst frameworks — the
+# closest thing to an iOS SDK a Mac without Xcode has (scripts/ios-typecheck.sh
+# explains). Not when ios-check.sh builds them for real below: that build
+# catches all this does. Skipped, not failed, where those frameworks are
+# absent; CI's ios-build job builds and tests the real thing.
+if [ "$IOS_GATES" -eq 1 ]; then
+  echo "==> ios-typecheck skipped: ios-check builds App/BlurtiOS for real below"
+elif [ -d "$(xcrun --show-sdk-path 2>/dev/null)/System/iOSSupport/System/Library/Frameworks/UIKit.framework" ]; then
+  run_check "ios-typecheck (App/BlurtiOS, Mac Catalyst stand-in)" "$REPO_ROOT/scripts/ios-typecheck.sh"
+else
+  echo "==> ios-typecheck skipped: no Mac Catalyst frameworks in the selected SDK"
+fi
 
 # Ignore rules must not shadow tracked files. A .gitignore pattern only suppresses
 # files that are *untracked* — one that also matches something already committed
@@ -390,6 +427,19 @@ check_invariants() {
   bash scripts/check-invariants.sh
 }
 run_check "settled decisions (AGENTS.md invariants)" check_invariants
+
+# The design's one source (App/BlurtiOS/Design/tokens.json) and everything
+# generated from it — Shared/DesignTokens.swift, DESIGN.md's token tables, the
+# app's three colour sets — must agree, and the keyboard's views must carry no
+# design literal that belongs in the tokens. scripts/design-sync.sh --check
+# regenerates into .build/ and diffs, the same shape as the xcodegen drift
+# check further down. It runs scripts/design-tokens.swift as a `swift` script,
+# which --portable mode does without.
+if [ "$PORTABLE" -eq 0 ]; then
+  run_check "design tokens in sync (scripts/design-sync.sh --check)" bash scripts/design-sync.sh --check
+else
+  echo "==> design-sync.sh --check skipped in portable mode (needs swift)"
+fi
 
 # Mutation-testing target list. The full run stays out of this script (minutes, and
 # survivors need judgement — see mutate.sh's header), but that also meant nothing
@@ -591,7 +641,9 @@ else
   echo "==> coverage gate (>= ${MIN_COVERAGE}% engine lines)"
   BIN="$(swift build --show-bin-path)"
   PROFDATA="$BIN/codecov/default.profdata"
-  XCTEST_BUNDLE="$(find "$BIN" -maxdepth 1 -name '*PackageTests.xctest' -print -quit)"
+  # `BlurtPackageTests.xctest` from SwiftPM's own build system; Xcode 27's
+  # SwiftPM names the bundle after the test target, `BlurtEngineTests.xctest`.
+  XCTEST_BUNDLE="$(find "$BIN" -maxdepth 1 -name '*Tests.xctest' -print -quit)"
   XCTEST_BIN="$XCTEST_BUNDLE/Contents/MacOS/$(basename "$XCTEST_BUNDLE" .xctest)"
   # These must exist after `swift test --enable-code-coverage`. Previously a
   # missing one (a renamed test bundle, a coverage build that didn't happen)
@@ -783,6 +835,17 @@ if [ "$PORTABLE" -eq 0 ]; then
   fi
 fi
 
+# The iPhone code's gates — its tests with BlurtiOSCore's coverage gate,
+# `swiftlint analyze` and periphery over App/BlurtiOS (scripts/ios-check.sh) — so
+# a local green covers both platforms. When IOS_GATES (above) says no, skipped
+# with a note, as the UI suite is, and CI stays the authority.
+if [ "$IOS_GATES" -eq 1 ]; then
+  run_check "ios-check (App/BlurtiOS tests, coverage, analyze, periphery)" "$REPO_ROOT/scripts/ios-check.sh"
+elif [ "$PORTABLE" -eq 0 ] && ! is_ci; then
+  IOS_SKIPPED=1
+  echo "==> ios-check skipped: no iOS ${IOS_SDK_VERSION:-?} simulator runtime (xcodebuild -downloadPlatform iOS)"
+fi
+
 # The closing line, and only when there is nothing to report — otherwise the exit
 # trap has the last word. Printing "ok" above a list of failures would be worse
 # than printing nothing at all.
@@ -792,7 +855,7 @@ if [ "${#FAILED_CHECKS[@]}" -eq 0 ]; then
   elif [ "${INTEGRATION:-0}" -eq 0 ]; then
     # Say it at the end too, where the reader is deciding whether this run means
     # "green": everything else passed, but the UI suite and leak scan did not run.
-    echo "==> ok (UI suite + leak scan NOT run — CI on macos-26 covers those)"
+    echo "==> ok (UI suite + leak scan NOT run${IOS_SKIPPED:+, nor the iPhone gates} — CI on macos-26 covers those)"
   else
     echo "==> ok"
   fi

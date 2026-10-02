@@ -95,6 +95,15 @@ jobs:
             -derivedDataPath "$DERIVED" \
             -resolvePackageDependencies
 
+      # The iPhone app's project is generated, not committed (see check.yml's
+      # ios-build), so generate it before tracing starts. It has no remote
+      # packages to resolve — only the local engine.
+      - name: Generate the iPhone app's project (untraced)
+        working-directory: App/BlurtiOS
+        run: |
+          brew install xcodegen
+          xcodegen generate --quiet
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
         with:
@@ -117,6 +126,27 @@ jobs:
             -configuration Debug \
             -destination 'generic/platform=macOS' \
             -derivedDataPath "$DERIVED" \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      # The iPhone app, its keyboard and BlurtiOSCore, traced in the same
+      # database: CodeQL analyses whatever the job compiles between init and
+      # analyze, so the Mac build alone would leave App/BlurtiOS unscanned.
+      # Simulator, signing off — nothing here needs a device or a team. One
+      # architecture: CodeQL extracts every compile, and a second slice would
+      # compile and extract every file again for nothing new.
+      - name: Build Swift (iPhone)
+        working-directory: App/BlurtiOS
+        run: |
+          xcodebuild \
+            -project BlurtiOS.xcodeproj \
+            -scheme BlurtiOS \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$DERIVED-ios" \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \

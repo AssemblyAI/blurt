@@ -162,15 +162,13 @@ public actor DictationSession {
   /// `pipelineTask` alone would abandon only the *wait* — the request itself
   /// would keep streaming and complete against a dictation the user dismissed.
   ///
-  /// A bare task, because that is now all a live request is. It was an
-  /// `InFlightUpload` pairing the task with the context channel its `config`
-  /// part parked on, so abandoning it meant closing that too; the streaming
-  /// route settles the context up front, so `cancel()` is now the whole of it.
+  /// A bare task: the streaming route settles the context up front, so `cancel()` is the whole of it.
   var upload: Task<String, any Error>?
 
-  /// The production entry point: the real focus capture and the real
-  /// developer-mode log. Delegates to the seam-carrying initializer below, which
-  /// can't be public because it names internal types.
+  /// The production entry point: the real log, and the real focus capture
+  /// unless the host supplies its own (`hostFocusCapture`: the iOS app, whose
+  /// keyboard knows the text before the cursor). Delegates to the seam-carrying
+  /// initializer below, which can't be public (it names internal seams).
   public init(
     mic: MicCaptureProtocol,
     transcriber: TranscriberProtocol,
@@ -181,14 +179,16 @@ public actor DictationSession {
     styleNameProvider: (@Sendable () -> String?)? = nil,
     textShortcutsProvider: (@Sendable () -> [TextShortcut])? = nil,
     readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
-    onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)? = nil
+    onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)? = nil,
+    hostFocusCapture: HostFocusCapture? = nil
   ) {
     self.init(
       mic: mic, transcriber: transcriber, injector: injector,
       maxRecordingSeconds: maxRecordingSeconds, clock: clock,
       keyTermsProvider: keyTermsProvider, styleNameProvider: styleNameProvider,
       textShortcutsProvider: textShortcutsProvider, readinessCheck: readinessCheck,
-      onTranscriptDelivered: onTranscriptDelivered, seams: .production)
+      onTranscriptDelivered: onTranscriptDelivered,
+      seams: hostFocusCapture.map(Seams.init(hostFocusCapture:)) ?? .production)
   }
 
   /// `seams` is deliberately required rather than defaulted: it's what keeps this

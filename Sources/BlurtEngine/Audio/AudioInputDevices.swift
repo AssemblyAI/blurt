@@ -102,7 +102,19 @@ public enum AudioInputDevices {
   /// `AudioTransport` matches against CoreAudio's `kAudioDeviceTransportType*`
   /// constants. Bit-pattern converted rather than numerically: these are packed
   /// ASCII, and the sign of the `Int32` spelling is an accident of the API.
+  ///
+  /// macOS only: `transportType` is not in the iOS SDK, and iOS exposes a single
+  /// microphone whose physical route the audio session decides. There this
+  /// answers nil — which `AudioTransport` reads as "unclassified", the middle
+  /// liveness cap and no tail linger — and, through `transportType(forUID:)`,
+  /// also reads as "the pinned device is absent", so an iOS capture always
+  /// follows the system route. Both hold until the iOS capture path classifies
+  /// `AVAudioSession` ports instead.
   private static func transportType(of device: AVCaptureDevice?) -> UInt32? {
-    device.map { UInt32(bitPattern: $0.transportType) }
+    #if os(macOS)
+      return device.map { UInt32(bitPattern: $0.transportType) }
+    #else
+      return nil
+    #endif
   }
 }

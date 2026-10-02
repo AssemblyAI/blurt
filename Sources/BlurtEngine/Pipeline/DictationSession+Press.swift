@@ -124,7 +124,16 @@ extension DictationSession {
         if !consumeCancelRequest() { setPhase(.cancelled) }
         return
       }
-      setPhase(.failed(.audioCaptureFailed(underlying: error)))
+      // `MicCapture.start()` already throws a `BlurtError` for its own failures
+      // (no input device, the liveness gate failing closed); wrapping that a
+      // second time read as "Audio capture failed: Audio capture failed: …" on
+      // the pill and in `errors.jsonl`. Only a conformer's untyped error needs
+      // the wrap — the same rule `awaitUpload` applies to the transcriber's.
+      if let blurtError = error as? BlurtError {
+        setPhase(.failed(blurtError))
+      } else {
+        setPhase(.failed(.audioCaptureFailed(underlying: error)))
+      }
     }
   }
 
@@ -142,7 +151,7 @@ extension DictationSession {
     // above) so the call is a Sendable closure rather than isolated state.
     let captureFrontmost = seams.captureFrontmost
     let captured = await captureFrontmost()
-    await injector.setTargetApp(captured.flatMap { FocusCapture.runningApp(for: $0) })
+    await injector.setTarget(captured)
     // Key terms are read synchronously at press (cheap UserDefaults read), so
     // each dictation observably re-reads Settings edits at press time.
     let keyTerms = keyTermsProvider()

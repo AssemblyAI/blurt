@@ -71,6 +71,26 @@ design. Note also that `check.sh` already runs `periphery scan --strict` with
 `retain_public: false`, so plainly-unreferenced symbols are caught — spend your
 effort on what periphery cannot see.
 
+On the iPhone (`App/BlurtiOS/`), equally deliberate:
+
+- **The two losing mic concepts are on purpose.** `VoiceRibs`, `VoiceStreak`,
+  `VoiceElementKind`'s `.ribs`/`.streak`, `SharedStore.voiceElementKind` and the
+  `-BlurtGalleryVoice` switch are marked TEMPORARY: three concepts are built side
+  by side until one is picked (`DESIGN.md` › The voice element), then the losers go
+  together. Don't propose deleting one piecemeal.
+- **The gallery and the probe screens are entry points**, reached by launch
+  arguments (`-BlurtGallery…`, `-BlurtProbeField`) from `scripts/design-capture.sh`,
+  `ios-keyboard-shot.sh`, `ios-keyboard-flows.sh` and `apple-geometry.sh` — not
+  from any view. Likewise the `BlurtiOSProbe` XCUITest helpers.
+- **`BlurtiOSCore` uses `package` access, not `public`,** and its explicit
+  `package init`s exist because a memberwise initializer is only ever internal.
+  Seams with one production use (`KeyboardModel.transport`, `.urlOpener`,
+  `.proxyOverride`, `SharedStore.override`) are there for the tests.
+- **`SimulatorAudioSource` is the simulator's microphone**, not a duplicate of
+  `WindowedAudioSource`: `AVCaptureSession` carries no audio in the simulator.
+- The iPhone periphery scan is CI's and `ios-check.sh`'s, with `--retain-public`,
+  so it reports the iPhone code's own dead declarations — `package` ones included.
+
 ## Method
 
 Verify every claim by reading the real code; never report a suspicion. For an

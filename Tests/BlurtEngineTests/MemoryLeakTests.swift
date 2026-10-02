@@ -44,10 +44,12 @@ struct MemoryLeakTests {
     }
   }
 
-  @Test("KeyInjector deallocates")
-  func keyInjectorNoLeak() async {
-    await expectNoLeak("KeyInjector") {
-      KeyInjector()
+  #if os(macOS)
+    @Test("KeyInjector deallocates")
+    func keyInjectorNoLeak() async {
+      await expectNoLeak("KeyInjector") {
+        KeyInjector()
+      }
     }
-  }
+  #endif
 }
