@@ -154,7 +154,11 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
           "session refused the input device \(device.localizedName, privacy: .public)")
       }
     }
-    output.audioSettings = Self.audioSettings()
+    // macOS only: `audioSettings` is not in the iOS SDK, so there the output
+    // vends the device's native format — an iOS host brings its own capture.
+    #if os(macOS)
+      output.audioSettings = Self.audioSettings()
+    #endif
     output.setSampleBufferDelegate(self, queue: delegateQueue)
     if session.canAddOutput(output) {
       session.addOutput(output)
@@ -187,28 +191,6 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
       return pinned
     }
     return AudioInputDevices.systemDefaultDevice
-  }
-
-  /// The dictation API's geometry, converted by the output itself — the same six
-  /// keys the retired WAV recorder asked of its file, so capture still lands in
-  /// upload-ready S16LE with no resample pass anywhere.
-  ///
-  /// Every number comes from `SyncSTTLimits`, which also owns the byte math the
-  /// upload side applies to the result. They are one contract: a stereo or
-  /// 8-bit recorder would silently halve or double every duration the pipeline
-  /// computes. Device-free, so `MicCaptureFormatTests` can assert it despite
-  /// this file being coverage-excluded; a function rather than a stored static
-  /// because `[String: Any]` is not `Sendable`, and it is built once per
-  /// recorder regardless.
-  static func audioSettings() -> [String: Any] {
-    [
-      AVFormatIDKey: kAudioFormatLinearPCM,
-      AVSampleRateKey: Double(SyncSTTLimits.sampleRate),
-      AVNumberOfChannelsKey: SyncSTTLimits.channelCount,
-      AVLinearPCMBitDepthKey: SyncSTTLimits.bitDepth,
-      AVLinearPCMIsFloatKey: false,
-      AVLinearPCMIsBigEndianKey: false,
-    ]
   }
 
   /// Opens the device and starts capture, answering false when there is no

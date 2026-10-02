@@ -156,21 +156,19 @@ public actor DictationSession {
   /// propagates is honored by `runTranscribeInject` and `KeyInjector.insert`.
   var pipelineTask: Task<Void, Never>?  // internal: joined by awaitPipeline()
 
-  /// The in-flight dictation request, opened at press so the recording uploads
-  /// while the user speaks. Stored for the same reason `pipelineTask` is: it is
-  /// unstructured work a cancel has to be able to reach, and cancelling
-  /// `pipelineTask` alone would abandon only the *wait* — the request itself
+  /// The in-flight dictation request, opened at press so the recording uploads while the user
+  /// speaks. Stored for the same reason `pipelineTask` is: it is unstructured work a cancel has to
+  /// reach, and cancelling `pipelineTask` alone would abandon only the *wait* — the request itself
   /// would keep streaming and complete against a dictation the user dismissed.
-  /// A bare task: the streaming route settles the context up front (it was an `InFlightUpload`).
+  /// A bare task: the streaming route settles the context up front, so `cancel()` is the whole of it.
   var upload: Task<String, any Error>?
 
-  /// Whether this press's transcript goes back to the host as `.handedBack`
-  /// instead of being pasted. Set by every press, read by `runTranscribeInject`.
+  /// Whether this press's transcript goes back to the host (`.handedBack`) instead of being pasted.
   var handsBackTranscript = false
 
-  /// The production entry point: the real focus capture and the real
-  /// developer-mode log. Delegates to the seam-carrying initializer below, which
-  /// can't be public because it names internal types.
+  /// The production entry point: the real log, and the real focus capture unless the host
+  /// supplies its own (`hostFocusCapture`: the iOS app, whose keyboard knows the text before
+  /// the cursor). Delegates to the seam-carrying initializer below, which can't be public.
   public init(
     mic: MicCaptureProtocol,
     transcriber: TranscriberProtocol,
@@ -181,14 +179,16 @@ public actor DictationSession {
     styleNameProvider: (@Sendable () -> String?)? = nil,
     textShortcutsProvider: (@Sendable () -> [TextShortcut])? = nil,
     readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
-    onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)? = nil
+    onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)? = nil,
+    hostFocusCapture: HostFocusCapture? = nil
   ) {
     self.init(
       mic: mic, transcriber: transcriber, injector: injector,
       maxRecordingSeconds: maxRecordingSeconds, clock: clock,
       keyTermsProvider: keyTermsProvider, styleNameProvider: styleNameProvider,
       textShortcutsProvider: textShortcutsProvider, readinessCheck: readinessCheck,
-      onTranscriptDelivered: onTranscriptDelivered, seams: .production)
+      onTranscriptDelivered: onTranscriptDelivered,
+      seams: hostFocusCapture.map(Seams.init(hostFocusCapture:)) ?? .production)
   }
 
   /// `seams` is deliberately required rather than defaulted: it's what keeps this

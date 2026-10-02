@@ -114,7 +114,7 @@ struct DictationLogEntryTests {
   func priorIsRawWhereTheTurnIsTrimmed() {
     // Why `prior` isn't redundant with the prompt's tail. The trailing space is the
     // whole input to the paste's leading-separator decision
-    // (`KeyInjector.withLeadingSeparator` branches on `prior.last.isWhitespace`),
+    // (`InsertionSeparator.withLeadingSeparator` branches on `prior.last.isWhitespace`),
     // and the wire copy has it trimmed off — so dropping `prior` for being a
     // duplicate would take the only record of that bit with it.
     let entry = DictationLog.makeEntry(
@@ -122,8 +122,8 @@ struct DictationLogEntryTests {
       now: Date())
     #expect(entry.prior == "Hi Sam, ")
     #expect(entry.sttPrompt == "Hi Sam,")
-    #expect(KeyInjector.withLeadingSeparator("p", after: entry.prior) == "p")
-    #expect(KeyInjector.withLeadingSeparator("p", after: entry.sttPrompt) == " p")
+    #expect(InsertionSeparator.withLeadingSeparator("p", after: entry.prior) == "p")
+    #expect(InsertionSeparator.withLeadingSeparator("p", after: entry.sttPrompt) == " p")
   }
 
   @Test("a nil prior tells a history-only prompt apart from a prior chunk")

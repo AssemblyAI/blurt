@@ -80,7 +80,15 @@ public struct InstallReset {
         UserDefaults.standard.removePersistentDomain(forName: bundleID)
       },
       clearAPIKey: { keyStore.save(nil) },
-      resetPermissions: { PermissionsReset.resetAll(bundleID: bundleID) },
+      resetPermissions: {
+        #if os(macOS)
+          return PermissionsReset.resetAll(bundleID: bundleID)
+        #else
+          // iOS lets no app revoke its own grants — they go with the install —
+          // so there is nothing for this step to do, and nothing to report.
+          return true
+        #endif
+      },
       clearLogs: { DictationLog.removeStoredLogs() })
   }
 

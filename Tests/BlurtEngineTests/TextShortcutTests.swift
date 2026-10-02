@@ -203,7 +203,7 @@ struct DictationSessionTextShortcutTests {
   @Test("the text before the caret goes out with expansions put back to triggers")
   func priorTextRedacted() async {
     let fixture = makeSession(
-      field: FocusCapture.FocusedFieldContext(
+      field: FocusedFieldContext(
         priorText: "Mail me@example.com.", selectedText: nil, windowTitle: nil, fieldLabel: nil),
       textShortcuts: [TextShortcut(trigger: "personal email", expansion: "me@example.com")])
 

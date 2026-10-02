@@ -75,8 +75,16 @@ GUARDRAILS=".claude/skills/project-guardrails/SKILL.md"
 # code extensions also keeps the app scope off the .png and .m4a resources it
 # was otherwise grepping byte by byte.
 ENGINE="Sources/*.swift"
-APP="App/Blurt/*.swift App/Blurt/*.yml App/Blurt/*.plist :!App/Blurt/Blurt.xcodeproj"
-TESTS="Tests/*.swift App/Blurt/BlurtUITests/*.swift"
+# The app scope is `App/`, not `App/Blurt/`: there is a second app spec now
+# (the iOS app), and a scope pinned to one app silently stops covering the
+# next one.
+APP="App/*.swift App/*.yml App/*.plist :!App/Blurt/Blurt.xcodeproj :!App/BlurtiOS/BlurtiOSTests"
+TESTS="Tests/*.swift App/Blurt/BlurtUITests/*.swift App/BlurtiOS/BlurtiOSTests/*.swift"
+# The keyboard extension and what it compiles or links — its own sources, the
+# Shared UI, and BlurtiOSCore: iOS lets no keyboard use the microphone, and the
+# design keeps every audio type out of it, so an import there is a decision
+# being reversed by accident.
+KEYBOARD="App/BlurtiOS/BlurtKeyboard/*.swift App/BlurtiOS/Shared/*.swift App/BlurtiOS/BlurtiOSCore/*.swift"
 # The streaming-STT rule's one carve-out: the experimental read-selection-aloud
 # feature speaks through AssemblyAI's streaming TTS, which is WebSocket-only.
 # The rule is about *dictation* staying one request/one response, so the TTS
@@ -107,6 +115,7 @@ PATTERNS=(
   "import KeyboardShortcuts"
   "KeychainStore\\(service: *(HostIdentity\\.current\\.keychainService|\"blurt\")"
   "@available\\(\\*, *deprecated"
+  "import AVFoundation|import AVFAudio|AVCaptureSession|AVAudioSession|AVAudioApplication|AudioQueueNewInput"
 )
 SCOPES=(
   "$ENGINE $APP"
@@ -121,6 +130,7 @@ SCOPES=(
   "$ENGINE $APP"
   "$TESTS"
   "$ENGINE $APP"
+  "$KEYBOARD"
 )
 ADVICE=(
   "MicCapture builds a fresh AVCaptureSession recorder per capture — a long-lived engine goes stale on a device switch"
@@ -135,6 +145,7 @@ ADVICE=(
   "the trigger is a home-grown lone modifier (CGEventTap + DictationKeyGate)"
   "use an isolated service (see KeychainStoreTests) or InMemoryAPIKeyStore"
   "deleted types stay deleted — no deprecated re-exports"
+  "the keyboard never hears anything: the app listens and transcribes, the keyboard inserts (KeyboardRelayInjector)"
 )
 
 # One known-bad line per rule, same order. `--self-test` asserts each pattern
@@ -154,6 +165,7 @@ PROBES=(
   "import KeyboardShortcuts"
   "let store = KeychainStore(service: HostIdentity.current.keychainService, account: \"AssemblyAIAPIKey\")"
   "@available(*, deprecated, renamed: \"NewName\")"
+  "let session = AVCaptureSession()"
 )
 
 # A verbatim slice of the row in AGENTS.md's "Settled decisions" table that each
@@ -175,6 +187,7 @@ TABLE_ANCHORS=(
   "Add a \`KeyboardShortcuts\` package or a key+modifier chord"
   "Touch the real Keychain in tests"
   "Add backwards-compat shims for removed types"
+  "Give the keyboard extension a microphone or any audio type"
 )
 
 # The same rule as the guardrails skill words it. Deliberately not the table's
@@ -195,6 +208,7 @@ SKILL_ANCHORS=(
   "No \`KeyboardShortcuts\` package"
   "the real Keychain in tests"
   "Don't add backwards-compat shims for removed types."
+  "The keyboard never hears anything."
 )
 
 if [ "${#SCOPES[@]}" -ne "${#PATTERNS[@]}" ] \
@@ -211,7 +225,7 @@ fi
 if [ "${1:-}" = "--self-test" ]; then
   failed=0
   for i in "${!PATTERNS[@]}"; do
-    if printf '%s\n' "${PROBES[$i]}" | grep -qE "${PATTERNS[$i]}"; then
+    if grep -qE -- "${PATTERNS[$i]}" <<<"${PROBES[$i]}"; then
       echo "  ok   rule $i flags: ${PROBES[$i]}"
     else
       echo "  FAIL rule $i does not match its own probe: ${PROBES[$i]}" >&2
@@ -232,7 +246,7 @@ if [ "${1:-}" = "--self-test" ]; then
   for good in "${GOOD[@]}"; do
     hit=""
     for i in "${!PATTERNS[@]}"; do
-      if printf '%s\n' "$good" | grep -qE "${PATTERNS[$i]}"; then
+      if grep -qE -- "${PATTERNS[$i]}" <<<"$good"; then
         hit="$i"
         break
       fi
@@ -258,8 +272,12 @@ if [ "${1:-}" = "--self-test" ]; then
     exit 1
   fi
 
+  # Here-strings, never `printf | grep -q`, throughout this file: grep -q
+  # exits at its first match, and a producer still writing gets EPIPE —
+  # under pipefail, a false "no match". The table (~30 KB, past a macOS pipe's
+  # 16 KB first buffer) did exactly that on CI: rule 3 failing at random.
   for i in "${!PATTERNS[@]}"; do
-    if printf '%s\n' "$TABLE" | grep -qF -- "${TABLE_ANCHORS[$i]}"; then
+    if grep -qF -- "${TABLE_ANCHORS[$i]}" <<<"$TABLE"; then
       echo "  ok   rule $i is pinned to its $GUIDE row"
     else
       echo "  FAIL rule $i has no row in $GUIDE's settled-decisions table:" >&2
@@ -292,7 +310,7 @@ fi
 # here until it is staged — and a scan that skips the file you just wrote reads
 # exactly like a scan that approved it. Warn rather than fail, because an
 # untracked file is a normal state mid-edit; `git add -N` brings it into scope.
-UNTRACKED=$(git ls-files --others --exclude-standard -- Sources Tests App/Blurt)
+UNTRACKED=$(git ls-files --others --exclude-standard -- Sources Tests App)
 if [ -n "$UNTRACKED" ]; then
   echo "note: untracked files are NOT scanned (git add -N to include them):"
   printf '%s\n' "$UNTRACKED" | sed 's/^/  /'
