@@ -137,6 +137,7 @@ struct SettingsView: View {
     Section {
       LabeledContent("Version", value: Self.version)
       Link("Blurt on GitHub", destination: URL(string: "https://github.com/AssemblyAI/blurt") ?? URL(filePath: "/"))
+      Link("AssemblyAI's privacy policy", destination: AIConsent.privacyPolicyURL)
       Text("Powered by AssemblyAI").foregroundStyle(BlurtBrand.muted)
     } header: {
       Eyebrow("About")

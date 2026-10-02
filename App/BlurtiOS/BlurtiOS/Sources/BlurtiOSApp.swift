@@ -71,7 +71,9 @@ struct BlurtiOSApp: App {
     #if DEBUG
       // `-BlurtStartListening` opens the mic at launch, so the listening
       // state can be screenshotted without a tap (see scripts/ios-sim.sh).
-      if CommandLine.arguments.contains("-BlurtStartListening") { await coordinator.startListening() }
+      // Asking for it stands in for consent, which a screenshot or probe run
+      // can't tap through; debug builds only.
+      if CommandLine.arguments.contains("-BlurtStartListening") { await coordinator.grantConsent() }
     #endif
   }
 }
