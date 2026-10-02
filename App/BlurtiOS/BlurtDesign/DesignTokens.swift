@@ -251,6 +251,8 @@ package enum DesignTokens {
     package nonisolated static let appSetupNumberWidth: CGFloat = 24
     /// Between a section's eyebrow and its content, and between cards.
     package nonisolated static let appStackGap: CGFloat = 12
+    /// Between the stats in the card, and between its rows.
+    package nonisolated static let appStatGap: CGFloat = 16
     /// Between a tab's icon and its label.
     package nonisolated static let appTabGap: CGFloat = 4
     /// A tab in the brand tab bar: its icon over its mono label.
@@ -381,6 +383,14 @@ package enum DesignTokens {
     package nonisolated static let ribsRestWidth: CGFloat = 40
     /// Between rows, the iPhone's.
     package nonisolated static let rowGap: CGFloat = 11
+    /// Between a stat's number-and-unit parts, as a fraction of its size.
+    package nonisolated static let statPartGapRatio: CGFloat = 0.38
+    /// A stat number's tracking, as a fraction of its size.
+    package nonisolated static let statTrackingRatio: CGFloat = -0.03
+    /// Between a number and its unit, as a fraction of its size.
+    package nonisolated static let statUnitGapRatio: CGFloat = 0.15
+    /// A stat's mono unit (hr, min, sec) as a fraction of its number's size.
+    package nonisolated static let statUnitRatio: CGFloat = 0.46
     /// The landing flash's vertical arm, as a fraction of the box's height.
     package nonisolated static let streakArm: CGFloat = 1.4
     /// The light streak while recording.
@@ -459,6 +469,14 @@ package enum DesignTokens {
     package nonisolated static let sizePopup: CGFloat = 32
     /// The × on a text-shortcut row.
     package nonisolated static let sizeRemoveGlyph: CGFloat = 12
+    /// The next size down when the stats would not fit.
+    package nonisolated static let sizeStatL: CGFloat = 23
+    /// And the next.
+    package nonisolated static let sizeStatM: CGFloat = 20
+    /// The smallest a stat is drawn.
+    package nonisolated static let sizeStatS: CGFloat = 18
+    /// A stat's serif number, at the largest size that fits.
+    package nonisolated static let sizeStatXl: CGFloat = 26
     /// A tab's icon.
     package nonisolated static let sizeTabIcon: CGFloat = 18
     /// A tab's mono label.
@@ -638,6 +656,7 @@ package enum DesignTokens {
     "metrics.app/section-gap": "24",
     "metrics.app/setup-number-width": "24",
     "metrics.app/stack-gap": "12",
+    "metrics.app/stat-gap": "16",
     "metrics.app/tab-gap": "4",
     "metrics.app/tab-height": "52",
     "metrics.card/border": "1",
@@ -709,6 +728,10 @@ package enum DesignTokens {
     "metrics.ribs/rest-height": "16",
     "metrics.ribs/rest-width": "40",
     "metrics.row/gap": "11",
+    "metrics.stat/part-gap-ratio": "0.38",
+    "metrics.stat/tracking-ratio": "-0.03",
+    "metrics.stat/unit-gap-ratio": "0.15",
+    "metrics.stat/unit-ratio": "0.46",
     "metrics.streak/arm": "1.4",
     "metrics.streak/height": "2",
     "metrics.streak/line": "1",
@@ -750,6 +773,10 @@ package enum DesignTokens {
     "type.size/pill-glyph": "10",
     "type.size/popup": "32",
     "type.size/remove-glyph": "12",
+    "type.size/stat-l": "23",
+    "type.size/stat-m": "20",
+    "type.size/stat-s": "18",
+    "type.size/stat-xl": "26",
     "type.size/tab-icon": "18",
     "type.size/tab-label": "11",
     "type.size/term": "17",

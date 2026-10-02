@@ -19,6 +19,7 @@ struct SettingsView: View {
   @AppStorage(BlurtShared.Key.voiceElement, store: SharedStore.defaults) private var voiceRaw =
     VoiceElementKind.shipped.rawValue
   @State private var showsKeyEntry = false
+  @State private var confirmsStatsReset = false
   @AppStorage(EnhancedTranscriptsStore.defaultsKey) private var enhancedTranscripts =
     EnhancedTranscriptsStore.defaultValue
 
@@ -29,6 +30,7 @@ struct SettingsView: View {
         listeningSection
         transcriptionSection
         accountSection
+        dataSection
         aboutSection
       }
       .brandForm()
@@ -116,6 +118,22 @@ struct SettingsView: View {
       Link("Get a free key", destination: APIKeyStore.dashboardURL)
     } header: {
       Eyebrow("Account")
+    }
+  }
+
+  /// The stats card's totals, which live only on this phone.
+  private var dataSection: some View {
+    Section {
+      Button("Reset statistics", role: .destructive) { confirmsStatsReset = true }
+    } header: {
+      Eyebrow("Data")
+    } footer: {
+      Text("Dictations, words and time saved are counted on this phone and never sent.")
+    }
+    .confirmationDialog("Reset statistics?", isPresented: $confirmsStatsReset, titleVisibility: .visible) {
+      Button("Reset", role: .destructive) { DictationStats.reset() }
+    } message: {
+      Text("Your dictation, word and time-saved totals go back to zero.")
     }
   }
 

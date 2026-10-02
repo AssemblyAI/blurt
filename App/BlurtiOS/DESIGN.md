@@ -182,6 +182,10 @@ point sizes throughout, as the system keyboard's; no Dynamic Type.
 | `size/pill-glyph`    | `10`       | `Typography.sizePillGlyph`    | the × on a key-term pill                                                          |
 | `size/popup`         | `32`       | `Typography.sizePopup`        | the letter pop-up                                                                 |
 | `size/remove-glyph`  | `12`       | `Typography.sizeRemoveGlyph`  | the × on a text-shortcut row                                                      |
+| `size/stat-l`        | `23`       | `Typography.sizeStatL`        | the next size down when the stats would not fit                                   |
+| `size/stat-m`        | `20`       | `Typography.sizeStatM`        | and the next                                                                      |
+| `size/stat-s`        | `18`       | `Typography.sizeStatS`        | the smallest a stat is drawn                                                      |
+| `size/stat-xl`       | `26`       | `Typography.sizeStatXl`       | a stat's serif number, at the largest size that fits                              |
 | `size/tab-icon`      | `18`       | `Typography.sizeTabIcon`      | a tab's icon                                                                      |
 | `size/tab-label`     | `11`       | `Typography.sizeTabLabel`     | a tab's mono label                                                                |
 | `size/term`          | `17`       | `Typography.sizeTerm`         | the key-term field                                                                |
@@ -545,6 +549,7 @@ pins the derivation.
 | `app/section-gap`            | `24`      | `Metrics.appSectionGap`            | between the home screen's sections                                                                                                                                                                                                                                  |
 | `app/setup-number-width`     | `24`      | `Metrics.appSetupNumberWidth`      | the setup steps' mono numerals                                                                                                                                                                                                                                      |
 | `app/stack-gap`              | `12`      | `Metrics.appStackGap`              | between a section's eyebrow and its content, and between cards                                                                                                                                                                                                      |
+| `app/stat-gap`               | `16`      | `Metrics.appStatGap`               | between the stats in the card, and between its rows                                                                                                                                                                                                                 |
 | `app/tab-gap`                | `4`       | `Metrics.appTabGap`                | between a tab's icon and its label                                                                                                                                                                                                                                  |
 | `app/tab-height`             | `52`      | `Metrics.appTabHeight`             | a tab in the brand tab bar: its icon over its mono label                                                                                                                                                                                                            |
 | `card/border`                | `1`       | `Metrics.cardBorder`               | the card's hairline                                                                                                                                                                                                                                                 |
@@ -616,6 +621,10 @@ pins the derivation.
 | `ribs/rest-height`           | `16`      | `Metrics.ribsRestHeight`           | —                                                                                                                                                                                                                                                                   |
 | `ribs/rest-width`            | `40`      | `Metrics.ribsRestWidth`            | the ribs asleep: the wave's own bars at rest                                                                                                                                                                                                                        |
 | `row/gap`                    | `11`      | `Metrics.rowGap`                   | between rows, the iPhone's                                                                                                                                                                                                                                          |
+| `stat/part-gap-ratio`        | `0.38`    | `Metrics.statPartGapRatio`         | between a stat's number-and-unit parts, as a fraction of its size                                                                                                                                                                                                   |
+| `stat/tracking-ratio`        | `-0.03`   | `Metrics.statTrackingRatio`        | a stat number's tracking, as a fraction of its size                                                                                                                                                                                                                 |
+| `stat/unit-gap-ratio`        | `0.15`    | `Metrics.statUnitGapRatio`         | between a number and its unit, as a fraction of its size                                                                                                                                                                                                            |
+| `stat/unit-ratio`            | `0.46`    | `Metrics.statUnitRatio`            | a stat's mono unit (hr, min, sec) as a fraction of its number's size                                                                                                                                                                                                |
 | `streak/arm`                 | `1.4`     | `Metrics.streakArm`                | the landing flash's vertical arm, as a fraction of the box's height                                                                                                                                                                                                 |
 | `streak/height`              | `2`       | `Metrics.streakHeight`             | the light streak while recording                                                                                                                                                                                                                                    |
 | `streak/line`                | `1`       | `Metrics.streakLine`               | the hairline at rest                                                                                                                                                                                                                                                |
@@ -702,7 +711,11 @@ accent over its replacement, × to remove, between hairlines; two inputs and
 disabled (`opacity/disabled`).
 
 **Home** (`HomeView`, `HomeHero`, `SetupCard`, `StyleChips`, `RecentSection`,
-`HomeStatus` for the words): the setup card only while something is missing,
+`HomeStatus` for the words; `StatsCard`): the setup card only while something is missing,
+then the lifetime stats — `DICTATIONS`, `WORDS`, `TIME SAVED` (against 36 wpm,
+the phone average) as serif numbers with mono units, one row until time saved
+reaches an hour and then two, at the largest of four sizes that fits (reset
+in Settings › Data);
 its three steps numbered `01 02 03` in mono; the hero — `STATUS`, the
 headline (Not listening · Ready to dictate · Connecting… · Listening… ·
 Transcribing… · Pasted · Copied · the error), the line under it, the voice
