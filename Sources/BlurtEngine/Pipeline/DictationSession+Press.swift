@@ -200,3 +200,14 @@ extension DictationSession {
     }
   }
 }
+
+extension DictationSession {
+  /// Runs blocking cross-process work on `contextQueue` and awaits it: the
+  /// awaitable form of the press-time capture's hop, for an AX read or a
+  /// pasteboard read that can make another app produce promised data.
+  static func offPool<T: Sendable>(_ work: @escaping @Sendable () -> T) async -> T {
+    await withCheckedContinuation { continuation in
+      contextQueue.async { continuation.resume(returning: work()) }
+    }
+  }
+}

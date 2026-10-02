@@ -38,16 +38,12 @@ public struct SelectionSpeaker: Sendable {
   /// the field is secure, or when it can't be read.
   ///
   /// Accessibility first. The read is synchronous cross-process IPC that can
-  /// block a thread for the AX timeout against a hung app, so it runs on
-  /// `DictationSession.contextQueue`, the press-time capture's queue, and never
-  /// on the cooperative pool. When AX can't reach a focused element at all, it
-  /// falls back to copying the selection (`SelectionCopy`).
+  /// block a thread for the AX timeout against a hung app, so it runs off the
+  /// cooperative pool (`DictationSession.offPool`). When AX can't reach a
+  /// focused element at all, it falls back to copying the selection
+  /// (`SelectionCopy`).
   public static func focusedSelection() async -> String? {
-    let read = await withCheckedContinuation { continuation in
-      DictationSession.contextQueue.async {
-        continuation.resume(returning: FocusCapture.captureSelectedText(maxChars: maxCharacters))
-      }
-    }
+    let read = await DictationSession.offPool { FocusCapture.captureSelectedText(maxChars: maxCharacters) }
     return await resolve(read, copy: SelectionCopy())
   }
 

@@ -58,21 +58,17 @@ public enum TriggerActivation: String, CaseIterable, Sendable {
 
   /// How to finish a dictation that is recording, e.g. "Tap again or release
   /// to finish." — only the gestures this mode actually stops on.
-  public var finishHint: String {
-    switch self {
-    case .tapOrHold: return "Tap again or release to finish."
-    case .tap: return "Tap again to finish."
-    case .hold: return "Release to finish."
-    }
-  }
+  public var finishHint: String { "\(stopGesture) to finish." }
 
   /// How to stop something the trigger started that isn't a dictation, today
   /// a read-aloud (see `SelectionSpeechRouting`): "Tap again or release to stop."
-  public var stopHint: String {
+  public var stopHint: String { "\(stopGesture) to stop." }
+
+  private var stopGesture: String {
     switch self {
-    case .tapOrHold: return "Tap again or release to stop."
-    case .tap: return "Tap again to stop."
-    case .hold: return "Release to stop."
+    case .tapOrHold: "Tap again or release"
+    case .tap: "Tap again"
+    case .hold: "Release"
     }
   }
 
