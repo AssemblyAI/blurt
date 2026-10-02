@@ -42,12 +42,14 @@ struct SetupCard: View {
       }
       SetupRow(number: "03", done: keyboardSeen, title: "Add the Blurt keyboard") {
         VStack(alignment: .leading, spacing: DesignTokens.Metrics.appLineGap) {
-          // The button opens Blurt's own page in Settings — the only Settings
-          // link Apple allows (the General › Keyboard deep links are private
-          // API and fail review) — and iOS puts a Keyboards row on that page
-          // for any app with a keyboard, so the steps start from there.
+          // The button's link (`openSettingsURLString`) is the only Settings
+          // link Apple allows — the General › Keyboard deep links are private
+          // API and fail review. It is meant to land on Blurt's own page, where
+          // iOS puts a Keyboards row for any app with a keyboard, but not every
+          // build honours it (the iOS 26 simulator opens Settings' top level),
+          // so the steps name the whole path, which holds from either screen.
           Text(
-            "Open Settings, tap Keyboards, then turn on Blurt and Allow Full Access. "
+            "In Settings, go to Apps › Blurt › Keyboards, turn on Blurt, then Allow Full Access. "
               + "Full Access is what lets the keyboard send your words to Blurt."
           )
           .font(BlurtType.body(DesignTokens.Typography.sizeCaption)).foregroundStyle(BlurtBrand.muted)

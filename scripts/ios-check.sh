@@ -12,6 +12,9 @@
 #   2. `swiftlint analyze` — unused imports — over that build's compiler log,
 #      as check.sh runs it over the Mac app's.
 #   3. periphery over the iPhone project — unused declarations.
+#   4. The probe's XCUITest bundle (BlurtiOSProbe), compiled: its own scheme,
+#      run only by hand (the screenshot and keyboard-flow scripts), so nothing
+#      else ever builds it — and it went uncompiled through a Swift 6 change.
 # swift-format, `swiftlint lint`, the invariants and ios-typecheck.sh already
 # cover App/BlurtiOS from check.sh, which reads every tracked Swift file.
 #
@@ -59,6 +62,14 @@ else
   echo "error: no build log to analyze — the build above did not run" >&2
   FAILED+=("swiftlint analyze")
 fi
+
+echo "==> build-for-testing (BlurtiOSProbe)"
+# The same derived data as the tests, so only the probe's own files compile.
+# shellcheck source=scripts/ios-lib.sh
+source "$REPO_ROOT/scripts/ios-lib.sh"
+xcodebuild build-for-testing -project App/BlurtiOS/BlurtiOS.xcodeproj -scheme BlurtiOSProbe \
+  -destination 'generic/platform=iOS Simulator' -derivedDataPath "${BLURT_DERIVED_DATA:-$REPO_ROOT/.build/ios-sim}" \
+  "${IOS_SIM_SIGNING[@]}" -quiet || FAILED+=("build-for-testing (BlurtiOSProbe)")
 
 echo "==> periphery (App/BlurtiOS)"
 # `--retain-public`: the engine's public API is used by the Mac app this scan

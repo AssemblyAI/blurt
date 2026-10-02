@@ -15,7 +15,7 @@ struct KeyboardModelFuzzTests {
   /// One event the fuzz can send. `apply` phases come as the app would
   /// publish them; the rest are the keyboard's own entry points.
   enum Event: CaseIterable {
-    case micDown, micUp, cancel
+    case micDown, micUp, cancel, swipeOffOrb
     case phaseIdle, phaseConnecting, phaseRecording, phaseProcessing, phasePasted, phaseCopied, phaseError
     case answerConnecting, answerError
     case appNotListening, appListening
@@ -87,6 +87,10 @@ struct KeyboardModelFuzzTests {
       let event = random.pick(Event.allCases)
       trace.append(event)
       let before = commands.sent.count
+      // Read before the event: whether words were in flight, and whether a
+      // word is highlighted for the term field to open over.
+      let stateBefore = model.snapshot.state
+      let seededTerm = KeyboardModel.termCandidate(from: proxy.selectedText) != nil
       drive(model, proxy, event, &random)
       if epoch {
         commands.sent.removeAll()
@@ -101,6 +105,18 @@ struct KeyboardModelFuzzTests {
           pressOpen = command.id
         case .release, .cancel: pressOpen = nil
         }
+        // The user's words are never thrown away behind their back. A cancel
+        // over a recording or a transcription is only ever theirs to ask for:
+        // the × key, or the term field opened over a highlighted word (whose
+        // words would land on the word being fixed). Leaving the screen, a
+        // swipe across the orb, the plain + — none of them may drop speech.
+        if command.kind == .cancel, stateBefore == .recording || stateBefore == .processing {
+          let asked = event == .cancel || (event == .beginTerm && seededTerm)
+          #expect(
+            asked,
+            "words dropped: cancel in \(stateBefore) by \(event) — seed \(seed) step \(step); last 12: \(trace.suffix(12))"
+          )
+        }
       }
       if Self.phaseEvents.contains(event), !model.isSettled || model.snapshot.command == pressOpen {
         pressOpen = nil
@@ -108,88 +124,6 @@ struct KeyboardModelFuzzTests {
       check(
         model, proxy, commands, after: event,
         "seed \(seed) step \(step) after \(event); last 12: \(trace.suffix(12))")
-    }
-  }
-
-  // swiftlint:disable:next cyclomatic_complexity function_body_length
-  private func drive(_ model: KeyboardModel, _ proxy: FakeProxy, _ event: Event, _ random: inout Random) {
-    epoch = false
-    switch event {
-    case .micDown: model.micDown()
-    case .micUp: model.micUp()
-    case .cancel: model.cancel()
-    case .phaseIdle: model.apply(snapshot(.idle))
-    case .phaseConnecting: model.apply(snapshot(.connecting))
-    case .phaseRecording: model.apply(snapshot(.recording))
-    case .phaseProcessing: model.apply(snapshot(.processing))
-    case .phasePasted: model.apply(snapshot(.pasted))
-    case .phaseCopied: model.apply(snapshot(.copied))
-    case .phaseError: model.apply(snapshot(.error))
-    case .answerConnecting:
-      model.apply(PhaseSnapshot(state: .connecting, message: nil, level: 0, at: Date(), command: model.unansweredPress))
-    case .answerError:
-      model.apply(PhaseSnapshot(state: .error, message: nil, level: 0, at: Date(), command: model.unansweredPress))
-    case .appNotListening:
-      listening(false)
-      model.apply(model.snapshot)
-    case .appListening:
-      listening(true)
-      model.apply(model.snapshot)
-    case .beginTerm: model.beginAddingTerm()
-    case .cancelTerm: model.cancelAddingTerm()
-    case .saveTerm: model.saveTerm()
-    case .typeLetter: model.type(random.pick(["a", "B", "z"]))
-    case .space: model.space()
-    case .deleteBack: model.deleteBackward()
-    case .newline: model.newline()
-    case .selectWord:
-      proxy.selected = "Rizz"
-      model.contextChanged()
-    case .selectOther:
-      proxy.selected = random.pick(["Gyatt", "neil bisht", " Rizz "])
-      model.contextChanged()
-    case .clearSelection:
-      proxy.selected = nil
-      model.contextChanged()
-    case .addSelected: model.addSelectedTerm()
-    case .dismissSelected: model.dismissSelection()
-    case .flipPanel: model.flipPanel(towardsLeading: random.next() % 2 == 0)
-    case .toggleSymbols: model.toggleSymbols()
-    case .toggleMore: model.toggleMore()
-    case .toggleShift: model.toggleShift()
-    case .appeared:
-      model.hasFullAccess = true
-      model.appeared()
-    case .appearedNoAccess:
-      // Without Full Access the keyboard can't reach the app: whatever was
-      // in flight is the app's to end; the command ledger starts over.
-      model.hasFullAccess = false
-      model.appeared()
-      model.hasFullAccess = true
-      epoch = true
-    case .disappeared: model.disappeared()
-    case .contextChanged: model.contextChanged()
-    case .resultFresh:
-      SharedStore.write(
-        DictationResult(id: UUID(), text: "words", deliveredAt: Date(), recipient: nil), forKey: BlurtShared.Key.result)
-      model.resultArrived()
-    case .resultStale:
-      SharedStore.write(
-        DictationResult(id: UUID(), text: "old", deliveredAt: Date().addingTimeInterval(-60), recipient: nil),
-        forKey: BlurtShared.Key.result)
-      model.resultArrived()
-    case .resultForOther:
-      SharedStore.write(
-        DictationResult(id: UUID(), text: "theirs", deliveredAt: Date(), recipient: "someone-else"),
-        forKey: BlurtShared.Key.result)
-      model.resultArrived()
-    case .hostTyped:
-      proxy.before += "x"
-      model.contextChanged()
-    case .hostMovedCursor:
-      proxy.before += "ab"
-      proxy.after = String(proxy.after.dropFirst(2))
-      model.contextChanged()
     }
   }
 
@@ -298,6 +232,97 @@ struct KeyboardModelFuzzTests {
       #expect(commands.sent.last?.kind == .release, "second tap is not a release (round \(round))")
       model.apply(snapshot(.pasted))
       model.apply(snapshot(.idle))
+    }
+  }
+}
+
+// The event → model call table, apart from the fuzz loop and its checks so
+// neither crowds the other.
+extension KeyboardModelFuzzTests {
+  // swiftlint:disable:next cyclomatic_complexity function_body_length
+  private func drive(_ model: KeyboardModel, _ proxy: FakeProxy, _ event: Event, _ random: inout Random) {
+    epoch = false
+    switch event {
+    case .micDown: model.micDown()
+    case .micUp: model.micUp()
+    case .cancel: model.cancel()
+    case .swipeOffOrb:
+      // A swipe that began on the orb and travelled after its press went out
+      // (MicControl's `.cancelSentPress`): the press, then its undo.
+      model.micDown()
+      model.undoPress()
+    case .phaseIdle: model.apply(snapshot(.idle))
+    case .phaseConnecting: model.apply(snapshot(.connecting))
+    case .phaseRecording: model.apply(snapshot(.recording))
+    case .phaseProcessing: model.apply(snapshot(.processing))
+    case .phasePasted: model.apply(snapshot(.pasted))
+    case .phaseCopied: model.apply(snapshot(.copied))
+    case .phaseError: model.apply(snapshot(.error))
+    case .answerConnecting:
+      model.apply(PhaseSnapshot(state: .connecting, message: nil, level: 0, at: Date(), command: model.unansweredPress))
+    case .answerError:
+      model.apply(PhaseSnapshot(state: .error, message: nil, level: 0, at: Date(), command: model.unansweredPress))
+    case .appNotListening:
+      listening(false)
+      model.apply(model.snapshot)
+    case .appListening:
+      listening(true)
+      model.apply(model.snapshot)
+    case .beginTerm: model.beginAddingTerm()
+    case .cancelTerm: model.cancelAddingTerm()
+    case .saveTerm: model.saveTerm()
+    case .typeLetter: model.type(random.pick(["a", "B", "z"]))
+    case .space: model.space()
+    case .deleteBack: model.deleteBackward()
+    case .newline: model.newline()
+    case .selectWord:
+      proxy.selected = "Rizz"
+      model.contextChanged()
+    case .selectOther:
+      proxy.selected = random.pick(["Gyatt", "neil bisht", " Rizz "])
+      model.contextChanged()
+    case .clearSelection:
+      proxy.selected = nil
+      model.contextChanged()
+    case .addSelected: model.addSelectedTerm()
+    case .dismissSelected: model.dismissSelection()
+    case .flipPanel: model.flipPanel(towardsLeading: random.next() % 2 == 0)
+    case .toggleSymbols: model.toggleSymbols()
+    case .toggleMore: model.toggleMore()
+    case .toggleShift: model.toggleShift()
+    case .appeared:
+      model.hasFullAccess = true
+      model.appeared()
+    case .appearedNoAccess:
+      // Without Full Access the keyboard can't reach the app: whatever was
+      // in flight is the app's to end; the command ledger starts over.
+      model.hasFullAccess = false
+      model.appeared()
+      model.hasFullAccess = true
+      epoch = true
+    case .disappeared: model.disappeared()
+    case .contextChanged: model.contextChanged()
+    case .resultFresh:
+      SharedStore.write(
+        DictationResult(id: UUID(), text: "words", deliveredAt: Date(), recipient: nil), forKey: BlurtShared.Key.result)
+      model.resultArrived()
+    case .resultStale:
+      SharedStore.write(
+        DictationResult(id: UUID(), text: "old", deliveredAt: Date().addingTimeInterval(-60), recipient: nil),
+        forKey: BlurtShared.Key.result)
+      model.resultArrived()
+    case .resultForOther:
+      SharedStore.write(
+        DictationResult(id: UUID(), text: "theirs", deliveredAt: Date(), recipient: "someone-else"),
+        forKey: BlurtShared.Key.result)
+      model.resultArrived()
+    case .hostTyped:
+      proxy.before += "x"
+      model.contextChanged()
+    case .hostMovedCursor:
+      proxy.before += "ab"
+      proxy.after = String(proxy.after.dropFirst(2))
+      model.contextChanged()
     }
   }
 }

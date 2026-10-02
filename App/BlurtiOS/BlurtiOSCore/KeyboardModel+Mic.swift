@@ -21,7 +21,9 @@ extension KeyboardModel {
       if hasFullAccess { UINotificationFeedbackGenerator().notificationOccurred(.warning) }
       return
     case .idle, .recording, .pasted, .copied, .error:
-      perform(gate.modifierDown(at: elapsed))
+      let action = gate.modifierDown(at: elapsed)
+      if action == .start { pressSentOver = snapshot.state }
+      perform(action)
     }
   }
 
@@ -103,7 +105,15 @@ extension KeyboardModel {
   /// a press over a recording a tap had latched only re-latches it, so
   /// flipping to the keys mid-dictation doesn't throw the words away; a press
   /// the orb ignored (busy, or Blurt not ready) undoes nothing.
+  ///
+  /// Nor does a fresh press sent over a dictation the app was still running:
+  /// the picture can say recording for a moment after this keyboard released
+  /// it (leaving the screen, opening the term field), and the engine drops a
+  /// press then, so it started nothing — a cancel would land on the words
+  /// being transcribed.
   package func undoPress() {
-    perform(gate.otherKeyDown())
+    let action = gate.otherKeyDown()
+    if action == .cancel, pressSentOver == .recording || pressSentOver == .processing { return }
+    perform(action)
   }
 }

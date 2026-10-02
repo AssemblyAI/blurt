@@ -198,6 +198,28 @@ struct KeyboardModelGateTests {
     #expect(commands.sent.map(\.kind) == [.press, .cancel, .press, .release])
   }
 
+  @Test("a swipe over a recording this keyboard just released cancels nothing: those words are being transcribed")
+  func undoPressOverReleasedRecording() {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    let rig = ready()
+    let model = rig.model
+    let commands = rig.commands
+    model.micDown()
+    model.micUp()
+    model.apply(snapshot(.recording))
+    // Leaving the screen releases it; the app hasn't published `.processing`
+    // yet, so the picture still says recording and the gate is idle.
+    model.disappeared()
+    #expect(commands.sent.map(\.kind) == [.press, .release])
+    // A swipe across the orb in that moment: its press went out over a
+    // dictation the app was still running, so it started nothing to undo.
+    model.micDown()
+    model.undoPress()
+    #expect(commands.sent.map(\.kind) == [.press, .release, .press])
+    #expect(model.gate.isIdle)
+  }
+
   @Test("a press the app never answers stops holding the gate once it is too old for the app to take")
   func unansweredPressExpires() {
     let suite = ScratchSuite()
