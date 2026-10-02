@@ -18,11 +18,11 @@ import Foundation
 /// The order they go on the wire — config, audio header, frames, closing
 /// boundary — is `AssemblyAITranscriber.streamedBody`'s to explain, and it is
 /// the streaming route's requirement rather than a choice.
-enum DictationMultipart {
+public enum DictationMultipart {
   /// The `audio` part's framing — everything before the PCM bytes themselves,
   /// written once, straight after the `config` part, so the frames that follow
   /// are just audio.
-  static func audioPartHeader(boundary: String) -> Data {
+  public static func audioPartHeader(boundary: String) -> Data {
     framed(
       "--\(boundary)\r\n",
       "Content-Disposition: form-data; name=\"audio\"; filename=\"audio.pcm\"\r\n",
@@ -40,7 +40,7 @@ enum DictationMultipart {
   /// headers, the JSON, and the CRLF terminating the part. Written before a
   /// single audio byte — see `streamedBody` for why, and why the service cannot
   /// start without it.
-  static func configHead(config: Data, boundary: String) -> Data {
+  public static func configHead(config: Data, boundary: String) -> Data {
     var head = framed(
       "--\(boundary)\r\n",
       "Content-Disposition: form-data; name=\"config\"\r\n",
@@ -53,7 +53,7 @@ enum DictationMultipart {
   /// Everything after the last audio frame: the `audio` part's terminating CRLF
   /// and the closing boundary — all that stands between the last frame and the
   /// request completing, which is why it carries no work.
-  static func closingBoundary(boundary: String) -> Data {
+  public static func closingBoundary(boundary: String) -> Data {
     framed("\r\n", "--\(boundary)--\r\n")
   }
 }

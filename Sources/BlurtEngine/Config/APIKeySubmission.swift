@@ -1,3 +1,4 @@
+import AssemblyAI
 /// The validate-then-save flow behind the setup/settings screen's Save/Update
 /// button. Owned in the engine — rather than in the app coordinator — so its
 /// central invariant is unit-tested: **an unverified key never persists.** A key

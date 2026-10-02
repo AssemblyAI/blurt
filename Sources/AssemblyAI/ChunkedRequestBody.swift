@@ -45,7 +45,8 @@ final class ChunkedRequestBody: @unchecked Sendable {
   /// uplink, and it is already the low end and the tightest spread (276-286 ms).
   /// Nothing to win by retuning it; what it protects against is a *saturated*
   /// uplink, which that sweep cannot manufacture and so did not test.
-  private static let bufferSize = SyncSTTLimits.pcmBytes(forSeconds: 1)
+  /// One second of 16 kHz mono 16-bit PCM, the dictation API's audio format.
+  private static let bufferSize = 16_000 * 2
 
   /// Backpressure re-check interval: starts here and doubles up to
   /// `maxSpaceRetry` while the pipe stays full, resetting after every write that
@@ -133,7 +134,7 @@ final class ChunkedRequestBody: @unchecked Sendable {
         // `streamError`, so the fallback was the only value it ever produced.
         // Logged instead, on the rare chance a future OS does populate it.
         if let streamError = output.streamError {
-          AssemblyAITranscriber.log.error(
+          SDKLog.transport.error(
             "upload pipe write failed: \(streamError.localizedDescription, privacy: .public)")
         }
         throw ChunkedUploadError.bodyStreamClosed
@@ -201,7 +202,8 @@ final class ChunkedRequestBody: @unchecked Sendable {
 }
 
 /// Failures specific to feeding a streamed request body. Wrapped in
-/// `BlurtError.sttFailed` before reaching the UI, like `AssemblyAIError`.
+/// the caller's own error before reaching a UI (Blurt wraps it in
+/// `BlurtError.sttFailed`).
 enum ChunkedUploadError: Error, LocalizedError {
   /// The pipe closed before the whole body was written — `URLSession` gave up
   /// on the request while audio was still being produced.
