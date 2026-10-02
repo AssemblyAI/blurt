@@ -20,6 +20,8 @@ struct SettingsView: View {
     VoiceElementKind.shipped.rawValue
   @State private var showsKeyEntry = false
   @State private var confirmsStatsReset = false
+  @State private var showsTypingTest = false
+  @AppStorage(TypingSpeed.defaultsKey) private var typingSpeed: Double = 0
   @AppStorage(EnhancedTranscriptsStore.defaultsKey) private var enhancedTranscripts =
     EnhancedTranscriptsStore.defaultValue
 
@@ -143,9 +145,23 @@ struct SettingsView: View {
       Link("Blurt on GitHub", destination: URL(string: "https://github.com/AssemblyAI/blurt") ?? URL(filePath: "/"))
       Link("AssemblyAI's privacy policy", destination: AIConsent.privacyPolicyURL)
       Text("Powered by AssemblyAI").foregroundStyle(BlurtBrand.muted)
+      // The easter egg: a link, not a button, so it stays a find rather than
+      // another call to action. Its result becomes time saved's typing speed.
+      Button {
+        showsTypingTest = true
+      } label: {
+        Label("How fast can you type?", systemImage: "keyboard")
+      }
+      .foregroundStyle(BlurtBrand.accent)
+      if typingSpeed > 0 {
+        Button("Using your \(Int(typingSpeed)) wpm · Reset to average") { TypingSpeed.resetToAverage() }
+          .font(BlurtType.body(DesignTokens.Typography.sizeCaption))
+          .foregroundStyle(BlurtBrand.muted)
+      }
     } header: {
       Eyebrow("About")
     }
+    .fullScreenCover(isPresented: $showsTypingTest) { TypingTestView() }
   }
 
   private static var version: String {
