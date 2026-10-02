@@ -3,7 +3,7 @@ import Foundation
 /// How one read-aloud press should sound: the playback rate, and whether the
 /// text is rewritten for listening before it is spoken
 /// (`ReadAloudLLM.rewriteForListening`).
-/// `ReadAloudWorkModeStore.style` resolves it from the settings at each press.
+/// `ReadAloudStyleStore.style` resolves it from the settings at each press.
 public struct ReadAloudStyle: Sendable, Equatable {
   /// Playback speed, where 1 is the voice's natural pace. Pitch is held (see
   /// `StreamingPCMPlayer`), so 2 sounds like someone talking fast, not a chipmunk.
@@ -12,7 +12,7 @@ public struct ReadAloudStyle: Sendable, Equatable {
   /// email addresses, long numbers.
   public let skipsJargon: Bool
 
-  /// Read-aloud with work mode off: natural pace, the selection verbatim.
+  /// Read-aloud untouched: natural pace, the selection verbatim.
   public static let standard = ReadAloudStyle(rate: 1, skipsJargon: false)
 
   public init(rate: Double, skipsJargon: Bool) {
@@ -21,23 +21,22 @@ public struct ReadAloudStyle: Sendable, Equatable {
   }
 }
 
-/// Persists read-aloud's work mode in `UserDefaults`: a switch, and the two
-/// things it changes, each the user's to tune. Off by default. Turned on with
-/// nothing else touched, it reads at double speed and skips jargon, the
-/// defaults the feature was asked for. The Settings window's Advanced pane
-/// writes all three slots through `@AppStorage`, so like `SelectionSpeechStore`
-/// this store is read-only.
-public struct ReadAloudWorkModeStore {
+/// Persists how read-aloud sounds in `UserDefaults`: its playback speed and
+/// whether it skips jargon, two independent settings. Untouched, it reads at
+/// natural pace with nothing skipped (`ReadAloudStyle.standard`). Skipping is
+/// off by default because it sends the selection to the LLM Gateway before
+/// reading it. The Settings window's Advanced pane writes both slots through
+/// `@AppStorage`, so like `SelectionSpeechStore` this store is read-only.
+public struct ReadAloudStyleStore {
   /// UserDefaults keys, public so the Settings view can bind them directly.
-  public static var defaultsKey: String { DefaultsKey.readAloudWorkMode.key }
-  public static var speedDefaultsKey: String { DefaultsKey.readAloudWorkModeSpeed.key }
-  public static var skipsJargonDefaultsKey: String { DefaultsKey.readAloudWorkModeSkipsJargon.key }
+  public static var speedDefaultsKey: String { DefaultsKey.readAloudSpeed.key }
+  public static var skipsJargonDefaultsKey: String { DefaultsKey.readAloudSkipsJargon.key }
 
   /// What an unset slot reads as. Public so the Settings view's `@AppStorage`
   /// defaults come from here and can't disagree with the press (the trap
   /// `EnhancedTranscriptsStore.defaultValue` records).
-  public static let defaultSpeed = 2.0
-  public static let defaultSkipsJargon = true
+  public static let defaultSpeed = ReadAloudStyle.standard.rate
+  public static let defaultSkipsJargon = ReadAloudStyle.standard.skipsJargon
 
   /// The speeds the Settings picker offers. Capped at 3: past that the
   /// time-domain pitch correction smears syllables together.
@@ -53,12 +52,9 @@ public struct ReadAloudWorkModeStore {
     self.defaults = defaults
   }
 
-  /// The style the next press reads with. Work mode off is `.standard`,
-  /// whatever the other two slots hold, so switching it off can't leave a
-  /// stale speed behind.
+  /// The style the next press reads with.
   public var style: ReadAloudStyle {
-    guard defaults.bool(forKey: Self.defaultsKey) else { return .standard }
-    return ReadAloudStyle(rate: speed, skipsJargon: skipsJargon)
+    ReadAloudStyle(rate: speed, skipsJargon: skipsJargon)
   }
 
   /// The stored speed, snapped to what the picker offers. The slot is a plain

@@ -198,7 +198,7 @@ struct SelectionSpeakerTests {
     }
   }
 
-  private let workMode = ReadAloudStyle(rate: 2, skipsJargon: true)
+  private let fastSkipping = ReadAloudStyle(rate: 2, skipsJargon: true)
 
   @Test("plays every chunk in order, then drains")
   func plays() async throws {
@@ -247,14 +247,14 @@ struct SelectionSpeakerTests {
     #expect(calls.value == 0)
   }
 
-  @Test("work mode speaks the gateway's rewrite, at its rate")
-  func workModeRewrites() async throws {
+  @Test("skipping jargon speaks the gateway's rewrite, at the style's rate")
+  func skippingRewrites() async throws {
     let sink = RecordingSink()
     let socket = FakeSpeechSocket(respond: FakeSpeechSocket.service())
     let gateway = FakeHTTPTransport { _ in (200, completion("Run the command first.")) }
     let rate = ValueBox<Double?>(nil)
     try await speaker(socket, sink: sink, gateway: gateway, rate: rate)
-      .speak("Run `npm ci --prefer-offline` first.", style: workMode)
+      .speak("Run `npm ci --prefer-offline` first.", style: fastSkipping)
     #expect(generated(socket) == ["Run the command first."])
     #expect(rate.value == 2)
     #expect(sink.drained)
@@ -265,7 +265,7 @@ struct SelectionSpeakerTests {
     let sink = RecordingSink()
     let socket = FakeSpeechSocket(respond: FakeSpeechSocket.service())
     let gateway = FakeHTTPTransport { _ in (503, Data()) }
-    try await speaker(socket, sink: sink, gateway: gateway).speak("Email jo@example.com today.", style: workMode)
+    try await speaker(socket, sink: sink, gateway: gateway).speak("Email jo@example.com today.", style: fastSkipping)
     #expect(generated(socket) == ["Email jo@example.com today."])
   }
 
@@ -276,7 +276,7 @@ struct SelectionSpeakerTests {
     let gateway = FakeHTTPTransport { _ in (200, completion("It reports a strong quarter.")) }
     let rate = ValueBox<Double?>(nil)
     try await speaker(socket, sink: sink, gateway: gateway, rate: rate)
-      .answer("Summarize this.", about: "Revenue rose `12%` in Q3.", style: workMode)
+      .answer("Summarize this.", about: "Revenue rose `12%` in Q3.", style: fastSkipping)
     // One gateway call (the answer, not a listening rewrite of it), then speech.
     #expect(generated(socket) == ["It reports a strong quarter."])
     #expect(rate.value == 2)
@@ -299,7 +299,7 @@ struct SelectionSpeakerTests {
     let socket = FakeSpeechSocket(respond: FakeSpeechSocket.service())
     let gateway = HangingTransport()
     let speaking = Task {
-      try await speaker(socket, sink: sink, gateway: gateway).speak("Say something here.", style: workMode)
+      try await speaker(socket, sink: sink, gateway: gateway).speak("Say something here.", style: fastSkipping)
     }
     while !gateway.asked { await Task.yield() }
     speaking.cancel()
@@ -323,7 +323,7 @@ struct SelectionSpeakerTests {
         }),
       llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: gateway),
       makeSink: { _ in sink })
-    let speaking = Task { try await speaker.speak("Say something here.", style: workMode) }
+    let speaking = Task { try await speaker.speak("Say something here.", style: fastSkipping) }
     while !gateway.asked { await Task.yield() }
     speaking.cancel()
     gateway.release()

@@ -10,7 +10,7 @@
 /// clock starts.
 ///
 /// The timeline is in media seconds, which pass `rate` times faster than the
-/// wall clock (work mode's faster speech), so the lead is scaled by the rate to
+/// wall clock (a read-aloud speed above 1×), so the lead is scaled by the rate to
 /// keep the same real headroom.
 struct PCMSchedule {
   /// Seconds of real headroom for a first or late chunk.

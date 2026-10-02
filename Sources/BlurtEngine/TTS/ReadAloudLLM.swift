@@ -3,7 +3,7 @@ import Foundation
 /// Read-aloud's two LLM jobs, each one `POST /v1/chat/completions` to
 /// AssemblyAI's LLM Gateway:
 ///
-/// - `rewriteForListening`: work mode's pass over a selection before it is
+/// - `rewriteForListening`: the skip-jargon pass over a selection before it is
 ///   spoken. Word for word, minus what sounds like noise read aloud (code, file
 ///   paths, links, email addresses, long numbers).
 /// - `answer`: the reply to a spoken request about a selection ("give me a

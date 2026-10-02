@@ -42,11 +42,11 @@ struct PersistedSettingsTests {
 
   @Test("the roster carries no stale or duplicate keys")
   func rosterHasNoStrays() {
-    // Exactly the thirteen known stores' keys (OverlayOriginStore contributes two,
-    // StyleProfileStore and ReadAloudWorkModeStore three each): a removed store
+    // Exactly the thirteen known stores' keys (OverlayOriginStore and
+    // ReadAloudStyleStore contribute two each, StyleProfileStore three): a removed store
     // must leave the roster in the same change, and a key listed twice would hint
     // at a copy-paste slip.
-    #expect(PersistedSettings.allDefaultsKeys.count == 18)
+    #expect(PersistedSettings.allDefaultsKeys.count == 17)
     #expect(Set(PersistedSettings.allDefaultsKeys).count == PersistedSettings.allDefaultsKeys.count)
   }
 
@@ -73,15 +73,14 @@ struct PersistedSettingsTests {
       MicDeviceStore.defaultsKey,
       TextShortcutStore.defaultsKey,
       SelectionSpeechStore.defaultsKey,
-      ReadAloudWorkModeStore.defaultsKey,
-      ReadAloudWorkModeStore.speedDefaultsKey,
-      ReadAloudWorkModeStore.skipsJargonDefaultsKey,
+      ReadAloudStyleStore.speedDefaultsKey,
+      ReadAloudStyleStore.skipsJargonDefaultsKey,
       SelectionAskStore.defaultsKey,
     ]
     #expect(storeKeys == Set(DefaultsKey.allCases.map(\.key)))
     // No two stores sharing a slot — the Set above would have quietly absorbed a
     // collision, and two stores on one key means each overwrites the other.
-    #expect(storeKeys.count == 18)
+    #expect(storeKeys.count == 17)
   }
 
   @Test("resetAll clears every roster key and leaves unrelated ones alone")

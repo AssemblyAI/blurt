@@ -71,9 +71,8 @@ enum UITestIdentifiers {
   static let enhancedTranscriptsToggle = "settings.enhancedTranscripts.toggle"
   static let selectionSpeechToggle = "settings.selectionSpeech.toggle"
   static let selectionAskToggle = "settings.selectionAsk.toggle"
-  static let readAloudWorkModeToggle = "settings.readAloudWorkMode.toggle"
-  static let readAloudSpeedPicker = "settings.readAloudWorkMode.speed"
-  static let readAloudSkipsJargonToggle = "settings.readAloudWorkMode.skipsJargon"
+  static let readAloudSpeedPicker = "settings.readAloud.speed"
+  static let readAloudSkipsJargonToggle = "settings.readAloud.skipsJargon"
   static let updateCheck = "settings.update.check"
   static let updateAutoCheck = "settings.update.autoCheck"
   /// The Advanced pane's "Reset…" button (`SettingsWindowRoot`'s reset section).

@@ -83,7 +83,7 @@ TESTS="Tests/*.swift App/Blurt/BlurtUITests/*.swift"
 # client — that one file — is excluded; a socket anywhere else still fails.
 NOT_TTS=":!Sources/BlurtEngine/TTS/AssemblyAISpeechSynthesizer.swift"
 # The client-side-LLM rule's one carve-out, on the same reasoning: read-aloud
-# shapes what the voice says through the LLM Gateway (work mode's listening
+# shapes what the voice says through the LLM Gateway (the skip-jargon listening
 # rewrite, and the answer to a spoken question about a selection), because the
 # TTS socket has no server-side rewrite or reply to ask for. The rule is about
 # *dictation* cleanup staying on the dictation request, so that client — that

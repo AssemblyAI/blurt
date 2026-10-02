@@ -64,10 +64,10 @@ final class SelectionSpeechRouter {
       case .speak(let text):
         // Read per press, like the switch itself, so a Settings change applies
         // to the next read.
-        let style = ReadAloudWorkModeStore().style
+        let style = ReadAloudStyleStore().style
         run { [speaker] in try await speaker.speak(text, style: style) }
       case .answer(let request, let selection):
-        let style = ReadAloudWorkModeStore().style
+        let style = ReadAloudStyleStore().style
         run { [speaker] in try await speaker.answer(request, about: selection, style: style) }
       case .stopSpeech:
         speech?.cancel()
