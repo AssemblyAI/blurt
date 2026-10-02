@@ -74,15 +74,14 @@ targets:
       # The Mac's brand colours (accent, card fill and border), copied verbatim
       # from App/Blurt/Blurt/Assets.xcassets — JSON can't reference JSON.
       - path: BlurtiOS/Assets.xcassets
+      # Apple's required-reason declarations: App Group UserDefaults (1C8F.1)
+      # and the bundle's own (CA92.1), the only such API either target uses.
+      - path: BlurtiOS/PrivacyInfo.xcprivacy
+        buildPhase: resources
       # The Mac's app icon and ready-screen wordmark, shared rather than copied:
       # the Icon Composer file targets iOS too (`squares: shared`).
       - path: ../Blurt/Blurt/AppIcon.icon
       - path: ../Blurt/Blurt/Branding/blurt-ready-logo.png
-        buildPhase: resources
-      # The brand's faces (Modern Gothic Mono, UN 11ST, Oceanic Text), from the
-      # website repo's public/_aai/fonts/rebrand, converted to TTF for iOS.
-      # The keyboard carries its own copy: an extension can't read the app's.
-      - path: Design/fonts
         buildPhase: resources
       # The UI both the app and the keyboard draw with (design tokens, type,
       # brand colours), compiled into each — an extension can't import the
@@ -121,14 +120,11 @@ targets:
         # Keeps the listening window alive while the user is back in the app
         # they are typing in: iOS ends a backgrounded app's capture without it.
         UIBackgroundModes: [audio]
-        UILaunchScreen: {}
-        UIAppFonts:
-          - ModernGothicMono-Light.ttf
-          - ModernGothicMono-Regular.ttf
-          - ModernGothicMono-Medium.ttf
-          - UN_11ST_Regular.ttf
-          - UN_11ST_Bold.ttf
-          - OceanicText-Regular.otf
+        # The icon zooms into this before the first frame: the app's own page
+        # colour (Assets.xcassets › Page, light and dark), not a blank system
+        # white that reads as a broken icon mid-launch.
+        UILaunchScreen:
+          UIColorName: Page
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
@@ -140,6 +136,10 @@ targets:
             CFBundleURLSchemes: [blurt]
         # A shared key-term list (`.blurtterms`, JSON): declared so a tap on
         # one in Messages offers Blurt, which opens it as an import.
+        # Not in place: iOS hands the app a copy in its Inbox, which
+        # `TermPack.from` reads and then deletes — an import, never an edit of
+        # the sender's file (and no security-scoped access to manage).
+        LSSupportsOpeningDocumentsInPlace: false
         CFBundleDocumentTypes:
           - CFBundleTypeName: Blurt key terms
             CFBundleTypeRole: Viewer
@@ -171,7 +171,7 @@ targets:
     sources:
       - path: BlurtKeyboard/Sources
       - path: Shared
-      - path: Design/fonts
+      - path: BlurtKeyboard/PrivacyInfo.xcprivacy
         buildPhase: resources
     settings:
       base:
@@ -185,13 +185,6 @@ targets:
         CFBundleDisplayName: Blurt
         CFBundleShortVersionString: "0.1.0"
         CFBundleVersion: "1"
-        UIAppFonts:
-          - ModernGothicMono-Light.ttf
-          - ModernGothicMono-Regular.ttf
-          - ModernGothicMono-Medium.ttf
-          - UN_11ST_Regular.ttf
-          - UN_11ST_Bold.ttf
-          - OceanicText-Regular.otf
         NSExtension:
           NSExtensionPointIdentifier: com.apple.keyboard-service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController

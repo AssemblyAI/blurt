@@ -1,5 +1,4 @@
 import CoreGraphics
-import Foundation
 
 /// The keyboard's touch rules, out of the views so they can be tested and
 /// never drift between layouts (DESIGN.md › The two processes, and every

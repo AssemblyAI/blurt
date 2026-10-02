@@ -58,6 +58,10 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# The runs whose XCUITest failed. The matrix carries on — every other run's
+# screenshots are still worth having — and the script exits non-zero at the end.
+FAILED_RUNS=()
+
 PICKED="$(ios_pick_device "${BLURT_SIM_DEVICE:-iPhone 18 Pro}")"
 [ -n "$PICKED" ] || {
   echo "ios-keyboard-flows: no iPhone simulator available" >&2
@@ -87,7 +91,8 @@ for face in $FACES; do
         -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$DERIVED" \
         -resultBundlePath "$dir/flows.xcresult" "${IOS_SIM_SIGNING[@]}" -collect-test-diagnostics never \
         2>&1 | grep -E "^FLOW-|XCTAssertTrue failed|Blurt never came up|error:|TEST BUILD FAILED" | grep -v "XCTAssertTrue failed" | sed "s/^/    /"
-      if grep -q "FLOW-FAIL\|failed" "$dir/flows.xcresult/Info.plist" 2>/dev/null; then :; fi
+      # xcodebuild's own verdict, read before any other command replaces it.
+      if [ "${PIPESTATUS[0]}" -ne 0 ]; then FAILED_RUNS+=("$name"); fi
       xcrun xcresulttool export attachments --path "$dir/flows.xcresult" --output-path "$dir/attachments" >/dev/null 2>&1
       python3 - "$dir" <<'PY'
 import json, os, shutil, sys
@@ -136,4 +141,9 @@ if [ -n "$ALIGN" ]; then
     xcrun simctl spawn "$UDID" defaults write "$GROUP/Library/Preferences/group.dev.alex.blurt" micAlignment center
     echo "ios-keyboard-flows: mic alignment back to the middle"
   fi
+fi
+
+if [ "${#FAILED_RUNS[@]}" -gt 0 ]; then
+  echo "ios-keyboard-flows: ${#FAILED_RUNS[@]} run(s) failed: ${FAILED_RUNS[*]}" >&2
+  exit 1
 fi

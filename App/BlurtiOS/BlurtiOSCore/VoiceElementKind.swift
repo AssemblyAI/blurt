@@ -1,5 +1,3 @@
-import Foundation
-
 /// The mic control's face — the one part of the keyboard that says what is
 /// happening, without a word. Three concepts are built side by side behind
 /// this seam so they can be judged on sight from the same states, the same

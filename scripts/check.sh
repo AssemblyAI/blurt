@@ -816,6 +816,24 @@ if [ "$PORTABLE" -eq 0 ]; then
   fi
 fi
 
+# The iPhone code's gates — its tests with BlurtiOSCore's coverage gate,
+# `swiftlint analyze` and periphery over App/BlurtiOS (scripts/ios-check.sh) — so
+# a local green covers both platforms. Off CI only: there the ios-build job runs
+# the same script, and running it here too would double the macos-26 bill. It
+# needs an iPhone simulator on the runtime this Xcode's SDK builds for (an older
+# one is refused at the destination); without one it is skipped with a note, as
+# the UI suite is, and CI stays the authority.
+if [ "$PORTABLE" -eq 0 ] && ! is_ci; then
+  IOS_SDK_VERSION="$(xcrun --sdk iphonesimulator --show-sdk-version 2>/dev/null || true)"
+  if [ -n "$IOS_SDK_VERSION" ] && xcrun simctl list runtimes available 2>/dev/null \
+    | grep -q "^iOS $IOS_SDK_VERSION "; then
+    run_check "ios-check (App/BlurtiOS tests, coverage, analyze, periphery)" "$REPO_ROOT/scripts/ios-check.sh"
+  else
+    IOS_SKIPPED=1
+    echo "==> ios-check skipped: no iOS ${IOS_SDK_VERSION:-?} simulator runtime (xcodebuild -downloadPlatform iOS)"
+  fi
+fi
+
 # The closing line, and only when there is nothing to report — otherwise the exit
 # trap has the last word. Printing "ok" above a list of failures would be worse
 # than printing nothing at all.
@@ -825,7 +843,7 @@ if [ "${#FAILED_CHECKS[@]}" -eq 0 ]; then
   elif [ "${INTEGRATION:-0}" -eq 0 ]; then
     # Say it at the end too, where the reader is deciding whether this run means
     # "green": everything else passed, but the UI suite and leak scan did not run.
-    echo "==> ok (UI suite + leak scan NOT run — CI on macos-26 covers those)"
+    echo "==> ok (UI suite + leak scan NOT run${IOS_SKIPPED:+, nor the iPhone gates} — CI on macos-26 covers those)"
   else
     echo "==> ok"
   fi

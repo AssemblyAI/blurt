@@ -1,5 +1,4 @@
 import BlurtEngine
-import Foundation
 
 /// The redraw cap for the keyboard's continuous motion — the sheen, the
 /// meter's idle wave, the glints. The Mac pill reads the same number from

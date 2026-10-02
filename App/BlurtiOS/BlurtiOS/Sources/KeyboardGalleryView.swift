@@ -12,7 +12,7 @@ import BlurtiOSCore
   /// The last word is a face, `light` or `dark` (the older theme words still
   /// land: `system` and `paper` are light, `system-dark` and `ink` dark); the
   /// light face when left out. Two switches make a capture reproducible for the design loop
-  /// (DESIGN.md › Figma): `-BlurtGalleryStill` holds every motion at time
+  /// (DESIGN.md › Reproducing it): `-BlurtGalleryStill` holds every motion at time
   /// zero — the ring, the meter's wave, the orb's fluid and grain — so two
   /// captures of one state are the same pixels; `-BlurtGalleryBare` draws the
   /// first row alone, no caption, inside a 2 pt `#FF00FF` registration border
@@ -201,7 +201,7 @@ import BlurtiOSCore
 
     /// `-BlurtVoice <a|b|c> <bar|panel|home> <state> [light|dark]`: one voice
     /// element by itself, in its slot's box, on the face's surface, inside the
-    /// registration border — for the review sheet and for Figma. States are
+    /// registration border — for the review sheet. States are
     /// the pipeline's plus `off` (not ready) and `landed` (the glint, timed
     /// for a 3 s screenshot).
     struct VoiceStillView: View {

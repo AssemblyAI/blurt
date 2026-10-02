@@ -24,6 +24,7 @@
       "Bash(scripts/dev-build.sh)",
       "Bash(scripts/ios-sim.sh*)",
       "Bash(scripts/ios-test.sh*)",
+      "Bash(scripts/ios-check.sh*)",
       "Bash(scripts/ios-typecheck.sh*)",
       "Bash(prettier *)",
       "Bash(actionlint)",

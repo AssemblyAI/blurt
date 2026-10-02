@@ -1,4 +1,4 @@
-import CoreGraphics
+import CoreFoundation
 
 /// The full keyboard's widths, the iPhone's own: ten letter caps across at
 /// one width, the side keys taking what seven letters and their gaps leave,

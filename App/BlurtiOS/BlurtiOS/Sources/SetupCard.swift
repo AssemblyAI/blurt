@@ -42,8 +42,12 @@ struct SetupCard: View {
       }
       SetupRow(number: "03", done: keyboardSeen, title: "Add the Blurt keyboard") {
         VStack(alignment: .leading, spacing: DesignTokens.Metrics.appLineGap) {
+          // The button opens Blurt's own page in Settings — the only Settings
+          // link Apple allows (the General › Keyboard deep links are private
+          // API and fail review) — and iOS puts a Keyboards row on that page
+          // for any app with a keyboard, so the steps start from there.
           Text(
-            "Settings → Keyboards: turn on Blurt and Allow Full Access. "
+            "Open Settings, tap Keyboards, then turn on Blurt and Allow Full Access. "
               + "Full Access is what lets the keyboard send your words to Blurt."
           )
           .font(BlurtType.body(DesignTokens.Typography.sizeCaption)).foregroundStyle(BlurtBrand.muted)

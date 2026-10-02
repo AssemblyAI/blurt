@@ -84,7 +84,9 @@ The suite holds the same gates as the engine's: warnings are errors, a plain run
 `BlurtiOSCore` drops below the engine's own line-coverage floor (`MIN_IOS_COVERAGE`, 88%, in the
 script — raise it as coverage grows, never lower it to land a change), and CI's `ios-sanitizers`
 job runs it again under ThreadSanitizer and AddressSanitizer (`BLURT_IOS_SANITIZER=thread` or
-`address` locally). The views are not in that figure, as the Mac shell's aren't in the engine's:
+`address` locally). `scripts/ios-check.sh` runs the whole iPhone bar in one go — the tests and
+the coverage gate, then `swiftlint analyze` and periphery over this project — and is what CI's
+`ios-build` job and a local `scripts/check.sh` run. The views are not in that figure, as the Mac shell's aren't in the engine's:
 they are checked on sight, through the gallery and the probe's screenshot flows.
 
 ## Testing in the simulator

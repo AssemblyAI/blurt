@@ -1,5 +1,3 @@
-import Foundation
-
 /// Where the mic key sits across the keyboard, for one hand: at the left
 /// edge, in the middle (the default), or at the right edge. Left and right
 /// are the phone's own sides — the side the thumb is on — whatever the

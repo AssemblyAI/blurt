@@ -1,5 +1,4 @@
 import BlurtEngine
-import Foundation
 
 /// What the voice control shows, from what the app published: one struct the
 /// keyboard's key and the app's hero both draw from, so the two never tell a

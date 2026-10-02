@@ -1,4 +1,4 @@
-import Foundation
+import CoreFoundation
 
 /// A Darwin-notification subscription that lives as long as this object does.
 ///

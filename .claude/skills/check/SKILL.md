@@ -126,8 +126,11 @@ hides every lint finding behind it — expect to fix a batch, not a queue.
 
 ## The iPhone app
 
-`check.sh` covers `App/BlurtiOS` only by the dependency guard, the invariants and the linters.
-Its build and tests run in CI's `ios-build` job (the authority). Locally: `scripts/ios-typecheck.sh`
+`check.sh` covers `App/BlurtiOS` with the dependency guard, the invariants, the linters and
+`ios-typecheck.sh`, and — off CI, when an iPhone simulator on this Xcode's iOS runtime exists —
+`scripts/ios-check.sh`: the tests with `BlurtiOSCore`'s coverage gate, `swiftlint analyze` and
+periphery over the iPhone project. Without that runtime it is skipped with a note (the closing `ok`
+line says so) and CI's `ios-build` job, which runs the same script, is the authority. Locally: `scripts/ios-typecheck.sh`
 typechecks both iPhone targets on a Mac with only the Command Line Tools (run by `check.sh` when
 the SDK carries the Mac Catalyst frameworks), `scripts/ios-test.sh` runs `BlurtiOSTests` on a
 simulator when Xcode is installed and enforces `BlurtiOSCore`'s line-coverage floor (`MIN_IOS_COVERAGE`, 88%;

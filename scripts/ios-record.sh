@@ -2,7 +2,7 @@
 # Record the keyboard's motion from the simulator: the gallery's `live` state
 # walks a whole dictation on a clock (about 11.7 s a cycle), this records two
 # cycles and cuts one clean loop, cropped to the keyboard, for the review packet
-# and for the Figma motion page's keyframes (DESIGN.md › Figma).
+# (DESIGN.md › Reproducing it).
 #
 #   scripts/ios-record.sh                          # panel, dark → .build/design/loops/panel-dark.mp4
 #   scripts/ios-record.sh --layout slimBar --theme light --out ~/Desktop/blurt-review

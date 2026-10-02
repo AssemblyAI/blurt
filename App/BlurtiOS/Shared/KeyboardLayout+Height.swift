@@ -1,5 +1,5 @@
 import BlurtiOSCore
-import CoreGraphics
+import CoreFoundation
 
 extension KeyboardLayout {
   /// The keyboard's height on screen, from the layout's rows at the iPhone

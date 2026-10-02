@@ -1,4 +1,3 @@
-import Foundation
 import UIKit
 
 // MARK: - What the host field says: the return key, the symbols page, the face

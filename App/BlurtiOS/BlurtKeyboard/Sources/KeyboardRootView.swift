@@ -57,11 +57,6 @@ struct KeyboardRootView: View {
     // see and recognises the swipe on the input view itself, which sees
     // every touch the keyboard gets, the panel's empty space included.
     // The slide itself is `PanelCarousel`'s.
-    .onAppear {
-      // `Font.custom` falls back to the system font in silence; the bundle
-      // must know the brand's faces (UIAppFonts + Design/fonts).
-      assert(BlurtType.missing().isEmpty, "fonts not registered: \(BlurtType.missing())")
-    }
   }
 
   @Environment(\.accessibilityReduceMotion) private var systemReduceMotion

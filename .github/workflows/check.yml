@@ -262,25 +262,20 @@ jobs:
         # a second before every build, so it can never go stale against its yml.
         run: xcodegen generate --quiet
 
-      - name: Build the iPhone app and its keyboard, and run its unit tests
+      - name: Install the iPhone gates' linters
+        # swiftlint for `swiftlint analyze`, periphery for the unused-code scan;
+        # both are in the Brewfile too, so these are the versions check.sh uses.
+        run: brew install swiftlint periphery
+
+      - name: Build the iPhone app and its keyboard, and run its quality gates
         working-directory: blurt
-        # One scheme builds the app with the keyboard it embeds and runs
-        # BlurtiOSTests against it, on whichever iPhone simulator the runner has
-        # (scripts/ios-lib.sh picks). Ad hoc signing: the simulator accepts it
-        # and, unlike no signing, it embeds the App Group entitlement.
-        run: BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-test.sh
-      - name: Scan the iPhone app for unused code
-        working-directory: blurt
-        # periphery over the iOS project only — the Mac scan in check.sh can't
-        # see it. `--retain-public`: the engine's public API is used by the Mac
-        # app this scan can't see either, and the engine's own findings are
-        # excluded from the report, so only the iPhone code's dead declarations
-        # are reported.
-        run: |
-          brew install periphery
-          periphery scan --project App/BlurtiOS/BlurtiOS.xcodeproj --schemes BlurtiOS \
-            --retain-public --retain-unused-protocol-func-params \
-            --report-exclude 'Sources/**' --strict --quiet
+        # scripts/ios-check.sh — the iPhone's check.sh: BlurtiOSTests (warnings
+        # as errors, BlurtiOSCore's coverage gate) on whichever iPhone simulator
+        # the runner has (scripts/ios-lib.sh picks), then `swiftlint analyze`
+        # over that from-scratch build's log, then periphery. Ad hoc signing: the
+        # simulator accepts it and, unlike no signing, it embeds the App Group
+        # entitlement.
+        run: BLURT_DERIVED_DATA="$RUNNER_TEMP/BlurtiOS" scripts/ios-check.sh
 
   # The iPhone suite under each sanitizer, as check.sh runs the engine's. A job
   # of its own, one runner per sanitizer, rather than more steps in ios-build:

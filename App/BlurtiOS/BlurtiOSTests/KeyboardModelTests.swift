@@ -2,7 +2,6 @@ import Foundation
 import Testing
 import UIKit
 
-@testable import BlurtiOS
 @testable import BlurtiOSCore
 
 /// A host text field the model can type into, remembering what it did.

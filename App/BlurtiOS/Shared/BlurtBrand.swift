@@ -1,5 +1,3 @@
-import SwiftUI
-
 /// Blurt's brand, as the Mac app defines it (`App/Blurt/Blurt/Branding/BlurtBrand.swift`,
 /// from the 2026-08-31 comps), plus the handful of shades the keyboard needs
 /// for a surface the Mac never draws. Compiled into the app and the keyboard.

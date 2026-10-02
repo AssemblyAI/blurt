@@ -1,4 +1,4 @@
-#!/usr/bin/env swift  // The design's one source of numbers and colours, fanned out: reads  // App/BlurtiOS/Design/tokens.json (exported from the Figma file, hand-written  // before it existed) and writes everything that used to repeat those values by  // hand — `App/BlurtiOS/Shared/DesignTokens.swift`, the generated tables in  // `App/BlurtiOS/DESIGN.md`, and the app's three asset-catalog colour sets. Run
+#!/usr/bin/env swift  // The design's one source of numbers and colours, fanned out: reads  // App/BlurtiOS/Design/tokens.json (hand-edited: it is the  // source, not an export) and writes everything that used to repeat those values by  // hand — `App/BlurtiOS/Shared/DesignTokens.swift`, the generated tables in  // `App/BlurtiOS/DESIGN.md`, and the app's three asset-catalog colour sets. Run
 // through scripts/design-sync.sh, which also formats the output and, with
 // --check, fails on drift the way check.sh fails on a stale .pbxproj.
 //
@@ -12,8 +12,7 @@
 // to another token in braces ("{brand.green/700}", the DTCG spelling). A value
 // may be wrapped as {"value": …, "use": "one line for DESIGN.md"}. Swift names
 // derive from token names by one rule — `kb/key-modifier` → `kbKeyModifier`,
-// `green/700` → `green700` — and the Figma build script sets the same string
-// as each variable's iOS code syntax, so the two can't disagree.
+// `green/700` → `green700`.
 
 import Foundation
 
@@ -38,7 +37,6 @@ let tokensPath = "App/BlurtiOS/Design/tokens.json"
 let swiftPath = "App/BlurtiOS/Shared/DesignTokens.swift"
 let designPath = "App/BlurtiOS/DESIGN.md"
 let catalogPath = "App/BlurtiOS/BlurtiOS/Assets.xcassets"
-let figmaTokensPath = "App/BlurtiOS/Design/figma/tokens.js"
 
 func fail(_ message: String) -> Never {
   FileHandle.standardError.write(Data("design-tokens: \(message)\n".utf8))
@@ -51,7 +49,6 @@ enum Value {
   case color(String)  // "#RRGGBB"
   case number(Double)
   case word(String)  // a font weight
-  case string(String)  // a font name (the `fonts` group)
   case curve([Double])  // a cubic-bezier easing: four numbers
   case alias(String)  // "group.name"
 }
@@ -116,23 +113,19 @@ guard let data = FileManager.default.contents(atPath: tokensURL.path),
   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
 else { fail("could not read \(tokensPath)") }
 
-let groups = ["brand", "themes", "keyboard", "metrics", "type", "motion", "fonts"]
+let groups = ["brand", "themes", "keyboard", "metrics", "type", "motion"]
 var tokens: [Token] = []
 var byQualified: [String: Token] = [:]
 for group in groups {
   guard let entries = json[group] as? [String: Any] else { fail("tokens.json has no \(group) group") }
   for name in entries.keys.sorted() {
     let entry = entries[name]!
-    var token: Token
+    let token: Token
     if let wrapped = entry as? [String: Any] {
       guard let raw = wrapped["value"] else { fail("\(group).\(name) has no value") }
       token = Token(group: group, name: name, value: parseValue(raw), use: wrapped["use"] as? String)
     } else {
       token = Token(group: group, name: name, value: parseValue(entry), use: nil)
-    }
-    // A bare word in `fonts` is a font's name, not a weight.
-    if group == "fonts", case .word(let word) = token.value {
-      token = Token(group: group, name: name, value: .string(word), use: token.use)
     }
     tokens.append(token)
     byQualified[token.qualified] = token
@@ -190,7 +183,6 @@ func rendered(_ token: Token) -> String {
   case .color(let hex): return hex
   case .number(let number): return format(number)
   case .word(let word): return word
-  case .string(let string): return string
   case .curve(let numbers): return numbers.map(format).joined(separator: ",")
   case .alias: fatalError("unreachable")
   }
@@ -210,7 +202,6 @@ func swiftLiteral(_ token: Token) -> (type: String, literal: String) {
   case .word(let word):
     guard weights.contains(word) else { fail("\(token.qualified): \(word) is not a font weight") }
     return ("Font.Weight", ".\(word)")
-  case .string(let string): return ("String", "\"\(string)\"")
   case .curve(let numbers):
     let n = numbers.map(format)
     return (
@@ -248,11 +239,10 @@ var swift = """
   import SwiftUI
 
   // swiftlint:disable type_body_length
-  /// The design's colours and numbers, from the one source Figma exports
+  /// The design's colours and numbers, from their one source
   /// (`Design/tokens.json`): what the views draw with, what DESIGN.md's tables
   /// say, and what the asset catalog holds, all from the same file. Swift names
-  /// follow the token names by one rule (`kb/key-modifier` → `kbKeyModifier`),
-  /// the same rule the Figma build script uses for iOS code syntax.
+  /// follow the token names by one rule (`kb/key-modifier` → `kbKeyModifier`).
   enum DesignTokens {
 
   """
@@ -332,7 +322,6 @@ blocks["keyboard"] = tokenRows("keyboard", valueLabel: "Value")
 blocks["metrics"] = tokenRows("metrics", valueLabel: "Points")
 blocks["type"] = tokenRows("type", valueLabel: "Value")
 blocks["motion"] = tokenRows("motion", valueLabel: "Value")
-blocks["fonts"] = tokenRows("fonts", valueLabel: "Value")
 
 let themeNames = tokens.filter { $0.group == "themes" }.map { String($0.name.split(separator: "/")[0]) }
 let themeOrder = ["light", "dark"] + Set(themeNames).subtracting(["light", "dark"]).sorted()
@@ -436,100 +425,6 @@ let colorSets: [(String, String, String)] = [
   ("CTAText", "keyboard.app/cta-text-light", "keyboard.app/cta-text-dark"),
 ]
 
-// MARK: - Figma
-
-/// What the Figma build scripts (Design/figma/lib.js) need: every token with
-/// its resolved value, its alias if any, the scopes its collection gives it and
-/// the iOS code syntax that is its Swift name. Scopes follow the token's role
-/// by name, which is the one place that rule is written down.
-func figmaScopes(_ token: Token) -> [String] {
-  let name = token.name
-  switch token.group {
-  case "brand", "themes", "motion": return []
-  case "keyboard":
-    if name.hasSuffix("legend") || name.hasSuffix("full-access-note") { return ["TEXT_FILL"] }
-    if name.contains("notice-") || name.contains("orb-ring-") || name.contains("card-border") {
-      return ["STROKE_COLOR"]
-    }
-    if name.hasSuffix("signal") { return ["SHAPE_FILL", "TEXT_FILL"] }
-    return ["FRAME_FILL", "SHAPE_FILL"]
-  case "metrics":
-    if name.hasPrefix("opacity/") { return ["OPACITY"] }
-    if name.hasSuffix("/radius") { return ["CORNER_RADIUS"] }
-    if name.hasSuffix("/gap") || name.hasSuffix("/spacing") || name.hasSuffix("/pad") || name.hasSuffix("/inset")
-      || name.hasSuffix("/lead") || name.hasSuffix("-gap") || name.hasSuffix("-clearance")
-    {
-      return ["GAP"]
-    }
-    if name.hasPrefix("ring/") || name == "card/border" || name == "caret/width" || name == "wave/bar" {
-      return ["STROKE_FLOAT", "WIDTH_HEIGHT"]
-    }
-    if name.hasPrefix("press/") || name.hasPrefix("gesture/") || name.contains("factor") || name.contains("light-")
-      || name.contains("dissipate") || name == "picker/scale"
-    {
-      return []
-    }
-    return ["WIDTH_HEIGHT"]
-  case "type":
-    if name.hasPrefix("size/") { return ["FONT_SIZE"] }
-    if name.hasPrefix("weight/") { return ["FONT_STYLE"] }
-    if name.hasPrefix("tracking/") { return ["LETTER_SPACING"] }
-    return []
-  case "fonts":
-    return name.hasSuffix("/family") ? ["FONT_FAMILY"] : []
-  default: return []
-  }
-}
-
-func figmaJSON() -> String {
-  // One line per variable — collection|name|type|value|alias|scopes|codeSyntax|use —
-  // and one per gradient, parsed by core.js. Flat on purpose: a use_figma call
-  // is capped at 50,000 characters and carries this once, for buildFoundations;
-  // every later builder reads the values back from the file's variables.
-  var lines: [String] = []
-  for group in groups {
-    for token in tokens where token.group == group {
-      let value = rendered(token)
-      let type: String
-      switch resolve(token).value {
-      case .color: type = "COLOR"
-      case .number: type = "FLOAT"
-      default: type = "STRING"
-      }
-      var alias = ""
-      if case .alias(let target) = token.value, let other = byQualified[target] {
-        alias = "\(typeName(other.group)):\(other.name)"
-      }
-      let use = (token.use ?? "").replacingOccurrences(of: "|", with: "/")
-      lines.append(
-        [
-          typeName(group), token.name, type, value, alias, figmaScopes(token).joined(separator: ","),
-          "DesignTokens.\(typeName(group)).\(token.swiftName)", use,
-        ].joined(separator: "|"))
-    }
-  }
-  for gradient in gradients {
-    let stops = gradient.stops.map { "\(resolveColor($0.color))@\(format($0.location))" }.joined(separator: ",")
-    let use = (gradient.use ?? "").replacingOccurrences(of: "|", with: "/")
-    lines.append(["GRADIENT", gradient.name, gradient.start, gradient.end, stops, use].joined(separator: "|"))
-  }
-  let text = lines.joined(separator: "\n").replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(
-    of: "`", with: "\\`")
-  return """
-    // Generated by scripts/design-tokens.swift from App/BlurtiOS/Design/tokens.json — do not edit.
-    // One line per variable (collection|name|type|value|alias|scopes|codeSyntax|use)
-    // and per gradient (GRADIENT|name|start|end|stops|use); core.js parses it.
-    // scripts/design-figma-call.sh puts it in front of core.js + foundations.js.
-    const TOKEN_LINES = `\(text)`;
-    const GROUPS = \(groups.map(typeName).map { "\"\($0)\"" }.joined(separator: ", ").wrappedInBrackets);
-
-    """
-}
-
-extension String {
-  var wrappedInBrackets: String { "[\(self)]" }
-}
-
 // MARK: - Write
 
 func write(_ text: String, to relative: String) {
@@ -544,7 +439,6 @@ func write(_ text: String, to relative: String) {
 
 write(swift, to: swiftPath)
 write(design, to: designPath)
-write(figmaJSON(), to: figmaTokensPath)
 for (set, light, dark) in colorSets {
   guard let lightToken = byQualified[light], let darkToken = byQualified[dark] else {
     fail("\(set) needs \(light) and \(dark)")
@@ -554,4 +448,4 @@ for (set, light, dark) in colorSets {
 }
 print(
   "design-tokens: \(tokens.count) tokens, \(gradients.count) gradients → \(swiftPath), \(designPath) "
-    + "(\(replaced.count) blocks), \(colorSets.count) colour sets, \(figmaTokensPath)")
+    + "(\(replaced.count) blocks), \(colorSets.count) colour sets")

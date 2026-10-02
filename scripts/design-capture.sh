@@ -1,7 +1,7 @@
 #!/bin/bash
 # Capture the keyboard from the simulator, one still per layout × state × theme,
 # cropped to the keyboard's own pixels — the simulator side of the design loop
-# (DESIGN.md › Figma). Each capture is deterministic: the gallery's
+# (DESIGN.md › Reproducing it). Each capture is deterministic: the gallery's
 # -BlurtGalleryStill holds the orb, the ring and the wave at time zero, and
 # -BlurtGalleryBare draws one row with a magenta registration border that
 # scripts/design-diff.swift crops to.
@@ -12,7 +12,7 @@
 #   scripts/design-capture.sh --out .build/design/captures --no-build
 #
 # Writes <out>/<layout>-<state>-<theme>@3x.png (1206 px wide on iPhone 18 Pro,
-# the same pixel size as a Figma export at 3×, so the diff never resamples)
+# the same pixel size as any 3× reference, so the diff never resamples)
 # plus <out>/<layout>-<state>-<theme>.raw.png, the whole screen it was cut from.
 set -euo pipefail
 

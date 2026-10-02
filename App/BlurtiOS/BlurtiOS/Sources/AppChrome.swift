@@ -59,7 +59,7 @@ extension View {
   }
 }
 
-/// An eyebrow: Modern Gothic Mono, uppercase, tracked, muted — the brand's
+/// An eyebrow: the system mono, uppercase, tracked, muted — the brand's
 /// section label, above every group on a screen.
 struct Eyebrow: View {
   let text: String

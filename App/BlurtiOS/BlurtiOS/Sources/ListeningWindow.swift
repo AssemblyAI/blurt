@@ -29,6 +29,11 @@ final class ListeningWindow {
   @ObservationIgnored private var expiry: Task<Void, Never>?
   @ObservationIgnored private var heartbeat: Task<Void, Never>?
   @ObservationIgnored private var interruptions: Task<Void, Never>?
+  /// Run when the window closes on its own — its time ran out, or iOS took
+  /// the microphone — and awaited *before* the source closes: a dictation
+  /// riding on the feed has to be ended by whoever owns the session while
+  /// the feed still holds its audio, not left recording into a closed one.
+  @ObservationIgnored var onClosingOnItsOwn: (() async -> Void)?
 
   var isOpen: Bool { source.isOpen && (until.map { $0 > Date() } ?? false) }
 
@@ -66,7 +71,7 @@ final class ListeningWindow {
     expiry = Task { [weak self] in
       try? await Task.sleep(for: .seconds(end.timeIntervalSinceNow))
       guard !Task.isCancelled else { return }
-      await self?.close()
+      await self?.closeOnItsOwn()
     }
   }
 
@@ -97,10 +102,16 @@ final class ListeningWindow {
         }
       for await _ in began {
         guard !Task.isCancelled else { return }
-        await self?.close()
+        await self?.closeOnItsOwn()
         return
       }
     }
+  }
+
+  /// The window ending without the user asking: the owner hears first.
+  private func closeOnItsOwn() async {
+    await onClosingOnItsOwn?()
+    await close()
   }
 
   func close() async {

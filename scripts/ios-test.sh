@@ -62,7 +62,13 @@ echo "testing on ${PICKED#*	}${SANITIZER:+ under the $SANITIZER sanitizer}"
 ios_wait_booted "$UDID"
 
 (cd "$REPO_ROOT/App/BlurtiOS" && xcodegen generate --quiet)
-RESULTS="$DERIVED/BlurtiOSTests-$(date +%Y%m%d-%H%M%S).xcresult"
+STAMP="$(date +%Y%m%d-%H%M%S)"
+RESULTS="$DERIVED/BlurtiOSTests-$STAMP.xcresult"
+# The whole xcodebuild log, kept rather than `-quiet`ed away: ios-check.sh feeds
+# its compiler invocations to `swiftlint analyze`. Only diagnostics and the
+# outcome reach the terminal; the log path is printed at the end.
+BUILD_LOG="${BLURT_IOS_BUILD_LOG:-$DERIVED/BlurtiOSTests-$STAMP.log}"
+mkdir -p "$(dirname "$BUILD_LOG")"
 COVERAGE_FLAGS=()
 [ -z "$SANITIZER" ] && COVERAGE_FLAGS=(-enableCodeCoverage YES)
 # The `${a[@]+...}` form: macOS bash 3.2 calls an empty array unbound under `set -u`.
@@ -71,13 +77,15 @@ COVERAGE_FLAGS=()
 xcodebuild test -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOS \
   -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$DERIVED" \
   -resultBundlePath "$RESULTS" "${IOS_SIM_SIGNING[@]}" ${COVERAGE_FLAGS[@]+"${COVERAGE_FLAGS[@]}"} ${SANITIZE_FLAGS[@]+"${SANITIZE_FLAGS[@]}"} \
-  -parallel-testing-enabled NO -collect-test-diagnostics never -quiet
+  -parallel-testing-enabled NO -collect-test-diagnostics never 2>&1 \
+  | tee "$BUILD_LOG" | { grep -E 'error:|warning:|\*\* (BUILD|TEST) [A-Z]+ \*\*|✘' || true; }
 xcrun xcresulttool get test-results summary --path "$RESULTS" 2>/dev/null | python3 -c '
 import json, sys
 d = json.load(sys.stdin)
 print("ios-test:", d.get("passedTests", "?"), "passed,", d.get("failedTests", "?"), "failed,", d.get("skippedTests", 0), "skipped")
 ' || true
 echo "results: $RESULTS"
+echo "build log: $BUILD_LOG"
 
 [ -n "$SANITIZER" ] && exit 0
 

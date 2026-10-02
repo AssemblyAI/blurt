@@ -4,7 +4,7 @@
 //   swift scripts/design-diff.swift diff <a.png> <b.png> --out <triptych.png> --json <metrics.json>
 //       [--mask x,y,w,h]... [--threshold 8]
 //       Compares two same-sized images pixel by pixel, both converted to sRGB
-//       first (a simulator capture carries the display's profile, a Figma
+//       first (a simulator capture carries the display's profile, a design
 //       export is sRGB). Reports, for the whole image and for everything
 //       outside the masks, the fraction of pixels whose largest channel
 //       difference exceeds the threshold (AE) and the root-mean-square

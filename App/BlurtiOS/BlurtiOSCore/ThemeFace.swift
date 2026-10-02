@@ -1,5 +1,3 @@
-import Foundation
-
 /// One face of a keyboard theme — its id and whether it is the dark one —
 /// with no colours attached: the keyboard model holds a choice, and the shell
 /// turns it into a palette (`KeyboardPalette.resolve`).

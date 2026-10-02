@@ -1,5 +1,4 @@
 import BlurtEngine
-import Foundation
 import Testing
 
 @testable import BlurtiOSCore

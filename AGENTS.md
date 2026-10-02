@@ -107,7 +107,9 @@ scripts/                     check.sh, check-portability.sh, check-invariants.sh
                              ios-sim.sh (build + run the iPhone app in the simulator),
                              ios-test.sh (the iPhone unit tests, BlurtiOSTests, on a simulator,
                              with BlurtiOSCore's line-coverage gate; BLURT_IOS_SANITIZER=thread|address
-                             runs them under a sanitizer instead)
+                             runs them under a sanitizer instead),
+                             ios-check.sh (the iPhone's check.sh: ios-test, then swiftlint analyze
+                             and periphery over App/BlurtiOS — CI's ios-build and a local check.sh)
                              hand-run maintainer tools — no automated caller, invoked by a
                              human, so "nothing references it" here does NOT mean dead code:
                              screenshot.swift + beautify.swift (window imagery, capture
@@ -207,18 +209,27 @@ the two checks that genuinely need the build products stay behind them (step 12)
 12. **`swiftlint analyze`** (unused imports — reads the compiler log the app build captured) and
     **`periphery scan --strict`** (unused declarations — runs its own xcodebuild + index). The only
     two checks that can't move earlier.
+13. **`scripts/ios-check.sh`** — the same gates for `App/BlurtiOS`: `BlurtiOSTests` with
+    `BlurtiOSCore`'s coverage gate, then `swiftlint analyze` over that build's log and periphery
+    over the iPhone project. Locally only, and only when an iPhone simulator on this Xcode's iOS
+    runtime exists (`xcodebuild -downloadPlatform iOS`); otherwise skipped with a note in the
+    closing `ok` line. On CI the `ios-build` job runs it instead.
 
 CI (`.github/workflows/check.yml`) installs all of these via Homebrew on `macos-26` and runs the same
 script, so a clean local `check.sh` matches CI by construction. One more job **is** required, because
 `check.sh` cannot cover it: **`ios-build`** compiles the engine for the iOS simulator
 (`xcodebuild -scheme BlurtEngine -destination 'generic/platform=iOS Simulator'`), which is the only
 place a macOS-only symbol that escaped its `#if os(macOS)` fence gets caught — `swift test` builds
-for the host, and every other job runs on a Mac. It then runs `BlurtiOSTests` under the same bar
-the engine's suite meets in `check.sh`: warnings as errors, a **line-coverage gate** on
-`BlurtiOSCore`, the iPhone code's logic (≥ `MIN_IOS_COVERAGE` in `scripts/ios-test.sh`, the
-engine's 88%; raise it as coverage grows), and — in the sibling
+for the host, and every other job runs on a Mac. It then runs **`scripts/ios-check.sh`**, which holds
+the iPhone code to the bar the engine and the Mac shell meet in `check.sh`: `BlurtiOSTests` with
+warnings as errors and a **line-coverage gate** on `BlurtiOSCore`, the iPhone code's logic
+(≥ `MIN_IOS_COVERAGE` in `scripts/ios-test.sh`, the engine's 88%; raise it as coverage grows), then
+**`swiftlint analyze`** over that from-scratch build's log and **periphery** over the iPhone
+project; `check.sh`'s swift-format, `swiftlint lint`, invariants and `ios-typecheck.sh` already read
+every Swift file there. In the sibling
 **`ios-sanitizers`** job, one runner per sanitizer — **ThreadSanitizer** and **AddressSanitizer**
-passes. `gate` fails unless all of them are green (or skipped for a docs-only change). Two sibling jobs exist purely to shorten the loop for whoever is
+passes run the same tests. `codeql.yml`'s Swift analysis builds the iPhone app as well as the Mac
+one, so both are in its database. `gate` fails unless all of them are green (or skipped for a docs-only change). Two sibling jobs exist purely to shorten the loop for whoever is
 editing Swift without a toolchain, and **neither is a required check** — both can only go red where
 `check` would too:
 

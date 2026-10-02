@@ -5,11 +5,10 @@
 import SwiftUI
 
 // swiftlint:disable type_body_length
-/// The design's colours and numbers, from the one source Figma exports
+/// The design's colours and numbers, from their one source
 /// (`Design/tokens.json`): what the views draw with, what DESIGN.md's tables
 /// say, and what the asset catalog holds, all from the same file. Swift names
-/// follow the token names by one rule (`kb/key-modifier` → `kbKeyModifier`),
-/// the same rule the Figma build script uses for iOS code syntax.
+/// follow the token names by one rule (`kb/key-modifier` → `kbKeyModifier`).
 enum DesignTokens {
   enum Brand {
     /// The iPhone keyboard's dark key.
@@ -196,7 +195,7 @@ enum DesignTokens {
     nonisolated static let kbPopup: Color = Themes.darkPopup
     /// The wave, the caret, the saved check.
     nonisolated static let kbSignal: Color = Themes.darkSignal
-    /// The design face's surface (Figma binds to kb/*; Swift reads the palette).
+    /// The design face's surface (Swift reads the palette).
     nonisolated static let kbSurface: Color = Themes.darkSurface
   }
 
@@ -494,21 +493,6 @@ enum DesignTokens {
     nonisolated static let waveFade: Double = 0.7
   }
 
-  enum Fonts {
-    nonisolated static let bodyBold: String = "UN-11ST-Bold"
-    /// The app's body text.
-    nonisolated static let bodyFamily: String = "UN-11 ST"
-    nonisolated static let bodyRegular: String = "UN-11ST-Regular"
-    /// The app's serif headlines, sentence case, tight.
-    nonisolated static let headingFamily: String = "Oceanic Text"
-    nonisolated static let headingRegular: String = "OceanicText-Regular"
-    /// Eyebrows, CTAs, the keyboard's word labels.
-    nonisolated static let monoFamily: String = "Modern Gothic Mono"
-    nonisolated static let monoLight: String = "ModernGothicMono-Light"
-    nonisolated static let monoMedium: String = "ModernGothicMono-Medium"
-    nonisolated static let monoRegular: String = "ModernGothicMono-Regular"
-  }
-
   enum Gradients {
   }
 
@@ -761,15 +745,6 @@ enum DesignTokens {
     "motion.state-fade": "0.5",
     "motion.term-swap": "0.4",
     "motion.wave-fade": "0.7",
-    "fonts.body/bold": "UN-11ST-Bold",
-    "fonts.body/family": "UN-11 ST",
-    "fonts.body/regular": "UN-11ST-Regular",
-    "fonts.heading/family": "Oceanic Text",
-    "fonts.heading/regular": "OceanicText-Regular",
-    "fonts.mono/family": "Modern Gothic Mono",
-    "fonts.mono/light": "ModernGothicMono-Light",
-    "fonts.mono/medium": "ModernGothicMono-Medium",
-    "fonts.mono/regular": "ModernGothicMono-Regular",
   ]
 }
 // swiftlint:enable type_body_length

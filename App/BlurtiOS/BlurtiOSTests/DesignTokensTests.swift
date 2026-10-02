@@ -1,7 +1,6 @@
 import Foundation
 import SwiftUI
 import Testing
-import UIKit
 
 @testable import BlurtiOS
 @testable import BlurtiOSCore
@@ -28,7 +27,7 @@ struct DesignTokensTests {
   /// rendering the generator writes into `DesignTokens.manifest`.
   private static func expectedManifest() throws -> [String: String] {
     let json = try tokensJSON()
-    let groups = ["brand", "themes", "keyboard", "metrics", "type", "motion", "fonts"]
+    let groups = ["brand", "themes", "keyboard", "metrics", "type", "motion"]
     var raw: [String: Any] = [:]
     for group in groups {
       let entries = try #require(json[group] as? [String: Any])
@@ -94,7 +93,7 @@ struct DesignTokensTests {
     #expect(KeyboardLayout.full.height == metrics.layoutFull)
   }
 
-  @Test("the full layout at 402 pt matches the @402 tokens the Figma frames are drawn with")
+  @Test("the full layout at 402 pt matches the @402 tokens the design is drawn at")
   func fullLayoutAt402() {
     // The tokens are written to a thousandth of a point; the row's thirds
     // round either way at the last digit.
@@ -153,15 +152,5 @@ struct DesignTokensTests {
     #expect(DesignTokens.Themes.lightSignal == DesignTokens.Brand.green700)
     #expect(DesignTokens.Themes.lightNotice == DesignTokens.Brand.orange)
     #expect(DesignTokens.Themes.darkNotice == DesignTokens.Brand.orange)
-  }
-
-  @Test("the fonts are named by PostScript name and the bundle knows them")
-  func fonts() {
-    typealias Fonts = DesignTokens.Fonts
-    for name in [
-      Fonts.monoLight, Fonts.monoRegular, Fonts.monoMedium, Fonts.headingRegular, Fonts.bodyRegular, Fonts.bodyBold,
-    ] {
-      #expect(UIFont(name: name, size: 12) != nil, "\(name) is not registered (UIAppFonts / Design/fonts)")
-    }
   }
 }

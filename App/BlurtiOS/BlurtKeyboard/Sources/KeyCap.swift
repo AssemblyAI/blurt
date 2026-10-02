@@ -48,7 +48,7 @@ struct KeyCap: View {
           .foregroundStyle(tint ?? palette.keyText)
       } else {
         // A word on a key — 123, ABC, #+=, space, the return label — is the
-        // brand's eyebrow: Modern Gothic Mono, uppercase, tracked, a step
+        // brand's eyebrow: the system mono, uppercase, tracked, a step
         // quieter than a letter. Tracking adds its space after the last
         // letter too; the same again before the first keeps the word centred.
         Text((title ?? "").uppercased())

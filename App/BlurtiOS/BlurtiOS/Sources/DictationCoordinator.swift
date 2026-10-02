@@ -69,6 +69,7 @@ final class DictationCoordinator {
       // the request — the same signal the Mac reads through Accessibility.
       hostFocusCapture: DictationSession.HostFocusCapture(
         frontmost: { nil }, field: { Self.fieldContext() }))
+    window.onClosingOnItsOwn = { [weak self] in await self?.windowClosingOnItsOwn() }
   }
 
   func start() {
@@ -113,6 +114,22 @@ final class DictationCoordinator {
     if !phase.isTerminal { await session.cancel() }
     await window.close()
     publish(.idle)
+  }
+
+  /// The window is closing without the user — its time ran out, or a call or
+  /// Siri took the microphone. Unlike `stopListening`, what was already said
+  /// still counts: a recording is released, so its words land (on the
+  /// clipboard when no keyboard is up), and a mic still coming up is
+  /// cancelled — the keyboard's own rule when it leaves the screen. Awaited
+  /// before the feed closes, so the release still finds the audio. Without
+  /// this the session sat in `.recording` over a dead feed until its
+  /// auto-release, while the keyboard, seeing no app, showed idle.
+  func windowClosingOnItsOwn() async {
+    switch phase {
+    case .recording: await session.release()
+    case .connecting: await session.cancel()
+    case .idle, .transcribing, .injecting, .failed, .cancelled, .pasted, .noTarget: break
+    }
   }
 
   func handle(_ url: URL) {

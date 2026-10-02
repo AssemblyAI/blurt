@@ -80,12 +80,20 @@ nonisolated final class WindowedAudioSource: NSObject, ListeningSource, @uncheck
     session.beginConfiguration()
     defer { session.commitConfiguration() }
     session.automaticallyConfiguresApplicationAudioSession = false
+    // A session refused its input or output would still start running — and
+    // hear nothing, which is worse than failing: the window would open, the
+    // keyboard would record, and the upload would get no frames. Refused is
+    // no microphone, said where the user can see it.
     if session.inputs.isEmpty {
       guard let device = AVCaptureDevice.default(for: .audio) else { throw ListeningSourceFailure.noInputDevice }
       let input = try AVCaptureDeviceInput(device: device)
-      if session.canAddInput(input) { session.addInput(input) }
+      guard session.canAddInput(input) else { throw ListeningSourceFailure.noInputDevice }
+      session.addInput(input)
     }
-    if session.outputs.isEmpty, session.canAddOutput(output) { session.addOutput(output) }
+    if session.outputs.isEmpty {
+      guard session.canAddOutput(output) else { throw ListeningSourceFailure.noInputDevice }
+      session.addOutput(output)
+    }
   }
 
   /// Releases the microphone and ends any utterance in flight.
