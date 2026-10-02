@@ -1,6 +1,7 @@
 import Foundation
 import Synchronization
 
+@testable import AssemblyAI
 @testable import BlurtEngine
 
 /// Per-instance `HTTPTransport` fake for the HTTP-client suites: answers each

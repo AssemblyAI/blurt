@@ -10,11 +10,20 @@ let package = Package(
   // for both platforms. CI's `ios-build` job is what keeps that true.
   platforms: [.macOS(.v15), .iOS(.v18)],
   products: [
-    .library(name: "BlurtEngine", targets: ["BlurtEngine"])
+    .library(name: "BlurtEngine", targets: ["BlurtEngine"]),
+    // The AssemblyAI API client the engine is built on: transport, wire types,
+    // key validation. Foundation only, no Blurt policy, so it can become a
+    // standalone SDK. See Sources/AssemblyAI/README.md.
+    .library(name: "AssemblyAI", targets: ["AssemblyAI"]),
   ],
   targets: [
     .target(
+      name: "AssemblyAI",
+      exclude: ["README.md"]
+    ),
+    .target(
       name: "BlurtEngine",
+      dependencies: ["AssemblyAI"],
       // The engine's developer guide lives next to the code it documents. SwiftPM
       // has no rule for a stray .md inside a target, so declare it excluded rather
       // than let it land in the target's unhandled-files list.
@@ -22,7 +31,7 @@ let package = Package(
     ),
     .testTarget(
       name: "BlurtEngineTests",
-      dependencies: ["BlurtEngine"]
+      dependencies: ["BlurtEngine", "AssemblyAI"]
     ),
   ]
 )

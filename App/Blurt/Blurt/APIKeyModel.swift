@@ -1,3 +1,4 @@
+import AssemblyAI
 import BlurtEngine
 import Observation
 
@@ -35,7 +36,7 @@ final class APIKeyModel {
   init(
     keyStore: any APIKeyGateway = ProductionAPIKeyStore(),
     validateKey: @escaping @Sendable (String) async -> APIKeyValidator.Result = {
-      await APIKeyValidator().validate($0)
+      await APIKeyValidator.blurt().validate($0)
     }
   ) {
     self.keyStore = keyStore

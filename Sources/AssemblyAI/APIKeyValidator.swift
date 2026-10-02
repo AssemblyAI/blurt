@@ -24,13 +24,19 @@ public struct APIKeyValidator: Sendable {
 
   private let baseURL: URL
   private let transport: any HTTPTransport
+  private let userAgent: String?
 
+  /// - Parameter userAgent: identifies the calling app (Blurt passes
+  ///   `Blurt/<version> (…)`), so a key this endpoint rejects can be traced to
+  ///   the build that asked. Nil sends URLSession's default.
   public init(
-    baseURL: URL = URL(staticString: "https://api.assemblyai.com"),
-    transport: any HTTPTransport = URLSession.shared
+    baseURL: URL = URL(literal: "https://api.assemblyai.com"),
+    transport: any HTTPTransport = URLSession.shared,
+    userAgent: String? = nil
   ) {
     self.baseURL = baseURL
     self.transport = transport
+    self.userAgent = userAgent
   }
 
   public func validate(_ key: String) async -> Result {
@@ -50,9 +56,9 @@ public struct APIKeyValidator: Sendable {
     // AssemblyAI expects the raw key in Authorization (no "Bearer" prefix),
     // matching AssemblyAITranscriber.
     request.setValue(trimmed, forHTTPHeaderField: "Authorization")
-    // `Blurt/<version>`, the same agent the dictation requests carry, so a key
-    // this endpoint rejects can be traced to the build that asked.
-    request.setUserAgent()
+    // The caller's agent (Blurt sends the one its dictation requests carry), so
+    // a key this endpoint rejects can be traced to the build that asked.
+    if let userAgent { request.setValue(userAgent, forHTTPHeaderField: "User-Agent") }
 
     do {
       let (_, response) = try await transport.data(for: request)
