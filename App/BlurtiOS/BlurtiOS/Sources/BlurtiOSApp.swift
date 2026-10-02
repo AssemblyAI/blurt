@@ -18,7 +18,7 @@ struct BlurtiOSApp: App {
     HostIdentity.configure(
       HostIdentity(
         productName: "Blurt",
-        subsystem: "dev.alex.blurt.ios",
+        subsystem: "com.assemblyai.blurt.ios",
         keychainService: "blurt-ios",
         defaultsPrefix: "Blurt",
         logDirectoryName: "Blurt"))
