@@ -195,7 +195,7 @@ struct STTPromptTests {
 /// What the context is *not* allowed to carry. Every signal below is captured at
 /// press time and kept on the machine: the focus fields drive the paste path
 /// (the leading separator, the injector's window identity) and the developer-mode
-/// log, and the key terms ride their own request field (`KeytermsBoost`) rather
+/// log, and the key terms ride their own request field (`KeyTerms`) rather
 /// than this one. `text` is the only door to the wire, so this suite is what
 /// stands between a captured context and AssemblyAI's servers.
 @Suite("STTPrompt scope")

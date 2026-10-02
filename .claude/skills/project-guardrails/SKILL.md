@@ -85,7 +85,7 @@ only one of stt_prompt or prompt; they are the same field`, before the audio is
   read. Adding it alongside is not a compatibility shim, it is every dictation
   failing.
 - **Key terms are keyterms prompting, not context text.** They ride
-  `config.keyterms_prompt` as a flat array of strings (`KeytermsBoost`), fitted to
+  `config.keyterms_prompt` as a flat array of strings (`KeyTerms`), fitted to
   that field's own 2048-character cap _and_ its 100-term `maxItems` — two caps on
   one field, and the count is reachable under the byte budget. Don't fold them back into the context as a
   `Keywords: a, b, c.` clause, and don't also send `keyterms` or `word_boost` —

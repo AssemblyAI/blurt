@@ -1,3 +1,4 @@
+import AssemblyAI
 import BlurtDesign
 import BlurtEngine
 import BlurtiOSCore
@@ -106,8 +107,8 @@ struct SettingsView: View {
       NavigationLink("Output styles") { StylesView() }
       TextField("Key terms, comma-separated", text: $keyTerms, axis: .vertical)
         .autocorrectionDisabled()
-      LabeledContent("Key terms", value: "\(KeyTermList.parse(keyTerms).count)")
-      if !KeyTermList.parse(keyTerms).isEmpty {
+      LabeledContent("Key terms", value: "\(KeyTerms.parse(keyTerms).count)")
+      if !KeyTerms.parse(keyTerms).isEmpty {
         ShareLink(
           item: termPack, subject: Text("Blurt key terms"), message: Text(termPack.plainText),
           preview: SharePreview(termPack.name, icon: Image(systemName: "text.badge.plus"))
@@ -147,7 +148,7 @@ struct SettingsView: View {
 
   /// The whole list, for a friend: a `.blurtterms` file plus the words as text.
   private var termPack: TermPack {
-    TermPack(name: "Key terms", from: nil, terms: KeyTermList.parse(keyTerms))
+    TermPack(name: "Key terms", from: nil, terms: KeyTerms.parse(keyTerms))
   }
 
   private static var version: String {

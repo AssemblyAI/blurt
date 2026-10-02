@@ -46,7 +46,7 @@ public struct DictationConfig: Encodable, Sendable {
   /// biasing recognition toward those exact spellings. A sibling of
   /// `stt_prompt`, not an alternative — the API takes both, for
   /// different jobs (prior text versus a vocabulary list) — fitted by
-  /// `KeytermsBoost` to its own 2048-byte cap, which is a different number
+  /// `KeyTerms` to its own 2048-byte cap, which is a different number
   /// from the 4096 scalars on the prompt. Empty asks for no boosting, and
   /// `encode(to:)` then drops the key rather than sending `[]`.
   ///

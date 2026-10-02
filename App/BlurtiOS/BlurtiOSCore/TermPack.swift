@@ -1,3 +1,4 @@
+import AssemblyAI
 import CoreTransferable
 import Foundation
 import UniformTypeIdentifiers
@@ -56,7 +57,7 @@ package nonisolated struct TermPack: Codable, Identifiable, Transferable {
   /// without Blurt still gets the words.
   package var plainText: String {
     let lead = from.map { "\($0)'s Blurt key terms" } ?? "Blurt key terms"
-    return "\(lead) (\(name)): \(KeyTermList.join(terms))"
+    return "\(lead) (\(name)): \(KeyTerms.join(terms))"
   }
 
   /// Whether a URL is meant to be a pack at all — a `.blurtterms` file or a
@@ -82,13 +83,13 @@ package nonisolated struct TermPack: Codable, Identifiable, Transferable {
     guard let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return nil }
     let value = { (name: String) in items.first { $0.name == name }?.value }
     return TermPack(
-      name: value("name") ?? "Shared key terms", from: value("from"), terms: KeyTermList.parse(value("add") ?? "")
+      name: value("name") ?? "Shared key terms", from: value("from"), terms: KeyTerms.parse(value("add") ?? "")
     ).capped()
   }
 
   /// The pack within the caps, or nil when nothing usable is left.
   private func capped() -> TermPack? {
-    let kept = KeyTermList.parse(KeyTermList.join(terms)).filter { $0.count <= Self.lengthCap }
+    let kept = KeyTerms.parse(KeyTerms.join(terms)).filter { $0.count <= Self.lengthCap }
     let terms = Array(kept.prefix(Self.termCap))
     guard !terms.isEmpty else { return nil }
     return TermPack(

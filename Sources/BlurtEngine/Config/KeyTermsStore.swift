@@ -1,8 +1,9 @@
+import AssemblyAI
 import Foundation
 
 /// Storage for the user's dictation "key terms" — a comma-separated list of
 /// domain words (names, jargon, product names) sent as the dictation request's
-/// keyterms list (`config.keyterms_prompt`, see `KeytermsBoost`), so the model
+/// keyterms list (`config.keyterms_prompt`, see the SDK's `KeyTerms`), so the model
 /// favors those exact spellings. They used to ride the transcription `prompt` as
 /// a `Keywords: a, b, c.` clause instead; a flat list is the field the API
 /// provides for exactly this, so that is what they are now.
@@ -21,7 +22,7 @@ import Foundation
 /// normalizing on write fought the text field, because the trimmed value was
 /// pushed back into the binding as an external change and a trailing space was
 /// deleted as the user typed it. Normalization lives on the read side instead
-/// (`raw` trims, `parse` trims and dedupes), so a blank field still reads back
+/// (`raw` trims, `KeyTerms.parse` trims and dedupes), so a blank field still reads back
 /// as "no terms". See the note on `KeyTermsStepView.text`.
 public struct KeyTermsStore {
   /// `UserDefaults` key for the raw, comma-separated string the user typed.
@@ -42,27 +43,10 @@ public struct KeyTermsStore {
     defaults.string(forKey: Self.defaultsKey).trimmedNonEmpty()
   }
 
-  /// The stored terms parsed into a clean list: split on commas, trimmed, with
-  /// blanks and duplicates removed (case-insensitively, keeping first spelling).
+  /// The stored terms parsed into a clean list (`KeyTerms.parse`): split on
+  /// commas, trimmed, with blanks and duplicates removed (case-insensitively,
+  /// keeping first spelling).
   var terms: [String] {
-    Self.parse(raw)
-  }
-
-  /// Pure parse of a comma-separated string into a clean term list. Static so
-  /// callers and tests can reuse the exact same rules without a `UserDefaults`
-  /// in hand. This is the whole normalization the request gets: `KeytermsBoost`
-  /// assumes terms arrive trimmed, blank-free and deduped, and only enforces the
-  /// field's length cap on top.
-  static func parse(_ text: String?) -> [String] {
-    guard let text else { return [] }
-    var seen = Set<String>()
-    var result: [String] = []
-    for piece in text.split(separator: ",") {
-      guard let term = String(piece).trimmedNonEmpty() else { continue }
-      let key = term.lowercased()
-      guard seen.insert(key).inserted else { continue }
-      result.append(term)
-    }
-    return result
+    KeyTerms.parse(raw)
   }
 }
