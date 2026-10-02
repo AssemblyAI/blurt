@@ -54,7 +54,11 @@
         try? await Task.sleep(for: .milliseconds(10))
         (seen, copied) = await DictationSession.offPool {
           let count = pasteboard.changeCount
-          return (count, count == before ? nil : pasteboard.currentString())
+          guard count != before else { return (count, nil) }
+          let string = pasteboard.currentString()
+          // A write between the two reads would pair the string with a stale
+          // count, and the restore would then skip. Poll again instead.
+          return pasteboard.changeCount == count ? (count, string) : (count, nil)
         }
       } while copied == nil && ContinuousClock.now < deadline
       guard seen != before else { return nil }
