@@ -79,10 +79,10 @@ targets:
       # and the bundle's own (CA92.1), the only such API either target uses.
       - path: BlurtiOS/PrivacyInfo.xcprivacy
         buildPhase: resources
-      # The Mac's app icon and ready-screen wordmark, shared rather than copied:
-      # the Icon Composer file targets iOS too (`squares: shared`).
-      - path: ../Blurt/Blurt/AppIcon.icon
-      - path: ../Blurt/Blurt/Branding/blurt-ready-logo.png
+      # The app icon and wordmark both apps ship (Design/brand), shared rather
+      # than copied: the Icon Composer file targets iOS too (`squares: shared`).
+      - path: ../../Design/brand/AppIcon.icon
+      - path: ../../Design/brand/blurt-ready-logo.png
         buildPhase: resources
       # The UI both the app and the keyboard draw with (design tokens, type,
       # brand colours), compiled into each — an extension can't import the
