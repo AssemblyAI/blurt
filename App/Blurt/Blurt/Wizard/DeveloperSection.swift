@@ -51,10 +51,15 @@ struct UpdatesSection: View {
 }
 
 /// The Advanced pane's experimental features — today just read-aloud (see
-/// `SelectionSpeechStore`). The router reads the same default this toggle writes
-/// at every press, so a change applies to the next one.
+/// `SelectionSpeechStore`) and its work mode (`ReadAloudWorkModeStore`). The
+/// router reads the same defaults these controls write at every press, so a
+/// change applies to the next one.
 struct ExperimentalSection: View {
   @AppStorage(SelectionSpeechStore.defaultsKey) private var selectionSpeech = false
+  @AppStorage(ReadAloudWorkModeStore.defaultsKey) private var workMode = false
+  @AppStorage(ReadAloudWorkModeStore.speedDefaultsKey) private var speed = ReadAloudWorkModeStore.defaultSpeed
+  @AppStorage(ReadAloudWorkModeStore.skipsJargonDefaultsKey)
+  private var skipsJargon = ReadAloudWorkModeStore.defaultSkipsJargon
   @BoundTriggerKey private var triggerKey
   @AppStorage(TriggerActivationStore.defaultsKey) private var activationRaw = ""
 
@@ -65,16 +70,54 @@ struct ExperimentalSection: View {
     return "Select text and \(activation.startVerb) \(triggerKey.label) to hear it. \(activation.stopHint)"
   }
 
+  /// The picker reads the stored speed through the same snap the press does, so
+  /// a `defaults write` value off the list shows as the speed that will play.
+  private var speedSelection: Binding<Double> {
+    Binding(get: { ReadAloudWorkModeStore.nearestChoice(to: speed) }, set: { speed = $0 })
+  }
+
   var body: some View {
     Section {
       Toggle(isOn: $selectionSpeech) {
         SettingLabel(title: "Read selected text aloud", systemImage: "speaker.wave.2")
       }
       .accessibilityIdentifier(UITestIdentifiers.selectionSpeechToggle)
+      // Work mode only changes how a read sounds, so its rows only appear
+      // while there are reads to change.
+      if selectionSpeech {
+        Toggle(isOn: $workMode) {
+          SettingLabel(title: "Work mode", systemImage: "briefcase")
+        }
+        .accessibilityIdentifier(UITestIdentifiers.readAloudWorkModeToggle)
+        if workMode {
+          PickerSettingRow(
+            title: "Speed", systemImage: "hare",
+            accessibilityID: UITestIdentifiers.readAloudSpeedPicker, selection: speedSelection
+          ) {
+            ForEach(ReadAloudWorkModeStore.speedChoices, id: \.self) { choice in
+              Text(ReadAloudWorkModeStore.speedLabel(choice)).tag(choice)
+            }
+          }
+          Toggle(isOn: $skipsJargon) {
+            SettingLabel(title: "Skip code, links, and long numbers", systemImage: "text.badge.minus")
+          }
+          .accessibilityIdentifier(UITestIdentifiers.readAloudSkipsJargonToggle)
+        }
+      }
     } header: {
       Text("Experimental")
     } footer: {
       Text("\(howToUse) With nothing selected, the key dictates as usual.")
+      // Work mode's note is its own paragraph: what the unexplained switch does
+      // while it's off, and, while skipping is on, that the selection goes to the
+      // gateway before it's read.
+      if selectionSpeech {
+        if !workMode {
+          Text("Work mode reads faster and can skip code, links, and long numbers.")
+        } else if skipsJargon {
+          Text("To leave those out, Blurt sends the selection to AssemblyAI’s LLM Gateway before reading it.")
+        }
+      }
     }
   }
 }

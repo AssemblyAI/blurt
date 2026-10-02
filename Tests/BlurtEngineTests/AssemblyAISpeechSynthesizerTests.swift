@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 
 @testable import BlurtEngine
@@ -175,11 +176,29 @@ struct AssemblyAISpeechSynthesizerExchangeTests {
 
 @Suite("SelectionSpeaker")
 struct SelectionSpeakerTests {
-  private func speaker(_ socket: FakeSpeechSocket, sink: RecordingSink) -> SelectionSpeaker {
+  private func speaker(
+    _ socket: FakeSpeechSocket, sink: RecordingSink,
+    gateway: any HTTPTransport = FakeHTTPTransport.failing(with: URLError(.notConnectedToInternet)),
+    rate: ValueBox<Double?> = ValueBox(nil)
+  ) -> SelectionSpeaker {
     SelectionSpeaker(
       synthesizer: AssemblyAISpeechSynthesizer(apiKeyProvider: { "k" }, connect: { _ in socket }),
-      makeSink: { sink })
+      llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: gateway),
+      makeSink: { played in
+        rate.value = played
+        return sink
+      })
   }
+
+  /// The text of every `Generate` the speaker sent, in order.
+  private func generated(_ socket: FakeSpeechSocket) -> [String] {
+    socket.sent.compactMap { command in
+      let object = (try? JSONSerialization.jsonObject(with: Data(command.utf8))) as? [String: String]
+      return object?["type"] == "Generate" ? object?["text"] : nil
+    }
+  }
+
+  private let workMode = ReadAloudStyle(rate: 2, skipsJargon: true)
 
   @Test("plays every chunk in order, then drains")
   func plays() async throws {
@@ -210,5 +229,124 @@ struct SelectionSpeakerTests {
     speaking.cancel()
     _ = await speaking.result
     #expect(sink.stopped)
+  }
+
+  @Test("the standard style reads the selection verbatim at natural pace, with no gateway call")
+  func standardStyle() async throws {
+    let sink = RecordingSink()
+    let socket = FakeSpeechSocket(respond: FakeSpeechSocket.service())
+    let calls = Counter()
+    let gateway = FakeHTTPTransport { _ in
+      _ = calls.next()
+      return (200, completion("unused"))
+    }
+    let rate = ValueBox<Double?>(nil)
+    try await speaker(socket, sink: sink, gateway: gateway, rate: rate).speak("Run `npm ci` first.")
+    #expect(generated(socket) == ["Run `npm ci` first."])
+    #expect(rate.value == 1)
+    #expect(calls.value == 0)
+  }
+
+  @Test("work mode speaks the gateway's rewrite, at its rate")
+  func workModeRewrites() async throws {
+    let sink = RecordingSink()
+    let socket = FakeSpeechSocket(respond: FakeSpeechSocket.service())
+    let gateway = FakeHTTPTransport { _ in (200, completion("Run the command first.")) }
+    let rate = ValueBox<Double?>(nil)
+    try await speaker(socket, sink: sink, gateway: gateway, rate: rate)
+      .speak("Run `npm ci --prefer-offline` first.", style: workMode)
+    #expect(generated(socket) == ["Run the command first."])
+    #expect(rate.value == 2)
+    #expect(sink.drained)
+  }
+
+  @Test("a failed rewrite falls back to reading the selection verbatim")
+  func rewriteFailureFallsBack() async throws {
+    let sink = RecordingSink()
+    let socket = FakeSpeechSocket(respond: FakeSpeechSocket.service())
+    let gateway = FakeHTTPTransport { _ in (503, Data()) }
+    try await speaker(socket, sink: sink, gateway: gateway).speak("Email jo@example.com today.", style: workMode)
+    #expect(generated(socket) == ["Email jo@example.com today."])
+  }
+
+  @Test("a stop during the rewrite plays nothing, rather than falling back")
+  func cancelledDuringRewrite() async {
+    let sink = RecordingSink()
+    let socket = FakeSpeechSocket(respond: FakeSpeechSocket.service())
+    let gateway = HangingTransport()
+    let speaking = Task {
+      try await speaker(socket, sink: sink, gateway: gateway).speak("Say something here.", style: workMode)
+    }
+    while !gateway.asked { await Task.yield() }
+    speaking.cancel()
+    await #expect(throws: CancellationError.self) { try await speaking.value }
+    #expect(socket.sent.isEmpty)
+    #expect(sink.chunks.isEmpty)
+  }
+
+  @Test("a rewrite that answers after the stop still plays nothing and opens no socket")
+  func cancelledAsRewriteLands() async {
+    let sink = RecordingSink()
+    let connects = Counter()
+    let socket = FakeSpeechSocket(respond: FakeSpeechSocket.service())
+    let gateway = LateAnsweringTransport()
+    let speaker = SelectionSpeaker(
+      synthesizer: AssemblyAISpeechSynthesizer(
+        apiKeyProvider: { "k" },
+        connect: { _ in
+          _ = connects.next()
+          return socket
+        }),
+      llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: gateway),
+      makeSink: { _ in sink })
+    let speaking = Task { try await speaker.speak("Say something here.", style: workMode) }
+    while !gateway.asked { await Task.yield() }
+    speaking.cancel()
+    gateway.release()
+    await #expect(throws: CancellationError.self) { try await speaking.value }
+    #expect(connects.value == 0)
+    #expect(sink.chunks.isEmpty)
+  }
+}
+
+/// A gateway that ignores cancellation: it waits for `release()`, then answers
+/// 200 anyway, the way a response already in flight lands after a stop.
+private final class LateAnsweringTransport: HTTPTransport {
+  private let state = Mutex((asked: false, released: false))
+  var asked: Bool { state.withLock { $0.asked } }
+  func release() { state.withLock { $0.released = true } }
+
+  func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+    state.withLock { $0.asked = true }
+    while !state.withLock({ $0.released }) { await Task.yield() }
+    let url = try #require(request.url)
+    let response = try #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil))
+    return (completion("Say something here."), response)
+  }
+
+  func upload(
+    for request: URLRequest, streaming body: AsyncThrowingStream<Data, any Error>,
+    delegate: (any URLSessionTaskDelegate)?
+  ) async throws -> (Data, URLResponse) {
+    throw URLError(.unsupportedURL)
+  }
+}
+
+/// A gateway that never answers, until the request's task is cancelled.
+private final class HangingTransport: HTTPTransport {
+  private let called = Mutex(false)
+  var asked: Bool { called.withLock { $0 } }
+
+  func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+    called.withLock { $0 = true }
+    try await Task.sleep(for: .seconds(60))
+    throw URLError(.timedOut)
+  }
+
+  func upload(
+    for request: URLRequest, streaming body: AsyncThrowingStream<Data, any Error>,
+    delegate: (any URLSessionTaskDelegate)?
+  ) async throws -> (Data, URLResponse) {
+    throw URLError(.unsupportedURL)
   }
 }

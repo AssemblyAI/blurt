@@ -61,7 +61,11 @@ genuinely correct, and reaching for it means it's time to stop and ask.
   transcribes, so it is not a door back to streaming STT.
 - **No separate LLM cleanup pass.** Cleanup rides in the same dictation request,
   as `config.llm_instruction` (`CleanupInstruction`). No LLM Gateway
-  client, no `StylerProtocol`, no post-transcription styling stage.
+  client for dictation, no `StylerProtocol`, no post-transcription styling
+  stage. The one gateway client in the tree is the experimental read-aloud
+  feature's (`TTS/ReadAloudLLM.swift`, the only file `check-invariants.sh`
+  exempts from this rule): work mode's listening rewrite of a selection. It
+  never cleans up a dictation, so it is not a door back to a cleanup pass.
 - **No local models / model downloads.** Transcription is a remote AssemblyAI
   call. No on-device ASR/LLM, no model cache, no download UI.
 - **There is no `config.conversation_context`.** `config.stt_prompt`

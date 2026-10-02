@@ -60,9 +60,12 @@ final class SelectionSpeechRouter {
 
   private func speak(_ text: String) {
     let speaker = speaker
+    // Read per press, like the switch itself, so a Settings change applies to
+    // the next read.
+    let style = ReadAloudWorkModeStore().style
     speech = Task { [weak self] in
       do {
-        try await speaker.speak(text)
+        try await speaker.speak(text, style: style)
       } catch is CancellationError {
       } catch {
         Self.logger.error("read-aloud failed: \(error.localizedDescription, privacy: .public)")

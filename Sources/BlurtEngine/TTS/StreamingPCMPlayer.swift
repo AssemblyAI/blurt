@@ -13,6 +13,14 @@ import Synchronization
 /// Where each chunk lands on the timeline is `PCMSchedule`'s call; this class is
 /// only the AV shell around it.
 ///
+/// **Faster speech is the synchronizer's rate**, not a request to the TTS
+/// service. The renderer's time-domain pitch algorithm (Apple's choice for
+/// voice) keeps the pitch while the clock runs `rate` times faster, so work
+/// mode's double speed costs nothing on the wire and starts as soon as the first
+/// chunk does. Measured 2026-10-02: at rate 2 the media clock ran ~1.8x the wall
+/// clock over its first 0.8 s, start-up latency included, with no renderer
+/// error.
+///
 /// Thread-safe: `enqueue`, `stop` and `drain` can be called from any context.
 /// All mutable state sits behind one `Mutex`; `@unchecked` covers the AV objects,
 /// which are only touched inside that lock (or, for the synchronizer clock read
@@ -27,11 +35,15 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
   private let synchronizer = AVSampleBufferRenderSynchronizer()
   private let format: CMAudioFormatDescription?
   private let sampleRate: Int32
+  private let rate: Double
   private let state: Mutex<State>
 
-  init(sampleRate: Int) {
+  init(sampleRate: Int, rate: Double = 1) {
     self.sampleRate = Int32(sampleRate)
-    self.state = Mutex(State(schedule: PCMSchedule(sampleRate: sampleRate)))
+    // `drain` divides by the rate, and a zero one is an infinite `Duration`,
+    // which traps. The store never produces one; this guards new callers.
+    self.rate = rate.isFinite && rate > 0 ? rate : 1
+    self.state = Mutex(State(schedule: PCMSchedule(sampleRate: sampleRate, rate: self.rate)))
     var description = AudioStreamBasicDescription(
       mSampleRate: Float64(sampleRate),
       mFormatID: kAudioFormatLinearPCM,
@@ -43,6 +55,7 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
       allocator: kCFAllocatorDefault, asbd: &description, layoutSize: 0, layout: nil,
       magicCookieSize: 0, magicCookie: nil, extensions: nil, formatDescriptionOut: &format)
     self.format = format
+    renderer.audioTimePitchAlgorithm = .timeDomain
     synchronizer.addRenderer(renderer)
   }
 
@@ -56,23 +69,24 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
       let time = CMTime(seconds: at, preferredTimescale: sampleRate)
       guard let buffer = Self.sampleBuffer(pcm, frames: frames, format: format, at: time) else { return }
       renderer.enqueue(buffer)
-      if first { synchronizer.setRate(1, time: .zero) }
+      if first { synchronizer.setRate(Float(rate), time: .zero) }
     }
   }
 
   /// Returns once everything enqueued has been played, or once `stop()` is called.
   ///
-  /// Also bounded by the wall clock: the audio still queued, plus `drainSlack`. The
+  /// Also bounded by the wall clock: the audio still queued, played at `rate`,
+  /// plus `drainSlack`. The
   /// synchronizer's clock only advances while an output device is consuming
   /// audio. With no device at all (a headless Mac, or one whose output vanished
   /// mid-read), "remaining" would never reach zero, and the press would stay in
   /// read-aloud mode until the user pressed again.
   func drain() async {
     let queued = remaining() ?? 0
-    let deadline = ContinuousClock.now + .seconds(queued) + Self.drainSlack
+    let deadline = ContinuousClock.now + .seconds(queued / rate) + Self.drainSlack
     while ContinuousClock.now < deadline {
       guard let remaining = remaining(), remaining > 0 else { break }
-      try? await Task.sleep(for: .milliseconds(min(100, Int(remaining * 1000) + 10)))
+      try? await Task.sleep(for: .milliseconds(min(100, Int(remaining / rate * 1000) + 10)))
       if Task.isCancelled { break }
     }
     stop()

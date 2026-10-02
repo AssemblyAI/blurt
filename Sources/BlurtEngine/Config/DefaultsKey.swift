@@ -49,6 +49,12 @@ enum DefaultsKey: String, CaseIterable {
   case textShortcuts = "TextShortcuts"
   /// The experimental read-selection-aloud switch (`SelectionSpeechStore`).
   case selectionSpeech = "SelectionSpeech"
+  /// Read-aloud's work mode: the switch, its playback speed, and whether it
+  /// rewrites the text for listening first (`ReadAloudWorkModeStore`, which owns
+  /// all three).
+  case readAloudWorkMode = "ReadAloudWorkMode"
+  case readAloudWorkModeSpeed = "ReadAloudWorkModeSpeed"
+  case readAloudWorkModeSkipsJargon = "ReadAloudWorkModeSkipsJargon"
 
   /// The key this case actually reads and writes, under the configured host
   /// identity. A computed property rather than a stored string because the
