@@ -7,8 +7,9 @@ import SwiftUI
 /// The Dictate tab: the Blurt landing page on a phone. The wordmark and
 /// the gear across the top; the lifetime stats; the status as an eyebrow, a serif headline and a
 /// line of body text over the voice element; the one green button; then the
-/// styles and the recent dictations under their eyebrows. Setup sits on top
-/// while anything is missing; everything adjustable lives behind the gear.
+/// styles and the recent dictations under their eyebrows. Setup comes before
+/// the tabs (`SetupView`) and lives in Settings after; everything adjustable
+/// is behind the gear.
 struct HomeView: View {
   var coordinator: DictationCoordinator
   /// Opens Settings, which `MainView` presents over either tab.
@@ -16,7 +17,6 @@ struct HomeView: View {
   @Environment(\.scenePhase) private var scenePhase
   @State private var microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
   @State private var keyboardSeen = SharedStore.keyboardEverSeen
-  @State private var showsKeyEntry = false
   /// When the last dictation's words landed — the hero's glint.
   @State private var landedAt: Date?
   /// TEMPORARY: the mic concept from Settings, so the hero shows the one
@@ -35,11 +35,6 @@ struct HomeView: View {
       ScrollView {
         VStack(alignment: .leading, spacing: DesignTokens.Metrics.appSectionGap) {
           header
-          if !status.isSetUp {
-            SetupCard(
-              hasKey: coordinator.apiKey.hasAPIKey, microphoneGranted: microphoneGranted, keyboardSeen: keyboardSeen,
-              enterKey: { showsKeyEntry = true }, refresh: refreshStatus)
-          }
           StatsCard()
           HomeHero(coordinator: coordinator, status: status, landedAt: landedAt)
           StyleChips()
@@ -53,7 +48,6 @@ struct HomeView: View {
       .page()
       .environment(\.voiceElementKind, VoiceElementKind(rawValue: voiceRaw) ?? .shipped)
       .toolbar(.hidden, for: .navigationBar)
-      .sheet(isPresented: $showsKeyEntry) { KeyEntryView(apiKey: coordinator.apiKey) }
       .onChange(of: scenePhase) { _, phase in
         if phase == .active { refreshStatus() }
       }

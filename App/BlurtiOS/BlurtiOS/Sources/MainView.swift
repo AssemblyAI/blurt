@@ -1,6 +1,29 @@
+import AVFoundation
 import BlurtDesign
 import BlurtiOSCore
 import SwiftUI
+
+/// The first-run setup screen until Blurt is set up, then the tabs
+/// (`SetupProgress`). Whoever was already set up when this arrived goes
+/// straight to the tabs: the check is taken once, at launch, so finishing the
+/// last step on the setup screen doesn't yank it away mid-read.
+struct RootView: View {
+  var coordinator: DictationCoordinator
+  @AppStorage(SetupProgress.finishedKey) private var finished = false
+  @State private var wasSetUpAtLaunch =
+    AVAudioApplication.shared.recordPermission == .granted && SharedStore.keyboardEverSeen
+
+  var body: some View {
+    if SetupProgress.needsSetup(
+      hasKey: coordinator.apiKey.hasAPIKey, isSetUp: wasSetUpAtLaunch, finished: finished)
+    {
+      SetupView(coordinator: coordinator)
+        .onOpenURL { coordinator.handle($0) }
+    } else {
+      MainView(coordinator: coordinator)
+    }
+  }
+}
 
 /// The app: the Dictate and Words tabs under the brand tab bar, plus what has
 /// to work whichever tab is showing — Settings from either tab's gear, the

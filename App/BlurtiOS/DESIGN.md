@@ -725,13 +725,22 @@ accent over its replacement, × to remove, between hairlines; two inputs and
 `ADD SHORTCUT` (re-adding a phrase replaces it). Brand buttons fade while
 disabled (`opacity/disabled`).
 
-**Home** (`HomeView`, `HomeHero`, `SetupCard`, `StyleChips`, `RecentSection`,
-`HomeStatus` for the words; `StatsCard`): the setup card only while something is missing,
-then the lifetime stats — `DICTATIONS`, `WORDS`, `TIME SAVED` (against 36 wpm,
-the phone average) as serif numbers with mono units, one row until time saved
-reaches an hour and then two, at the largest of four sizes that fits (reset
-in Settings › Data);
-its three steps numbered `01 02 03` in mono; the hero — `STATUS`, the
+**First run** (`RootView`, `SetupView`, `SetupSteps`, `SetupProgress`): in
+place of the tabs until Blurt is set up — the wordmark, a serif headline, and
+`SET UP BLURT` in a card, its three steps numbered `01 02 03` in mono (a check
+once done): the API key inline (a secure field, `CONTINUE`, `GET A FREE KEY`,
+and where the key and the audio go), the microphone, the keyboard. Without a
+key it can't be left; with one, `START DICTATING` goes to the tabs and the rest
+can wait. Afterwards the steps live in Settings › Setup, folded to "Blurt is
+set up ✓ · Show steps" while everything is done and open while anything isn't.
+Whoever was already set up skips it.
+
+**Home** (`HomeView`, `HomeHero`, `StyleChips`, `RecentSection`,
+`HomeStatus` for the words; `StatsCard`): the lifetime stats — `DICTATIONS`,
+`WORDS`, `TIME SAVED` (against 36 wpm, the phone average, or the easter egg's
+result) as serif numbers with mono units, one row until time saved reaches an
+hour and then two, at the largest of four sizes that fits (reset in Settings ›
+Data); the hero — `STATUS`, the
 headline (Not listening · Ready to dictate · Connecting… · Listening… ·
 Transcribing… · Pasted · Copied · the error), the line under it, the voice
 element at home size, `START LISTENING` (refused without a key, with a line

@@ -1,3 +1,4 @@
+import AVFoundation
 import BlurtDesign
 import BlurtEngine
 import BlurtiOSCore
@@ -21,6 +22,10 @@ struct SettingsView: View {
   @State private var showsKeyEntry = false
   @State private var confirmsStatsReset = false
   @State private var showsTypingTest = false
+  @State private var showsSetupSteps = false
+  @State private var microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
+  @State private var keyboardSeen = SharedStore.keyboardEverSeen
+  @Environment(\.scenePhase) private var scenePhase
   @AppStorage(TypingSpeed.defaultsKey) private var typingSpeed: Double = 0
   @AppStorage(EnhancedTranscriptsStore.defaultsKey) private var enhancedTranscripts =
     EnhancedTranscriptsStore.defaultValue
@@ -28,6 +33,7 @@ struct SettingsView: View {
   var body: some View {
     NavigationStack {
       Form {
+        setupSection
         keyboardSection
         listeningSection
         transcriptionSection
@@ -45,6 +51,9 @@ struct SettingsView: View {
       // On the form, not on a section: a section's modifiers apply to each of
       // its rows, so a cover there was presented once per row at the same time.
       .fullScreenCover(isPresented: $showsTypingTest) { TypingTestView() }
+      .onChange(of: scenePhase) { _, phase in
+        if phase == .active { refreshSetup() }
+      }
       .confirmationDialog("Reset statistics?", isPresented: $confirmsStatsReset, titleVisibility: .visible) {
         Button("Reset", role: .destructive) { DictationStats.reset() }
       } message: {
@@ -52,6 +61,43 @@ struct SettingsView: View {
       }
     }
     .tint(BlurtBrand.accent)
+  }
+
+  /// The first-run steps, kept here once the app is set up, as in the
+  /// blurt-ios prototype: folded to a line while everything is done, open while
+  /// something (the microphone, the keyboard) is still missing.
+  private var setupSection: some View {
+    let isSetUp = coordinator.apiKey.hasAPIKey && microphoneGranted && keyboardSeen
+    return Section {
+      if isSetUp {
+        HStack {
+          Text("Blurt is set up")
+          Image(systemName: "checkmark").foregroundStyle(BlurtBrand.accent)
+          Spacer()
+          Button(showsSetupSteps ? "Hide steps" : "Show steps") { showsSetupSteps.toggle() }
+            .font(BlurtType.body(DesignTokens.Typography.sizeCaption, bold: true))
+            .foregroundStyle(BlurtBrand.accent)
+            .buttonStyle(.plain)
+        }
+      }
+      if !isSetUp || showsSetupSteps {
+        SetupSteps(
+          hasKey: coordinator.apiKey.hasAPIKey, microphoneGranted: microphoneGranted, keyboardSeen: keyboardSeen,
+          refresh: refreshSetup
+        ) {
+          Button("Add an API key") { showsKeyEntry = true }.buttonStyle(BrandButtonStyle())
+        }
+        .padding(.vertical, DesignTokens.Metrics.appRowPadY)
+      }
+    } header: {
+      Eyebrow("Setup")
+    }
+  }
+
+  private func refreshSetup() {
+    microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
+    keyboardSeen = SharedStore.keyboardEverSeen
+    coordinator.apiKey.refreshStatus()
   }
 
   private var keyboardSection: some View {
