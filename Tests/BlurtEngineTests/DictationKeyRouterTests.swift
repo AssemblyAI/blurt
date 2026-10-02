@@ -73,7 +73,7 @@ struct DictationKeyRouterTests {
   func tapToToggle() {
     var router = DictationKeyRouter(triggerKeyCode: trigger)
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
-    #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .none)  // latched
+    #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .latch)  // latched
     #expect(router.handle(downEvent(trigger), at: .seconds(5)) == .none)
     #expect(router.handle(upEvent(trigger), at: .seconds(5) + .milliseconds(200)) == .stop)
   }
@@ -104,7 +104,7 @@ struct DictationKeyRouterTests {
   func resetOverLatchedReportsDiscard() {
     var router = DictationKeyRouter(triggerKeyCode: trigger)
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
-    #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .none)  // latched
+    #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .latch)  // latched
     let discarded = router.reset()
     #expect(discarded)
   }
@@ -120,7 +120,7 @@ struct DictationKeyRouterTests {
     // reset genuinely restores the next press.
     var router = DictationKeyRouter(triggerKeyCode: trigger)
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
-    #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .none)  // latched
+    #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .latch)  // latched
 
     // Without the reset, this next tap is swallowed — the exact dead press.
     var swallowed = router
@@ -236,7 +236,7 @@ struct DictationKeyRouterTests {
     // since nothing is coming to close it.
     var router = DictationKeyRouter(triggerKeyCode: trigger)
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
-    #expect(router.handle(upEvent(trigger), at: .milliseconds(100)) == .none)  // latched
+    #expect(router.handle(upEvent(trigger), at: .milliseconds(100)) == .latch)  // latched
 
     let discarded = router.recoverFromDroppedEvents(triggerStillHeld: false)
     #expect(discarded)

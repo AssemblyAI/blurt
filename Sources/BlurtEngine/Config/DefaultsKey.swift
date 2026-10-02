@@ -55,6 +55,8 @@ enum DefaultsKey: String, CaseIterable {
   case readAloudWorkMode = "ReadAloudWorkMode"
   case readAloudWorkModeSpeed = "ReadAloudWorkModeSpeed"
   case readAloudWorkModeSkipsJargon = "ReadAloudWorkModeSkipsJargon"
+  /// Whether a hold over a selection asks about it (`SelectionAskStore`).
+  case selectionAsk = "SelectionAsk"
 
   /// The key this case actually reads and writes, under the configured host
   /// identity. A computed property rather than a stored string because the

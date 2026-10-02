@@ -83,6 +83,16 @@ public struct SelectionSpeaker: Sendable {
     }
   }
 
+  /// Answers a spoken `request` about `selection` and reads the answer aloud at
+  /// `style`'s rate. The answer is already written to be heard, so it skips the
+  /// listening rewrite. No fallback: when the answer fails, there is nothing
+  /// else to read.
+  public func answer(_ request: String, about selection: String, style: ReadAloudStyle) async throws {
+    let reply = try await llm.answer(request, about: selection)
+    try Task.checkCancellation()
+    try await speak(reply, style: ReadAloudStyle(rate: style.rate, skipsJargon: false))
+  }
+
   /// `text` rewritten by `ReadAloudLLM`, or `text` itself when the rewrite
   /// fails: hearing the jargon beats hearing nothing. A stop during the rewrite
   /// is the one failure that doesn't fall back, since nothing should play.

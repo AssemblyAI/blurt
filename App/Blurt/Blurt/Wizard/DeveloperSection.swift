@@ -51,11 +51,13 @@ struct UpdatesSection: View {
 }
 
 /// The Advanced pane's experimental features — today just read-aloud (see
-/// `SelectionSpeechStore`) and its work mode (`ReadAloudWorkModeStore`). The
-/// router reads the same defaults these controls write at every press, so a
-/// change applies to the next one.
+/// `SelectionSpeechStore`), asking about the selection (`SelectionAskStore`)
+/// and its work mode (`ReadAloudWorkModeStore`). The router reads the same
+/// defaults these controls write at every press, so a change applies to the
+/// next one.
 struct ExperimentalSection: View {
   @AppStorage(SelectionSpeechStore.defaultsKey) private var selectionSpeech = false
+  @AppStorage(SelectionAskStore.defaultsKey) private var selectionAsk = SelectionAskStore.defaultValue
   @AppStorage(ReadAloudWorkModeStore.defaultsKey) private var workMode = false
   @AppStorage(ReadAloudWorkModeStore.speedDefaultsKey) private var speed = ReadAloudWorkModeStore.defaultSpeed
   @AppStorage(ReadAloudWorkModeStore.skipsJargonDefaultsKey)
@@ -64,10 +66,19 @@ struct ExperimentalSection: View {
   @AppStorage(TriggerActivationStore.defaultsKey) private var activationRaw = ""
 
   /// Read-aloud rides the trigger's own tap/hold gate, so its instructions
-  /// follow the activation mode.
+  /// follow the activation mode. With asking on, a hold asks instead of reading,
+  /// so reading is a tap's job, or, where every press is a hold, a hold with
+  /// nothing said.
   private var howToUse: String {
     let activation = TriggerActivation.fromPersisted(activationRaw)
-    return "Select text and \(activation.startVerb) \(triggerKey.label) to hear it. \(activation.stopHint)"
+    let key = triggerKey.label
+    guard selectionAsk else {
+      return "Select text and \(activation.startVerb) \(key) to hear it. \(activation.stopHint)"
+    }
+    switch activation {
+    case .hold: return "Select text and hold \(key) without speaking to hear it. Press again to stop."
+    case .tapOrHold, .tap: return "Select text and tap \(key) to hear it. Tap again to stop."
+    }
   }
 
   /// The picker reads the stored speed through the same snap the press does, so
@@ -85,6 +96,10 @@ struct ExperimentalSection: View {
       // Work mode only changes how a read sounds, so its rows only appear
       // while there are reads to change.
       if selectionSpeech {
+        Toggle(isOn: $selectionAsk) {
+          SettingLabel(title: "Hold to ask about the selection", systemImage: "questionmark.bubble")
+        }
+        .accessibilityIdentifier(UITestIdentifiers.selectionAskToggle)
         Toggle(isOn: $workMode) {
           SettingLabel(title: "Work mode", systemImage: "briefcase")
         }
@@ -108,9 +123,15 @@ struct ExperimentalSection: View {
       Text("Experimental")
     } footer: {
       Text("\(howToUse) With nothing selected, the key dictates as usual.")
-      // Work mode's note is its own paragraph: what the unexplained switch does
-      // while it's off, and, while skipping is on, that the selection goes to the
-      // gateway before it's read.
+      // Each note is its own paragraph. Asking says where the selection and the
+      // request go, since that is a second service seeing both.
+      if selectionSpeech, selectionAsk {
+        Text(
+          "Hold \(triggerKey.label) over a selection and say what you want, like “summarize this,” to hear "
+            + "the answer. Asking sends the selection and what you said to AssemblyAI’s LLM Gateway.")
+      }
+      // Work mode's: what the unexplained switch does while it's off, and, while
+      // skipping is on, that the selection goes to the gateway before it's read.
       if selectionSpeech {
         if !workMode {
           Text("Work mode reads faster and can skip code, links, and long numbers.")

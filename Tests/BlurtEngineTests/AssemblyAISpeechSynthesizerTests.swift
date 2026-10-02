@@ -269,6 +269,30 @@ struct SelectionSpeakerTests {
     #expect(generated(socket) == ["Email jo@example.com today."])
   }
 
+  @Test("an answer is spoken as the gateway wrote it, at the style's rate")
+  func answers() async throws {
+    let sink = RecordingSink()
+    let socket = FakeSpeechSocket(respond: FakeSpeechSocket.service())
+    let gateway = FakeHTTPTransport { _ in (200, completion("It reports a strong quarter.")) }
+    let rate = ValueBox<Double?>(nil)
+    try await speaker(socket, sink: sink, gateway: gateway, rate: rate)
+      .answer("Summarize this.", about: "Revenue rose `12%` in Q3.", style: workMode)
+    // One gateway call (the answer, not a listening rewrite of it), then speech.
+    #expect(generated(socket) == ["It reports a strong quarter."])
+    #expect(rate.value == 2)
+  }
+
+  @Test("a failed answer surfaces its error and opens no socket")
+  func answerFailure() async {
+    let sink = RecordingSink()
+    let socket = FakeSpeechSocket(respond: FakeSpeechSocket.service())
+    let gateway = FakeHTTPTransport { _ in (503, Data()) }
+    await #expect(throws: ReadAloudLLMError.status(503)) {
+      try await speaker(socket, sink: sink, gateway: gateway).answer("Explain.", about: "x", style: .standard)
+    }
+    #expect(socket.sent.isEmpty)
+  }
+
   @Test("a stop during the rewrite plays nothing, rather than falling back")
   func cancelledDuringRewrite() async {
     let sink = RecordingSink()

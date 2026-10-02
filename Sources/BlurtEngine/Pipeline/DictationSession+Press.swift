@@ -8,8 +8,9 @@ import Dispatch
 // `Dispatch`, not `Foundation`: the only thing here from outside the module is
 // `contextQueue.async` (see `performPress` for why that read is off-pool).
 extension DictationSession {
-  func performPress() async {
+  func performPress(handingBack: Bool) async {
     guard phase.isTerminal else { return }
+    handsBackTranscript = handingBack
     // Refuse the press before any capture begins when the host reports a
     // blocker (e.g. no API key saved): recording an utterance that can only
     // fail at transcribe time would discard the user's words after the fact.

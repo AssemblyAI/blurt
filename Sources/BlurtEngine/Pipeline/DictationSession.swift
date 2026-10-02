@@ -161,12 +161,12 @@ public actor DictationSession {
   /// unstructured work a cancel has to be able to reach, and cancelling
   /// `pipelineTask` alone would abandon only the *wait* — the request itself
   /// would keep streaming and complete against a dictation the user dismissed.
-  ///
-  /// A bare task, because that is now all a live request is. It was an
-  /// `InFlightUpload` pairing the task with the context channel its `config`
-  /// part parked on, so abandoning it meant closing that too; the streaming
-  /// route settles the context up front, so `cancel()` is now the whole of it.
+  /// A bare task: the streaming route settles the context up front (it was an `InFlightUpload`).
   var upload: Task<String, any Error>?
+
+  /// Whether this press's transcript goes back to the host as `.handedBack`
+  /// instead of being pasted. Set by every press, read by `runTranscribeInject`.
+  var handsBackTranscript = false
 
   /// The production entry point: the real focus capture and the real
   /// developer-mode log. Delegates to the seam-carrying initializer below, which
@@ -276,10 +276,10 @@ public actor DictationSession {
     return task
   }
 
-  public func press() async {
+  public func press(handingBack: Bool = false) async {
     // Published before awaiting so a cancel can preempt the mic bring-up — see
     // `inFlightPress`. Cleared on the way out, but only if it's still ours.
-    let task = chain { await self.performPress() }
+    let task = chain { await self.performPress(handingBack: handingBack) }
     inFlightPress = task
     await task.value
     clearInFlightPress(task)

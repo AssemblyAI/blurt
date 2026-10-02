@@ -70,6 +70,7 @@ enum UITestIdentifiers {
   static let developerShowLogs = "settings.developer.showLogs"
   static let enhancedTranscriptsToggle = "settings.enhancedTranscripts.toggle"
   static let selectionSpeechToggle = "settings.selectionSpeech.toggle"
+  static let selectionAskToggle = "settings.selectionAsk.toggle"
   static let readAloudWorkModeToggle = "settings.readAloudWorkMode.toggle"
   static let readAloudSpeedPicker = "settings.readAloudWorkMode.speed"
   static let readAloudSkipsJargonToggle = "settings.readAloudWorkMode.skipsJargon"
