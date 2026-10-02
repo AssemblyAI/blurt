@@ -11,7 +11,7 @@ This file adds only what is specific to Claude Code: the tooling wired up under 
 | Hook                                | What it does                                                                                                                                                                                                                                                                                                                                                                  |
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `SessionStart` → `session-start.sh` | Web/Linux sandboxes only (`CLAUDE_CODE_REMOTE=true`): installs the portable linters so `scripts/check.sh --portable` works, then prints a preflight noting CI is the authority on green. SwiftLint and swift-format are _not_ installed — their Linux builds ship as GitHub release binaries, which the default network policy blocks. Local macOS sessions exit immediately. |
-| `PreToolUse` → `protect-pbxproj.sh` | Blocks edits to `App/Blurt/Blurt.xcodeproj/project.pbxproj` (exit 2). Edit `App/Blurt/project.yml` and run `xcodegen generate` instead.                                                                                                                                                                                                                                       |
+| `PreToolUse` → `protect-pbxproj.sh` | Blocks edits to `App/Blurt/Blurt.xcodeproj/project.pbxproj` (exit 2). Edit `App/Blurt/project.yml` and run `xcodegen generate` instead. (The iPhone project, `App/BlurtiOS/BlurtiOS.xcodeproj`, isn't committed at all: edit `App/BlurtiOS/project.yml`; every script regenerates it.)                                                                                        |
 | `PostToolUse` → `swift-format.sh`   | Formats every edited `*.swift` file with the repo's `.swift-format` config, so edits are CI-clean by construction. No-ops when the tool is absent.                                                                                                                                                                                                                            |
 | `PostToolUse` → `swiftlint.sh`      | Lints edited Swift files and surfaces violations immediately rather than at `check.sh` time.                                                                                                                                                                                                                                                                                  |
 
@@ -59,9 +59,12 @@ globs go in one invocation so `hook-lib.sh` and `release-lib.sh` are in the inpu
 
 ## Subagents (`.claude/agents/`)
 
-- **`swift6-concurrency-reviewer`** — run after editing engine or app code that touches actors,
-  async, the mic capture path, or the dictation pipeline.
+- **`swift6-concurrency-reviewer`** — run after editing engine, Mac app or iPhone code that
+  touches actors, async, the mic capture path, the dictation pipeline, or the keyboard's hand-off
+  with the iPhone app (`BlurtiOSCore`'s model, `DictationCoordinator`, `ListeningWindow`).
 - **`macos-hig-reviewer`** — run after editing views in `App/Blurt/` (wizard, settings, overlay).
+  Mac only: the iPhone's views answer to `App/BlurtiOS/DESIGN.md`, checked on sight through the
+  gallery and the probe's screenshots (`scripts/design-capture.sh`, `scripts/ios-keyboard-shot.sh`).
 - **`cleanup-reviewer`** — quality-only review (reuse, simplification/dead code, efficiency,
   altitude), one agent per angle. Use it for `/simplify`-style passes instead of writing the
   guardrails into an ad-hoc prompt: it loads `project-guardrails` itself and already knows the
@@ -89,9 +92,27 @@ not raw `brew install` or hand-rolled `xcodebuild` invocations:
 full Xcode — not just the Command Line Tools, Homebrew, a free Apple Development certificate)
 and why the scripts work the way they do.
 
+For the iPhone app (`App/BlurtiOS`, the keyboard included), from the repo root:
+
+1. `xcodebuild -downloadPlatform iOS` — one-time: the simulator runtime **matching this Xcode's
+   iOS SDK**. An older runtime is refused at the destination ("iOS 26.5 is not installed"), even
+   with simulators for it listed.
+2. `scripts/ios-sim.sh` — build, boot a simulator, install, grant the microphone, launch.
+   `BLURT_SIM_DEVICE="iPhone Air"` picks one; avoid the one a test run is using.
+3. In the simulator: Settings › Apps › Blurt › Keyboards (or General › Keyboard › Keyboards ›
+   Add New Keyboard) — Blurt on, Allow Full Access; then **Start listening** in Blurt.
+
+The simulator records through the Mac's microphone (`SimulatorAudioSource`), so dictation also
+needs macOS to allow the **Simulator** app the microphone (Privacy & Security › Microphone) and
+the right input under the Simulator's I/O › Audio Input — a refused microphone records silence
+rather than failing. `scripts/ios-check.sh` runs the iPhone's quality gates (tests with the
+`BlurtiOSCore` coverage floor, `swiftlint analyze`, periphery, the probe build); `check.sh` runs it
+itself when this Mac has the matching runtime.
+
 ## Permissions
 
 `.claude/settings.json` pre-allows the read-only and verification commands this repo needs
 (`swift test`, `swift build`, `xcodegen generate`, the Debug `xcodebuild` invocation, the linters,
-`scripts/check.sh` with and without `--portable`, `scripts/dev-build.sh`). If you find yourself
+`scripts/check.sh` with and without `--portable`, `scripts/dev-build.sh`, and the iPhone scripts:
+`ios-sim.sh`, `ios-test.sh`, `ios-check.sh`, `ios-typecheck.sh`). If you find yourself
 prompted for a command that belongs in that set, add it there rather than working around it.

@@ -190,4 +190,16 @@ only one of stt_prompt or prompt; they are the same field`, before the audio is
   kept open, not a per-press capture — the two rows marked "(macOS shell)" above do not apply.
 - Insertion is the keyboard's `textDocumentProxy`; the clipboard is only the fallback when no
   keyboard is there to take the words, and the phase then says "Copied", never "Pasted".
+- **Logic lives in `BlurtiOSCore`, UI in the targets** — the Mac's engine/shell split. The
+  core has no SwiftUI, no views and no audio; its API is `package`, not `public` (periphery
+  still sees dead code); it is static, linked by both targets. It alone is coverage-gated at
+  88%. A UI hook the model needs is a shell-side extension, never SwiftUI in the core.
+- **The keyboard never cancels words behind the user's back.** A cancel over a recording or a
+  transcription comes only from the × key or the term field opened over a highlighted word —
+  not from leaving the screen, a swipe across the orb, or the plain +. The fuzz test enforces it.
+- **No private Settings URLs** (`App-Prefs:`): `openSettingsURLString` only, and the copy names
+  the whole path (Apps › Blurt › Keyboards).
+- **No bundled brand fonts** — removed over their licence; `BlurtType`'s roles use system faces.
+- **`BlurtiOSTests` run serially** (scheme + `-parallel-testing-enabled NO`): they swap a global
+  `SharedStore.override`, which `.serialized` alone doesn't protect across suites.
 - The full list, with every number, is `App/BlurtiOS/DESIGN.md`.

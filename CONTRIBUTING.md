@@ -105,6 +105,31 @@ Run `xcodegen generate` and commit the regenerated `Blurt.xcodeproj/project.pbxp
 alongside it. `check.sh` fails on drift between the two. Never hand-edit the
 `.pbxproj` — it's generated.
 
+### The iPhone app
+
+`App/BlurtiOS` is the iPhone app and the keyboard it ships: the app listens and transcribes, the
+keyboard inserts the words (iOS lets no keyboard use the microphone). Its logic lives in
+`BlurtiOSCore`, apart from its views the way `BlurtEngine` is apart from the Mac shell.
+
+```bash
+xcodebuild -downloadPlatform iOS   # one-time: the simulator runtime this Xcode builds for
+scripts/ios-sim.sh                 # build, boot, install, grant the mic, launch (repo root)
+scripts/ios-check.sh               # its gates: tests + coverage floor, swiftlint analyze, periphery
+```
+
+No team or signing is needed for the simulator. Two things trip people up:
+
+- **The runtime has to match Xcode's iOS SDK.** Simulators on an older runtime still show in the
+  list but are refused at build time.
+- **The simulator dictates through your Mac's microphone,** so macOS has to allow the
+  **Simulator** app the microphone (System Settings › Privacy & Security › Microphone), with the
+  right input picked under the Simulator's **I/O › Audio Input**. Refused, it records silence
+  rather than failing.
+
+To use the keyboard: Settings › Apps › Blurt › Keyboards — turn on Blurt, then Allow Full
+Access — and **Start listening** in Blurt. A phone needs a paid team for the App Group;
+[`App/BlurtiOS/README.md`](./App/BlurtiOS/README.md) has that, the tests and the design loop.
+
 ### Working without a Mac
 
 You can read and edit Swift, and `scripts/check.sh --portable` fully verifies
