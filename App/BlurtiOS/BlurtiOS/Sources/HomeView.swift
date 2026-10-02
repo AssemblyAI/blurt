@@ -5,7 +5,7 @@ import BlurtiOSCore
 import SwiftUI
 
 /// The Dictate tab: the Blurt landing page on a phone. The wordmark and
-/// the gear across the top; the status as an eyebrow, a serif headline and a
+/// the gear across the top; the lifetime stats; the status as an eyebrow, a serif headline and a
 /// line of body text over the voice element; the one green button; then the
 /// styles and the recent dictations under their eyebrows. Setup sits on top
 /// while anything is missing; everything adjustable lives behind the gear.
@@ -40,6 +40,7 @@ struct HomeView: View {
               hasKey: coordinator.apiKey.hasAPIKey, microphoneGranted: microphoneGranted, keyboardSeen: keyboardSeen,
               enterKey: { showsKeyEntry = true }, refresh: refreshStatus)
           }
+          StatsCard()
           HomeHero(coordinator: coordinator, status: status, landedAt: landedAt)
           StyleChips()
           RecentSection(coordinator: coordinator)
