@@ -65,14 +65,21 @@
       // alone rather than clobbering them with the stale pre-paste snapshot.
       let ourChangeCount = changeCount
       return { [self] in
-        guard changeCount == ourChangeCount else { return }
         // A nil snapshot means the pasteboard could not be read at all. There is
         // nothing to put back, so leave the transcript on the clipboard (the same
         // degraded-but-recoverable outcome as the `.noTarget` path) rather than
         // clearing the user's clipboard to nothing.
         guard let saved else { return }
-        restore(saved)
+        restore(saved, ifChangeCountIs: ourChangeCount)
       }
+    }
+
+    /// Puts `saved` back, unless something wrote to the pasteboard since
+    /// `expected` was read: a newer copy by the user survives. Shared by the
+    /// paste path and the read-aloud copy fallback (`SelectionCopy`).
+    func restore(_ saved: PasteboardSnapshot, ifChangeCountIs expected: Int) {
+      guard changeCount == expected else { return }
+      restore(saved)
     }
 
     // MARK: - NSPasteboard building blocks (also exercised directly by SystemClipboardTests)

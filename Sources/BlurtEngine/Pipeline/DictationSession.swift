@@ -156,19 +156,19 @@ public actor DictationSession {
   /// propagates is honored by `runTranscribeInject` and `KeyInjector.insert`.
   var pipelineTask: Task<Void, Never>?  // internal: joined by awaitPipeline()
 
-  /// The in-flight dictation request, opened at press so the recording uploads
-  /// while the user speaks. Stored for the same reason `pipelineTask` is: it is
-  /// unstructured work a cancel has to be able to reach, and cancelling
-  /// `pipelineTask` alone would abandon only the *wait* — the request itself
+  /// The in-flight dictation request, opened at press so the recording uploads while the user
+  /// speaks. Stored for the same reason `pipelineTask` is: it is unstructured work a cancel has to
+  /// reach, and cancelling `pipelineTask` alone would abandon only the *wait* — the request itself
   /// would keep streaming and complete against a dictation the user dismissed.
-  ///
   /// A bare task: the streaming route settles the context up front, so `cancel()` is the whole of it.
   var upload: Task<String, any Error>?
 
-  /// The production entry point: the real log, and the real focus capture
-  /// unless the host supplies its own (`hostFocusCapture`: the iOS app, whose
-  /// keyboard knows the text before the cursor). Delegates to the seam-carrying
-  /// initializer below, which can't be public (it names internal seams).
+  /// Whether this press's transcript goes back to the host (`.handedBack`) instead of being pasted.
+  var handsBackTranscript = false
+
+  /// The production entry point: the real log, and the real focus capture unless the host
+  /// supplies its own (`hostFocusCapture`: the iOS app, whose keyboard knows the text before
+  /// the cursor). Delegates to the seam-carrying initializer below, which can't be public.
   public init(
     mic: MicCaptureProtocol,
     transcriber: TranscriberProtocol,
@@ -276,10 +276,10 @@ public actor DictationSession {
     return task
   }
 
-  public func press() async {
+  public func press(handingBack: Bool = false) async {
     // Published before awaiting so a cancel can preempt the mic bring-up — see
     // `inFlightPress`. Cleared on the way out, but only if it's still ours.
-    let task = chain { await self.performPress() }
+    let task = chain { await self.performPress(handingBack: handingBack) }
     inFlightPress = task
     await task.value
     clearInFlightPress(task)

@@ -8,24 +8,31 @@
 /// late and skip audio. A late chunk costs a small gap rather than lost words.
 /// The first chunk also gets the lead, so the renderer has it in hand before the
 /// clock starts.
+///
+/// The timeline is in media seconds, which pass `rate` times faster than the
+/// wall clock (a read-aloud speed above 1×), so the lead is scaled by the rate to
+/// keep the same real headroom.
 struct PCMSchedule {
-  /// Seconds of headroom for a first or late chunk.
+  /// Seconds of real headroom for a first or late chunk.
   static let lead = 0.05
 
   let sampleRate: Double
+  /// The lead in media seconds at this schedule's playback rate.
+  let leadTime: Double
   /// Where the next chunk goes, in seconds on the playback timeline.
   private(set) var nextTime = 0.0
   private(set) var started = false
 
-  init(sampleRate: Int) {
+  init(sampleRate: Int, rate: Double = 1) {
     self.sampleRate = Double(sampleRate)
+    self.leadTime = Self.lead * rate
   }
 
   /// The presentation time for a chunk of `frames`, given the clock reads `now`.
   /// Advances the schedule past the chunk.
   mutating func place(frames: Int, now: Double) -> Double {
     if !started || nextTime < now {
-      nextTime = (started ? now : 0) + Self.lead
+      nextTime = (started ? now : 0) + leadTime
     }
     started = true
     let at = nextTime

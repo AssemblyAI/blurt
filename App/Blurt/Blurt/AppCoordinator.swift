@@ -142,6 +142,7 @@ final class AppCoordinator {
       onStart: { router.submit(.press) },
       onStop: { router.submit(.release) },
       onCancel: { router.submit(.cancel) },
+      onLatch: { router.keyLatched() },
       // Recovery-only teardown; `cancelRecording()`'s doc owns the rationale.
       onRecordingDiscarded: { router.submit(.cancelRecording) }
     )
@@ -289,8 +290,10 @@ final class AppCoordinator {
     // pipeline phases. No-op whenever the gate is already idle, which is every
     // normal flow. Asked through the router, because while a read-aloud owns the
     // gate the reset isn't this dictation's to make (see `SelectionSpeechRouting`).
+    // It gets the phase itself because an ask about a selection ends in one,
+    // `.handedBack`, carrying the transcript the router answers.
     if phase.isTerminal {
-      speechRouter?.sessionReachedTerminalPhase()
+      speechRouter?.sessionReachedTerminalPhase(phase)
     }
   }
 }

@@ -44,6 +44,29 @@ struct CancelRaceTests {
     #expect(await session.phase == .cancelled)
   }
 
+  @Test("a submitted cancel during transcribing is spent there, not on the next press")
+  func submittedCancelDuringTranscribingIsSpent() async throws {
+    let stt = GatedTranscriber(text: "Summarize this.")
+    let session = DictationSession(
+      mic: StubMicCapture(), transcriber: stt, injector: StubInjector(), keyTermsProvider: { [] },
+      seams: .offline)
+
+    await session.press()
+    await session.release()
+    await stt.waitUntilStarted()
+    // The submitted door records the request before its turn (`requestCancel`).
+    // Read-aloud submits exactly this when a press lands while an ask transcribes.
+    session.submit(.cancel)
+    while await session.phase != .cancelled { await Task.yield() }
+    await stt.allowToFinish()
+    await session.awaitPipeline()
+
+    // A request left recorded would cancel the next press during its bring-up.
+    #expect(!session.cancelRequested)
+    await session.press()
+    #expect(await session.phase == .recording)
+  }
+
   @Test("cancel during transcribing with a throwing transcriber stays .cancelled")
   func cancelDuringTranscribingThrowingStaysCancelled() async throws {
     let mic = StubMicCapture()

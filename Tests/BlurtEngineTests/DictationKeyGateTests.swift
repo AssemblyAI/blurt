@@ -47,7 +47,7 @@ struct DictationKeyGateTests {
     Scenario(
       name: "quick tap latches on — release does not stop (a later solo tap does)",
       steps: [
-        .init(.down(.seconds(0))), .init(.up(.milliseconds(200)), DictationKeyGate.Action.none),
+        .init(.down(.seconds(0))), .init(.up(.milliseconds(200)), .latch),
         .init(.down(.seconds(5))), .init(.up(.milliseconds(5100)), .stop),
       ]),
     Scenario(
@@ -70,7 +70,7 @@ struct DictationKeyGateTests {
     Scenario(
       name: "release just under threshold is a tap (latch, not stop)",
       steps: [
-        .init(.down(.seconds(0))), .init(.up(.milliseconds(999)), DictationKeyGate.Action.none),
+        .init(.down(.seconds(0))), .init(.up(.milliseconds(999)), .latch),
         .init(.down(.seconds(5))), .init(.up(.milliseconds(5100)), .stop),
       ]),
     Scenario(
@@ -112,14 +112,14 @@ struct DictationKeyGateTests {
     Scenario(
       name: "tap mode: a release past the hold threshold still latches (no push-to-talk)",
       steps: [
-        .init(.down(.seconds(0)), .start), .init(.up(.milliseconds(1200)), DictationKeyGate.Action.none),
+        .init(.down(.seconds(0)), .start), .init(.up(.milliseconds(1200)), .latch),
         .init(.down(.seconds(5)), DictationKeyGate.Action.none), .init(.up(.milliseconds(5100)), .stop),
       ],
       activation: .tap),
     Scenario(
       name: "tap mode: a quick tap latches and the next tap stops, as in tap-or-hold",
       steps: [
-        .init(.down(.seconds(0)), .start), .init(.up(.milliseconds(200)), DictationKeyGate.Action.none),
+        .init(.down(.seconds(0)), .start), .init(.up(.milliseconds(200)), .latch),
         .init(.down(.seconds(2)), DictationKeyGate.Action.none), .init(.up(.milliseconds(2100)), .stop),
       ],
       activation: .tap),

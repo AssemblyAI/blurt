@@ -90,6 +90,13 @@ KEYBOARD="App/BlurtiOS/BlurtKeyboard/*.swift App/BlurtiOS/Shared/*.swift App/Blu
 # The rule is about *dictation* staying one request/one response, so the TTS
 # client — that one file — is excluded; a socket anywhere else still fails.
 NOT_TTS=":!Sources/BlurtEngine/TTS/AssemblyAISpeechSynthesizer.swift"
+# The client-side-LLM rule's one carve-out, on the same reasoning: read-aloud
+# shapes what the voice says through the LLM Gateway (the skip-jargon listening
+# rewrite, and the answer to a spoken question about a selection), because the
+# TTS socket has no server-side rewrite or reply to ask for. The rule is about
+# *dictation* cleanup staying on the dictation request, so that client — that
+# one file — is excluded; a gateway call anywhere else still fails.
+NOT_READ_ALOUD_LLM=":!Sources/BlurtEngine/TTS/ReadAloudLLM.swift"
 
 # Four parallel arrays rather than one delimited list, for the reason
 # check-portability.sh gives: the patterns contain `|`, so splitting on it
@@ -98,7 +105,7 @@ NOT_TTS=":!Sources/BlurtEngine/TTS/AssemblyAISpeechSynthesizer.swift"
 PATTERNS=(
   "AVAudioEngine|installTap"
   "URLSessionWebSocketTask|wss://"
-  "StylerProtocol|LLMGateway|LemurClient|/lemur/"
+  "StylerProtocol|LLMGateway|LemurClient|/lemur/|llm-gateway\\."
   "import Speech|import CoreML|SFSpeechRecognizer|MLModel"
   "\"language_codes?\""
   "\"conversation_context\""
@@ -113,7 +120,7 @@ PATTERNS=(
 SCOPES=(
   "$ENGINE $APP"
   "$ENGINE $APP $NOT_TTS"
-  "$ENGINE $APP"
+  "$ENGINE $APP $NOT_READ_ALOUD_LLM"
   "$ENGINE $APP"
   "$ENGINE"
   "$ENGINE"
@@ -128,7 +135,7 @@ SCOPES=(
 ADVICE=(
   "MicCapture builds a fresh AVCaptureSession recorder per capture — a long-lived engine goes stale on a device switch"
   "the dictation API returns the full text in one response; there is no streaming path (the one socket is the TTS client, AssemblyAISpeechSynthesizer.swift)"
-  "cleanup is the API's server-side rewrite via config.llm_instruction on the same /v1/transcribe/live call"
+  "cleanup is the API's server-side rewrite via config.llm_instruction on the same /v1/transcribe/live call (the one gateway client is read-aloud's, ReadAloudLLM.swift)"
   "transcription is a remote AssemblyAI call — no on-device ASR/LLM, no model cache"
   "leave language to the model's own detection; setting the field takes that away"
   "config.conversation_context was replaced by config.stt_prompt (STTPrompt)"

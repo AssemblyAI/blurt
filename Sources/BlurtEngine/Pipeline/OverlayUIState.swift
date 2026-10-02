@@ -64,7 +64,9 @@ extension PipelinePhase {
   /// How this phase should be presented on the overlay pill.
   public var overlayState: OverlayUIState {
     switch self {
-    case .idle, .cancelled: .idle
+    // `.handedBack` hides the pill: the transcript went to the host (an ask
+    // about the selection, answered aloud), so there is nothing to confirm.
+    case .idle, .cancelled, .handedBack: .idle
     // `.injecting` maps to `.processing`, NOT `.idle`. The shell reads an `.idle`
     // projection as "dismiss the pill", so mapping this working phase to idle
     // started a fade-out mid-dictation: two wasted animation groups on the fast

@@ -51,18 +51,39 @@ struct UpdatesSection: View {
 }
 
 /// The Advanced pane's experimental features — today just read-aloud (see
-/// `SelectionSpeechStore`). The router reads the same default this toggle writes
-/// at every press, so a change applies to the next one.
+/// `SelectionSpeechStore`), asking about the selection (`SelectionAskStore`)
+/// and how a read sounds (`ReadAloudStyleStore`). The router reads the same
+/// defaults these controls write at every press, so a change applies to the
+/// next one.
 struct ExperimentalSection: View {
   @AppStorage(SelectionSpeechStore.defaultsKey) private var selectionSpeech = false
+  @AppStorage(SelectionAskStore.defaultsKey) private var selectionAsk = SelectionAskStore.defaultValue
+  @AppStorage(ReadAloudStyleStore.speedDefaultsKey) private var speed = ReadAloudStyleStore.defaultSpeed
+  @AppStorage(ReadAloudStyleStore.skipsJargonDefaultsKey)
+  private var skipsJargon = ReadAloudStyleStore.defaultSkipsJargon
   @BoundTriggerKey private var triggerKey
   @AppStorage(TriggerActivationStore.defaultsKey) private var activationRaw = ""
 
   /// Read-aloud rides the trigger's own tap/hold gate, so its instructions
-  /// follow the activation mode.
+  /// follow the activation mode. With asking on, a hold asks instead of reading,
+  /// so reading is a tap's job, or, where every press is a hold, a hold with
+  /// nothing said.
   private var howToUse: String {
     let activation = TriggerActivation.fromPersisted(activationRaw)
-    return "Select text and \(activation.startVerb) \(triggerKey.label) to hear it. \(activation.stopHint)"
+    let key = triggerKey.label
+    guard selectionAsk else {
+      return "Select text and \(activation.startVerb) \(key) to hear it. \(activation.stopHint)"
+    }
+    switch activation {
+    case .hold: return "Select text and hold \(key) without speaking to hear it. Press again to stop."
+    case .tapOrHold, .tap: return "Select text and tap \(key) to hear it. Tap again to stop."
+    }
+  }
+
+  /// The picker reads the stored speed through the same snap the press does, so
+  /// a `defaults write` value off the list shows as the speed that will play.
+  private var speedSelection: Binding<Double> {
+    Binding(get: { ReadAloudStyleStore.nearestChoice(to: speed) }, set: { speed = $0 })
   }
 
   var body: some View {
@@ -71,10 +92,43 @@ struct ExperimentalSection: View {
         SettingLabel(title: "Read selected text aloud", systemImage: "speaker.wave.2")
       }
       .accessibilityIdentifier(UITestIdentifiers.selectionSpeechToggle)
+      // These rows only change reads, so they only appear while there are
+      // reads to change.
+      if selectionSpeech {
+        Toggle(isOn: $selectionAsk) {
+          SettingLabel(title: "Hold to ask about the selection", systemImage: "questionmark.bubble")
+        }
+        .accessibilityIdentifier(UITestIdentifiers.selectionAskToggle)
+        PickerSettingRow(
+          title: "Speed", systemImage: "hare",
+          accessibilityID: UITestIdentifiers.readAloudSpeedPicker, selection: speedSelection
+        ) {
+          ForEach(ReadAloudStyleStore.speedChoices, id: \.self) { choice in
+            Text(ReadAloudStyleStore.speedLabel(choice)).tag(choice)
+          }
+        }
+        Toggle(isOn: $skipsJargon) {
+          SettingLabel(title: "Skip code, links, and long numbers", systemImage: "text.badge.minus")
+        }
+        .accessibilityIdentifier(UITestIdentifiers.readAloudSkipsJargonToggle)
+      }
     } header: {
       Text("Experimental")
     } footer: {
       Text("\(howToUse) With nothing selected, the key dictates as usual.")
+      // Each note is its own paragraph. Asking says where the selection and the
+      // request go, since that is a second service seeing both.
+      if selectionSpeech, selectionAsk {
+        Text(
+          "Hold \(triggerKey.label) over a selection and say what you want, like “summarize this,” to hear "
+            + "the answer. Asking sends the selection and what you said to AssemblyAI’s LLM Gateway.")
+      }
+      // While skipping is on, the selection goes to the gateway before it's read.
+      if selectionSpeech, skipsJargon {
+        Text(
+          "To skip code, links, and long numbers, Blurt sends the selection to AssemblyAI’s LLM Gateway "
+            + "before reading it.")
+      }
     }
   }
 }
