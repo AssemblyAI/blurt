@@ -40,8 +40,8 @@ public enum KeyTerms {
     return result
   }
 
-  /// Terms as the comma-separated text `parse` reads back unchanged.
   // periphery:ignore - public for the iOS app (App/BlurtiOS), which the Mac scan doesn't index.
+  /// Terms as the comma-separated text `parse` reads back unchanged.
   public static func join(_ terms: [String]) -> String {
     terms.joined(separator: ", ")
   }
