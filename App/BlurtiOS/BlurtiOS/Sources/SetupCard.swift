@@ -1,15 +1,17 @@
 import AVFoundation
+import BlurtEngine
 import SwiftUI
 import UIKit
 
 /// The setup checklist, on top of the home screen while anything is missing:
-/// three numbered steps — sign in (a key, in debug builds), the microphone,
-/// the keyboard — each with its control until it is done.
+/// three numbered steps — an AssemblyAI API key, the microphone, the keyboard —
+/// each with its control until it is done.
 struct SetupCard: View {
   let hasKey: Bool
   let microphoneGranted: Bool
   let keyboardSeen: Bool
-  /// Debug builds take an API key in place of the sign-in that doesn't exist yet.
+  /// Every build takes an API key, as the Mac app does, until Sign in with
+  /// AssemblyAI exists.
   let enterKey: () -> Void
   /// Re-read the permissions after one was asked for.
   let refresh: () -> Void
@@ -17,13 +19,13 @@ struct SetupCard: View {
   var body: some View {
     VStack(alignment: .leading, spacing: DesignTokens.Metrics.appStackGap) {
       Eyebrow("Set up Blurt")
-      SetupRow(number: "01", done: hasKey, title: "Sign in with AssemblyAI") {
+      SetupRow(number: "01", done: hasKey, title: "Add your AssemblyAI API key") {
         VStack(alignment: .leading, spacing: DesignTokens.Metrics.appLineGap) {
-          Text("Coming soon — sign-in needs the AssemblyAI login service.")
+          Text("Blurt uses your own AssemblyAI account. New accounts come with free credits.")
             .font(BlurtType.body(DesignTokens.Typography.sizeCaption)).foregroundStyle(BlurtBrand.muted)
-          #if DEBUG
-            Button("Use an API key instead") { enterKey() }.buttonStyle(BrandButtonStyle(role: .secondary))
-          #endif
+          Button("Paste your key") { enterKey() }.buttonStyle(BrandButtonStyle(role: .primary))
+          Link("Get a free key", destination: APIKeyStore.dashboardURL)
+            .font(BlurtType.body(DesignTokens.Typography.sizeCaption))
         }
       }
       SetupRow(number: "02", done: microphoneGranted, title: "Allow the microphone") {

@@ -33,9 +33,10 @@ CI builds it for the simulator on every PR (`check.yml`'s `ios-build` job). On a
 Mac with only the Command Line Tools — no iOS SDK — `scripts/ios-typecheck.sh`
 typechecks both targets against the Mac Catalyst frameworks with the same
 flags, which catches the Swift 6 isolation errors before CI does. Running
-on a phone needs Xcode with a team that can provision the App Group; every id in
-`project.yml` (`dev.alex.blurt.ios`, `group.dev.alex.blurt`) is a placeholder
-inherited from the Mac app and must become org-owned before the App Store.
+on a phone needs Xcode with a team that can provision the App Group. The ids in
+`project.yml` (`com.assemblyai.blurt.ios`, `com.assemblyai.blurt.ios.keyboard`,
+`group.com.assemblyai.blurt.ios`) are AssemblyAI's, so they register under the AssemblyAI team;
+anyone building under another team changes them locally (see Testing on a phone).
 
 ## Design
 
@@ -128,13 +129,12 @@ shows its console.
    characters after the team's name). The App Group needs a paid team — a free Personal Team
    cannot register one, so use the org's team, not your own.
 3. `cd App/BlurtiOS && BLURT_TEAM=<your team id> xcodegen generate && open BlurtiOS.xcodeproj`.
-   Automatic signing registers `dev.alex.blurt.ios`, `dev.alex.blurt.ios.keyboard` and
-   `group.dev.alex.blurt` under that team on the first build; it fails if another team already
+   Automatic signing registers `com.assemblyai.blurt.ios`, `com.assemblyai.blurt.ios.keyboard` and
+   `group.com.assemblyai.blurt.ios` under that team on the first build; it fails if another team already
    owns them.
 4. Plug the phone in (Developer Mode on: Settings → Privacy & Security), pick it as the run
    destination, run the `BlurtiOS` scheme. On the phone, trust the developer app (Settings →
-   General → VPN & Device Management). In the app: **Use an API key instead** (debug builds
-   only), **Allow** the microphone, then **Open Settings** and go to **Apps › Blurt › Keyboards**
+   General → VPN & Device Management). In the app: **Paste your key**, **Allow** the microphone, then **Open Settings** and go to **Apps › Blurt › Keyboards**
    (a phone may open straight on Blurt's page): turn on Blurt and **Allow Full Access**.
 5. Back in the app, **Start listening**, then go to Messages, hold the globe key, pick Blurt,
    and tap the mic. Tap again to stop, or hold it while you talk. The words land in the field.
@@ -145,9 +145,9 @@ shows its console.
 
 - **Autocorrect and the suggestion bar** on the full keyboard.
 
-- **Sign in with AssemblyAI.** The shipping app signs the user in and gets a key
-  behind the scenes; that service does not exist yet. Debug builds show "Use an API
-  key instead" (`KeyEntryView`) so the pipeline can be tested now.
+- **Sign in with AssemblyAI.** The shipping app will sign the user in and get a key
+  behind the scenes; that service does not exist yet. Until it does, every build
+  (TestFlight included) takes a pasted API key (`KeyEntryView`), as the Mac app does.
 - **Returning to the host app.** After "Start Blurt" the user swipes back; iOS 26.4
   ended automatic switch-back for everyone.
 - **The full keyboard** has no autocorrect or suggestions yet.

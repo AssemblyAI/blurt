@@ -23,7 +23,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$REPO_ROOT/scripts/ios-lib.sh"
 DERIVED="$IOS_DERIVED"
 # PRODUCT_BUNDLE_IDENTIFIER in App/BlurtiOS/project.yml.
-BUNDLE_ID=dev.alex.blurt.ios
+BUNDLE_ID=com.assemblyai.blurt.ios
 SHOT=""
 BUILD=1
 while [ $# -gt 0 ]; do

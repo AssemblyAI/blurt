@@ -372,7 +372,7 @@ against the request's cap of 100 terms.
 
 Settings → Transcription → **Share key terms…** puts the list in the share
 sheet as a `.blurtterms` file (JSON — `name`, `from`, `terms`; a declared
-document type, `dev.alex.blurt.terms`) with the words as the message text. A
+document type, `com.assemblyai.blurt.terms`) with the words as the message text. A
 tap on the file in Messages opens Blurt with "Add N key terms?": every term
 ticked, untick any, Add merges the rest without duplicates. A
 `blurt://terms?add=a,b,c&name=…&from=…` link does the same (`TermPack`,
