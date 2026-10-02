@@ -7,7 +7,7 @@ App/Blurt/Blurt.xcodeproj/
 .github/images/
 
 # App icon asset bundle (not Swift).
-App/Blurt/Blurt/AppIcon.icon/
+Design/brand/AppIcon.icon/
 
 # --- lint-only (NOT mirrored to .cursorignore — Cursor still indexes these) ---
 

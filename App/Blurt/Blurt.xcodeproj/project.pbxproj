@@ -24,10 +24,12 @@
 		0933F6F9CD7294843A63E09C /* rom1b-15-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = B401FA111CA49F5A535366AC /* rom1b-15-stop.m4a */; };
 		0946D58B6886B74ED2A5DA18 /* rom1b-13-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 429B975FA7FFA777106D0A49 /* rom1b-13-stop.m4a */; };
 		0A259385C40D25FC87E377D6 /* APIKeyStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DA3A304528FD1C7FE6C2B94 /* APIKeyStepView.swift */; };
+		0A37755226EF8ABE02BA42AC /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 30117E33FF99C309A29FB903 /* AppIcon.icon */; };
 		0A7FB8A90BB7E7A5110A4F4D /* BlurtEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 371215E93A9C2CE60C6347BB /* BlurtEngine */; };
 		0BAB613C778CDF7691FAE6E6 /* rom1b-11-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4052A873788D31A33BE80FCB /* rom1b-11-stop.m4a */; };
 		0CB2E6C02E57374806139E68 /* juno-60-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 24B8138546D9CD21F6D55F54 /* juno-60-start.m4a */; };
 		0D4AE0F936EAA5E3F0CE96AD /* rom1b-5-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F2B1262C9AB83ED251421D03 /* rom1b-5-start.m4a */; };
+		0DB94677FDF38489C7CE3E25 /* blurt-ready-logo.png in Resources */ = {isa = PBXBuildFile; fileRef = 49B8C7CF9FC84D9E3B96796B /* blurt-ready-logo.png */; };
 		0F06FD2F6DB2831867C8B681 /* juno-52-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = ED1535C5BDC865063C5DA3A3 /* juno-52-stop.m4a */; };
 		0F1317CCFA2A3245DAA96141 /* DictationComposition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08A7417835D8538AC4A7E2FB /* DictationComposition.swift */; };
 		0F6D746DF48BB048827A358F /* rom1b-29-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 786672855B44AB80CAF4D782 /* rom1b-29-stop.m4a */; };
@@ -296,7 +298,6 @@
 		A98B1591750D1E45F35356F5 /* juno-75-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 92CAA331F57FCD20583AF8CB /* juno-75-start.m4a */; };
 		AA418A6C485538A314B95258 /* rom1b-10-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 7A6872FE0B51D0EC9C4B397B /* rom1b-10-stop.m4a */; };
 		AA61D851350DECC5A7045594 /* rom1a-27-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = A8FCDA16949B9CE1323E24F8 /* rom1a-27-start.m4a */; };
-		AAD6D2EADCA8C241332764AD /* blurt-ready-logo.png in Resources */ = {isa = PBXBuildFile; fileRef = 350F18C964DCA2DDCA296ED4 /* blurt-ready-logo.png */; };
 		AB1C0077FA26EEDEA3542A07 /* juno-89-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 00768AE8171902B439F0602F /* juno-89-start.m4a */; };
 		AC402D2E4BC71A0F8324DCFD /* juno-109-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = EB08EC40A267C71B185EC782 /* juno-109-stop.m4a */; };
 		AD32046355138298E7FC40D0 /* MenuBarScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBA9C9322D0AF3D9C529F06F /* MenuBarScene.swift */; };
@@ -428,7 +429,6 @@
 		F0ABE7C8E87C7B955DB89601 /* juno-34-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3012F22300681F3DD71AD51B /* juno-34-stop.m4a */; };
 		F164F3AA161629499C07A5F2 /* rom1b-17-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DE43545891BB9D4ED7B55D7B /* rom1b-17-stop.m4a */; };
 		F22CA13B8F0DB10BE6D84696 /* rom1a-21-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 5DB9D5866E9743B12589DFF4 /* rom1a-21-stop.m4a */; };
-		F245B1D54675872118567839 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 1BE0AC6DFA2DC39D6D557BA3 /* AppIcon.icon */; };
 		F2C37DB124D3CD134315F6AD /* rom1b-20-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 662773E86D58C62C6A41801F /* rom1b-20-start.m4a */; };
 		F30578AA785CAE98E944F6B7 /* TextShortcutsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A50C85936C100F9E51CC2AD /* TextShortcutsSection.swift */; };
 		F3D87A72BED81C8532FCB503 /* juno-3-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = A2C5021E8F72182F331DA397 /* juno-3-start.m4a */; };
@@ -504,7 +504,6 @@
 		19A708C2C2C7CDF52E47A8C4 /* juno-88-start.m4a */ = {isa = PBXFileReference; path = "juno-88-start.m4a"; sourceTree = "<group>"; };
 		1A1C4446E1D3FAB9F662E61D /* rom1a-12-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-12-stop.m4a"; sourceTree = "<group>"; };
 		1A3D5DAAD31F8C7F67CAD5BB /* juno-32-start.m4a */ = {isa = PBXFileReference; path = "juno-32-start.m4a"; sourceTree = "<group>"; };
-		1BE0AC6DFA2DC39D6D557BA3 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		1C72B7BEF6CFEC52928C6CED /* juno-100-stop.m4a */ = {isa = PBXFileReference; path = "juno-100-stop.m4a"; sourceTree = "<group>"; };
 		1CF1F098A8DC41DD8508480E /* juno-8-start.m4a */ = {isa = PBXFileReference; path = "juno-8-start.m4a"; sourceTree = "<group>"; };
 		1D5C52A673686FB041595227 /* rom1b-31-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-31-stop.m4a"; sourceTree = "<group>"; };
@@ -548,6 +547,7 @@
 		2E64BCDB280FD0A27D965AA9 /* rom1a-5-start.m4a */ = {isa = PBXFileReference; path = "rom1a-5-start.m4a"; sourceTree = "<group>"; };
 		2E79CB809D285C0C27E8D43D /* OverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayView.swift; sourceTree = "<group>"; };
 		2FFA326076660C91492A6CE1 /* juno-8-stop.m4a */ = {isa = PBXFileReference; path = "juno-8-stop.m4a"; sourceTree = "<group>"; };
+		30117E33FF99C309A29FB903 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		3012F22300681F3DD71AD51B /* juno-34-stop.m4a */ = {isa = PBXFileReference; path = "juno-34-stop.m4a"; sourceTree = "<group>"; };
 		30703F589CF213720C7E3B15 /* StyleRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StyleRow.swift; sourceTree = "<group>"; };
 		30E57A9C9B934A2120381005 /* WizardController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardController.swift; sourceTree = "<group>"; };
@@ -561,7 +561,6 @@
 		33AE2EBBF7FA36E1E0AEBC3A /* rom1a-16-start.m4a */ = {isa = PBXFileReference; path = "rom1a-16-start.m4a"; sourceTree = "<group>"; };
 		35048A9866E106410CDCED81 /* juno-115-stop.m4a */ = {isa = PBXFileReference; path = "juno-115-stop.m4a"; sourceTree = "<group>"; };
 		35059AC7D847666F9D7FFF07 /* juno-107-start.m4a */ = {isa = PBXFileReference; path = "juno-107-start.m4a"; sourceTree = "<group>"; };
-		350F18C964DCA2DDCA296ED4 /* blurt-ready-logo.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "blurt-ready-logo.png"; sourceTree = "<group>"; };
 		35EA12CB630AC702CBAC175A /* juno-106-stop.m4a */ = {isa = PBXFileReference; path = "juno-106-stop.m4a"; sourceTree = "<group>"; };
 		3611A8FA0547B780D0804F52 /* AppCoordinator+UITesting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppCoordinator+UITesting.swift"; sourceTree = "<group>"; };
 		36CF30F1384D606BE74362C8 /* juno-51-start.m4a */ = {isa = PBXFileReference; path = "juno-51-start.m4a"; sourceTree = "<group>"; };
@@ -608,6 +607,7 @@
 		4873421ACF290B88FA257D6A /* rom1a-7-start.m4a */ = {isa = PBXFileReference; path = "rom1a-7-start.m4a"; sourceTree = "<group>"; };
 		48C4CFC6271703797187A269 /* KeyCap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyCap.swift; sourceTree = "<group>"; };
 		49A71146BDFEA07D74A6A67C /* juno-32-stop.m4a */ = {isa = PBXFileReference; path = "juno-32-stop.m4a"; sourceTree = "<group>"; };
+		49B8C7CF9FC84D9E3B96796B /* blurt-ready-logo.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "blurt-ready-logo.png"; sourceTree = "<group>"; };
 		49CD6A6815EDDB16BBBCCCB2 /* rom1b-3-start.m4a */ = {isa = PBXFileReference; path = "rom1b-3-start.m4a"; sourceTree = "<group>"; };
 		49F7AD1193F18CCDF17B9EBA /* juno-6-stop.m4a */ = {isa = PBXFileReference; path = "juno-6-stop.m4a"; sourceTree = "<group>"; };
 		4A89CB4834FF9ABE02C969F7 /* juno-111-stop.m4a */ = {isa = PBXFileReference; path = "juno-111-stop.m4a"; sourceTree = "<group>"; };
@@ -936,7 +936,6 @@
 				240939D503F3CE03A0697A5F /* AppCoordinator.swift */,
 				3611A8FA0547B780D0804F52 /* AppCoordinator+UITesting.swift */,
 				9542F903D789DDAA55639374 /* AppDelegate.swift */,
-				1BE0AC6DFA2DC39D6D557BA3 /* AppIcon.icon */,
 				E3DD66C653EAB2EFF2CF8DAA /* Assets.xcassets */,
 				77E9E7F17972483F6FBF1CCD /* Blurt.entitlements */,
 				7D222ED050CC93DEB330E773 /* CueSoundPlayer.swift */,
@@ -961,6 +960,7 @@
 			children = (
 				1560402FBA5911463036085F /* Blurt */,
 				73649A7C02EB13B17D81A412 /* BlurtUITests */,
+				E0FCB536C7F1A0AD06EE625D /* brand */,
 				4B1375E36CD42DBEFF08BC7E /* Packages */,
 				D8F69C40E4A93A6B3433BAC0 /* Shared */,
 				10E2E11380C974390308C1D2 /* Products */,
@@ -1406,7 +1406,6 @@
 		7D6DE85EA50E7CD4CC977211 /* Branding */ = {
 			isa = PBXGroup;
 			children = (
-				350F18C964DCA2DDCA296ED4 /* blurt-ready-logo.png */,
 				C19DBE4661B752927D16B261 /* BlurtBrand.swift */,
 			);
 			path = Branding;
@@ -1464,6 +1463,16 @@
 				C10286F2D7AD2A279FBBEBFC /* SelectionSpeechRouter.swift */,
 			);
 			path = Hotkey;
+			sourceTree = "<group>";
+		};
+		E0FCB536C7F1A0AD06EE625D /* brand */ = {
+			isa = PBXGroup;
+			children = (
+				30117E33FF99C309A29FB903 /* AppIcon.icon */,
+				49B8C7CF9FC84D9E3B96796B /* blurt-ready-logo.png */,
+			);
+			name = brand;
+			path = ../../Design/brand;
 			sourceTree = "<group>";
 		};
 		E7D37943B6B2CE3C0692AA48 /* Update */ = {
@@ -1581,9 +1590,9 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F245B1D54675872118567839 /* AppIcon.icon in Resources */,
+				0A37755226EF8ABE02BA42AC /* AppIcon.icon in Resources */,
 				68AE6018C91E06C05EBFB2D0 /* Assets.xcassets in Resources */,
-				AAD6D2EADCA8C241332764AD /* blurt-ready-logo.png in Resources */,
+				0DB94677FDF38489C7CE3E25 /* blurt-ready-logo.png in Resources */,
 				351E74AD4AF61AC397D0E29F /* juno-0-start.m4a in Resources */,
 				8D81DE1C806A0EE6E219D343 /* juno-0-stop.m4a in Resources */,
 				FACF8BEBF744A47219B402F3 /* juno-1-start.m4a in Resources */,
