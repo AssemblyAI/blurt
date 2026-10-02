@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 
+@testable import AssemblyAI
 @testable import BlurtEngine
 
 @Suite("TextShortcutExpander")
@@ -147,7 +148,7 @@ struct TextShortcutStoreTests {
       TextShortcut(trigger: "...", expansion: "unmatchable"),
     ]
     #expect(store.shortcuts.map(\.expansion) == ["a@example.com"])
-    #expect(TextShortcutStore.matchKey(for: "Cal.com") == TextShortcutStore.matchKey(for: "cal com"))
+    #expect(TextShortcut.matchKey(for: "Cal.com") == TextShortcut.matchKey(for: "cal com"))
   }
 
   @Test("an undecodable slot reads as no shortcuts")

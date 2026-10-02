@@ -1,5 +1,6 @@
 import Testing
 
+@testable import AssemblyAI
 @testable import BlurtEngine
 
 /// `TranscriptionContext.isEmpty` is the gate `FocusCapture`/`DictationSession`
@@ -47,7 +48,7 @@ struct TranscriptionContextTests {
     // Not in the context turns — they are sent as the request's word-boost list,
     // which is why a key-terms-only context is still worth carrying.
     #expect(STTPrompt.text(context: context).isEmpty)
-    #expect(KeytermsBoost.fitted(context.keyTerms) == ["Blurt"])
+    #expect(KeyTerms.fitted(context.keyTerms) == ["Blurt"])
   }
 
   @Test("recent dictations alone make it non-empty, and are what gets sent")

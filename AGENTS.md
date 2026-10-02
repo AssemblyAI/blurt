@@ -41,7 +41,8 @@ Four reflexes before you touch anything:
 
 The package's second library, **`AssemblyAI`** (`Sources/AssemblyAI/`), is the AssemblyAI API client the
 engine is built on: the `HTTPTransport` seam and its streamed upload body, the dictation wire types and
-multipart framing, and `APIKeyValidator`. It holds no Blurt policy (no prompts, styles, key storage or
+multipart framing, `APIKeyValidator`, and dictation vocabulary — `KeyTerms` (parsing a list and fitting
+it to `keyterms_prompt`'s caps) and `TextShortcut` with its on-device `TextShortcutExpander`. It holds no Blurt policy (no prompts, styles, key storage or
 `User-Agent`; `APIKeyValidator.blurt()` is where Blurt's agent joins it), so it can become a standalone
 Swift SDK. It is part of the same local package, so the dependency-free rule is unchanged.
 
@@ -58,8 +59,9 @@ workflow and the _why_ behind the design; the engine's README covers the _what_ 
 
 ```text
 Sources/AssemblyAI/          the AssemblyAI API client library (README.md there): HTTPTransport +
-                             ChunkedRequestBody, Dictation/ (wire types, multipart framing),
-                             APIKeyValidator. No Blurt policy; BlurtEngine depends on it
+                             ChunkedRequestBody, Dictation/ (wire types, multipart framing,
+                             KeyTerms, TextShortcuts), APIKeyValidator. No Blurt policy;
+                             BlurtEngine depends on it
 Sources/BlurtEngine/         the engine (dependency-free Swift package)
   README.md                  the engine's developer guide (quick start, seams, error table)
   Audio/                     MicCapture (+meter) over CaptureSessionRecorder (the
@@ -85,7 +87,7 @@ Sources/BlurtEngine/         the engine (dependency-free Swift package)
                              PermissionsChecker (mic + Accessibility), PermissionsReset,
                              SigningIdentity (macOS only)
   Pipeline/                  DictationSession (actor) + phases, UI projections, geometry, log
-  STT/                       AssemblyAITranscriber, Conversation/TranscriptionContext, KeytermsBoost,
+  STT/                       AssemblyAITranscriber, Conversation/TranscriptionContext,
                              CleanupInstruction, SyncSTTLimits
 App/Blurt/
   project.yml                XcodeGen source of truth — Blurt.xcodeproj is GENERATED
@@ -416,7 +418,7 @@ rule along with the row.
 | Pin transcription to English, or set a language at all                         | Hurt non-English transcription; language is left to the model's own detection. **No `config.language_codes`** either — note the plural, which is the documented spelling, though the undocumented singular `language_code` is accepted too (a 200, not the unknown-key 400 a bogus name earns), so both are live and both are pinned absent. Detection was measured to work with neither it nor a prompt set (es/fr/de/ja clips each transcribed in their own language against the live endpoint, rewrite included), and re-measured 2026-09-11: a Spanish clip came back as Spanish with no field, with `language_codes: ["es"]`, **and** with `language_codes: ["en"]` — asking for English did not force English, so the reference's `["en"]` default does not describe this route and omission is not a bet on a default. Setting one would only take working detection away. `KeytermsWireTests` asserts the absence of both spellings.                                                                                                                                                                                                         |
 | Send `config.prompt` alongside `config.stt_prompt`                             | They are the same field under two names — the docs give `stt_prompt` as the field and note it is "Also accepted as `prompt`" — and a request carrying both is rejected before the audio is read (`provide only one of stt_prompt or prompt; they are the same field`). So this is never a compatible addition: it is a 400 on _every_ dictation. `stt_prompt` is the documented spelling and the only one to send; `prompt` is the legacy one, and the route's own inner validator still answers under it (see `STTPrompt.characterCap`), which is a reason to treat it as deprecated rather than interchangeable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Bring back `config.conversation_context`                                       | Replaced by `config.stt_prompt` (`STTPrompt`), which carries the same two signals as one string. Both fields still work and can ride the same request, so re-adding the turn list sends the prior text twice rather than failing. `prompt` is `stt_prompt`'s own alias — a request carrying both is a 400 (`they are the same field`) — and a custom prompt replaces the service's managed default, which is the trade this swap accepted.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| Widen the request's context past history + the prior chunk                     | `STTPrompt.text` reads exactly two fields of `TranscriptionContext` — `recentTranscripts` and `priorText`. The app name, window title, field label and selected text are captured for the paste path and the developer-mode log and stay on the machine; the app/window/field hints and the `Selected text:` block were removed, not gated. Don't add one back, and don't route that context onto the request by another path. The user's key terms are the exception that proves the rule: they _are_ sent, as the request's own `keyterms_prompt` list (`KeytermsBoost`) — never folded back into the prompt.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Widen the request's context past history + the prior chunk                     | `STTPrompt.text` reads exactly two fields of `TranscriptionContext` — `recentTranscripts` and `priorText`. The app name, window title, field label and selected text are captured for the paste path and the developer-mode log and stay on the machine; the app/window/field hints and the `Selected text:` block were removed, not gated. Don't add one back, and don't route that context onto the request by another path. The user's key terms are the exception that proves the rule: they _are_ sent, as the request's own `keyterms_prompt` list (`KeyTerms`) — never folded back into the prompt.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | Add a "remove filler words (um, uh, like)" clause                              | Not in the STT model's trained instruction set — a no-op, deliberately dropped; disfluency removal is the server-side LLM rewrite's job.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Add a keystroke-typing paste path or a length threshold                        | Injection is **always** clipboard paste (save → write → ⌘V → settle → restore), with the copied-to-clipboard degradation when the target is lost.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Add `LSUIElement` or a menu-bar-**only** mode                                  | Blurt is a Dock app first. The `MenuBarExtra` status item is convenience layered on the Dock icon; the notch can hide a status item, so nothing may depend on it. A menu-bar-only variant was reverted twice.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
@@ -691,9 +693,9 @@ and the instruction cap was measured against the live endpoint before the refere
 (it now gives `llm_instruction` a `maxLength` of 2048, in characters, while the constant counts
 UTF-8 bytes — the conservative unit). There is a _third_ cap in the same request —
 `config.keyterms_prompt` accepts 2048 characters summed across all terms
-(`KeytermsBoost.characterCap`), the same figure as the instruction cap but a limit on a different
+(`KeyTerms.characterCap`), the same figure as the instruction cap but a limit on a different
 field — and that field carries a _fourth_, which is a **count** and not a size:
-at most 100 terms (`KeytermsBoost.termCap`, the reference's `maxItems`). The count is the one the
+at most 100 terms (`KeyTerms.termCap`, the reference's `maxItems`). The count is the one the
 byte budget does not imply, and it is reachable, since 150 short terms cost ~1500 bytes and clear
 the byte cap easily. Four caps, four constants: never reuse one field's figure for another, and
 never assume one cap on a field is the only cap on it.
@@ -946,14 +948,14 @@ as trimming an over-cap list, which made our 4096 a bandwidth measure; `stt_prom
 what stands between a long history and every dictation failing. Its unit is **Unicode scalars**,
 measured rather than inferred from the word "characters": 4096 `é` (8192 UTF-8 bytes) is accepted,
 while 820 family emoji — 820 grapheme clusters but 4100 scalars — is rejected. So Swift's
-`String.count` would under-count and let a 400 through, and the UTF-8 bytes `KeytermsBoost` and
+`String.count` would under-count and let a 400 through, and the UTF-8 bytes `KeyTerms` and
 `CleanupInstruction` count (their own servers' units being unmeasured) would needlessly halve the
 budget for accented text. Two omissions are deliberate and regression-tested — no language directive
 and no filler-word clause; see
 [Settled decisions](#settled-decisions--dont-reintroduce-these).
 
 **The key terms are the request's other steering field.**
-`Sources/BlurtEngine/STT/KeytermsBoost.swift` sends the user's Settings list as
+`Sources/AssemblyAI/Dictation/KeyTerms.swift` sends the user's Settings list as
 `config.keyterms_prompt` — keyterms prompting: a flat array of strings biasing recognition toward
 those exact spellings. It is a
 sibling of `stt_prompt`, not an alternative; the API takes both on the same request and
@@ -967,8 +969,8 @@ both halves of that, since `/v1/transcribe/live` rejects an unknown key outright
 (`Extra inputs are not permitted`) and `keyterms_prompt` returns 200. Send exactly one of the three,
 never two — they are mutually exclusive on this route (`provide only one of keyterms_prompt,
 keyterms, or word_boost`, 400 before the audio is read), so a rename here is a swap and never an
-addition. `KeytermsBoost.fitted` takes whole terms in the user's order while
-they fit the field's own 2048-character cap (`KeytermsBoost.characterCap`, measured in UTF-8 bytes —
+addition. `KeyTerms.fitted` takes whole terms in the user's order while
+they fit the field's own 2048-character cap (`KeyTerms.characterCap`, measured in UTF-8 bytes —
 the conservative reading, as with `CleanupInstruction`) **and** the list stays within
 `termCap` (100), the reference's `maxItems` on the same field — two independent limits, so both are
 checked; a comma-split list of 150 short terms clears the byte cap and 400s on the count. It returns a plain `[String]`, not an
@@ -976,7 +978,7 @@ optional one — the repo bans optional collections, and "no terms" needs only o
 omit-vs-`[]` distinction that _does_ matter to the API lives in `DictationConfig.encode(to:)`, which
 drops the key for an empty list. Terms arrive already trimmed and deduped from `KeyTermsStore.parse`,
 so length is the only thing enforced here. Unit-tested in
-`Tests/BlurtEngineTests/KeytermsBoostTests.swift`.
+`Tests/BlurtEngineTests/KeyTermsTests.swift`.
 
 **The two fields are deliberately different JSON types, and neither tolerates the other's.**
 `stt_prompt` is a string — an array earns `400 stt_prompt: Input should be a valid string` — while
@@ -1006,7 +1008,7 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
 - **`TriggerKeyStore`** (`BlurtTriggerKeyCode`), **`SoundPackStore`** (`BlurtSoundPack`),
   **`KeyTermsStore`** (`BlurtKeyTerms`, the user's domain vocabulary, re-read at every press via
   the session's `keyTermsProvider` and sent as the request's `keyterms_prompt` list —
-  see `KeytermsBoost`),
+  see `KeyTerms`),
   **`DeveloperModeStore`** (`BlurtDeveloperMode`, off by default),
   **`EnhancedTranscriptsStore`** (`BlurtEnhancedTranscripts`, **on** by default — unset reads as
   enabled; picks the cleanup rewrite over the verbatim transcript in the dictation _response_,

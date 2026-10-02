@@ -1,3 +1,4 @@
+import AssemblyAI
 import BlurtEngine
 import SwiftUI
 
@@ -143,14 +144,14 @@ private struct TextShortcutEditorSheet: View {
     self.shortcut = shortcut
     isExisting = shortcuts.contains { $0.id == shortcut.id }
     otherKeys = Set(
-      shortcuts.filter { $0.id != shortcut.id }.map { TextShortcutStore.matchKey(for: $0.trigger) })
+      shortcuts.filter { $0.id != shortcut.id }.map { TextShortcut.matchKey(for: $0.trigger) })
     _trigger = State(initialValue: shortcut.trigger)
     _expansion = State(initialValue: shortcut.expansion)
   }
 
-  /// The phrase as the matcher sees it (`TextShortcutStore.matchKey`) — empty
+  /// The phrase as the matcher sees it (`TextShortcut.matchKey`) — empty
   /// when it has no letters or digits.
-  private var triggerKey: String { TextShortcutStore.matchKey(for: trigger) }
+  private var triggerKey: String { TextShortcut.matchKey(for: trigger) }
 
   /// A phrase the matcher can't tell from another shortcut's — "personal
   /// email" vs "Personal-Email" — would be dropped by the store's dedupe, so

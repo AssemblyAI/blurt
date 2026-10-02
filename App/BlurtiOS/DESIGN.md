@@ -349,7 +349,7 @@ the plain + a recording is released and the words still land; from a
 highlighted word it is cancelled, since a result replaces the selection and
 would land over the very word being fixed (tested). Shift is on for the first letter and after a space. Type the right
 spelling; return or ✓ saves. The term goes into Blurt's key terms
-(`BlurtKeyTerms` in the App Group, `KeyTermList` rules: trimmed, deduplicated
+(`BlurtKeyTerms` in the App Group, the AssemblyAI SDK's `KeyTerms` rules: trimmed, deduplicated
 case-insensitively) and rides `keyterms_prompt` on the very next dictation. If
 it began as a selection and you changed it, the misheard word in your text is
 replaced with what you typed — only while that highlight still stands where

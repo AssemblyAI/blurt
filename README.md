@@ -224,8 +224,7 @@ Sources/BlurtEngine/     Swift 6 package owning the pipeline — no external dep
   STT/                   AssemblyAITranscriber: one POST to dictation.assemblyai.com/v1/transcribe/live
                          (STT + LLM rewrite); STTPrompt (contextual priming:
                          your recent dictations then the text before the cursor, and
-                         nothing else about your screen); KeytermsBoost (key terms as
-                         the keyterms-prompt list)
+                         nothing else about your screen)
   Pipeline/              DictationSession actor: press/release/cancel commands, phase
                          stream, auto-release before the API's recording cap
   Hotkey/                DictationKeyGate/Router: pure, unit-tested state machine for the

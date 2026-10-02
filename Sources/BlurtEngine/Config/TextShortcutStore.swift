@@ -1,29 +1,8 @@
+import AssemblyAI
 import Foundation
 
-/// One spoken phrase and the text it expands to — "personal email" →
-/// `me@example.com`. Applied to the finished transcript on the machine, after
-/// the dictation response and before the paste (see `TextShortcutExpander`);
-/// nothing about a shortcut goes on the wire.
-///
-/// The `id` is minted once so the Settings list and its editor sheet can track
-/// a row across a rename of its trigger.
-public struct TextShortcut: Codable, Identifiable, Hashable, Sendable {
-  public let id: UUID
-  public var trigger: String
-  public var expansion: String
-
-  public init(trigger: String, expansion: String) {
-    self.init(id: UUID(), trigger: trigger, expansion: expansion)
-  }
-
-  init(id: UUID, trigger: String, expansion: String) {
-    self.id = id
-    self.trigger = trigger
-    self.expansion = expansion
-  }
-}
-
-/// Storage for the user's text shortcuts, as one JSON list in `UserDefaults`.
+/// Storage for the user's text shortcuts (the AssemblyAI SDK's `TextShortcut`),
+/// as one JSON list in `UserDefaults` — Blurt's key and Blurt's limits.
 ///
 /// Has a setter for the same encoded-on-write reason as `StyleProfileStore`:
 /// the JSON shape is the store's business, so the Settings sheet writes through
@@ -76,18 +55,9 @@ public struct TextShortcutStore {
     return Self.normalized(decoded)
   }
 
-  /// The identity two triggers share when the expander can't tell them apart:
-  /// letters and digits only, lowercased, with the separators dropped — it
-  /// treats any separator run (or none) between words as equal, so "personal
-  /// email", "Personal-Email" and "personalemail" are one phrase. Empty for a
-  /// trigger with no letters or digits, which can never match anything.
-  public static func matchKey(for trigger: String) -> String {
-    TextShortcutExpander.words(in: trigger).joined().lowercased()
-  }
-
   /// The one funnel every list passes through, on read and on write: trimmed
   /// fields within their caps, entries with a blank or unmatchable trigger or a
-  /// blank expansion dropped, and triggers deduplicated by `matchKey` (first
+  /// blank expansion dropped, and triggers deduplicated by `TextShortcut.matchKey` (first
   /// wins — two expansions for one phrase could only ever apply one of them).
   /// Idempotent.
   static func normalized(_ shortcuts: [TextShortcut]) -> [TextShortcut] {
@@ -99,7 +69,7 @@ public struct TextShortcutStore {
         let expansion = shortcut.expansion.trimmedNonEmpty().map({
           String($0.prefix(expansionLimit))
         }),
-        case let key = matchKey(for: trigger), !key.isEmpty,
+        case let key = TextShortcut.matchKey(for: trigger), !key.isEmpty,
         seen.insert(key).inserted
       else { continue }
       result.append(TextShortcut(id: shortcut.id, trigger: trigger, expansion: expansion))

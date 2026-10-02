@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 
+@testable import AssemblyAI
 @testable import BlurtEngine
 
 private struct DecodedEntry: Decodable {
@@ -141,7 +142,7 @@ struct DictationLogEntryTests {
 
   @Test("records the key terms the request boosts, fitted the same way")
   func logsTheKeytermsTheRequestCarries() {
-    // Through `KeytermsBoost.fitted`, not the raw list: the log has to show the
+    // Through `KeyTerms.fitted`, not the raw list: the log has to show the
     // steering the API actually saw, so a blank entry is dropped here too.
     let withTerms = TranscriptionContext(
       appName: "Mail", priorText: "Hi Sam,", keyTerms: ["AssemblyAI", "  ", "LeMUR"])

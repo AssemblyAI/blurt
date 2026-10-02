@@ -16,7 +16,7 @@
 public struct SoundPackCatalog: Sendable {
   /// Distinct group names, in catalog order — the picker's sections. Deduped
   /// through a `Set` (`insert(_:).inserted` as the filter, matching
-  /// `KeyTermsStore.parse`) rather than an array `contains` scan per element, and
+  /// `KeyTerms.parse`) rather than an array `contains` scan per element, and
   /// resolved once at construction: the picker reads it, then `voices(in:)` per
   /// group, on every settings render.
   public let groups: [String]

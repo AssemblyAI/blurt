@@ -1,51 +1,61 @@
-/// The user's key terms as the dictation request's `config.keyterms_prompt` —
-/// keyterms prompting, the other half of transcription steering next to
-/// `STTPrompt`.
+/// Key terms — names, product names, jargon — for the dictation request's
+/// `config.keyterms_prompt`: keyterms prompting, the other half of
+/// transcription steering next to the `stt_prompt` context.
 ///
 /// The two fields do different jobs and ride the same request:
-/// `stt_prompt` is the prior text (the user's recent dictations,
-/// then the text before the cursor) that tells the model what this utterance
-/// continues; `keyterms_prompt` is a flat list of strings biasing recognition
-/// toward those exact spellings. Boosting is the right tool for an explicit vocabulary
-/// list — names, product names, jargon — which is exactly what the Settings
-/// "Key Terms" field collects, and the wrong thing to pack into prose context (a
-/// `Keywords: a, b, c.` clause is what this replaces).
+/// `stt_prompt` is prior text (recent dictations, then the text before the
+/// cursor) that tells the model what this utterance continues;
+/// `keyterms_prompt` is a flat list of strings biasing recognition toward those
+/// exact spellings. Boosting is the right tool for an explicit vocabulary list,
+/// and the wrong thing to pack into prose context (a `Keywords: a, b, c.`
+/// clause).
 ///
 /// **`keyterms_prompt`, not `word_boost`.** Three names are the same feature —
 /// `keyterms_prompt` is the one the Streaming and Pre-recorded surfaces use and
-/// the one the dictation reference now documents, with `keyterms` and
-/// `word_boost` kept as legacy aliases. This sent `word_boost` until 2026-09-10,
-/// on the belief that it was the documented name and `keyterms_prompt` merely a
-/// pass-through among the unknown fields the endpoint forwards as-is. Both halves
-/// of that were wrong, measured against `/v1/transcribe/live`: the route
+/// the one the dictation reference documents, with `keyterms` and `word_boost`
+/// kept as legacy aliases. Measured against `/v1/transcribe/live`: the route
 /// validates its config strictly and rejects an unknown key outright
-/// (`Extra inputs are not permitted`), so `keyterms_prompt` returning 200 is
-/// proof it is a parameter the route knows — and the service's own error names it
-/// first: `provide only one of keyterms_prompt, keyterms, or word_boost`.
+/// (`Extra inputs are not permitted`), and the service's own error names it
+/// first: `provide only one of keyterms_prompt, keyterms, or word_boost`. The
+/// aliases are mutually exclusive on this route, so a request carrying two names
+/// 400s before the audio is read. Send exactly one.
 ///
-/// Send exactly one. The aliases are mutually exclusive on this route, not just
-/// on the sibling one, so a belt-and-braces request carrying two names 400s
-/// before the audio is read — which makes the migration a swap and never an
-/// addition.
-///
-/// The terms arrive already normalized — `KeyTermsStore.parse` splits on commas,
-/// trims, drops blanks, and dedupes case-insensitively — so the only thing left
-/// to enforce here is size: the field accepts at most `characterCap` across
-/// all terms and at most `termCap` terms, and the user's list is the one
-/// unbounded input in the request.
-/// Exercised by `Tests/BlurtEngineTests/KeytermsBoostTests.swift`.
-enum KeytermsBoost {
+/// Two steps, both here: `parse` turns what a person types (a comma-separated
+/// list) into clean terms, and `fitted` keeps a list within the field's two
+/// caps, which the user's list is the one unbounded input able to breach.
+public enum KeyTerms {
+  /// A comma-separated list as clean terms: split on commas (only commas, so
+  /// "San Francisco" stays one term), trimmed, blanks dropped, and duplicates
+  /// removed case-insensitively, keeping the first spelling and the user's
+  /// order. `fitted` assumes terms arrive this way.
+  public static func parse(_ text: String?) -> [String] {
+    guard let text else { return [] }
+    var seen = Set<String>()
+    var result: [String] = []
+    for piece in text.split(separator: ",") {
+      guard let term = String(piece).trimmedNonEmpty() else { continue }
+      guard seen.insert(term.lowercased()).inserted else { continue }
+      result.append(term)
+    }
+    return result
+  }
+
+  // periphery:ignore - public for the iOS app (App/BlurtiOS), which the Mac scan doesn't index.
+  /// Terms as the comma-separated text `parse` reads back unchanged.
+  public static func join(_ terms: [String]) -> String {
+    terms.joined(separator: ", ")
+  }
+
   /// Cap the API places on `config.keyterms_prompt`: 2048 characters summed
   /// across every term. Measured here in **UTF-8 bytes**, the conservative reading — the
   /// documented unit is "characters", which is unmeasured against the endpoint,
-  /// and bytes can only overestimate a multi-byte term's cost. Same conservative
-  /// choice, and the same reasoning, as `CleanupInstruction.characterCap`.
+  /// and bytes can only overestimate a multi-byte term's cost.
   ///
   /// Note this is the *boost* cap and a different number from the 4096 on
-  /// `config.stt_prompt` (`STTPrompt.characterCap`). Reusing
+  /// `config.stt_prompt`. Reusing
   /// one cap's figure for the other field is how a whole-request 400 shipped once
   /// before.
-  static let characterCap = 2048
+  public static let characterCap = 2048
 
   /// The *other* cap on the same field, and the one the byte budget above does
   /// not imply: at most **100 terms**, however short they are
@@ -53,12 +63,12 @@ enum KeytermsBoost {
   /// 100 terms and 8000 characters in total"). Exceeding either is a 400 on the
   /// whole request, before the audio is read.
   ///
-  /// Reachable, which is why it is here: the terms are comma-split from one
-  /// free-text field, so 150 short ones cost ~1500 bytes and sail under
+  /// Reachable, which is why it is here: terms comma-split from one free-text
+  /// field (`parse`) are uncounted, so 150 short ones cost ~1500 bytes and sail under
   /// `characterCap` while being half again over this. That shape failed *every*
   /// dictation until the user shortened the list — the same outage a 3057-character
   /// cleanup instruction caused once, by the same mechanism.
-  static let termCap = 100
+  public static let termCap = 100
 
   /// The terms to send for `terms` — empty when there are none to send, which
   /// the encoders read as "omit the field", so the request asks for no boosting
@@ -75,7 +85,7 @@ enum KeytermsBoost {
   /// nothing — and order is the user's, so the terms they typed first are the
   /// ones that survive a list too long to send. A term is never split and a
   /// blank one is never sent, so a stray entry can't cost the request.
-  static func fitted(_ terms: [String]) -> [String] {
+  public static func fitted(_ terms: [String]) -> [String] {
     var included: [String] = []
     var remaining = characterCap
     for term in terms {
