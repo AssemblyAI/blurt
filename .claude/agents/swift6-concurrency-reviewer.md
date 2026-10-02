@@ -58,7 +58,7 @@ Look at the changes (default to the working diff via `git diff` and
 ### On the iPhone (`App/BlurtiOS/`)
 
 - **The keyboard never hears anything:** no `AVFoundation`/`AVFAudio` in
-  `BlurtKeyboard/`, `Shared/` or `BlurtiOSCore/` (the keyboard links the core).
+  `BlurtKeyboard/`, `BlurtDesign/` or `BlurtiOSCore/` (the keyboard links the core).
   Capture lives only in the app (`WindowedAudioSource`, `SimulatorAudioSource`).
 - **Payloads that cross processes or the capture path are `nonisolated`** —
   `SharedStore`, `PhaseSnapshot`, `KeyboardCommand`, `DictationResult` and the

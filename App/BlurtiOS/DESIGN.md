@@ -12,7 +12,7 @@ Sources of truth: the brand design system
 (`https://www.assemblyai.com/brand-design-system/assemblyai-brand-design-system.md`)
 and the Blurt landing page for the look; `Design/apple-geometry.json` for the
 keys; `Design/tokens.json` for every value the views draw with. From the
-tokens, `scripts/design-tokens.swift` writes `Shared/DesignTokens.swift`
+tokens, `scripts/design-tokens.swift` writes `BlurtDesign/DesignTokens.swift`
 (what the views read), the tables in this file marked `tokens:begin` /
 `tokens:end`, and the app's asset-catalog colour sets. Edit the JSON, run `scripts/design-sync.sh`, commit; `check.sh`
 runs `design-sync.sh --check` and fails on drift or on a design literal in a
@@ -412,11 +412,11 @@ side, and — in the panel — cancel in the far top corner, clear of them both,
 where in the middle it mirrors the + on the mic's other side.
 Left and right are the phone's sides: in a right-to-left language the
 leading/trailing mapping flips so the mic stays under the thumb chosen
-(`BlurtiOSCore/MicAlignment.swift` and `Shared/MicAlignment+Layout.swift`, tested). Gallery: `-BlurtGalleryAlign
+(`BlurtiOSCore/MicAlignment.swift` and `BlurtKeyboard/Sources/MicAlignment+Layout.swift`, tested). Gallery: `-BlurtGalleryAlign
 left|center|right`; the real extension: `scripts/ios-keyboard-flows.sh
 --align left|right` checks the mic is at that edge with the add key inside it.
 
-## Tokens (`Design/tokens.json` → `Shared/DesignTokens.swift`)
+## Tokens (`Design/tokens.json` → `BlurtDesign/DesignTokens.swift`)
 
 The brand's colours, as the design system defines them and as the phone
 uses them. `BlurtBrand` keeps a few of the Mac's names as aliases.
@@ -469,36 +469,36 @@ The keyboard's semantic colours and the app's catalog colours:
 
 <!-- tokens:begin keyboard -->
 
-| Token                   | Value                                      | Swift                         | Use                                                              |
-| ----------------------- | ------------------------------------------ | ----------------------------- | ---------------------------------------------------------------- |
-| `app/accent-dark`       | `#67AD82` (`brand.green/400`)              | `Keyboard.appAccentDark`      | the catalog's AccentColor in dark                                |
-| `app/accent-light`      | `#01762F` (`brand.green/700`)              | `Keyboard.appAccentLight`     | the catalog's AccentColor in light                               |
-| `app/card-border-dark`  | `#3A362F` (`brand.ink/600`)                | `Keyboard.appCardBorderDark`  | the catalog's CardBorder in dark                                 |
-| `app/card-border-light` | `#C7C3B2` (`brand.paper/400`)              | `Keyboard.appCardBorderLight` | the catalog's CardBorder in light                                |
-| `app/card-fill-dark`    | `#26231E` (`brand.ink/800`)                | `Keyboard.appCardFillDark`    | the catalog's CardFill in dark                                   |
-| `app/card-fill-light`   | `#F5F3EB` (`brand.paper/tint`)             | `Keyboard.appCardFillLight`   | the catalog's CardFill in light                                  |
-| `app/cta-dark`          | `#67AD82` (`brand.green/400`)              | `Keyboard.appCtaDark`         | the catalog's CTA in dark: the site's button green               |
-| `app/cta-light`         | `#01762F` (`brand.green/700`)              | `Keyboard.appCtaLight`        | the catalog's CTA in light: the one green button                 |
-| `app/cta-text-dark`     | `#1D1B16` (`brand.ink`)                    | `Keyboard.appCtaTextDark`     | the catalog's CTAText in dark: ink on green, as the site         |
-| `app/cta-text-light`    | `#FFFFFF` (`brand.white`)                  | `Keyboard.appCtaTextLight`    | the catalog's CTAText in light                                   |
-| `app/muted-dark`        | `#A5A4A2` (`brand.neutral/500`)            | `Keyboard.appMutedDark`       | the catalog's Muted in dark                                      |
-| `app/muted-light`       | `#777673` (`brand.neutral/700`)            | `Keyboard.appMutedLight`      | the catalog's Muted in light: eyebrows, captions, secondary text |
-| `app/page-dark`         | `#1D1B16` (`brand.ink`)                    | `Keyboard.appPageDark`        | the catalog's Page in dark: ink, the website's ground            |
-| `app/page-light`        | `#FDFCF8` (`brand.paper/page`)             | `Keyboard.appPageLight`       | the catalog's Page in light: the design system's page            |
-| `app/text-dark`         | `#F5F3EB` (`brand.paper/tint`)             | `Keyboard.appTextDark`        | the catalog's Text in dark                                       |
-| `app/text-light`        | `#1D1B16` (`brand.ink`)                    | `Keyboard.appTextLight`       | the catalog's Text in light                                      |
-| `kb/cancel`             | `#E67F36` (`brand.orange`)                 | `Keyboard.kbCancel`           | the panel's cancel ×                                             |
-| `kb/field`              | `#33302A` (`themes.dark/field`)            | `Keyboard.kbField`            | the key-term field                                               |
-| `kb/field-border`       | `#3A362F` (`themes.dark/field-border`)     | `Keyboard.kbFieldBorder`      | the field's hairline                                             |
-| `kb/full-access-note`   | `#E67F36` (`brand.orange`)                 | `Keyboard.kbFullAccessNote`   | the one line of words the keyboard ever shows                    |
-| `kb/key`                | `#33302A` (`themes.dark/key`)              | `Keyboard.kbKey`              | an ordinary key                                                  |
-| `kb/key-modifier`       | `#26231E` (`themes.dark/key-modifier`)     | `Keyboard.kbKeyModifier`      | shift, delete, globe, return, 123, cancel                        |
-| `kb/legend`             | `#F5F3EB` (`themes.dark/legend`)           | `Keyboard.kbLegend`           | key legends and bare glyphs                                      |
-| `kb/legend-secondary`   | `#A5A4A2` (`themes.dark/legend-secondary`) | `Keyboard.kbLegendSecondary`  | the mono word labels (123, ABC, return, space) and the + at rest |
-| `kb/notice-error`       | `#E67F36` (`brand.orange`)                 | `Keyboard.kbNoticeError`      | the solid ring and glyph for an error                            |
-| `kb/popup`              | `#33302A` (`themes.dark/popup`)            | `Keyboard.kbPopup`            | the letter pop-up                                                |
-| `kb/signal`             | `#67AD82` (`themes.dark/signal`)           | `Keyboard.kbSignal`           | the wave, the caret, the saved check                             |
-| `kb/surface`            | `#1D1B16` (`themes.dark/surface`)          | `Keyboard.kbSurface`          | the design face's surface (Swift reads the palette)              |
+| Token                   | Value                                      | Swift                         | Use                                                                                           |
+| ----------------------- | ------------------------------------------ | ----------------------------- | --------------------------------------------------------------------------------------------- |
+| `app/accent-dark`       | `#67AD82` (`brand.green/400`)              | `Keyboard.appAccentDark`      | the catalog's AccentColor in dark                                                             |
+| `app/accent-light`      | `#01762F` (`brand.green/700`)              | `Keyboard.appAccentLight`     | the catalog's AccentColor in light: Blurt green, the one accent every screen and the CTA take |
+| `app/card-border-dark`  | `#3A362F` (`brand.ink/600`)                | `Keyboard.appCardBorderDark`  | the catalog's CardBorder in dark                                                              |
+| `app/card-border-light` | `#C7C3B2` (`brand.paper/400`)              | `Keyboard.appCardBorderLight` | the catalog's CardBorder in light                                                             |
+| `app/card-fill-dark`    | `#26231E` (`brand.ink/800`)                | `Keyboard.appCardFillDark`    | the catalog's CardFill in dark                                                                |
+| `app/card-fill-light`   | `#F5F3EB` (`brand.paper/tint`)             | `Keyboard.appCardFillLight`   | the catalog's CardFill in light                                                               |
+| `app/cta-dark`          | `#67AD82` (`keyboard.app/accent-dark`)     | `Keyboard.appCtaDark`         | the catalog's CTA in dark: the one accent button                                              |
+| `app/cta-light`         | `#01762F` (`keyboard.app/accent-light`)    | `Keyboard.appCtaLight`        | the catalog's CTA in light: the one accent button                                             |
+| `app/cta-text-dark`     | `#1D1B16` (`brand.ink`)                    | `Keyboard.appCtaTextDark`     | the catalog's CTAText in dark: ink on green, as the site                                      |
+| `app/cta-text-light`    | `#FFFFFF` (`brand.white`)                  | `Keyboard.appCtaTextLight`    | the catalog's CTAText in light                                                                |
+| `app/muted-dark`        | `#A5A4A2` (`brand.neutral/500`)            | `Keyboard.appMutedDark`       | the catalog's Muted in dark                                                                   |
+| `app/muted-light`       | `#777673` (`brand.neutral/700`)            | `Keyboard.appMutedLight`      | the catalog's Muted in light: eyebrows, captions, secondary text                              |
+| `app/page-dark`         | `#1D1B16` (`brand.ink`)                    | `Keyboard.appPageDark`        | the catalog's Page in dark: ink, the website's ground                                         |
+| `app/page-light`        | `#FDFCF8` (`brand.paper/page`)             | `Keyboard.appPageLight`       | the catalog's Page in light: the design system's page                                         |
+| `app/text-dark`         | `#F5F3EB` (`brand.paper/tint`)             | `Keyboard.appTextDark`        | the catalog's Text in dark                                                                    |
+| `app/text-light`        | `#1D1B16` (`brand.ink`)                    | `Keyboard.appTextLight`       | the catalog's Text in light                                                                   |
+| `kb/cancel`             | `#E67F36` (`brand.orange`)                 | `Keyboard.kbCancel`           | the panel's cancel ×                                                                          |
+| `kb/field`              | `#33302A` (`themes.dark/field`)            | `Keyboard.kbField`            | the key-term field                                                                            |
+| `kb/field-border`       | `#3A362F` (`themes.dark/field-border`)     | `Keyboard.kbFieldBorder`      | the field's hairline                                                                          |
+| `kb/full-access-note`   | `#E67F36` (`brand.orange`)                 | `Keyboard.kbFullAccessNote`   | the one line of words the keyboard ever shows                                                 |
+| `kb/key`                | `#33302A` (`themes.dark/key`)              | `Keyboard.kbKey`              | an ordinary key                                                                               |
+| `kb/key-modifier`       | `#26231E` (`themes.dark/key-modifier`)     | `Keyboard.kbKeyModifier`      | shift, delete, globe, return, 123, cancel                                                     |
+| `kb/legend`             | `#F5F3EB` (`themes.dark/legend`)           | `Keyboard.kbLegend`           | key legends and bare glyphs                                                                   |
+| `kb/legend-secondary`   | `#A5A4A2` (`themes.dark/legend-secondary`) | `Keyboard.kbLegendSecondary`  | the mono word labels (123, ABC, return, space) and the + at rest                              |
+| `kb/notice-error`       | `#E67F36` (`brand.orange`)                 | `Keyboard.kbNoticeError`      | the solid ring and glyph for an error                                                         |
+| `kb/popup`              | `#33302A` (`themes.dark/popup`)            | `Keyboard.kbPopup`            | the letter pop-up                                                                             |
+| `kb/signal`             | `#67AD82` (`themes.dark/signal`)           | `Keyboard.kbSignal`           | the wave, the caret, the saved check                                                          |
+| `kb/surface`            | `#1D1B16` (`themes.dark/surface`)          | `Keyboard.kbSurface`          | the design face's surface (Swift reads the palette)                                           |
 
 <!-- tokens:end keyboard -->
 

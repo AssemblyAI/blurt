@@ -1,4 +1,5 @@
 import AVFoundation
+import BlurtDesign
 import BlurtEngine
 import BlurtiOSCore
 import SwiftUI

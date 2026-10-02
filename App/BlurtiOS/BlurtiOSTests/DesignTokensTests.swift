@@ -1,6 +1,8 @@
+import BlurtDesign
 import Foundation
 import SwiftUI
 import Testing
+import UIKit
 
 @testable import BlurtiOS
 @testable import BlurtiOSCore
@@ -152,5 +154,41 @@ struct DesignTokensTests {
     #expect(DesignTokens.Themes.lightSignal == DesignTokens.Brand.green700)
     #expect(DesignTokens.Themes.lightNotice == DesignTokens.Brand.orange)
     #expect(DesignTokens.Themes.darkNotice == DesignTokens.Brand.orange)
+  }
+
+  @Test(
+    "BlurtDesign's chrome colours are the app's catalog colours, light and dark",
+    arguments: [
+      ("AccentColor", BlurtBrand.accent), ("Page", BlurtBrand.page), ("Text", BlurtBrand.text),
+      ("Muted", BlurtBrand.muted), ("CardFill", BlurtBrand.cardFill), ("CardBorder", BlurtBrand.cardBorder),
+      ("CTA", BlurtBrand.cta), ("CTAText", BlurtBrand.ctaText),
+    ])
+  func chromeMatchesCatalog(name: String, colour: Color) throws {
+    // The catalog is what the system draws with (the global accent, the launch
+    // screen); the library is what our views draw with. Both come from the same
+    // token pair, so a mismatch is a generator or library bug.
+    let catalog = try #require(UIColor(named: name), "\(name) is not in the app's catalog")
+    for style in [UIUserInterfaceStyle.light, .dark] {
+      let traits = UITraitCollection(userInterfaceStyle: style)
+      #expect(
+        Self.rgba(UIColor(colour).resolvedColor(with: traits)) == Self.rgba(catalog.resolvedColor(with: traits)),
+        "\(name) in \(style == .dark ? "dark" : "light")")
+    }
+  }
+
+  @Test("the CTA is the accent, so the accent is one token to repoint")
+  func ctaIsTheAccent() {
+    #expect(DesignTokens.Keyboard.appCtaLight == DesignTokens.Keyboard.appAccentLight)
+    #expect(DesignTokens.Keyboard.appCtaDark == DesignTokens.Keyboard.appAccentDark)
+  }
+
+  /// sRGB components to 8 bits, as the catalog stores them.
+  private static func rgba(_ colour: UIColor) -> [Int] {
+    var red: CGFloat = 0
+    var green: CGFloat = 0
+    var blue: CGFloat = 0
+    var alpha: CGFloat = 0
+    colour.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+    return [red, green, blue, alpha].map { Int(($0 * 255).rounded()) }
   }
 }

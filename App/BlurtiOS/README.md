@@ -63,8 +63,9 @@ The iPhone code splits the way the Mac's does. **`BlurtiOSCore/`** is the logic 
 contract, the keyboard's model and rules, the voice state, term packs, the relay injector — and
 plays the part `BlurtEngine` plays for the Mac shell: no SwiftUI, no views, no audio (the keyboard
 links it, and the keyboard never hears anything; `check-invariants.sh` enforces the last). The
-app (`BlurtiOS/Sources`) and the keyboard (`BlurtKeyboard/Sources`) are the UI on top of it, with
-`Shared/` holding what both draw with (design tokens, type, brand colours).
+app (`BlurtiOS/Sources`) and the keyboard (`BlurtKeyboard/Sources`) are the UI on top of it, drawn
+with **`BlurtDesign/`**, the component library: the design tokens, type roles and brand colours,
+and the pieces every screen is built from (card, page, form, eyebrow, button, wordmark, grain).
 
 It is a static framework, so the app and the keyboard each link their own copy beside the
 engine's, and its API is `package` (one `SWIFT_PACKAGE_NAME` across the project), not `public`:
