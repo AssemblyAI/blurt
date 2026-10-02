@@ -229,18 +229,32 @@ package enum DesignTokens {
     package nonisolated static let appHeroPad: CGFloat = 20
     /// The header's gear, the copy glyph.
     package nonisolated static let appIcon: CGFloat = 20
+    /// An app input's top and bottom (its sides are app/chip-pad-x).
+    package nonisolated static let appInputPadY: CGFloat = 10
     /// Between lines of one thought.
     package nonisolated static let appLineGap: CGFloat = 6
     /// The screens' side padding.
     package nonisolated static let appPagePad: CGFloat = 20
+    /// A key-term pill's top and bottom, and its side beside the ×.
+    package nonisolated static let appPillPadY: CGFloat = 4
+    /// The × on a key-term pill: its tap square.
+    package nonisolated static let appPillRemove: CGFloat = 24
     /// Between the theme card's two faces.
     package nonisolated static let appPreviewGap: CGFloat = 8
+    /// A list row's top and bottom inside a card.
+    package nonisolated static let appRowPadY: CGFloat = 8
+    /// The × on a text-shortcut row: its tap square.
+    package nonisolated static let appRowRemove: CGFloat = 32
     /// Between the home screen's sections.
     package nonisolated static let appSectionGap: CGFloat = 24
     /// The setup steps' mono numerals.
     package nonisolated static let appSetupNumberWidth: CGFloat = 24
     /// Between a section's eyebrow and its content, and between cards.
     package nonisolated static let appStackGap: CGFloat = 12
+    /// Between a tab's icon and its label.
+    package nonisolated static let appTabGap: CGFloat = 4
+    /// A tab in the brand tab bar: its icon over its mono label.
+    package nonisolated static let appTabHeight: CGFloat = 52
     /// The card's hairline.
     package nonisolated static let cardBorder: CGFloat = 1
     /// The app's cards (radius/card).
@@ -307,7 +321,7 @@ package enum DesignTokens {
     package nonisolated static let marginSide: CGFloat = 6.5
     /// The keyboard's top, and the slim bar's bottom.
     package nonisolated static let marginVertical: CGFloat = 8
-    /// The + without Full Access.
+    /// The + without Full Access; a brand button that can't be pressed yet.
     package nonisolated static let opacityDisabled: CGFloat = 0.4
     /// The cross glint when the words land.
     package nonisolated static let opacityGlint: CGFloat = 0.95
@@ -439,8 +453,16 @@ package enum DesignTokens {
     package nonisolated static let sizeLegend: CGFloat = 16
     /// Letter keys: the iPhone's (estimated from the l glyph, apple-geometry.json).
     package nonisolated static let sizeLetter: CGFloat = 24
+    /// The × on a key-term pill.
+    package nonisolated static let sizePillGlyph: CGFloat = 10
     /// The letter pop-up.
     package nonisolated static let sizePopup: CGFloat = 32
+    /// The × on a text-shortcut row.
+    package nonisolated static let sizeRemoveGlyph: CGFloat = 12
+    /// A tab's icon.
+    package nonisolated static let sizeTabIcon: CGFloat = 18
+    /// A tab's mono label.
+    package nonisolated static let sizeTabLabel: CGFloat = 11
     /// The key-term field.
     package nonisolated static let sizeTerm: CGFloat = 17
     /// The app's serif headline.
@@ -605,12 +627,19 @@ package enum DesignTokens {
     "metrics.app/hero-gap": "14",
     "metrics.app/hero-pad": "20",
     "metrics.app/icon": "20",
+    "metrics.app/input-pad-y": "10",
     "metrics.app/line-gap": "6",
     "metrics.app/page-pad": "20",
+    "metrics.app/pill-pad-y": "4",
+    "metrics.app/pill-remove": "24",
     "metrics.app/preview-gap": "8",
+    "metrics.app/row-pad-y": "8",
+    "metrics.app/row-remove": "32",
     "metrics.app/section-gap": "24",
     "metrics.app/setup-number-width": "24",
     "metrics.app/stack-gap": "12",
+    "metrics.app/tab-gap": "4",
+    "metrics.app/tab-height": "52",
     "metrics.card/border": "1",
     "metrics.card/radius": "12",
     "metrics.caret/height": "20",
@@ -718,7 +747,11 @@ package enum DesignTokens {
     "type.size/label": "12",
     "type.size/legend": "16",
     "type.size/letter": "24",
+    "type.size/pill-glyph": "10",
     "type.size/popup": "32",
+    "type.size/remove-glyph": "12",
+    "type.size/tab-icon": "18",
+    "type.size/tab-label": "11",
     "type.size/term": "17",
     "type.size/title": "34",
     "type.tracking/cta": "1.4",

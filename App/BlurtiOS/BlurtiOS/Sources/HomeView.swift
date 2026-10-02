@@ -4,18 +4,19 @@ import BlurtEngine
 import BlurtiOSCore
 import SwiftUI
 
-/// The app's one screen: the Blurt landing page on a phone. The wordmark and
+/// The Dictate tab: the Blurt landing page on a phone. The wordmark and
 /// the gear across the top; the status as an eyebrow, a serif headline and a
 /// line of body text over the voice element; the one green button; then the
 /// styles and the recent dictations under their eyebrows. Setup sits on top
 /// while anything is missing; everything adjustable lives behind the gear.
 struct HomeView: View {
   var coordinator: DictationCoordinator
+  /// Opens Settings, which `MainView` presents over either tab.
+  let showSettings: () -> Void
   @Environment(\.scenePhase) private var scenePhase
   @State private var microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
   @State private var keyboardSeen = SharedStore.keyboardEverSeen
   @State private var showsKeyEntry = false
-  @State private var showsSettings = false
   /// When the last dictation's words landed — the hero's glint.
   @State private var landedAt: Date?
   /// TEMPORARY: the mic concept from Settings, so the hero shows the one
@@ -52,21 +53,6 @@ struct HomeView: View {
       .environment(\.voiceElementKind, VoiceElementKind(rawValue: voiceRaw) ?? .shipped)
       .toolbar(.hidden, for: .navigationBar)
       .sheet(isPresented: $showsKeyEntry) { KeyEntryView(apiKey: coordinator.apiKey) }
-      .sheet(isPresented: $showsSettings) { SettingsView(coordinator: coordinator) }
-      .sheet(isPresented: Binding(get: { coordinator.needsConsent }, set: { coordinator.needsConsent = $0 })) {
-        ConsentView { Task { await coordinator.grantConsent() } }
-      }
-      .sheet(item: Binding(get: { coordinator.pendingTermPack }, set: { coordinator.pendingTermPack = $0 })) {
-        ImportTermsView(pack: $0)
-      }
-      .alert(
-        "Couldn't read that list",
-        isPresented: Binding(get: { coordinator.termPackUnreadable }, set: { coordinator.termPackUnreadable = $0 })
-      ) {
-        Button("OK") {}
-      } message: {
-        Text("It isn't a Blurt key-term list, or it's too big.")
-      }
       .onChange(of: scenePhase) { _, phase in
         if phase == .active { refreshStatus() }
       }
@@ -82,14 +68,7 @@ struct HomeView: View {
     HStack {
       Wordmark()
       Spacer()
-      Button {
-        showsSettings = true
-      } label: {
-        Image(systemName: "gearshape")
-          .font(.system(size: DesignTokens.Metrics.appIcon, weight: DesignTokens.Typography.weightGlyph))
-          .foregroundStyle(BlurtBrand.muted)
-      }
-      .accessibilityLabel("Settings")
+      SettingsButton(action: showSettings)
     }
     .frame(height: DesignTokens.Metrics.appHeaderHeight)
   }

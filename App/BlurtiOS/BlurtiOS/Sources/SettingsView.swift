@@ -1,4 +1,3 @@
-import AssemblyAI
 import BlurtDesign
 import BlurtEngine
 import BlurtiOSCore
@@ -7,7 +6,7 @@ import SwiftUI
 /// Everything adjustable, grouped the way the Mac's Settings are: the keyboard
 /// (layout, theme, hands-free), listening, transcription, the account, and
 /// about — a form on the brand's page, its sections under mono eyebrows.
-/// Presented from the home screen's gear.
+/// Presented from either tab's gear.
 struct SettingsView: View {
   var coordinator: DictationCoordinator
   @Environment(\.dismiss) private var dismiss
@@ -20,7 +19,6 @@ struct SettingsView: View {
   @AppStorage(BlurtShared.Key.voiceElement, store: SharedStore.defaults) private var voiceRaw =
     VoiceElementKind.shipped.rawValue
   @State private var showsKeyEntry = false
-  @AppStorage(SharedStore.keyTermsKey, store: SharedStore.defaults) private var keyTerms = ""
   @AppStorage(EnhancedTranscriptsStore.defaultsKey) private var enhancedTranscripts =
     EnhancedTranscriptsStore.defaultValue
 
@@ -105,24 +103,10 @@ struct SettingsView: View {
     Section {
       Toggle("Enhanced transcripts", isOn: $enhancedTranscripts)
       NavigationLink("Output styles") { StylesView() }
-      TextField("Key terms, comma-separated", text: $keyTerms, axis: .vertical)
-        .autocorrectionDisabled()
-      LabeledContent("Key terms", value: "\(KeyTerms.parse(keyTerms).count)")
-      if !KeyTerms.parse(keyTerms).isEmpty {
-        ShareLink(
-          item: termPack, subject: Text("Blurt key terms"), message: Text(termPack.plainText),
-          preview: SharePreview(termPack.name, icon: Image(systemName: "text.badge.plus"))
-        ) {
-          Label("Share key terms…", systemImage: "square.and.arrow.up")
-        }
-      }
     } header: {
       Eyebrow("Transcription")
     } footer: {
-      Text(
-        "Enhanced transcripts clean up punctuation and wording. Key terms are names and jargon to spell right — "
-          + "add one from the keyboard with the + beside the orb, share the list with a group chat so everyone's "
-          + "dictation gets the names right; \(coordinator.lexiconNameCount) contact names come along automatically.")
+      Text("Enhanced transcripts clean up punctuation and wording.")
     }
   }
 
@@ -144,11 +128,6 @@ struct SettingsView: View {
     } header: {
       Eyebrow("About")
     }
-  }
-
-  /// The whole list, for a friend: a `.blurtterms` file plus the words as text.
-  private var termPack: TermPack {
-    TermPack(name: "Key terms", from: nil, terms: KeyTerms.parse(keyTerms))
   }
 
   private static var version: String {
