@@ -62,7 +62,8 @@ struct OverlayView: View {
       // No cross-fade for a change that resizes the pill — the controller fades
       // the whole panel over that swap instead (`OverlayBridge.animatesStateChange`).
       .animation(
-        reduceMotion || !bridge.animatesStateChange ? nil : .easeInOut(duration: 0.15), value: state)
+        reduceMotion || !bridge.animatesStateChange ? nil : .easeInOut(duration: 0.15), value: state
+      )
       .contentShape(Rectangle())
       // Transparent margin so the shadow has room to render without being
       // clipped by the panel's contentRect (most visible at the rounded ends).
