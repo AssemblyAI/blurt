@@ -78,6 +78,8 @@ package nonisolated struct VoiceState: Equatable {
     case .pasted: self.init(phase: .pasted, isReady: windowOpen)
     case .noTarget: self.init(phase: .copied, isReady: windowOpen)
     case .error(let message): self.init(phase: .error, isReady: windowOpen, message: message)
+    case .inputSilent:
+      self.init(phase: .error, isReady: windowOpen, message: overlay.accessibilityLabel)
     }
   }
 

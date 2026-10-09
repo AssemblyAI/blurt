@@ -9,6 +9,17 @@ final class OverlayBridge {
   /// The latest mic loudness, 0...1 (MicCapture.linearLevel). The overlay's
   /// voice bars track this current value — there is no scrolling history.
   var level: Float = 0
+  /// The capsule's current width: `OverlayWindowController.pillSize.width`,
+  /// except while a notice that writes its reason on the pill is up (see
+  /// `OverlayWindowController.pillWidth(for:)`).
+  var pillWidth: CGFloat = OverlayWindowController.pillSize.width
+  /// Whether the view cross-fades its latest state change. False for a change
+  /// that also resizes the pill: the panel and the capsule can't move in step,
+  /// so that swap happens in one step under a fade of the whole panel instead.
+  /// A flag the view reads rather than a `withTransaction`, because this
+  /// `@Observable` reaches the view in a later update, after any transaction
+  /// set here has ended.
+  var animatesStateChange = true
 
   func pushLevel(_ value: Float) {
     // `value` arrives on the fixed 0...1 scale `MicCaptureProtocol.levels`
@@ -52,6 +63,10 @@ final class OverlayWindowController {
   // `shadowMargin` is checked on both sides rather than only one.
   private static let panelSize = OverlayPlacement.panelSize(
     pillSize: pillSize, shadowMargin: shadowMargin)
+  // Ceiling for a pill that writes its reason out (`OverlayUIState.pillText`):
+  // room for the sentence with an ordinary device name; a longer one truncates
+  // rather than stretching the pill across the screen.
+  private static let maxPillWidth: CGFloat = 340
 
   private let panel: NSPanel
   private let hosting: NSHostingView<OverlayView>
@@ -77,6 +92,11 @@ final class OverlayWindowController {
     self.hosting = NSHostingView(rootView: OverlayView(bridge: bridge))
     self.hosting.wantsLayer = true
     self.hosting.layer?.backgroundColor = .clear
+    // This controller sizes the panel (`resizePanel(toPillWidth:)`), keeping the
+    // pill centred as it widens. Left at its default, the hosting view would also
+    // resize the window to fit the content whenever the width changed, anchored at
+    // a corner.
+    self.hosting.sizingOptions = []
     self.panel = FloatingPanel.make(
       size: Self.panelSize,
       collectionBehavior: [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary],
@@ -143,7 +163,20 @@ final class OverlayWindowController {
     // a value that hadn't moved. The notice handling below stays outside the guard:
     // a repeated notice still has to announce and re-arm its revert.
     if bridge.state != state {
-      bridge.state = state
+      let width = Self.pillWidth(for: state)
+      let resizes = width != bridge.pillWidth
+      bridge.animatesStateChange = !resizes
+      if resizes {
+        // The window resizes a frame before SwiftUI redraws at the new size, so
+        // swap under a transparent panel; `setVisible(true)` below fades it back
+        // in with the pill's usual appear ramp.
+        if panel.isVisible { panel.alphaValue = 0 }
+        bridge.pillWidth = width
+        bridge.state = state
+        resizePanel(toPillWidth: width)
+      } else {
+        bridge.state = state
+      }
     }
     // The red error flash and the neutral "copied" notice are both transient: the
     // pill is otherwise only up during active dictation, so they linger briefly to
@@ -204,10 +237,12 @@ final class OverlayWindowController {
   /// the screen: an empty capsule still animating after the dismiss. The pill's
   /// only fade is the alpha ramp in `setVisible`, so this settle is instantaneous.
   private func settleContent() {
+    defer { resizePanel(toPillWidth: Self.pillSize.width) }
     var transaction = Transaction()
     transaction.disablesAnimations = true
     withTransaction(transaction) {
       bridge.state = .idle
+      bridge.pillWidth = Self.pillSize.width
       // Clear the level too, or the pill's next appearance renders its bars at the
       // PREVIOUS dictation's loudness until the first new meter tick (~50 ms)
       // replaces it — a one-frame "already talking" flash at the start of every
@@ -268,6 +303,55 @@ final class OverlayWindowController {
     bridge.pushLevel(value)
   }
 
+  // MARK: - Pill width
+
+  /// The pill's width for `state`: the compact standard width, or — for a notice
+  /// that writes its reason out — wide enough for that text in the status-line
+  /// type, capped at `maxPillWidth`. Measured with the same font and tracking
+  /// `StatusLineText` draws with, so the text fits without scaling down.
+  static func pillWidth(for state: OverlayUIState) -> CGFloat {
+    guard let text = state.pillText else { return pillSize.width }
+    let measured = NSAttributedString(
+      string: text.uppercased(),
+      attributes: [
+        .font: NSFont.systemFont(ofSize: StatusLineText.fontSize, weight: .semibold),
+        .kern: StatusLineText.tracking,
+      ]
+    ).size().width
+    // The same few points of headroom the standard width keeps for its longest
+    // word (see `pillSize`), so Bold Text or a font-metric change truncates
+    // nothing at an ordinary device name.
+    let width = (measured + OverlayView.errorTextInset * 2 + 8).rounded(.up)
+    return min(max(width, pillSize.width), maxPillWidth)
+  }
+
+  /// How much wider than standard the panel is right now. The persisted drag
+  /// origin is always the *standard* panel's, so the two places that cross that
+  /// boundary — placing the panel and saving a drag — shift by half of this.
+  private var extraPanelWidth: CGFloat { panel.frame.width - Self.panelSize.width }
+
+  /// Resizes the panel to hold a `width`-wide pill. Widening grows it evenly on
+  /// both sides, so the pill stays centred where it was, then clamps it onto the
+  /// screen — a pill dragged near an edge would otherwise push its notice off
+  /// it. Returning to the standard width goes back to the pill's own placement
+  /// (`reposition`), not the centre of a notice that may have been clamped. A
+  /// programmatic move either way, so it isn't persisted as a drag.
+  private func resizePanel(toPillWidth width: CGFloat) {
+    let delta = width + Self.shadowMargin * 2 - panel.frame.width
+    guard delta != 0 else { return }
+    var frame = panel.frame
+    frame.origin.x -= delta / 2
+    frame.size.width += delta
+    if width > Self.pillSize.width, let screen = panel.screen ?? NSScreen.main {
+      frame.origin = OverlayPlacement.clamped(
+        origin: frame.origin, size: frame.size, into: screen.visibleFrame)
+    }
+    suppressOriginPersist = true
+    panel.setFrame(frame, display: false)
+    suppressOriginPersist = false
+    if width == Self.pillSize.width { reposition() }
+  }
+
   private func reposition() {
     guard let screen = NSScreen.main else { return }
     // All the placement policy — default bottom-center, the clearance, the
@@ -277,7 +361,7 @@ final class OverlayWindowController {
     let origin = OverlayPlacement.panelOrigin(
       panelSize: panel.frame.size,
       visibleFrame: screen.visibleFrame,
-      customOrigin: Self.originStore.origin,
+      customOrigin: Self.originStore.origin.map { CGPoint(x: $0.x - extraPanelWidth / 2, y: $0.y) },
       shadowMargin: Self.shadowMargin)
     suppressOriginPersist = true
     panel.setFrameOrigin(origin)
@@ -286,7 +370,8 @@ final class OverlayWindowController {
 
   private func handleDidMove() {
     guard !suppressOriginPersist else { return }
-    Self.originStore.origin = panel.frame.origin
+    let origin = panel.frame.origin
+    Self.originStore.origin = CGPoint(x: origin.x + extraPanelWidth / 2, y: origin.y)
   }
 
   /// Persistence for the dragged origin lives in the engine next to the clamping

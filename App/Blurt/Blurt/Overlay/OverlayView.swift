@@ -34,7 +34,9 @@ struct OverlayView: View {
 
   var body: some View {
     content
-      .frame(width: pillSize.width, height: pillSize.height)
+      // The width is the bridge's: standard, or widened by the controller for a
+      // notice that writes its reason on the pill (`OverlayUIState.pillText`).
+      .frame(width: bridge.pillWidth, height: pillSize.height)
       // Solid, opaque capsule rather than Liquid Glass: a fixed fill never adapts
       // to the backdrop, so the pill fades in the same dark gray everywhere with
       // no first-frame flash (see `fillColor`). `.animation` below cross-fades the
@@ -57,7 +59,11 @@ struct OverlayView: View {
       // edge rather than clipping into a line.
       .compositingGroup()
       .shadow(color: .black.opacity(0.25), radius: 10, y: 3)
-      .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: state)
+      // No cross-fade for a change that resizes the pill — the controller fades
+      // the whole panel over that swap instead (`OverlayBridge.animatesStateChange`).
+      .animation(
+        reduceMotion || !bridge.animatesStateChange ? nil : .easeInOut(duration: 0.15), value: state
+      )
       .contentShape(Rectangle())
       // Transparent margin so the shadow has room to render without being
       // clipped by the panel's contentRect (most visible at the rounded ends).
@@ -130,6 +136,27 @@ struct OverlayView: View {
       StatusLineText("Pasted")
         .transition(.opacity)
         .help(state.accessibilityLabel)
+    case .inputSilent:
+      // The silent-mic notice: the device name is the diagnosis, so it goes on
+      // the pill itself — the controller has widened the capsule to fit — in the
+      // same orange as the "Error" word.
+      //
+      // Two runs, so a device name too long for the capped pill is cut in its
+      // middle while "isn't sending any audio" — the part that says what's wrong —
+      // always shows in full, and neither shrinks.
+      if let notice = state.pillNotice {
+        HStack(spacing: 0) {
+          StatusLineText(
+            notice.subject + " ", color: BlurtBrand.errorOrange,
+            truncation: .middle, shrinksToFit: false)
+          StatusLineText(notice.predicate, color: BlurtBrand.errorOrange, shrinksToFit: false)
+            .fixedSize()
+            .layoutPriority(1)
+        }
+        .padding(.horizontal, Self.errorTextInset)
+        .transition(.opacity)
+        .help(state.accessibilityLabel)
+      }
     case .noTarget:
       // Quiet, informational notice: there was no text field to type into, so
       // the transcript went to the clipboard. Styled exactly like "Pasted"
@@ -141,6 +168,10 @@ struct OverlayView: View {
         .help(state.accessibilityLabel)
     }
   }
+
+  /// Horizontal inset of a notice written out on the pill. Internal so
+  /// `OverlayWindowController.pillWidth(for:)` sizes the pill with the same value.
+  static let errorTextInset: CGFloat = 14
 
   /// The pill's inner inset and the gap between the orb and what follows it.
   private static let contentInset: CGFloat = 12

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import BlurtEngine
@@ -53,7 +54,42 @@ struct OverlayUIStateTests {
     // the reason reaches the user (hover tooltip + VoiceOver) instead of an
     // unexplained red flash.
     let phase = PipelinePhase.failed(.audioCaptureFailed(underlying: MicCaptureError.noInputDevice))
-    #expect(phase.overlayState == .error(message: "Audio capture failed: No microphone is available."))
+    #expect(phase.overlayState == .error(message: "No microphone is available."))
+  }
+
+  @Test func silentMicFailureNamesTheDeviceOnThePill() {
+    // Its own state rather than `.error`, so the shell can widen the pill and
+    // show the device name — the whole diagnosis — instead of hiding it on hover.
+    let error = MicCaptureError.inputNeverDelivered(deviceName: "Aggregate Device")
+    let state = PipelinePhase.failed(.audioCaptureFailed(underlying: error)).overlayState
+    #expect(state == .inputSilent(deviceName: "Aggregate Device"))
+    #expect(state.pillText == "Aggregate Device isn't sending any audio")
+    #expect(state.pillNotice?.subject == "Aggregate Device")
+    #expect(state.pillNotice?.predicate == "isn't sending any audio")
+    #expect(state.accessibilityLabel == "Aggregate Device isn't sending any audio.")
+    #expect(state.noticeDwellSeconds != nil)
+  }
+
+  @Test func silentMicFailureWithoutANameStillSaysWhatHappened() {
+    let state = OverlayUIState.inputSilent(deviceName: nil)
+    #expect(state.pillText == "The microphone isn't sending any audio")
+    #expect(state.accessibilityLabel == "The microphone isn't sending any audio.")
+  }
+
+  @Test func onlyTheSilentMicNoticeWritesOnThePill() {
+    // Every other state is a status word or the meter; a pill-text there would
+    // widen the pill for it too.
+    let others: [OverlayUIState] = [
+      .idle, .connecting, .recording, .processing, .error(message: "x"), .pasted, .noTarget,
+    ]
+    #expect(others.allSatisfy { $0.pillText == nil && $0.pillNotice == nil })
+  }
+
+  @Test func foreignCaptureErrorsKeepTheirContext() {
+    // A conformer's untyped error has no user-facing framing of its own.
+    let error = NSError(domain: "Test", code: 1, userInfo: [NSLocalizedDescriptionKey: "Boom."])
+    let phase = PipelinePhase.failed(.audioCaptureFailed(underlying: error))
+    #expect(phase.overlayState == .error(message: "Audio capture failed: Boom."))
   }
 
   @Test func missingKeyFailureMapsToIdle() {

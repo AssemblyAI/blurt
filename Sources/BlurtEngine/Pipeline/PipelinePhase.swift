@@ -114,7 +114,10 @@ extension BlurtError: Equatable {
       // rather than `localizedDescription`. The description is human-facing copy:
       // comparing it would make equality silently depend on message wording, so a
       // localization or phrasing tweak could break a test. Domain + code is the
-      // stable identity of the underlying error.
+      // stable identity of the underlying error. Payloads are ignored too —
+      // `inputNeverDelivered` on two different devices compares equal — so don't
+      // dedupe phases on `==` where the device name matters; the overlay compares
+      // `OverlayUIState`, which carries it.
       let lhsError = lhsUnderlying as NSError
       let rhsError = rhsUnderlying as NSError
       return lhsError.domain == rhsError.domain && lhsError.code == rhsError.code

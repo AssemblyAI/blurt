@@ -200,7 +200,11 @@ public actor MicCapture: MicCaptureProtocol {
     // so no stopGeneration bump — a concurrent stop() correctly sees no active
     // capture.
     guard gap != nil else {
-      throw BlurtError.audioCaptureFailed(underlying: MicCaptureError.inputNeverDelivered)
+      // Named only here, on the failure path, so a press that succeeds pays no
+      // extra device lookup.
+      throw BlurtError.audioCaptureFailed(
+        underlying: MicCaptureError.inputNeverDelivered(
+          deviceName: AudioInputDevices.inputName(pinnedUID: resolved.pinnedUID)))
     }
 
     activeRecorder = recorder

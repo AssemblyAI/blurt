@@ -281,12 +281,17 @@ final class DictationCoordinator {
     case .processing: .processing
     case .pasted: .pasted
     case .noTarget: .copied
-    case .error: .error
+    case .error, .inputSilent: .error
     }
   }
 
   private static func message(_ state: OverlayUIState) -> String? {
-    guard case .error(let message) = state else { return nil }
-    return message
+    switch state {
+    case .error(let message): message
+    // No wide pill on the iPhone: the silent mic reads as an error, its sentence
+    // (with the device name) as the message.
+    case .inputSilent: state.accessibilityLabel
+    case .idle, .connecting, .recording, .processing, .pasted, .noTarget: nil
+    }
   }
 }
