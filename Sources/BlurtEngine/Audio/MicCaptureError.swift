@@ -18,12 +18,20 @@ enum MicCaptureError: LocalizedError {
   /// `MicLiveness`'s cap — the device delivered nothing (or only digital
   /// silence) for the whole wait, so the press fails closed rather than
   /// recording an utterance the mic isn't receiving.
-  case inputNeverDelivered
+  ///
+  /// Carries the silent device's name, because the device is usually the whole
+  /// story: an aggregate whose real interface is unplugged, or a loopback like
+  /// BlackHole set as the default input, records nothing while every other mic
+  /// works. "The microphone didn't start" sent users hunting for a Blurt bug;
+  /// naming the device points them at their audio settings. Nil when the name
+  /// can't be read (the device vanished mid-press).
+  case inputNeverDelivered(deviceName: String?)
 
   var errorDescription: String? {
     switch self {
     case .noInputDevice: "No microphone is available."
-    case .inputNeverDelivered: "The microphone didn't start."
+    case .inputNeverDelivered(let deviceName?): "\(deviceName) isn't sending any audio."
+    case .inputNeverDelivered(nil): "The microphone isn't sending any audio."
     }
   }
 }

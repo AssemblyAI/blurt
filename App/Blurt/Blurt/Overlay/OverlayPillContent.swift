@@ -16,19 +16,37 @@ struct StatusLineText: View {
   /// The text color — brand green for every state but `.error`, which the
   /// design gives its own orange rather than a red pill body.
   var color: Color = BlurtBrand.greenOnDark
+  /// Where an over-long line is cut. The tail, except for a device name, which
+  /// keeps its distinguishing end ("…Scarlett Solo USB").
+  var truncation: Text.TruncationMode = .tail
+  /// Whether an over-long line shrinks before it truncates. Fine for a status
+  /// word; a sentence shrunk to 70% of 9 pt is unreadable, so a written-out
+  /// notice truncates at full size instead.
+  var shrinksToFit = true
 
-  init(_ text: String, color: Color = BlurtBrand.greenOnDark) {
+  init(
+    _ text: String, color: Color = BlurtBrand.greenOnDark,
+    truncation: Text.TruncationMode = .tail, shrinksToFit: Bool = true
+  ) {
     self.text = text
     self.color = color
+    self.truncation = truncation
+    self.shrinksToFit = shrinksToFit
   }
+
+  /// The status-line type, named so `OverlayWindowController.pillWidth(for:)`
+  /// measures a written-out notice with exactly what draws it.
+  static let fontSize: CGFloat = 9
+  static let tracking: CGFloat = 0.9
 
   var body: some View {
     Text(text)
-      .font(.system(size: 9, weight: .semibold))
+      .font(.system(size: Self.fontSize, weight: .semibold))
       .textCase(.uppercase)
-      .tracking(0.9)
+      .tracking(Self.tracking)
       .lineLimit(1)
-      .minimumScaleFactor(0.7)
+      .truncationMode(truncation)
+      .minimumScaleFactor(shrinksToFit ? 0.7 : 1)
       .foregroundStyle(color)
   }
 }

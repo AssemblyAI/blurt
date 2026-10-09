@@ -71,6 +71,10 @@ extension BlurtError: LocalizedError {
     case .apiKeyMissing: "Add your AssemblyAI API key in Settings to start dictating."
     case .sttFailed(let underlying): "Transcription failed: \(underlying.localizedDescription)"
     case .targetAppLost: "Target app lost focus or quit."
+    // `MicCaptureError`'s messages are already written for the user and name the
+    // problem, so the prefix would only bury the device name; anything else a
+    // capture throws keeps it as context.
+    case .audioCaptureFailed(let underlying as MicCaptureError): underlying.localizedDescription
     case .audioCaptureFailed(let underlying): "Audio capture failed: \(underlying.localizedDescription)"
     case .noEditableTarget: "No text field was focused — copied to the clipboard instead."
     }
