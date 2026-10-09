@@ -11,6 +11,10 @@ final class FakeCopyPasteboard: CopyPasteboard {
     var changeCount = 0
     var string: String? = "user's clipboard"
     var restoreCount = 0
+    /// A write the app makes just after its clear: applied the moment the
+    /// cleared clipboard is first read, so the copier is guaranteed to see the
+    /// clear on one poll and the write on a later one — without racing a timer.
+    var lateWrite: String?
   }
 
   let state = Mutex(State())
@@ -23,7 +27,17 @@ final class FakeCopyPasteboard: CopyPasteboard {
     guard readable else { return nil }
     return PasteboardSnapshot(items: [], plainText: state.withLock(\.string))
   }
-  func currentString() -> String? { state.withLock(\.string) }
+  func currentString() -> String? {
+    state.withLock {
+      let current = $0.string
+      if current == nil, let late = $0.lateWrite {
+        $0.lateWrite = nil
+        $0.string = late
+        $0.changeCount += 1
+      }
+      return current
+    }
+  }
   func restore(_ saved: PasteboardSnapshot, ifChangeCountIs expected: Int) {
     state.withLock {
       guard $0.changeCount == expected else { return }
@@ -102,17 +116,11 @@ struct SelectionCopyTests {
         pasteboard.state.withLock {
           $0.string = nil
           $0.changeCount += 1
-        }
-        Task {
-          try? await Task.sleep(for: .milliseconds(30))
-          pasteboard.state.withLock {
-            $0.string = "late copy"
-            $0.changeCount += 1
-          }
+          $0.lateWrite = "late copy"
         }
         return true
       },
-      timeout: .milliseconds(500))
+      timeout: .seconds(5))
     #expect(await copy.copySelection(maxCharacters: 100) == "late copy")
     #expect(pasteboard.string == "user's clipboard")
   }
