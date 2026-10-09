@@ -101,16 +101,44 @@
       isBrowserBundleID(app?.bundleIdentifier)
     }
 
-    /// Whether `app` is AX-opaque — an Electron editor or a web browser — where a
-    /// focused text field can expose no editable AX signal at all. These are the
-    /// one case the injector still pastes into on no signal: dropping the user's
-    /// words into a copy-only fallback there would be the worse mistake. The
-    /// accepted trade-off is a rare ⌘V beep when such an app truly has nothing
-    /// editable focused.
+    /// Bundle-identifier prefixes of native editors that draw their own text view
+    /// and expose no text element to Accessibility at all: with the caret in a
+    /// buffer, the focused element is the bare `AXWindow` — no value, no selection
+    /// range — or the system-wide query fails outright (`kAXErrorCannotComplete`).
+    /// Measured on Sublime Text 4 (build 4215), Sublime Merge (build 2132, the
+    /// commit-message box) and Zed 1.23.2; ⌘V lands in all three. Prefix-matched
+    /// so channel variants classify with their stable siblings.
+    private static let customDrawnEditorBundleIDPrefixes: [String] = [
+      "com.sublimetext.",  // Sublime Text 3 + 4
+      "com.sublimemerge",
+      "dev.zed.Zed",  // Zed + Preview/Nightly
+    ]
+
+    /// Pure decision behind `isCustomDrawnEditorApp`, split out for the same reason
+    /// as `isBrowserBundleID`.
+    static func isCustomDrawnEditorBundleID(_ bundleID: String?) -> Bool {
+      guard let bundleID else { return false }
+      return customDrawnEditorBundleIDPrefixes.contains { bundleID.hasPrefix($0) }
+    }
+
+    /// Whether `app` is a known custom-drawn editor (Sublime Text, Sublime Merge,
+    /// Zed). Neither a browser nor Electron, yet just as invisible to Accessibility
+    /// — so without this it would read as "nothing editable focused" and every
+    /// dictation would land on the clipboard instead of in the buffer.
+    static func isCustomDrawnEditorApp(_ app: NSRunningApplication?) -> Bool {
+      isCustomDrawnEditorBundleID(app?.bundleIdentifier)
+    }
+
+    /// Whether `app` is AX-opaque — an Electron editor, a web browser, or a
+    /// custom-drawn editor — where a focused text field can expose no editable AX
+    /// signal at all. These are the one case the injector still pastes into on no
+    /// signal: dropping the user's words into a copy-only fallback there would be
+    /// the worse mistake. The accepted trade-off is a rare ⌘V beep when such an
+    /// app truly has nothing editable focused.
     static func isAXOpaqueApp(_ app: NSRunningApplication?) -> Bool {
-      // Browser first: it's a string prefix check, whereas isElectronApp probes
-      // the disk (FileManager.fileExists) — skip that I/O for the common case.
-      isBrowserApp(app) || isElectronApp(app)
+      // String prefix checks first, whereas isElectronApp probes the disk
+      // (FileManager.fileExists) — skip that I/O for the common case.
+      isBrowserApp(app) || isCustomDrawnEditorApp(app) || isElectronApp(app)
     }
 
     /// Whether the system-wide focused element can accept pasted text right now.
