@@ -31,10 +31,10 @@ nonisolated final class WindowedAudioSource: NSObject, ListeningSource, @uncheck
   private let session = AVCaptureSession()
   private let output = AVCaptureAudioDataOutput()
   /// Serial, so the converter below needs no lock.
-  private let deliveryQueue = DispatchQueue(label: "dev.alex.blurt.ios.capture")
+  private let deliveryQueue = DispatchQueue(label: "com.assemblyai.blurt.ios.capture")
   /// Where the session is started and stopped — both block for a while on a
   /// phone — so the main actor never waits on the capture stack.
-  private let controlQueue = DispatchQueue(label: "dev.alex.blurt.ios.capture.control")
+  private let controlQueue = DispatchQueue(label: "com.assemblyai.blurt.ios.capture.control")
   private nonisolated(unsafe) var converter: PCMConverter?
 
   var levels: AsyncStream<Float> { feed.levels }

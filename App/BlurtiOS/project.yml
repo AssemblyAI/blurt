@@ -9,13 +9,14 @@
 #
 # Two processes, one App Group. iOS lets no keyboard use the microphone, so the
 # app records and talks to AssemblyAI while the keyboard is a remote control that
-# inserts the result; they share `group.dev.alex.blurt` (see Shared/). Every id
-# here is a placeholder namespace inherited from the Mac app — the App Store
-# submission needs org-owned bundle ids, an org App Group and a team that can
-# provision them.
+# inserts the result; they share `group.com.assemblyai.blurt.ios` (see
+# BlurtiOSCore/SharedState.swift). Every id is AssemblyAI-owned
+# (`com.assemblyai.blurt.ios…`); the team comes from $BLURT_TEAM, never this
+# file. The Mac app keeps its own `dev.alex.blurt` ids: changing them would
+# orphan its Sparkle updates and its granted Accessibility permission.
 name: BlurtiOS
 options:
-  bundleIdPrefix: dev.alex
+  bundleIdPrefix: com.assemblyai
   deploymentTarget:
     # Matches Package.swift's `.iOS(.v18)`: an app floor below the package's fails
     # to resolve the dependency at all.
@@ -57,7 +58,7 @@ targets:
       - path: BlurtiOSCore
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt.ios.core
+        PRODUCT_BUNDLE_IDENTIFIER: com.assemblyai.blurt.ios.core
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
@@ -97,7 +98,7 @@ targets:
           - KeyboardViewController.swift
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt.ios
+        PRODUCT_BUNDLE_IDENTIFIER: com.assemblyai.blurt.ios
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # The app-level accent, from the catalog, so system-drawn chrome and our
         # views agree (see the Mac's project.yml and BlurtBrand).
@@ -132,7 +133,7 @@ targets:
         # `blurt://start` — what the keyboard opens to bring the app forward, the
         # one moment iOS insists on before the microphone may open.
         CFBundleURLTypes:
-          - CFBundleURLName: dev.alex.blurt.ios
+          - CFBundleURLName: com.assemblyai.blurt.ios
             CFBundleURLSchemes: [blurt]
         # A shared key-term list (`.blurtterms`, JSON): declared so a tap on
         # one in Messages offers Blurt, which opens it as an import.
@@ -144,9 +145,9 @@ targets:
           - CFBundleTypeName: Blurt key terms
             CFBundleTypeRole: Viewer
             LSHandlerRank: Owner
-            LSItemContentTypes: [dev.alex.blurt.terms]
+            LSItemContentTypes: [com.assemblyai.blurt.terms]
         UTExportedTypeDeclarations:
-          - UTTypeIdentifier: dev.alex.blurt.terms
+          - UTTypeIdentifier: com.assemblyai.blurt.terms
             UTTypeDescription: Blurt key terms
             UTTypeConformsTo: [public.json]
             UTTypeTagSpecification:
@@ -155,7 +156,7 @@ targets:
     entitlements:
       path: BlurtiOS/BlurtiOS.entitlements
       properties:
-        com.apple.security.application-groups: [group.dev.alex.blurt]
+        com.apple.security.application-groups: [group.com.assemblyai.blurt.ios]
     dependencies:
       - package: BlurtEngine
         product: BlurtEngine
@@ -175,7 +176,7 @@ targets:
         buildPhase: resources
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt.ios.keyboard
+        PRODUCT_BUNDLE_IDENTIFIER: com.assemblyai.blurt.ios.keyboard
         SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         APPLICATION_EXTENSION_API_ONLY: YES
@@ -196,7 +197,7 @@ targets:
     entitlements:
       path: BlurtKeyboard/BlurtKeyboard.entitlements
       properties:
-        com.apple.security.application-groups: [group.dev.alex.blurt]
+        com.apple.security.application-groups: [group.com.assemblyai.blurt.ios]
     dependencies:
       - package: BlurtEngine
         product: BlurtEngine
@@ -224,7 +225,7 @@ targets:
       - target: BlurtiOS
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt.ios.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.assemblyai.blurt.ios.tests
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
@@ -242,7 +243,7 @@ targets:
       - target: BlurtiOS
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt.ios.probe
+        PRODUCT_BUNDLE_IDENTIFIER: com.assemblyai.blurt.ios.probe
         TEST_TARGET_NAME: BlurtiOS
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
