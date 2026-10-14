@@ -1,5 +1,6 @@
 import Foundation
 
+@testable import AssemblyAI
 @testable import BlurtEngine
 
 extension AsyncStream where Element: Sendable {

@@ -78,6 +78,13 @@ extension DictationSession {
       return
     }
     seams.logTranscript(text, capturedContext)
+    // A hand-back press ends here: the host asked for the words, not a paste.
+    // Not remembered either, since the ring is what later dictations are primed
+    // with and this text was never typed anywhere.
+    if handsBackTranscript {
+      setPhase(.handedBack(spoken))
+      return
+    }
     // Remember it as context for the *next* press before handing it on: the ring
     // is what supplies `stt_prompt`'s leading text, so a stretch of
     // dictation continues itself. Recorded here rather than by the host so the

@@ -38,6 +38,7 @@ package nonisolated struct HomeStatus: Equatable {
     case .pasted: "Pasted"
     case .noTarget: "Copied"
     case .error(let message): message
+    case .inputSilent: overlay.accessibilityLabel
     case .idle: windowOpen ? "Ready to dictate" : "Not listening"
     }
   }

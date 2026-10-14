@@ -45,7 +45,7 @@ extension PipelinePhase {
     // rule that holds the start chime. The pill carries the warming-up state,
     // and a distinct fourth glyph isn't worth it for something usually gone
     // within a frame on a wired mic.
-    case .idle, .connecting, .injecting, .cancelled, .failed, .pasted, .noTarget: .idle
+    case .idle, .connecting, .injecting, .cancelled, .failed, .pasted, .noTarget, .handedBack: .idle
     }
   }
 }

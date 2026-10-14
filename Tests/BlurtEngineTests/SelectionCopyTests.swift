@@ -10,7 +10,11 @@ final class FakeCopyPasteboard: CopyPasteboard {
   struct State {
     var changeCount = 0
     var string: String? = "user's clipboard"
-    var restored: [PasteboardSnapshot] = []
+    var restoreCount = 0
+    /// A write the app makes just after its clear: applied the moment the
+    /// cleared clipboard is first read, so the copier is guaranteed to see the
+    /// clear on one poll and the write on a later one — without racing a timer.
+    var lateWrite: String?
   }
 
   let state = Mutex(State())
@@ -23,10 +27,21 @@ final class FakeCopyPasteboard: CopyPasteboard {
     guard readable else { return nil }
     return PasteboardSnapshot(items: [], plainText: state.withLock(\.string))
   }
-  func currentString() -> String? { state.withLock(\.string) }
-  func restore(_ saved: PasteboardSnapshot) {
+  func currentString() -> String? {
     state.withLock {
-      $0.restored.append(saved)
+      let current = $0.string
+      if current == nil, let late = $0.lateWrite {
+        $0.lateWrite = nil
+        $0.string = late
+        $0.changeCount += 1
+      }
+      return current
+    }
+  }
+  func restore(_ saved: PasteboardSnapshot, ifChangeCountIs expected: Int) {
+    state.withLock {
+      guard $0.changeCount == expected else { return }
+      $0.restoreCount += 1
       $0.string = saved.plainText
       $0.changeCount += 1
     }
@@ -46,7 +61,7 @@ final class FakeCopyPasteboard: CopyPasteboard {
   }
 
   var string: String? { state.withLock(\.string) }
-  var restoreCount: Int { state.withLock(\.restored.count) }
+  var restoreCount: Int { state.withLock(\.restoreCount) }
 }
 
 @Suite("SelectionCopy")
@@ -90,6 +105,26 @@ struct SelectionCopyTests {
     #expect(await copy(pasteboard, answering: "abcdefgh").copySelection(maxCharacters: 3) == "abc")
   }
 
+  @Test("a clear before the write isn't mistaken for an empty copy")
+  func clearThenWrite() async {
+    let pasteboard = FakeCopyPasteboard()
+    // The app clears the clipboard (a change with no string), then writes the
+    // selection a moment later.
+    let copy = SelectionCopy(
+      pasteboard: pasteboard,
+      postCopy: {
+        pasteboard.state.withLock {
+          $0.string = nil
+          $0.changeCount += 1
+          $0.lateWrite = "late copy"
+        }
+        return true
+      },
+      timeout: .seconds(5))
+    #expect(await copy.copySelection(maxCharacters: 100) == "late copy")
+    #expect(pasteboard.string == "user's clipboard")
+  }
+
   @Test("the fallback runs only when AX was unreadable, never on a bare caret")
   func resolveRule() async {
     let pasteboard = FakeCopyPasteboard()
@@ -98,5 +133,11 @@ struct SelectionCopyTests {
     #expect(await SelectionSpeaker.resolve(.none, copy: copy) == nil)
     #expect(pasteboard.changeCount == 0)
     #expect(await SelectionSpeaker.resolve(.unreadable, copy: copy) == "copied")
+  }
+
+  @Test("a copy of only zero-width characters reads as nothing selected")
+  func invisibleCopy() async {
+    let pasteboard = FakeCopyPasteboard()
+    #expect(await copy(pasteboard, answering: "\u{200B}").copySelection(maxCharacters: 100) == nil)
   }
 }

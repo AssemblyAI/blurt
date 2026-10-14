@@ -39,7 +39,7 @@
     nonisolated static func captureFieldContext(maxPriorChars: Int = 320, maxSelectedChars: Int = 320)
       -> FocusedFieldContext
     {
-      guard let (element, isSecure) = focusedElementForReading() else { return .empty }
+      guard AXIsProcessTrusted(), let (element, isSecure) = focusedElementForReading() else { return .empty }
       // Both text slices stay nil for a secure field — the whole point of the guard
       // above — so the reads that feed them are skipped wholesale rather than each
       // being individually conditional.
@@ -99,14 +99,15 @@
     }
 
     /// The focused element and whether its contents must stay unread, or nil when
-    /// the process isn't trusted or nothing is focused. Shared by both captures,
-    /// so the password-field guard is spelled once.
+    /// nothing is focused. Shared by both captures, so the password-field guard is
+    /// spelled once. Each caller checks trust first, because they map an untrusted
+    /// process differently.
     ///
     /// The whole decision, including the fail-closed arm, lives in
     /// `mustRedactContents`, where it is unit-tested. This needs a live AX element,
     /// so anything decided inline here would be covered by nothing.
     private nonisolated static func focusedElementForReading() -> (element: AXUIElement, isSecure: Bool)? {
-      guard AXIsProcessTrusted(), let element = systemFocusedElement() else { return nil }
+      guard let element = systemFocusedElement() else { return nil }
       let isSecure = mustRedactContents(
         role: stringValue(element, kAXRoleAttribute),
         subrole: stringValue(element, kAXSubroleAttribute))
