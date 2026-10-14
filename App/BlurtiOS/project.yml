@@ -26,7 +26,11 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     IPHONEOS_DEPLOYMENT_TARGET: "18.0"
-    # iPhone first. iPad needs its own keyboard sizing pass.
+    # iPhone first. iPad needs its own keyboard sizing pass. Restated on every
+    # target below: XcodeGen's iOS target presets set "1,2" per target, which
+    # wins over this, and an archive that claims iPad fails App Store
+    # validation for being portrait-only (iPad multitasking wants all four
+    # orientations).
     TARGETED_DEVICE_FAMILY: "1"
     # Whoever generates the project signs with their own team: XcodeGen expands
     # `${BLURT_TEAM}` from the environment (`BLURT_TEAM=XXXXXXXXXX xcodegen
@@ -58,6 +62,7 @@ targets:
       - path: BlurtiOSCore
     settings:
       base:
+        TARGETED_DEVICE_FAMILY: "1"
         PRODUCT_BUNDLE_IDENTIFIER: com.assemblyai.blurt.ios.core
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
@@ -98,6 +103,7 @@ targets:
           - KeyboardViewController.swift
     settings:
       base:
+        TARGETED_DEVICE_FAMILY: "1"
         PRODUCT_BUNDLE_IDENTIFIER: com.assemblyai.blurt.ios
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # The app-level accent, from the catalog, so system-drawn chrome and our
@@ -176,6 +182,7 @@ targets:
         buildPhase: resources
     settings:
       base:
+        TARGETED_DEVICE_FAMILY: "1"
         PRODUCT_BUNDLE_IDENTIFIER: com.assemblyai.blurt.ios.keyboard
         SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
@@ -225,6 +232,7 @@ targets:
       - target: BlurtiOS
     settings:
       base:
+        TARGETED_DEVICE_FAMILY: "1"
         PRODUCT_BUNDLE_IDENTIFIER: com.assemblyai.blurt.ios.tests
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
@@ -243,6 +251,7 @@ targets:
       - target: BlurtiOS
     settings:
       base:
+        TARGETED_DEVICE_FAMILY: "1"
         PRODUCT_BUNDLE_IDENTIFIER: com.assemblyai.blurt.ios.probe
         TEST_TARGET_NAME: BlurtiOS
         GENERATE_INFOPLIST_FILE: YES
