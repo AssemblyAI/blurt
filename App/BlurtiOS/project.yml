@@ -121,9 +121,14 @@ targets:
       properties:
         CFBundleDisplayName: Blurt
         CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "1"
+        CFBundleVersion: "2"
         LSApplicationCategoryType: public.app-category.productivity
         NSMicrophoneUsageDescription: Blurt listens only while you dictate, and sends that audio to AssemblyAI to turn it into text.
+        # Never shown: Blurt doesn't ask for the camera. App Store processing
+        # still requires it (ITMS-90683) because the microphone is opened
+        # through AVCaptureSession/AVCaptureDevice (AudioSource), the capture
+        # API cameras share.
+        NSCameraUsageDescription: Blurt doesn't use the camera. It opens only the microphone, through the same system capture service the camera uses.
         # Keeps the listening window alive while the user is back in the app
         # they are typing in: iOS ends a backgrounded app's capture without it.
         UIBackgroundModes: [audio]
@@ -192,7 +197,7 @@ targets:
       properties:
         CFBundleDisplayName: Blurt
         CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "1"
+        CFBundleVersion: "2"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.keyboard-service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
