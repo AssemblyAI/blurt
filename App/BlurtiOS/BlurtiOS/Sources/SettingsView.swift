@@ -126,10 +126,8 @@ struct SettingsView: View {
 
   private var accountSection: some View {
     Section {
-      LabeledContent("Sign in with AssemblyAI", value: "Coming soon")
-      #if DEBUG
-        Button(coordinator.apiKey.hasAPIKey ? "Replace the API key" : "Use an API key") { showsKeyEntry = true }
-      #endif
+      Button(coordinator.apiKey.hasAPIKey ? "Replace the API key" : "Add an API key") { showsKeyEntry = true }
+      Link("Get a free key", destination: APIKeyStore.dashboardURL)
     } header: {
       Eyebrow("Account")
     }
@@ -139,6 +137,7 @@ struct SettingsView: View {
     Section {
       LabeledContent("Version", value: Self.version)
       Link("Blurt on GitHub", destination: URL(string: "https://github.com/AssemblyAI/blurt") ?? URL(filePath: "/"))
+      Link("AssemblyAI's privacy policy", destination: AIConsent.privacyPolicyURL)
       Text("Powered by AssemblyAI").foregroundStyle(BlurtBrand.muted)
     } header: {
       Eyebrow("About")

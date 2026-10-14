@@ -3,9 +3,9 @@ import BlurtiOSCore
 import SwiftUI
 
 /// Paste an AssemblyAI API key, verified against the API before it is saved
-/// (`APIKeySubmission` owns that rule). Debug builds only: the shipping app
-/// signs in with AssemblyAI and never shows a key. It exists so the pipeline can
-/// be tested on a phone before that service is in place.
+/// (`APIKeySubmission` owns that rule). Every build shows it, the way the Mac app
+/// works, until Sign in with AssemblyAI exists; then it becomes the advanced
+/// path for contributors and self-built copies.
 struct KeyEntryView: View {
   var apiKey: APIKeyModel
   @Environment(\.dismiss) private var dismiss

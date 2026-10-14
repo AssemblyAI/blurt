@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 extension UTType {
   /// A shared list of Blurt key terms: JSON, `.blurtterms`, declared in
   /// `project.yml` so a tap on one in Messages opens Blurt.
-  package nonisolated static let blurtTerms = UTType(exportedAs: "dev.alex.blurt.terms", conformingTo: .json)
+  package nonisolated static let blurtTerms = UTType(exportedAs: "com.assemblyai.blurt.terms", conformingTo: .json)
 }
 
 /// A list of key terms on its way to a friend — a group chat's names and

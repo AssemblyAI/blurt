@@ -74,7 +74,7 @@ ios_wait_booted "$UDID"
 xcodebuild build -project "$REPO_ROOT/App/BlurtiOS/BlurtiOS.xcodeproj" -scheme BlurtiOS \
   -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$DERIVED" "${IOS_SIM_SIGNING[@]}" -quiet
 xcrun simctl install "$UDID" "$DERIVED/Build/Products/Debug-iphonesimulator/BlurtiOS.app"
-xcrun simctl privacy "$UDID" grant microphone dev.alex.blurt.ios
+xcrun simctl privacy "$UDID" grant microphone com.assemblyai.blurt.ios
 
 for face in $FACES; do
   xcrun simctl ui "$UDID" appearance "$face"
@@ -136,9 +136,9 @@ echo "ios-keyboard-flows: screenshots in $OUT"
 # back through the simulator's own defaults daemon (a plist edit alone is
 # not seen until cfprefsd reloads).
 if [ -n "$ALIGN" ]; then
-  GROUP="$(xcrun simctl get_app_container "$UDID" dev.alex.blurt.ios groups 2>/dev/null | awk -F'\t' '/group.dev.alex.blurt/ {print $2}')"
+  GROUP="$(xcrun simctl get_app_container "$UDID" com.assemblyai.blurt.ios groups 2>/dev/null | awk -F'\t' '/group.com.assemblyai.blurt.ios/ {print $2}')"
   if [ -n "$GROUP" ]; then
-    xcrun simctl spawn "$UDID" defaults write "$GROUP/Library/Preferences/group.dev.alex.blurt" micAlignment center
+    xcrun simctl spawn "$UDID" defaults write "$GROUP/Library/Preferences/group.com.assemblyai.blurt.ios" micAlignment center
     echo "ios-keyboard-flows: mic alignment back to the middle"
   fi
 fi
