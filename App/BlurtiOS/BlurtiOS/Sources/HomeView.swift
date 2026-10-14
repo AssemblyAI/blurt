@@ -52,6 +52,9 @@ struct HomeView: View {
       .toolbar(.hidden, for: .navigationBar)
       .sheet(isPresented: $showsKeyEntry) { KeyEntryView(apiKey: coordinator.apiKey) }
       .sheet(isPresented: $showsSettings) { SettingsView(coordinator: coordinator) }
+      .sheet(isPresented: Binding(get: { coordinator.needsConsent }, set: { coordinator.needsConsent = $0 })) {
+        ConsentView { Task { await coordinator.grantConsent() } }
+      }
       .sheet(item: Binding(get: { coordinator.pendingTermPack }, set: { coordinator.pendingTermPack = $0 })) {
         ImportTermsView(pack: $0)
       }

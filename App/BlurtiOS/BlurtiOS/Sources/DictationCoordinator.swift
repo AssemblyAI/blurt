@@ -33,6 +33,9 @@ final class DictationCoordinator {
   var termPackUnreadable = false
   /// The window can't open without a key: the last "Start listening" said so.
   var needsKey = false
+  /// The window can't open until the user agrees to AssemblyAI processing their
+  /// voice (`AIConsent`); `ConsentView` asks while this is set.
+  var needsConsent = false
 
   @ObservationIgnored private let session: DictationSession
   @ObservationIgnored private let recents: AsyncStream<RecentDictations>
@@ -99,12 +102,25 @@ final class DictationCoordinator {
     apiKey.refreshStatus()
     needsKey = !apiKey.hasAPIKey
     guard !needsKey else { return }
+    // Every way to the microphone comes through here — the button, the
+    // keyboard's `blurt://start`, and in-app dictation, which needs the window
+    // open — so this one gate covers them all.
+    needsConsent = !AIConsent.isGranted()
+    guard !needsConsent else { return }
     guard await AVAudioApplication.requestRecordPermission() else {
       microphoneDenied = true
       return
     }
     microphoneDenied = false
     await window.open()
+  }
+
+  /// The user agreed in `ConsentView`: record it and carry on opening the
+  /// window they asked for.
+  func grantConsent() async {
+    AIConsent.grant()
+    needsConsent = false
+    await startListening()
   }
 
   /// Closes the window. A dictation in flight is cancelled first, upload and
