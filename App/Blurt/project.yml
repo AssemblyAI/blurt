@@ -141,6 +141,11 @@ targets:
       # Shared with BlurtUITests: the single source of truth for UI-test
       # identifiers/sentinels (see Shared/UITestIdentifiers.swift).
       - path: Shared
+      # The brand assets both apps ship (Design/brand), so neither app's folder
+      # is a dependency of the other.
+      - path: ../../Design/brand/AppIcon.icon
+      - path: ../../Design/brand/blurt-ready-logo.png
+        buildPhase: resources
     info:
       path: Blurt/Info.plist
       properties:

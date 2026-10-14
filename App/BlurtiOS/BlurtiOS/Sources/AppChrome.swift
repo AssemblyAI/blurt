@@ -112,7 +112,7 @@ struct BrandButtonStyle: ButtonStyle {
 }
 
 /// The lowercase wordmark from the Mac's ready screen, tinted with the accent
-/// (`blurt-ready-logo.png`, shared from `App/Blurt/Blurt/Branding`).
+/// (`blurt-ready-logo.png`, shared from `Design/brand`).
 struct Wordmark: View {
   private static let height = DesignTokens.Metrics.wordmarkHeight
 

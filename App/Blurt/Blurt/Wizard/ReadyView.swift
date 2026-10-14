@@ -216,7 +216,7 @@ enum BlurtLinks {
 }
 
 /// The `blurt` wordmark over the form: the brand-green mark
-/// (`Branding/blurt-ready-logo.png`, a 720×180 rasterization of the design's
+/// (`Design/brand/blurt-ready-logo.png`, a 720×180 rasterization of the design's
 /// vector wordmark, so its 104×26 pt slot is fed nearly 7× the pixels it needs and
 /// stays crisp at any display scale). Smoothly interpolated — it's curved
 /// letterforms now, not the pixel-art mark it replaced, which needed
