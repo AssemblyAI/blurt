@@ -69,6 +69,16 @@ final class FakeHTTPTransport: HTTPTransport, Sendable {
   }
 }
 
+/// A chat-completions body with one choice, the shape the LLM Gateway answers.
+func completion(_ content: String?, finishReason: String = "stop") -> Data {
+  var message: [String: Any] = ["role": "assistant"]
+  if let content { message["content"] = content }
+  let body: [String: Any] = [
+    "request_id": "test", "choices": [["message": message, "finish_reason": finishReason]],
+  ]
+  return (try? JSONSerialization.data(withJSONObject: body)) ?? Data()
+}
+
 /// JSON-encodes a string dictionary into a canned mock response body.
 func json(_ object: [String: String]) -> Data {
   (try? JSONSerialization.data(withJSONObject: object)) ?? Data()
