@@ -19,7 +19,7 @@ import os
 /// request per utterance covers transcription *and* cleanup. `config` leads the
 /// body because the streaming route cannot open its upstream call without it —
 /// see `transcribePath` and `streamedBody`. The service picks
-/// the STT model server-side and accepts **at most 120 s** of audio (the
+/// the STT model server-side and accepts **at most 20 minutes** of audio (the
 /// documented cap; there is no documented *minimum* — the ~80 ms floor is this
 /// client's own, see `SyncSTTLimits.minPCMBytes`). The rewrite is best-effort
 /// with a 5 s server-side deadline, so a failure still returns the verbatim

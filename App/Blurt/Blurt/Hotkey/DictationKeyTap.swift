@@ -171,8 +171,8 @@ final class DictationKeyTap {
   /// consumes `phaseStream()` asynchronously, so if that loop falls behind,
   /// dictation N's terminal phase can arrive *after* the gate has armed for
   /// dictation N+1 — the reset then clears N+1's live state, its key-up routes to
-  /// `.none`, and the recording would otherwise run to the ~115 s auto-release cap.
-  /// Cancelling it turns a silent two-minute hang into a clean stop.
+  /// `.none`, and the recording would otherwise run to the ~1195 s auto-release cap.
+  /// Cancelling it turns a silent twenty-minute hang into a clean stop.
   ///
   /// A no-op in every normal flow, where the gate is already idle by the time a
   /// terminal phase lands.

@@ -731,13 +731,13 @@ The cost is that the press-time context read has to be settled _before_ the requ
 path doing so — the read is dispatched before the mic bring-up is joined, so it is almost always
 already finished and the wait is spent while the user is still speaking, not while they wait for a
 transcript. The _response_
-is unchanged and still arrives whole: a single `async throws -> String`, no deltas. The underlying sync STT model
-handles audio from ~80 ms up to 120 s (server-side ~30 s inference deadline); those limits live in
+is unchanged and still arrives whole: a single `async throws -> String`, no deltas. The dictation API
+accepts audio from ~80 ms up to 20 minutes (1200 s; it was 120 s until the API raised it; server-side ~30 s inference deadline); those limits live in
 `SyncSTTLimits` and back `DictationSession`'s auto-release timeout, so a held hotkey stops before
-the cap.
+the cap (at 1195 s).
 
 Every wire constant was swept against the live route on 2026-09-09 (the keyterms list at 2048 chars and the
-120 s ceiling are both exact and enforced; the prompt's 4096 is the API's own and hard-rejecting,
+then-120 s audio ceiling were both exact and enforced — the ceiling has since been raised to 20 minutes and not re-swept; the prompt's 4096 is the API's own and hard-rejecting,
 measured in Unicode scalars on 2026-09-10 — it was `conversation_context`'s 4096, which was **ours**
 and merely trimmed, until `stt_prompt` replaced that field; the whole `config` part is separately
 limited somewhere past 48 kB; sub-floor audio returns 200 with an

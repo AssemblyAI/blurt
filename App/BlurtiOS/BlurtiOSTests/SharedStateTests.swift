@@ -59,11 +59,11 @@ struct PhaseSnapshotTests {
     }
   }
 
-  @Test("an in-flight state outlives no dictation past 130 seconds")
+  @Test("an in-flight state outlives no dictation past 1210 seconds")
   func inFlight() {
     for state in [PhaseSnapshot.State.connecting, .recording, .processing] {
-      #expect(!snapshot(state, ageSeconds: 120).isStale)
-      #expect(snapshot(state, ageSeconds: 131).isStale)
+      #expect(!snapshot(state, ageSeconds: 1200).isStale)
+      #expect(snapshot(state, ageSeconds: 1211).isStale)
     }
   }
 
