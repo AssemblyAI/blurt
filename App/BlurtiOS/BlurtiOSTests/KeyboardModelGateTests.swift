@@ -91,9 +91,7 @@ struct KeyboardModelGateTests {
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
-    model.micDown()
-    model.micUp()
-    model.apply(snapshot(.recording))
+    rig.latchRecording()
     model.beginAddingTerm()
     #expect(commands.sent.map(\.kind) == [.press, .release])
     #expect(model.gate.isIdle)
@@ -121,9 +119,7 @@ struct KeyboardModelGateTests {
     let model = rig.model
     let commands = rig.commands
     // A tap latched the gate; the app auto-released, with no finger event.
-    model.micDown()
-    model.micUp()
-    model.apply(snapshot(.recording))
+    rig.latchRecording()
     model.apply(snapshot(.processing))
     #expect(!model.gate.isIdle)
     model.beginAddingTerm()
@@ -142,9 +138,7 @@ struct KeyboardModelGateTests {
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
-    model.micDown()
-    model.micUp()
-    model.apply(snapshot(.recording))
+    rig.latchRecording()
     model.micDown()
     model.micUp()
     model.apply(snapshot(.processing))
@@ -168,9 +162,7 @@ struct KeyboardModelGateTests {
     // A tap latches a recording; a swipe across the orb leaves it running,
     // and the next tap is still the stop.
     model.apply(snapshot(.idle))
-    model.micDown()
-    model.micUp()
-    model.apply(snapshot(.recording))
+    rig.latchRecording()
     model.micDown()
     model.undoPress()
     #expect(commands.sent.map(\.kind) == [.press, .cancel, .press])
@@ -187,9 +179,7 @@ struct KeyboardModelGateTests {
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
-    model.micDown()
-    model.micUp()
-    model.apply(snapshot(.recording))
+    rig.latchRecording()
     // Leaving the screen releases it; the app hasn't published `.processing`
     // yet, so the picture still says recording and the gate is idle.
     model.disappeared()

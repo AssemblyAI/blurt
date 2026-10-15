@@ -19,10 +19,7 @@
       let insertTask = ValueBox<Task<Void, any Error>?>(nil)
       let injector = KeyInjector(
         pasteSettleDuration: .zero,
-        postPaste: {
-          posted.value = true
-          return true
-        },
+        postPaste: posted.recordingPaste,
         activateTarget: { _ in
           // The cancel lands while activation is in flight; activation itself
           // still succeeds, so only the post-activation cancellation gate stands

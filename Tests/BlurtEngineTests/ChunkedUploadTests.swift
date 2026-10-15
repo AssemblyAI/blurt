@@ -92,9 +92,7 @@ struct ChunkedUploadTests {
     let injector = StubInjector()
     let session = makeSession(transcriber: probe, mic: mic, injector: injector)
 
-    await session.press()
-    await session.release()
-    await session.waitForIdle()
+    await session.dictate()
 
     #expect(await session.phase == .idle)
     #expect(await injector.inserted.isEmpty)
@@ -144,9 +142,7 @@ struct ChunkedUploadTests {
           priorText: "Dear Sam,", selectedText: nil, windowTitle: nil, fieldLabel: nil),
         log: log))
 
-    await session.press()
-    await session.release()
-    await session.waitForIdle()
+    await session.dictate()
 
     let failure = try #require(log.failures.first)
     #expect(failure.context?.priorText == "Dear Sam,")

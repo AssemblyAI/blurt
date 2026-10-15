@@ -1,0 +1,8 @@
+{
+  "name": "blurt-jscpd",
+  "private": true,
+  "description": "check.sh's copy/paste detector, pinned with a lockfile. Install with: npm ci --prefix tools/jscpd",
+  "dependencies": {
+    "jscpd": "5.4.1"
+  }
+}

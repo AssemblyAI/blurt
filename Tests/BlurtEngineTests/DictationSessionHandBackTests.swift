@@ -11,9 +11,7 @@ struct DictationSessionHandBackTests {
   @Test("the transcript comes back as .handedBack and nothing is pasted")
   func handsBack() async {
     let fixture = makeSession(mode: .transcript("Give me a high-level summary."))
-    await fixture.session.press(handingBack: true)
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate(handingBack: true)
 
     #expect(await fixture.session.phase == .handedBack("Give me a high-level summary."))
     #expect(await fixture.injector.inserted.isEmpty)
@@ -25,9 +23,7 @@ struct DictationSessionHandBackTests {
     let fixture = makeSession(
       mode: .transcript("What does this mean?"),
       onTranscriptDelivered: { _, _ in _ = delivered.next() })
-    await fixture.session.press(handingBack: true)
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate(handingBack: true)
 
     #expect(await fixture.session.recentDictations.spokenOldestFirst.isEmpty)
     #expect(delivered.value == 0)
@@ -38,9 +34,7 @@ struct DictationSessionHandBackTests {
     let fixture = makeSession(
       mode: .transcript("Email it to my personal email"),
       textShortcuts: [TextShortcut(trigger: "personal email", expansion: "me@example.com")])
-    await fixture.session.press(handingBack: true)
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate(handingBack: true)
 
     #expect(await fixture.session.phase == .handedBack("Email it to my personal email"))
   }
@@ -48,9 +42,7 @@ struct DictationSessionHandBackTests {
   @Test("nothing said ends in .idle, as a dictation's empty transcript does")
   func nothingSaid() async {
     let fixture = makeSession(mode: .transcript("   "))
-    await fixture.session.press(handingBack: true)
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate(handingBack: true)
 
     #expect(await fixture.session.phase == .idle)
   }
@@ -58,12 +50,8 @@ struct DictationSessionHandBackTests {
   @Test("the next ordinary press pastes again")
   func flagIsPerPress() async {
     let fixture = makeSession(mode: .transcript("Hello world."))
-    await fixture.session.press(handingBack: true)
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate(handingBack: true)
+    await fixture.session.dictate()
 
     #expect(await fixture.session.phase == .pasted)
     #expect(await fixture.injector.inserted == ["Hello world."])

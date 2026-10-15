@@ -41,10 +41,7 @@ struct VoiceGrille: View {
       }
       .frame(width: box.width, height: box.height)
     }
-    .frame(width: box.width, height: box.height)
-    .opacity(inputs.state.isReady ? 1 : Metrics.opacityOff)
-    .animation(.easeInOut(duration: DesignTokens.Motion.stateFade), value: inputs.state.isReady)
-    .accessibilityHidden(true)
+    .voiceElementFrame(box, ready: inputs.state.isReady)
   }
 
   static func box(_ slot: VoiceSlot) -> CGSize {

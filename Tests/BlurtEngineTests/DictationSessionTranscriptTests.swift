@@ -20,9 +20,7 @@ struct DictationSessionTranscriptTests {
       mode: .transcript("Hello world."), onTranscriptDelivered: { text, _ in spy.append(text) }
     ).session
 
-    await session.press()
-    await session.release()
-    await session.waitForIdle()
+    await session.dictate()
 
     #expect(await session.phase == .pasted)
     #expect(spy.values == ["Hello world."])
@@ -35,9 +33,7 @@ struct DictationSessionTranscriptTests {
       mode: .transcript("Copied text."), onTranscriptDelivered: { text, _ in spy.append(text) })
     await fixture.injector.setError(BlurtError.noEditableTarget)
 
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate()
 
     #expect(await fixture.session.phase == .noTarget)
     #expect(spy.values == ["Copied text."])
@@ -53,9 +49,7 @@ struct DictationSessionTranscriptTests {
       mode: .transcript("Spoken but unpasted."), onTranscriptDelivered: { text, _ in spy.append(text) })
     await fixture.injector.setError(BlurtError.accessibilityPermissionMissing)
 
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate()
 
     #expect(await fixture.session.phase == .failed(.accessibilityPermissionMissing))
     #expect(spy.values == ["Spoken but unpasted."])
@@ -78,9 +72,7 @@ struct DictationSessionTranscriptTests {
       })
 
     for _ in 1...2 {
-      await fixture.session.press()
-      await fixture.session.release()
-      await fixture.session.waitForIdle()
+      await fixture.session.dictate()
     }
 
     // The first push already contains the transcript it reported — an empty ring
@@ -98,9 +90,7 @@ struct DictationSessionTranscriptTests {
     let session = makeSession(mode: .throwError(Boom()), onTranscriptDelivered: { text, _ in spy.append(text) })
       .session
 
-    await session.press()
-    await session.release()
-    await session.waitForIdle()
+    await session.dictate()
 
     #expect(spy.values.isEmpty)
   }
@@ -113,9 +103,7 @@ struct DictationSessionTranscriptTests {
     let session = makeSession(mode: .transcript("   "), onTranscriptDelivered: { text, _ in spy.append(text) })
       .session
 
-    await session.press()
-    await session.release()
-    await session.waitForIdle()
+    await session.dictate()
 
     #expect(await session.phase == .idle)
     #expect(spy.values.isEmpty)

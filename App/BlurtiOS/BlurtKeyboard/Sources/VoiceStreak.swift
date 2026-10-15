@@ -22,10 +22,7 @@ struct VoiceStreak: View {
         Self.draw(&context, size: size, inputs: inputs, now: now)
       }
     }
-    .frame(width: box.width, height: box.height)
-    .opacity(inputs.state.isReady ? 1 : Metrics.opacityOff)
-    .animation(.easeInOut(duration: DesignTokens.Motion.stateFade), value: inputs.state.isReady)
-    .accessibilityHidden(true)
+    .voiceElementFrame(box, ready: inputs.state.isReady)
   }
 
   private static func draw(_ context: inout GraphicsContext, size: CGSize, inputs: VoiceElementInputs, now: Date) {

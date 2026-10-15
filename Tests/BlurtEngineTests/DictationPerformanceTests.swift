@@ -31,9 +31,7 @@ final class DictationPerformanceTests: XCTestCase {
   func testTranscribeInjectWithinBudget() async {
     let median = await medianDuration(iterations: 7) {
       let session = makeSession().session
-      await session.press()
-      await session.release()
-      await session.waitForIdle()
+      await session.dictate()
     }
     // Stubbed this is well under a millisecond; 500 ms is a gross-regression trip.
     XCTAssertLessThan(
