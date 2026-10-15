@@ -30,8 +30,18 @@ enum MicCaptureError: LocalizedError {
   var errorDescription: String? {
     switch self {
     case .noInputDevice: "No microphone is available."
-    case .inputNeverDelivered(let deviceName?): "\(deviceName) isn't sending any audio."
-    case .inputNeverDelivered(nil): "The microphone isn't sending any audio."
+    case .inputNeverDelivered: pillNotice.map { "\($0.text)." }
+    }
+  }
+
+  /// What the overlay writes on the pill for this fault (`OverlayUIState.error`'s
+  /// notice), or nil for one the compact "Error" pill covers. The sentence above
+  /// is built from the same words, so the two can't drift apart.
+  var pillNotice: PillNotice? {
+    switch self {
+    case .noInputDevice: nil
+    case .inputNeverDelivered(let deviceName):
+      PillNotice(subject: deviceName ?? "The microphone", predicate: "isn't sending any audio")
     }
   }
 }

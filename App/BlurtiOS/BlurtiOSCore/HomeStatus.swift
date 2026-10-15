@@ -37,8 +37,7 @@ package nonisolated struct HomeStatus: Equatable {
     case .processing: "Transcribing…"
     case .pasted: "Pasted"
     case .noTarget: "Copied"
-    case .error(let message): message
-    case .inputSilent: overlay.accessibilityLabel
+    case .error(let message, _): message
     case .idle: windowOpen ? "Ready to dictate" : "Not listening"
     }
   }

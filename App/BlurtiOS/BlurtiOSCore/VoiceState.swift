@@ -110,7 +110,7 @@ package nonisolated struct VoiceState: Equatable {
 extension PhaseSnapshot.State {
   /// The engine's overlay state as the orb shows it. "No target" is the words
   /// going to the clipboard — the keyboard's "copied" — and a silent mic is an
-  /// error: the iPhone has no wide pill for it.
+  /// error like any other: the iPhone has no wide pill for its notice.
   package init(_ overlay: OverlayUIState) {
     self =
       switch overlay {
@@ -120,18 +120,17 @@ extension PhaseSnapshot.State {
       case .processing: .processing
       case .pasted: .pasted
       case .noTarget: .copied
-      case .error, .inputSilent: .error
+      case .error: .error
       }
   }
 }
 
 extension PhaseSnapshot {
-  /// The words an overlay state carries for VoiceOver: an error's own, or the
-  /// silent mic's sentence (with the device name).
+  /// The words an overlay state carries for VoiceOver: an error's own (the
+  /// silent mic's sentence, with the device name, included).
   package static func message(for overlay: OverlayUIState) -> String? {
     switch overlay {
-    case .error(let message): message
-    case .inputSilent: overlay.accessibilityLabel
+    case .error(let message, _): message
     case .idle, .connecting, .recording, .processing, .pasted, .noTarget: nil
     }
   }
