@@ -7,10 +7,13 @@ import SwiftUI
 /// totals stay on the phone (`DictationStats`).
 struct StatsCard: View {
   @AppStorage(DictationStats.defaultsKey) private var raw = Data()
+  /// The speed time saved is measured against: the phone average, or the
+  /// easter egg's latest result (`TypingSpeed`).
+  @AppStorage(TypingSpeed.defaultsKey) private var typingSpeed: Double = 0
 
   var body: some View {
     let stats = DictationStats.decode(raw)
-    let saved = stats.timeSaved()
+    let saved = stats.timeSaved(typingWordsPerMinute: TypingSpeed.resolved(typingSpeed))
     let dictations = [(StatFormat.count(stats.dictations), String?.none)]
     let words = [(StatFormat.count(stats.words), String?.none)]
     let timeSaved = StatFormat.durationParts(saved).map { ($0.value, Optional($0.unit)) }

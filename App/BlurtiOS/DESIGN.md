@@ -190,6 +190,13 @@ point sizes throughout, as the system keyboard's; no Dynamic Type.
 | `size/tab-label`     | `11`       | `Typography.sizeTabLabel`     | a tab's mono label                                                                |
 | `size/term`          | `17`       | `Typography.sizeTerm`         | the key-term field                                                                |
 | `size/title`         | `34`       | `Typography.sizeTitle`        | the app's serif headline                                                          |
+| `size/typing-clock`  | `64`       | `Typography.sizeTypingClock`  | the typing test's countdown                                                       |
+| `size/typing-field`  | `22`       | `Typography.sizeTypingField`  | what you've typed                                                                 |
+| `size/typing-live`   | `28`       | `Typography.sizeTypingLive`   | its live words per minute                                                         |
+| `size/typing-rank`   | `28`       | `Typography.sizeTypingRank`   | the result's rank, in the serif                                                   |
+| `size/typing-result` | `96`       | `Typography.sizeTypingResult` | the result's words per minute                                                     |
+| `size/typing-unit`   | `16`       | `Typography.sizeTypingUnit`   | the result's WPM                                                                  |
+| `size/typing-words`  | `24`       | `Typography.sizeTypingWords`  | the words to type                                                                 |
 | `tracking/cta`       | `1.4`      | `Typography.trackingCta`      | uppercase mono at 14: the brand's E2 tracking                                     |
 | `tracking/eyebrow`   | `1.2`      | `Typography.trackingEyebrow`  | uppercase mono at 12: the brand's E1 tracking                                     |
 | `weight/glyph`       | `medium`   | `Typography.weightGlyph`      | —                                                                                 |
@@ -638,6 +645,12 @@ pins the derivation.
 | `term/inset`                 | `2`       | `Metrics.termInset`                | the field row's side inset                                                                                                                                                                                                                                          |
 | `term/pad`                   | `14`      | `Metrics.termPad`                  | the field's side padding                                                                                                                                                                                                                                            |
 | `term/radius`                | `8`       | `Metrics.termRadius`               | the key-term field: the brand's input corners (radius/input)                                                                                                                                                                                                        |
+| `typing/field-border`        | `2`       | `Metrics.typingFieldBorder`        | the typing field's border, orange once a word goes wrong                                                                                                                                                                                                            |
+| `typing/field-pad`           | `12`      | `Metrics.typingFieldPad`           | inside the typing field                                                                                                                                                                                                                                             |
+| `typing/line-spacing`        | `8`       | `Metrics.typingLineSpacing`        | between the lines of words to type                                                                                                                                                                                                                                  |
+| `typing/pulse`               | `1.06`    | `Metrics.typingPulse`              | the countdown's thump in the last five seconds                                                                                                                                                                                                                      |
+| `typing/result-gap`          | `20`      | `Metrics.typingResultGap`          | between the result's blocks                                                                                                                                                                                                                                         |
+| `typing/words-height`        | `180`     | `Metrics.typingWordsHeight`        | the least room the words take, so the field below stays put                                                                                                                                                                                                         |
 | `voice/bar-height`           | `32`      | `Metrics.voiceBarHeight`           | —                                                                                                                                                                                                                                                                   |
 | `voice/bar-width`            | `160`     | `Metrics.voiceBarWidth`            | the voice element's box in the voice bar — the most it takes (the ribs awake, the streak); the + sits beside what shows                                                                                                                                             |
 | `voice/home-height`          | `112`     | `Metrics.voiceHomeHeight`          | —                                                                                                                                                                                                                                                                   |
@@ -680,6 +693,8 @@ house curve (`ease/signature`, `cubic-bezier(0.22, 1, 0.36, 1)`).
 | `sheen-working`  | `1.6`           | `Motion.sheenWorking`  | and while something is happening: the ring's cadence                       |
 | `state-fade`     | `0.5`           | `Motion.stateFade`     | every other change on the key: the ring, a glyph, the dimming              |
 | `term-swap`      | `0.4`           | `Motion.termSwap`      | the voice bar becoming the field                                           |
+| `typing-flash`   | `0.15`          | `Motion.typingFlash`   | the typing field's border turning, and the countdown's thump               |
+| `typing-tick`    | `0.1`           | `Motion.typingTick`    | how often the typing test's clock and live speed redraw                    |
 | `wave-fade`      | `0.7`           | `Motion.waveFade`      | the orb and the wave crossing, either way                                  |
 
 <!-- tokens:end motion -->
@@ -731,6 +746,15 @@ Transcription (enhanced transcripts, output styles), Account (the API key, and w
 About (with AssemblyAI's privacy policy). The theme picker shows each theme's
 two faces side by side. Styles, the import sheet, the key entry and the consent
 sheet share the form's chrome (`brandForm()`).
+
+**The easter egg** (`TypingTestView`, `TypingTest`, `TypingSpeed`): a quiet
+"How fast can you type?" link at the foot of Settings opens a 30-second sprint
+over common words, full screen — a mono countdown that turns orange and thumps
+through the last five seconds (no thump under Reduce Motion), live WPM in the
+accent, the current word underlined, wrong words struck through in orange,
+the field's border orange once a word goes wrong. The result: WPM, a rank,
+accuracy, the best, and talking's 150 wpm against yours; the latest result
+becomes time saved's typing speed ("Using your N wpm · Reset to average").
 
 **Consent** (`ConsentView`, `AIConsent`): before the listening window first
 opens, a sheet names AssemblyAI, lists what is sent (the voice while
