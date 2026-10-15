@@ -1,8 +1,11 @@
 extension DictationSession {
   /// One host-initiated pipeline command, for `submit(_:)`. Mirrors the four
   /// async methods one-to-one; see each method's doc for semantics.
+  /// `pressHandingBack` is `press(handingBack: true)`: the same dictation, whose
+  /// transcript ends the run as `.handedBack` rather than being pasted.
   public enum Command: Sendable {
     case press
+    case pressHandingBack
     case release
     case cancel
     case cancelRecording
@@ -36,6 +39,7 @@ extension DictationSession {
   func run(_ command: Command) async {
     switch command {
     case .press: await press()
+    case .pressHandingBack: await press(handingBack: true)
     case .release: await release()
     case .cancel: await cancel()
     case .cancelRecording: await cancelRecording()
@@ -105,6 +109,11 @@ extension DictationSession {
     if phase == .transcribing || phase == .injecting {
       // Cancel but keep the handle so `awaitPipeline()` can join the cancelled task.
       pipelineTask?.cancel()
+      // The cancel is honored right here, so spend the request a submitted
+      // cancel recorded on its way in. Left set, it would cancel the next press
+      // during its mic bring-up. A release still inside `mic.stop()` bails
+      // regardless, on the phase this claims (`cancelWonRelease`).
+      cancelRequested = false
       // `setPhase(.cancelled)` also abandons the request, which cancelling the
       // pipeline alone would not: awaiting a `Task`'s value is not
       // cancellation-aware, so the upload would finish and transcribe a

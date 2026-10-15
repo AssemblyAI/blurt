@@ -71,10 +71,21 @@ struct MicCaptureFormatTests {
     #expect(MicCaptureError.noInputDevice.errorDescription == "No microphone is available.")
   }
 
-  @Test func inputNeverDeliveredHasHumanReadableMessage() {
+  @Test func inputNeverDeliveredNamesTheSilentDevice() {
     // The liveness gate's fail-closed outcome — same route to the pill as
-    // noInputDevice above, and the same sentence requirement. Together the two
-    // also keep MicCaptureError.swift's errorDescription fully covered.
-    #expect(MicCaptureError.inputNeverDelivered.errorDescription == "The microphone didn't start.")
+    // noInputDevice above, and the same sentence requirement. Naming the device
+    // is the point: a silent aggregate or loopback input is a settings problem,
+    // and the name is what tells the user which setting.
+    #expect(
+      MicCaptureError.inputNeverDelivered(deviceName: "Aggregate Device").errorDescription
+        == "Aggregate Device isn't sending any audio.")
+  }
+
+  @Test func inputNeverDeliveredWithoutANameStillReadsAsASentence() {
+    // The device vanished before its name could be read. Together with the two
+    // above, keeps MicCaptureError.swift's errorDescription fully covered.
+    #expect(
+      MicCaptureError.inputNeverDelivered(deviceName: nil).errorDescription
+        == "The microphone isn't sending any audio.")
   }
 }

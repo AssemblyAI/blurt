@@ -26,7 +26,11 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     IPHONEOS_DEPLOYMENT_TARGET: "18.0"
-    # iPhone first. iPad needs its own keyboard sizing pass.
+    # iPhone first. iPad needs its own keyboard sizing pass. Restated on every
+    # target below: XcodeGen's iOS target presets set "1,2" per target, which
+    # wins over this, and an archive that claims iPad fails App Store
+    # validation for being portrait-only (iPad multitasking wants all four
+    # orientations).
     TARGETED_DEVICE_FAMILY: "1"
     # Whoever generates the project signs with their own team: XcodeGen expands
     # `${BLURT_TEAM}` from the environment (`BLURT_TEAM=XXXXXXXXXX xcodegen
@@ -58,6 +62,7 @@ targets:
       - path: BlurtiOSCore
     settings:
       base:
+        TARGETED_DEVICE_FAMILY: "1"
         PRODUCT_BUNDLE_IDENTIFIER: com.assemblyai.blurt.ios.core
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
@@ -83,6 +88,7 @@ targets:
       - path: BlurtDesign
     settings:
       base:
+        TARGETED_DEVICE_FAMILY: "1"
         PRODUCT_BUNDLE_IDENTIFIER: com.assemblyai.blurt.ios.design
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
@@ -115,6 +121,7 @@ targets:
           - KeyboardViewController.swift
     settings:
       base:
+        TARGETED_DEVICE_FAMILY: "1"
         PRODUCT_BUNDLE_IDENTIFIER: com.assemblyai.blurt.ios
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # The app-level accent, from the catalog, so system-drawn chrome and our
@@ -132,9 +139,14 @@ targets:
       properties:
         CFBundleDisplayName: Blurt
         CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "1"
+        CFBundleVersion: "2"
         LSApplicationCategoryType: public.app-category.productivity
         NSMicrophoneUsageDescription: Blurt listens only while you dictate, and sends that audio to AssemblyAI to turn it into text.
+        # Never shown: Blurt doesn't ask for the camera. App Store processing
+        # still requires it (ITMS-90683) because the microphone is opened
+        # through AVCaptureSession/AVCaptureDevice (AudioSource), the capture
+        # API cameras share.
+        NSCameraUsageDescription: Blurt doesn't use the camera. It opens only the microphone, through the same system capture service the camera uses.
         # Keeps the listening window alive while the user is back in the app
         # they are typing in: iOS ends a backgrounded app's capture without it.
         UIBackgroundModes: [audio]
@@ -194,6 +206,7 @@ targets:
         buildPhase: resources
     settings:
       base:
+        TARGETED_DEVICE_FAMILY: "1"
         PRODUCT_BUNDLE_IDENTIFIER: com.assemblyai.blurt.ios.keyboard
         SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
@@ -203,7 +216,7 @@ targets:
       properties:
         CFBundleDisplayName: Blurt
         CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "1"
+        CFBundleVersion: "2"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.keyboard-service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
@@ -246,6 +259,7 @@ targets:
       - target: BlurtiOS
     settings:
       base:
+        TARGETED_DEVICE_FAMILY: "1"
         PRODUCT_BUNDLE_IDENTIFIER: com.assemblyai.blurt.ios.tests
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
@@ -264,6 +278,7 @@ targets:
       - target: BlurtiOS
     settings:
       base:
+        TARGETED_DEVICE_FAMILY: "1"
         PRODUCT_BUNDLE_IDENTIFIER: com.assemblyai.blurt.ios.probe
         TEST_TARGET_NAME: BlurtiOS
         GENERATE_INFOPLIST_FILE: YES

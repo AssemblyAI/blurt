@@ -29,6 +29,16 @@ public enum PipelinePhase: Equatable, Sendable {
   /// was left on the clipboard. A terminal, non-error outcome — the overlay
   /// shows a quiet "copied" notice rather than the red failure flash.
   case noTarget
+  /// Transcription succeeded and the press asked for the text back instead of a
+  /// paste (`DictationSession.Command.pressHandingBack`, read-aloud's "ask about
+  /// the selection"). Carries the transcript, as the service returned it and
+  /// before text shortcuts expand it. A terminal, non-error outcome that the pill
+  /// renders as idle: what happens next is the host's.
+  ///
+  /// A phase rather than a callback so the host reads the transcript and the end
+  /// of the dictation from one ordered stream. Two streams can deliver in either
+  /// order, and a router that saw "it ended" first would drop the transcript.
+  case handedBack(String)
 
   /// Whether the dictation has finished (or never started) — nothing in flight.
   ///
@@ -38,7 +48,7 @@ public enum PipelinePhase: Equatable, Sendable {
   /// swallowing the user's next press.
   public var isTerminal: Bool {
     switch self {
-    case .idle, .failed, .cancelled, .pasted, .noTarget: true
+    case .idle, .failed, .cancelled, .pasted, .noTarget, .handedBack: true
     case .connecting, .recording, .transcribing, .injecting: false
     }
   }
@@ -51,7 +61,7 @@ public enum PipelinePhase: Equatable, Sendable {
   public var isCapturing: Bool {
     switch self {
     case .connecting, .recording: true
-    case .idle, .transcribing, .injecting, .failed, .cancelled, .pasted, .noTarget: false
+    case .idle, .transcribing, .injecting, .failed, .cancelled, .pasted, .noTarget, .handedBack: false
     }
   }
 
@@ -104,7 +114,10 @@ extension BlurtError: Equatable {
       // rather than `localizedDescription`. The description is human-facing copy:
       // comparing it would make equality silently depend on message wording, so a
       // localization or phrasing tweak could break a test. Domain + code is the
-      // stable identity of the underlying error.
+      // stable identity of the underlying error. Payloads are ignored too —
+      // `inputNeverDelivered` on two different devices compares equal — so don't
+      // dedupe phases on `==` where the device name matters; the overlay compares
+      // `OverlayUIState`, which carries it.
       let lhsError = lhsUnderlying as NSError
       let rhsError = rhsUnderlying as NSError
       return lhsError.domain == rhsError.domain && lhsError.code == rhsError.code
