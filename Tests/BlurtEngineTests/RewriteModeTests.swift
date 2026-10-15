@@ -1,3 +1,4 @@
+import AssemblyAI
 import Foundation
 import Testing
 
@@ -57,6 +58,19 @@ struct RewriteModeTests {
     // slower model would only cost latency.
     let object = try config(mode: .smart, enhancedTranscripts: false)
     #expect(object.keys.contains("rewrite_mode") == false)
+  }
+
+  @Test("the SDK writes each typed mode as its documented spelling")
+  func sdkSpellsEachMode() throws {
+    for mode in [DictationRewriteMode.fast, .smart] {
+      let data = try JSONEncoder().encode(
+        DictationConfig(
+          sampleRate: 16_000, channels: 1, sttPrompt: "", keytermsPrompt: [], llmInstruction: nil,
+          rewriteMode: mode))
+      let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+      #expect(object["rewrite_mode"] as? String == mode.rawValue)
+    }
+    #expect(DictationRewriteMode.smart.rawValue == "smart")
   }
 
   // MARK: - helpers

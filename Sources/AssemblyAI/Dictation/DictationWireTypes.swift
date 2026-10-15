@@ -25,6 +25,16 @@
 // evidence a field is supported, only that it has not been removed yet. There
 // has been a lot of renaming on this route. Treat any name absent from the docs
 // as deprecated and don't send it, however well it works today.
+/// The models the cleanup rewrite can run on — `config.rewrite_mode`'s
+/// documented values. Typed so a misspelling can't type-check its way onto the
+/// wire.
+public enum DictationRewriteMode: String, Encodable, Sendable {
+  /// The route's default.
+  case fast
+  /// A larger model: better rewrites, a longer server-side path.
+  case smart
+}
+
 public struct DictationConfig: Encodable, Sendable {
   public let sampleRate: Int
   public let channels: Int
@@ -93,15 +103,14 @@ public struct DictationConfig: Encodable, Sendable {
   /// Adding an `llm` case back would reintroduce it *and* leave the response's
   /// choice unreachable — read `transcript(from:enhanced:)` first.
   public let llmInstruction: String?
-  /// Which model the cleanup rewrite runs on: `"smart"` (a larger model) or
-  /// `"fast"`, or nil to omit the key and leave the route on its default.
-  /// A top-level sibling of `llm_instruction`, which is where the rest of the
-  /// rewrite request already lives.
-  public let rewriteMode: String?
+  /// Which model the cleanup rewrite runs on, or nil to omit the key and leave
+  /// the route on its default. A top-level sibling of `llm_instruction`, which
+  /// is where the rest of the rewrite request already lives.
+  public let rewriteMode: DictationRewriteMode?
 
   public init(
     sampleRate: Int, channels: Int, sttPrompt: String, keytermsPrompt: [String], llmInstruction: String?,
-    rewriteMode: String? = nil
+    rewriteMode: DictationRewriteMode? = nil
   ) {
     self.sampleRate = sampleRate
     self.channels = channels
