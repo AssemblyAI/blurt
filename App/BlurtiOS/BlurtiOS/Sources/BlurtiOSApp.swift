@@ -26,13 +26,24 @@ struct BlurtiOSApp: App {
     // touches neither the Keychain nor the App Group (the Mac's UITestSupport
     // does the same for its harness), and `start()` below never runs.
     let coordinator =
-      Self.isTestHost
+      Self.isTestHost || Self.isKeyless
       ? DictationCoordinator(apiKey: APIKeyModel(keyStore: InMemoryAPIKeyStore())) : DictationCoordinator()
     _coordinator = State(initialValue: coordinator)
   }
 
   private static var isTestHost: Bool {
     ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+  }
+
+  /// `-BlurtNoKey`: a fresh install's view of the key, in memory, so the
+  /// first-run screen can be screenshotted without touching the Keychain's;
+  /// debug builds only.
+  private static var isKeyless: Bool {
+    #if DEBUG
+      CommandLine.arguments.contains("-BlurtNoKey")
+    #else
+      false
+    #endif
   }
 
   var body: some Scene {
@@ -63,7 +74,7 @@ struct BlurtiOSApp: App {
   }
 
   private var home: some View {
-    MainView(coordinator: coordinator)
+    RootView(coordinator: coordinator)
       .task { await start() }
   }
 

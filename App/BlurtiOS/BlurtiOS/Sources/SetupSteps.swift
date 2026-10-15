@@ -1,38 +1,29 @@
 import AVFoundation
 import BlurtDesign
-import BlurtEngine
 import SwiftUI
 import UIKit
 
-/// The setup checklist, on top of the home screen while anything is missing:
-/// three numbered steps — an AssemblyAI API key, the microphone, the keyboard —
-/// each with its control until it is done.
-struct SetupCard: View {
+/// The setup steps, numbered: an AssemblyAI API key, the microphone, the
+/// keyboard, each with its control until it is done and a check after. The
+/// first-run screen shows them in a card; Settings keeps them once the app is
+/// set up, folded away until asked for.
+struct SetupSteps<KeyStep: View>: View {
   let hasKey: Bool
   let microphoneGranted: Bool
   let keyboardSeen: Bool
-  /// Every build takes an API key, as the Mac app does, until Sign in with
-  /// AssemblyAI exists.
-  let enterKey: () -> Void
   /// Re-read the permissions after one was asked for.
   let refresh: () -> Void
+  /// What the key step offers while there's no key: the inline field on the
+  /// first-run screen.
+  @ViewBuilder let keyStep: () -> KeyStep
 
   var body: some View {
     VStack(alignment: .leading, spacing: DesignTokens.Metrics.appStackGap) {
-      Eyebrow("Set up Blurt")
-      SetupRow(number: "01", done: hasKey, title: "Add your AssemblyAI API key") {
-        VStack(alignment: .leading, spacing: DesignTokens.Metrics.appLineGap) {
-          Text("Blurt uses your own AssemblyAI account. New accounts come with free credits.")
-            .font(BlurtType.body(DesignTokens.Typography.sizeCaption)).foregroundStyle(BlurtBrand.muted)
-          Button("Paste your key") { enterKey() }.buttonStyle(BrandButtonStyle(role: .primary))
-          Link("Get a free key", destination: APIKeyStore.dashboardURL)
-            .font(BlurtType.body(DesignTokens.Typography.sizeCaption))
-        }
-      }
+      SetupRow(number: "01", done: hasKey, title: "Add your AssemblyAI API key", action: keyStep)
       SetupRow(number: "02", done: microphoneGranted, title: "Allow the microphone") {
         if AVAudioApplication.shared.recordPermission == .denied {
           // iOS asks once; after a refusal only Settings can change it.
-          Button("Allow in Settings") { Self.openAppSettings() }.buttonStyle(BrandButtonStyle(role: .primary))
+          Button("Allow in Settings") { SystemSettings.open() }.buttonStyle(BrandButtonStyle(role: .primary))
         } else {
           Button("Allow") {
             Task {
@@ -56,16 +47,17 @@ struct SetupCard: View {
               + "Full Access is what lets the keyboard send your words to Blurt."
           )
           .font(BlurtType.body(DesignTokens.Typography.sizeCaption)).foregroundStyle(BlurtBrand.muted)
-          Button("Open Settings") { Self.openAppSettings() }.buttonStyle(BrandButtonStyle(role: .secondary))
+          Button("Open Settings") { SystemSettings.open() }.buttonStyle(BrandButtonStyle(role: .secondary))
         }
       }
     }
-    .padding(DesignTokens.Metrics.appCardPad)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .card()
   }
 
-  static func openAppSettings() {
+}
+
+/// Blurt's page in the Settings app.
+enum SystemSettings {
+  static func open() {
     guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
     UIApplication.shared.open(url)
   }
