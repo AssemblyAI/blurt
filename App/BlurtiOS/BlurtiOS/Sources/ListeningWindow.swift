@@ -60,10 +60,13 @@ final class ListeningWindow {
   }
 
   /// Pushes the window's end out again — called on open and after every
-  /// dictation, so a window only closes on real silence.
-  func extend() {
+  /// dictation, so a window only closes on real silence. `atLeast` holds it
+  /// open that long whatever the setting says: a dictation's start passes the
+  /// longest a dictation can run (`SyncSTTLimits.maxAudioSeconds`), so a
+  /// five-minute window can't end a twenty-minute dictation partway through.
+  func extend(atLeast floor: TimeInterval = 0) {
     let minutes = SharedStore.windowMinutes
-    let end = minutes > 0 ? Date().addingTimeInterval(TimeInterval(minutes * 60)) : Date.distantFuture
+    let end = minutes > 0 ? Date().addingTimeInterval(max(TimeInterval(minutes * 60), floor)) : Date.distantFuture
     until = end
     SharedStore.listeningUntil = end
     expiry?.cancel()

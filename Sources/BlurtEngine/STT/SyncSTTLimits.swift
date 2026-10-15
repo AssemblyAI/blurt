@@ -9,8 +9,12 @@ public enum SyncSTTLimits {
   /// the recorded and declared rates can't drift apart.
   public static let sampleRate = 16_000
 
-  /// Maximum audio duration the Sync model accepts per request (seconds).
-  public static let maxAudioSeconds: Double = 120
+  /// Maximum audio duration the dictation API accepts per request (seconds):
+  /// 20 minutes. Raised from 120 s when the API began accepting 20-minute
+  /// audio; the upload is chunked while the user speaks (see
+  /// `AssemblyAITranscriber.streamedBody`), so a longer cap holds no more of
+  /// the recording in memory than a slow uplink forces it to.
+  public static let maxAudioSeconds: Double = 1200
 
   /// Minimum audio duration worth sending (seconds). Not a rejection
   /// threshold: measured against `/v1/transcribe/live` (2026-09-09) the route

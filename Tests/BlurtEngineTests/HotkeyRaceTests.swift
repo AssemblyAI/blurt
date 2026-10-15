@@ -8,7 +8,7 @@ import Testing
 /// `release()`/`cancel()` while the press is still inside that call. The
 /// session's serial command queue must run the follow-up *after* the press —
 /// honoring it against the freshly started recording — rather than dropping it
-/// (which would strand the session in `.recording` until the ~115 s
+/// (which would strand the session in `.recording` until the ~1195 s
 /// auto-release fires).
 @Suite("Hotkey press/release races", .timeLimit(.minutes(1)))
 struct HotkeyRaceTests {

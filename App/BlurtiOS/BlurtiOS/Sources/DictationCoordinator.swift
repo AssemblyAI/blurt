@@ -271,7 +271,7 @@ final class DictationCoordinator {
 
   private func render(_ phase: PipelinePhase) {
     self.phase = phase
-    if phase == .recording { window.extend() }
+    if phase == .recording { window.extend(atLeast: SyncSTTLimits.maxAudioSeconds) }
     timeRecording(phase)
     // Delivery always comes before the paste and its terminal phase, and the
     // phases render in order, so the dictation's words are waiting by now.
