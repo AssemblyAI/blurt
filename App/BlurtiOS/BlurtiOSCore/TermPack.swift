@@ -26,10 +26,9 @@ package nonisolated struct TermPack: Codable, Identifiable, Transferable {
 
   package var id: String { "\(name)|\(from ?? "")|\(terms.joined(separator: ","))" }
 
-  /// The request's own cap on key terms (`keyterms_prompt`, 100), which is
-  /// also as many as a list is worth; a file over this size, or a term, name
-  /// or sender longer than a line, is refused.
-  package static let termCap = 100
+  /// A file over this size, or a term, name or sender longer than a line, is
+  /// refused. The term count is held to the request's own cap,
+  /// `KeyTerms.termCap`, which is also as many as a list is worth.
   package static let fileCap = 64 * 1024
   package static let lengthCap = 80
 
@@ -90,7 +89,7 @@ package nonisolated struct TermPack: Codable, Identifiable, Transferable {
   /// The pack within the caps, or nil when nothing usable is left.
   private func capped() -> TermPack? {
     let kept = KeyTerms.parse(KeyTerms.join(terms)).filter { $0.count <= Self.lengthCap }
-    let terms = Array(kept.prefix(Self.termCap))
+    let terms = Array(kept.prefix(KeyTerms.termCap))
     guard !terms.isEmpty else { return nil }
     return TermPack(
       name: String(name.prefix(Self.lengthCap)), from: from.map { String($0.prefix(Self.lengthCap)) }, terms: terms)

@@ -64,11 +64,14 @@ extension KeyboardModel {
   }
 
   package func send(_ kind: KeyboardCommand.Kind) {
+    // Only a press primes the request with the field's text; a release or a
+    // cancel carries none of it across to the app.
+    let isPress = kind == .press
     let command = KeyboardCommand(
-      id: UUID(), kind: kind, priorText: proxy?.documentContextBeforeInput,
-      selectedText: proxy?.selectedText, sentAt: Date(), keyboard: instanceID)
+      id: UUID(), kind: kind, priorText: isPress ? proxy?.documentContextBeforeInput : nil,
+      selectedText: isPress ? proxy?.selectedText : nil, sentAt: Date(), keyboard: instanceID)
     transport(command)
-    unansweredPressCommand = kind == .press ? command : nil
+    unansweredPressCommand = isPress ? command : nil
     // A press the app never answers would leave the gate latched over
     // nothing. Either notification can be missed: first catch up with a phase
     // the app may have published unheard; if the picture is still as it was,

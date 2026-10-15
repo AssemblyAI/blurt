@@ -30,10 +30,19 @@ public enum KeyTerms {
   /// order. `fitted` assumes terms arrive this way.
   public static func parse(_ text: String?) -> [String] {
     guard let text else { return [] }
+    return normalized(text.split(separator: ",").map(String.init))
+  }
+
+  // periphery:ignore - public for the iOS app (App/BlurtiOS), which the Mac scan doesn't index.
+  /// Terms already apart as clean terms, by `parse`'s rules: trimmed, blanks
+  /// dropped, duplicates removed case-insensitively keeping the first spelling.
+  /// For lists that can't go through the comma form, such as a contact called
+  /// "Smith, John".
+  public static func normalized(_ terms: [String]) -> [String] {
     var seen = Set<String>()
     var result: [String] = []
-    for piece in text.split(separator: ",") {
-      guard let term = String(piece).trimmedNonEmpty() else { continue }
+    for piece in terms {
+      guard let term = piece.trimmedNonEmpty() else { continue }
       guard seen.insert(term.lowercased()).inserted else { continue }
       result.append(term)
     }

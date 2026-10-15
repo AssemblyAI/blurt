@@ -42,7 +42,7 @@ package nonisolated struct TypingTest: Sendable {
   package func isOnTrack(_ partial: String) -> Bool { currentWord.hasPrefix(partial) }
 
   package func wordsPerMinute(after elapsed: Duration) -> Double {
-    let minutes = Double(elapsed.components.seconds) / 60 + Double(elapsed.components.attoseconds) / 6e19
+    let minutes = elapsed / .seconds(60)
     guard minutes > 0 else { return 0 }
     return Double(correctCharacters) / 5 / minutes
   }

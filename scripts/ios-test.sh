@@ -53,13 +53,8 @@ case "$SANITIZER" in
 esac
 DERIVED="$IOS_DERIVED${SANITIZER:+-$SANITIZER}"
 
-PICKED="$(ios_pick_device "${BLURT_SIM_DEVICE:-iPhone 18 Pro}")"
-if [ -z "$PICKED" ]; then
-  echo "ios-test: no iPhone simulator available (xcrun simctl list devices)" >&2
-  exit 1
-fi
-UDID="${PICKED%%	*}"
-echo "testing on ${PICKED#*	}${SANITIZER:+ under the $SANITIZER sanitizer}"
+ios_require_device ios-test
+echo "testing on $NAME${SANITIZER:+ under the $SANITIZER sanitizer}"
 ios_wait_booted "$UDID"
 
 (cd "$REPO_ROOT/App/BlurtiOS" && xcodegen generate --quiet)

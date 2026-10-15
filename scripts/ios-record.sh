@@ -74,8 +74,7 @@ read -r CROP_W CROP_H CROP_X CROP_Y < <(swift scripts/design-diff.swift crop "$r
   exit 1
 }
 
-PICKED="$(ios_pick_device "${BLURT_SIM_DEVICE:-iPhone 18 Pro}")"
-UDID="${PICKED%%	*}"
+ios_require_device ios-record
 BUNDLE_ID=com.assemblyai.blurt.ios
 
 echo "==> recording $name (two cycles)"

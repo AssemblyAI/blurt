@@ -75,6 +75,10 @@ nonisolated final class UtteranceFeed: Sendable {
     }
   }
 
+  /// Whether an utterance is open. A microphone checks this before converting
+  /// a buffer that `deliver` would only drop.
+  var isCapturing: Bool { state.withLock { $0.sink != nil } }
+
   /// A chunk of 16 kHz mono 16-bit PCM from the microphone, on whatever
   /// thread the microphone delivers on.
   func deliver(_ chunk: Data) {
@@ -90,8 +94,8 @@ nonisolated final class UtteranceFeed: Sendable {
     if delivered { levelsContinuation.yield(Self.level(of: chunk)) }
   }
 
-  /// dBFS of a chunk of 16-bit PCM, mapped to 0…1 with the Mac meter's -50 dB
-  /// floor so room ambient reads as empty bars.
+  /// dBFS of a chunk of 16-bit PCM, mapped to 0…1 by the Mac meter's own
+  /// mapping, so room ambient reads as empty bars on both.
   static func level(of pcm: Data) -> Float {
     let count = pcm.count / MemoryLayout<Int16>.size
     guard count > 0 else { return 0 }
@@ -102,10 +106,6 @@ nonisolated final class UtteranceFeed: Sendable {
       }
     }
     let rms = (energy / Double(count)).squareRoot() / Double(Int16.max)
-    guard rms > 0 else { return 0 }
-    let floor = -50.0
-    let db = 20 * log10(rms)
-    guard db > floor else { return 0 }
-    return Float(min(1, (db - floor) / -floor))
+    return MicCapture.linearLevel(fromPowerDB: Float(20 * log10(rms)))
   }
 }

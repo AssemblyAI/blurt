@@ -1,4 +1,5 @@
 import AVFoundation
+import AssemblyAI
 import BlurtEngine
 import BlurtiOSCore
 import Foundation
@@ -221,14 +222,7 @@ final class DictationCoordinator {
   nonisolated static func keyTerms() -> [String] {
     // Not through the comma-separated form: a contact called "Smith, John"
     // is one name, and the engine takes an array.
-    var seen = Set<String>()
-    var terms: [String] = []
-    for term in SharedStore.keyTerms + lexiconNames.withLock({ $0 }) {
-      let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !trimmed.isEmpty, seen.insert(trimmed.lowercased()).inserted else { continue }
-      terms.append(trimmed)
-    }
-    return terms
+    KeyTerms.normalized(SharedStore.keyTerms + lexiconNames.withLock { $0 })
   }
 
   /// What the keyboard saw around the cursor on the press in flight, once.
@@ -281,7 +275,7 @@ final class DictationCoordinator {
       if recordingSince == nil { recordingSince = .now }
     } else if let since = recordingSince {
       let elapsed = since.duration(to: .now)
-      lastSpokenSeconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
+      lastSpokenSeconds = elapsed / .seconds(1)
       recordingSince = nil
     }
   }
@@ -317,31 +311,9 @@ final class DictationCoordinator {
 
   private func publish(_ state: OverlayUIState) {
     let snapshot = PhaseSnapshot(
-      state: Self.snapshotState(state), message: Self.message(state), level: Double(level), at: Date(),
-      command: lastCommandID)
+      state: PhaseSnapshot.State(state), message: PhaseSnapshot.message(for: state), level: Double(level),
+      at: Date(), command: lastCommandID)
     SharedStore.write(snapshot, forKey: BlurtShared.Key.phase)
     SharedStore.post(BlurtShared.Signal.phase)
-  }
-
-  private static func snapshotState(_ state: OverlayUIState) -> PhaseSnapshot.State {
-    switch state {
-    case .idle: .idle
-    case .connecting: .connecting
-    case .recording: .recording
-    case .processing: .processing
-    case .pasted: .pasted
-    case .noTarget: .copied
-    case .error, .inputSilent: .error
-    }
-  }
-
-  private static func message(_ state: OverlayUIState) -> String? {
-    switch state {
-    case .error(let message): message
-    // No wide pill on the iPhone: the silent mic reads as an error, its sentence
-    // (with the device name) as the message.
-    case .inputSilent: state.accessibilityLabel
-    case .idle, .connecting, .recording, .processing, .pasted, .noTarget: nil
-    }
   }
 }

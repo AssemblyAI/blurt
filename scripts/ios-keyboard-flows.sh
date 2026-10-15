@@ -62,12 +62,7 @@ done
 # screenshots are still worth having — and the script exits non-zero at the end.
 FAILED_RUNS=()
 
-PICKED="$(ios_pick_device "${BLURT_SIM_DEVICE:-iPhone 18 Pro}")"
-[ -n "$PICKED" ] || {
-  echo "ios-keyboard-flows: no iPhone simulator available" >&2
-  exit 1
-}
-UDID="${PICKED%%	*}"
+ios_require_device ios-keyboard-flows
 ios_wait_booted "$UDID"
 
 (cd "$REPO_ROOT/App/BlurtiOS" && xcodegen generate --quiet)

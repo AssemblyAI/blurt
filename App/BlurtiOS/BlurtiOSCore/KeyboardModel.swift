@@ -164,12 +164,7 @@ package final class KeyboardModel {
 
   /// Whether the phase leaves nothing in flight — the moments the gate has to
   /// be reset, since a dictation can end with no finger event to close it.
-  package var isSettled: Bool {
-    switch snapshot.state {
-    case .idle, .pasted, .copied, .error: true
-    case .connecting, .recording, .processing: false
-    }
-  }
+  package var isSettled: Bool { snapshot.state.isSettled }
 
   package init() {}
 
@@ -195,10 +190,7 @@ package final class KeyboardModel {
     // Every appearance starts on the mic page with no term half-typed, and on
     // the page the field asks for: symbols for a number, letters otherwise.
     panelShowsKeys = false
-    termDraft = nil
-    termDraftFromSelection = nil
-    termHostBaseline = nil
-    termHostBaselineAfter = nil
+    endTermField()
     dismissedSelection = nil
     termNotice?.cancel()
     termSavedAt = nil

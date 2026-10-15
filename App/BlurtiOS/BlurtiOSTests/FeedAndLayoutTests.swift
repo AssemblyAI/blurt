@@ -25,11 +25,14 @@ struct UtteranceFeedTests {
   func tally() async {
     let feed = UtteranceFeed()
     feed.deliver(pcm([1000, -1000]))
+    #expect(!feed.isCapturing)
     let stream = feed.begin()
+    #expect(feed.isCapturing)
     feed.deliver(pcm([1000, -1000]))
     feed.deliver(pcm([1000, -1000, 1000]))
     let bytes = feed.end()
     #expect(bytes == 10)
+    #expect(!feed.isCapturing)
     var received = 0
     for await chunk in stream { received += chunk.count }
     #expect(received == 10)

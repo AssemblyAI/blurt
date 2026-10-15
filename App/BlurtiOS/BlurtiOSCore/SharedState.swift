@@ -1,4 +1,5 @@
 import AssemblyAI
+import BlurtEngine
 import Foundation
 
 // MARK: - The App Group contract
@@ -143,6 +144,14 @@ package nonisolated struct PhaseSnapshot: Codable, Sendable, Equatable {
     case pasted
     case copied
     case error
+
+    /// Nothing in flight: a notice, or rest.
+    package var isSettled: Bool {
+      switch self {
+      case .idle, .pasted, .copied, .error: true
+      case .connecting, .recording, .processing: false
+      }
+    }
   }
 
   package let state: State
@@ -166,13 +175,15 @@ package nonisolated struct PhaseSnapshot: Codable, Sendable, Equatable {
 
   package static let idle = PhaseSnapshot(state: .idle, message: nil, level: 0, at: .distantPast)
 
+  private static let longestNoticeDwell = 2.0
+
   /// How long a notice stays on the orb before it settles back to idle — the
   /// Mac's 0.8 s / 1.6 s dwell, a little longer since a phone has no hover to
   /// reveal more. Nil for the states that end on their own.
   package var noticeDwellSeconds: Double? {
     switch state {
     case .pasted: 1.2
-    case .copied, .error: 2.0
+    case .copied, .error: Self.longestNoticeDwell
     case .idle, .connecting, .recording, .processing: nil
     }
   }
@@ -194,11 +205,11 @@ package nonisolated struct PhaseSnapshot: Codable, Sendable, Equatable {
     }
   }
 
-  /// The longest notice dwell (2 s) plus a second of slack.
-  package static let noticeStaleAfter: TimeInterval = 3
-  /// The engine's 120 s cap on one dictation, plus ten seconds for the
-  /// transcript to come back.
-  package static let inFlightStaleAfter: TimeInterval = 130
+  /// The longest notice dwell plus a second of slack.
+  package static let noticeStaleAfter: TimeInterval = longestNoticeDwell + 1
+  /// The engine's cap on one dictation, plus ten seconds for the transcript
+  /// to come back.
+  package static let inFlightStaleAfter: TimeInterval = SyncSTTLimits.maxAudioSeconds + 10
 }
 
 /// One entry of the phone's own word list (`UILexicon`): contact names and the
@@ -243,15 +254,23 @@ package nonisolated enum SharedStore {
     defaults.removeObject(forKey: key)
   }
 
+  /// A choice stored by its raw value, or `fallback` when none (or one this
+  /// build doesn't know) is stored.
+  private static func choice<C: RawRepresentable>(_ key: String, default fallback: C) -> C where C.RawValue == String {
+    C(rawValue: defaults.string(forKey: key) ?? "") ?? fallback
+  }
+
   package static var layout: KeyboardLayout {
-    get { KeyboardLayout(rawValue: defaults.string(forKey: BlurtShared.Key.layout) ?? "") ?? .panel }
+    get { choice(BlurtShared.Key.layout, default: .panel) }
     set { defaults.set(newValue.rawValue, forKey: BlurtShared.Key.layout) }
   }
 
-  /// Which keyboard theme (`KeyboardPalette.id`); the iPhone's own until one
-  /// is picked.
+  /// The theme until one is picked: the iPhone's own.
+  package static let defaultThemeID = "system"
+
+  /// Which keyboard theme (`KeyboardPalette.id`).
   package static var themeID: String {
-    get { defaults.string(forKey: BlurtShared.Key.theme) ?? "system" }
+    get { defaults.string(forKey: BlurtShared.Key.theme) ?? defaultThemeID }
     set { defaults.set(newValue, forKey: BlurtShared.Key.theme) }
   }
 
@@ -259,13 +278,13 @@ package nonisolated enum SharedStore {
   /// shipped one until Settings says otherwise. Read by the keyboard on every
   /// appearance and by the home screen live. Goes with the losers.
   package static var voiceElementKind: VoiceElementKind {
-    get { VoiceElementKind(rawValue: defaults.string(forKey: BlurtShared.Key.voiceElement) ?? "") ?? .shipped }
+    get { choice(BlurtShared.Key.voiceElement, default: .shipped) }
     set { defaults.set(newValue.rawValue, forKey: BlurtShared.Key.voiceElement) }
   }
 
   /// Where the mic key sits across the keyboard; the middle until chosen.
   package static var micAlignment: MicAlignment {
-    get { MicAlignment(rawValue: defaults.string(forKey: BlurtShared.Key.micAlignment) ?? "") ?? .center }
+    get { choice(BlurtShared.Key.micAlignment, default: .center) }
     set { defaults.set(newValue.rawValue, forKey: BlurtShared.Key.micAlignment) }
   }
 

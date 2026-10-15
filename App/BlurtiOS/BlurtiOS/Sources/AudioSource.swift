@@ -131,6 +131,13 @@ extension WindowedAudioSource: nonisolated AVCaptureAudioDataOutputSampleBufferD
   func captureOutput(
     _ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection
   ) {
+    // The window keeps the mic open for minutes between utterances; resampling
+    // buffers nobody will read is wasted. The converter is dropped with them, so
+    // the next utterance doesn't start on the old audio's resampler tail.
+    guard feed.isCapturing else {
+      converter = nil
+      return
+    }
     if converter == nil { converter = PCMConverter() }
     guard let converter, let chunk = converter.convert(sampleBuffer) else { return }
     feed.deliver(chunk)

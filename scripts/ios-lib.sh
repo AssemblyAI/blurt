@@ -40,6 +40,25 @@ print(best[3] + "\t" + best[2])
 ' "$1"
 }
 
+# The simulator every script picks unless BLURT_SIM_DEVICE names another.
+IOS_DEFAULT_DEVICE="iPhone 18 Pro"
+
+# ios_require_device SCRIPT → sets UDID and NAME to the simulator to use
+# (BLURT_SIM_DEVICE, else IOS_DEFAULT_DEVICE, else any iPhone), or exits
+# with an error naming SCRIPT when this Mac has none.
+ios_require_device() {
+  local picked
+  picked="$(ios_pick_device "${BLURT_SIM_DEVICE:-$IOS_DEFAULT_DEVICE}")"
+  if [ -z "$picked" ]; then
+    echo "$1: no iPhone simulator available (xcrun simctl list devices)" >&2
+    exit 1
+  fi
+  # shellcheck disable=SC2034 # used by the scripts that source this file
+  UDID="${picked%%	*}"
+  # shellcheck disable=SC2034 # used by the scripts that source this file
+  NAME="${picked#*	}"
+}
+
 # ios_wait_booted UDID → boots the simulator if needed and waits for it.
 ios_wait_booted() {
   xcrun simctl boot "$1" 2>/dev/null || true

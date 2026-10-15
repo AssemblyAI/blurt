@@ -50,12 +50,7 @@ done
 [ -n "$OUT" ] || OUT="$REPO_ROOT/.build/design/ext/keyboard-$FACE${VOICE:+-$VOICE}${LAYOUT:+-$LAYOUT}.png"
 mkdir -p "$(dirname "$OUT")"
 
-PICKED="$(ios_pick_device "${BLURT_SIM_DEVICE:-iPhone 18 Pro}")"
-[ -n "$PICKED" ] || {
-  echo "ios-keyboard-shot: no iPhone simulator available" >&2
-  exit 1
-}
-UDID="${PICKED%%	*}"
+ios_require_device ios-keyboard-shot
 ios_wait_booted "$UDID"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
