@@ -46,7 +46,7 @@ public struct DictationConfig: Encodable, Sendable {
   /// biasing recognition toward those exact spellings. A sibling of
   /// `stt_prompt`, not an alternative — the API takes both, for
   /// different jobs (prior text versus a vocabulary list) — fitted by
-  /// `KeytermsBoost` to its own 2048-byte cap, which is a different number
+  /// `KeyTerms` to its own 2048-byte cap, which is a different number
   /// from the 4096 scalars on the prompt. Empty asks for no boosting, and
   /// `encode(to:)` then drops the key rather than sending `[]`.
   ///
@@ -93,15 +93,22 @@ public struct DictationConfig: Encodable, Sendable {
   /// Adding an `llm` case back would reintroduce it *and* leave the response's
   /// choice unreachable — read `transcript(from:)` first.
   public let llmInstruction: String?
+  /// Which model the cleanup rewrite runs on: `"smart"` (a larger model) or
+  /// `"fast"`, or nil to omit the key and leave the route on its default.
+  /// A top-level sibling of `llm_instruction`, which is where the rest of the
+  /// rewrite request already lives.
+  public let rewriteMode: String?
 
   public init(
-    sampleRate: Int, channels: Int, sttPrompt: String, keytermsPrompt: [String], llmInstruction: String?
+    sampleRate: Int, channels: Int, sttPrompt: String, keytermsPrompt: [String], llmInstruction: String?,
+    rewriteMode: String? = nil
   ) {
     self.sampleRate = sampleRate
     self.channels = channels
     self.sttPrompt = sttPrompt
     self.keytermsPrompt = keytermsPrompt
     self.llmInstruction = llmInstruction
+    self.rewriteMode = rewriteMode
   }
   enum CodingKeys: String, CodingKey {
     case sampleRate = "sample_rate"
@@ -109,6 +116,7 @@ public struct DictationConfig: Encodable, Sendable {
     case sttPrompt = "stt_prompt"
     case keytermsPrompt = "keyterms_prompt"
     case llmInstruction = "llm_instruction"
+    case rewriteMode = "rewrite_mode"
   }
 
   /// Hand-written for the one thing synthesis can't express: an empty
@@ -129,6 +137,7 @@ public struct DictationConfig: Encodable, Sendable {
       try container.encode(keytermsPrompt, forKey: .keytermsPrompt)
     }
     try container.encodeIfPresent(llmInstruction, forKey: .llmInstruction)
+    try container.encodeIfPresent(rewriteMode, forKey: .rewriteMode)
   }
 }
 

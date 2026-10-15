@@ -12,7 +12,7 @@ Sources of truth: the brand design system
 (`https://www.assemblyai.com/brand-design-system/assemblyai-brand-design-system.md`)
 and the Blurt landing page for the look; `Design/apple-geometry.json` for the
 keys; `Design/tokens.json` for every value the views draw with. From the
-tokens, `scripts/design-tokens.swift` writes `Shared/DesignTokens.swift`
+tokens, `scripts/design-tokens.swift` writes `BlurtDesign/DesignTokens.swift`
 (what the views read), the tables in this file marked `tokens:begin` /
 `tokens:end`, and the app's asset-catalog colour sets. Edit the JSON, run `scripts/design-sync.sh`, commit; `check.sh`
 runs `design-sync.sh --check` and fails on drift or on a design literal in a
@@ -179,9 +179,24 @@ point sizes throughout, as the system keyboard's; no Dynamic Type.
 | `size/label`         | `12`       | `Typography.sizeLabel`        | the mono word labels on keys: 123, ABC, #+=, space, the return label              |
 | `size/legend`        | `16`       | `Typography.sizeLegend`       | every other key                                                                   |
 | `size/letter`        | `24`       | `Typography.sizeLetter`       | letter keys: the iPhone's (estimated from the l glyph, apple-geometry.json)       |
+| `size/pill-glyph`    | `10`       | `Typography.sizePillGlyph`    | the × on a key-term pill                                                          |
 | `size/popup`         | `32`       | `Typography.sizePopup`        | the letter pop-up                                                                 |
+| `size/remove-glyph`  | `12`       | `Typography.sizeRemoveGlyph`  | the × on a text-shortcut row                                                      |
+| `size/stat-l`        | `23`       | `Typography.sizeStatL`        | the next size down when the stats would not fit                                   |
+| `size/stat-m`        | `20`       | `Typography.sizeStatM`        | and the next                                                                      |
+| `size/stat-s`        | `18`       | `Typography.sizeStatS`        | the smallest a stat is drawn                                                      |
+| `size/stat-xl`       | `26`       | `Typography.sizeStatXl`       | a stat's serif number, at the largest size that fits                              |
+| `size/tab-icon`      | `18`       | `Typography.sizeTabIcon`      | a tab's icon                                                                      |
+| `size/tab-label`     | `11`       | `Typography.sizeTabLabel`     | a tab's mono label                                                                |
 | `size/term`          | `17`       | `Typography.sizeTerm`         | the key-term field                                                                |
 | `size/title`         | `34`       | `Typography.sizeTitle`        | the app's serif headline                                                          |
+| `size/typing-clock`  | `64`       | `Typography.sizeTypingClock`  | the typing test's countdown                                                       |
+| `size/typing-field`  | `22`       | `Typography.sizeTypingField`  | what you've typed                                                                 |
+| `size/typing-live`   | `28`       | `Typography.sizeTypingLive`   | its live words per minute                                                         |
+| `size/typing-rank`   | `28`       | `Typography.sizeTypingRank`   | the result's rank, in the serif                                                   |
+| `size/typing-result` | `96`       | `Typography.sizeTypingResult` | the result's words per minute                                                     |
+| `size/typing-unit`   | `16`       | `Typography.sizeTypingUnit`   | the result's WPM                                                                  |
+| `size/typing-words`  | `24`       | `Typography.sizeTypingWords`  | the words to type                                                                 |
 | `tracking/cta`       | `1.4`      | `Typography.trackingCta`      | uppercase mono at 14: the brand's E2 tracking                                     |
 | `tracking/eyebrow`   | `1.2`      | `Typography.trackingEyebrow`  | uppercase mono at 12: the brand's E1 tracking                                     |
 | `weight/glyph`       | `medium`   | `Typography.weightGlyph`      | —                                                                                 |
@@ -349,7 +364,7 @@ the plain + a recording is released and the words still land; from a
 highlighted word it is cancelled, since a result replaces the selection and
 would land over the very word being fixed (tested). Shift is on for the first letter and after a space. Type the right
 spelling; return or ✓ saves. The term goes into Blurt's key terms
-(`BlurtKeyTerms` in the App Group, `KeyTermList` rules: trimmed, deduplicated
+(`BlurtKeyTerms` in the App Group, the AssemblyAI SDK's `KeyTerms` rules: trimmed, deduplicated
 case-insensitively) and rides `keyterms_prompt` on the very next dictation. If
 it began as a selection and you changed it, the misheard word in your text is
 replaced with what you typed — only while that highlight still stands where
@@ -370,7 +385,7 @@ against the request's cap of 100 terms.
 
 ## Sharing key terms
 
-Settings → Transcription → **Share key terms…** puts the list in the share
+Words → Key terms → **Share key terms** puts the list in the share
 sheet as a `.blurtterms` file (JSON — `name`, `from`, `terms`; a declared
 document type, `com.assemblyai.blurt.terms`) with the words as the message text. A
 tap on the file in Messages opens Blurt with "Add N key terms?": every term
@@ -412,11 +427,11 @@ side, and — in the panel — cancel in the far top corner, clear of them both,
 where in the middle it mirrors the + on the mic's other side.
 Left and right are the phone's sides: in a right-to-left language the
 leading/trailing mapping flips so the mic stays under the thumb chosen
-(`BlurtiOSCore/MicAlignment.swift` and `Shared/MicAlignment+Layout.swift`, tested). Gallery: `-BlurtGalleryAlign
+(`BlurtiOSCore/MicAlignment.swift` and `BlurtKeyboard/Sources/MicAlignment+Layout.swift`, tested). Gallery: `-BlurtGalleryAlign
 left|center|right`; the real extension: `scripts/ios-keyboard-flows.sh
 --align left|right` checks the mic is at that edge with the add key inside it.
 
-## Tokens (`Design/tokens.json` → `Shared/DesignTokens.swift`)
+## Tokens (`Design/tokens.json` → `BlurtDesign/DesignTokens.swift`)
 
 The brand's colours, as the design system defines them and as the phone
 uses them. `BlurtBrand` keeps a few of the Mac's names as aliases.
@@ -469,36 +484,36 @@ The keyboard's semantic colours and the app's catalog colours:
 
 <!-- tokens:begin keyboard -->
 
-| Token                   | Value                                      | Swift                         | Use                                                              |
-| ----------------------- | ------------------------------------------ | ----------------------------- | ---------------------------------------------------------------- |
-| `app/accent-dark`       | `#67AD82` (`brand.green/400`)              | `Keyboard.appAccentDark`      | the catalog's AccentColor in dark                                |
-| `app/accent-light`      | `#01762F` (`brand.green/700`)              | `Keyboard.appAccentLight`     | the catalog's AccentColor in light                               |
-| `app/card-border-dark`  | `#3A362F` (`brand.ink/600`)                | `Keyboard.appCardBorderDark`  | the catalog's CardBorder in dark                                 |
-| `app/card-border-light` | `#C7C3B2` (`brand.paper/400`)              | `Keyboard.appCardBorderLight` | the catalog's CardBorder in light                                |
-| `app/card-fill-dark`    | `#26231E` (`brand.ink/800`)                | `Keyboard.appCardFillDark`    | the catalog's CardFill in dark                                   |
-| `app/card-fill-light`   | `#F5F3EB` (`brand.paper/tint`)             | `Keyboard.appCardFillLight`   | the catalog's CardFill in light                                  |
-| `app/cta-dark`          | `#67AD82` (`brand.green/400`)              | `Keyboard.appCtaDark`         | the catalog's CTA in dark: the site's button green               |
-| `app/cta-light`         | `#01762F` (`brand.green/700`)              | `Keyboard.appCtaLight`        | the catalog's CTA in light: the one green button                 |
-| `app/cta-text-dark`     | `#1D1B16` (`brand.ink`)                    | `Keyboard.appCtaTextDark`     | the catalog's CTAText in dark: ink on green, as the site         |
-| `app/cta-text-light`    | `#FFFFFF` (`brand.white`)                  | `Keyboard.appCtaTextLight`    | the catalog's CTAText in light                                   |
-| `app/muted-dark`        | `#A5A4A2` (`brand.neutral/500`)            | `Keyboard.appMutedDark`       | the catalog's Muted in dark                                      |
-| `app/muted-light`       | `#777673` (`brand.neutral/700`)            | `Keyboard.appMutedLight`      | the catalog's Muted in light: eyebrows, captions, secondary text |
-| `app/page-dark`         | `#1D1B16` (`brand.ink`)                    | `Keyboard.appPageDark`        | the catalog's Page in dark: ink, the website's ground            |
-| `app/page-light`        | `#FDFCF8` (`brand.paper/page`)             | `Keyboard.appPageLight`       | the catalog's Page in light: the design system's page            |
-| `app/text-dark`         | `#F5F3EB` (`brand.paper/tint`)             | `Keyboard.appTextDark`        | the catalog's Text in dark                                       |
-| `app/text-light`        | `#1D1B16` (`brand.ink`)                    | `Keyboard.appTextLight`       | the catalog's Text in light                                      |
-| `kb/cancel`             | `#E67F36` (`brand.orange`)                 | `Keyboard.kbCancel`           | the panel's cancel ×                                             |
-| `kb/field`              | `#33302A` (`themes.dark/field`)            | `Keyboard.kbField`            | the key-term field                                               |
-| `kb/field-border`       | `#3A362F` (`themes.dark/field-border`)     | `Keyboard.kbFieldBorder`      | the field's hairline                                             |
-| `kb/full-access-note`   | `#E67F36` (`brand.orange`)                 | `Keyboard.kbFullAccessNote`   | the one line of words the keyboard ever shows                    |
-| `kb/key`                | `#33302A` (`themes.dark/key`)              | `Keyboard.kbKey`              | an ordinary key                                                  |
-| `kb/key-modifier`       | `#26231E` (`themes.dark/key-modifier`)     | `Keyboard.kbKeyModifier`      | shift, delete, globe, return, 123, cancel                        |
-| `kb/legend`             | `#F5F3EB` (`themes.dark/legend`)           | `Keyboard.kbLegend`           | key legends and bare glyphs                                      |
-| `kb/legend-secondary`   | `#A5A4A2` (`themes.dark/legend-secondary`) | `Keyboard.kbLegendSecondary`  | the mono word labels (123, ABC, return, space) and the + at rest |
-| `kb/notice-error`       | `#E67F36` (`brand.orange`)                 | `Keyboard.kbNoticeError`      | the solid ring and glyph for an error                            |
-| `kb/popup`              | `#33302A` (`themes.dark/popup`)            | `Keyboard.kbPopup`            | the letter pop-up                                                |
-| `kb/signal`             | `#67AD82` (`themes.dark/signal`)           | `Keyboard.kbSignal`           | the wave, the caret, the saved check                             |
-| `kb/surface`            | `#1D1B16` (`themes.dark/surface`)          | `Keyboard.kbSurface`          | the design face's surface (Swift reads the palette)              |
+| Token                   | Value                                      | Swift                         | Use                                                                                           |
+| ----------------------- | ------------------------------------------ | ----------------------------- | --------------------------------------------------------------------------------------------- |
+| `app/accent-dark`       | `#67AD82` (`brand.green/400`)              | `Keyboard.appAccentDark`      | the catalog's AccentColor in dark                                                             |
+| `app/accent-light`      | `#01762F` (`brand.green/700`)              | `Keyboard.appAccentLight`     | the catalog's AccentColor in light: Blurt green, the one accent every screen and the CTA take |
+| `app/card-border-dark`  | `#3A362F` (`brand.ink/600`)                | `Keyboard.appCardBorderDark`  | the catalog's CardBorder in dark                                                              |
+| `app/card-border-light` | `#C7C3B2` (`brand.paper/400`)              | `Keyboard.appCardBorderLight` | the catalog's CardBorder in light                                                             |
+| `app/card-fill-dark`    | `#26231E` (`brand.ink/800`)                | `Keyboard.appCardFillDark`    | the catalog's CardFill in dark                                                                |
+| `app/card-fill-light`   | `#F5F3EB` (`brand.paper/tint`)             | `Keyboard.appCardFillLight`   | the catalog's CardFill in light                                                               |
+| `app/cta-dark`          | `#67AD82` (`keyboard.app/accent-dark`)     | `Keyboard.appCtaDark`         | the catalog's CTA in dark: the one accent button                                              |
+| `app/cta-light`         | `#01762F` (`keyboard.app/accent-light`)    | `Keyboard.appCtaLight`        | the catalog's CTA in light: the one accent button                                             |
+| `app/cta-text-dark`     | `#1D1B16` (`brand.ink`)                    | `Keyboard.appCtaTextDark`     | the catalog's CTAText in dark: ink on green, as the site                                      |
+| `app/cta-text-light`    | `#FFFFFF` (`brand.white`)                  | `Keyboard.appCtaTextLight`    | the catalog's CTAText in light                                                                |
+| `app/muted-dark`        | `#A5A4A2` (`brand.neutral/500`)            | `Keyboard.appMutedDark`       | the catalog's Muted in dark                                                                   |
+| `app/muted-light`       | `#777673` (`brand.neutral/700`)            | `Keyboard.appMutedLight`      | the catalog's Muted in light: eyebrows, captions, secondary text                              |
+| `app/page-dark`         | `#1D1B16` (`brand.ink`)                    | `Keyboard.appPageDark`        | the catalog's Page in dark: ink, the website's ground                                         |
+| `app/page-light`        | `#FDFCF8` (`brand.paper/page`)             | `Keyboard.appPageLight`       | the catalog's Page in light: the design system's page                                         |
+| `app/text-dark`         | `#F5F3EB` (`brand.paper/tint`)             | `Keyboard.appTextDark`        | the catalog's Text in dark                                                                    |
+| `app/text-light`        | `#1D1B16` (`brand.ink`)                    | `Keyboard.appTextLight`       | the catalog's Text in light                                                                   |
+| `kb/cancel`             | `#E67F36` (`brand.orange`)                 | `Keyboard.kbCancel`           | the panel's cancel ×                                                                          |
+| `kb/field`              | `#33302A` (`themes.dark/field`)            | `Keyboard.kbField`            | the key-term field                                                                            |
+| `kb/field-border`       | `#3A362F` (`themes.dark/field-border`)     | `Keyboard.kbFieldBorder`      | the field's hairline                                                                          |
+| `kb/full-access-note`   | `#E67F36` (`brand.orange`)                 | `Keyboard.kbFullAccessNote`   | the one line of words the keyboard ever shows                                                 |
+| `kb/key`                | `#33302A` (`themes.dark/key`)              | `Keyboard.kbKey`              | an ordinary key                                                                               |
+| `kb/key-modifier`       | `#26231E` (`themes.dark/key-modifier`)     | `Keyboard.kbKeyModifier`      | shift, delete, globe, return, 123, cancel                                                     |
+| `kb/legend`             | `#F5F3EB` (`themes.dark/legend`)           | `Keyboard.kbLegend`           | key legends and bare glyphs                                                                   |
+| `kb/legend-secondary`   | `#A5A4A2` (`themes.dark/legend-secondary`) | `Keyboard.kbLegendSecondary`  | the mono word labels (123, ABC, return, space) and the + at rest                              |
+| `kb/notice-error`       | `#E67F36` (`brand.orange`)                 | `Keyboard.kbNoticeError`      | the solid ring and glyph for an error                                                         |
+| `kb/popup`              | `#33302A` (`themes.dark/popup`)            | `Keyboard.kbPopup`            | the letter pop-up                                                                             |
+| `kb/signal`             | `#67AD82` (`themes.dark/signal`)           | `Keyboard.kbSignal`           | the wave, the caret, the saved check                                                          |
+| `kb/surface`            | `#1D1B16` (`themes.dark/surface`)          | `Keyboard.kbSurface`          | the design face's surface (Swift reads the palette)                                           |
 
 <!-- tokens:end keyboard -->
 
@@ -530,12 +545,20 @@ pins the derivation.
 | `app/hero-gap`               | `14`      | `Metrics.appHeroGap`               | between the hero's pieces                                                                                                                                                                                                                                           |
 | `app/hero-pad`               | `20`      | `Metrics.appHeroPad`               | inside the hero card                                                                                                                                                                                                                                                |
 | `app/icon`                   | `20`      | `Metrics.appIcon`                  | the header's gear, the copy glyph                                                                                                                                                                                                                                   |
+| `app/input-pad-y`            | `10`      | `Metrics.appInputPadY`             | an app input's top and bottom (its sides are app/chip-pad-x)                                                                                                                                                                                                        |
 | `app/line-gap`               | `6`       | `Metrics.appLineGap`               | between lines of one thought                                                                                                                                                                                                                                        |
 | `app/page-pad`               | `20`      | `Metrics.appPagePad`               | the screens' side padding                                                                                                                                                                                                                                           |
+| `app/pill-pad-y`             | `4`       | `Metrics.appPillPadY`              | a key-term pill's top and bottom, and its side beside the ×                                                                                                                                                                                                         |
+| `app/pill-remove`            | `24`      | `Metrics.appPillRemove`            | the × on a key-term pill: its tap square                                                                                                                                                                                                                            |
 | `app/preview-gap`            | `8`       | `Metrics.appPreviewGap`            | between the theme card's two faces                                                                                                                                                                                                                                  |
+| `app/row-pad-y`              | `8`       | `Metrics.appRowPadY`               | a list row's top and bottom inside a card                                                                                                                                                                                                                           |
+| `app/row-remove`             | `32`      | `Metrics.appRowRemove`             | the × on a text-shortcut row: its tap square                                                                                                                                                                                                                        |
 | `app/section-gap`            | `24`      | `Metrics.appSectionGap`            | between the home screen's sections                                                                                                                                                                                                                                  |
 | `app/setup-number-width`     | `24`      | `Metrics.appSetupNumberWidth`      | the setup steps' mono numerals                                                                                                                                                                                                                                      |
 | `app/stack-gap`              | `12`      | `Metrics.appStackGap`              | between a section's eyebrow and its content, and between cards                                                                                                                                                                                                      |
+| `app/stat-gap`               | `16`      | `Metrics.appStatGap`               | between the stats in the card, and between its rows                                                                                                                                                                                                                 |
+| `app/tab-gap`                | `4`       | `Metrics.appTabGap`                | between a tab's icon and its label                                                                                                                                                                                                                                  |
+| `app/tab-height`             | `52`      | `Metrics.appTabHeight`             | a tab in the brand tab bar: its icon over its mono label                                                                                                                                                                                                            |
 | `card/border`                | `1`       | `Metrics.cardBorder`               | the card's hairline                                                                                                                                                                                                                                                 |
 | `card/radius`                | `12`      | `Metrics.cardRadius`               | the app's cards (radius/card)                                                                                                                                                                                                                                       |
 | `caret/height`               | `20`      | `Metrics.caretHeight`              | —                                                                                                                                                                                                                                                                   |
@@ -572,7 +595,7 @@ pins the derivation.
 | `margin/bottom-keys`         | `13`      | `Metrics.marginBottomKeys`         | under a bottom row of keys (the full keyboard, the panel): the iPhone's                                                                                                                                                                                             |
 | `margin/side`                | `6.5`     | `Metrics.marginSide`               | at the keyboard's sides: the iPhone's cap margin, (402 − 10 letters − 9 gaps) / 2                                                                                                                                                                                   |
 | `margin/vertical`            | `8`       | `Metrics.marginVertical`           | the keyboard's top, and the slim bar's bottom                                                                                                                                                                                                                       |
-| `opacity/disabled`           | `0.4`     | `Metrics.opacityDisabled`          | the + without Full Access                                                                                                                                                                                                                                           |
+| `opacity/disabled`           | `0.4`     | `Metrics.opacityDisabled`          | the + without Full Access; a brand button that can't be pressed yet                                                                                                                                                                                                 |
 | `opacity/glint`              | `0.95`    | `Metrics.opacityGlint`             | the cross glint when the words land                                                                                                                                                                                                                                 |
 | `opacity/grain-dark`         | `0.14`    | `Metrics.opacityGrainDark`         | film grain over the dark face: matte, the brand's texture                                                                                                                                                                                                           |
 | `opacity/grain-light`        | `0.08`    | `Metrics.opacityGrainLight`        | film grain over the light face: paper, lighter                                                                                                                                                                                                                      |
@@ -605,6 +628,10 @@ pins the derivation.
 | `ribs/rest-height`           | `16`      | `Metrics.ribsRestHeight`           | —                                                                                                                                                                                                                                                                   |
 | `ribs/rest-width`            | `40`      | `Metrics.ribsRestWidth`            | the ribs asleep: the wave's own bars at rest                                                                                                                                                                                                                        |
 | `row/gap`                    | `11`      | `Metrics.rowGap`                   | between rows, the iPhone's                                                                                                                                                                                                                                          |
+| `stat/part-gap-ratio`        | `0.38`    | `Metrics.statPartGapRatio`         | between a stat's number-and-unit parts, as a fraction of its size                                                                                                                                                                                                   |
+| `stat/tracking-ratio`        | `-0.03`   | `Metrics.statTrackingRatio`        | a stat number's tracking, as a fraction of its size                                                                                                                                                                                                                 |
+| `stat/unit-gap-ratio`        | `0.15`    | `Metrics.statUnitGapRatio`         | between a number and its unit, as a fraction of its size                                                                                                                                                                                                            |
+| `stat/unit-ratio`            | `0.46`    | `Metrics.statUnitRatio`            | a stat's mono unit (hr, min, sec) as a fraction of its number's size                                                                                                                                                                                                |
 | `streak/arm`                 | `1.4`     | `Metrics.streakArm`                | the landing flash's vertical arm, as a fraction of the box's height                                                                                                                                                                                                 |
 | `streak/height`              | `2`       | `Metrics.streakHeight`             | the light streak while recording                                                                                                                                                                                                                                    |
 | `streak/line`                | `1`       | `Metrics.streakLine`               | the hairline at rest                                                                                                                                                                                                                                                |
@@ -618,6 +645,12 @@ pins the derivation.
 | `term/inset`                 | `2`       | `Metrics.termInset`                | the field row's side inset                                                                                                                                                                                                                                          |
 | `term/pad`                   | `14`      | `Metrics.termPad`                  | the field's side padding                                                                                                                                                                                                                                            |
 | `term/radius`                | `8`       | `Metrics.termRadius`               | the key-term field: the brand's input corners (radius/input)                                                                                                                                                                                                        |
+| `typing/field-border`        | `2`       | `Metrics.typingFieldBorder`        | the typing field's border, orange once a word goes wrong                                                                                                                                                                                                            |
+| `typing/field-pad`           | `12`      | `Metrics.typingFieldPad`           | inside the typing field                                                                                                                                                                                                                                             |
+| `typing/line-spacing`        | `8`       | `Metrics.typingLineSpacing`        | between the lines of words to type                                                                                                                                                                                                                                  |
+| `typing/pulse`               | `1.06`    | `Metrics.typingPulse`              | the countdown's thump in the last five seconds                                                                                                                                                                                                                      |
+| `typing/result-gap`          | `20`      | `Metrics.typingResultGap`          | between the result's blocks                                                                                                                                                                                                                                         |
+| `typing/words-height`        | `180`     | `Metrics.typingWordsHeight`        | the least room the words take, so the field below stays put                                                                                                                                                                                                         |
 | `voice/bar-height`           | `32`      | `Metrics.voiceBarHeight`           | —                                                                                                                                                                                                                                                                   |
 | `voice/bar-width`            | `160`     | `Metrics.voiceBarWidth`            | the voice element's box in the voice bar — the most it takes (the ribs awake, the streak); the + sits beside what shows                                                                                                                                             |
 | `voice/home-height`          | `112`     | `Metrics.voiceHomeHeight`          | —                                                                                                                                                                                                                                                                   |
@@ -660,6 +693,8 @@ house curve (`ease/signature`, `cubic-bezier(0.22, 1, 0.36, 1)`).
 | `sheen-working`  | `1.6`           | `Motion.sheenWorking`  | and while something is happening: the ring's cadence                       |
 | `state-fade`     | `0.5`           | `Motion.stateFade`     | every other change on the key: the ring, a glyph, the dimming              |
 | `term-swap`      | `0.4`           | `Motion.termSwap`      | the voice bar becoming the field                                           |
+| `typing-flash`   | `0.15`          | `Motion.typingFlash`   | the typing field's border turning, and the countdown's thump               |
+| `typing-tick`    | `0.1`           | `Motion.typingTick`    | how often the typing test's clock and live speed redraw                    |
 | `wave-fade`      | `0.7`           | `Motion.waveFade`      | the orb and the wave crossing, either way                                  |
 
 <!-- tokens:end motion -->
@@ -676,9 +711,36 @@ row (Cam's rule) and a hairline one beside it, a colour change on press and
 never a lift. Glyphs are SF Symbols — the platform's — where the web brand
 uses Material Symbols.
 
-**Home** (`HomeView`, `HomeHero`, `SetupCard`, `StyleChips`, `RecentSection`,
-`HomeStatus` for the words): the setup card only while something is missing,
-its three steps numbered `01 02 03` in mono; the hero — `STATUS`, the
+**Tabs** (`MainView`, `BrandTabBar`): Dictate and Words under the brand tab
+bar — each tab's icon over its mono label, the selected one in the accent, a
+hairline above. Settings opens from either tab's gear; the consent sheet and a
+shared key-term list arrive whichever tab is showing (a list switches to Words).
+
+**Words** (`WordsView`, `WordsEdit`): the serif `Words` headline and the gear;
+two cards. `KEY TERMS`: the terms as pills (full radius, the page's fill, a
+hairline, × to remove; `FlowLayout`), an input and `ADD` (commas add several;
+duplicates of any case drop; 100 at most, the request's cap), the count and the
+contact names that come along, and Share. `TEXT SHORTCUTS`: each phrase in mono
+accent over its replacement, × to remove, between hairlines; two inputs and
+`ADD SHORTCUT` (re-adding a phrase replaces it). Brand buttons fade while
+disabled (`opacity/disabled`).
+
+**First run** (`RootView`, `SetupView`, `SetupSteps`, `SetupProgress`): in
+place of the tabs until Blurt is set up — the wordmark, a serif headline, and
+`SET UP BLURT` in a card, its three steps numbered `01 02 03` in mono (a check
+once done): the API key inline (a secure field, `CONTINUE`, `GET A FREE KEY`,
+and where the key and the audio go), the microphone, the keyboard. Without a
+key it can't be left; with one, `START DICTATING` goes to the tabs and the rest
+can wait. Afterwards the steps live in Settings › Setup, folded to "Blurt is
+set up ✓ · Show steps" while everything is done and open while anything isn't.
+Whoever was already set up skips it.
+
+**Home** (`HomeView`, `HomeHero`, `StyleChips`, `RecentSection`,
+`HomeStatus` for the words; `StatsCard`): the lifetime stats — `DICTATIONS`,
+`WORDS`, `TIME SAVED` (against 36 wpm, the phone average, or the easter egg's
+result) as serif numbers with mono units, one row until time saved reaches an
+hour and then two, at the largest of four sizes that fits (reset in Settings ›
+Data); the hero — `STATUS`, the
 headline (Not listening · Ready to dictate · Connecting… · Listening… ·
 Transcribing… · Pasted · Copied · the error), the line under it, the voice
 element at home size, `START LISTENING` (refused without a key, with a line
@@ -689,11 +751,19 @@ time, a copy button); `POWERED BY ASSEMBLYAI`.
 
 **Settings** (`SettingsView`): a form on the page, its sections under
 eyebrows — Keyboard (layout, theme, hands-free), Listening (the window),
-Transcription (enhanced transcripts, output styles, key terms with the
-contact-name count, sharing), Account (the API key, and where to get one),
+Transcription (enhanced transcripts, output styles), Account (the API key, and where to get one),
 About (with AssemblyAI's privacy policy). The theme picker shows each theme's
 two faces side by side. Styles, the import sheet, the key entry and the consent
 sheet share the form's chrome (`brandForm()`).
+
+**The easter egg** (`TypingTestView`, `TypingTest`, `TypingSpeed`): a quiet
+"How fast can you type?" link at the foot of Settings opens a 30-second sprint
+over common words, full screen — a mono countdown that turns orange and thumps
+through the last five seconds (no thump under Reduce Motion), live WPM in the
+accent, the current word underlined, wrong words struck through in orange,
+the field's border orange once a word goes wrong. The result: WPM, a rank,
+accuracy, the best, and talking's 150 wpm against yours; the latest result
+becomes time saved's typing speed ("Using your N wpm · Reset to average").
 
 **Consent** (`ConsentView`, `AIConsent`): before the listening window first
 opens, a sheet names AssemblyAI, lists what is sent (the voice while

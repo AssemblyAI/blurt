@@ -5,7 +5,7 @@ import Testing
 @testable import BlurtEngine
 
 /// The two steering fields of the dictation `config`, as they actually encode:
-/// `KeytermsBoost` → `keyterms_prompt`, and `STTPrompt` → a single
+/// `KeyTerms` → `keyterms_prompt`, and `STTPrompt` → a single
 /// `stt_prompt` string. An extension of the `HTTPClientTests` suite in its own
 /// file, exactly as the `APIKeyValidator` cases are — with its own private
 /// helper, since each of those files carries its own rather than sharing one
@@ -142,7 +142,8 @@ extension HTTPClientTests {
       apiKeyProvider: { "test-key" },
       transport: FakeHTTPTransport { _ in (500, Data()) },
       enhancedTranscripts: { true },
-      customStyle: { nil }
+      customStyle: { nil },
+      rewriteMode: { .fast }
     )
     .makeConfigData(sampleRate: 16_000, sttPrompt: prompt, keytermsPrompt: keyterms)
     return try #require(JSONSerialization.jsonObject(with: config) as? [String: Any])

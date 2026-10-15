@@ -109,16 +109,39 @@ private struct TranscriptionSection: View {
   @AppStorage(EnhancedTranscriptsStore.defaultsKey)
   private var enhancedTranscripts = EnhancedTranscriptsStore.defaultValue
 
+  // "" is "nothing persisted"; the unset default belongs to
+  // `RewriteMode.fromPersisted`, as `HotkeyStepView`'s activation slot does.
+  @AppStorage(RewriteModeStore.defaultsKey) private var rewriteModeRaw = ""
+
+  private var rewriteMode: Binding<RewriteMode> {
+    Binding(
+      get: { RewriteMode.fromPersisted(rewriteModeRaw) },
+      // Through the store, which owns the encoding (see `HotkeyStepView`).
+      set: { RewriteModeStore().mode = $0 })
+  }
+
   var body: some View {
     Section {
       Toggle(isOn: $enhancedTranscripts) {
         SettingLabel(title: "Enhanced transcripts", systemImage: "wand.and.stars")
       }
       .accessibilityIdentifier(UITestIdentifiers.enhancedTranscriptsToggle)
+      // Picks the model for the rewrite the switch above pastes, so it is
+      // disabled with it, as the styles below are.
+      PickerSettingRow(
+        title: "Dictation mode", systemImage: "speedometer",
+        accessibilityID: UITestIdentifiers.rewriteModePicker, selection: rewriteMode
+      ) {
+        ForEach(RewriteMode.allCases, id: \.self) { mode in
+          Text(mode.label).tag(mode)
+        }
+      }
+      .disabled(!enhancedTranscripts)
     } footer: {
       Text(
         "Polishes each dictation before pasting — removing filler words and fixing punctuation. "
           + "Turn off to paste your words exactly as spoken.")
+      Text(RewriteMode.guidance)
     }
   }
 }

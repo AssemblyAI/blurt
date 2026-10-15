@@ -1,3 +1,4 @@
+import BlurtDesign
 import BlurtiOSCore
 
 #if DEBUG

@@ -1,3 +1,4 @@
+import BlurtDesign
 import Foundation
 import SwiftUI
 import Testing
@@ -36,26 +37,6 @@ struct MicAlignmentSettingTests {
     #expect(MicAlignment.parse(["-BlurtGallery", "panel", "idle", "-BlurtGalleryAlign", "right"]) == .right)
     #expect(MicAlignment.parse(["-BlurtGallery", "panel", "idle"]) == nil)
     #expect(MicAlignment(rawValue: "left") == .left)
-  }
-}
-
-@Suite("Key term list")
-struct KeyTermListTests {
-  @Test("parse trims, drops blanks, and deduplicates case-insensitively in first-seen order")
-  func parse() {
-    #expect(KeyTermList.parse(" Rizz , skibidi,,RIZZ, Blurt ,") == ["Rizz", "skibidi", "Blurt"])
-  }
-
-  @Test("join is what parse reads back")
-  func roundTrip() {
-    let terms = ["Neil Bisht", "AssemblyAI", "rizz"]
-    #expect(KeyTermList.parse(KeyTermList.join(terms)) == terms)
-  }
-
-  @Test("an empty or all-blank list is empty")
-  func empty() {
-    #expect(KeyTermList.parse("").isEmpty)
-    #expect(KeyTermList.parse(" , ,").isEmpty)
   }
 }
 

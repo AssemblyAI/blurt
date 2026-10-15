@@ -59,16 +59,22 @@ echo "BlurtiOSCore"
 xcrun swiftc "${IOS_FLAGS[@]}" -application-extension -D DEBUG -module-name BlurtiOSCore \
   -emit-module -emit-module-path "$WORK/BlurtiOSCore.swiftmodule" "$IOS"/BlurtiOSCore/*.swift
 
+# The component library both targets link, emitted the same way and just as
+# extension-safe.
+echo "BlurtDesign"
+xcrun swiftc "${IOS_FLAGS[@]}" -application-extension -module-name BlurtDesign \
+  -emit-module -emit-module-path "$WORK/BlurtDesign.swiftmodule" "$IOS"/BlurtDesign/*.swift
+
 # The app also compiles the keyboard's sources, all but its entry point
 # (project.yml: the theme picker and the home screen draw the real keyboard
 # and orb), and CI builds Debug, so `#if DEBUG` code is checked too.
 echo "BlurtiOS"
 find "$IOS/BlurtKeyboard/Sources" -name '*.swift' ! -name KeyboardViewController.swift -print0 \
   | xargs -0 xcrun swiftc "${TARGET_FLAGS[@]}" -D DEBUG -module-name BlurtiOS \
-    "$IOS"/BlurtiOS/Sources/*.swift "$IOS"/Shared/*.swift
+    "$IOS"/BlurtiOS/Sources/*.swift
 
 echo "BlurtKeyboard"
 xcrun swiftc "${TARGET_FLAGS[@]}" -application-extension -module-name BlurtKeyboard \
-  "$IOS"/BlurtKeyboard/Sources/*.swift "$IOS"/Shared/*.swift
+  "$IOS"/BlurtKeyboard/Sources/*.swift
 
 echo "ios-typecheck: ok"

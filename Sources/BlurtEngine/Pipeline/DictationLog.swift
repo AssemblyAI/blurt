@@ -1,3 +1,4 @@
+import AssemblyAI
 import Foundation
 import os
 
@@ -51,7 +52,7 @@ public enum DictationLog {
     let sttPrompt: String
     /// The `config.keyterms_prompt` list sent for this utterance —
     /// the request's other steering field, so the log accounts for both. Built
-    /// through the same `KeytermsBoost.fitted` the request uses, so an
+    /// through the same `KeyTerms.fitted` the request uses, so an
     /// over-long list is recorded as the terms that actually went out. Empty
     /// when none were sent, and `encode(to:)` then omits the key, matching how
     /// every absent field above is left out rather than written as `null`.
@@ -230,7 +231,7 @@ public enum DictationLog {
       app: context?.appName, window: context?.windowTitle, field: context?.fieldLabel,
       prior: context?.priorText, selected: context?.selectedText,
       sttPrompt: STTPrompt.text(context: context),
-      keyterms: KeytermsBoost.fitted(context?.keyTerms ?? [])
+      keyterms: KeyTerms.fitted(context?.keyTerms ?? [])
     )
   }
 

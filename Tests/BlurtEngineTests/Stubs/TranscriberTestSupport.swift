@@ -14,12 +14,14 @@ func makeTranscriber(
   // fails rather than quietly succeeding on an empty body.
   transport: any HTTPTransport = FakeHTTPTransport { _ in (500, Data()) },
   enhancedTranscripts: Bool = true,
-  customStyle: String? = nil
+  customStyle: String? = nil,
+  rewriteMode: RewriteMode = .fast
 ) -> AssemblyAITranscriber {
   AssemblyAITranscriber(
     apiKeyProvider: { apiKey }, transport: transport,
     enhancedTranscripts: { enhancedTranscripts },
-    customStyle: { customStyle })
+    customStyle: { customStyle },
+    rewriteMode: { rewriteMode })
 }
 
 /// Drains a canned frame feed the way a conforming transcriber must: consume it

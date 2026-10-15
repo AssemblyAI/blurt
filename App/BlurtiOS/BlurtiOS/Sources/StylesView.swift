@@ -1,3 +1,4 @@
+import BlurtDesign
 import BlurtEngine
 import SwiftUI
 
@@ -28,7 +29,7 @@ struct StylesView: View {
             store.activate(profile)
           }
           .swipeActions {
-            Button("Edit") { editing = profile }.tint(BlurtBrand.green)
+            Button("Edit") { editing = profile }.tint(BlurtBrand.accent)
           }
         }
       } header: {
@@ -63,7 +64,7 @@ private struct StyleRow: View {
             .lineLimit(2)  // literal-ok: two lines of instructions
         }
         Spacer()
-        if isActive { Image(systemName: "checkmark").foregroundStyle(BlurtBrand.green) }
+        if isActive { Image(systemName: "checkmark").foregroundStyle(BlurtBrand.accent) }
       }
     }
   }

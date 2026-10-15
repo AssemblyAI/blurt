@@ -1,3 +1,5 @@
+import AssemblyAI
+
 /// Everything captured at dictation start about where the user is typing:
 /// the frontmost app, the focused window and field, the text around the cursor,
 /// the user's recent dictations, and the user's key terms.
@@ -66,7 +68,7 @@ public struct TranscriptionContext: Sendable, Equatable {
   /// from `KeyTermsStore`. Like `recentTranscripts` this isn't per-utterance
   /// focus state — it's the same list every time. **Sent**, but not as context:
   /// it goes as the request's own keyterms field, `keyterms_prompt` (see
-  /// `KeytermsBoost`).
+  /// `KeyTerms`).
   public let keyTerms: [String]
 
   /// The user's text shortcuts, from `TextShortcutStore`. **Not sent**: `STTPrompt`

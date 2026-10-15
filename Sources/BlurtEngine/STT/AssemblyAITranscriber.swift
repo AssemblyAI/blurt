@@ -51,6 +51,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   let transport: any HTTPTransport
   private let enhancedTranscriptsEnabled: @Sendable () -> Bool
   private let customStyle: @Sendable () -> String?
+  private let rewriteMode: @Sendable () -> RewriteMode
 
   /// Idle timeout for the transcribe round trip — `URLRequest.timeoutInterval` is
   /// reset each time data moves, so this bounds *stalls*, not total elapsed time.
@@ -75,7 +76,8 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// the route returns gets pasted — it no longer shapes the request, which
   /// always asks for the rewrite; `customStyle` supplies the *active* style
   /// profile's instructions, appended to the cleanup instruction — one
-  /// profile's text, never a join of several (see `StyleProfileStore`). Both are
+  /// profile's text, never a join of several (see `StyleProfileStore`);
+  /// `rewriteMode` picks the rewrite's model (`RewriteModeStore`). All three are
   /// read at every `transcribe` so a settings change applies to the next
   /// dictation without rebuilding the transcriber. `nil` (the default) reads
   /// the corresponding store — spelled as optionals rather than default
@@ -86,13 +88,15 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     baseURL: URL = URL(staticString: "https://dictation.assemblyai.com"),
     transport: any HTTPTransport = URLSession.shared,
     enhancedTranscripts: (@Sendable () -> Bool)? = nil,
-    customStyle: (@Sendable () -> String?)? = nil
+    customStyle: (@Sendable () -> String?)? = nil,
+    rewriteMode: (@Sendable () -> RewriteMode)? = nil
   ) {
     self.apiKeyProvider = apiKeyProvider
     self.baseURL = baseURL
     self.transport = transport
     self.enhancedTranscriptsEnabled = enhancedTranscripts ?? { EnhancedTranscriptsStore().isEnabled }
     self.customStyle = customStyle ?? { StyleProfileStore().activeInstructions }
+    self.rewriteMode = rewriteMode ?? { RewriteModeStore().mode }
   }
 
   // MARK: - Dictation request
@@ -115,7 +119,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     let config = try makeConfigData(
       sampleRate: sampleRate,
       sttPrompt: STTPrompt.text(context: context),
-      keytermsPrompt: KeytermsBoost.fitted(context?.keyTerms ?? []))
+      keytermsPrompt: KeyTerms.fitted(context?.keyTerms ?? []))
 
     var request = URLRequest(url: baseURL.appending(path: Self.transcribePath))
     request.httpMethod = "POST"
@@ -261,7 +265,10 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
         channels: 1,
         sttPrompt: sttPrompt,
         keytermsPrompt: keytermsPrompt,
-        llmInstruction: cleanupInstruction()
+        llmInstruction: cleanupInstruction(),
+        // Only while the rewrite is what gets pasted: with enhanced transcripts
+        // off it is discarded unread, so a slower model would only add latency.
+        rewriteMode: enhancedTranscriptsEnabled() ? rewriteMode().wireValue : nil
       )
     )
   }
