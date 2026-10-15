@@ -1,7 +1,6 @@
-import AssemblyAI
 import Foundation
 
-/// Storage for the user's text shortcuts (the AssemblyAI SDK's `TextShortcut`),
+/// Storage for the user's text shortcuts (`TextShortcut`),
 /// as one JSON list in `UserDefaults` — Blurt's key and Blurt's limits.
 ///
 /// Has a setter for the same encoded-on-write reason as `StyleProfileStore`:

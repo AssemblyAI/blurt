@@ -58,11 +58,15 @@ struct OverlayUIStateTests {
   }
 
   @Test func silentMicFailureNamesTheDeviceOnThePill() {
-    // Its own state rather than `.error`, so the shell can widen the pill and
-    // show the device name — the whole diagnosis — instead of hiding it on hover.
+    // An error carrying a pill notice, so the shell can widen the pill and show
+    // the device name — the whole diagnosis — instead of hiding it on hover.
     let error = MicCaptureError.inputNeverDelivered(deviceName: "Aggregate Device")
     let state = PipelinePhase.failed(.audioCaptureFailed(underlying: error)).overlayState
-    #expect(state == .inputSilent(deviceName: "Aggregate Device"))
+    #expect(
+      state
+        == .error(
+          message: "Aggregate Device isn't sending any audio.",
+          notice: PillNotice(subject: "Aggregate Device", predicate: "isn't sending any audio")))
     #expect(state.pillText == "Aggregate Device isn't sending any audio")
     #expect(state.pillNotice?.subject == "Aggregate Device")
     #expect(state.pillNotice?.predicate == "isn't sending any audio")
@@ -71,7 +75,8 @@ struct OverlayUIStateTests {
   }
 
   @Test func silentMicFailureWithoutANameStillSaysWhatHappened() {
-    let state = OverlayUIState.inputSilent(deviceName: nil)
+    let error = MicCaptureError.inputNeverDelivered(deviceName: nil)
+    let state = PipelinePhase.failed(.audioCaptureFailed(underlying: error)).overlayState
     #expect(state.pillText == "The microphone isn't sending any audio")
     #expect(state.accessibilityLabel == "The microphone isn't sending any audio.")
   }
@@ -123,7 +128,7 @@ struct OverlayUIStateTests {
   @Test func failedFallsBackWhenNoDescription() {
     // Defensive: every BlurtError supplies an errorDescription today, but the
     // mapping must still produce a non-empty message if one ever returns nil.
-    if case .error(let message) = PipelinePhase.failed(.targetAppLost).overlayState {
+    if case .error(let message, _) = PipelinePhase.failed(.targetAppLost).overlayState {
       #expect(!message.isEmpty)
     } else {
       Issue.record("expected .error")

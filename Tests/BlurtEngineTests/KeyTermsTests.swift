@@ -129,4 +129,11 @@ struct KeyTermsParseTests {
     #expect(KeyTerms.join(terms) == "AssemblyAI, San Francisco, LeMUR")
     #expect(KeyTerms.parse(KeyTerms.join(terms)) == terms)
   }
+
+  @Test("normalized cleans a list without splitting its terms on commas")
+  func normalizedKeepsCommas() {
+    // A contact called "Smith, John" is one name; the iPhone app merges such
+    // names with the user's terms through this rather than through `parse`.
+    #expect(KeyTerms.normalized([" Smith, John ", "", "smith, john", "Blurt"]) == ["Smith, John", "Blurt"])
+  }
 }

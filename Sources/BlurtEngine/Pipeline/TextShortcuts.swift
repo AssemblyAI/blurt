@@ -57,7 +57,7 @@ public struct TextShortcut: Codable, Identifiable, Hashable, Sendable {
 ///
 /// One pass over the text, longest trigger first, so an expansion is never
 /// itself re-expanded and "personal email work" wins over "personal email".
-public enum TextShortcutExpander {
+enum TextShortcutExpander {
   /// What counts as part of a word — the regex spelling of
   /// `CharacterSet.alphanumerics` (letters, marks, digits), which `words(in:)`
   /// splits on.
@@ -73,7 +73,7 @@ public enum TextShortcutExpander {
   private static let separatorRun =
     "(?:[^\(wordClass)\(sentencePunctuation)]|[\(sentencePunctuation)](?!\\s))*"
 
-  public static func expand(_ text: String, using shortcuts: [TextShortcut]) -> String {
+  static func expand(_ text: String, using shortcuts: [TextShortcut]) -> String {
     // Longest first, so a trigger that extends another claims the text before
     // its prefix can. Group i+1 of `alternation` is `ordered[i]`.
     let ordered = shortcuts.compactMap { shortcut in pattern(for: shortcut.trigger).map { (shortcut, $0) } }
@@ -130,7 +130,7 @@ public enum TextShortcutExpander {
   /// `minimumClippedOverlap` long) at the very start of `text` counts too.
   /// Replaced with the trigger rather than nothing, so the prompt still reads as
   /// the continuous passage it is.
-  public static func redactingExpansions(in text: String, using shortcuts: [TextShortcut]) -> String {
+  static func redactingExpansions(in text: String, using shortcuts: [TextShortcut]) -> String {
     var result = text
     for shortcut in shortcuts.sorted(by: { $0.expansion.count > $1.expansion.count }) {
       let expansion = shortcut.expansion

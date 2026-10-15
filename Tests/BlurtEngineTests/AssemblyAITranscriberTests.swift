@@ -205,7 +205,7 @@ struct HTTPClientTests {
     //
     // And sent with the enhanced-transcripts switch in **both** positions,
     // which is the change of 2026-09-11: the request no longer varies with that
-    // setting at all. `transcript(from:)` applies it to the response instead.
+    // setting at all. `transcript(from:enhanced:)` applies it to the response instead.
     let object = try configObject(prompt: prompt, enhancedTranscripts: enhancedTranscripts)
     #expect(object["llm_instruction"] as? String == CleanupInstruction.text)
     // Two keys that must never appear. `llm` is the nested block this replaced —

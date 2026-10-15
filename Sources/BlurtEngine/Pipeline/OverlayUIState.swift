@@ -1,3 +1,19 @@
+/// A failure's reason written out on the pill, in two parts so the shell can
+/// truncate the subject (a device name of any length) and never the predicate,
+/// which is what says what went wrong. A status line, so no closing period.
+public struct PillNotice: Equatable, Sendable {
+  public let subject: String
+  public let predicate: String
+
+  public init(subject: String, predicate: String) {
+    self.subject = subject
+    self.predicate = predicate
+  }
+
+  /// The one line it reads as — what the shell measures.
+  public var text: String { "\(subject) \(predicate)" }
+}
+
 /// The visual state of the dictation overlay pill. It's a pure projection of
 /// `PipelinePhase` — owned here (rather than in the AppKit shell) so the mapping
 /// is unit-testable; the shell just renders whatever this resolves to.
@@ -18,14 +34,14 @@ public enum OverlayUIState: Equatable, Sendable {
   /// reason (e.g. "AssemblyAI error 401…"), surfaced via the pill's hover
   /// tooltip and VoiceOver announcement so the failure isn't an unexplained
   /// red dot.
-  case error(message: String)
-  /// The press failed because the input device delivered only silence (the
-  /// liveness gate's fail-closed outcome). Split from `.error` because the
-  /// device name is the whole diagnosis — an aggregate whose real interface is
-  /// unplugged, or a loopback like BlackHole set as the default input — and a
-  /// hover tooltip hides it. The shell widens the pill to show `pillText` for
-  /// this notice alone; every other failure keeps the compact "Error" pill.
-  case inputSilent(deviceName: String?)
+  ///
+  /// `notice`, when set, is written on the pill instead of the compact "Error":
+  /// today only for a mic that delivered only silence (the liveness gate's
+  /// fail-closed outcome), where the device name is the whole diagnosis — an
+  /// aggregate whose real interface is unplugged, or a loopback like BlackHole
+  /// set as the default input — and a hover tooltip would hide it. The shell
+  /// widens the pill to fit; a host with no pill (the iPhone) reads `message`.
+  case error(message: String, notice: PillNotice? = nil)
   /// Transcription succeeded and the text was pasted into the focused field. The
   /// shell shows this as a brief, neutral "Pasted" notice before settling to
   /// `.idle` — the mirror of the `.noTarget` "Copied" notice for the paste path.
@@ -45,9 +61,7 @@ public enum OverlayUIState: Equatable, Sendable {
     case .connecting: "Connecting to the microphone."
     case .recording: "Recording."
     case .processing: "Processing."
-    case .error(let message): message
-    case .inputSilent(let deviceName):
-      MicCaptureError.inputNeverDelivered(deviceName: deviceName).errorDescription ?? ""
+    case .error(let message, _): message
     case .pasted: "Your dictation was pasted."
     case .noTarget: "No text field focused. Your dictation was copied to the clipboard."
     }
@@ -63,29 +77,23 @@ public enum OverlayUIState: Equatable, Sendable {
   public var noticeDwellSeconds: Double? {
     switch self {
     case .pasted: 0.8
-    case .error, .noTarget: 1.6
     // A sentence, not a word: long enough to read the device name.
-    case .inputSilent: 3.0
+    case .error(_, _?): 3.0
+    case .error, .noTarget: 1.6
     case .idle, .connecting, .recording, .processing: nil
     }
   }
 
-  /// The words written on the pill for a notice that spells out its reason, or
-  /// nil for the states the pill shows as a status word or meter. Split so the
-  /// shell can truncate the subject (a device name of any length) and never the
-  /// predicate, which is what says what went wrong. A status line, so no closing
-  /// period — the sentence form is `accessibilityLabel`.
-  public var pillNotice: (subject: String, predicate: String)? {
-    switch self {
-    case .inputSilent(let deviceName): (deviceName ?? "The microphone", "isn't sending any audio")
-    case .idle, .connecting, .recording, .processing, .error, .pasted, .noTarget: nil
-    }
+  /// The words written on the pill for a failure that spells out its reason, or
+  /// nil for the states the pill shows as a status word or meter. The sentence
+  /// form is `accessibilityLabel`.
+  public var pillNotice: PillNotice? {
+    guard case .error(_, let notice) = self else { return nil }
+    return notice
   }
 
   /// `pillNotice` as the one line it reads as — what the shell measures.
-  public var pillText: String? {
-    pillNotice.map { "\($0.subject) \($0.predicate)" }
-  }
+  public var pillText: String? { pillNotice?.text }
 }
 
 extension PipelinePhase {
@@ -117,10 +125,10 @@ extension PipelinePhase {
     // navigation can't disagree about which failures are setup states.
     case .failed(let error) where error.isSetupBlocker: .idle
     case .failed(let error):
-      if case .audioCaptureFailed(let underlying as MicCaptureError) = error,
-        case .inputNeverDelivered(let deviceName) = underlying
-      {
-        .inputSilent(deviceName: deviceName)
+      // A capture fault with its own pill notice (the silent mic) speaks in its
+      // own sentence, not the "Audio capture failed: …" wrapper.
+      if case .audioCaptureFailed(let underlying as MicCaptureError) = error, let notice = underlying.pillNotice {
+        .error(message: underlying.errorDescription ?? notice.text, notice: notice)
       } else {
         .error(message: error.errorDescription ?? "Dictation failed.")
       }

@@ -94,7 +94,7 @@ private struct KeyStep: View {
       VStack(spacing: DesignTokens.Metrics.appChipGap) {
         Button(isChecking ? "Checking…" : "Continue") { Task { await submit() } }
           .buttonStyle(BrandButtonStyle())
-          .disabled(isChecking || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+          .disabled(isChecking || draft.trimmedNonEmpty() == nil)
         Button("Get a free key") { openURL(APIKeyStore.dashboardURL) }
           .buttonStyle(BrandButtonStyle(role: .secondary))
       }

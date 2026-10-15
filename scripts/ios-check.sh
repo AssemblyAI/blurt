@@ -61,7 +61,7 @@ echo "==> build-for-testing (BlurtiOSProbe)"
 # The tests' destination, flags and derived data, so the build above is
 # reused and only the probe's own files compile (a generic destination would
 # rebuild everything for a second architecture).
-UDID="$(ios_pick_device "${BLURT_SIM_DEVICE:-iPhone 18 Pro}" | cut -f1)"
+UDID="$(ios_pick_device "${BLURT_SIM_DEVICE:-$IOS_DEFAULT_DEVICE}" | cut -f1)"
 if [ -n "$UDID" ]; then
   xcodebuild build-for-testing -project App/BlurtiOS/BlurtiOS.xcodeproj -scheme BlurtiOSProbe \
     -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath "$IOS_DERIVED" \

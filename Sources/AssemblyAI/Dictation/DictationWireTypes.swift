@@ -25,6 +25,16 @@
 // evidence a field is supported, only that it has not been removed yet. There
 // has been a lot of renaming on this route. Treat any name absent from the docs
 // as deprecated and don't send it, however well it works today.
+/// The models the cleanup rewrite can run on — `config.rewrite_mode`'s
+/// documented values. Typed so a misspelling can't type-check its way onto the
+/// wire.
+public enum DictationRewriteMode: String, Encodable, Sendable {
+  /// The route's default.
+  case fast
+  /// A larger model: better rewrites, a longer server-side path.
+  case smart
+}
+
 public struct DictationConfig: Encodable, Sendable {
   public let sampleRate: Int
   public let channels: Int
@@ -74,7 +84,7 @@ public struct DictationConfig: Encodable, Sendable {
   /// `text`, which is "always the verbatim transcript". So the config carries
   /// no off switch, and the *response* is where the enhanced-transcripts
   /// setting chooses between the two transcripts
-  /// (`AssemblyAITranscriber.transcript(from:)`).
+  /// (`AssemblyAITranscriber.transcript(from:enhanced:)`).
   ///
   /// An explicit null `llm` does suppress the rewrite — measured 2026-09-10 and
   /// re-confirmed 2026-09-11 (200, with `llm_response` and `llm_error` both
@@ -91,17 +101,16 @@ public struct DictationConfig: Encodable, Sendable {
   /// users who turned cleanup off. That is the failure this whole path already
   /// shipped once, by a different route. Blurt sent the null until 2026-09-11.
   /// Adding an `llm` case back would reintroduce it *and* leave the response's
-  /// choice unreachable — read `transcript(from:)` first.
+  /// choice unreachable — read `transcript(from:enhanced:)` first.
   public let llmInstruction: String?
-  /// Which model the cleanup rewrite runs on: `"smart"` (a larger model) or
-  /// `"fast"`, or nil to omit the key and leave the route on its default.
-  /// A top-level sibling of `llm_instruction`, which is where the rest of the
-  /// rewrite request already lives.
-  public let rewriteMode: String?
+  /// Which model the cleanup rewrite runs on, or nil to omit the key and leave
+  /// the route on its default. A top-level sibling of `llm_instruction`, which
+  /// is where the rest of the rewrite request already lives.
+  public let rewriteMode: DictationRewriteMode?
 
   public init(
     sampleRate: Int, channels: Int, sttPrompt: String, keytermsPrompt: [String], llmInstruction: String?,
-    rewriteMode: String? = nil
+    rewriteMode: DictationRewriteMode? = nil
   ) {
     self.sampleRate = sampleRate
     self.channels = channels

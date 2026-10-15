@@ -1,3 +1,4 @@
+import AssemblyAI
 import Foundation
 
 /// Which model the dictation API's server-side cleanup rewrite runs on — the
@@ -10,7 +11,7 @@ public enum RewriteMode: String, CaseIterable, Sendable {
   case fast = "Fast"
   /// The larger rewrite model. It has a longer server-side path, and a rewrite
   /// that misses the route's budget comes back as `llm_error` and degrades to the
-  /// verbatim transcript (`AssemblyAITranscriber.transcript(from:)`).
+  /// verbatim transcript (`AssemblyAITranscriber.transcript(from:enhanced:)`).
   case smart = "Smart"
 
   /// Decodes a persisted raw value, falling back to Fast for unset ("") or
@@ -32,12 +33,12 @@ public enum RewriteMode: String, CaseIterable, Sendable {
   public static let guidance = "Smart uses a larger model for better rewrites; Fast is quicker."
 
   /// What goes on the wire as `rewrite_mode`, or nil to omit the key. Fast
-  /// **omits** it rather than sending `"fast"`, so the default request stays
+  /// **omits** it rather than sending `.fast`, so the default request stays
   /// byte-identical to the one that shipped before this setting existed.
-  var wireValue: String? {
+  var wireValue: DictationRewriteMode? {
     switch self {
     case .fast: return nil
-    case .smart: return "smart"
+    case .smart: return .smart
     }
   }
 }

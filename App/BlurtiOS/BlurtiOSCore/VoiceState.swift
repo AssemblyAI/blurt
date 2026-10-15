@@ -7,15 +7,9 @@ import BlurtEngine
 /// — the ring, a glyph, dimming, whether the meter is up — is a property here
 /// and tested, not a branch in a view.
 package nonisolated struct VoiceState: Equatable {
-  package enum Phase: Equatable {
-    case idle
-    case connecting
-    case recording
-    case processing
-    case pasted
-    case copied
-    case error
-  }
+  /// The same states the keyboard reads from the App Group, so the keyboard's
+  /// and the app's phases can't drift apart.
+  package typealias Phase = PhaseSnapshot.State
 
   package enum Ring: Equatable {
     /// At rest, or while recording (the meter says it all).
@@ -54,61 +48,28 @@ package nonisolated struct VoiceState: Equatable {
 
   /// The keyboard's: from the phase the app published.
   package init(snapshot: PhaseSnapshot, isReady: Bool) {
-    let phase: Phase =
-      switch snapshot.state {
-      case .idle: .idle
-      case .connecting: .connecting
-      case .recording: .recording
-      case .processing: .processing
-      case .pasted: .pasted
-      case .copied: .copied
-      case .error: .error
-      }
-    self.init(phase: phase, isReady: isReady, level: Float(snapshot.level), message: snapshot.message)
+    self.init(phase: snapshot.state, isReady: isReady, level: Float(snapshot.level), message: snapshot.message)
   }
 
-  /// The app's: from the engine's overlay state. "No target" is the words
-  /// going to the clipboard — the keyboard's "copied".
+  /// The app's: from the engine's overlay state, mapped as the app publishes
+  /// it to the keyboard.
   package init(overlay: OverlayUIState, windowOpen: Bool, level: Float) {
-    switch overlay {
-    case .idle: self.init(phase: .idle, isReady: windowOpen)
-    case .connecting: self.init(phase: .connecting, isReady: windowOpen)
-    case .recording: self.init(phase: .recording, isReady: windowOpen, level: level)
-    case .processing: self.init(phase: .processing, isReady: windowOpen)
-    case .pasted: self.init(phase: .pasted, isReady: windowOpen)
-    case .noTarget: self.init(phase: .copied, isReady: windowOpen)
-    case .error(let message): self.init(phase: .error, isReady: windowOpen, message: message)
-    case .inputSilent:
-      self.init(phase: .error, isReady: windowOpen, message: overlay.accessibilityLabel)
-    }
+    let phase = Phase(overlay)
+    self.init(
+      phase: phase, isReady: windowOpen, level: phase == .recording ? level : 0,
+      message: PhaseSnapshot.message(for: overlay))
   }
 
   /// The meter is up and is the key.
   package var isRecording: Bool { isReady && phase == .recording }
 
   /// Something is in flight: the mic coming up, the voice, the words being made.
-  package var isWorking: Bool {
-    guard isReady else { return false }
-    switch phase {
-    case .connecting, .recording, .processing: return true
-    case .idle, .pasted, .copied, .error: return false
-    }
-  }
+  package var isWorking: Bool { isReady && !isSettled }
 
-  package var isNotice: Bool {
-    switch phase {
-    case .pasted, .copied, .error: true
-    case .idle, .connecting, .recording, .processing: false
-    }
-  }
+  package var isNotice: Bool { isSettled && phase != .idle }
 
   /// Nothing in flight — the moments the cancel control has nothing to cancel.
-  package var isSettled: Bool {
-    switch phase {
-    case .idle, .pasted, .copied, .error: true
-    case .connecting, .recording, .processing: false
-    }
-  }
+  package var isSettled: Bool { phase.isSettled }
 
   /// Something is in flight and Blurt is there to stop it: no × beside a
   /// dimmed mic whose app is gone.
@@ -143,5 +104,42 @@ package nonisolated struct VoiceState: Equatable {
 
   package var accessibilityValue: String {
     phase == .error ? message ?? "Dictation failed." : ""
+  }
+}
+
+extension PhaseSnapshot.State {
+  /// Nothing in flight: a notice, or rest.
+  nonisolated package var isSettled: Bool {
+    switch self {
+    case .idle, .pasted, .copied, .error: true
+    case .connecting, .recording, .processing: false
+    }
+  }
+
+  /// The engine's overlay state as the orb shows it. "No target" is the words
+  /// going to the clipboard — the keyboard's "copied" — and a silent mic is an
+  /// error like any other: the iPhone has no wide pill for its notice.
+  nonisolated package init(_ overlay: OverlayUIState) {
+    self =
+      switch overlay {
+      case .idle: .idle
+      case .connecting: .connecting
+      case .recording: .recording
+      case .processing: .processing
+      case .pasted: .pasted
+      case .noTarget: .copied
+      case .error: .error
+      }
+  }
+}
+
+extension PhaseSnapshot {
+  /// The words an overlay state carries for VoiceOver: an error's own (the
+  /// silent mic's sentence, with the device name, included).
+  nonisolated package static func message(for overlay: OverlayUIState) -> String? {
+    switch overlay {
+    case .error(let message, _): message
+    case .idle, .connecting, .recording, .processing, .pasted, .noTarget: nil
+    }
   }
 }

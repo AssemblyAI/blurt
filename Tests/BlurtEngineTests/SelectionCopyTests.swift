@@ -125,6 +125,21 @@ struct SelectionCopyTests {
     #expect(pasteboard.string == "user's clipboard")
   }
 
+  @Test("a copy that lands after the timeout still gets the user's clipboard back")
+  func lateCopyRestored() async throws {
+    let pasteboard = FakeCopyPasteboard()
+    // The app answers nothing in time; its copy lands once the press has given up.
+    let copy = SelectionCopy(
+      pasteboard: pasteboard, postCopy: { true }, timeout: .milliseconds(20), lateCopyWindow: .seconds(5))
+    #expect(await copy.copySelection(maxCharacters: 100) == nil)
+    _ = pasteboard.answerCopy(with: "the highlighted text")()
+    let deadline = ContinuousClock.now + .seconds(5)
+    while pasteboard.restoreCount == 0, ContinuousClock.now < deadline {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(pasteboard.string == "user's clipboard")
+  }
+
   @Test("the fallback runs only when AX was unreadable, never on a bare caret")
   func resolveRule() async {
     let pasteboard = FakeCopyPasteboard()

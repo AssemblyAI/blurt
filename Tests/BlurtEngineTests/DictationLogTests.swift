@@ -150,6 +150,16 @@ struct DictationLogEntryTests {
     #expect(entry.keyterms == ["AssemblyAI", "LeMUR"])
   }
 
+  @Test("records which rewrite model was asked for, Fast included, and none with the rewrite off")
+  func logsTheRewriteMode() {
+    func logged(_ mode: RewriteMode?) -> String? {
+      DictationLog.makeEntry(transcript: "p", context: nil, rewriteMode: mode, now: Date()).rewriteMode
+    }
+    #expect(logged(.smart) == "smart")
+    #expect(logged(.fast) == "fast")
+    #expect(logged(nil) == nil)
+  }
+
   @Test("leaves the key terms empty when the context has none")
   func noKeytermsLeavesTheFieldEmpty() {
     #expect(DictationLog.makeEntry(transcript: "p", context: context, now: Date()).keyterms.isEmpty)
@@ -217,6 +227,7 @@ struct DictationLogTests {
     #expect(!line.contains("selected"))
     #expect(!line.contains("stt_prompt"))
     #expect(!line.contains("keyterms"))
+    #expect(!line.contains("rewrite_mode"))
   }
 
   @Test("a non-empty prompt/keyterms pair is written, with its values intact")
@@ -228,11 +239,12 @@ struct DictationLogTests {
     let url = makeTempLogURL()
     let context = TranscriptionContext(
       appName: "Mail", priorText: "Hi Sam,", keyTerms: ["AssemblyAI", "LeMUR"])
-    DictationLog.write(transcript: "p", context: context, to: url, now: Date())
+    DictationLog.write(transcript: "p", context: context, rewriteMode: .smart, to: url, now: Date())
 
     let entry = try #require(firstEntry(in: url))
     #expect(entry.keyterms == ["AssemblyAI", "LeMUR"])
     #expect(entry.sttPrompt == "Hi Sam,")
+    #expect(readLog(url).contains(#""rewrite_mode":"smart""#))
   }
 }
 

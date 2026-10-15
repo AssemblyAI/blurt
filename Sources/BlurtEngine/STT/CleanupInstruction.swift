@@ -100,7 +100,7 @@ enum CleanupInstruction {
   /// service's own default cleanup: worse than our instruction, and immeasurably
   /// better than an outage. It does *not* turn the rewrite off — nothing on the
   /// request does, and the enhanced-transcripts switch is applied to the
-  /// response instead (`AssemblyAITranscriber.transcript(from:)`).
+  /// response instead (`AssemblyAITranscriber.transcript(from:enhanced:)`).
   ///
   /// The tests make this unreachable, which is the point — this is the belt to
   /// their braces, for the edit that lands when nobody runs them.

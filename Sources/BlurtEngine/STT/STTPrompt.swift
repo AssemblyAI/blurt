@@ -1,5 +1,3 @@
-import AssemblyAI
-
 /// Builds the dictation request's `config.stt_prompt` — the contextual prompt
 /// that primes the STT model with what came *before* this utterance. The model
 /// reads it as continuity: vocabulary, spelling, capitalization, and mid-sentence

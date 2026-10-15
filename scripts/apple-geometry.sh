@@ -34,13 +34,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-PICKED="$(ios_pick_device "${BLURT_SIM_DEVICE:-iPhone 18 Pro}")"
-[ -n "$PICKED" ] || {
-  echo "apple-geometry: no iPhone simulator available" >&2
-  exit 1
-}
-UDID="${PICKED%%	*}"
-NAME="${PICKED#*	}"
+ios_require_device apple-geometry
 ios_wait_booted "$UDID"
 rm -rf "$WORK"
 mkdir -p "$WORK"

@@ -62,14 +62,20 @@ public struct SelectionSpeechRouting: Sendable {
     case deciding(pending: [DictationSession.Command], asks: Bool, latched: Bool, held: Bool)
     /// A selection is in hand and the key is still down: a tap reads it, a hold asks.
     case selected(String)
-    /// Recording the spoken request about the selection.
-    case asking(String)
-    /// The request was let go of and is being transcribed.
-    case transcribing(String)
+    /// Recording the spoken request about the selection. Not `started` while
+    /// an earlier dictation is still finishing: the hand-back press waits for
+    /// it, since the session refuses a press until it is back at rest.
+    case asking(String, started: Bool)
+    /// The request was let go of and is being transcribed (or, not `started`,
+    /// was let go of before the mic ever opened).
+    case transcribing(String, started: Bool)
     case speaking
   }
 
   private var mode = Mode.passthrough
+  /// Whether the session's last phase was in flight. A terminal phase is then
+  /// that dictation's end, never a hand-back press that hasn't started.
+  private var sessionBusy = false
 
   public init() {}
 
@@ -90,10 +96,10 @@ public struct SelectionSpeechRouting: Sendable {
       // combo over the selection. Neither asked for anything.
       mode = .passthrough
       return command == .cancelRecording ? [.forward(command)] : []
-    case .asking(let selection):
-      return asking(selection, command)
-    case .transcribing:
-      return transcribing(command)
+    case .asking(let selection, let started):
+      return asking(selection, started: started, command)
+    case .transcribing(_, let started):
+      return transcribing(started: started, command)
     case .speaking:
       mode = .passthrough
       switch command {
@@ -110,30 +116,34 @@ public struct SelectionSpeechRouting: Sendable {
     }
   }
 
-  private mutating func asking(_ selection: String, _ command: DictationSession.Command) -> [Action] {
+  private mutating func asking(
+    _ selection: String, started: Bool, _ command: DictationSession.Command
+  ) -> [Action] {
     switch command {
     case .release:
-      mode = .transcribing(selection)
-      return [.forward(.release)]
+      mode = .transcribing(selection, started: started)
+      return started ? [.forward(.release)] : []
     case .cancel, .cancelRecording:
       mode = .passthrough
-      return [.forward(command)]
+      // Unstarted, the session is still busy with the earlier dictation, which
+      // a cancel would throw away. A recovery reset still goes through.
+      return started || command == .cancelRecording ? [.forward(command)] : []
     case .press, .pressHandingBack:
       // The key is down for the whole request, so the gate can't press again.
       return []
     }
   }
 
-  private mutating func transcribing(_ command: DictationSession.Command) -> [Action] {
+  private mutating func transcribing(started: Bool, _ command: DictationSession.Command) -> [Action] {
     switch command {
     case .press, .pressHandingBack:
       // A press while the request is transcribing drops it. The gate is armed
       // for this press, and its key-up would latch a recording nobody started.
       mode = .passthrough
-      return [.forward(.cancel), .resetGate]
+      return started ? [.forward(.cancel), .resetGate] : [.resetGate]
     case .cancel:
       mode = .passthrough
-      return [.forward(.cancel)]
+      return started ? [.forward(.cancel)] : []
     case .release, .cancelRecording:
       // Nothing is recording, so the session treats either as a no-op.
       return [.forward(command)]
@@ -149,12 +159,12 @@ public struct SelectionSpeechRouting: Sendable {
     case .selected(let selection):
       mode = .speaking
       return [.speak(selection)]
-    case .asking(let selection):
+    case .asking(let selection, let started):
       // Let go before the gate's own hold threshold, so it latched. For a
       // request, letting go is the end of it, and the latch holds no recording
       // the user knows about.
-      mode = .transcribing(selection)
-      return [.forward(.release), .resetGate]
+      mode = .transcribing(selection, started: started)
+      return started ? [.forward(.release), .resetGate] : [.resetGate]
     case .passthrough, .transcribing, .speaking:
       return []
     }
@@ -168,8 +178,7 @@ public struct SelectionSpeechRouting: Sendable {
       mode = .deciding(pending: pending, asks: true, latched: latched, held: true)
       return []
     case .selected(let selection):
-      mode = .asking(selection)
-      return [.forward(.pressHandingBack)]
+      return beginAsking(selection)
     case .passthrough, .deciding, .asking, .transcribing, .speaking:
       return []
     }
@@ -194,12 +203,16 @@ public struct SelectionSpeechRouting: Sendable {
       mode = .speaking
       return [.speak(selection)]
     }
-    if held {
-      mode = .asking(selection)
-      return [.forward(.pressHandingBack)]
-    }
+    if held { return beginAsking(selection) }
     mode = .selected(selection)
     return []
+  }
+
+  /// Opens the mic for a request, through the session's hand-back press — or,
+  /// while an earlier dictation is still finishing, once it has.
+  private mutating func beginAsking(_ selection: String) -> [Action] {
+    mode = .asking(selection, started: !sessionBusy)
+    return sessionBusy ? [] : [.forward(.pressHandingBack)]
   }
 
   /// The read ended on its own, or failed. The caller must not report a read it
@@ -211,33 +224,49 @@ public struct SelectionSpeechRouting: Sendable {
     return [.resetGate]
   }
 
-  /// A dictation reached a terminal phase. While commands are going to the
-  /// session, the gate is this router's to sync. While a read or a decision
-  /// owns it, an earlier dictation's end must not reset it. A request's end is
-  /// the one this router waits for: its transcript (`.handedBack`), nothing
-  /// said (`.idle`), or a failure.
-  public mutating func sessionReachedTerminalPhase(_ phase: PipelinePhase) -> [Action] {
+  /// The session's phase changed. Only a terminal phase can need an action:
+  /// while commands are going to the session, the gate is this router's to
+  /// sync. While a read or a decision owns it, an earlier dictation's end must
+  /// not reset it. A request's end is the one this router waits for: its
+  /// transcript (`.handedBack`), nothing said (`.idle`), or a failure — and
+  /// only once its own press has started; before that, a terminal phase is the
+  /// earlier dictation's end, which lets the request start.
+  public mutating func sessionPhaseChanged(_ phase: PipelinePhase) -> [Action] {
+    sessionBusy = !phase.isTerminal
+    guard phase.isTerminal else { return [] }
     switch mode {
     case .passthrough:
       return [.syncGateAfterSession]
-    case .asking(let selection), .transcribing(let selection):
-      let stillDown = mode == .asking(selection)
-      if case .handedBack(let request) = phase {
-        mode = .speaking
-        // Handed back with the key still down means the session's recording cap
-        // released it. Clear the gate, or the eventual key-up would stop the answer.
-        return [.answer(request: request, selection: selection)] + (stillDown ? [.resetGate] : [])
-      }
-      if phase == .idle, !stillDown {
-        mode = .speaking
-        return [.speak(selection)]
-      }
-      // The request failed or was cancelled: a dictation ending without a key
-      // event, like any other.
-      mode = .passthrough
-      return [.syncGateAfterSession]
+    case .asking(let selection, started: false):
+      mode = .asking(selection, started: true)
+      return [.forward(.pressHandingBack)]
+    case .transcribing(let selection, started: false):
+      // Let go before the mic ever opened: a request with nothing said.
+      mode = .speaking
+      return [.speak(selection)]
+    case .asking(let selection, started: true):
+      return requestEnded(phase, selection: selection, stillDown: true)
+    case .transcribing(let selection, started: true):
+      return requestEnded(phase, selection: selection, stillDown: false)
     case .deciding, .selected, .speaking:
       return []
     }
+  }
+
+  private mutating func requestEnded(_ phase: PipelinePhase, selection: String, stillDown: Bool) -> [Action] {
+    if case .handedBack(let request) = phase {
+      mode = .speaking
+      // Handed back with the key still down means the session's recording cap
+      // released it. Clear the gate, or the eventual key-up would stop the answer.
+      return [.answer(request: request, selection: selection)] + (stillDown ? [.resetGate] : [])
+    }
+    if phase == .idle, !stillDown {
+      mode = .speaking
+      return [.speak(selection)]
+    }
+    // The request failed or was cancelled: a dictation ending without a key
+    // event, like any other.
+    mode = .passthrough
+    return [.syncGateAfterSession]
   }
 }

@@ -15,7 +15,7 @@ struct SettingsView: View {
   @State private var micAlignment = SharedStore.micAlignment
   @State private var autoDictate = SharedStore.autoDictate
   @State private var windowMinutes = SharedStore.windowMinutes
-  @AppStorage(BlurtShared.Key.theme, store: SharedStore.defaults) private var themeID = "system"
+  @AppStorage(BlurtShared.Key.theme, store: SharedStore.defaults) private var themeID = SharedStore.defaultThemeID
   /// TEMPORARY: which mic concept to try. Goes with the losers.
   @AppStorage(BlurtShared.Key.voiceElement, store: SharedStore.defaults) private var voiceRaw =
     VoiceElementKind.shipped.rawValue

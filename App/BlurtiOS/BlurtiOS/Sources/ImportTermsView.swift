@@ -1,3 +1,4 @@
+import AssemblyAI
 import BlurtDesign
 import BlurtiOSCore
 import SwiftUI
@@ -24,7 +25,7 @@ struct ImportTermsView: View {
         } footer: {
           Text(
             "They'll ride along with every dictation so Blurt spells them right. Terms you already have are skipped; "
-              + "the first \(TermPack.termCap) terms ride each request, so keep the list to what matters.")
+              + "the first \(KeyTerms.termCap) terms ride each request, so keep the list to what matters.")
         }
       }
       .brandForm()

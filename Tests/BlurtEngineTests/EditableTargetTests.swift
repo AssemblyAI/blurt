@@ -1,4 +1,5 @@
 #if os(macOS)
+  import ApplicationServices
   import Testing
 
   @testable import BlurtEngine
@@ -60,6 +61,41 @@
       #expect(
         !FocusCapture.isEditableTarget(
           role: nil, valueSettable: false, hasInsertionPoint: false))
+    }
+  }
+
+  /// The third answer: AX that can't tell pastes rather than copies, which is
+  /// what lets editors that draw their own text view (Sublime Text, Zed) take a
+  /// dictation without being named.
+  @Suite("FocusCapture.editability")
+  struct FocusedEditabilityTests {
+    @Test("a focus query that couldn't complete can't tell")
+    func cannotComplete() {
+      #expect(FocusCapture.editability(ofFailedFocusQuery: .cannotComplete) == .cannotTell)
+    }
+
+    @Test("a focus query that found nothing focused means nothing takes text")
+    func nothingFocused() {
+      #expect(FocusCapture.editability(ofFailedFocusQuery: .noValue) == .notEditable)
+      #expect(FocusCapture.editability(ofFailedFocusQuery: .failure) == .notEditable)
+    }
+
+    @Test("a bare window with no text signal can't tell")
+    func bareWindow() {
+      #expect(
+        FocusCapture.editability(role: "AXWindow", valueSettable: false, hasInsertionPoint: false) == .cannotTell)
+    }
+
+    @Test("a text signal is editable, a window's included")
+    func editableSignals() {
+      #expect(
+        FocusCapture.editability(role: "AXTextArea", valueSettable: false, hasInsertionPoint: false) == .editable)
+      #expect(FocusCapture.editability(role: "AXWindow", valueSettable: false, hasInsertionPoint: true) == .editable)
+    }
+
+    @Test("any other element without a text signal takes no text", arguments: ["AXButton", "AXGroup", nil])
+    func otherElements(role: String?) {
+      #expect(FocusCapture.editability(role: role, valueSettable: false, hasInsertionPoint: false) == .notEditable)
     }
   }
 

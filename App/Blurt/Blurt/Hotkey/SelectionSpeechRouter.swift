@@ -46,8 +46,8 @@ final class SelectionSpeechRouter {
     perform(routing.keyLatched())
   }
 
-  func sessionReachedTerminalPhase(_ phase: PipelinePhase) {
-    perform(routing.sessionReachedTerminalPhase(phase))
+  func sessionPhaseChanged(_ phase: PipelinePhase) {
+    perform(routing.sessionPhaseChanged(phase))
   }
 
   private func perform(_ actions: [SelectionSpeechRouting.Action]) {

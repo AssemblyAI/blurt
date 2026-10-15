@@ -6,7 +6,7 @@ import Dispatch
 // file-length budget, mirroring `+Pipeline` (the release half). Members it
 // reaches are internal, not private: file-scoped access can't cross the split.
 // `Dispatch`, not `Foundation`: the only thing here from outside the module is
-// `contextQueue.async` (see `performPress` for why that read is off-pool).
+// `BlockingIPC.queue.async` (see `BlockingIPC` for why that read is off-pool).
 extension DictationSession {
   func performPress(handingBack: Bool) async {
     guard phase.isTerminal else { return }
@@ -189,7 +189,7 @@ extension DictationSession {
     // values, so it needs no task context.
     let captureFieldContext = seams.captureFieldContext
     let textShortcutsProvider = textShortcutsProvider
-    Self.contextQueue.async {
+    BlockingIPC.queue.async {
       let field = captureFieldContext()
       let context = TranscriptionContext(
         appName: captured?.processName,
@@ -206,17 +206,6 @@ extension DictationSession {
       // One publish, which is what makes the value-before-stream ordering
       // `startUpload`'s wait depends on unforgeable — see `PressContext.store`.
       press.store(resolved: context.isEmpty ? nil : context)
-    }
-  }
-}
-
-extension DictationSession {
-  /// Runs blocking cross-process work on `contextQueue` and awaits it: the
-  /// awaitable form of the press-time capture's hop, for an AX read or a
-  /// pasteboard read that can make another app produce promised data.
-  static func offPool<T: Sendable>(_ work: @escaping @Sendable () -> T) async -> T {
-    await withCheckedContinuation { continuation in
-      contextQueue.async { continuation.resume(returning: work()) }
     }
   }
 }

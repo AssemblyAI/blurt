@@ -55,13 +55,7 @@ elif [ ! -d "$APP" ]; then
   exit 1
 fi
 
-PICKED="$(ios_pick_device "${BLURT_SIM_DEVICE:-iPhone 18 Pro}")"
-if [ -z "$PICKED" ]; then
-  echo "ios-sim: no iPhone simulator available (xcrun simctl list devices)" >&2
-  exit 1
-fi
-UDID="${PICKED%%	*}"
-NAME="${PICKED#*	}"
+ios_require_device ios-sim
 
 echo "boot $NAME ($UDID)"
 ios_wait_booted "$UDID"

@@ -291,9 +291,9 @@ final class AppCoordinator {
     // normal flow. Asked through the router, because while a read-aloud owns the
     // gate the reset isn't this dictation's to make (see `SelectionSpeechRouting`).
     // It gets the phase itself because an ask about a selection ends in one,
-    // `.handedBack`, carrying the transcript the router answers.
-    if phase.isTerminal {
-      speechRouter?.sessionReachedTerminalPhase(phase)
-    }
+    // `.handedBack`, carrying the transcript the router answers — and every
+    // phase, not just the terminal ones, so it can tell an earlier dictation
+    // still finishing from the end of a request it is waiting on.
+    speechRouter?.sessionPhaseChanged(phase)
   }
 }

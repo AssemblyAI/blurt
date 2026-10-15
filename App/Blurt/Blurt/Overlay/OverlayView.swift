@@ -122,7 +122,7 @@ struct OverlayView: View {
       // surface progressing rather than three unrelated states.
       waitingContent("Transcribing")
         .transition(.opacity)
-    case .error(let message):
+    case .error(let message, nil):
       // "Try again" tells the user what to do; the full failure reason is too
       // long for the pill, so expose it on hover. The VoiceOver announcement
       // (OverlayWindowController) speaks the same message for non-sighted users.
@@ -136,27 +136,25 @@ struct OverlayView: View {
       StatusLineText("Pasted")
         .transition(.opacity)
         .help(state.accessibilityLabel)
-    case .inputSilent:
-      // The silent-mic notice: the device name is the diagnosis, so it goes on
-      // the pill itself — the controller has widened the capsule to fit — in the
-      // same orange as the "Error" word.
+    case .error(_, let notice?):
+      // A failure that spells out its reason (the silent mic: the device name is
+      // the diagnosis), so it goes on the pill itself — the controller has
+      // widened the capsule to fit — in the same orange as the "Error" word.
       //
       // Two runs, so a device name too long for the capped pill is cut in its
       // middle while "isn't sending any audio" — the part that says what's wrong —
       // always shows in full, and neither shrinks.
-      if let notice = state.pillNotice {
-        HStack(spacing: 0) {
-          StatusLineText(
-            notice.subject + " ", color: BlurtBrand.errorOrange,
-            truncation: .middle, shrinksToFit: false)
-          StatusLineText(notice.predicate, color: BlurtBrand.errorOrange, shrinksToFit: false)
-            .fixedSize()
-            .layoutPriority(1)
-        }
-        .padding(.horizontal, Self.errorTextInset)
-        .transition(.opacity)
-        .help(state.accessibilityLabel)
+      HStack(spacing: 0) {
+        StatusLineText(
+          notice.subject + " ", color: BlurtBrand.errorOrange,
+          truncation: .middle, shrinksToFit: false)
+        StatusLineText(notice.predicate, color: BlurtBrand.errorOrange, shrinksToFit: false)
+          .fixedSize()
+          .layoutPriority(1)
       }
+      .padding(.horizontal, Self.errorTextInset)
+      .transition(.opacity)
+      .help(state.accessibilityLabel)
     case .noTarget:
       // Quiet, informational notice: there was no text field to type into, so
       // the transcript went to the clipboard. Styled exactly like "Pasted"

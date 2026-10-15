@@ -54,8 +54,8 @@ extension KeyboardModel {
   /// A selection as a key term: trimmed, on one line, short enough to be a
   /// name or a phrase. Nil when it is none of those, or nothing is selected.
   package static func termCandidate(from selected: String?) -> String? {
-    guard let trimmed = selected?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty,
-      trimmed.count <= termLengthCap, !trimmed.contains(where: \.isNewline)
+    guard let trimmed = selected.trimmedNonEmpty(), trimmed.count <= termLengthCap,
+      !trimmed.contains(where: \.isNewline)
     else { return nil }
     return trimmed
   }
@@ -144,11 +144,17 @@ extension KeyboardModel {
     onLayoutChange?()
   }
 
-  package func cancelAddingTerm() {
+  /// Closes the term field: the draft and the baselines it was typed against
+  /// only mean something together, so they are cleared together.
+  package func endTermField() {
     termDraft = nil
     termDraftFromSelection = nil
     termHostBaseline = nil
     termHostBaselineAfter = nil
+  }
+
+  package func cancelAddingTerm() {
+    endTermField()
     // The highlight may still stand: the chip comes back as it is now.
     readSelection()
     updateShift()
@@ -159,7 +165,7 @@ extension KeyboardModel {
   /// and, when it began as a selection, puts it into the text in place of the
   /// misheard word.
   package func saveTerm() {
-    guard let draft = termDraft?.trimmingCharacters(in: .whitespacesAndNewlines), !draft.isEmpty else {
+    guard let draft = termDraft.trimmedNonEmpty() else {
       cancelAddingTerm()
       return
     }
@@ -168,10 +174,7 @@ extension KeyboardModel {
     // notification can't read the replacement as typing to claim.
     let original = termDraftFromSelection
     let baseline = termHostBaseline
-    termDraft = nil
-    termDraftFromSelection = nil
-    termHostBaseline = nil
-    termHostBaselineAfter = nil
+    endTermField()
     // Only while the highlight the field opened over still stands where it
     // was: the host may report a selection a moment after the user moved on,
     // and inserting then would put the word in twice.

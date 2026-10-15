@@ -1,4 +1,5 @@
 import AssemblyAI
+import BlurtEngine
 import Foundation
 
 /// The Words tab's edits, apart from its views: what adding a key term or a

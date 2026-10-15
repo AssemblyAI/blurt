@@ -11,10 +11,10 @@ a standalone Swift SDK. Foundation only; macOS 15 and iOS 18.
 | `DictationMultipart`                   | The upload's multipart framing: `config` first, then the PCM audio.                  |
 | `APIKeyValidator`                      | A cheap authenticated check that tells a rejected key from one it couldn't verify.   |
 | `KeyTerms`                             | Key terms for `keyterms_prompt`: parse a comma-separated list, fit it to the caps.   |
-| `TextShortcut`, `TextShortcutExpander` | Say a phrase, get saved text: expanded on the device, never sent.                    |
 
 What it deliberately doesn't hold: which prompt, cleanup instruction or key terms to send, where the
-key, the key terms or the shortcuts are stored, or the `User-Agent`. Those are the app's choices and live in `BlurtEngine`
-(`AssemblyAITranscriber`, `KeyTermsStore`, `TextShortcutStore`, `APIKeyValidator.blurt()`).
+key or the key terms are stored, the `User-Agent`, or anything done to the text on the device (text
+shortcuts, `TextShortcutExpander`). Those are the app's choices and live in `BlurtEngine`
+(`AssemblyAITranscriber`, `KeyTermsStore`, `TextShortcuts.swift`, `APIKeyValidator.blurt()`).
 
 Tests run with the engine's: `swift test` from the repo root.

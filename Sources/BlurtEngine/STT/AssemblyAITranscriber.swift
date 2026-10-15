@@ -13,7 +13,7 @@ import os
 /// **Every request asks for that rewrite** — `llm_instruction` rides the config
 /// unconditionally, and the config carries no on/off switch at all. Which of the
 /// two transcripts gets pasted is decided on the *response*, by the "enhanced
-/// transcripts" setting (on by default): see `transcript(from:)`, which also
+/// transcripts" setting (on by default): see `transcript(from:enhanced:)`, which also
 /// states what that costs a user who has it off.
 /// No upload step, no job submission, no polling — one
 /// request per utterance covers transcription *and* cleanup. `config` leads the
@@ -116,10 +116,13 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     // text before the cursor) and the key terms as keyterms prompting. App name,
     // window title, field label and selected text stay on the machine —
     // `STTPrompt` draws that line, so nothing is filtered here.
+    // Read once, so a mid-recording flip can't split the request from the paste.
+    let enhanced = enhancedTranscriptsEnabled()
     let config = try makeConfigData(
       sampleRate: sampleRate,
       sttPrompt: STTPrompt.text(context: context),
-      keytermsPrompt: KeyTerms.fitted(context?.keyTerms ?? []))
+      keytermsPrompt: KeyTerms.fitted(context?.keyTerms ?? []),
+      enhanced: enhanced)
 
     var request = URLRequest(url: baseURL.appending(path: Self.transcribePath))
     request.httpMethod = "POST"
@@ -146,7 +149,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
       throw AssemblyAIError.malformedResponse
     }
     Self.logServerMetrics(response)
-    return transcript(from: response)
+    return transcript(from: response, enhanced: enhanced)
   }
 
   /// Which of the two transcripts in the response to paste.
@@ -171,8 +174,8 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// slipping through would strand the utterance — the pipeline drops a
   /// whitespace-only transcript to `.idle` without pasting or reporting, wasting
   /// the good verbatim `text` beside it.
-  private func transcript(from response: DictationResponse) -> String {
-    guard enhancedTranscriptsEnabled() else { return response.text }
+  private func transcript(from response: DictationResponse, enhanced: Bool) -> String {
+    guard enhanced else { return response.text }
     if let rewrite = response.llmResponse.trimmedNonEmpty() { return rewrite }
     if let error = response.llmError {
       Self.log.warning(
@@ -250,14 +253,15 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// alongside it — see `STTPrompt`. The cleanup instruction is
   /// `cleanupInstruction()`'s and rides every request, whatever the
   /// enhanced-transcripts setting says — that switch is applied to the response,
-  /// in `transcript(from:)`. Internal so tests can assert the
+  /// in `transcript(from:enhanced:)`. Internal so tests can assert the
   /// config wiring without inspecting the multipart upload body (which
   /// `URLProtocol` mocks can't observe reliably for `upload(from:)`).
   /// Neither steering field is defaulted: every caller states both, so what a
   /// given request does and does not steer with is readable at the call site
   /// rather than inferred from which argument was left off.
+  /// `enhanced` is the request's reading of the setting; nil reads it now.
   func makeConfigData(
-    sampleRate: Int, sttPrompt: String, keytermsPrompt: [String]
+    sampleRate: Int, sttPrompt: String, keytermsPrompt: [String], enhanced: Bool? = nil
   ) throws -> Data {
     try JSONEncoder().encode(
       DictationConfig(
@@ -266,9 +270,8 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
         sttPrompt: sttPrompt,
         keytermsPrompt: keytermsPrompt,
         llmInstruction: cleanupInstruction(),
-        // Only while the rewrite is what gets pasted: with enhanced transcripts
-        // off it is discarded unread, so a slower model would only add latency.
-        rewriteMode: enhancedTranscriptsEnabled() ? rewriteMode().wireValue : nil
+        // Only while the rewrite is pasted: off, a slower model only adds latency.
+        rewriteMode: (enhanced ?? enhancedTranscriptsEnabled()) ? rewriteMode().wireValue : nil
       )
     )
   }
