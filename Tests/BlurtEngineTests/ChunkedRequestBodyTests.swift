@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 
+@testable import AssemblyAI
 @testable import BlurtEngine
 
 /// The upload's transport half: the bound-pair body pipe, the send policy that

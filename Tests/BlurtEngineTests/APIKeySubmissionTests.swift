@@ -1,5 +1,6 @@
 import Testing
 
+@testable import AssemblyAI
 @testable import BlurtEngine
 
 /// The validate-then-save flow behind the Save/Update button. The invariant

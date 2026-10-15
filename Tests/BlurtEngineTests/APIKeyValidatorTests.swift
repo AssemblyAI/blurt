@@ -1,6 +1,8 @@
 import Foundation
+import Synchronization
 import Testing
 
+@testable import AssemblyAI
 @testable import BlurtEngine
 
 // The `APIKeyValidator` half of the `HTTPClientTests` suite. Kept on the same
@@ -120,9 +122,21 @@ extension HTTPClientTests {
     #expect(hits.value == 0)
   }
 
+  @Test("the SDK's validator sends only the agent it's given; Blurt's comes from .blurt()")
+  func validatorAgentIsTheCallers() async {
+    let agents = Mutex<[String?]>([])
+    let transport = FakeHTTPTransport { request in
+      agents.withLock { $0.append(request.value(forHTTPHeaderField: "User-Agent")) }
+      return (200, json(["page_number": "1"]))
+    }
+    #expect(await APIKeyValidator(transport: transport).validate("k") == .valid)
+    #expect(await APIKeyValidator(transport: transport, userAgent: "MyApp/1.0").validate("k") == .valid)
+    #expect(agents.withLock { $0 } == [nil, "MyApp/1.0"])
+  }
+
   // MARK: - helpers
 
   private func makeValidator(_ transport: any HTTPTransport) -> APIKeyValidator {
-    APIKeyValidator(transport: transport)
+    APIKeyValidator.blurt(transport: transport)
   }
 }

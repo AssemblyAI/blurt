@@ -1,3 +1,4 @@
+import AssemblyAI
 import Foundation
 import os
 

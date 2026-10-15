@@ -288,7 +288,7 @@
 		A0DEFAB5DF5E5C7A6146A559 /* juno-90-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DA27B927EB6616D017D910CD /* juno-90-stop.m4a */; };
 		A13335FE97FA2E60A4F5CABC /* ReadyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 383E03AB60BA21AAD92655D5 /* ReadyView.swift */; };
 		A1C101543CA3972691DF5367 /* rom1a-30-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 7FC3A25550C39659E3E00A11 /* rom1a-30-start.m4a */; };
-		A34A51EDE26BC24EB08A3900 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 3BE06CE59B6A662701C56CE5 /* Sparkle */; };
+		A34A51EDE26BC24EB08A3900 /* AssemblyAI in Frameworks */ = {isa = PBXBuildFile; productRef = 07F3519DF8F73DA30C8E55EB /* AssemblyAI */; };
 		A3D012E25BD52949E2452B7B /* juno-17-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F37D9EAC78D140EE0CD438F2 /* juno-17-start.m4a */; };
 		A487D7B801A44C51807E0DCB /* rom1a-28-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = AC2E79FB5ACE247FF90F50E4 /* rom1a-28-stop.m4a */; };
 		A5D51CD762229A68757463C8 /* CueSoundPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D222ED050CC93DEB330E773 /* CueSoundPlayer.swift */; };
@@ -379,6 +379,7 @@
 		D4782F83F43693371724011D /* rom1b-23-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = EAB0871FD8CB94A4DCF837CC /* rom1b-23-start.m4a */; };
 		D5927A391D26CAB212D6FBB4 /* rom1b-3-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 49CD6A6815EDDB16BBBCCCB2 /* rom1b-3-start.m4a */; };
 		D5A84975628548A076CEB3D7 /* juno-118-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 92387F60666853C0AA1BF0B5 /* juno-118-stop.m4a */; };
+		D6DFF322638007525EBA02B2 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 3BE06CE59B6A662701C56CE5 /* Sparkle */; };
 		D750C1BF16502EEC92182ECD /* PermissionsStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8DE60178ABA2CC7F4EB6401 /* PermissionsStepView.swift */; };
 		D779D9FD904DA9DDC241DA5F /* juno-70-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = AD5F1BDEB1DB3658DDB96247 /* juno-70-start.m4a */; };
 		D7CCAEAF551027586E39A032 /* juno-4-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 63189CC345106B1D56960B1E /* juno-4-start.m4a */; };
@@ -912,7 +913,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				0A7FB8A90BB7E7A5110A4F4D /* BlurtEngine in Frameworks */,
-				A34A51EDE26BC24EB08A3900 /* Sparkle in Frameworks */,
+				A34A51EDE26BC24EB08A3900 /* AssemblyAI in Frameworks */,
+				D6DFF322638007525EBA02B2 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1535,6 +1537,7 @@
 			name = Blurt;
 			packageProductDependencies = (
 				371215E93A9C2CE60C6347BB /* BlurtEngine */,
+				07F3519DF8F73DA30C8E55EB /* AssemblyAI */,
 				3BE06CE59B6A662701C56CE5 /* Sparkle */,
 			);
 			productName = Blurt;
@@ -2481,6 +2484,10 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		07F3519DF8F73DA30C8E55EB /* AssemblyAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AssemblyAI;
+		};
 		371215E93A9C2CE60C6347BB /* BlurtEngine */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = BlurtEngine;

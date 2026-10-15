@@ -1,5 +1,6 @@
 import Foundation
 
+@testable import AssemblyAI
 @testable import BlurtEngine
 
 /// Scaffolding shared by the transcriber suites, in `Stubs/` for the same reason

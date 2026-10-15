@@ -2,6 +2,7 @@ import Foundation
 import Synchronization
 import Testing
 
+@testable import AssemblyAI
 @testable import BlurtEngine
 
 @Suite("AssemblyAISpeechSynthesizer wire format")

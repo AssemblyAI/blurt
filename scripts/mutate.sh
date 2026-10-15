@@ -46,7 +46,7 @@ cd "$REPO_ROOT"
 # (nothing exercises those lines) that drown the real signal.
 DEFAULT_TARGETS=(
   "Sources/BlurtEngine/Config/APIKeyDisplay.swift"
-  "Sources/BlurtEngine/Config/APIKeyValidator.swift"
+  "Sources/AssemblyAI/APIKeyValidator.swift"
   "Sources/BlurtEngine/FocusCapture/FocusCapture+Pure.swift"
   "Sources/BlurtEngine/Hotkey/DictationKeyGate.swift"
   "Sources/BlurtEngine/Hotkey/DictationKeyRouter.swift"

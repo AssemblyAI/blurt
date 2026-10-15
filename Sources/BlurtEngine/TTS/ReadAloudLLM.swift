@@ -1,3 +1,4 @@
+import AssemblyAI
 import Foundation
 
 /// Read-aloud's two LLM jobs, each one `POST /v1/chat/completions` to

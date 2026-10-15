@@ -180,6 +180,9 @@ targets:
     dependencies:
       - package: BlurtEngine
         product: BlurtEngine
+      # The AssemblyAI SDK library (the key validator's types live there).
+      - package: BlurtEngine
+        product: AssemblyAI
       - package: Sparkle
         product: Sparkle
     postBuildScripts:

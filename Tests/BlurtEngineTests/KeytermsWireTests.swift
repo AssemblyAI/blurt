@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 
+@testable import AssemblyAI
 @testable import BlurtEngine
 
 /// The two steering fields of the dictation `config`, as they actually encode:
@@ -150,7 +151,7 @@ extension HTTPClientTests {
   /// One config carrying `llmInstruction` and nothing else optional, re-parsed.
   private func rewriteConfig(_ instruction: String?) throws -> [String: Any] {
     let data = try JSONEncoder().encode(
-      AssemblyAITranscriber.DictationConfig(
+      DictationConfig(
         sampleRate: 16_000, channels: 1, sttPrompt: "", keytermsPrompt: [],
         llmInstruction: instruction))
     return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])

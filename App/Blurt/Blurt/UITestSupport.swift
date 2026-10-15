@@ -1,6 +1,7 @@
 #if UITEST_HOOKS
 
   import AppKit
+  import AssemblyAI
   import BlurtEngine
   import Foundation
   import Observation
