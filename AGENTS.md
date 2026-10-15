@@ -1021,6 +1021,10 @@ Engine-side stores, all `UserDefaults`-backed value types with the same shape:
   **`EnhancedTranscriptsStore`** (`BlurtEnhancedTranscripts`, **on** by default — unset reads as
   enabled; picks the cleanup rewrite over the verbatim transcript in the dictation _response_,
   re-read at every request — it shapes no part of the request),
+  **`RewriteModeStore`** (`BlurtRewriteMode`, `RewriteMode.fast` by default — unset or unknown
+  reads as Fast; Smart sends `config.rewrite_mode: "smart"` for the larger rewrite model, Fast
+  omits the key so the default request is unchanged, and nothing is sent while enhanced
+  transcripts are off; re-read at every request),
   **`StyleProfileStore`** (three keys: `BlurtStyleProfiles`, the JSON list of up to
   `profileLimit` (4) named `StyleProfile`s; `BlurtActiveStyleProfile`, the id of the one in
   effect, or the `defaultStyleID` sentinel when the user has selected **Default** — base

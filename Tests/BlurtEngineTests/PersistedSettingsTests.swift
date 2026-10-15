@@ -20,6 +20,7 @@ struct PersistedSettingsTests {
     // the other direction too: a stray `false` surviving a reset would leave a
     // "clean" install pasting verbatim transcripts.
     #expect(PersistedSettings.allDefaultsKeys.contains(EnhancedTranscriptsStore.defaultsKey))
+    #expect(PersistedSettings.allDefaultsKeys.contains(RewriteModeStore.defaultsKey))
     // Three keys for the style profiles: the list, the active pointer, and the
     // pre-profiles single field `StyleProfileStore` still reads. The legacy one
     // belongs to the sweep too — a reset that left it behind would have a
@@ -43,11 +44,11 @@ struct PersistedSettingsTests {
 
   @Test("the roster carries no stale or duplicate keys")
   func rosterHasNoStrays() {
-    // Exactly the thirteen known stores' keys (OverlayOriginStore and
+    // Exactly the fourteen known stores' keys (OverlayOriginStore and
     // ReadAloudStyleStore contribute two each, StyleProfileStore three): a removed store
     // must leave the roster in the same change, and a key listed twice would hint
     // at a copy-paste slip.
-    #expect(PersistedSettings.allDefaultsKeys.count == 17)
+    #expect(PersistedSettings.allDefaultsKeys.count == 18)
     #expect(Set(PersistedSettings.allDefaultsKeys).count == PersistedSettings.allDefaultsKeys.count)
   }
 
@@ -66,6 +67,7 @@ struct PersistedSettingsTests {
       KeyTermsStore.defaultsKey,
       DeveloperModeStore.defaultsKey,
       EnhancedTranscriptsStore.defaultsKey,
+      RewriteModeStore.defaultsKey,
       StyleProfileStore.defaultsKey,
       StyleProfileStore.activeDefaultsKey,
       StyleProfileStore.legacyDefaultsKey,
@@ -81,7 +83,7 @@ struct PersistedSettingsTests {
     #expect(storeKeys == Set(DefaultsKey.allCases.map(\.key)))
     // No two stores sharing a slot — the Set above would have quietly absorbed a
     // collision, and two stores on one key means each overwrites the other.
-    #expect(storeKeys.count == 17)
+    #expect(storeKeys.count == 18)
   }
 
   @Test("resetAll clears every roster key and leaves unrelated ones alone")
