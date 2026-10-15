@@ -60,8 +60,7 @@ struct BlurtiOSApp: App {
   }
 
   private var home: some View {
-    HomeView(coordinator: coordinator)
-      .onOpenURL { coordinator.handle($0) }
+    MainView(coordinator: coordinator)
       .task { await start() }
   }
 

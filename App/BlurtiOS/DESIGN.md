@@ -179,7 +179,11 @@ point sizes throughout, as the system keyboard's; no Dynamic Type.
 | `size/label`         | `12`       | `Typography.sizeLabel`        | the mono word labels on keys: 123, ABC, #+=, space, the return label              |
 | `size/legend`        | `16`       | `Typography.sizeLegend`       | every other key                                                                   |
 | `size/letter`        | `24`       | `Typography.sizeLetter`       | letter keys: the iPhone's (estimated from the l glyph, apple-geometry.json)       |
+| `size/pill-glyph`    | `10`       | `Typography.sizePillGlyph`    | the × on a key-term pill                                                          |
 | `size/popup`         | `32`       | `Typography.sizePopup`        | the letter pop-up                                                                 |
+| `size/remove-glyph`  | `12`       | `Typography.sizeRemoveGlyph`  | the × on a text-shortcut row                                                      |
+| `size/tab-icon`      | `18`       | `Typography.sizeTabIcon`      | a tab's icon                                                                      |
+| `size/tab-label`     | `11`       | `Typography.sizeTabLabel`     | a tab's mono label                                                                |
 | `size/term`          | `17`       | `Typography.sizeTerm`         | the key-term field                                                                |
 | `size/title`         | `34`       | `Typography.sizeTitle`        | the app's serif headline                                                          |
 | `tracking/cta`       | `1.4`      | `Typography.trackingCta`      | uppercase mono at 14: the brand's E2 tracking                                     |
@@ -370,7 +374,7 @@ against the request's cap of 100 terms.
 
 ## Sharing key terms
 
-Settings → Transcription → **Share key terms…** puts the list in the share
+Words → Key terms → **Share key terms** puts the list in the share
 sheet as a `.blurtterms` file (JSON — `name`, `from`, `terms`; a declared
 document type, `com.assemblyai.blurt.terms`) with the words as the message text. A
 tap on the file in Messages opens Blurt with "Add N key terms?": every term
@@ -530,12 +534,19 @@ pins the derivation.
 | `app/hero-gap`               | `14`      | `Metrics.appHeroGap`               | between the hero's pieces                                                                                                                                                                                                                                           |
 | `app/hero-pad`               | `20`      | `Metrics.appHeroPad`               | inside the hero card                                                                                                                                                                                                                                                |
 | `app/icon`                   | `20`      | `Metrics.appIcon`                  | the header's gear, the copy glyph                                                                                                                                                                                                                                   |
+| `app/input-pad-y`            | `10`      | `Metrics.appInputPadY`             | an app input's top and bottom (its sides are app/chip-pad-x)                                                                                                                                                                                                        |
 | `app/line-gap`               | `6`       | `Metrics.appLineGap`               | between lines of one thought                                                                                                                                                                                                                                        |
 | `app/page-pad`               | `20`      | `Metrics.appPagePad`               | the screens' side padding                                                                                                                                                                                                                                           |
+| `app/pill-pad-y`             | `4`       | `Metrics.appPillPadY`              | a key-term pill's top and bottom, and its side beside the ×                                                                                                                                                                                                         |
+| `app/pill-remove`            | `24`      | `Metrics.appPillRemove`            | the × on a key-term pill: its tap square                                                                                                                                                                                                                            |
 | `app/preview-gap`            | `8`       | `Metrics.appPreviewGap`            | between the theme card's two faces                                                                                                                                                                                                                                  |
+| `app/row-pad-y`              | `8`       | `Metrics.appRowPadY`               | a list row's top and bottom inside a card                                                                                                                                                                                                                           |
+| `app/row-remove`             | `32`      | `Metrics.appRowRemove`             | the × on a text-shortcut row: its tap square                                                                                                                                                                                                                        |
 | `app/section-gap`            | `24`      | `Metrics.appSectionGap`            | between the home screen's sections                                                                                                                                                                                                                                  |
 | `app/setup-number-width`     | `24`      | `Metrics.appSetupNumberWidth`      | the setup steps' mono numerals                                                                                                                                                                                                                                      |
 | `app/stack-gap`              | `12`      | `Metrics.appStackGap`              | between a section's eyebrow and its content, and between cards                                                                                                                                                                                                      |
+| `app/tab-gap`                | `4`       | `Metrics.appTabGap`                | between a tab's icon and its label                                                                                                                                                                                                                                  |
+| `app/tab-height`             | `52`      | `Metrics.appTabHeight`             | a tab in the brand tab bar: its icon over its mono label                                                                                                                                                                                                            |
 | `card/border`                | `1`       | `Metrics.cardBorder`               | the card's hairline                                                                                                                                                                                                                                                 |
 | `card/radius`                | `12`      | `Metrics.cardRadius`               | the app's cards (radius/card)                                                                                                                                                                                                                                       |
 | `caret/height`               | `20`      | `Metrics.caretHeight`              | —                                                                                                                                                                                                                                                                   |
@@ -572,7 +583,7 @@ pins the derivation.
 | `margin/bottom-keys`         | `13`      | `Metrics.marginBottomKeys`         | under a bottom row of keys (the full keyboard, the panel): the iPhone's                                                                                                                                                                                             |
 | `margin/side`                | `6.5`     | `Metrics.marginSide`               | at the keyboard's sides: the iPhone's cap margin, (402 − 10 letters − 9 gaps) / 2                                                                                                                                                                                   |
 | `margin/vertical`            | `8`       | `Metrics.marginVertical`           | the keyboard's top, and the slim bar's bottom                                                                                                                                                                                                                       |
-| `opacity/disabled`           | `0.4`     | `Metrics.opacityDisabled`          | the + without Full Access                                                                                                                                                                                                                                           |
+| `opacity/disabled`           | `0.4`     | `Metrics.opacityDisabled`          | the + without Full Access; a brand button that can't be pressed yet                                                                                                                                                                                                 |
 | `opacity/glint`              | `0.95`    | `Metrics.opacityGlint`             | the cross glint when the words land                                                                                                                                                                                                                                 |
 | `opacity/grain-dark`         | `0.14`    | `Metrics.opacityGrainDark`         | film grain over the dark face: matte, the brand's texture                                                                                                                                                                                                           |
 | `opacity/grain-light`        | `0.08`    | `Metrics.opacityGrainLight`        | film grain over the light face: paper, lighter                                                                                                                                                                                                                      |
@@ -676,6 +687,20 @@ row (Cam's rule) and a hairline one beside it, a colour change on press and
 never a lift. Glyphs are SF Symbols — the platform's — where the web brand
 uses Material Symbols.
 
+**Tabs** (`MainView`, `BrandTabBar`): Dictate and Words under the brand tab
+bar — each tab's icon over its mono label, the selected one in the accent, a
+hairline above. Settings opens from either tab's gear; the consent sheet and a
+shared key-term list arrive whichever tab is showing (a list switches to Words).
+
+**Words** (`WordsView`, `WordsEdit`): the serif `Words` headline and the gear;
+two cards. `KEY TERMS`: the terms as pills (full radius, the page's fill, a
+hairline, × to remove; `FlowLayout`), an input and `ADD` (commas add several;
+duplicates of any case drop; 100 at most, the request's cap), the count and the
+contact names that come along, and Share. `TEXT SHORTCUTS`: each phrase in mono
+accent over its replacement, × to remove, between hairlines; two inputs and
+`ADD SHORTCUT` (re-adding a phrase replaces it). Brand buttons fade while
+disabled (`opacity/disabled`).
+
 **Home** (`HomeView`, `HomeHero`, `SetupCard`, `StyleChips`, `RecentSection`,
 `HomeStatus` for the words): the setup card only while something is missing,
 its three steps numbered `01 02 03` in mono; the hero — `STATUS`, the
@@ -689,8 +714,7 @@ time, a copy button); `POWERED BY ASSEMBLYAI`.
 
 **Settings** (`SettingsView`): a form on the page, its sections under
 eyebrows — Keyboard (layout, theme, hands-free), Listening (the window),
-Transcription (enhanced transcripts, output styles, key terms with the
-contact-name count, sharing), Account (the API key, and where to get one),
+Transcription (enhanced transcripts, output styles), Account (the API key, and where to get one),
 About (with AssemblyAI's privacy policy). The theme picker shows each theme's
 two faces side by side. Styles, the import sheet, the key entry and the consent
 sheet share the form's chrome (`brandForm()`).

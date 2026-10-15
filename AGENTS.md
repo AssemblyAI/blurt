@@ -106,7 +106,7 @@ App/BlurtiOS/                the iPhone app and its keyboard (README.md there is
                              SwiftUI, no audio; `package` access; coverage-gated (ios-test.sh)
   BlurtiOS/Sources/          the app: DictationCoordinator (composition root), ListeningWindow +
                              WindowedAudioSource (the always-on capture, since iOS can't open
-                             the mic from the background), HomeView and the other screens
+                             the mic from the background), MainView (Dictate and Words tabs) and the screens
   BlurtKeyboard/Sources/     the keyboard's views: a remote control that inserts the words; three
                              layouts (slim bar / panel / full keyboard) over BlurtiOSCore's model
   BlurtDesign/               the component library both targets link: the generated DesignTokens,
