@@ -1,5 +1,4 @@
-#!/usr/bin/env swift  // The design's one source of numbers and colours, fanned out: reads  // App/BlurtiOS/Design/tokens.json (hand-edited: it is the  // source, not an export) and writes everything that used to repeat those values by  // hand — `App/BlurtiOS/Shared/DesignTokens.swift`, the generated tables in  // `App/BlurtiOS/DESIGN.md`, and the app's three asset-catalog colour sets. Run
-// through scripts/design-sync.sh, which also formats the output and, with
+#!/usr/bin/env swift  // The design's one source of numbers and colours, fanned out: reads  // App/BlurtiOS/Design/tokens.json (hand-edited: it is the  // source, not an export) and writes everything that used to repeat those values by  // hand — `App/BlurtiOS/BlurtDesign/DesignTokens.swift`, the generated tables in  // `App/BlurtiOS/DESIGN.md`, and the app's three asset-catalog colour sets. Run  // through scripts/design-sync.sh, which also formats the output and, with
 // --check, fails on drift the way check.sh fails on a stale .pbxproj.
 //
 //   swift scripts/design-tokens.swift [--root <dir>]
@@ -34,7 +33,7 @@ while !arguments.isEmpty {
 }
 
 let tokensPath = "App/BlurtiOS/Design/tokens.json"
-let swiftPath = "App/BlurtiOS/Shared/DesignTokens.swift"
+let swiftPath = "App/BlurtiOS/BlurtDesign/DesignTokens.swift"
 let designPath = "App/BlurtiOS/DESIGN.md"
 let catalogPath = "App/BlurtiOS/BlurtiOS/Assets.xcassets"
 
@@ -243,25 +242,26 @@ var swift = """
   /// (`Design/tokens.json`): what the views draw with, what DESIGN.md's tables
   /// say, and what the asset catalog holds, all from the same file. Swift names
   /// follow the token names by one rule (`kb/key-modifier` → `kbKeyModifier`).
-  enum DesignTokens {
+  /// `package`: BlurtDesign's, read by the app, the keyboard and the tests.
+  package enum DesignTokens {
 
   """
 
 for group in groups {
-  swift += "  enum \(typeName(group)) {\n"
+  swift += "  package enum \(typeName(group)) {\n"
   for token in tokens where token.group == group {
     let (type, literal) = swiftLiteral(token)
     let use = token.use.map { $0 } ?? (token.value.isAlias ? "`\(aliasTarget(token))`" : nil)
     swift += docComment(use, indent: "    ")
-    swift += "    nonisolated static let \(token.swiftName): \(type) = \(literal)\n"
+    swift += "    package nonisolated static let \(token.swiftName): \(type) = \(literal)\n"
   }
   swift += "  }\n\n"
 }
 
-swift += "  enum Gradients {\n"
+swift += "  package enum Gradients {\n"
 for gradient in gradients {
   swift += docComment(gradient.use, indent: "    ")
-  swift += "    nonisolated static let \(camel(gradient.name)) = LinearGradient(\n      stops: [\n"
+  swift += "    package nonisolated static let \(camel(gradient.name)) = LinearGradient(\n      stops: [\n"
   for stop in gradient.stops {
     swift += "        .init(color: \(swiftColorReference(stop.color)), location: \(format(stop.location))),\n"
   }
@@ -272,7 +272,7 @@ swift += "  }\n\n"
 swift += """
     /// Every token as `group.name: value`, the way tokens.json renders it, so a
     /// test can pin the compiled values to the file (`DesignTokensTests`).
-    nonisolated static let manifest: [String: String] = [
+    package nonisolated static let manifest: [String: String] = [
 
   """
 for token in tokens {

@@ -1,3 +1,4 @@
+import BlurtDesign
 import BlurtiOSCore
 import SwiftUI
 import UIKit

@@ -1,9 +1,43 @@
 import Foundation
 
+/// One spoken phrase and the text it expands to — "personal email" →
+/// `me@example.com`. Applied to the finished transcript on the device, after
+/// the dictation response and before the text is inserted
+/// (`TextShortcutExpander`); nothing about a shortcut goes on the wire.
+///
+/// The `id` is minted once so a list and its editor can track a row across a
+/// rename of its trigger.
+public struct TextShortcut: Codable, Identifiable, Hashable, Sendable {
+  public let id: UUID
+  public var trigger: String
+  public var expansion: String
+
+  public init(trigger: String, expansion: String) {
+    self.init(id: UUID(), trigger: trigger, expansion: expansion)
+  }
+
+  public init(id: UUID, trigger: String, expansion: String) {
+    self.id = id
+    self.trigger = trigger
+    self.expansion = expansion
+  }
+
+  /// The identity two triggers share when the expander can't tell them apart:
+  /// letters and digits only, lowercased, with the separators dropped — it
+  /// treats any separator run (or none) between words as equal, so "personal
+  /// email", "Personal-Email" and "personalemail" are one phrase. Empty for a
+  /// trigger with no letters or digits, which can never match anything. A list
+  /// should hold one shortcut per key: two expansions for one phrase could
+  /// only ever apply one of them.
+  public static func matchKey(for trigger: String) -> String {
+    TextShortcutExpander.words(in: trigger).joined().lowercased()
+  }
+}
+
 /// Replaces each spoken shortcut trigger in a finished transcript with its
 /// expansion — "my handle is personal GitHub" → "my handle is
 /// https://github.com/…". Pure and local: it runs on the text the dictation API
-/// returned, between the response and the paste.
+/// returned, between the response and the insertion.
 ///
 /// Matching is forgiving about what the transcription and the cleanup rewrite
 /// do to a phrase, and strict about where it starts and ends:
@@ -14,7 +48,7 @@ import Foundation
 ///   aren't letters or digits, or none at all — so "link tree" also matches
 ///   "Linktree", "cal.com" matches "Cal com", and "mom's address" matches
 ///   "Mom’s address". Only letters and digits in the trigger are significant,
-///   which is exactly what `TextShortcutStore.matchKey` dedupes on.
+///   which is exactly what `TextShortcut.matchKey` identifies a trigger by.
 /// - **Never across a sentence or clause break**: sentence punctuation
 ///   (`.,!?;:`) followed by whitespace ends the run, so "work email" leaves "my
 ///   work. Email me" alone while "cal.com" still matches.
@@ -23,7 +57,7 @@ import Foundation
 ///
 /// One pass over the text, longest trigger first, so an expansion is never
 /// itself re-expanded and "personal email work" wins over "personal email".
-enum TextShortcutExpander {
+public enum TextShortcutExpander {
   /// What counts as part of a word — the regex spelling of
   /// `CharacterSet.alphanumerics` (letters, marks, digits), which `words(in:)`
   /// splits on.
@@ -39,7 +73,7 @@ enum TextShortcutExpander {
   private static let separatorRun =
     "(?:[^\(wordClass)\(sentencePunctuation)]|[\(sentencePunctuation)](?!\\s))*"
 
-  static func expand(_ text: String, using shortcuts: [TextShortcut]) -> String {
+  public static func expand(_ text: String, using shortcuts: [TextShortcut]) -> String {
     // Longest first, so a trigger that extends another claims the text before
     // its prefix can. Group i+1 of `alternation` is `ordered[i]`.
     let ordered = shortcuts.compactMap { shortcut in pattern(for: shortcut.trigger).map { (shortcut, $0) } }
@@ -50,7 +84,7 @@ enum TextShortcutExpander {
     // A trigger standing alone — surrounding whitespace and closing punctuation
     // aside — becomes exactly its expansion: a trailing period glued to an
     // address or URL is never what someone dictating a snippet on its own
-    // wanted. The whitespace is kept so the paste separator logic sees the same
+    // wanted. The whitespace is kept so an insertion's separator logic sees the same
     // shape.
     let source = text as NSString
     let whole = NSRange(location: 0, length: source.length)
@@ -85,18 +119,18 @@ enum TextShortcutExpander {
   }
 
   /// `text` with every expansion in it put back to its trigger — the inverse of
-  /// `expand`, for the text before the caret that `STTPrompt` sends. After a
-  /// shortcut is pasted the field *holds* the saved replacement, and the next
+  /// `expand`, for the text before the caret sent as `stt_prompt`. After a
+  /// shortcut is inserted the field *holds* the saved replacement, and the next
   /// press reads it back; this keeps it local.
   ///
-  /// Literal and case-sensitive, since the field holds exactly what was pasted.
+  /// Literal and case-sensitive, since the field holds exactly what was inserted.
   /// Longest expansion first, so one that contains another is caught whole. The
   /// capture reads only the last few hundred characters, so a long expansion can
   /// arrive with its head cut off: a tail of one (at least
   /// `minimumClippedOverlap` long) at the very start of `text` counts too.
   /// Replaced with the trigger rather than nothing, so the prompt still reads as
   /// the continuous passage it is.
-  static func redactingExpansions(in text: String, using shortcuts: [TextShortcut]) -> String {
+  public static func redactingExpansions(in text: String, using shortcuts: [TextShortcut]) -> String {
     var result = text
     for shortcut in shortcuts.sorted(by: { $0.expansion.count > $1.expansion.count }) {
       let expansion = shortcut.expansion

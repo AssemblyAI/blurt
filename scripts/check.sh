@@ -429,7 +429,7 @@ check_invariants() {
 run_check "settled decisions (AGENTS.md invariants)" check_invariants
 
 # The design's one source (App/BlurtiOS/Design/tokens.json) and everything
-# generated from it — Shared/DesignTokens.swift, DESIGN.md's token tables, the
+# generated from it — BlurtDesign/DesignTokens.swift, DESIGN.md's token tables, the
 # app's three colour sets — must agree, and the keyboard's views must carry no
 # design literal that belongs in the tokens. scripts/design-sync.sh --check
 # regenerates into .build/ and diffs, the same shape as the xcodegen drift

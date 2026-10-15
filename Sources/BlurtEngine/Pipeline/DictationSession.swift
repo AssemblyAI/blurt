@@ -1,3 +1,4 @@
+import AssemblyAI
 // `Dispatch`, not `Foundation`: the only thing here from outside the module is
 // `contextQueue`'s and `commandQueue`'s `DispatchQueue`, the same choice
 // `+Press.swift` documents. Foundation's last use here went with `mic.stop()`
@@ -47,9 +48,8 @@ public actor DictationSession {
   let injector: InjectorProtocol
   /// Supplies the user's key terms (domain vocabulary) at press time, so each
   /// utterance's request boosts those spellings — as its own `keyterms_prompt` field
-  /// (`KeytermsBoost`), not as part of the conversation context. A closure, rather
-  /// than a stored list, so edits in Settings take effect on the next dictation
-  /// without rebuilding the session. Defaults to reading `KeyTermsStore`.
+  /// (`KeyTerms`), not as part of the conversation context. A closure, so edits in
+  /// Settings apply to the next dictation without rebuilding the session. Defaults to `KeyTermsStore`.
   let keyTermsProvider: @Sendable () -> [String]
   /// Names the style a completed dictation was made with, recorded onto its
   /// `RecentDictations.Entry` (the row's trailing style chip). `nil` means no

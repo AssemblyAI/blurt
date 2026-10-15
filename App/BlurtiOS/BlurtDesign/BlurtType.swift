@@ -6,17 +6,17 @@ import SwiftUI
 /// headlines; the default face for body text. Call sites name the role, never
 /// a face. Fixed point sizes throughout, as the system keyboard's are — no
 /// Dynamic Type.
-enum BlurtType {
+package enum BlurtType {
   /// Eyebrows, CTAs, the keyboard's word labels.
-  nonisolated static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+  package nonisolated static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
     .system(size: size, weight: weight, design: .monospaced)
   }
 
   /// The app's headlines, sentence case.
-  nonisolated static func heading(_ size: CGFloat) -> Font { .system(size: size, design: .serif) }
+  package nonisolated static func heading(_ size: CGFloat) -> Font { .system(size: size, design: .serif) }
 
   /// The app's body text.
-  nonisolated static func body(_ size: CGFloat, bold: Bool = false) -> Font {
+  package nonisolated static func body(_ size: CGFloat, bold: Bool = false) -> Font {
     .system(size: size, weight: bold ? .bold : .regular)
   }
 }

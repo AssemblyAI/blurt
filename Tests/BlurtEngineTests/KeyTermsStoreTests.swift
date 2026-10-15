@@ -3,36 +3,6 @@ import Testing
 
 @testable import BlurtEngine
 
-@Suite("KeyTermsStore.parse")
-struct KeyTermsStoreTests {
-  @Test("nil and blank input yield no terms")
-  func emptyInputs() {
-    #expect(KeyTermsStore.parse(nil).isEmpty)
-    #expect(KeyTermsStore.parse("").isEmpty)
-    #expect(KeyTermsStore.parse("   ,  , \n").isEmpty)
-  }
-
-  @Test("comma-separated input splits and trims each term")
-  func splitsAndTrims() {
-    #expect(KeyTermsStore.parse("AssemblyAI, Kubernetes ,  Anthropic") == ["AssemblyAI", "Kubernetes", "Anthropic"])
-  }
-
-  @Test("blank entries between commas are dropped")
-  func dropsBlanks() {
-    #expect(KeyTermsStore.parse("foo,,bar, ,baz") == ["foo", "bar", "baz"])
-  }
-
-  @Test("duplicates are removed case-insensitively, keeping the first spelling")
-  func dedupesCaseInsensitively() {
-    #expect(KeyTermsStore.parse("Blurt, blurt, BLURT, Slack") == ["Blurt", "Slack"])
-  }
-
-  @Test("multi-word terms survive (only commas split)")
-  func multiWordTerms() {
-    #expect(KeyTermsStore.parse("San Francisco, New York") == ["San Francisco", "New York"])
-  }
-}
-
 /// The read side, against an isolated defaults suite like every other store's
 /// suite (`freshDefaults()`). Each case writes the defaults slot directly, which
 /// is exactly how production writes it: the store has no setter, and the Settings
