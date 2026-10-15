@@ -31,6 +31,8 @@ enum DefaultsKey: String, CaseIterable {
   case keyTerms = "KeyTerms"
   case developerMode = "DeveloperMode"
   case enhancedTranscripts = "EnhancedTranscripts"
+  /// Which model the cleanup rewrite runs on (`RewriteModeStore`).
+  case rewriteMode = "RewriteMode"
   /// The pre-profiles single custom-style field. `StyleProfileStore` still
   /// *reads* it — an install that predates profiles has its text here and no
   /// list — so the case stays, and its raw value with it.
