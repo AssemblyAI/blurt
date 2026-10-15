@@ -322,6 +322,9 @@ The update window shows the appcast item's `<description>`, which
   - no developer leakage: PR numbers, `chore:`/`fix:` prefixes, backticks,
     filenames, `snake_case` or `camelCase` identifiers (real product names like
     macOS or YouTube are allow-listed in `RELEASE_NOTES_PROPER_NOUNS`).
+- **The GitHub release shows them too.** `release-publish.sh` puts the same
+  notes at the top of the release page, with GitHub's generated "What's Changed"
+  PR list and the checksums below them.
 
 The staging fallback measures from tags, so the build job checks out with full
 history; on a shallow checkout that path fails fast.
