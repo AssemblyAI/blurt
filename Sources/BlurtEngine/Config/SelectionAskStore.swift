@@ -6,9 +6,10 @@ import Foundation
 /// answer is read aloud (`SelectionSpeechRouting`, `SelectionSpeaker.answer`).
 /// A tap over a selection still reads it.
 ///
-/// **On by default**, unlike read-aloud itself: it only does anything once the
-/// user has opted in to read-aloud, and it is the half of the feature a hold
-/// exists for. The Settings window's Advanced pane writes the slot through
+/// **Off by default**, like skip-jargon (`ReadAloudStyleStore`) and for the same
+/// reason: asking sends the selection and the spoken request to the LLM
+/// Gateway, a second service, so it is its own opt-in rather than riding
+/// read-aloud's. The Settings window's Advanced pane writes the slot through
 /// `@AppStorage`, so like `EnhancedTranscriptsStore` this store is read-only.
 public struct SelectionAskStore {
   /// UserDefaults key holding the switch. Public so SwiftUI views can observe
@@ -17,7 +18,7 @@ public struct SelectionAskStore {
 
   /// The value an unset key reads as. Public so the Settings toggle's
   /// `@AppStorage` default comes from here and can't disagree with the router.
-  public static let defaultValue = true
+  public static let defaultValue = false
 
   private let defaults: UserDefaults
 
@@ -29,7 +30,7 @@ public struct SelectionAskStore {
     self.defaults = defaults
   }
 
-  /// Unset means on, hence the presence check rather than `bool(forKey:)`.
+  /// Unset reads as `defaultValue`.
   public var isEnabled: Bool {
     defaults.object(forKey: Self.defaultsKey) as? Bool ?? Self.defaultValue
   }

@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 
 @testable import AssemblyAI
@@ -205,7 +206,7 @@ struct HTTPClientTests {
     //
     // And sent with the enhanced-transcripts switch in **both** positions,
     // which is the change of 2026-09-11: the request no longer varies with that
-    // setting at all. `transcript(from:)` applies it to the response instead.
+    // setting at all. `transcript(from:enhanced:)` applies it to the response instead.
     let object = try configObject(prompt: prompt, enhancedTranscripts: enhancedTranscripts)
     #expect(object["llm_instruction"] as? String == CleanupInstruction.text)
     // Two keys that must never appear. `llm` is the nested block this replaced —
@@ -258,6 +259,25 @@ struct HTTPClientTests {
     let result = try await collectTranscript(
       makeTranscriber(apiKey: "test-key", transport: transport, enhancedTranscripts: false))
     #expect(result == "um hello")
+  }
+
+  @Test("the setting is read once per request, so a mid-recording flip can't split request from paste")
+  func enhancedReadOncePerRequest() async throws {
+    // On when the request opened, off by the time it answered: the request asked
+    // for the rewrite, so the rewrite is what gets pasted.
+    let reads = Mutex(0)
+    let transport = FakeHTTPTransport { _ in (200, Data(#"{"text":"um hello","llm_response":"Hello."}"#.utf8)) }
+    let transcriber = AssemblyAITranscriber(
+      apiKeyProvider: { "test-key" }, transport: transport,
+      enhancedTranscripts: {
+        reads.withLock {
+          $0 += 1
+          return $0 == 1
+        }
+      },
+      customStyle: { nil }, rewriteMode: { .smart })
+    #expect(try await collectTranscript(transcriber) == "Hello.")
+    #expect(reads.withLock { $0 } == 1)
   }
 
   @Test("transcriber HTTP error carries the decoded server message")

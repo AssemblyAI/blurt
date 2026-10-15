@@ -5,10 +5,10 @@ import Testing
 
 @Suite("SelectionAskStore")
 struct SelectionAskStoreTests {
-  @Test("defaults to on when unset — it only acts once read-aloud is opted in to")
-  func defaultsToOn() {
-    #expect(SelectionAskStore(defaults: freshDefaults()).isEnabled)
-    #expect(SelectionAskStore.defaultValue)
+  @Test("defaults to off when unset — asking sends the selection to the LLM Gateway, so it is its own opt-in")
+  func defaultsToOff() {
+    #expect(!SelectionAskStore(defaults: freshDefaults()).isEnabled)
+    #expect(!SelectionAskStore.defaultValue)
   }
 
   @Test("reads back the switch the Settings toggle writes")

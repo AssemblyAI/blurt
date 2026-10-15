@@ -27,15 +27,22 @@
     /// tens of milliseconds, and nothing landing means nothing was selected. Kept
     /// short because a dictation press pays all of it.
     private let timeout: Duration
+    /// How long after `timeout` a late answer to the ⌘C is still watched for,
+    /// so the user's clipboard is put back even when the app copied too slowly
+    /// to be read (a busy app can take past `timeout`). The press doesn't wait
+    /// for this; it runs behind it.
+    private let lateCopyWindow: Duration
 
     init(
       pasteboard: any CopyPasteboard = SystemClipboard(),
       postCopy: @escaping @Sendable () -> Bool = { KeyInjector.postCmdC() },
-      timeout: Duration = .milliseconds(100)
+      timeout: Duration = .milliseconds(100),
+      lateCopyWindow: Duration = .seconds(1)
     ) {
       self.pasteboard = pasteboard
       self.postCopy = postCopy
       self.timeout = timeout
+      self.lateCopyWindow = lateCopyWindow
     }
 
     /// The copied text, up to `maxCharacters`, or nil when the copy produced
@@ -61,11 +68,36 @@
           return pasteboard.changeCount == count ? (count, string) : (count, nil)
         }
       } while copied == nil && ContinuousClock.now < deadline
-      guard seen != before else { return nil }
       let copyCount = seen
-      await DictationSession.offPool { pasteboard.restore(saved, ifChangeCountIs: copyCount) }
+      let settled = await DictationSession.offPool {
+        if copyCount != before { pasteboard.restore(saved, ifChangeCountIs: copyCount) }
+        return pasteboard.changeCount
+      }
+      // Nothing readable in time, but the app may still answer. Nothing else
+      // would put the user's clipboard back then.
+      if copied == nil { restoreLateCopy(saved, after: settled) }
       // The same cleanup as the AX read, so a zero-width-only copy isn't spoken.
       return FocusCapture.visibleTextOrNil(FocusCapture.clip(copied?.trimmedNonEmpty(), to: maxCharacters))
+    }
+
+    /// Restores `saved` over the first change after `baseline`, if one comes
+    /// within `lateCopyWindow`: the ⌘C's answer arriving after the press gave up
+    /// on it.
+    private func restoreLateCopy(_ saved: PasteboardSnapshot, after baseline: Int) {
+      let pasteboard = pasteboard
+      let deadline = ContinuousClock.now + lateCopyWindow
+      Task {
+        while ContinuousClock.now < deadline {
+          try? await Task.sleep(for: .milliseconds(20))
+          let restored = await DictationSession.offPool { () -> Bool in
+            let count = pasteboard.changeCount
+            guard count != baseline else { return false }
+            pasteboard.restore(saved, ifChangeCountIs: count)
+            return true
+          }
+          if restored { return }
+        }
+      }
     }
   }
 

@@ -74,7 +74,7 @@ public struct DictationConfig: Encodable, Sendable {
   /// `text`, which is "always the verbatim transcript". So the config carries
   /// no off switch, and the *response* is where the enhanced-transcripts
   /// setting chooses between the two transcripts
-  /// (`AssemblyAITranscriber.transcript(from:)`).
+  /// (`AssemblyAITranscriber.transcript(from:enhanced:)`).
   ///
   /// An explicit null `llm` does suppress the rewrite — measured 2026-09-10 and
   /// re-confirmed 2026-09-11 (200, with `llm_response` and `llm_error` both
@@ -91,7 +91,7 @@ public struct DictationConfig: Encodable, Sendable {
   /// users who turned cleanup off. That is the failure this whole path already
   /// shipped once, by a different route. Blurt sent the null until 2026-09-11.
   /// Adding an `llm` case back would reintroduce it *and* leave the response's
-  /// choice unreachable — read `transcript(from:)` first.
+  /// choice unreachable — read `transcript(from:enhanced:)` first.
   public let llmInstruction: String?
   /// Which model the cleanup rewrite runs on: `"smart"` (a larger model) or
   /// `"fast"`, or nil to omit the key and leave the route on its default.

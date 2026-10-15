@@ -45,11 +45,20 @@ final class DictationCoordinator {
   @ObservationIgnored private var lastCommandID: UUID?
   @ObservationIgnored private var lastLevelPublish = ContinuousClock.now
 
+  /// Who pressed last and what their field held, until the session accepts
+  /// the press (`claimPress`). A press the session refuses — one arriving while
+  /// a dictation is still in flight — must not take over that dictation's words.
+  nonisolated private struct Press: Sendable {
+    var keyboard: String?
+    var context = FocusedFieldContext.empty
+  }
+  nonisolated private static let pendingPress = Mutex(Press())
   /// What the keyboard saw around the cursor on the press that started the
   /// dictation in flight, read by the engine's context seam — and cleared once
   /// used, so nothing from another app's field primes a later request.
   nonisolated private static let pressContext = Mutex<FocusedFieldContext>(.empty)
-  /// The keyboard process that pressed, for the words to go back to it.
+  /// The keyboard process whose press started the dictation in flight, for the
+  /// words to go back to it.
   nonisolated private static let pressKeyboard = Mutex<String?>(nil)
   /// Contact names, parsed once per lexicon refresh rather than on the press.
   nonisolated private static let lexiconNames = Mutex<[String]>([])
@@ -82,8 +91,10 @@ final class DictationCoordinator {
       // The keyboard is the only thing that can see the field: the press
       // command carries the text before the cursor, and that is what primes
       // the request — the same signal the Mac reads through Accessibility.
+      // `frontmost` runs only for a press the session accepts, first thing, so
+      // that is where the press's keyboard and field text become the dictation's.
       hostFocusCapture: DictationSession.HostFocusCapture(
-        frontmost: { nil }, field: { Self.fieldContext() }))
+        frontmost: { Self.claimPress() }, field: { Self.fieldContext() }))
     window.onClosingOnItsOwn = { [weak self] in await self?.windowClosingOnItsOwn() }
   }
 
@@ -176,8 +187,7 @@ final class DictationCoordinator {
   /// set up, and the way to test the pipeline without one. No field, so no
   /// prior text primes it.
   func toggleDictation() {
-    Self.pressContext.withLock { $0 = .empty }
-    Self.pressKeyboard.withLock { $0 = nil }
+    Self.pendingPress.withLock { $0 = Press() }
     session.submit(phase.isCapturing ? .release : .press)
   }
 
@@ -196,11 +206,12 @@ final class DictationCoordinator {
     guard command.isFresh() else { return }
     switch command.kind {
     case .press:
-      Self.pressContext.withLock {
-        $0 = FocusedFieldContext(
-          priorText: command.priorText, selectedText: command.selectedText, windowTitle: nil, fieldLabel: nil)
+      Self.pendingPress.withLock {
+        $0 = Press(
+          keyboard: command.keyboard,
+          context: FocusedFieldContext(
+            priorText: command.priorText, selectedText: command.selectedText, windowTitle: nil, fieldLabel: nil))
       }
-      Self.pressKeyboard.withLock { $0 = command.keyboard }
       session.submit(.press)
     case .release: session.submit(.release)
     case .cancel: session.submit(.cancel)
@@ -223,6 +234,19 @@ final class DictationCoordinator {
     // Not through the comma-separated form: a contact called "Smith, John"
     // is one name, and the engine takes an array.
     KeyTerms.normalized(SharedStore.keyTerms + lexiconNames.withLock { $0 })
+  }
+
+  /// The session accepted a press: the last one asked for becomes the
+  /// dictation's, and is no longer pending. Nil, as the frontmost app: there is
+  /// none to paste into on the iPhone; the words go back to the keyboard.
+  nonisolated private static func claimPress() -> CapturedFocus? {
+    let press = pendingPress.withLock { pending in
+      defer { pending = Press() }
+      return pending
+    }
+    pressKeyboard.withLock { $0 = press.keyboard }
+    pressContext.withLock { $0 = press.context }
+    return nil
   }
 
   /// What the keyboard saw around the cursor on the press in flight, once.

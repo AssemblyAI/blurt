@@ -83,8 +83,10 @@ final class ListeningWindow {
     heartbeat?.cancel()
     heartbeat = Task { [weak self] in
       while !Task.isCancelled {
-        guard let self else { return }
-        SharedStore.appSeenAt = source.isOpen ? Date() : nil
+        // Re-checked each beat and not held across the sleep, so a window
+        // nobody closed can still go away and the beat stops with it.
+        guard let isOpen = self?.source.isOpen else { return }
+        SharedStore.appSeenAt = isOpen ? Date() : nil
         try? await Task.sleep(for: .seconds(SharedStore.appHeartbeatInterval))
       }
     }

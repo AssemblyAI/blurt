@@ -57,6 +57,13 @@ public enum DictationLog {
     /// when none were sent, and `encode(to:)` then omits the key, matching how
     /// every absent field above is left out rather than written as `null`.
     let keyterms: [String]
+    /// Which rewrite model the dictation asked for (`RewriteMode`: "fast" or
+    /// "smart"), so the corpus can be split by mode: Smart takes a different
+    /// server path and latency budget. Nil when enhanced transcripts were off and
+    /// the verbatim text was pasted. Read from the settings when the dictation
+    /// ends, not threaded from the request. Unlike `config.rewrite_mode`, which
+    /// leaves Fast out, Fast is written.
+    let rewriteMode: String?
 
     /// Spelled out because a hand-written `encode(to:)` means the compiler no
     /// longer derives this — the key names are the on-disk contract for anything
@@ -65,6 +72,7 @@ public enum DictationLog {
     enum CodingKeys: String, CodingKey {
       case transcript, ts, app, window, field, prior, selected, keyterms
       case sttPrompt = "stt_prompt"
+      case rewriteMode = "rewrite_mode"
     }
 
     /// Hand-written for two fields: `sttPrompt` is a plain string and
@@ -90,6 +98,7 @@ public enum DictationLog {
       if !keyterms.isEmpty {
         try container.encode(keyterms, forKey: .keyterms)
       }
+      try container.encodeIfPresent(rewriteMode, forKey: .rewriteMode)
     }
   }
 
@@ -191,10 +200,12 @@ public enum DictationLog {
     transcript: String,
     context: TranscriptionContext? = nil,
     store: DeveloperModeStore = DeveloperModeStore(),
+    rewriteMode: @escaping @Sendable () -> RewriteMode? = { requestedRewriteMode() },
     to url: URL = defaultURL
   ) {
+    // The settings are read behind the gate, like everything else the entry carries.
     gated(store: store) { now in
-      write(transcript: transcript, context: context, to: url, now: now)
+      write(transcript: transcript, context: context, rewriteMode: rewriteMode(), to: url, now: now)
     }
   }
 
@@ -225,23 +236,34 @@ public enum DictationLog {
   /// so all of that is assertable directly rather than through a temp file and a
   /// substring search over the encoded line — a search that read the same whether
   /// a field was correctly absent or the write had failed outright.
-  static func makeEntry(transcript: String, context: TranscriptionContext?, now: Date) -> Entry {
+  static func makeEntry(
+    transcript: String, context: TranscriptionContext?, rewriteMode: RewriteMode? = nil, now: Date
+  ) -> Entry {
     Entry(
       transcript: transcript, ts: now.formatted(timestampFormat),
       app: context?.appName, window: context?.windowTitle, field: context?.fieldLabel,
       prior: context?.priorText, selected: context?.selectedText,
       sttPrompt: STTPrompt.text(context: context),
-      keyterms: KeyTerms.fitted(context?.keyTerms ?? [])
+      keyterms: KeyTerms.fitted(context?.keyTerms ?? []),
+      rewriteMode: rewriteMode.map { $0.rawValue.lowercased() }
     )
+  }
+
+  /// The rewrite the settings ask for: the chosen mode while enhanced
+  /// transcripts are on, nil while the verbatim text is pasted. The same two
+  /// settings `AssemblyAITranscriber` reads for the request.
+  static func requestedRewriteMode() -> RewriteMode? {
+    EnhancedTranscriptsStore().isEnabled ? RewriteModeStore().mode : nil
   }
 
   /// The unconditional writer: formats one entry and appends it. Distinct name
   /// rather than an `append` overload so the gated entry point above can't be
   /// bypassed by accidentally satisfying a different signature.
   static func write(
-    transcript: String, context: TranscriptionContext? = nil, to url: URL, now: Date
+    transcript: String, context: TranscriptionContext? = nil, rewriteMode: RewriteMode? = nil, to url: URL,
+    now: Date
   ) {
-    appendLine(makeEntry(transcript: transcript, context: context, now: now), to: url)
+    appendLine(makeEntry(transcript: transcript, context: context, rewriteMode: rewriteMode, now: now), to: url)
   }
 
   /// Encodes one entry and appends it as a JSONL line, creating the file (and

@@ -124,7 +124,7 @@ extension HTTPClientTests {
     // `llm_instruction` nor `llm` still comes back with `llm_response` set to a
     // default-cleaned transcript. So this row is "the service's wording", not
     // "no rewrite" — which is fine, because the config no longer tries to
-    // decline (`AssemblyAITranscriber.transcript(from:)` chooses instead).
+    // decline (`AssemblyAITranscriber.transcript(from:enhanced:)` chooses instead).
     #expect(try rewriteKeys(nil) == [])
   }
 

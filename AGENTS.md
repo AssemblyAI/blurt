@@ -647,7 +647,7 @@ verbatim transcript, all inside the same request, and it rides **every** request
 
 **The switch is applied to the response, not the request** (since 2026-09-11). The response
 carries both `text` (the verbatim transcript, "never altered by the LLM") and `llm_response`
-(the rewrite), so `AssemblyAITranscriber.transcript(from:)` simply picks: with **enhanced
+(the rewrite), so `AssemblyAITranscriber.transcript(from:enhanced:)` simply picks: with **enhanced
 transcripts** on (`EnhancedTranscriptsStore`, on by default, read per request via the
 transcriber's injected `enhancedTranscripts` closure) it prefers the rewrite and falls back to
 `text` when `llm_response` is null or blank — the rewrite is best-effort (5 s server-side

@@ -76,6 +76,8 @@ final class OverlayWindowController {
   // The revert timer for a transient notice; its dwell comes from the engine
   // (`OverlayUIState.noticeDwellSeconds`, unit-tested there).
   private var errorRevertTask: Task<Void, Never>?
+  /// Bumped by every `setVisible`, so a fade-out's completion can tell it was superseded.
+  private var fadeGeneration = 0
 
   // The pill fades in fast — the appear is tied to the user's keypress, so a snappy
   // ramp reads as instant response — but fades out gently. Asymmetric on purpose.
@@ -254,9 +256,14 @@ final class OverlayWindowController {
 
   /// Drives the pill on/off screen, fading unless Reduce Motion is on. Idempotent
   /// and re-entrant: a key-down during the fade-out re-targets alpha back to 1,
-  /// and the in-flight fade's completion only orders the panel out if it actually
-  /// reached transparent — so a quick hide→show never strands a hidden panel.
+  /// and the in-flight fade's completion only orders the panel out if no later
+  /// call has superseded it — so a quick hide→show never strands a hidden panel.
+  /// A generation, not the alpha it ended at: `show` zeroes alpha itself to
+  /// resize under a transparent panel, and that must not read as the fade-out
+  /// having finished.
   private func setVisible(_ visible: Bool) {
+    fadeGeneration &+= 1
+    let generation = fadeGeneration
     let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     if visible {
       // Already up and fully opaque: nothing to ramp. Without this, each phase
@@ -292,7 +299,7 @@ final class OverlayWindowController {
         completionHandler: { [weak self] in
           // NSAnimationContext completion handlers run on the main thread.
           MainActor.assumeIsolated {
-            guard let self, self.panel.alphaValue < 0.01 else { return }
+            guard let self, self.fadeGeneration == generation, self.panel.alphaValue < 0.01 else { return }
             self.dismissPanel()
           }
         })

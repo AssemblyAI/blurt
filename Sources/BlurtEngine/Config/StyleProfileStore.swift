@@ -35,7 +35,7 @@ public struct StyleProfile: Codable, Identifiable, Hashable, Sendable {
 /// set at all. Inert while enhanced transcripts are off — but not because the
 /// request changes: it still carries `llm_instruction` with the active profile
 /// appended, and the rewrite that profile shaped is what the response-side
-/// switch then discards (`AssemblyAITranscriber.transcript(from:)`). So the
+/// switch then discards (`AssemblyAITranscriber.transcript(from:enhanced:)`). So the
 /// profile is on the wire and off the screen. `AssemblyAITranscriber` reads
 /// `activeInstructions` at each request, so an edit — or a click on the main
 /// window's switcher — applies to the very next dictation.

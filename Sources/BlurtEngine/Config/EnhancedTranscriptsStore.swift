@@ -7,7 +7,7 @@ import Foundation
 /// carries `llm_instruction` regardless, so the response always holds both the
 /// verbatim transcript and the cleanup rewrite (disfluencies removed,
 /// punctuation fixed); this flag decides which one gets pasted — see
-/// `AssemblyAITranscriber.transcript(from:)`, which also records what that
+/// `AssemblyAITranscriber.transcript(from:enhanced:)`, which also records what that
 /// costs a user who has it off. `AssemblyAITranscriber` reads this at each
 /// request, so a change applies to the very next dictation.
 /// Same shape as `DeveloperModeStore` / `SoundPackStore`.

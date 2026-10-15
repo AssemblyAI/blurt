@@ -10,7 +10,7 @@ public enum RewriteMode: String, CaseIterable, Sendable {
   case fast = "Fast"
   /// The larger rewrite model. It has a longer server-side path, and a rewrite
   /// that misses the route's budget comes back as `llm_error` and degrades to the
-  /// verbatim transcript (`AssemblyAITranscriber.transcript(from:)`).
+  /// verbatim transcript (`AssemblyAITranscriber.transcript(from:enhanced:)`).
   case smart = "Smart"
 
   /// Decodes a persisted raw value, falling back to Fast for unset ("") or
