@@ -13,17 +13,27 @@ import Testing
 @Suite("Hotkey press/release races", .timeLimit(.minutes(1)))
 struct HotkeyRaceTests {
 
-  @Test("release during mic.start is honored, not dropped")
-  func releaseDuringStartIsHonored() async throws {
-    let mic = GatedStartMic()
-    let stt = StubTranscriber(mode: .transcript("hi"))
-    let injector = StubInjector()
-    let session = DictationSession(
-      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
-      seams: .offline)
+  // Fresh doubles for every test: Swift Testing builds a new suite instance per test.
+  private let mic = GatedStartMic()
+  private let injector = StubInjector()
+  private let session: DictationSession
 
+  init() {
+    session = makeSession(transcriber: StubTranscriber(mode: .transcript("hi")), mic: mic, injector: injector)
+  }
+
+  /// Parks the session's first press inside `mic.start()`: the window a fast tap's
+  /// follow-up lands in. The test lets it go with `mic.allowStartToFinish()` and
+  /// joins the returned press.
+  private func parkPress() async -> Task<Void, Never> {
     let pressed = Task { await session.press() }
     await mic.waitUntilStartEntered()  // press() is now suspended inside mic.start()
+    return pressed
+  }
+
+  @Test("release during mic.start is honored, not dropped")
+  func releaseDuringStartIsHonored() async throws {
+    let pressed = await parkPress()
     // Fast tap: the release arrives before .recording is set. It queues behind
     // the in-flight press (awaiting it inline would deadlock against the gate).
     let released = Task { await session.release() }
@@ -40,15 +50,7 @@ struct HotkeyRaceTests {
 
   @Test("cancel during mic.start is honored, not dropped")
   func cancelDuringStartIsHonored() async throws {
-    let mic = GatedStartMic()
-    let stt = StubTranscriber(mode: .transcript("hi"))
-    let injector = StubInjector()
-    let session = DictationSession(
-      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
-      seams: .offline)
-
-    let pressed = Task { await session.press() }
-    await mic.waitUntilStartEntered()  // press() is now suspended inside mic.start()
+    let pressed = await parkPress()
     // Fast tap: the cancel arrives before .recording is set. It queues behind
     // the in-flight press and ends the freshly started recording.
     let cancelled = Task { await session.cancel() }
@@ -69,15 +71,7 @@ struct HotkeyRaceTests {
   /// — the mic must never be started twice.
   @Test("a second press during mic.start is dropped, not double-started")
   func secondPressDuringStartIsDropped() async throws {
-    let mic = GatedStartMic()
-    let stt = StubTranscriber(mode: .transcript("hi"))
-    let injector = StubInjector()
-    let session = DictationSession(
-      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
-      seams: .offline)
-
-    let pressed = Task { await session.press() }
-    await mic.waitUntilStartEntered()  // first press() is suspended inside mic.start()
+    let pressed = await parkPress()
     // Queues behind the in-flight press (awaiting it inline would deadlock
     // against the gate) and must be dropped when its turn comes.
     let secondPress = Task { await session.press() }
@@ -98,15 +92,7 @@ struct HotkeyRaceTests {
   /// transcribe→inject run.
   @Test("cancel overrides a pending release during mic.start")
   func cancelOverridesPendingReleaseDuringStart() async throws {
-    let mic = GatedStartMic()
-    let stt = StubTranscriber(mode: .transcript("hi"))
-    let injector = StubInjector()
-    let session = DictationSession(
-      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
-      seams: .offline)
-
-    let pressed = Task { await session.press() }
-    await mic.waitUntilStartEntered()
+    let pressed = await parkPress()
     // Both queue behind the in-flight press. Waiting until the cancel has
     // *recorded* its request — the condition itself, rather than a fixed yield
     // budget that drains this task and not the session — is what makes the rest

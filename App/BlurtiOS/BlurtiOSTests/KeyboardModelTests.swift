@@ -33,17 +33,19 @@ final class FakeProxy: NSObject, UITextDocumentProxy {
   func unmarkText() {}
 }
 
+/// A bare keyboard over a fake field holding `before` up to the caret, with
+/// `selected` highlighted: what the typing and chip rules read.
+private func typingModel(before: String = "", selected: String? = nil) -> (KeyboardModel, FakeProxy) {
+  let proxy = FakeProxy()
+  proxy.before = before
+  proxy.selected = selected
+  let model = KeyboardModel()
+  model.proxyOverride = proxy
+  return (model, proxy)
+}
+
 @Suite("Keyboard model: typing rules")
 struct KeyboardModelTypingTests {
-  private func model(before: String = "", selected: String? = nil) -> (KeyboardModel, FakeProxy) {
-    let proxy = FakeProxy()
-    proxy.before = before
-    proxy.selected = selected
-    let model = KeyboardModel()
-    model.proxyOverride = proxy
-    return (model, proxy)
-  }
-
   @Test("sentence start: empty, after a full stop and a space, after a newline")
   func sentenceStart() {
     #expect(KeyboardModel.isSentenceStart(""))
@@ -56,7 +58,7 @@ struct KeyboardModelTypingTests {
 
   @Test("a letter goes to the field and lowers shift")
   func typing() {
-    let (model, proxy) = model()
+    let (model, proxy) = typingModel()
     model.shifted = true
     model.type("H")
     #expect(proxy.before == "H")
@@ -65,7 +67,7 @@ struct KeyboardModelTypingTests {
 
   @Test("two quick spaces after a word become a full stop and a space")
   func doubleSpace() {
-    let (model, proxy) = model(before: "hello")
+    let (model, proxy) = typingModel(before: "hello")
     model.space()
     #expect(proxy.before == "hello ")
     model.space()
@@ -74,7 +76,7 @@ struct KeyboardModelTypingTests {
 
   @Test("two quick spaces after punctuation stay spaces")
   func doubleSpaceAfterPunctuation() {
-    let (model, proxy) = model(before: "hello.")
+    let (model, proxy) = typingModel(before: "hello.")
     model.space()
     model.space()
     #expect(proxy.before == "hello.  ")
@@ -82,7 +84,7 @@ struct KeyboardModelTypingTests {
 
   @Test("the term field takes the keys instead of the host, and return saves nothing empty")
   func termField() {
-    let (model, proxy) = model(before: "yo ")
+    let (model, proxy) = typingModel(before: "yo ")
     model.beginAddingTerm()
     #expect(model.termDraft == "")
     #expect(model.effectiveLayout == .full)
@@ -99,7 +101,7 @@ struct KeyboardModelTypingTests {
 
   @Test("a swipe while a term is open flips nothing; the panel is back on the mic when the term closes")
   func noFlipDuringTerm() {
-    let (model, _) = model()
+    let (model, _) = typingModel()
     model.layout = .panel
     model.flipPanel(towardsLeading: true)
     #expect(model.panelShowsKeys)
@@ -115,7 +117,7 @@ struct KeyboardModelTypingTests {
 
   @Test("a selection seeds the term and is replaced on save")
   func termFromSelection() {
-    let (model, proxy) = model(before: "he said ", selected: "riz")
+    let (model, proxy) = typingModel(before: "he said ", selected: "riz")
     model.beginAddingTerm()
     #expect(model.termDraft == "riz")
     model.type("z")
@@ -126,7 +128,7 @@ struct KeyboardModelTypingTests {
 
   @Test("typing that reached the host field while the term is open moves into the term")
   func hardwareTypingClaimed() {
-    let (model, proxy) = model(before: "yo ")
+    let (model, proxy) = typingModel(before: "yo ")
     model.beginAddingTerm()
     // A hardware key is one character per change.
     proxy.before = "yo R"
@@ -144,7 +146,7 @@ struct KeyboardModelTypingTests {
 
   @Test("the return key wears the field's word")
   func returnLabel() {
-    let (model, proxy) = model()
+    let (model, proxy) = typingModel()
     proxy.returnKeyType = .send
     model.contextChanged()
     #expect(model.returnLabel == "send")
@@ -170,7 +172,7 @@ struct KeyboardModelTypingTests {
   func addSelectedTerm() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let (model, proxy) = model(before: "he said ", selected: "Rizz")
+    let (model, proxy) = typingModel(before: "he said ", selected: "Rizz")
     model.hasFullAccess = true
     model.contextChanged()
     #expect(model.selectedTerm == "Rizz")
@@ -192,7 +194,7 @@ struct KeyboardModelTypingTests {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     SharedStore.addKeyTerm("rizz")
-    let (model, proxy) = model(before: "he said ", selected: "Rizz")
+    let (model, proxy) = typingModel(before: "he said ", selected: "Rizz")
     model.hasFullAccess = true
     model.contextChanged()
     #expect(model.selectedTerm == "Rizz")
@@ -205,7 +207,7 @@ struct KeyboardModelTypingTests {
 
   @Test("no chip without Full Access, or for a selection that is no term")
   func noChip() {
-    let (model, proxy) = model(before: "", selected: "Rizz")
+    let (model, proxy) = typingModel(before: "", selected: "Rizz")
     model.contextChanged()
     #expect(model.selectedTerm == nil)
     model.hasFullAccess = true
@@ -218,7 +220,7 @@ struct KeyboardModelTypingTests {
   func chipToField() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let (model, proxy) = model(before: "he said ", selected: "riz")
+    let (model, proxy) = typingModel(before: "he said ", selected: "riz")
     model.hasFullAccess = true
     model.contextChanged()
     model.beginAddingTerm()
@@ -237,22 +239,13 @@ struct KeyboardModelTypingTests {
 
 @Suite("Keyboard model: the chip and the term field")
 struct KeyboardModelChipTests {
-  private func model(before: String = "", selected: String? = nil) -> (KeyboardModel, FakeProxy) {
-    let proxy = FakeProxy()
-    proxy.before = before
-    proxy.selected = selected
-    let model = KeyboardModel()
-    model.proxyOverride = proxy
-    return (model, proxy)
-  }
-
   @Test(
     "a tap on a chip for a word Blurt has puts the + back; the chip returns for another word, or the same one again")
   func dismissKnownChip() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     SharedStore.addKeyTerm("Rizz")
-    let (model, proxy) = model(before: "he said ", selected: "Rizz")
+    let (model, proxy) = typingModel(before: "he said ", selected: "Rizz")
     model.hasFullAccess = true
     model.contextChanged()
     #expect(model.selectedTerm == "Rizz")
@@ -280,7 +273,7 @@ struct KeyboardModelChipTests {
   func dismissAfterAdd() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let (model, _) = model(before: "he said ", selected: "Rizz")
+    let (model, _) = typingModel(before: "he said ", selected: "Rizz")
     model.hasFullAccess = true
     model.contextChanged()
     model.addSelectedTerm()
@@ -297,7 +290,7 @@ struct KeyboardModelChipTests {
   func collapseIsNotTyping() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let (model, proxy) = model(before: "he said ", selected: "Rizz")
+    let (model, proxy) = typingModel(before: "he said ", selected: "Rizz")
     proxy.after = " today"
     model.hasFullAccess = true
     model.contextChanged()
@@ -315,7 +308,7 @@ struct KeyboardModelChipTests {
   func noReplaceAfterCursorMove() {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
-    let (model, proxy) = model(before: "he said ", selected: "riz")
+    let (model, proxy) = typingModel(before: "he said ", selected: "riz")
     model.hasFullAccess = true
     model.contextChanged()
     model.beginAddingTerm()
@@ -329,7 +322,7 @@ struct KeyboardModelChipTests {
 
   @Test("a key term capitalises after a space too")
   func termShift() {
-    let (model, _) = model()
+    let (model, _) = typingModel()
     model.hasFullAccess = true
     model.beginAddingTerm()
     #expect(model.shifted)
@@ -344,7 +337,7 @@ struct KeyboardModelChipTests {
 
   @Test("123 opens the symbols, #+= the second page, 123 there the first, ABC the letters")
   func symbolPages() {
-    let (model, _) = model()
+    let (model, _) = typingModel()
     #expect(!model.symbolsPage && !model.morePage)
     model.toggleSymbols()
     #expect(model.symbolsPage && !model.morePage)

@@ -78,11 +78,7 @@ struct KeyboardLifecycleTests {
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
-    model.micDown()
-    model.apply(snapshot(.connecting))
-    // Push-to-talk let go before the mic was up: the engine would drop a
-    // release now, so it waits.
-    model.perform(.stop)
+    rig.letGoWhileConnecting()
     #expect(commands.sent.map(\.kind) == [.press])
     model.apply(snapshot(.recording))
     #expect(commands.sent.map(\.kind) == [.press, .release])
@@ -96,9 +92,7 @@ struct KeyboardLifecycleTests {
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
-    model.micDown()
-    model.apply(snapshot(.connecting))
-    model.perform(.stop)
+    rig.letGoWhileConnecting()
     model.apply(snapshot(.error))
     model.apply(snapshot(.recording))
     #expect(commands.sent.map(\.kind) == [.press])
@@ -172,5 +166,15 @@ struct KeyboardLifecycleTests {
     #expect(model.micAlignment == .left)
     model.micAlignmentOverride = .right
     #expect(model.micAlignment == .right)
+  }
+}
+
+extension KeyboardRig {
+  /// Push-to-talk let go before the mic was up: a press, the app's `.connecting`,
+  /// then the stop. The engine would drop a release now, so the keyboard holds it.
+  fileprivate func letGoWhileConnecting() {
+    model.micDown()
+    model.apply(snapshot(.connecting))
+    model.perform(.stop)
   }
 }

@@ -17,9 +17,7 @@ struct DictationSessionBringUpTests {
     // cancel. `.recording` must never be published on this path, because
     // `RecordingCueGate` chimes on exactly that edge.
     let mic = GatedStartMic()
-    let session = DictationSession(
-      mic: mic, transcriber: StubTranscriber(mode: .transcript("never")),
-      injector: StubInjector(), seams: .offline)
+    let session = makeSession(transcriber: StubTranscriber(mode: .transcript("never")), mic: mic)
 
     let stream = await session.phaseStream()
     let pressed = Task { await session.press() }
@@ -57,9 +55,7 @@ struct DictationSessionBringUpTests {
     // records the intent and cancels the in-flight press itself, without waiting
     // for a turn on an actor the press is holding.
     let mic = GatedStartMic()
-    let session = DictationSession(
-      mic: mic, transcriber: StubTranscriber(mode: .transcript("never")),
-      injector: StubInjector(), seams: .offline)
+    let session = makeSession(transcriber: StubTranscriber(mode: .transcript("never")), mic: mic)
 
     let stream = await session.phaseStream()
     session.submit(.press)
@@ -94,9 +90,7 @@ struct DictationSessionBringUpTests {
     // itself — one dead dictation for every cancelled bring-up.
     let mic = GatedStartMic()
     await mic.setThrowsIfCancelled(true)
-    let session = DictationSession(
-      mic: mic, transcriber: StubTranscriber(mode: .transcript("Hello world.")),
-      injector: StubInjector(), seams: .offline)
+    let session = makeSession(transcriber: StubTranscriber(mode: .transcript("Hello world.")), mic: mic)
 
     let pressed = Task { await session.press() }
     await mic.waitUntilStartEntered()

@@ -1,5 +1,6 @@
 brew "actionlint"
 brew "markdownlint-cli"
+brew "node"
 brew "periphery"
 brew "prettier"
 brew "pytest"

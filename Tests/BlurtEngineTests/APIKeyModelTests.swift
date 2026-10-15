@@ -2,8 +2,8 @@ import Testing
 
 @testable import BlurtEngine
 
-/// The shells' API-key model over an in-memory store — never the real
-/// Keychain — and a validator that answers without the network.
+/// The shells' API-key model over an in-memory store — never the real Keychain
+/// — and a validator that answers without the network.
 @Suite("API key model")
 @MainActor
 struct APIKeyModelTests {
@@ -18,7 +18,6 @@ struct APIKeyModelTests {
     #expect(await model.submit("good") == .valid)
     #expect(model.hasAPIKey)
     #expect(store.current == "good")
-    #expect(model.current == "good")
   }
 
   @Test("the readiness gate reads the store as it is now; a refresh catches the flag up")
@@ -38,8 +37,9 @@ struct APIKeyModelTests {
   func save() {
     let store = InMemoryAPIKeyStore()
     let model = APIKeyModel(keyStore: store) { _ in .invalid }
-    #expect(model.save("seeded"))
+    #expect(model.save("typed"))
     #expect(model.hasAPIKey)
-    #expect(model.storage.current == "seeded")
+    #expect(model.current == "typed")
+    #expect(model.storage.current == "typed")
   }
 }

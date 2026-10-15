@@ -12,6 +12,13 @@ import Testing
 /// there (`customStyleBudgetIsTheHeadroom`).
 @Suite("StyleProfileStore")
 struct StyleProfileStoreTests {
+  /// The two-profile list most cases start from. A property, so each test (a fresh
+  /// instance of this suite) gets its own profiles and ids.
+  private let casualAndFormal = [
+    StyleProfile(name: "Casual", instructions: "keep it breezy"),
+    StyleProfile(name: "Formal", instructions: "no contractions"),
+  ]
+
   private func makeStore() -> StyleProfileStore {
     StyleProfileStore(defaults: freshDefaults())
   }
@@ -147,10 +154,7 @@ struct StyleProfileStoreTests {
   @Test("the active choice is sticky across a list edit")
   func activeChoiceIsSticky() {
     let store = makeStore()
-    let profiles = [
-      StyleProfile(name: "Casual", instructions: "keep it breezy"),
-      StyleProfile(name: "Formal", instructions: "no contractions"),
-    ]
+    let profiles = casualAndFormal
     store.profiles = profiles
     store.activate(profiles[1])
     store.profiles = profiles + [StyleProfile(name: "Terse", instructions: "cut adjectives")]
@@ -164,10 +168,7 @@ struct StyleProfileStoreTests {
   @Test("Default sends no instructions until another style is clicked")
   func defaultChoiceSendsNothingAndSticks() {
     let store = makeStore()
-    let profiles = [
-      StyleProfile(name: "Casual", instructions: "keep it breezy"),
-      StyleProfile(name: "Formal", instructions: "no contractions"),
-    ]
+    let profiles = casualAndFormal
     store.profiles = profiles
     store.activate(profiles[1])
     store.activateDefault()
@@ -199,10 +200,7 @@ struct StyleProfileStoreTests {
   @Test("an unset or stale active pointer falls back to the first profile")
   func activeFallsBackToTheFirstProfile() {
     let store = makeStore()
-    let profiles = [
-      StyleProfile(name: "Casual", instructions: "keep it breezy"),
-      StyleProfile(name: "Formal", instructions: "no contractions"),
-    ]
+    let profiles = casualAndFormal
     store.profiles = profiles
     // Nothing chosen yet.
     #expect(store.activeInstructions == "keep it breezy")

@@ -195,7 +195,11 @@ the two checks that genuinely need the build products stay behind them (step 12)
    most for `release.yml`, which hands the Developer ID key to a runner) **/ prettier** (yml/yaml/md
    — the repo holds no html/css/xml since the Pages site moved to assemblyai.com/blurt) **/
    markdownlint / shellcheck / shfmt --diff** (`scripts/*.sh` formatting, style from the `[*.sh]`
-   block in `.editorconfig`).
+   block in `.editorconfig`) **/ jscpd** (copy/paste detection over the Swift, shell and Python,
+   tests included; config in `.jscpd.json`, zero clones allowed — factor a repeated block into a
+   helper or fixture). jscpd is pinned by the lockfile in `tools/jscpd` (`npm ci --prefix
+tools/jscpd`), which `check.sh` prefers over any other copy, since its tokenizer decides what
+   counts as a clone.
 5. **The evals** (`evals/`, the repo's only Python): `ruff format --check`, `ruff check`, and
    `pytest evals/dictation-prompt/test_eval.py`. Config in `evals/ruff.toml`. The suite needs no
    network, no API key, and nothing beyond pytest — the one test that needs DSPy skips itself when
@@ -372,7 +376,7 @@ Linux or a web sandbox you **cannot build, test, or run it** — `swift test`, `
   `macos-26` and is the authority on green.
 - **The portable gate**: `scripts/check.sh --portable` runs the repo-integrity guards
   (dependencies, sound catalog, site, shell portability), then actionlint, zizmor, prettier, xmllint,
-  markdownlint, shellcheck, shfmt, ruff (lint + format check), pytest over the evals, and
+  markdownlint, shellcheck, shfmt, jscpd, ruff (lint + format check), pytest over the evals, and
   `release.test.sh` (plus `swift-format`/`swiftlint lint` if Linux
   builds happen to be on `PATH`). It fully verifies docs, site, scripts, eval, and workflow changes.
   It skips the entire Swift side, and its closing line says so.
@@ -1130,7 +1134,10 @@ are unit-tested against a double instead of the real item). The injectable seam 
 from it. **`APIKeySubmission`** owns the validate-then-save flow (an unverified key never persists) and
 its `Outcome.failureReport` classifies a failure as `.inline` (recoverable, shown beside the field) or
 `.alert` (a Keychain fault retyping can't fix), so `APIKeyStepView` can't disagree with the engine
-about severity. **`APIKeyDisplay.resolve(key:)`** owns how a stored key is _presented_ — masked tail,
+about severity. **`APIKeyModel`** (`@MainActor @Observable`) is the one shell-facing surface over
+both, shared by the Mac app and the iPhone app: the observable `hasAPIKey` flag, `submit`/`save`,
+and the `readinessCheck()` snapshot the session's press gate runs.
+**`APIKeyDisplay.resolve(key:)`** owns how a stored key is _presented_ — masked tail,
 status and VoiceOver wording, connect-vs-rotate control titles. The mask reveals only the last four
 characters and, below `minimumLengthToMask`, none at all (a bare `suffix(4)` in the view once rendered
 a short key whole).

@@ -1,39 +1,34 @@
 import AssemblyAI
 import Observation
 
-/// The app shells' API-key surface, kept out of their coordinators so those
-/// stay focused on wiring the pipeline to the UI. Owns the storage
-/// seam (`APIKeyGateway`), the validate-then-save flow (`APIKeySubmission`), and
-/// the observable `hasAPIKey` flag the wizard/Settings react to.
+/// A shell's API-key surface, shared by the Mac app and the iPhone app (one copy
+/// each, kept in step by hand, until both were moved here). Owns the storage seam
+/// (`APIKeyGateway`), the validate-then-save flow (`APIKeySubmission`), and the
+/// observable `hasAPIKey` flag the setup and settings screens react to.
 ///
 /// `@Observable` so views that only care about the key (the API-key step, the
 /// wizard's readiness gate) observe *this* directly instead of reaching through
 /// the coordinator. The validate-and-never-persist-an-unverified-key rules
-/// themselves live in `APIKeySubmission`, where `swift test` covers
-/// them; this type just forwards and mirrors the result into `hasAPIKey`.
-///
-/// One type for both shells — the Mac's wizard and Settings, the iPhone's setup
-/// and key entry — in the engine rather than copied into each app: nothing in
-/// it is platform-specific. `Observation` is a toolchain module, like
-/// `Synchronization`, not a package dependency.
+/// themselves live in `APIKeySubmission`; this type just forwards and mirrors the
+/// result into `hasAPIKey`.
 @MainActor
 @Observable
 public final class APIKeyModel {
   /// Storage for the API key. Production hits the Keychain via `APIKeyStore`;
   /// UI tests inject an in-memory store so the real key is never touched.
   @ObservationIgnored private let keyStore: any APIKeyGateway
-  /// The validate-then-save flow over `keyStore` (engine-owned + unit-tested).
-  /// Carries the injected validator: AssemblyAI's real network check in
-  /// production, an offline stub under UI testing — both through the one submit
-  /// path, so there's no test-only branch here.
+  /// The validate-then-save flow over `keyStore`. Carries the injected validator:
+  /// AssemblyAI's real network check in production, an offline stub under UI
+  /// testing — both through the one submit path, so there's no test-only branch
+  /// here.
   @ObservationIgnored private let submission: APIKeySubmission
 
   /// Whether an AssemblyAI API key is currently saved. Drives the wizard (which
   /// gates dictation on having a key) and the Settings UI.
   public private(set) var hasAPIKey: Bool
 
-  /// `validateKey` defaults to the engine's real AssemblyAI check; UI tests
-  /// inject an offline validator so the settings flow needs no network.
+  /// `validateKey` defaults to the real AssemblyAI check; UI tests inject an
+  /// offline validator so the settings flow needs no network.
   ///
   /// The `hasKey` read below also loads the Keychain memo (`APIKeyStore.current`),
   /// so every later readiness check on the press→recording latency path is
@@ -73,8 +68,8 @@ public final class APIKeyModel {
 
   /// Saves the AssemblyAI API key and refreshes `hasAPIKey` so observers —
   /// including the wizard — react. Returns true only when a non-empty key is
-  /// actually readable from Keychain after the write (the engine's
-  /// `APIKeySubmission.save` owns that read-back rule).
+  /// actually readable from Keychain after the write (`APIKeySubmission.save`
+  /// owns that read-back rule).
   @discardableResult
   public func save(_ key: String) -> Bool {
     let saved = submission.save(key)
@@ -83,10 +78,10 @@ public final class APIKeyModel {
   }
 
   /// Re-reads the Keychain and updates `hasAPIKey`. The flag is otherwise only
-  /// set at `init` and after `save`, so it can drift out of sync with what's
-  /// actually stored — e.g. an early-launch Keychain read fails (the item's ACL
-  /// needs re-approval after a re-sign) before a later read succeeds. Calling this
-  /// when the API-key UI appears keeps the readiness gate honest: a key that's
+  /// set at `init` and after `save` or `submit`, so it can drift out of sync with
+  /// what's actually stored — e.g. an early-launch Keychain read fails (the item's
+  /// ACL needs re-approval after a re-sign) before a later read succeeds. Calling
+  /// this when the API-key UI appears keeps the readiness gate honest: a key that's
   /// already present flips `hasAPIKey` true, so the wizard advances to the ready
   /// screen instead of stranding the user on a setup step whose only control (a
   /// *changed*-key "Update") is disabled.
@@ -96,9 +91,9 @@ public final class APIKeyModel {
   }
 
   /// Verifies `key` against AssemblyAI and saves it only when AssemblyAI
-  /// actively accepts it (`.valid`) — the engine's `APIKeySubmission` owns
-  /// (and unit-tests) that never-persist-an-unverified-key rule. Mirrors the
-  /// outcome into `hasAPIKey` so the wizard/Settings UI reacts.
+  /// actively accepts it (`.valid`) — `APIKeySubmission` owns (and unit-tests)
+  /// that never-persist-an-unverified-key rule. Mirrors the outcome into
+  /// `hasAPIKey` so the wizard/Settings UI reacts.
   public func submit(_ key: String) async -> APIKeySubmission.Outcome {
     let outcome = await submission.submit(key)
     refreshStatus()

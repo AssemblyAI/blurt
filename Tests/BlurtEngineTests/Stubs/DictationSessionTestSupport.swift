@@ -35,11 +35,11 @@ func makeSession(
   let log = RecordedLog()
   let session = DictationSession(
     mic: mic, transcriber: transcriber, injector: injector,
-    maxRecordingSeconds: maxRecordingSeconds,
+    maxRecordingSeconds: maxRecordingSeconds, clock: ContinuousClock(),
     // Pinned rather than left to read the process's real `UserDefaults`, so a
     // developer's own Settings list can't change what a test sends.
-    keyTermsProvider: { keyTerms },
-    textShortcutsProvider: { textShortcuts },
+    keyTermsProvider: { keyTerms }, styleNameProvider: nil,
+    textShortcutsProvider: { textShortcuts }, readinessCheck: { nil },
     onTranscriptDelivered: onTranscriptDelivered,
     seams: testSeams(field: field, frontmost: frontmost, log: log))
   return SessionFixture(
@@ -83,22 +83,31 @@ func hungFieldSeams(
   return (seams, hung)
 }
 
-/// A session wired to a custom transcriber, which `makeSession` cannot do — it
-/// hard-codes `StubTranscriber`, and the upload suites need a double that
-/// reports *when* it was called. Here beside `makeSession` so the two don't
-/// drift; the file-local factory it replaces had none of the passthroughs, so
-/// tests needing a transcriber *and* a seam bypassed it entirely.
+/// A session wired to the doubles a test hands it — a gated mic, injector or
+/// transcriber, a test clock, a readiness gate — which `makeSession(mode:)` cannot
+/// do: it hard-codes the stubs, and the race and upload suites need doubles that
+/// report *when* they were called. Here beside `makeSession` so the two don't
+/// drift. Between them they are the only way a test builds a session, which is
+/// what lets the seam-carrying initializer leave every default to the public one.
+///
+/// `keyTermsProvider` overrides `keyTerms` for a test that counts the reads.
 func makeSession(
   transcriber: any TranscriberProtocol,
-  mic: StubMicCapture = StubMicCapture(),
-  injector: StubInjector = StubInjector(),
+  mic: any MicCaptureProtocol = StubMicCapture(),
+  injector: any InjectorProtocol = StubInjector(),
+  maxRecordingSeconds: Double = SyncSTTLimits.autoReleaseSeconds,
   clock: any Clock<Duration> = ContinuousClock(),
   keyTerms: [String] = [],
+  keyTermsProvider: (@Sendable () -> [String])? = nil,
+  readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
   seams: DictationSession.Seams = .offline
 ) -> DictationSession {
   DictationSession(
-    mic: mic, transcriber: transcriber, injector: injector, clock: clock,
-    keyTermsProvider: { keyTerms }, textShortcutsProvider: { [] }, seams: seams)
+    mic: mic, transcriber: transcriber, injector: injector,
+    maxRecordingSeconds: maxRecordingSeconds, clock: clock,
+    keyTermsProvider: keyTermsProvider ?? { keyTerms }, styleNameProvider: nil,
+    textShortcutsProvider: { [] }, readinessCheck: readinessCheck,
+    onTranscriptDelivered: nil, seams: seams)
 }
 
 extension DictationSession.Seams {
@@ -145,6 +154,14 @@ final class RecordedLog: Sendable {
 }
 
 extension DictationSession {
+  /// One whole dictation: press, release, and wait for the pipeline to settle.
+  /// The shape most session tests drive before asserting on the outcome.
+  func dictate(handingBack: Bool = false) async {
+    await press(handingBack: handingBack)
+    await release()
+    await waitForIdle()
+  }
+
   /// Completes when the session reaches a terminal phase (idle/failed). Lives in
   /// the test target rather than the engine because only tests await terminal
   /// states; the production app drives off `phaseStream()` directly.

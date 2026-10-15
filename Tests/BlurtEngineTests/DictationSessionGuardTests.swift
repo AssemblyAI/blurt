@@ -49,13 +49,12 @@ struct DictationSessionGuardTests {
     let mic = StubMicCapture()
     let stt = StubTranscriber(mode: .transcript("hi"))
     let injector = StubInjector()
-    let session = DictationSession(
-      mic: mic, transcriber: stt, injector: injector,
+    let session = makeSession(
+      transcriber: stt, mic: mic, injector: injector,
       keyTermsProvider: {
         _ = reads.next()
         return ["Blurt"]
-      },
-      seams: .offline)
+      })
 
     await session.press()
     await session.cancel()

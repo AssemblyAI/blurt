@@ -3,9 +3,9 @@
 #
 # Blurt is macOS-only, so the Swift toolchain can't run here — but the portable
 # checks (prettier / xmllint / markdownlint / shellcheck / actionlint / zizmor /
-# shfmt / release.test.sh) can. This hook installs the missing portable linters so
-# `scripts/check.sh --portable` works, then prints a one-line preflight so the
-# session starts knowing CI (macos-26) is the authority on green.
+# shfmt / jscpd / release.test.sh) can. This hook installs the missing portable
+# linters so `scripts/check.sh --portable` works, then prints a one-line preflight
+# so the session starts knowing CI (macos-26) is the authority on green.
 #
 # Local (macOS) sessions are untouched: the hook exits immediately unless
 # CLAUDE_CODE_REMOTE=true. Idempotent — every install is guarded on
@@ -35,6 +35,14 @@ fi
 # preinstalled in the web sandbox; this is a fallback.
 if ! command -v prettier >/dev/null 2>&1; then
   npm install -g prettier >/dev/null 2>&1 || note "prettier install failed (npm)"
+fi
+
+# jscpd (npm) — check.sh's copy/paste gate, from tools/jscpd's lockfile (the one
+# version pin; check.sh prefers that copy). The tokenizer decides what counts as a
+# clone, so another release could disagree with CI.
+jscpd_dir="$(cd "$(dirname "$0")/../.." && pwd)/tools/jscpd"
+if [ ! -x "$jscpd_dir/node_modules/.bin/jscpd" ]; then
+  npm ci --prefix "$jscpd_dir" >/dev/null 2>&1 || note "jscpd install failed (npm ci --prefix tools/jscpd)"
 fi
 
 # ShellCheck (pip) — static analysis for scripts/*.sh. shellcheck-py bundles a
@@ -76,6 +84,7 @@ missing=""
 for tool in prettier xmllint markdownlint shellcheck actionlint zizmor shfmt; do
   command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
 done
+[ -x "$jscpd_dir/node_modules/.bin/jscpd" ] || missing="$missing jscpd"
 echo "Blurt web sandbox: no macOS toolchain — Swift build/tests/format run on CI (macos-26), the authority on green."
 if [ -n "$missing" ]; then
   echo "Portable linters missing:${missing}. 'scripts/check.sh --portable' will skip them with a note."

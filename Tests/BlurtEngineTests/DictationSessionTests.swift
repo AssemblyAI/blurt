@@ -23,9 +23,7 @@ extension DictationSessionTests {
     // The dictation API returns the already-cleaned text in one response.
     let fixture = makeSession(mode: .transcript("Hello world."))
 
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate()
 
     #expect(await fixture.session.phase == .pasted)
     #expect(await fixture.injector.inserted == ["Hello world."])
@@ -43,9 +41,7 @@ extension DictationSessionTests {
     // tap the endpoint would reject with a 400.
     await fixture.mic.setPCM(Data(count: 6))
 
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate()
 
     #expect(await fixture.session.phase == .idle)
     #expect(await fixture.injector.inserted.isEmpty)
@@ -58,9 +54,7 @@ extension DictationSessionTests {
     struct Boom: Error {}
     let fixture = makeSession(mode: .throwError(Boom()))
 
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate()
 
     if case .failed(.sttFailed) = await fixture.session.phase {
       // ok
@@ -74,9 +68,7 @@ extension DictationSessionTests {
   func transcriberBlurtErrorSurfaces() async throws {
     let fixture = makeSession(mode: .throwError(BlurtError.apiKeyMissing))
 
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate()
 
     #expect(await fixture.session.phase == .failed(.apiKeyMissing))
     #expect(await fixture.injector.inserted.isEmpty)
@@ -90,9 +82,7 @@ extension DictationSessionTests {
     let fixture = makeSession(mode: .throwError(Boom()))
 
     // First run: fail in STT
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate()
     if case .failed = await fixture.session.phase {
     } else {
       Issue.record("expected .failed after STT throws")
@@ -125,9 +115,7 @@ extension DictationSessionTests {
     // The API yielded only whitespace (e.g. silence) — nothing to inject.
     let fixture = makeSession(mode: .transcript("   "))
 
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate()
 
     #expect(await fixture.session.phase == .idle)
     #expect(await fixture.injector.inserted.isEmpty)
@@ -139,9 +127,7 @@ extension DictationSessionTests {
     let fixture = makeSession(mode: .transcript("Hello world."))
     await fixture.injector.setError(Boom())
 
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate()
 
     #expect(await fixture.session.phase == .failed(.targetAppLost))
   }
@@ -153,9 +139,7 @@ extension DictationSessionTests {
     // than being flattened to .targetAppLost.
     await fixture.injector.setError(BlurtError.accessibilityPermissionMissing)
 
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate()
 
     #expect(await fixture.session.phase == .failed(.accessibilityPermissionMissing))
   }
@@ -168,9 +152,7 @@ extension DictationSessionTests {
     // outcome, not a red .failed error.
     await fixture.injector.setError(BlurtError.noEditableTarget)
 
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate()
 
     #expect(await fixture.session.phase == .noTarget)
   }
@@ -183,9 +165,7 @@ extension DictationSessionTests {
     // this to the quiet "copied" outcome rather than a red .failed error.
     await fixture.injector.setError(BlurtError.targetAppLost)
 
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate()
 
     #expect(await fixture.session.phase == .noTarget)
   }
@@ -196,9 +176,7 @@ extension DictationSessionTests {
     let fixture = makeSession(mode: .transcript("never"))
     await fixture.mic.setStopError(Boom())
 
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate()
 
     if case .failed(.audioCaptureFailed) = await fixture.session.phase {
       // ok
@@ -264,14 +242,19 @@ extension DictationSessionTests {
     await fixture.session.cancel()
   }
 
-  @Test("cancel during active recording stops mic, discards audio, and transitions to .cancelled")
-  func cancelDuringRecording() async throws {
+  /// Both cancels end a live recording the same way: the user's `cancel()`, and
+  /// the narrow recovery `cancelRecording()` (tap disabled / trigger rebound),
+  /// which differs from it only once the capture has already ended.
+  @Test(
+    "cancel during active recording stops mic, discards audio, and transitions to .cancelled",
+    arguments: CancelCommand.allCases)
+  func cancelDuringRecording(command: CancelCommand) async throws {
     let fixture = makeSession(mode: .transcript("Hello"))
 
     await fixture.session.press()
     #expect(await fixture.session.phase == .recording)
 
-    await fixture.session.cancel()
+    await command.send(to: fixture.session)
     #expect(await fixture.session.phase == .cancelled)
     #expect(await fixture.mic.stopCalls == 1)
     #expect(await fixture.injector.inserted.isEmpty)
@@ -291,9 +274,7 @@ extension DictationSessionTests {
     #expect(await cancelled.mic.cancelCaptureCalls == 1)
 
     let released = makeSession()
-    await released.session.press()
-    await released.session.release()
-    await released.session.waitForIdle()
+    await released.session.dictate()
     #expect(await released.mic.cancelCaptureCalls == 0)
     #expect(await released.mic.stopCalls == 1)
   }
@@ -305,3 +286,17 @@ extension DictationSessionTests {
 // side-channel tests live in `DictationSessionTranscriptTests.swift`, and the
 // `.connecting` bring-up window in `DictationSessionBringUpTests.swift`, for the
 // same reason.
+
+/// `DictationSession`'s two cancel entry points, for a test that holds both to the
+/// same outcome.
+enum CancelCommand: CaseIterable, Sendable {
+  case cancel
+  case cancelRecording
+
+  func send(to session: DictationSession) async {
+    switch self {
+    case .cancel: await session.cancel()
+    case .cancelRecording: await session.cancelRecording()
+    }
+  }
+}

@@ -89,12 +89,7 @@ struct ProtocolTests {
     #expect(UIPasteboard.general.string == "wrong app")
     #expect(SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result) == nil)
     let same = KeyboardRelayInjector(presser: { "kb-2" })
-    let taker = Task {
-      try? await Task.sleep(for: .milliseconds(300))
-      let pending = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result)
-      SharedStore.remove(forKey: BlurtShared.Key.result)
-      return pending
-    }
+    let taker = takeResultShortly()
     try await same.insert("right app", after: nil, windowTitle: nil)
     #expect(await taker.value?.recipient == "kb-2")
   }
@@ -106,16 +101,22 @@ struct ProtocolTests {
     SharedStore.keyboardSeenAt = Date()
     SharedStore.keyboardInstance = "kb-1"
     let injector = KeyboardRelayInjector()
-    let taker = Task {
-      try? await Task.sleep(for: .milliseconds(300))
-      let pending = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result)
-      SharedStore.remove(forKey: BlurtShared.Key.result)
-      return pending
-    }
+    let taker = takeResultShortly()
     try await injector.insert("on time", after: nil, windowTitle: nil)
     let taken = await taker.value
     #expect(taken?.text == "on time")
     #expect(taken?.recipient == "kb-1")
+  }
+}
+
+/// Stands in for the keyboard: a moment after the app hands a result over, takes
+/// it out of the store the way the keyboard's signal handler does.
+private func takeResultShortly() -> Task<DictationResult?, Never> {
+  Task {
+    try? await Task.sleep(for: .milliseconds(300))
+    let pending = SharedStore.read(DictationResult.self, forKey: BlurtShared.Key.result)
+    SharedStore.remove(forKey: BlurtShared.Key.result)
+    return pending
   }
 }
 
@@ -174,9 +175,7 @@ struct KeyboardModelProtocolTests {
     let rig = KeyboardRig()
     let model = rig.model
     let commands = rig.commands
-    model.micDown()
-    model.micUp()
-    model.apply(snapshot(.recording))
+    rig.latchRecording()
     model.disappeared()
     #expect(commands.sent.map(\.kind) == [.press, .release])
     #expect(model.gate.isIdle)

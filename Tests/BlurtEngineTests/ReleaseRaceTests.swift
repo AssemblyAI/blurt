@@ -13,15 +13,18 @@ import Testing
 @Suite("DictationSession release races", .timeLimit(.minutes(1)))
 struct ReleaseRaceTests {
 
+  // Fresh doubles for every test: Swift Testing builds a new suite instance per
+  // test. The gated mic parks `stop()` until the test calls `allowStopToFinish()`.
+  private let mic = GatedStopMic()
+  private let injector = StubInjector()
+  private let session: DictationSession
+
+  init() {
+    session = makeSession(transcriber: StubTranscriber(mode: .transcript("hi")), mic: mic, injector: injector)
+  }
+
   @Test("a second release during mic.stop is dropped, not run twice")
   func reentrantReleaseRunsPipelineOnce() async throws {
-    let mic = GatedStopMic()
-    let stt = StubTranscriber(mode: .transcript("hi"))
-    let injector = StubInjector()
-    let session = DictationSession(
-      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
-      seams: .offline)
-
     await session.press()
     #expect(await session.phase == .recording)
 
@@ -52,13 +55,6 @@ struct ReleaseRaceTests {
 
   @Test("release claims .transcribing before mic.stop completes")
   func transcribingClaimedBeforeMicStopReturns() async throws {
-    let mic = GatedStopMic()
-    let stt = StubTranscriber(mode: .transcript("hi"))
-    let injector = StubInjector()
-    let session = DictationSession(
-      mic: mic, transcriber: stt, injector: injector, keyTermsProvider: { [] },
-      seams: .offline)
-
     await session.press()
     let release = Task { await session.release() }
     await mic.waitUntilStopEntered()

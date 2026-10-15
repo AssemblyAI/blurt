@@ -183,21 +183,21 @@ public actor DictationSession {
 
   /// `seams` is deliberately required rather than defaulted: it's what keeps this
   /// initializer distinct from the public one above, so an in-module call is never
-  /// ambiguous. `keyTermsProvider` is optional-and-resolved-here rather than
-  /// defaulted in the signature for the same reason `AssemblyAITranscriber`'s
-  /// `enhancedTranscripts` is — a public default argument can't reference the
-  /// store's internal members.
+  /// ambiguous. Nothing else is defaulted either: the defaults live on the public one,
+  /// and tests come here through the `makeSession` factories, which spell out theirs.
+  /// `keyTermsProvider` is optional-and-resolved-here because a public default
+  /// argument can't reference the store's internal members.
   init(
     mic: MicCaptureProtocol,
     transcriber: TranscriberProtocol,
     injector: InjectorProtocol,
-    maxRecordingSeconds: Double = SyncSTTLimits.autoReleaseSeconds,
-    clock: any Clock<Duration> = ContinuousClock(),
-    keyTermsProvider: (@Sendable () -> [String])? = nil,
-    styleNameProvider: (@Sendable () -> String?)? = nil,
-    textShortcutsProvider: (@Sendable () -> [TextShortcut])? = nil,
-    readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
-    onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)? = nil,
+    maxRecordingSeconds: Double,
+    clock: any Clock<Duration>,
+    keyTermsProvider: (@Sendable () -> [String])?,
+    styleNameProvider: (@Sendable () -> String?)?,
+    textShortcutsProvider: (@Sendable () -> [TextShortcut])?,
+    readinessCheck: @escaping @Sendable () -> BlurtError?,
+    onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)?,
     seams: Seams
   ) {
     self.mic = mic

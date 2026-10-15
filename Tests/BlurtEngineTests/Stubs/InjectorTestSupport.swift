@@ -126,4 +126,15 @@
       set { stored.withLock { $0 = newValue } }
     }
   }
+
+  extension ValueBox where T == Bool {
+    /// A `KeyInjector` `postPaste` double that records the ⌘V was posted and
+    /// reports it landed — for a test that asserts on whether the paste happened.
+    var recordingPaste: @Sendable () -> Bool {
+      {
+        self.value = true
+        return true
+      }
+    }
+  }
 #endif
