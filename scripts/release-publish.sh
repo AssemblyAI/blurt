@@ -31,7 +31,7 @@ done
 source "$REPO_ROOT/scripts/release-lib.sh"
 
 step "Preflight"
-require_tools gh git xcrun awk
+require_tools gh git xcrun awk perl
 
 VERSION="$(require_project_version "$APP_DIR/project.yml")"
 DMG="$BUILD_ROOT/Blurt-$VERSION.dmg"
@@ -68,6 +68,13 @@ info "built at: $BUILT_SHA (matches HEAD)"
 BUILT_CHANNEL="$(parse_build_info_channel <"$BUILD_INFO")"
 [ "$BUILT_CHANNEL" = release ] \
   || die "these artifacts are a '${BUILT_CHANNEL:-no channel}' build, not a release — rebuild without --staging to publish (a staging build goes to scripts/release-stage.sh)"
+# The release page leads with the same hand-written notes the update window
+# shows. release-build.sh refuses to build a release without them, so at the
+# commit it built (checked above) the file is there; this only catches a tree
+# that lost it since.
+NOTES_FILE="$(release_notes_path "$VERSION")"
+[ -f "$NOTES_FILE" ] || die "no release notes at $NOTES_FILE — the build had them; restore the file (RELEASE.md → Release notes)"
+info "notes:    $NOTES_FILE"
 
 step "Validate staple"
 xcrun stapler validate "$DMG" >/dev/null || die "DMG not stapled — rebuild with release-build.sh"
@@ -161,20 +168,25 @@ ln -f "$DSYM_ZIP" "$STABLE_DSYM"
 # before the assets are verified put a possibly-truncated upload in front of
 # users for the length of the verify step. The draft is flipped live at the end,
 # after the re-download + sha + staple checks pass.
-gh release create "$TAG" \
+#
+# The body is the hand-written notes (comments stripped, as the appcast gets
+# them) with GitHub's generated "What's Changed" PR list below: gh prepends
+# --notes-file to the --generate-notes output.
+release_notes_body <"$NOTES_FILE" | gh release create "$TAG" \
   "$STABLE_DMG" \
   "$DMG" \
   "$STABLE_DSYM" \
   "$APPCAST" \
   --title "$TAG" \
+  --notes-file - \
   --generate-notes \
   --draft
 
-# Fold the checksums into the generated notes (see above for why not as an asset).
-GENERATED_NOTES="$(gh release view "$TAG" --json body -q .body)"
+# Fold the checksums into the notes (see above for why not as an asset).
+RELEASE_BODY="$(gh release view "$TAG" --json body -q .body)"
 CHECKSUMS_BODY="$(cat "$CHECKSUMS")"
 # shellcheck disable=SC2016  # the single-quoted string is a printf format, not shell expansion
-NOTES="$(printf '%s\n\n## Checksums\n\n```\n%s\n```\n' "$GENERATED_NOTES" "$CHECKSUMS_BODY")"
+NOTES="$(printf '%s\n\n## Checksums\n\n```\n%s\n```\n' "$RELEASE_BODY" "$CHECKSUMS_BODY")"
 gh release edit "$TAG" --notes "$NOTES"
 
 step "Verify published assets"

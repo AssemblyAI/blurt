@@ -86,7 +86,7 @@ struct AssemblyAISpeechSynthesizer: Sendable {
     try await withTaskCancellationHandler {
       // `exchange` closes the socket itself on every failure.
       try await exchange(over: socket, segments: segments, onAudio: onAudio)
-      try? await socket.send(Self.command("Terminate"))
+      try? await socket.send(Self.terminate)
       socket.close(normally: true)
     } onCancel: {
       socket.close(normally: false)
@@ -108,7 +108,7 @@ struct AssemblyAISpeechSynthesizer: Sendable {
           // stopped, don't queue any more.
           try Task.checkCancellation()
           try await socket.send(Self.command("Generate", text: segment))
-          try await socket.send(Self.command("Flush"))
+          try await socket.send(Self.flush)
         }
       }
       // One idle timer for the whole exchange. A closed socket is the only
@@ -153,6 +153,10 @@ struct AssemblyAISpeechSynthesizer: Sendable {
     let type: String
     let text: String?
   }
+
+  /// The fixed commands, encoded once rather than per segment.
+  private static let flush = command("Flush")
+  private static let terminate = command("Terminate")
 
   static func command(_ type: String, text: String? = nil) -> String {
     let encoder = JSONEncoder()

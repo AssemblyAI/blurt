@@ -59,6 +59,14 @@ public enum AudioInputDevices {
     systemDefaultDevice?.localizedName
   }
 
+  /// The name of the input a press records from — the pinned device, or the
+  /// system default when there is no pin (`MicCapture.ResolvedInput` has already
+  /// folded a missing pin into nil) — or nil when that device can't be found.
+  static func inputName(pinnedUID: String?) -> String? {
+    guard let pinnedUID else { return systemDefaultInputName() }
+    return device(forUID: pinnedUID)?.localizedName
+  }
+
   /// The transport type of the device carrying this UID, or nil when no
   /// connected device does.
   ///

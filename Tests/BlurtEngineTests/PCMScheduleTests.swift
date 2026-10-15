@@ -30,4 +30,12 @@ struct PCMScheduleTests {
     #expect(near(schedule.remaining(now: 0.55), 0.5))
     #expect(schedule.remaining(now: 5) == 0)
   }
+
+  @Test("at a faster rate the lead stretches in media time, so the real headroom stays the same")
+  func rate() {
+    var schedule = PCMSchedule(sampleRate: 1_000, rate: 2)
+    #expect(near(schedule.place(frames: 500, now: 0), PCMSchedule.lead * 2))
+    _ = schedule.place(frames: 100, now: 0)
+    #expect(near(schedule.place(frames: 100, now: 5), 5 + PCMSchedule.lead * 2))
+  }
 }

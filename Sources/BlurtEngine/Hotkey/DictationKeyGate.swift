@@ -12,7 +12,11 @@
 /// The gate reads no clock — callers pass monotonic timestamps as a `Duration`
 /// from a fixed reference, so every decision is deterministic and unit-testable.
 public struct DictationKeyGate: Sendable {
-  public enum Action: Sendable, Equatable { case none, start, stop, cancel }
+  /// `latch` is a release that latched the recording on (a tap). Dictation has
+  /// nothing to do on it, since the recording just keeps going, but it is the
+  /// only moment a tap is distinguishable from a hold, and read-aloud's router
+  /// needs exactly that (a tap over a selection reads it; a hold asks about it).
+  public enum Action: Sendable, Equatable { case none, start, stop, cancel, latch }
 
   /// A release held at least this long counts as a hold (push-to-talk stop);
   /// shorter is a tap. 1 s is a good default when one key does both jobs.
@@ -74,7 +78,7 @@ public struct DictationKeyGate: Sendable {
     // or any release over a latched recording — stops.
     if fromIdle, activation.latchesOnRelease(heldFor: now - downAt, holdThreshold: holdThreshold) {
       state = .latched
-      return .none
+      return .latch
     }
     state = .idle
     return .stop
