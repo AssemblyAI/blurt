@@ -169,9 +169,7 @@ struct DictationSessionTextShortcutTests {
       textShortcuts: [TextShortcut(trigger: "personal email", expansion: "me@example.com")],
       onTranscriptDelivered: { text, _ in spy.append(text) })
 
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate()
 
     #expect(await fixture.injector.inserted == ["Mail me@example.com."])
     #expect(spy.values == ["Mail me@example.com."])
@@ -188,9 +186,7 @@ struct DictationSessionTextShortcutTests {
       textShortcuts: [TextShortcut(trigger: "personal email", expansion: "me@example.com")])
 
     for _ in 1...2 {
-      await fixture.session.press()
-      await fixture.session.release()
-      await fixture.session.waitForIdle()
+      await fixture.session.dictate()
     }
 
     let contexts = await fixture.transcriber.receivedContexts
@@ -208,9 +204,7 @@ struct DictationSessionTextShortcutTests {
         priorText: "Mail me@example.com.", selectedText: nil, windowTitle: nil, fieldLabel: nil),
       textShortcuts: [TextShortcut(trigger: "personal email", expansion: "me@example.com")])
 
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate()
 
     let context = await fixture.transcriber.receivedContexts.last ?? nil
     #expect(context?.priorText == "Mail me@example.com.")

@@ -92,6 +92,13 @@ jobs:
         working-directory: blurt
         run: brew bundle --file=Brewfile
 
+      # check.sh's copy/paste gate, installed from its lockfile (tools/jscpd) rather
+      # than the Brewfile so every machine runs the one release: the tokenizer
+      # decides what counts as a clone. check.sh finds it in tools/jscpd itself.
+      - name: Install jscpd
+        working-directory: blurt
+        run: npm ci --prefix tools/jscpd
+
       - name: Show toolchain
         run: |
           xcodebuild -version

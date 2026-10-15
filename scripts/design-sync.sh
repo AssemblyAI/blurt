@@ -27,13 +27,8 @@ elif [ -n "${1:-}" ]; then
   exit 2
 fi
 
-if command -v xcrun >/dev/null 2>&1 && xcrun --find swift-format >/dev/null 2>&1; then
-  SWIFT_FORMAT=(xcrun swift-format)
-elif command -v swift-format >/dev/null 2>&1; then
-  SWIFT_FORMAT=(swift-format)
-else
-  SWIFT_FORMAT=()
-fi
+# shellcheck source=scripts/swift-format-lib.sh
+source "$REPO_ROOT/scripts/swift-format-lib.sh"
 
 OUTPUTS=(
   App/BlurtiOS/BlurtDesign/DesignTokens.swift

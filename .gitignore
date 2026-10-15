@@ -26,6 +26,9 @@ docs/
 *.profraw
 *.profdata
 
+# tools/jscpd's install (npm ci --prefix tools/jscpd); its lockfile is tracked.
+tools/jscpd/node_modules/
+
 # Python
 __pycache__/
 *.py[cod]

@@ -47,6 +47,14 @@ struct KeyboardRig {
     self.commands = commands
   }
 
+  /// A tap — finger down, finger up — answered by the app's recording phase: the
+  /// gate latched over a live dictation.
+  func latchRecording() {
+    model.micDown()
+    model.micUp()
+    model.apply(snapshot(.recording))
+  }
+
   /// The app listening — an open window and a fresh heartbeat — or not.
   static func listening(_ on: Bool) {
     let now = Date()

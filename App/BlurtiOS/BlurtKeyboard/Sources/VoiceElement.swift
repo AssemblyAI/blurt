@@ -62,6 +62,18 @@ struct VoiceElementView: View {
   }
 }
 
+extension View {
+  /// How a candidate sits in its slot: the slot's box, dimmed to `opacity/off`
+  /// (fading over `state-fade`) while Blurt isn't ready, and out of the
+  /// accessibility tree: `MicControl`, drawn over it, is what VoiceOver reads.
+  func voiceElementFrame(_ box: CGSize, ready: Bool) -> some View {
+    frame(width: box.width, height: box.height)
+      .opacity(ready ? 1 : DesignTokens.Metrics.opacityOff)
+      .animation(.easeInOut(duration: DesignTokens.Motion.stateFade), value: ready)
+      .accessibilityHidden(true)
+  }
+}
+
 private struct VoiceElementKindKey: EnvironmentKey {
   static let defaultValue = VoiceElementKind.shipped
 }

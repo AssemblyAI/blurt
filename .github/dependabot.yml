@@ -11,3 +11,11 @@ updates:
     groups:
       github-actions:
         patterns: ["*"]
+  # check.sh's copy/paste detector, pinned by tools/jscpd's lockfile. A bump is a
+  # PR so CI shows whether the new tokenizer finds clones the old one didn't.
+  - package-ecosystem: npm
+    directory: "/tools/jscpd"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci"

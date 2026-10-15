@@ -56,13 +56,8 @@ struct KeyboardModelFuzzTests {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     var random = Random(state: seed &* 7919)
-    let proxy = FakeProxy()
-    let model = KeyboardModel()
-    model.proxyOverride = proxy
-    model.hasFullAccess = true
-    let commands = KeyboardRig.Commands()
-    model.transport = { commands.sent.append($0) }
-    KeyboardRig.listening(true)
+    let rig = KeyboardRig()
+    let (model, proxy, commands) = (rig.model, rig.proxy, rig.commands)
     model.appeared()
     var trace: [Event] = []
     // The press the app has not taken yet: closed by our release or cancel,
@@ -182,13 +177,8 @@ struct KeyboardModelFuzzTests {
     let suite = ScratchSuite()
     defer { suite.tearDown() }
     var random = Random(state: 42)
-    let proxy = FakeProxy()
-    let model = KeyboardModel()
-    model.proxyOverride = proxy
-    model.hasFullAccess = true
-    let commands = KeyboardRig.Commands()
-    model.transport = { commands.sent.append($0) }
-    KeyboardRig.listening(true)
+    let rig = KeyboardRig()
+    let (model, proxy, commands) = (rig.model, rig.proxy, rig.commands)
     // Hands-free off: a tap must be the press here, not the stop of one the
     // appearance started.
     SharedStore.autoDictate = false

@@ -2,7 +2,7 @@
 # Project health check: build + test the SPM engine and the macOS app.
 # Pipes xcodebuild through xcbeautify when available (brew install xcbeautify).
 # Runs swiftlint / periphery / actionlint / zizmor / prettier /
-# markdownlint / shellcheck / shfmt / ruff / pytest when available.
+# markdownlint / shellcheck / shfmt / jscpd / ruff / pytest when available.
 # Swift warnings are treated as errors everywhere; engine line coverage is gated.
 # The read-only checks run to completion and report together at the bottom rather
 # than stopping at the first failure — see `run_check` below.
@@ -18,7 +18,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_DIR="$REPO_ROOT/App/Blurt"
 
 # --portable: run only the platform-independent checks (actionlint / zizmor /
-# prettier / markdownlint / shellcheck / shfmt / ruff / pytest /
+# prettier / markdownlint / shellcheck / shfmt / jscpd / ruff / pytest /
 # release.test.sh, plus swift-format and
 # swiftlint lint when their Linux builds happen to be present). For Linux / web
 # sandboxes where the macOS toolchain is absent. A green --portable run is NOT
@@ -480,17 +480,12 @@ run_check "mutation targets exist (mutate.sh --list)" check_mutation_targets
 # Lint every tracked .swift file (git ls-files) so a new source directory is
 # picked up automatically rather than silently skipped by a stale path list.
 # On a Mac it runs via xcrun; a bare swift-format on PATH (e.g. a Linux build)
-# works too. In portable mode a missing swift-format is a skip-note, matching
-# the other optional tools; on a Mac xcrun is always present so it still runs
-# unconditionally.
+# works too (swift-format-lib.sh picks). A missing swift-format is a skip-note,
+# matching the other optional tools; on a Mac with full Xcode — what the rest of
+# this script needs anyway — the toolchain always has one, so it still runs.
 cd "$REPO_ROOT"
-if command -v xcrun >/dev/null 2>&1; then
-  SWIFT_FORMAT=(xcrun swift-format)
-elif command -v swift-format >/dev/null 2>&1; then
-  SWIFT_FORMAT=(swift-format)
-else
-  SWIFT_FORMAT=()
-fi
+# shellcheck source=scripts/swift-format-lib.sh
+source "$REPO_ROOT/scripts/swift-format-lib.sh"
 check_swift_format() {
   git ls-files -z -- '*.swift' \
     | xargs -0 "${SWIFT_FORMAT[@]}" lint --strict
@@ -580,6 +575,19 @@ if tool_ready shfmt 'brew install shfmt'; then
   # here instead of drifting. No formatting flags on purpose — that is what lets
   # shfmt read the [*.sh] block in .editorconfig, so editors and this check agree.
   run_check "shfmt --diff" shfmt --diff scripts/*.sh
+fi
+
+# Copy/paste detection over the Swift, shell and Python (config, thresholds and
+# scope in .jscpd.json). Zero clones is the bar, tests included: a block repeated
+# across tests wants a fixture or a helper, the way `makeSession` and `KeyboardRig`
+# are. The pinned install in tools/jscpd (its lockfile is the one version pin) wins
+# over any other copy on PATH: the tokenizer decides what counts as a clone, so
+# another release could go red, or green, with no source change.
+if [ -x "$REPO_ROOT/tools/jscpd/node_modules/.bin/jscpd" ]; then
+  PATH="$REPO_ROOT/tools/jscpd/node_modules/.bin:$PATH"
+fi
+if tool_ready jscpd 'npm ci --prefix tools/jscpd'; then
+  run_check "jscpd (copy/paste)" jscpd
 fi
 
 # The evals (evals/) are the repo's only Python: offline decision support for the

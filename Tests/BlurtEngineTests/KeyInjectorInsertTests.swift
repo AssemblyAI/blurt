@@ -69,10 +69,7 @@
       let posted = ValueBox<Bool>(false)
       let injector = KeyInjector(
         pasteSettleDuration: .zero,
-        postPaste: {
-          posted.value = true
-          return true
-        },
+        postPaste: posted.recordingPaste,
         activateTarget: { _ in false },
         clipboard: clip)
       await injector.setTarget(try liveTargetFocus())
@@ -91,10 +88,7 @@
       let posted = ValueBox<Bool>(false)
       let injector = KeyInjector(
         pasteSettleDuration: .zero,
-        postPaste: {
-          posted.value = true
-          return true
-        })
+        postPaste: posted.recordingPaste)
       try await injector.insert("")
       #expect(posted.value == false)
     }
@@ -117,10 +111,7 @@
       let posted = ValueBox<Bool>(false)
       let injector = KeyInjector(
         pasteSettleDuration: .zero,
-        postPaste: {
-          posted.value = true
-          return true
-        },
+        postPaste: posted.recordingPaste,
         isAccessibilityTrusted: { false },
         clipboard: clip)
 
@@ -138,10 +129,7 @@
       let posted = ValueBox<Bool>(false)
       let injector = KeyInjector(
         pasteSettleDuration: .zero,
-        postPaste: {
-          posted.value = true
-          return true
-        },
+        postPaste: posted.recordingPaste,
         hasEditableTarget: { false },
         clipboard: clip)
 
@@ -160,10 +148,7 @@
       let posted = ValueBox<Bool>(false)
       let injector = KeyInjector(
         pasteSettleDuration: .zero,
-        postPaste: {
-          posted.value = true
-          return true
-        },
+        postPaste: posted.recordingPaste,
         hasEditableTarget: { false },  // Electron/Chromium exposes no editable AX signal
         isAXOpaqueApp: { _ in true },  // …but it *is* an AX-opaque app (Electron editor)
         clipboard: clip)
@@ -279,10 +264,7 @@
       let posted = ValueBox<Bool>(false)
       let injector = KeyInjector(
         pasteSettleDuration: .zero,
-        postPaste: {
-          posted.value = true
-          return true
-        })
+        postPaste: posted.recordingPaste)
       // Gate the body so `cancel()` is guaranteed to land before `insert` reaches
       // its first cancellation check. Without this, a busy machine can run the
       // task past that check before `cancel()` arrives, posting the paste and

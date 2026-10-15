@@ -30,9 +30,7 @@ struct DictationSessionContextTests {
       frontmost: CapturedFocus(pid: 501, processName: "Mail"),
       keyTerms: ["AssemblyAI"])
 
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate()
 
     // One snapshot, assembled from the frontmost app, the field read, and the
     // key terms — and it must be the *same* one everywhere downstream, which is
@@ -54,9 +52,7 @@ struct DictationSessionContextTests {
     // instead of omitting the field.
     let fixture = makeSession(mode: .transcript("Hello world."))
 
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate()
 
     #expect(await fixture.transcriber.receivedContexts == [nil])
     #expect(await fixture.injector.insertedPrior == [nil])
@@ -66,12 +62,8 @@ struct DictationSessionContextTests {
   func eachPressCapturesAfresh() async throws {
     let fixture = makeSession(mode: .transcript("Second."), field: Self.field)
 
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate()
+    await fixture.session.dictate()
 
     // The stream the press installs is consumed once and cleared, so dictation #2
     // must not inherit — or be starved by — dictation #1's read.
@@ -85,9 +77,7 @@ struct DictationSessionContextTests {
     let fixture = makeSession(mode: .transcript("First thought."), field: Self.field)
 
     for _ in 1...3 {
-      await fixture.session.press()
-      await fixture.session.release()
-      await fixture.session.waitForIdle()
+      await fixture.session.dictate()
     }
 
     let contexts = await fixture.transcriber.receivedContexts
@@ -116,9 +106,7 @@ struct DictationSessionContextTests {
     let fixture = makeSession(mode: .transcript("hunter2"), field: Self.secureField)
 
     for _ in 1...2 {
-      await fixture.session.press()
-      await fixture.session.release()
-      await fixture.session.waitForIdle()
+      await fixture.session.dictate()
     }
 
     // It still reached the user: transcribed and pasted, twice.
@@ -227,9 +215,7 @@ struct DictationSessionContextTests {
     #expect(!TranscriptionContext(appName: nil, priorText: nil, targetIsSecure: true).isEmpty)
     let fixture = makeSession(mode: .transcript("hunter2"), field: secure, frontmost: nil)
 
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate()
 
     #expect(await fixture.transcriber.receivedContexts.first??.targetIsSecure == true)
     #expect(await fixture.session.recentDictations.entries.isEmpty)
@@ -244,9 +230,7 @@ struct DictationSessionContextTests {
     let fixture = makeSession(mode: .transcript("Said this."))
 
     for _ in 1...2 {
-      await fixture.session.press()
-      await fixture.session.release()
-      await fixture.session.waitForIdle()
+      await fixture.session.dictate()
     }
 
     let contexts = await fixture.transcriber.receivedContexts
@@ -321,9 +305,7 @@ struct DictationSessionFailureLogTests {
       field: FocusedFieldContext(
         priorText: nil, selectedText: nil, windowTitle: "Vault", fieldLabel: "Password"))
 
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate()
 
     #expect(fixture.log.failureNames == ["apiKeyMissing"])
     #expect(fixture.log.failures.first?.context?.windowTitle == "Vault")
@@ -335,11 +317,9 @@ struct DictationSessionFailureLogTests {
   func refusedPressIsLogged() async throws {
     let mic = StubMicCapture()
     let log = RecordedLog()
-    let session = DictationSession(
-      mic: mic, transcriber: StubTranscriber(mode: .transcript("never")),
-      injector: StubInjector(), keyTermsProvider: { [] },
-      readinessCheck: { .apiKeyMissing },
-      seams: testSeams(log: log))
+    let session = makeSession(
+      transcriber: StubTranscriber(mode: .transcript("never")), mic: mic,
+      readinessCheck: { .apiKeyMissing }, seams: testSeams(log: log))
 
     await session.press()
 
@@ -355,9 +335,7 @@ struct DictationSessionFailureLogTests {
     let fixture = makeSession(mode: .transcript("Copied text."))
     await fixture.injector.setError(BlurtError.noEditableTarget)
 
-    await fixture.session.press()
-    await fixture.session.release()
-    await fixture.session.waitForIdle()
+    await fixture.session.dictate()
 
     #expect(await fixture.session.phase == .noTarget)
     #expect(fixture.log.failures.isEmpty)

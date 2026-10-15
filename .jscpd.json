@@ -1,0 +1,9 @@
+{
+  "path": ["."],
+  "format": ["swift", "bash", "python"],
+  "minTokens": 50,
+  "minLines": 5,
+  "exitCode": 1,
+  "reporters": ["console-full"],
+  "noTips": true
+}

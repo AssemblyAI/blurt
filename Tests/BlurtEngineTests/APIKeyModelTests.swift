@@ -1,10 +1,9 @@
-import BlurtEngine
 import Testing
 
-@testable import BlurtiOSCore
+@testable import BlurtEngine
 
-/// The iPhone's API-key model over an in-memory store — never the real
-/// Keychain — and a validator that answers without the network.
+/// The shells' API-key model over an in-memory store — never the real Keychain
+/// — and a validator that answers without the network.
 @Suite("API key model")
 @MainActor
 struct APIKeyModelTests {
@@ -32,5 +31,15 @@ struct APIKeyModelTests {
     #expect(!model.hasAPIKey)
     model.refreshStatus()
     #expect(model.hasAPIKey)
+  }
+
+  @Test("save writes through the injected store, unvalidated, and flips the flag")
+  func save() {
+    let store = InMemoryAPIKeyStore()
+    let model = APIKeyModel(keyStore: store) { _ in .invalid }
+    #expect(model.save("typed"))
+    #expect(model.hasAPIKey)
+    #expect(model.current == "typed")
+    #expect(model.storage.current == "typed")
   }
 }

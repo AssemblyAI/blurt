@@ -37,9 +37,7 @@ struct MemoryLeakTests {
       // session — so it neither masks nor creates a cycle, it just keeps the leak
       // check off the window server and out of the user's real log.
       let session = makeSession(mode: .transcript("Hello.")).session
-      await session.press()
-      await session.release()
-      await session.waitForIdle()
+      await session.dictate()
       return session
     }
   }

@@ -131,9 +131,19 @@ if [ "$status" -eq 0 ] && [ -z "$shadowed" ] \
   status=1
 fi
 
+# jscpd isn't a Brewfile formula: check.sh's copy/paste gate runs the release
+# pinned by tools/jscpd's lockfile, because the tokenizer decides what counts as a
+# clone. The Brewfile's `node` supplies npm; `npm ci` reinstalls exactly the locked
+# versions, so rerunning this repairs a drifted install.
+echo "==> npm ci --prefix tools/jscpd"
+if ! npm ci --prefix "$REPO_ROOT/tools/jscpd"; then
+  echo "error: jscpd didn't install; retry with: npm ci --prefix tools/jscpd" >&2
+  status=1
+fi
+
 if [ "$status" -ne 0 ]; then
   exit 1
 fi
 
 echo "==> done"
-echo "Every Brewfile tool is on PATH; scripts/check.sh will skip none of them."
+echo "Every Brewfile tool and jscpd is on PATH; scripts/check.sh will skip none of them."
