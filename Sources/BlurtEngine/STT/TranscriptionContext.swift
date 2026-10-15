@@ -1,5 +1,3 @@
-import AssemblyAI
-
 /// Everything captured at dictation start about where the user is typing:
 /// the frontmost app, the focused window and field, the text around the cursor,
 /// the user's recent dictations, and the user's key terms.
