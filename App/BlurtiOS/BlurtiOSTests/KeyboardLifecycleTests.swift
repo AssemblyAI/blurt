@@ -169,10 +169,10 @@ struct KeyboardLifecycleTests {
   }
 }
 
-extension KeyboardRig {
+private extension KeyboardRig {
   /// Push-to-talk let go before the mic was up: a press, the app's `.connecting`,
   /// then the stop. The engine would drop a release now, so the keyboard holds it.
-  fileprivate func letGoWhileConnecting() {
+  func letGoWhileConnecting() {
     model.micDown()
     model.apply(snapshot(.connecting))
     model.perform(.stop)

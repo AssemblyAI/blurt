@@ -193,13 +193,11 @@ public actor DictationSession {
 
   /// `seams` is deliberately required rather than defaulted: it's what keeps this
   /// initializer distinct from the public one above, so an in-module call is never
-  /// ambiguous. Nothing else is defaulted either — the public initializer is the one
-  /// place the defaults live, and the tests reach this one through the `makeSession`
-  /// factories, which spell out their own. `keyTermsProvider` is
-  /// optional-and-resolved-here for the same reason `AssemblyAITranscriber`'s
-  /// `enhancedTranscripts` is — a public default argument can't reference the
-  /// store's internal members.
-  init(
+  /// ambiguous. Nothing else is defaulted either: the defaults live on the public one,
+  /// and tests come here through the `makeSession` factories, which spell out theirs.
+  /// `keyTermsProvider` is optional-and-resolved-here because a public default
+  /// argument can't reference the store's internal members.
+  init(  // swiftlint:disable:this function_parameter_count
     mic: MicCaptureProtocol,
     transcriber: TranscriberProtocol,
     injector: InjectorProtocol,
