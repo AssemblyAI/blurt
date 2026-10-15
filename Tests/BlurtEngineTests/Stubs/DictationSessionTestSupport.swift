@@ -1,6 +1,7 @@
 import Foundation
 import Synchronization
 
+@testable import AssemblyAI
 @testable import BlurtEngine
 
 /// A `DictationSession` plus the doubles a test configures or asserts against

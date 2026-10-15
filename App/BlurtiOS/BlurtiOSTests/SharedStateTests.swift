@@ -40,26 +40,6 @@ struct MicAlignmentSettingTests {
   }
 }
 
-@Suite("Key term list")
-struct KeyTermListTests {
-  @Test("parse trims, drops blanks, and deduplicates case-insensitively in first-seen order")
-  func parse() {
-    #expect(KeyTermList.parse(" Rizz , skibidi,,RIZZ, Blurt ,") == ["Rizz", "skibidi", "Blurt"])
-  }
-
-  @Test("join is what parse reads back")
-  func roundTrip() {
-    let terms = ["Neil Bisht", "AssemblyAI", "rizz"]
-    #expect(KeyTermList.parse(KeyTermList.join(terms)) == terms)
-  }
-
-  @Test("an empty or all-blank list is empty")
-  func empty() {
-    #expect(KeyTermList.parse("").isEmpty)
-    #expect(KeyTermList.parse(" , ,").isEmpty)
-  }
-}
-
 @Suite("Phase snapshot staleness")
 struct PhaseSnapshotTests {
   private func snapshot(_ state: PhaseSnapshot.State, ageSeconds: TimeInterval) -> PhaseSnapshot {

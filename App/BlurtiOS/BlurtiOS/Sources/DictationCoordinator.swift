@@ -204,7 +204,7 @@ final class DictationCoordinator {
 
   /// The user's own key terms (from the App Group, where the keyboard adds
   /// them on the spot), then the contact names the keyboard read off the
-  /// phone, deduplicated case-insensitively. `KeytermsBoost` fits the list
+  /// phone, deduplicated case-insensitively. `KeyTerms` fits the list
   /// to the request's caps (100 terms, 2048 bytes), first entries first, which
   /// is why the typed terms lead.
   nonisolated static func keyTerms() -> [String] {

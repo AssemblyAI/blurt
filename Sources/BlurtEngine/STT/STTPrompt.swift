@@ -1,3 +1,5 @@
+import AssemblyAI
+
 /// Builds the dictation request's `config.stt_prompt` — the contextual prompt
 /// that primes the STT model with what came *before* this utterance. The model
 /// reads it as continuity: vocabulary, spelling, capitalization, and mid-sentence
@@ -24,7 +26,7 @@
 ///
 /// The key terms aren't here either, but for the opposite reason: they *are*
 /// sent, as their own request field. Keyterms prompting takes a flat list of
-/// strings (`config.keyterms_prompt` — see `KeytermsBoost`), which is what the
+/// strings (`config.keyterms_prompt` — see `KeyTerms`), which is what the
 /// Settings field collects. Don't fold them into this string — a
 /// `Keywords: a, b, c.` clause is the shape that field replaced.
 ///
@@ -91,7 +93,7 @@ enum STTPrompt {
   /// and 820 family emoji — 820 grapheme clusters but 4100 scalars — is
   /// rejected with the message above. So Swift's `String.count`, which counts
   /// graphemes, would *under*-count and let a 400 through, and UTF-8 bytes (the
-  /// unit `KeytermsBoost` and `CleanupInstruction` use, where the server's own
+  /// unit `KeyTerms` and `CleanupInstruction` use, where the server's own
   /// unit is unmeasured) would needlessly halve the budget for any accented
   /// text. Scalars are exactly what the server counts.
   static let characterCap = 4096
@@ -117,7 +119,7 @@ enum STTPrompt {
   /// A plain `String`, not an optional one: "nothing to send" needs exactly one
   /// spelling, and the omit-vs-`""` distinction that matters to the API is
   /// stated once on the wire, in `DictationConfig.encode(to:)`. Same shape, and
-  /// the same reasoning, as `KeytermsBoost.fitted`.
+  /// the same reasoning, as `KeyTerms.fitted`.
   ///
   /// Every caller that reports or transmits the context goes through here — the
   /// transcriber and the developer-mode log both — so the log records exactly

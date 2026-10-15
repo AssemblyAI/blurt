@@ -76,7 +76,7 @@ preview hands the model a `ThemeFace`, not a palette — the colours are the UI'
 ## Unit tests
 
 `scripts/ios-test.sh` runs `BlurtiOSTests` on a simulator (CI's `ios-build` job runs it after
-the build): the core's logic — the App Group contract (`KeyTermList`, stale snapshots, layouts),
+the build): the core's logic — the App Group contract (key terms, stale snapshots, layouts),
 the keyboard's rules (sentence start, the double space, the term field, return labels, letter
 rows) against a fake text field, the gate against the app's phases, the Darwin signals, term
 packs — and what the UI builds on it (palettes, the voice element, the gallery). The engine's

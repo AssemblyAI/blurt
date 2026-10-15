@@ -115,7 +115,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     let config = try makeConfigData(
       sampleRate: sampleRate,
       sttPrompt: STTPrompt.text(context: context),
-      keytermsPrompt: KeytermsBoost.fitted(context?.keyTerms ?? []))
+      keytermsPrompt: KeyTerms.fitted(context?.keyTerms ?? []))
 
     var request = URLRequest(url: baseURL.appending(path: Self.transcribePath))
     request.httpMethod = "POST"
