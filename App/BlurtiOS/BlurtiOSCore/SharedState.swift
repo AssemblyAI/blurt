@@ -144,14 +144,6 @@ package nonisolated struct PhaseSnapshot: Codable, Sendable, Equatable {
     case pasted
     case copied
     case error
-
-    /// Nothing in flight: a notice, or rest.
-    package var isSettled: Bool {
-      switch self {
-      case .idle, .pasted, .copied, .error: true
-      case .connecting, .recording, .processing: false
-      }
-    }
   }
 
   package let state: State
@@ -254,8 +246,7 @@ package nonisolated enum SharedStore {
     defaults.removeObject(forKey: key)
   }
 
-  /// A choice stored by its raw value, or `fallback` when none (or one this
-  /// build doesn't know) is stored.
+  /// A choice stored by its raw value, or `fallback` for none or an unknown one.
   private static func choice<C: RawRepresentable>(_ key: String, default fallback: C) -> C where C.RawValue == String {
     C(rawValue: defaults.string(forKey: key) ?? "") ?? fallback
   }

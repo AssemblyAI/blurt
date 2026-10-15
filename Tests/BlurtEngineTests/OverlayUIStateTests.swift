@@ -128,7 +128,7 @@ struct OverlayUIStateTests {
   @Test func failedFallsBackWhenNoDescription() {
     // Defensive: every BlurtError supplies an errorDescription today, but the
     // mapping must still produce a non-empty message if one ever returns nil.
-    if case .error(let message) = PipelinePhase.failed(.targetAppLost).overlayState {
+    if case .error(let message, _) = PipelinePhase.failed(.targetAppLost).overlayState {
       #expect(!message.isEmpty)
     } else {
       Issue.record("expected .error")

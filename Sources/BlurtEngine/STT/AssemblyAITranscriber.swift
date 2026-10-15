@@ -116,8 +116,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     // text before the cursor) and the key terms as keyterms prompting. App name,
     // window title, field label and selected text stay on the machine —
     // `STTPrompt` draws that line, so nothing is filtered here.
-    // Read once: the request's rewrite model and which transcript gets pasted
-    // must answer to the same setting, even if it is flipped mid-recording.
+    // Read once, so a mid-recording flip can't split the request from the paste.
     let enhanced = enhancedTranscriptsEnabled()
     let config = try makeConfigData(
       sampleRate: sampleRate,
@@ -260,8 +259,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// Neither steering field is defaulted: every caller states both, so what a
   /// given request does and does not steer with is readable at the call site
   /// rather than inferred from which argument was left off.
-  /// `enhanced` is the request's reading of the enhanced-transcripts setting;
-  /// nil reads it now (the tests' form).
+  /// `enhanced` is the request's reading of the setting; nil reads it now.
   func makeConfigData(
     sampleRate: Int, sttPrompt: String, keytermsPrompt: [String], enhanced: Bool? = nil
   ) throws -> Data {
@@ -272,8 +270,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
         sttPrompt: sttPrompt,
         keytermsPrompt: keytermsPrompt,
         llmInstruction: cleanupInstruction(),
-        // Only while the rewrite is what gets pasted: with enhanced transcripts
-        // off it is discarded unread, so a slower model would only add latency.
+        // Only while the rewrite is pasted: off, a slower model only adds latency.
         rewriteMode: (enhanced ?? enhancedTranscriptsEnabled()) ? rewriteMode().wireValue : nil
       )
     )

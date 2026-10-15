@@ -108,10 +108,18 @@ package nonisolated struct VoiceState: Equatable {
 }
 
 extension PhaseSnapshot.State {
+  /// Nothing in flight: a notice, or rest.
+  nonisolated package var isSettled: Bool {
+    switch self {
+    case .idle, .pasted, .copied, .error: true
+    case .connecting, .recording, .processing: false
+    }
+  }
+
   /// The engine's overlay state as the orb shows it. "No target" is the words
   /// going to the clipboard — the keyboard's "copied" — and a silent mic is an
   /// error like any other: the iPhone has no wide pill for its notice.
-  package init(_ overlay: OverlayUIState) {
+  nonisolated package init(_ overlay: OverlayUIState) {
     self =
       switch overlay {
       case .idle: .idle
@@ -128,7 +136,7 @@ extension PhaseSnapshot.State {
 extension PhaseSnapshot {
   /// The words an overlay state carries for VoiceOver: an error's own (the
   /// silent mic's sentence, with the device name, included).
-  package static func message(for overlay: OverlayUIState) -> String? {
+  nonisolated package static func message(for overlay: OverlayUIState) -> String? {
     switch overlay {
     case .error(let message, _): message
     case .idle, .connecting, .recording, .processing, .pasted, .noTarget: nil
