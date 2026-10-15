@@ -197,7 +197,7 @@ public actor DictationSession {
   /// and tests come here through the `makeSession` factories, which spell out theirs.
   /// `keyTermsProvider` is optional-and-resolved-here because a public default
   /// argument can't reference the store's internal members.
-  init(  // swiftlint:disable:this function_parameter_count
+  init(
     mic: MicCaptureProtocol,
     transcriber: TranscriberProtocol,
     injector: InjectorProtocol,
