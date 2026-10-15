@@ -1,4 +1,5 @@
 import AssemblyAI
+import BlurtEngine
 import Testing
 
 @testable import BlurtiOSCore

@@ -48,7 +48,7 @@ DEFAULT_TARGETS=(
   "Sources/BlurtEngine/Config/APIKeyDisplay.swift"
   "Sources/AssemblyAI/APIKeyValidator.swift"
   "Sources/AssemblyAI/Dictation/KeyTerms.swift"
-  "Sources/AssemblyAI/Dictation/TextShortcuts.swift"
+  "Sources/BlurtEngine/Pipeline/TextShortcuts.swift"
   "Sources/BlurtEngine/FocusCapture/FocusCapture+Pure.swift"
   "Sources/BlurtEngine/Hotkey/DictationKeyGate.swift"
   "Sources/BlurtEngine/Hotkey/DictationKeyRouter.swift"

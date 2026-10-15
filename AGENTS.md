@@ -42,9 +42,9 @@ Four reflexes before you touch anything:
 The package's second library, **`AssemblyAI`** (`Sources/AssemblyAI/`), is the AssemblyAI API client the
 engine is built on: the `HTTPTransport` seam and its streamed upload body, the dictation wire types and
 multipart framing, `APIKeyValidator`, and dictation vocabulary — `KeyTerms` (parsing a list and fitting
-it to `keyterms_prompt`'s caps) and `TextShortcut` with its on-device `TextShortcutExpander`. It holds no Blurt policy (no prompts, styles, key storage or
-`User-Agent`; `APIKeyValidator.blurt()` is where Blurt's agent joins it), so it can become a standalone
-Swift SDK. It is part of the same local package, so the dependency-free rule is unchanged.
+it to `keyterms_prompt`'s caps). It holds no Blurt policy (no prompts, styles, key storage,
+`User-Agent` or on-device text processing; `APIKeyValidator.blurt()` is where Blurt's agent joins it,
+and text shortcuts live in the engine), so it can become a standalone Swift SDK. It is part of the same local package, so the dependency-free rule is unchanged.
 
 The engine's dependency-free rule is a **rule**. The app carries one remote package — Sparkle, the
 in-place updater (see [Updates](#updates)) — allowlisted by URL in `check.sh`'s dependency guard, and
@@ -60,7 +60,7 @@ workflow and the _why_ behind the design; the engine's README covers the _what_ 
 ```text
 Sources/AssemblyAI/          the AssemblyAI API client library (README.md there): HTTPTransport +
                              ChunkedRequestBody, Dictation/ (wire types, multipart framing,
-                             KeyTerms, TextShortcuts), APIKeyValidator. No Blurt policy;
+                             KeyTerms), APIKeyValidator. No Blurt policy;
                              BlurtEngine depends on it
 Sources/BlurtEngine/         the engine (dependency-free Swift package)
   README.md                  the engine's developer guide (quick start, seams, error table)
@@ -86,7 +86,8 @@ Sources/BlurtEngine/         the engine (dependency-free Swift package)
   Permissions/               PermissionStatus + SetupReadiness (every platform);
                              PermissionsChecker (mic + Accessibility), PermissionsReset,
                              SigningIdentity (macOS only)
-  Pipeline/                  DictationSession (actor) + phases, UI projections, geometry, log
+  Pipeline/                  DictationSession (actor) + phases, UI projections, geometry, log,
+                             TextShortcuts (the on-device phrase expansion)
   STT/                       AssemblyAITranscriber, Conversation/TranscriptionContext,
                              CleanupInstruction, SyncSTTLimits
   TTS/                       experimental read-aloud: SelectionSpeaker, AssemblyAISpeechSynthesizer

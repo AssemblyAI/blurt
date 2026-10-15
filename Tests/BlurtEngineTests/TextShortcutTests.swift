@@ -1,7 +1,6 @@
 import Foundation
 import Testing
 
-@testable import AssemblyAI
 @testable import BlurtEngine
 
 @Suite("TextShortcutExpander")

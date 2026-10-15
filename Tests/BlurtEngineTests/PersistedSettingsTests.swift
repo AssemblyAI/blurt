@@ -1,7 +1,6 @@
 import Foundation
 import Testing
 
-@testable import AssemblyAI
 @testable import BlurtEngine
 
 /// `PersistedSettings.allDefaultsKeys` exists so "add a store" and "add it to
