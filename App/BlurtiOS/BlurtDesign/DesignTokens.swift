@@ -251,6 +251,8 @@ package enum DesignTokens {
     package nonisolated static let appSetupNumberWidth: CGFloat = 24
     /// Between a section's eyebrow and its content, and between cards.
     package nonisolated static let appStackGap: CGFloat = 12
+    /// Between the stats in the card, and between its rows.
+    package nonisolated static let appStatGap: CGFloat = 16
     /// Between a tab's icon and its label.
     package nonisolated static let appTabGap: CGFloat = 4
     /// A tab in the brand tab bar: its icon over its mono label.
@@ -381,6 +383,14 @@ package enum DesignTokens {
     package nonisolated static let ribsRestWidth: CGFloat = 40
     /// Between rows, the iPhone's.
     package nonisolated static let rowGap: CGFloat = 11
+    /// Between a stat's number-and-unit parts, as a fraction of its size.
+    package nonisolated static let statPartGapRatio: CGFloat = 0.38
+    /// A stat number's tracking, as a fraction of its size.
+    package nonisolated static let statTrackingRatio: CGFloat = -0.03
+    /// Between a number and its unit, as a fraction of its size.
+    package nonisolated static let statUnitGapRatio: CGFloat = 0.15
+    /// A stat's mono unit (hr, min, sec) as a fraction of its number's size.
+    package nonisolated static let statUnitRatio: CGFloat = 0.46
     /// The landing flash's vertical arm, as a fraction of the box's height.
     package nonisolated static let streakArm: CGFloat = 1.4
     /// The light streak while recording.
@@ -407,6 +417,18 @@ package enum DesignTokens {
     package nonisolated static let termPad: CGFloat = 14
     /// The key-term field: the brand's input corners (radius/input).
     package nonisolated static let termRadius: CGFloat = 8
+    /// The typing field's border, orange once a word goes wrong.
+    package nonisolated static let typingFieldBorder: CGFloat = 2
+    /// Inside the typing field.
+    package nonisolated static let typingFieldPad: CGFloat = 12
+    /// Between the lines of words to type.
+    package nonisolated static let typingLineSpacing: CGFloat = 8
+    /// The countdown's thump in the last five seconds.
+    package nonisolated static let typingPulse: CGFloat = 1.06
+    /// Between the result's blocks.
+    package nonisolated static let typingResultGap: CGFloat = 20
+    /// The least room the words take, so the field below stays put.
+    package nonisolated static let typingWordsHeight: CGFloat = 180
     package nonisolated static let voiceBarHeight: CGFloat = 32
     /// The voice element's box in the voice bar — the most it takes (the ribs awake, the streak); the + sits beside what shows.
     package nonisolated static let voiceBarWidth: CGFloat = 160
@@ -459,6 +481,14 @@ package enum DesignTokens {
     package nonisolated static let sizePopup: CGFloat = 32
     /// The × on a text-shortcut row.
     package nonisolated static let sizeRemoveGlyph: CGFloat = 12
+    /// The next size down when the stats would not fit.
+    package nonisolated static let sizeStatL: CGFloat = 23
+    /// And the next.
+    package nonisolated static let sizeStatM: CGFloat = 20
+    /// The smallest a stat is drawn.
+    package nonisolated static let sizeStatS: CGFloat = 18
+    /// A stat's serif number, at the largest size that fits.
+    package nonisolated static let sizeStatXl: CGFloat = 26
     /// A tab's icon.
     package nonisolated static let sizeTabIcon: CGFloat = 18
     /// A tab's mono label.
@@ -467,6 +497,20 @@ package enum DesignTokens {
     package nonisolated static let sizeTerm: CGFloat = 17
     /// The app's serif headline.
     package nonisolated static let sizeTitle: CGFloat = 34
+    /// The typing test's countdown.
+    package nonisolated static let sizeTypingClock: CGFloat = 64
+    /// What you've typed.
+    package nonisolated static let sizeTypingField: CGFloat = 22
+    /// Its live words per minute.
+    package nonisolated static let sizeTypingLive: CGFloat = 28
+    /// The result's rank, in the serif.
+    package nonisolated static let sizeTypingRank: CGFloat = 28
+    /// The result's words per minute.
+    package nonisolated static let sizeTypingResult: CGFloat = 96
+    /// The result's WPM.
+    package nonisolated static let sizeTypingUnit: CGFloat = 16
+    /// The words to type.
+    package nonisolated static let sizeTypingWords: CGFloat = 24
     /// Uppercase mono at 14: the brand's E2 tracking.
     package nonisolated static let trackingCta: CGFloat = 1.4
     /// Uppercase mono at 12: the brand's E1 tracking.
@@ -512,6 +556,10 @@ package enum DesignTokens {
     package nonisolated static let stateFade: Double = 0.5
     /// The voice bar becoming the field.
     package nonisolated static let termSwap: Double = 0.4
+    /// The typing field's border turning, and the countdown's thump.
+    package nonisolated static let typingFlash: Double = 0.15
+    /// How often the typing test's clock and live speed redraw.
+    package nonisolated static let typingTick: Double = 0.1
     /// The orb and the wave crossing, either way.
     package nonisolated static let waveFade: Double = 0.7
   }
@@ -638,6 +686,7 @@ package enum DesignTokens {
     "metrics.app/section-gap": "24",
     "metrics.app/setup-number-width": "24",
     "metrics.app/stack-gap": "12",
+    "metrics.app/stat-gap": "16",
     "metrics.app/tab-gap": "4",
     "metrics.app/tab-height": "52",
     "metrics.card/border": "1",
@@ -709,6 +758,10 @@ package enum DesignTokens {
     "metrics.ribs/rest-height": "16",
     "metrics.ribs/rest-width": "40",
     "metrics.row/gap": "11",
+    "metrics.stat/part-gap-ratio": "0.38",
+    "metrics.stat/tracking-ratio": "-0.03",
+    "metrics.stat/unit-gap-ratio": "0.15",
+    "metrics.stat/unit-ratio": "0.46",
     "metrics.streak/arm": "1.4",
     "metrics.streak/height": "2",
     "metrics.streak/line": "1",
@@ -722,6 +775,12 @@ package enum DesignTokens {
     "metrics.term/inset": "2",
     "metrics.term/pad": "14",
     "metrics.term/radius": "8",
+    "metrics.typing/field-border": "2",
+    "metrics.typing/field-pad": "12",
+    "metrics.typing/line-spacing": "8",
+    "metrics.typing/pulse": "1.06",
+    "metrics.typing/result-gap": "20",
+    "metrics.typing/words-height": "180",
     "metrics.voice/bar-height": "32",
     "metrics.voice/bar-width": "160",
     "metrics.voice/home-height": "112",
@@ -750,10 +809,21 @@ package enum DesignTokens {
     "type.size/pill-glyph": "10",
     "type.size/popup": "32",
     "type.size/remove-glyph": "12",
+    "type.size/stat-l": "23",
+    "type.size/stat-m": "20",
+    "type.size/stat-s": "18",
+    "type.size/stat-xl": "26",
     "type.size/tab-icon": "18",
     "type.size/tab-label": "11",
     "type.size/term": "17",
     "type.size/title": "34",
+    "type.size/typing-clock": "64",
+    "type.size/typing-field": "22",
+    "type.size/typing-live": "28",
+    "type.size/typing-rank": "28",
+    "type.size/typing-result": "96",
+    "type.size/typing-unit": "16",
+    "type.size/typing-words": "24",
     "type.tracking/cta": "1.4",
     "type.tracking/eyebrow": "1.2",
     "type.weight/glyph": "medium",
@@ -778,6 +848,8 @@ package enum DesignTokens {
     "motion.sheen-working": "1.6",
     "motion.state-fade": "0.5",
     "motion.term-swap": "0.4",
+    "motion.typing-flash": "0.15",
+    "motion.typing-tick": "0.1",
     "motion.wave-fade": "0.7",
   ]
 }

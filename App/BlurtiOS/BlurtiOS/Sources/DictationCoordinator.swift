@@ -52,6 +52,14 @@ final class DictationCoordinator {
   nonisolated private static let pressKeyboard = Mutex<String?>(nil)
   /// Contact names, parsed once per lexicon refresh rather than on the press.
   nonisolated private static let lexiconNames = Mutex<[String]>([])
+  /// The words the session just delivered, waiting to be counted. The stats are
+  /// recorded on the main actor when the dictation's terminal phase renders —
+  /// after its recording has been timed, and in the same place a reset runs —
+  /// rather than on the session's actor, where neither ordering holds.
+  nonisolated private static let deliveredText = Mutex<String?>(nil)
+  /// When the recording in progress started, and how long the last one ran.
+  @ObservationIgnored private var recordingSince: ContinuousClock.Instant?
+  @ObservationIgnored private var lastSpokenSeconds: Double = 0
 
   init(apiKey: APIKeyModel = APIKeyModel()) {
     let window = ListeningWindow()
@@ -66,7 +74,10 @@ final class DictationCoordinator {
       injector: KeyboardRelayInjector(presser: { Self.pressKeyboard.withLock { $0 } }),
       keyTermsProvider: { Self.keyTerms() },
       readinessCheck: apiKey.readinessCheck(),
-      onTranscriptDelivered: { _, ring in continuation.yield(ring) },
+      onTranscriptDelivered: { text, ring in
+        Self.deliveredText.withLock { $0 = text }
+        continuation.yield(ring)
+      },
       // The keyboard is the only thing that can see the field: the press
       // command carries the text before the cursor, and that is what primes
       // the request — the same signal the Mac reads through Accessibility.
@@ -243,6 +254,17 @@ final class DictationCoordinator {
   private func render(_ phase: PipelinePhase) {
     self.phase = phase
     if phase == .recording { window.extend() }
+    timeRecording(phase)
+    // Delivery always comes before the paste and its terminal phase, and the
+    // phases render in order, so the dictation's words are waiting by now.
+    if phase.isTerminal,
+      let text = Self.deliveredText.withLock({ text in
+        defer { text = nil }
+        return text
+      })
+    {
+      DictationStats.record(text, spokenFor: lastSpokenSeconds)
+    }
     // The Mac shows a setup blocker as calm idle beside a settings button;
     // the keyboard has no such button, so it hears an error and the orb says so.
     if phase.setupBlocker != nil {
@@ -250,6 +272,18 @@ final class DictationCoordinator {
       return
     }
     publish(phase.overlayState)
+  }
+
+  /// Starts the clock when a recording starts and, when it stops, keeps how
+  /// long it ran for the stats.
+  private func timeRecording(_ phase: PipelinePhase) {
+    if phase == .recording {
+      if recordingSince == nil { recordingSince = .now }
+    } else if let since = recordingSince {
+      let elapsed = since.duration(to: .now)
+      lastSpokenSeconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
+      recordingSince = nil
+    }
   }
 
   private func observeLevels() -> Task<Void, Never> {

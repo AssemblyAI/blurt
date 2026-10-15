@@ -1,3 +1,4 @@
+import AVFoundation
 import BlurtDesign
 import BlurtEngine
 import BlurtiOSCore
@@ -19,16 +20,25 @@ struct SettingsView: View {
   @AppStorage(BlurtShared.Key.voiceElement, store: SharedStore.defaults) private var voiceRaw =
     VoiceElementKind.shipped.rawValue
   @State private var showsKeyEntry = false
+  @State private var confirmsStatsReset = false
+  @State private var showsTypingTest = false
+  @State private var showsSetupSteps = false
+  @State private var microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
+  @State private var keyboardSeen = SharedStore.keyboardEverSeen
+  @Environment(\.scenePhase) private var scenePhase
+  @AppStorage(TypingSpeed.defaultsKey) private var typingSpeed: Double = 0
   @AppStorage(EnhancedTranscriptsStore.defaultsKey) private var enhancedTranscripts =
     EnhancedTranscriptsStore.defaultValue
 
   var body: some View {
     NavigationStack {
       Form {
+        setupSection
         keyboardSection
         listeningSection
         transcriptionSection
         accountSection
+        dataSection
         aboutSection
       }
       .brandForm()
@@ -38,8 +48,56 @@ struct SettingsView: View {
         ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
       }
       .sheet(isPresented: $showsKeyEntry) { KeyEntryView(apiKey: coordinator.apiKey) }
+      // On the form, not on a section: a section's modifiers apply to each of
+      // its rows, so a cover there was presented once per row at the same time.
+      .fullScreenCover(isPresented: $showsTypingTest) { TypingTestView() }
+      .onChange(of: scenePhase) { _, phase in
+        if phase == .active { refreshSetup() }
+      }
+      .confirmationDialog("Reset statistics?", isPresented: $confirmsStatsReset, titleVisibility: .visible) {
+        Button("Reset", role: .destructive) { DictationStats.reset() }
+      } message: {
+        Text("Your dictation, word and time-saved totals go back to zero.")
+      }
     }
     .tint(BlurtBrand.accent)
+  }
+
+  /// The first-run steps, kept here once the app is set up, as in the
+  /// blurt-ios prototype: folded to a line while everything is done, open while
+  /// something (the microphone, the keyboard) is still missing.
+  private var setupSection: some View {
+    let isSetUp = coordinator.apiKey.hasAPIKey && microphoneGranted && keyboardSeen
+    return Section {
+      if isSetUp {
+        HStack {
+          Text("Blurt is set up")
+          Image(systemName: "checkmark").foregroundStyle(BlurtBrand.accent)
+          Spacer()
+          Button(showsSetupSteps ? "Hide steps" : "Show steps") { showsSetupSteps.toggle() }
+            .font(BlurtType.body(DesignTokens.Typography.sizeCaption, bold: true))
+            .foregroundStyle(BlurtBrand.accent)
+            .buttonStyle(.plain)
+        }
+      }
+      if !isSetUp || showsSetupSteps {
+        SetupSteps(
+          hasKey: coordinator.apiKey.hasAPIKey, microphoneGranted: microphoneGranted, keyboardSeen: keyboardSeen,
+          refresh: refreshSetup
+        ) {
+          Button("Add an API key") { showsKeyEntry = true }.buttonStyle(BrandButtonStyle())
+        }
+        .padding(.vertical, DesignTokens.Metrics.appRowPadY)
+      }
+    } header: {
+      Eyebrow("Setup")
+    }
+  }
+
+  private func refreshSetup() {
+    microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
+    keyboardSeen = SharedStore.keyboardEverSeen
+    coordinator.apiKey.refreshStatus()
   }
 
   private var keyboardSection: some View {
@@ -119,12 +177,36 @@ struct SettingsView: View {
     }
   }
 
+  /// The stats card's totals, which live only on this phone.
+  private var dataSection: some View {
+    Section {
+      Button("Reset statistics", role: .destructive) { confirmsStatsReset = true }
+    } header: {
+      Eyebrow("Data")
+    } footer: {
+      Text("Dictations, words and time saved are counted on this phone and never sent.")
+    }
+  }
+
   private var aboutSection: some View {
     Section {
       LabeledContent("Version", value: Self.version)
       Link("Blurt on GitHub", destination: URL(string: "https://github.com/AssemblyAI/blurt") ?? URL(filePath: "/"))
       Link("AssemblyAI's privacy policy", destination: AIConsent.privacyPolicyURL)
       Text("Powered by AssemblyAI").foregroundStyle(BlurtBrand.muted)
+      // The easter egg: a link, not a button, so it stays a find rather than
+      // another call to action. Its result becomes time saved's typing speed.
+      Button {
+        showsTypingTest = true
+      } label: {
+        Label("How fast can you type?", systemImage: "keyboard")
+      }
+      .foregroundStyle(BlurtBrand.accent)
+      if typingSpeed > 0 {
+        Button("Using your \(Int(typingSpeed)) wpm · Reset to average") { TypingSpeed.resetToAverage() }
+          .font(BlurtType.body(DesignTokens.Typography.sizeCaption))
+          .foregroundStyle(BlurtBrand.muted)
+      }
     } header: {
       Eyebrow("About")
     }
