@@ -40,11 +40,11 @@
     ///
     /// Accessibility first. The read is synchronous cross-process IPC that can
     /// block a thread for the AX timeout against a hung app, so it runs off the
-    /// cooperative pool (`DictationSession.offPool`). When AX can't reach a
+    /// cooperative pool (`BlockingIPC.run`). When AX can't reach a
     /// focused element at all, it falls back to copying the selection
     /// (`SelectionCopy`).
     public static func focusedSelection() async -> String? {
-      let read = await DictationSession.offPool { FocusCapture.captureSelectedText(maxChars: maxCharacters) }
+      let read = await BlockingIPC.run { FocusCapture.captureSelectedText(maxChars: maxCharacters) }
       return await resolve(read, copy: SelectionCopy())
     }
 

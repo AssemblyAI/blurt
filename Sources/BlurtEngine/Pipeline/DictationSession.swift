@@ -1,18 +1,9 @@
 import AssemblyAI
-// `Dispatch`, not `Foundation`: the only thing here from outside the module is
-// `contextQueue`'s and `commandQueue`'s `DispatchQueue`, the same choice
-// `+Press.swift` documents. Foundation's last use here went with `mic.stop()`
-// returning a byte count instead of a `Data` blob.
-import Dispatch
+// No `Foundation`: its last use here went with `mic.stop()` returning a byte
+// count instead of a `Data` blob, and the off-pool queue moved to `BlockingIPC`.
 import Synchronization
 
 public actor DictationSession {
-  /// Off-pool home for the press-time AX field read — see its use in
-  /// `performPress` for why blocking IPC must not run on the cooperative pool.
-  static let contextQueue = DispatchQueue(
-    label: HostIdentity.current.queueLabel("FieldContext"), qos: .userInitiated,
-    attributes: .concurrent)
-
   /// `internal(set)`, not `private(set)`: `private` is file-scoped, and the one
   /// writer — `setPhase` — lives in `+Observation` (see the split note below).
   /// Hosts outside the module still can't assign it. **`setPhase` remains the

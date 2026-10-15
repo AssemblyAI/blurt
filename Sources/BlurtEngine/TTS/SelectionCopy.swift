@@ -50,7 +50,7 @@
     func copySelection(maxCharacters: Int) async -> String? {
       let pasteboard = pasteboard
       // An unreadable pasteboard can't be restored, so don't disturb it.
-      let (saved, before) = await DictationSession.offPool { (pasteboard.snapshot(), pasteboard.changeCount) }
+      let (saved, before) = await BlockingIPC.run { (pasteboard.snapshot(), pasteboard.changeCount) }
       guard let saved, postCopy() else { return nil }
       let deadline = ContinuousClock.now + timeout
       // Wait for a string, not just a change: an app may clear the clipboard and
@@ -59,7 +59,7 @@
       var copied: String?
       repeat {
         try? await Task.sleep(for: .milliseconds(10))
-        (seen, copied) = await DictationSession.offPool {
+        (seen, copied) = await BlockingIPC.run {
           let count = pasteboard.changeCount
           guard count != before else { return (count, nil) }
           let string = pasteboard.currentString()
@@ -69,7 +69,7 @@
         }
       } while copied == nil && ContinuousClock.now < deadline
       let copyCount = seen
-      let settled = await DictationSession.offPool {
+      let settled = await BlockingIPC.run {
         if copyCount != before { pasteboard.restore(saved, ifChangeCountIs: copyCount) }
         return pasteboard.changeCount
       }
@@ -89,7 +89,7 @@
       Task {
         while ContinuousClock.now < deadline {
           try? await Task.sleep(for: .milliseconds(20))
-          let restored = await DictationSession.offPool { () -> Bool in
+          let restored = await BlockingIPC.run { () -> Bool in
             let count = pasteboard.changeCount
             guard count != baseline else { return false }
             pasteboard.restore(saved, ifChangeCountIs: count)
