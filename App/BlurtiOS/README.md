@@ -34,8 +34,8 @@ Mac with only the Command Line Tools — no iOS SDK — `scripts/ios-typecheck.s
 typechecks both targets against the Mac Catalyst frameworks with the same
 flags, which catches the Swift 6 isolation errors before CI does. Running
 on a phone needs Xcode with a team that can provision the App Group. The ids in
-`project.yml` (`com.assemblyai.blurt.ios`, `com.assemblyai.blurt.ios.keyboard`,
-`group.com.assemblyai.blurt.ios`) are AssemblyAI's, so they register under the AssemblyAI team;
+`project.yml` (`com.assemblyai.blurt.iphone`, `com.assemblyai.blurt.iphone.keyboard`,
+`group.com.assemblyai.blurt.iphone`) are AssemblyAI's, so they register under the AssemblyAI team;
 anyone building under another team changes them locally (see Testing on a phone).
 
 ## Design
@@ -130,8 +130,8 @@ shows its console.
    characters after the team's name). The App Group needs a paid team — a free Personal Team
    cannot register one, so use the org's team, not your own.
 3. `cd App/BlurtiOS && BLURT_TEAM=<your team id> xcodegen generate && open BlurtiOS.xcodeproj`.
-   Automatic signing registers `com.assemblyai.blurt.ios`, `com.assemblyai.blurt.ios.keyboard` and
-   `group.com.assemblyai.blurt.ios` under that team on the first build; it fails if another team already
+   Automatic signing registers `com.assemblyai.blurt.iphone`, `com.assemblyai.blurt.iphone.keyboard` and
+   `group.com.assemblyai.blurt.iphone` under that team on the first build; it fails if another team already
    owns them.
 4. Plug the phone in (Developer Mode on: Settings → Privacy & Security), pick it as the run
    destination, run the `BlurtiOS` scheme. On the phone, trust the developer app (Settings →

@@ -75,7 +75,7 @@ read -r CROP_W CROP_H CROP_X CROP_Y < <(swift scripts/design-diff.swift crop "$r
 }
 
 ios_require_device ios-record
-BUNDLE_ID=com.assemblyai.blurt.ios
+BUNDLE_ID=com.assemblyai.blurt.iphone
 
 echo "==> recording $name (two cycles)"
 xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true

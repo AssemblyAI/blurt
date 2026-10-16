@@ -14,7 +14,7 @@ package nonisolated enum BlurtShared {
   /// The App Group both targets declare. A placeholder namespace inherited from
   /// the Mac app; an org-owned id replaces it before the App Store, and the app
   /// and the keyboard must change together.
-  package static let appGroup = "group.com.assemblyai.blurt.ios"
+  package static let appGroup = "group.com.assemblyai.blurt.iphone"
   /// The URL the keyboard opens to bring the app forward (`blurt://start`) —
   /// the one moment iOS insists on before the microphone may open.
   package static let urlScheme = "blurt"
@@ -48,10 +48,10 @@ package nonisolated enum BlurtShared {
   /// Darwin notification names. Reverse-DNS so they can't collide with another
   /// app's on the same device.
   package nonisolated enum Signal {
-    package static let command = "com.assemblyai.blurt.ios.command"
-    package static let phase = "com.assemblyai.blurt.ios.phase"
-    package static let result = "com.assemblyai.blurt.ios.result"
-    package static let lexicon = "com.assemblyai.blurt.ios.lexicon"
+    package static let command = "com.assemblyai.blurt.iphone.command"
+    package static let phase = "com.assemblyai.blurt.iphone.phase"
+    package static let result = "com.assemblyai.blurt.iphone.result"
+    package static let lexicon = "com.assemblyai.blurt.iphone.lexicon"
   }
 }
 
