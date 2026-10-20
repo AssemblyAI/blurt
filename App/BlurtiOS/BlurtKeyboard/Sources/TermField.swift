@@ -18,10 +18,11 @@ struct TermField: View {
       HStack(spacing: 0) {
         if let draft = model.termDraft, !draft.isEmpty {
           Text(draft).foregroundStyle(palette.keyText)
+          Caret(gap: .leading)
         } else {
+          Caret(gap: .trailing)
           Text("New key term").foregroundStyle(palette.keyText.opacity(DesignTokens.Metrics.opacityPlaceholder))
         }
-        Caret()
         Spacer(minLength: 0)
       }
       .font(.system(size: DesignTokens.Typography.sizeTerm, weight: DesignTokens.Typography.weightTerm))
@@ -45,6 +46,7 @@ struct TermField: View {
 
 /// A blinking caret, as a text field's; held on while motion is held.
 private struct Caret: View {
+  var gap: Edge.Set
   @Environment(\.keyboardPalette) private var palette
   @Environment(\.keyboardMotionHeld) private var motionHeld
 
@@ -55,7 +57,7 @@ private struct Caret: View {
         .fill(palette.signal)
         .frame(width: DesignTokens.Metrics.caretWidth, height: DesignTokens.Metrics.caretHeight)
         .opacity(on ? 1 : 0)
-        .padding(.leading, DesignTokens.Metrics.caretLead)
+        .padding(gap, DesignTokens.Metrics.caretLead)
     }
     .accessibilityHidden(true)
   }
