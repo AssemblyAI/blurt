@@ -16,9 +16,6 @@ struct TermField: View {
         model.cancelAddingTerm()
       }
       HStack(spacing: 0) {
-        // The caret sits where the next character lands: after what has been
-        // typed, or — on an empty field — at the start, ahead of the
-        // placeholder, as a system text field draws it.
         if let draft = model.termDraft, !draft.isEmpty {
           Text(draft).foregroundStyle(palette.keyText)
           Caret(gap: .leading)
@@ -49,7 +46,6 @@ struct TermField: View {
 
 /// A blinking caret, as a text field's; held on while motion is held.
 private struct Caret: View {
-  /// The side the caret keeps its gap on — toward the text beside it.
   var gap: Edge.Set
   @Environment(\.keyboardPalette) private var palette
   @Environment(\.keyboardMotionHeld) private var motionHeld
