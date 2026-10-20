@@ -87,7 +87,9 @@ extension KeyboardModel {
     SharedStore.remove(forKey: BlurtShared.Key.result)
     // Joined against the live text before the cursor, not the press-time
     // snapshot: the user may have typed since.
-    proxy.insertText(InsertionSeparator.withLeadingSeparator(result.text, after: proxy.documentContextBeforeInput))
+    let inserted = InsertionSeparator.withLeadingSeparator(result.text, after: proxy.documentContextBeforeInput)
+    proxy.insertText(inserted)
+    lastInsertion = inserted
     resultLandedAt = Date()
     // Not typing, so not the term field's to claim.
     if termDraft != nil { termHostBaseline = proxy.documentContextBeforeInput ?? "" }

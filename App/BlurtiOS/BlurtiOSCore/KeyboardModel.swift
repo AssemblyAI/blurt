@@ -67,6 +67,9 @@ package final class KeyboardModel {
   @ObservationIgnored package var gate = DictationKeyGate()
   @ObservationIgnored package let clockStart = ContinuousClock.now
   @ObservationIgnored package var lastResultID: UUID?
+  /// What the last dictation put in the field, separator included, so one
+  /// delete takes the whole of it back. Any keystroke into the host clears it.
+  @ObservationIgnored package var lastInsertion: String?
   @ObservationIgnored private var heartbeat: Task<Void, Never>?
   @ObservationIgnored package var lastSpaceAt: ContinuousClock.Instant?
   @ObservationIgnored package var noticeDwell: Task<Void, Never>?

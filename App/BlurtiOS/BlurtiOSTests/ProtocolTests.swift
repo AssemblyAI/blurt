@@ -210,6 +210,45 @@ struct KeyboardModelProtocolTests {
     #expect(proxy.before == "Hi one four")
   }
 
+  @Test("delete right after a dictation takes all of it back; otherwise one character")
+  func deleteTakesBackDictation() {
+    let suite = ScratchSuite()
+    defer { suite.tearDown() }
+    let rig = KeyboardRig()
+    let model = rig.model
+    let proxy = rig.proxy
+    func deliver(_ text: String) {
+      SharedStore.write(
+        DictationResult(id: UUID(), text: text, deliveredAt: Date(), recipient: nil),
+        forKey: BlurtShared.Key.result)
+      model.resultArrived()
+    }
+    proxy.before = "Hi"
+    deliver("there friend")
+    #expect(proxy.before == "Hi there friend")
+    model.deleteBackward()
+    #expect(proxy.before == "Hi")
+    // Only once: the next delete is a character again.
+    model.deleteBackward()
+    #expect(proxy.before == "H")
+
+    // Typing after the dictation makes delete a character again.
+    deliver("again")
+    model.type("!")
+    model.deleteBackward()
+    #expect(proxy.before == "H again")
+
+    // So does a caret that no longer sits at the dictation's end, or a selection.
+    deliver("moved")
+    proxy.before += "x"
+    model.deleteBackward()
+    #expect(proxy.before == "H again moved")
+    deliver("chosen")
+    proxy.selected = "chosen"
+    model.deleteBackward()
+    #expect(proxy.before == "H again moved chose")
+  }
+
   @Test("the term field never claims a cursor move or a selection")
   func termFieldIgnoresCursorMoves() {
     let suite = ScratchSuite()
