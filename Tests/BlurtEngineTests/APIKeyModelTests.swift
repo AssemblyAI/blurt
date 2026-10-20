@@ -42,4 +42,14 @@ struct APIKeyModelTests {
     #expect(model.current == "typed")
     #expect(model.storage.current == "typed")
   }
+
+  @Test("clear deletes the stored key and drops the flag")
+  func clear() {
+    let store = InMemoryAPIKeyStore()
+    let model = APIKeyModel(keyStore: store) { _ in .valid }
+    model.save("key")
+    #expect(model.clear())
+    #expect(!model.hasAPIKey)
+    #expect(store.current == nil)
+  }
 }

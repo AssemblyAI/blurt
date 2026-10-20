@@ -1,4 +1,5 @@
 import BlurtEngine
+import Foundation
 import Observation
 
 @Observable
@@ -25,6 +26,9 @@ final class AppCoordinator {
   /// pipeline↔UI wiring. The wizard and the API-key view observe this directly
   /// rather than reaching through the coordinator (see `APIKeyModel`).
   let apiKey: APIKeyModel
+  /// "Sign in with AssemblyAI", which fills the same key `apiKey` holds. Its
+  /// configuration comes from Info.plist; a build without one hides sign-in.
+  let account: AssemblyAIAccount
   @ObservationIgnored private var phaseObserver: Task<Void, Never>?
   @ObservationIgnored private var levelsObserver: Task<Void, Never>?
   @ObservationIgnored var keyTap: DictationKeyTap?
@@ -66,10 +70,15 @@ final class AppCoordinator {
   init(
     onSetupBlocked: @escaping @MainActor () -> Void,
     components: DictationComponents = .production(),
-    apiKey: APIKeyModel = APIKeyModel()
+    apiKey: APIKeyModel = APIKeyModel(),
+    account: AssemblyAIAccount? = nil
   ) {
     self.onSetupBlocked = onSetupBlocked
     self.apiKey = apiKey
+    self.account =
+      account
+      ?? AssemblyAIAccount(
+        configuration: .blurt(infoDictionary: Bundle.main.infoDictionary ?? [:]), apiKey: apiKey)
 
     // Buffering the newest is enough: each element is the *whole* ring as of that
     // delivery, not a delta, so a value dropped under contention is one the next

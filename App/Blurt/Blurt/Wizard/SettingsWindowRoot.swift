@@ -58,7 +58,7 @@ private struct GeneralSettingsTab: View {
 
   var body: some View {
     SettingsPane {
-      APIKeyStepView(apiKey: coordinator.apiKey)
+      APIKeyStepView(apiKey: coordinator.apiKey, account: coordinator.account)
       HotkeyStepView(coordinator: coordinator)
       MicrophoneStepView()
       SoundStepView(coordinator: coordinator)

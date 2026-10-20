@@ -1142,6 +1142,32 @@ status and VoiceOver wording, connect-vs-rotate control titles. The mask reveals
 characters and, below `minimumLengthToMask`, none at all (a bare `suffix(4)` in the view once rendered
 a short key whole).
 
+Sign in with AssemblyAI: the other way to fill that same key item. **`AssemblyAIAccount`**
+(`@MainActor @Observable`, in `Sources/BlurtEngine/Account/`) runs the authorization-code + PKCE flow
+against a public Connected App: the shell's `AccountSignIn` opens the consent page in an
+`ASWebAuthenticationSession` (redirect `com.assemblyai.blurt://oauth/callback`, caught by the session, so no URL
+handler is registered), and the engine trades the code for tokens and the access token for the
+connection's API key (`POST /api/v2/oauth/api-key`), which it saves through `APIKeyModel` like a
+pasted key — the transcriber, the press gate and the TTS clients can't tell the two apart. Beside it,
+a second Keychain item (`AssemblyAISignIn`, `SignInStore`) holds the **`SignInSession`**: refresh
+token, email, key expiry and last renewal. Its read keeps "none" apart from "unavailable" (a locked
+Keychain), for the reason `MemoizedKeyStore` gives: an unreadable item must not read as signed out,
+or Sign Out would delete the key without ending the connection. `runRenewal()` (started once at
+launch) calls `renewIfDue()` hourly, which refreshes and re-exchanges at most daily or within two days
+of the key's expiry, keeping a rotated refresh token before anything else can fail; a refused refresh
+or exchange means the connection was ended elsewhere and drops key and session, an unreachable server
+changes nothing. A renewal suspends twice on the network, so a `generation` counter makes one that
+wakes after a sign-out, reset or new sign-in write nothing, and `signOut()` waits out a renewal in
+flight first. `signOut()` ends the connection server-side (`POST /api/v2/oauth/api-key/revoke`) and
+only then forgets it here; a revoke the server couldn't confirm (503) leaves everything in place and
+returns an inline report so the user can retry (`SignInFailure.failureReport` makes the same
+inline-vs-alert split as `APIKeySubmission`). `CredentialRows.resolve` decides which of the account
+and key rows show and which button is filled. `InstallReset` clears the session item with the key.
+The wire half (`OAuthAuthorization`, `OAuthClient`) is in the `AssemblyAI` library. The build turns
+sign-in on with four Info.plist values (`BLURT_OAUTH_*` in `App/Blurt/project.yml`, read by
+`OAuthConfiguration.blurt`); any one empty hides it, which is how release ships until a production
+Connected App exists, and a session inherited by such a build can still be signed out (locally).
+
 Setup gating: **`SetupReadiness.isReady(permissions:hasAPIKey:)`** is the fully-configured rule
 (deliberately excluding the trigger key, which has a default binding, so a shortcut change can't trap
 the user in the wizard), `SetupReadiness.pollInterval(isReady:)` the permission-poll cadence (brisk

@@ -301,8 +301,10 @@ struct ResetSection: View {
   private func reset() {
     let report = InstallReset(
       bundleID: Bundle.main.bundleIdentifier ?? HostIdentity.current.subsystem,
-      keyStore: coordinator.apiKey.storage
+      keyStore: coordinator.apiKey.storage,
+      signInStore: coordinator.account.storage
     ).run()
+    coordinator.account.refreshStatus()
     // `hasAPIKey` is a mirror of the store, not a read-through, so it has to be
     // re-read for the wizard to see the key go — which matters on the failure
     // path, where the app stays running.

@@ -120,6 +120,23 @@ targets:
         # isolation, and genuinely off-main app code (the CGEventTap C callback,
         # the UI-test pipeline stubs) opts out with `nonisolated`.
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        # "Sign in with AssemblyAI" (`AssemblyAIAccount`), baked into Info.plist
+        # (see `info:` below). Any one left empty turns sign-in off and the setup
+        # screen offers only the paste-a-key path, which is where every
+        # configuration stays until its Connected App is registered: the Debug
+        # ones point at the Stytch test project and the staging deployments, Release at
+        # the live project and www.assemblyai.com. All four are public: the
+        # client is a public PKCE client with no secret.
+        #   CLIENT_ID     the Connected App's client id
+        #   TOKEN_URL     the Stytch project's token endpoint (…/v1/oauth2/token)
+        #   AUTHORIZE_URL the dashboard's consent page (…/dashboard/oauth/authorize)
+        #   API_ORIGIN    the web origin serving /api/v2/oauth/api-key[/revoke];
+        #                 the consent page's host in production, a separate
+        #                 deployment on staging
+        BLURT_OAUTH_CLIENT_ID: ""
+        BLURT_OAUTH_TOKEN_URL: ""
+        BLURT_OAUTH_AUTHORIZE_URL: ""
+        BLURT_OAUTH_API_ORIGIN: ""
       configs:
         # The XCUITest harness + leak/hotkey test seams compile only when
         # UITEST_HOOKS is set (see the `#if UITEST_HOOKS` blocks). It's on for the
@@ -128,10 +145,22 @@ targets:
         # for a clean local install build with the test scaffolding excluded.
         # (DEBUG is listed explicitly since setting this key overrides the value
         # XcodeGen would otherwise derive for a debug config.)
+        # Dev builds sign in against the Stytch test project and the staging
+        # dashboard and site (whose /api routes proxy to the sandbox AMS). Release keeps the
+        # empty base values, so sign-in stays off there until a production
+        # Connected App exists.
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG UITEST_HOOKS
+          BLURT_OAUTH_CLIENT_ID: connected-app-test-2030e449-137e-47bc-a09c-2edbf6aa86ff
+          BLURT_OAUTH_TOKEN_URL: https://snapdragon-coyote-7054.customers.stytch.dev/v1/oauth2/token
+          BLURT_OAUTH_AUTHORIZE_URL: https://dashboard-assemblyai.vercel.app/dashboard/oauth/authorize
+          BLURT_OAUTH_API_ORIGIN: https://explore-git-staging-assemblyai.vercel.app
         Debug-Local:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+          BLURT_OAUTH_CLIENT_ID: connected-app-test-2030e449-137e-47bc-a09c-2edbf6aa86ff
+          BLURT_OAUTH_TOKEN_URL: https://snapdragon-coyote-7054.customers.stytch.dev/v1/oauth2/token
+          BLURT_OAUTH_AUTHORIZE_URL: https://dashboard-assemblyai.vercel.app/dashboard/oauth/authorize
+          BLURT_OAUTH_API_ORIGIN: https://explore-git-staging-assemblyai.vercel.app
         # The shipping identity, opted into by the one configuration that ships.
         Release:
           PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt
@@ -158,6 +187,12 @@ targets:
         LSMinimumSystemVersion: "15.0"
         LSApplicationCategoryType: public.app-category.productivity
         NSMicrophoneUsageDescription: Blurt uses your microphone to transcribe your dictation with AssemblyAI.
+        # Sign in with AssemblyAI; empty values turn it off (see the
+        # BLURT_OAUTH_* settings above and `OAuthConfiguration.blurt`).
+        BlurtOAuthClientID: $(BLURT_OAUTH_CLIENT_ID)
+        BlurtOAuthTokenURL: $(BLURT_OAUTH_TOKEN_URL)
+        BlurtOAuthAuthorizeURL: $(BLURT_OAUTH_AUTHORIZE_URL)
+        BlurtOAuthAPIOrigin: $(BLURT_OAUTH_API_ORIGIN)
         # Sparkle. The feed is a stable release-asset URL (the
         # BLURT_SPARKLE_FEED_URL setting above): release-publish.sh attaches
         # appcast.xml to every release, so /latest/download/ always resolves to
