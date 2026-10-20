@@ -1152,9 +1152,17 @@ pasted key — the transcriber, the press gate and the TTS clients can't tell th
 a second Keychain item (`AssemblyAISignIn`, `SignInStore`) holds the **`SignInSession`**: refresh
 token, email, key expiry and last renewal. Its read keeps "none" apart from "unavailable" (a locked
 Keychain), for the reason `MemoizedKeyStore` gives: an unreadable item must not read as signed out,
-or Sign Out would delete the key without ending the connection. `runRenewal()` (started once at
-launch) calls `renewIfDue()` hourly, which refreshes and re-exchanges at most daily or within two days
-of the key's expiry, keeping a rotated refresh token before anything else can fail; a refused refresh
+or Sign Out would delete the key without ending the connection. `runRenewal()` (started once at launch) sleeps until the renewal is due — when the exchange said the
+key rotates (`api_key_rotates_at`: AMS mints the next key and disables the old one once an exchange
+lands inside its window, two days before expiry), else two days before expiry (`SignInSession.renewalDue`;
+at most a day per sleep, on the continuous clock so a renewal that fell due while the Mac slept runs on
+wake) — then refreshes and re-exchanges: one renewal per key, since the
+refresh token's three-month sliding lifetime dwarfs a key's two weeks. `KeyRejectionReporter` wraps the
+transcriber and calls `keyWasRejected()` when dictation refuses the key (401, or the API's invalid-key
+404), which renews at once (at most every 15 minutes) so the next dictation has a working key; the
+refused utterance itself can't be retried, its audio having streamed as it was spoken. A renewal that brings back the same key with its renewal already due (a server that didn't rotate
+early) defers the next one to the key's expiry, or a day out once it has expired, instead of asking
+every minute. Renewal keeps a rotated refresh token before anything else can fail; a refused refresh
 or exchange means the connection was ended elsewhere and drops key and session, an unreachable server
 changes nothing. A renewal suspends twice on the network, so a `generation` counter makes one that
 wakes after a sign-out, reset or new sign-in write nothing, and `signOut()` waits out a renewal in

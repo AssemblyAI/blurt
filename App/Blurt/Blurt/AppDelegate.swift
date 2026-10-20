@@ -131,8 +131,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // on a configured launch, which is what actually installs the tap. If the
     // wizard ran first the tap wouldn't exist yet and would never come up.
     coord.start()
-    // A signed-in Mac renews its connection's key at most once a day; the
-    // cadence and the rule are the engine's (`AssemblyAIAccount.runRenewal`).
+    // A signed-in Mac renews its connection's key shortly before it expires;
+    // the schedule is the engine's (`AssemblyAIAccount.runRenewal`).
     Task { await coord.account.runRenewal() }
 
     // Created before the run loop presents any scene, so `MainWindowRoot` always

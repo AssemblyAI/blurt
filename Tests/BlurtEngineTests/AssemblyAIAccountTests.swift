@@ -17,6 +17,7 @@ final class SignInServer: Sendable {
     var rotatedRefreshToken: String? = "rt-2"
     var apiKey = "connection-key"
     var expiresAt = "2026-11-01T00:00:00Z"
+    var rotatesAt: String?
     var refreshTokensSeen: [String] = []
     var exchanges = 0
     var revokes = 0
@@ -44,7 +45,9 @@ final class SignInServer: Sendable {
         case testOAuthConfiguration.apiKeyURL:
           state.exchanges += 1
           guard state.exchangeStatus == 200 else { return (state.exchangeStatus, Data()) }
-          return (200, json(["api_key": state.apiKey, "api_key_expires_at": state.expiresAt]))
+          var body = ["api_key": state.apiKey, "api_key_expires_at": state.expiresAt]
+          body["api_key_rotates_at"] = state.rotatesAt
+          return (200, json(body))
         case testOAuthConfiguration.revokeURL:
           state.revokes += 1
           return (state.revokeStatus, Data())
@@ -71,7 +74,7 @@ struct AssemblyAIAccountTests {
   let keyStore = InMemoryAPIKeyStore()
   let sessions = SignInStore.inMemory()
 
-  private func account(configured: Bool = true) -> AssemblyAIAccount {
+  func account(configured: Bool = true) -> AssemblyAIAccount {
     let clock = clock
     return AssemblyAIAccount(
       configuration: configured ? testOAuthConfiguration : nil,
@@ -155,13 +158,13 @@ struct AssemblyAIAccountTests {
     #expect(await account.completeSignIn(auth, callback: callback) == .failed(.unavailable))
   }
 
-  @Test("renewal waits a day, then refreshes, keeps the rotated token and any new key")
+  @Test("renewal waits until the key nears expiry, then refreshes, keeps the rotated token and any new key")
   func renewal() async throws {
     let account = try await signedIn()
     await account.renewIfDue()
     #expect(server.state.withLock { $0.refreshTokensSeen }.isEmpty)
 
-    clock.advance(SignInSession.renewalInterval)
+    advanceToRenewal()
     server.state.withLock { $0.apiKey = "next-key" }
     await account.renewIfDue()
     #expect(server.state.withLock { $0.refreshTokensSeen } == ["rt-1"])
@@ -175,7 +178,7 @@ struct AssemblyAIAccountTests {
   func renewalWithoutRotation() async throws {
     let account = try await signedIn()
     server.state.withLock { $0.rotatedRefreshToken = nil }
-    clock.advance(SignInSession.renewalInterval)
+    advanceToRenewal()
     await account.renewIfDue()
     #expect(sessions.session?.refreshToken == "rt-1")
   }
@@ -209,7 +212,7 @@ struct AssemblyAIAccountTests {
   func renewalOffline() async throws {
     let account = try await signedIn()
     server.state.withLock { $0.exchangeStatus = 503 }
-    clock.advance(SignInSession.renewalInterval)
+    advanceToRenewal()
     await account.renewIfDue()
     #expect(account.status == .signedIn(email: "member@example.com"))
     #expect(keyStore.current == "connection-key")
@@ -284,21 +287,10 @@ struct AssemblyAIAccountTests {
     #expect(account.status == .signedOut)
   }
 
-  @Test("runRenewal checks now, then again after each interval, and stops when cancelled")
-  func runRenewal() async throws {
-    let account = try await signedIn()
-    let testClock = TestClock()
-    let loop = Task { await account.runRenewal(every: .seconds(10), clock: testClock) }
-    clock.advance(SignInSession.renewalInterval)
-    // The first check ran before the clock moved past the interval, or after:
-    // either way, advancing virtual time drives one more.
-    for _ in 0..<50 where server.state.withLock({ $0.refreshTokensSeen }).isEmpty {
-      testClock.advance(by: .seconds(10))
-      await Task.yield()
-    }
-    #expect(server.state.withLock { $0.refreshTokensSeen } == ["rt-1"])
-    loop.cancel()
-    await loop.value
+  /// Moves the clock to the stored session's renewal date.
+  func advanceToRenewal() {
+    guard let due = sessions.session?.renewalDue else { return }
+    clock.advance(max(0, due.timeIntervalSince(clock.now)))
   }
 }
 

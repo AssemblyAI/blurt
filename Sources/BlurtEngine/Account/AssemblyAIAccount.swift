@@ -33,10 +33,16 @@ public final class AssemblyAIAccount {
 
   private static let log = HostIdentity.current.logger("Account")
 
-  /// How often the running app asks `renewIfDue()`. Blurt runs for days from
-  /// the trigger key without coming forward, so launch alone isn't enough; a
-  /// check that isn't due costs a Keychain read.
-  public static let renewalCheckInterval: Duration = .seconds(60 * 60)
+  /// The longest `runRenewal` sleeps between checks. A renewal is normally
+  /// due days away, and the loop sleeps until then; the cap bounds how long a
+  /// sign-in made while it sleeps waits for its schedule, and how far a
+  /// changed system clock can throw it.
+  public static let longestRenewalSleep: TimeInterval = 24 * 60 * 60
+  /// The shortest: a renewal that keeps failing (offline) retries no faster.
+  public static let shortestRenewalSleep: TimeInterval = 60
+  /// A rejected key renews at once, but no more often than this, so repeated
+  /// dictation failures can't hammer the token endpoint.
+  public static let rejectedKeyRenewalSpacing: TimeInterval = 15 * 60
 
   /// Whether this build has a Connected App configured. Builds without one
   /// (today: release) show only the paste-a-key path.
@@ -60,6 +66,8 @@ public final class AssemblyAIAccount {
   /// rotated the refresh token, and refreshing with the old one would read as
   /// "already over".
   @ObservationIgnored private var renewal: Task<Void, Never>?
+  /// When a rejected key last forced a renewal (`keyWasRejected`).
+  @ObservationIgnored private var lastForcedRenewal: Date?
   /// Bumped whenever the stored session is replaced or dropped (a sign-in, a
   /// sign-out, a reset). A renewal suspends twice on the network; one that wakes
   /// to a different generation writes nothing, or it would bring back a session
@@ -141,7 +149,8 @@ public final class AssemblyAIAccount {
       }
       let key = try await client.apiKey(accessToken: tokens.accessToken)
       let session = SignInSession(
-        refreshToken: refreshToken, email: tokens.email, keyExpiresAt: key.expiresAt, renewedAt: now())
+        refreshToken: refreshToken, email: tokens.email, keyExpiresAt: key.expiresAt,
+        keyRotatesAt: key.rotatesAt, renewedAt: now())
       generation += 1
       guard store.save(session), apiKey.save(key.apiKey) else {
         store.save(nil)
@@ -154,15 +163,39 @@ public final class AssemblyAIAccount {
     }
   }
 
-  /// Asks `renewIfDue()` now and then every `interval` until cancelled. The
-  /// shell starts it once at launch.
-  public func runRenewal<C: Clock<Duration>>(
-    every interval: Duration = AssemblyAIAccount.renewalCheckInterval, clock: C = ContinuousClock()
-  ) async {
+  /// Renews when due and otherwise sleeps until the next renewal is, until
+  /// cancelled. The shell starts it once at launch. The default clock keeps
+  /// counting while the Mac sleeps, so a renewal that fell due during sleep
+  /// runs on wake.
+  public func runRenewal<C: Clock<Duration>>(clock: C = ContinuousClock()) async {
     while !Task.isCancelled {
       await renewIfDue()
-      do { try await clock.sleep(for: interval) } catch { return }
+      do { try await clock.sleep(for: .seconds(nextRenewalCheck())) } catch { return }
     }
+  }
+
+  /// Seconds until `runRenewal` should look again: until the session's
+  /// renewal is due, within the shortest and longest sleep. Signed out (or
+  /// unreadable), the longest.
+  func nextRenewalCheck() -> TimeInterval {
+    guard case .session(let session) = store.load else { return Self.longestRenewalSleep }
+    let untilDue = session.renewalDue.timeIntervalSince(now())
+    return min(max(untilDue, Self.shortestRenewalSleep), Self.longestRenewalSleep)
+  }
+
+  /// Dictation refused the stored key (expired early, deleted by an admin, a
+  /// revoked connection). Renews at once rather than when due, so the next
+  /// dictation has a working key, or the account notices the connection is
+  /// over. At most once per `rejectedKeyRenewalSpacing`; nothing to do for a
+  /// pasted key.
+  public func keyWasRejected() async {
+    let now = now()
+    if let lastForcedRenewal, now.timeIntervalSince(lastForcedRenewal) < Self.rejectedKeyRenewalSpacing {
+      return
+    }
+    guard case .session = store.load else { return }
+    lastForcedRenewal = now
+    await renewIfDue(force: true)
   }
 
   /// Refreshes and re-exchanges when `SignInSession.isRenewalDue` says so. A
@@ -171,9 +204,13 @@ public final class AssemblyAIAccount {
   /// session go and the row offers sign-in again. An unreachable server, or an
   /// unreadable session item, changes nothing; the next check tries again.
   public func renewIfDue() async {
+    await renewIfDue(force: false)
+  }
+
+  private func renewIfDue(force: Bool) async {
     if let renewal { return await renewal.value }
     guard case .session(let session) = store.load,
-      session.isRenewalDue(now: now(), hasKey: apiKey.current != nil)
+      force || session.isRenewalDue(now: now(), hasKey: apiKey.current != nil)
     else { return }
     let task = Task { await renew(session) }
     renewal = task
@@ -244,7 +281,9 @@ public final class AssemblyAIAccount {
       let key = try await client.apiKey(accessToken: tokens.accessToken)
       guard generation == started else { return }
       session.keyExpiresAt = key.expiresAt
+      session.keyRotatesAt = key.rotatesAt
       session.renewedAt = now()
+      session.deferRenewalIfStillDue(now: session.renewedAt)
       if apiKey.current != key.apiKey { apiKey.save(key.apiKey) }
       store.save(session)
       status = .signedIn(email: session.email)

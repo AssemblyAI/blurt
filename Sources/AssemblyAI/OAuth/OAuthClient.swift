@@ -38,10 +38,14 @@ public struct OAuthClient: Sendable {
   public struct ConnectionKey: Sendable, Equatable {
     public let apiKey: String
     public let expiresAt: Date?
+    /// From when an exchange mints the next key: when to exchange again. Nil
+    /// from a server that doesn't say.
+    public let rotatesAt: Date?
 
-    public init(apiKey: String, expiresAt: Date?) {
+    public init(apiKey: String, expiresAt: Date?, rotatesAt: Date? = nil) {
       self.apiKey = apiKey
       self.expiresAt = expiresAt
+      self.rotatesAt = rotatesAt
     }
   }
 
@@ -101,7 +105,9 @@ public struct OAuthClient: Sendable {
       guard let body = try? JSONDecoder().decode(APIKeyBody.self, from: data),
         let apiKey = body.apiKey.trimmedNonEmpty()
       else { throw .unreachable }
-      return ConnectionKey(apiKey: apiKey, expiresAt: body.apiKeyExpiresAt.flatMap(Self.date(from:)))
+      return ConnectionKey(
+        apiKey: apiKey, expiresAt: body.apiKeyExpiresAt.flatMap(Self.date(from:)),
+        rotatesAt: body.apiKeyRotatesAt.flatMap(Self.date(from:)))
     case 401:
       Self.logRefusal(request, status: status, data: data)
       throw .rejected
@@ -194,10 +200,12 @@ public struct OAuthClient: Sendable {
   private struct APIKeyBody: Decodable {
     let apiKey: String
     let apiKeyExpiresAt: String?
+    let apiKeyRotatesAt: String?
 
     enum CodingKeys: String, CodingKey {
       case apiKey = "api_key"
       case apiKeyExpiresAt = "api_key_expires_at"
+      case apiKeyRotatesAt = "api_key_rotates_at"
     }
   }
 

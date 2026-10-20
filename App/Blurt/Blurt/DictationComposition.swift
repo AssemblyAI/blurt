@@ -17,12 +17,18 @@ struct DictationComponents {
   /// production behavior is unchanged by the test seam existing.
   /// `dictationOrigin` is the signed-in key's dictation host
   /// (`AssemblyAIAccount.dictationOrigin`); production when it holds none.
-  static func production(dictationOrigin: DictationOrigin? = nil) -> DictationComponents {
+  /// `onKeyRejected` hears about a dictation refused for its key
+  /// (`KeyRejectionReporter`), so the account can renew at once.
+  static func production(
+    dictationOrigin: DictationOrigin? = nil, onKeyRejected: @escaping @Sendable () -> Void = {}
+  ) -> DictationComponents {
     DictationComponents(
       mic: MicCapture(),
-      transcriber: AssemblyAITranscriber(baseURL: {
-        dictationOrigin?.current ?? AssemblyAITranscriber.defaultBaseURL
-      }),
+      transcriber: KeyRejectionReporter(
+        AssemblyAITranscriber(baseURL: {
+          dictationOrigin?.current ?? AssemblyAITranscriber.defaultBaseURL
+        }),
+        onRejected: onKeyRejected),
       injector: KeyInjector()
     )
   }

@@ -50,7 +50,7 @@ extension AssemblyAIAccountTests {
     let callback = try #require(URL(string: "com.assemblyai.blurt://oauth/callback?code=c&state=\(auth.state)"))
     #expect(await account.completeSignIn(auth, callback: callback) == .signedIn)
 
-    clock.advance(SignInSession.renewalInterval)
+    advanceToRenewal()
     gated.armed.withLock { $0 = true }
     let renewal = Task { await account.renewIfDue() }
     await gate.waitUntilEntered()
@@ -78,7 +78,7 @@ extension AssemblyAIAccountTests {
     let callback = try #require(URL(string: "com.assemblyai.blurt://oauth/callback?code=c&state=\(auth.state)"))
     _ = await account.completeSignIn(auth, callback: callback)
 
-    clock.advance(SignInSession.renewalInterval)
+    advanceToRenewal()
     gated.armed.withLock { $0 = true }
     let renewal = Task { await account.renewIfDue() }
     await gate.waitUntilEntered()
@@ -94,17 +94,39 @@ extension AssemblyAIAccountTests {
 struct SignInSessionTests {
   private let start = Date(timeIntervalSince1970: 1_790_000_000)
 
-  @Test("renewal is due after a day, near the key's expiry, or with no key stored")
+  @Test("renewal is due two days before the key expires, or with no key stored, and not daily")
   func renewalDue() {
-    let session = SignInSession(
-      refreshToken: "rt", email: nil, keyExpiresAt: start.addingTimeInterval(30 * 86_400), renewedAt: start)
-    #expect(!session.isRenewalDue(now: start.addingTimeInterval(3_600), hasKey: true))
+    let expires = start.addingTimeInterval(14 * 86_400)
+    let session = SignInSession(refreshToken: "rt", email: nil, keyExpiresAt: expires, renewedAt: start)
+    #expect(session.renewalDue == expires.addingTimeInterval(-SignInSession.expiryMargin))
+    #expect(!session.isRenewalDue(now: start.addingTimeInterval(86_400), hasKey: true))
+    #expect(!session.isRenewalDue(now: start.addingTimeInterval(11 * 86_400), hasKey: true))
+    #expect(session.isRenewalDue(now: start.addingTimeInterval(12 * 86_400), hasKey: true))
     #expect(session.isRenewalDue(now: start.addingTimeInterval(3_600), hasKey: false))
-    #expect(session.isRenewalDue(now: start.addingTimeInterval(SignInSession.renewalInterval), hasKey: true))
+  }
 
-    let expiring = SignInSession(
-      refreshToken: "rt", email: nil, keyExpiresAt: start.addingTimeInterval(86_400), renewedAt: start)
-    #expect(expiring.isRenewalDue(now: start.addingTimeInterval(60), hasKey: true))
+  @Test("the server's rotation time wins over the expiry margin")
+  func rotatesAtWins() {
+    let rotates = start.addingTimeInterval(10 * 86_400)
+    let session = SignInSession(
+      refreshToken: "rt", email: nil, keyExpiresAt: start.addingTimeInterval(14 * 86_400),
+      keyRotatesAt: rotates, renewedAt: start)
+    #expect(session.renewalDue == rotates)
+  }
+
+  @Test("a session saved before keyRotatesAt existed still reads")
+  func oldSessionDecodes() throws {
+    let json = #"{"refreshToken":"rt","keyExpiresAt":"2026-11-01T00:00:00Z","renewedAt":"2026-10-01T00:00:00Z"}"#
+    let store = SignInStore(read: { .value(json) }, write: { _ in true })
+    let session = try #require(store.session)
+    #expect(session.keyRotatesAt == nil)
+    #expect(session.renewalDue == Date(timeIntervalSince1970: 1_793_491_200 - SignInSession.expiryMargin))
+  }
+
+  @Test("an exchange that didn't say when the key expires renews a day after the last renewal")
+  func unknownExpiry() {
+    let session = SignInSession(refreshToken: "rt", email: nil, keyExpiresAt: nil, renewedAt: start)
+    #expect(session.renewalDue == start.addingTimeInterval(SignInSession.unknownExpiryInterval))
   }
 
   @Test("the store round-trips a session and deletes on nil; unreadable JSON reads as none")

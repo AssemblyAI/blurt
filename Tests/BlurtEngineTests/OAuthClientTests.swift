@@ -163,6 +163,22 @@ struct OAuthClientTests {
     }
     let key = try await client(transport).apiKey(accessToken: "at")
     #expect(key == OAuthClient.ConnectionKey(apiKey: "key-1", expiresAt: Date(timeIntervalSince1970: 1_793_491_200)))
+    #expect(key.rotatesAt == nil)
+  }
+
+  @Test("the exchange reads when the key rotates, when the server says")
+  func exchangeRotatesAt() async throws {
+    let transport = FakeHTTPTransport { _ in
+      (
+        200,
+        json([
+          "api_key": "key-1", "api_key_expires_at": "2026-11-01T00:00:00Z",
+          "api_key_rotates_at": "2026-10-30T00:00:00Z",
+        ])
+      )
+    }
+    let key = try await client(transport).apiKey(accessToken: "at")
+    #expect(key.rotatesAt == Date(timeIntervalSince1970: 1_793_491_200 - 2 * 86_400))
   }
 
   @Test("an expiry with fractional seconds parses; a missing or odd one is nil")

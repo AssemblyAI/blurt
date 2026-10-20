@@ -85,7 +85,11 @@ final class AppCoordinator {
         dictationHost: OAuthConfiguration.blurtDictationOrigin(infoDictionary: info),
         apiKey: apiKey)
     self.account = account
-    let components = components ?? .production(dictationOrigin: account.dictationOrigin)
+    let components =
+      components
+      ?? .production(
+        dictationOrigin: account.dictationOrigin,
+        onKeyRejected: { Task { await account.keyWasRejected() } })
 
     // Buffering the newest is enough: each element is the *whole* ring as of that
     // delivery, not a delta, so a value dropped under contention is one the next

@@ -11,30 +11,59 @@ public struct SignInSession: Codable, Sendable, Equatable {
   public var email: String?
   /// When the connection's key stops working, as the exchange reported it.
   public var keyExpiresAt: Date?
+  /// When to renew: from when the exchange mints the next key, as it reported
+  /// it (`api_key_rotates_at`). Nil from a server that doesn't say, or a
+  /// session saved before it did.
+  public var keyRotatesAt: Date?
   /// The last successful refresh and exchange.
   public var renewedAt: Date
 
-  public init(refreshToken: String, email: String?, keyExpiresAt: Date?, renewedAt: Date) {
+  public init(
+    refreshToken: String, email: String?, keyExpiresAt: Date?, keyRotatesAt: Date? = nil, renewedAt: Date
+  ) {
     self.refreshToken = refreshToken
     self.email = email
     self.keyExpiresAt = keyExpiresAt
+    self.keyRotatesAt = keyRotatesAt
     self.renewedAt = renewedAt
   }
 
-  /// At most one renewal a day. Each one also slides the refresh token's
-  /// lifetime, so a Mac that opens Blurt now and then stays signed in.
-  public static let renewalInterval: TimeInterval = 24 * 60 * 60
-  /// Renew this far ahead of the key's expiry, so the next key is in place
-  /// before the old one stops working mid-dictation.
+  /// Without `keyRotatesAt`, renew this far ahead of the key's expiry (the
+  /// server's usual rotation window), so the next key is in place before the
+  /// old one stops working mid-dictation. One renewal per key is all the
+  /// refresh token needs: its sliding lifetime (three months) dwarfs a key's
+  /// (two weeks).
   public static let expiryMargin: TimeInterval = 2 * 24 * 60 * 60
+  /// When the exchange didn't say when the key expires: renew this long after
+  /// the last renewal instead.
+  public static let unknownExpiryInterval: TimeInterval = 24 * 60 * 60
 
-  /// Whether a renewal check should refresh and exchange now: a day since the last renewal, the key close to expiring, or no key
+  /// When the next renewal is due: when the server said the key rotates, else
+  /// `expiryMargin` before it expires.
+  public var renewalDue: Date {
+    keyRotatesAt
+      ?? keyExpiresAt.map { $0.addingTimeInterval(-Self.expiryMargin) }
+      ?? renewedAt.addingTimeInterval(Self.unknownExpiryInterval)
+  }
+
+  /// After a renewal that brought back a key still due for renewal (a server
+  /// that didn't rotate it early): push the next renewal to the key's expiry,
+  /// when any server rotates, or once it has expired, a day out, rather than
+  /// asking again every minute. A dictation the key fails meanwhile still
+  /// renews at once (`AssemblyAIAccount.keyWasRejected`).
+  mutating func deferRenewalIfStillDue(now: Date) {
+    guard renewalDue <= now else { return }
+    if let keyExpiresAt, keyExpiresAt > now {
+      keyRotatesAt = keyExpiresAt
+    } else {
+      keyRotatesAt = now.addingTimeInterval(Self.unknownExpiryInterval)
+    }
+  }
+
+  /// Whether a renewal should refresh and exchange now: it's due, or no key is
   /// stored at all.
   public func isRenewalDue(now: Date, hasKey: Bool) -> Bool {
-    if !hasKey { return true }
-    if now.timeIntervalSince(renewedAt) >= Self.renewalInterval { return true }
-    if let keyExpiresAt, keyExpiresAt.timeIntervalSince(now) <= Self.expiryMargin { return true }
-    return false
+    !hasKey || now >= renewalDue
   }
 }
 
