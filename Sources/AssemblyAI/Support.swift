@@ -4,6 +4,9 @@ import os
 /// The SDK's own log, apart from any app's. Only transport faults are logged.
 enum SDKLog {
   static let transport = Logger(subsystem: "com.assemblyai.sdk", category: "Transport")
+  /// Refused or failed OAuth calls: the route, the status and the server's own
+  /// error fields. Never a token.
+  static let oauth = Logger(subsystem: "com.assemblyai.sdk", category: "OAuth")
 }
 
 extension URL {

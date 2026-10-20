@@ -2,7 +2,7 @@ import Foundation
 
 /// The in-app equivalent of `scripts/reset-install.sh`: everything Blurt has put
 /// on this machine, removed in one pass — the persisted settings, the Keychain
-/// API key, the TCC grants (Accessibility, Microphone, Input Monitoring), and
+/// API key and any "Sign in with AssemblyAI" session, the TCC grants (Accessibility, Microphone, Input Monitoring), and
 /// the developer-mode logs — so someone whose install is in a bad state can get
 /// back to preinstall without a terminal.
 ///
@@ -45,7 +45,7 @@ public struct InstallReset {
     /// added later can't ship with an alert that forgets to name it.
     var failureAlert: AlertContent? {
       let survivors = [
-        apiKeyCleared ? nil : "your AssemblyAI API key",
+        apiKeyCleared ? nil : "your AssemblyAI API key or sign-in",
         permissionsCleared ? nil : "Blurt’s microphone, accessibility and input-monitoring permissions",
         logsCleared ? nil : "the dictation logs",
       ].compactMap { $0 }
@@ -68,7 +68,9 @@ public struct InstallReset {
   /// **running** one (`Bundle.main.bundleIdentifier`) for the reason spelled out
   /// on `PermissionsReset` — a dev build must never clear the released Blurt's
   /// grants.
-  public init(bundleID: String, keyStore: any APIKeyGateway) {
+  /// `signInStore` likewise: the account's own storage, so the session item goes
+  /// with the key (locally only — a reset is not a sign-out).
+  public init(bundleID: String, keyStore: any APIKeyGateway, signInStore: SignInStore) {
     self.init(
       clearSettings: {
         PersistedSettings.resetAll()
@@ -79,7 +81,8 @@ public struct InstallReset {
         // would survive a reset.
         UserDefaults.standard.removePersistentDomain(forName: bundleID)
       },
-      clearAPIKey: { keyStore.save(nil) },
+      // Both always run: a failed key delete mustn't leave the session behind.
+      clearAPIKey: { [keyStore.save(nil), signInStore.save(nil)].allSatisfy { $0 } },
       resetPermissions: {
         #if os(macOS)
           return PermissionsReset.resetAll(bundleID: bundleID)

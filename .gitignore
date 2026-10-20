@@ -47,3 +47,7 @@ results*.json
 App/BlurtiOS/BlurtiOS.xcodeproj/
 App/BlurtiOS/*/Info.plist
 App/BlurtiOS/*/*.entitlements
+
+# Sign in with AssemblyAI's dev values name AssemblyAI's sandbox deployments,
+# which stay out of this public repo (see App/Blurt/Config/SignIn.xcconfig).
+App/Blurt/Config/SignIn.local.xcconfig

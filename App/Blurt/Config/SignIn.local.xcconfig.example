@@ -1,0 +1,13 @@
+// Copy to SignIn.local.xcconfig (gitignored) and fill in. Any one left empty
+// turns sign-in off. xcconfig treats `//` as the start of a comment, so write
+// every URL's `//` as `/$()/`.
+//
+// BLURT_OAUTH_CLIENT_ID         the Connected App's client id
+// BLURT_OAUTH_TOKEN_URL         the Stytch project's token endpoint (…/v1/oauth2/token)
+// BLURT_OAUTH_AUTHORIZE_URL     the dashboard's consent page (…/dashboard/oauth/authorize)
+// BLURT_OAUTH_API_ORIGIN        the web origin serving /api/v2/oauth/api-key[/revoke]
+
+BLURT_OAUTH_CLIENT_ID =
+BLURT_OAUTH_TOKEN_URL = https:/$()/
+BLURT_OAUTH_AUTHORIZE_URL = https:/$()/
+BLURT_OAUTH_API_ORIGIN = https:/$()/

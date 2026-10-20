@@ -136,6 +136,14 @@ targets:
         Release:
           PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt
           BLURT_APP_NAME: Blurt
+    # Sign in with AssemblyAI's BLURT_OAUTH_* settings, for the dev
+    # configurations only. They name AssemblyAI's sandbox deployments, so the
+    # values live in a gitignored include (see Config/SignIn.xcconfig); without
+    # it, and in Release, they're unset and sign-in is off. Baked into
+    # Info.plist below and read by `OAuthConfiguration.blurt`.
+    configFiles:
+      Debug: Config/SignIn.xcconfig
+      Debug-Local: Config/SignIn.xcconfig
     sources:
       - path: Blurt
       # Shared with BlurtUITests: the single source of truth for UI-test
@@ -158,6 +166,12 @@ targets:
         LSMinimumSystemVersion: "15.0"
         LSApplicationCategoryType: public.app-category.productivity
         NSMicrophoneUsageDescription: Blurt uses your microphone to transcribe your dictation with AssemblyAI.
+        # Sign in with AssemblyAI; unset or empty values turn it off (see
+        # `configFiles` above and `OAuthConfiguration.blurt`).
+        BlurtOAuthClientID: $(BLURT_OAUTH_CLIENT_ID)
+        BlurtOAuthTokenURL: $(BLURT_OAUTH_TOKEN_URL)
+        BlurtOAuthAuthorizeURL: $(BLURT_OAUTH_AUTHORIZE_URL)
+        BlurtOAuthAPIOrigin: $(BLURT_OAUTH_API_ORIGIN)
         # Sparkle. The feed is a stable release-asset URL (the
         # BLURT_SPARKLE_FEED_URL setting above): release-publish.sh attaches
         # appcast.xml to every release, so /latest/download/ always resolves to
