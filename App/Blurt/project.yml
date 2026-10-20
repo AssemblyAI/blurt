@@ -172,6 +172,7 @@ targets:
         BlurtOAuthTokenURL: $(BLURT_OAUTH_TOKEN_URL)
         BlurtOAuthAuthorizeURL: $(BLURT_OAUTH_AUTHORIZE_URL)
         BlurtOAuthAPIOrigin: $(BLURT_OAUTH_API_ORIGIN)
+        BlurtOAuthDictationOrigin: $(BLURT_OAUTH_DICTATION_ORIGIN)
         # Sparkle. The feed is a stable release-asset URL (the
         # BLURT_SPARKLE_FEED_URL setting above): release-publish.sh attaches
         # appcast.xml to every release, so /latest/download/ always resolves to

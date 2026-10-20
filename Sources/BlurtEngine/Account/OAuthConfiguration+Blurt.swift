@@ -16,6 +16,9 @@ extension OAuthConfiguration {
     /// (`/api/v2/oauth/api-key[/revoke]`). In production the same host as the
     /// consent page; on staging the dashboard and the site deploy apart.
     public static let apiOrigin = "BlurtOAuthAPIOrigin"
+    /// The dictation host a signed-in key belongs to (`DictationOrigin`).
+    /// Optional: unset, a signed-in key dictates against production.
+    public static let dictationOrigin = "BlurtOAuthDictationOrigin"
   }
 
   /// Blurt's redirect. ASWebAuthenticationSession catches the scheme itself, so
@@ -24,6 +27,15 @@ extension OAuthConfiguration {
   /// collide with another app's. `://` rather than RFC 8252's single slash
   /// because Stytch refuses a redirect URL without it.
   public static let blurtRedirectURI = URL(staticString: "com.assemblyai.blurt://oauth/callback")
+
+  /// The dictation host this build's sign-in mints keys for, or nil (unset,
+  /// blank, or neither https nor loopback http) for production.
+  public static func blurtDictationOrigin(infoDictionary: [String: Any]) -> URL? {
+    guard let value = (infoDictionary[InfoKey.dictationOrigin] as? String)?.trimmedNonEmpty(),
+      let url = URL(string: value), isAllowed(url)
+    else { return nil }
+    return url
+  }
 
   /// https, or plain http to this machine (`localhost`, `127.0.0.1`, `::1`) so
   /// a dev build can point at a locally run dashboard or site. Nothing on the

@@ -6,8 +6,11 @@
 // BLURT_OAUTH_TOKEN_URL         the Stytch project's token endpoint (…/v1/oauth2/token)
 // BLURT_OAUTH_AUTHORIZE_URL     the dashboard's consent page (…/dashboard/oauth/authorize)
 // BLURT_OAUTH_API_ORIGIN        the web origin serving /api/v2/oauth/api-key[/revoke]
+// BLURT_OAUTH_DICTATION_ORIGIN  optional: the dictation host the signed-in key
+//                               belongs to; empty means production
 
 BLURT_OAUTH_CLIENT_ID =
 BLURT_OAUTH_TOKEN_URL = https:/$()/
 BLURT_OAUTH_AUTHORIZE_URL = https:/$()/
 BLURT_OAUTH_API_ORIGIN = https:/$()/
+BLURT_OAUTH_DICTATION_ORIGIN =
