@@ -49,7 +49,7 @@ package nonisolated enum StylePreset: String, CaseIterable, Identifiable, Sendab
   /// the existing one when it was already added. Nil when the list is full.
   package func adding(to profiles: [StyleProfile]) -> (profiles: [StyleProfile], style: StyleProfile)? {
     if let existing = added(in: profiles) { return (profiles, existing) }
-    guard profiles.count < StyleProfileStore.profileLimit else { return nil }
+    guard profiles.count < StyleProfileStore.limit else { return nil }
     let style = StyleProfile(name: name, instructions: instructions)
     return (profiles + [style], style)
   }

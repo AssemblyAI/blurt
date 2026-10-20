@@ -3,8 +3,9 @@ import BlurtEngine
 import BlurtiOSCore
 import SwiftUI
 
-/// Output styles: Default (the engine's base cleanup) plus up to four named
-/// profiles whose instructions ride the cleanup rewrite. Three ways in, each
+/// Output styles: Default (the engine's base cleanup) plus the user's named
+/// profiles (up to `StyleProfileStore.limit`, 100 on the phone) whose
+/// instructions ride the cleanup rewrite. Three ways in, each
 /// one tap: use a style (tap its row), edit one (its pencil), or add one, from
 /// a preset (`StylePreset`) or from scratch.
 /// The store owns the JSON and the active-style rule (`StyleProfileStore`);
@@ -19,7 +20,7 @@ struct StylesView: View {
 
   private var profiles: [StyleProfile] { store.profiles(decoding: profilesRaw) }
   private var active: StyleProfile? { StyleProfileStore.active(in: profiles, id: activeRaw) }
-  private var isFull: Bool { profiles.count >= StyleProfileStore.profileLimit }
+  private var isFull: Bool { profiles.count >= StyleProfileStore.limit }
 
   var body: some View {
     List {
@@ -49,7 +50,7 @@ struct StylesView: View {
       } footer: {
         Text(
           isFull
-            ? "You have \(StyleProfileStore.profileLimit) styles, the most there can be. Delete one to add another."
+            ? "You have \(StyleProfileStore.limit) styles, the most there can be. Delete one to add another."
             : "Adds it to your styles and switches to it. Edit it any time.")
       }
     }

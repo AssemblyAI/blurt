@@ -102,11 +102,18 @@ public struct StyleProfileStore {
   /// profile's id.
   public static let defaultStyleID = "default"
 
-  /// How many profiles the user may define. With the leading Default button
-  /// that is five, the most the main window's switcher can hold at a legible
-  /// width; past that it would have to scroll or become a menu, which is a lot
-  /// of chrome for a switch that is one click either way.
+  /// How many profiles Blurt for Mac lets the user define, and every host's
+  /// default. With the leading Default button that is five, the most the main
+  /// window's switcher can hold at a legible width; past that it would have to
+  /// scroll or become a menu, which is a lot of chrome for a switch that is one
+  /// click either way.
   public static let profileLimit = 4
+
+  // periphery:ignore - public for hosts outside this repo (the iOS app); the Mac app reads profileLimit.
+  /// How many profiles this host allows: `HostIdentity.styleProfileLimit`,
+  /// `profileLimit` unless the host configured another. The cap every list is
+  /// normalized to, on read and on write.
+  public static var limit: Int { HostIdentity.current.styleProfileLimit }
 
   /// The most UTF-8 bytes one profile's instructions may hold —
   /// `CleanupInstruction.customStyleBudget`, the real headroom the dictation
@@ -152,7 +159,7 @@ public struct StyleProfileStore {
 
   /// The user's profiles, in their own order. Normalized on the way out as well
   /// as in, so a hand-edited or truncated defaults value can't put an over-long
-  /// instruction on the wire or a fifth profile on screen.
+  /// instruction on the wire or one profile past the host's limit on screen.
   public var profiles: [StyleProfile] {
     get { profiles(decoding: defaults.string(forKey: Self.defaultsKey) ?? "") }
     nonmutating set {
@@ -254,12 +261,12 @@ public struct StyleProfileStore {
   }
 
   /// The one funnel every profile list passes through, on read and on write: at
-  /// most `profileLimit` profiles, each with a trimmed non-blank name of at most
+  /// most `limit` profiles (the host's), each with a trimmed non-blank name of at most
   /// `nameLimit` characters and instructions trimmed to `characterLimit` UTF-8
   /// bytes. Idempotent, so running it on both sides costs nothing but a walk.
   /// Static because it is a rule about a list, with no defaults in it.
-  static func normalized(_ profiles: [StyleProfile]) -> [StyleProfile] {
-    profiles.prefix(profileLimit).map { profile in
+  static func normalized(_ profiles: [StyleProfile], limit: Int = limit) -> [StyleProfile] {
+    profiles.prefix(limit).map { profile in
       StyleProfile(
         id: profile.id,
         name: String((profile.name.trimmedNonEmpty() ?? fallbackName).prefix(nameLimit)),

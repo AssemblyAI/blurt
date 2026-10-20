@@ -5,8 +5,10 @@ import Testing
 
 @Suite("Style presets")
 struct StylePresetTests {
-  @Test("the three presets fit the store's caps")
+  @Test("the phone allows 100 styles, and the three presets fit the store's caps")
   func fitTheCaps() {
+    // The test host is the app, which configures the phone's limit at launch.
+    #expect(StyleProfileStore.limit == 100)
     #expect(StylePreset.allCases.map(\.name) == ["Professional", "Casual", "Ultracasual"])
     for preset in StylePreset.allCases {
       #expect(preset.name.count <= StyleProfileStore.nameLimit)
@@ -29,7 +31,7 @@ struct StylePresetTests {
 
   @Test("a full list takes no new preset, but still finds one already added")
   func full() {
-    let full = (0..<StyleProfileStore.profileLimit).map { StyleProfile(name: "Style \($0)", instructions: "x") }
+    let full = (0..<StyleProfileStore.limit).map { StyleProfile(name: "Style \($0)", instructions: "x") }
     #expect(StylePreset.professional.adding(to: full) == nil)
     let withPreset = Array(full.dropLast()) + [StyleProfile(name: "Professional", instructions: "x")]
     #expect(StylePreset.professional.adding(to: withPreset)?.profiles == withPreset)

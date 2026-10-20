@@ -65,6 +65,17 @@ struct HostIdentityTests {
     #expect(HostIdentity.current == .blurt)
   }
 
+  @Test("a host's style limit defaults to Blurt's, and is never below one")
+  func styleProfileLimit() {
+    let identity = HostIdentity(
+      productName: "Host", subsystem: "host", keychainService: "host", defaultsPrefix: "Host", logDirectoryName: "Host")
+    #expect(identity.styleProfileLimit == StyleProfileStore.profileLimit)
+    let none = HostIdentity(
+      productName: "Host", subsystem: "host", keychainService: "host", defaultsPrefix: "Host", logDirectoryName: "Host",
+      styleProfileLimit: 0)
+    #expect(none.styleProfileLimit == 1)
+  }
+
   @Test("defaults keys are the prefix plus the case's raw value")
   func defaultsKeysComposeFromThePrefix() {
     // Blurt's prefix reproduces the keys already on disk — renaming one abandons

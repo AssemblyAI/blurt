@@ -76,18 +76,28 @@ public struct HostIdentity: Sendable, Equatable {
   /// logs are written to (`~/Library/Logs/Blurt/{dictations,errors}.jsonl`).
   public let logDirectoryName: String
 
+  // periphery:ignore - public for hosts outside this repo (the iOS app); the Mac app keeps the default.
+  /// How many style profiles the user may define (`StyleProfileStore.limit`).
+  /// Blurt's is `StyleProfileStore.profileLimit`, the most its main window's
+  /// switcher holds; a host whose styles live in a scrolling list can allow
+  /// more. Every store reads it, so the list the transcriber resolves the active
+  /// style from is never trimmed shorter than the one the user sees.
+  public let styleProfileLimit: Int
+
   public init(
     productName: String,
     subsystem: String,
     keychainService: String,
     defaultsPrefix: String,
-    logDirectoryName: String
+    logDirectoryName: String,
+    styleProfileLimit: Int = StyleProfileStore.profileLimit
   ) {
     self.productName = productName
     self.subsystem = subsystem
     self.keychainService = keychainService
     self.defaultsPrefix = defaultsPrefix
     self.logDirectoryName = logDirectoryName
+    self.styleProfileLimit = max(1, styleProfileLimit)
   }
 
   /// Blurt's own identity, and the value an unconfigured host inherits — so the
@@ -127,7 +137,8 @@ public struct HostIdentity: Sendable, Equatable {
       subsystem: subsystem,
       keychainService: service,
       defaultsPrefix: defaultsPrefix,
-      logDirectoryName: logDirectoryName)
+      logDirectoryName: logDirectoryName,
+      styleProfileLimit: styleProfileLimit)
   }
 
   /// The identity every engine component reads. `.blurt` until a host calls

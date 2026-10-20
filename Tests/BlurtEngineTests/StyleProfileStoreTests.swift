@@ -97,6 +97,15 @@ struct StyleProfileStoreTests {
     #expect(store.profiles.last?.name == "Style \(StyleProfileStore.profileLimit)")
   }
 
+  @Test("a host's own limit keeps more profiles than Blurt's four; Blurt's stays four")
+  func hostLimitSetsTheCap() {
+    let ten = (1...10).map { StyleProfile(name: "Style \($0)", instructions: "instruction \($0)") }
+    #expect(StyleProfileStore.normalized(ten, limit: 100).count == 10)
+    #expect(StyleProfileStore.normalized(ten, limit: StyleProfileStore.profileLimit).count == 4)
+    #expect(HostIdentity.blurt.styleProfileLimit == StyleProfileStore.profileLimit)
+    #expect(StyleProfileStore.profileLimit == 4)
+  }
+
   /// The cap is per profile because only one profile is ever sent. Both are
   /// trimmed to the full budget even though their sum is far over it — a sum that
   /// would matter only if they were concatenated, which is precisely what this
