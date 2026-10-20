@@ -1166,7 +1166,11 @@ and key rows show and which button is filled. `InstallReset` clears the session 
 The wire half (`OAuthAuthorization`, `OAuthClient`) is in the `AssemblyAI` library. The build turns
 sign-in on with four Info.plist values (`BLURT_OAUTH_*` in `App/Blurt/project.yml`, read by
 `OAuthConfiguration.blurt`); any one empty hides it, which is how release ships until a production
-Connected App exists, and a session inherited by such a build can still be signed out (locally).
+Connected App exists, and a session inherited by such a build can still be signed out (locally). A signed-in key also
+dictates against the host its sign-in configures (`BLURT_OAUTH_DICTATION_ORIGIN`, optional; a sandbox
+key only works against its sandbox's host): the account keeps a `DictationOrigin` current as it signs
+in and out, and `AssemblyAITranscriber` reads it at every request and warm-up. A pasted key, or no
+origin configured, dictates against production.
 
 Setup gating: **`SetupReadiness.isReady(permissions:hasAPIKey:)`** is the fully-configured rule
 (deliberately excluding the trigger key, which has a default binding, so a shortcut change can't trap

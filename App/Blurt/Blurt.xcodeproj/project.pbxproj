@@ -2266,6 +2266,7 @@
 				BLURT_OAUTH_API_ORIGIN = "";
 				BLURT_OAUTH_AUTHORIZE_URL = "";
 				BLURT_OAUTH_CLIENT_ID = "";
+				BLURT_OAUTH_DICTATION_ORIGIN = "";
 				BLURT_OAUTH_TOKEN_URL = "";
 				CODE_SIGN_ENTITLEMENTS = Blurt/Blurt.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -2384,6 +2385,7 @@
 				BLURT_OAUTH_API_ORIGIN = "https://explore-git-staging-assemblyai.vercel.app";
 				BLURT_OAUTH_AUTHORIZE_URL = "https://dashboard-assemblyai.vercel.app/dashboard/oauth/authorize";
 				BLURT_OAUTH_CLIENT_ID = "connected-app-test-2030e449-137e-47bc-a09c-2edbf6aa86ff";
+				BLURT_OAUTH_DICTATION_ORIGIN = "https://dictation.sandbox000.assemblyai-labs.com";
 				BLURT_OAUTH_TOKEN_URL = "https://snapdragon-coyote-7054.customers.stytch.dev/v1/oauth2/token";
 				CODE_SIGN_ENTITLEMENTS = Blurt/Blurt.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -2408,6 +2410,7 @@
 				BLURT_OAUTH_API_ORIGIN = "https://explore-git-staging-assemblyai.vercel.app";
 				BLURT_OAUTH_AUTHORIZE_URL = "https://dashboard-assemblyai.vercel.app/dashboard/oauth/authorize";
 				BLURT_OAUTH_CLIENT_ID = "connected-app-test-2030e449-137e-47bc-a09c-2edbf6aa86ff";
+				BLURT_OAUTH_DICTATION_ORIGIN = "https://dictation.sandbox000.assemblyai-labs.com";
 				BLURT_OAUTH_TOKEN_URL = "https://snapdragon-coyote-7054.customers.stytch.dev/v1/oauth2/token";
 				CODE_SIGN_ENTITLEMENTS = Blurt/Blurt.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;

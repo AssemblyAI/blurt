@@ -1,3 +1,4 @@
+import AssemblyAI
 import BlurtEngine
 import Foundation
 import Observation
@@ -62,23 +63,29 @@ final class AppCoordinator {
   /// its `.recording` half (via `menuBarStatus`) drives the listening state.
   private(set) var isCapturing = false
 
-  /// `components` defaults to the production pipeline; `apiKey` defaults to the
+  /// `components` defaults to the production pipeline, its transcriber dictating
+  /// against the account's `dictationOrigin`; `apiKey` defaults to the
   /// production Keychain-backed model. Tests/UI-tests inject deterministic
   /// doubles (see `DictationComponents`) and an `APIKeyModel` built over an
   /// in-memory store with an offline validator — the engine's `APIKeySubmission`
   /// still owns the never-persist-an-unverified-key invariant either way.
   init(
     onSetupBlocked: @escaping @MainActor () -> Void,
-    components: DictationComponents = .production(),
+    components: DictationComponents? = nil,
     apiKey: APIKeyModel = APIKeyModel(),
     account: AssemblyAIAccount? = nil
   ) {
     self.onSetupBlocked = onSetupBlocked
     self.apiKey = apiKey
-    self.account =
+    let info = Bundle.main.infoDictionary ?? [:]
+    let account =
       account
       ?? AssemblyAIAccount(
-        configuration: .blurt(infoDictionary: Bundle.main.infoDictionary ?? [:]), apiKey: apiKey)
+        configuration: .blurt(infoDictionary: info),
+        dictationHost: OAuthConfiguration.blurtDictationOrigin(infoDictionary: info),
+        apiKey: apiKey)
+    self.account = account
+    let components = components ?? .production(dictationOrigin: account.dictationOrigin)
 
     // Buffering the newest is enough: each element is the *whole* ring as of that
     // delivery, not a delta, so a value dropped under contention is one the next

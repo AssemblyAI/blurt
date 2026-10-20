@@ -81,7 +81,7 @@ struct AssemblyAIAccountTests {
       now: { clock.now })
   }
 
-  private func signedIn() async throws -> AssemblyAIAccount {
+  func signedIn() async throws -> AssemblyAIAccount {
     let account = account()
     let auth = try #require(account.beginSignIn())
     let callback = try #require(URL(string: "com.assemblyai.blurt://oauth/callback?code=c&state=\(auth.state)"))

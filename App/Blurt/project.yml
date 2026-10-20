@@ -133,10 +133,15 @@ targets:
         #   API_ORIGIN    the web origin serving /api/v2/oauth/api-key[/revoke];
         #                 the consent page's host in production, a separate
         #                 deployment on staging
+        #   DICTATION_ORIGIN (optional) the dictation host the signed-in key
+        #                 belongs to: a sandbox key only works against its
+        #                 sandbox's host. Empty means production. A pasted key
+        #                 always dictates against production.
         BLURT_OAUTH_CLIENT_ID: ""
         BLURT_OAUTH_TOKEN_URL: ""
         BLURT_OAUTH_AUTHORIZE_URL: ""
         BLURT_OAUTH_API_ORIGIN: ""
+        BLURT_OAUTH_DICTATION_ORIGIN: ""
       configs:
         # The XCUITest harness + leak/hotkey test seams compile only when
         # UITEST_HOOKS is set (see the `#if UITEST_HOOKS` blocks). It's on for the
@@ -155,12 +160,14 @@ targets:
           BLURT_OAUTH_TOKEN_URL: https://snapdragon-coyote-7054.customers.stytch.dev/v1/oauth2/token
           BLURT_OAUTH_AUTHORIZE_URL: https://dashboard-assemblyai.vercel.app/dashboard/oauth/authorize
           BLURT_OAUTH_API_ORIGIN: https://explore-git-staging-assemblyai.vercel.app
+          BLURT_OAUTH_DICTATION_ORIGIN: https://dictation.sandbox000.assemblyai-labs.com
         Debug-Local:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
           BLURT_OAUTH_CLIENT_ID: connected-app-test-2030e449-137e-47bc-a09c-2edbf6aa86ff
           BLURT_OAUTH_TOKEN_URL: https://snapdragon-coyote-7054.customers.stytch.dev/v1/oauth2/token
           BLURT_OAUTH_AUTHORIZE_URL: https://dashboard-assemblyai.vercel.app/dashboard/oauth/authorize
           BLURT_OAUTH_API_ORIGIN: https://explore-git-staging-assemblyai.vercel.app
+          BLURT_OAUTH_DICTATION_ORIGIN: https://dictation.sandbox000.assemblyai-labs.com
         # The shipping identity, opted into by the one configuration that ships.
         Release:
           PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt
@@ -193,6 +200,7 @@ targets:
         BlurtOAuthTokenURL: $(BLURT_OAUTH_TOKEN_URL)
         BlurtOAuthAuthorizeURL: $(BLURT_OAUTH_AUTHORIZE_URL)
         BlurtOAuthAPIOrigin: $(BLURT_OAUTH_API_ORIGIN)
+        BlurtOAuthDictationOrigin: $(BLURT_OAUTH_DICTATION_ORIGIN)
         # Sparkle. The feed is a stable release-asset URL (the
         # BLURT_SPARKLE_FEED_URL setting above): release-publish.sh attaches
         # appcast.xml to every release, so /latest/download/ always resolves to

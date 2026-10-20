@@ -41,9 +41,17 @@ public final class AssemblyAIAccount {
   /// Whether this build has a Connected App configured. Builds without one
   /// (today: release) show only the paste-a-key path.
   public var isAvailable: Bool { configuration != nil }
-  public private(set) var status: Status
+  public private(set) var status: Status {
+    didSet { syncDictationOrigin() }
+  }
+
+  /// The dictation host for the current sign-in, for the transcriber. Set to
+  /// `dictationHost` while signed in, nil otherwise.
+  public nonisolated let dictationOrigin = DictationOrigin()
 
   @ObservationIgnored private let configuration: OAuthConfiguration?
+  /// Where this sign-in's keys dictate; nil means production.
+  @ObservationIgnored private let dictationHost: URL?
   @ObservationIgnored private let apiKey: APIKeyModel
   @ObservationIgnored private let store: SignInStore
   @ObservationIgnored private let client: OAuthClient?
@@ -60,12 +68,14 @@ public final class AssemblyAIAccount {
 
   public init(
     configuration: OAuthConfiguration?,
+    dictationHost: URL? = nil,
     apiKey: APIKeyModel,
     store: SignInStore = .production,
     transport: any HTTPTransport = URLSession.shared,
     now: @escaping @Sendable () -> Date = { Date() }
   ) {
     self.configuration = configuration
+    self.dictationHost = dictationHost
     self.apiKey = apiKey
     self.store = store
     self.client = configuration.map {
@@ -79,6 +89,12 @@ public final class AssemblyAIAccount {
     } else {
       self.status = .signedOut
     }
+    // `didSet` doesn't run for the initial value.
+    syncDictationOrigin()
+  }
+
+  private func syncDictationOrigin() {
+    dictationOrigin.set(status == .signedOut ? nil : dictationHost)
   }
 
   /// The session storage, for the install reset's sweep (the in-memory store
