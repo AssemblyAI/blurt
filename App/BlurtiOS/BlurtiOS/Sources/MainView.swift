@@ -51,6 +51,7 @@ struct MainView: View {
   }
 
   var coordinator: DictationCoordinator
+  @Environment(\.scenePhase) private var scenePhase
   @State private var tab = Tab.dictate
   @State private var showsSettings = false
 
@@ -84,6 +85,12 @@ struct MainView: View {
     .onOpenURL { url in
       tab = TermPack.looksLikePack(url) ? .words : .dictate
       coordinator.handle(url)
+    }
+    // A session by default: opening Blurt turns one on (when nothing needs
+    // asking first), so the keyboard is ready without a trip to the switch.
+    .task { await coordinator.startSessionIfReady() }
+    .onChange(of: scenePhase) { _, phase in
+      if phase == .active { Task { await coordinator.startSessionIfReady() } }
     }
     .tint(BlurtBrand.accent)
   }

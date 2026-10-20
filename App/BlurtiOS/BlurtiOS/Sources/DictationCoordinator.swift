@@ -25,6 +25,8 @@ final class DictationCoordinator {
   private(set) var recent = RecentDictations()
   private(set) var level: Float = 0
   private(set) var microphoneDenied = false
+  /// A window is opening: a second ask waits for it rather than opening another.
+  @ObservationIgnored private var opening = false
   /// The keyboard brought the app forward from another app to start a
   /// session (`blurt://start`): the home screen points at iOS's "◀ App" back
   /// link until the user leaves. Not when the keyboard was already in Blurt's
@@ -141,7 +143,24 @@ final class DictationCoordinator {
       return
     }
     microphoneDenied = false
+    // The keyboard's link and the app coming forward can both ask at once;
+    // the capture session is opened once.
+    guard !window.isOpen, !opening else { return }
+    opening = true
+    defer { opening = false }
     await window.open()
+  }
+
+  /// Turns a session on by itself as the app comes to the front, so using the
+  /// Blurt keyboard needs no switch: once Blurt has been opened, the keyboard
+  /// works in place for the session's length. Only when nothing would ask the
+  /// user anything — a key saved, consent given, the microphone already
+  /// allowed — so it never puts up a sheet or a permission prompt unasked.
+  func startSessionIfReady() async {
+    guard !window.isOpen, apiKey.hasAPIKey, AIConsent.isGranted(),
+      AVAudioApplication.shared.recordPermission == .granted
+    else { return }
+    await startListening()
   }
 
   /// The user agreed in `ConsentView`: record it and carry on opening the

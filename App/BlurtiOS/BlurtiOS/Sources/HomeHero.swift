@@ -16,24 +16,27 @@ struct HomeHero: View {
       if coordinator.startedFromKeyboard, status.isOn {
         ReturnHint()
       }
-      HStack {
-        Eyebrow(status.label, color: status.isOn ? BlurtBrand.accent : BlurtBrand.muted)
-        Spacer()
-        if coordinator.microphoneDenied {
-          Button("Open Settings") { SystemSettings.open() }
-            .buttonStyle(BrandButtonStyle())
-            .fixedSize()
-        } else {
-          Toggle("Session", isOn: session)
-            .labelsHidden()
-            .tint(BlurtBrand.accent)
-            .disabled(!coordinator.apiKey.hasAPIKey)
+      // The session and its line read as one thing, so they sit close.
+      VStack(alignment: .leading, spacing: DesignTokens.Metrics.appLineGap) {
+        HStack {
+          Eyebrow(status.label, color: status.isOn ? BlurtBrand.accent : BlurtBrand.muted)
+          Spacer()
+          if coordinator.microphoneDenied {
+            Button("Open Settings") { SystemSettings.open() }
+              .buttonStyle(BrandButtonStyle())
+              .fixedSize()
+          } else {
+            Toggle("Session", isOn: session)
+              .labelsHidden()
+              .tint(BlurtBrand.accent)
+              .disabled(!coordinator.apiKey.hasAPIKey)
+          }
         }
+        Text(status.message)
+          .font(BlurtType.body(DesignTokens.Typography.sizeBody))
+          .foregroundStyle(BlurtBrand.text)
+          .fixedSize(horizontal: false, vertical: true)
       }
-      Text(status.message)
-        .font(BlurtType.body(DesignTokens.Typography.sizeBody))
-        .foregroundStyle(BlurtBrand.text)
-        .fixedSize(horizontal: false, vertical: true)
       TryItBox()
       if let error = status.error ?? coordinator.window.lastError {
         note(error)
@@ -42,7 +45,7 @@ struct HomeHero: View {
         note("Add your API key first (Settings → Account).")
       }
     }
-    .padding(DesignTokens.Metrics.appHeroPad)
+    .padding(DesignTokens.Metrics.appCardPad)
     .frame(maxWidth: .infinity, alignment: .leading)
     .card(radius: DesignTokens.Metrics.radiusHero)
   }

@@ -741,7 +741,9 @@ Whoever was already set up skips it.
 `WORDS`, `TIME SAVED` (against 36 wpm, the phone average, or the easter egg's
 result) as serif numbers with mono units, one row until time saved reaches an
 hour and then two, at the largest of four sizes that fits (reset in Settings ›
-Data); the session card — `SESSION ON` in the
+Data); the session card — on by itself whenever Blurt comes to the front with nothing
+to ask (a key, consent and the microphone all given), so the keyboard is ready
+without the switch — `SESSION ON` in the
 accent or `SESSION OFF` muted, with the switch beside it that opens and closes
 the listening window (off without a key; `OPEN SETTINGS` instead when the
 microphone was refused), one line (what to do, and "Ends after 15 idle
