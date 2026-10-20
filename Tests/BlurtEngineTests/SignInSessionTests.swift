@@ -40,6 +40,29 @@ private final class GatedTransport: HTTPTransport, Sendable {
 extension AssemblyAIAccountTests {
   @Test("a sign-out during a renewal wins: the renewal wakes and writes nothing back")
   func signOutDuringRenewal() async throws {
+    let parked = try await renewalParkedOnTheNetwork()
+    let (account, gate, renewal) = (parked.account, parked.gate, parked.renewal)
+    let signOut = Task { await account.signOut() }
+    gate.allowToFinish()
+    await renewal.value
+    #expect(await signOut.value == nil)
+
+    #expect(account.status == .signedOut)
+    #expect(sessions.session == nil)
+    #expect(keyStore.current == nil)
+    // Sign-out waited for the renewal and refreshed with the rotated token.
+    #expect(server.state.withLock { $0.refreshTokensSeen } == ["rt-1", "rt-2"])
+  }
+
+  /// A signed-in account whose renewal is parked at the token endpoint until
+  /// the test releases `gate`.
+  private struct ParkedRenewal {
+    let account: AssemblyAIAccount
+    let gate: Gate
+    let renewal: Task<Void, Never>
+  }
+
+  private func renewalParkedOnTheNetwork() async throws -> ParkedRenewal {
     let gate = Gate()
     let gated = GatedTransport(inner: server.transport, gate: gate)
     let clock = clock
@@ -54,34 +77,13 @@ extension AssemblyAIAccountTests {
     gated.armed.withLock { $0 = true }
     let renewal = Task { await account.renewIfDue() }
     await gate.waitUntilEntered()
-    let signOut = Task { await account.signOut() }
-    gate.allowToFinish()
-    await renewal.value
-    #expect(await signOut.value == nil)
-
-    #expect(account.status == .signedOut)
-    #expect(sessions.session == nil)
-    #expect(keyStore.current == nil)
-    // Sign-out waited for the renewal and refreshed with the rotated token.
-    #expect(server.state.withLock { $0.refreshTokensSeen } == ["rt-1", "rt-2"])
+    return ParkedRenewal(account: account, gate: gate, renewal: renewal)
   }
 
   @Test("a forget during a renewal (the reset, an ended connection) also wins")
   func forgetDuringRenewal() async throws {
-    let gate = Gate()
-    let gated = GatedTransport(inner: server.transport, gate: gate)
-    let clock = clock
-    let account = AssemblyAIAccount(
-      configuration: testOAuthConfiguration, apiKey: APIKeyModel(keyStore: keyStore) { _ in .valid },
-      store: sessions, transport: gated, now: { clock.now })
-    let auth = try #require(account.beginSignIn())
-    let callback = try #require(URL(string: "com.assemblyai.blurt://oauth/callback?code=c&state=\(auth.state)"))
-    _ = await account.completeSignIn(auth, callback: callback)
-
-    advanceToRenewal()
-    gated.armed.withLock { $0 = true }
-    let renewal = Task { await account.renewIfDue() }
-    await gate.waitUntilEntered()
+    let parked = try await renewalParkedOnTheNetwork()
+    let (account, gate, renewal) = (parked.account, parked.gate, parked.renewal)
     account.forget()
     gate.allowToFinish()
     await renewal.value
