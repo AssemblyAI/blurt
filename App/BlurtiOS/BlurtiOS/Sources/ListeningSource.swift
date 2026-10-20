@@ -26,7 +26,7 @@ nonisolated enum ListeningSourceFailure: Error, LocalizedError {
 
   var errorDescription: String? {
     switch self {
-    case .windowClosed: "Blurt isn't listening. Open Blurt to start."
+    case .windowClosed: "The session is off."
     case .noInputDevice: "No microphone is available."
     }
   }

@@ -257,6 +257,8 @@ package enum DesignTokens {
     package nonisolated static let appTabGap: CGFloat = 4
     /// A tab in the brand tab bar: its icon over its mono label.
     package nonisolated static let appTabHeight: CGFloat = 52
+    /// The least height of the home screen's "Try it here" box: two lines.
+    package nonisolated static let appTryBoxHeight: CGFloat = 64
     /// The card's hairline.
     package nonisolated static let cardBorder: CGFloat = 1
     /// The app's cards (radius/card).
@@ -689,6 +691,7 @@ package enum DesignTokens {
     "metrics.app/stat-gap": "16",
     "metrics.app/tab-gap": "4",
     "metrics.app/tab-height": "52",
+    "metrics.app/try-box-height": "64",
     "metrics.card/border": "1",
     "metrics.card/radius": "12",
     "metrics.caret/height": "20",

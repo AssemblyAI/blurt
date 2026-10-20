@@ -1,44 +1,45 @@
 import BlurtEngine
-import Foundation
 
-/// What the home screen says about the app's state, in words: the headline,
-/// the line under it, whether setup is complete, whether the last dictation
-/// just landed. Pure, so the wording is tested and the view only lays it out.
+/// What the home screen says: the session, on
+/// or off, and one line about it, rather than every phase of every dictation
+/// (the keyboard shows those where the user is typing). Plus whether setup is
+/// complete. Pure, so the wording is tested and the view only lays it out.
 package nonisolated struct HomeStatus: Equatable {
-  package let title: String
-  package let subtitle: String
+  /// The card's eyebrow: "Session on" or "Session off".
+  package let label: String
+  /// The listening window is open, so the Blurt keyboard can dictate.
+  package let isOn: Bool
+  /// The line under it: what to do now, and how long the session lasts.
+  package let message: String
+  /// A dictation that failed, said plainly; nil when nothing did.
+  package let error: String?
   /// A key, the microphone and the keyboard, all in place.
   package let isSetUp: Bool
-  /// The words just went in (or to the clipboard): the hero's moment.
-  package let landed: Bool
 
   package init(
-    overlay: OverlayUIState, windowOpen: Bool, until: Date?, hasKey: Bool, micGranted: Bool, keyboardSeen: Bool
+    overlay: OverlayUIState, windowOpen: Bool, windowMinutes: Int, micDenied: Bool, hasKey: Bool, micGranted: Bool,
+    keyboardSeen: Bool
   ) {
-    title = Self.title(overlay, windowOpen: windowOpen)
-    if !windowOpen {
-      subtitle = "Open the mic so the Blurt keyboard can dictate anywhere you type."
-    } else if let until, until != .distantFuture {
-      subtitle = "Until \(until.formatted(date: .omitted, time: .shortened)) · tap the mic on the Blurt keyboard."
+    isOn = windowOpen
+    label = windowOpen ? "Session on" : "Session off"
+    if micDenied {
+      message = "Blurt needs microphone access to dictate. Turn it on in Settings."
+    } else if windowOpen {
+      message = "Use the Blurt keyboard's mic in any app. " + Self.endsAfter(minutes: windowMinutes)
     } else {
-      subtitle = "Until you stop it · tap the mic on the Blurt keyboard."
+      message = "Start a session to dictate with the Blurt keyboard in any app."
     }
+    if case .error(let text, _) = overlay { error = text } else { error = nil }
     isSetUp = hasKey && micGranted && keyboardSeen
-    switch overlay {
-    case .pasted, .noTarget: landed = true
-    default: landed = false
-    }
   }
 
-  private static func title(_ overlay: OverlayUIState, windowOpen: Bool) -> String {
-    switch overlay {
-    case .connecting: "Connecting…"
-    case .recording: "Listening…"
-    case .processing: "Transcribing…"
-    case .pasted: "Pasted"
-    case .noTarget: "Copied"
-    case .error(let message, _): message
-    case .idle: windowOpen ? "Ready to dictate" : "Not listening"
+  /// How long an idle session stays on: "Ends after 15 idle minutes."; 0 is
+  /// the window's "until you stop it".
+  static func endsAfter(minutes: Int) -> String {
+    switch minutes {
+    case ...0: "Stays on until you end it."
+    case 1: "Ends after 1 idle minute."
+    default: "Ends after \(minutes) idle minutes."
     }
   }
 }

@@ -63,8 +63,8 @@ struct SettingsView: View {
     .tint(BlurtBrand.accent)
   }
 
-  /// The first-run steps, kept here once the app is set up, as in the
-  /// blurt-ios prototype: folded to a line while everything is done, open while
+  /// The first-run steps, kept here once the app is set up: folded to a line
+  /// while everything is done, open while
   /// something (the microphone, the keyboard) is still missing.
   private var setupSection: some View {
     let isSetUp = coordinator.apiKey.hasAPIKey && microphoneGranted && keyboardSeen

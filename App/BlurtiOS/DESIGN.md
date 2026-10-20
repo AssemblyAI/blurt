@@ -559,6 +559,7 @@ pins the derivation.
 | `app/stat-gap`               | `16`      | `Metrics.appStatGap`               | between the stats in the card, and between its rows                                                                                                                                                                                                                 |
 | `app/tab-gap`                | `4`       | `Metrics.appTabGap`                | between a tab's icon and its label                                                                                                                                                                                                                                  |
 | `app/tab-height`             | `52`      | `Metrics.appTabHeight`             | a tab in the brand tab bar: its icon over its mono label                                                                                                                                                                                                            |
+| `app/try-box-height`         | `64`      | `Metrics.appTryBoxHeight`          | the least height of the home screen's "Try it here" box: two lines                                                                                                                                                                                                  |
 | `card/border`                | `1`       | `Metrics.cardBorder`               | the card's hairline                                                                                                                                                                                                                                                 |
 | `card/radius`                | `12`      | `Metrics.cardRadius`               | the app's cards (radius/card)                                                                                                                                                                                                                                       |
 | `caret/height`               | `20`      | `Metrics.caretHeight`              | —                                                                                                                                                                                                                                                                   |
@@ -740,12 +741,16 @@ Whoever was already set up skips it.
 `WORDS`, `TIME SAVED` (against 36 wpm, the phone average, or the easter egg's
 result) as serif numbers with mono units, one row until time saved reaches an
 hour and then two, at the largest of four sizes that fits (reset in Settings ›
-Data); the hero — `STATUS`, the
-headline (Not listening · Ready to dictate · Connecting… · Listening… ·
-Transcribing… · Pasted · Copied · the error), the line under it, the voice
-element at home size, `START LISTENING` (refused without a key, with a line
-saying so) or the hairline `STOP LISTENING`, and "Dictate here, to the
-clipboard" as a text button; `STYLE` and the chips, the active one filled;
+Data); the session card — `SESSION ON` in the
+accent or `SESSION OFF` muted, with the switch beside it that opens and closes
+the listening window (off without a key; `OPEN SETTINGS` instead when the
+microphone was refused), one line (what to do, and "Ends after 15 idle
+minutes."), and "Try it here" (`TryItBox`), a box to try the Blurt keyboard in:
+iOS remembers the keyboard last used in it, so after the first switch with the
+globe key it opens on Blurt, and the keyboard inserts at the cursor. A
+dictation's phases stay on the keyboard; only a failure shows, in orange. After
+the keyboard opened the app to start a session, a green banner points at iOS's
+◀ back link until the user leaves. `STYLE` and the chips, the active one filled;
 `RECENT` and the cards (three lines, the style as a green mono tag, the
 time, a copy button); `POWERED BY ASSEMBLYAI`.
 
