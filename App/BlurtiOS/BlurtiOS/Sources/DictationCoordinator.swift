@@ -133,9 +133,9 @@ final class DictationCoordinator {
     apiKey.refreshStatus()
     needsKey = !apiKey.hasAPIKey
     guard !needsKey else { return }
-    // Every way to the microphone comes through here — the button, the
-    // keyboard's `blurt://start`, and in-app dictation, which needs the window
-    // open — so this one gate covers them all.
+    // Every way to the microphone comes through here — the switch, the
+    // keyboard's `blurt://start`, and the app coming to the front — so this
+    // one gate covers them all.
     needsConsent = !AIConsent.isGranted()
     guard !needsConsent else { return }
     guard await AVAudioApplication.requestRecordPermission() else {
@@ -153,14 +153,29 @@ final class DictationCoordinator {
 
   /// Turns a session on by itself as the app comes to the front, so using the
   /// Blurt keyboard needs no switch: once Blurt has been opened, the keyboard
-  /// works in place for the session's length. Only when nothing would ask the
-  /// user anything — a key saved, consent given, the microphone already
-  /// allowed — so it never puts up a sheet or a permission prompt unasked.
+  /// works in place for the session's length. Never when it would ask the
+  /// user anything, and never against the switch (`SessionAutoStart`).
   func startSessionIfReady() async {
-    guard !window.isOpen, apiKey.hasAPIKey, AIConsent.isGranted(),
-      AVAudioApplication.shared.recordPermission == .granted
+    guard
+      SessionAutoStart.shouldStart(
+        windowOpen: window.isOpen, hasKey: apiKey.hasAPIKey, consented: AIConsent.isGranted(),
+        micGranted: AVAudioApplication.shared.recordPermission == .granted,
+        turnedOff: SessionAutoStart.isTurnedOff())
     else { return }
     await startListening()
+  }
+
+  /// The switch turned on: the user asked for a session, so Blurt goes back to
+  /// turning one on by itself.
+  func turnSessionOn() async {
+    SessionAutoStart.setTurnedOff(false)
+    await startListening()
+  }
+
+  /// The switch turned off: closed now, and left off until the user asks again.
+  func turnSessionOff() async {
+    SessionAutoStart.setTurnedOff(true)
+    await stopListening()
   }
 
   /// The user agreed in `ConsentView`: record it and carry on opening the
@@ -205,6 +220,8 @@ final class DictationCoordinator {
     }
     guard url.scheme == BlurtShared.urlScheme, url.host() == BlurtShared.startHost else { return }
     startedFromKeyboard = UIApplication.shared.applicationState != .active
+    // The keyboard's mic asked for a session: that undoes an earlier off.
+    SessionAutoStart.setTurnedOff(false)
     Task { await startListening() }
   }
 
@@ -357,7 +374,7 @@ final class DictationCoordinator {
     if case .failed(.audioCaptureFailed(let underlying)) = phase,
       underlying as? ListeningSourceFailure == .windowClosed
     {
-      return .error(message: "The session is off. Turn it on to dictate.")
+      return .error(message: HomeStatus.sessionOffError)
     }
     return phase.overlayState
   }

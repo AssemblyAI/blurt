@@ -35,7 +35,10 @@ final class ListeningWindow {
   /// the feed still holds its audio, not left recording into a closed one.
   @ObservationIgnored var onClosingOnItsOwn: (() async -> Void)?
 
-  var isOpen: Bool { source.isOpen && (until.map { $0 > Date() } ?? false) }
+  /// `until` is read first, always: it is what a view reading this observes
+  /// (the source's flag isn't observable), so a view that last saw the window
+  /// closed still redraws when it opens.
+  var isOpen: Bool { (until.map { $0 > Date() } ?? false) && source.isOpen }
 
   /// Opens the microphone for `SharedStore.windowMinutes`. Foreground only.
   func open() async {

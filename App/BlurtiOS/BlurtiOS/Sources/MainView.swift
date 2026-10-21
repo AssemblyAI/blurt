@@ -87,10 +87,14 @@ struct MainView: View {
       coordinator.handle(url)
     }
     // A session by default: opening Blurt turns one on (when nothing needs
-    // asking first), so the keyboard is ready without a trip to the switch.
+    // asking first, and the user hasn't turned it off), so the keyboard is
+    // ready without a trip to the switch.
     .task { await coordinator.startSessionIfReady() }
     .onChange(of: scenePhase) { _, phase in
       if phase == .active { Task { await coordinator.startSessionIfReady() } }
+      // Back in the app the user was typing in: the ◀ hint has done its job.
+      // Here rather than on the Dictate tab, which isn't there while Words is.
+      if phase == .background { coordinator.startedFromKeyboard = false }
     }
     .tint(BlurtBrand.accent)
   }

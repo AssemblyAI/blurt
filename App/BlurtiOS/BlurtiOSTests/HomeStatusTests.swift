@@ -36,6 +36,14 @@ struct HomeStatusTests {
     #expect(status(.pasted).error == nil && status(.recording).error == nil)
   }
 
+  @Test("\"the session is off\" shows while it is, and goes once a session is on")
+  func sessionOffError() {
+    let sessionOff = OverlayUIState.error(message: HomeStatus.sessionOffError)
+    #expect(status(sessionOff, open: false).error == HomeStatus.sessionOffError)
+    #expect(status(sessionOff, open: true).error == nil)
+    #expect(status(.error(message: "No network."), open: true).error == "No network.")
+  }
+
   @Test("setup needs the key, the microphone and the keyboard")
   func setup() {
     #expect(status().isSetUp)

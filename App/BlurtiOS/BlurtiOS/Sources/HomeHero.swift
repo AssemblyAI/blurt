@@ -51,13 +51,14 @@ struct HomeHero: View {
   }
 
   /// The switch is the session, which is the listening window: on opens it
-  /// (with its key, consent and microphone gates), off closes it.
+  /// (with its key, consent and microphone gates), off closes it and keeps it
+  /// closed until the user asks again (`SessionAutoStart`).
   private var session: Binding<Bool> {
     Binding(
       get: { coordinator.window.isOpen },
       set: { on in
         Task {
-          if on { await coordinator.startListening() } else { await coordinator.stopListening() }
+          if on { await coordinator.turnSessionOn() } else { await coordinator.turnSessionOff() }
         }
       })
   }

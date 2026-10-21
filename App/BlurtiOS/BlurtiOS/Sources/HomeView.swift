@@ -40,12 +40,12 @@ struct HomeView: View {
         .padding(.horizontal, DesignTokens.Metrics.appPagePad)
         .padding(.bottom, DesignTokens.Metrics.appSectionGap)
       }
+      // "Try it here" brings a keyboard up on this page; a drag puts it away.
+      .scrollDismissesKeyboard(.interactively)
       .page()
       .toolbar(.hidden, for: .navigationBar)
       .onChange(of: scenePhase) { _, phase in
         if phase == .active { refreshStatus() }
-        // Back in the app the user was typing in: the ◀ hint has done its job.
-        if phase == .background { coordinator.startedFromKeyboard = false }
       }
     }
     .tint(BlurtBrand.accent)

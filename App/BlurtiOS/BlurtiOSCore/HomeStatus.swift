@@ -16,6 +16,10 @@ package nonisolated struct HomeStatus: Equatable {
   /// A key, the microphone and the keyboard, all in place.
   package let isSetUp: Bool
 
+  /// A press that found the session off, as the keyboard and the card say it,
+  /// rather than as the engine's "Audio capture failed: …".
+  package static let sessionOffError = "The session is off. Turn it on to dictate."
+
   package init(
     overlay: OverlayUIState, windowOpen: Bool, windowMinutes: Int, micDenied: Bool, hasKey: Bool, micGranted: Bool,
     keyboardSeen: Bool
@@ -29,7 +33,13 @@ package nonisolated struct HomeStatus: Equatable {
     } else {
       message = "Start a session to dictate with the Blurt keyboard in any app."
     }
-    if case .error(let text, _) = overlay { error = text } else { error = nil }
+    // A session that has come on since makes "the session is off" untrue: it
+    // goes, while any other failure stays until the next dictation.
+    if case .error(let text, _) = overlay, !(windowOpen && text == Self.sessionOffError) {
+      error = text
+    } else {
+      error = nil
+    }
     isSetUp = hasKey && micGranted && keyboardSeen
   }
 

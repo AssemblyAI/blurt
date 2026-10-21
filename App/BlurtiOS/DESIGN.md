@@ -743,14 +743,18 @@ result) as serif numbers with mono units, one row until time saved reaches an
 hour and then two, at the largest of four sizes that fits (reset in Settings ›
 Data); the session card — on by itself whenever Blurt comes to the front with nothing
 to ask (a key, consent and the microphone all given), so the keyboard is ready
-without the switch — `SESSION ON` in the
+without the switch, unless the user turned it off: off with the switch holds,
+across launches, until the switch or the keyboard's mic asks for a session
+(`SessionAutoStart`) — `SESSION ON` in the
 accent or `SESSION OFF` muted, with the switch beside it that opens and closes
 the listening window (off without a key; `OPEN SETTINGS` instead when the
 microphone was refused), one line (what to do, and "Ends after 15 idle
 minutes."), and "Try it here" (`TryItBox`), a box to try the Blurt keyboard in:
 iOS remembers the keyboard last used in it, so after the first switch with the
-globe key it opens on Blurt, and the keyboard inserts at the cursor. A
-dictation's phases stay on the keyboard; only a failure shows, in orange. After
+globe key it opens on Blurt, and the keyboard inserts at the cursor; a drag
+down the page puts the keyboard away. A dictation's phases stay on the
+keyboard; only a failure shows, in orange, and "The session is off. Turn it on
+to dictate." goes once a session is on. After
 the keyboard opened the app to start a session, a green banner points at iOS's
 ◀ back link until the user leaves. `STYLE` and the chips, the active one filled;
 `RECENT` and the cards (three lines, the style as a green mono tag, the
