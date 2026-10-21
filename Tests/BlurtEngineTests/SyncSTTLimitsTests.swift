@@ -62,6 +62,14 @@ struct SyncSTTLimitsTests {
     #expect(SyncSTTLimits.sampleRate == 16_000)
   }
 
+  @Test("the audio cap is the dictation API's 20 minutes, auto-released 5 s early")
+  func audioCapPinned() {
+    // What a user feels: a held trigger stops recording at 19 min 55 s. Pinned
+    // so moving either number is a deliberate change, not a side effect.
+    #expect(SyncSTTLimits.maxAudioSeconds == 1200)
+    #expect(SyncSTTLimits.autoReleaseSeconds == 1195)
+  }
+
   @Test("the minimum audio floor sits strictly inside the accepted range")
   func minFloorInsideRange() {
     #expect(SyncSTTLimits.minAudioSeconds > 0)
