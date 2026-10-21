@@ -15,10 +15,20 @@ struct DictationComponents {
   /// The real pipeline: a fresh `MicCapture`, the AssemblyAI dictation transcriber,
   /// and the clipboard-paste injector. This is what `AppCoordinator` builds, so
   /// production behavior is unchanged by the test seam existing.
-  static func production() -> DictationComponents {
+  /// `dictationOrigin` is the signed-in key's dictation host
+  /// (`AssemblyAIAccount.dictationOrigin`); production when it holds none.
+  /// `onKeyRejected` hears about a dictation refused for its key
+  /// (`KeyRejectionReporter`), so the account can renew at once.
+  static func production(
+    dictationOrigin: DictationOrigin? = nil, onKeyRejected: @escaping @Sendable () -> Void = {}
+  ) -> DictationComponents {
     DictationComponents(
       mic: MicCapture(),
-      transcriber: AssemblyAITranscriber(),
+      transcriber: KeyRejectionReporter(
+        AssemblyAITranscriber(baseURL: {
+          dictationOrigin?.current ?? AssemblyAITranscriber.defaultBaseURL
+        }),
+        onRejected: onKeyRejected),
       injector: KeyInjector()
     )
   }

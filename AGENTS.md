@@ -1142,6 +1142,45 @@ status and VoiceOver wording, connect-vs-rotate control titles. The mask reveals
 characters and, below `minimumLengthToMask`, none at all (a bare `suffix(4)` in the view once rendered
 a short key whole).
 
+Sign in with AssemblyAI: the other way to fill that same key item. **`AssemblyAIAccount`**
+(`@MainActor @Observable`, in `Sources/BlurtEngine/Account/`) runs the authorization-code + PKCE flow
+against a public Connected App: the shell's `AccountSignIn` opens the consent page in an
+`ASWebAuthenticationSession` (redirect `com.assemblyai.blurt://oauth/callback`, caught by the session, so no URL
+handler is registered), and the engine trades the code for tokens and the access token for the
+connection's API key (`POST /api/v2/oauth/api-key`), which it saves through `APIKeyModel` like a
+pasted key — the transcriber, the press gate and the TTS clients can't tell the two apart. Beside it,
+a second Keychain item (`AssemblyAISignIn`, `SignInStore`) holds the **`SignInSession`**: refresh
+token, email, key expiry and last renewal. Its read keeps "none" apart from "unavailable" (a locked
+Keychain), for the reason `MemoizedKeyStore` gives: an unreadable item must not read as signed out,
+or Sign Out would delete the key without ending the connection. `runRenewal()` (started once at launch) sleeps until the renewal is due — when the exchange said the
+key rotates (`api_key_rotates_at`: AMS mints the next key and disables the old one once an exchange
+lands inside its window, two days before expiry), else two days before expiry (`SignInSession.renewalDue`;
+at most a day per sleep, on the continuous clock so a renewal that fell due while the Mac slept runs on
+wake) — then refreshes and re-exchanges: one renewal per key, since the
+refresh token's three-month sliding lifetime dwarfs a key's two weeks. `KeyRejectionReporter` wraps the
+transcriber and calls `keyWasRejected()` when dictation refuses the key (401, or the API's invalid-key
+404), which renews at once (at most every 15 minutes) so the next dictation has a working key; the
+refused utterance itself can't be retried, its audio having streamed as it was spoken. A renewal that brings back the same key with its renewal already due (a server that didn't rotate
+early) defers the next one to the key's expiry, or a day out once it has expired, instead of asking
+every minute. Renewal keeps a rotated refresh token before anything else can fail; a refused refresh
+or exchange means the connection was ended elsewhere and drops key and session, an unreachable server
+changes nothing. A renewal suspends twice on the network, so a `generation` counter makes one that
+wakes after a sign-out, reset or new sign-in write nothing, and `signOut()` waits out a renewal in
+flight first. `signOut()` ends the connection server-side (`POST /api/v2/oauth/api-key/revoke`) and
+only then forgets it here; a revoke the server couldn't confirm (503) leaves everything in place and
+returns an inline report so the user can retry (`SignInFailure.failureReport` makes the same
+inline-vs-alert split as `APIKeySubmission`). `CredentialRows.resolve` decides which of the account
+and key rows show and which button is filled. `InstallReset` clears the session item with the key.
+The wire half (`OAuthAuthorization`, `OAuthClient`) is in the `AssemblyAI` library. The build turns
+sign-in on with four Info.plist values (`BLURT_OAUTH_*`, from the gitignored `App/Blurt/Config/SignIn.local.xcconfig` via `SignIn.xcconfig` on the dev configurations, read by
+`OAuthConfiguration.blurt`); any one empty hides it, which is how release ships until a production
+Connected App exists, and a session inherited by such a build can still be signed out (locally). A signed-in key also
+dictates against the host its sign-in configures (`BLURT_OAUTH_DICTATION_ORIGIN`, optional; a sandbox
+key only works against its sandbox's host): the account keeps a `DictationOrigin` current as it signs
+in and out, and the app's `baseURL` closure for `AssemblyAITranscriber` reads it at every request and
+warm-up. A pasted key, or no
+origin configured, dictates against production.
+
 Setup gating: **`SetupReadiness.isReady(permissions:hasAPIKey:)`** is the fully-configured rule
 (deliberately excluding the trigger key, which has a default binding, so a shortcut change can't trap
 the user in the wizard), `SetupReadiness.pollInterval(isReady:)` the permission-poll cadence (brisk

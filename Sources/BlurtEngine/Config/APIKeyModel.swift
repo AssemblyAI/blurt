@@ -52,10 +52,19 @@ public final class APIKeyModel {
   /// The storage seam itself, handed to the Settings window's full-install reset
   /// (`InstallReset`) so the sweep deletes the key from the *injected* store —
   /// the in-memory one under UI testing — rather than reaching past this model
-  /// to the production Keychain item. Exposed rather than wrapped in a `clear()`
-  /// here because the reset owns the sweep; what this model owns is
-  /// `refreshStatus()`, which is how `hasAPIKey` catches up afterwards.
+  /// to the production Keychain item. The reset owns that sweep and reports on
+  /// it; `refreshStatus()` is how `hasAPIKey` catches up afterwards.
   public var storage: any APIKeyGateway { keyStore }
+
+  /// Deletes the stored key and refreshes `hasAPIKey`. For a sign-in whose
+  /// connection ended (`AssemblyAIAccount`): that key was never the user's to
+  /// keep. Returns whether the delete succeeded.
+  @discardableResult
+  public func clear() -> Bool {
+    let cleared = keyStore.save(nil)
+    refreshStatus()
+    return cleared
+  }
 
   /// A `@Sendable` snapshot of the readiness gate for `DictationSession`: a press
   /// with no key saved fails fast as `.failed(.apiKeyMissing)` before any capture.

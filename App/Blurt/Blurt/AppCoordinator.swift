@@ -1,4 +1,6 @@
+import AssemblyAI
 import BlurtEngine
+import Foundation
 import Observation
 
 @Observable
@@ -25,6 +27,9 @@ final class AppCoordinator {
   /// pipeline↔UI wiring. The wizard and the API-key view observe this directly
   /// rather than reaching through the coordinator (see `APIKeyModel`).
   let apiKey: APIKeyModel
+  /// "Sign in with AssemblyAI", which fills the same key `apiKey` holds. Its
+  /// configuration comes from Info.plist; a build without one hides sign-in.
+  let account: AssemblyAIAccount
   @ObservationIgnored private var phaseObserver: Task<Void, Never>?
   @ObservationIgnored private var levelsObserver: Task<Void, Never>?
   @ObservationIgnored var keyTap: DictationKeyTap?
@@ -58,18 +63,33 @@ final class AppCoordinator {
   /// its `.recording` half (via `menuBarStatus`) drives the listening state.
   private(set) var isCapturing = false
 
-  /// `components` defaults to the production pipeline; `apiKey` defaults to the
+  /// `components` defaults to the production pipeline, its transcriber dictating
+  /// against the account's `dictationOrigin`; `apiKey` defaults to the
   /// production Keychain-backed model. Tests/UI-tests inject deterministic
   /// doubles (see `DictationComponents`) and an `APIKeyModel` built over an
   /// in-memory store with an offline validator — the engine's `APIKeySubmission`
   /// still owns the never-persist-an-unverified-key invariant either way.
   init(
     onSetupBlocked: @escaping @MainActor () -> Void,
-    components: DictationComponents = .production(),
-    apiKey: APIKeyModel = APIKeyModel()
+    components: DictationComponents? = nil,
+    apiKey: APIKeyModel = APIKeyModel(),
+    account: AssemblyAIAccount? = nil
   ) {
     self.onSetupBlocked = onSetupBlocked
     self.apiKey = apiKey
+    let info = Bundle.main.infoDictionary ?? [:]
+    let account =
+      account
+      ?? AssemblyAIAccount(
+        configuration: .blurt(infoDictionary: info),
+        dictationHost: OAuthConfiguration.blurtDictationOrigin(infoDictionary: info),
+        apiKey: apiKey)
+    self.account = account
+    let components =
+      components
+      ?? .production(
+        dictationOrigin: account.dictationOrigin,
+        onKeyRejected: { Task { await account.keyWasRejected() } })
 
     // Buffering the newest is enough: each element is the *whole* ring as of that
     // delivery, not a delta, so a value dropped under contention is one the next

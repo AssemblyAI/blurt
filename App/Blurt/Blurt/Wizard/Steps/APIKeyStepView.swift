@@ -23,8 +23,14 @@ import SwiftUI
 /// Everything the row can't hold — why a key is needed at all, where it's
 /// stored, how to get one, and what went wrong when AssemblyAI rejects one —
 /// lives in the sheet, which has room for it without crowding the form.
+///
+/// With sign-in configured (`AssemblyAIAccount.isAvailable`), an account row
+/// comes first: signing in fills the same key a paste would, so once signed in
+/// the key row gives way to "Signed in as …" and a Sign Out button, and the key
+/// is the connection's to rotate, not the user's to change.
 struct APIKeyStepView: View {
   var apiKey: APIKeyModel
+  var account: AssemblyAIAccount
 
   /// The key currently in the Keychain, loaded on appear (empty when none).
   @State private var savedKey = ""
@@ -36,20 +42,29 @@ struct APIKeyStepView: View {
   /// This view just renders what it resolves to.
   private var display: APIKeyDisplay { .resolve(key: savedKey) }
 
+  /// Which rows show and which button is filled — the engine's
+  /// `CredentialRows`, so the rule is tested rather than restated here.
+  private var rows: CredentialRows {
+    .resolve(isKeyStored: display.isConnected, isSignInAvailable: account.isAvailable, status: account.status)
+  }
+
   var body: some View {
     Section {
-      SettingRow(title: "API Key", systemImage: "key.fill") {
-        HStack(spacing: 12) {
-          statusLabel
-          Button(display.editButtonTitle) { isPresentingEditor = true }
-            // Prominent (brand-green fill) only while there's no key: "Connect…"
-            // is the one thing setup is waiting on, but once a key is stored,
-            // "Change…" is a rare errand, and a lone filled button in Settings
-            // marked it as the pane's main action.
-            .glassButtonStyleCompat(prominent: !display.isConnected)
-            .accessibilityIdentifier(
-              display.isConnected ? UITestIdentifiers.apiKeyChange : UITestIdentifiers.apiKeyConnect
-            )
+      if rows.showsAccountRow {
+        AccountRowView(account: account, isPrimary: rows.primary == .signIn)
+      }
+      if rows.showsKeyRow {
+        SettingRow(title: "API Key", systemImage: "key.fill") {
+          HStack(spacing: 12) {
+            statusLabel
+            Button(display.editButtonTitle) { isPresentingEditor = true }
+              // Prominent (brand-green fill) only while it is the one thing
+              // setup is waiting on; see `CredentialRows.primary`.
+              .glassButtonStyleCompat(prominent: rows.primary == .connect)
+              .accessibilityIdentifier(
+                display.isConnected ? UITestIdentifiers.apiKeyChange : UITestIdentifiers.apiKeyConnect
+              )
+          }
         }
       }
     } header: {
@@ -66,6 +81,7 @@ struct APIKeyStepView: View {
       // a key is already saved, this flips `hasAPIKey` true so the wizard advances
       // to the ready screen instead of stranding the user on a setup step.
       apiKey.refreshStatus()
+      account.refreshStatus()
     }
     // The setup window and Settings both host this section, so a key connected
     // in one has to reach the other's row — a snapshot taken once on appear

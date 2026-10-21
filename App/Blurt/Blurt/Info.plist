@@ -2,6 +2,16 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>BlurtOAuthAPIOrigin</key>
+	<string>$(BLURT_OAUTH_API_ORIGIN)</string>
+	<key>BlurtOAuthAuthorizeURL</key>
+	<string>$(BLURT_OAUTH_AUTHORIZE_URL)</string>
+	<key>BlurtOAuthClientID</key>
+	<string>$(BLURT_OAUTH_CLIENT_ID)</string>
+	<key>BlurtOAuthDictationOrigin</key>
+	<string>$(BLURT_OAUTH_DICTATION_ORIGIN)</string>
+	<key>BlurtOAuthTokenURL</key>
+	<string>$(BLURT_OAUTH_TOKEN_URL)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

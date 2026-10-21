@@ -43,11 +43,11 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// internal so `DictationUploadDelegate` in `DictationUploadMetrics.swift`
   /// writes the same category — one category, two files.
   static let log = HostIdentity.current.logger("Transcriber")
+  public static let defaultBaseURL = URL(staticString: "https://dictation.assemblyai.com")
   private let apiKeyProvider: @Sendable () -> String?
-  /// Internal, not private, for the same reason `DictationWireTypes`' nested
-  /// types are: `warmUp()` lives in `DictationWarmUp.swift` and needs both, and
-  /// Swift's `private` is file-scoped so it cannot cross that split.
-  let baseURL: URL
+  /// Read per request, so the host can change while the app runs. Internal for `warmUp()`.
+  var baseURL: URL { baseURLProvider() }
+  private let baseURLProvider: @Sendable () -> URL
   let transport: any HTTPTransport
   private let enhancedTranscriptsEnabled: @Sendable () -> Bool
   private let customStyle: @Sendable () -> String?
@@ -85,14 +85,14 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// internal member.
   public init(
     apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.current },
-    baseURL: URL = URL(staticString: "https://dictation.assemblyai.com"),
+    baseURL: @escaping @Sendable () -> URL = { AssemblyAITranscriber.defaultBaseURL },
     transport: any HTTPTransport = URLSession.shared,
     enhancedTranscripts: (@Sendable () -> Bool)? = nil,
     customStyle: (@Sendable () -> String?)? = nil,
     rewriteMode: (@Sendable () -> RewriteMode)? = nil
   ) {
     self.apiKeyProvider = apiKeyProvider
-    self.baseURL = baseURL
+    self.baseURLProvider = baseURL
     self.transport = transport
     self.enhancedTranscriptsEnabled = enhancedTranscripts ?? { EnhancedTranscriptsStore().isEnabled }
     self.customStyle = customStyle ?? { StyleProfileStore().activeInstructions }
