@@ -406,7 +406,9 @@ the field's `keyboardAppearance`.
 
 ## Hands-free
 
-On by default, with a toggle in Settings: a dictation starts the moment the
+Off by default — a session comes on whenever Blurt is opened, so on by
+default would record whenever a Blurt keyboard came up after, without a tap —
+with a toggle in Settings: a dictation starts the moment the
 keyboard comes up in a text field — the same synthetic tap through the
 engine's gate, so it latches and the next tap of the element stops it. Only
 when the app is listening and nothing is in flight; otherwise the element
