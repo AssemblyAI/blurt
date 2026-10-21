@@ -21,9 +21,14 @@ extension KeyboardModel {
   /// highlighted: the picture follows at once, not on the host's next
   /// notification.
   private func typedIntoHost() {
+    lastInsertion = nil
     readSelection()
   }
 
+  /// Delete right after a dictation takes back all of it — but only while the
+  /// caret still sits at its end with nothing highlighted. A moved caret, a
+  /// selection, or a host that shows less context than the dictation's length
+  /// falls back to deleting one character.
   package func deleteBackward() {
     UIDevice.current.playInputClick()
     if termDraft != nil {
@@ -31,7 +36,13 @@ extension KeyboardModel {
       updateShift()
       return
     }
-    proxy?.deleteBackward()
+    if let inserted = lastInsertion, let proxy, (proxy.selectedText ?? "").isEmpty,
+      proxy.documentContextBeforeInput?.hasSuffix(inserted) == true
+    {
+      for _ in inserted { proxy.deleteBackward() }
+    } else {
+      proxy?.deleteBackward()
+    }
     typedIntoHost()
   }
 
