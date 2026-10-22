@@ -145,7 +145,7 @@ targets:
       properties:
         CFBundleDisplayName: Blurt
         CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "2"
+        CFBundleVersion: "3"
         LSApplicationCategoryType: public.app-category.productivity
         NSMicrophoneUsageDescription: Blurt listens only while you dictate, and sends that audio to AssemblyAI to turn it into text.
         # Never shown: Blurt doesn't ask for the camera. App Store processing
@@ -223,7 +223,7 @@ targets:
       properties:
         CFBundleDisplayName: Blurt
         CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "2"
+        CFBundleVersion: "3"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.keyboard-service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
