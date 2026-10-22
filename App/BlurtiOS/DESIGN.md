@@ -778,6 +778,13 @@ the field's border orange once a word goes wrong. The result: WPM, a rank,
 accuracy, the best, and talking's 150 wpm against yours; the latest result
 becomes time saved's typing speed ("Using your N wpm · Reset to average").
 
+**Styles** (`StylesView`, `StylePreset`): `YOUR STYLES` (Default, then each
+of the user's, the active one checked; tap to use, the pencil to edit),
+`START FROM A PRESET` (Professional, Casual and Ultracasual, each with its icon and a line of its text; one tap adds it as a
+style and switches to it, an added one shows a check), and `NEW STYLE` pinned
+underneath, whose editor starts with the presets as equal-width chips that fill
+in the name and the instructions.
+
 **Consent** (`ConsentView`, `AIConsent`): before the listening window first
 opens, a sheet names AssemblyAI, lists what is sent (the voice while
 dictating, the text before the cursor, recent dictations, key terms with
