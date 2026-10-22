@@ -5,6 +5,7 @@ import BlurtiOSCore
 import Foundation
 import Observation
 import Synchronization
+import UIKit
 
 /// The one place the engine is composed for the iPhone app — the role
 /// `AppCoordinator` plays in the Mac shell. It owns the listening window (the
@@ -24,6 +25,13 @@ final class DictationCoordinator {
   private(set) var recent = RecentDictations()
   private(set) var level: Float = 0
   private(set) var microphoneDenied = false
+  /// A window is opening: a second ask waits for it rather than opening another.
+  @ObservationIgnored private var opening = false
+  /// The keyboard brought the app forward from another app to start a
+  /// session (`blurt://start`): the home screen points at iOS's "◀ App" back
+  /// link until the user leaves. Not when the keyboard was already in Blurt's
+  /// own box: iOS shows no back link then.
+  var startedFromKeyboard = false
   /// How many contact names the keyboard last read off the phone — the key
   /// terms that come for free, so the home screen can say so.
   private(set) var lexiconNameCount = 0
@@ -32,7 +40,7 @@ final class DictationCoordinator {
   var pendingTermPack: TermPack?
   /// A file or link that claimed to be a key-term list and wasn't.
   var termPackUnreadable = false
-  /// The window can't open without a key: the last "Start listening" said so.
+  /// The window can't open without a key: the last try to enable Blurt said so.
   var needsKey = false
   /// The window can't open until the user agrees to AssemblyAI processing their
   /// voice (`AIConsent`); `ConsentView` asks while this is set.
@@ -125,9 +133,9 @@ final class DictationCoordinator {
     apiKey.refreshStatus()
     needsKey = !apiKey.hasAPIKey
     guard !needsKey else { return }
-    // Every way to the microphone comes through here — the button, the
-    // keyboard's `blurt://start`, and in-app dictation, which needs the window
-    // open — so this one gate covers them all.
+    // Every way to the microphone comes through here — the switch, the
+    // keyboard's `blurt://start`, and the app coming to the front — so this
+    // one gate covers them all.
     needsConsent = !AIConsent.isGranted()
     guard !needsConsent else { return }
     guard await AVAudioApplication.requestRecordPermission() else {
@@ -135,7 +143,39 @@ final class DictationCoordinator {
       return
     }
     microphoneDenied = false
+    // The keyboard's link and the app coming forward can both ask at once;
+    // the capture session is opened once.
+    guard !window.isOpen, !opening else { return }
+    opening = true
+    defer { opening = false }
     await window.open()
+  }
+
+  /// Turns a session on by itself as the app comes to the front, so using the
+  /// Blurt keyboard needs no switch: once Blurt has been opened, the keyboard
+  /// works in place for the session's length. Never when it would ask the
+  /// user anything, and never against the switch (`SessionAutoStart`).
+  func startSessionIfReady() async {
+    guard
+      SessionAutoStart.shouldStart(
+        windowOpen: window.isOpen, hasKey: apiKey.hasAPIKey, consented: AIConsent.isGranted(),
+        micGranted: AVAudioApplication.shared.recordPermission == .granted,
+        turnedOff: SessionAutoStart.isTurnedOff())
+    else { return }
+    await startListening()
+  }
+
+  /// The switch turned on: the user asked for a session, so Blurt goes back to
+  /// turning one on by itself.
+  func turnSessionOn() async {
+    SessionAutoStart.setTurnedOff(false)
+    await startListening()
+  }
+
+  /// The switch turned off: closed now, and left off until the user asks again.
+  func turnSessionOff() async {
+    SessionAutoStart.setTurnedOff(true)
+    await stopListening()
   }
 
   /// The user agreed in `ConsentView`: record it and carry on opening the
@@ -179,16 +219,10 @@ final class DictationCoordinator {
       return
     }
     guard url.scheme == BlurtShared.urlScheme, url.host() == BlurtShared.startHost else { return }
+    startedFromKeyboard = UIApplication.shared.applicationState != .active
+    // The keyboard's mic asked for a session: that undoes an earlier off.
+    SessionAutoStart.setTurnedOff(false)
     Task { await startListening() }
-  }
-
-  /// A dictation started from the app itself, with no keyboard to land in —
-  /// the words go to the clipboard. The way to try Blurt before the keyboard is
-  /// set up, and the way to test the pipeline without one. No field, so no
-  /// prior text primes it.
-  func toggleDictation() {
-    Self.pendingPress.withLock { $0 = Press() }
-    session.submit(phase.isCapturing ? .release : .press)
   }
 
   // MARK: - Commands from the keyboard
@@ -289,7 +323,7 @@ final class DictationCoordinator {
       publish(.error(message: "Blurt needs an API key. Open Blurt to add one."))
       return
     }
-    publish(phase.overlayState)
+    publish(overlay)
   }
 
   /// Starts the clock when a recording starts and, when it stops, keeps how
@@ -331,6 +365,18 @@ final class DictationCoordinator {
         self.recent = ring
       }
     }
+  }
+
+  /// The phase as the home screen and the keyboard show it: the engine's own
+  /// wording, except a press that found the session off, which says so plainly
+  /// rather than as "Audio capture failed: …".
+  var overlay: OverlayUIState {
+    if case .failed(.audioCaptureFailed(let underlying)) = phase,
+      underlying as? ListeningSourceFailure == .windowClosed
+    {
+      return .error(message: HomeStatus.sessionOffError)
+    }
+    return phase.overlayState
   }
 
   private func publish(_ state: OverlayUIState) {

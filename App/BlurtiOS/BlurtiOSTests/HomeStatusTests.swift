@@ -1,5 +1,4 @@
 import BlurtEngine
-import Foundation
 import Testing
 
 @testable import BlurtiOSCore
@@ -7,39 +6,49 @@ import Testing
 @Suite("Home status")
 struct HomeStatusTests {
   private func status(
-    _ overlay: OverlayUIState, open: Bool = true, until: Date? = nil, key: Bool = true, mic: Bool = true,
-    keyboard: Bool = true
+    _ overlay: OverlayUIState = .idle, open: Bool = true, minutes: Int = 15, denied: Bool = false, key: Bool = true,
+    mic: Bool = true, keyboard: Bool = true
   ) -> HomeStatus {
-    HomeStatus(overlay: overlay, windowOpen: open, until: until, hasKey: key, micGranted: mic, keyboardSeen: keyboard)
+    HomeStatus(
+      overlay: overlay, windowOpen: open, windowMinutes: minutes, micDenied: denied, hasKey: key, micGranted: mic,
+      keyboardSeen: keyboard)
   }
 
-  @Test("the headline follows the phase, and says whether the mic is open at rest")
-  func titles() {
-    #expect(status(.idle).title == "Ready to dictate")
-    #expect(status(.idle, open: false).title == "Not listening")
-    #expect(status(.connecting).title == "Connecting…")
-    #expect(status(.recording).title == "Listening…")
-    #expect(status(.processing).title == "Transcribing…")
-    #expect(status(.pasted).title == "Pasted")
-    #expect(status(.noTarget).title == "Copied")
-    #expect(status(.error(message: "No network.")).title == "No network.")
+  @Test("the session is on while the window is open, off when it isn't, whatever the dictation is doing")
+  func session() {
+    #expect(status().label == "Session on" && status().isOn)
+    #expect(status(open: false).label == "Session off" && !status(open: false).isOn)
+    #expect(status(.recording).label == "Session on")
   }
 
-  @Test("the line under it says how long the mic stays open")
-  func subtitles() {
-    #expect(status(.idle, open: false).subtitle.hasPrefix("Open the mic"))
-    #expect(status(.idle, until: .distantFuture).subtitle.hasPrefix("Until you stop it"))
-    #expect(status(.idle, until: Date()).subtitle.hasPrefix("Until "))
-    #expect(!status(.idle, until: Date()).subtitle.hasPrefix("Until you"))
+  @Test("the line says what to do, and how long an idle session lasts")
+  func message() {
+    #expect(status(open: false).message.hasPrefix("Start a session"))
+    #expect(status().message.hasSuffix("Ends after 15 idle minutes."))
+    #expect(status(minutes: 1).message.hasSuffix("Ends after 1 idle minute."))
+    #expect(status(minutes: 0).message.hasSuffix("Stays on until you end it."))
+    #expect(status(denied: true).message.hasPrefix("Blurt needs microphone access"))
   }
 
-  @Test("setup needs the key, the microphone and the keyboard; landed means pasted or copied")
-  func setupAndLanded() {
-    #expect(status(.idle).isSetUp)
-    #expect(!status(.idle, key: false).isSetUp)
-    #expect(!status(.idle, mic: false).isSetUp)
-    #expect(!status(.idle, keyboard: false).isSetUp)
-    #expect(status(.pasted).landed && status(.noTarget).landed)
-    #expect(!status(.idle).landed && !status(.error(message: "x")).landed)
+  @Test("a failed dictation says why; nothing else is an error")
+  func error() {
+    #expect(status(.error(message: "No network.")).error == "No network.")
+    #expect(status(.pasted).error == nil && status(.recording).error == nil)
+  }
+
+  @Test("\"the session is off\" shows while it is, and goes once a session is on")
+  func sessionOffError() {
+    let sessionOff = OverlayUIState.error(message: HomeStatus.sessionOffError)
+    #expect(status(sessionOff, open: false).error == HomeStatus.sessionOffError)
+    #expect(status(sessionOff, open: true).error == nil)
+    #expect(status(.error(message: "No network."), open: true).error == "No network.")
+  }
+
+  @Test("setup needs the key, the microphone and the keyboard")
+  func setup() {
+    #expect(status().isSetUp)
+    #expect(!status(key: false).isSetUp)
+    #expect(!status(mic: false).isSetUp)
+    #expect(!status(keyboard: false).isSetUp)
   }
 }

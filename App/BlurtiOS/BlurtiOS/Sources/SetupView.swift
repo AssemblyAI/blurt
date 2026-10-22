@@ -4,8 +4,8 @@ import BlurtEngine
 import BlurtiOSCore
 import SwiftUI
 
-/// The first-run screen, in place of the tabs until Blurt is set up, as in the
-/// blurt-ios prototype: the wordmark, a headline, and the three steps in a
+/// The first-run screen, in place of the tabs until Blurt is set up: the
+/// wordmark, a headline, and the three steps in a
 /// card. The key comes first and can't be skipped, since nothing works without
 /// it; once it is in, the user can start right away and finish the microphone
 /// and the keyboard later from Settings, where the steps move.
@@ -66,8 +66,8 @@ struct SetupView: View {
 }
 
 /// Paste a key, checked with AssemblyAI before it is saved (`APIKeySubmission`
-/// owns that rule), as on the prototype's first screen: the field, Continue,
-/// Get a free key, and what happens to the key and the audio.
+/// owns that rule): the field, Continue, Get a free key, and what happens to
+/// the key and the audio.
 private struct KeyStep: View {
   var apiKey: APIKeyModel
   @Environment(\.openURL) private var openURL

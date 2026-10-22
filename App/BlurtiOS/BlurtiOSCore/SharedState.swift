@@ -279,11 +279,11 @@ package nonisolated enum SharedStore {
     set { defaults.set(newValue.rawValue, forKey: BlurtShared.Key.micAlignment) }
   }
 
-  /// Hands-free: the keyboard starts a dictation the moment it appears in a
-  /// text field, so there is nothing to tap before talking. On by default.
+  /// Hands-free: a dictation starts the moment the keyboard appears in a text field. Off by default: sessions
+  /// come on whenever Blurt opens, so it would record whenever a keyboard came up after, unasked (DESIGN.md).
   package static var autoDictate: Bool {
     get {
-      guard defaults.object(forKey: BlurtShared.Key.autoDictate) != nil else { return true }
+      guard defaults.object(forKey: BlurtShared.Key.autoDictate) != nil else { return false }
       return defaults.bool(forKey: BlurtShared.Key.autoDictate)
     }
     set { defaults.set(newValue, forKey: BlurtShared.Key.autoDictate) }

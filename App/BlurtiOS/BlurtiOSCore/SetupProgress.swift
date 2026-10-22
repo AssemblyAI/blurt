@@ -1,5 +1,5 @@
-/// Whether the app opens on its first-run setup screen or on its tabs, as in
-/// the blurt-ios prototype: setup first, then the app, with the steps moving
+/// Whether the app opens on its first-run setup screen or on its tabs: setup
+/// first, then the app, with the steps moving
 /// into Settings once they are done.
 package nonisolated enum SetupProgress {
   /// Set when the user leaves the setup screen with a key in place, so the

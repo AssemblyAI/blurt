@@ -107,7 +107,7 @@ Xcode 27 replaced Simulator.app with Device Hub (`Xcode.app/Contents/Application
 which the script opens; turn off its **Always simulate hardware keyboard** setting (Device Hub →
 Settings…) or no on-screen keyboard ever appears. Then: Blurt → Open Settings, and Apps → Blurt →
 Keyboards → Blurt on, Allow Full Access (the simulator's Settings opens at its top level, not on
-Blurt's page); Start listening; in Notes, hold the globe key, pick Blurt, tap the
+Blurt's page); turn the session on; in Notes, hold the globe key, pick Blurt, tap the
 mic. The keyboard's crash logs, if any, land in `~/Library/Logs/DiagnosticReports/BlurtKeyboard-*`,
 and `xcrun simctl spawn booted log show --last 5m --predicate 'process == "BlurtKeyboard"'`
 shows its console.
@@ -137,7 +137,7 @@ shows its console.
    destination, run the `BlurtiOS` scheme. On the phone, trust the developer app (Settings →
    General → VPN & Device Management). In the app: **Paste your key**, **Allow** sending your voice to AssemblyAI, **Allow** the microphone, then **Open Settings** and go to **Apps › Blurt › Keyboards**
    (a phone may open straight on Blurt's page): turn on Blurt and **Allow Full Access**.
-5. Back in the app, **Start listening**, then go to Messages, hold the globe key, pick Blurt,
+5. Back in the app, turn the **session** on, then go to Messages, hold the globe key, pick Blurt,
    and tap the mic. Tap again to stop, or hold it while you talk. The words land in the field.
 6. Try the other two layouts from the app's Keyboard picker; the keyboard reads the choice the
    next time it comes up.

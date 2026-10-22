@@ -117,9 +117,9 @@ struct SharedDefaultsTests {
     #expect(SharedStore.themeID == "system")
     SharedStore.themeID = "blurt"
     #expect(SharedStore.themeID == "blurt")
-    #expect(SharedStore.autoDictate)
-    SharedStore.autoDictate = false
     #expect(!SharedStore.autoDictate)
+    SharedStore.autoDictate = true
+    #expect(SharedStore.autoDictate)
     #expect(SharedStore.windowMinutes == 15)
     // 0 is a real choice (until closed), not the unset default.
     SharedStore.windowMinutes = 0

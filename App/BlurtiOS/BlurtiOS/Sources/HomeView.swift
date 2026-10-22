@@ -5,9 +5,9 @@ import BlurtiOSCore
 import SwiftUI
 
 /// The Dictate tab: the Blurt landing page on a phone. The wordmark and
-/// the gear across the top; the lifetime stats; the status as an eyebrow, a serif headline and a
-/// line of body text over the voice element; the one green button; then the
-/// styles and the recent dictations under their eyebrows. Setup comes before
+/// the gear across the top; the lifetime stats; the session card (on or off,
+/// its switch, a box to try the keyboard in); then the styles and the recent
+/// dictations under their eyebrows. Setup comes before
 /// the tabs (`SetupView`) and lives in Settings after; everything adjustable
 /// is behind the gear.
 struct HomeView: View {
@@ -17,16 +17,11 @@ struct HomeView: View {
   @Environment(\.scenePhase) private var scenePhase
   @State private var microphoneGranted = AVAudioApplication.shared.recordPermission == .granted
   @State private var keyboardSeen = SharedStore.keyboardEverSeen
-  /// When the last dictation's words landed — the hero's glint.
-  @State private var landedAt: Date?
-  /// TEMPORARY: the mic concept from Settings, so the hero shows the one
-  /// the keyboard will. Goes with the losers.
-  @AppStorage(BlurtShared.Key.voiceElement, store: SharedStore.defaults) private var voiceRaw =
-    VoiceElementKind.shipped.rawValue
 
   private var status: HomeStatus {
     HomeStatus(
-      overlay: coordinator.phase.overlayState, windowOpen: coordinator.window.isOpen, until: coordinator.window.until,
+      overlay: coordinator.overlay, windowOpen: coordinator.window.isOpen,
+      windowMinutes: SharedStore.windowMinutes, micDenied: coordinator.microphoneDenied,
       hasKey: coordinator.apiKey.hasAPIKey, micGranted: microphoneGranted, keyboardSeen: keyboardSeen)
   }
 
@@ -36,7 +31,7 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: DesignTokens.Metrics.appSectionGap) {
           header
           StatsCard()
-          HomeHero(coordinator: coordinator, status: status, landedAt: landedAt)
+          HomeHero(coordinator: coordinator, status: status)
           StyleChips()
           RecentSection(coordinator: coordinator)
           Eyebrow("Powered by AssemblyAI")
@@ -45,14 +40,12 @@ struct HomeView: View {
         .padding(.horizontal, DesignTokens.Metrics.appPagePad)
         .padding(.bottom, DesignTokens.Metrics.appSectionGap)
       }
+      // "Try it here" brings a keyboard up on this page; a drag puts it away.
+      .scrollDismissesKeyboard(.interactively)
       .page()
-      .environment(\.voiceElementKind, VoiceElementKind(rawValue: voiceRaw) ?? .shipped)
       .toolbar(.hidden, for: .navigationBar)
       .onChange(of: scenePhase) { _, phase in
         if phase == .active { refreshStatus() }
-      }
-      .onChange(of: coordinator.phase) { _, _ in
-        if status.landed { landedAt = Date() }
       }
     }
     .tint(BlurtBrand.accent)
