@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One event, windows changing, to tell when a keyboard is on screen (the
+     bubble shows only then). flagRetrieveInteractiveWindows lists the windows
+     for that, and lets the focused field be found across all of them: the touch
+     on the bubble can make the bubble's window the "active" one. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowsChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagRetrieveInteractiveWindows"
+    android:canRetrieveWindowContent="true"
+    android:description="@string/accessibility_description"
+    android:notificationTimeout="0" />
