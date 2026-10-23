@@ -157,7 +157,11 @@ class BubbleService : Service() {
         recorder = mic
         // The style is read per dictation, so a change in the app applies to the next one.
         val instruction = CleanupInstruction.withStyle(StyleStore.instructions(this))
-        upload = scope.async { DictationClient(apiKey, instruction).transcribe(frames, context) }
+        val origin = Account.dictationOrigin(this)
+        upload = scope.async { DictationClient(apiKey, instruction, origin).transcribe(frames, context) }
+        // A signed-in key past its renewal time renews in the background; this
+        // dictation still uses the current key, which is valid until expiry.
+        scope.launch { Account.renewIfDue(applicationContext) }
         setState(BubbleView.State.Recording)
         bubble.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
     }
@@ -181,6 +185,11 @@ class BubbleService : Service() {
                 if (text.isNotEmpty()) deliver(text)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
+            } catch (e: DictationClient.KeyRejected) {
+                toast(e.message ?: "Dictation failed")
+                // A signed-in key refused early (revoked, rotated): renew now so
+                // the next dictation works. Nothing happens for a pasted key.
+                Account.keyWasRejected(applicationContext)
             } catch (e: Exception) {
                 toast(e.message ?: "Dictation failed")
             } finally {

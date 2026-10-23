@@ -23,6 +23,7 @@ here.
 | `DictationClient.kt`           | The streamed multipart upload: `config` first, then audio frames as they're recorded. By the time you tap to stop, the upload is done.                                                                                                             |
 | `BlurtAccessibilityService.kt` | Finds the focused text field across windows, reads the text before the cursor, and inserts the result with the right spacing. Also reports whether a keyboard is on screen. Without it, the words go to the clipboard and the bubble is always up. |
 | `Styles.kt`                    | The output styles (None, Professional, Casual, Ultracasual, Custom), appended to the cleanup instruction.                                                                                                                                          |
+| `OAuth.kt`, `Account.kt`       | Sign in with AssemblyAI: a port of `Sources/AssemblyAI/OAuth` and the engine's `AssemblyAIAccount` (PKCE, the key exchange, renewal, sign-out). See below.                                                                                         |
 | `ApiKeyStore.kt`               | The API key, encrypted with an Android Keystore key.                                                                                                                                                                                               |
 
 Two Android rules shape it:
@@ -84,6 +85,29 @@ Android blocks Accessibility for some apps installed from outside a store ("rest
 Open Blurt's **App info** (the button on step 4), tap **⋮** in the top corner, choose **Allow
 restricted settings**, then turn on Blurt typing again.
 
+## Sign in with AssemblyAI
+
+Off unless the build is configured, like the Mac's development builds (`App/Blurt/Config/SignIn.xcconfig`):
+there is no production sign-in client yet, and the values for the sandbox one aren't in this repo. Add
+them to `local.properties` (gitignored) in this directory, then rebuild:
+
+```properties
+blurt.oauth.clientId=…            # the Connected App's client id
+blurt.oauth.authorizeUrl=https://…/dashboard/oauth/authorize
+blurt.oauth.tokenUrl=https://…/v1/oauth2/token
+blurt.oauth.apiOrigin=https://…   # serves /api/v2/oauth/api-key[/revoke]
+blurt.oauth.dictationOrigin=https://…   # optional: the sandbox's dictation host; empty is production
+```
+
+They're the same values as the Mac's `SignIn.local.xcconfig`. Any missing or non-https value turns
+sign-in off and the setup screen shows only the paste-a-key field.
+
+The redirect is the Mac's own, `com.assemblyai.blurt://oauth/callback`, so the Connected App already
+lists it; the manifest routes it back to the setup screen. The consent page opens in a Custom Tab.
+The minted key is stored where a pasted one goes, and the session (the refresh token) beside it,
+encrypted the same way. An app can't run the Mac's renewal timer, so a signed-in key renews when the
+app opens and when the bubble starts a dictation, and at once when dictation reports it refused.
+
 ## Sharing it with other people
 
 For a handful of testers, the free **limited distribution** account in the Android Developer Console
@@ -93,7 +117,6 @@ your own key, which this prototype doesn't set up yet.
 
 ## Not done yet
 
-- Sign in with AssemblyAI (the Mac and iPhone have it; this takes a pasted key).
 - Key terms, text shortcuts, more than one custom style, recent dictations in `stt_prompt`.
 - A release signing config.
 - Tests.

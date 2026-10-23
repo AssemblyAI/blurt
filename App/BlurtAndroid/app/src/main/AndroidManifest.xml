@@ -21,10 +21,22 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTop">
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Sign in with AssemblyAI's redirect, the Mac's own
+                 (OAuthConfig.REDIRECT_URI). singleTask so it lands on the open
+                 setup screen and closes the browser tab above it. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="oauth"
+                    android:path="/callback"
+                    android:scheme="com.assemblyai.blurt" />
             </intent-filter>
         </activity>
 

@@ -22,9 +22,18 @@ import kotlin.coroutines.coroutineContext
  * produces it, then the closing boundary once recording stops. So the upload
  * is already done by the time the user taps the bubble the second time.
  */
-class DictationClient(private val apiKey: String, private val llmInstruction: String) {
+class DictationClient(
+    private val apiKey: String,
+    private val llmInstruction: String,
+    /** A sandbox sign-in's dictation host ([Account.dictationOrigin]); null is production. */
+    origin: String? = null,
+) {
+    private val endpoint = (origin ?: PRODUCTION_ORIGIN).trimEnd('/') + TRANSCRIBE_PATH
 
-    class DictationException(message: String) : IOException(message)
+    open class DictationException(message: String) : IOException(message)
+
+    /** The key itself was refused: a signed-in key may just need renewing. */
+    class KeyRejected : DictationException("AssemblyAI didn't accept your API key")
 
     /**
      * Streams [frames] (16 kHz mono S16LE) and returns the text to insert: the
@@ -35,7 +44,7 @@ class DictationClient(private val apiKey: String, private val llmInstruction: St
     suspend fun transcribe(frames: ReceiveChannel<ByteArray>, sttPrompt: String): String =
         withContext(Dispatchers.IO) {
             val boundary = "blurt-${UUID.randomUUID()}"
-            val connection = (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {
+            val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 doOutput = true
                 // Chunked, so the request opens now and each frame goes out as it
@@ -68,6 +77,8 @@ class DictationClient(private val apiKey: String, private val llmInstruction: St
                 val status = connection.responseCode
                 val stream = if (status in 200..299) connection.inputStream else connection.errorStream
                 val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                // An invalid key comes back as 404, not 401.
+                if (status == 401 || status == 404) throw KeyRejected()
                 if (status !in 200..299) throw DictationException(errorMessage(status, body))
                 transcript(body)
             } finally {
@@ -111,13 +122,8 @@ class DictationClient(private val apiKey: String, private val llmInstruction: St
         return rewrite?.takeIf { it.isNotBlank() } ?: json.optString("text")
     }
 
-    /**
-     * The route documents two error shapes, `{error, error_code}` and
-     * `{status, title, detail}`, and an invalid key comes back as 404 rather
-     * than 401.
-     */
+    /** The route documents two error shapes, `{error, error_code}` and `{status, title, detail}`. */
     private fun errorMessage(status: Int, body: String): String {
-        if (status == 401 || status == 404) return "AssemblyAI didn't accept your API key"
         val detail = try {
             val json = JSONObject(body)
             json.optString("error").ifBlank { json.optString("detail") }
@@ -128,7 +134,8 @@ class DictationClient(private val apiKey: String, private val llmInstruction: St
     }
 
     private companion object {
-        const val ENDPOINT = "https://dictation.assemblyai.com/v1/transcribe/live"
+        const val PRODUCTION_ORIGIN = "https://dictation.assemblyai.com"
+        const val TRANSCRIBE_PATH = "/v1/transcribe/live"
         const val CONNECT_TIMEOUT_MS = 15_000
         // An idle timeout, as on the Mac: it has to outlast the rewrite after
         // the last frame, not the whole recording.

@@ -55,10 +55,14 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 /**
- * Setup, in the order the bubble needs it: the API key, the microphone,
+ * Setup, in the order the bubble needs it: an account (signed in, or a
+ * pasted API key), the microphone,
  * drawing over other apps, and (optional) typing into them. Then one switch
  * turns the bubble on.
  */
@@ -67,21 +71,71 @@ class MainActivity : ComponentActivity() {
     // Bumped on every resume so the checklist re-reads permissions the user
     // just granted in Settings.
     private val resumes = mutableIntStateOf(0)
+    private val keyChanges = mutableIntStateOf(0)
+    private val accountBusy = mutableStateOf(false)
+    private val accountError = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent { BlurtTheme { SetupScreen(resumes.intValue) } }
+        handleSignInRedirect(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleSignInRedirect(intent)
     }
 
     override fun onResume() {
         super.onResume()
         resumes.intValue++
+        Account.refreshStatus(this)
+        lifecycleScope.launch {
+            Account.renewIfDue(applicationContext)
+            keyChanges.intValue++
+        }
+    }
+
+    /** Opens AssemblyAI's consent page in a browser tab; the redirect comes back to [onNewIntent]. */
+    private fun signIn() {
+        val url = Account.beginSignIn(this) ?: return
+        accountError.value = null
+        CustomTabsIntent.Builder().build().launchUrl(this, url)
+    }
+
+    private fun handleSignInRedirect(intent: Intent?) {
+        val callback = intent?.data ?: return
+        if (!callback.toString().startsWith(OAuthConfig.REDIRECT_URI)) return
+        // Consumed, so a recreated activity doesn't replay it.
+        intent.data = null
+        accountBusy.value = true
+        accountError.value = null
+        lifecycleScope.launch {
+            when (val outcome = Account.completeSignIn(applicationContext, callback)) {
+                is Account.Outcome.Failed -> accountError.value = outcome.message
+                Account.Outcome.Cancelled, Account.Outcome.SignedIn -> Unit
+            }
+            accountBusy.value = false
+            keyChanges.intValue++
+        }
+    }
+
+    private fun signOut() {
+        accountBusy.value = true
+        accountError.value = null
+        lifecycleScope.launch {
+            accountError.value = Account.signOut(applicationContext)
+            accountBusy.value = false
+            keyChanges.intValue++
+        }
     }
 
     @Composable
     private fun SetupScreen(resumeCount: Int) {
-        var hasKey by remember { mutableStateOf(ApiKeyStore.load(this) != null) }
+        val signedIn = Account.status.collectAsState().value
+        // Re-read whenever a key is saved, cleared, signed in or out.
+        val hasKey = (keyChanges.intValue + resumeCount).let { ApiKeyStore.load(this) != null }
         var keyDraft by remember { mutableStateOf("") }
         var micTick by remember { mutableIntStateOf(0) }
         val bubbleOn by BubbleService.running.collectAsState()
@@ -120,38 +174,62 @@ class MainActivity : ComponentActivity() {
 
                 Step(
                     number = 1,
-                    title = "AssemblyAI API key",
+                    title = "Your AssemblyAI account",
                     done = hasKey,
-                    detail = if (hasKey) "Saved on this phone, encrypted." else
-                        "Blurt sends your voice to AssemblyAI with your own key.",
+                    detail = when {
+                        signedIn is Account.Status.SignedIn ->
+                            signedIn.email?.let { "Signed in as $it." } ?: "Signed in."
+                        hasKey -> "Your API key is saved on this phone, encrypted."
+                        else -> "Blurt sends your voice to AssemblyAI with your own account."
+                    },
                 ) {
-                    if (hasKey) {
-                        TextButton(onClick = {
+                    when {
+                        signedIn is Account.Status.SignedIn -> OutlinedButton(
+                            onClick = { signOut() },
+                            enabled = !accountBusy.value,
+                        ) { Text("Sign out") }
+                        hasKey -> TextButton(onClick = {
                             ApiKeyStore.clear(this@MainActivity)
-                            hasKey = false
+                            keyChanges.intValue++
                         }) { Text("Replace key") }
-                    } else {
-                        OutlinedTextField(
-                            value = keyDraft,
-                            onValueChange = { keyDraft = it },
-                            label = { Text("Paste your key") },
-                            singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = {
-                                    ApiKeyStore.save(this@MainActivity, keyDraft)
-                                    keyDraft = ""
-                                    hasKey = true
-                                },
-                                enabled = keyDraft.isNotBlank(),
-                            ) { Text("Save") }
-                            TextButton(onClick = {
-                                open(Intent(Intent.ACTION_VIEW, Uri.parse(KEYS_URL)))
-                            }) { Text("Get a key") }
+                        else -> {
+                            if (Account.isAvailable) {
+                                Button(
+                                    onClick = { signIn() },
+                                    enabled = !accountBusy.value,
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) { Text(if (accountBusy.value) "Signing in…" else "Sign in with AssemblyAI") }
+                                Text(
+                                    "Or paste an API key:",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            OutlinedTextField(
+                                value = keyDraft,
+                                onValueChange = { keyDraft = it },
+                                label = { Text("Paste your key") },
+                                singleLine = true,
+                                visualTransformation = PasswordVisualTransformation(),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = {
+                                        ApiKeyStore.save(this@MainActivity, keyDraft)
+                                        keyDraft = ""
+                                        keyChanges.intValue++
+                                    },
+                                    enabled = keyDraft.isNotBlank(),
+                                ) { Text("Save") }
+                                TextButton(onClick = {
+                                    open(Intent(Intent.ACTION_VIEW, Uri.parse(KEYS_URL)))
+                                }) { Text("Get a key") }
+                            }
                         }
+                    }
+                    accountError.value?.let {
+                        Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
                     }
                 }
 

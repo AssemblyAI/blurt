@@ -11,41 +11,55 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * The user's AssemblyAI API key, encrypted with an AES key that lives in the
- * Android Keystore (the counterpart of the Keychain the Mac and iPhone use), so
- * the preferences file only ever holds ciphertext.
+ * The user's AssemblyAI API key — pasted, or minted by Sign in with AssemblyAI
+ * (the sign-in stores its key here too, so dictation reads one place).
  */
 object ApiKeyStore {
+    private const val FIELD = "api_key"
+
+    fun load(context: Context): String? = SecureStore.read(context, FIELD)
+
+    fun save(context: Context, apiKey: String) = SecureStore.write(context, FIELD, apiKey.trim())
+
+    fun clear(context: Context) = SecureStore.write(context, FIELD, null)
+}
+
+/**
+ * Secrets encrypted with an AES key that lives in the Android Keystore (the
+ * counterpart of the Keychain the Mac and iPhone use), so the preferences file
+ * only ever holds ciphertext.
+ */
+object SecureStore {
     private const val KEY_ALIAS = "blurt-api-key"
     private const val PREFS = "blurt"
-    private const val FIELD = "api_key"
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
 
-    fun load(context: Context): String? {
-        val stored = prefs(context).getString(FIELD, null) ?: return null
+    fun read(context: Context, field: String): String? {
+        val stored = prefs(context).getString(field, null) ?: return null
         return try {
             val (iv, ciphertext) = stored.split(":").map { Base64.decode(it, Base64.NO_WRAP) }
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(128, iv))
             String(cipher.doFinal(ciphertext))
         } catch (e: Exception) {
-            // A Keystore key lost to a reset or a corrupt entry: ask for the key again.
+            // A Keystore key lost to a reset or a corrupt entry: as if never saved.
             null
         }
     }
 
-    fun save(context: Context, apiKey: String) {
+    /** Stores [value] encrypted, or removes the field when it's null. */
+    fun write(context: Context, field: String, value: String?) {
+        if (value == null) {
+            prefs(context).edit().remove(field).apply()
+            return
+        }
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, secretKey())
-        val ciphertext = cipher.doFinal(apiKey.trim().toByteArray())
+        val ciphertext = cipher.doFinal(value.toByteArray())
         val encoded = listOf(cipher.iv, ciphertext).joinToString(":") {
             Base64.encodeToString(it, Base64.NO_WRAP)
         }
-        prefs(context).edit().putString(FIELD, encoded).apply()
-    }
-
-    fun clear(context: Context) {
-        prefs(context).edit().remove(FIELD).apply()
+        prefs(context).edit().putString(field, encoded).apply()
     }
 
     private fun prefs(context: Context) =
