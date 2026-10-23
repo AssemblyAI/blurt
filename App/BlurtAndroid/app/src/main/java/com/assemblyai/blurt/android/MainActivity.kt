@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -138,6 +139,7 @@ class MainActivity : ComponentActivity() {
         val hasKey = (keyChanges.intValue + resumeCount).let { ApiKeyStore.load(this) != null }
         var keyDraft by remember { mutableStateOf("") }
         var micTick by remember { mutableIntStateOf(0) }
+        var showTypingDisclosure by remember { mutableStateOf(false) }
         val bubbleOn by BubbleService.running.collectAsState()
 
         // Re-read on resume and after the permission dialog.
@@ -148,6 +150,16 @@ class MainActivity : ComponentActivity() {
         val askMic = rememberLauncherForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions(),
         ) { micTick++ }
+
+        if (showTypingDisclosure) {
+            TypingDisclosure(
+                onAgree = {
+                    showTypingDisclosure = false
+                    open(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                },
+                onDecline = { showTypingDisclosure = false },
+            )
+        }
 
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(
@@ -281,7 +293,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     if (!canType) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { open(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }) {
+                            Button(onClick = { showTypingDisclosure = true }) {
                                 Text("Open settings")
                             }
                             OutlinedButton(onClick = {
@@ -328,6 +340,40 @@ class MainActivity : ComponentActivity() {
                 StyleCard()
             }
         }
+    }
+
+    /**
+     * Google Play's prominent disclosure for the Accessibility API: what Blurt
+     * typing reads, why, and where it goes, with an explicit agree before the
+     * settings open. Dismissing it is a decline. Keep it true to
+     * [BlurtAccessibilityService]: change one, change both.
+     */
+    @Composable
+    private fun TypingDisclosure(onAgree: () -> Unit, onDecline: () -> Unit) {
+        AlertDialog(
+            onDismissRequest = onDecline,
+            title = { Text("Let Blurt type for you?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Blurt typing uses Android's Accessibility service to put your dictation into the " +
+                            "app you're using.",
+                    )
+                    Text(
+                        "When you start and finish a dictation, Blurt reads the text field you're typing " +
+                            "in. Up to 1,000 characters before the cursor are sent to AssemblyAI with your " +
+                            "audio, so the transcript continues what you wrote. Password fields are never read.",
+                    )
+                    Text(
+                        "Blurt also checks whether a keyboard is on screen, to show the bubble only while " +
+                            "you type. It doesn't read anything else on screen, keep what it reads, or use it " +
+                            "for anything else.",
+                    )
+                }
+            },
+            confirmButton = { TextButton(onClick = onAgree) { Text("Agree and continue") } },
+            dismissButton = { TextButton(onClick = onDecline) { Text("Not now") } },
+        )
     }
 
     /** How the cleanup rewrite should sound: one of the presets, or the user's own words. */

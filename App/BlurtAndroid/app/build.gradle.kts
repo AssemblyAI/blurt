@@ -8,21 +8,44 @@ plugins {
 
 android {
     namespace = "com.assemblyai.blurt.android"
-    compileSdk = 35
+    compileSdk = 36
+
+    // Release signing with the upload key (Play App Signing re-signs for
+    // users). Its path is in the gitignored local.properties; its password
+    // comes from BLURT_UPLOAD_PASSWORD or, on a Mac, the Keychain item
+    // `blurt-android-upload`, so it's never in a file. Without the path, a
+    // release build is simply unsigned.
+    val local = Properties().apply {
+        rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+    }
+    val uploadStore = local.getProperty("blurt.upload.storeFile")?.let(::file)?.takeIf { it.exists() }
+    val uploadPassword: Provider<String> = providers.environmentVariable("BLURT_UPLOAD_PASSWORD").orElse(
+        providers.exec {
+            commandLine("security", "find-generic-password", "-s", "blurt-android-upload", "-w")
+            isIgnoreExitValue = true
+        }.standardOutput.asText.map { it.trim() },
+    )
+    signingConfigs {
+        if (uploadStore != null) {
+            create("upload") {
+                storeFile = uploadStore
+                storePassword = uploadPassword.get()
+                keyAlias = "upload"
+                keyPassword = uploadPassword.get()
+            }
+        }
+    }
 
     defaultConfig {
         applicationId = "com.assemblyai.blurt.android"
         minSdk = 30
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
 
         // Sign in with AssemblyAI, from the gitignored local.properties (see the
         // README). Any value left out turns sign-in off and the app offers only
         // the paste-a-key path, the way the Mac's SignIn.xcconfig does.
-        val local = Properties().apply {
-            rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
-        }
         fun signIn(name: String) = "\"${local.getProperty("blurt.oauth.$name", "")}\""
         buildConfigField("String", "OAUTH_CLIENT_ID", signIn("clientId"))
         buildConfigField("String", "OAUTH_AUTHORIZE_URL", signIn("authorizeUrl"))
@@ -34,6 +57,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.findByName("upload")
         }
     }
 

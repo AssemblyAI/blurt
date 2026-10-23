@@ -108,6 +108,29 @@ The minted key is stored where a pasted one goes, and the session (the refresh t
 encrypted the same way. An app can't run the Mac's renewal timer, so a signed-in key renews when the
 app opens and when the bubble starts a dictation, and at once when dictation reports it refused.
 
+## Release builds
+
+`./gradlew bundleRelease` writes `app/build/outputs/bundle/release/app-release.aab`, the bundle
+Google Play takes, signed with the **upload key**. Play App Signing re-signs it with the key users'
+phones see, so a lost upload key can be reset through Play support rather than stranding installs.
+
+The upload key lives outside the repo. Point `local.properties` at it:
+
+```properties
+blurt.upload.storeFile=/Users/you/.android/blurt-upload.jks
+```
+
+Its password comes from `BLURT_UPLOAD_PASSWORD`, or on a Mac from the Keychain item
+`blurt-android-upload`. Without `blurt.upload.storeFile`, release builds are unsigned. Raise
+`versionCode` in `app/build.gradle.kts` for every upload; Play refuses a number it has seen.
+
+A release build can't install over a debug build (they're signed with different keys): uninstall
+the debug one first, which also clears its settings.
+
+The setup screen's step 4 shows Google Play's required disclosure for the Accessibility API before it
+opens the settings (`TypingDisclosure` in `MainActivity.kt`). Keep its wording true to what
+`BlurtAccessibilityService` reads and sends.
+
 ## Sharing it with other people
 
 For a handful of testers, the free **limited distribution** account in the Android Developer Console
