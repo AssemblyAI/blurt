@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Blurt</string>
+    <string name="accessibility_label">Blurt typing</string>
+    <string name="accessibility_description">Lets Blurt type your dictation into the field you are editing, and read the text just before the cursor so the transcript continues it. Blurt reads the focused field only when you tap the bubble.</string>
+</resources>
