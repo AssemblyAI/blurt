@@ -201,6 +201,13 @@ private struct KeyStylesSheet: View {
           .keyboardShortcut(.defaultAction)
           .accessibilityIdentifier(UITestIdentifiers.keyStylesDone)
       }
+      // Escape closes it too. The other sheets get that from their Cancel button;
+      // every choice here is already saved, so the same shortcut rides a hidden one.
+      .background {
+        Button("Close") { dismiss() }
+          .keyboardShortcut(.cancelAction)
+          .hidden()
+      }
     }
     .padding(20)
     .frame(width: 420)
