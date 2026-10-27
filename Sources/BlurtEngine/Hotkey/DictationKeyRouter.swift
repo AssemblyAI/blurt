@@ -28,6 +28,14 @@ public struct DictationKeyRouter: Sendable {
     case flagsChanged(keyCode: Int, triggerFlagIsOn: Bool)
     /// A `keyDown` for `keyCode`.
     case keyDown(keyCode: Int)
+
+    /// A `flagsChanged` delivery from its keycode and the event's raw
+    /// `CGEventFlags`: down when the flags hold *that* key's device bit — so
+    /// every trigger key reads correctly, not only the bound one.
+    public static func fromFlags(keyCode: Int, rawFlags: UInt64) -> Event {
+      let isOn = TriggerKey(rawValue: keyCode).map { rawFlags & $0.deviceModifierMask != 0 } ?? false
+      return .flagsChanged(keyCode: keyCode, triggerFlagIsOn: isOn)
+    }
   }
 
   /// The virtual keycodes of the bound trigger modifiers (`TriggerKey.keyCode`).

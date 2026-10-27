@@ -75,6 +75,46 @@ struct TriggerKeyStyleTests {
     #expect(choice(.function, [.function: StyleProfileStore.defaultStyleID]) == StyleProfileStore.defaultStyleID)
   }
 
+  /// Raw `CGEventFlags` as macOS reports a lone press of each key: the generic
+  /// modifier bit, the key's own device bit, and the non-coalesced bit (0x100).
+  private static let pressedFlags: [TriggerKey: UInt64] = [
+    .rightCommand: 0x10_0000 | 0x10 | 0x100,
+    .rightOption: 0x8_0000 | 0x40 | 0x100,
+    .function: 0x80_0000 | 0x100,
+  ]
+
+  @Test("each trigger key's own flag bit reads as down, and another key's doesn't")
+  func flagsReadPerKey() throws {
+    for key in TriggerKey.allCases {
+      let flags = try #require(Self.pressedFlags[key])
+      let down = DictationKeyRouter.Event.fromFlags(keyCode: key.keyCode, rawFlags: flags)
+      let up = DictationKeyRouter.Event.fromFlags(keyCode: key.keyCode, rawFlags: 0x100)
+      #expect(down == .flagsChanged(keyCode: key.keyCode, triggerFlagIsOn: true))
+      #expect(up == .flagsChanged(keyCode: key.keyCode, triggerFlagIsOn: false))
+    }
+    // Right ⌥ released while right ⌘ is still held: ⌥'s event must read as up.
+    let option = TriggerKey.rightOption.keyCode
+    let commandHeld = try #require(Self.pressedFlags[.rightCommand])
+    let optionUp = DictationKeyRouter.Event.fromFlags(keyCode: option, rawFlags: commandHeld)
+    #expect(optionUp == .flagsChanged(keyCode: option, triggerFlagIsOn: false))
+  }
+
+  @Test("a router built from the store dictates with every key given a style")
+  func routerFromStoreFiresForStyledKeys() throws {
+    _ = keyStyles.setStyle(casual.id.uuidString, for: .rightOption)
+    _ = keyStyles.setStyle(TriggerKeyStyleStore.currentStyleID, for: .function)
+    var router = DictationKeyRouter(triggerKeyCodes: Set(keyStyles.enabledKeys.map(\.keyCode)))
+    for (index, key) in [TriggerKey.rightOption, .function, .rightCommand].enumerated() {
+      let start = Duration.seconds(index * 10)
+      let flags = try #require(Self.pressedFlags[key])
+      let down = DictationKeyRouter.Event.fromFlags(keyCode: key.keyCode, rawFlags: flags)
+      #expect(router.handle(down, at: start) == .start)
+      #expect(router.activeKeyCode == key.keyCode)
+      let up = DictationKeyRouter.Event.fromFlags(keyCode: key.keyCode, rawFlags: 0x100)
+      #expect(router.handle(up, at: start + .seconds(2)) == .stop)
+    }
+  }
+
   @Test("a key's style shapes one dictation and never moves the selection")
   func pressStyleOverridesWithoutPersisting() {
     let store = formalSelected()

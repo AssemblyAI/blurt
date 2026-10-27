@@ -225,8 +225,7 @@ final class DictationKeyTap {
     let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
     switch type {
     case .flagsChanged:
-      let flagIsOn = TriggerKey(rawValue: keyCode).map { event.flags.contains(Self.flag(for: $0)) } ?? false
-      return .flagsChanged(keyCode: keyCode, triggerFlagIsOn: flagIsOn)
+      return .fromFlags(keyCode: keyCode, rawFlags: event.flags.rawValue)
     case .keyDown:
       return .keyDown(keyCode: keyCode)
     default:
