@@ -1,10 +1,10 @@
 import BlurtEngine
 import SwiftUI
 
-/// The dictation-key section of the setup/settings screen. Menu pickers for which
-/// lone modifier triggers dictation, whether it activates by tap (toggle), hold
-/// (push-to-talk), or both, and — one row per trigger key — the style each key
-/// dictates with, or Off for a key other than the bound one; changes are
+/// The dictation-key section of the setup/settings screen. Two menu pickers: which
+/// lone modifier triggers dictation, and whether it activates by tap (toggle),
+/// hold (push-to-talk), or both — plus, beside the key, a menu giving each trigger
+/// key its own style (or Off, for keys other than the bound one); changes are
 /// persisted and pushed to the event tap immediately.
 struct HotkeyStepView: View {
   var coordinator: AppCoordinator
@@ -21,7 +21,7 @@ struct HotkeyStepView: View {
   // default belongs to `TriggerActivation.fromPersisted`, not a literal here.
   @AppStorage(TriggerActivationStore.defaultsKey) private var activationRaw = ""
 
-  // Observed so the per-key rows follow a style added or deleted in the Styles
+  // Observed so the per-key menu follows a style added or deleted in the Styles
   // pane, and decoded through the stores that own both encodings.
   @AppStorage(TriggerKeyStyleStore.defaultsKey) private var keyStylesRaw = ""
   @AppStorage(StyleProfileStore.defaultsKey) private var profilesRaw = ""
@@ -75,25 +75,33 @@ struct HotkeyStepView: View {
       })
   }
 
-  /// One row per trigger key: the style a press of it dictates with — the main
+  /// A submenu per trigger key: the style a press of it dictates with — the main
   /// window's current one, Default, or a profile — or Off. The bound key always
-  /// dictates, so only the others offer Off.
-  @ViewBuilder private var keyStyleRows: some View {
+  /// dictates, so only the others offer Off. A menu in the Dictation key row
+  /// rather than a row per key, so the General pane — sized to its content —
+  /// stays short enough for a small display (see `SettingsWindowRoot`).
+  private var keyStylesMenu: some View {
     let profiles = StyleProfileStore().profiles(decoding: profilesRaw)
-    ForEach(TriggerKey.allCases, id: \.self) { key in
-      PickerSettingRow(
-        title: key.fullName, systemImage: "textformat",
-        accessibilityID: UITestIdentifiers.keyStylePicker(key.keyCode),
-        selection: keyStyle(key, profiles: profiles)
-      ) {
-        if key != selection.wrappedValue { Text("Off").tag("") }
-        Text("Current style").tag(TriggerKeyStyleStore.currentStyleID)
-        Text(StyleProfileStore.defaultStyleName).tag(StyleProfileStore.defaultStyleID)
-        ForEach(profiles) { profile in
-          Text(profile.name).tag(profile.id.uuidString)
+    return Menu {
+      ForEach(TriggerKey.allCases, id: \.self) { key in
+        Picker(key.fullName, selection: keyStyle(key, profiles: profiles)) {
+          if key != selection.wrappedValue { Text("Off").tag("") }
+          Text("Current style").tag(TriggerKeyStyleStore.currentStyleID)
+          Text(StyleProfileStore.defaultStyleName).tag(StyleProfileStore.defaultStyleID)
+          ForEach(profiles) { profile in
+            Text(profile.name).tag(profile.id.uuidString)
+          }
         }
+        .pickerStyle(.menu)
       }
+    } label: {
+      Label("Styles by Key", systemImage: "textformat")
+        .labelStyle(.iconOnly)
     }
+    // The standard bordered pull-down: a pop-up's height and hit target.
+    .fixedSize()
+    .help("Give each key its own style")
+    .accessibilityIdentifier(UITestIdentifiers.keyStylesMenu)
   }
 
   private static let keyboardSettingsURL = URL(
@@ -101,12 +109,19 @@ struct HotkeyStepView: View {
 
   var body: some View {
     Section {
-      PickerSettingRow(
-        title: "Dictation key", systemImage: "keyboard",
-        accessibilityID: UITestIdentifiers.hotkeyPicker, selection: selection
-      ) {
-        ForEach(TriggerKey.allCases, id: \.self) { key in
-          Text(key.label).tag(key)
+      SettingRow(title: "Dictation key", systemImage: "keyboard") {
+        HStack(spacing: 8) {
+          // Styled as `PickerSettingRow`'s pop-up, which can't carry the menu beside it.
+          Picker("Dictation key", selection: selection) {
+            ForEach(TriggerKey.allCases, id: \.self) { key in
+              Text(key.label).tag(key)
+            }
+          }
+          .labelsHidden()
+          .pickerStyle(.menu)
+          .lineLimit(1)
+          .accessibilityIdentifier(UITestIdentifiers.hotkeyPicker)
+          keyStylesMenu
         }
       }
       PickerSettingRow(
@@ -117,7 +132,6 @@ struct HotkeyStepView: View {
           Text(mode.label).tag(mode)
         }
       }
-      keyStyleRows
     } header: {
       Text("Shortcut")
     } footer: {

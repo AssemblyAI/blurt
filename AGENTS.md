@@ -903,9 +903,10 @@ the `@AppStorage(TriggerKeyStore.defaultsKey)` + `TriggerKey.fromPersisted` pair
 restating that pairing per view. The unset default belongs to `fromPersisted` (an absent keycode maps
 to right ⌘), so views must not re-declare `TriggerKey.rightCommand.rawValue` themselves.
 
-**Per-key styles.** Below those pickers, one row per `TriggerKey` picks the style a press of that key
-dictates with — Current style (the main window's selection), Default, or a profile — or Off for keys
-other than the bound one. `TriggerKeyStyleStore` (`BlurtTriggerKeyStyles`, keycode → style id) holds
+**Per-key styles.** A menu beside the key picker holds one submenu per `TriggerKey`: the style a
+press of that key dictates with — Current style (the main window's selection), Default, or a
+profile — or Off for keys other than the bound one. A menu, not a row per key, so the General pane
+stays short enough for a small display. `TriggerKeyStyleStore` (`BlurtTriggerKeyStyles`, keycode → style id) holds
 it; an absent value is today's single key with the current style. Each key is still a lone modifier
 from the same set, watched by the same listen-only tap. A press's style lives in `PressStyle` for
 that one dictation (the request adopts it; the Recent row names what the request used) and never
