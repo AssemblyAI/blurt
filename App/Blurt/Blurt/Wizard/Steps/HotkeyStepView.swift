@@ -3,9 +3,9 @@ import SwiftUI
 
 /// The dictation-key section of the setup/settings screen. Two menu pickers: which
 /// lone modifier triggers dictation, and whether it activates by tap (toggle),
-/// hold (push-to-talk), or both — plus, beside the key, a menu giving each trigger
-/// key its own style (or Off, for keys other than the bound one); changes are
-/// persisted and pushed to the event tap immediately.
+/// hold (push-to-talk), or both — plus, beside the key, a Key Styles… button whose
+/// sheet gives each trigger key its own style (or Off, for keys other than the
+/// bound one); changes are persisted and pushed to the event tap immediately.
 struct HotkeyStepView: View {
   var coordinator: AppCoordinator
 
@@ -21,12 +21,14 @@ struct HotkeyStepView: View {
   // default belongs to `TriggerActivation.fromPersisted`, not a literal here.
   @AppStorage(TriggerActivationStore.defaultsKey) private var activationRaw = ""
 
-  // Observed so the per-key menu follows a style added or deleted in the Styles
-  // pane, and decoded through the stores that own both encodings.
+  // Observed so the Key Styles summary and the fn footer follow a change, and
+  // decoded through the stores that own both encodings.
   @AppStorage(TriggerKeyStyleStore.defaultsKey) private var keyStylesRaw = ""
   @AppStorage(StyleProfileStore.defaultsKey) private var profilesRaw = ""
 
   private var keyStyles: [TriggerKey: String] { TriggerKeyStyleStore.styles(decoding: keyStylesRaw) }
+
+  @State private var isPresentingKeyStyles = false
 
   private var selection: Binding<TriggerKey> {
     Binding(
@@ -58,51 +60,17 @@ struct HotkeyStepView: View {
       })
   }
 
-  /// One key's submenu: `""` is Off, otherwise a style id (see `TriggerKeyStyleStore`).
-  private func keyStyle(
-    _ key: TriggerKey, styles: [TriggerKey: String], profiles: [StyleProfile]
-  ) -> Binding<String> {
-    Binding(
-      get: {
-        TriggerKeyStyleStore.choice(for: key, bound: selection.wrappedValue, styles: styles, profiles: profiles)
-      },
-      set: { newValue in
-        // Through the store for the same reason as `selection` above. Only a key
-        // turned on or off rebinds the tap; a new style is read at the next press.
-        if TriggerKeyStyleStore().setStyle(newValue, for: key) {
-          coordinator.dictationBindingChanged()
-        }
-      })
-  }
-
-  /// A submenu per trigger key: the style a press of it dictates with — the main
-  /// window's current one, Default, or a profile — or Off. The bound key always
-  /// dictates, so only the others offer Off. A menu in the Dictation key row
-  /// rather than a row per key, so the General pane — sized to its content —
-  /// stays short enough for a small display (see `SettingsWindowRoot`).
-  private var keyStylesMenu: some View {
+  /// The Key Styles button's spoken summary, e.g. "right ⌘: Same as main window,
+  /// right ⌥: Off, fn: Casual" — the mapping the sheet would show.
+  private var keyStylesSummary: String {
     let profiles = StyleProfileStore().profiles(decoding: profilesRaw)
     let styles = keyStyles
-    return Menu {
-      ForEach(TriggerKey.allCases, id: \.self) { key in
-        Picker(key.fullName, selection: keyStyle(key, styles: styles, profiles: profiles)) {
-          if key != selection.wrappedValue { Text("Off").tag("") }
-          Text("Current style").tag(TriggerKeyStyleStore.currentStyleID)
-          Text(StyleProfileStore.defaultStyleName).tag(StyleProfileStore.defaultStyleID)
-          ForEach(profiles) { profile in
-            Text(profile.name).tag(profile.id.uuidString)
-          }
-        }
-        .pickerStyle(.menu)
-      }
-    } label: {
-      Label("Styles by Key", systemImage: "textformat")
-        .labelStyle(.iconOnly)
+    return TriggerKey.allCases.map { key in
+      let choice = TriggerKeyStyleStore.choice(
+        for: key, bound: selection.wrappedValue, styles: styles, profiles: profiles)
+      return "\(key.label): \(KeyStylesSheet.name(of: choice, profiles: profiles))"
     }
-    // The standard bordered pull-down: a pop-up's height and hit target.
-    .fixedSize()
-    .help("Give each key its own style")
-    .accessibilityIdentifier(UITestIdentifiers.keyStylesMenu)
+    .joined(separator: ", ")
   }
 
   private static let keyboardSettingsURL = URL(
@@ -112,7 +80,7 @@ struct HotkeyStepView: View {
     Section {
       SettingRow(title: "Dictation key", systemImage: "keyboard") {
         HStack(spacing: 8) {
-          // Styled as `PickerSettingRow`'s pop-up, which can't carry the menu beside it.
+          // Styled as `PickerSettingRow`'s pop-up, which can't carry the button beside it.
           Picker("Dictation key", selection: selection) {
             ForEach(TriggerKey.allCases, id: \.self) { key in
               Text(key.label).tag(key)
@@ -122,7 +90,11 @@ struct HotkeyStepView: View {
           .pickerStyle(.menu)
           .lineLimit(1)
           .accessibilityIdentifier(UITestIdentifiers.hotkeyPicker)
-          keyStylesMenu
+          // Ellipsis because it opens a sheet; a sheet rather than more rows so
+          // the General pane, sized to its content, fits a small display.
+          Button("Key Styles…") { isPresentingKeyStyles = true }
+            .accessibilityValue(keyStylesSummary)
+            .accessibilityIdentifier(UITestIdentifiers.keyStylesButton)
         }
       }
       PickerSettingRow(
@@ -152,5 +124,108 @@ struct HotkeyStepView: View {
         Link("Open Keyboard Settings…", destination: Self.keyboardSettingsURL)
       }
     }
+    .sheet(isPresented: $isPresentingKeyStyles) {
+      KeyStylesSheet(bound: selection.wrappedValue) { coordinator.dictationBindingChanged() }
+    }
+  }
+}
+
+/// Which style each trigger key dictates with, as a sheet from the Dictation
+/// key row: one pop-up per key offering Off (except for the bound key, which
+/// always dictates), the main window's style, Default, or a profile. Follows
+/// `StyleProfileEditorSheet`'s shape — headline, explanation, content, and the
+/// default action at the trailing edge — with only Done, since each choice is
+/// written as it is made. While enhanced transcripts are off the styles are
+/// disabled, as on the Styles pane; turning a key on or off still works.
+private struct KeyStylesSheet: View {
+  let bound: TriggerKey
+  /// A key was turned on or off, so the tap must rebind (see `setStyle`).
+  let onEnabledKeysChanged: () -> Void
+
+  @Environment(\.dismiss) private var dismiss
+  @AppStorage(TriggerKeyStyleStore.defaultsKey) private var keyStylesRaw = ""
+  @AppStorage(StyleProfileStore.defaultsKey) private var profilesRaw = ""
+  @AppStorage(EnhancedTranscriptsStore.defaultsKey)
+  private var enhancedTranscripts = EnhancedTranscriptsStore.defaultValue
+
+  static let offName = "Off"
+  static let mainWindowName = "Same as main window"
+
+  /// A choice's display name: Off, the main window's style, Default, or a profile.
+  static func name(of choice: String, profiles: [StyleProfile]) -> String {
+    switch choice {
+    case "": offName
+    case TriggerKeyStyleStore.currentStyleID: mainWindowName
+    case StyleProfileStore.defaultStyleID: StyleProfileStore.defaultStyleName
+    default: profiles.first { $0.id.uuidString == choice }?.name ?? mainWindowName
+    }
+  }
+
+  var body: some View {
+    let profiles = StyleProfileStore().profiles(decoding: profilesRaw)
+    let styles = TriggerKeyStyleStore.styles(decoding: keyStylesRaw)
+    VStack(alignment: .leading, spacing: 16) {
+      header
+      Form {
+        Section {
+          ForEach(TriggerKey.allCases, id: \.self) { key in
+            PickerSettingRow(
+              title: key.label, systemImage: "keyboard",
+              accessibilityID: UITestIdentifiers.keyStylePicker(key.keyCode),
+              selection: choice(for: key, styles: styles, profiles: profiles)
+            ) {
+              if key != bound { Text(Self.offName).tag("") }
+              Text(Self.mainWindowName).tag(TriggerKeyStyleStore.currentStyleID)
+              Group {
+                Text(StyleProfileStore.defaultStyleName).tag(StyleProfileStore.defaultStyleID)
+                ForEach(profiles) { profile in
+                  Text(profile.name).tag(profile.id.uuidString)
+                }
+              }
+              .disabled(!enhancedTranscripts)
+            }
+          }
+        } footer: {
+          if !enhancedTranscripts {
+            Text("Turn on Enhanced transcripts to use styles.")
+          }
+        }
+      }
+      .formStyle(.grouped)
+      .scrollDisabled(true)
+      .fixedSize(horizontal: false, vertical: true)
+      HStack {
+        Spacer()
+        Button("Done") { dismiss() }
+          .glassButtonStyleCompat(prominent: true)
+          .keyboardShortcut(.defaultAction)
+          .accessibilityIdentifier(UITestIdentifiers.keyStylesDone)
+      }
+    }
+    .padding(20)
+    .frame(width: 420)
+  }
+
+  private var header: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      Text("Key Styles")
+        .font(.headline)
+      Text("Each key can dictate with its own style, without changing the style selected in the main window.")
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+  }
+
+  /// One key's pop-up: `""` is Off, otherwise a style id (see `TriggerKeyStyleStore`).
+  private func choice(
+    for key: TriggerKey, styles: [TriggerKey: String], profiles: [StyleProfile]
+  ) -> Binding<String> {
+    Binding(
+      get: { TriggerKeyStyleStore.choice(for: key, bound: bound, styles: styles, profiles: profiles) },
+      set: { newValue in
+        // Through the store, which owns the encoding (see `HotkeyStepView.selection`).
+        // Only a key turned on or off rebinds the tap; a style is read at the next press.
+        if TriggerKeyStyleStore().setStyle(newValue, for: key) { onEnabledKeysChanged() }
+      })
   }
 }

@@ -64,7 +64,10 @@ enum UITestIdentifiers {
   static let keyTermsField = "settings.keyTerms.field"
   static let hotkeyPicker = "settings.hotkey.picker"
   static let activationPicker = "settings.activation.picker"
-  static let keyStylesMenu = "settings.keyStyles.menu"
+  static let keyStylesButton = "settings.keyStyles.button"
+  static let keyStylesDone = "settings.keyStyles.done"
+  /// One per trigger key in the Key Styles sheet, suffixed with its keycode.
+  static func keyStylePicker(_ keyCode: Int) -> String { "settings.keyStyles.picker.\(keyCode)" }
   static let micPicker = "settings.mic.picker"
   static let soundPicker = "settings.sound.picker"
   static let developerToggle = "settings.developer.toggle"
