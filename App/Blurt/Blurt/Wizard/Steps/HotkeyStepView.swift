@@ -1,10 +1,11 @@
 import BlurtEngine
 import SwiftUI
 
-/// The dictation-key section of the setup/settings screen. Two menu pickers: which
-/// lone modifier triggers dictation, and whether it activates by tap (toggle),
-/// hold (push-to-talk), or both; changes are persisted and pushed to the event
-/// tap immediately.
+/// The dictation-key section of the setup/settings screen. Menu pickers for which
+/// lone modifier triggers dictation, whether it activates by tap (toggle), hold
+/// (push-to-talk), or both, and — one row per trigger key — the style each key
+/// dictates with, or Off for a key other than the bound one; changes are
+/// persisted and pushed to the event tap immediately.
 struct HotkeyStepView: View {
   var coordinator: AppCoordinator
 
@@ -19,6 +20,13 @@ struct HotkeyStepView: View {
   // Same rule for the activation half: "" is "nothing persisted", and the unset
   // default belongs to `TriggerActivation.fromPersisted`, not a literal here.
   @AppStorage(TriggerActivationStore.defaultsKey) private var activationRaw = ""
+
+  // Observed so the per-key rows follow a style added or deleted in the Styles
+  // pane, and decoded through the stores that own both encodings.
+  @AppStorage(TriggerKeyStyleStore.defaultsKey) private var keyStylesRaw = ""
+  @AppStorage(StyleProfileStore.defaultsKey) private var profilesRaw = ""
+
+  private var keyStyles: [TriggerKey: String] { TriggerKeyStyleStore.styles(decoding: keyStylesRaw) }
 
   private var selection: Binding<TriggerKey> {
     Binding(
@@ -50,6 +58,44 @@ struct HotkeyStepView: View {
       })
   }
 
+  /// One key's row: `""` is Off, otherwise a style id (see `TriggerKeyStyleStore`).
+  private func keyStyle(_ key: TriggerKey, profiles: [StyleProfile]) -> Binding<String> {
+    Binding(
+      get: {
+        TriggerKeyStyleStore.choice(
+          for: key, bound: selection.wrappedValue, styles: keyStyles, profiles: profiles)
+      },
+      set: { newValue in
+        // Through the store for the same reason as `selection` above.
+        let store = TriggerKeyStyleStore()
+        var styles = store.styles
+        styles[key] = newValue.isEmpty ? nil : newValue
+        store.styles = styles
+        coordinator.dictationBindingChanged()
+      })
+  }
+
+  /// One row per trigger key: the style a press of it dictates with — the main
+  /// window's current one, Default, or a profile — or Off. The bound key always
+  /// dictates, so only the others offer Off.
+  @ViewBuilder private var keyStyleRows: some View {
+    let profiles = StyleProfileStore().profiles(decoding: profilesRaw)
+    ForEach(TriggerKey.allCases, id: \.self) { key in
+      PickerSettingRow(
+        title: key.fullName, systemImage: "textformat",
+        accessibilityID: UITestIdentifiers.keyStylePicker(key.keyCode),
+        selection: keyStyle(key, profiles: profiles)
+      ) {
+        if key != selection.wrappedValue { Text("Off").tag("") }
+        Text("Current style").tag(TriggerKeyStyleStore.currentStyleID)
+        Text(StyleProfileStore.defaultStyleName).tag(StyleProfileStore.defaultStyleID)
+        ForEach(profiles) { profile in
+          Text(profile.name).tag(profile.id.uuidString)
+        }
+      }
+    }
+  }
+
   private static let keyboardSettingsURL = URL(
     string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!
 
@@ -71,6 +117,7 @@ struct HotkeyStepView: View {
           Text(mode.label).tag(mode)
         }
       }
+      keyStyleRows
     } header: {
       Text("Shortcut")
     } footer: {
@@ -83,9 +130,9 @@ struct HotkeyStepView: View {
       // (`GlobeKeyOverride`), so a 🌐 key that stopped opening emoji isn't a mystery.
       // That write only lands at the next log-in, so link to the pane that
       // applies it now.
-      if selection.wrappedValue == .function {
+      if TriggerKeyStyleStore.enabledKeys(bound: selection.wrappedValue, styles: keyStyles).contains(.function) {
         Text(
-          "While fn is the dictation key, macOS’s “Press 🌐 key to” is set to Do Nothing "
+          "While fn is a dictation key, macOS’s “Press 🌐 key to” is set to Do Nothing "
             + "from your next log-in. To stop 🌐 firing sooner, set it in Keyboard Settings.")
         Link("Open Keyboard Settings…", destination: Self.keyboardSettingsURL)
       }

@@ -13,38 +13,47 @@ struct GlobeKeyOverrideTests {
   @Test("binding fn sets the 🌐 action to Do Nothing, and rebinding restores it")
   func overridesAndRestores() {
     system.set(2, forKey: GlobeKeyOverride.usageKey)  // Show Emoji & Symbols
-    override.sync(boundKey: .function)
+    override.sync(boundKeys: [.function])
     #expect(usage == GlobeKeyOverride.doNothing)
-    override.sync(boundKey: .rightCommand)
+    override.sync(boundKeys: [.rightCommand])
     #expect(usage == 2)
     #expect(record.object(forKey: GlobeKeyOverride.replacedUsageKey) == nil)
   }
 
+  @Test("fn bound beside another key still sets Do Nothing")
+  func fnAmongSeveralKeys() {
+    system.set(2, forKey: GlobeKeyOverride.usageKey)
+    override.sync(boundKeys: [.rightCommand, .function])
+    #expect(usage == GlobeKeyOverride.doNothing)
+    override.sync(boundKeys: [.rightCommand, .rightOption])
+    #expect(usage == 2)
+  }
+
   @Test("an unset system value is restored as unset, not pinned")
   func restoresUnset() {
-    override.sync(boundKey: .function)
+    override.sync(boundKeys: [.function])
     #expect(usage == GlobeKeyOverride.doNothing)
-    override.sync(boundKey: .rightOption)
+    override.sync(boundKeys: [.rightOption])
     #expect(system.object(forKey: GlobeKeyOverride.usageKey) == nil)
   }
 
   @Test("re-syncing fn keeps the original value and re-asserts the override")
   func resyncKeepsOriginal() {
     system.set(3, forKey: GlobeKeyOverride.usageKey)  // Start Dictation
-    override.sync(boundKey: .function)
+    override.sync(boundKeys: [.function])
     // Changed back in System Settings while fn stayed bound; the next launch's
     // sync must not record Blurt's own override as "the original".
     system.set(1, forKey: GlobeKeyOverride.usageKey)
-    override.sync(boundKey: .function)
+    override.sync(boundKeys: [.function])
     #expect(usage == GlobeKeyOverride.doNothing)
-    override.sync(boundKey: .rightCommand)
+    override.sync(boundKeys: [.rightCommand])
     #expect(usage == 3)
   }
 
   @Test("a non-fn binding never touches the system setting")
   func nonFunctionIsNoOp() {
     system.set(2, forKey: GlobeKeyOverride.usageKey)
-    override.sync(boundKey: .rightCommand)
+    override.sync(boundKeys: [.rightCommand])
     #expect(usage == 2)
   }
 
@@ -55,9 +64,9 @@ struct GlobeKeyOverrideTests {
     #expect(!DefaultsKey.allCases.map(\.key).contains(GlobeKeyOverride.replacedUsageKey))
     let own = freshDefaults()
     system.set(2, forKey: GlobeKeyOverride.usageKey)
-    override.sync(boundKey: .function)
+    override.sync(boundKeys: [.function])
     PersistedSettings.resetAll(in: own)
-    override.sync(boundKey: TriggerKeyStore(defaults: own).triggerKey)
+    override.sync(boundKeys: [TriggerKeyStore(defaults: own).triggerKey])
     #expect(usage == 2)
   }
 
@@ -66,11 +75,11 @@ struct GlobeKeyOverrideTests {
     // Blurt and Blurt Dev are separate hosts over the same system setting. The
     // second to bind fn must not record the first's Do Nothing as the original.
     system.set(2, forKey: GlobeKeyOverride.usageKey)
-    override.sync(boundKey: .function)  // one build
-    override.sync(boundKey: .function)  // the other
-    override.sync(boundKey: .rightCommand)
+    override.sync(boundKeys: [.function])  // one build
+    override.sync(boundKeys: [.function])  // the other
+    override.sync(boundKeys: [.rightCommand])
     #expect(usage == 2)
-    override.sync(boundKey: .rightOption)  // the other rebinds too: nothing left to undo
+    override.sync(boundKeys: [.rightOption])  // the other rebinds too: nothing left to undo
     #expect(usage == 2)
   }
 }

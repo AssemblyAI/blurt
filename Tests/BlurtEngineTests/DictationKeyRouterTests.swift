@@ -23,7 +23,7 @@ struct DictationKeyRouterTests {
 
   @Test("a held press is start → stop")
   func holdIsStartStop() {
-    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
     #expect(router.handle(upEvent(trigger), at: .seconds(2)) == .stop)
   }
@@ -32,7 +32,7 @@ struct DictationKeyRouterTests {
   func repeatedDownStateIsDeduped() {
     // While the trigger is held, another flags delivery can re-report its bit
     // still set; re-arming the gate on it would corrupt the tap/hold timing.
-    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
     #expect(router.handle(downEvent(trigger), at: .milliseconds(50)) == .none)
     // The eventual release still stops the (single) dictation.
@@ -41,7 +41,7 @@ struct DictationKeyRouterTests {
 
   @Test("an up-state delivery with no tracked down is ignored")
   func upWithoutDownIsIgnored() {
-    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     #expect(router.handle(upEvent(trigger), at: .zero) == .none)
   }
 
@@ -49,21 +49,21 @@ struct DictationKeyRouterTests {
   func otherKeycodeFlagsAreIgnored() {
     // E.g. right ⌥ going down while right ⌘ is bound: the delivery's flags may
     // even carry the trigger's bit, but the event isn't about the bound key.
-    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     #expect(router.handle(downEvent(otherModifier), at: .zero) == .none)
     #expect(router.handle(upEvent(otherModifier), at: .seconds(2)) == .none)
   }
 
   @Test("another key over a fresh press is a combo and cancels")
   func comboCancelsFreshCapture() {
-    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
     #expect(router.handle(.keyDown(keyCode: 8), at: .milliseconds(100)) == .cancel)  // ⌘C
   }
 
   @Test("the trigger's own keyDown is not a combo")
   func triggerKeyDownIsNotACombo() {
-    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
     #expect(router.handle(.keyDown(keyCode: trigger), at: .milliseconds(100)) == .none)
     #expect(router.handle(upEvent(trigger), at: .seconds(2)) == .stop)
@@ -71,11 +71,49 @@ struct DictationKeyRouterTests {
 
   @Test("a short tap latches; the next tap stops")
   func tapToToggle() {
-    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
     #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .latch)  // latched
     #expect(router.handle(downEvent(trigger), at: .seconds(5)) == .none)
     #expect(router.handle(upEvent(trigger), at: .seconds(5) + .milliseconds(200)) == .stop)
+  }
+
+  @Test("with several triggers bound, each one starts a dictation and reports itself")
+  func anyBoundTriggerStarts() {
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger, otherModifier])
+    #expect(router.handle(downEvent(otherModifier), at: .zero) == .start)
+    #expect(router.activeKeyCode == otherModifier)
+    #expect(router.handle(upEvent(otherModifier), at: .seconds(2)) == .stop)
+    #expect(router.activeKeyCode == nil)
+    #expect(router.handle(downEvent(trigger), at: .seconds(3)) == .start)
+    #expect(router.activeKeyCode == trigger)
+  }
+
+  @Test("the trigger that started a dictation owns it until the gate is idle")
+  func otherTriggersAreIgnoredWhileOneOwnsTheGate() {
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger, otherModifier])
+    #expect(router.handle(downEvent(trigger), at: .zero) == .start)
+    #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .latch)
+    // Another trigger tapped over the latched recording neither stops nor
+    // re-starts it, and isn't a combo.
+    #expect(router.handle(downEvent(otherModifier), at: .seconds(1)) == .none)
+    #expect(router.handle(upEvent(otherModifier), at: .seconds(1) + .milliseconds(200)) == .none)
+    #expect(router.handle(.keyDown(keyCode: otherModifier), at: .seconds(1)) == .none)
+    #expect(router.activeKeyCode == trigger)
+    // The owner's next tap stops it and frees the gate for either key.
+    #expect(router.handle(downEvent(trigger), at: .seconds(2)) == .none)
+    #expect(router.handle(upEvent(trigger), at: .seconds(2) + .milliseconds(200)) == .stop)
+    #expect(router.handle(downEvent(otherModifier), at: .seconds(3)) == .start)
+  }
+
+  @Test("a combo-cancelled press keeps ownership until its key is released")
+  func cancelledPressKeepsOwnershipUntilKeyUp() {
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger, otherModifier])
+    #expect(router.handle(downEvent(trigger), at: .zero) == .start)
+    #expect(router.handle(.keyDown(keyCode: 8), at: .milliseconds(100)) == .cancel)
+    #expect(router.handle(downEvent(otherModifier), at: .milliseconds(200)) == .none)
+    #expect(router.handle(upEvent(trigger), at: .milliseconds(300)) == .none)
+    #expect(router.activeKeyCode == nil)
   }
 
   // Note: `reset()`/`rebind(_:)` results are hoisted into locals below because
@@ -84,14 +122,14 @@ struct DictationKeyRouterTests {
 
   @Test("reset while idle reports nothing discarded")
   func resetWhileIdle() {
-    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     let discarded = router.reset()
     #expect(!discarded)
   }
 
   @Test("reset mid-recording reports the discarded recording")
   func resetMidRecordingReportsDiscard() {
-    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
     let discarded = router.reset()
     #expect(discarded)
@@ -102,7 +140,7 @@ struct DictationKeyRouterTests {
 
   @Test("reset over a latched recording reports the discarded recording")
   func resetOverLatchedReportsDiscard() {
-    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
     #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .latch)  // latched
     let discarded = router.reset()
@@ -118,7 +156,7 @@ struct DictationKeyRouterTests {
     // the user's whole next press does nothing. `DictationKeyTap`'s
     // `syncAfterTerminalPhase()` calls `reset()` to clear it; this pins that a
     // reset genuinely restores the next press.
-    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
     #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .latch)  // latched
 
@@ -137,7 +175,7 @@ struct DictationKeyRouterTests {
     // (the dictation is over), which clears the modifier tracker — so the release
     // that follows must route to `.none` rather than emitting a spurious `.stop`,
     // and the press after that must start normally.
-    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
 
     router.reset()  // terminal phase arrived while the key is still down
@@ -148,13 +186,13 @@ struct DictationKeyRouterTests {
 
   @Test("rebind mid-recording discards it and switches keycodes")
   func rebindMidRecording() {
-    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
     // Rebinding means the old key's up-event can never match — the caller must
     // cancel the capture rather than let the auto-release cap paste it.
-    let discarded = router.rebind(triggerKeyCode: otherModifier, activation: .tapOrHold)
+    let discarded = router.rebind(triggerKeyCodes: [otherModifier], activation: .tapOrHold)
     #expect(discarded)
-    #expect(router.triggerKeyCode == otherModifier)
+    #expect(router.triggerKeyCodes == [otherModifier])
     // The old key is now irrelevant; the new one drives dictation.
     #expect(router.handle(downEvent(trigger), at: .seconds(1)) == .none)
     #expect(router.handle(downEvent(otherModifier), at: .seconds(2)) == .start)
@@ -162,15 +200,15 @@ struct DictationKeyRouterTests {
 
   @Test("rebind while idle reports nothing discarded")
   func rebindWhileIdle() {
-    var router = DictationKeyRouter(triggerKeyCode: trigger)
-    let discarded = router.rebind(triggerKeyCode: otherModifier, activation: .tapOrHold)
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger])
+    let discarded = router.rebind(triggerKeyCodes: [otherModifier], activation: .tapOrHold)
     #expect(!discarded)
   }
 
   @Test("rebind swaps the activation mode the gate applies")
   func rebindSwapsActivationMode() {
-    var router = DictationKeyRouter(triggerKeyCode: trigger)
-    router.rebind(triggerKeyCode: trigger, activation: .hold)
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger])
+    router.rebind(triggerKeyCodes: [trigger], activation: .hold)
     // Under hold-only a quick release stops instead of latching — the tap-or-hold
     // gate this router was built with would have returned `.none` here.
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
@@ -182,7 +220,7 @@ struct DictationKeyRouterTests {
     // The tap was disabled mid-sentence. The key-up hasn't happened yet, so it is
     // still coming and the gate is coherent — resetting here would throw away
     // speech the user is in the middle of.
-    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
 
     // Bound to a local rather than asserted inline: `#expect` rewrites a bare
@@ -203,7 +241,7 @@ struct DictationKeyRouterTests {
     // will never arrive. Left latched, the session would sit in `.recording` until
     // the auto-release cap pasted an unprompted transcript — so the reset must
     // report the discarded recording for the host to cancel upstream.
-    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
 
     let discarded = router.recoverFromDroppedEvents(triggerStillHeld: false)
@@ -220,7 +258,7 @@ struct DictationKeyRouterTests {
     // The common case: the tap times out with no dictation in flight. Neither
     // branch may claim a recording was discarded, or the host cancels a session
     // that was never recording.
-    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     let discardedAfterRelease = router.recoverFromDroppedEvents(triggerStillHeld: false)
     #expect(!discardedAfterRelease)
     let discardedWhileHeld = router.recoverFromDroppedEvents(triggerStillHeld: true)
@@ -234,7 +272,7 @@ struct DictationKeyRouterTests {
     // A tapped recording has no key held by definition, so `triggerStillHeld` is
     // false and the gate is latched — the state most at risk of being stranded,
     // since nothing is coming to close it.
-    var router = DictationKeyRouter(triggerKeyCode: trigger)
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
     #expect(router.handle(upEvent(trigger), at: .milliseconds(100)) == .latch)  // latched
 

@@ -197,8 +197,25 @@ public struct StyleProfileStore {
   /// Internal: the app resolves the profiles it has already observed through
   /// that static instead, and periphery's redundant-public check would flag a
   /// `public` here that no host reaches.
-  var active: StyleProfile? {
-    Self.active(in: profiles, id: defaults.string(forKey: Self.activeDefaultsKey) ?? "")
+  var active: StyleProfile? { profile(for: nil) }
+
+  /// The profile a dictation uses when its trigger key asked for `styleID`
+  /// (`TriggerKeyStyleStore`): that style while it still exists — `nil` for
+  /// `defaultStyleID`, base styling — and otherwise the active one. A key whose
+  /// style was deleted therefore follows the main window's selection, rather
+  /// than `active(in:id:)`'s first-profile fallback. Never writes the pointer.
+  func profile(for styleID: String?) -> StyleProfile? {
+    let profiles = profiles
+    if let styleID, Self.isStyle(styleID, in: profiles) {
+      return Self.active(in: profiles, id: styleID)
+    }
+    return Self.active(in: profiles, id: defaults.string(forKey: Self.activeDefaultsKey) ?? "")
+  }
+
+  /// Whether `id` names a style that exists: `defaultStyleID`, or one of
+  /// `profiles` by its `uuidString`.
+  static func isStyle(_ id: String, in profiles: [StyleProfile]) -> Bool {
+    id == defaultStyleID || profiles.contains { $0.id.uuidString == id }
   }
 
   /// The profiles behind a raw slot value a SwiftUI view has **already

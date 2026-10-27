@@ -5,9 +5,12 @@
 ///   bit whether or not it changed, so the router tracks the modifier's current
 ///   physical state and only a genuine down/up *edge* reaches the gate —
 ///   repeated same-state deliveries must not double-fire a dictation.
-/// - **Relevance.** Only the bound keycode's flag changes drive the modifier;
+/// - **Relevance.** Only the bound keycodes' flag changes drive the modifier;
 ///   a `keyDown` for any *other* key marks a combo (e.g. ⌘C over the held
-///   trigger), and the trigger's own keycode never counts as a combo.
+///   trigger), and a trigger's own keycode never counts as a combo. With more
+///   than one trigger bound, the one whose press left the gate idle owns it
+///   (`activeKeyCode`) until the gate is idle and that key is up again; the
+///   others are ignored meanwhile, so two triggers never interleave.
 /// - **Dropped-event recovery.** After the host's tap is disabled and re-enabled,
 ///   whether the gate's state survives depends on the trigger still being held —
 ///   see `recoverFromDroppedEvents(triggerStillHeld:)`.
@@ -19,27 +22,32 @@ public struct DictationKeyRouter: Sendable {
   /// A keyboard event reduced to exactly what the routing decision needs, so
   /// the router never touches `CGEvent`/`CGEventFlags` types.
   public enum Event: Sendable, Equatable {
-    /// A `flagsChanged` delivery: the keycode it reports and whether the bound
-    /// trigger's device-dependent flag bit is set in the event's flags (see
+    /// A `flagsChanged` delivery: the keycode it reports and whether that
+    /// key's device-dependent flag bit is set in the event's flags (see
     /// `TriggerKey.deviceModifierMask`).
     case flagsChanged(keyCode: Int, triggerFlagIsOn: Bool)
     /// A `keyDown` for `keyCode`.
     case keyDown(keyCode: Int)
   }
 
-  /// The virtual keycode of the bound trigger modifier (`TriggerKey.keyCode`).
-  public private(set) var triggerKeyCode: Int
+  /// The virtual keycodes of the bound trigger modifiers (`TriggerKey.keyCode`).
+  private(set) var triggerKeyCodes: Set<Int>
+
+  /// The trigger that owns the gate — the one whose press started the current
+  /// dictation — or nil while the gate is idle and no trigger is held. The host
+  /// reads it on `.start` to know which key fired.
+  public private(set) var activeKeyCode: Int?
 
   private var gate: DictationKeyGate
-  /// The bound modifier's current physical state, so repeated `flagsChanged`
+  /// The active modifier's current physical state, so repeated `flagsChanged`
   /// deliveries with an unchanged bit don't re-fire the gate.
   private var modifierIsDown = false
 
   public init(
-    triggerKeyCode: Int, holdThreshold: Duration = .seconds(1),
+    triggerKeyCodes: Set<Int>, holdThreshold: Duration = .seconds(1),
     activation: TriggerActivation = .tapOrHold
   ) {
-    self.triggerKeyCode = triggerKeyCode
+    self.triggerKeyCodes = triggerKeyCodes
     self.gate = DictationKeyGate(holdThreshold: holdThreshold, activation: activation)
   }
 
@@ -48,30 +56,33 @@ public struct DictationKeyRouter: Sendable {
   public mutating func handle(_ event: Event, at now: Duration) -> DictationKeyGate.Action {
     switch event {
     case .flagsChanged(let keyCode, let triggerFlagIsOn):
-      guard keyCode == triggerKeyCode else { return .none }
+      guard triggerKeyCodes.contains(keyCode), (activeKeyCode ?? keyCode) == keyCode else { return .none }
       if triggerFlagIsOn, !modifierIsDown {
         modifierIsDown = true
+        activeKeyCode = keyCode
         return gate.modifierDown(at: now)
       }
       if !triggerFlagIsOn, modifierIsDown {
         modifierIsDown = false
-        return gate.modifierUp(at: now)
+        let action = gate.modifierUp(at: now)
+        if gate.isIdle { activeKeyCode = nil }
+        return action
       }
       return .none
     case .keyDown(let keyCode):
-      return keyCode == triggerKeyCode ? .none : gate.otherKeyDown()
+      return triggerKeyCodes.contains(keyCode) ? .none : gate.otherKeyDown()
     }
   }
 
-  /// Rebinds the trigger — key and activation mode, the two halves of the
+  /// Rebinds the trigger — keys and activation mode, the two halves of the
   /// binding Settings can change — and resets: events already tracked belong to
   /// the old binding, whose up-event can no longer match (or would resolve under
   /// the old mode). The gate is rebuilt because its `activation` is `let`, part
   /// of its determinism contract. Returns whether the reset discarded a live
   /// recording (see `reset()`).
   @discardableResult
-  public mutating func rebind(triggerKeyCode: Int, activation: TriggerActivation) -> Bool {
-    self.triggerKeyCode = triggerKeyCode
+  public mutating func rebind(triggerKeyCodes: Set<Int>, activation: TriggerActivation) -> Bool {
+    self.triggerKeyCodes = triggerKeyCodes
     let discardedRecording = reset()
     gate = DictationKeyGate(holdThreshold: gate.holdThreshold, activation: activation)
     return discardedRecording
@@ -81,7 +92,7 @@ public struct DictationKeyRouter: Sendable {
   /// while it was down) and re-enabled: events may have been dropped, so the gate's
   /// state may no longer match the keyboard.
   ///
-  /// `triggerStillHeld` is the caller's read of whether the trigger modifier is
+  /// `triggerStillHeld` is the caller's read of whether the active trigger is
   /// physically down *right now* — `CGEventSource.flagsState` on the app side, the
   /// one CoreGraphics-typed input, which is why it's passed in rather than read
   /// here. If it is, nothing that matters was lost: the key-up is still coming and
@@ -90,7 +101,7 @@ public struct DictationKeyRouter: Sendable {
   /// the dropped events, so the gate is reset.
   ///
   /// Returns whether that reset discarded a live recording the caller must cancel
-  /// upstream, matching `reset()` and `rebind(triggerKeyCode:activation:)`. This lived in the
+  /// upstream, matching `reset()` and `rebind(triggerKeyCodes:activation:)`. This lived in the
   /// shell as a bare `if`, where nothing could test it — the app target has no test
   /// target and a `CGEventTap` can't be driven from XCUITest — while carrying the
   /// worst failure of the three decisions here: a session left in `.recording` with
@@ -114,6 +125,7 @@ public struct DictationKeyRouter: Sendable {
     let discardedRecording = !gate.isIdle
     gate.reset()
     modifierIsDown = false
+    activeKeyCode = nil
     return discardedRecording
   }
 }

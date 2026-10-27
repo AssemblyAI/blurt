@@ -6,11 +6,11 @@ import Foundation
 /// macOS binds the key itself (System Settings → Keyboard → "Press 🌐 key to":
 /// show emoji, change input source, or start Apple Dictation), and the hotkey tap
 /// is listen-only, so it can't swallow the press — every dictation would also fire
-/// that action, alert sound included. So while `fn` is bound this sets the system
-/// setting to "Do Nothing", remembering what it replaced; binding any other key
-/// puts that back.
+/// that action, alert sound included. So while `fn` is among the bound keys this
+/// sets the system setting to "Do Nothing", remembering what it replaced; unbinding
+/// it puts that back.
 ///
-/// `sync(boundKey:)` is idempotent and re-applies the override on every call, so
+/// `sync(boundKeys:)` is idempotent and re-applies the override on every call, so
 /// a launch with `fn` bound re-asserts it even if the setting was changed in
 /// System Settings meanwhile.
 public struct GlobeKeyOverride {
@@ -52,9 +52,9 @@ public struct GlobeKeyOverride {
   /// `AppleFnUsageType` at login (System Settings applies it through its own
   /// path), so the override lands after the next log-out. The Shortcut footer
   /// says so and links to Keyboard Settings for changing it right away.
-  public func sync(boundKey: TriggerKey) {
+  public func sync(boundKeys: Set<TriggerKey>) {
     guard let system, let record else { return }
-    if boundKey == .function {
+    if boundKeys.contains(.function) {
       if record.object(forKey: Self.replacedUsageKey) == nil {
         let current = system.object(forKey: Self.usageKey) as? Int ?? Self.wasUnset
         record.set(current, forKey: Self.replacedUsageKey)

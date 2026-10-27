@@ -27,6 +27,9 @@
 enum DefaultsKey: String, CaseIterable {
   case triggerKeyCode = "TriggerKeyCode"
   case triggerActivation = "TriggerActivation"
+  /// Which style each trigger key dictates with, and so which keys beyond the
+  /// bound one dictate at all (`TriggerKeyStyleStore`).
+  case triggerKeyStyles = "TriggerKeyStyles"
   case soundPack = "SoundPack"
   case keyTerms = "KeyTerms"
   case developerMode = "DeveloperMode"

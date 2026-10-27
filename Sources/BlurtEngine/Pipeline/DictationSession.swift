@@ -206,16 +206,10 @@ public actor DictationSession {
     self.maxRecordingSeconds = maxRecordingSeconds
     self.clock = clock
     self.keyTermsProvider = keyTermsProvider ?? { KeyTermsStore().terms }
-    self.styleNameProvider =
-      styleNameProvider
-      ?? {
-        // No rewrite means no style was applied — matching the transcriber's
-        // own per-request read of the same store. `active` is nil for the
-        // Default sentinel as well as for an empty list, which is exactly
-        // the rule: only a *custom* style is worth naming on the row.
-        guard EnhancedTranscriptsStore().isEnabled else { return nil }
-        return StyleProfileStore().active?.name
-      }
+    // With nothing requested, `PressStyle` names the main window's selection —
+    // and nothing with enhanced transcripts off, or under base styling: only a
+    // *custom* style is worth naming on the row.
+    self.styleNameProvider = styleNameProvider ?? { PressStyle().styleName() }
     self.textShortcutsProvider = textShortcutsProvider ?? { TextShortcutStore().shortcuts }
     self.readinessCheck = readinessCheck
     self.onTranscriptDelivered = onTranscriptDelivered

@@ -18,16 +18,19 @@ struct DictationComponents {
   /// `dictationOrigin` is the signed-in key's dictation host
   /// (`AssemblyAIAccount.dictationOrigin`); production when it holds none.
   /// `onKeyRejected` hears about a dictation refused for its key
-  /// (`KeyRejectionReporter`), so the account can renew at once.
+  /// (`KeyRejectionReporter`), so the account can renew at once. `pressStyle`
+  /// supplies each request's style: the one the trigger key asked for, else the
+  /// main window's selection.
   static func production(
-    dictationOrigin: DictationOrigin? = nil, onKeyRejected: @escaping @Sendable () -> Void = {}
+    dictationOrigin: DictationOrigin? = nil, pressStyle: PressStyle,
+    onKeyRejected: @escaping @Sendable () -> Void = {}
   ) -> DictationComponents {
     DictationComponents(
       mic: MicCapture(),
       transcriber: KeyRejectionReporter(
-        AssemblyAITranscriber(baseURL: {
-          dictationOrigin?.current ?? AssemblyAITranscriber.defaultBaseURL
-        }),
+        AssemblyAITranscriber(
+          baseURL: { dictationOrigin?.current ?? AssemblyAITranscriber.defaultBaseURL },
+          customStyle: { pressStyle.instructions() }),
         onRejected: onKeyRejected),
       injector: KeyInjector()
     )

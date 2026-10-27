@@ -860,10 +860,10 @@ in-house. Four pieces, three of them pure engine logic:
   (modifier + another key, e.g. ⌘C) from idle cancels the fresh capture; over a latched recording it
   passes through as a normal shortcut. Callers pass monotonic timestamps, so every decision is
   deterministic and unit-tested.
-- **`DictationKeyRouter`** — the event-routing layer over the gate: only the bound keycode's flag
-  changes drive the modifier, and only genuine down/up **edges** reach the gate (`flagsChanged`
+- **`DictationKeyRouter`** — the event-routing layer over the gate: only the bound keycodes' flag
+  changes drive the modifier (the first to go down owns the gate, `activeKeyCode`, until it is idle), and only genuine down/up **edges** reach the gate (`flagsChanged`
   deliveries re-report the bit whether or not it changed, so a repeat must not double-fire).
-  `reset()`/`rebind(triggerKeyCode:)` report whether they discarded a live recording the host must
+  `reset()`/`rebind(triggerKeyCodes:activation:)` report whether they discarded a live recording the host must
   cancel upstream, and so does **`recoverFromDroppedEvents(triggerStillHeld:)`** — the
   disabled-tap rule: events may have been dropped, so the gate's state survives only while the
   trigger is still physically held (its key-up is still coming); otherwise that key-up was among
@@ -902,6 +902,14 @@ Settings change, use **`@BoundTriggerKey`** — a `DynamicProperty` in `Wizard/B
 the `@AppStorage(TriggerKeyStore.defaultsKey)` + `TriggerKey.fromPersisted` pair — rather than
 restating that pairing per view. The unset default belongs to `fromPersisted` (an absent keycode maps
 to right ⌘), so views must not re-declare `TriggerKey.rightCommand.rawValue` themselves.
+
+**Per-key styles.** Below those pickers, one row per `TriggerKey` picks the style a press of that key
+dictates with — Current style (the main window's selection), Default, or a profile — or Off for keys
+other than the bound one. `TriggerKeyStyleStore` (`BlurtTriggerKeyStyles`, keycode → style id) holds
+it; an absent value is today's single key with the current style. Each key is still a lone modifier
+from the same set, watched by the same listen-only tap. A press's style lives in `PressStyle` for
+that one dictation (the request adopts it; the Recent row names what the request used) and never
+writes `BlurtActiveStyleProfile`; a mapped style since deleted falls back to the selection.
 
 ## Contextual prompt and key terms
 
