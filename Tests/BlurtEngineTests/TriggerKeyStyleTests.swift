@@ -33,12 +33,24 @@ struct TriggerKeyStyleTests {
 
   @Test("styles round-trip, and a key given one dictates beside the bound key")
   func stylesRoundTripAndEnableKeys() {
-    keyStyles.styles = [.rightOption: casual.id.uuidString, .function: TriggerKeyStyleStore.currentStyleID]
+    #expect(keyStyles.setStyle(casual.id.uuidString, for: .rightOption))
+    #expect(keyStyles.setStyle(TriggerKeyStyleStore.currentStyleID, for: .function))
     #expect(TriggerKeyStyleStore(defaults: defaults).styles[.rightOption] == casual.id.uuidString)
     #expect(keyStyles.enabledKeys == [.rightCommand, .rightOption, .function])
     #expect(keyStyles.styleID(for: .rightOption) == casual.id.uuidString)
     #expect(keyStyles.styleID(for: .function) == nil)
     #expect(keyStyles.styleID(for: .rightCommand) == nil)
+  }
+
+  @Test("only turning a key on or off reports a rebind; a style change doesn't")
+  func setStyleReportsEnabledChanges() {
+    #expect(keyStyles.setStyle(TriggerKeyStyleStore.currentStyleID, for: .rightOption))
+    #expect(!keyStyles.setStyle(casual.id.uuidString, for: .rightOption))
+    #expect(keyStyles.setStyle("", for: .rightOption))
+    #expect(!keyStyles.setStyle("", for: .rightOption))
+    #expect(keyStyles.styles.isEmpty)
+    // The bound key dictates either way, so giving it a style rebinds nothing.
+    #expect(!keyStyles.setStyle(formal.id.uuidString, for: .rightCommand))
   }
 
   @Test("a corrupt value or an unknown keycode binds nothing new")

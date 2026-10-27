@@ -841,8 +841,8 @@ lands), and `keyTap.refreshBinding()` after the user picks a different trigger k
 
 ## Hotkey
 
-The dictation trigger is a **single lone modifier key** (tap-to-toggle or hold-to-talk), implemented
-in-house. Four pieces, three of them pure engine logic:
+The dictation trigger is a **lone modifier key** — one by default, plus any other given a style (see
+Per-key styles below) — tap-to-toggle or hold-to-talk, implemented in-house. Four pieces, three of them pure engine logic:
 
 - **`TriggerKey`** (`Hotkey/TriggerKey.swift`) — enum of the curated lone momentary modifiers usable
   as the trigger (right ⌘, right ⌥, `fn`), `rawValue` = the macOS virtual keycode, plus `label`

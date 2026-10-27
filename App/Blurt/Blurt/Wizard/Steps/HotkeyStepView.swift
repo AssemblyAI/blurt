@@ -58,20 +58,20 @@ struct HotkeyStepView: View {
       })
   }
 
-  /// One key's row: `""` is Off, otherwise a style id (see `TriggerKeyStyleStore`).
-  private func keyStyle(_ key: TriggerKey, profiles: [StyleProfile]) -> Binding<String> {
+  /// One key's submenu: `""` is Off, otherwise a style id (see `TriggerKeyStyleStore`).
+  private func keyStyle(
+    _ key: TriggerKey, styles: [TriggerKey: String], profiles: [StyleProfile]
+  ) -> Binding<String> {
     Binding(
       get: {
-        TriggerKeyStyleStore.choice(
-          for: key, bound: selection.wrappedValue, styles: keyStyles, profiles: profiles)
+        TriggerKeyStyleStore.choice(for: key, bound: selection.wrappedValue, styles: styles, profiles: profiles)
       },
       set: { newValue in
-        // Through the store for the same reason as `selection` above.
-        let store = TriggerKeyStyleStore()
-        var styles = store.styles
-        styles[key] = newValue.isEmpty ? nil : newValue
-        store.styles = styles
-        coordinator.dictationBindingChanged()
+        // Through the store for the same reason as `selection` above. Only a key
+        // turned on or off rebinds the tap; a new style is read at the next press.
+        if TriggerKeyStyleStore().setStyle(newValue, for: key) {
+          coordinator.dictationBindingChanged()
+        }
       })
   }
 
@@ -82,9 +82,10 @@ struct HotkeyStepView: View {
   /// stays short enough for a small display (see `SettingsWindowRoot`).
   private var keyStylesMenu: some View {
     let profiles = StyleProfileStore().profiles(decoding: profilesRaw)
+    let styles = keyStyles
     return Menu {
       ForEach(TriggerKey.allCases, id: \.self) { key in
-        Picker(key.fullName, selection: keyStyle(key, profiles: profiles)) {
+        Picker(key.fullName, selection: keyStyle(key, styles: styles, profiles: profiles)) {
           if key != selection.wrappedValue { Text("Off").tag("") }
           Text("Current style").tag(TriggerKeyStyleStore.currentStyleID)
           Text(StyleProfileStore.defaultStyleName).tag(StyleProfileStore.defaultStyleID)

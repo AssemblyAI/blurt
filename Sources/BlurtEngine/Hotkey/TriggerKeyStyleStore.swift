@@ -27,16 +27,25 @@ public struct TriggerKeyStyleStore {
   }
 
   /// Each key's chosen style id; a key with no entry is off, unless it is the
-  /// bound key, which dictates with the current style. Has a setter because
-  /// the value is encoded (the Shortcut rows write through it).
+  /// bound key, which dictates with the current style.
   public var styles: [TriggerKey: String] {
-    get { Self.styles(decoding: defaults.string(forKey: Self.defaultsKey) ?? "") }
-    nonmutating set {
-      let raw = Dictionary(uniqueKeysWithValues: newValue.map { (String($0.key.rawValue), $0.value) })
-      guard let data = try? JSONEncoder().encode(raw), let json = String(data: data, encoding: .utf8)
-      else { return }
-      defaults.set(json, forKey: Self.defaultsKey)
-    }
+    Self.styles(decoding: defaults.string(forKey: Self.defaultsKey) ?? "")
+  }
+
+  /// Gives `key` the style `styleID`, or turns it off for `""` — the Shortcut
+  /// menu's write, through here because the value is encoded. Returns whether
+  /// that changed which keys dictate, the one case the tap has to rebind for:
+  /// a style-only change is read at the next press, and a rebind would discard
+  /// a recording in progress.
+  public func setStyle(_ styleID: String, for key: TriggerKey) -> Bool {
+    let wasEnabled = enabledKeys
+    var styles = styles
+    styles[key] = styleID.isEmpty ? nil : styleID
+    let raw = Dictionary(uniqueKeysWithValues: styles.map { (String($0.key.rawValue), $0.value) })
+    guard let data = try? JSONEncoder().encode(raw), let json = String(data: data, encoding: .utf8)
+    else { return false }
+    defaults.set(json, forKey: Self.defaultsKey)
+    return enabledKeys != wasEnabled
   }
 
   /// The mapping behind a raw slot value a view has already observed. Blank or
