@@ -243,7 +243,7 @@ final class SettingsUITests: BlurtUITestCase {
   private let rightOption = 61
   private let fnKey = 63
 
-  /// "Key Styles…" opens a sheet with a pop-up per trigger key. On a reset launch
+  /// The Key Styles row's "Edit…" opens a sheet with a pop-up per trigger key. On a reset launch
   /// right ⌘ is the bound key: it dictates with the main window's style and, since
   /// the bound key always dictates, offers no Off; the other keys start Off.
   func testKeyStylesSheetListsEveryKey() {
@@ -299,10 +299,10 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertTrue(settings.exists, "Escape should close only the sheet, not Settings")
   }
 
-  /// Opens the Key Styles sheet from the Dictation key row and returns it.
+  /// Opens the Key Styles sheet from its row's Edit… button and returns it.
   private func openKeyStyles(_ settings: XCUIElement) -> XCUIElement {
     let button = settings.buttons[UITestIdentifiers.keyStylesButton]
-    XCTAssertTrue(button.waitForExistence(timeout: 10), "Key Styles… button not found")
+    XCTAssertTrue(button.waitForExistence(timeout: 10), "Key Styles row's Edit… button not found")
     button.click()
     let sheet = settings.sheets.firstMatch
     XCTAssertTrue(sheet.waitForExistence(timeout: 5), "The Key Styles sheet should open")

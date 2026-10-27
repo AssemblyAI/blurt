@@ -3,9 +3,9 @@ import SwiftUI
 
 /// The dictation-key section of the setup/settings screen. Two menu pickers: which
 /// lone modifier triggers dictation, and whether it activates by tap (toggle),
-/// hold (push-to-talk), or both — plus, beside the key, a Key Styles… button whose
-/// sheet gives each trigger key its own style (or Off, for keys other than the
-/// bound one); changes are persisted and pushed to the event tap immediately.
+/// hold (push-to-talk), or both — plus a Key Styles row whose sheet gives each
+/// trigger key its own style (or Off, for keys other than the bound one); changes
+/// are persisted and pushed to the event tap immediately.
 struct HotkeyStepView: View {
   var coordinator: AppCoordinator
 
@@ -60,17 +60,25 @@ struct HotkeyStepView: View {
       })
   }
 
-  /// The Key Styles button's spoken summary, e.g. "right ⌘: Same as main window,
-  /// right ⌥: Off, fn: Casual" — the mapping the sheet would show.
-  private var keyStylesSummary: String {
+  /// One "right ⌥: Casual" entry per trigger key, named as the sheet names it —
+  /// the Edit… button's spoken summary. `changedOnly` keeps just the keys moved
+  /// off their default (Off, or the main window's style for the bound key).
+  private func keyStyleEntries(changedOnly: Bool) -> [String] {
     let profiles = StyleProfileStore().profiles(decoding: profilesRaw)
     let styles = keyStyles
-    return TriggerKey.allCases.map { key in
-      let choice = TriggerKeyStyleStore.choice(
-        for: key, bound: selection.wrappedValue, styles: styles, profiles: profiles)
+    let bound = selection.wrappedValue
+    return TriggerKey.allCases.compactMap { key in
+      let choice = TriggerKeyStyleStore.choice(for: key, bound: bound, styles: styles, profiles: profiles)
+      if changedOnly, choice == (key == bound ? TriggerKeyStyleStore.currentStyleID : "") { return nil }
       return "\(key.label): \(KeyStylesSheet.name(of: choice, profiles: profiles))"
     }
-    .joined(separator: ", ")
+  }
+
+  /// The Key Styles row's status: the keys set up beyond the default, or the main
+  /// window's style when none are.
+  private var keyStylesStatus: String {
+    let changed = keyStyleEntries(changedOnly: true)
+    return changed.isEmpty ? KeyStylesSheet.mainWindowName : changed.joined(separator: ", ")
   }
 
   private static let keyboardSettingsURL = URL(
@@ -78,22 +86,24 @@ struct HotkeyStepView: View {
 
   var body: some View {
     Section {
-      SettingRow(title: "Dictation key", systemImage: "keyboard") {
+      PickerSettingRow(
+        title: "Dictation key", systemImage: "keyboard",
+        accessibilityID: UITestIdentifiers.hotkeyPicker, selection: selection
+      ) {
+        ForEach(TriggerKey.allCases, id: \.self) { key in
+          Text(key.label).tag(key)
+        }
+      }
+      // A status and an "Edit…" button, like the API key row: the per-key pop-ups
+      // live in a sheet, so the General pane grows one row rather than three.
+      SettingRow(title: "Key Styles", systemImage: "textformat") {
         HStack(spacing: 8) {
-          // Styled as `PickerSettingRow`'s pop-up, which can't carry the button beside it.
-          Picker("Dictation key", selection: selection) {
-            ForEach(TriggerKey.allCases, id: \.self) { key in
-              Text(key.label).tag(key)
-            }
-          }
-          .labelsHidden()
-          .pickerStyle(.menu)
-          .lineLimit(1)
-          .accessibilityIdentifier(UITestIdentifiers.hotkeyPicker)
-          // Ellipsis because it opens a sheet; a sheet rather than more rows so
-          // the General pane, sized to its content, fits a small display.
-          Button("Key Styles…") { isPresentingKeyStyles = true }
-            .accessibilityValue(keyStylesSummary)
+          Text(keyStylesStatus)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .truncationMode(.tail)
+          Button("Edit…") { isPresentingKeyStyles = true }
+            .accessibilityValue(keyStyleEntries(changedOnly: false).joined(separator: ", "))
             .accessibilityIdentifier(UITestIdentifiers.keyStylesButton)
         }
       }
@@ -130,8 +140,8 @@ struct HotkeyStepView: View {
   }
 }
 
-/// Which style each trigger key dictates with, as a sheet from the Dictation
-/// key row: one pop-up per key offering Off (except for the bound key, which
+/// Which style each trigger key dictates with, as a sheet from the Key Styles
+/// row: one pop-up per key offering Off (except for the bound key, which
 /// always dictates), the main window's style, Default, or a profile. Follows
 /// `StyleProfileEditorSheet`'s shape — headline, explanation, content, and the
 /// default action at the trailing edge — with only Done, since each choice is
