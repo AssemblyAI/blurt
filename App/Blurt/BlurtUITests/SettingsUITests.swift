@@ -2,7 +2,8 @@ import XCTest
 
 /// Drives the Settings window: the AssemblyAI API-key sheet (connect / reject
 /// / cancel) reached from the account row, the
-/// dictation-key picker, the sound-cue picker, and the key-terms field. All
+/// dictation-key picker and its Key Styles sheet, the sound-cue picker, and the
+/// key-terms field. All
 /// offline — the API-key submit is short-circuited in UI-test mode, so these
 /// never reach AssemblyAI or the real Keychain.
 final class SettingsUITests: BlurtUITestCase {
@@ -231,6 +232,81 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertTrue(
       settings.staticTexts[UITestIdentifiers.apiKeySavedStatus].waitForExistence(timeout: 5),
       "Cancel should return to the connected row")
+  }
+
+  // MARK: - Key styles
+
+  /// The trigger keys' keycodes (`TriggerKey`'s raw values), which suffix each
+  /// pop-up's identifier in the Key Styles sheet. Spelled out because this bundle
+  /// doesn't link the engine.
+  private let rightCommand = 54
+  private let rightOption = 61
+  private let fnKey = 63
+
+  /// "Key Styles…" opens a sheet with a pop-up per trigger key. On a reset launch
+  /// right ⌘ is the bound key: it dictates with the main window's style and, since
+  /// the bound key always dictates, offers no Off; the other keys start Off.
+  func testKeyStylesSheetListsEveryKey() {
+    let sheet = openKeyStyles(openSettingsWindow())
+
+    for keyCode in [rightCommand, rightOption, fnKey] {
+      XCTAssertTrue(
+        sheet.popUpButtons[UITestIdentifiers.keyStylePicker(keyCode)].exists,
+        "The sheet should list a pop-up for keycode \(keyCode)")
+    }
+    XCTAssertEqual(sheet.popUpButtons[UITestIdentifiers.keyStylePicker(rightOption)].value as? String, "Off")
+
+    let bound = sheet.popUpButtons[UITestIdentifiers.keyStylePicker(rightCommand)]
+    XCTAssertEqual(bound.value as? String, "Same as main window")
+    bound.click()
+    XCTAssertTrue(app.menuItems["Same as main window"].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.menuItems["Off"].exists, "The bound key always dictates, so it offers no Off")
+    // Close the menu by re-choosing the current item, leaving the setting as it was.
+    app.menuItems["Same as main window"].click()
+  }
+
+  /// Turning right ⌥ on persists: the button's spoken summary names it, and the
+  /// sheet shows the choice again when reopened.
+  func testKeyStyleChoicePersists() {
+    let settings = openSettingsWindow()
+    let sheet = openKeyStyles(settings)
+
+    sheet.popUpButtons[UITestIdentifiers.keyStylePicker(rightOption)].click()
+    app.menuItems["Same as main window"].click()
+    sheet.buttons[UITestIdentifiers.keyStylesDone].click()
+    XCTAssertTrue(sheet.waitForNonExistence(timeout: 5), "Done should dismiss the sheet")
+
+    let summary = settings.buttons[UITestIdentifiers.keyStylesButton].value as? String ?? ""
+    XCTAssertTrue(
+      summary.contains("right ⌥: Same as main window"),
+      "The button's accessibility value should summarise the new mapping (got: \(summary))")
+
+    let reopened = openKeyStyles(settings)
+    XCTAssertEqual(
+      reopened.popUpButtons[UITestIdentifiers.keyStylePicker(rightOption)].value as? String,
+      "Same as main window", "The choice should survive closing the sheet")
+  }
+
+  /// Escape closes the sheet (it has no Cancel button to carry the shortcut) and
+  /// leaves the Settings window open.
+  func testEscapeClosesKeyStylesSheet() {
+    let settings = openSettingsWindow()
+    let sheet = openKeyStyles(settings)
+
+    app.typeKey(.escape, modifierFlags: [])
+
+    XCTAssertTrue(sheet.waitForNonExistence(timeout: 5), "Escape should dismiss the sheet")
+    XCTAssertTrue(settings.exists, "Escape should close only the sheet, not Settings")
+  }
+
+  /// Opens the Key Styles sheet from the Dictation key row and returns it.
+  private func openKeyStyles(_ settings: XCUIElement) -> XCUIElement {
+    let button = settings.buttons[UITestIdentifiers.keyStylesButton]
+    XCTAssertTrue(button.waitForExistence(timeout: 10), "Key Styles… button not found")
+    button.click()
+    let sheet = settings.sheets.firstMatch
+    XCTAssertTrue(sheet.waitForExistence(timeout: 5), "The Key Styles sheet should open")
+    return sheet
   }
 
   // MARK: - API-key helpers
