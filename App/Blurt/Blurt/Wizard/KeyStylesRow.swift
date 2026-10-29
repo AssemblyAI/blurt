@@ -1,13 +1,13 @@
 import BlurtEngine
 import SwiftUI
 
-/// The Advanced pane's Key Styles section: a status and an "Edit…" button, like
-/// the API key row, whose sheet gives each trigger key its own style (or Off,
-/// for keys other than the bound one). On Advanced rather than beside the
-/// dictation key on General because it's a power-user extra — one key dictating
-/// with the main window's style is the whole story for most people — and the
-/// General pane stays short. Settings-only, so it is not a wizard step.
-struct KeyStylesSection: View {
+/// The Key Styles row: a status and an "Edit…" button, like the API key row,
+/// whose sheet gives each trigger key its own style (or Off, for keys other
+/// than the bound one). The first row of the Advanced pane's Experimental
+/// section rather than beside the dictation key on General — it's a
+/// power-user extra, and a section of its own made Advanced too tall for a
+/// small display. Settings-only, so it is not a wizard step.
+struct KeyStylesRow: View {
   var coordinator: AppCoordinator
 
   @BoundTriggerKey private var bound
@@ -40,8 +40,7 @@ struct KeyStylesSection: View {
       bound: bound, styles: TriggerKeyStyleStore.styles(decoding: keyStylesRaw),
       profiles: StyleProfileStore().profiles(decoding: profilesRaw))
     let changed = entries.filter(\.isChanged).map(\.text)
-    Section {
-      SettingRow(title: "Key Styles", systemImage: "textformat") {
+    SettingRow(title: "Key Styles", systemImage: "textformat") {
         HStack(spacing: 8) {
           // The keys set up beyond the default, or the main window's style.
           Text(changed.isEmpty ? KeyStylesSheet.mainWindowName : changed.joined(separator: ", "))
@@ -52,9 +51,6 @@ struct KeyStylesSection: View {
             .accessibilityValue(entries.map(\.text).joined(separator: ", "))
             .accessibilityIdentifier(UITestIdentifiers.keyStylesButton)
         }
-      }
-    } footer: {
-      Text("Turn on more dictation keys, each with its own style.")
     }
     .sheet(isPresented: $isPresentingKeyStyles) {
       KeyStylesSheet(bound: bound) { coordinator.dictationBindingChanged() }

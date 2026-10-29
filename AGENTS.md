@@ -904,12 +904,13 @@ the `@AppStorage(TriggerKeyStore.defaultsKey)` + `TriggerKey.fromPersisted` pair
 restating that pairing per view. The unset default belongs to `fromPersisted` (an absent keycode maps
 to right ⌘), so views must not re-declare `TriggerKey.rightCommand.rawValue` themselves.
 
-**Per-key styles.** A Key Styles row on the Advanced pane (`KeyStylesSection`) — a status naming the
+**Per-key styles.** A Key Styles row in the Advanced pane's Experimental section (`KeyStylesRow`) — a status naming the
 keys set up, and an Edit… button — opens a sheet with one pop-up per `TriggerKey`: the style a press
 of that key dictates with — Same as main window, Default, or a profile (disabled while enhanced
 transcripts are off) — or Off for keys other than the bound one. On Advanced rather than under the
 key picker because it's a power-user extra, so General stays short enough for a small display; a
-sheet, not a row per key, so Advanced grows by one row rather than three. `TriggerKeyStyleStore` (`BlurtTriggerKeyStyles`, keycode → style id) holds
+row in an existing section and a sheet, not a section or a row per key, because Advanced is already
+near that limit — a section of its own pushed Reset… off the bottom of CI's screen. `TriggerKeyStyleStore` (`BlurtTriggerKeyStyles`, keycode → style id) holds
 it; an absent value is today's single key with the current style. Each key is still a lone modifier
 from the same set, watched by the same listen-only tap. The press command carries its key
 (`DictationSession.Command.press(key:)`), and the session resolves that key's style once, on the

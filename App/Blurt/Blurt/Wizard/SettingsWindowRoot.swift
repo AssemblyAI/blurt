@@ -79,8 +79,9 @@ private struct StylesSettingsTab: View {
   }
 }
 
-/// The occasional stuff: checking for an update, per-key styles, the
-/// developer-mode log toggle, and the start-over button. Kept out of General so
+/// The occasional stuff: checking for an update, experimental features
+/// (per-key styles among them), the developer-mode log toggle, and the
+/// start-over button. Kept out of General so
 /// the common pane stays short.
 private struct AdvancedSettingsTab: View {
   let coordinator: AppCoordinator
@@ -89,8 +90,7 @@ private struct AdvancedSettingsTab: View {
   var body: some View {
     SettingsPane {
       UpdatesSection(model: updaterModel)
-      KeyStylesSection(coordinator: coordinator)
-      ExperimentalSection()
+      ExperimentalSection(coordinator: coordinator)
       MaintenanceSection()
       ResetSection(coordinator: coordinator)
     }

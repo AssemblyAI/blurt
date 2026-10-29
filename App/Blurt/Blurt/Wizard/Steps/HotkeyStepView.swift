@@ -5,7 +5,7 @@ import SwiftUI
 /// lone modifier triggers dictation, and whether it activates by tap (toggle),
 /// hold (push-to-talk), or both; changes are persisted and pushed to the event tap
 /// immediately. Giving the other trigger keys their own styles is the Advanced
-/// pane's `KeyStylesSection`.
+/// pane's `KeyStylesRow`.
 struct HotkeyStepView: View {
   var coordinator: AppCoordinator
 
