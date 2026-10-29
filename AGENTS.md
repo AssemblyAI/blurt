@@ -1213,9 +1213,11 @@ returns an inline report so the user can retry (`SignInFailure.failureReport` ma
 inline-vs-alert split as `APIKeySubmission`). `CredentialRows.resolve` decides which of the account
 and key rows show and which button is filled. `InstallReset` clears the session item with the key.
 The wire half (`OAuthAuthorization`, `OAuthClient`) is in the `AssemblyAI` library. The build turns
-sign-in on with four Info.plist values (`BLURT_OAUTH_*`, from the gitignored `App/Blurt/Config/SignIn.local.xcconfig` via `SignIn.xcconfig` on the dev configurations, read by
-`OAuthConfiguration.blurt`); any one empty hides it, which is how release ships until a production
-Connected App exists, and a session inherited by such a build can still be signed out (locally). A signed-in key also
+sign-in on with four Info.plist values (`BLURT_OAUTH_*`, read by `OAuthConfiguration.blurt`):
+release's are production's, committed in `App/Blurt/Config/SignIn.release.xcconfig`; the dev
+configurations' come from the gitignored `SignIn.local.xcconfig` via `SignIn.xcconfig`, since they
+name sandbox deployments. Any one empty hides sign-in, which is how a dev build without the local
+file runs, and a session inherited by such a build can still be signed out (locally). A signed-in key also
 dictates against the host its sign-in configures (`BLURT_OAUTH_DICTATION_ORIGIN`, optional; a sandbox
 key only works against its sandbox's host): the account keeps a `DictationOrigin` current as it signs
 in and out, and the app's `baseURL` closure for `AssemblyAITranscriber` reads it at every request and

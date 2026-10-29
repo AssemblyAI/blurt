@@ -1,0 +1,12 @@
+// Sign in with AssemblyAI, for the Release configuration (see `configFiles`
+// in project.yml): AssemblyAI's production Connected App and endpoints. All
+// public — the client id is a public PKCE client's, and every URL is one the
+// sign-in itself sends the user's browser to — so, unlike the dev values (see
+// SignIn.xcconfig), they live in the repo. Dictation goes to production, so
+// BLURT_OAUTH_DICTATION_ORIGIN stays unset. xcconfig treats `//` as the start
+// of a comment, so every URL's `//` is written `/$()/`.
+
+BLURT_OAUTH_CLIENT_ID = connected-app-live-0ba0ec1a-2285-4ea9-b2c7-03f3a3be438f
+BLURT_OAUTH_TOKEN_URL = https:/$()/auth.assemblyai.com/v1/oauth2/token
+BLURT_OAUTH_AUTHORIZE_URL = https:/$()/www.assemblyai.com/dashboard/oauth/authorize
+BLURT_OAUTH_API_ORIGIN = https:/$()/www.assemblyai.com
