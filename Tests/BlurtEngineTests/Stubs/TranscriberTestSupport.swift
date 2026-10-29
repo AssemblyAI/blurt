@@ -5,7 +5,7 @@ import Foundation
 
 /// Scaffolding shared by the transcriber suites, in `Stubs/` for the same reason
 /// `makeSession` is: it was copied between two suites, and the copy silently
-/// dropped the `enhancedTranscripts` / `customStyle` pinning that keeps a test
+/// dropped the `enhancedTranscripts` / `rewriteMode` pinning that keeps a test
 /// off the process's real `UserDefaults`.
 func makeTranscriber(
   apiKey: String?,
@@ -14,13 +14,11 @@ func makeTranscriber(
   // fails rather than quietly succeeding on an empty body.
   transport: any HTTPTransport = FakeHTTPTransport { _ in (500, Data()) },
   enhancedTranscripts: Bool = true,
-  customStyle: String? = nil,
   rewriteMode: RewriteMode = .fast
 ) -> AssemblyAITranscriber {
   AssemblyAITranscriber(
     apiKeyProvider: { apiKey }, transport: transport,
     enhancedTranscripts: { enhancedTranscripts },
-    customStyle: { customStyle },
     rewriteMode: { rewriteMode })
 }
 

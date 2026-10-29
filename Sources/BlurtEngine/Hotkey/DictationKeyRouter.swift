@@ -13,7 +13,7 @@
 ///   others are ignored meanwhile, so two triggers never interleave.
 /// - **Dropped-event recovery.** After the host's tap is disabled and re-enabled,
 ///   whether the gate's state survives depends on the trigger still being held —
-///   see `recoverFromDroppedEvents(triggerStillHeld:)`.
+///   see `recoverFromDroppedEvents(heldFlags:)`.
 ///
 /// Like the gate, the router reads no clock — callers pass monotonic timestamps
 /// — so every decision is deterministic and unit-testable. The app-side
@@ -100,10 +100,12 @@ public struct DictationKeyRouter: Sendable {
   /// while it was down) and re-enabled: events may have been dropped, so the gate's
   /// state may no longer match the keyboard.
   ///
-  /// `triggerStillHeld` is the caller's read of whether the active trigger is
-  /// physically down *right now* — `CGEventSource.flagsState` on the app side, the
-  /// one CoreGraphics-typed input, which is why it's passed in rather than read
-  /// here. If it is, nothing that matters was lost: the key-up is still coming and
+  /// `heldFlags` is the caller's read of the modifier flags physically down *right
+  /// now* — `CGEventSource.flagsState` on the app side, the one CoreGraphics-typed
+  /// input, which is why it's passed in rather than read here. The router checks
+  /// the *active* trigger's device bit in it, as `Event.fromFlags` does, so which
+  /// key decides is settled here rather than in the shell. If it is held, nothing
+  /// that matters was lost: the key-up is still coming and
   /// the gate is coherent, so the state is kept — resetting would discard speech the
   /// user is mid-sentence on. If it isn't, the trigger's key-up may have been among
   /// the dropped events, so the gate is reset.
@@ -116,8 +118,9 @@ public struct DictationKeyRouter: Sendable {
   /// no key event able to end it, until the auto-release cap pastes an unprompted
   /// transcript.
   @discardableResult
-  public mutating func recoverFromDroppedEvents(triggerStillHeld: Bool) -> Bool {
-    guard !triggerStillHeld else { return false }
+  public mutating func recoverFromDroppedEvents(heldFlags: UInt64) -> Bool {
+    let activeKey = activeKeyCode.flatMap(TriggerKey.init(rawValue:))
+    guard activeKey.map({ heldFlags & $0.deviceModifierMask == 0 }) ?? true else { return false }
     return reset()
   }
 

@@ -247,7 +247,7 @@ final class SettingsUITests: BlurtUITestCase {
   /// right ⌘ is the bound key: it dictates with the main window's style and, since
   /// the bound key always dictates, offers no Off; the other keys start Off.
   func testKeyStylesSheetListsEveryKey() {
-    let sheet = openKeyStyles(openSettingsWindow())
+    let sheet = openKeyStyles(openAdvancedSettings())
 
     for keyCode in [rightCommand, rightOption, fnKey] {
       XCTAssertTrue(
@@ -268,7 +268,7 @@ final class SettingsUITests: BlurtUITestCase {
   /// Turning right ⌥ on persists: the button's spoken summary names it, and the
   /// sheet shows the choice again when reopened.
   func testKeyStyleChoicePersists() {
-    let settings = openSettingsWindow()
+    let settings = openAdvancedSettings()
     let sheet = openKeyStyles(settings)
 
     sheet.popUpButtons[UITestIdentifiers.keyStylePicker(rightOption)].click()
@@ -290,7 +290,7 @@ final class SettingsUITests: BlurtUITestCase {
   /// Escape closes the sheet (it has no Cancel button to carry the shortcut) and
   /// leaves the Settings window open.
   func testEscapeClosesKeyStylesSheet() {
-    let settings = openSettingsWindow()
+    let settings = openAdvancedSettings()
     let sheet = openKeyStyles(settings)
 
     app.typeKey(.escape, modifierFlags: [])
@@ -299,7 +299,13 @@ final class SettingsUITests: BlurtUITestCase {
     XCTAssertTrue(settings.exists, "Escape should close only the sheet, not Settings")
   }
 
-  /// Opens the Key Styles sheet from its row's Edit… button and returns it.
+  /// Returns the Advanced pane, where the Key Styles row lives.
+  private func openAdvancedSettings() -> XCUIElement {
+    selectSettingsTab(openSettingsWindow(), named: UITestIdentifiers.advancedSettingsTab)
+  }
+
+  /// Opens the Key Styles sheet from its row's Edit… button on the Advanced
+  /// pane and returns it.
   private func openKeyStyles(_ settings: XCUIElement) -> XCUIElement {
     let button = settings.buttons[UITestIdentifiers.keyStylesButton]
     XCTAssertTrue(button.waitForExistence(timeout: 10), "Key Styles row's Edit… button not found")

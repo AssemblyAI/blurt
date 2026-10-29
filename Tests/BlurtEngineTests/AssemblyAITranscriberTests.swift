@@ -382,10 +382,8 @@ struct HTTPClientTests {
   private func configObject(
     prompt: String = "", enhancedTranscripts: Bool = true, customStyle: String? = nil
   ) throws -> [String: Any] {
-    let config = try makeTranscriber(
-      apiKey: "test-key", enhancedTranscripts: enhancedTranscripts, customStyle: customStyle
-    )
-    .makeConfigData(sampleRate: 16_000, sttPrompt: prompt, keytermsPrompt: [])
+    let config = try makeTranscriber(apiKey: "test-key", enhancedTranscripts: enhancedTranscripts)
+      .makeConfigData(sampleRate: 16_000, sttPrompt: prompt, keytermsPrompt: [], customStyle: customStyle)
     return try #require(JSONSerialization.jsonObject(with: config) as? [String: Any])
   }
 

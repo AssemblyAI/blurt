@@ -227,7 +227,7 @@ struct DictationKeyRouterTests {
     // function call into a closure taking an *immutable* receiver, so a `mutating`
     // method can't be called inside it — same reason the rebind cases above bind
     // `discarded` first.
-    let discarded = router.recoverFromDroppedEvents(triggerStillHeld: true)
+    let discarded = router.recoverFromDroppedEvents(heldFlags: TriggerKey.rightCommand.deviceModifierMask)
     #expect(!discarded)
 
     // The gate kept its state, so the eventual release still stops this dictation
@@ -244,7 +244,7 @@ struct DictationKeyRouterTests {
     var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
 
-    let discarded = router.recoverFromDroppedEvents(triggerStillHeld: false)
+    let discarded = router.recoverFromDroppedEvents(heldFlags: 0)
     #expect(discarded)
 
     // The tracker was cleared with the gate, so a stale up can't emit a spurious
@@ -259,9 +259,9 @@ struct DictationKeyRouterTests {
     // branch may claim a recording was discarded, or the host cancels a session
     // that was never recording.
     var router = DictationKeyRouter(triggerKeyCodes: [trigger])
-    let discardedAfterRelease = router.recoverFromDroppedEvents(triggerStillHeld: false)
+    let discardedAfterRelease = router.recoverFromDroppedEvents(heldFlags: 0)
     #expect(!discardedAfterRelease)
-    let discardedWhileHeld = router.recoverFromDroppedEvents(triggerStillHeld: true)
+    let discardedWhileHeld = router.recoverFromDroppedEvents(heldFlags: TriggerKey.rightCommand.deviceModifierMask)
     #expect(!discardedWhileHeld)
     // Still usable afterwards.
     #expect(router.handle(downEvent(trigger), at: .seconds(1)) == .start)
@@ -269,14 +269,25 @@ struct DictationKeyRouterTests {
 
   @Test("dropped-event recovery discards a latched (tap-to-toggle) recording")
   func recoveryDiscardsALatchedRecording() {
-    // A tapped recording has no key held by definition, so `triggerStillHeld` is
-    // false and the gate is latched — the state most at risk of being stranded,
+    // A tapped recording has no key held by definition, so no trigger bit is in
+    // `heldFlags` and the gate is latched — the state most at risk of being stranded,
     // since nothing is coming to close it.
     var router = DictationKeyRouter(triggerKeyCodes: [trigger])
     #expect(router.handle(downEvent(trigger), at: .zero) == .start)
     #expect(router.handle(upEvent(trigger), at: .milliseconds(100)) == .latch)  // latched
 
-    let discarded = router.recoverFromDroppedEvents(triggerStillHeld: false)
+    let discarded = router.recoverFromDroppedEvents(heldFlags: 0)
+    #expect(discarded)
+  }
+
+  @Test("dropped-event recovery checks the active trigger's bit, not another trigger's")
+  func recoveryReadsTheActiveKeysBit() {
+    // Right ⌥ owns the gate while right ⌘ — also bound — is held: right ⌥'s key-up
+    // may have been dropped, so another trigger's bit must not keep the recording.
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger, otherModifier])
+    #expect(router.handle(downEvent(otherModifier), at: .zero) == .start)
+
+    let discarded = router.recoverFromDroppedEvents(heldFlags: TriggerKey.rightCommand.deviceModifierMask)
     #expect(discarded)
   }
 }

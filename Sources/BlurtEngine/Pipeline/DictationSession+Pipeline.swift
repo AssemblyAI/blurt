@@ -97,7 +97,7 @@ extension DictationSession {
     // and pasted as normal, and simply not remembered.
     if capturedContext?.targetIsSecure != true {
       recentDictations.record(
-        trimmed, spoken: spoken, style: styleNameProvider(), at: Date())
+        trimmed, spoken: spoken, style: pressStyle.name, at: Date())
     }
     // Report every produced transcript (trimmed for display), with the ring it
     // just joined, before injection — pasted, copied, and failed-to-paste all count.

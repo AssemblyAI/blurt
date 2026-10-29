@@ -2,7 +2,10 @@ import Foundation
 
 /// Persists which style each trigger key dictates with — and so which keys
 /// dictate at all: the bound key (`TriggerKeyStore`) always does, and any other
-/// `TriggerKey` does once the user gives it a style in the Shortcut section.
+/// `TriggerKey` does once the user gives it a style in the Advanced pane's Key
+/// Styles sheet. Rebinding clears the entry of the key moved away from (see
+/// `TriggerKeyStore.triggerKey`), so a former bound key never lingers as an
+/// extra trigger.
 /// Every key is still a lone modifier from the same curated set, watched by the
 /// same listen-only tap; this only widens which of them the router matches.
 ///
@@ -32,20 +35,24 @@ public struct TriggerKeyStyleStore {
     Self.styles(decoding: defaults.string(forKey: Self.defaultsKey) ?? "")
   }
 
-  /// Gives `key` the style `styleID`, or turns it off for `""` — the Shortcut
-  /// menu's write, through here because the value is encoded. Returns whether
-  /// that changed which keys dictate, the one case the tap has to rebind for:
-  /// a style-only change is read at the next press, and a rebind would discard
-  /// a recording in progress.
+  /// Gives `key` the style `styleID`, or turns it off for `""` — the Key Styles
+  /// sheet's write, through here because the value is encoded. A choice equal
+  /// to the key's default (`defaultChoice`) is stored as no entry, so the bound
+  /// key set back to the main window's style leaves nothing behind. Returns
+  /// whether that changed which keys dictate, the one case the tap has to
+  /// rebind for: a style-only change is read at the next press, and a rebind
+  /// would discard a recording in progress.
   public func setStyle(_ styleID: String, for key: TriggerKey) -> Bool {
-    let wasEnabled = enabledKeys
+    let bound = TriggerKeyStore(defaults: defaults).triggerKey
     var styles = styles
-    styles[key] = styleID.isEmpty ? nil : styleID
+    let wasEnabled = Self.enabledKeys(bound: bound, styles: styles)
+    let isDefault = styleID.isEmpty || styleID == Self.defaultChoice(for: key, bound: bound)
+    styles[key] = isDefault ? nil : styleID
     let raw = Dictionary(uniqueKeysWithValues: styles.map { (String($0.key.rawValue), $0.value) })
     guard let data = try? JSONEncoder().encode(raw), let json = String(data: data, encoding: .utf8)
     else { return false }
     defaults.set(json, forKey: Self.defaultsKey)
-    return enabledKeys != wasEnabled
+    return Self.enabledKeys(bound: bound, styles: styles) != wasEnabled
   }
 
   /// The mapping behind a raw slot value a view has already observed. Blank or
@@ -72,21 +79,20 @@ public struct TriggerKeyStyleStore {
     Set(styles.keys).union([bound])
   }
 
-  /// The style a press of `key` asks for, or nil for the main window's
-  /// selection — what `PressStyle.request(_:)` takes.
-  public func styleID(for key: TriggerKey) -> String? {
-    guard let id = styles[key], id != Self.currentStyleID else { return nil }
-    return id
-  }
-
-  /// What `key`'s Shortcut row shows: `""` (off), `currentStyleID`, or a style
+  /// What `key`'s Key Styles pop-up shows: `""` (off), `currentStyleID`, or a style
   /// id that still exists. A style since deleted shows as the current style,
   /// which is what a press of that key then dictates with (see
   /// `StyleProfileStore.profile(for:)`).
   public static func choice(
     for key: TriggerKey, bound: TriggerKey, styles: [TriggerKey: String], profiles: [StyleProfile]
   ) -> String {
-    guard let id = styles[key] else { return key == bound ? currentStyleID : "" }
+    guard let id = styles[key] else { return defaultChoice(for: key, bound: bound) }
     return StyleProfileStore.isStyle(id, in: profiles) ? id : currentStyleID
+  }
+
+  /// What `key`'s row shows with no entry: the bound key dictates with the main
+  /// window's style, every other key is off.
+  public static func defaultChoice(for key: TriggerKey, bound: TriggerKey) -> String {
+    key == bound ? currentStyleID : ""
   }
 }

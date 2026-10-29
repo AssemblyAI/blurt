@@ -204,11 +204,10 @@ final class DictationKeyTap {
       if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
       // Events may have been dropped while the tap was down. Whether the gate's
       // state survives that is the router's call (and unit-tested there); the only
-      // part that has to happen here is the CoreGraphics read of whether the
-      // active trigger is physically held right now.
-      let held = CGEventSource.flagsState(.combinedSessionState)
-      let triggerStillHeld = activeKey.map { held.contains(Self.flag(for: $0)) } ?? false
-      if router.recoverFromDroppedEvents(triggerStillHeld: triggerStillHeld) {
+      // part that has to happen here is the CoreGraphics read of which modifiers
+      // are physically held right now.
+      let held = CGEventSource.flagsState(.combinedSessionState).rawValue
+      if router.recoverFromDroppedEvents(heldFlags: held) {
         onRecordingDiscarded()
       }
       return
@@ -236,7 +235,9 @@ final class DictationKeyTap {
   private func dispatch(_ action: DictationKeyGate.Action) {
     switch action {
     // `.start` only follows a trigger's down edge, which made it the active key.
-    case .start: onStart(activeKey ?? TriggerKeyStore().triggerKey)
+    case .start:
+      guard let activeKey else { return assertionFailure(".start with no active trigger key") }
+      onStart(activeKey)
     case .stop: onStop()
     case .cancel: onCancel()
     case .latch: onLatch()
@@ -250,15 +251,6 @@ final class DictationKeyTap {
   /// Every key that dictates: the bound one plus each key given a style.
   private static func boundKeyCodes() -> Set<Int> {
     Set(TriggerKeyStyleStore().enabledKeys.map(\.keyCode))
-  }
-
-  /// The `CGEventFlags` bit a trigger key toggles, so a `flagsChanged` event for
-  /// it reads as down (bit set) or up (bit clear). This is the *device-dependent*
-  /// per-side bit (e.g. right ⌘ only), not the generic `.maskCommand` shared by
-  /// both ⌘ keys — see `TriggerKey.deviceModifierMask` for why that distinction
-  /// keeps the down/up tracking from desyncing on keyboards with both keys held.
-  nonisolated static func flag(for key: TriggerKey) -> CGEventFlags {
-    CGEventFlags(rawValue: key.deviceModifierMask)
   }
 
   #if UITEST_HOOKS

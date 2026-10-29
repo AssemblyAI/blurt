@@ -675,9 +675,9 @@ the config merely omitted the instruction.
 The instruction is `CleanupInstruction.text`, the winner of a GEPA run of
 `evals/dictation-prompt/` (see its README), compressed to fit the cap. Two later searches
 failed to beat it — the most recent scored 0.9043 against its 0.9101 on a held-out split. When the
-user has defined a **style profile** (`StyleProfileStore`, read per request via the transcriber's
-injected `customStyle` closure), `CleanupInstruction.sendable(appending:)` appends
-the **active** profile's instructions after the base text with a bridging preamble, trimmed to the
+user has defined a **style profile** (`StyleProfileStore`, resolved at each press into
+`PressStyle` and carried to the transcriber as `TranscriptionContext.styleInstructions`),
+`CleanupInstruction.sendable(appending:)` appends that one profile's instructions after the base text with a bridging preamble, trimmed to the
 headroom the API's 2048
 instruction cap leaves (`customStyleBudget`, measured in UTF-8 bytes — the cap's own unit is
 unmeasured, and bytes are the conservative bound); no profile, or blank instructions, sends the base
@@ -864,10 +864,11 @@ Per-key styles below) — tap-to-toggle or hold-to-talk, implemented in-house. F
   changes drive the modifier (the first to go down owns the gate, `activeKeyCode`, until it is idle), and only genuine down/up **edges** reach the gate (`flagsChanged`
   deliveries re-report the bit whether or not it changed, so a repeat must not double-fire).
   `reset()`/`rebind(triggerKeyCodes:activation:)` report whether they discarded a live recording the host must
-  cancel upstream, and so does **`recoverFromDroppedEvents(triggerStillHeld:)`** — the
+  cancel upstream, and so does **`recoverFromDroppedEvents(heldFlags:)`** — the
   disabled-tap rule: events may have been dropped, so the gate's state survives only while the
-  trigger is still physically held (its key-up is still coming); otherwise that key-up was among
-  the losses and the gate is reset. The host passes the `CGEventSource.flagsState` read in and
+  active trigger is still physically held (its key-up is still coming); otherwise that key-up was
+  among the losses and the gate is reset. The host passes the raw `CGEventSource.flagsState` read
+  in — the router picks the active key's device bit out of it — and
   keeps no decision of its own, so the rule is unit-tested rather than living in an untestable
   shell `if`.
 
@@ -903,15 +904,18 @@ the `@AppStorage(TriggerKeyStore.defaultsKey)` + `TriggerKey.fromPersisted` pair
 restating that pairing per view. The unset default belongs to `fromPersisted` (an absent keycode maps
 to right ⌘), so views must not re-declare `TriggerKey.rightCommand.rawValue` themselves.
 
-**Per-key styles.** A Key Styles row under the key picker — a status naming the keys set up, and an
-Edit… button — opens a sheet with one pop-up per `TriggerKey`: the style a press of that key
-dictates with — Same as main window, Default, or a profile (disabled while enhanced transcripts are
-off) — or Off for keys other than the bound one. A sheet, not a row per key, so the General pane
-grows by one row rather than three and stays short enough for a small display. `TriggerKeyStyleStore` (`BlurtTriggerKeyStyles`, keycode → style id) holds
+**Per-key styles.** A Key Styles row on the Advanced pane (`KeyStylesSection`) — a status naming the
+keys set up, and an Edit… button — opens a sheet with one pop-up per `TriggerKey`: the style a press
+of that key dictates with — Same as main window, Default, or a profile (disabled while enhanced
+transcripts are off) — or Off for keys other than the bound one. On Advanced rather than under the
+key picker because it's a power-user extra, so General stays short enough for a small display; a
+sheet, not a row per key, so Advanced grows by one row rather than three. `TriggerKeyStyleStore` (`BlurtTriggerKeyStyles`, keycode → style id) holds
 it; an absent value is today's single key with the current style. Each key is still a lone modifier
-from the same set, watched by the same listen-only tap. A press's style lives in `PressStyle` for
-that one dictation (the request adopts it; the Recent row names what the request used) and never
-writes `BlurtActiveStyleProfile`; a mapped style since deleted falls back to the selection.
+from the same set, watched by the same listen-only tap. The press command carries its key
+(`DictationSession.Command.press(key:)`), and the session resolves that key's style once, on the
+press's own turn, into a `PressStyle` value: its instructions ride the request's context, its name
+the Recent row. It never writes `BlurtActiveStyleProfile`, a later press can't restyle a dictation
+under way, and a mapped style since deleted falls back to the selection.
 
 ## Contextual prompt and key terms
 

@@ -50,7 +50,6 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   private let baseURLProvider: @Sendable () -> URL
   let transport: any HTTPTransport
   private let enhancedTranscriptsEnabled: @Sendable () -> Bool
-  private let customStyle: @Sendable () -> String?
   private let rewriteMode: @Sendable () -> RewriteMode
 
   /// Idle timeout for the transcribe round trip — `URLRequest.timeoutInterval` is
@@ -74,10 +73,11 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 
   /// `enhancedTranscripts` decides, per response, which of the two transcripts
   /// the route returns gets pasted — it no longer shapes the request, which
-  /// always asks for the rewrite; `customStyle` supplies the *active* style
-  /// profile's instructions, appended to the cleanup instruction — one
-  /// profile's text, never a join of several (see `StyleProfileStore`);
-  /// `rewriteMode` picks the rewrite's model (`RewriteModeStore`). All three are
+  /// always asks for the rewrite; `rewriteMode` picks the rewrite's model
+  /// (`RewriteModeStore`). The style appended to the cleanup instruction is the
+  /// press's, carried on the context (`TranscriptionContext.styleInstructions`)
+  /// — one profile's text, never a join of several (see `StyleProfileStore`).
+  /// Both settings are
   /// read at every `transcribe` so a settings change applies to the next
   /// dictation without rebuilding the transcriber. `nil` (the default) reads
   /// the corresponding store — spelled as optionals rather than default
@@ -88,14 +88,12 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
     baseURL: @escaping @Sendable () -> URL = { AssemblyAITranscriber.defaultBaseURL },
     transport: any HTTPTransport = URLSession.shared,
     enhancedTranscripts: (@Sendable () -> Bool)? = nil,
-    customStyle: (@Sendable () -> String?)? = nil,
     rewriteMode: (@Sendable () -> RewriteMode)? = nil
   ) {
     self.apiKeyProvider = apiKeyProvider
     self.baseURLProvider = baseURL
     self.transport = transport
     self.enhancedTranscriptsEnabled = enhancedTranscripts ?? { EnhancedTranscriptsStore().isEnabled }
-    self.customStyle = customStyle ?? { StyleProfileStore().activeInstructions }
     self.rewriteMode = rewriteMode ?? { RewriteModeStore().mode }
   }
 
@@ -122,6 +120,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
       sampleRate: sampleRate,
       sttPrompt: STTPrompt.text(context: context),
       keytermsPrompt: KeyTerms.fitted(context?.keyTerms ?? []),
+      customStyle: context?.styleInstructions,
       enhanced: enhanced)
 
     var request = URLRequest(url: baseURL.appending(path: Self.transcribePath))
@@ -261,7 +260,8 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// rather than inferred from which argument was left off.
   /// `enhanced` is the request's reading of the setting; nil reads it now.
   func makeConfigData(
-    sampleRate: Int, sttPrompt: String, keytermsPrompt: [String], enhanced: Bool? = nil
+    sampleRate: Int, sttPrompt: String, keytermsPrompt: [String], customStyle: String?,
+    enhanced: Bool? = nil
   ) throws -> Data {
     try JSONEncoder().encode(
       DictationConfig(
@@ -269,7 +269,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
         channels: 1,
         sttPrompt: sttPrompt,
         keytermsPrompt: keytermsPrompt,
-        llmInstruction: cleanupInstruction(),
+        llmInstruction: cleanupInstruction(appending: customStyle),
         // Only while the rewrite is pasted: off, a slower model only adds latency.
         rewriteMode: (enhanced ?? enhancedTranscriptsEnabled()) ? rewriteMode().wireValue : nil
       )
@@ -280,10 +280,9 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// to leave the wording to the service — which is *not* the same as no
   /// rewrite; see `DictationConfig.llmInstruction`.
   ///
-  /// Read fresh per request, so switching style profiles applies to the next
-  /// dictation without rebuilding the transcriber.
-  private func cleanupInstruction() -> String? {
-    guard let instruction = CleanupInstruction.sendable(appending: customStyle()) else {
+  /// `customStyle` is the press's style (`TranscriptionContext.styleInstructions`).
+  private func cleanupInstruction(appending customStyle: String?) -> String? {
+    guard let instruction = CleanupInstruction.sendable(appending: customStyle) else {
       // Unreachable while the tests run: `CleanupInstructionTests` asserts the length.
       // Logged rather than trusted because the failure it guards against is silent —
       // the user would get the service's default cleanup instead of their style

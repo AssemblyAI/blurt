@@ -20,7 +20,15 @@ public struct TriggerKeyStore {
       TriggerKey.fromPersisted(defaults.integer(forKey: Self.defaultsKey))
     }
     nonmutating set {
+      let old = triggerKey
       defaults.set(newValue.rawValue, forKey: Self.defaultsKey)
+      // The key moved away from stops dictating. Its Key Styles row offered no
+      // Off while it was bound, so a style picked for it then says nothing about
+      // keeping it as an extra key — and left behind, it would silently stay one
+      // (and, for fn, keep `GlobeKeyOverride` switching 🌐 off).
+      if old != newValue {
+        _ = TriggerKeyStyleStore(defaults: defaults).setStyle("", for: old)
+      }
     }
   }
 

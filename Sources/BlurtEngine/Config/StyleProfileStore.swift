@@ -25,6 +25,11 @@ public struct StyleProfile: Codable, Identifiable, Hashable, Sendable {
     self.name = name
     self.instructions = instructions
   }
+
+  /// What this profile appends to the cleanup instruction: its text, or nil
+  /// when blank — which must mean "send the base instruction untouched", not
+  /// an empty suffix.
+  var appendedInstructions: String? { instructions.trimmedNonEmpty() }
 }
 
 /// Storage for the user's style profiles and which one is active — possibly
@@ -36,8 +41,8 @@ public struct StyleProfile: Codable, Identifiable, Hashable, Sendable {
 /// request changes: it still carries `llm_instruction` with the active profile
 /// appended, and the rewrite that profile shaped is what the response-side
 /// switch then discards (`AssemblyAITranscriber.transcript(from:enhanced:)`). So the
-/// profile is on the wire and off the screen. `AssemblyAITranscriber` reads
-/// `activeInstructions` at each request, so an edit — or a click on the main
+/// profile is on the wire and off the screen. Each press resolves its style
+/// afresh (`PressStyle`), so an edit — or a click on the main
 /// window's switcher — applies to the very next dictation.
 ///
 /// **Only the active profile is ever sent.** Concatenating them would be the
@@ -180,7 +185,7 @@ public struct StyleProfileStore {
   /// resets it, so a style chosen once stays chosen until the user picks another
   /// or deletes it. A method rather than a settable `activeProfileID` because
   /// there is exactly one thing a caller ever wants to say here, and "unset it"
-  /// is not it: the fallback in `active` already covers every way the pointer
+  /// is not it: the fallback in `active(in:id:)` already covers every way the pointer
   /// can stop naming a profile.
   public func activate(_ profile: StyleProfile) {
     defaults.set(profile.id.uuidString, forKey: Self.activeDefaultsKey)
@@ -192,13 +197,6 @@ public struct StyleProfileStore {
     defaults.set(Self.defaultStyleID, forKey: Self.activeDefaultsKey)
   }
 
-  /// The profile the next request's instruction comes from — see
-  /// `active(in:id:)`, which is the same resolution over the stored pointer.
-  /// Internal: the app resolves the profiles it has already observed through
-  /// that static instead, and periphery's redundant-public check would flag a
-  /// `public` here that no host reaches.
-  var active: StyleProfile? { profile(for: nil) }
-
   /// The profile a dictation uses when its trigger key asked for `styleID`
   /// (`TriggerKeyStyleStore`): that style while it still exists — `nil` for
   /// `defaultStyleID`, base styling — and otherwise the active one. A key whose
@@ -206,16 +204,25 @@ public struct StyleProfileStore {
   /// than `active(in:id:)`'s first-profile fallback. Never writes the pointer.
   func profile(for styleID: String?) -> StyleProfile? {
     let profiles = profiles
-    if let styleID, Self.isStyle(styleID, in: profiles) {
-      return Self.active(in: profiles, id: styleID)
+    if let styleID {
+      if styleID == Self.defaultStyleID { return nil }
+      if let match = Self.match(styleID, in: profiles) { return match }
     }
     return Self.active(in: profiles, id: defaults.string(forKey: Self.activeDefaultsKey) ?? "")
   }
 
   /// Whether `id` names a style that exists: `defaultStyleID`, or one of
-  /// `profiles` by its `uuidString`.
+  /// `profiles` (`match`).
   static func isStyle(_ id: String, in profiles: [StyleProfile]) -> Bool {
-    id == defaultStyleID || profiles.contains { $0.id.uuidString == id }
+    id == defaultStyleID || match(id, in: profiles) != nil
+  }
+
+  /// The one of `profiles` whose id `raw` spells, if any — the single place a
+  /// stored style id is matched, so `active(in:id:)`, `profile(for:)` and
+  /// `isStyle(_:in:)` can't disagree about whether a style still exists.
+  private static func match(_ raw: String, in profiles: [StyleProfile]) -> StyleProfile? {
+    guard let id = UUID(uuidString: raw) else { return nil }
+    return profiles.first { $0.id == id }
   }
 
   /// The profiles behind a raw slot value a SwiftUI view has **already
@@ -251,18 +258,7 @@ public struct StyleProfileStore {
   /// slot and resolves it through this.
   public static func active(in profiles: [StyleProfile], id raw: String) -> StyleProfile? {
     guard raw != defaultStyleID else { return nil }
-    guard let id = UUID(uuidString: raw), let match = profiles.first(where: { $0.id == id })
-    else { return profiles.first }
-    return match
-  }
-
-  /// The instructions to append to the cleanup instruction, or `nil` when there
-  /// is no profile, **Default** is selected, or the active text is blank —
-  /// all three must mean "send the base instruction untouched", not an empty
-  /// suffix. **The active profile's text alone**, never a join of every
-  /// profile; see the type's note on the cap.
-  var activeInstructions: String? {
-    active?.instructions.trimmedNonEmpty()
+    return match(raw, in: profiles) ?? profiles.first
   }
 
   /// One active profile named "Custom" holding the pre-profiles single field, or

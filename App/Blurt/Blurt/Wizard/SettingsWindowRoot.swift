@@ -79,8 +79,9 @@ private struct StylesSettingsTab: View {
   }
 }
 
-/// The occasional stuff: checking for an update, the developer-mode log toggle,
-/// and the start-over button. Kept out of General so the common pane stays short.
+/// The occasional stuff: checking for an update, per-key styles, the
+/// developer-mode log toggle, and the start-over button. Kept out of General so
+/// the common pane stays short.
 private struct AdvancedSettingsTab: View {
   let coordinator: AppCoordinator
   let updaterModel: UpdaterModel
@@ -88,6 +89,7 @@ private struct AdvancedSettingsTab: View {
   var body: some View {
     SettingsPane {
       UpdatesSection(model: updaterModel)
+      KeyStylesSection(coordinator: coordinator)
       ExperimentalSection()
       MaintenanceSection()
       ResetSection(coordinator: coordinator)
@@ -207,7 +209,7 @@ private struct StyleProfilesSection: View {
           ? "A style tells Blurt how to polish your dictations — for example, “casual, all "
             + "lowercase” for chat. Switch between styles in the main window. Create up to "
             + "\(StyleProfileStore.profileLimit) styles."
-          : "Turn on Enhanced transcripts to use styles.")
+          : StylesInertNotice.settingsText)
     }
     .disabled(!enhancedTranscripts)
     .sheet(item: $editing) { profile in

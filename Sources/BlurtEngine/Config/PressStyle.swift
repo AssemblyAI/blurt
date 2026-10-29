@@ -1,48 +1,33 @@
-import Synchronization
+import Foundation
 
-/// The style the trigger key that started a dictation asked for
-/// (`TriggerKeyStyleStore`), held in memory for that one dictation, so a key's
-/// style never moves the main window's sticky selection.
-///
-/// Two steps, because the two readers run at different moments: the request's
-/// instruction is built at press, the Recent row's style name when the
-/// transcript lands — and a trigger key can be pressed in between (refused,
-/// since the last dictation is still transcribing). `request(_:)` records what
-/// the newest press asked for; `instructions(from:)`, read once per request,
-/// adopts it as the dictation's own; `styleName(from:)` names that one.
-public final class PressStyle: Sendable {
-  private struct State {
-    var requested: String?
-    var inFlight: String?
+/// The style one dictation is made with, resolved once at press from the
+/// trigger key that started it (`TriggerKeyStyleStore`) — else the main
+/// window's selection. A value carried by that dictation (the press command
+/// names the key, the session resolves it), so a key's style never moves the
+/// main window's sticky selection, and a later press can't restyle a dictation
+/// already under way.
+public struct PressStyle: Sendable, Equatable {
+  /// Appended to the cleanup instruction — `TranscriptionContext`'s
+  /// `styleInstructions`. Nil under base styling or for a blank style.
+  public let instructions: String?
+  /// The custom style named on the dictation's Recent row. Nil with enhanced
+  /// transcripts off (no rewrite, so no style applied) or under base styling.
+  public let name: String?
+
+  public init(instructions: String?, name: String?) {
+    self.instructions = instructions
+    self.name = name
   }
 
-  private let state = Mutex(State())
+  /// Base styling, unnamed: no style appended, none on the Recent row.
+  public static let none = PressStyle(instructions: nil, name: nil)
 
-  public init() {}
-
-  /// A press is starting with `styleID` (nil: the main window's selection).
-  public func request(_ styleID: String?) {
-    state.withLock { $0.requested = styleID }
-  }
-
-  /// The instructions to append for the request being built — the transcriber's
-  /// `customStyle`. Makes the requested style this dictation's.
-  public func instructions(from store: StyleProfileStore = StyleProfileStore()) -> String? {
-    let id = state.withLock { current -> String? in
-      current.inFlight = current.requested
-      return current.inFlight
-    }
-    return store.profile(for: id)?.instructions.trimmedNonEmpty()
-  }
-
-  /// The custom style the in-flight dictation was made with, for its Recent
-  /// row — the session's `styleNameProvider`. Nil with enhanced transcripts off
-  /// (no rewrite, so no style applied) or under base styling. `enhanced` nil
-  /// reads the store — optional because a public default can't reach it.
-  public func styleName(
-    from store: StyleProfileStore = StyleProfileStore(), enhanced: Bool? = nil
-  ) -> String? {
-    guard enhanced ?? EnhancedTranscriptsStore().isEnabled else { return nil }
-    return store.profile(for: state.withLock { $0.inFlight })?.name
+  /// `key`'s style, or the main window's selection for nil, a key with no
+  /// style, or one whose style is gone (`StyleProfileStore.profile(for:)`).
+  init(key: TriggerKey?, defaults: UserDefaults = .standard) {
+    let styleID = key.flatMap { TriggerKeyStyleStore(defaults: defaults).styles[$0] }
+    let profile = StyleProfileStore(defaults: defaults).profile(for: styleID)
+    let isEnhanced = EnhancedTranscriptsStore(defaults: defaults).isEnabled
+    self.init(instructions: profile?.appendedInstructions, name: isEnhanced ? profile?.name : nil)
   }
 }

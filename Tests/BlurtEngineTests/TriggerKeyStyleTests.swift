@@ -26,7 +26,7 @@ struct TriggerKeyStyleTests {
   func untouchedIsTodaysBehavior() {
     #expect(keyStyles.styles.isEmpty)
     #expect(keyStyles.enabledKeys == [.rightCommand])
-    #expect(keyStyles.styleID(for: .rightCommand) == nil)
+    #expect(keyStyles.styles[.rightCommand] == nil)
     TriggerKeyStore(defaults: defaults).triggerKey = .function
     #expect(keyStyles.enabledKeys == [.function])
   }
@@ -37,9 +37,8 @@ struct TriggerKeyStyleTests {
     #expect(keyStyles.setStyle(TriggerKeyStyleStore.currentStyleID, for: .function))
     #expect(TriggerKeyStyleStore(defaults: defaults).styles[.rightOption] == casual.id.uuidString)
     #expect(keyStyles.enabledKeys == [.rightCommand, .rightOption, .function])
-    #expect(keyStyles.styleID(for: .rightOption) == casual.id.uuidString)
-    #expect(keyStyles.styleID(for: .function) == nil)
-    #expect(keyStyles.styleID(for: .rightCommand) == nil)
+    #expect(keyStyles.styles[.function] == TriggerKeyStyleStore.currentStyleID)
+    #expect(keyStyles.styles[.rightCommand] == nil)
   }
 
   @Test("only turning a key on or off reports a rebind; a style change doesn't")
@@ -51,6 +50,22 @@ struct TriggerKeyStyleTests {
     #expect(keyStyles.styles.isEmpty)
     // The bound key dictates either way, so giving it a style rebinds nothing.
     #expect(!keyStyles.setStyle(formal.id.uuidString, for: .rightCommand))
+  }
+
+  @Test("the bound key set back to the main window's style stores no entry")
+  func boundKeyDefaultStoresNothing() {
+    _ = keyStyles.setStyle(casual.id.uuidString, for: .rightCommand)
+    _ = keyStyles.setStyle(TriggerKeyStyleStore.currentStyleID, for: .rightCommand)
+    #expect(keyStyles.styles.isEmpty)
+  }
+
+  @Test("rebinding stops the key moved away from dictating, and keeps the others")
+  func rebindClearsTheOldBoundKey() {
+    _ = keyStyles.setStyle(casual.id.uuidString, for: .rightCommand)
+    _ = keyStyles.setStyle(formal.id.uuidString, for: .function)
+    TriggerKeyStore(defaults: defaults).triggerKey = .rightOption
+    #expect(keyStyles.enabledKeys == [.rightOption, .function])
+    #expect(keyStyles.styles == [.function: formal.id.uuidString])
   }
 
   @Test("a corrupt value or an unknown keycode binds nothing new")
@@ -118,15 +133,26 @@ struct TriggerKeyStyleTests {
   @Test("a key's style shapes one dictation and never moves the selection")
   func pressStyleOverridesWithoutPersisting() {
     let store = formalSelected()
-    let press = PressStyle()
-    #expect(press.instructions(from: store) == "no contractions")
-    press.request(casual.id.uuidString)
-    #expect(press.instructions(from: store) == "keep it breezy")
-    #expect(press.styleName(from: store, enhanced: true) == "Casual")
-    #expect(store.active == formal)
-    press.request(StyleProfileStore.defaultStyleID)
-    #expect(press.instructions(from: store) == nil)
-    #expect(press.styleName(from: store, enhanced: true) == nil)
+    _ = keyStyles.setStyle(casual.id.uuidString, for: .rightOption)
+    _ = keyStyles.setStyle(StyleProfileStore.defaultStyleID, for: .function)
+    _ = keyStyles.setStyle(TriggerKeyStyleStore.currentStyleID, for: .rightCommand)
+    let formalStyle = PressStyle(instructions: "no contractions", name: "Formal")
+    #expect(PressStyle(key: nil, defaults: defaults) == formalStyle)
+    #expect(PressStyle(key: .rightCommand, defaults: defaults) == formalStyle)
+    #expect(
+      PressStyle(key: .rightOption, defaults: defaults)
+        == PressStyle(instructions: "keep it breezy", name: "Casual"))
+    #expect(store.profile(for: nil) == formal)
+    #expect(PressStyle(key: .function, defaults: defaults) == .none)
+  }
+
+  @Test("with enhanced transcripts off a style still rides the request but names no row")
+  func enhancedOffNamesNothing() {
+    _ = formalSelected()
+    defaults.set(false, forKey: EnhancedTranscriptsStore.defaultsKey)
+    #expect(
+      PressStyle(key: nil, defaults: defaults)
+        == PressStyle(instructions: "no contractions", name: nil))
   }
 
   @Test("a mapped style since deleted falls back to the main window's selection")
@@ -134,19 +160,5 @@ struct TriggerKeyStyleTests {
     let store = formalSelected()
     #expect(store.profile(for: UUID().uuidString) == formal)
     #expect(store.profile(for: TriggerKeyStyleStore.currentStyleID) == formal)
-  }
-
-  @Test("the Recent row names the style its request used, not a later press's")
-  func styleNameFollowsTheRequest() {
-    let store = formalSelected()
-    let press = PressStyle()
-    press.request(casual.id.uuidString)
-    _ = press.instructions(from: store)
-    // A press refused while that dictation transcribes asks for another style.
-    press.request(nil)
-    #expect(press.styleName(from: store, enhanced: true) == "Casual")
-    #expect(press.styleName(from: store, enhanced: false) == nil)
-    #expect(press.instructions(from: store) == "no contractions")
-    #expect(press.styleName(from: store, enhanced: true) == "Formal")
   }
 }

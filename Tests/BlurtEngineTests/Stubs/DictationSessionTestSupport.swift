@@ -27,6 +27,7 @@ func makeSession(
   frontmost: CapturedFocus? = nil,
   keyTerms: [String] = [],
   textShortcuts: [TextShortcut] = [],
+  pressStyle: @escaping @Sendable (TriggerKey?) -> PressStyle = { _ in PressStyle.none },
   onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)? = nil
 ) -> SessionFixture {
   let mic = StubMicCapture()
@@ -38,7 +39,7 @@ func makeSession(
     maxRecordingSeconds: maxRecordingSeconds, clock: ContinuousClock(),
     // Pinned rather than left to read the process's real `UserDefaults`, so a
     // developer's own Settings list can't change what a test sends.
-    keyTermsProvider: { keyTerms }, styleNameProvider: nil,
+    keyTermsProvider: { keyTerms }, pressStyleProvider: pressStyle,
     textShortcutsProvider: { textShortcuts }, readinessCheck: { nil },
     onTranscriptDelivered: onTranscriptDelivered,
     seams: testSeams(field: field, frontmost: frontmost, log: log))
@@ -99,13 +100,14 @@ func makeSession(
   clock: any Clock<Duration> = ContinuousClock(),
   keyTerms: [String] = [],
   keyTermsProvider: (@Sendable () -> [String])? = nil,
+  pressStyle: @escaping @Sendable (TriggerKey?) -> PressStyle = { _ in PressStyle.none },
   readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
   seams: DictationSession.Seams = .offline
 ) -> DictationSession {
   DictationSession(
     mic: mic, transcriber: transcriber, injector: injector,
     maxRecordingSeconds: maxRecordingSeconds, clock: clock,
-    keyTermsProvider: keyTermsProvider ?? { keyTerms }, styleNameProvider: nil,
+    keyTermsProvider: keyTermsProvider ?? { keyTerms }, pressStyleProvider: pressStyle,
     textShortcutsProvider: { [] }, readinessCheck: readinessCheck,
     onTranscriptDelivered: nil, seams: seams)
 }
@@ -156,8 +158,8 @@ final class RecordedLog: Sendable {
 extension DictationSession {
   /// One whole dictation: press, release, and wait for the pipeline to settle.
   /// The shape most session tests drive before asserting on the outcome.
-  func dictate(handingBack: Bool = false) async {
-    await press(handingBack: handingBack)
+  func dictate(handingBack: Bool = false, key: TriggerKey? = nil) async {
+    await press(handingBack: handingBack, key: key)
     await release()
     await waitForIdle()
   }

@@ -33,9 +33,6 @@ final class AppCoordinator {
   @ObservationIgnored private var phaseObserver: Task<Void, Never>?
   @ObservationIgnored private var levelsObserver: Task<Void, Never>?
   @ObservationIgnored var keyTap: DictationKeyTap?
-  /// The style the trigger key that started the current dictation asked for —
-  /// set on each press, read by the request and the Recent row (`PressStyle`).
-  private let pressStyle: PressStyle
   /// Routes the trigger's commands to dictation, or to read-aloud when the
   /// experimental switch is on and text is selected. It also decides the gate
   /// resets (see `SelectionSpeechRouting`).
@@ -88,12 +85,10 @@ final class AppCoordinator {
         dictationHost: OAuthConfiguration.blurtDictationOrigin(infoDictionary: info),
         apiKey: apiKey)
     self.account = account
-    let pressStyle = PressStyle()
-    self.pressStyle = pressStyle
     let components =
       components
       ?? .production(
-        dictationOrigin: account.dictationOrigin, pressStyle: pressStyle,
+        dictationOrigin: account.dictationOrigin,
         onKeyRejected: { Task { await account.keyWasRejected() } })
 
     // Buffering the newest is enough: each element is the *whole* ring as of that
@@ -109,8 +104,6 @@ final class AppCoordinator {
       mic: components.mic,
       transcriber: components.transcriber,
       injector: components.injector,
-      // Names the style the request was built with, not the selection now.
-      styleNameProvider: { pressStyle.styleName() },
       // A press with no key saved fails fast as .failed(.apiKeyMissing) —
       // before any capture — and render(_:) routes it to the settings window.
       readinessCheck: apiKey.readinessCheck(),
@@ -165,14 +158,10 @@ final class AppCoordinator {
     // experimental switch off, it forwards each one to `session.submit` exactly
     // as before.
     let router = SelectionSpeechRouter(session: session)
-    let pressStyle = pressStyle
     keyTap = DictationKeyTap(
-      // The key's style rides this one dictation; the main window's selection
-      // is never written.
-      onStart: { key in
-        pressStyle.request(TriggerKeyStyleStore().styleID(for: key))
-        router.submit(.press)
-      },
+      // The key rides the press, and the session resolves its style for that one
+      // dictation (`PressStyle`); the main window's selection is never written.
+      onStart: { key in router.submit(.press(key: key)) },
       onStop: { router.submit(.release) },
       onCancel: { router.submit(.cancel) },
       onLatch: { router.keyLatched() },
