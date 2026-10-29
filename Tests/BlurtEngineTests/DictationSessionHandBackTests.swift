@@ -57,7 +57,7 @@ struct DictationSessionHandBackTests {
     #expect(await fixture.injector.inserted == ["Hello world."])
   }
 
-  @Test("submit(.pressHandingBack) is the same press through the command feed")
+  @Test("submit(.pressHandingBack()) is the same press through the command feed")
   func submitted() async {
     let fixture = makeSession(mode: .transcript("Summarize this."))
     // Subscribed before submitting, so the stream can't miss the phase.
@@ -68,7 +68,7 @@ struct DictationSessionHandBackTests {
       }
       return nil
     }
-    fixture.session.submit(.pressHandingBack)
+    fixture.session.submit(.pressHandingBack())
     while await fixture.session.phase != .recording { await Task.yield() }
     fixture.session.submit(.release)
 

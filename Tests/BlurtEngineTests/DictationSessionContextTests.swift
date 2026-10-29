@@ -45,6 +45,22 @@ struct DictationSessionContextTests {
     #expect(fixture.log.transcripts == [RecordedLog.Transcript(text: "Hello world.", context: expected)])
   }
 
+  @Test("a press's trigger key style rides its request and names its Recent row")
+  func pressKeyStyleRidesTheDictation() async throws {
+    let casual = PressStyle(instructions: "keep it breezy", name: "Casual")
+    let fixture = makeSession(
+      mode: .transcript("Hello world."), pressStyle: { $0 == .rightOption ? casual : PressStyle.none })
+
+    await fixture.session.dictate(key: .rightOption)
+    await fixture.session.dictate()
+
+    // Resolved at each press from the key that pressed, so the second — no key,
+    // the main window's (here, base) style — carries none of the first's.
+    let contexts = await fixture.transcriber.receivedContexts
+    #expect(contexts.map { $0?.styleInstructions } == ["keep it breezy", nil])
+    #expect(await fixture.session.recentDictations.entries.map(\.style) == [nil, "Casual"])
+  }
+
   @Test("an empty capture transcribes with no context rather than an empty one")
   func emptyCaptureYieldsNilContext() async throws {
     // `TranscriptionContext.isEmpty` collapses a capture with nothing usable in

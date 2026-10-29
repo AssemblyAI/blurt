@@ -2,10 +2,11 @@ import BlurtEngine
 import CoreGraphics
 import os
 
-/// Drives the single lone-modifier dictation trigger from a `CGEventTap`.
+/// Drives the lone-modifier dictation triggers from a `CGEventTap`.
 ///
-/// Watches `flagsChanged` for the bound modifier (e.g. right ⌘, keycode 54) to
-/// detect down/up, and `keyDown` for any *other* key to spot a modifier combo
+/// Watches `flagsChanged` for the bound modifiers (e.g. right ⌘, keycode 54, plus
+/// any trigger key given a style — `TriggerKeyStyleStore`) to detect down/up, and
+/// `keyDown` for any *other* key to spot a modifier combo
 /// (⌘C, ⌘V…). The per-event decision lives in the engine — `DictationKeyRouter`
 /// (keycode relevance + down/up edge dedup) over `DictationKeyGate` (tap/hold
 /// semantics) — so this type only reduces each `CGEvent` to a router event and
@@ -27,7 +28,8 @@ import os
 final class DictationKeyTap {
   private static let logger = HostIdentity.current.logger("DictationKeyTap")
 
-  private let onStart: @MainActor () -> Void
+  /// A press started a dictation; carries the trigger key that fired.
+  private let onStart: @MainActor (TriggerKey) -> Void
   private let onStop: @MainActor () -> Void
   private let onCancel: @MainActor () -> Void
   /// A tap latched the recording on. Dictation ignores it (the recording just
@@ -46,9 +48,6 @@ final class DictationKeyTap {
   /// the gate's tap/hold state machine — all unit-tested in BlurtEngine).
   /// Seeded from the persisted binding in `init` — see the note there.
   private var router: DictationKeyRouter
-  /// The bound key's device-dependent `CGEventFlags` bit — the one CoreGraphics-
-  /// typed piece of the binding, so it stays here rather than in the router.
-  private var triggerFlag: CGEventFlags
 
   /// Monotonic reference; per-event timestamps are `reference.duration(to: now)`.
   private let reference = ContinuousClock.now
@@ -66,7 +65,7 @@ final class DictationKeyTap {
   nonisolated(unsafe) private var tap: CFMachPort?
 
   init(
-    onStart: @escaping @MainActor () -> Void,
+    onStart: @escaping @MainActor (TriggerKey) -> Void,
     onStop: @escaping @MainActor () -> Void,
     onCancel: @escaping @MainActor () -> Void,
     onLatch: @escaping @MainActor () -> Void,
@@ -82,12 +81,9 @@ final class DictationKeyTap {
     // restating it here is the same mistake `BoundTriggerKey` and `HotkeyStepView`
     // were each corrected away from — the tap would name the old key while the
     // picker, ready screen, and menu bar all named the new one. `refreshBinding()`
-    // re-reads this, but nothing enforces that it runs before the first read of
-    // either property (`simulatePressForTesting` reads `router.triggerKeyCode`).
-    let key = TriggerKeyStore().triggerKey
+    // re-reads this, but nothing enforces that it runs before the first event.
     self.router = DictationKeyRouter(
-      triggerKeyCode: key.keyCode, activation: TriggerActivationStore().activation)
-    self.triggerFlag = Self.flag(for: key)
+      triggerKeyCodes: Self.boundKeyCodes(), activation: TriggerActivationStore().activation)
   }
 
   deinit {
@@ -188,16 +184,14 @@ final class DictationKeyTap {
     _ = router.reset()
   }
 
-  /// Re-read the bound trigger key and activation mode into the router. Call
-  /// after the user rebinds either. The router's reset reports a discarded live
+  /// Re-read the bound trigger keys and activation mode into the router. Call
+  /// after the user rebinds any of them. The router's reset reports a discarded live
   /// recording: rebinding mid-dictation means the old key's up-event will never
   /// match, so the capture must be cancelled, not left to run out the
   /// auto-release cap.
   func refreshBinding() {
-    let key = TriggerKeyStore().triggerKey
-    triggerFlag = Self.flag(for: key)
     let activation = TriggerActivationStore().activation
-    if router.rebind(triggerKeyCode: key.keyCode, activation: activation) {
+    if router.rebind(triggerKeyCodes: Self.boundKeyCodes(), activation: activation) {
       onRecordingDiscarded()
     }
   }
@@ -210,10 +204,10 @@ final class DictationKeyTap {
       if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
       // Events may have been dropped while the tap was down. Whether the gate's
       // state survives that is the router's call (and unit-tested there); the only
-      // part that has to happen here is the CoreGraphics read of whether the
-      // trigger is physically held right now.
-      let triggerStillHeld = CGEventSource.flagsState(.combinedSessionState).contains(triggerFlag)
-      if router.recoverFromDroppedEvents(triggerStillHeld: triggerStillHeld) {
+      // part that has to happen here is the CoreGraphics read of which modifiers
+      // are physically held right now.
+      let held = CGEventSource.flagsState(.combinedSessionState).rawValue
+      if router.recoverFromDroppedEvents(heldFlags: held) {
         onRecordingDiscarded()
       }
       return
@@ -230,7 +224,7 @@ final class DictationKeyTap {
     let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
     switch type {
     case .flagsChanged:
-      return .flagsChanged(keyCode: keyCode, triggerFlagIsOn: event.flags.contains(triggerFlag))
+      return .fromFlags(keyCode: keyCode, rawFlags: event.flags.rawValue)
     case .keyDown:
       return .keyDown(keyCode: keyCode)
     default:
@@ -240,7 +234,10 @@ final class DictationKeyTap {
 
   private func dispatch(_ action: DictationKeyGate.Action) {
     switch action {
-    case .start: onStart()
+    // `.start` only follows a trigger's down edge, which made it the active key.
+    case .start:
+      guard let activeKey else { return assertionFailure(".start with no active trigger key") }
+      onStart(activeKey)
     case .stop: onStop()
     case .cancel: onCancel()
     case .latch: onLatch()
@@ -248,13 +245,12 @@ final class DictationKeyTap {
     }
   }
 
-  /// The `CGEventFlags` bit the bound key toggles, so a `flagsChanged` event for
-  /// it reads as down (bit set) or up (bit clear). This is the *device-dependent*
-  /// per-side bit (e.g. right ⌘ only), not the generic `.maskCommand` shared by
-  /// both ⌘ keys — see `TriggerKey.deviceModifierMask` for why that distinction
-  /// keeps the down/up tracking from desyncing on keyboards with both keys held.
-  nonisolated static func flag(for key: TriggerKey) -> CGEventFlags {
-    CGEventFlags(rawValue: key.deviceModifierMask)
+  /// The trigger key that owns the router's gate, if any.
+  private var activeKey: TriggerKey? { router.activeKeyCode.flatMap(TriggerKey.init(rawValue:)) }
+
+  /// Every key that dictates: the bound one plus each key given a style.
+  private static func boundKeyCodes() -> Set<Int> {
+    Set(TriggerKeyStyleStore().enabledKeys.map(\.keyCode))
   }
 
   #if UITEST_HOOKS
@@ -269,7 +265,7 @@ final class DictationKeyTap {
       _ = router.reset()
       dispatch(
         router.handle(
-          .flagsChanged(keyCode: router.triggerKeyCode, triggerFlagIsOn: true), at: .seconds(0)))
+          .flagsChanged(keyCode: TriggerKeyStore().triggerKey.keyCode, triggerFlagIsOn: true), at: .seconds(0)))
     }
 
     /// Completes the synthetic cycle as a hold (past the threshold), so the gate
@@ -277,7 +273,7 @@ final class DictationKeyTap {
     func simulateReleaseForTesting() {
       dispatch(
         router.handle(
-          .flagsChanged(keyCode: router.triggerKeyCode, triggerFlagIsOn: false), at: .seconds(2)))
+          .flagsChanged(keyCode: TriggerKeyStore().triggerKey.keyCode, triggerFlagIsOn: false), at: .seconds(2)))
     }
   #endif
 }

@@ -246,7 +246,7 @@ final class DictationCoordinator {
           context: FocusedFieldContext(
             priorText: command.priorText, selectedText: command.selectedText, windowTitle: nil, fieldLabel: nil))
       }
-      session.submit(.press)
+      session.submit(.press())
     case .release: session.submit(.release)
     case .cancel: session.submit(.cancel)
     }

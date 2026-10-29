@@ -29,8 +29,8 @@ import Synchronization
 /// missing, and no call site can get that backwards.
 ///
 /// `pressKnown` is the other half of the same problem, and needs no
-/// synchronization: it is what the actor already knew at press — key terms and
-/// the recent-dictation ring, no focus signals — set once and never written
+/// synchronization: it is what the actor already knew at press — key terms, the
+/// recent-dictation ring and the press's style, no focus signals — set once and never written
 /// again. It used to be discarded along with the field text whenever the budget
 /// was missed, because the same `TranscriptionContext` carried both. Kept apart,
 /// a timeout costs the request only what actually failed to arrive, so

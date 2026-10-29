@@ -35,8 +35,8 @@ struct StyleProfileStoreTests {
   func unsetIsEmpty() {
     let store = makeStore()
     #expect(store.profiles.isEmpty)
-    #expect(store.active == nil)
-    #expect(store.activeInstructions == nil)
+    #expect(store.profile(for: nil) == nil)
+    #expect(store.profile(for: nil)?.appendedInstructions == nil)
   }
 
   /// The whole reason this store owns the encoding: ids, names, text and order
@@ -64,8 +64,8 @@ struct StyleProfileStoreTests {
     #expect(profile.name == StyleProfileStore.legacyProfileName)
     #expect(profile.id == StyleProfileStore.legacyProfileID)
     #expect(profile.instructions == "always write in lowercase")
-    #expect(store.active == profile)
-    #expect(store.activeInstructions == "always write in lowercase")
+    #expect(store.profile(for: nil) == profile)
+    #expect(store.profile(for: nil)?.appendedInstructions == "always write in lowercase")
   }
 
   /// A cleared or space-padded legacy field must not conjure an empty profile —
@@ -84,7 +84,7 @@ struct StyleProfileStoreTests {
     let store = StyleProfileStore(defaults: defaults)
     store.profiles = []
     #expect(store.profiles.isEmpty)
-    #expect(store.activeInstructions == nil)
+    #expect(store.profile(for: nil)?.appendedInstructions == nil)
   }
 
   @Test("writing more than the limit keeps the first profiles")
@@ -151,8 +151,8 @@ struct StyleProfileStoreTests {
     store.profiles = profiles
     store.activate(profiles[1])
 
-    #expect(store.active == profiles[1])
-    let sent = try #require(store.activeInstructions)
+    #expect(store.profile(for: nil) == profiles[1])
+    let sent = try #require(store.profile(for: nil)?.appendedInstructions)
     #expect(sent == "no contractions")
     #expect(!sent.contains("keep it breezy"))
     #expect(!sent.contains("cut every adjective"))
@@ -167,7 +167,7 @@ struct StyleProfileStoreTests {
     store.profiles = profiles
     store.activate(profiles[1])
     store.profiles = profiles + [StyleProfile(name: "Terse", instructions: "cut adjectives")]
-    #expect(store.activeInstructions == "no contractions")
+    #expect(store.profile(for: nil)?.appendedInstructions == "no contractions")
   }
 
   /// Selecting Default (`activateDefault`)
@@ -181,14 +181,14 @@ struct StyleProfileStoreTests {
     store.profiles = profiles
     store.activate(profiles[1])
     store.activateDefault()
-    #expect(store.active == nil)
-    #expect(store.activeInstructions == nil)
+    #expect(store.profile(for: nil) == nil)
+    #expect(store.profile(for: nil)?.appendedInstructions == nil)
     // Sticky: an unrelated list edit doesn't un-choose it...
     store.profiles = profiles + [StyleProfile(name: "Terse", instructions: "cut adjectives")]
-    #expect(store.activeInstructions == nil)
+    #expect(store.profile(for: nil)?.appendedInstructions == nil)
     // ...and only clicking a style does.
     store.activate(profiles[0])
-    #expect(store.activeInstructions == "keep it breezy")
+    #expect(store.profile(for: nil)?.appendedInstructions == "keep it breezy")
   }
 
   /// The upgrade path and the Default button together: a legacy user's
@@ -199,9 +199,9 @@ struct StyleProfileStoreTests {
   @Test("Default is an explicit choice, not what a migrated install starts on")
   func defaultIsDistinctFromUnsetOnALegacyInstall() {
     let store = makeLegacyStore("always write in lowercase")
-    #expect(store.activeInstructions == "always write in lowercase")
+    #expect(store.profile(for: nil)?.appendedInstructions == "always write in lowercase")
     store.activateDefault()
-    #expect(store.activeInstructions == nil)
+    #expect(store.profile(for: nil)?.appendedInstructions == nil)
   }
 
   /// Never chosen, or naming a profile the user has since deleted: fall back to
@@ -212,11 +212,11 @@ struct StyleProfileStoreTests {
     let profiles = casualAndFormal
     store.profiles = profiles
     // Nothing chosen yet.
-    #expect(store.activeInstructions == "keep it breezy")
+    #expect(store.profile(for: nil)?.appendedInstructions == "keep it breezy")
     // Chosen, then deleted out from under the pointer.
     store.activate(profiles[1])
     store.profiles = [profiles[0]]
-    #expect(store.activeInstructions == "keep it breezy")
+    #expect(store.profile(for: nil)?.appendedInstructions == "keep it breezy")
   }
 
   /// Blank text in the active profile means "send the base instruction
@@ -225,7 +225,7 @@ struct StyleProfileStoreTests {
   func blankActiveInstructionsSendNothing(instructions: String) {
     let store = makeStore()
     store.profiles = [StyleProfile(name: "Empty", instructions: instructions)]
-    #expect(store.activeInstructions == nil)
+    #expect(store.profile(for: nil)?.appendedInstructions == nil)
   }
 
   /// A stored value that will not decode reads as no profiles. Deliberately not

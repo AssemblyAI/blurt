@@ -12,6 +12,7 @@ struct PersistedSettingsTests {
   func rosterCoversEveryStore() {
     #expect(PersistedSettings.allDefaultsKeys.contains(TriggerKeyStore.defaultsKey))
     #expect(PersistedSettings.allDefaultsKeys.contains(TriggerActivationStore.defaultsKey))
+    #expect(PersistedSettings.allDefaultsKeys.contains(TriggerKeyStyleStore.defaultsKey))
     #expect(PersistedSettings.allDefaultsKeys.contains(SoundPackStore.defaultsKey))
     #expect(PersistedSettings.allDefaultsKeys.contains(KeyTermsStore.defaultsKey))
     #expect(PersistedSettings.allDefaultsKeys.contains(DeveloperModeStore.defaultsKey))
@@ -43,11 +44,11 @@ struct PersistedSettingsTests {
 
   @Test("the roster carries no stale or duplicate keys")
   func rosterHasNoStrays() {
-    // Exactly the fourteen known stores' keys (OverlayOriginStore and
+    // Exactly the fifteen known stores' keys (OverlayOriginStore and
     // ReadAloudStyleStore contribute two each, StyleProfileStore three): a removed store
     // must leave the roster in the same change, and a key listed twice would hint
     // at a copy-paste slip.
-    #expect(PersistedSettings.allDefaultsKeys.count == 18)
+    #expect(PersistedSettings.allDefaultsKeys.count == 19)
     #expect(Set(PersistedSettings.allDefaultsKeys).count == PersistedSettings.allDefaultsKeys.count)
   }
 
@@ -62,6 +63,7 @@ struct PersistedSettingsTests {
     let storeKeys: Set<String> = [
       TriggerKeyStore.defaultsKey,
       TriggerActivationStore.defaultsKey,
+      TriggerKeyStyleStore.defaultsKey,
       SoundPackStore.defaultsKey,
       KeyTermsStore.defaultsKey,
       DeveloperModeStore.defaultsKey,
@@ -82,7 +84,7 @@ struct PersistedSettingsTests {
     #expect(storeKeys == Set(DefaultsKey.allCases.map(\.key)))
     // No two stores sharing a slot — the Set above would have quietly absorbed a
     // collision, and two stores on one key means each overwrites the other.
-    #expect(storeKeys.count == 18)
+    #expect(storeKeys.count == 19)
   }
 
   @Test("resetAll clears every roster key and leaves unrelated ones alone")

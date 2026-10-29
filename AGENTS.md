@@ -682,9 +682,9 @@ the config merely omitted the instruction.
 The instruction is `CleanupInstruction.text`, the winner of a GEPA run of
 `evals/dictation-prompt/` (see its README), compressed to fit the cap. Two later searches
 failed to beat it — the most recent scored 0.9043 against its 0.9101 on a held-out split. When the
-user has defined a **style profile** (`StyleProfileStore`, read per request via the transcriber's
-injected `customStyle` closure), `CleanupInstruction.sendable(appending:)` appends
-the **active** profile's instructions after the base text with a bridging preamble, trimmed to the
+user has defined a **style profile** (`StyleProfileStore`, resolved at each press into
+`PressStyle` and carried to the transcriber as `TranscriptionContext.styleInstructions`),
+`CleanupInstruction.sendable(appending:)` appends that one profile's instructions after the base text with a bridging preamble, trimmed to the
 headroom the API's 2048
 instruction cap leaves (`customStyleBudget`, measured in UTF-8 bytes — the cap's own unit is
 unmeasured, and bytes are the conservative bound); no profile, or blank instructions, sends the base
@@ -882,8 +882,8 @@ lands), and `keyTap.refreshBinding()` after the user picks a different trigger k
 
 ## Hotkey
 
-The dictation trigger is a **single lone modifier key** (tap-to-toggle or hold-to-talk), implemented
-in-house. Four pieces, three of them pure engine logic:
+The dictation trigger is a **lone modifier key** — one by default, plus any other given a style (see
+Per-key styles below) — tap-to-toggle or hold-to-talk, implemented in-house. Four pieces, three of them pure engine logic:
 
 - **`TriggerKey`** (`Hotkey/TriggerKey.swift`) — enum of the curated lone momentary modifiers usable
   as the trigger (right ⌘, right ⌥, `fn`), `rawValue` = the macOS virtual keycode, plus `label`
@@ -901,14 +901,15 @@ in-house. Four pieces, three of them pure engine logic:
   (modifier + another key, e.g. ⌘C) from idle cancels the fresh capture; over a latched recording it
   passes through as a normal shortcut. Callers pass monotonic timestamps, so every decision is
   deterministic and unit-tested.
-- **`DictationKeyRouter`** — the event-routing layer over the gate: only the bound keycode's flag
-  changes drive the modifier, and only genuine down/up **edges** reach the gate (`flagsChanged`
+- **`DictationKeyRouter`** — the event-routing layer over the gate: only the bound keycodes' flag
+  changes drive the modifier (the first to go down owns the gate, `activeKeyCode`, until it is idle), and only genuine down/up **edges** reach the gate (`flagsChanged`
   deliveries re-report the bit whether or not it changed, so a repeat must not double-fire).
-  `reset()`/`rebind(triggerKeyCode:)` report whether they discarded a live recording the host must
-  cancel upstream, and so does **`recoverFromDroppedEvents(triggerStillHeld:)`** — the
+  `reset()`/`rebind(triggerKeyCodes:activation:)` report whether they discarded a live recording the host must
+  cancel upstream, and so does **`recoverFromDroppedEvents(heldFlags:)`** — the
   disabled-tap rule: events may have been dropped, so the gate's state survives only while the
-  trigger is still physically held (its key-up is still coming); otherwise that key-up was among
-  the losses and the gate is reset. The host passes the `CGEventSource.flagsState` read in and
+  active trigger is still physically held (its key-up is still coming); otherwise that key-up was
+  among the losses and the gate is reset. The host passes the raw `CGEventSource.flagsState` read
+  in — the router picks the active key's device bit out of it — and
   keeps no decision of its own, so the rule is unit-tested rather than living in an untestable
   shell `if`.
 
@@ -943,6 +944,20 @@ Settings change, use **`@BoundTriggerKey`** — a `DynamicProperty` in `Wizard/B
 the `@AppStorage(TriggerKeyStore.defaultsKey)` + `TriggerKey.fromPersisted` pair — rather than
 restating that pairing per view. The unset default belongs to `fromPersisted` (an absent keycode maps
 to right ⌘), so views must not re-declare `TriggerKey.rightCommand.rawValue` themselves.
+
+**Per-key styles.** A Key Styles row in the Advanced pane's Experimental section (`KeyStylesRow`) — a status naming the
+keys set up, and an Edit… button — opens a sheet with one pop-up per `TriggerKey`: the style a press
+of that key dictates with — Same as main window, Default, or a profile (disabled while enhanced
+transcripts are off) — or Off for keys other than the bound one. On Advanced rather than under the
+key picker because it's a power-user extra, so General stays short enough for a small display; a
+row in an existing section and a sheet, not a section or a row per key, because Advanced is already
+near that limit — a section of its own pushed Reset… off the bottom of CI's screen. `TriggerKeyStyleStore` (`BlurtTriggerKeyStyles`, keycode → style id) holds
+it; an absent value is today's single key with the current style. Each key is still a lone modifier
+from the same set, watched by the same listen-only tap. The press command carries its key
+(`DictationSession.Command.press(key:)`), and the session resolves that key's style once, on the
+press's own turn, into a `PressStyle` value: its instructions ride the request's context, its name
+the Recent row. It never writes `BlurtActiveStyleProfile`, a later press can't restyle a dictation
+under way, and a mapped style since deleted falls back to the selection.
 
 ## Contextual prompt and key terms
 

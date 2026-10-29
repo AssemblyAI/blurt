@@ -114,6 +114,10 @@ struct StyleRow: View {
 /// selected style's name is the row's whole readout, its instructions live in
 /// Settings.
 struct StylesInertNotice: View {
+  /// The same caveat inside Settings, where the Enhanced transcripts switch is
+  /// on screen — the Styles pane's and the Key Styles sheet's footer.
+  static let settingsText = "Turn on Enhanced transcripts to use styles."
+
   /// Observed so the notice follows the toggle in the Settings window live.
   @AppStorage(EnhancedTranscriptsStore.defaultsKey)
   private var enhancedTranscripts = EnhancedTranscriptsStore.defaultValue

@@ -88,7 +88,7 @@ struct RewriteModeTests {
           return $0 == 1
         }
       },
-      customStyle: { nil }, rewriteMode: { .smart })
+      rewriteMode: { .smart })
     #expect(try await collectTranscript(transcriber) == "Hello.")
     #expect(reads.withLock { $0 } == 1)
   }
@@ -99,7 +99,7 @@ struct RewriteModeTests {
     let data = try makeTranscriber(
       apiKey: "test-key", enhancedTranscripts: enhancedTranscripts, rewriteMode: mode
     )
-    .makeConfigData(sampleRate: 16_000, sttPrompt: "", keytermsPrompt: [])
+    .makeConfigData(sampleRate: 16_000, sttPrompt: "", keytermsPrompt: [], customStyle: nil)
     return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
   }
 }

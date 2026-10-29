@@ -29,7 +29,7 @@ struct DictationOriginTests {
     let transcriber = AssemblyAITranscriber(
       apiKeyProvider: { "key" }, baseURL: { origin.current ?? AssemblyAITranscriber.defaultBaseURL },
       transport: hosts.transport,
-      enhancedTranscripts: { false }, customStyle: { nil }, rewriteMode: { .fast })
+      enhancedTranscripts: { false }, rewriteMode: { .fast })
 
     _ = try await collectTranscript(transcriber)
     origin.set(Self.sandbox)
