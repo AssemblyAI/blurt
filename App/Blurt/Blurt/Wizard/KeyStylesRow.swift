@@ -41,16 +41,16 @@ struct KeyStylesRow: View {
       profiles: StyleProfileStore().profiles(decoding: profilesRaw))
     let changed = entries.filter(\.isChanged).map(\.text)
     SettingRow(title: "Key Styles", systemImage: "textformat") {
-        HStack(spacing: 8) {
-          // The keys set up beyond the default, or the main window's style.
-          Text(changed.isEmpty ? KeyStylesSheet.mainWindowName : changed.joined(separator: ", "))
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .truncationMode(.tail)
-          Button("Edit…") { isPresentingKeyStyles = true }
-            .accessibilityValue(entries.map(\.text).joined(separator: ", "))
-            .accessibilityIdentifier(UITestIdentifiers.keyStylesButton)
-        }
+      HStack(spacing: 8) {
+        // The keys set up beyond the default, or the main window's style.
+        Text(changed.isEmpty ? KeyStylesSheet.mainWindowName : changed.joined(separator: ", "))
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+          .truncationMode(.tail)
+        Button("Edit…") { isPresentingKeyStyles = true }
+          .accessibilityValue(entries.map(\.text).joined(separator: ", "))
+          .accessibilityIdentifier(UITestIdentifiers.keyStylesButton)
+      }
     }
     .sheet(isPresented: $isPresentingKeyStyles) {
       KeyStylesSheet(bound: bound) { coordinator.dictationBindingChanged() }
