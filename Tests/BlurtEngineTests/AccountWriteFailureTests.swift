@@ -22,55 +22,6 @@ final class RefusingKeyStore: APIKeyGateway {
   }
 }
 
-/// Parks the first token request after `hold()` until `release()`, so a test
-/// can act while a sign-out waits on the server. Later requests pass straight
-/// through, so a request the code under test shouldn't make shows up at the
-/// server rather than hanging the test.
-final class HoldingTransport: HTTPTransport, Sendable {
-  private struct State {
-    var armed = false
-    var parked: CheckedContinuation<Void, Never>?
-  }
-
-  private let inner: FakeHTTPTransport
-  private let state = Mutex(State())
-
-  init(_ inner: FakeHTTPTransport) { self.inner = inner }
-
-  func hold() { state.withLock { $0.armed = true } }
-  var isParked: Bool { state.withLock { $0.parked != nil } }
-
-  func release() {
-    let parked = state.withLock { state -> CheckedContinuation<Void, Never>? in
-      defer { state.parked = nil }
-      return state.parked
-    }
-    parked?.resume()
-  }
-
-  func data(for request: URLRequest) async throws -> (Data, URLResponse) {
-    if request.url == testOAuthConfiguration.tokenURL {
-      await withCheckedContinuation { continuation in
-        let park = state.withLock { state -> Bool in
-          guard state.armed else { return false }
-          state.armed = false
-          state.parked = continuation
-          return true
-        }
-        if !park { continuation.resume() }
-      }
-    }
-    return try await inner.data(for: request)
-  }
-
-  func upload(
-    for request: URLRequest, streaming body: AsyncThrowingStream<Data, any Error>,
-    delegate: (any URLSessionTaskDelegate)?
-  ) async throws -> (Data, URLResponse) {
-    try await inner.upload(for: request, streaming: body, delegate: delegate)
-  }
-}
-
 // What the account does when the Keychain refuses a write, and when a sign-out
 // overlaps a renewal or a new sign-in.
 extension AssemblyAIAccountTests {
@@ -158,74 +109,67 @@ extension AssemblyAIAccountTests {
     await loop.value
   }
 
+  /// A signed-in account whose sign-out is parked at the token endpoint until
+  /// the test releases `gate`.
+  private struct ParkedSignOut {
+    let account: AssemblyAIAccount
+    let gate: Gate
+    let signOut: Task<APIKeySubmission.FailureReport?, Never>
+  }
+
+  private func signOutParkedOnTheNetwork(keys: RefusingKeyStore) async throws -> ParkedSignOut {
+    let gate = Gate()
+    let transport = GatedTransport(inner: server.transport, gate: gate)
+    let account = account(keyStore: keys, transport: transport)
+    #expect(try await signIn(account) == .signedIn)
+    transport.armed.withLock { $0 = true }
+    let signOut = Task { await account.signOut() }
+    await gate.waitUntilEntered()
+    return ParkedSignOut(account: account, gate: gate, signOut: signOut)
+  }
+
   @Test("no renewal starts while a sign-out is talking to the server")
   func noRenewalDuringSignOut() async throws {
-    let transport = HoldingTransport(server.transport)
-    let account = account(keyStore: RefusingKeyStore(), transport: transport)
-    #expect(try await signIn(account) == .signedIn)
-
-    transport.hold()
-    defer { transport.release() }
-    let signOut = Task { await account.signOut() }
-    try await waitUntilParked(transport)
-    await account.keyWasRejected()
+    let parked = try await signOutParkedOnTheNetwork(keys: RefusingKeyStore())
+    defer { parked.gate.allowToFinish() }
+    await parked.account.keyWasRejected()
     advanceToRenewal()
-    await account.renewIfDue()
-    transport.release()
-    #expect(await signOut.value == nil)
+    await parked.account.renewIfDue()
+    parked.gate.allowToFinish()
+    #expect(await parked.signOut.value == nil)
     // Only the sign-out's own refresh reached the server.
     #expect(server.state.withLock { $0.refreshTokensSeen } == ["rt-1"])
-    #expect(account.status == .signedOut)
+    #expect(parked.account.status == .signedOut)
   }
 
   @Test("a sign-in that lands while a sign-out waits on the server is kept")
   func signInDuringSignOut() async throws {
-    let transport = HoldingTransport(server.transport)
     let keys = RefusingKeyStore()
-    let account = account(keyStore: keys, transport: transport)
-    #expect(try await signIn(account) == .signedIn)
-
-    transport.hold()
-    defer { transport.release() }
-    let signOut = Task { await account.signOut() }
-    try await waitUntilParked(transport)
+    let parked = try await signOutParkedOnTheNetwork(keys: keys)
+    defer { parked.gate.allowToFinish() }
     server.state.withLock {
       $0.codeGrantRefreshToken = "rt-new"
       $0.apiKey = "second-key"
     }
-    #expect(try await signIn(account) == .signedIn)
-    transport.release()
-    #expect(await signOut.value == nil)
-    #expect(account.status == .signedIn(email: "member@example.com"))
+    #expect(try await signIn(parked.account) == .signedIn)
+    parked.gate.allowToFinish()
+    #expect(await parked.signOut.value == nil)
+    #expect(parked.account.status == .signedIn(email: "member@example.com"))
     #expect(keys.current == "second-key")
     #expect(sessions.session?.refreshToken == "rt-new")
   }
 
   @Test("a sign-in that fails while a sign-out waits on the server doesn't stop the sign-out")
   func failedSignInDuringSignOut() async throws {
-    let transport = HoldingTransport(server.transport)
     let keys = RefusingKeyStore()
-    let account = account(keyStore: keys, transport: transport)
-    #expect(try await signIn(account) == .signedIn)
-
-    transport.hold()
-    defer { transport.release() }
-    let signOut = Task { await account.signOut() }
-    try await waitUntilParked(transport)
+    let parked = try await signOutParkedOnTheNetwork(keys: keys)
+    defer { parked.gate.allowToFinish() }
     keys.refuse(true)
-    #expect(try await signIn(account) == .failed(.keychain))
+    #expect(try await signIn(parked.account) == .failed(.keychain))
     keys.refuse(false)
-    transport.release()
-    #expect(await signOut.value == nil)
-    #expect(account.status == .signedOut)
+    parked.gate.allowToFinish()
+    #expect(await parked.signOut.value == nil)
+    #expect(parked.account.status == .signedOut)
     #expect(sessions.session == nil)
-  }
-
-  private func waitUntilParked(_ transport: HoldingTransport) async throws {
-    let deadline = ContinuousClock.now + .seconds(5)
-    while !transport.isParked, ContinuousClock.now < deadline {
-      try await Task.sleep(for: .milliseconds(5))
-    }
-    try #require(transport.isParked)
   }
 }
