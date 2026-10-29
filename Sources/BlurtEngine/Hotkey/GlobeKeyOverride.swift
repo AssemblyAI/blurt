@@ -51,7 +51,8 @@ public struct GlobeKeyOverride {
   /// A raw write to another app's domain isn't picked up live: macOS reads
   /// `AppleFnUsageType` at login (System Settings applies it through its own
   /// path), so the override lands after the next log-out. The Shortcut footer
-  /// says so and links to Keyboard Settings for changing it right away.
+  /// warns that fn may double-fire until then and links to Keyboard Settings for
+  /// changing it right away.
   public func sync(boundKey: TriggerKey) {
     guard let system, let record else { return }
     if boundKey == .function {
