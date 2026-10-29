@@ -240,8 +240,17 @@ public final class AssemblyAIAccount {
       forget()
       return nil
     }
+    let started = generation
     do throws(OAuthClient.Failure) {
       let tokens = try await client.refresh(session.refreshToken)
+      // Keep a rotated refresh token before revoking, as `renew` does: the old
+      // one is dead, and presenting it again reads as reuse, which ends the
+      // grant. A revoke that fails below must leave a token that still works.
+      if let rotated = tokens.refreshToken, generation == started {
+        var rotatedSession = session
+        rotatedSession.refreshToken = rotated
+        store.save(rotatedSession)
+      }
       try await client.revoke(accessToken: tokens.accessToken)
     } catch .rejected {
       // Nothing left server-side to end.

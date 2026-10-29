@@ -237,6 +237,15 @@ struct AssemblyAIAccountTests {
     #expect(await account.signOut() == .inline(message: AssemblyAIAccount.signOutUnconfirmedMessage))
     #expect(account.status == .signedIn(email: "member@example.com"))
     #expect(keyStore.current == "connection-key")
+    // The refresh before the revoke rotated the token, and the rotated one was
+    // kept: the old one is dead, and sending it again would end the grant.
+    #expect(sessions.session?.refreshToken == "rt-2")
+
+    // So the retry refreshes with the token that still works.
+    server.state.withLock { $0.revokeStatus = 204 }
+    #expect(await account.signOut() == nil)
+    #expect(server.state.withLock { $0.refreshTokensSeen } == ["rt-1", "rt-2"])
+    #expect(account.status == .signedOut)
   }
 
   @Test("sign-out with a refresh token the server already refuses is a sign-out")
