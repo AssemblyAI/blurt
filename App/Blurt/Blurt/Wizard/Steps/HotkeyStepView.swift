@@ -86,14 +86,15 @@ struct HotkeyStepView: View {
       // no longer than the tap-or-hold sentence shipped here before the picker
       // existed, so the footer never grows the pane.
       Text(TriggerActivation.fromPersisted(activationRaw).guidance)
-      // Say so when Blurt has changed a system setting on the user's behalf
-      // (`GlobeKeyOverride`), so a 🌐 key that stopped opening emoji isn't a mystery.
-      // That write only lands at the next log-in, so link to the pane that
-      // applies it now.
+      // `GlobeKeyOverride` turns off macOS's own 🌐 action while fn is bound, but
+      // that write only lands at the next log-in, so until then fn double-fires.
+      // Lead with that symptom rather than the setting's name, and link to the
+      // pane that applies the change now.
       if TriggerKeyStyleStore.enabledKeys(bound: bound, styles: styles).contains(.function) {
         Text(
-          "While fn is a dictation key, macOS’s “Press 🌐 key to” is set to Do Nothing "
-            + "from your next log-in. To stop 🌐 firing sooner, set it in Keyboard Settings.")
+          "Until you next log in, pressing fn may also open the emoji picker or Apple "
+            + "Dictation. To fix that now, open Keyboard Settings and set “Press 🌐 key to” "
+            + "to Do Nothing.")
         Link("Open Keyboard Settings…", destination: Self.keyboardSettingsURL)
       }
     }
