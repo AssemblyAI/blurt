@@ -305,8 +305,5 @@ struct AssemblyAIAccountTests {
 
 extension SignInStore {
   /// The stored session, or nil when there is none or it can't be read.
-  var session: SignInSession? {
-    if case .session(let session) = load { return session }
-    return nil
-  }
+  var session: SignInSession? { load.session }
 }

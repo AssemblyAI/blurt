@@ -50,14 +50,12 @@ struct UpdatesSection: View {
   }
 }
 
-/// The Advanced pane's experimental features — per-key styles (`KeyStylesRow`),
-/// read-aloud (see `SelectionSpeechStore`), asking about the selection
+/// The Advanced pane's experimental features — read-aloud (see
+/// `SelectionSpeechStore`), asking about the selection
 /// (`SelectionAskStore`) and how a read sounds (`ReadAloudStyleStore`). The
 /// router reads the same defaults these controls write at every press, so a
 /// change applies to the next one.
 struct ExperimentalSection: View {
-  var coordinator: AppCoordinator
-
   @AppStorage(SelectionSpeechStore.defaultsKey) private var selectionSpeech = false
   @AppStorage(SelectionAskStore.defaultsKey) private var selectionAsk = SelectionAskStore.defaultValue
   @AppStorage(ReadAloudStyleStore.speedDefaultsKey) private var speed = ReadAloudStyleStore.defaultSpeed
@@ -90,7 +88,6 @@ struct ExperimentalSection: View {
 
   var body: some View {
     Section {
-      KeyStylesRow(coordinator: coordinator)
       Toggle(isOn: $selectionSpeech) {
         SettingLabel(title: "Read selected text aloud", systemImage: "speaker.wave.2")
       }

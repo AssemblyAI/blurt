@@ -34,6 +34,9 @@ public struct APIKeySubmission: Sendable {
     case alert(title: String, message: String)
   }
 
+  /// AssemblyAI didn't answer — a pasted key's check, or a sign-in's exchange.
+  static let unreachableMessage = "Couldn’t reach AssemblyAI. Check your connection and try again."
+
   private let keyStore: any APIKeyGateway
   private let validate: @Sendable (String) async -> APIKeyValidator.Result
 
@@ -84,7 +87,7 @@ extension APIKeySubmission.Outcome {
     case .invalid:
       .inline(message: "AssemblyAI rejected that key. Double-check it and try again.")
     case .unreachable:
-      .inline(message: "Couldn't reach AssemblyAI. Check your connection and try again.")
+      .inline(message: APIKeySubmission.unreachableMessage)
     case .saveFailed:
       .alert(
         title: "Couldn’t Save Your Key",

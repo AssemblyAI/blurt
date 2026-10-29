@@ -65,7 +65,10 @@ struct TypingTestView: View {
 
   private var sprint: some View {
     VStack(alignment: .leading, spacing: DesignTokens.Metrics.appSectionGap) {
-      TimelineView(.periodic(from: .now, by: DesignTokens.Motion.typingTick)) { context in
+      // Ticks only once the clock runs: before the first key nothing it shows changes.
+      let schedule = AnimationTimelineSchedule(
+        minimumInterval: DesignTokens.Motion.typingTick, paused: phase.startDate == nil)
+      TimelineView(schedule) { context in
         let remaining = remainingSeconds(at: context.date)
         let isFinalStretch =
           phase.startDate != nil && remaining <= Double(TypingTest.finalStretch.components.seconds)
@@ -212,6 +215,7 @@ struct TypingTestView: View {
     let rank = TypingTest.rank(for: wordsPerMinute)
     let rounded = Int(wordsPerMinute.rounded())
     let speedup = TypingTest.speakingWordsPerMinute / max(wordsPerMinute, 1)
+    let talking = "Talking runs about \(Int(TypingTest.speakingWordsPerMinute)) words a minute."
     return VStack(alignment: .leading, spacing: DesignTokens.Metrics.typingResultGap) {
       VStack(alignment: .leading, spacing: DesignTokens.Metrics.appChipGap) {
         Eyebrow(
@@ -238,8 +242,8 @@ struct TypingTestView: View {
 
       Text(
         speedup >= 1.5
-          ? "Talking runs about 150 words a minute. That's \(String(format: "%.1f", speedup))× you."
-          : "Talking runs about 150 words a minute. Honestly, you might not need us."
+          ? "\(talking) That's \(String(format: "%.1f", speedup))× you."
+          : "\(talking) Honestly, you might not need us."
       )
       .font(BlurtType.body(DesignTokens.Typography.sizeBody))
       .foregroundStyle(BlurtBrand.text)

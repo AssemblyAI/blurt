@@ -247,6 +247,18 @@ struct KeyboardModelProtocolTests {
     proxy.selected = "chosen"
     model.deleteBackward()
     #expect(proxy.before == "H again moved chose")
+    proxy.selected = nil
+
+    // Another field whose text happens to end the same way keeps its text.
+    deliver("OK.")
+    proxy.documentIdentifier = UUID()
+    model.deleteBackward()
+    #expect(proxy.before == "H again moved chose OK")
+    // Nor does it survive the keyboard leaving the screen.
+    deliver("bye")
+    model.disappeared()
+    model.deleteBackward()
+    #expect(proxy.before == "H again moved chose OK by")
   }
 
   @Test("the term field never claims a cursor move or a selection")

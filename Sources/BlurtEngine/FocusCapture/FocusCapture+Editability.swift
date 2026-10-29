@@ -101,78 +101,68 @@
       isBrowserBundleID(app?.bundleIdentifier)
     }
 
-    /// Whether `app` is AX-opaque — an Electron editor or a web browser — where a
-    /// focused text field can expose no editable AX signal at all. These are the
-    /// one case the injector still pastes into on a definite no-signal answer:
-    /// dropping the user's words into a copy-only fallback there would be
+    /// Bundle-identifier prefixes of native editors that draw their own text view
+    /// and expose no text element to Accessibility at all: with the caret in a
+    /// buffer, the focused element is the bare `AXWindow` — no value, no selection
+    /// range — or the system-wide query fails outright (`kAXErrorCannotComplete`).
+    /// Measured on Sublime Text 4 (build 4215), Sublime Merge (build 2132, the
+    /// commit-message box) and Zed 1.23.2; ⌘V lands in all three. Prefix-matched
+    /// so channel variants classify with their stable siblings. Named rather than
+    /// inferred from those AX answers: a native window with no focused control, or
+    /// a busy app whose query times out, answers the same way, and pasting there
+    /// beeps and then restores the clipboard over the user's words.
+    private static let customDrawnEditorBundleIDPrefixes: [String] = [
+      "com.sublimetext.",  // Sublime Text 3 + 4
+      "com.sublimemerge",
+      "dev.zed.Zed",  // Zed + Preview/Nightly
+    ]
+
+    /// Pure decision behind `isCustomDrawnEditorApp`, split out for the same reason
+    /// as `isBrowserBundleID`.
+    static func isCustomDrawnEditorBundleID(_ bundleID: String?) -> Bool {
+      guard let bundleID else { return false }
+      return customDrawnEditorBundleIDPrefixes.contains { bundleID.hasPrefix($0) }
+    }
+
+    /// Whether `app` is a known custom-drawn editor (Sublime Text, Sublime Merge,
+    /// Zed). Neither a browser nor Electron, yet just as invisible to Accessibility
+    /// — so without this it would read as "nothing editable focused" and every
+    /// dictation would land on the clipboard instead of in the buffer.
+    static func isCustomDrawnEditorApp(_ app: NSRunningApplication?) -> Bool {
+      isCustomDrawnEditorBundleID(app?.bundleIdentifier)
+    }
+
+    /// Whether `app` is AX-opaque — an Electron editor, a web browser, or a
+    /// custom-drawn editor — where a focused text field can expose no editable AX
+    /// signal at all. These are the one case the injector still pastes into on no
+    /// signal: dropping the user's words into a copy-only fallback there would be
     /// the worse mistake. The accepted trade-off is a rare ⌘V beep when such an
     /// app truly has nothing editable focused.
     static func isAXOpaqueApp(_ app: NSRunningApplication?) -> Bool {
       // String prefix checks first, whereas isElectronApp probes the disk
       // (FileManager.fileExists) — skip that I/O for the common case.
-      isBrowserApp(app) || isElectronApp(app)
+      isBrowserApp(app) || isCustomDrawnEditorApp(app) || isElectronApp(app)
     }
 
-    /// What Accessibility says about pasting into the focused element. Three
-    /// answers, not two: an app can draw its own text view and show AX nothing at
-    /// all, and that is "can't tell", not "nothing to paste into".
-    enum FocusedEditability: Equatable {
-      /// A text role, a settable value, or an insertion point.
-      case editable
-      /// AX answered, and what it shows takes no text: ⌘V would only beep.
-      case notEditable
-      /// AX couldn't answer. Measured on editors that draw their own text view
-      /// (Sublime Text 4, Sublime Merge, Zed 1.23.2, where ⌘V lands): with the
-      /// caret in a buffer the system-wide focus query fails with
-      /// `kAXErrorCannotComplete`, or the focused element is the bare `AXWindow`
-      /// with no value and no selection range.
-      case cannotTell
-    }
-
-    /// Pure decision for a focus query that resolved no element: a query that
-    /// couldn't complete can't tell; one that answered "nothing focused" (a native
-    /// app with no focused control, the desktop) means nothing takes text.
-    static func editability(ofFailedFocusQuery error: AXError) -> FocusedEditability {
-      error == .cannotComplete ? .cannotTell : .notEditable
-    }
-
-    /// Pure decision for a focused element's signals: `isEditableTarget`'s
-    /// positive signals, else a bare window — the element a custom-drawn editor
-    /// reports — can't tell, and anything else takes no text.
-    static func editability(
-      role: String?, valueSettable: Bool, hasInsertionPoint: Bool
-    ) -> FocusedEditability {
-      if isEditableTarget(role: role, valueSettable: valueSettable, hasInsertionPoint: hasInsertionPoint) {
-        return .editable
-      }
-      return role == windowRole ? .cannotTell : .notEditable
-    }
-
-    private static let windowRole = "AXWindow"
-
-    /// Whether the system-wide focused element may accept pasted text right now:
-    /// anything but a definite `.notEditable`. Read by `KeyInjector` (off the main
-    /// actor, after it has activated the target app) just before pasting — the
-    /// Accessibility *client* read APIs are thread-safe. Returns `true` whenever AX
-    /// can't be consulted (process not trusted) or can't tell, so an unknowable
-    /// state still attempts the paste — the injector's own trust check then
-    /// handles the missing-permission case.
+    /// Whether the system-wide focused element can accept pasted text right now.
+    /// Read by `KeyInjector` (off the main actor, after it has activated the target
+    /// app) just before pasting — the Accessibility *client* read APIs are
+    /// thread-safe. Returns `true` whenever AX can't be consulted (process not
+    /// trusted) or can't resolve a focused element, so an unknowable state still
+    /// attempts the paste — the injector's own trust check then handles the
+    /// missing-permission case.
     nonisolated static func hasEditableFocusedElement() -> Bool {
       guard AXIsProcessTrusted() else { return true }
-      return focusedEditability() != .notEditable
-    }
 
-    nonisolated private static func focusedEditability() -> FocusedEditability {
-      let query = queryFocusedElement()
-      guard let element = query.element else {
-        // AX is trusted but resolved no focused element. Usually a native app with
-        // nothing editable focused (Finder, the desktop, a button-only window),
-        // where ⌘V only beeps; but a query that couldn't complete is AX failing,
-        // not an answer. AX-opaque apps (Electron editors like VS Code/Slack, and
-        // browsers before Chromium's lazy accessibility tree is built) also land
-        // here, and the injector's app-identity check still pastes into those (see
-        // `KeyInjector.insert` / `isAXOpaqueApp`).
-        return editability(ofFailedFocusQuery: query.error)
+      guard let element = systemFocusedElement() else {
+        // AX is trusted but reports no focused element — e.g. a native app frontmost
+        // with nothing editable focused (Finder, the desktop, a button-only window).
+        // Posting ⌘V there only beeps, so treat it as non-editable and copy instead.
+        // AX-opaque apps (Electron editors like VS Code/Slack, and browsers before
+        // Chromium's lazy accessibility tree is built) also expose no focused
+        // element here, but the injector's app-identity check still pastes into
+        // those (see `KeyInjector.insert` / `isAXOpaqueApp`).
+        return false
       }
 
       // Same checked reader `captureFieldContext` uses for this attribute, so the
@@ -196,7 +186,8 @@
           element, kAXSelectedTextRangeAttribute as CFString, &rangeRef) == .success
         && rangeRef.flatMap(axRange) != nil
 
-      return editability(role: role, valueSettable: valueSettable, hasInsertionPoint: hasInsertionPoint)
+      return isEditableTarget(
+        role: role, valueSettable: valueSettable, hasInsertionPoint: hasInsertionPoint)
     }
   }
 #endif

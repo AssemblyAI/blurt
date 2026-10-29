@@ -945,14 +945,19 @@ the `@AppStorage(TriggerKeyStore.defaultsKey)` + `TriggerKey.fromPersisted` pair
 restating that pairing per view. The unset default belongs to `fromPersisted` (an absent keycode maps
 to right ⌘), so views must not re-declare `TriggerKey.rightCommand.rawValue` themselves.
 
-**Per-key styles.** A Key Styles row in the Advanced pane's Experimental section (`KeyStylesRow`) — a status naming the
+**Per-key styles.** A Key Styles row in its own section on the Styles pane (`KeyStylesSection`, `KeyStylesRow`) — a status naming the
 keys set up, and an Edit… button — opens a sheet with one pop-up per `TriggerKey`: the style a press
 of that key dictates with — Same as main window, Default, or a profile (disabled while enhanced
-transcripts are off) — or Off for keys other than the bound one. On Advanced rather than under the
-key picker because it's a power-user extra, so General stays short enough for a small display; a
-row in an existing section and a sheet, not a section or a row per key, because Advanced is already
-near that limit — a section of its own pushed Reset… off the bottom of CI's screen. `TriggerKeyStyleStore` (`BlurtTriggerKeyStyles`, keycode → style id) holds
-it; an absent value is today's single key with the current style. Each key is still a lone modifier
+transcripts are off) — or Off for keys other than the bound one. On Styles, under the profiles it
+picks from, rather than under the key picker, so General stays short enough for a small display;
+its own section rather than a row of Custom Styles, because that section is disabled while
+enhanced transcripts are off and turning a key on or off still works then; one row and a sheet,
+not a row per key, to keep the pane short. `TriggerKeyStyleStore` (`BlurtTriggerKeyStyles`, keycode → style id) holds
+it; an absent value is today's single key with the current style. Rebinding swaps each moved key's
+entry with a stash (`BlurtTriggerKeyStyleStash`): the key moved away from goes back to what it was
+as an extra before it was bound (off, unless the user had set it up as one), and gets its bound
+style back if it is bound again. Turning another key on or off doesn't reset the router, so a
+recording latched while the sheet is open survives it. Each key is still a lone modifier
 from the same set, watched by the same listen-only tap. The press command carries its key
 (`DictationSession.Command.press(key:)`), and the session resolves that key's style once, on the
 press's own turn, into a `PressStyle` value: its instructions ride the request's context, its name
@@ -1220,9 +1225,15 @@ refused utterance itself can't be retried, its audio having streamed as it was s
 early) defers the next one to the key's expiry, or a day out once it has expired, instead of asking
 every minute. Renewal keeps a rotated refresh token before anything else can fail; a refused refresh
 or exchange means the connection was ended elsewhere and drops key and session, an unreachable server
-changes nothing. A renewal suspends twice on the network, so a `generation` counter makes one that
-wakes after a sign-out, reset or new sign-in write nothing, and `signOut()` waits out a renewal in
-flight first. `signOut()` ends the connection server-side (`POST /api/v2/oauth/api-key/revoke`) and
+changes nothing. "Refused" at the token endpoint means an `invalid_grant` or `invalid_client` error,
+not any 400: an `invalid_request` mid-deploy or a proxy's page says nothing about the grant. A
+renewed key the Keychain won't take leaves the session's dates alone, so the renewal stays due. A
+renewal suspends twice on the network, so a `generation` counter makes one that
+wakes after a sign-out, reset or new sign-in write nothing; `signOut()` waits out a renewal in
+flight first, starts none while it talks to the server, and keeps a sign-in that lands meanwhile. A
+sign-in whose key the Keychain refuses puts the earlier session back and revokes the grant it just
+minted. An unreadable session item (a locked Keychain) is looked at again every five minutes, and the
+loop re-reads the status each pass. `signOut()` ends the connection server-side (`POST /api/v2/oauth/api-key/revoke`) and
 only then forgets it here; a revoke the server couldn't confirm (503) leaves everything in place and
 returns an inline report so the user can retry (`SignInFailure.failureReport` makes the same
 inline-vs-alert split as `APIKeySubmission`). `CredentialRows.resolve` decides which of the account

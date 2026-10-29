@@ -83,14 +83,18 @@ public struct DictationKeyRouter: Sendable {
   }
 
   /// Rebinds the trigger — keys and activation mode, the two halves of the
-  /// binding Settings can change — and resets: events already tracked belong to
-  /// the old binding, whose up-event can no longer match (or would resolve under
-  /// the old mode). The gate is rebuilt because its `activation` is `let`, part
-  /// of its determinism contract. Returns whether the reset discarded a live
-  /// recording (see `reset()`).
+  /// binding Settings can change — and resets when the change touches what the
+  /// gate is tracking: the active key unbound (its up-event can no longer match)
+  /// or the mode changed (it would resolve under the old one). The gate is
+  /// rebuilt then because its `activation` is `let`, part of its determinism
+  /// contract. Turning some *other* key on or off in Key Styles keeps the state,
+  /// so a recording latched while Settings is open survives it. Returns whether
+  /// a reset discarded a live recording (see `reset()`).
   @discardableResult
   public mutating func rebind(triggerKeyCodes: Set<Int>, activation: TriggerActivation) -> Bool {
     self.triggerKeyCodes = triggerKeyCodes
+    let activeKeyStillBound = activeKeyCode.map(triggerKeyCodes.contains) ?? true
+    guard !activeKeyStillBound || activation != gate.activation else { return false }
     let discardedRecording = reset()
     gate = DictationKeyGate(holdThreshold: gate.holdThreshold, activation: activation)
     return discardedRecording

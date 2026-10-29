@@ -1,12 +1,27 @@
 import BlurtEngine
 import SwiftUI
 
+/// The Key Styles row in a section of its own, under the styles it picks from.
+/// Not a row of Custom Styles: that section is disabled while enhanced
+/// transcripts are off, and turning a key on or off still works then (the
+/// sheet disables only the styles).
+struct KeyStylesSection: View {
+  let coordinator: AppCoordinator
+
+  var body: some View {
+    Section {
+      KeyStylesRow(coordinator: coordinator)
+    } footer: {
+      Text("Use a different style with each key, without switching styles in the main window.")
+    }
+  }
+}
+
 /// The Key Styles row: a status and an "Edit…" button, like the API key row,
 /// whose sheet gives each trigger key its own style (or Off, for keys other
-/// than the bound one). The first row of the Advanced pane's Experimental
-/// section rather than beside the dictation key on General — it's a
-/// power-user extra, and a section of its own made Advanced too tall for a
-/// small display. Settings-only, so it is not a wizard step.
+/// than the bound one). On the Styles pane, under the styles it picks from,
+/// rather than beside the dictation key on General, which has to stay short
+/// enough for a small display. Settings-only, so it is not a wizard step.
 struct KeyStylesRow: View {
   var coordinator: AppCoordinator
 
@@ -40,7 +55,7 @@ struct KeyStylesRow: View {
       bound: bound, styles: TriggerKeyStyleStore.styles(decoding: keyStylesRaw),
       profiles: StyleProfileStore().profiles(decoding: profilesRaw))
     let changed = entries.filter(\.isChanged).map(\.text)
-    SettingRow(title: "Key Styles", systemImage: "textformat") {
+    SettingRow(title: "Key Styles", systemImage: "keyboard") {
       HStack(spacing: 8) {
         // The keys set up beyond the default, or the main window's style.
         Text(changed.isEmpty ? KeyStylesSheet.mainWindowName : changed.joined(separator: ", "))
@@ -83,7 +98,7 @@ private struct KeyStylesSheet: View {
   /// profile — `choice` is one `TriggerKeyStyleStore.choice` has normalized.
   static func name(of choice: String, profiles: [StyleProfile]) -> String {
     switch choice {
-    case "": offName
+    case TriggerKeyStyleStore.offChoice: offName
     case TriggerKeyStyleStore.currentStyleID: mainWindowName
     default: StyleProfileStore.active(in: profiles, id: choice)?.name ?? StyleProfileStore.defaultStyleName
     }
@@ -102,7 +117,7 @@ private struct KeyStylesSheet: View {
               accessibilityID: UITestIdentifiers.keyStylePicker(key.keyCode),
               selection: choice(for: key, styles: styles, profiles: profiles)
             ) {
-              if key != bound { Text(Self.offName).tag("") }
+              if key != bound { Text(Self.offName).tag(TriggerKeyStyleStore.offChoice) }
               Text(Self.mainWindowName).tag(TriggerKeyStyleStore.currentStyleID)
               Group {
                 Text(StyleProfileStore.defaultStyleName).tag(StyleProfileStore.defaultStyleID)
@@ -145,13 +160,13 @@ private struct KeyStylesSheet: View {
     VStack(alignment: .leading, spacing: 6) {
       Text("Key Styles")
         .font(.headline)
-      Text("Each key can dictate with its own style, without changing the style selected in the main window.")
+      Text("Pick a style for each key. Turn another key on to dictate with it too.")
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
     }
   }
 
-  /// One key's pop-up: `""` is Off, otherwise a style id (see `TriggerKeyStyleStore`).
+  /// One key's pop-up: `offChoice` is Off, otherwise a style id (see `TriggerKeyStyleStore`).
   private func choice(
     for key: TriggerKey, styles: [TriggerKey: String], profiles: [StyleProfile]
   ) -> Binding<String> {

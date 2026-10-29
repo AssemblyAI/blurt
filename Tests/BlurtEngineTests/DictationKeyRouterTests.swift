@@ -198,6 +198,28 @@ struct DictationKeyRouterTests {
     #expect(router.handle(downEvent(otherModifier), at: .seconds(2)) == .start)
   }
 
+  @Test("turning another key on or off mid-recording keeps the recording")
+  func rebindOtherKeyKeepsRecording() {
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger])
+    #expect(router.handle(downEvent(trigger), at: .zero) == .start)
+    #expect(router.handle(upEvent(trigger), at: .milliseconds(200)) == .latch)
+    let added = router.rebind(triggerKeyCodes: [trigger, otherModifier], activation: .tapOrHold)
+    #expect(!added)
+    let removed = router.rebind(triggerKeyCodes: [trigger], activation: .tapOrHold)
+    #expect(!removed)
+    // Still latched: the next tap of the active key stops it.
+    #expect(router.handle(downEvent(trigger), at: .seconds(2)) == .none)
+    #expect(router.handle(upEvent(trigger), at: .milliseconds(2100)) == .stop)
+  }
+
+  @Test("changing the mode mid-recording discards it even with the same keys")
+  func rebindModeMidRecording() {
+    var router = DictationKeyRouter(triggerKeyCodes: [trigger])
+    #expect(router.handle(downEvent(trigger), at: .zero) == .start)
+    let discarded = router.rebind(triggerKeyCodes: [trigger], activation: .hold)
+    #expect(discarded)
+  }
+
   @Test("rebind while idle reports nothing discarded")
   func rebindWhileIdle() {
     var router = DictationKeyRouter(triggerKeyCodes: [trigger])

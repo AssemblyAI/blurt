@@ -11,6 +11,7 @@ final class FakeCopyPasteboard: CopyPasteboard {
     var changeCount = 0
     var string: String? = "user's clipboard"
     var restoreCount = 0
+    var ownWriteCount = 0
     /// A write the app makes just after its clear: applied the moment the
     /// cleared clipboard is first read, so the copier is guaranteed to see the
     /// clear on one poll and the write on a later one — without racing a timer.
@@ -23,6 +24,7 @@ final class FakeCopyPasteboard: CopyPasteboard {
   init(readable: Bool = true) { self.readable = readable }
 
   var changeCount: Int { state.withLock(\.changeCount) }
+  var ownWriteCount: Int { state.withLock(\.ownWriteCount) }
   func snapshot() -> PasteboardSnapshot? {
     guard readable else { return nil }
     return PasteboardSnapshot(items: [], plainText: state.withLock(\.string))
@@ -43,6 +45,15 @@ final class FakeCopyPasteboard: CopyPasteboard {
       guard $0.changeCount == expected else { return }
       $0.restoreCount += 1
       $0.string = saved.plainText
+      $0.changeCount += 1
+    }
+  }
+
+  /// Blurt writing the clipboard itself, as a paste does.
+  func ownWrite(_ text: String) {
+    state.withLock {
+      $0.ownWriteCount += 1
+      $0.string = text
       $0.changeCount += 1
     }
   }
@@ -138,6 +149,36 @@ struct SelectionCopyTests {
       try await Task.sleep(for: .milliseconds(10))
     }
     #expect(pasteboard.string == "user's clipboard")
+  }
+
+  @Test("a Blurt paste during the copy wait isn't read as the selection or restored over")
+  func ownWriteDuringCopyWait() async {
+    let pasteboard = FakeCopyPasteboard()
+    let copy = SelectionCopy(
+      pasteboard: pasteboard,
+      postCopy: {
+        pasteboard.ownWrite("an earlier dictation")
+        return true
+      },
+      timeout: .milliseconds(200))
+    #expect(await copy.copySelection(maxCharacters: 100) == nil)
+    #expect(pasteboard.restoreCount == 0)
+    #expect(pasteboard.string == "an earlier dictation")
+  }
+
+  @Test("a paste inside the late-copy window is left alone and ends the watch")
+  func lateWatchSparesOwnWrite() async throws {
+    let pasteboard = FakeCopyPasteboard()
+    let copy = SelectionCopy(
+      pasteboard: pasteboard, postCopy: { true }, timeout: .milliseconds(20), lateCopyWindow: .milliseconds(300))
+    #expect(await copy.copySelection(maxCharacters: 100) == nil)
+    pasteboard.ownWrite("the dictation")
+    // A copy after Blurt's write must not be restored either: the watch is over.
+    try await Task.sleep(for: .milliseconds(60))
+    _ = pasteboard.answerCopy(with: "the highlighted text")()
+    try await Task.sleep(for: .milliseconds(400))
+    #expect(pasteboard.restoreCount == 0)
+    #expect(pasteboard.string == "the highlighted text")
   }
 
   @Test("the fallback runs only when AX was unreadable, never on a bare caret")

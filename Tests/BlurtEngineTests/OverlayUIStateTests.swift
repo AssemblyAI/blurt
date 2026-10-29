@@ -67,7 +67,7 @@ struct OverlayUIStateTests {
         == .error(
           message: "Aggregate Device isn't sending any audio.",
           notice: PillNotice(subject: "Aggregate Device", predicate: "isn't sending any audio")))
-    #expect(state.pillText == "Aggregate Device isn't sending any audio")
+    #expect(state.pillNotice?.text == "Aggregate Device isn't sending any audio")
     #expect(state.pillNotice?.subject == "Aggregate Device")
     #expect(state.pillNotice?.predicate == "isn't sending any audio")
     #expect(state.accessibilityLabel == "Aggregate Device isn't sending any audio.")
@@ -77,7 +77,7 @@ struct OverlayUIStateTests {
   @Test func silentMicFailureWithoutANameStillSaysWhatHappened() {
     let error = MicCaptureError.inputNeverDelivered(deviceName: nil)
     let state = PipelinePhase.failed(.audioCaptureFailed(underlying: error)).overlayState
-    #expect(state.pillText == "The microphone isn't sending any audio")
+    #expect(state.pillNotice?.text == "The microphone isn't sending any audio")
     #expect(state.accessibilityLabel == "The microphone isn't sending any audio.")
   }
 
@@ -87,7 +87,7 @@ struct OverlayUIStateTests {
     let others: [OverlayUIState] = [
       .idle, .connecting, .recording, .processing, .error(message: "x"), .pasted, .noTarget,
     ]
-    #expect(others.allSatisfy { $0.pillText == nil && $0.pillNotice == nil })
+    #expect(others.allSatisfy { $0.pillNotice == nil })
   }
 
   @Test func foreignCaptureErrorsKeepTheirContext() {

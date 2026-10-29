@@ -15,19 +15,17 @@ struct AccountRowView: View {
   @State private var signIn = AccountSignIn()
   /// A sign-in or sign-out in flight; the button is disabled so they can't overlap.
   @State private var isWorking = false
-  /// A recoverable failure, shown in red under the row until the next attempt.
-  @State private var inlineError: String?
-  @State private var fault: Fault?
+  /// The last attempt's failure, until the next attempt: a recoverable one in
+  /// red under the row, a Keychain fault as an alert. The strings are the
+  /// engine's.
+  @State private var failure: APIKeySubmission.FailureReport?
 
-  /// The alert-shaped failure, carried as view state so the alert can present
-  /// it. The strings are the engine's.
-  private struct Fault {
-    let title: String
-    let message: String
+  private var alert: (title: String, message: String)? {
+    if case .alert(let title, let message) = failure { (title, message) } else { nil }
   }
 
-  private var isPresentingFault: Binding<Bool> {
-    Binding(get: { fault != nil }, set: { if !$0 { fault = nil } })
+  private var isPresentingAlert: Binding<Bool> {
+    Binding(get: { alert != nil }, set: { if !$0 { failure = nil } })
   }
 
   var body: some View {
@@ -35,17 +33,17 @@ struct AccountRowView: View {
     // parent `Section` while sharing the alert and the teardown.
     Group {
       row
-      if let inlineError {
+      if case .inline(let message) = failure {
         // Red, no caution glyph: "retry this", not "something broke".
-        Text(inlineError)
+        Text(message)
           .foregroundStyle(.red)
           .fixedSize(horizontal: false, vertical: true)
       }
     }
-    .alert(fault?.title ?? "", isPresented: isPresentingFault, presenting: fault) { _ in
+    .alert(alert?.title ?? "", isPresented: isPresentingAlert, presenting: alert) { _ in
       Button("OK", role: .cancel) {}
-    } message: { fault in
-      Text(fault.message)
+    } message: { alert in
+      Text(alert.message)
     }
     // The row goes away with its window or a Settings tab switch; either ends
     // the browser session too, since nothing would be left to finish it.
@@ -85,28 +83,20 @@ struct AccountRowView: View {
     Task {
       let outcome = await signIn.run(account)
       isWorking = false
-      if case .failed(let failure) = outcome { report(failure.failureReport) }
+      if case .failed(let reason) = outcome { failure = reason.failureReport }
     }
   }
 
   private func signOut() {
     begin()
     Task {
-      let failure = await account.signOut()
+      failure = await account.signOut()
       isWorking = false
-      if let failure { report(failure) }
     }
   }
 
   private func begin() {
     isWorking = true
-    inlineError = nil
-  }
-
-  private func report(_ report: APIKeySubmission.FailureReport) {
-    switch report {
-    case .inline(let message): inlineError = message
-    case .alert(let title, let message): fault = Fault(title: title, message: message)
-    }
+    failure = nil
   }
 }

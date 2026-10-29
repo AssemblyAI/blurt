@@ -56,9 +56,9 @@ private struct KeyTermsCard: View {
   @AppStorage(SharedStore.keyTermsKey, store: SharedStore.defaults) private var raw = ""
   @State private var draft = ""
 
-  private var terms: [String] { KeyTerms.parse(raw) }
-
   var body: some View {
+    // Parsed once per redraw, which every keystroke in the field causes.
+    let terms = KeyTerms.parse(raw)
     VStack(alignment: .leading, spacing: DesignTokens.Metrics.appStackGap) {
       Eyebrow("Key terms")
       if !terms.isEmpty {
@@ -73,9 +73,9 @@ private struct KeyTermsCard: View {
           .textInputAutocapitalization(.never)
           .autocorrectionDisabled()
           .submitLabel(.done)
-          .onSubmit(add)
+          .onSubmit { add(to: terms) }
           .brandInput()
-        Button("Add", action: add)
+        Button("Add") { add(to: terms) }
           .buttonStyle(BrandButtonStyle())
           .fixedSize()
           .disabled(KeyTerms.parse(draft).isEmpty || terms.count >= KeyTerms.termCap)
@@ -87,6 +87,8 @@ private struct KeyTermsCard: View {
       )
       .brandFootnote()
       if !terms.isEmpty {
+        // The whole list, for a friend: a `.blurtterms` file plus the words as text.
+        let pack = TermPack(name: "Key terms", from: nil, terms: terms)
         ShareLink(
           item: pack, subject: Text("Blurt key terms"), message: Text(pack.plainText),
           preview: SharePreview(pack.name, icon: Image(systemName: "text.badge.plus"))
@@ -102,10 +104,7 @@ private struct KeyTermsCard: View {
     .card()
   }
 
-  /// The whole list, for a friend: a `.blurtterms` file plus the words as text.
-  private var pack: TermPack { TermPack(name: "Key terms", from: nil, terms: terms) }
-
-  private func add() {
+  private func add(to terms: [String]) {
     let updated = WordsEdit.addingKeyTerms(draft, to: terms)
     guard updated != terms else { return }
     SharedStore.keyTerms = updated

@@ -5,10 +5,10 @@ import BlurtEngine
 /// (the keyboard shows those where the user is typing). Plus whether setup is
 /// complete. Pure, so the wording is tested and the view only lays it out.
 package nonisolated struct HomeStatus: Equatable {
-  /// The card's eyebrow: "Session on" or "Session off".
-  package let label: String
   /// The listening window is open, so the Blurt keyboard can dictate.
   package let isOn: Bool
+  /// The card's eyebrow.
+  package var label: String { isOn ? "Session on" : "Session off" }
   /// The line under it: what to do now, and how long the session lasts.
   package let message: String
   /// A dictation that failed, said plainly; nil when nothing did.
@@ -25,7 +25,6 @@ package nonisolated struct HomeStatus: Equatable {
     keyboardSeen: Bool
   ) {
     isOn = windowOpen
-    label = windowOpen ? "Session on" : "Session off"
     if micDenied {
       message = "Blurt needs microphone access to dictate. Turn it on in Settings."
     } else if windowOpen {

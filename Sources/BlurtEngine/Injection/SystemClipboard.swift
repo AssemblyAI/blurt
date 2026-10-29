@@ -1,6 +1,7 @@
 #if os(macOS)
   import AppKit
   import Foundation
+  import Synchronization
 
   /// A thread-safe, value-type representation of a pasteboard item containing its data
   /// keyed by pasteboard types, allowing it to cross concurrency boundaries safely.
@@ -86,6 +87,16 @@
 
     var changeCount: Int { NSPasteboard.general.changeCount }
 
+    /// Counts the writes Blurt itself makes to the pasteboard, bumped *before*
+    /// each one, so a reader that sees the pasteboard's change count move can
+    /// then tell whether Blurt made the change (`SelectionCopy`'s late-copy
+    /// watcher must never restore over a paste's transcript).
+    private static let ownWrites = Atomic<Int>(0)
+
+    var ownWriteCount: Int { Self.ownWrites.load(ordering: .sequentiallyConsistent) }
+
+    private func noteOwnWrite() { Self.ownWrites.add(1, ordering: .sequentiallyConsistent) }
+
     /// Snapshots the pasteboard, or `nil` when it can't be read at all
     /// (`pasteboardItems` is documented to return nil on error). Callers must treat
     /// nil as "don't restore" — never as an empty clipboard.
@@ -107,12 +118,14 @@
     }
 
     func setString(_ text: String) {
+      noteOwnWrite()
       let pasteboard = NSPasteboard.general
       pasteboard.clearContents()
       pasteboard.setString(text, forType: .string)
     }
 
     func restore(_ saved: PasteboardSnapshot) {
+      noteOwnWrite()
       let pasteboard = NSPasteboard.general
 
       // The pasteboard genuinely held nothing, so restoring it means emptying it.

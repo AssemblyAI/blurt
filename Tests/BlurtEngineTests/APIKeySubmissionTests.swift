@@ -105,7 +105,7 @@ struct APIKeySubmissionTests {
   func unreachableIsInline() {
     #expect(
       APIKeySubmission.Outcome.unreachable.failureReport
-        == .inline(message: "Couldn't reach AssemblyAI. Check your connection and try again."))
+        == .inline(message: APIKeySubmission.unreachableMessage))
   }
 
   @Test("a Keychain write fault is an alert, not inline text")

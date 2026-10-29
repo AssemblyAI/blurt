@@ -20,7 +20,7 @@ struct SettingsWindowRoot: View {
       TabView {
         GeneralSettingsTab(coordinator: coordinator)
           .tabItem { Label(UITestIdentifiers.generalSettingsTab, systemImage: "gearshape") }
-        StylesSettingsTab()
+        StylesSettingsTab(coordinator: coordinator)
           .tabItem { Label(UITestIdentifiers.stylesSettingsTab, systemImage: "textformat") }
         VocabularySettingsTab()
           .tabItem {
@@ -66,21 +66,25 @@ private struct GeneralSettingsTab: View {
   }
 }
 
-/// The enhanced-transcripts switch and the user's style profiles — their own
-/// pane rather than an Advanced section. The switch leads because styles only
-/// shape the enhanced rewrite: with it off they're disabled, and the switch that
-/// re-enables them sits directly above rather than on another pane.
+/// The enhanced-transcripts switch, the user's style profiles, and which style
+/// each trigger key dictates with — their own pane rather than an Advanced
+/// section. The switch leads because styles only shape the enhanced rewrite:
+/// with it off they're disabled, and the switch that re-enables them sits
+/// directly above rather than on another pane.
 private struct StylesSettingsTab: View {
+  let coordinator: AppCoordinator
+
   var body: some View {
     SettingsPane {
       TranscriptionSection()
       StyleProfilesSection()
+      KeyStylesSection(coordinator: coordinator)
     }
   }
 }
 
 /// The occasional stuff: checking for an update, experimental features
-/// (per-key styles among them), the developer-mode log toggle, and the
+/// (read-aloud), the developer-mode log toggle, and the
 /// start-over button. Kept out of General so
 /// the common pane stays short.
 private struct AdvancedSettingsTab: View {
@@ -90,7 +94,7 @@ private struct AdvancedSettingsTab: View {
   var body: some View {
     SettingsPane {
       UpdatesSection(model: updaterModel)
-      ExperimentalSection(coordinator: coordinator)
+      ExperimentalSection()
       MaintenanceSection()
       ResetSection(coordinator: coordinator)
     }
@@ -196,7 +200,7 @@ private struct StyleProfilesSection: View {
       // Ellipsis for the same reason as the API-key row's "Connect…": the
       // action needs more input before it completes.
       Button("Add Style…") { editing = StyleProfile(name: "", instructions: "") }
-        .disabled(profiles.count >= StyleProfileStore.profileLimit)
+        .disabled(profiles.count >= StyleProfileStore.limit)
         .accessibilityIdentifier(UITestIdentifiers.styleProfileAdd)
     } header: {
       Text("Custom Styles")
@@ -208,7 +212,7 @@ private struct StyleProfilesSection: View {
         enhancedTranscripts
           ? "A style tells Blurt how to polish your dictations — for example, “casual, all "
             + "lowercase” for chat. Switch between styles in the main window. Create up to "
-            + "\(StyleProfileStore.profileLimit) styles."
+            + "\(StyleProfileStore.limit) styles."
           : StylesInertNotice.settingsText)
     }
     .disabled(!enhancedTranscripts)

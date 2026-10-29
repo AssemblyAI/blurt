@@ -80,6 +80,11 @@ public struct SignInStore: Sendable {
     case none
     case session(SignInSession)
     case unavailable
+
+    /// The stored session, or nil when there is none or it can't be read.
+    public var session: SignInSession? {
+      if case .session(let session) = self { session } else { nil }
+    }
   }
 
   private let read: @Sendable () -> KeychainStore.ReadResult

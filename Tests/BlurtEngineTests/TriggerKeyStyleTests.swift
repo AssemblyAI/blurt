@@ -68,6 +68,33 @@ struct TriggerKeyStyleTests {
     #expect(keyStyles.styles == [.function: formal.id.uuidString])
   }
 
+  @Test("a key bound away and back gets its style back")
+  func rebindBackRestoresTheStyle() {
+    let keys = TriggerKeyStore(defaults: defaults)
+    _ = keyStyles.setStyle(casual.id.uuidString, for: .rightCommand)
+    keys.triggerKey = .rightOption
+    #expect(keyStyles.enabledKeys == [.rightOption])
+    keys.triggerKey = .rightCommand
+    #expect(keyStyles.enabledKeys == [.rightCommand])
+    #expect(keyStyles.styles == [.rightCommand: casual.id.uuidString])
+  }
+
+  @Test("a key set up as an extra before it was bound is an extra again once unbound")
+  func extraKeySurvivesBeingBound() {
+    let keys = TriggerKeyStore(defaults: defaults)
+    _ = keyStyles.setStyle(casual.id.uuidString, for: .rightOption)
+    keys.triggerKey = .rightOption
+    // Bound, it keeps dictating with the style it had as an extra.
+    #expect(keyStyles.styles[.rightOption] == casual.id.uuidString)
+    _ = keyStyles.setStyle(formal.id.uuidString, for: .rightOption)
+    keys.triggerKey = .rightCommand
+    #expect(keyStyles.enabledKeys == [.rightCommand, .rightOption])
+    #expect(keyStyles.styles[.rightOption] == casual.id.uuidString)
+    // And bound again, the style it was given while bound.
+    keys.triggerKey = .rightOption
+    #expect(keyStyles.styles[.rightOption] == formal.id.uuidString)
+  }
+
   @Test("a corrupt value or an unknown keycode binds nothing new")
   func corruptOrUnknownDecodesToNothing() {
     #expect(TriggerKeyStyleStore.styles(decoding: "not json").isEmpty)

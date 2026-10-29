@@ -144,7 +144,7 @@ extension HTTPClientTests {
       enhancedTranscripts: { true },
       rewriteMode: { .fast }
     )
-    .makeConfigData(sampleRate: 16_000, sttPrompt: prompt, keytermsPrompt: keyterms, customStyle: nil)
+    .makeConfigData(sampleRate: 16_000, sttPrompt: prompt, keytermsPrompt: keyterms, customStyle: nil, enhanced: true)
     return try #require(JSONSerialization.jsonObject(with: config) as? [String: Any])
   }
 

@@ -279,10 +279,10 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// Neither steering field is defaulted: every caller states both, so what a
   /// given request does and does not steer with is readable at the call site
   /// rather than inferred from which argument was left off.
-  /// `enhanced` is the request's reading of the setting; nil reads it now.
+  /// `enhanced` is the request's one reading of the setting, which the paste
+  /// uses too.
   func makeConfigData(
-    sampleRate: Int, sttPrompt: String, keytermsPrompt: [String], customStyle: String?,
-    enhanced: Bool? = nil
+    sampleRate: Int, sttPrompt: String, keytermsPrompt: [String], customStyle: String?, enhanced: Bool
   ) throws -> Data {
     try JSONEncoder().encode(
       DictationConfig(
@@ -292,7 +292,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
         keytermsPrompt: keytermsPrompt,
         llmInstruction: cleanupInstruction(appending: customStyle),
         // Only while the rewrite is pasted: off, a slower model only adds latency.
-        rewriteMode: (enhanced ?? enhancedTranscriptsEnabled()) ? rewriteMode().wireValue : nil
+        rewriteMode: enhanced ? rewriteMode().wireValue : nil
       )
     )
   }

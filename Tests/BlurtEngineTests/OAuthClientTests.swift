@@ -141,7 +141,7 @@ struct OAuthClientTests {
     #expect(tokens == OAuthClient.Tokens(accessToken: "fresh", refreshToken: nil, idToken: nil))
   }
 
-  @Test("the token endpoint's 400/401 is a refusal; 5xx, garbage and offline are unreachable")
+  @Test("the token endpoint's invalid_grant/invalid_client is a refusal; 5xx, garbage and offline are unreachable")
   func tokenFailures() async {
     for (status, expected) in [(400, OAuthClient.Failure.rejected), (401, .rejected), (500, .unreachable)] {
       let transport = FakeHTTPTransport { _ in (status, json(["error": "invalid_grant"])) }
@@ -149,8 +149,18 @@ struct OAuthClientTests {
     }
     let garbage = FakeHTTPTransport { _ in (200, Data("nope".utf8)) }
     await #expect(throws: OAuthClient.Failure.unreachable) { try await client(garbage).refresh("rt") }
+    let invalidClient = FakeHTTPTransport { _ in (401, json(["error": "invalid_client"])) }
+    await #expect(throws: OAuthClient.Failure.rejected) { try await client(invalidClient).refresh("rt") }
     let offline = FakeHTTPTransport.failing(with: URLError(.notConnectedToInternet))
     await #expect(throws: OAuthClient.Failure.unreachable) { try await client(offline).refresh("rt") }
+  }
+
+  @Test("a 400 that doesn't name a dead credential is not a refusal")
+  func tokenOtherClientErrors() async {
+    for data in [json(["error": "invalid_request"]), json(["error": "unsupported_grant_type"]), Data("<html>".utf8)] {
+      let transport = FakeHTTPTransport { _ in (400, data) }
+      await #expect(throws: OAuthClient.Failure.unreachable) { try await client(transport).refresh("rt") }
+    }
   }
 
   @Test("the exchange sends the bearer token and reads the key and its expiry")
