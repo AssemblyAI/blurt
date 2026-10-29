@@ -71,6 +71,35 @@ struct AssemblyAITranscriberMultipartTests {
     #expect(tail == "\r\n--\(try boundary(of: body))--\r\n")
   }
 
+  @Test("the buffered body is the streamed body's four pieces, in the same order")
+  func bufferedBodyMatchesTheStreamedFraming() {
+    // The over-cap fallback re-sends the recording to `/v1/transcribe`, and the
+    // reference has it take the same `config` and the same audio part. Building
+    // it from the streamed body's own pieces is what keeps the two from drifting:
+    // the same part names, the same `audio.pcm` filename, the same CRLFs.
+    let config = Data(#"{"channels":1}"#.utf8)
+    let pcm = StubPCM.everyByteValueAboveMinimum
+    var streamed = DictationMultipart.configHead(config: config, boundary: "BOUND")
+    streamed.append(DictationMultipart.audioPartHeader(boundary: "BOUND"))
+    streamed.append(pcm)
+    streamed.append(DictationMultipart.closingBoundary(boundary: "BOUND"))
+
+    #expect(DictationMultipart.bufferedBody(config: config, audio: pcm, boundary: "BOUND") == streamed)
+  }
+
+  @Test("the documented error_code is decoded beside the message")
+  func errorCodeDecodes() throws {
+    // The fallback's trigger reads it: `413` alone is not specific enough.
+    let refusal = try JSONDecoder().decode(
+      ErrorResponse.self,
+      from: json(["error": "audio exceeds 120000 ms", "error_code": "audio_too_large"]))
+    #expect(refusal.errorCode == "audio_too_large")
+    #expect(refusal.message == "audio exceeds 120000 ms")
+    // The `{status, title, detail}` shape carries no code.
+    let detail = try JSONDecoder().decode(ErrorResponse.self, from: json(["detail": "Invalid API key"]))
+    #expect(detail.errorCode == nil)
+  }
+
   /// The boundary the transcriber generated for this request, read back out of
   /// the body's first line — it is a fresh UUID per request, so the assertion
   /// above cannot hard-code one.

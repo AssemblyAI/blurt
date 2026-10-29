@@ -262,12 +262,14 @@ struct HTTPClientTests {
 
   @Test("transcriber HTTP error carries the decoded server message")
   func transcribeHTTPErrorMessage() async throws {
-    // A documented status carrying a documented shape: 413 with
+    // A documented status carrying a documented shape: 503 with
     // `{error, error_code}`. This asserted a 422 with a `message` key until
     // 2026-09-11, and neither the status nor the field is in the reference —
-    // so the test was pinning a response the route does not send.
-    let body = json(["error": "audio too long", "error_code": "audio_too_large"])
-    let transport = FakeHTTPTransport { _ in (413, body) }
+    // so the test was pinning a response the route does not send. It was a 413
+    // `audio_too_large` until that became the over-cap fallback's trigger
+    // (`LiveCapFallbackTests`), which this fake would have answered twice.
+    let body = json(["error": "server at capacity", "error_code": "capacity_exceeded"])
+    let transport = FakeHTTPTransport { _ in (503, body) }
 
     // The transcriber surfaces its transport error directly; DictationSession is
     // the layer that wraps it in BlurtError.sttFailed before it reaches the UI.
@@ -275,8 +277,8 @@ struct HTTPClientTests {
       _ = try await collectTranscript(makeTranscriber(apiKey: "k", transport: transport))
       Issue.record("expected a throw")
     } catch let AssemblyAIError.http(status, message) {
-      #expect(status == 413)
-      #expect(message == "audio too long")
+      #expect(status == 503)
+      #expect(message == "server at capacity")
     } catch {
       Issue.record("expected AssemblyAIError.http, got \(error)")
     }

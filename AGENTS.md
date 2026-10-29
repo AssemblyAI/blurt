@@ -8,7 +8,9 @@ the Claude-Code-specific tooling under `.claude/` (hooks, skills, subagents).
 Blurt is a macOS dictation app powered by [AssemblyAI](https://www.assemblyai.com). Tap or hold a
 trigger key, speak, and polished text is pasted into the focused app. Transcription is **one remote
 AssemblyAI dictation API call**: the audio plus a request for the service's server-side LLM cleanup
-rewrite (`config.llm_instruction`), so the text that comes back is already polished. The user supplies their own
+rewrite (`config.llm_instruction`), so the text that comes back is already polished. (A recording
+past the streaming route's 120 s cap is the one exception: it is sent again, whole, to the
+buffered route — see [the over-cap fallback](#the-over-cap-fallback).) The user supplies their own
 API key. The request's `stt_prompt` carries **two context signals, newline-joined oldest first: the
 user's recent dictations, then the text immediately before the cursor**. The frontmost app, the
 window title, the focused field's label, and the selected text are captured for local work (paste
@@ -402,7 +404,8 @@ entries fail `check.sh` rather than relying on a reviewer's memory: `AVAudioEngi
 capture, a streaming or on-device path, a client-side cleanup pass (`StylerProtocol`, an LLM
 Gateway/LeMUR client), `config.language_code(s)`, `config.conversation_context`, `config.prompt`, a keystroke-typing injector,
 `LSUIElement`, a `KeyboardShortcuts` import, the production Keychain
-under `Tests/`, and `@available(*, deprecated)` shims. The SPM-dependency row has its own guard in
+under `Tests/`, `@available(*, deprecated)` shims, and the buffered
+`/v1/transcribe` path anywhere but the over-cap fallback. The SPM-dependency row has its own guard in
 `check.sh` (it parses `project.yml`'s `packages:` block), and the `.pbxproj` row is covered by the
 xcodegen drift check plus a Claude `PreToolUse` hook. The rest — the filler-word clause, the
 context-widening rule, the `/Applications` install path — stay prose, because no pattern separates
@@ -422,6 +425,7 @@ rule along with the row.
 | Pre-open the mic to shave bring-up latency (a warm/prepared recorder)          | Measured against `kAudioDevicePropertyDeviceIsRunningSomewhere`: neither building an `AVCaptureSession` nor the retired `AVAudioRecorder.prepareToRecord()` opens the device, so neither pre-pays the 180–600 ms route activation `record()` costs. A warm-recorder lifecycle bought ~15 ms and cost a device-identity check, a pin check, an expiry and a bring-up flag. `MicCapture.warmUp()` is stateless: it absorbs the process's first-touch cost and holds nothing.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | Add streaming STT                                                              | The dictation API returns the full (already rewritten) text in one response; the overlay shows "Transcribing…" then the full text. The one WebSocket allowed is the experimental read-aloud feature's streaming **TTS**, confined to `Sources/BlurtEngine/TTS/AssemblyAISpeechSynthesizer.swift` (the invariant gate exempts only that file).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Call the dictation API in a way its docs don't describe                        | **The reference is the source of truth.** Every path, header, multipart part, `config` key, response key and error key Blurt sends or reads is one it documents. The route has been renamed repeatedly and still answers to names the docs have dropped — `prompt`, `keyterms`, `word_boost`, `language_code`, `llm: null` — so a 200 is not evidence a field is supported, only that it has not been removed yet; treat anything absent from the docs as deprecated. Undocumented behaviour carries no compatibility promise, so a feature resting on it can stop working silently: that is why `llm: null` (the only rewrite off switch there is) and the `message` error field were dropped on 2026-09-11, along with `warmUp()`'s GET at the bare host root in favour of the documented `GET /warm`. Running tighter than a documented cap is fine — `STTPrompt.characterCap` does. Measuring is still how a claim gets settled, and the docs have been wrong twice (see `DictationWireTypes` on unknown fields, `STTPrompt` on the 6000 cap), but a measurement licenses _distrusting_ a documented field, never _sending_ an undocumented one. |
+| Keep a copy of the recording for anything but the over-cap fallback            | `MicCapture.stop()` answers a byte count, not the audio (owner-directed, 2026-09-08): accumulating the blob in the capture lock cost a second `memcpy` of every byte and held a duplicate until release, and nothing read it back. The one copy that exists is the transcriber's (`relay`, in `AssemblyAITranscriber+LiveCapFallback.swift`), kept on the upload's task to back the documented `/v1/transcribe` fallback when the streaming route refuses a recording past its 120 s cap (`413 audio_too_large`): the 2026-09-08 rule's "no retry-from-buffer path", reversed for that one case on 2026-10-29. Don't read it back for a retry, a replay, a cache or a second request of any other kind, and don't move it into `MicCapture`. `check-invariants.sh` keeps the buffered route's path inside that one file.                                                                                                                                                                                                                                                                                                                             |
 | Add a client-side LLM cleanup pass                                             | Cleanup is the dictation API's server-side rewrite, requested by `config.llm_instruction` on the same `/v1/transcribe/live` call. No LLM Gateway client, no `StylerProtocol`, no styling stage, no second request — transcription steering belongs in `STTPrompt`. The one gateway client allowed is the experimental read-aloud feature's, confined to `Sources/BlurtEngine/TTS/ReadAloudLLM.swift` (the invariant gate exempts only that file): the skip-jargon listening rewrite of a selection, and the spoken answer to a request about one, neither of which the TTS socket has a server-side equivalent for. It never cleans up a dictation; the only transcript it sees is a hand-back press's request (`.handedBack`), which is never pasted.                                                                                                                                                                                                                                                                                                                                                                                               |
 | Add local models or model downloads                                            | Transcription is a remote AssemblyAI call: no on-device ASR/LLM, no model cache, no download UI.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Pin transcription to English, or set a language at all                         | Hurt non-English transcription; language is left to the model's own detection. **No `config.language_codes`** either — note the plural, which is the documented spelling, though the undocumented singular `language_code` is accepted too (a 200, not the unknown-key 400 a bogus name earns), so both are live and both are pinned absent. Detection was measured to work with neither it nor a prompt set (es/fr/de/ja clips each transcribed in their own language against the live endpoint, rewrite included), and re-measured 2026-09-11: a Spanish clip came back as Spanish with no field, with `language_codes: ["es"]`, **and** with `language_codes: ["en"]` — asking for English did not force English, so the reference's `["en"]` default does not describe this route and omission is not a bet on a default. Setting one would only take working detection away. `KeytermsWireTests` asserts the absence of both spellings.                                                                                                                                                                                                         |
@@ -488,7 +492,8 @@ framework, or notarization rejects the build; roll-forward-only for a bad releas
 ```text
 DictationKeyTap (CGEventTap + DictationKeyGate) → AppCoordinator → DictationSession (actor) → MicCapture
                        ↓
-              AssemblyAITranscriber  (STT + LLM cleanup, dictation API: one POST /v1/transcribe/live)
+              AssemblyAITranscriber  (STT + LLM cleanup, dictation API: one POST /v1/transcribe/live;
+                                      past its 120 s cap, the whole recording to /v1/transcribe)
                        ↓
               KeyInjector → focused app (clipboard paste via a synthesized ⌘V CGEvent)
 ```
@@ -505,7 +510,9 @@ still speaking — no temp file, no read-back, and no resampling or float-conver
 answers a **byte count**, not the audio: the recording has already gone out by then, so all the
 release path needs is whether there was enough of it to send (`SyncSTTLimits.minPCMBytes`).
 Accumulating the blob as well cost a second `memcpy` of every byte inside the capture lock and
-retained a duplicate of the whole utterance until release.
+retained a duplicate of the whole utterance until release. The one copy of the recording that does
+exist now lives in the transcriber, not here: the upload layer keeps it, off the capture lock, to
+back [the over-cap fallback](#the-over-cap-fallback) and nothing else.
 
 A **fresh recorder per session**, built around the _current_ resolution of the user's selection at
 press time; this is deliberate — see
@@ -719,9 +726,10 @@ apart, and the harness refuses to report an over-cap winner — see its README's
 The finished text arrives in the response body — no `/v2/upload`, no job submission, no polling.
 The **upload is chunked**: `transcribe(frames:sampleRate:context:)` is called at _press_ and
 streams the recording into one open request as the microphone produces it, so the transfer overlaps
-the speaking instead of following it. There is no buffered path — measured on a 1 Mbps uplink, a
-10 s dictation waits ~3.1 s after speech buffered versus ~0.5 s chunked, and on a fast link the two
-are within noise. The `config` part is written **first**, which the streaming route requires — it
+the speaking instead of following it. Every dictation starts on this path — measured on a 1 Mbps
+uplink, a 10 s dictation waits ~3.1 s after speech buffered versus ~0.5 s chunked, and on a fast link
+the two are within noise. The only buffered request is [the over-cap fallback](#the-over-cap-fallback),
+for a recording this route has refused as too long. The `config` part is written **first**, which the streaming route requires — it
 cannot open its upstream STT call without it, and rejects an audio-first body with a 400 (whose
 exact wording lives once, on `AssemblyAITranscriber.streamedBody`). That is
 also where the rest of the win comes from: the service starts inferring as the audio arrives rather
@@ -731,13 +739,46 @@ The cost is that the press-time context read has to be settled _before_ the requ
 path doing so — the read is dispatched before the mic bring-up is joined, so it is almost always
 already finished and the wait is spent while the user is still speaking, not while they wait for a
 transcript. The _response_
-is unchanged and still arrives whole: a single `async throws -> String`, no deltas. The dictation API
-accepts audio from ~80 ms up to 20 minutes (1200 s; it was 120 s until the API raised it; server-side ~30 s inference deadline); those limits live in
-`SyncSTTLimits` and back `DictationSession`'s auto-release timeout, so a held hotkey stops before
-the cap (at 1195 s).
+is unchanged and still arrives whole: a single `async throws -> String`, no deltas. The streaming
+route accepts audio from ~80 ms up to **120 s** (server-side ~30 s inference deadline); the buffered
+route accepts up to **20 minutes** / 256 MB. Blurt records for up to the buffered route's 20 minutes
+(`SyncSTTLimits.maxAudioSeconds`, raised from 120 s in #251), and that cap backs
+`DictationSession`'s auto-release timeout, so a held hotkey stops before it (at 1195 s).
+
+#### The over-cap fallback
+
+`AssemblyAITranscriber+LiveCapFallback.swift`. The streaming route answers a recording that runs past
+its 120 s cap with `413 {"error_code": "audio_too_large"}` — mid-upload, as soon as the cap is passed,
+while the user may still be talking. Before this fallback, that 413 surfaced at release as
+"Transcription failed: AssemblyAI error 413: audio exceeds 120000 ms" and everything said was lost —
+on every dictation over two minutes once #251 raised the recording cap. Now:
+
+1. The capture feed reaches the upload through `relay`, which keeps a copy of every audio byte, from
+   the first, on the upload's own task — never under `MicCapture`'s capture lock.
+2. Only `413` **and** `error_code == "audio_too_large"` triggers the fallback. Every other failure
+   surfaces exactly as before, and the copy is dropped with the request.
+3. On the trigger, `relay` keeps reading the feed until the recording ends (key up, or the
+   auto-release), so audio spoken after the refusal is kept. The drain is recording time: it has no
+   timeout of its own.
+4. The whole copy goes to `POST /v1/transcribe` once, with the same `config` JSON, the same audio part
+   (`audio.pcm`, `audio/pcm`) and the normal idle timeout, and its response takes the same path as a
+   streamed one: rewrite or `text`, paste, history. The pill reads "Transcribing…" throughout. If it
+   fails, its own error is what surfaces.
+5. The copy is bounded by `SyncSTTLimits.maxBufferedAudioBytes` (the route's 256 MB); past it the
+   copy is dropped and the fallback fails cleanly (`AssemblyAIError.recordingTooLarge`). At the
+   capture geometry a 20-minute recording is ~38 MB, so this is a guard.
+6. A cancel drops the copy and sends nothing.
+
+`/v1/transcribe` is documented — <https://assemblyai.com/docs/api-reference/dictation-api/transcribe.md>
+— which is what licenses calling it under "The reference is the source of truth". AssemblyAI's Python and
+Node SDKs are getting the same fallback to the same spec. The alternative, if the copy isn't wanted, is putting
+`SyncSTTLimits.maxAudioSeconds` back to 120, so the auto-release stops a held key just inside the
+streaming route's cap; raising that cap server-side would make the fallback unnecessary.
 
 Every wire constant was swept against the live route on 2026-09-09 (the keyterms list at 2048 chars and the
-then-120 s audio ceiling were both exact and enforced — the ceiling has since been raised to 20 minutes and not re-swept; the prompt's 4096 is the API's own and hard-rejecting,
+then-120 s audio ceiling were both exact and enforced — the streaming route's 120 s is enforced again
+server-side since 2026-10-14, re-measured 2026-10-29 as a mid-upload 413 on 130 s of audio, while
+`/v1/transcribe` answered the same 130 s with a 200; the prompt's 4096 is the API's own and hard-rejecting,
 measured in Unicode scalars on 2026-09-10 — it was `conversation_context`'s 4096, which was **ours**
 and merely trimmed, until `stt_prompt` replaced that field; the whole `config` part is separately
 limited somewhere past 48 kB; sub-floor audio returns 200 with an

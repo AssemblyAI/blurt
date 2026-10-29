@@ -97,6 +97,11 @@ NOT_TTS=":!Sources/BlurtEngine/TTS/AssemblyAISpeechSynthesizer.swift"
 # *dictation* cleanup staying on the dictation request, so that client — that
 # one file — is excluded; a gateway call anywhere else still fails.
 NOT_READ_ALOUD_LLM=":!Sources/BlurtEngine/TTS/ReadAloudLLM.swift"
+# The buffered-route rule's one carve-out: the over-cap fallback, which sends a
+# recording the streaming route refused past its 120 s cap to /v1/transcribe
+# whole. The copy it sends exists for that alone, so the route's path may appear
+# in that file and nowhere else.
+NOT_LIVE_CAP_FALLBACK=":!Sources/BlurtEngine/STT/AssemblyAITranscriber+LiveCapFallback.swift"
 
 # Four parallel arrays rather than one delimited list, for the reason
 # check-portability.sh gives: the patterns contain `|`, so splitting on it
@@ -116,6 +121,7 @@ PATTERNS=(
   "KeychainStore\\(service: *(HostIdentity\\.current\\.keychainService|\"blurt\")"
   "@available\\(\\*, *deprecated"
   "import AVFoundation|import AVFAudio|AVCaptureSession|AVAudioSession|AVAudioApplication|AudioQueueNewInput"
+  "\"/?(v1/)?transcribe\""
 )
 SCOPES=(
   "$ENGINE $APP"
@@ -131,6 +137,7 @@ SCOPES=(
   "$TESTS"
   "$ENGINE $APP"
   "$KEYBOARD"
+  "$ENGINE $APP $NOT_LIVE_CAP_FALLBACK"
 )
 ADVICE=(
   "MicCapture builds a fresh AVCaptureSession recorder per capture — a long-lived engine goes stale on a device switch"
@@ -146,6 +153,7 @@ ADVICE=(
   "use an isolated service (see KeychainStoreTests) or InMemoryAPIKeyStore"
   "deleted types stay deleted — no deprecated re-exports"
   "the keyboard never hears anything: the app listens and transcribes, the keyboard inserts (KeyboardRelayInjector)"
+  "dictation streams to /v1/transcribe/live; the buffered route is only the over-cap fallback's (AssemblyAITranscriber+LiveCapFallback.swift)"
 )
 
 # One known-bad line per rule, same order. `--self-test` asserts each pattern
@@ -166,6 +174,7 @@ PROBES=(
   "let store = KeychainStore(service: HostIdentity.current.keychainService, account: \"AssemblyAIAPIKey\")"
   "@available(*, deprecated, renamed: \"NewName\")"
   "let session = AVCaptureSession()"
+  "static let bufferedTranscribePath = \"v1/transcribe\""
 )
 
 # A verbatim slice of the row in AGENTS.md's "Settled decisions" table that each
@@ -188,6 +197,7 @@ TABLE_ANCHORS=(
   "Touch the real Keychain in tests"
   "Add backwards-compat shims for removed types"
   "Give the keyboard extension a microphone or any audio type"
+  "Keep a copy of the recording for anything but the over-cap fallback"
 )
 
 # The same rule as the guardrails skill words it. Deliberately not the table's
@@ -209,6 +219,7 @@ SKILL_ANCHORS=(
   "the real Keychain in tests"
   "Don't add backwards-compat shims for removed types."
   "The keyboard never hears anything."
+  "One copy of the recording exists, for one reason."
 )
 
 if [ "${#SCOPES[@]}" -ne "${#PATTERNS[@]}" ] \
@@ -242,6 +253,7 @@ if [ "${1:-}" = "--self-test" ]; then
     "let prompt: NSDictionary = [\"AXTrustedCheckOptionPrompt\": true]"
     "KeychainStore(service: \"dev.alex.blurt.tests\", account: \"test-\\(UUID().uuidString)\")"
     "case sttPrompt = \"stt_prompt\""
+    "private static let transcribePath = \"v1/transcribe/live\""
   )
   for good in "${GOOD[@]}"; do
     hit=""

@@ -1,7 +1,16 @@
 /// Limits imposed by the Sync STT model behind AssemblyAI's dictation API
 /// (the dictation service forwards audio to Sync unchanged, so its caps apply
 /// end to end). `DictationSession` auto-releases a held hotkey just before the
-/// cap so a long press never records audio the endpoint would reject.
+/// recording cap so a long press never records audio the API would reject.
+///
+/// Two routes, two caps. The **streaming** route every dictation starts on,
+/// `/v1/transcribe/live`, accepts at most 120 s (server-side since
+/// 2026-10-14); the **buffered** route, `/v1/transcribe`, accepts 20 minutes
+/// and 256 MB. The recording cap below is the buffered route's, and a
+/// recording that outlives the streaming route's is finished and sent there
+/// whole — `AssemblyAITranscriber+LiveCapFallback.swift`. The 120 s figure has
+/// no constant: nothing on the client acts on it, the route enforces it with a
+/// `413`, and that response is the trigger.
 public enum SyncSTTLimits {
   /// Sample rate of the 16 kHz / mono / 16-bit PCM geometry the API
   /// expects. The single definition shared by `MicCapture` (which records at
@@ -9,12 +18,24 @@ public enum SyncSTTLimits {
   /// the recorded and declared rates can't drift apart.
   public static let sampleRate = 16_000
 
-  /// Maximum audio duration the dictation API accepts per request (seconds):
-  /// 20 minutes. Raised from 120 s when the API began accepting 20-minute
-  /// audio; the upload is chunked while the user speaks (see
-  /// `AssemblyAITranscriber.streamedBody`), so a longer cap holds no more of
-  /// the recording in memory than a slow uplink forces it to.
+  /// Maximum recording length (seconds): 20 minutes, the buffered route's
+  /// documented cap. Raised from 120 s in #251. Only the first 120 s of it fit
+  /// the streaming route; a longer recording is refused there and sent whole to
+  /// `/v1/transcribe`, which is why a recording past two minutes is held in
+  /// memory (`maxBufferedAudioBytes`) until it is sent — ~38 MB at this cap.
+  /// The alternative to that copy is putting this back to 120, so a held key
+  /// auto-releases just inside the streaming route's cap.
   public static let maxAudioSeconds: Double = 1200
+
+  /// The most audio the over-cap fallback's copy may hold: the buffered
+  /// route's documented 256 MB part limit, read as 10⁶-byte megabytes — the
+  /// conservative reading of an unstated unit, as `CleanupInstruction`'s byte
+  /// count is for its cap. A guard, not a working limit: the 20-minute recording
+  /// cap is ~38 MB at this geometry, so it trips only if the geometry changes.
+  /// Past it the copy is dropped at once and the fallback fails cleanly with
+  /// `AssemblyAIError.recordingTooLarge` rather than sending a truncated
+  /// recording.
+  static let maxBufferedAudioBytes = 256_000_000
 
   /// Minimum audio duration worth sending (seconds). Not a rejection
   /// threshold: measured against `/v1/transcribe/live` (2026-09-09) the route

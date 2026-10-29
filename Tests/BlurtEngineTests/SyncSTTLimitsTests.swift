@@ -70,6 +70,19 @@ struct SyncSTTLimitsTests {
     #expect(SyncSTTLimits.autoReleaseSeconds == 1195)
   }
 
+  @Test("a whole recording at the cap fits the fallback's copy, with room to spare")
+  func fullRecordingFitsTheBufferedCap() {
+    // The guard is a guard, not a working limit: a 20-minute recording at the
+    // capture geometry (~38 MB) must never trip it, or every long dictation that
+    // reached the buffered route would fail at release.
+    let fullRecording =
+      Int(SyncSTTLimits.maxAudioSeconds) * SyncSTTLimits.sampleRate * SyncSTTLimits.bytesPerSample
+      * SyncSTTLimits.channelCount
+    #expect(fullRecording < SyncSTTLimits.maxBufferedAudioBytes)
+    // And it is the documented 256 MB, read in its conservative unit.
+    #expect(SyncSTTLimits.maxBufferedAudioBytes == 256_000_000)
+  }
+
   @Test("the minimum audio floor sits strictly inside the accepted range")
   func minFloorInsideRange() {
     #expect(SyncSTTLimits.minAudioSeconds > 0)
