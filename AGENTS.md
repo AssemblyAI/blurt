@@ -945,13 +945,14 @@ the `@AppStorage(TriggerKeyStore.defaultsKey)` + `TriggerKey.fromPersisted` pair
 restating that pairing per view. The unset default belongs to `fromPersisted` (an absent keycode maps
 to right ⌘), so views must not re-declare `TriggerKey.rightCommand.rawValue` themselves.
 
-**Per-key styles.** A Key Styles row in the Advanced pane's Experimental section (`KeyStylesRow`) — a status naming the
+**Per-key styles.** A Key Styles row in its own section on the Styles pane (`KeyStylesSection`, `KeyStylesRow`) — a status naming the
 keys set up, and an Edit… button — opens a sheet with one pop-up per `TriggerKey`: the style a press
 of that key dictates with — Same as main window, Default, or a profile (disabled while enhanced
-transcripts are off) — or Off for keys other than the bound one. On Advanced rather than under the
-key picker because it's a power-user extra, so General stays short enough for a small display; a
-row in an existing section and a sheet, not a section or a row per key, because Advanced is already
-near that limit — a section of its own pushed Reset… off the bottom of CI's screen. `TriggerKeyStyleStore` (`BlurtTriggerKeyStyles`, keycode → style id) holds
+transcripts are off) — or Off for keys other than the bound one. On Styles, under the profiles it
+picks from, rather than under the key picker, so General stays short enough for a small display;
+its own section rather than a row of Custom Styles, because that section is disabled while
+enhanced transcripts are off and turning a key on or off still works then; one row and a sheet,
+not a row per key, to keep the pane short. `TriggerKeyStyleStore` (`BlurtTriggerKeyStyles`, keycode → style id) holds
 it; an absent value is today's single key with the current style. Rebinding swaps each moved key's
 entry with a stash (`BlurtTriggerKeyStyleStash`): the key moved away from goes back to what it was
 as an extra before it was bound (off, unless the user had set it up as one), and gets its bound
