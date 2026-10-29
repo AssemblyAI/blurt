@@ -808,6 +808,7 @@
 		C7714523A92F4753092CA67C /* juno-81-start.m4a */ = {isa = PBXFileReference; path = "juno-81-start.m4a"; sourceTree = "<group>"; };
 		C7C95B4C80443E2A6EFE05E7 /* DeveloperSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperSection.swift; sourceTree = "<group>"; };
 		C7DAE8C9E70F6D2232F409DE /* juno-101-start.m4a */ = {isa = PBXFileReference; path = "juno-101-start.m4a"; sourceTree = "<group>"; };
+		CB06476968FCE1345350649A /* SignIn.release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = SignIn.release.xcconfig; sourceTree = "<group>"; };
 		CB487BE3C821FF18E414CF4B /* juno-117-stop.m4a */ = {isa = PBXFileReference; path = "juno-117-stop.m4a"; sourceTree = "<group>"; };
 		CBBA2376BDBD82E7474C9D84 /* juno-46-start.m4a */ = {isa = PBXFileReference; path = "juno-46-start.m4a"; sourceTree = "<group>"; };
 		CC40ECD64CC632EF7C26115F /* juno-49-start.m4a */ = {isa = PBXFileReference; path = "juno-49-start.m4a"; sourceTree = "<group>"; };
@@ -1448,6 +1449,7 @@
 		CE00AEC94B430DEF79A46820 /* Config */ = {
 			isa = PBXGroup;
 			children = (
+				CB06476968FCE1345350649A /* SignIn.release.xcconfig */,
 				0FDF98A81095D247FB92B90D /* SignIn.xcconfig */,
 			);
 			path = Config;
@@ -2270,6 +2272,7 @@
 		};
 		81D8585ABD7DDD16BFC4DE0D /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = CB06476968FCE1345350649A /* SignIn.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				BLURT_APP_NAME = Blurt;

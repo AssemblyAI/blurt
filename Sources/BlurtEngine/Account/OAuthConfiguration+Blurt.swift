@@ -3,8 +3,8 @@ import Foundation
 
 extension OAuthConfiguration {
   /// The Info.plist keys a build sets to turn sign-in on. They come from build
-  /// settings in `App/Blurt/project.yml`, so a build without them (release,
-  /// until a production Connected App exists) offers only the paste-a-key path.
+  /// settings in `App/Blurt/project.yml`, so a build without them (a dev build
+  /// with no local sign-in config) offers only the paste-a-key path.
   public enum InfoKey {
     /// The Connected App's client id.
     public static let clientID = "BlurtOAuthClientID"

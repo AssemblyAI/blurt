@@ -136,14 +136,16 @@ targets:
         Release:
           PRODUCT_BUNDLE_IDENTIFIER: dev.alex.blurt
           BLURT_APP_NAME: Blurt
-    # Sign in with AssemblyAI's BLURT_OAUTH_* settings, for the dev
-    # configurations only. They name AssemblyAI's sandbox deployments, so the
-    # values live in a gitignored include (see Config/SignIn.xcconfig); without
-    # it, and in Release, they're unset and sign-in is off. Baked into
-    # Info.plist below and read by `OAuthConfiguration.blurt`.
+    # Sign in with AssemblyAI's BLURT_OAUTH_* settings. Release signs in to
+    # production, whose values are public and committed. The dev
+    # configurations name AssemblyAI's sandbox deployments, so their values
+    # live in a gitignored include (see Config/SignIn.xcconfig); without it
+    # they're unset and sign-in is off. Baked into Info.plist below and read by
+    # `OAuthConfiguration.blurt`.
     configFiles:
       Debug: Config/SignIn.xcconfig
       Debug-Local: Config/SignIn.xcconfig
+      Release: Config/SignIn.release.xcconfig
     sources:
       - path: Blurt
       # Shared with BlurtUITests: the single source of truth for UI-test

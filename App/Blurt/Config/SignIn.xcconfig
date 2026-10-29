@@ -1,7 +1,6 @@
 // Sign in with AssemblyAI, for the Debug and Debug-Local configurations
-// (see `configFiles` in project.yml). Release has no config file, so its
-// BLURT_OAUTH_* settings are unset and the app offers only the paste-a-key
-// path.
+// (see `configFiles` in project.yml). Release signs in to production instead,
+// from SignIn.release.xcconfig.
 //
 // The values themselves are not in this repo: they name AssemblyAI's sandbox
 // deployments. Copy SignIn.local.xcconfig.example to SignIn.local.xcconfig

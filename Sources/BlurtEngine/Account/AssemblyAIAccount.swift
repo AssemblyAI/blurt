@@ -45,7 +45,7 @@ public final class AssemblyAIAccount {
   public static let rejectedKeyRenewalSpacing: TimeInterval = 15 * 60
 
   /// Whether this build has a Connected App configured. Builds without one
-  /// (today: release) show only the paste-a-key path.
+  /// (a dev build with no local sign-in config) show only the paste-a-key path.
   public var isAvailable: Bool { configuration != nil }
   public private(set) var status: Status {
     didSet { syncDictationOrigin() }
