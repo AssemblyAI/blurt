@@ -32,11 +32,19 @@ genuinely correct, and reaching for it means it's time to stop and ask.
   Keep the data output converting to 16 kHz mono 16-bit S16LE (the Sync API's
   geometry), published straight onto the feed `start()` returns with no resample
   pass. **`stop()` answers a byte count, not the audio** (owner-directed,
-  2026-09-08): the recording is uploaded in chunks as it is captured, so nothing
-  downstream reads it back, and accumulating the blob as well copied every byte
-  a second time inside the capture lock and held a duplicate of the whole
-  utterance (~3.7 MB at the cap) until release. Don't reintroduce a buffered
-  copy "just in case" — there is no retry-from-buffer path, by design.
+  2026-09-08): the recording is uploaded in chunks as it is captured, and
+  accumulating the blob as well copied every byte a second time inside the
+  capture lock and held a duplicate of the whole utterance until release.
+- **One copy of the recording exists, for one reason.** The transcriber keeps it
+  (`relay`, `AssemblyAITranscriber+LiveCapFallback.swift`), on the upload's task
+  and never in `MicCapture`'s capture lock, solely to back the documented
+  `/v1/transcribe` fallback when `/v1/transcribe/live` refuses a recording past
+  its 120 s cap (`413` with `error_code: "audio_too_large"`). That narrowed the
+  2026-09-08 "no retry-from-buffer path" rule on 2026-10-29; it did not open a
+  general one. Don't read the copy back for a retry, a replay, a cache or any
+  other second request, don't trigger the fallback on any other error, and don't
+  move the copy into `MicCapture`. `check-invariants.sh` keeps the buffered
+  route's path in that one file.
 - **(macOS shell) Don't pre-open the mic to make presses feel faster.** `MicCapture.warmUp()`
   is stateless on purpose — build a session, drop it — and there is no warm or
   prepared recorder to reuse. Measured on hardware: building a session (or the

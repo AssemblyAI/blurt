@@ -7,8 +7,8 @@ a standalone Swift SDK. Foundation (plus CryptoKit for the PKCE challenge); macO
 | -------------------------------------- | ------------------------------------------------------------------------------------- |
 | `HTTPTransport`                        | The network seam. `URLSession` conforms, including a streamed (chunked) upload body.  |
 | `DictationConfig`, `DictationResponse` | The dictation API's `config` part and response, with only documented keys.            |
-| `ErrorResponse`                        | The dictation API's two documented error shapes.                                      |
-| `DictationMultipart`                   | The upload's multipart framing: `config` first, then the PCM audio.                   |
+| `ErrorResponse`                        | The dictation API's two documented error shapes, with `error_code` when present.      |
+| `DictationMultipart`                   | The multipart framing: `config` first, then the PCM audio; streamed or whole.         |
 | `APIKeyValidator`                      | A cheap authenticated check that tells a rejected key from one it couldn't verify.    |
 | `KeyTerms`                             | Key terms for `keyterms_prompt`: parse a comma-separated list, fit it to the caps.    |
 | `OAuthAuthorization`                   | One "Sign in with AssemblyAI" attempt: PKCE verifier, `state`, consent URL, callback. |

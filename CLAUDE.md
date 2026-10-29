@@ -49,7 +49,7 @@ globs go in one invocation so `hook-lib.sh` and `release-lib.sh` are in the inpu
 - **`project-guardrails`** — the compressed "don't do this" list. `AGENTS.md`'s
   [Settled decisions](./AGENTS.md#settled-decisions--dont-reintroduce-these) table is the fuller
   reference and the source of truth; keep the two in agreement when you change either. For the
-  twelve decisions `scripts/check-invariants.sh` mechanizes, that agreement is no longer on your
+  decisions `scripts/check-invariants.sh` mechanizes, that agreement is no longer on your
   honour: each rule pins a verbatim slice of its table row _and_ its skill bullet, so deleting or
   rewording either fails the gate's `--self-test` until someone decides whether the rule survives
   the edit. The rest of the list is still yours to keep in sync.

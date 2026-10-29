@@ -219,11 +219,24 @@ public struct DictationResponse: Decodable, Sendable {
 /// wire. A body carrying some third spelling now reaches the user through the
 /// raw-body arm below, which is the honest outcome: unrecognized, not silently
 /// guessed at.
+///
+/// `error_code` is the `{error, error_code}` shape's machine-readable half, and
+/// it is read for exactly one decision: `413` with `audio_too_large` is the
+/// streaming route refusing a recording past its 120 s cap, which Blurt answers
+/// by sending the whole recording to `/v1/transcribe` instead
+/// (`AssemblyAITranscriber`'s over-cap fallback). A status alone can't make that
+/// call — the route documents `413` for its size cap too, under the same code,
+/// and any other `413` must surface as it always has.
 public struct ErrorResponse: Decodable, Sendable {
   public let message: String?
+  /// The documented machine-readable code (`bad_request`, `audio_too_large`,
+  /// `capacity_exceeded`, `upstream_error`, `upstream_timeout`), or nil for the
+  /// `{status, title, detail}` shape, which carries none.
+  public let errorCode: String?
 
   enum CodingKeys: String, CodingKey {
     case error, detail
+    case errorCode = "error_code"
   }
 
   public init(from decoder: Decoder) throws {
@@ -235,5 +248,6 @@ public struct ErrorResponse: Decodable, Sendable {
       try? container.decode(String.self, forKey: key)
     }
     message = string(.error) ?? string(.detail)
+    errorCode = string(.errorCode)
   }
 }

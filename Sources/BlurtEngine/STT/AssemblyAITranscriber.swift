@@ -19,9 +19,12 @@ import os
 /// request per utterance covers transcription *and* cleanup. `config` leads the
 /// body because the streaming route cannot open its upstream call without it —
 /// see `transcribePath` and `streamedBody`. The service picks
-/// the STT model server-side and accepts **at most 20 minutes** of audio (the
-/// documented cap; there is no documented *minimum* — the ~80 ms floor is this
-/// client's own, see `SyncSTTLimits.minPCMBytes`). The rewrite is best-effort
+/// the STT model server-side. The streaming route accepts **at most 120 s** of
+/// audio; a longer recording (Blurt records up to 20 minutes) is refused with
+/// `413 audio_too_large` and sent again, whole, to `/v1/transcribe` — the one
+/// second request there is, see `AssemblyAITranscriber+LiveCapFallback.swift`.
+/// There is no documented *minimum* — the ~80 ms floor is this
+/// client's own, see `SyncSTTLimits.minPCMBytes`. The rewrite is best-effort
 /// with a 5 s server-side deadline, so a failure still returns the verbatim
 /// transcript (`llm_response` null, `llm_error` set).
 ///
@@ -52,6 +55,10 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   private let enhancedTranscriptsEnabled: @Sendable () -> Bool
   private let customStyle: @Sendable () -> String?
   private let rewriteMode: @Sendable () -> RewriteMode
+  /// The most audio the over-cap fallback's copy may hold before it is dropped
+  /// and the fallback fails cleanly instead. Internal and settable so tests can
+  /// trip the guard with a few bytes; production never changes it.
+  var bufferedAudioByteCap = SyncSTTLimits.maxBufferedAudioBytes
 
   /// Idle timeout for the transcribe round trip — `URLRequest.timeoutInterval` is
   /// reset each time data moves, so this bounds *stalls*, not total elapsed time.
@@ -68,8 +75,12 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// route parsed the body only once complete, so inference could not begin
   /// until the last byte landed (and it required the opposite part order). This
   /// one opens its upstream STT call as soon as `config` arrives, so inference
-  /// overlaps the recording. No fallback to the old route — a client that can
-  /// silently take the slower path is one whose latency nobody can reason about.
+  /// overlaps the recording. Every dictation starts here. There is exactly one
+  /// way onto the buffered route (`bufferedTranscribePath`): this route refusing
+  /// a recording past its documented 120 s cap with `413 audio_too_large`. It is
+  /// not a latency fallback — nothing else, no timeout, no other error, takes
+  /// the slower path — and it is logged when it happens, so the latency of
+  /// every dictation under two minutes is still this route's alone.
   private static let transcribePath = "v1/transcribe/live"
 
   /// `enhancedTranscripts` decides, per response, which of the two transcripts
@@ -123,28 +134,35 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
       sttPrompt: STTPrompt.text(context: context),
       keytermsPrompt: KeyTerms.fitted(context?.keyTerms ?? []),
       enhanced: enhanced)
+    let request = makeRequest(path: Self.transcribePath, apiKey: apiKey, boundary: boundary)
 
-    var request = URLRequest(url: baseURL.appending(path: Self.transcribePath))
-    request.httpMethod = "POST"
-    // Bounds a stalled connection; see `requestTimeoutSeconds` for why an idle
-    // timeout is the right shape here — and note it now has to cover the
-    // recording as well as the round trip, which is exactly what an idle
-    // timeout does and a total one would not.
-    request.timeoutInterval = Self.requestTimeoutSeconds
-    request.setValue(apiKey, forHTTPHeaderField: "Authorization")
-    request.setValue(
-      "multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-    // Names the client and its release to the service (`Blurt/<version>`) in place
-    // of `URLSession`'s default agent, which reports the opaque build counter.
-    // The one header here the reference does not describe, and the exception is
-    // principled rather than a crack in that rule — see `UserAgent`.
-    request.setUserAgent()
-
+    // The capture feed goes through `relay` on its way to the upload, which keeps
+    // a copy of every audio byte for the over-cap fallback and — the part that
+    // matters — keeps reading the feed after the streaming request has failed,
+    // so a recording refused mid-speech is still captured to key-up. A child
+    // task, so cancelling this dictation cancels it, and every exit below that
+    // doesn't await it (success, and every other error) cancels it on the way
+    // out, which ends the feed exactly as the cancelled body producer used to.
+    let (liveFrames, liveFeed) = AsyncStream.makeStream(of: Data.self)
+    async let recording = Self.relay(frames, to: liveFeed, keepingAtMost: bufferedAudioByteCap)
     let progress = UploadProgress()
     let body = streamedBody(
-      frames: frames, config: config, boundary: boundary, progress: progress)
-    let data = try await send(
-      request, streaming: body, sampleRate: sampleRate, progress: progress)
+      frames: liveFrames, config: config, boundary: boundary, progress: progress)
+    let data: Data
+    do {
+      data = try await send(
+        request, streaming: body, sampleRate: sampleRate, progress: progress)
+    } catch is LiveCapExceeded {
+      // The one trigger. Everything else propagates exactly as before.
+      Self.log.notice(
+        """
+        live route refused the recording past its cap (413 audio_too_large) after \
+        \(SyncSTTLimits.durationMs(ofPCMBytes: progress.audioBytes, rate: sampleRate), privacy: .public) ms; \
+        recording on for the buffered route
+        """)
+      data = try await sendBuffered(
+        await recording, config: config, apiKey: apiKey, boundary: boundary, sampleRate: sampleRate)
+    }
     guard let response = try? JSONDecoder().decode(DictationResponse.self, from: data) else {
       throw AssemblyAIError.malformedResponse
     }
@@ -207,7 +225,10 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   /// the upload task's cancellation, so by the time it could notice, the
   /// continuation is torn down and its yields are already no-ops. The teardown
   /// is the mechanism; the config-last body used to make a complete body
-  /// impossible by construction, and nothing does now.
+  /// impossible by construction, and nothing does now. `frames` here is
+  /// `relay`'s output, not the capture feed itself: tearing this producer down
+  /// ends the *streaming request's* view of the audio, while the capture keeps
+  /// flowing into the fallback's copy for as long as `transcribe` waits on it.
   ///
   /// The stream buffers without bound, which is deliberate: frames can only
   /// arrive as fast as the microphone produces them, so a backlog forms only
@@ -301,6 +322,28 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
 
   // MARK: - Networking helpers
 
+  /// The headers both dictation requests carry — the streaming one and the
+  /// buffered fallback — stated once, so the second request cannot drift from
+  /// the first in anything but its path and body.
+  func makeRequest(path: String, apiKey: String, boundary: String) -> URLRequest {
+    var request = URLRequest(url: baseURL.appending(path: path))
+    request.httpMethod = "POST"
+    // Bounds a stalled connection; see `requestTimeoutSeconds` for why an idle
+    // timeout is the right shape here — and note that on the streaming request it
+    // covers the recording as well as the round trip, which is exactly what an
+    // idle timeout does and a total one would not.
+    request.timeoutInterval = Self.requestTimeoutSeconds
+    request.setValue(apiKey, forHTTPHeaderField: "Authorization")
+    request.setValue(
+      "multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+    // Names the client and its release to the service (`Blurt/<version>`) in place
+    // of `URLSession`'s default agent, which reports the opaque build counter.
+    // The one header here the reference does not describe, and the exception is
+    // principled rather than a crack in that rule — see `UserAgent`.
+    request.setUserAgent()
+    return request
+  }
+
   private func send(
     _ request: URLRequest, streaming body: AsyncThrowingStream<Data, any Error>,
     sampleRate: Int, progress: UploadProgress
@@ -333,30 +376,9 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
       postSpeechMs=\(postSpeechMs ?? -1, format: .fixed(precision: 0), privacy: .public) \
       wallMs=\(wallMs, format: .fixed(precision: 0), privacy: .public)
       """)
-    guard let http = response as? HTTPURLResponse else { return data }
-    guard (200..<300).contains(http.statusCode) else {
-      throw AssemblyAIError.http(status: http.statusCode, message: Self.errorMessage(from: data))
-    }
+    if Self.isLiveCapRefusal(response, body: data) { throw LiveCapExceeded() }
+    try Self.requireSuccess(response, body: data)
     return data
-  }
-
-  /// Best human-readable explanation for a non-2xx response: `error`, then
-  /// `detail` (the two documented shapes — see `ErrorResponse`, which is also
-  /// where the dropped `message` key is accounted for), then the raw body text,
-  /// trimmed and capped.
-  ///
-  /// The raw-body arm is deliberately kept. It is not compatibility with an old
-  /// API shape — it is what turns a response the API never promised (a proxy's HTML
-  /// 502, a captive-portal page) into something diagnosable instead of a bare
-  /// status code. Returns nil only for an empty body.
-  static func errorMessage(from data: Data) -> String? {
-    if let parsed = try? JSONDecoder().decode(ErrorResponse.self, from: data),
-      let message = parsed.message
-    {
-      return message
-    }
-    guard let raw = String(bytes: data, encoding: .utf8).trimmedNonEmpty() else { return nil }
-    return String(raw.prefix(500))
   }
 
   // The request/response types this encodes and decodes — `DictationConfig`,
@@ -367,34 +389,7 @@ public struct AssemblyAITranscriber: TranscriberProtocol {
   // and the measurement; everything here is the transport.
 }
 
-// `Duration.milliseconds` — the latency-logging conversion this file's request
-// timing uses — moved to `Duration+Milliseconds.swift` when `MicCapture` needed
-// the same thing for its liveness-gap line. It was `fileprivate` here; a second
-// copy is an "invalid redeclaration", not a shadow.
-
-/// Errors specific to the AssemblyAI transport. These get wrapped in
-/// `BlurtError.sttFailed` before reaching the UI.
-enum AssemblyAIError: Error, LocalizedError {
-  case http(status: Int, message: String?)
-  case malformedResponse
-  /// The recording ended below `SyncSTTLimits.minPCMBytes`, so the body was
-  /// never closed — a belt on top of `DictationSession.performRelease`'s own
-  /// guard rather than the only thing between a stray tap and a request billed
-  /// for transcribing nothing. `awaitUpload` maps it to the same quiet `.idle`
-  /// that guard produces, so whichever layer notices first the user sees the
-  /// same nothing; the description below is a backstop, not a message anyone is
-  /// expected to read.
-  case audioTooShort
-
-  var errorDescription: String? {
-    switch self {
-    case .http(let status, let message):
-      if let message { return "AssemblyAI error \(status): \(message)" }
-      return "AssemblyAI error \(status)"
-    case .malformedResponse:
-      return "Unexpected response from AssemblyAI."
-    case .audioTooShort:
-      return "That recording was too short to transcribe."
-    }
-  }
-}
+// `AssemblyAIError`, the errors this transport raises — and `requireSuccess`/`errorMessage`, which turn a
+// failed response into one — live in `AssemblyAIError.swift`, and
+// the over-cap fallback to `/v1/transcribe` — its recording copy and its request — in
+// `AssemblyAITranscriber+LiveCapFallback.swift`. Both split out for the lint file-length budget.

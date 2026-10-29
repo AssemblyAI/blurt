@@ -17,7 +17,11 @@ public protocol HTTPTransport: Sendable {
   ///
   /// Replaces the `Data`-bodied `upload(for:from:delegate:)` outright rather
   /// than sitting beside it: the dictation request was its only caller, and a
-  /// buffered path left in place is a fallback waiting to be taken.
+  /// buffered path left in place is a fallback waiting to be taken. The one
+  /// buffered dictation request there is — the whole recording to
+  /// `/v1/transcribe`, sent only after the streaming route refuses a recording
+  /// past its 120 s cap — goes through `data(for:)` with an `httpBody`, so it
+  /// cannot be mistaken for, or substituted into, this streaming path.
   func upload(
     for request: URLRequest, streaming body: AsyncThrowingStream<Data, any Error>,
     delegate: (any URLSessionTaskDelegate)?

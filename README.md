@@ -222,7 +222,8 @@ Sources/BlurtEngine/     Swift 6 package owning the pipeline — no external dep
   Audio/                 MicCapture: fresh AVCaptureSession per session, 16 kHz mono PCM,
                          live level meter; DX7/Juno-106 sound packs
   STT/                   AssemblyAITranscriber: one POST to dictation.assemblyai.com/v1/transcribe/live
-                         (STT + LLM rewrite); STTPrompt (contextual priming:
+                         (STT + LLM rewrite), or past its 120 s cap the whole recording
+                         to /v1/transcribe; STTPrompt (contextual priming:
                          your recent dictations then the text before the cursor, and
                          nothing else about your screen)
   Pipeline/              DictationSession actor: press/release/cancel commands, phase

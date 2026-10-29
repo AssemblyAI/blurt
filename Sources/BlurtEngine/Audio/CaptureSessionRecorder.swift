@@ -71,13 +71,17 @@ final class CaptureSessionRecorder: NSObject, @unchecked Sendable {
   /// device, so no frame can be delivered before there is somewhere to put it —
   /// including the ones the liveness gate waits for.
   ///
-  /// Unbounded, but a handoff rather than a buffer: the upload's body producer
+  /// Unbounded, but a handoff rather than a buffer: the transcriber's `relay`
   /// drains it eagerly (it yields onward into an unbounded stream, and an
   /// unbounded yield never suspends), so a slow uplink backs up *there*, not
-  /// here. And once the request ends the producer is cancelled, which terminates
-  /// this stream — later yields are dropped rather than accumulated. So no
-  /// backlog forms in this stage at all; check `streamedBody` for the one that
-  /// does.
+  /// here. Once the transcription ends `relay` is cancelled, which terminates
+  /// this stream — later yields are dropped rather than accumulated. The one
+  /// exception is deliberate: after the streaming route refuses a recording past
+  /// its cap, `relay` keeps reading to the end of the recording, into the copy
+  /// the buffered fallback sends (`AssemblyAITranscriber+LiveCapFallback.swift`).
+  /// That copy lives there, on the upload's task — never here, under this
+  /// lock. So no backlog forms in this stage at all; check `streamedBody` for
+  /// the one that does.
   let frames: AsyncStream<Data>
   private let framesContinuation: AsyncStream<Data>.Continuation
 

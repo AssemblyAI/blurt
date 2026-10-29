@@ -57,7 +57,9 @@ final class DictationUploadDelegate: NSObject, URLSessionTaskDelegate, @unchecke
   /// `URLSession` asks for a fresh body stream whenever it has to send the
   /// request again — an auth challenge, a 307, a connection retry it handles
   /// internally. A recording that has already been streamed to the server is
-  /// gone: there is no buffered copy to replay, by design. Returning nil fails
+  /// gone from this body: the copy the over-cap fallback keeps backs a second,
+  /// separate request to `/v1/transcribe`, taken only on the streaming route's
+  /// `413 audio_too_large`, and is never fed back into this one. Returning nil fails
   /// the request loudly instead of quietly re-sending it with an empty body and
   /// letting the user watch a dictation come back blank.
   func urlSession(

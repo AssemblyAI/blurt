@@ -50,6 +50,28 @@ public enum DictationMultipart {
     return head
   }
 
+  /// A whole multipart body for the **buffered** route, `/v1/transcribe`: the
+  /// same `config` part, the same `audio` part header (so the same
+  /// `audio.pcm` filename and `audio/pcm` Content-Type), the recording, and the
+  /// closing boundary — the streamed body's four pieces, joined in the same
+  /// order. That route reads the whole body before it starts and accepts the
+  /// parts in either order; keeping the streaming order means the two requests
+  /// differ in their path and their framing on the wire, and nothing else.
+  ///
+  /// Sized once up front, because `audio` can be tens of megabytes at the
+  /// 20-minute cap and growing the buffer by appends would copy it repeatedly.
+  public static func bufferedBody(config: Data, audio: Data, boundary: String) -> Data {
+    let head = configHead(config: config, boundary: boundary)
+    let audioHeader = audioPartHeader(boundary: boundary)
+    let tail = closingBoundary(boundary: boundary)
+    var body = Data(capacity: head.count + audioHeader.count + audio.count + tail.count)
+    body.append(head)
+    body.append(audioHeader)
+    body.append(audio)
+    body.append(tail)
+    return body
+  }
+
   /// Everything after the last audio frame: the `audio` part's terminating CRLF
   /// and the closing boundary — all that stands between the last frame and the
   /// request completing, which is why it carries no work.

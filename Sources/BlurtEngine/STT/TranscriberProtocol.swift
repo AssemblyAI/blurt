@@ -12,6 +12,10 @@ public protocol TranscriberProtocol: Sendable {
   /// upload that waits for the last sample puts the whole transfer on the path
   /// the user is sitting through. Measured: on a 1 Mbps uplink a 10 s dictation
   /// waits ~3.1 s after speech for a buffered upload versus ~0.5 s chunked.
+  /// (A conformer may still finish a recording its streaming route refuses as
+  /// too long by other means — `AssemblyAITranscriber` sends it whole to the
+  /// buffered route — but it does so behind this same call, reading `frames` to
+  /// its end either way, so the caller's contract doesn't change.)
   ///
   /// `context` supplies the per-utterance priming (focused app + text before the
   /// cursor, the user's recent dictations) as a plain value, resolved *before*
