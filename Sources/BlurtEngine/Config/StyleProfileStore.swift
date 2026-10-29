@@ -114,7 +114,6 @@ public struct StyleProfileStore {
   /// click either way.
   public static let profileLimit = 4
 
-  // periphery:ignore - public for hosts outside this repo (the iOS app); the Mac app reads profileLimit.
   /// How many profiles this host allows: `HostIdentity.styleProfileLimit`,
   /// `profileLimit` unless the host configured another. The cap every list is
   /// normalized to, on read and on write.

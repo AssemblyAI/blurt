@@ -126,14 +126,6 @@
     /// APIs are thread-safe, so this serves both the off-main context capture
     /// and the injector's off-main editability check.
     nonisolated static func systemFocusedElement() -> AXUIElement? {
-      queryFocusedElement().element
-    }
-
-    /// `systemFocusedElement` with the query's own answer kept: the editability
-    /// check tells a query that couldn't complete (`.cannotComplete`) apart from
-    /// one that found nothing focused. `.success` with a nil element is a
-    /// misbehaving app's mistyped reply.
-    nonisolated static func queryFocusedElement() -> (element: AXUIElement?, error: AXError) {
       let system = AXUIElementCreateSystemWide()
       // Setting the timeout on the system-wide element applies it process-wide
       // (per AXUIElement.h), bounding this focused-element lookup AND every later
@@ -141,9 +133,12 @@
       // miss (the window element behind `windowTitle`, the editability probes).
       AXUIElementSetMessagingTimeout(system, axMessagingTimeoutSeconds)
       var focusedRef: CFTypeRef?
-      let error = AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedRef)
-      guard error == .success, let focusedRef else { return (nil, error) }
-      return (axElement(focusedRef), .success)
+      guard
+        AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedRef)
+          == .success,
+        let focusedRef
+      else { return nil }
+      return axElement(focusedRef)
     }
 
     // MARK: - Checked CF downcasts

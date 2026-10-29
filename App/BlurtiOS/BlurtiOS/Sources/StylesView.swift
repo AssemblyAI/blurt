@@ -18,11 +18,12 @@ struct StylesView: View {
   @State private var adding = false
   private let store = StyleProfileStore()
 
-  private var profiles: [StyleProfile] { store.profiles(decoding: profilesRaw) }
-  private var active: StyleProfile? { StyleProfileStore.active(in: profiles, id: activeRaw) }
-  private var isFull: Bool { profiles.count >= StyleProfileStore.limit }
-
   var body: some View {
+    // Decoded once per redraw: the list holds up to 100 profiles, and every
+    // tap on a style rewrites the active slot and redraws.
+    let profiles = store.profiles(decoding: profilesRaw)
+    let active = StyleProfileStore.active(in: profiles, id: activeRaw)
+    let isFull = profiles.count >= StyleProfileStore.limit
     List {
       Section {
         StyleRow(

@@ -63,7 +63,7 @@ final class OverlayWindowController {
   // `shadowMargin` is checked on both sides rather than only one.
   private static let panelSize = OverlayPlacement.panelSize(
     pillSize: pillSize, shadowMargin: shadowMargin)
-  // Ceiling for a pill that writes its reason out (`OverlayUIState.pillText`):
+  // Ceiling for a pill that writes its reason out (`OverlayUIState.pillNotice`):
   // room for the sentence with an ordinary device name; a longer one truncates
   // rather than stretching the pill across the screen.
   private static let maxPillWidth: CGFloat = 340
@@ -317,7 +317,7 @@ final class OverlayWindowController {
   /// type, capped at `maxPillWidth`. Measured with the same font and tracking
   /// `StatusLineText` draws with, so the text fits without scaling down.
   static func pillWidth(for state: OverlayUIState) -> CGFloat {
-    guard let text = state.pillText else { return pillSize.width }
+    guard let text = state.pillNotice?.text else { return pillSize.width }
     let measured = NSAttributedString(
       string: text.uppercased(),
       attributes: [

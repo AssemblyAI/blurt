@@ -30,6 +30,10 @@ enum DefaultsKey: String, CaseIterable {
   /// Which style each trigger key dictates with, and so which keys beyond the
   /// bound one dictate at all (`TriggerKeyStyleStore`).
   case triggerKeyStyles = "TriggerKeyStyles"
+  /// Each trigger key's entry for the role it isn't in right now — kept across
+  /// a rebind so moving the bound key away and back loses nothing
+  /// (`TriggerKeyStyleStore.rebound(from:to:)`).
+  case triggerKeyStyleStash = "TriggerKeyStyleStash"
   case soundPack = "SoundPack"
   case keyTerms = "KeyTerms"
   case developerMode = "DeveloperMode"

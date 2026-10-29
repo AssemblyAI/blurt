@@ -99,7 +99,8 @@ struct RewriteModeTests {
     let data = try makeTranscriber(
       apiKey: "test-key", enhancedTranscripts: enhancedTranscripts, rewriteMode: mode
     )
-    .makeConfigData(sampleRate: 16_000, sttPrompt: "", keytermsPrompt: [], customStyle: nil)
+    .makeConfigData(
+      sampleRate: 16_000, sttPrompt: "", keytermsPrompt: [], customStyle: nil, enhanced: enhancedTranscripts)
     return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
   }
 }

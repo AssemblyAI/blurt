@@ -25,10 +25,11 @@ extension KeyboardModel {
     readSelection()
   }
 
-  /// Delete right after a dictation takes back all of it — but only while the
-  /// caret still sits at its end with nothing highlighted. A moved caret, a
-  /// selection, or a host that shows less context than the dictation's length
-  /// falls back to deleting one character.
+  /// Delete right after a dictation takes back all of it — but only in the
+  /// field it landed in, while the caret still sits at its end with nothing
+  /// highlighted. Another field, a moved caret, a selection, or a host that
+  /// shows less context than the dictation's length falls back to deleting one
+  /// character: text that merely ends the same way isn't the dictation.
   package func deleteBackward() {
     UIDevice.current.playInputClick()
     if termDraft != nil {
@@ -36,10 +37,8 @@ extension KeyboardModel {
       updateShift()
       return
     }
-    if let inserted = lastInsertion, let proxy, (proxy.selectedText ?? "").isEmpty,
-      proxy.documentContextBeforeInput?.hasSuffix(inserted) == true
-    {
-      for _ in inserted { proxy.deleteBackward() }
+    if let inserted = lastInsertion, let proxy, inserted.isAtCaret(in: proxy) {
+      for _ in inserted.text { proxy.deleteBackward() }
     } else {
       proxy?.deleteBackward()
     }
@@ -290,6 +289,23 @@ extension KeyboardModel {
       }
       responder = current.next
     }
+  }
+}
+
+/// A dictation's words as they landed (`KeyboardModel.lastInsertion`): the
+/// text, the field it went into, and what followed the caret then.
+package struct Insertion: Equatable {
+  package let text: String
+  package let document: UUID
+  package let textAfter: String
+
+  /// Whether the caret still sits at the end of these words in the same
+  /// field, with nothing highlighted and the text on both sides as it was
+  /// left.
+  func isAtCaret(in proxy: any UITextDocumentProxy) -> Bool {
+    proxy.documentIdentifier == document && (proxy.selectedText ?? "").isEmpty
+      && (proxy.documentContextAfterInput ?? "") == textAfter
+      && proxy.documentContextBeforeInput?.hasSuffix(text) == true
   }
 }
 

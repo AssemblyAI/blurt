@@ -35,7 +35,7 @@ struct OverlayView: View {
   var body: some View {
     content
       // The width is the bridge's: standard, or widened by the controller for a
-      // notice that writes its reason on the pill (`OverlayUIState.pillText`).
+      // notice that writes its reason on the pill (`OverlayUIState.pillNotice`).
       .frame(width: bridge.pillWidth, height: pillSize.height)
       // Solid, opaque capsule rather than Liquid Glass: a fixed fill never adapts
       // to the backdrop, so the pill fades in the same dark gray everywhere with

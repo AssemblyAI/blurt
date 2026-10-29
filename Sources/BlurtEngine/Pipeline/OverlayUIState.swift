@@ -91,9 +91,6 @@ public enum OverlayUIState: Equatable, Sendable {
     guard case .error(_, let notice) = self else { return nil }
     return notice
   }
-
-  /// `pillNotice` as the one line it reads as — what the shell measures.
-  public var pillText: String? { pillNotice?.text }
 }
 
 extension PipelinePhase {

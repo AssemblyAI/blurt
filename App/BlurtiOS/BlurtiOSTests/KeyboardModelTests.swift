@@ -17,7 +17,7 @@ final class FakeProxy: NSObject, UITextDocumentProxy {
   var documentContextAfterInput: String? { after }
   var selectedText: String? { selected }
   var documentInputMode: UITextInputMode? { nil }
-  var documentIdentifier: UUID { UUID() }
+  var documentIdentifier = UUID()
   var hasText: Bool { !before.isEmpty || !after.isEmpty }
 
   func insertText(_ text: String) {

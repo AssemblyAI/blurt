@@ -75,7 +75,7 @@ extension AssemblyAIAccountTests {
 
     advanceToRenewal()
     gated.armed.withLock { $0 = true }
-    let renewal = Task { await account.renewIfDue() }
+    let renewal = Task { _ = await account.renewIfDue() }
     await gate.waitUntilEntered()
     return ParkedRenewal(account: account, gate: gate, renewal: renewal)
   }

@@ -40,6 +40,10 @@ public final class AssemblyAIAccount {
   public static let longestRenewalSleep: TimeInterval = 24 * 60 * 60
   /// The shortest: a renewal that keeps failing (offline) retries no faster.
   public static let shortestRenewalSleep: TimeInterval = 60
+  /// How soon `runRenewal` looks again at a session item it couldn't read (a
+  /// locked Keychain): soon enough that a key due in the meantime still
+  /// renews, and the status catches up once the Keychain unlocks.
+  public static let unreadableSessionRecheck: TimeInterval = 5 * 60
   /// A rejected key renews at once, but no more often than this, so repeated
   /// dictation failures can't hammer the token endpoint.
   public static let rejectedKeyRenewalSpacing: TimeInterval = 15 * 60
@@ -66,6 +70,10 @@ public final class AssemblyAIAccount {
   /// rotated the refresh token, and refreshing with the old one would read as
   /// "already over".
   @ObservationIgnored private var renewal: Task<Void, Never>?
+  /// While `signOut()` is talking to the server, no renewal may start: it
+  /// would present the same refresh token the sign-out is about to rotate,
+  /// which reads as reuse and can end the grant mid-sign-out.
+  @ObservationIgnored private var signingOut = false
   /// When a rejected key last forced a renewal (`keyWasRejected`).
   @ObservationIgnored private var lastForcedRenewal: Date?
   /// Bumped whenever the stored session is replaced or dropped (a sign-in, a
@@ -92,11 +100,7 @@ public final class AssemblyAIAccount {
     self.now = now
     // An unreadable item (a locked Keychain at launch) starts as signed out;
     // `refreshStatus()` catches up once it reads.
-    if case .session(let session) = store.load {
-      self.status = .signedIn(email: session.email)
-    } else {
-      self.status = .signedOut
-    }
+    self.status = store.load.session.map { .signedIn(email: $0.email) } ?? .signedOut
     // `didSet` doesn't run for the initial value.
     syncDictationOrigin()
   }
@@ -113,11 +117,18 @@ public final class AssemblyAIAccount {
   /// item can't be read. Called when the account UI appears, like
   /// `APIKeyModel.refreshStatus()`.
   public func refreshStatus() {
-    switch store.load {
-    case .session(let session): status = .signedIn(email: session.email)
-    case .none: status = .signedOut
-    case .unavailable: break
+    updateStatus(from: store.load)
+  }
+
+  private func updateStatus(from load: SignInStore.Load) {
+    let read: Status
+    switch load {
+    case .session(let session): read = .signedIn(email: session.email)
+    case .none: read = .signedOut
+    case .unavailable: return
     }
+    // `@Observable` notifies on every write, unchanged or not.
+    if read != status { status = read }
   }
 
   /// A new sign-in attempt for the shell to open, or nil when sign-in isn't
@@ -128,7 +139,8 @@ public final class AssemblyAIAccount {
 
   /// Finishes a sign-in from the consent page's redirect: code → tokens → key,
   /// then stores both. Nothing is stored unless every step succeeds, so a failed
-  /// attempt leaves whatever was there (a pasted key, or nothing) as it was.
+  /// attempt leaves whatever was there (a pasted key, an earlier sign-in, or
+  /// nothing) as it was.
   public func completeSignIn(_ authorization: OAuthAuthorization, callback: URL) async -> SignInOutcome {
     guard let client else { return .failed(.unavailable) }
     let code: String
@@ -151,9 +163,13 @@ public final class AssemblyAIAccount {
       let session = SignInSession(
         refreshToken: refreshToken, email: tokens.email, keyExpiresAt: key.expiresAt,
         keyRotatesAt: key.rotatesAt, renewedAt: now())
-      generation += 1
-      guard store.save(session), apiKey.save(key.apiKey) else {
-        store.save(nil)
+      // A renewal of the session this replaces may be mid-flight with a rotated
+      // refresh token; let it land, so a failed write below can put it back.
+      if let renewal { await renewal.value }
+      guard storeSignIn(session, key: key.apiKey) else {
+        // Nothing on this Mac can renew or revoke the grant just minted, so end
+        // it now. Best effort: the user is told the sign-in failed either way.
+        try? await client.revoke(accessToken: tokens.accessToken)
         return .failed(.keychain)
       }
       status = .signedIn(email: session.email)
@@ -163,22 +179,52 @@ public final class AssemblyAIAccount {
     }
   }
 
+  /// Writes a new sign-in's session and key, or neither: when the Keychain
+  /// refuses the key, the session item goes back to what it held before.
+  private func storeSignIn(_ session: SignInSession, key: String) -> Bool {
+    let previous = store.load
+    guard store.save(session) else { return false }
+    guard apiKey.save(key) else {
+      store.save(previous.session)
+      return false
+    }
+    // Only a sign-in that landed is a new generation: a rolled-back one left
+    // the session as it was, and a sign-out waiting on the server must still
+    // keep its rotated token and finish. Nothing here suspends, so no renewal
+    // or sign-out can observe the writes before the bump.
+    generation += 1
+    return true
+  }
+
   /// Renews when due and otherwise sleeps until the next renewal is, until
   /// cancelled. The shell starts it once at launch. The default clock keeps
   /// counting while the Mac sleeps, so a renewal that fell due during sleep
   /// runs on wake.
   public func runRenewal<C: Clock<Duration>>(clock: C = ContinuousClock()) async {
     while !Task.isCancelled {
-      await renewIfDue()
-      do { try await clock.sleep(for: .seconds(nextRenewalCheck())) } catch { return }
+      // One read of the item per pass, and a second only after a renewal
+      // rewrote it. A session item that was unreadable at launch shows as
+      // signed out (and dictates to production) until something re-reads it.
+      let load = store.load
+      updateStatus(from: load)
+      let renewed = await renewIfDue(load: load)
+      let next = nextRenewalCheck(for: renewed ? store.load : load)
+      do { try await clock.sleep(for: .seconds(next)) } catch { return }
     }
   }
 
   /// Seconds until `runRenewal` should look again: until the session's
-  /// renewal is due, within the shortest and longest sleep. Signed out (or
-  /// unreadable), the longest.
-  func nextRenewalCheck() -> TimeInterval {
-    guard case .session(let session) = store.load else { return Self.longestRenewalSleep }
+  /// renewal is due, within the shortest and longest sleep. Signed out, or a
+  /// build that can't renew, the longest; unreadable, `unreadableSessionRecheck`.
+  /// `load` is a read of the item the caller already made; nil reads it now.
+  func nextRenewalCheck(for load: SignInStore.Load? = nil) -> TimeInterval {
+    guard client != nil else { return Self.longestRenewalSleep }
+    let session: SignInSession
+    switch load ?? store.load {
+    case .session(let stored): session = stored
+    case .none: return Self.longestRenewalSleep
+    case .unavailable: return Self.unreadableSessionRecheck
+    }
     let untilDue = session.renewalDue.timeIntervalSince(now())
     return min(max(untilDue, Self.shortestRenewalSleep), Self.longestRenewalSleep)
   }
@@ -193,9 +239,10 @@ public final class AssemblyAIAccount {
     if let lastForcedRenewal, now.timeIntervalSince(lastForcedRenewal) < Self.rejectedKeyRenewalSpacing {
       return
     }
-    guard case .session = store.load else { return }
+    let load = store.load
+    guard !signingOut, load.session != nil else { return }
     lastForcedRenewal = now
-    await renewIfDue(force: true)
+    await renewIfDue(force: true, load: load)
   }
 
   /// Refreshes and re-exchanges when `SignInSession.isRenewalDue` says so. A
@@ -203,19 +250,30 @@ public final class AssemblyAIAccount {
   /// dashboard, the member removed, the refresh token lapsed), so the key and
   /// session go and the row offers sign-in again. An unreachable server, or an
   /// unreadable session item, changes nothing; the next check tries again.
-  public func renewIfDue() async {
-    await renewIfDue(force: false)
+  /// `load` is a read of the item the caller already made; nil reads it now.
+  /// Returns whether a renewal ran, so `runRenewal` knows its read is stale.
+  @discardableResult
+  func renewIfDue(load: SignInStore.Load? = nil) async -> Bool {
+    await renewIfDue(force: false, load: load ?? store.load)
   }
 
-  private func renewIfDue(force: Bool) async {
-    if let renewal { return await renewal.value }
-    guard case .session(let session) = store.load,
+  /// Whether a renewal ran (this one, or one already in flight), so the
+  /// caller knows `load` is stale.
+  @discardableResult
+  private func renewIfDue(force: Bool, load: SignInStore.Load) async -> Bool {
+    guard !signingOut else { return false }
+    if let renewal {
+      await renewal.value
+      return true
+    }
+    guard let session = load.session,
       force || session.isRenewalDue(now: now(), hasKey: apiKey.current != nil)
-    else { return }
+    else { return false }
     let task = Task { await renew(session) }
     renewal = task
     await task.value
     renewal = nil
+    return true
   }
 
   /// Ends the connection server-side, then forgets it here. Returns the failure
@@ -224,6 +282,11 @@ public final class AssemblyAIAccount {
   /// sign-out would be wrong. A refresh token the server already refuses means
   /// the connection is already over, which counts as signed out. Nil on success.
   public func signOut() async -> APIKeySubmission.FailureReport? {
+    // A second click while the first is still talking to the server: that one
+    // reports.
+    guard !signingOut else { return nil }
+    signingOut = true
+    defer { signingOut = false }
     if let renewal { await renewal.value }
     let session: SignInSession
     switch store.load {
@@ -242,22 +305,18 @@ public final class AssemblyAIAccount {
     }
     let started = generation
     do throws(OAuthClient.Failure) {
-      let tokens = try await client.refresh(session.refreshToken)
-      // Keep a rotated refresh token before revoking, as `renew` does: the old
-      // one is dead, and presenting it again reads as reuse, which ends the
-      // grant. A revoke that fails below must leave a token that still works.
-      if let rotated = tokens.refreshToken, generation == started {
-        var rotatedSession = session
-        rotatedSession.refreshToken = rotated
-        store.save(rotatedSession)
-      }
+      // The rotated token is kept before the revoke: one that fails must leave
+      // a token that still works.
+      let (tokens, _) = try await refresh(session, with: client, generation: started)
       try await client.revoke(accessToken: tokens.accessToken)
     } catch .rejected {
       // Nothing left server-side to end.
     } catch {
       return .inline(message: Self.signOutUnconfirmedMessage)
     }
-    forget()
+    // A sign-in that completed while this waited on the server is the user's
+    // newer choice; it stays.
+    if generation == started { forget() }
     return nil
   }
 
@@ -275,92 +334,47 @@ public final class AssemblyAIAccount {
     status = .signedOut
   }
 
+  /// Refreshes `session`'s access token and stores a rotated refresh token
+  /// before anything else can fail: the old one is dead, and presenting it
+  /// again reads as reuse, which ends the grant. The session comes back nil,
+  /// with nothing written, when a sign-in, sign-out or reset replaced it
+  /// while the refresh was on the network (`generation` moved past `started`).
+  private func refresh(
+    _ session: SignInSession, with client: OAuthClient, generation started: Int
+  ) async throws(OAuthClient.Failure) -> (OAuthClient.Tokens, SignInSession?) {
+    let tokens = try await client.refresh(session.refreshToken)
+    guard generation == started else { return (tokens, nil) }
+    var session = session
+    if let rotated = tokens.refreshToken { session.refreshToken = rotated }
+    session.email = tokens.email ?? session.email
+    store.save(session)
+    return (tokens, session)
+  }
+
   private func renew(_ session: SignInSession) async {
     guard let client else { return }
     let started = generation
-    var session = session
     do throws(OAuthClient.Failure) {
-      let tokens = try await client.refresh(session.refreshToken)
-      guard generation == started else { return }
-      // Keep a rotated refresh token before anything else can fail: the old one
-      // is already dead.
-      if let rotated = tokens.refreshToken { session.refreshToken = rotated }
-      session.email = tokens.email ?? session.email
-      store.save(session)
+      let (tokens, refreshed) = try await refresh(session, with: client, generation: started)
+      guard var session = refreshed else { return }
       let key = try await client.apiKey(accessToken: tokens.accessToken)
       guard generation == started else { return }
       session.keyExpiresAt = key.expiresAt
       session.keyRotatesAt = key.rotatesAt
       session.renewedAt = now()
       session.deferRenewalIfStillDue(now: session.renewedAt)
-      if apiKey.current != key.apiKey { apiKey.save(key.apiKey) }
+      // A key the Keychain refused isn't in place, so the stored dates must stay
+      // the old key's: the session stays due and the next check tries again.
+      if apiKey.current != key.apiKey, !apiKey.save(key.apiKey) {
+        Self.log.error("renewal couldn't store the connection's new key")
+        return
+      }
       store.save(session)
       status = .signedIn(email: session.email)
     } catch .unreachable {
       return
     } catch {
       if generation == started { forget() }
-    }
-  }
-}
-
-/// How a sign-in attempt ended.
-public enum SignInOutcome: Sendable, Equatable {
-  case signedIn
-  /// The member closed the window or declined on the consent page. Nothing to
-  /// report.
-  case cancelled
-  case failed(SignInFailure)
-}
-
-/// Why a sign-in failed, with the wording the shell shows. Owned here, next to
-/// the outcomes, so the shell renders one judgement instead of assembling text
-/// at an alert call site no test reaches.
-public enum SignInFailure: Sendable, Equatable {
-  /// This build has no Connected App configured.
-  case unavailable
-  /// The redirect didn't answer this attempt or reported an error.
-  case consent
-  /// The exchange refused this member; carries the server's reason.
-  case forbidden(String?)
-  /// A credential was refused mid-flow (an expired code, a revoked grant).
-  case rejected
-  /// Couldn't reach AssemblyAI, or it failed.
-  case server
-  /// The key or the session couldn't be written to the Keychain.
-  case keychain
-
-  init(_ failure: OAuthClient.Failure) {
-    switch failure {
-    case .rejected: self = .rejected
-    case .forbidden(let reason): self = .forbidden(reason)
-    case .unreachable: self = .server
-    }
-  }
-
-  /// How to report it: inline beside the row for anything a retry (or an admin)
-  /// can fix, an alert only for the Keychain fault retrying can't touch. The
-  /// same split `APIKeySubmission.Outcome.failureReport` makes for a pasted key.
-  public var failureReport: APIKeySubmission.FailureReport {
-    switch self {
-    case .keychain: .alert(title: "Couldn’t Save Your Sign-In", message: message)
-    default: .inline(message: message)
-    }
-  }
-
-  var message: String {
-    switch self {
-    case .unavailable:
-      "Signing in isn’t available in this version of Blurt. Use an API key instead."
-    case .consent, .rejected:
-      "AssemblyAI didn’t complete the sign-in. Try again."
-    case .forbidden(let reason):
-      reason.map { "AssemblyAI didn’t allow it: \($0)" }
-        ?? "AssemblyAI didn’t allow Blurt to use your account. Ask an admin of your organization."
-    case .server:
-      "Couldn’t reach AssemblyAI. Check your connection and try again."
-    case .keychain:
-      "Blurt couldn’t write to your macOS Keychain. Check Keychain access and try again."
     }
   }
 }

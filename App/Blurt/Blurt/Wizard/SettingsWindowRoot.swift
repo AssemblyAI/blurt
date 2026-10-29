@@ -196,7 +196,7 @@ private struct StyleProfilesSection: View {
       // Ellipsis for the same reason as the API-key row's "Connect…": the
       // action needs more input before it completes.
       Button("Add Style…") { editing = StyleProfile(name: "", instructions: "") }
-        .disabled(profiles.count >= StyleProfileStore.profileLimit)
+        .disabled(profiles.count >= StyleProfileStore.limit)
         .accessibilityIdentifier(UITestIdentifiers.styleProfileAdd)
     } header: {
       Text("Custom Styles")
@@ -208,7 +208,7 @@ private struct StyleProfilesSection: View {
         enhancedTranscripts
           ? "A style tells Blurt how to polish your dictations — for example, “casual, all "
             + "lowercase” for chat. Switch between styles in the main window. Create up to "
-            + "\(StyleProfileStore.profileLimit) styles."
+            + "\(StyleProfileStore.limit) styles."
           : StylesInertNotice.settingsText)
     }
     .disabled(!enhancedTranscripts)

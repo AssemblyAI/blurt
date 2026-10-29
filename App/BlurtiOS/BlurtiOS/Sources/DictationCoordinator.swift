@@ -61,13 +61,11 @@ final class DictationCoordinator {
     var context = FocusedFieldContext.empty
   }
   nonisolated private static let pendingPress = Mutex(Press())
-  /// What the keyboard saw around the cursor on the press that started the
-  /// dictation in flight, read by the engine's context seam — and cleared once
-  /// used, so nothing from another app's field primes a later request.
-  nonisolated private static let pressContext = Mutex<FocusedFieldContext>(.empty)
-  /// The keyboard process whose press started the dictation in flight, for the
-  /// words to go back to it.
-  nonisolated private static let pressKeyboard = Mutex<String?>(nil)
+  /// The press that started the dictation in flight: its keyboard, for the
+  /// words to go back to, and what that keyboard saw around the cursor, read
+  /// by the engine's context seam — and cleared once used, so nothing from
+  /// another app's field primes a later request.
+  nonisolated private static let claimedPress = Mutex(Press())
   /// Contact names, parsed once per lexicon refresh rather than on the press.
   nonisolated private static let lexiconNames = Mutex<[String]>([])
   /// The words the session just delivered, waiting to be counted. The stats are
@@ -89,7 +87,7 @@ final class DictationCoordinator {
     session = DictationSession(
       mic: window.source,
       transcriber: AssemblyAITranscriber(),
-      injector: KeyboardRelayInjector(presser: { Self.pressKeyboard.withLock { $0 } }),
+      injector: KeyboardRelayInjector(presser: { Self.claimedPress.withLock { $0.keyboard } }),
       keyTermsProvider: { Self.keyTerms() },
       readinessCheck: apiKey.readinessCheck(),
       onTranscriptDelivered: { text, ring in
@@ -278,16 +276,15 @@ final class DictationCoordinator {
       defer { pending = Press() }
       return pending
     }
-    pressKeyboard.withLock { $0 = press.keyboard }
-    pressContext.withLock { $0 = press.context }
+    claimedPress.withLock { $0 = press }
     return nil
   }
 
   /// What the keyboard saw around the cursor on the press in flight, once.
   nonisolated static func fieldContext() -> FocusedFieldContext {
-    pressContext.withLock { context in
-      defer { context = .empty }
-      return context
+    claimedPress.withLock { press in
+      defer { press.context = .empty }
+      return press.context
     }
   }
 

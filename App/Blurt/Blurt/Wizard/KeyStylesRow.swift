@@ -83,7 +83,7 @@ private struct KeyStylesSheet: View {
   /// profile — `choice` is one `TriggerKeyStyleStore.choice` has normalized.
   static func name(of choice: String, profiles: [StyleProfile]) -> String {
     switch choice {
-    case "": offName
+    case TriggerKeyStyleStore.offChoice: offName
     case TriggerKeyStyleStore.currentStyleID: mainWindowName
     default: StyleProfileStore.active(in: profiles, id: choice)?.name ?? StyleProfileStore.defaultStyleName
     }
@@ -102,7 +102,7 @@ private struct KeyStylesSheet: View {
               accessibilityID: UITestIdentifiers.keyStylePicker(key.keyCode),
               selection: choice(for: key, styles: styles, profiles: profiles)
             ) {
-              if key != bound { Text(Self.offName).tag("") }
+              if key != bound { Text(Self.offName).tag(TriggerKeyStyleStore.offChoice) }
               Text(Self.mainWindowName).tag(TriggerKeyStyleStore.currentStyleID)
               Group {
                 Text(StyleProfileStore.defaultStyleName).tag(StyleProfileStore.defaultStyleID)
@@ -151,7 +151,7 @@ private struct KeyStylesSheet: View {
     }
   }
 
-  /// One key's pop-up: `""` is Off, otherwise a style id (see `TriggerKeyStyleStore`).
+  /// One key's pop-up: `offChoice` is Off, otherwise a style id (see `TriggerKeyStyleStore`).
   private func choice(
     for key: TriggerKey, styles: [TriggerKey: String], profiles: [StyleProfile]
   ) -> Binding<String> {

@@ -97,8 +97,7 @@ public struct OAuthClient: Sendable {
   /// The connection's API key for this access token. The same key comes back on
   /// every call until it expires; the first call after that mints the next one.
   public func apiKey(accessToken: String) async throws(Failure) -> ConnectionKey {
-    var request = authorizedRequest(configuration.apiKeyURL, accessToken: accessToken)
-    request.httpMethod = "POST"
+    let request = authorizedPost(configuration.apiKeyURL, accessToken: accessToken)
     let (status, data) = try await send(request)
     switch status {
     case 200..<300:
@@ -109,13 +108,10 @@ public struct OAuthClient: Sendable {
         apiKey: apiKey, expiresAt: body.apiKeyExpiresAt.flatMap(Self.date(from:)),
         rotatesAt: body.apiKeyRotatesAt.flatMap(Self.date(from:)))
     case 401:
-      Self.logRefusal(request, status: status, data: data)
       throw .rejected
     case 403:
-      Self.logRefusal(request, status: status, data: data)
       throw .forbidden(Self.explanation(in: data))
     default:
-      Self.logRefusal(request, status: status, data: data)
       throw .unreachable
     }
   }
@@ -123,18 +119,15 @@ public struct OAuthClient: Sendable {
   /// Ends the connection server-side: the grant is revoked and the key disabled.
   /// Succeeds when there was nothing left to end.
   public func revoke(accessToken: String) async throws(Failure) {
-    var request = authorizedRequest(configuration.revokeURL, accessToken: accessToken)
-    request.httpMethod = "POST"
-    let (status, data) = try await send(request)
+    let request = authorizedPost(configuration.revokeURL, accessToken: accessToken)
+    let (status, _) = try await send(request)
     switch status {
     case 200..<300: return
     case 401:
-      Self.logRefusal(request, status: status, data: data)
       throw .rejected
     // 503 is the server saying the grant revoke failed: the grant is still
     // live, so this must not look like a sign-out.
     default:
-      Self.logRefusal(request, status: status, data: data)
       throw .unreachable
     }
   }
@@ -156,33 +149,40 @@ public struct OAuthClient: Sendable {
       return Tokens(
         accessToken: accessToken, refreshToken: body.refreshToken?.trimmedNonEmpty(),
         idToken: body.idToken?.trimmedNonEmpty())
-    // RFC 6749 §5.2: a refused grant (`invalid_grant`, an unknown client) is a
-    // 400 or 401. Anything else says nothing about the credential.
-    case 400, 401:
-      Self.logRefusal(request, status: status, data: data)
+    // RFC 6749 §5.2: a refused grant is a 400 or 401 whose `error` names it.
+    // Only `invalid_grant` and `invalid_client` say the credential is dead; any
+    // other 400 (`invalid_request` mid-deploy, a proxy's own page) says nothing
+    // about it, and reading it as a refusal would sign the user out.
+    case 400...401 where Self.isRefusedGrant(data):
       throw .rejected
     default:
-      Self.logRefusal(request, status: status, data: data)
       throw .unreachable
     }
   }
 
-  private func authorizedRequest(_ url: URL, accessToken: String) -> URLRequest {
+  private func authorizedPost(_ url: URL, accessToken: String) -> URLRequest {
     var request = URLRequest(url: url)
+    request.httpMethod = "POST"
     request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
     request.setValue("application/json", forHTTPHeaderField: "Accept")
     if let userAgent { request.setValue(userAgent, forHTTPHeaderField: "User-Agent") }
     return request
   }
 
+  /// The response's status and body. Every refused or failed call is logged
+  /// here, once, so the callers only map the status to a `Failure`.
   private func send(_ request: URLRequest) async throws(Failure) -> (Int, Data) {
+    let status: Int
+    let data: Data
     do {
-      let (data, response) = try await transport.data(for: request)
+      let (body, response) = try await transport.data(for: request)
       guard let http = response as? HTTPURLResponse else { throw Failure.unreachable }
-      return (http.statusCode, data)
+      (status, data) = (http.statusCode, body)
     } catch {
       throw .unreachable
     }
+    if !(200..<300).contains(status) { Self.logRefusal(request, status: status, data: data) }
+    return (status, data)
   }
 
   private struct TokenBody: Decodable {
@@ -220,6 +220,13 @@ public struct OAuthClient: Sendable {
     }
     let reason = fields.isEmpty ? "-" : fields.joined(separator: " ")
     SDKLog.oauth.error("\(path, privacy: .public) -> \(status, privacy: .public): \(reason, privacy: .public)")
+  }
+
+  /// Whether a token-endpoint error body names a dead credential: the refresh
+  /// token or code (`invalid_grant`) or the client (`invalid_client`).
+  static func isRefusedGrant(_ data: Data) -> Bool {
+    let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+    return ["invalid_grant", "invalid_client"].contains(body?["error"] as? String)
   }
 
   /// The 403's reason: `error_description` from an `insufficient_scope` body, or

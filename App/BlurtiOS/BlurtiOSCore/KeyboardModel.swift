@@ -68,8 +68,9 @@ package final class KeyboardModel {
   @ObservationIgnored package let clockStart = ContinuousClock.now
   @ObservationIgnored package var lastResultID: UUID?
   /// What the last dictation put in the field, separator included, so one
-  /// delete takes the whole of it back. Any keystroke into the host clears it.
-  @ObservationIgnored package var lastInsertion: String?
+  /// delete takes the whole of it back. Any keystroke into the host clears it,
+  /// and so does the keyboard leaving the screen.
+  @ObservationIgnored package var lastInsertion: Insertion?
   @ObservationIgnored private var heartbeat: Task<Void, Never>?
   @ObservationIgnored package var lastSpaceAt: ContinuousClock.Instant?
   @ObservationIgnored package var noticeDwell: Task<Void, Never>?
@@ -268,6 +269,7 @@ package final class KeyboardModel {
       gate.reset()
     }
     SharedStore.keyboardSeenAt = nil
+    lastInsertion = nil
   }
 
   deinit {
