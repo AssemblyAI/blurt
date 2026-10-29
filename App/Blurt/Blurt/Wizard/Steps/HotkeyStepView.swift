@@ -4,7 +4,7 @@ import SwiftUI
 /// The dictation-key section of the setup/settings screen. Two menu pickers: which
 /// lone modifier triggers dictation, and whether it activates by tap (toggle),
 /// hold (push-to-talk), or both; changes are persisted and pushed to the event tap
-/// immediately. Giving the other trigger keys their own styles is the Advanced
+/// immediately. Giving the other trigger keys their own styles is the Styles
 /// pane's `KeyStylesRow`.
 struct HotkeyStepView: View {
   var coordinator: AppCoordinator
