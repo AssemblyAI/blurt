@@ -227,7 +227,7 @@ extension DictationSessionTests {
     let fixture = makeSession()
 
     let stream = await fixture.session.phaseStream()
-    fixture.session.submit(.press)
+    fixture.session.submit(.press())
 
     var seen: [PipelinePhase] = []
     for await phase in stream {

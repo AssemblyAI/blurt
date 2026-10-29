@@ -47,7 +47,7 @@ public struct DictationKeyGate: Sendable {
   /// Whether the gate holds no in-flight dictation (neither armed nor latched).
   /// `DictationKeyRouter.reset()` reads this to report whether it just discarded a
   /// live recording that the caller must cancel upstream (rebinding, or the
-  /// disabled-tap recovery in `recoverFromDroppedEvents(triggerStillHeld:)`) —
+  /// disabled-tap recovery in `recoverFromDroppedEvents(heldFlags:)`) —
   /// otherwise the session would stay `.recording` with no key-up ever arriving.
   public var isIdle: Bool { state == .idle }
 

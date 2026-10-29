@@ -3,9 +3,12 @@ extension DictationSession {
   /// async methods one-to-one; see each method's doc for semantics.
   /// `pressHandingBack` is `press(handingBack: true)`: the same dictation, whose
   /// transcript ends the run as `.handedBack` rather than being pasted.
-  public enum Command: Sendable {
-    case press
-    case pressHandingBack
+  public enum Command: Sendable, Equatable {
+    /// `key` is the trigger key that pressed, whose style the dictation is made
+    /// with (`PressStyle`); nil for the main window's selection. Carried on the
+    /// command so the style rides this one press in submission order.
+    case press(key: TriggerKey? = nil)
+    case pressHandingBack(key: TriggerKey? = nil)
     case release
     case cancel
     case cancelRecording
@@ -38,8 +41,8 @@ extension DictationSession {
   /// mirrors, so `submit` and direct calls share every guard and race rule.
   func run(_ command: Command) async {
     switch command {
-    case .press: await press()
-    case .pressHandingBack: await press(handingBack: true)
+    case .press(let key): await press(key: key)
+    case .pressHandingBack(let key): await press(handingBack: true, key: key)
     case .release: await release()
     case .cancel: await cancel()
     case .cancelRecording: await cancelRecording()

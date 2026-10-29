@@ -58,7 +58,7 @@ struct DictationSessionBringUpTests {
     let session = makeSession(transcriber: StubTranscriber(mode: .transcript("never")), mic: mic)
 
     let stream = await session.phaseStream()
-    session.submit(.press)
+    session.submit(.press())
     await mic.waitUntilStartEntered()  // the consumer is now blocked inside this press
 
     session.submit(.cancel)

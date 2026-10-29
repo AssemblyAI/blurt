@@ -159,7 +159,9 @@ final class AppCoordinator {
     // as before.
     let router = SelectionSpeechRouter(session: session)
     keyTap = DictationKeyTap(
-      onStart: { router.submit(.press) },
+      // The key rides the press, and the session resolves its style for that one
+      // dictation (`PressStyle`); the main window's selection is never written.
+      onStart: { key in router.submit(.press(key: key)) },
       onStop: { router.submit(.release) },
       onCancel: { router.submit(.cancel) },
       onLatch: { router.keyLatched() },
@@ -262,11 +264,11 @@ final class AppCoordinator {
     syncGlobeKeyOverride()
   }
 
-  /// Turns macOS's own 🌐 action off while `fn` is the trigger, and back on
+  /// Turns macOS's own 🌐 action off while `fn` is a trigger, and back on
   /// otherwise (see `GlobeKeyOverride`). Also run from `start()`, so the relaunch
   /// after a settings reset restores the user's setting.
   private func syncGlobeKeyOverride() {
-    GlobeKeyOverride().sync(boundKey: TriggerKeyStore().triggerKey)
+    GlobeKeyOverride().sync(boundKeys: TriggerKeyStyleStore().enabledKeys)
   }
 
   // MARK: - Dictation render

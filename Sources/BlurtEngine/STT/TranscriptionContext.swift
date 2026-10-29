@@ -4,7 +4,8 @@
 ///
 /// **Most of it never leaves the machine.** Only `recentTranscripts` and
 /// `priorText` go on the wire, as the request's `stt_prompt` string
-/// (`STTPrompt.text`), and `keyTerms` rides a separate request field.
+/// (`STTPrompt.text`); `keyTerms` and `styleInstructions` ride separate request
+/// fields.
 /// The rest is collected for local work — paste spacing, the injector's window
 /// identity, the developer-mode log — and each field below says which it is. A
 /// field's presence here is not permission to send it; widening what is sent is
@@ -75,6 +76,13 @@ public struct TranscriptionContext: Sendable, Equatable {
   /// rides `stt_prompt`. Empty when there is no `priorText` to scrub.
   public let textShortcuts: [TextShortcut]
 
+  /// The style this press resolved (`PressStyle`) — the trigger key's, else the
+  /// main window's selection. Like `keyTerms` it isn't focus state, and it is
+  /// **sent**, but not as context: it is appended to the request's cleanup
+  /// instruction, `llm_instruction` (`CleanupInstruction.sendable(appending:)`).
+  /// Nil under base styling.
+  public let styleInstructions: String?
+
   public init(
     appName: String?,
     windowTitle: String? = nil,
@@ -84,6 +92,7 @@ public struct TranscriptionContext: Sendable, Equatable {
     recentTranscripts: [String] = [],
     keyTerms: [String] = [],
     textShortcuts: [TextShortcut] = [],
+    styleInstructions: String? = nil,
     targetIsSecure: Bool = false
   ) {
     self.appName = appName
@@ -94,14 +103,21 @@ public struct TranscriptionContext: Sendable, Equatable {
     self.recentTranscripts = recentTranscripts
     self.keyTerms = keyTerms
     self.textShortcuts = textShortcuts
+    self.styleInstructions = styleInstructions
     self.targetIsSecure = targetIsSecure
   }
 
   /// True when no focus field carries usable (non-whitespace) content, there is no
-  /// history, no key terms, and the target wasn't secure. Covers every signal,
+  /// history, no key terms, no style, and the target wasn't secure. Covers every signal,
   /// including the ones that stay local, so it answers "is this snapshot worth
   /// carrying at all" — not "will this send context", which only
   /// `recentTranscripts` and `priorText` decide.
+  ///
+  /// So a non-nil context does **not** mean the Accessibility read found
+  /// anything: key terms, history or a style alone keep it, because the session
+  /// collapses an empty snapshot to `nil` and these would be dropped from the
+  /// request with it. Readers that care about the focused field read its fields
+  /// (`priorText`, `windowTitle`, …), never the context's presence.
   ///
   /// `targetIsSecure` counts, even though it is a `Bool` rather than content: the
   /// session collapses an empty snapshot to `nil`, and a secure target reduced to
@@ -110,7 +126,7 @@ public struct TranscriptionContext: Sendable, Equatable {
   /// exists to prevent.
   public var isEmpty: Bool {
     !targetIsSecure && keyTerms.isEmpty && recentTranscripts.isEmpty
-      && [appName, windowTitle, fieldLabel, priorText, selectedText].allSatisfy {
+      && [appName, windowTitle, fieldLabel, priorText, selectedText, styleInstructions].allSatisfy {
         $0.trimmedNonEmpty() == nil
       }
   }

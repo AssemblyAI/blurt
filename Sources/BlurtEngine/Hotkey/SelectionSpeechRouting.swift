@@ -76,6 +76,10 @@ public struct SelectionSpeechRouting: Sendable {
   /// Whether the session's last phase was in flight. A terminal phase is then
   /// that dictation's end, never a hand-back press that hasn't started.
   private var sessionBusy = false
+  /// The trigger key of the press a read is deciding over, so the dictation it
+  /// becomes — the press itself with no selection, or a request about one — is
+  /// made with that key's style.
+  private var decidingKey: TriggerKey?
 
   public init() {}
 
@@ -84,7 +88,8 @@ public struct SelectionSpeechRouting: Sendable {
   ) -> [Action] {
     switch mode {
     case .passthrough:
-      guard command == .press, readAloudEnabled else { return [.forward(command)] }
+      guard case .press(let key) = command, readAloudEnabled else { return [.forward(command)] }
+      decidingKey = key
       mode = .deciding(pending: [], asks: askEnabled, latched: false, held: false)
       return askEnabled ? [.readSelection, .startHoldTimer] : [.readSelection]
     case .deciding(var pending, let asks, let latched, let held):
@@ -188,7 +193,7 @@ public struct SelectionSpeechRouting: Sendable {
     guard case .deciding(let pending, let asks, let latched, let held) = mode else { return [] }
     guard let selection else {
       mode = .passthrough
-      return ([.press] + pending).map(Action.forward)
+      return ([.press(key: decidingKey)] + pending).map(Action.forward)
     }
     // The press was already over before the read returned: a combo cancelled
     // it, or a hold was released. Neither one asked to hear anything. When a
@@ -196,7 +201,8 @@ public struct SelectionSpeechRouting: Sendable {
     // nothing will run for it, so clear the gate or the next press is swallowed.
     guard pending.isEmpty else {
       mode = .passthrough
-      return pending.last == .press ? [.resetGate] : []
+      guard case .press? = pending.last else { return [] }
+      return [.resetGate]
     }
     // A tap, or a press that can't ask, reads now.
     if !asks || latched {
@@ -212,7 +218,7 @@ public struct SelectionSpeechRouting: Sendable {
   /// while an earlier dictation is still finishing, once it has.
   private mutating func beginAsking(_ selection: String) -> [Action] {
     mode = .asking(selection, started: !sessionBusy)
-    return sessionBusy ? [] : [.forward(.pressHandingBack)]
+    return sessionBusy ? [] : [.forward(.pressHandingBack(key: decidingKey))]
   }
 
   /// The read ended on its own, or failed. The caller must not report a read it
@@ -239,7 +245,7 @@ public struct SelectionSpeechRouting: Sendable {
       return [.syncGateAfterSession]
     case .asking(let selection, started: false):
       mode = .asking(selection, started: true)
-      return [.forward(.pressHandingBack)]
+      return [.forward(.pressHandingBack(key: decidingKey))]
     case .transcribing(let selection, started: false):
       // Let go before the mic ever opened: a request with nothing said.
       mode = .speaking

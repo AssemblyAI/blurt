@@ -3,8 +3,9 @@ import SwiftUI
 
 /// The dictation-key section of the setup/settings screen. Two menu pickers: which
 /// lone modifier triggers dictation, and whether it activates by tap (toggle),
-/// hold (push-to-talk), or both; changes are persisted and pushed to the event
-/// tap immediately.
+/// hold (push-to-talk), or both; changes are persisted and pushed to the event tap
+/// immediately. Giving the other trigger keys their own styles is the Advanced
+/// pane's `KeyStylesRow`.
 struct HotkeyStepView: View {
   var coordinator: AppCoordinator
 
@@ -19,6 +20,10 @@ struct HotkeyStepView: View {
   // Same rule for the activation half: "" is "nothing persisted", and the unset
   // default belongs to `TriggerActivation.fromPersisted`, not a literal here.
   @AppStorage(TriggerActivationStore.defaultsKey) private var activationRaw = ""
+
+  // Observed so the fn footer follows a key turned on in Key Styles, and decoded
+  // through the store that owns the encoding.
+  @AppStorage(TriggerKeyStyleStore.defaultsKey) private var keyStylesRaw = ""
 
   private var selection: Binding<TriggerKey> {
     Binding(
@@ -54,6 +59,8 @@ struct HotkeyStepView: View {
     string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!
 
   var body: some View {
+    let bound = selection.wrappedValue
+    let styles = TriggerKeyStyleStore.styles(decoding: keyStylesRaw)
     Section {
       PickerSettingRow(
         title: "Dictation key", systemImage: "keyboard",
@@ -83,7 +90,7 @@ struct HotkeyStepView: View {
       // that write only lands at the next log-in, so until then fn double-fires.
       // Lead with that symptom rather than the setting's name, and link to the
       // pane that applies the change now.
-      if selection.wrappedValue == .function {
+      if TriggerKeyStyleStore.enabledKeys(bound: bound, styles: styles).contains(.function) {
         Text(
           "Until you next log in, pressing fn may also open the emoji picker or Apple "
             + "Dictation. To fix that now, open Keyboard Settings and set “Press 🌐 key to” "

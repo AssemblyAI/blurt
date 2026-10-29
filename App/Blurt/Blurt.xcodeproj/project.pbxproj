@@ -74,6 +74,7 @@
 		2103C3F415E9C102664CA13C /* rom1a-20-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F7307E06A286147462426313 /* rom1a-20-stop.m4a */; };
 		234AFC3335EE59A5CF61E79C /* juno-78-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2A97148549AA99C8CDD7C316 /* juno-78-start.m4a */; };
 		24CD4A998CA258D89140D418 /* juno-12-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = A0C78659208520BB93EAB372 /* juno-12-start.m4a */; };
+		2638A7B2FF8239CF3D861F0C /* KeyStylesRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00D3C74B2EFEC7A63A7E27A8 /* KeyStylesRow.swift */; };
 		2747AA6669B2406D4436E2A3 /* juno-53-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 56F69B42F0D495142B17FF83 /* juno-53-start.m4a */; };
 		27CD78DC27ACE6A0E2EDFD15 /* juno-41-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 8E71DBB3C21D616DDFA77D0B /* juno-41-stop.m4a */; };
 		282E843FAECCBCA0CDB04E48 /* juno-93-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D85C603DADD81B58F7D390F7 /* juno-93-stop.m4a */; };
@@ -466,6 +467,7 @@
 		002FB9F5FD28A66C04993007 /* juno-61-start.m4a */ = {isa = PBXFileReference; path = "juno-61-start.m4a"; sourceTree = "<group>"; };
 		00768AE8171902B439F0602F /* juno-89-start.m4a */ = {isa = PBXFileReference; path = "juno-89-start.m4a"; sourceTree = "<group>"; };
 		0088DE3FD3980CA727EB02FE /* juno-111-start.m4a */ = {isa = PBXFileReference; path = "juno-111-start.m4a"; sourceTree = "<group>"; };
+		00D3C74B2EFEC7A63A7E27A8 /* KeyStylesRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyStylesRow.swift; sourceTree = "<group>"; };
 		0150E727307295CE46981426 /* rom1b-19-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-19-stop.m4a"; sourceTree = "<group>"; };
 		01B663528C4E1AFEF24675E1 /* rom1b-21-start.m4a */ = {isa = PBXFileReference; path = "rom1b-21-start.m4a"; sourceTree = "<group>"; };
 		01F10B3261EA8F8616B8595A /* MainWindowRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowRoot.swift; sourceTree = "<group>"; };
@@ -1395,6 +1397,7 @@
 				8999B37D9418B7A6923BD358 /* BoundTriggerKey.swift */,
 				C7C95B4C80443E2A6EFE05E7 /* DeveloperSection.swift */,
 				48C4CFC6271703797187A269 /* KeyCap.swift */,
+				00D3C74B2EFEC7A63A7E27A8 /* KeyStylesRow.swift */,
 				01F10B3261EA8F8616B8595A /* MainWindowRoot.swift */,
 				383E03AB60BA21AAD92655D5 /* ReadyView.swift */,
 				A0EC4E3D73862F8E4DB6F47D /* RecentDictationsSection.swift */,
@@ -2070,6 +2073,7 @@
 				B5A7CEA6517E5A1E4D77623F /* FloatingPanel.swift in Sources */,
 				F42E6D4E62345772C5A49A08 /* HotkeyStepView.swift in Sources */,
 				92041B42C67CE21AF82B6863 /* KeyCap.swift in Sources */,
+				2638A7B2FF8239CF3D861F0C /* KeyStylesRow.swift in Sources */,
 				9B7CB19D131F1374FCA0A986 /* KeyTermsStepView.swift in Sources */,
 				E8AE03AA4DCD807D2BB8D660 /* LiquidGlass.swift in Sources */,
 				7F838018EA0ACE7170FC32C4 /* MainWindowRoot.swift in Sources */,

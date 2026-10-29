@@ -8,9 +8,12 @@ import Dispatch
 // `Dispatch`, not `Foundation`: the only thing here from outside the module is
 // `BlockingIPC.queue.async` (see `BlockingIPC` for why that read is off-pool).
 extension DictationSession {
-  func performPress(handingBack: Bool) async {
+  func performPress(handingBack: Bool, key: TriggerKey?) async {
     guard phase.isTerminal else { return }
     handsBackTranscript = handingBack
+    // Drop the last dictation's style now, so a press that exits before
+    // `beginContextCapture` resolves its own can't be attributed to it.
+    pressStyle = .none
     // Refuse the press before any capture begins when the host reports a
     // blocker (e.g. no API key saved): recording an utterance that can only
     // fail at transcribe time would discard the user's words after the fact.
@@ -57,7 +60,7 @@ extension DictationSession {
       // cancellation, which is what `cancel()`'s `.connecting` branch relies on
       // to preempt the wait.
       async let started = mic.start()
-      await beginContextCapture()
+      await beginContextCapture(key: key)
       // Only now join the bring-up. Everything above ran while the mic was
       // coming up; the phase still flips to `.recording` only once `start()`
       // returns, so the UI never claims capture that isn't live. The cost of
@@ -146,7 +149,7 @@ extension DictationSession {
   /// cross-process AX read, the expensive part — overlaps the mic coming up
   /// rather than queueing behind it. Split out of `performPress` for the lint
   /// function-length budget; it is one phase of the press, not a reusable step.
-  private func beginContextCapture() async {
+  private func beginContextCapture(key: TriggerKey?) async {
     // Capture the frontmost app (paste target). A cheap in-process AppKit read
     // on the main actor. Lifted out of the actor first (like `transcriber`
     // above) so the call is a Sendable closure rather than isolated state.
@@ -156,6 +159,10 @@ extension DictationSession {
     // Key terms are read synchronously at press (cheap UserDefaults read), so
     // each dictation observably re-reads Settings edits at press time.
     let keyTerms = keyTermsProvider()
+    // So is the press's style, from the key that pressed — resolved here, on
+    // this press's turn, so a later press can't restyle it.
+    pressStyle = pressStyleProvider(key)
+    let styleInstructions = pressStyle.instructions
     // Session history, read on the actor for the same reason: the capture below
     // runs off-actor, so what it carries has to be a value taken now.
     let recentTranscripts = recentDictations.spokenOldestFirst
@@ -169,11 +176,12 @@ extension DictationSession {
     //
     // `pressKnown` carries only what this actor already has, so a missed budget
     // costs the request the field text and not `keyterms_prompt` and the recent turns
-    // as well. It deliberately carries no focus signals — see `PressContext`,
+    // as well (nor its style). It deliberately carries no focus signals — see `PressContext`,
     // which also owns the wait and the release-side peek.
     let pressKnown = TranscriptionContext(
       appName: nil, priorText: nil,
-      recentTranscripts: recentTranscripts, keyTerms: keyTerms)
+      recentTranscripts: recentTranscripts, keyTerms: keyTerms,
+      styleInstructions: styleInstructions)
     let press = PressContext(pressKnown: pressKnown.isEmpty ? nil : pressKnown)
     pressContext = press
     // A Dispatch queue, not `Task.detached`: `captureFieldContext` is documented
@@ -202,6 +210,7 @@ extension DictationSession {
         // Only needed to scrub the field text, so read only when there is some,
         // and here rather than on the actor.
         textShortcuts: field.priorText == nil ? [] : textShortcutsProvider(),
+        styleInstructions: styleInstructions,
         targetIsSecure: field.isSecure)
       // One publish, which is what makes the value-before-stream ordering
       // `startUpload`'s wait depends on unforgeable — see `PressContext.store`.

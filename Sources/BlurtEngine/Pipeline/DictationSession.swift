@@ -41,14 +41,16 @@ public actor DictationSession {
   /// (`KeyTerms`), not as part of the conversation context. A closure, so edits in
   /// Settings apply to the next dictation without rebuilding the session. Defaults to `KeyTermsStore`.
   let keyTermsProvider: @Sendable () -> [String]
-  /// Names the style a completed dictation was made with, recorded onto its
-  /// `RecentDictations.Entry` (the row's trailing style chip). `nil` means no
-  /// *custom* style shaped it — enhanced transcripts off, or the base Cleaned
-  /// Up styling with no profile active — and the entry shows only its
-  /// timestamp: the base treatment is every row's default, so naming it on
-  /// each would be noise. A closure for the same live-read reason as
-  /// `keyTermsProvider`; the default reads the stores.
-  let styleNameProvider: @Sendable () -> String?
+  /// Resolves the style a press is made with from the trigger key that
+  /// pressed (`PressStyle`), once, at press: its instructions ride the
+  /// request's context, and its name is recorded onto the dictation's
+  /// `RecentDictations.Entry` (the row's trailing style chip). A nil name means
+  /// no *custom* style shaped it — enhanced transcripts off, or the base
+  /// Cleaned Up styling — and the entry shows only its timestamp: the base
+  /// treatment is every row's default, so naming it on each would be noise. A
+  /// closure for the same live-read reason as `keyTermsProvider`; the default
+  /// reads the stores.
+  let pressStyleProvider: @Sendable (TriggerKey?) -> PressStyle
   /// The text shortcuts expanded into each transcript before the paste; live-read.
   let textShortcutsProvider: @Sendable () -> [TextShortcut]
   /// Auto-releases the hotkey after this long so a held key can't run forever.
@@ -156,6 +158,9 @@ public actor DictationSession {
   /// Whether this press's transcript goes back to the host (`.handedBack`) instead of being pasted.
   var handsBackTranscript = false
 
+  /// The style this press resolved (`pressStyleProvider`), named on its Recent row.
+  var pressStyle = PressStyle.none
+
   /// The production entry point: the real log, and the real focus capture unless the host
   /// supplies its own (`hostFocusCapture`: the iOS app, whose keyboard knows the text before
   /// the cursor). Delegates to the seam-carrying initializer below, which can't be public.
@@ -166,7 +171,7 @@ public actor DictationSession {
     maxRecordingSeconds: Double = SyncSTTLimits.autoReleaseSeconds,
     clock: any Clock<Duration> = ContinuousClock(),
     keyTermsProvider: (@Sendable () -> [String])? = nil,
-    styleNameProvider: (@Sendable () -> String?)? = nil,
+    pressStyleProvider: (@Sendable (TriggerKey?) -> PressStyle)? = nil,
     textShortcutsProvider: (@Sendable () -> [TextShortcut])? = nil,
     readinessCheck: @escaping @Sendable () -> BlurtError? = { nil },
     onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)? = nil,
@@ -175,7 +180,7 @@ public actor DictationSession {
     self.init(
       mic: mic, transcriber: transcriber, injector: injector,
       maxRecordingSeconds: maxRecordingSeconds, clock: clock,
-      keyTermsProvider: keyTermsProvider, styleNameProvider: styleNameProvider,
+      keyTermsProvider: keyTermsProvider, pressStyleProvider: pressStyleProvider,
       textShortcutsProvider: textShortcutsProvider, readinessCheck: readinessCheck,
       onTranscriptDelivered: onTranscriptDelivered,
       seams: hostFocusCapture.map(Seams.init(hostFocusCapture:)) ?? .production)
@@ -194,7 +199,7 @@ public actor DictationSession {
     maxRecordingSeconds: Double,
     clock: any Clock<Duration>,
     keyTermsProvider: (@Sendable () -> [String])?,
-    styleNameProvider: (@Sendable () -> String?)?,
+    pressStyleProvider: (@Sendable (TriggerKey?) -> PressStyle)?,
     textShortcutsProvider: (@Sendable () -> [TextShortcut])?,
     readinessCheck: @escaping @Sendable () -> BlurtError?,
     onTranscriptDelivered: (@Sendable (String, RecentDictations) -> Void)?,
@@ -206,16 +211,7 @@ public actor DictationSession {
     self.maxRecordingSeconds = maxRecordingSeconds
     self.clock = clock
     self.keyTermsProvider = keyTermsProvider ?? { KeyTermsStore().terms }
-    self.styleNameProvider =
-      styleNameProvider
-      ?? {
-        // No rewrite means no style was applied — matching the transcriber's
-        // own per-request read of the same store. `active` is nil for the
-        // Default sentinel as well as for an empty list, which is exactly
-        // the rule: only a *custom* style is worth naming on the row.
-        guard EnhancedTranscriptsStore().isEnabled else { return nil }
-        return StyleProfileStore().active?.name
-      }
+    self.pressStyleProvider = pressStyleProvider ?? { PressStyle(key: $0) }
     self.textShortcutsProvider = textShortcutsProvider ?? { TextShortcutStore().shortcuts }
     self.readinessCheck = readinessCheck
     self.onTranscriptDelivered = onTranscriptDelivered
@@ -266,10 +262,11 @@ public actor DictationSession {
     return task
   }
 
-  public func press(handingBack: Bool = false) async {
+  /// `key` is the trigger key that pressed, for its style (`Command.press(key:)`).
+  public func press(handingBack: Bool = false, key: TriggerKey? = nil) async {
     // Published before awaiting so a cancel can preempt the mic bring-up — see
     // `inFlightPress`. Cleared on the way out, but only if it's still ours.
-    let task = chain { await self.performPress(handingBack: handingBack) }
+    let task = chain { await self.performPress(handingBack: handingBack, key: key) }
     inFlightPress = task
     await task.value
     clearInFlightPress(task)

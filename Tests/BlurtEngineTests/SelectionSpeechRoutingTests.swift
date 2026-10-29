@@ -8,7 +8,7 @@ struct SelectionSpeechRoutingTests {
   @Test("with the switch off, every command goes straight to the session")
   func switchedOff() {
     var routing = SelectionSpeechRouting()
-    for command in [DictationSession.Command.press, .release, .cancel, .cancelRecording] {
+    for command in [DictationSession.Command.press(), .press(key: .rightOption), .release, .cancel, .cancelRecording] {
       #expect(routing.submit(command, readAloudEnabled: false) == [.forward(command)])
     }
   }
@@ -16,16 +16,23 @@ struct SelectionSpeechRoutingTests {
   @Test("a press with nothing selected dictates, replaying what arrived during the read in order")
   func noSelectionReplays() {
     var routing = SelectionSpeechRouting()
-    #expect(routing.submit(.press, readAloudEnabled: true) == [.readSelection])
+    #expect(routing.submit(.press(), readAloudEnabled: true) == [.readSelection])
     #expect(routing.submit(.release, readAloudEnabled: true).isEmpty)
-    #expect(routing.selectionResolved(nil) == [.forward(.press), .forward(.release)])
-    #expect(routing.submit(.press, readAloudEnabled: true) == [.readSelection])
+    #expect(routing.selectionResolved(nil) == [.forward(.press()), .forward(.release)])
+    #expect(routing.submit(.press(), readAloudEnabled: true) == [.readSelection])
+  }
+
+  @Test("a press with nothing selected dictates with its own trigger key")
+  func noSelectionKeepsTheKey() {
+    var routing = SelectionSpeechRouting()
+    _ = routing.submit(.press(key: .rightOption), readAloudEnabled: true)
+    #expect(routing.selectionResolved(nil) == [.forward(.press(key: .rightOption))])
   }
 
   @Test("a press over a selection speaks it, and the next key command stops it")
   func speaksThenStops() {
     var routing = SelectionSpeechRouting()
-    _ = routing.submit(.press, readAloudEnabled: true)
+    _ = routing.submit(.press(), readAloudEnabled: true)
     #expect(routing.selectionResolved("Hello there.") == [.speak("Hello there.")])
     #expect(routing.submit(.release, readAloudEnabled: true) == [.stopSpeech])
     // The key stop already left the gate idle, so a late finish is nothing.
@@ -35,16 +42,16 @@ struct SelectionSpeechRoutingTests {
   @Test("a combo cancel during the read drops the press — ⌘C over a selection is a copy")
   func comboDuringRead() {
     var routing = SelectionSpeechRouting()
-    _ = routing.submit(.press, readAloudEnabled: true)
+    _ = routing.submit(.press(), readAloudEnabled: true)
     _ = routing.submit(.cancel, readAloudEnabled: true)
     #expect(routing.selectionResolved("Hello there.").isEmpty)
-    #expect(routing.submit(.press, readAloudEnabled: false) == [.forward(.press)])
+    #expect(routing.submit(.press(), readAloudEnabled: false) == [.forward(.press())])
   }
 
   @Test("a recovery reset while speaking stops the read and still reaches the session")
   func recoveryWhileSpeaking() {
     var routing = SelectionSpeechRouting()
-    _ = routing.submit(.press, readAloudEnabled: true)
+    _ = routing.submit(.press(), readAloudEnabled: true)
     _ = routing.selectionResolved("Hello there.")
     #expect(
       routing.submit(.cancelRecording, readAloudEnabled: true)
@@ -54,17 +61,17 @@ struct SelectionSpeechRoutingTests {
   @Test("a read that ends on its own clears the gate silently")
   func naturalEnd() {
     var routing = SelectionSpeechRouting()
-    _ = routing.submit(.press, readAloudEnabled: true)
+    _ = routing.submit(.press(), readAloudEnabled: true)
     _ = routing.selectionResolved("Hello there.")
     #expect(routing.speechFinished() == [.resetGate])
-    #expect(routing.submit(.press, readAloudEnabled: false) == [.forward(.press)])
+    #expect(routing.submit(.press(), readAloudEnabled: false) == [.forward(.press())])
   }
 
   @Test("a dictation's terminal phase syncs the gate only while commands go to the session")
   func terminalPhaseOwnership() {
     var routing = SelectionSpeechRouting()
     #expect(routing.sessionPhaseChanged(.pasted) == [.syncGateAfterSession])
-    _ = routing.submit(.press, readAloudEnabled: true)
+    _ = routing.submit(.press(), readAloudEnabled: true)
     #expect(routing.sessionPhaseChanged(.pasted).isEmpty)
     _ = routing.selectionResolved("Hello there.")
     // The earlier dictation finishing mid-read must not reset the read's gate.
@@ -74,17 +81,17 @@ struct SelectionSpeechRoutingTests {
   @Test("a press that lands during a slow read and is dropped clears the gate it latched")
   func pressDroppedDuringSlowRead() {
     var routing = SelectionSpeechRouting()
-    _ = routing.submit(.press, readAloudEnabled: true)
+    _ = routing.submit(.press(), readAloudEnabled: true)
     // ⌘C over the selection, then a tap to read, all before an Electron app's
     // read returns. The tap latched the gate.
     _ = routing.submit(.cancel, readAloudEnabled: true)
-    _ = routing.submit(.press, readAloudEnabled: true)
+    _ = routing.submit(.press(), readAloudEnabled: true)
     _ = routing.keyLatched()
     // Dropped like any press that was over before the read returned, but the
     // latch it left would swallow the next tap, so clear it.
     #expect(routing.selectionResolved("Hello there.") == [.resetGate])
     // A held-then-released press leaves the gate idle, so there is nothing to clear.
-    _ = routing.submit(.press, readAloudEnabled: true)
+    _ = routing.submit(.press(), readAloudEnabled: true)
     _ = routing.submit(.release, readAloudEnabled: true)
     #expect(routing.selectionResolved("Hello there.").isEmpty)
   }
@@ -106,7 +113,7 @@ struct SelectionSpeechRoutingAskTests {
   /// while the key is still down.
   private func selected(_ start: SelectionSpeechRouting = SelectionSpeechRouting()) -> SelectionSpeechRouting {
     var routing = start
-    _ = routing.submit(.press, readAloudEnabled: true, askEnabled: true)
+    _ = routing.submit(.press(), readAloudEnabled: true, askEnabled: true)
     _ = routing.selectionResolved(selection)
     return routing
   }
@@ -121,7 +128,7 @@ struct SelectionSpeechRoutingAskTests {
   @Test("a press that may ask starts the hold timer beside the selection read")
   func startsTimer() {
     var routing = SelectionSpeechRouting()
-    #expect(routing.submit(.press, readAloudEnabled: true, askEnabled: true) == [.readSelection, .startHoldTimer])
+    #expect(routing.submit(.press(), readAloudEnabled: true, askEnabled: true) == [.readSelection, .startHoldTimer])
   }
 
   @Test("a tap over a selection reads it, without ever opening the mic")
@@ -135,7 +142,7 @@ struct SelectionSpeechRoutingAskTests {
   @Test("a tap that lands before the selection read returns still reads it")
   func tapDuringRead() {
     var routing = SelectionSpeechRouting()
-    _ = routing.submit(.press, readAloudEnabled: true, askEnabled: true)
+    _ = routing.submit(.press(), readAloudEnabled: true, askEnabled: true)
     #expect(routing.keyLatched().isEmpty)
     #expect(routing.selectionResolved(selection) == [.speak(selection)])
   }
@@ -143,15 +150,23 @@ struct SelectionSpeechRoutingAskTests {
   @Test("a hold over a selection opens the mic with the hand-back press")
   func holdAsks() {
     var routing = selected()
-    #expect(routing.holdElapsed() == [.forward(.pressHandingBack)])
+    #expect(routing.holdElapsed() == [.forward(.pressHandingBack())])
+  }
+
+  @Test("the request about a selection is made with its trigger key's style")
+  func askKeepsTheKey() {
+    var routing = SelectionSpeechRouting()
+    _ = routing.submit(.press(key: .rightOption), readAloudEnabled: true, askEnabled: true)
+    #expect(routing.holdElapsed().isEmpty)
+    #expect(routing.selectionResolved(selection) == [.forward(.pressHandingBack(key: .rightOption))])
   }
 
   @Test("a hold that outlasts a slow selection read asks as soon as the read returns")
   func holdDuringRead() {
     var routing = SelectionSpeechRouting()
-    _ = routing.submit(.press, readAloudEnabled: true, askEnabled: true)
+    _ = routing.submit(.press(), readAloudEnabled: true, askEnabled: true)
     #expect(routing.holdElapsed().isEmpty)
-    #expect(routing.selectionResolved(selection) == [.forward(.pressHandingBack)])
+    #expect(routing.selectionResolved(selection) == [.forward(.pressHandingBack())])
   }
 
   @Test("letting go after the gate's hold threshold releases the request")
@@ -184,10 +199,10 @@ struct SelectionSpeechRoutingAskTests {
     _ = routing.submit(.release, readAloudEnabled: true, askEnabled: true)
     _ = routing.sessionPhaseChanged(.handedBack("Summarize this."))
     // The gate was idle under the answer, so the stopping tap arrives as a press.
-    #expect(routing.submit(.press, readAloudEnabled: true, askEnabled: true) == [.stopSpeech, .resetGate])
+    #expect(routing.submit(.press(), readAloudEnabled: true, askEnabled: true) == [.stopSpeech, .resetGate])
     // Its key-up latch then finds nothing to do, and the next press is a press.
     #expect(routing.keyLatched().isEmpty)
-    #expect(routing.submit(.press, readAloudEnabled: true, askEnabled: true) == [.readSelection, .startHoldTimer])
+    #expect(routing.submit(.press(), readAloudEnabled: true, askEnabled: true) == [.readSelection, .startHoldTimer])
   }
 
   @Test("a request with nothing said reads the selection instead")
@@ -204,7 +219,7 @@ struct SelectionSpeechRoutingAskTests {
     let failed = PipelinePhase.failed(.sttFailed(underlying: URLError(.timedOut)))
     #expect(routing.sessionPhaseChanged(failed) == [.syncGateAfterSession])
     // Back to passthrough: the next press dictates or reads as usual.
-    #expect(routing.submit(.press, readAloudEnabled: false) == [.forward(.press)])
+    #expect(routing.submit(.press(), readAloudEnabled: false) == [.forward(.press())])
   }
 
   @Test("a recording that fails while the key is still down syncs the gate")
@@ -232,7 +247,7 @@ struct SelectionSpeechRoutingAskTests {
   func pressWhileTranscribing() {
     var routing = asking()
     _ = routing.submit(.release, readAloudEnabled: true, askEnabled: true)
-    #expect(routing.submit(.press, readAloudEnabled: true, askEnabled: true) == [.forward(.cancel), .resetGate])
+    #expect(routing.submit(.press(), readAloudEnabled: true, askEnabled: true) == [.forward(.cancel), .resetGate])
     // A transcript arriving after that is someone else's now, and ignored.
     #expect(routing.sessionPhaseChanged(.cancelled) == [.syncGateAfterSession])
   }
@@ -246,7 +261,7 @@ struct SelectionSpeechRoutingAskTests {
     // The session would refuse a press now, so none is sent yet...
     #expect(held.holdElapsed().isEmpty)
     // ...and the earlier dictation's end is not the request's: the mic opens now.
-    #expect(held.sessionPhaseChanged(.pasted) == [.forward(.pressHandingBack)])
+    #expect(held.sessionPhaseChanged(.pasted) == [.forward(.pressHandingBack())])
     #expect(held.sessionPhaseChanged(.recording).isEmpty)
     #expect(held.submit(.release, readAloudEnabled: true, askEnabled: true) == [.forward(.release)])
     #expect(
@@ -276,7 +291,7 @@ struct SelectionSpeechRoutingAskTests {
   func staleTimer() {
     var routing = SelectionSpeechRouting()
     #expect(routing.holdElapsed().isEmpty)
-    _ = routing.submit(.press, readAloudEnabled: true, askEnabled: false)
+    _ = routing.submit(.press(), readAloudEnabled: true, askEnabled: false)
     #expect(routing.holdElapsed().isEmpty)
     // Asking off reads at once, as before asking existed.
     #expect(routing.selectionResolved(selection) == [.speak(selection)])
@@ -285,9 +300,9 @@ struct SelectionSpeechRoutingAskTests {
   @Test("with nothing selected, a press that may ask dictates as usual")
   func noSelection() {
     var routing = SelectionSpeechRouting()
-    _ = routing.submit(.press, readAloudEnabled: true, askEnabled: true)
+    _ = routing.submit(.press(), readAloudEnabled: true, askEnabled: true)
     _ = routing.keyLatched()
-    #expect(routing.selectionResolved(nil) == [.forward(.press)])
+    #expect(routing.selectionResolved(nil) == [.forward(.press())])
     #expect(routing.holdElapsed().isEmpty)
   }
 }

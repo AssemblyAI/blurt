@@ -142,10 +142,9 @@ extension HTTPClientTests {
       apiKeyProvider: { "test-key" },
       transport: FakeHTTPTransport { _ in (500, Data()) },
       enhancedTranscripts: { true },
-      customStyle: { nil },
       rewriteMode: { .fast }
     )
-    .makeConfigData(sampleRate: 16_000, sttPrompt: prompt, keytermsPrompt: keyterms)
+    .makeConfigData(sampleRate: 16_000, sttPrompt: prompt, keytermsPrompt: keyterms, customStyle: nil)
     return try #require(JSONSerialization.jsonObject(with: config) as? [String: Any])
   }
 
