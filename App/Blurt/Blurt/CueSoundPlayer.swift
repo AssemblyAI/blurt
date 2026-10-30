@@ -19,10 +19,9 @@ final class CueSoundPlayer {
   /// output-only profile, which drops the output format the players were primed
   /// against — so the very next chime is the one that stalls, and that's the
   /// chime at the start of a dictation.
-  /// Set when the output route changes, cleared when each pair's re-prime
-  /// actually runs. See `transition(for:)` for why the reloads wait.
-  private var dictationNeedsReprime = false
-  private var readAloudNeedsReprime = false
+  /// When each pair reloads after an output-route change (the engine's
+  /// `CueReprimeSchedule`; see `transition(for:)` for why dictation's waits).
+  private var reprime = CueReprimeSchedule()
   /// Kept alive for the app's lifetime; assignment is the use. Nil until
   /// `prime()` starts it, which is also what makes starting idempotent.
   private var routeObserver: Task<Void, Never>?
@@ -78,9 +77,7 @@ final class CueSoundPlayer {
         // keeps the player alive — the same reason `MicCapture`'s meter task
         // rebinds across its sleep.
         guard let self else { return }
-        // Recorded, not acted on — see `transition(for:)`.
-        self.dictationNeedsReprime = true
-        self.readAloudNeedsReprime = true
+        self.reload(self.reprime.routeChanged())
       }
     }
   }
@@ -138,17 +135,16 @@ final class CueSoundPlayer {
     // Terminal phases stay a trigger for everything else. A flip caused by *this*
     // press arrives mid-bring-up, too late for this dictation's chime either way,
     // and between dictations the reload costs nothing anyone is waiting on and
-    // coalesces a burst of flips into one decode. Read-aloud's pair waits for
-    // one: no read cue plays during a press, so it needn't compete with the
-    // bring-up.
-    if phase == .connecting || phase.isTerminal, dictationNeedsReprime {
-      dictationNeedsReprime = false
-      Task { await dictation.load(force: true) }
-    }
-    if phase.isTerminal, readAloudNeedsReprime {
-      readAloudNeedsReprime = false
-      Task { await readAloud.load(force: true) }
-    }
+    // coalesces a burst of flips into one decode. Read-aloud's pair reloads at
+    // once when nothing is capturing (reads produce no phases to wait for),
+    // else at the capture's end, so it never competes with a bring-up.
+    reload(reprime.phase(phase))
+  }
+
+  /// Reloads the pairs `reloads` names, each against the current route.
+  private func reload(_ reloads: CueReprimeSchedule.Reloads) {
+    if reloads.dictation { Task { await dictation.load(force: true) } }
+    if reloads.readAloud { Task { await readAloud.load(force: true) } }
   }
 
   /// Read-aloud's start and stop, from its own pack, so a read never sounds

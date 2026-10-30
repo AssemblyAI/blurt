@@ -49,7 +49,7 @@ struct KeysSettingsTab: View {
     SettingsPane {
       Section {
         ForEach(TriggerKey.allCases, id: \.self) { key in
-          row(for: key, bindings: bindings, profiles: profiles, isOnlyDictatingKey: dictating == [key])
+          row(for: key, bindings: bindings, profiles: profiles, isOnlyDictatingKey: bindings.isOnlyDictatingKey(key))
         }
       } header: {
         HStack(spacing: 8) {

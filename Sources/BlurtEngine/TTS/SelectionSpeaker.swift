@@ -1,4 +1,14 @@
 #if os(macOS)
+  /// What reads text aloud for `SelectionSpeechRouter`: `SelectionSpeaker` in
+  /// production, a stand-in under UI testing (no network, no audio). Both calls
+  /// run until the speech has played; cancelling the task stops it.
+  public protocol ReadAloudSpeaker: Sendable {
+    func speak(_ text: String, style: ReadAloudStyle, onLevel: (@Sendable (Float) -> Void)?) async throws
+    func answer(
+      _ request: String, about selection: String, style: ReadAloudStyle, onLevel: (@Sendable (Float) -> Void)?
+    ) async throws
+  }
+
   /// Reads text aloud with AssemblyAI's streaming TTS. This is the engine half of
   /// the read-aloud and ask keys (`SelectionSpeechRouting`); the app decides when
   /// to call it.
@@ -6,7 +16,7 @@
   /// `speak` runs until the last sample has played. To stop early, cancel the task
   /// that is awaiting it: cancellation silences playback at once and cancels the
   /// request in flight.
-  public struct SelectionSpeaker: Sendable {
+  public struct SelectionSpeaker: ReadAloudSpeaker {
     /// The most text one press will read: a long article (about 15,000 words).
     /// Reading is paced by listening (`bufferTarget`), so a long selection costs
     /// only as much TTS as is heard before it's stopped.
@@ -102,6 +112,9 @@
             for try await chunk in synthesizer.speech(for: spoken, voiceID: style.voiceID) {
               player.enqueue(chunk)
             }
+            // A stopped read's stream just ends — iteration doesn't throw on
+            // cancellation — so say it was stopped rather than drain as if done.
+            try Task.checkCancellation()
           }
         } catch {
           player.stop()

@@ -47,7 +47,7 @@ struct ReadyView: View {
         Section {
           shortcutRow
           // Every other key given an action in the Keys tab, in its order.
-          ForEach(extraKeys, id: \.self) { key in
+          ForEach(bindings.extraKeys, id: \.self) { key in
             extraKeyRow(key, profiles: profiles)
           }
           // Always present, even with no custom styles, so the active treatment
@@ -123,11 +123,6 @@ struct ReadyView: View {
           .hidden()
       }
     }
-  }
-
-  /// The keys other than the bound one that do something.
-  private var extraKeys: [TriggerKey] {
-    TriggerKey.allCases.filter { $0 != bindings.bound && bindings.action(for: $0) != .off }
   }
 
   /// One extra key's row: what it does leading — with the style a dictating

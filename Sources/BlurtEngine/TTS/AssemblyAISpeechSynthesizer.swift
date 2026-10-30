@@ -72,14 +72,8 @@ struct AssemblyAISpeechSynthesizer: Sendable {
       let (response, body) = try await transport.stream(
         try Self.request(for: text, voiceID: voiceID, apiKey: apiKey))
       guard response.statusCode == 200 else {
-        var data = Data()
-        for try await chunk in body {
-          data.append(chunk)
-          // Enough for any error body the docs describe; a proxy's page or a
-          // stalled stream past it isn't worth waiting on.
-          if data.count >= 65_536 { break }
-        }
-        throw SpeechSynthesisError.server(Self.failure(status: response.statusCode, body: data))
+        let reason = Self.failure(status: response.statusCode, body: try await Self.head(of: body))
+        throw SpeechSynthesisError.server(reason)
       }
       // At most the one byte of a sample the network split; whole chunks,
       // the usual case, pass straight through without a copy.
@@ -95,6 +89,11 @@ struct AssemblyAISpeechSynthesizer: Sendable {
       }
     } catch let error as URLError where error.code == .timedOut {
       throw SpeechSynthesisError.timedOut
+    } catch let error as URLError where error.code == .cancelled {
+      // A stopped read cancels its request, which URLSession reports as an
+      // error. It's a cancellation, and must read as one: the router beeps on
+      // a failure, never on a stop.
+      throw CancellationError()
     }
   }
 
@@ -118,6 +117,17 @@ struct AssemblyAISpeechSynthesizer: Sendable {
     try URLRequest.assemblyAIJSONPost(
       to: endpoint, apiKey: apiKey, timeout: timeout,
       body: Body(text: text, voiceID: voiceID, sampleRate: sampleRate, encoding: encoding))
+  }
+
+  /// The start of an error body: enough for any error the docs describe; a
+  /// proxy's page or a stalled stream past it isn't worth waiting on.
+  private static func head(of body: AsyncThrowingStream<Data, Error>) async throws -> Data {
+    var data = Data()
+    for try await chunk in body {
+      data.append(chunk)
+      if data.count >= 65_536 { break }
+    }
+    return data
   }
 
   /// A failed request's reason: the error body's `code` and `message`, or the

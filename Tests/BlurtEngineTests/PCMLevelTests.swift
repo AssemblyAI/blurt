@@ -31,13 +31,4 @@ struct PCMLevelTests {
     #expect(OverlayUIState.speaking.accessibilityLabel == "Reading aloud.")
     #expect(OverlayUIState.speaking.noticeDwellSeconds == nil)
   }
-
-  @Test("while a read plays, only a new capture takes the pill; otherwise the phase does")
-  func pillWhileSpeaking() {
-    #expect(PipelinePhase.idle.overlayState(whileSpeaking: true) == nil)
-    #expect(PipelinePhase.pasted.overlayState(whileSpeaking: true) == nil)
-    #expect(PipelinePhase.recording.overlayState(whileSpeaking: true) == .recording)
-    #expect(PipelinePhase.idle.overlayState(whileSpeaking: false) == .idle)
-    #expect(PipelinePhase.pasted.overlayState(whileSpeaking: false) == .pasted)
-  }
 }

@@ -148,4 +148,13 @@ extension PipelinePhase {
   public func overlayState(whileSpeaking speaking: Bool) -> OverlayUIState? {
     speaking && !isCapturing ? nil : overlayState
   }
+
+  /// The pill once a read ends, this being the session's last phase. A steady
+  /// state still under way (a capture, a transcription) shows again; a notice
+  /// (Pasted, Copied, an error) belonged to a dictation that ended before the
+  /// read did, so the pill settles to idle rather than replaying it — and
+  /// VoiceOver re-announcing it.
+  public var overlayStateAfterSpeech: OverlayUIState {
+    overlayState.noticeDwellSeconds == nil ? overlayState : .idle
+  }
 }

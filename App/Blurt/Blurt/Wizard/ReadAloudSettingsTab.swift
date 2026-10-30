@@ -55,10 +55,9 @@ struct ReadAloudSection: View {
   }
 
   var body: some View {
-    // One decode per render, read three times below.
-    let actions = Set(TriggerKey.allCases.map(bindings.action(for:)))
-    let readsOrAsks = actions.contains(.readAloud) || actions.contains(.ask)
-    let asks = actions.contains(.ask)
+    let bindings = bindings
+    let readsOrAsks = bindings.readsOrAsks
+    let asks = bindings.asks
     Section {
       Group {
         PickerSettingRow(
@@ -96,7 +95,7 @@ struct ReadAloudSection: View {
     } footer: {
       // Each note is its own paragraph, and each says where the text goes: reading
       // aloud is on by default (left ⌥), so the first one always shows.
-      if actions.contains(.readAloud) {
+      if TriggerKey.allCases.contains(where: { bindings.action(for: $0) == .readAloud }) {
         Text("Select text, then use a key assigned to \(KeyActionName.readAloud).")
       } else if !readsOrAsks {
         Text("Assign a \(KeyActionName.readAloud) or \(KeyActionName.ask) key in Keys to enable playback.")

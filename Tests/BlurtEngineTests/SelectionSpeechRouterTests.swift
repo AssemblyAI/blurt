@@ -29,14 +29,6 @@ struct SelectionSpeechRouterTests {
     return (router, fixture)
   }
 
-  private func waitUntil(_ condition: () -> Bool) async throws {
-    let deadline = ContinuousClock.now + .seconds(5)
-    while !condition() {
-      guard ContinuousClock.now < deadline else { throw CancellationError() }
-      try await Task.sleep(for: .milliseconds(5))
-    }
-  }
-
   @Test("a tap of left ⌥ over a selection reads it, between one start and one end")
   func tapReadsSelection() async throws {
     let transport = FakeSpeechTransport()

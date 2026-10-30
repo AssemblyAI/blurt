@@ -130,6 +130,21 @@ public struct TriggerKeyBindings: Sendable, Equatable {
   /// The keys that dictate, in `TriggerKey` order — the bound key among them.
   public var dictatingKeys: [TriggerKey] { TriggerKey.allCases.filter { action(for: $0) == .dictate } }
 
+  /// Whether `key` is the only key that dictates, so it can't be set to
+  /// anything else (`TriggerKeyStyleStore.setChoice` refuses it).
+  public func isOnlyDictatingKey(_ key: TriggerKey) -> Bool { dictatingKeys == [key] }
+
+  /// The keys besides the bound one that do something, in `TriggerKey` order:
+  /// the ready screen's extra rows.
+  public var extraKeys: [TriggerKey] {
+    TriggerKey.allCases.filter { $0 != bound && action(for: $0) != .off }
+  }
+
+  /// Whether some key reads aloud or asks — read-aloud's settings do something
+  /// — and whether some key asks, which sends what's said to the LLM Gateway.
+  public var readsOrAsks: Bool { TriggerKey.allCases.contains { [.readAloud, .ask].contains(action(for: $0)) } }
+  public var asks: Bool { TriggerKey.allCases.contains { action(for: $0) == .ask } }
+
   /// Every key the tap watches, with its mode — the router's binding.
   public var activations: [TriggerKey: TriggerActivation] {
     Dictionary(uniqueKeysWithValues: enabledKeys.map { ($0, activation(for: $0)) })

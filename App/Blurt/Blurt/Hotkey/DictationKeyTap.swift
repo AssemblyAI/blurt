@@ -271,27 +271,31 @@ final class DictationKeyTap {
     private var isSimulatingPress = false
 
     /// Test seam: drive the real gate + callback dispatch for a synthetic
-    /// lone-modifier press, bypassing the `CGEventTap` (whose creation needs
-    /// Accessibility trust an automated run doesn't have). Pairs with
-    /// `simulateReleaseForTesting()` to run the same press→hold→release path a
-    /// real keypress would — used by the leak exercise (`scripts/leaks.sh`) so the
-    /// DictationKeyTap → DictationKeyGate → onStart/onStop object graph is
-    /// covered, not just the session the coordinator drives directly.
-    func simulatePressForTesting() {
+    /// lone-modifier press of `key` (the bound key unless given), bypassing the
+    /// `CGEventTap` (whose creation needs Accessibility trust an automated run
+    /// doesn't have). Pairs with `simulateReleaseForTesting` to run the same
+    /// press→release path a real keypress would — used by the UI tests, for
+    /// every trigger key and action, and by the leak exercise
+    /// (`scripts/leaks.sh`) so the DictationKeyTap → DictationKeyGate →
+    /// onStart/onStop object graph is covered, not just the session the
+    /// coordinator drives directly. A key that does nothing (Off) isn't
+    /// watched, so its press starts nothing, as a real one wouldn't.
+    func simulatePressForTesting(_ key: TriggerKey? = nil) {
+      // No reset first: a press over a latched recording (a tapped ask's or
+      // dictation's second tap) must reach the gate as a real one would.
       isSimulatingPress = true
-      _ = router.reset()
-      dispatch(
-        router.handle(
-          .flagsChanged(keyCode: TriggerKeyStore().triggerKey.keyCode, triggerFlagIsOn: true), at: .seconds(0)))
+      let keyCode = (key ?? TriggerKeyStore().triggerKey).keyCode
+      dispatch(router.handle(.flagsChanged(keyCode: keyCode, triggerFlagIsOn: true), at: .seconds(0)))
     }
 
-    /// Completes the synthetic cycle as a hold (past the threshold), so the gate
-    /// emits `.stop` and `onStop` fires.
-    func simulateReleaseForTesting() {
+    /// Completes the synthetic cycle: as a hold (past the threshold, so the
+    /// gate emits `.stop`) or a tap (`.latch` under tap-or-hold).
+    func simulateReleaseForTesting(_ key: TriggerKey? = nil, asTap: Bool = false) {
       isSimulatingPress = false
+      let keyCode = (key ?? TriggerKeyStore().triggerKey).keyCode
       dispatch(
         router.handle(
-          .flagsChanged(keyCode: TriggerKeyStore().triggerKey.keyCode, triggerFlagIsOn: false), at: .seconds(2)))
+          .flagsChanged(keyCode: keyCode, triggerFlagIsOn: false), at: asTap ? .milliseconds(100) : .seconds(2)))
     }
   #endif
 }

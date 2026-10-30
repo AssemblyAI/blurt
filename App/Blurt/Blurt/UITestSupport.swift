@@ -62,6 +62,26 @@
     private(set) var pastedText = ""
 
     func recordPaste(_ text: String) { pastedText = text }
+
+    /// The style instructions the last dictation request carried, or "—" for
+    /// none: how a test sees which style a key dictated with.
+    private(set) var sentStyle = "—"
+
+    func recordStyle(_ instructions: String?) { sentStyle = instructions ?? "—" }
+
+    /// What the stub speaker was last asked to read ("—" before any read).
+    private(set) var spokenText = "—"
+
+    func recordSpoken(_ text: String) { spokenText = text }
+
+    /// The voice and speed the stub speaker was last asked to use, e.g.
+    /// "aai-jane @ 1.0" ("—" before any read).
+    private(set) var spokenStyle = "—"
+
+    func recordSpokenStyle(_ style: ReadAloudStyle) { spokenStyle = "\(style.voiceID) @ \(style.rate)" }
+
+    /// The trigger key the harness's press/release buttons drive.
+    var selectedKey = TriggerKey.rightCommand
   }
 
   // MARK: - Pipeline doubles
@@ -100,7 +120,10 @@
       // context needs no draining now — the streaming route settles it before
       // the request opens, so it arrives as a value.
       for await _ in frames {}
-      return await MainActor.run { UITestState.shared.cannedTranscript }
+      return await MainActor.run {
+        UITestState.shared.recordStyle(context?.styleInstructions)
+        return UITestState.shared.cannedTranscript
+      }
     }
   }
 
@@ -112,6 +135,26 @@
     func setTarget(_ focus: CapturedFocus?) async {}
     func insert(_ text: String, after priorText: String?, windowTitle: String?) async throws {
       await MainActor.run { UITestState.shared.recordPaste(text) }
+    }
+  }
+
+  /// Stub read-aloud speaker: records what it's asked to read, then "plays"
+  /// until stopped (or a while passes), so a test can watch a read start, run
+  /// and be interrupted — no network, no audio.
+  nonisolated struct UITestReadAloudSpeaker: ReadAloudSpeaker {
+    func speak(_ text: String, style: ReadAloudStyle, onLevel: (@Sendable (Float) -> Void)?) async throws {
+      await MainActor.run {
+        UITestState.shared.recordSpoken(text)
+        UITestState.shared.recordSpokenStyle(style)
+      }
+      try await Task.sleep(for: .seconds(20))
+    }
+
+    func answer(
+      _ request: String, about selection: String, style: ReadAloudStyle, onLevel: (@Sendable (Float) -> Void)?
+    ) async throws {
+      await MainActor.run { UITestState.shared.recordSpoken("Answer to: \(request)") }
+      try await Task.sleep(for: .seconds(20))
     }
   }
 
@@ -188,17 +231,38 @@
             .accessibilityIdentifier(UITestIdentifiers.cancelButton)
         }
 
-        // A second row that drives dictation through the *real* key tap
-        // (DictationKeyTap → DictationKeyGate → the coordinator's onStart/onStop),
-        // rather than calling the session directly like Start/Stop above. Lets a
-        // UI test exercise the hotkey path end to end without synthesizing the
-        // lone-modifier CGEvent (which needs Accessibility trust the test host
-        // lacks). Press then Release is a hold, so it records then transcribes.
+        // Drives the picked trigger key through the *real* key tap
+        // (DictationKeyTap → DictationKeyGate → the read-aloud router → the
+        // session), rather than calling the session directly like Start/Stop
+        // above. Lets a UI test exercise every key's path end to end without
+        // synthesizing the lone-modifier CGEvent (which needs Accessibility
+        // trust the test host lacks). Press then Release is a hold; Tap
+        // Release lets go quickly, as a tap.
+        Picker("Key", selection: $state.selectedKey) {
+          ForEach(TriggerKey.allCases, id: \.self) { key in
+            Text(key.label).tag(key)
+          }
+        }
+        .accessibilityIdentifier(UITestIdentifiers.harnessKeyPicker)
         HStack(spacing: 8) {
-          Button("Hotkey Press") { coordinator?.simulateDictationPressForTesting() }
+          Button("Dictate") { coordinator?.setKeyChoiceForTesting(.dictate, for: state.selectedKey) }
+            .accessibilityIdentifier(UITestIdentifiers.harnessSetDictate)
+          Button("Read") { coordinator?.setKeyChoiceForTesting(.readAloud, for: state.selectedKey) }
+            .accessibilityIdentifier(UITestIdentifiers.harnessSetReadAloud)
+          Button("Ask") { coordinator?.setKeyChoiceForTesting(.ask, for: state.selectedKey) }
+            .accessibilityIdentifier(UITestIdentifiers.harnessSetAsk)
+          Button("Off") { coordinator?.setKeyChoiceForTesting(.off, for: state.selectedKey) }
+            .accessibilityIdentifier(UITestIdentifiers.harnessSetOff)
+          Button("Tap Mode") { coordinator?.setKeyActivationForTesting(.tap, for: state.selectedKey) }
+            .accessibilityIdentifier(UITestIdentifiers.harnessSetTapMode)
+        }
+        HStack(spacing: 8) {
+          Button("Hotkey Press") { coordinator?.simulateKeyPressForTesting(state.selectedKey) }
             .accessibilityIdentifier(UITestIdentifiers.hotkeyPressButton)
-          Button("Hotkey Release") { coordinator?.simulateDictationReleaseForTesting() }
+          Button("Hotkey Release") { coordinator?.simulateKeyReleaseForTesting(state.selectedKey) }
             .accessibilityIdentifier(UITestIdentifiers.hotkeyReleaseButton)
+          Button("Tap Release") { coordinator?.simulateKeyReleaseForTesting(state.selectedKey, asTap: true) }
+            .accessibilityIdentifier(UITestIdentifiers.hotkeyTapReleaseButton)
         }
 
         // The live pipeline status, mirrored off the same `menuBarStatus` the
@@ -213,6 +277,25 @@
         LabeledContent("Pasted") {
           Text(state.pastedText)
             .accessibilityIdentifier(UITestIdentifiers.pastedLabel)
+        }
+
+        // Read-aloud: what the stub speaker was asked to read, whether a read is
+        // playing, and the style the last dictation request carried.
+        LabeledContent("Spoken") {
+          Text(state.spokenText)
+            .accessibilityIdentifier(UITestIdentifiers.spokenLabel)
+        }
+        LabeledContent("Reading") {
+          Text(coordinator?.isReadingAloud == true ? "yes" : "no")
+            .accessibilityIdentifier(UITestIdentifiers.readingLabel)
+        }
+        LabeledContent("Voice") {
+          Text(state.spokenStyle)
+            .accessibilityIdentifier(UITestIdentifiers.spokenStyleLabel)
+        }
+        LabeledContent("Style") {
+          Text(state.sentStyle)
+            .accessibilityIdentifier(UITestIdentifiers.sentStyleLabel)
         }
 
         // Mirrors the newest entry of `AppCoordinator.recentDictations` (the

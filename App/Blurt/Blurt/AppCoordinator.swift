@@ -65,6 +65,11 @@ final class AppCoordinator {
   private(set) var isCapturing = false
   /// The last phase rendered, so the pill can go back to it when a read ends.
   @ObservationIgnored private var lastPhase = PipelinePhase.idle
+  /// Whether a read or answer is playing — the pill shows it; UI tests read it.
+  private(set) var isReadingAloud = false
+  /// What reads aloud and how the selection is read, when not the real ones:
+  /// UI tests run the whole read-aloud path offline. Nil in production.
+  @ObservationIgnored private let readAloudSeams: ReadAloudSeams?
 
   /// `components` defaults to the production pipeline, its transcriber dictating
   /// against the account's `dictationOrigin`; `apiKey` defaults to the
@@ -76,9 +81,11 @@ final class AppCoordinator {
     onSetupBlocked: @escaping @MainActor () -> Void,
     components: DictationComponents? = nil,
     apiKey: APIKeyModel = APIKeyModel(),
-    account: AssemblyAIAccount? = nil
+    account: AssemblyAIAccount? = nil,
+    readAloud: ReadAloudSeams? = nil
   ) {
     self.onSetupBlocked = onSetupBlocked
+    self.readAloudSeams = readAloud
     self.apiKey = apiKey
     let info = Bundle.main.infoDictionary ?? [:]
     let account =
@@ -160,7 +167,10 @@ final class AppCoordinator {
     // Every trigger command goes through the read-aloud router, which forwards
     // a dictating key's commands to `session.submit` and handles read and ask
     // keys itself.
-    let router = SelectionSpeechRouter(session: session)
+    let router =
+      readAloudSeams.map {
+        SelectionSpeechRouter(session: session, speaker: $0.speaker, readSelection: $0.readSelection)
+      } ?? SelectionSpeechRouter(session: session)
     keyTap = DictationKeyTap(
       // The key rides the press, and the session resolves its style for that one
       // dictation (`PressStyle`); the main window's selection is never written.
@@ -177,13 +187,16 @@ final class AppCoordinator {
     // voice — between the same start and stop cues. Pill first, then the cue,
     // as `render(_:)` orders them.
     router.speechStarted = { [weak self] in
+      self?.isReadingAloud = true
       self?.overlay?.show(state: .speaking)
       self?.cues.speechStarted()
     }
     router.speechEnded = { [weak self] in
       guard let self else { return }
-      // Back to what the session is doing: idle, or a capture started meanwhile.
-      self.overlay?.show(state: self.lastPhase.overlayState)
+      self.isReadingAloud = false
+      // Back to what the session is doing — a capture or transcription still
+      // under way — and never a dictation's old notice (the engine's rule).
+      self.overlay?.show(state: self.lastPhase.overlayStateAfterSpeech)
       self.cues.speechEnded()
     }
     router.speechLevel = { [weak self] level in self?.overlay?.pushLevel(level) }
@@ -287,6 +300,11 @@ final class AppCoordinator {
   /// otherwise (see `GlobeKeyOverride`). Also run from `start()`, so the relaunch
   /// after a settings reset restores the user's setting.
   private func syncGlobeKeyOverride() {
+    #if UITEST_HOOKS
+      // UI tests set fn to every action; the 🌐 setting it writes is the Mac's
+      // own, one per login, and no test may change it.
+      if UITestMode.isActive { return }
+    #endif
     GlobeKeyOverride().sync(boundKeys: TriggerKeyBindings().enabledKeys)
   }
 
@@ -353,4 +371,11 @@ final class AppCoordinator {
     // still finishing from the end of a request it is waiting on.
     speechRouter?.sessionPhaseChanged(phase)
   }
+}
+
+/// Stand-ins for read-aloud's speaker and selection read, so a host can run the
+/// read-aloud path with no network, audio or Accessibility (Blurt's UI tests).
+struct ReadAloudSeams {
+  let speaker: any ReadAloudSpeaker
+  let readSelection: @Sendable () async -> String?
 }

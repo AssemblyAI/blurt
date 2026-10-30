@@ -162,8 +162,23 @@ struct SelectionSpeakerTests {
     #expect(sink.chunks.isEmpty)
   }
 
+  @Test("an ask stopped while the gateway answers plays nothing and makes no TTS request")
+  func cancelledAsAnswerLands() async {
+    await expectStoppedAsGatewayAnswers { speaker in
+      Task { try await speaker.answer("Explain.", about: "x", style: .standard) }
+    }
+  }
+
   @Test("a rewrite that answers after the stop still plays nothing and makes no TTS request")
   func cancelledAsRewriteLands() async {
+    await expectStoppedAsGatewayAnswers { [fastSkipping] speaker in
+      Task { try await speaker.speak("Say something here.", style: fastSkipping) }
+    }
+  }
+
+  /// Starts a read or answer whose gateway call answers only after the stop,
+  /// stops it mid-call, and checks it throws a cancellation and plays nothing.
+  private func expectStoppedAsGatewayAnswers(_ start: (SelectionSpeaker) -> Task<Void, Error>) async {
     let sink = RecordingSink()
     let transport = FakeSpeechTransport()
     let gateway = LateAnsweringTransport()
@@ -171,11 +186,11 @@ struct SelectionSpeakerTests {
       synthesizer: AssemblyAISpeechSynthesizer(apiKeyProvider: { "k" }, transport: transport),
       llm: ReadAloudLLM(apiKeyProvider: { "k" }, transport: gateway),
       makeSink: { _ in sink })
-    let speaking = Task { try await speaker.speak("Say something here.", style: fastSkipping) }
+    let task = start(speaker)
     while !gateway.asked { await Task.yield() }
-    speaking.cancel()
+    task.cancel()
     gateway.release()
-    await #expect(throws: CancellationError.self) { try await speaking.value }
+    await #expect(throws: CancellationError.self) { try await task.value }
     #expect(transport.requests.isEmpty)
     #expect(sink.chunks.isEmpty)
   }

@@ -986,7 +986,14 @@ ask records like a dictation (`pressHandingBack`) and the transcript handed back
 With nothing selected, the press does nothing. A read or answer wears the dictation pill
 (`OverlayUIState.speaking`: the orb and meter, the meter following the voice — `StreamingPCMPlayer`
 keeps each chunk's 50 ms loudness windows on the media timeline, `PCMLevel`, and the meter reads the
-one playing) between the same start and stop cues. The TTS is AssemblyAI's documented Streaming TTS API
+one playing) between its own start and stop cues (read-aloud's `SoundPackStore` slot). While a read
+plays, only a new capture takes the pill (`PipelinePhase.overlayState(whileSpeaking:)`); when it ends,
+the pill goes back to a steady state still under way and never replays a dictation's old notice
+(`overlayStateAfterSpeech`). Each cue pair reloads after an output-route change on its own schedule
+(`CueReprimeSchedule`): dictation's at the next press or terminal phase, read-aloud's at once unless a
+capture is running. `SelectionSpeechRouter` takes any `ReadAloudSpeaker` (`SelectionSpeaker` in
+production), which is how the UI tests run read and ask offline; a stopped read's cancelled request
+reads as a cancellation, never a failure. The TTS is AssemblyAI's documented Streaming TTS API
 (`AssemblyAISpeechSynthesizer`: `POST https://tts.us.assemblyai.com/v1/speech`, `voice_id`, the
 audio read as the response streams). A selection is read in pieces (`ListeningChunks`: a short first
 piece, so reading starts after a paragraph, then about 1,500 characters each, at paragraph or

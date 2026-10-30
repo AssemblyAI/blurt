@@ -21,7 +21,7 @@ import Foundation
     private static let logger = HostIdentity.current.logger("SelectionSpeech")
 
     private let session: DictationSession
-    private let speaker: SelectionSpeaker
+    private let speaker: any ReadAloudSpeaker
     private let readSelection: @Sendable () async -> String?
     private let defaults: UserDefaults
     private var routing = SelectionSpeechRouting()
@@ -56,9 +56,10 @@ import Foundation
     }
 
     /// The seams: what speaks, how the selection is read, and where the
-    /// settings each press reads come from.
-    init(
-      session: DictationSession, speaker: SelectionSpeaker,
+    /// settings each press reads come from. Public so a host can run the whole
+    /// read-aloud path offline (Blurt's UI tests do).
+    public init(
+      session: DictationSession, speaker: any ReadAloudSpeaker,
       readSelection: @escaping @Sendable () async -> String?, defaults: UserDefaults = .standard
     ) {
       self.session = session
@@ -85,7 +86,8 @@ import Foundation
       preview?.cancel()
       preview = Task { [weak self, speaker] in
         do {
-          try await speaker.speak("Hi, I'm \(name). This is how Blurt reads your selection.", style: sample)
+          let line = "Hi, I'm \(name). This is how Blurt reads your selection."
+          try await speaker.speak(line, style: sample, onLevel: nil)
         } catch is CancellationError {
         } catch {
           Self.logger.error("voice preview failed: \(error.localizedDescription, privacy: .public)")

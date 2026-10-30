@@ -8,11 +8,32 @@ import Synchronization
 /// streamed response would be. Every request is recorded, so a test can read
 /// back what was asked for.
 final class FakeSpeechTransport: SpeechTransport, Sendable {
+  /// How a response body ends once its chunks are delivered.
+  enum End: Sendable {
+    case finish
+    case fail(any Error & Sendable)
+    /// Never finishes: a stalled server.
+    case hang
+  }
+
   private let respond: @Sendable (URLRequest) -> (Int, [Data])
+  private let end: End
+  private let failure: (any Error & Sendable)?
   private let recorded = Mutex<[URLRequest]>([])
 
-  init(respond: @escaping @Sendable (URLRequest) -> (Int, [Data]) = FakeSpeechTransport.speaking()) {
+  init(
+    end: End = .finish, respond: @escaping @Sendable (URLRequest) -> (Int, [Data]) = FakeSpeechTransport.speaking()
+  ) {
     self.respond = respond
+    self.end = end
+    self.failure = nil
+  }
+
+  /// A transport whose request fails before any response, with `error`.
+  init(failing error: any Error & Sendable) {
+    self.respond = { _ in (0, []) }
+    self.end = .finish
+    self.failure = error
   }
 
   var requests: [URLRequest] { recorded.withLock { $0 } }
@@ -27,16 +48,22 @@ final class FakeSpeechTransport: SpeechTransport, Sendable {
 
   func stream(_ request: URLRequest) async throws -> (HTTPURLResponse, AsyncThrowingStream<Data, Error>) {
     recorded.withLock { $0.append(request) }
+    if let failure { throw failure }
     let (status, chunks) = respond(request)
     let url = request.url ?? AssemblyAISpeechSynthesizer.endpoint
     guard let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil) else {
       throw URLError(.badServerResponse)
     }
+    let end = end
     return (
       response,
       AsyncThrowingStream { continuation in
         for chunk in chunks { continuation.yield(chunk) }
-        continuation.finish()
+        switch end {
+        case .finish: continuation.finish()
+        case .fail(let error): continuation.finish(throwing: error)
+        case .hang: break
+        }
       }
     )
   }
