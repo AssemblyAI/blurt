@@ -29,6 +29,10 @@ public enum OverlayUIState: Equatable, Sendable {
   case connecting
   case recording
   case processing
+  /// Reading the selection (or an answer about it) aloud. Not a pipeline phase:
+  /// the app shows it for as long as a read plays, with the recording pill's
+  /// orb and meter, the meter following the voice rather than the mic.
+  case speaking
   /// A dictation attempt failed. The shell shows this as a brief red flash on
   /// the pill before settling back to `.idle`; `message` is the human-readable
   /// reason (e.g. "AssemblyAI error 401…"), surfaced via the pill's hover
@@ -60,6 +64,7 @@ public enum OverlayUIState: Equatable, Sendable {
     case .idle: "Blurt."
     case .connecting: "Connecting to the microphone."
     case .recording: "Recording."
+    case .speaking: "Reading aloud."
     case .processing: "Processing."
     case .error(let message, _): message
     case .pasted: "Your dictation was pasted."
@@ -80,7 +85,7 @@ public enum OverlayUIState: Equatable, Sendable {
     // A sentence, not a word: long enough to read the device name.
     case .error(_, _?): 3.0
     case .error, .noTarget: 1.6
-    case .idle, .connecting, .recording, .processing: nil
+    case .idle, .connecting, .recording, .processing, .speaking: nil
     }
   }
 
@@ -132,5 +137,24 @@ extension PipelinePhase {
     case .pasted: .pasted
     case .noTarget: .noTarget
     }
+  }
+}
+
+extension PipelinePhase {
+  /// The pill for this phase while a read may be playing, or nil to leave the
+  /// pill as it is. A read wears the pill until it ends (`.speaking`); only a
+  /// new capture takes it over — a press stops the read first — so an earlier
+  /// dictation finishing mid-read can neither cover nor hide it.
+  public func overlayState(whileSpeaking speaking: Bool) -> OverlayUIState? {
+    speaking && !isCapturing ? nil : overlayState
+  }
+
+  /// The pill once a read ends, this being the session's last phase. A steady
+  /// state still under way (a capture, a transcription) shows again; a notice
+  /// (Pasted, Copied, an error) belonged to a dictation that ended before the
+  /// read did, so the pill settles to idle rather than replaying it — and
+  /// VoiceOver re-announcing it.
+  public var overlayStateAfterSpeech: OverlayUIState {
+    overlayState.noticeDwellSeconds == nil ? overlayState : .idle
   }
 }

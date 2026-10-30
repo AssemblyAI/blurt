@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Root view of the `Settings` scene. A `TabView` at the root of a `Settings`
 /// scene renders as the standard macOS preferences window — a segmented toolbar
-/// of panes (General / Styles / Vocabulary / Advanced), each sized to its own content. This is the
+/// of panes (General / Keys / Read Aloud / Styles / Vocabulary / Advanced), each sized to its own content. This is the
 /// HIG-native answer to a settings screen that outgrows one pane: keeping every
 /// pane short means the window never has to grow past a small display (a single
 /// stacked `Form` did, stranding the bottom section off-screen). Each pane
@@ -20,7 +20,11 @@ struct SettingsWindowRoot: View {
       TabView {
         GeneralSettingsTab(coordinator: coordinator)
           .tabItem { Label(UITestIdentifiers.generalSettingsTab, systemImage: "gearshape") }
-        StylesSettingsTab(coordinator: coordinator)
+        KeysSettingsTab(coordinator: coordinator)
+          .tabItem { Label(UITestIdentifiers.keysSettingsTab, systemImage: "keyboard") }
+        ReadAloudSettingsTab(coordinator: coordinator)
+          .tabItem { Label(UITestIdentifiers.readAloudSettingsTab, systemImage: "speaker.wave.2") }
+        StylesSettingsTab()
           .tabItem { Label(UITestIdentifiers.stylesSettingsTab, systemImage: "textformat") }
         VocabularySettingsTab()
           .tabItem {
@@ -50,8 +54,8 @@ struct SettingsPane<Content: View>: View {
   }
 }
 
-/// The everyday setup a user changes: the AssemblyAI key, the dictation
-/// shortcut, the microphone, and the cue sound. Key terms live on Vocabulary,
+/// The everyday setup a user changes: the AssemblyAI account, the microphone,
+/// and the cue sounds. The trigger keys are their own tab (`KeysSettingsTab`). Key terms live on Vocabulary,
 /// beside the text shortcuts — both are "words Blurt should know".
 private struct GeneralSettingsTab: View {
   let coordinator: AppCoordinator
@@ -59,32 +63,27 @@ private struct GeneralSettingsTab: View {
   var body: some View {
     SettingsPane {
       APIKeyStepView(apiKey: coordinator.apiKey, account: coordinator.account)
-      HotkeyStepView(coordinator: coordinator)
       MicrophoneStepView()
       SoundStepView(coordinator: coordinator)
     }
   }
 }
 
-/// The enhanced-transcripts switch, the user's style profiles, and which style
-/// each trigger key dictates with — their own pane rather than an Advanced
-/// section. The switch leads because styles only shape the enhanced rewrite:
+/// The enhanced-transcripts switch and the user's style profiles — their own
+/// pane rather than an Advanced section. The switch leads because styles only shape the enhanced rewrite:
 /// with it off they're disabled, and the switch that re-enables them sits
 /// directly above rather than on another pane.
 private struct StylesSettingsTab: View {
-  let coordinator: AppCoordinator
-
   var body: some View {
     SettingsPane {
       TranscriptionSection()
       StyleProfilesSection()
-      KeyStylesSection(coordinator: coordinator)
     }
   }
 }
 
-/// The occasional stuff: checking for an update, experimental features
-/// (read-aloud), the developer-mode log toggle, and the
+/// The occasional stuff: checking for an update, the developer-mode log
+/// toggle, and the
 /// start-over button. Kept out of General so
 /// the common pane stays short.
 private struct AdvancedSettingsTab: View {
@@ -94,7 +93,6 @@ private struct AdvancedSettingsTab: View {
   var body: some View {
     SettingsPane {
       UpdatesSection(model: updaterModel)
-      ExperimentalSection()
       MaintenanceSection()
       ResetSection(coordinator: coordinator)
     }
@@ -116,38 +114,39 @@ private struct TranscriptionSection: View {
   private var enhancedTranscripts = EnhancedTranscriptsStore.defaultValue
 
   // "" is "nothing persisted"; the unset default belongs to
-  // `RewriteMode.fromPersisted`, as `HotkeyStepView`'s activation slot does.
+  // `RewriteMode.fromPersisted`, as the key slots' defaults belong to `TriggerKeyBindings`.
   @AppStorage(RewriteModeStore.defaultsKey) private var rewriteModeRaw = ""
 
   private var rewriteMode: Binding<RewriteMode> {
     Binding(
       get: { RewriteMode.fromPersisted(rewriteModeRaw) },
-      // Through the store, which owns the encoding (see `HotkeyStepView`).
+      // Through the store, which owns the encoding (see `KeysSettingsTab`).
       set: { RewriteModeStore().mode = $0 })
   }
 
   var body: some View {
     Section {
       Toggle(isOn: $enhancedTranscripts) {
-        SettingLabel(title: "Enhanced transcripts", systemImage: "wand.and.stars")
+        SettingLabel(
+          title: "Enhanced transcripts", systemImage: "wand.and.stars",
+          subtitle: "Removes filler words and fixes punctuation.")
       }
       .accessibilityIdentifier(UITestIdentifiers.enhancedTranscriptsToggle)
       // Picks the model for the rewrite the switch above pastes, so it is
       // disabled with it, as the styles below are.
       PickerSettingRow(
         title: "Dictation mode", systemImage: "speedometer",
-        accessibilityID: UITestIdentifiers.rewriteModePicker, selection: rewriteMode
+        accessibilityID: UITestIdentifiers.rewriteModePicker,
+        subtitle: "Fast for speed. Smart for better rewrites.", selection: rewriteMode
       ) {
         ForEach(RewriteMode.allCases, id: \.self) { mode in
           Text(mode.label).tag(mode)
         }
       }
       .disabled(!enhancedTranscripts)
+      .help(RewriteMode.guidance)
     } footer: {
-      Text(
-        "Polishes each dictation before pasting — removing filler words and fixing punctuation. "
-          + "Turn off to paste your words exactly as spoken.")
-      Text(RewriteMode.guidance)
+      Text("Turn off Enhanced transcripts to paste the transcript without cleanup or custom styling.")
     }
   }
 }
@@ -199,20 +198,23 @@ private struct StyleProfilesSection: View {
       }
       // Ellipsis for the same reason as the API-key row's "Connect…": the
       // action needs more input before it completes.
-      Button("Add Style…") { editing = StyleProfile(name: "", instructions: "") }
-        .disabled(profiles.count >= StyleProfileStore.limit)
-        .accessibilityIdentifier(UITestIdentifiers.styleProfileAdd)
+      SettingRow(
+        title: profiles.isEmpty ? "Create your first style" : "New style", systemImage: "text.badge.plus",
+        subtitle: "For example, casual tone and lowercase text."
+      ) {
+        Button("Add Style…") { editing = StyleProfile(name: "", instructions: "") }
+          .disabled(profiles.count >= StyleProfileStore.limit)
+          .accessibilityIdentifier(UITestIdentifiers.styleProfileAdd)
+      }
     } header: {
-      Text("Custom Styles")
+      Text("Custom styles")
     } footer: {
       // The caveat *replaces* the explanation rather than joining it: with
       // enhanced transcripts off the rewrite a style shapes is discarded
       // unread, so pointing at the switch just above is the useful half.
       Text(
         enhancedTranscripts
-          ? "A style tells Blurt how to polish your dictations — for example, “casual, all "
-            + "lowercase” for chat. Switch between styles in the main window. Create up to "
-            + "\(StyleProfileStore.limit) styles."
+          ? "Create up to \(StyleProfileStore.limit) styles for tone and formatting. Choose the active style in the main window."
           : StylesInertNotice.settingsText)
     }
     .disabled(!enhancedTranscripts)
@@ -262,9 +264,9 @@ private struct StyleProfileEditorSheet: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
       VStack(alignment: .leading, spacing: 6) {
-        Text("Custom Style")
+        Text(isExisting ? "Edit Style" : "Add Style")
           .font(.headline)
-        Text("Tell Blurt how to polish each dictation, including its casing, tone, and emoji use.")
+        Text("Choose a name and describe the tone and formatting you want.")
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
       }
@@ -287,7 +289,7 @@ private struct StyleProfileEditorSheet: View {
     VStack(alignment: .leading, spacing: 6) {
       Text("Name")
         .font(.subheadline.weight(.semibold))
-      TextField("", text: $name, prompt: Text("Casual"))
+      TextField("", text: $name, prompt: Text("e.g. Casual"))
         .lineLimit(1)
         .disableAutocorrection(true)
         .focused($nameFocused)
@@ -303,8 +305,7 @@ private struct StyleProfileEditorSheet: View {
     }
   }
 
-  /// The multi-line instruction field, with the byte counter directly beneath
-  /// the field it measures.
+  /// The multi-line instruction field, with its limit usage beneath it.
   private var instructionsField: some View {
     VStack(alignment: .leading, spacing: 6) {
       Text("Instructions")
@@ -313,13 +314,13 @@ private struct StyleProfileEditorSheet: View {
       // there's no faked placeholder over a TextEditor.
       TextField(
         text: $instructions,
-        prompt: Text("Add fitting emojis sparingly, or always write in lowercase"),
+        prompt: Text("Use a casual tone, write in lowercase, and add emojis sparingly."),
         axis: .vertical
       ) {
         Text("Instructions")
       }
       .labelsHidden()
-      .lineLimit(2...6)
+      .lineLimit(3...6)
       .font(.body)
       .disableAutocorrection(true)
       .accessibilityIdentifier(UITestIdentifiers.styleProfileInstructions)
@@ -333,14 +334,18 @@ private struct StyleProfileEditorSheet: View {
       // The API caps the instruction, so the room left is finite — show it
       // rather than truncating silently at the limit. Counted in UTF-8 bytes,
       // the unit the limit is enforced in.
-      Text("\(instructions.utf8.count)/\(StyleProfileStore.characterLimit)")
+      Text("\(instructionUsage)% of limit used")
         .font(.caption)
         .monospacedDigit()
         .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity, alignment: .trailing)
         .accessibilityLabel(
-          "\(instructions.utf8.count) of \(StyleProfileStore.characterLimit) characters used")
+          "\(instructionUsage) percent of instruction limit used")
     }
+  }
+
+  private var instructionUsage: Int {
+    instructions.utf8.count * 100 / StyleProfileStore.characterLimit
   }
 
   private var buttonRow: some View {

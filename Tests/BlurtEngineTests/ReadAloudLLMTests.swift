@@ -142,6 +142,23 @@ struct ReadAloudLLMTests {
       ])
   }
 
+  @Test("an ask about a whole article sends only its opening stretch, within the model's context")
+  func answerClipsLongSelection() async throws {
+    let sent = ValueBox<URLRequest?>(nil)
+    let transport = FakeHTTPTransport { request in
+      sent.value = request
+      return (200, completion("A summary."))
+    }
+    let article = String(repeating: "word ", count: 20_000)
+    _ = try await llm(transport).answer("Summarize this.", about: article)
+    let body = try #require(sent.value?.httpBody)
+    let object = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+    let messages = try #require(object["messages"] as? [[String: String]])
+    let user = try #require(messages.last?["content"])
+    #expect(user.contains(String(article.prefix(ReadAloudLLM.answerSelectionCharacters)) + "\n</highlighted_text>"))
+    #expect(user.count < ReadAloudLLM.answerSelectionCharacters + 200)
+  }
+
   @Test("an answer cut off at max_tokens is still read, and isn't held to the rewrite's length rule")
   func answerTruncated() async throws {
     let long = String(repeating: "Here is a long answer. ", count: 20)

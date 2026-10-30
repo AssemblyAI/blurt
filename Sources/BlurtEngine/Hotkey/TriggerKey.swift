@@ -7,6 +7,11 @@ public enum TriggerKey: Int, CaseIterable, Sendable, Hashable {
   case rightCommand = 54
   case rightOption = 61
   case function = 63
+  // The left-hand keys: off by default, except left ⌥, which reads the selection
+  // aloud (`TriggerKeyBindings.defaultChoice`). Any key can take any action.
+  case leftCommand = 55
+  case leftOption = 58
+  case leftControl = 59
 
   public var keyCode: Int { rawValue }
 
@@ -35,6 +40,9 @@ public enum TriggerKey: Int, CaseIterable, Sendable, Hashable {
     case .rightCommand: return 0x10  // NX_DEVICERCMDKEYMASK
     case .rightOption: return 0x40  // NX_DEVICERALTKEYMASK
     case .function: return 0x80_0000  // kCGEventFlagMaskSecondaryFn
+    case .leftCommand: return 0x08  // NX_DEVICELCMDKEYMASK
+    case .leftOption: return 0x20  // NX_DEVICELALTKEYMASK
+    case .leftControl: return 0x01  // NX_DEVICELCTLKEYMASK
     }
   }
 
@@ -44,6 +52,9 @@ public enum TriggerKey: Int, CaseIterable, Sendable, Hashable {
     case .rightCommand: return "right ⌘"
     case .rightOption: return "right ⌥"
     case .function: return "fn"
+    case .leftCommand: return "left ⌘"
+    case .leftOption: return "left ⌥"
+    case .leftControl: return "left ⌃"
     }
   }
 
@@ -55,6 +66,9 @@ public enum TriggerKey: Int, CaseIterable, Sendable, Hashable {
     case .rightCommand: return "Right Command (⌘)"
     case .rightOption: return "Right Option (⌥)"
     case .function: return "Function (fn)"
+    case .leftCommand: return "Left Command (⌘)"
+    case .leftOption: return "Left Option (⌥)"
+    case .leftControl: return "Left Control (⌃)"
     }
   }
 }

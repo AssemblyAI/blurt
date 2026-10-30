@@ -27,6 +27,18 @@ struct SoundPackStoreTests {
     #expect(SoundPackStore(catalog: Self.catalog, defaults: defaults).soundPack == Self.clav)
   }
 
+  @Test("read-aloud's cues are their own setting, with their own default")
+  func readAloudIsSeparate() {
+    let defaults = freshDefaults()
+    let readAloud = SoundPackStore(
+      catalog: Self.catalog.defaulting(to: "rom1a-19"), cue: .readAloud, defaults: defaults)
+    #expect(readAloud.soundPack == Self.clav)
+    readAloud.soundPack = .none
+    #expect(SoundPackStore(catalog: Self.catalog, defaults: defaults).soundPack == Self.brass)
+    #expect(readAloud.soundPack == .none)
+    #expect(Self.catalog.defaulting(to: "missing").fromPersisted(nil) == .none)
+  }
+
   @Test("none is a storable, distinct value")
   func storesNone() {
     let defaults = freshDefaults()

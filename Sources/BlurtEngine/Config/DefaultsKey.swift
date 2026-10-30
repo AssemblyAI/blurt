@@ -27,14 +27,14 @@
 enum DefaultsKey: String, CaseIterable {
   case triggerKeyCode = "TriggerKeyCode"
   case triggerActivation = "TriggerActivation"
-  /// Which style each trigger key dictates with, and so which keys beyond the
-  /// bound one dictate at all (`TriggerKeyStyleStore`).
+  /// What each trigger key does — dictate with a style, read aloud, ask, or
+  /// nothing (`TriggerKeyStyleStore`). The raw value predates read and ask.
   case triggerKeyStyles = "TriggerKeyStyles"
-  /// Each trigger key's entry for the role it isn't in right now — kept across
-  /// a rebind so moving the bound key away and back loses nothing
-  /// (`TriggerKeyStyleStore.rebound(from:to:)`).
-  case triggerKeyStyleStash = "TriggerKeyStyleStash"
+  /// Each trigger key's tap/hold mode (`TriggerKeyActivationStore`).
+  case triggerKeyActivations = "TriggerKeyActivations"
   case soundPack = "SoundPack"
+  /// Read-aloud's start/stop cue voice (`SoundPackStore`, `.readAloud`).
+  case readAloudSoundPack = "ReadAloudSoundPack"
   case keyTerms = "KeyTerms"
   case developerMode = "DeveloperMode"
   case enhancedTranscripts = "EnhancedTranscripts"
@@ -56,14 +56,11 @@ enum DefaultsKey: String, CaseIterable {
   case micDeviceUID = "MicDeviceUID"
   /// The JSON list of spoken-phrase → text expansions (`TextShortcutStore`).
   case textShortcuts = "TextShortcuts"
-  /// The experimental read-selection-aloud switch (`SelectionSpeechStore`).
-  case selectionSpeech = "SelectionSpeech"
-  /// Read-aloud's playback speed, and whether it rewrites the text for
-  /// listening first (`ReadAloudStyleStore`, which owns both).
+  /// Read-aloud's playback speed, whether it rewrites the text for listening
+  /// first, and its voice (`ReadAloudStyleStore`, which owns all three).
   case readAloudSpeed = "ReadAloudSpeed"
   case readAloudSkipsJargon = "ReadAloudSkipsJargon"
-  /// Whether a hold over a selection asks about it (`SelectionAskStore`).
-  case selectionAsk = "SelectionAsk"
+  case readAloudVoice = "ReadAloudVoice"
 
   /// The key this case actually reads and writes, under the configured host
   /// identity. A computed property rather than a stored string because the

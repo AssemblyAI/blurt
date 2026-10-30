@@ -12,8 +12,9 @@ struct PermissionsStepView: View {
   /// Observed rather than read once via `TriggerKeyStore()`: Settings is reachable
   /// with ⌘, while this page is showing, so a one-shot read left the footer naming
   /// the old key after a rebind until something else re-rendered the view. Same
-  /// `BoundTriggerKey` as `ReadyView` / `MenuBarScene`.
-  @BoundTriggerKey private var triggerKey
+  /// `ObservedKeyBindings` as `ReadyView` / `MenuBarScene`.
+  @ObservedKeyBindings private var bindings
+  private var triggerKey: TriggerKey { bindings.bound }
 
   /// Set when the user taps a settings button so the section can show a
   /// "waiting for you to come back" cue until the poll sees the grant.
@@ -33,16 +34,18 @@ struct PermissionsStepView: View {
   private static let stuckGrantHintDelay: Duration = .seconds(12)
 
   var body: some View {
-    Group {
+    Section("Permissions") {
       microphoneSection
       accessibilitySection
     }
   }
 
   private var microphoneSection: some View {
-    Section {
+    VStack(alignment: .leading, spacing: 6) {
       permissionRow(
-        PermissionInfo(label: "Microphone", symbol: "mic.fill", buttonLabel: "Allow Microphone Access"),
+        PermissionInfo(
+          label: "Microphone", symbol: "mic.fill", buttonLabel: "Allow Access",
+          detail: "Records when you use \(triggerKey.keycapLabel)."),
         granted: controller.permissions.microphone,
         action: {
           Task {
@@ -59,37 +62,31 @@ struct PermissionsStepView: View {
           }
         }
       )
-    } header: {
-      Text("Permissions")
-    } footer: {
       settingsFooter(
         opened: openedMicrophoneSettings,
         granted: controller.permissions.microphone,
-        waiting: "Waiting for you to turn on Blurt under Microphone…",
-        description:
-          "Blurt records only after you start dictating with \(triggerKey.label)."
+        waiting: "Waiting for you to turn on Blurt under Microphone…"
       )
     }
   }
 
   private var accessibilitySection: some View {
-    Section {
+    VStack(alignment: .leading, spacing: 6) {
       permissionRow(
         PermissionInfo(
-          label: "Accessibility", symbol: "accessibility", buttonLabel: "Open Accessibility Settings…"),
+          label: "Accessibility", symbol: "accessibility", buttonLabel: "Open Settings…",
+          detail: "Pastes dictations into the active app."),
         granted: controller.permissions.accessibility,
         action: {
           openedAccessibilitySettings = true
           PermissionsChecker.openAccessibilitySettings()
         }
       )
-    } footer: {
       VStack(alignment: .leading, spacing: 4) {
         settingsFooter(
           opened: openedAccessibilitySettings,
           granted: controller.permissions.accessibility,
-          waiting: "Waiting for you to turn on Blurt in the Accessibility list…",
-          description: "Blurt uses Accessibility to paste transcripts into the active app."
+          waiting: "Waiting for you to turn on Blurt in the Accessibility list…"
         )
         if accessibilityGrantLooksStuck && openedAccessibilitySettings
           && !controller.permissions.accessibility
@@ -120,9 +117,9 @@ struct PermissionsStepView: View {
 
   /// Shared footer for a settings-backed permission row: a "waiting for you to
   /// come back" cue while the grant is outstanding after the user opened
-  /// Settings, otherwise the explanatory description.
+  /// Settings. The explanation stays beneath the row title.
   @ViewBuilder
-  private func settingsFooter(opened: Bool, granted: Bool, waiting: String, description: String)
+  private func settingsFooter(opened: Bool, granted: Bool, waiting: String)
     -> some View
   {
     if opened && !granted {
@@ -130,8 +127,8 @@ struct PermissionsStepView: View {
         ProgressView().controlSize(.small)
         Text(waiting)
       }
-    } else {
-      Text(description)
+      .font(.callout)
+      .foregroundStyle(.secondary)
     }
   }
 
@@ -141,6 +138,7 @@ struct PermissionsStepView: View {
     let label: String
     let symbol: String
     let buttonLabel: String
+    let detail: String
   }
 
   @ViewBuilder
@@ -149,17 +147,16 @@ struct PermissionsStepView: View {
     granted: Bool,
     action: @escaping () -> Void
   ) -> some View {
-    SettingRow(title: info.label, systemImage: info.symbol) {
+    SettingRow(title: info.label, systemImage: info.symbol, subtitle: info.detail) {
       if granted {
         HStack(spacing: 4) {
           Image(systemName: "checkmark.circle.fill").foregroundStyle(BlurtBrand.accent)
           Text("Granted").foregroundStyle(.secondary)
         }
       } else {
-        // Prominent (brand-green fill), like the API key row's button: the one
-        // action that clears this row's outstanding requirement.
         Button(info.buttonLabel, action: action)
-          .glassButtonStyleCompat(prominent: true)
+          .glassButtonStyleCompat(prominent: false)
+          .accessibilityLabel("\(info.label): \(info.buttonLabel)")
       }
     }
   }

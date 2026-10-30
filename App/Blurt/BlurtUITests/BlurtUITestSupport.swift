@@ -58,6 +58,8 @@ class BlurtUITestCase: XCTestCase {
   func openSettingsWindow(timeout: TimeInterval = 10) -> XCUIElement {
     let paneTitles = [
       UITestIdentifiers.generalSettingsTab,
+      UITestIdentifiers.keysSettingsTab,
+      UITestIdentifiers.readAloudSettingsTab,
       UITestIdentifiers.stylesSettingsTab,
       UITestIdentifiers.vocabularySettingsTab,
       UITestIdentifiers.advancedSettingsTab,

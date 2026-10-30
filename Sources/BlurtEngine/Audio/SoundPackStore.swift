@@ -11,24 +11,37 @@ import Foundation
 /// stranded the sound setting outside every reset — the exact bug the roster was
 /// created to prevent, twice.
 public struct SoundPackStore {
-  /// UserDefaults key holding the selected pack id. Public so SwiftUI views can
+  /// Which cues a store holds: dictation's, or read-aloud's — its own pair, so
+  /// a read never sounds like a recording starting.
+  public enum Cue: Sendable {
+    case dictation, readAloud
+  }
+
+  /// UserDefaults key holding dictation's pack id. Public so SwiftUI views can
   /// observe it directly (e.g. `@AppStorage`) and re-render on change.
   public static var defaultsKey: String { DefaultsKey.soundPack.key }
+  /// Read-aloud's pack id, the same way.
+  public static var readAloudDefaultsKey: String { DefaultsKey.readAloudSoundPack.key }
 
   private let catalog: SoundPackCatalog
   private let defaults: UserDefaults
+  private let key: String
 
-  public init(catalog: SoundPackCatalog, defaults: UserDefaults = .standard) {
+  /// `catalog` supplies the voices and what an unset setting means, so a
+  /// read-aloud store is given a catalog defaulting to read-aloud's pack
+  /// (`SoundPackCatalog.defaulting(to:)`).
+  public init(catalog: SoundPackCatalog, cue: Cue = .dictation, defaults: UserDefaults = .standard) {
     self.catalog = catalog
     self.defaults = defaults
+    self.key = cue == .dictation ? Self.defaultsKey : Self.readAloudDefaultsKey
   }
 
   public var soundPack: SoundPack {
     get {
-      catalog.fromPersisted(defaults.string(forKey: Self.defaultsKey))
+      catalog.fromPersisted(defaults.string(forKey: key))
     }
     nonmutating set {
-      defaults.set(newValue.id, forKey: Self.defaultsKey)
+      defaults.set(newValue.id, forKey: key)
     }
   }
 }

@@ -59,11 +59,10 @@ struct TextShortcutsSection: View {
         .buttonStyle(.borderless)
       }
     } header: {
-      Text("Text Shortcuts")
+      Text("Text shortcuts")
     } footer: {
       Text(
-        "Say a phrase while dictating and it's replaced with your saved text — "
-          + "for example, “personal email” becomes your address.")
+        "Replace spoken phrases with saved text. For example, say “personal email” to insert your address.")
     }
     .sheet(item: $editing) { shortcut in
       TextShortcutEditorSheet(shortcut: shortcut, among: shortcuts)
@@ -102,8 +101,14 @@ struct TextShortcutsSection: View {
     .onDeleteCommand { if let selection { remove(selection) } }
     .overlay {
       if shortcuts.isEmpty {
-        Text("No shortcuts")
-          .foregroundStyle(.secondary)
+        VStack(spacing: 6) {
+          Text("No text shortcuts yet")
+            .font(.headline)
+          Text("Click + to add a phrase and its replacement.")
+            .font(.callout)
+            .foregroundStyle(.secondary)
+        }
+        .allowsHitTesting(false)
       }
     }
     .frame(height: 160)

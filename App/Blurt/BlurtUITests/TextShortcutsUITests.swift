@@ -64,8 +64,8 @@ final class TextShortcutsUITests: BlurtUITestCase {
     addShortcut(in: pane, trigger: "work email", expansion: "me@example.com")
 
     let sheet = openSheet(in: pane, via: UITestIdentifiers.textShortcutAdd)
-    type("Work-Email", into: UITestIdentifiers.textShortcutTrigger, in: sheet)
-    type("other@example.com", into: UITestIdentifiers.textShortcutExpansion, in: sheet)
+    fill("Work-Email", into: UITestIdentifiers.textShortcutTrigger, in: sheet)
+    fill("other@example.com", into: UITestIdentifiers.textShortcutExpansion, in: sheet)
 
     let save = sheet.buttons[UITestIdentifiers.textShortcutSave]
     XCTAssertFalse(save.isEnabled, "Save should stay disabled for a duplicate phrase")
@@ -103,19 +103,12 @@ final class TextShortcutsUITests: BlurtUITestCase {
     return sheet
   }
 
-  private func type(_ text: String, into identifier: String, in sheet: XCUIElement) {
-    let field = sheet.anyDescendant(identified: identifier)
-    XCTAssertTrue(field.waitForExistence(timeout: 5), "Field \(identifier) not found")
-    field.click()
-    field.typeText(text)
-  }
-
   /// Adds one shortcut through the sheet, waiting on the sheet's disappearance
   /// for the reason on `SettingsUITests.connectValidKey`.
   private func addShortcut(in pane: XCUIElement, trigger: String, expansion: String) {
     let sheet = openSheet(in: pane, via: UITestIdentifiers.textShortcutAdd)
-    type(trigger, into: UITestIdentifiers.textShortcutTrigger, in: sheet)
-    type(expansion, into: UITestIdentifiers.textShortcutExpansion, in: sheet)
+    fill(trigger, into: UITestIdentifiers.textShortcutTrigger, in: sheet)
+    fill(expansion, into: UITestIdentifiers.textShortcutExpansion, in: sheet)
     sheet.buttons[UITestIdentifiers.textShortcutSave].click()
     XCTAssertTrue(sheet.waitForNonExistence(timeout: 5), "Save should dismiss the sheet")
   }

@@ -30,11 +30,10 @@ struct MenuBarContent: View {
   @Environment(\.openSettings) private var openSettings
 
   // Observed (as the ready screen does) so the reminder line updates live when
-  // the dictation key is rebound in Settings — see `BoundTriggerKey`.
-  @BoundTriggerKey private var triggerKey
-  @AppStorage(TriggerActivationStore.defaultsKey) private var activationRaw = ""
-
-  private var activation: TriggerActivation { .fromPersisted(activationRaw) }
+  // the dictation key or its mode changes in Settings (`ObservedKeyBindings`).
+  @ObservedKeyBindings private var bindings
+  private var triggerKey: TriggerKey { bindings.bound }
+  private var activation: TriggerActivation { bindings.activation(for: bindings.bound) }
 
   var body: some View {
     // Disabled informational row: the dictation trigger is an invisible lone

@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+import Testing
 
 @testable import AssemblyAI
 @testable import BlurtEngine
@@ -96,5 +97,26 @@ final class Counter: Sendable {
   }
   var value: Int {
     count.withLock { $0 }
+  }
+}
+
+/// An LLM Gateway stub: read-aloud only ever asks the gateway with
+/// `data(for:)`, so a streaming upload is unreachable and needn't be restated
+/// by each stub.
+protocol GatewayStub: HTTPTransport {}
+
+extension GatewayStub {
+  func upload(
+    for request: URLRequest, streaming body: AsyncThrowingStream<Data, any Error>,
+    delegate: (any URLSessionTaskDelegate)?
+  ) async throws -> (Data, URLResponse) {
+    throw URLError(.unsupportedURL)
+  }
+
+  /// A 200 answering `request` with `body`.
+  func ok(_ request: URLRequest, _ body: Data) throws -> (Data, URLResponse) {
+    let url = try #require(request.url)
+    let response = try #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil))
+    return (body, response)
   }
 }

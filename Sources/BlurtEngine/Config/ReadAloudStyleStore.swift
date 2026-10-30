@@ -1,7 +1,7 @@
 import Foundation
 
-/// How one read-aloud press should sound: the playback rate, and whether the
-/// text is rewritten for listening before it is spoken
+/// How one read-aloud press should sound: the voice, the playback rate, and
+/// whether the text is rewritten for listening before it is spoken
 /// (`ReadAloudLLM.rewriteForListening`).
 /// `ReadAloudStyleStore.style` resolves it from the settings at each press.
 public struct ReadAloudStyle: Sendable, Equatable {
@@ -11,32 +11,44 @@ public struct ReadAloudStyle: Sendable, Equatable {
   /// Leave out what sounds like noise read aloud: code, file paths, links,
   /// email addresses, long numbers.
   public let skipsJargon: Bool
+  /// The TTS request's `voice_id`, one of `ReadAloudVoice.catalog`.
+  public let voiceID: String
 
-  /// Read-aloud untouched: natural pace, the selection verbatim.
+  /// Read-aloud untouched: the default voice at natural pace, the selection verbatim.
   public static let standard = ReadAloudStyle(rate: 1, skipsJargon: false)
 
-  public init(rate: Double, skipsJargon: Bool) {
+  public init(rate: Double, skipsJargon: Bool, voiceID: String = ReadAloudVoice.defaultID) {
     self.rate = rate
     self.skipsJargon = skipsJargon
+    self.voiceID = voiceID
   }
+
+  /// The same voice and speed, reading the text as given: for text already
+  /// written to be heard (an answer, a voice sample).
+  public var verbatim: ReadAloudStyle { ReadAloudStyle(rate: rate, skipsJargon: false, voiceID: voiceID) }
 }
 
-/// Persists how read-aloud sounds in `UserDefaults`: its playback speed and
-/// whether it skips jargon, two independent settings. Untouched, it reads at
-/// natural pace with nothing skipped (`ReadAloudStyle.standard`). Skipping is
-/// off by default because it sends the selection to the LLM Gateway before
-/// reading it. The Settings window's Advanced pane writes both slots through
-/// `@AppStorage`, so like `SelectionSpeechStore` this store is read-only.
+/// Persists how read-aloud sounds in `UserDefaults`: its voice, its playback
+/// speed and whether it skips jargon, three independent settings. Untouched, it
+/// reads in the default voice at natural pace, skipping jargon: code, paths and
+/// long numbers read aloud are mostly noise. That sends the selection to the LLM
+/// Gateway before reading it, which the Read Aloud footer says while it's on,
+/// and a failed rewrite falls back to the selection verbatim. The Keys tab's Read Aloud section writes every slot through
+/// `@AppStorage`, so this store is read-only.
 public struct ReadAloudStyleStore {
   /// UserDefaults keys, public so the Settings view can bind them directly.
   public static var speedDefaultsKey: String { DefaultsKey.readAloudSpeed.key }
   public static var skipsJargonDefaultsKey: String { DefaultsKey.readAloudSkipsJargon.key }
+  public static var voiceDefaultsKey: String { DefaultsKey.readAloudVoice.key }
 
   /// What an unset slot reads as. Public so the Settings view's `@AppStorage`
   /// defaults come from here and can't disagree with the press (the trap
   /// `EnhancedTranscriptsStore.defaultValue` records).
   public static let defaultSpeed = ReadAloudStyle.standard.rate
-  public static let defaultSkipsJargon = ReadAloudStyle.standard.skipsJargon
+  /// On, unlike `ReadAloudStyle.standard` (the verbatim style a caller gets
+  /// when it names none).
+  public static let defaultSkipsJargon = true
+  public static let defaultVoiceID = ReadAloudStyle.standard.voiceID
 
   /// The speeds the Settings picker offers. Capped at 3: past that the
   /// time-domain pitch correction smears syllables together.
@@ -54,7 +66,18 @@ public struct ReadAloudStyleStore {
 
   /// The style the next press reads with.
   public var style: ReadAloudStyle {
-    ReadAloudStyle(rate: speed, skipsJargon: skipsJargon)
+    ReadAloudStyle(
+      rate: speed, skipsJargon: skipsJargon,
+      voiceID: Self.knownVoiceID(defaults.string(forKey: Self.voiceDefaultsKey)))
+  }
+
+  /// `id` when it names a catalog voice, else the default. The slot is a plain
+  /// string anyone can `defaults write`, and an id the service doesn't know
+  /// refuses the whole read (`3012`), so it is never passed through. The
+  /// picker's binding reads through this too, so a stale value shows as the
+  /// voice that will actually speak.
+  public static func knownVoiceID(_ id: String?) -> String {
+    id.flatMap(ReadAloudVoice.voice(id:))?.id ?? defaultVoiceID
   }
 
   /// The stored speed, snapped to what the picker offers. The slot is a plain

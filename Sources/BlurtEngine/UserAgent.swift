@@ -145,4 +145,22 @@ extension URLRequest {
   mutating func setUserAgent() {
     setValue(UserAgent.current, forHTTPHeaderField: UserAgent.headerField)
   }
+
+  /// A JSON `POST` of `body` to an AssemblyAI route: the raw API key in
+  /// `Authorization`, as every AssemblyAI request Blurt makes, the user agent,
+  /// and stably ordered keys. Read-aloud's two clients (`ReadAloudLLM`,
+  /// `AssemblyAISpeechSynthesizer`) both build theirs here.
+  static func assemblyAIJSONPost(
+    to url: URL, apiKey: String, timeout: TimeInterval, body: some Encodable
+  ) throws -> URLRequest {
+    var request = URLRequest(url: url, timeoutInterval: timeout)
+    request.httpMethod = "POST"
+    request.setValue(apiKey, forHTTPHeaderField: "Authorization")
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setUserAgent()
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = .sortedKeys
+    request.httpBody = try encoder.encode(body)
+    return request
+  }
 }

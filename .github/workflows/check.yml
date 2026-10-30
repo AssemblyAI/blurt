@@ -79,7 +79,10 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: macos-26
-    timeout-minutes: 30
+    # The UI suite alone is ~17 minutes (47 tests, driving every trigger key and
+    # read-aloud end to end) on top of the engine suite, the leak run and the
+    # lint passes; 30 cut a passing run off in its last lint step.
+    timeout-minutes: 45
 
     steps:
       - name: Checkout blurt

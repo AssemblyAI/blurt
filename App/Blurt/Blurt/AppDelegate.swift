@@ -116,7 +116,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
           apiKey: apiKey,
           // No configuration: the suite covers the paste-a-key path, and sign-in
           // would open a real browser.
-          account: AssemblyAIAccount(configuration: nil, apiKey: apiKey, store: .inMemory()))
+          account: AssemblyAIAccount(configuration: nil, apiKey: apiKey, store: .inMemory()),
+          // Read-aloud offline: a canned selection, and a speaker that records
+          // what it's asked to read instead of streaming TTS.
+          readAloud: ReadAloudSeams(
+            speaker: UITestReadAloudSpeaker(),
+            readSelection: { [selection = UITestIdentifiers.cannedSelection] in selection }))
       } else {
         coord = AppCoordinator(onSetupBlocked: onSetupBlocked)
       }
@@ -255,9 +260,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       // Accessibility trust, but its gate/callback graph is still exercised.)
       coord.showOverlay()
       for _ in 0..<5 {
-        coord.simulateDictationPressForTesting()
+        coord.simulateKeyPressForTesting()
         try? await Task.sleep(for: .milliseconds(120))  // let press() reach .recording
-        coord.simulateDictationReleaseForTesting()
+        coord.simulateKeyReleaseForTesting()
         try? await Task.sleep(for: .milliseconds(180))  // let transcribe→inject settle
       }
       coord.hideOverlay()

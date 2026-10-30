@@ -26,9 +26,19 @@ import Synchronization
 /// which are only touched inside that lock (or, for the synchronizer clock read
 /// and `addRenderer` at init, through APIs AVFoundation documents as thread-safe).
 final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
+  /// One 50 ms window's loudness and where it sits on the media timeline.
+  private struct LevelWindow {
+    let start: Double
+    let end: Double
+    let level: Float
+  }
+
   private struct State {
     var schedule: PCMSchedule
     var stopped = false
+    /// Each queued 50 ms window's loudness and where it sits on the media
+    /// timeline, oldest first, for `currentLevel`.
+    var levels: [LevelWindow] = []
   }
 
   private let renderer = AVSampleBufferAudioRenderer()
@@ -62,10 +72,19 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
   func enqueue(_ pcm: Data) {
     let frames = pcm.count / 2
     guard frames > 0, let format else { return }
+    // Loudness per meter tick, measured before taking the lock the meter and
+    // the pacing both wait on; only the placement needs it.
+    let window = Int(Double(sampleRate) * MicCapture.meterIntervalSeconds)
+    let levels = PCMLevel.levels(of: pcm, windowFrames: window)
     state.withLock { state in
       guard !state.stopped else { return }
       let first = !state.schedule.started
       let at = state.schedule.place(frames: frames, now: CMTimeGetSeconds(synchronizer.currentTime()))
+      for (index, level) in levels.enumerated() {
+        let start = at + Double(index * window) / Double(sampleRate)
+        let end = min(start + Double(window) / Double(sampleRate), at + Double(frames) / Double(sampleRate))
+        state.levels.append(LevelWindow(start: start, end: end, level: level))
+      }
       let time = CMTime(seconds: at, preferredTimescale: sampleRate)
       guard let buffer = Self.sampleBuffer(pcm, frames: frames, format: format, at: time) else { return }
       renderer.enqueue(buffer)
@@ -94,10 +113,33 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
 
   private static let drainSlack = Duration.seconds(2)
 
+  /// Seconds of audio queued ahead of what's playing, in listening time (the
+  /// rate applied), or 0 once stopped — how far ahead of the listener the
+  /// reading has got.
+  var bufferedSeconds: Double { (remaining() ?? 0) / rate }
+
   /// Seconds of audio still ahead of the clock, or nil once stopped.
   private func remaining() -> Double? {
     state.withLock { state in
       state.stopped ? nil : state.schedule.remaining(now: CMTimeGetSeconds(synchronizer.currentTime()))
+    }
+  }
+
+  /// The loudness of what's playing right now, 0...1, or 0 between words,
+  /// before the first chunk, and once stopped. Reads the media clock, so it
+  /// follows the audio coming out of the speakers, not the audio arriving.
+  var currentLevel: Float {
+    state.withLock { state in
+      guard !state.stopped else { return 0 }
+      let now = CMTimeGetSeconds(synchronizer.currentTime())
+      // Windows are in time order, so only the head can have expired.
+      if let live = state.levels.firstIndex(where: { $0.end > now }) {
+        state.levels.removeFirst(live)
+      } else {
+        state.levels.removeAll()
+      }
+      guard let window = state.levels.first, window.start <= now else { return 0 }
+      return window.level
     }
   }
 
@@ -108,6 +150,7 @@ final class StreamingPCMPlayer: PCMSink, @unchecked Sendable {
       state.stopped = true
       synchronizer.setRate(0, time: synchronizer.currentTime())
       renderer.flush()
+      state.levels.removeAll()
     }
   }
 
@@ -149,4 +192,13 @@ protocol PCMSink: Sendable {
   func drain() async
   /// Silences at once. Idempotent.
   func stop()
+  /// The loudness of what's playing now, 0...1, for the pill's meter.
+  var currentLevel: Float { get }
+  /// Seconds of audio queued ahead of what's playing, in listening time.
+  var bufferedSeconds: Double { get }
+}
+
+extension PCMSink {
+  var currentLevel: Float { 0 }
+  var bufferedSeconds: Double { 0 }
 }

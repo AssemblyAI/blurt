@@ -97,7 +97,8 @@ struct OverlayView: View {
       // which is the whole point.
       waitingContent("Connecting")
         .transition(.opacity)
-    case .recording:
+    case .recording, .speaking:
+      // A read wears the same pill, the meter following the voice instead.
       // The orb beside the live waveform, its ring sweeping as it does in every
       // other state — the orb is one object and doesn't change behaviour with
       // the content next to it. The meter carries the level; the ring carries

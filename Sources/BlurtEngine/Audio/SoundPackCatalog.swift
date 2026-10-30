@@ -69,6 +69,23 @@ public struct SoundPackCatalog: Sendable {
     defaultPack = index[defaultVoiceID] ?? SoundPack.none
   }
 
+  /// The same voices with a different default — a second setting drawn from
+  /// one catalog, such as read-aloud's cues beside dictation's. An id naming no
+  /// voice falls back to `SoundPack.none`, as in `init`.
+  public func defaulting(to voiceID: String) -> SoundPackCatalog {
+    SoundPackCatalog(
+      groups: groups, defaultPack: byID[voiceID] ?? SoundPack.none, byID: byID, voicesByGroup: voicesByGroup)
+  }
+
+  private init(
+    groups: [String], defaultPack: SoundPack, byID: [String: SoundPack], voicesByGroup: [String: [SoundPack]]
+  ) {
+    self.groups = groups
+    self.defaultPack = defaultPack
+    self.byID = byID
+    self.voicesByGroup = voicesByGroup
+  }
+
   /// The voices belonging to one group, in catalog order.
   public func voices(in group: String) -> [SoundPack] { voicesByGroup[group] ?? [] }
 

@@ -1,9 +1,10 @@
 // Sign in with AssemblyAI, for the Debug and Debug-Local configurations
-// (see `configFiles` in project.yml). Release signs in to production instead,
-// from SignIn.release.xcconfig.
+// (see `configFiles` in project.yml). Dev builds sign in to production, the
+// same as Release, from SignIn.release.xcconfig.
 //
-// The values themselves are not in this repo: they name AssemblyAI's sandbox
-// deployments. Copy SignIn.local.xcconfig.example to SignIn.local.xcconfig
-// (gitignored) and fill it in; without it, dev builds simply don't show
-// sign-in.
+// To sign a dev build in to one of AssemblyAI's sandbox deployments instead,
+// copy SignIn.local.xcconfig.example to SignIn.local.xcconfig (gitignored)
+// and fill it in: its values, included after production's, replace them. The
+// sandbox values aren't in this repo.
+#include "SignIn.release.xcconfig"
 #include? "SignIn.local.xcconfig"

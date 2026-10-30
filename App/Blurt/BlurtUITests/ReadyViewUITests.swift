@@ -14,14 +14,20 @@ final class ReadyViewUITests: BlurtUITestCase {
   func testReadyScreenShowsShortcutAndRecent() {
     mainWindow()
 
-    // The shortcut row: one element naming the bound key in words (the row
+    // The dictation row: one element naming the bound key in words (the row
     // itself draws it as a keycap) and how to use it.
     let shortcutPredicate = NSPredicate(
-      format: "label BEGINSWITH %@", "Shortcut: Right Command.")
+      format: "label BEGINSWITH %@", "Dictate: Right Command.")
     XCTAssertTrue(
       app.descendants(matching: .any).matching(shortcutPredicate).firstMatch
         .waitForExistence(timeout: 10),
       "Ready screen should state the dictation shortcut")
+    // And a row for each other configured key: left ⌥ reads aloud by default.
+    let readPredicate = NSPredicate(
+      format: "label BEGINSWITH %@", "\(KeyActionName.readAloud): Left Option.")
+    XCTAssertTrue(
+      app.descendants(matching: .any).matching(readPredicate).firstMatch.exists,
+      "Ready screen should list the read-aloud key")
 
     // The style row is always present. With no custom styles there isn't a real
     // choice, so it reads Default without drawing a one-item pop-up.
@@ -169,7 +175,7 @@ final class ReadyViewUITests: BlurtUITestCase {
   }
 
   /// The empty Recent list's first-dictation prompt, one element whose label
-  /// starts "Start your first dictation" and goes on to name the bound key.
+  /// starts "Ready when you are" and goes on to name the bound key.
   private func emptyRecentPrompt(in main: XCUIElement) -> XCUIElement {
     main.descendants(matching: .any)[UITestIdentifiers.recentEmptyPrompt]
   }

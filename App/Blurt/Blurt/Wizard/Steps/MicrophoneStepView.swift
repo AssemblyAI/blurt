@@ -11,7 +11,7 @@ import SwiftUI
 struct MicrophoneStepView: View {
   // Empty means "no device pinned" — the unset default belongs to
   // `MicDeviceSelection.fromPersisted`, which reads it as "same as system". See
-  // `HotkeyStepView` for why the view must not restate it.
+  // `KeysSettingsTab` for why the view must not restate it.
   @AppStorage(MicDeviceStore.defaultsKey) private var micDeviceUID = ""
 
   /// The input devices present when the pane appeared, re-read each time it
@@ -27,18 +27,17 @@ struct MicrophoneStepView: View {
   /// rather than an optional array because SwiftLint's
   /// `discouraged_optional_collection` (opted into repo-wide) forbids the latter.
   @State private var devicesLoaded = false
-  /// The current default input's name, for the "Same as system (…)" label; nil
-  /// (no device, or the read failed) drops the parenthetical.
+  /// The current default input's name, shown beneath the row title.
   @State private var systemDefaultName: String?
 
   /// The selection as the engine's own type, not the raw slot. Binding the
   /// `String` meant spelling ""-means-system a second time (in a `.tag("")`),
   /// which is exactly what `MicDeviceSelection` exists to own — the same shape
-  /// `SoundStepView` and `HotkeyStepView` already use for their pickers.
+  /// `SoundStepView` and `KeysSettingsTab` already use for their pickers.
   private var selection: Binding<MicDeviceSelection> {
     Binding(
       get: { MicDeviceSelection.fromPersisted(micDeviceUID) },
-      // Write through the store (see `HotkeyStepView` for why): the store owns
+      // Write through the store (see `KeysSettingsTab` for why): the store owns
       // the encoding, `@AppStorage` observes the key to re-render.
       set: { MicDeviceStore().selection = $0 })
   }
@@ -53,17 +52,20 @@ struct MicrophoneStepView: View {
     return .pinned(uid: micDeviceUID)
   }
 
-  private var systemDefaultLabel: String {
-    systemDefaultName.map { "Same as system (\($0))" } ?? "Same as system"
+  private var deviceDescription: String {
+    if micDeviceUID.isEmpty || missingPin != nil {
+      return systemDefaultName.map { "Using \($0)." } ?? "Uses your system’s default microphone."
+    }
+    return "Used for voice recording."
   }
 
   var body: some View {
     Section {
       PickerSettingRow(
         title: "Input device", systemImage: "mic",
-        accessibilityID: UITestIdentifiers.micPicker, selection: selection
+        accessibilityID: UITestIdentifiers.micPicker, subtitle: deviceDescription, selection: selection
       ) {
-        Text(systemDefaultLabel).tag(MicDeviceSelection.systemDefault)
+        Text("Same as system").tag(MicDeviceSelection.systemDefault)
         ForEach(devices) { device in
           Text(device.name).tag(MicDeviceSelection.pinned(uid: device.uid))
         }
@@ -75,7 +77,7 @@ struct MicrophoneStepView: View {
       Text("Microphone")
     } footer: {
       Text(
-        "Blurt uses this microphone for dictation. If it’s unavailable, Blurt uses the system default."
+        "If this microphone is unavailable, Blurt uses the system default."
       )
     }
     // Off the main actor, and `.task` rather than `.onAppear` to have somewhere

@@ -32,17 +32,21 @@ public enum TriggerActivation: String, CaseIterable, Sendable {
     }
   }
 
-  /// The Shortcut section's footer sentence: how to dictate under this mode.
-  /// Lives here rather than at the SwiftUI call site so the wording stays
-  /// beside the behavior it describes (and inside the tested target).
-  public var guidance: String {
+  /// How to use a key under this mode, for what it does: the ready screen's
+  /// key rows ("Tap to start and stop. Hold to talk."). Lives here rather than
+  /// at the SwiftUI call site so the wording stays beside the behavior it
+  /// describes (and inside the tested target).
+  public func hint(for action: TriggerKeyAction) -> String {
+    let verb =
+      switch action {
+      case .readAloud: "listen"
+      case .ask: "ask"
+      case .dictate, .off: "talk"
+      }
     switch self {
-    case .tapOrHold:
-      return "Tap to start and tap again to stop, or hold the key and release to dictate."
-    case .tap:
-      return "Tap to start and tap again to stop dictating."
-    case .hold:
-      return "Hold the key while you speak and release to stop dictating."
+    case .tapOrHold: return "Tap to start and stop. Hold to \(verb)."
+    case .tap: return "Tap to start and stop."
+    case .hold: return "Hold to \(verb). Release to stop."
     }
   }
 
@@ -59,10 +63,6 @@ public enum TriggerActivation: String, CaseIterable, Sendable {
   /// How to finish a dictation that is recording, e.g. "Tap again or release
   /// to finish." — only the gestures this mode actually stops on.
   public var finishHint: String { "\(stopGesture) to finish." }
-
-  /// How to stop something the trigger started that isn't a dictation, today
-  /// a read-aloud (see `SelectionSpeechRouting`): "Tap again or release to stop."
-  public var stopHint: String { "\(stopGesture) to stop." }
 
   private var stopGesture: String {
     switch self {

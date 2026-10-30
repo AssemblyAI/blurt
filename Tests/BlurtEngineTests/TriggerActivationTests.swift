@@ -8,27 +8,31 @@ import Testing
 /// act, in `DictationKeyGateTests`.
 @Suite("TriggerActivation")
 struct TriggerActivationTests {
+  /// The bound key's mode with no entry of its own: the shared slot.
+  private func sharedMode(_ defaults: UserDefaults) -> TriggerActivation {
+    TriggerKeyBindings(defaults: defaults).activation(for: .rightCommand)
+  }
+
   @Test("defaults to tap-or-hold when unset")
   func defaultsToTapOrHold() {
     // The shipped behavior: an install that never touched the picker must keep
     // both gestures working.
-    #expect(TriggerActivationStore(defaults: freshDefaults()).activation == .tapOrHold)
+    #expect(sharedMode(freshDefaults()) == .tapOrHold)
     #expect(TriggerActivation.fromPersisted("") == .tapOrHold)
   }
 
-  @Test("persists and reads back a chosen mode")
+  @Test("an existing install's shared mode is still honoured")
   func roundTrips() {
     let defaults = freshDefaults()
-    let store = TriggerActivationStore(defaults: defaults)
-    store.activation = .hold
-    #expect(TriggerActivationStore(defaults: defaults).activation == .hold)
+    defaults.set(TriggerActivation.hold.rawValue, forKey: TriggerActivationStore.defaultsKey)
+    #expect(sharedMode(defaults) == .hold)
   }
 
   @Test("an unknown stored value falls back to the default")
   func unknownFallsBack() {
     let defaults = freshDefaults()
     defaults.set("DoubleTap", forKey: TriggerActivationStore.defaultsKey)
-    #expect(TriggerActivationStore(defaults: defaults).activation == .tapOrHold)
+    #expect(sharedMode(defaults) == .tapOrHold)
   }
 
   @Test("every mode names itself and explains itself, distinctly")
@@ -37,14 +41,10 @@ struct TriggerActivationTests {
     // differently, or the picker offers two spellings of one behavior.
     #expect(Set(TriggerActivation.allCases.map(\.label)).count == TriggerActivation.allCases.count)
     #expect(
-      Set(TriggerActivation.allCases.map(\.guidance)).count == TriggerActivation.allCases.count)
-    #expect(
-      Set(TriggerActivation.allCases.map(\.stopHint)).count == TriggerActivation.allCases.count)
-    // The default's footer is the sentence that shipped before the picker
-    // existed — the unset experience must not reword itself.
-    #expect(
-      TriggerActivation.tapOrHold.guidance
-        == "Tap to start and tap again to stop, or hold the key and release to dictate.")
+      Set(TriggerActivation.allCases.map { $0.hint(for: .dictate) }).count == TriggerActivation.allCases.count)
+    #expect(TriggerActivation.tapOrHold.hint(for: .dictate) == "Tap to start and stop. Hold to talk.")
+    #expect(TriggerActivation.hold.hint(for: .readAloud) == "Hold to listen. Release to stop.")
+    #expect(TriggerActivation.tapOrHold.hint(for: .ask) == "Tap to start and stop. Hold to ask.")
     #expect(
       Set(TriggerActivation.allCases.map(\.finishHint)).count == TriggerActivation.allCases.count)
   }

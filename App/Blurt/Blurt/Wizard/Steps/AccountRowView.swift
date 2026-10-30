@@ -51,17 +51,9 @@ struct AccountRowView: View {
   }
 
   private var row: some View {
-    SettingRow(title: "Account", systemImage: "person.crop.circle") {
+    let status = account.status.statusText ?? "Connect your AssemblyAI account."
+    return SettingRow(title: "Account", systemImage: "person.crop.circle", subtitle: status) {
       HStack(spacing: 12) {
-        if let statusText = account.status.statusText {
-          Text(statusText)
-            .foregroundStyle(.secondary)
-            // A long work address mustn't push Sign Out off the row; the full
-            // text is on hover.
-            .lineLimit(1)
-            .truncationMode(.middle)
-            .help(statusText)
-        }
         if isWorking {
           ProgressView().controlSize(.small)
             .accessibilityLabel(account.status.statusText == nil ? "Signing in" : "Signing out")
@@ -70,12 +62,13 @@ struct AccountRowView: View {
           Button("Sign Out", action: signOut)
             .disabled(isWorking)
         } else {
-          Button("Sign In with AssemblyAI…", action: startSignIn)
+          Button("Sign In…", action: startSignIn)
             .glassButtonStyleCompat(prominent: isPrimary)
             .disabled(isWorking)
         }
       }
     }
+    .help(status)
   }
 
   private func startSignIn() {

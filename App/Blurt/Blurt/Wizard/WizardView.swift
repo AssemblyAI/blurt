@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// The first-run setup screen. A single page showing everything setup needs at
@@ -20,6 +19,8 @@ struct WizardView: View {
 
   var body: some View {
     VStack(spacing: 0) {
+      MainWindowBranding()
+        .padding(.top, 16)
       header
       Form {
         // API key first — the reason setup leads with it: a user arriving from
@@ -41,43 +42,23 @@ struct WizardView: View {
   }
 
   private var header: some View {
-    // Center the mark against the two-line text block rather than pinning it to
-    // the first line's top — top-alignment left the icon reading high over the
-    // taller title+subtitle stack. A little more spacing gives it room.
-    HStack(alignment: .center, spacing: 12) {
-      OnboardingBrandMark()
-
-      VStack(alignment: .leading, spacing: 4) {
-        Text("Set up Blurt")
-          .font(.title2)
-          .fontWeight(.bold)
-        Text("Add your API key, then allow Microphone and Accessibility access.")
-          .font(.body)
-          .foregroundStyle(.secondary)
-      }
+    VStack(alignment: .leading, spacing: 4) {
+      Text("Set up Blurt")
+        .font(.title2)
+        .fontWeight(.bold)
+      Text(
+        coordinator.account.isAvailable
+          ? "Sign in, then allow microphone and Accessibility access."
+          : "Add your API key, then allow microphone and Accessibility access."
+      )
+      .font(.body)
+      .foregroundStyle(.secondary)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.horizontal, 20)
     // The standard titlebar provides the traffic-light clearance, so the top
     // inset is just breathing room between the bar and the header.
-    .padding(.top, 12)
+    .padding(.top, 20)
     .padding(.bottom, 4)
-  }
-}
-
-private struct OnboardingBrandMark: View {
-  /// 60 pt, the size the design draws it at (a 60×60 icon against the title and
-  /// its two-line subtitle). It was 38, which left the mark reading as a favicon
-  /// beside the heading rather than as the app introducing itself — this is the
-  /// first thing shown on first run.
-  private static let size: CGFloat = 60
-
-  var body: some View {
-    Image(nsImage: NSApplication.shared.applicationIconImage)
-      .resizable()
-      .interpolation(.high)
-      .scaledToFit()
-      .frame(width: Self.size, height: Self.size)
-      .accessibilityHidden(true)
   }
 }

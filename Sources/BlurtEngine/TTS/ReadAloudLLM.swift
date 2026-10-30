@@ -12,7 +12,7 @@ import Foundation
 ///
 /// **The repo's one LLM Gateway client, and only for read-aloud.** Dictation
 /// cleanup stays the dictation API's server-side rewrite on the same request
-/// (AGENTS.md's settled decisions). The TTS socket has no rewrite or reply of
+/// (AGENTS.md's settled decisions). The TTS API has no rewrite or reply of
 /// its own to ask for, so this is the only way to shape what the voice says.
 /// That is also why `check-invariants.sh` exempts this file and no other.
 ///
@@ -31,14 +31,19 @@ struct ReadAloudLLM: Sendable {
   /// jobs are short and latency-bound: the user is waiting to hear something.
   static let model = "qwen3.5-4b-32k-fast"
 
-  /// Room for the longest selection read-aloud takes
-  /// (`SelectionSpeaker.maxCharacters`) to come back whole, even as code-heavy
+  /// Room for the longest piece read-aloud rewrites at once
+  /// (`ListeningChunks.maxCharacters`) to come back whole, even as code-heavy
   /// text that tokenizes badly. A rewrite cut short by the cap would drop the
   /// end of the selection, so a `length` stop is treated as a failure.
   static let rewriteMaxTokens = 4_096
   /// A spoken answer is a few sentences. An answer that runs into this cap is
   /// still read, cut where it stopped: a long reply is better than none.
   static let answerMaxTokens = 1_024
+  /// The most of a selection an answer is asked about: a long article's
+  /// opening stretch. A read takes up to `SelectionSpeaker.maxCharacters`, far
+  /// past the model's 32k-token context once tokenized — code runs two or three
+  /// characters a token — so the rest is left out rather than failing the ask.
+  static let answerSelectionCharacters = 30_000
 
   /// The gateway answers small-model requests in well under a second; past
   /// this the user is better served by hearing the selection verbatim.
@@ -111,7 +116,8 @@ struct ReadAloudLLM: Sendable {
   func answer(_ request: String, about selection: String) async throws -> String {
     try await complete(
       Self.chat(
-        system: Self.answerInstruction, user: Self.answerPrompt(request, about: selection),
+        system: Self.answerInstruction,
+        user: Self.answerPrompt(request, about: String(selection.prefix(Self.answerSelectionCharacters))),
         maxTokens: Self.answerMaxTokens),
       timeout: Self.answerTimeout
     ).text
@@ -162,16 +168,7 @@ struct ReadAloudLLM: Sendable {
   }
 
   static func request(for body: Body, apiKey: String, timeout: TimeInterval) throws -> URLRequest {
-    var request = URLRequest(url: endpoint, timeoutInterval: timeout)
-    request.httpMethod = "POST"
-    // The raw key, as every AssemblyAI request Blurt makes.
-    request.setValue(apiKey, forHTTPHeaderField: "Authorization")
-    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    request.setUserAgent()
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = .sortedKeys
-    request.httpBody = try encoder.encode(body)
-    return request
+    try URLRequest.assemblyAIJSONPost(to: endpoint, apiKey: apiKey, timeout: timeout, body: body)
   }
 
   private struct Completion: Decodable {

@@ -31,27 +31,21 @@ struct StyleRow: View {
   }
 
   var body: some View {
-    SettingRow(title: "Style", systemImage: "textformat") {
+    SettingRow(
+      title: "Writing style", systemImage: "textformat", subtitle: "Choose how your dictations are written."
+    ) {
       if profiles.isEmpty {
         // With no alternative there is nothing to pick. A passive value avoids
         // presenting a one-item pop-up that promises a choice it can't offer.
         Text(StyleProfileStore.defaultStyleName)
           .foregroundStyle(.secondary)
       } else {
-        // The picker keeps its own (hidden) title so VoiceOver reads a
-        // meaningful name for the pop-up rather than an empty string.
-        Picker("Style", selection: choice) {
-          // Writes go through the store — never the raw slot — so the store
-          // keeps owning how a choice is encoded (a profile's id, or the
-          // store's "default" sentinel; see `HotkeyStepView.selection` for the
-          // precedent).
+        Picker("Writing style", selection: choice) {
           Text(StyleProfileStore.defaultStyleName).tag(Choice.defaultStyle)
           ForEach(profiles) { profile in
             Text(profile.name).tag(Choice.profile(profile.id))
           }
         }
-        // Explicit, not inherited: the pop-up is the whole point (see the type's
-        // note on why segmented can't work here).
         .pickerStyle(.menu)
         .labelsHidden()
         .accessibilityIdentifier(UITestIdentifiers.styleProfilePickerFromMain)
@@ -115,7 +109,7 @@ struct StyleRow: View {
 /// Settings.
 struct StylesInertNotice: View {
   /// The same caveat inside Settings, where the Enhanced transcripts switch is
-  /// on screen — the Styles pane's and the Key Styles sheet's footer.
+  /// on screen — the Styles pane's and the Keys tab's footer.
   static let settingsText = "Turn on Enhanced transcripts to use styles."
 
   /// Observed so the notice follows the toggle in the Settings window live.

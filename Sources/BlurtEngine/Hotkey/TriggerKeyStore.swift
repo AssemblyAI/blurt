@@ -20,17 +20,7 @@ public struct TriggerKeyStore {
       TriggerKey.fromPersisted(defaults.integer(forKey: Self.defaultsKey))
     }
     nonmutating set {
-      let old = triggerKey
       defaults.set(newValue.rawValue, forKey: Self.defaultsKey)
-      // The key moved away from stops dictating unless the user had made it an
-      // extra key before binding it. Its Key Styles row offered no Off while it
-      // was bound, so a style picked for it then says nothing about keeping it
-      // as an extra — left behind, it would silently stay one (and, for fn,
-      // keep `GlobeKeyOverride` switching 🌐 off). The style is stashed, not
-      // dropped, and comes back if the key is bound again.
-      if old != newValue {
-        TriggerKeyStyleStore(defaults: defaults).rebound(from: old, to: newValue)
-      }
     }
   }
 

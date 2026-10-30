@@ -28,6 +28,10 @@ public struct DictationKeyRouter: Sendable {
     case flagsChanged(keyCode: Int, triggerFlagIsOn: Bool)
     /// A `keyDown` for `keyCode`.
     case keyDown(keyCode: Int)
+    /// A mouse button went down. A modifier held through a click is a
+    /// modifier-click (⌘-click a link, ⌥-click in Finder), not a lone press, so
+    /// it cancels the press exactly as another key would.
+    case pointerDown
 
     /// A `flagsChanged` delivery from its keycode and the event's raw
     /// `CGEventFlags`: down when the flags hold *that* key's device bit — so
@@ -38,8 +42,9 @@ public struct DictationKeyRouter: Sendable {
     }
   }
 
-  /// The virtual keycodes of the bound trigger modifiers (`TriggerKey.keyCode`).
-  private(set) var triggerKeyCodes: Set<Int>
+  /// Each watched trigger's virtual keycode (`TriggerKey.keyCode`) and the
+  /// activation mode its presses resolve under.
+  private(set) var activations: [Int: TriggerActivation]
 
   /// The trigger that owns the gate — the one whose press started the current
   /// dictation — or nil while the gate is idle and no trigger is held. The host
@@ -51,12 +56,10 @@ public struct DictationKeyRouter: Sendable {
   /// deliveries with an unchanged bit don't re-fire the gate.
   private var modifierIsDown = false
 
-  public init(
-    triggerKeyCodes: Set<Int>, holdThreshold: Duration = .seconds(1),
-    activation: TriggerActivation = .tapOrHold
-  ) {
-    self.triggerKeyCodes = triggerKeyCodes
-    self.gate = DictationKeyGate(holdThreshold: holdThreshold, activation: activation)
+  /// Each key with its own mode (keycode → activation).
+  public init(activations: [Int: TriggerActivation], holdThreshold: Duration = .seconds(1)) {
+    self.activations = activations
+    self.gate = DictationKeyGate(holdThreshold: holdThreshold, activation: activations.values.first ?? .tapOrHold)
   }
 
   /// Feeds one event through the relevance/edge filters into the gate and
@@ -64,10 +67,16 @@ public struct DictationKeyRouter: Sendable {
   public mutating func handle(_ event: Event, at now: Duration) -> DictationKeyGate.Action {
     switch event {
     case .flagsChanged(let keyCode, let triggerFlagIsOn):
-      guard triggerKeyCodes.contains(keyCode), (activeKeyCode ?? keyCode) == keyCode else { return .none }
+      guard activations[keyCode] != nil, (activeKeyCode ?? keyCode) == keyCode else { return .none }
       if triggerFlagIsOn, !modifierIsDown {
         modifierIsDown = true
         activeKeyCode = keyCode
+        // A press from idle resolves under its own key's mode. The gate's mode
+        // is `let` (its determinism contract), so a different one is a fresh gate;
+        // an idle gate holds nothing to lose.
+        if gate.isIdle, let activation = activations[keyCode], activation != gate.activation {
+          gate = DictationKeyGate(holdThreshold: gate.holdThreshold, activation: activation)
+        }
         return gate.modifierDown(at: now)
       }
       if !triggerFlagIsOn, modifierIsDown {
@@ -78,26 +87,29 @@ public struct DictationKeyRouter: Sendable {
       }
       return .none
     case .keyDown(let keyCode):
-      return triggerKeyCodes.contains(keyCode) ? .none : gate.otherKeyDown()
+      return activations[keyCode] != nil ? .none : gate.otherKeyDown()
+    case .pointerDown:
+      return gate.otherKeyDown()
     }
   }
 
-  /// Rebinds the trigger — keys and activation mode, the two halves of the
-  /// binding Settings can change — and resets when the change touches what the
-  /// gate is tracking: the active key unbound (its up-event can no longer match)
-  /// or the mode changed (it would resolve under the old one). The gate is
-  /// rebuilt then because its `activation` is `let`, part of its determinism
-  /// contract. Turning some *other* key on or off in Key Styles keeps the state,
-  /// so a recording latched while Settings is open survives it. Returns whether
-  /// a reset discarded a live recording (see `reset()`).
+  /// Rebinds the triggers — which keys, and each one's mode, the two halves of
+  /// the binding Settings can change — and resets only when the change touches
+  /// what the gate is tracking: the active key unbound (its up-event can no
+  /// longer match) or its mode changed (it would resolve under the old one).
+  /// Any other key's change keeps the state, so a recording latched while
+  /// Settings is open survives it; that key's next press picks up its mode.
+  /// Returns whether a reset discarded a live recording (see `reset()`).
   @discardableResult
-  public mutating func rebind(triggerKeyCodes: Set<Int>, activation: TriggerActivation) -> Bool {
-    self.triggerKeyCodes = triggerKeyCodes
-    let activeKeyStillBound = activeKeyCode.map(triggerKeyCodes.contains) ?? true
-    guard !activeKeyStillBound || activation != gate.activation else { return false }
-    let discardedRecording = reset()
-    gate = DictationKeyGate(holdThreshold: gate.holdThreshold, activation: activation)
-    return discardedRecording
+  public mutating func rebind(activations: [Int: TriggerActivation]) -> Bool {
+    self.activations = activations
+    guard let activeKeyCode else { return false }
+    // An unbound active key resets even with the gate idle (a combo cancelled
+    // its press, the key still down): its up-event can no longer match, so it
+    // would hold `activeKeyCode` and lock every other key out.
+    guard let activation = activations[activeKeyCode] else { return reset() }
+    guard !gate.isIdle, activation != gate.activation else { return false }
+    return reset()
   }
 
   /// Recovery after the host's event tap was disabled (by timeout, or by user input
@@ -115,7 +127,7 @@ public struct DictationKeyRouter: Sendable {
   /// the dropped events, so the gate is reset.
   ///
   /// Returns whether that reset discarded a live recording the caller must cancel
-  /// upstream, matching `reset()` and `rebind(triggerKeyCodes:activation:)`. This lived in the
+  /// upstream, matching `reset()` and `rebind(activations:)`. This lived in the
   /// shell as a bare `if`, where nothing could test it — the app target has no test
   /// target and a `CGEventTap` can't be driven from XCUITest — while carrying the
   /// worst failure of the three decisions here: a session left in `.recording` with

@@ -1,5 +1,7 @@
-// Copy to SignIn.local.xcconfig (gitignored) and fill in. Any one left empty
-// turns sign-in off. xcconfig treats `//` as the start of a comment, so write
+// Copy to SignIn.local.xcconfig (gitignored) and fill in to sign a dev build
+// in to a sandbox deployment instead of production (SignIn.xcconfig includes
+// this after the production values, so each one set here replaces its
+// production value). Any one left empty turns sign-in off. xcconfig treats `//` as the start of a comment, so write
 // every URL's `//` as `/$()/`.
 //
 // BLURT_OAUTH_CLIENT_ID         the Connected App's client id
