@@ -21,6 +21,16 @@ struct DictationKeyRouterTests {
     .flagsChanged(keyCode: keyCode, triggerFlagIsOn: false)
   }
 
+  @Test("a click while the trigger is down is a modifier-click: it cancels the press")
+  func clickCancelsPress() {
+    var router = DictationKeyRouter(triggerKeyCodes: [55])
+    #expect(router.handle(.flagsChanged(keyCode: 55, triggerFlagIsOn: true), at: .zero) == .start)
+    #expect(router.handle(.pointerDown, at: .milliseconds(80)) == .cancel)
+    #expect(router.handle(.flagsChanged(keyCode: 55, triggerFlagIsOn: false), at: .milliseconds(150)) == .none)
+    // With nothing pressed, a click is nothing.
+    #expect(router.handle(.pointerDown, at: .seconds(1)) == .none)
+  }
+
   @Test("a held press is start → stop")
   func holdIsStartStop() {
     var router = DictationKeyRouter(triggerKeyCodes: [trigger])

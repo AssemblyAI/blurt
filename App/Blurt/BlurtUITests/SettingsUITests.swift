@@ -1,9 +1,8 @@
 import XCTest
 
 /// Drives the Settings window: the AssemblyAI API-key sheet (connect / reject
-/// / cancel) reached from the account row, the
-/// dictation-key picker and its Key Styles sheet, the sound-cue picker, and the
-/// key-terms field. All
+/// / cancel) reached from the account row, the Keys tab, the Read Aloud tab,
+/// the sound-cue pickers, and the key-terms field. All
 /// offline — the API-key submit is short-circuited in UI-test mode, so these
 /// never reach AssemblyAI or the real Keychain.
 final class SettingsUITests: BlurtUITestCase {
@@ -63,17 +62,20 @@ final class SettingsUITests: BlurtUITestCase {
       "Show key should expose a plain (non-secure) text field")
   }
 
-  /// The dictation-key picker changes the persisted trigger selection.
-  func testHotkeyPickerChangesSelection() {
-    let settings = openSettingsWindow()
+  /// Taking the bound key off dictation moves the binding to the other dictating
+  /// key: turn right ⌥ on, set right ⌘ to read aloud, and both stick.
+  func testDictationMovesToAnotherKey() {
+    let keys = openKeys()
+    let option = keys.popUpButtons[UITestIdentifiers.keyStylePicker(rightOption)]
+    let command = keys.popUpButtons[UITestIdentifiers.keyStylePicker(rightCommand)]
 
-    let picker = settings.popUpButtons[UITestIdentifiers.hotkeyPicker]
-    XCTAssertTrue(picker.waitForExistence(timeout: 10), "Hotkey picker not found")
-    // Default is right ⌘; switch to right ⌥ and confirm the selection sticks.
-    picker.click()
-    app.menuItems["right ⌥"].click()
+    option.click()
+    app.menuItems["Dictate"].click()
+    command.click()
+    app.menuItems[KeyActionName.readAloud].click()
 
-    XCTAssertEqual(picker.value as? String, "right ⌥")
+    XCTAssertEqual(command.value as? String, KeyActionName.readAloud)
+    XCTAssertEqual(option.value as? String, "Dictate")
   }
 
   /// The microphone picker exists and defaults to following the system input.
@@ -234,85 +236,73 @@ final class SettingsUITests: BlurtUITestCase {
       "Cancel should return to the connected row")
   }
 
-  // MARK: - Key styles
+  // MARK: - Keys
 
   /// The trigger keys' keycodes (`TriggerKey`'s raw values), which suffix each
-  /// pop-up's identifier in the Key Styles sheet. Spelled out because this bundle
+  /// pop-up's identifier in the Keys tab. Spelled out because this bundle
   /// doesn't link the engine.
   private let rightCommand = 54
   private let rightOption = 61
   private let fnKey = 63
+  private let leftCommand = 55
+  private let leftOption = 58
+  private let leftControl = 59
 
-  /// The Key Styles row's "Edit…" opens a sheet with a pop-up per trigger key. On a reset launch
-  /// right ⌘ is the bound key: it dictates with the main window's style and, since
-  /// the bound key always dictates, offers no Off; the other keys start Off.
-  func testKeyStylesSheetListsEveryKey() {
-    let sheet = openKeyStyles(openStylesSettings())
+  /// The Keys tab has an action and a mode pop-up per trigger key. On a reset
+  /// launch right ⌘ dictates and, as the only dictating key, can't be turned
+  /// off; left ⌥ reads aloud on a tap or hold; the rest are off, with no mode
+  /// to pick.
+  func testKeysTabListsEveryKey() {
+    let keys = openKeys()
 
-    for keyCode in [rightCommand, rightOption, fnKey] {
+    for keyCode in [rightCommand, rightOption, fnKey, leftCommand, leftOption, leftControl] {
       XCTAssertTrue(
-        sheet.popUpButtons[UITestIdentifiers.keyStylePicker(keyCode)].exists,
-        "The sheet should list a pop-up for keycode \(keyCode)")
+        keys.popUpButtons[UITestIdentifiers.keyStylePicker(keyCode)].exists,
+        "The tab should list an action pop-up for keycode \(keyCode)")
+      XCTAssertTrue(
+        keys.popUpButtons[UITestIdentifiers.keyActivationPicker(keyCode)].exists,
+        "The tab should list a mode pop-up for keycode \(keyCode)")
     }
-    XCTAssertEqual(sheet.popUpButtons[UITestIdentifiers.keyStylePicker(rightOption)].value as? String, "Off")
-
-    let bound = sheet.popUpButtons[UITestIdentifiers.keyStylePicker(rightCommand)]
-    XCTAssertEqual(bound.value as? String, "Same as main window")
-    bound.click()
-    XCTAssertTrue(app.menuItems["Same as main window"].waitForExistence(timeout: 5))
-    XCTAssertFalse(app.menuItems["Off"].exists, "The bound key always dictates, so it offers no Off")
-    // Close the menu by re-choosing the current item, leaving the setting as it was.
-    app.menuItems["Same as main window"].click()
-  }
-
-  /// Turning right ⌥ on persists: the button's spoken summary names it, and the
-  /// sheet shows the choice again when reopened.
-  func testKeyStyleChoicePersists() {
-    let settings = openStylesSettings()
-    let sheet = openKeyStyles(settings)
-
-    sheet.popUpButtons[UITestIdentifiers.keyStylePicker(rightOption)].click()
-    app.menuItems["Same as main window"].click()
-    sheet.buttons[UITestIdentifiers.keyStylesDone].click()
-    XCTAssertTrue(sheet.waitForNonExistence(timeout: 5), "Done should dismiss the sheet")
-
-    let summary = settings.buttons[UITestIdentifiers.keyStylesButton].value as? String ?? ""
-    XCTAssertTrue(
-      summary.contains("right ⌥: Same as main window"),
-      "The button's accessibility value should summarise the new mapping (got: \(summary))")
-
-    let reopened = openKeyStyles(settings)
+    XCTAssertEqual(keys.popUpButtons[UITestIdentifiers.keyStylePicker(rightOption)].value as? String, "Off")
+    XCTAssertFalse(keys.popUpButtons[UITestIdentifiers.keyActivationPicker(rightOption)].isEnabled)
     XCTAssertEqual(
-      reopened.popUpButtons[UITestIdentifiers.keyStylePicker(rightOption)].value as? String,
-      "Same as main window", "The choice should survive closing the sheet")
+      keys.popUpButtons[UITestIdentifiers.keyStylePicker(leftOption)].value as? String, KeyActionName.readAloud)
+    XCTAssertEqual(
+      keys.popUpButtons[UITestIdentifiers.keyActivationPicker(leftOption)].value as? String, "Tap or hold")
+
+    let bound = keys.popUpButtons[UITestIdentifiers.keyStylePicker(rightCommand)]
+    XCTAssertEqual(bound.value as? String, "Dictate")
+    bound.click()
+    XCTAssertTrue(bound.menuItems["Dictate"].waitForExistence(timeout: 5))
+    XCTAssertFalse(bound.menuItems["Off"].exists, "The only dictating key can't be turned off")
+    XCTAssertFalse(bound.menuItems[KeyActionName.readAloud].exists, "…nor set to read aloud")
+    // Close the menu by re-choosing the current item, leaving the setting as it was.
+    bound.menuItems["Dictate"].click()
   }
 
-  /// Escape closes the sheet (it has no Cancel button to carry the shortcut) and
-  /// leaves the Settings window open.
-  func testEscapeClosesKeyStylesSheet() {
-    let settings = openStylesSettings()
-    let sheet = openKeyStyles(settings)
+  /// A key's mode persists: the tab shows it again after another pane.
+  func testKeyModePersists() {
+    openKeys().popUpButtons[UITestIdentifiers.keyActivationPicker(leftOption)].click()
+    app.menuItems["Hold"].click()
 
-    app.typeKey(.escape, modifierFlags: [])
-
-    XCTAssertTrue(sheet.waitForNonExistence(timeout: 5), "Escape should dismiss the sheet")
-    XCTAssertTrue(settings.exists, "Escape should close only the sheet, not Settings")
+    let settings = openSettingsWindow()
+    let reopened = selectSettingsTab(settings, named: UITestIdentifiers.keysSettingsTab)
+    XCTAssertEqual(
+      reopened.popUpButtons[UITestIdentifiers.keyActivationPicker(leftOption)].value as? String, "Hold",
+      "The mode should survive leaving the tab")
   }
 
-  /// Returns the Styles pane, where the Key Styles row lives.
-  private func openStylesSettings() -> XCUIElement {
-    selectSettingsTab(openSettingsWindow(), named: UITestIdentifiers.stylesSettingsTab)
+  /// The Read Aloud tab's voice picker starts on the service's default voice.
+  func testVoicePickerDefaultsToJane() {
+    let pane = selectSettingsTab(openSettingsWindow(), named: UITestIdentifiers.readAloudSettingsTab)
+    let voice = pane.popUpButtons[UITestIdentifiers.readAloudVoicePicker]
+    XCTAssertTrue(voice.waitForExistence(timeout: 5), "Voice picker not found")
+    XCTAssertEqual(voice.value as? String, "Jane")
   }
 
-  /// Opens the Key Styles sheet from its row's Edit… button on the Styles
-  /// pane and returns it.
-  private func openKeyStyles(_ settings: XCUIElement) -> XCUIElement {
-    let button = settings.buttons[UITestIdentifiers.keyStylesButton]
-    XCTAssertTrue(button.waitForExistence(timeout: 10), "Key Styles row's Edit… button not found")
-    button.click()
-    let sheet = settings.sheets.firstMatch
-    XCTAssertTrue(sheet.waitForExistence(timeout: 5), "The Key Styles sheet should open")
-    return sheet
+  /// Opens Settings on the Keys tab and returns it.
+  private func openKeys() -> XCUIElement {
+    selectSettingsTab(openSettingsWindow(), named: UITestIdentifiers.keysSettingsTab)
   }
 
   // MARK: - API-key helpers

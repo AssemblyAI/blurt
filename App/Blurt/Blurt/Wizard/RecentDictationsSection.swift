@@ -22,7 +22,7 @@ struct RecentDictationsSection: View {
 
   /// Each transcript gets a comfortable pointer target even though its text
   /// stays one line. Three of these slots preserve the section's height.
-  private static let rowHeight: CGFloat = 36
+  private static let rowHeight: CGFloat = 28
 
   /// How often the relative timestamps re-render. Half the engine's "just now"
   /// window, so a row can't read as stale for longer than that window lasts —
@@ -61,20 +61,21 @@ struct RecentDictationsSection: View {
   /// only says nothing has happened yet: it names the one thing to try, in the
   /// order the user does it.
   private var emptyPrompt: some View {
-    VStack(spacing: 7) {
-      Text("Start your first dictation")
+    VStack(spacing: 8) {
+      Text("Ready when you are")
         .font(.headline)
         .foregroundStyle(.primary)
       HStack(spacing: 5) {
-        Text("Focus a text field, then \(activation.startVerb)")
+        Text("Click a text field, then \(activation.startVerb)")
         KeyCap(label: triggerKey.keycapLabel)
       }
+      .font(.callout)
     }
     .foregroundStyle(.secondary)
     .fixedSize()
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(
-      "Start your first dictation. Focus a text field, then \(activation.startVerb) \(triggerKey.spokenName)."
+      "Ready when you are. Click a text field, then \(activation.startVerb) \(triggerKey.spokenName)."
     )
     .accessibilityAddTraits(.isStaticText)
     .accessibilityIdentifier(UITestIdentifiers.recentEmptyPrompt)

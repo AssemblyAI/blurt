@@ -31,6 +31,8 @@ enum UITestIdentifiers {
   // its selected pane, so the General label doubles as the Settings window's
   // opening title (see `settingsWindowTitle` in BlurtUITestSupport).
   static let generalSettingsTab = "General"
+  static let keysSettingsTab = "Keys"
+  static let readAloudSettingsTab = "Read Aloud"
   static let stylesSettingsTab = "Styles"
   static let advancedSettingsTab = "Advanced"
   static let vocabularySettingsTab = "Vocabulary"
@@ -62,20 +64,17 @@ enum UITestIdentifiers {
   static let apiKeyCancel = "settings.apiKey.cancel"
   static let apiKeyError = "settings.apiKey.error"
   static let keyTermsField = "settings.keyTerms.field"
-  static let hotkeyPicker = "settings.hotkey.picker"
-  static let activationPicker = "settings.activation.picker"
-  static let keyStylesButton = "settings.keyStyles.button"
-  static let keyStylesDone = "settings.keyStyles.done"
-  /// One per trigger key in the Key Styles sheet, suffixed with its keycode.
+  /// One pair per trigger key on the Keys tab, suffixed with its keycode.
   static func keyStylePicker(_ keyCode: Int) -> String { "settings.keyStyles.picker.\(keyCode)" }
+  static func keyActivationPicker(_ keyCode: Int) -> String { "settings.keyStyles.activation.\(keyCode)" }
   static let micPicker = "settings.mic.picker"
   static let soundPicker = "settings.sound.picker"
+  static let readAloudSoundPicker = "settings.readAloudSound.picker"
   static let developerToggle = "settings.developer.toggle"
   static let developerShowLogs = "settings.developer.showLogs"
   static let enhancedTranscriptsToggle = "settings.enhancedTranscripts.toggle"
   static let rewriteModePicker = "settings.rewriteMode.picker"
-  static let selectionSpeechToggle = "settings.selectionSpeech.toggle"
-  static let selectionAskToggle = "settings.selectionAsk.toggle"
+  static let readAloudVoicePicker = "settings.readAloud.voice"
   static let readAloudSpeedPicker = "settings.readAloud.speed"
   static let readAloudSkipsJargonToggle = "settings.readAloud.skipsJargon"
   static let updateCheck = "settings.update.check"

@@ -187,10 +187,16 @@ struct OAuthConfigurationInfoTests {
 
 @Suite("Credential rows")
 struct CredentialRowsTests {
-  @Test("signed out with sign-in configured: account row first and filled, key row below")
-  func signedOutWithSignIn() {
+  @Test("a new install with sign-in configured: only the account row, filled — no pasting a key")
+  func newInstallSignsIn() {
     let rows = CredentialRows.resolve(isKeyStored: false, isSignInAvailable: true, status: .signedOut)
-    #expect(rows == CredentialRows(showsAccountRow: true, showsKeyRow: true, primary: .signIn))
+    #expect(rows == CredentialRows(showsAccountRow: true, showsKeyRow: false, primary: .signIn))
+  }
+
+  @Test("a legacy install with a pasted key keeps its key row, beside the account row")
+  func legacyKeyKeepsItsRow() {
+    let rows = CredentialRows.resolve(isKeyStored: true, isSignInAvailable: true, status: .signedOut)
+    #expect(rows == CredentialRows(showsAccountRow: true, showsKeyRow: true, primary: nil))
   }
 
   @Test("no sign-in configured: just the key row, Connect filled until a key is stored")

@@ -4,10 +4,11 @@ import os
 
 /// Drives the lone-modifier dictation triggers from a `CGEventTap`.
 ///
-/// Watches `flagsChanged` for the bound modifiers (e.g. right ⌘, keycode 54, plus
-/// any trigger key given a style — `TriggerKeyStyleStore`) to detect down/up, and
-/// `keyDown` for any *other* key to spot a modifier combo
-/// (⌘C, ⌘V…). The per-event decision lives in the engine — `DictationKeyRouter`
+/// Watches `flagsChanged` for every trigger modifier given an action (e.g. right ⌘,
+/// keycode 54, dictating and left ⌥ reading aloud), each under its own
+/// tap/hold mode — `TriggerKeyBindings`, to detect down/up, and
+/// `keyDown` for any *other* key, or a mouse-button down, to spot a modifier
+/// combo (⌘C, ⌘V, ⌘-click…). The per-event decision lives in the engine — `DictationKeyRouter`
 /// (keycode relevance + down/up edge dedup) over `DictationKeyGate` (tap/hold
 /// semantics) — so this type only reduces each `CGEvent` to a router event and
 /// owns the tap lifecycle.
@@ -78,12 +79,11 @@ final class DictationKeyTap {
     self.onRecordingDiscarded = onRecordingDiscarded
     // Every half of the binding comes from its store, not a hard-coded
     // `.rightCommand` / `.tapOrHold`: `fromPersisted` owns the unset default, and
-    // restating it here is the same mistake `BoundTriggerKey` and `HotkeyStepView`
+    // restating it here is the same mistake `ObservedKeyBindings` and `KeysSettingsTab`
     // were each corrected away from — the tap would name the old key while the
     // picker, ready screen, and menu bar all named the new one. `refreshBinding()`
     // re-reads this, but nothing enforces that it runs before the first event.
-    self.router = DictationKeyRouter(
-      triggerKeyCodes: Self.boundKeyCodes(), activation: TriggerActivationStore().activation)
+    self.router = DictationKeyRouter(activations: Self.boundActivations())
   }
 
   deinit {
@@ -115,7 +115,14 @@ final class DictationKeyTap {
       CGEvent.tapEnable(tap: tap, enable: true)
       return true
     }
-    let mask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.flagsChanged.rawValue)
+    // Mouse-button downs too: a modifier held through a click is a
+    // modifier-click (⌘-click a link, ⌥-click in Finder), which must cancel the
+    // press rather than read as a lone tap of the trigger. Listen-only, so
+    // clicks pass through untouched.
+    let mask =
+      (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.flagsChanged.rawValue)
+      | (1 << CGEventType.leftMouseDown.rawValue) | (1 << CGEventType.rightMouseDown.rawValue)
+      | (1 << CGEventType.otherMouseDown.rawValue)
     guard
       let created = CGEvent.tapCreate(
         tap: .cgSessionEventTap,
@@ -184,14 +191,13 @@ final class DictationKeyTap {
     _ = router.reset()
   }
 
-  /// Re-read the bound trigger keys and activation mode into the router. Call
-  /// after the user rebinds any of them. The router's reset reports a discarded live
+  /// Re-read the trigger keys and their modes into the router. Call after the
+  /// user changes any of them in the Keys tab. The router's reset reports a discarded live
   /// recording: rebinding mid-dictation means the old key's up-event will never
   /// match, so the capture must be cancelled, not left to run out the
   /// auto-release cap.
   func refreshBinding() {
-    let activation = TriggerActivationStore().activation
-    if router.rebind(triggerKeyCodes: Self.boundKeyCodes(), activation: activation) {
+    if router.rebind(activations: Self.boundActivations()) {
       onRecordingDiscarded()
     }
   }
@@ -227,6 +233,13 @@ final class DictationKeyTap {
       return .fromFlags(keyCode: keyCode, rawFlags: event.flags.rawValue)
     case .keyDown:
       return .keyDown(keyCode: keyCode)
+    case .leftMouseDown, .rightMouseDown, .otherMouseDown:
+      #if UITEST_HOOKS
+        // A simulated press is "held" while the test clicks the harness's
+        // release button; that click isn't a modifier-click.
+        if isSimulatingPress { return nil }
+      #endif
+      return .pointerDown
     default:
       return nil
     }
@@ -248,12 +261,15 @@ final class DictationKeyTap {
   /// The trigger key that owns the router's gate, if any.
   private var activeKey: TriggerKey? { router.activeKeyCode.flatMap(TriggerKey.init(rawValue:)) }
 
-  /// Every key that dictates: the bound one plus each key given a style.
-  private static func boundKeyCodes() -> Set<Int> {
-    Set(TriggerKeyStyleStore().enabledKeys.map(\.keyCode))
+  /// Every key that does something (dictate, read aloud, ask), with its tap/hold mode.
+  private static func boundActivations() -> [Int: TriggerActivation] {
+    Dictionary(uniqueKeysWithValues: TriggerKeyBindings().activations.map { ($0.key.keyCode, $0.value) })
   }
 
   #if UITEST_HOOKS
+    /// Between `simulatePressForTesting()` and its release: clicks don't cancel.
+    private var isSimulatingPress = false
+
     /// Test seam: drive the real gate + callback dispatch for a synthetic
     /// lone-modifier press, bypassing the `CGEventTap` (whose creation needs
     /// Accessibility trust an automated run doesn't have). Pairs with
@@ -262,6 +278,7 @@ final class DictationKeyTap {
     /// DictationKeyTap → DictationKeyGate → onStart/onStop object graph is
     /// covered, not just the session the coordinator drives directly.
     func simulatePressForTesting() {
+      isSimulatingPress = true
       _ = router.reset()
       dispatch(
         router.handle(
@@ -271,6 +288,7 @@ final class DictationKeyTap {
     /// Completes the synthetic cycle as a hold (past the threshold), so the gate
     /// emits `.stop` and `onStop` fires.
     func simulateReleaseForTesting() {
+      isSimulatingPress = false
       dispatch(
         router.handle(
           .flagsChanged(keyCode: TriggerKeyStore().triggerKey.keyCode, triggerFlagIsOn: false), at: .seconds(2)))

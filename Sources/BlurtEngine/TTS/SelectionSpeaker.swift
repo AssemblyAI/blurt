@@ -1,16 +1,21 @@
 #if os(macOS)
   /// Reads text aloud with AssemblyAI's streaming TTS. This is the engine half of
-  /// the experimental read-selection-aloud press (`SelectionSpeechStore`); the app
-  /// decides when to call it.
+  /// the read-aloud and ask keys (`SelectionSpeechRouting`); the app decides when
+  /// to call it.
   ///
   /// `speak` runs until the last sample has played. To stop early, cancel the task
-  /// that is awaiting it: cancellation silences playback at once and closes the
-  /// socket.
+  /// that is awaiting it: cancellation silences playback at once and cancels the
+  /// request in flight.
   public struct SelectionSpeaker: Sendable {
-    /// The most text one press will read. Enough for several paragraphs, while
-    /// keeping a whole-document select-all from queueing minutes of audio (and
-    /// the TTS usage that comes with it) behind a single tap.
-    public static let maxCharacters = 4_000
+    /// The most text one press will read: a long article (about 15,000 words).
+    /// Reading is paced by listening (`bufferTarget`), so a long selection costs
+    /// only as much TTS as is heard before it's stopped.
+    public static let maxCharacters = 100_000
+
+    /// How far ahead of the listener the reading runs, in seconds: the next
+    /// piece is asked for once less than this is queued. Comfortably longer
+    /// than a piece's rewrite and first audio, so pieces join without a gap.
+    static let bufferTarget: Double = 30
 
     private static let logger = HostIdentity.current.logger("SelectionSpeech")
 
@@ -57,18 +62,46 @@
       }
     }
 
-    /// Reads `text` in `style`: rewritten for listening first when it skips
-    /// jargon, then played at its rate.
-    public func speak(_ text: String, style: ReadAloudStyle = .standard) async throws {
-      let spoken = style.skipsJargon ? try await forListening(text) : text
-      // A stop that landed while the rewrite's answer was already on its way
-      // back: nothing should play, and no TTS socket should open.
-      try Task.checkCancellation()
+    /// Reads `text` in `style`, a piece at a time (`ListeningChunks`): each
+    /// rewritten for listening first when it skips jargon, then spoken in its
+    /// voice and played at its rate, the next asked for only as the listening
+    /// catches up (`bufferTarget`). `onLevel`, when
+    /// given, hears the loudness of what's playing about 20 times a second
+    /// while it plays, then a final 0 — the pill's meter.
+    public func speak(
+      _ text: String, style: ReadAloudStyle = .standard, onLevel: (@Sendable (Float) -> Void)? = nil
+    ) async throws {
+      let pieces = ListeningChunks.chunks(of: text)
+      guard !pieces.isEmpty else { return }
       let player = makeSink(style.rate)
+      // At the mic meter's rate, and only on a change: the silence before the
+      // first audio and between words is a run of zeros the pill needn't hear.
+      let meter = onLevel.map { onLevel in
+        Task {
+          var last: Float?
+          while !Task.isCancelled {
+            let level = player.currentLevel
+            if level != last { onLevel(level) }
+            last = level
+            try? await Task.sleep(for: .seconds(MicCapture.meterIntervalSeconds))
+          }
+        }
+      }
+      defer {
+        meter?.cancel()
+        onLevel?(0)
+      }
       try await withTaskCancellationHandler {
         do {
-          for try await chunk in synthesizer.synthesize(spoken) {
-            player.enqueue(chunk)
+          for piece in pieces {
+            try await waitForRoom(in: player)
+            let spoken = style.skipsJargon ? try await forListening(piece) : piece
+            // A stop that landed while the rewrite's answer was already on its
+            // way back: nothing more should play, and no request should go out.
+            try Task.checkCancellation()
+            for try await chunk in synthesizer.speech(for: spoken, voiceID: style.voiceID) {
+              player.enqueue(chunk)
+            }
           }
         } catch {
           player.stop()
@@ -80,14 +113,28 @@
       }
     }
 
-    /// Answers a spoken `request` about `selection` and reads the answer aloud at
-    /// `style`'s rate. The answer is already written to be heard, so it skips the
+    /// Answers a spoken `request` about `selection` and reads the answer aloud in
+    /// `style`'s voice and rate. The answer is already written to be heard, so it skips the
     /// listening rewrite. No fallback: when the answer fails, there is nothing
     /// else to read.
-    public func answer(_ request: String, about selection: String, style: ReadAloudStyle) async throws {
+    public func answer(
+      _ request: String, about selection: String, style: ReadAloudStyle,
+      onLevel: (@Sendable (Float) -> Void)? = nil
+    ) async throws {
       let reply = try await llm.answer(request, about: selection)
       try Task.checkCancellation()
-      try await speak(reply, style: ReadAloudStyle(rate: style.rate, skipsJargon: false))
+      try await speak(reply, style: style.verbatim, onLevel: onLevel)
+    }
+
+    /// Returns once less than `bufferTarget` seconds of audio are queued, so the
+    /// next piece is synthesized only as the listening reaches it.
+    private func waitForRoom(in player: any PCMSink) async throws {
+      // Sleep out the excess — it drains at listening speed — then look again:
+      // between a quarter second (should the clock stall) and a second, so a
+      // wait of minutes is a wake a second rather than four.
+      while player.bufferedSeconds > Self.bufferTarget {
+        try await Task.sleep(for: .seconds(min(1, max(0.25, player.bufferedSeconds - Self.bufferTarget))))
+      }
     }
 
     /// `text` rewritten by `ReadAloudLLM`, or `text` itself when the rewrite

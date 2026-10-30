@@ -92,8 +92,8 @@ Sources/BlurtEngine/         the engine (dependency-free Swift package)
                              TextShortcuts (the on-device phrase expansion)
   STT/                       AssemblyAITranscriber, Conversation/TranscriptionContext,
                              CleanupInstruction, SyncSTTLimits
-  TTS/                       experimental read-aloud: SelectionSpeaker, AssemblyAISpeechSynthesizer
-                             (the one WebSocket), SpeechSegmenter, StreamingPCMPlayer +
+  TTS/                       read-aloud: SelectionSpeaker, AssemblyAISpeechSynthesizer
+                             (streaming HTTP), ListeningChunks, SpeechSegmenter, StreamingPCMPlayer +
                              PCMSchedule, SelectionCopy, ReadAloudLLM (the skip-jargon rewrite
                              and the answer to a spoken ask, the one gateway client)
 App/Blurt/
@@ -423,10 +423,10 @@ rule along with the row.
 | Add an external SPM dependency to the engine                                   | Dependency-free by rule (biggest supply-chain risk); a `check.sh` guard fails on `.package(` in `Package.swift` or a `url:`/`github:` package in `project.yml`. Extend `BlurtEngine` instead.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Use `AVAudioEngine` / `installTap` for capture                                 | A long-lived engine bound its input graph to one device and went stale on a mic↔built-in switch — `-10868` (`kAudioUnitErr_FormatNotSupported`) or all-zero buffers. `MicCapture` builds a fresh `AVCaptureSession` recorder per capture (owner-directed move from `AVAudioRecorder`, 2026-08-25).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Pre-open the mic to shave bring-up latency (a warm/prepared recorder)          | Measured against `kAudioDevicePropertyDeviceIsRunningSomewhere`: neither building an `AVCaptureSession` nor the retired `AVAudioRecorder.prepareToRecord()` opens the device, so neither pre-pays the 180–600 ms route activation `record()` costs. A warm-recorder lifecycle bought ~15 ms and cost a device-identity check, a pin check, an expiry and a bring-up flag. `MicCapture.warmUp()` is stateless: it absorbs the process's first-touch cost and holds nothing.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| Add streaming STT                                                              | The dictation API returns the full (already rewritten) text in one response; the overlay shows "Transcribing…" then the full text. The one WebSocket allowed is the experimental read-aloud feature's streaming **TTS**, confined to `Sources/BlurtEngine/TTS/AssemblyAISpeechSynthesizer.swift` (the invariant gate exempts only that file).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Add streaming STT                                                              | The dictation API returns the full (already rewritten) text in one response; the overlay shows "Transcribing…" then the full text. There is no WebSocket anywhere: read-aloud's **TTS** is AssemblyAI's streaming HTTP API, a response body read as it arrives, and the invariant gate exempts no file.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | Call the dictation API in a way its docs don't describe                        | **The reference is the source of truth.** Every path, header, multipart part, `config` key, response key and error key Blurt sends or reads is one it documents. The route has been renamed repeatedly and still answers to names the docs have dropped — `prompt`, `keyterms`, `word_boost`, `language_code`, `llm: null` — so a 200 is not evidence a field is supported, only that it has not been removed yet; treat anything absent from the docs as deprecated. Undocumented behaviour carries no compatibility promise, so a feature resting on it can stop working silently: that is why `llm: null` (the only rewrite off switch there is) and the `message` error field were dropped on 2026-09-11, along with `warmUp()`'s GET at the bare host root in favour of the documented `GET /warm`. Running tighter than a documented cap is fine — `STTPrompt.characterCap` does. Measuring is still how a claim gets settled, and the docs have been wrong twice (see `DictationWireTypes` on unknown fields, `STTPrompt` on the 6000 cap), but a measurement licenses _distrusting_ a documented field, never _sending_ an undocumented one. |
 | Keep a copy of the recording for anything but the over-cap fallback            | `MicCapture.stop()` answers a byte count, not the audio (owner-directed, 2026-09-08): accumulating the blob in the capture lock cost a second `memcpy` of every byte and held a duplicate until release, and nothing read it back. The one copy that exists is the transcriber's (`relay`, in `AssemblyAITranscriber+LiveCapFallback.swift`), kept on the upload's task to back the documented `/v1/transcribe` fallback when the streaming route refuses a recording past its 120 s cap (`413 audio_too_large`): the 2026-09-08 rule's "no retry-from-buffer path", reversed for that one case on 2026-10-29. Don't read it back for a retry, a replay, a cache or a second request of any other kind, and don't move it into `MicCapture`. `check-invariants.sh` keeps the buffered route's path inside that one file.                                                                                                                                                                                                                                                                                                                             |
-| Add a client-side LLM cleanup pass                                             | Cleanup is the dictation API's server-side rewrite, requested by `config.llm_instruction` on the same `/v1/transcribe/live` call. No LLM Gateway client, no `StylerProtocol`, no styling stage, no second request — transcription steering belongs in `STTPrompt`. The one gateway client allowed is the experimental read-aloud feature's, confined to `Sources/BlurtEngine/TTS/ReadAloudLLM.swift` (the invariant gate exempts only that file): the skip-jargon listening rewrite of a selection, and the spoken answer to a request about one, neither of which the TTS socket has a server-side equivalent for. It never cleans up a dictation; the only transcript it sees is a hand-back press's request (`.handedBack`), which is never pasted.                                                                                                                                                                                                                                                                                                                                                                                               |
+| Add a client-side LLM cleanup pass                                             | Cleanup is the dictation API's server-side rewrite, requested by `config.llm_instruction` on the same `/v1/transcribe/live` call. No LLM Gateway client, no `StylerProtocol`, no styling stage, no second request — transcription steering belongs in `STTPrompt`. The one gateway client allowed is the read-aloud feature's, confined to `Sources/BlurtEngine/TTS/ReadAloudLLM.swift` (the invariant gate exempts only that file): the skip-jargon listening rewrite of a selection, and the spoken answer to a request about one, neither of which the TTS API has a server-side equivalent for. It never cleans up a dictation; the only transcript it sees is a hand-back press's request (`.handedBack`), which is never pasted.                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Add local models or model downloads                                            | Transcription is a remote AssemblyAI call: no on-device ASR/LLM, no model cache, no download UI.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Pin transcription to English, or set a language at all                         | Hurt non-English transcription; language is left to the model's own detection. **No `config.language_codes`** either — note the plural, which is the documented spelling, though the undocumented singular `language_code` is accepted too (a 200, not the unknown-key 400 a bogus name earns), so both are live and both are pinned absent. Detection was measured to work with neither it nor a prompt set (es/fr/de/ja clips each transcribed in their own language against the live endpoint, rewrite included), and re-measured 2026-09-11: a Spanish clip came back as Spanish with no field, with `language_codes: ["es"]`, **and** with `language_codes: ["en"]` — asking for English did not force English, so the reference's `["en"]` default does not describe this route and omission is not a bet on a default. Setting one would only take working detection away. `KeytermsWireTests` asserts the absence of both spellings.                                                                                                                                                                                                         |
 | Send `config.prompt` alongside `config.stt_prompt`                             | They are the same field under two names — the docs give `stt_prompt` as the field and note it is "Also accepted as `prompt`" — and a request carrying both is rejected before the audio is read (`provide only one of stt_prompt or prompt; they are the same field`). So this is never a compatible addition: it is a 400 on _every_ dictation. `stt_prompt` is the documented spelling and the only one to send; `prompt` is the legacy one, and the route's own inner validator still answers under it (see `STTPrompt.characterCap`), which is a reason to treat it as deprecated rather than interchangeable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
@@ -471,7 +471,7 @@ framework, or notarization rejects the build; roll-forward-only for a bad releas
   the one exception (XCTest, because XCUIAutomation requires it).
 - **A store setter with no production caller gets deleted.** The exception is a value that's
   _encoded_ on write (`TriggerKeyStore`'s keycode, `SoundPackStore`'s id, `StyleProfileStore`'s JSON
-  profile list): there, give the setter a production caller instead — see `HotkeyStepView`, where assigning the raw `@AppStorage` slot
+  profile list): there, give the setter a production caller instead — see `KeysSettingsTab`, where assigning the raw `@AppStorage` slot
   directly left the setter test-only, so a change to the encoding would have kept `swift test` green
   while the picker silently wrote the old form. For a plain `Bool` there is nothing to encode, so the
   Settings toggle writing the slot through `@AppStorage` is the whole story and the store stays
@@ -882,20 +882,24 @@ lands), and `keyTap.refreshBinding()` after the user picks a different trigger k
 
 ## Hotkey
 
-The dictation trigger is a **lone modifier key** — one by default, plus any other given a style (see
-Per-key styles below) — tap-to-toggle or hold-to-talk, implemented in-house. Four pieces, three of them pure engine logic:
+The triggers are **lone modifier keys**, each set to dictate, read the selection aloud, ask about it,
+or nothing, and each tapped, held, or either (see Keys below) — implemented in-house. Four pieces,
+three of them pure engine logic:
 
 - **`TriggerKey`** (`Hotkey/TriggerKey.swift`) — enum of the curated lone momentary modifiers usable
-  as the trigger (right ⌘, right ⌥, `fn`), `rawValue` = the macOS virtual keycode, plus `label`
-  ("right ⌘") and the device-modifier masks the event source needs. Right-side modifiers are chosen
-  because a solo press rarely collides with app shortcuts.
+  as triggers (right ⌘, right ⌥, `fn`, left ⌘, left ⌥, left ⌃), `rawValue` = the macOS virtual
+  keycode, plus `label` ("right ⌘") and the device-modifier masks the event source needs (one bit
+  per physical side). Dictation defaults to right ⌘ because a solo press rarely collides with app
+  shortcuts; left ⌥ defaults to reading aloud (not left ⌘, which is down for every shortcut and
+  ⌘-click), and a read waits for the press to prove itself (below).
 - **`TriggerKeyStore`** — persists the chosen keycode in `UserDefaults` (`BlurtTriggerKeyCode`),
   defaulting to **right ⌘**.
 - **`DictationKeyGate`** — pure, clock-free state machine (`idle`/`armed`/`latched`) turning
   modifier-down/up and other-key-down into `start`/`stop`/`cancel`/`none`. Recording starts the
-  instant the modifier goes down; what a key-up means is the persisted **`TriggerActivation`**'s
-  call (`TriggerActivationStore`, default tap-or-hold; the Shortcut section's Activation picker
-  writes it): under the default a release ≥ `holdThreshold` (default 1 s) is a **hold**
+  instant the modifier goes down; what a key-up means is that key's **`TriggerActivation`**
+  (`TriggerKeyBindings.activation(for:)`: the key's own mode in `TriggerKeyActivationStore`, else
+  tap-or-hold for a key that reads aloud, else `TriggerActivationStore`'s shared mode, default
+  tap-or-hold): under tap-or-hold a release ≥ `holdThreshold` (default 1 s) is a **hold**
   (push-to-talk → stop) while a shorter release **latches** (tap-to-toggle; next tap stops);
   tap-only latches on every release, hold-only stops on every release. A combo
   (modifier + another key, e.g. ⌘C) from idle cancels the fresh capture; over a latched recording it
@@ -904,7 +908,8 @@ Per-key styles below) — tap-to-toggle or hold-to-talk, implemented in-house. F
 - **`DictationKeyRouter`** — the event-routing layer over the gate: only the bound keycodes' flag
   changes drive the modifier (the first to go down owns the gate, `activeKeyCode`, until it is idle), and only genuine down/up **edges** reach the gate (`flagsChanged`
   deliveries re-report the bit whether or not it changed, so a repeat must not double-fire).
-  `reset()`/`rebind(triggerKeyCodes:activation:)` report whether they discarded a live recording the host must
+  A press from idle rebuilds the gate under its own key's mode, so each key keeps its own.
+  `reset()`/`rebind(activations:)` report whether they discarded a live recording the host must
   cancel upstream, and so does **`recoverFromDroppedEvents(heldFlags:)`** — the
   disabled-tap rule: events may have been dropped, so the gate's state survives only while the
   active trigger is still physically held (its key-up is still coming); otherwise that key-up was
@@ -932,37 +937,64 @@ any other key restores the value it replaced. That record lives in a suite both 
 Blurt Dev restore each other to Do Nothing — and outside `DefaultsKey` on purpose, so a settings
 reset doesn't erase it: the relaunch after a reset is what restores the user's setting.
 `scripts/reset-install.sh` restores from it directly, since it wipes the host domains. The write
-only takes effect at the next log-in (macOS reads it then), so the Shortcut footer warns that `fn`
+only takes effect at the next log-in (macOS reads it then), so the Keys tab's footer warns that `fn`
 may also open the emoji picker or Apple Dictation until then, and links to Keyboard Settings. A keycode 63 saved before `fn` was removed (#146) is migrated to right ⌘ once
 (`TriggerKeyStore.migrateStaleFunctionBinding()`), so restoring `fn` doesn't silently rebind it. Don't fix this with an active tap that swallows `fn`: the tap is listen-only for latency.
 
-The trigger is editable in the Shortcut section of the setup/settings UI (`HotkeyStepView`) — a
-`Picker` over `TriggerKey.allCases` that writes `TriggerKeyStore`, after which
-`AppCoordinator.dictationBindingChanged()` re-reads it into the tap. For display strings, use
-`TriggerKeyStore().triggerKey.label` for one-shot reads; in views that must re-render live on a
-Settings change, use **`@BoundTriggerKey`** — a `DynamicProperty` in `Wizard/BoundTriggerKey.swift` wrapping
-the `@AppStorage(TriggerKeyStore.defaultsKey)` + `TriggerKey.fromPersisted` pair — rather than
-restating that pairing per view. The unset default belongs to `fromPersisted` (an absent keycode maps
-to right ⌘), so views must not re-declare `TriggerKey.rightCommand.rawValue` themselves.
+The keys are editable on Settings' Keys tab (`KeysSettingsTab`; below); after any change
+`AppCoordinator.dictationBindingChanged()` re-reads the binding into the tap. Every reader of the
+keys — the tap, the read-aloud router, `PressStyle`, every view — goes through one snapshot,
+**`TriggerKeyBindings`** (`TriggerKeyBindings(defaults:)` for one-shot reads), which owns the
+defaults and the rules; views that must re-render live on a Settings change use
+**`@ObservedKeyBindings`** (`Wizard/ObservedKeyBindings.swift`), which observes the four raw slots
+through `@AppStorage` and builds the snapshot from them. The unset defaults belong to the bindings
+(an absent keycode maps to right ⌘), so views must not restate them.
 
-**Per-key styles.** A Key Styles row in its own section on the Styles pane (`KeyStylesSection`, `KeyStylesRow`) — a status naming the
-keys set up, and an Edit… button — opens a sheet with one pop-up per `TriggerKey`: the style a press
-of that key dictates with — Same as main window, Default, or a profile (disabled while enhanced
-transcripts are off) — or Off for keys other than the bound one. On Styles, under the profiles it
-picks from, rather than under the key picker, so General stays short enough for a small display;
-its own section rather than a row of Custom Styles, because that section is disabled while
-enhanced transcripts are off and turning a key on or off still works then; one row and a sheet,
-not a row per key, to keep the pane short. `TriggerKeyStyleStore` (`BlurtTriggerKeyStyles`, keycode → style id) holds
-it; an absent value is today's single key with the current style. Rebinding swaps each moved key's
-entry with a stash (`BlurtTriggerKeyStyleStash`): the key moved away from goes back to what it was
-as an extra before it was bound (off, unless the user had set it up as one), and gets its bound
-style back if it is bound again. Turning another key on or off doesn't reset the router, so a
-recording latched while the sheet is open survives it. Each key is still a lone modifier
-from the same set, watched by the same listen-only tap. The press command carries its key
+**Keys.** Settings' Keys tab, after General (`KeysSettingsTab`), is a table with two pop-ups per
+`TriggerKey`: its action (`TriggerKeyChoice`) — Off, dictate (with the main window's style, no custom style, or a profile; the
+styles disabled while enhanced transcripts are off), Read Selection Aloud, or Ask About Selection — and whether it is
+tapped, held, or either. How read-aloud sounds (voice, speed, skipping jargon —
+`ReadAloudStyleStore`) is its own Settings tab, Read Aloud, before Styles (`ReadAloudSettingsTab`);
+picking a voice plays a sample of it, as picking a cue sound does. Its own tab, not rows on General,
+because General has to stay short enough for a small display (three per-key rows pushed the
+cue-sound picker off CI's screen).
+`TriggerKeyStyleStore` (`BlurtTriggerKeyStyles`, keycode → choice, the stored form a style id had
+before read and ask) and `TriggerKeyActivationStore` (`BlurtTriggerKeyActivations`, keycode → mode,
+the bound key's included) are the writes; both encode through `TriggerKeyMap`. An absent choice is
+the key's default — the bound key dictating with the current style, left ⌥ reading aloud, the rest
+off — so Off is stored explicitly where it isn't the default; an absent mode follows
+`TriggerActivationStore`'s shared one, so an install from before per-key modes reads unchanged. The
+bound key (`TriggerKeyStore`, the one the ready screen and menu bar name) always dictates:
+`TriggerKeyStyleStore.setChoice` refuses to take the only dictating key off dictation, and taking
+the bound key off it moves the binding to the next dictating key first. A key's entries mean the
+same in either role, so moving the binding moves nothing else. Changing another key doesn't reset
+the router, so a recording latched while Settings is open survives it. The press command carries its key
 (`DictationSession.Command.press(key:)`), and the session resolves that key's style once, on the
 press's own turn, into a `PressStyle` value: its instructions ride the request's context, its name
 the Recent row. It never writes `BlurtActiveStyleProfile`, a later press can't restyle a dictation
 under way, and a mapped style since deleted falls back to the selection.
+
+**Read aloud and ask** live in the engine: `SelectionSpeechRouting` (pure) decides, and
+`SelectionSpeechRouter` (main-actor) carries it out — the selection read, the hold timer, the speech
+task — reporting each read's start, end, loudness and failure to the app, which owns only the pill,
+the cues and the beep. A dictating key's commands pass straight to the session, so dictation
+never waits on an Accessibility read. A read or ask press reads the selection, and nothing starts at
+the key-down — a modifier going down over a selection is as often the start of ⌘C — until the press
+proves itself: a tap (the gate's `.latch`), or the key still down `holdDelay` (350 ms) later in a
+mode that holds. A combo before then does nothing. A read then plays until the key's next stop; an
+ask records like a dictation (`pressHandingBack`) and the transcript handed back is answered aloud.
+With nothing selected, the press does nothing. A read or answer wears the dictation pill
+(`OverlayUIState.speaking`: the orb and meter, the meter following the voice — `StreamingPCMPlayer`
+keeps each chunk's 50 ms loudness windows on the media timeline, `PCMLevel`, and the meter reads the
+one playing) between the same start and stop cues. The TTS is AssemblyAI's documented Streaming TTS API
+(`AssemblyAISpeechSynthesizer`: `POST https://tts.us.assemblyai.com/v1/speech`, `voice_id`, the
+audio read as the response streams). A selection is read in pieces (`ListeningChunks`: a short first
+piece, so reading starts after a paragraph, then about 1,500 characters each, at paragraph or
+sentence ends), one request each, rewritten first when skip-jargon is on; the next piece is asked
+for only once less than 30 s of audio is queued (`SelectionSpeaker.bufferTarget`), so a long
+article (up to 100,000 characters) starts quickly and is synthesized only as far as it is heard;
+the voices offered are the English ones on the docs' Voices page (`ReadAloudVoice.catalog`), since a
+read sends no `language` and a catalog voice would otherwise speak its own.
 
 ## Contextual prompt and key terms
 
@@ -1237,13 +1269,16 @@ loop re-reads the status each pass. `signOut()` ends the connection server-side 
 only then forgets it here; a revoke the server couldn't confirm (503) leaves everything in place and
 returns an inline report so the user can retry (`SignInFailure.failureReport` makes the same
 inline-vs-alert split as `APIKeySubmission`). `CredentialRows.resolve` decides which of the account
-and key rows show and which button is filled. `InstallReset` clears the session item with the key.
+and key rows show and which button is filled. Pasting a key is the legacy path: where sign-in is
+configured, a new install sees only Sign In, and the key row shows only for an install that already
+holds a pasted key (to change or remove it) or a build without sign-in (the UI-test harness). `InstallReset` clears the session item with the key.
 The wire half (`OAuthAuthorization`, `OAuthClient`) is in the `AssemblyAI` library. The build turns
 sign-in on with four Info.plist values (`BLURT_OAUTH_*`, read by `OAuthConfiguration.blurt`):
-release's are production's, committed in `App/Blurt/Config/SignIn.release.xcconfig`; the dev
-configurations' come from the gitignored `SignIn.local.xcconfig` via `SignIn.xcconfig`, since they
-name sandbox deployments. Any one empty hides sign-in, which is how a dev build without the local
-file runs, and a session inherited by such a build can still be signed out (locally). A signed-in key also
+production's, committed in `App/Blurt/Config/SignIn.release.xcconfig`, for every configuration —
+dev builds too, through `SignIn.xcconfig`, which then includes the gitignored
+`SignIn.local.xcconfig`: a developer's override pointing a dev build at a sandbox deployment, whose
+values aren't committed. Any one empty hides sign-in, and a session inherited by a build without
+it can still be signed out (locally). A signed-in key also
 dictates against the host its sign-in configures (`BLURT_OAUTH_DICTATION_ORIGIN`, optional; a sandbox
 key only works against its sandbox's host): the account keeps a `DictationOrigin` current as it signs
 in and out, and the app's `baseURL` closure for `AssemblyAITranscriber` reads it at every request and

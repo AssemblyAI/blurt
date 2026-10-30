@@ -2,8 +2,8 @@ import BlurtEngine
 import SwiftUI
 
 /// The "you're all set" screen shown in the main window once setup is complete:
-/// the wordmark over a grouped form — the shortcut and the style in effect,
-/// then the recent dictations — and a bottom bar with the attribution links
+/// the wordmark over a grouped form — the keys you've configured and the
+/// style in effect, then the recent dictations — and a bottom bar with the attribution links
 /// and a Settings button, the window's own door to the Settings scene
 /// alongside the app-menu "Settings…" (⌘,) and the menu-bar item.
 ///
@@ -15,14 +15,13 @@ import SwiftUI
 struct ReadyView: View {
   var coordinator: AppCoordinator
   var openSettings: () -> Void
-  // Observed (not read once) so changing the dictation key in the separate
-  // Settings window re-renders this window's keycap live — see `BoundTriggerKey`.
-  @BoundTriggerKey private var triggerKey
-  /// Tap or hold, tap, or hold — observed like the key, so the shortcut row's
-  /// words follow a change made in Settings. Raw slot, decoded through
-  /// `fromPersisted`, which owns the unset default.
-  @AppStorage(TriggerActivationStore.defaultsKey) private var activationRaw = ""
-  private var activation: TriggerActivation { .fromPersisted(activationRaw) }
+  // Observed (not read once) so a change in the separate Settings window —
+  // the dictation key, any key's action or mode — re-renders this window's
+  // rows live (`ObservedKeyBindings`).
+  @ObservedKeyBindings private var bindings
+  private var triggerKey: TriggerKey { bindings.bound }
+  /// The dictation key's tap/hold mode, which the shortcut row's words follow.
+  private var activation: TriggerActivation { bindings.activation(for: bindings.bound) }
 
   /// Kept as view state because Settings is a separate scene: its defaults
   /// write can otherwise leave this already-open window displaying the old
@@ -41,13 +40,16 @@ struct ReadyView: View {
     // second reading here.
     let active = StyleProfileStore.active(in: profiles, id: rawActiveID)
     VStack(spacing: 0) {
-      ReadyBrandingView()
-        .padding(.top, 24)
-        .padding(.bottom, 2)
+      MainWindowBranding()
+        .padding(.top, 16)
 
       Form {
         Section {
           shortcutRow
+          // Every other key given an action in the Keys tab, in its order.
+          ForEach(extraKeys, id: \.self) { key in
+            extraKeyRow(key, profiles: profiles)
+          }
           // Always present, even with no custom styles, so the active treatment
           // remains visible from the main window.
           StyleRow(profiles: profiles, activeID: active?.id)
@@ -90,24 +92,26 @@ struct ReadyView: View {
   /// the bound key as a keycap beside a word on what it does. The keycap fills
   /// with the accent the moment the key goes down (`isCapturing`, which
   /// includes the mic bring-up) — the window's proof the hotkey is registered —
-  /// while the words swap from the configured gesture ("Tap or hold", "Tap",
-  /// or "Hold" — `TriggerActivation.label`) to the live phase.
+  /// with the gesture guidance beneath the title and the live phase beside
+  /// the key during capture and transcription.
   ///
   /// The phase is gated on the same stream the overlay pill renders
   /// (`coordinator.menuBarStatus`, whose `.recording` deliberately excludes
   /// the mic bring-up) — during "Connecting…" nothing is captured yet, so
   /// claiming "Listening" would invite unrecoverable speech.
   private var shortcutRow: some View {
-    SettingRow(title: "Shortcut", systemImage: "keyboard") {
+    SettingRow(title: "Dictate", systemImage: "keyboard", subtitle: activation.hint(for: .dictate)) {
       HStack(spacing: 8) {
         phaseText
           .foregroundStyle(.secondary)
         KeyCap(label: triggerKey.keycapLabel, isLit: coordinator.isCapturing)
+          .frame(minWidth: 64, alignment: .trailing)
       }
     }
-    .help(activation.guidance)
+    .padding(.vertical, 3)
+    .help(activation.hint(for: .dictate))
     .accessibilityElement(children: .ignore)
-    .accessibilityLabel("Shortcut: \(triggerKey.spokenName). \(phaseDescription)")
+    .accessibilityLabel("Dictate: \(triggerKey.spokenName). \(phaseDescription)")
     // Esc cancels the in-flight dictation — same command the overlay's owner
     // submits (`.cancel`), scoped to this window by living on a button in it.
     // Present through all of capture (not just `.recording`), so Esc during
@@ -121,8 +125,40 @@ struct ReadyView: View {
     }
   }
 
-  /// The shortcut row's trailing words: how to use the key at rest, then what
-  /// the dictation is doing.
+  /// The keys other than the bound one that do something.
+  private var extraKeys: [TriggerKey] {
+    TriggerKey.allCases.filter { $0 != bindings.bound && bindings.action(for: $0) != .off }
+  }
+
+  /// One extra key's row: what it does leading — with the style a dictating
+  /// key uses when it isn't the main window's — and trailing its tap/hold mode
+  /// beside its keycap. No live phase: that stays on the dictation row above,
+  /// whichever key started the dictation.
+  private func extraKeyRow(_ key: TriggerKey, profiles: [StyleProfile]) -> some View {
+    let choice = bindings.choice(for: key, profiles: profiles)
+    let (title, symbol): (String, String) =
+      switch choice {
+      case .readAloud: (KeyActionName.readAloud, "speaker.wave.2")
+      case .ask: (KeyActionName.ask, "questionmark.bubble")
+      case .dictate(TriggerKeyChoice.mainWindowStyle), .off: ("Dictate", "keyboard")
+      case .dictate(let style):
+        (
+          "Dictate: \(StyleProfileStore.active(in: profiles, id: style)?.name ?? StyleProfileStore.defaultStyleName)",
+          "keyboard"
+        )
+      }
+    let hint = bindings.activation(for: key).hint(for: choice.action)
+    return SettingRow(title: title, systemImage: symbol, subtitle: hint) {
+      KeyCap(label: key.keycapLabel)
+        .frame(minWidth: 64, alignment: .trailing)
+    }
+    .padding(.vertical, 3)
+    .help(hint)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("\(title): \(key.spokenName). \(hint)")
+  }
+
+  /// The shortcut row's trailing status, shown only during an active dictation.
   @ViewBuilder
   private var phaseText: some View {
     switch coordinator.menuBarStatus {
@@ -138,7 +174,7 @@ struct ReadyView: View {
     case .transcribing:
       Text("Transcribing…")
     case .idle:
-      Text(activation.label)
+      EmptyView()
     }
   }
 
@@ -148,7 +184,7 @@ struct ReadyView: View {
     switch coordinator.menuBarStatus {
     case .recording: "Listening. \(activation.finishHint) Escape cancels."
     case .transcribing: "Transcribing."
-    case .idle: activation.guidance
+    case .idle: activation.hint(for: .dictate)
     }
   }
 
@@ -157,13 +193,14 @@ struct ReadyView: View {
   /// A standard push button — Settings is a place visited once, and ⌘, and the
   /// app menu already reach it, so it takes neither the accent nor glass.
   private var bottomBar: some View {
-    HStack {
+    HStack(alignment: .firstTextBaseline) {
       footerLinks
       Spacer()
       Button(action: openSettings) {
         Label("Settings…", systemImage: "gearshape")
           .labelStyle(.titleAndIcon)
       }
+      .controlSize(.small)
     }
   }
 
@@ -193,6 +230,7 @@ struct ReadyView: View {
       }
     }
     .font(.caption)
+    .tint(.secondary)
   }
 }
 
@@ -217,14 +255,14 @@ enum BlurtLinks {
 
 /// The `blurt` wordmark over the form: the brand-green mark
 /// (`Design/brand/blurt-ready-logo.png`, a 720×180 rasterization of the design's
-/// vector wordmark, so its 104×26 pt slot is fed nearly 7× the pixels it needs and
+/// vector wordmark, so its 72×18 pt slot is fed nearly 7× the pixels it needs and
 /// stays crisp at any display scale). Smoothly interpolated — it's curved
 /// letterforms now, not the pixel-art mark it replaced, which needed
 /// nearest-neighbor to keep its pixels square. A header mark, not the window's
 /// identity — the standard titlebar names the app — which is why it simply
 /// omits itself if the PNG can't load rather than swapping in a fallback
 /// identity view.
-private struct ReadyBrandingView: View {
+struct MainWindowBranding: View {
   /// Loaded once for the process rather than per `body` evaluation: this view
   /// sits in `ReadyView`, whose body re-runs on every new dictation
   /// (`recentDictations.entries`), and a bundle lookup plus a PNG decode is not
@@ -254,7 +292,7 @@ private struct ReadyBrandingView: View {
         .interpolation(.high)
         .resizable()
         .scaledToFit()
-        .frame(maxWidth: 104)
+        .frame(maxWidth: 72)
         .foregroundStyle(BlurtBrand.accent)
         .accessibilityLabel("Blurt logo")
     }

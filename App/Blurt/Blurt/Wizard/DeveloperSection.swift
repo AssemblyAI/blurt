@@ -3,8 +3,8 @@ import BlurtEngine
 import OSLog
 import SwiftUI
 
-// The Advanced pane's four sections: updates (version, check, Sparkle's two
-// preferences), experimental features, developer mode, and the start-over button. All are
+// The Advanced pane's three sections: updates (version, check, Sparkle's two
+// preferences), developer mode, and the start-over button. All are
 // Settings-only (none gates setup, so none is a wizard step), and they live here
 // rather than in `SettingsWindowRoot` because that file is at the repo's
 // file-length limit.
@@ -24,20 +24,24 @@ struct UpdatesSection: View {
     Section {
       // Ellipsis: it opens Sparkle's window, where an update still waits on the
       // user's go-ahead — the same rule as "Reset…" below.
-      SettingRow(title: model.versionLabel, systemImage: "info.circle") {
+      SettingRow(title: "Version", systemImage: "info.circle", subtitle: model.versionLabel) {
         Button("Check for Updates…") { model.checkForUpdates() }
           .disabled(!model.canCheckForUpdates)
           .accessibilityIdentifier(UITestIdentifiers.updateCheck)
       }
       Toggle(isOn: $model.automaticallyChecksForUpdates) {
-        SettingLabel(title: "Check for updates automatically", systemImage: "clock")
+        SettingLabel(
+          title: "Automatic checks", systemImage: "clock",
+          subtitle: "Check for new versions in the background.")
       }
       .disabled(!model.isEnabled)
       .accessibilityIdentifier(UITestIdentifiers.updateAutoCheck)
       // Installing on its own only means anything while Blurt is looking on its
       // own, so the second switch follows the first.
       Toggle(isOn: $model.automaticallyDownloadsUpdates) {
-        SettingLabel(title: "Download and install updates automatically", systemImage: "arrow.down.circle")
+        SettingLabel(
+          title: "Automatic installation", systemImage: "arrow.down.circle",
+          subtitle: "Download and install new versions automatically.")
       }
       .disabled(!model.isEnabled || !model.automaticallyChecksForUpdates)
     } header: {
@@ -45,89 +49,6 @@ struct UpdatesSection: View {
     } footer: {
       if !model.isEnabled {
         Text("This development build doesn’t update itself.")
-      }
-    }
-  }
-}
-
-/// The Advanced pane's experimental features — read-aloud (see
-/// `SelectionSpeechStore`), asking about the selection
-/// (`SelectionAskStore`) and how a read sounds (`ReadAloudStyleStore`). The
-/// router reads the same defaults these controls write at every press, so a
-/// change applies to the next one.
-struct ExperimentalSection: View {
-  @AppStorage(SelectionSpeechStore.defaultsKey) private var selectionSpeech = false
-  @AppStorage(SelectionAskStore.defaultsKey) private var selectionAsk = SelectionAskStore.defaultValue
-  @AppStorage(ReadAloudStyleStore.speedDefaultsKey) private var speed = ReadAloudStyleStore.defaultSpeed
-  @AppStorage(ReadAloudStyleStore.skipsJargonDefaultsKey)
-  private var skipsJargon = ReadAloudStyleStore.defaultSkipsJargon
-  @BoundTriggerKey private var triggerKey
-  @AppStorage(TriggerActivationStore.defaultsKey) private var activationRaw = ""
-
-  /// Read-aloud rides the trigger's own tap/hold gate, so its instructions
-  /// follow the activation mode. With asking on, a hold asks instead of reading,
-  /// so reading is a tap's job, or, where every press is a hold, a hold with
-  /// nothing said.
-  private var howToUse: String {
-    let activation = TriggerActivation.fromPersisted(activationRaw)
-    let key = triggerKey.label
-    guard selectionAsk else {
-      return "Select text and \(activation.startVerb) \(key) to hear it. \(activation.stopHint)"
-    }
-    switch activation {
-    case .hold: return "Select text and hold \(key) without speaking to hear it. Press again to stop."
-    case .tapOrHold, .tap: return "Select text and tap \(key) to hear it. Tap again to stop."
-    }
-  }
-
-  /// The picker reads the stored speed through the same snap the press does, so
-  /// a `defaults write` value off the list shows as the speed that will play.
-  private var speedSelection: Binding<Double> {
-    Binding(get: { ReadAloudStyleStore.nearestChoice(to: speed) }, set: { speed = $0 })
-  }
-
-  var body: some View {
-    Section {
-      Toggle(isOn: $selectionSpeech) {
-        SettingLabel(title: "Read selected text aloud", systemImage: "speaker.wave.2")
-      }
-      .accessibilityIdentifier(UITestIdentifiers.selectionSpeechToggle)
-      // These rows only change reads, so they only appear while there are
-      // reads to change.
-      if selectionSpeech {
-        Toggle(isOn: $selectionAsk) {
-          SettingLabel(title: "Hold to ask about the selection", systemImage: "questionmark.bubble")
-        }
-        .accessibilityIdentifier(UITestIdentifiers.selectionAskToggle)
-        PickerSettingRow(
-          title: "Speed", systemImage: "hare",
-          accessibilityID: UITestIdentifiers.readAloudSpeedPicker, selection: speedSelection
-        ) {
-          ForEach(ReadAloudStyleStore.speedChoices, id: \.self) { choice in
-            Text(ReadAloudStyleStore.speedLabel(choice)).tag(choice)
-          }
-        }
-        Toggle(isOn: $skipsJargon) {
-          SettingLabel(title: "Skip code, links, and long numbers", systemImage: "text.badge.minus")
-        }
-        .accessibilityIdentifier(UITestIdentifiers.readAloudSkipsJargonToggle)
-      }
-    } header: {
-      Text("Experimental")
-    } footer: {
-      Text("\(howToUse) With nothing selected, the key dictates as usual.")
-      // Each note is its own paragraph. Asking says where the selection and the
-      // request go, since that is a second service seeing both.
-      if selectionSpeech, selectionAsk {
-        Text(
-          "Hold \(triggerKey.label) over a selection and say what you want, like “summarize this,” to hear "
-            + "the answer. Asking sends the selection and what you said to AssemblyAI’s LLM Gateway.")
-      }
-      // While skipping is on, the selection goes to the gateway before it's read.
-      if selectionSpeech, skipsJargon {
-        Text(
-          "To skip code, links, and long numbers, Blurt sends the selection to AssemblyAI’s LLM Gateway "
-            + "before reading it.")
       }
     }
   }
@@ -146,7 +67,9 @@ struct MaintenanceSection: View {
   var body: some View {
     Section {
       Toggle(isOn: $developerMode) {
-        SettingLabel(title: "Developer mode", systemImage: "hammer")
+        SettingLabel(
+          title: "Developer mode", systemImage: "hammer",
+          subtitle: "Keep local logs of dictations and failures.")
       }
       .accessibilityIdentifier(UITestIdentifiers.developerToggle)
       if developerMode {
@@ -167,8 +90,6 @@ struct MaintenanceSection: View {
             + "and each failure to \(DictationLog.defaultErrorDisplayPath)"
         )
         .textSelection(.enabled)
-      } else {
-        Text("Developer mode keeps a local log of each dictation and failure.")
       }
     }
   }
@@ -244,7 +165,10 @@ struct ResetSection: View {
     Section {
       // Ellipsis for the same reason as "Connect…" and "Add Style…": the button
       // opens something rather than completing the action.
-      SettingRow(title: "Reset Blurt", systemImage: "arrow.counterclockwise") {
+      SettingRow(
+        title: "Reset Blurt", systemImage: "arrow.counterclockwise",
+        subtitle: "Remove app data and return to setup."
+      ) {
         // Red text, because `role: .destructive` alone draws a bordered
         // button no differently from "Check for Updates…" in the sections
         // above — and this one deletes the key, every setting and the logs.

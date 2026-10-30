@@ -1,29 +1,20 @@
-/// Cuts text into the segments `AssemblyAISpeechSynthesizer` flushes one at a
-/// time.
+/// Cuts text at sentence ends — what `ListeningChunks` uses to split a
+/// paragraph too long for one piece, so a piece never starts or ends
+/// mid-sentence.
 ///
-/// On AssemblyAI's streaming TTS, `Flush` is the only thing that starts
-/// synthesis, and each flushed segment is synthesized as its own utterance, with
-/// its own prosody and roughly 800 ms of padding. So where the cuts fall decides
-/// both how soon the first audio arrives and how natural the speech sounds. The
-/// rule is the one the AssemblyAI agent runtime measured
+/// The rule is the one the AssemblyAI agent runtime measured
 /// (`aai-runtime/src/providers/tts/assemblyai-segment.ts`):
 ///
 /// - **Cut at sentence ends only.** Terminal punctuation plus any closing
 ///   quotes or brackets, followed by whitespace or the end of the text. Never
-///   cut at commas: a clause flushed alone gets a falling final intonation, and
-///   per-clause flushing measured longer audio for no gain in latency. Line
+///   at commas: a clause spoken alone gets a falling final intonation. Line
 ///   breaks count as sentence ends too, because a heading or list item in a
 ///   selection often has no punctuation.
 /// - **A segment needs at least two words.** One-word "sentences" are usually
-///   abbreviations (`Dr.`, `e.g.`), and measured 25% longer audio when flushed
-///   alone, so they join the sentence that follows.
+///   abbreviations (`Dr.`, `e.g.`), so they join the sentence that follows.
 ///
-/// The runtime also has a 40-character budget. It exists because an LLM
-/// streams text in word by word, and without the budget time-to-first-audio
-/// becomes the length of the first sentence. Blurt has the whole selection
-/// before it sends anything, so it doesn't need that budget. `maxCharacters`
-/// only splits a runaway sentence, such as a paragraph with no punctuation, so a
-/// single flush can't take unreasonably long.
+/// `maxCharacters` only splits a runaway sentence, such as a paragraph with no
+/// punctuation.
 enum SpeechSegmenter {
   /// A sentence end: terminal punctuation plus closers, looking ahead for
   /// whitespace or the end so "3.5" and "v1.2" don't match. Curly closers are

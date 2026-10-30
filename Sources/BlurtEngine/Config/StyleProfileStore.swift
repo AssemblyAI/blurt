@@ -55,7 +55,7 @@ public struct StyleProfile: Codable, Identifiable, Hashable, Sendable {
 /// documented exception for a value that is *encoded* on write (as with
 /// `TriggerKeyStore`'s keycode and `SoundPackStore`'s id): the JSON shape is the
 /// store's business, so the views write through here and merely *observe* the
-/// raw slots with `@AppStorage` — see `HotkeyStepView`, where binding the raw
+/// raw slots with `@AppStorage` — see `KeysSettingsTab`, where binding the raw
 /// slot directly left the setter test-only and a change to the encoding would
 /// have kept `swift test` green while the UI wrote the old form.
 ///

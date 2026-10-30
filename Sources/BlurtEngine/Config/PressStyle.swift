@@ -1,7 +1,7 @@
 import Foundation
 
 /// The style one dictation is made with, resolved once at press from the
-/// trigger key that started it (`TriggerKeyStyleStore`) — else the main
+/// trigger key that started it (`TriggerKeyBindings`) — else the main
 /// window's selection. A value carried by that dictation (the press command
 /// names the key, the session resolves it), so a key's style never moves the
 /// main window's sticky selection, and a later press can't restyle a dictation
@@ -25,7 +25,10 @@ public struct PressStyle: Sendable, Equatable {
   /// `key`'s style, or the main window's selection for nil, a key with no
   /// style, or one whose style is gone (`StyleProfileStore.profile(for:)`).
   init(key: TriggerKey?, defaults: UserDefaults = .standard) {
-    let styleID = key.flatMap { TriggerKeyStyleStore(defaults: defaults).styles[$0] }
+    var styleID: String?
+    if let key, case .dictate(let style) = TriggerKeyBindings(defaults: defaults).choice(for: key) {
+      styleID = style
+    }
     let profile = StyleProfileStore(defaults: defaults).profile(for: styleID)
     let isEnhanced = EnhancedTranscriptsStore(defaults: defaults).isEnabled
     self.init(instructions: profile?.appendedInstructions, name: isEnhanced ? profile?.name : nil)

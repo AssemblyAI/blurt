@@ -28,10 +28,10 @@ struct KeyTermsStepView: View {
       // accessibility without repeating the section header inline.
       TextField(
         text: $text,
-        prompt: Text("AssemblyAI, Kubernetes, Anthropic, Blurt"),
+        prompt: Text("e.g. AssemblyAI, Kubernetes, Blurt"),
         axis: .vertical
       ) {
-        Text("Key Terms")
+        Text("Key terms")
       }
       .labelsHidden()
       .lineLimit(2...6)
@@ -39,9 +39,9 @@ struct KeyTermsStepView: View {
       .disableAutocorrection(true)
       .accessibilityIdentifier(UITestIdentifiers.keyTermsField)
     } header: {
-      Text("Key Terms")
+      Text("Key terms")
     } footer: {
-      Text("Add names, jargon, and product terms to help Blurt spell them correctly.")
+      Text("Separate names and specialist terms with commas to help Blurt spell them correctly.")
     }
   }
 }

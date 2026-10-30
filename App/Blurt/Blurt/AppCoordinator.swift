@@ -1,3 +1,4 @@
+import AppKit
 import AssemblyAI
 import BlurtEngine
 import Foundation
@@ -62,6 +63,8 @@ final class AppCoordinator {
   /// .isCapturing`) — the ready screen disables the style switcher on it, and
   /// its `.recording` half (via `menuBarStatus`) drives the listening state.
   private(set) var isCapturing = false
+  /// The last phase rendered, so the pill can go back to it when a read ends.
+  @ObservationIgnored private var lastPhase = PipelinePhase.idle
 
   /// `components` defaults to the production pipeline, its transcriber dictating
   /// against the account's `dictationOrigin`; `apiKey` defaults to the
@@ -154,14 +157,14 @@ final class AppCoordinator {
   /// than a Carbon global hotkey: the latter leaks the trigger's auto-repeat key
   /// events into the focused app while held.
   private func startDictationDriver() {
-    // Every trigger command goes through the read-aloud router. With the
-    // experimental switch off, it forwards each one to `session.submit` exactly
-    // as before.
+    // Every trigger command goes through the read-aloud router, which forwards
+    // a dictating key's commands to `session.submit` and handles read and ask
+    // keys itself.
     let router = SelectionSpeechRouter(session: session)
     keyTap = DictationKeyTap(
       // The key rides the press, and the session resolves its style for that one
       // dictation (`PressStyle`); the main window's selection is never written.
-      onStart: { key in router.submit(.press(key: key)) },
+      onStart: { key in router.press(key: key) },
       onStop: { router.submit(.release) },
       onCancel: { router.submit(.cancel) },
       onLatch: { router.keyLatched() },
@@ -170,6 +173,22 @@ final class AppCoordinator {
     )
     router.syncGateAfterSession = { [weak self] in self?.keyTap?.syncAfterTerminalPhase() }
     router.resetGate = { [weak self] in self?.keyTap?.resetGate() }
+    // A read wears the dictation pill — orb and meter, the meter following the
+    // voice — between the same start and stop cues. Pill first, then the cue,
+    // as `render(_:)` orders them.
+    router.speechStarted = { [weak self] in
+      self?.overlay?.show(state: .speaking)
+      self?.cues.speechStarted()
+    }
+    router.speechEnded = { [weak self] in
+      guard let self else { return }
+      // Back to what the session is doing: idle, or a capture started meanwhile.
+      self.overlay?.show(state: self.lastPhase.overlayState)
+      self.cues.speechEnded()
+    }
+    router.speechLevel = { [weak self] level in self?.overlay?.pushLevel(level) }
+    // The pill just goes away on a failed read, so say something went wrong.
+    router.speechFailed = { _ in NSSound.beep() }
     speechRouter = router
     // Deliberately *not* installed here: `CGEvent.tapCreate` for keystrokes is
     // itself what surfaces the system permission prompt, so creating the tap at
@@ -268,7 +287,7 @@ final class AppCoordinator {
   /// otherwise (see `GlobeKeyOverride`). Also run from `start()`, so the relaunch
   /// after a settings reset restores the user's setting.
   private func syncGlobeKeyOverride() {
-    GlobeKeyOverride().sync(boundKeys: TriggerKeyStyleStore().enabledKeys)
+    GlobeKeyOverride().sync(boundKeys: TriggerKeyBindings().enabledKeys)
   }
 
   // MARK: - Dictation render
@@ -280,6 +299,17 @@ final class AppCoordinator {
   /// players and preview the new voice so the choice is audible immediately.
   func soundPackChanged() {
     cues.packChanged()
+  }
+
+  /// Read-aloud's cue pack changed in Settings: reload and preview it.
+  func readAloudSoundPackChanged() {
+    cues.readPackChanged()
+  }
+
+  /// The Read Aloud tab picked a voice or a speed: play a sample in it, as a cue
+  /// sound plays when it's picked.
+  func readAloudStyleChanged() {
+    speechRouter?.previewSample()
   }
 
   private func render(_ phase: PipelinePhase) {
@@ -295,7 +325,12 @@ final class AppCoordinator {
     // front of the visual state change. Pure phase→pill mapping lives in the
     // engine (unit-tested there); .failed resolves to .error, which the pill
     // flashes red then auto-reverts to idle.
-    overlay?.show(state: phase.overlayState)
+    // A read wears the pill until it ends (the engine's rule — see
+    // `overlayState(whileSpeaking:)`).
+    lastPhase = phase
+    if let state = phase.overlayState(whileSpeaking: speechRouter?.isSpeaking ?? false) {
+      overlay?.show(state: state)
+    }
     // Mirror the phase onto the menu bar indicator (mapping lives in the engine,
     // unit-tested alongside `overlayState`).
     menuBarStatus = phase.menuBarStatus

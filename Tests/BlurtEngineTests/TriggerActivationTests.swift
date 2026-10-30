@@ -37,14 +37,10 @@ struct TriggerActivationTests {
     // differently, or the picker offers two spellings of one behavior.
     #expect(Set(TriggerActivation.allCases.map(\.label)).count == TriggerActivation.allCases.count)
     #expect(
-      Set(TriggerActivation.allCases.map(\.guidance)).count == TriggerActivation.allCases.count)
-    #expect(
-      Set(TriggerActivation.allCases.map(\.stopHint)).count == TriggerActivation.allCases.count)
-    // The default's footer is the sentence that shipped before the picker
-    // existed — the unset experience must not reword itself.
-    #expect(
-      TriggerActivation.tapOrHold.guidance
-        == "Tap to start and tap again to stop, or hold the key and release to dictate.")
+      Set(TriggerActivation.allCases.map { $0.hint(for: .dictate) }).count == TriggerActivation.allCases.count)
+    #expect(TriggerActivation.tapOrHold.hint(for: .dictate) == "Tap to start and stop. Hold to talk.")
+    #expect(TriggerActivation.hold.hint(for: .readAloud) == "Hold to listen. Release to stop.")
+    #expect(TriggerActivation.tapOrHold.hint(for: .ask) == "Tap to start and stop. Hold to ask.")
     #expect(
       Set(TriggerActivation.allCases.map(\.finishHint)).count == TriggerActivation.allCases.count)
   }
