@@ -1,5 +1,3 @@
-import Foundation
-
 /// The shared tap/hold mode's slot: the one setting there was before each key
 /// had its own (`TriggerKeyActivationStore`), and still the mode of any key
 /// without one. Read through `TriggerKeyBindings`, which decodes it with

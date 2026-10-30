@@ -50,7 +50,8 @@ struct SpeechTransportTests {
 
   @Test("an error body with a message but no code reports the message")
   func messageWithoutCode() {
-    #expect(AssemblyAISpeechSynthesizer.failure(status: 429, body: Data(#"{"message":"Slow down"}"#.utf8)) == "Slow down")
+    let body = Data(#"{"message":"Slow down"}"#.utf8)
+    #expect(AssemblyAISpeechSynthesizer.failure(status: 429, body: body) == "Slow down")
   }
 
   // MARK: - The URLSession path

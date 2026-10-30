@@ -60,7 +60,8 @@ final class ReadAloudFlowsUITests: BlurtUITestCase {
     waitForLabel(statusLabel(in: harness), equals: UITestIdentifiers.statusRecording, "A tap should start the ask")
     harness.buttons[UITestIdentifiers.hotkeyPressButton].click()
     harness.buttons[UITestIdentifiers.hotkeyTapReleaseButton].click()
-    waitForLabel(spoken(in: harness), equals: "Answer to: What does this mean?", timeout: 15, "The next tap should end it")
+    waitForLabel(
+      spoken(in: harness), equals: "Answer to: What does this mean?", timeout: 15, "The next tap should end it")
   }
 
   /// An ask with nothing said answers nothing — and leaves the key working.

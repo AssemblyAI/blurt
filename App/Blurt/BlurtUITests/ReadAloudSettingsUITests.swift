@@ -67,7 +67,8 @@ final class ReadAloudSettingsUITests: BlurtUITestCase {
     let voice = tab.popUpButtons[UITestIdentifiers.readAloudVoicePicker]
     XCTAssertTrue(voice.waitForExistence(timeout: 5))
     XCTAssertFalse(voice.isEnabled, "With no read or ask key, the voice can't be picked")
-    let assign = NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@", "to enable playback", "to enable playback")
+    let hint = "to enable playback"
+    let assign = NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@", hint, hint)
     XCTAssertTrue(tab.staticTexts.matching(assign).firstMatch.exists, "The tab should say how to turn it on")
 
     harness.click()
