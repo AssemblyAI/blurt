@@ -8,27 +8,31 @@ import Testing
 /// act, in `DictationKeyGateTests`.
 @Suite("TriggerActivation")
 struct TriggerActivationTests {
+  /// The bound key's mode with no entry of its own: the shared slot.
+  private func sharedMode(_ defaults: UserDefaults) -> TriggerActivation {
+    TriggerKeyBindings(defaults: defaults).activation(for: .rightCommand)
+  }
+
   @Test("defaults to tap-or-hold when unset")
   func defaultsToTapOrHold() {
     // The shipped behavior: an install that never touched the picker must keep
     // both gestures working.
-    #expect(TriggerActivationStore(defaults: freshDefaults()).activation == .tapOrHold)
+    #expect(sharedMode(freshDefaults()) == .tapOrHold)
     #expect(TriggerActivation.fromPersisted("") == .tapOrHold)
   }
 
-  @Test("persists and reads back a chosen mode")
+  @Test("an existing install's shared mode is still honoured")
   func roundTrips() {
     let defaults = freshDefaults()
-    let store = TriggerActivationStore(defaults: defaults)
-    store.activation = .hold
-    #expect(TriggerActivationStore(defaults: defaults).activation == .hold)
+    defaults.set(TriggerActivation.hold.rawValue, forKey: TriggerActivationStore.defaultsKey)
+    #expect(sharedMode(defaults) == .hold)
   }
 
   @Test("an unknown stored value falls back to the default")
   func unknownFallsBack() {
     let defaults = freshDefaults()
     defaults.set("DoubleTap", forKey: TriggerActivationStore.defaultsKey)
-    #expect(TriggerActivationStore(defaults: defaults).activation == .tapOrHold)
+    #expect(sharedMode(defaults) == .tapOrHold)
   }
 
   @Test("every mode names itself and explains itself, distinctly")

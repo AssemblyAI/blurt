@@ -31,8 +31,8 @@
 /// its own. Each asks for a different reset: `.syncGateAfterSession` goes through
 /// the tap's recovery path, while `.resetGate` just clears it, because no
 /// recording is involved.
-public struct SelectionSpeechRouting: Sendable {
-  public enum Action: Sendable, Equatable {
+struct SelectionSpeechRouting: Sendable {
+  enum Action: Sendable, Equatable {
     case forward(DictationSession.Command)
     /// Start the Accessibility read. Its result comes back through `selectionResolved`.
     case readSelection
@@ -52,7 +52,7 @@ public struct SelectionSpeechRouting: Sendable {
   /// the press counts. Well under the gate's 1 s tap/hold threshold, because an
   /// asker waits this long (plus the mic bring-up) for the start chime before
   /// speaking; a deliberate tap is over long before it.
-  public static let holdDelay = Duration.milliseconds(350)
+  static let holdDelay = Duration.milliseconds(350)
 
   private enum Intent: Sendable, Equatable {
     case read, ask
@@ -90,11 +90,11 @@ public struct SelectionSpeechRouting: Sendable {
   /// that dictation's end, never a hand-back press that hasn't started.
   private var sessionBusy = false
 
-  public init() {}
+  init() {}
 
   /// A trigger key went down from idle. `holds`: its mode lets a press be a
   /// hold (anything but tap-only), so a read or ask starts the hold timer.
-  public mutating func press(
+  mutating func press(
     key: TriggerKey, action: TriggerKeyAction, holds: Bool
   ) -> [Action] {
     switch mode {
@@ -130,7 +130,7 @@ public struct SelectionSpeechRouting: Sendable {
 
   /// A gate command other than a press: `.release` (the gate's stop),
   /// `.cancel` (a combo), or `.cancelRecording` (a recovery reset).
-  public mutating func submit(_ command: DictationSession.Command) -> [Action] {
+  mutating func submit(_ command: DictationSession.Command) -> [Action] {
     switch mode {
     case .passthrough:
       return [.forward(command)]
@@ -189,7 +189,7 @@ public struct SelectionSpeechRouting: Sendable {
 
   /// The gate latched: the key came up quickly enough to be a tap (or, in
   /// tap-only mode, came up at all).
-  public mutating func keyLatched() -> [Action] {
+  mutating func keyLatched() -> [Action] {
     switch mode {
     case .deciding(let intent, let trigger, let ended):
       // Held past the delay, then let go before the gate's own threshold: a
@@ -219,7 +219,7 @@ public struct SelectionSpeechRouting: Sendable {
 
   /// `holdDelay` passed since the press. Meaningful only while the key may
   /// still be down over a selection.
-  public mutating func holdElapsed() -> [Action] {
+  mutating func holdElapsed() -> [Action] {
     switch mode {
     case .deciding(let intent, nil, false):
       mode = .deciding(intent, trigger: .hold, ended: false)
@@ -231,7 +231,7 @@ public struct SelectionSpeechRouting: Sendable {
     }
   }
 
-  public mutating func selectionResolved(_ selection: String?) -> [Action] {
+  mutating func selectionResolved(_ selection: String?) -> [Action] {
     guard case .deciding(let intent, let trigger, let ended) = mode else { return [] }
     guard let selection, !ended else {
       mode = .passthrough
@@ -264,7 +264,7 @@ public struct SelectionSpeechRouting: Sendable {
   /// stopped itself: a key stop has already moved on, and a newer read may be
   /// playing. The read's key may still hold the gate (latched by a tap), so
   /// clear it, or its next press would only stop a read that's over.
-  public mutating func speechFinished() -> [Action] {
+  mutating func speechFinished() -> [Action] {
     guard mode == .speaking else { return [] }
     mode = .passthrough
     return [.resetGate]
@@ -277,7 +277,7 @@ public struct SelectionSpeechRouting: Sendable {
   /// transcript (`.handedBack`), nothing said (`.idle`), or a failure — and
   /// only once its own press has started; before that, a terminal phase is the
   /// earlier dictation's end, which lets the request start.
-  public mutating func sessionPhaseChanged(_ phase: PipelinePhase) -> [Action] {
+  mutating func sessionPhaseChanged(_ phase: PipelinePhase) -> [Action] {
     sessionBusy = !phase.isTerminal
     guard phase.isTerminal else { return [] }
     switch mode {

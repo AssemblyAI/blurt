@@ -16,11 +16,11 @@
   /// `speak` runs until the last sample has played. To stop early, cancel the task
   /// that is awaiting it: cancellation silences playback at once and cancels the
   /// request in flight.
-  public struct SelectionSpeaker: ReadAloudSpeaker {
+  struct SelectionSpeaker: ReadAloudSpeaker {
     /// The most text one press will read: a long article (about 15,000 words).
     /// Reading is paced by listening (`bufferTarget`), so a long selection costs
     /// only as much TTS as is heard before it's stopped.
-    public static let maxCharacters = 100_000
+    static let maxCharacters = 100_000
 
     /// How far ahead of the listener the reading runs, in seconds: the next
     /// piece is asked for once less than this is queued. Comfortably longer
@@ -33,7 +33,7 @@
     private let llm: ReadAloudLLM
     private let makeSink: @Sendable (_ rate: Double) -> any PCMSink
 
-    public init() {
+    init() {
       self.init(synthesizer: AssemblyAISpeechSynthesizer(), llm: ReadAloudLLM()) { rate in
         StreamingPCMPlayer(sampleRate: AssemblyAISpeechSynthesizer.sampleRate, rate: rate)
       }
@@ -58,7 +58,7 @@
     /// cooperative pool (`BlockingIPC.run`). When AX can't reach a
     /// focused element at all, it falls back to copying the selection
     /// (`SelectionCopy`).
-    public static func focusedSelection() async -> String? {
+    static func focusedSelection() async -> String? {
       let read = await BlockingIPC.run { FocusCapture.captureSelectedText(maxChars: maxCharacters) }
       return await resolve(read, copy: SelectionCopy())
     }
@@ -78,7 +78,7 @@
     /// catches up (`bufferTarget`). `onLevel`, when
     /// given, hears the loudness of what's playing about 20 times a second
     /// while it plays, then a final 0 — the pill's meter.
-    public func speak(
+    func speak(
       _ text: String, style: ReadAloudStyle = .standard, onLevel: (@Sendable (Float) -> Void)? = nil
     ) async throws {
       let pieces = ListeningChunks.chunks(of: text)
@@ -130,7 +130,7 @@
     /// `style`'s voice and rate. The answer is already written to be heard, so it skips the
     /// listening rewrite. No fallback: when the answer fails, there is nothing
     /// else to read.
-    public func answer(
+    func answer(
       _ request: String, about selection: String, style: ReadAloudStyle,
       onLevel: (@Sendable (Float) -> Void)? = nil
     ) async throws {

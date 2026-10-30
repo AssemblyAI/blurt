@@ -112,7 +112,7 @@ struct TriggerKeyStyleTests {
 
   @Test("modes: a key's own, else left ⌥'s read is tap or hold, else the shared mode")
   func activations() {
-    TriggerActivationStore(defaults: defaults).activation = .hold
+    defaults.set(TriggerActivation.hold.rawValue, forKey: TriggerActivationStore.defaultsKey)
     choices.setChoice(.dictate(style: casual.id.uuidString), for: .rightOption)
     #expect(bindings.activation(for: .rightCommand) == .hold)
     #expect(bindings.activation(for: .leftOption) == .tapOrHold)
