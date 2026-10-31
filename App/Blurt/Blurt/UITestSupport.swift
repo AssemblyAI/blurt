@@ -35,6 +35,17 @@
     static var isReadyStateRequested: Bool {
       ProcessInfo.processInfo.arguments.contains(UITestIdentifiers.readyLaunchArgument)
     }
+
+    /// A throwaway history for this run, seeded when the runner asks
+    /// (`seedHistoryLaunchArgument`).
+    static func historyStore() -> TranscriptStore {
+      let store = TranscriptStore(
+        url: FileManager.default.temporaryDirectory.appending(path: "blurt-uitest-\(UUID().uuidString).json"))
+      if ProcessInfo.processInfo.arguments.contains(UITestIdentifiers.seedHistoryLaunchArgument) {
+        UITestHistorySeed.seed(store)
+      }
+      return store
+    }
   }
 
   // Accessibility identifiers, the launch argument, and the sentinel API keys

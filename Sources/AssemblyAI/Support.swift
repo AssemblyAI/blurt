@@ -22,6 +22,16 @@ extension URL {
   }
 }
 
+extension URLRequest {
+  /// Authorizes this request the way every AssemblyAI route takes it: the raw
+  /// key in `Authorization` (no "Bearer"), and the calling app's agent when it
+  /// names one. The SDK's one spelling of it.
+  mutating func authorize(apiKey: String, userAgent: String?) {
+    setValue(apiKey, forHTTPHeaderField: "Authorization")
+    if let userAgent { setValue(userAgent, forHTTPHeaderField: "User-Agent") }
+  }
+}
+
 extension String {
   /// The string trimmed of surrounding whitespace, or nil when nothing is left.
   func trimmedNonEmpty() -> String? {

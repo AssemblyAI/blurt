@@ -152,4 +152,31 @@ enum UITestIdentifiers {
   static let validAPIKey = "uitest-valid-key"
   static let invalidAPIKey = "uitest-invalid-key"
   static let unreachableAPIKey = "uitest-unreachable-key"
+
+  // MARK: Transcription and history
+
+  /// Seeds the (throwaway) history with known entries before the app reads it:
+  /// a two-speaker recording, a dictation and a read-aloud clip.
+  static let seedHistoryLaunchArgument = "-BlurtUITestSeedHistory"
+  static let seededRecordingTitle = "Quarterly Planning Sync"
+  static let seededRecordingSpeakerA = "Let's start with the roadmap."
+  static let seededRecordingSpeakerB = "The launch moves to Friday."
+  static let seededDictationText = "Ship it on Friday."
+  static let seededReadText = "The quarterly numbers look strong."
+  /// Transcribes a sample file at launch through the canned async-API
+  /// transport — XCUITest can't drive a Finder drag.
+  static let transcribeSampleLaunchArgument = "-BlurtUITestTranscribeSample"
+  /// What the canned transport transcribes any file to, and calls it.
+  static let cannedFileSpeakerA = "Welcome to the design review."
+  static let cannedFileSpeakerB = "Thanks, glad to be here."
+  static let cannedFileTitle = "Design Review Kickoff"
+  /// What the canned gateway returns for any task.
+  static let cannedTaskResult = "Canned task result for the transcript."
+  static let recentList = "recent.list"
+  static let recentSearchField = "recent.search"
+  static let transcribeRecordButton = "transcribe.record"
+  static let transcribeBrowseButton = "transcribe.browse"
+  static let autoRecordToggle = "settings.autoRecordMeetings"
+  /// A transcript sheet chip: this prefix, then the facet's raw value.
+  static let facetChipPrefix = "facet."
 }

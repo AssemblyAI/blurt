@@ -39,8 +39,8 @@ final class ReadyViewUITests: BlurtUITestCase {
     // The Recent section, empty on a fresh launch, shows its header and the
     // first-dictation prompt that fills the reserved list area.
     XCTAssertTrue(
-      app.staticTexts["Recent dictations"].exists,
-      "Ready screen should have a Recent dictations section")
+      app.staticTexts["Recent"].exists,
+      "Ready screen should have a Recent section")
     XCTAssertTrue(
       emptyRecentPrompt(in: main).exists,
       "An empty Recent list should prompt the first dictation")
@@ -180,11 +180,13 @@ final class ReadyViewUITests: BlurtUITestCase {
     main.descendants(matching: .any)[UITestIdentifiers.recentEmptyPrompt]
   }
 
-  /// The Recent row for the canned transcript (the row's VoiceOver label is
-  /// "<text>, <relative time>", hence CONTAINS).
+  /// The Recent row for the canned transcript: one combined element in the
+  /// Recent list whose text ("<text>, <details>") XCUITest reports as its label
+  /// or its value, hence both, and CONTAINS. Scoped to the list, as a typed
+  /// query: matching `.any` across the window can time out.
   private func recentRow(in main: XCUIElement) -> XCUIElement {
-    let rowPredicate = NSPredicate(
-      format: "label CONTAINS %@", UITestIdentifiers.defaultCannedTranscript)
-    return main.descendants(matching: .any).matching(rowPredicate).firstMatch
+    let text = UITestIdentifiers.defaultCannedTranscript
+    let rowPredicate = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", text, text)
+    return main.outlines[UITestIdentifiers.recentList].staticTexts.matching(rowPredicate).firstMatch
   }
 }

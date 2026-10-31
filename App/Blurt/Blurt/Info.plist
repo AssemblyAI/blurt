@@ -34,6 +34,8 @@
 	<string>public.app-category.productivity</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>15.0</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Blurt records your Mac's audio alongside your microphone so it can transcribe meetings and calls with AssemblyAI.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Blurt uses your microphone to transcribe your dictation with AssemblyAI.</string>
 	<key>SUEnableAutomaticChecks</key>

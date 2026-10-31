@@ -4,6 +4,7 @@ import SwiftUI
 /// `Settings` scene itself (see `BlurtApp`).
 struct BlurtCommands: Commands {
   var appDelegate: AppDelegate
+  @FocusedValue(\.focusHistorySearch) private var focusHistorySearch
 
   var body: some Commands {
     // "Check for Updates…" sits just below "About Blurt" in the app menu — the
@@ -22,6 +23,13 @@ struct BlurtCommands: Commands {
     // reading as an ad. No ellipses: they open a page and ask nothing more, the
     // way Apple's own Help-menu links read. Each omits itself if its URL fails
     // to build.
+    // Edit › Find (⌘F): focuses the Recent list's search field, as any Mac
+    // window with a search field answers to.
+    CommandGroup(after: .textEditing) {
+      Button("Find") { focusHistorySearch?() }
+        .keyboardShortcut("f")
+        .disabled(focusHistorySearch == nil)
+    }
     CommandGroup(replacing: .help) {
       if let url = BlurtLinks.reportBug {
         Link("Report a Bug", destination: url)

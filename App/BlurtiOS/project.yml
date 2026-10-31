@@ -92,6 +92,8 @@ targets:
     platform: iOS
     sources:
       - path: BlurtDesign
+      # FlowLayout, shared with the Mac app.
+      - path: ../Shared
     settings:
       base:
         TARGETED_DEVICE_FAMILY: "1"

@@ -32,7 +32,7 @@ struct StyleRow: View {
 
   var body: some View {
     SettingRow(
-      title: "Writing style", systemImage: "textformat", subtitle: "Choose how your dictations are written."
+      title: "Writing style", systemImage: "textformat"
     ) {
       if profiles.isEmpty {
         // With no alternative there is nothing to pick. A passive value avoids

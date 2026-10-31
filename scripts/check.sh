@@ -699,8 +699,20 @@ else
   #                        the timing policy it serves stays covered, in
   #                        PCMSchedule, and SelectionSpeaker's stop/drain/error
   #                        handling is covered through the PCMSink seam.
+  #  - SystemAudioRecorder.swift : the Record button's Core Audio half — a process
+  #                        tap, an aggregate device around the default input, and
+  #                        its IOProc. Only real hardware (and the System Audio
+  #                        Recording grant) can create them. Same justification as
+  #                        CaptureSessionRecorder. The mix, the 16 kHz conversion
+  #                        and the file and PCM output live in SystemAudioMix.swift,
+  #                        which IS covered.
+  #  - MeetingMicProbe.swift : the microphone-user probe — Core Audio process
+  #                        objects, which only a real machine has. Same
+  #                        justification as AudioInputDevices. The policy that
+  #                        turns its answer into start and stop (MeetingAutoRecord)
+  #                        IS covered.
   COVERAGE="$(xcrun llvm-cov export -summary-only -instr-profile "$PROFDATA" "$XCTEST_BIN" \
-    -ignore-filename-regex='Tests/|Audio/MicCapture\.swift|Audio/AudioRoute(Monitor)?\.swift|Audio/AudioInputDevices\.swift|Audio/CaptureSessionRecorder\.swift|TTS/StreamingPCMPlayer\.swift' \
+    -ignore-filename-regex='Tests/|Audio/MicCapture\.swift|Audio/AudioRoute(Monitor)?\.swift|Audio/AudioInputDevices\.swift|Audio/CaptureSessionRecorder\.swift|TTS/StreamingPCMPlayer\.swift|Audio/SystemAudioRecorder\.swift|Audio/MeetingMicProbe\.swift' \
     | python3 -c 'import sys,json; print(round(json.load(sys.stdin)["data"][0]["totals"]["lines"]["percent"],2))')"
   echo "engine line coverage: ${COVERAGE}%"
   if ! awk -v c="$COVERAGE" -v min="$MIN_COVERAGE" 'BEGIN{ exit (c+0 < min+0) }'; then

@@ -1,4 +1,6 @@
 #if os(macOS)
+  import Foundation
+
   /// What reads text aloud for `SelectionSpeechRouter`: `SelectionSpeaker` in
   /// production, a stand-in under UI testing (no network, no audio). Both calls
   /// run until the speech has played; cancelling the task stops it.
@@ -32,9 +34,11 @@
     private let synthesizer: AssemblyAISpeechSynthesizer
     private let llm: ReadAloudLLM
     private let makeSink: @Sendable (_ rate: Double) -> any PCMSink
+    /// Where each read's audio is kept and who hears about it; nil keeps none.
+    private let clips: ReadClipSink?
 
-    init() {
-      self.init(synthesizer: AssemblyAISpeechSynthesizer(), llm: ReadAloudLLM()) { rate in
+    init(clips: ReadClipSink? = nil) {
+      self.init(synthesizer: AssemblyAISpeechSynthesizer(), llm: ReadAloudLLM(), clips: clips) { rate in
         StreamingPCMPlayer(sampleRate: AssemblyAISpeechSynthesizer.sampleRate, rate: rate)
       }
     }
@@ -42,11 +46,12 @@
     /// `makeSink` is the playback seam, handed the style's rate. There is one
     /// sink per `speak`, so a cancelled read can't bleed into the next one.
     init(
-      synthesizer: AssemblyAISpeechSynthesizer, llm: ReadAloudLLM,
+      synthesizer: AssemblyAISpeechSynthesizer, llm: ReadAloudLLM, clips: ReadClipSink? = nil,
       makeSink: @escaping @Sendable (_ rate: Double) -> any PCMSink
     ) {
       self.synthesizer = synthesizer
       self.llm = llm
+      self.clips = clips
       self.makeSink = makeSink
     }
 
@@ -81,9 +86,22 @@
     func speak(
       _ text: String, style: ReadAloudStyle = .standard, onLevel: (@Sendable (Float) -> Void)? = nil
     ) async throws {
+      try await speak(text, style: style, onLevel: onLevel, request: nil)
+    }
+
+    /// `speak`, kept as a clip (`clips`) when there is somewhere to keep it:
+    /// the audio is copied as it plays, and the clip is reported however the
+    /// read ends — finished, stopped or failed part-way — as long as some of it
+    /// was heard. `request` is the question an answer replied to.
+    private func speak(
+      _ text: String, style: ReadAloudStyle, onLevel: (@Sendable (Float) -> Void)?, request: String?
+    ) async throws {
       let pieces = ListeningChunks.chunks(of: text)
       guard !pieces.isEmpty else { return }
-      let player = makeSink(style.rate)
+      let writer = makeClipWriter()
+      let base = makeSink(style.rate)
+      let player: any PCMSink = writer.map { ClipRecordingSink(base: base, writer: $0) } ?? base
+      defer { finishClip(writer, text: text, request: request) }
       // At the mic meter's rate, and only on a change: the silence before the
       // first audio and between words is a run of zeros the pill needn't hear.
       let meter = onLevel.map { onLevel in
@@ -136,7 +154,26 @@
     ) async throws {
       let reply = try await llm.answer(request, about: selection)
       try Task.checkCancellation()
-      try await speak(reply, style: style.verbatim, onLevel: onLevel)
+      try await speak(reply, style: style.verbatim, onLevel: onLevel, request: request)
+    }
+
+    /// A writer for this read's clip, when clips are kept and the file opens.
+    private func makeClipWriter() -> WAVWriter? {
+      clips.flatMap { clips in
+        try? WAVWriter(
+          url: clips.directory.appending(path: "Read \(TranscriptStore.fileStamp(.now)).wav"),
+          sampleRate: AssemblyAISpeechSynthesizer.sampleRate)
+      }
+    }
+
+    /// Closes the clip and reports it, or drops the file if nothing was heard.
+    private func finishClip(_ writer: WAVWriter?, text: String, request: String?) {
+      guard let writer, let clips else { return }
+      if writer.finish() > 0 {
+        clips.onClip(ReadClip(text: text, audioURL: writer.url, request: request))
+      } else {
+        try? FileManager.default.removeItem(at: writer.url)
+      }
     }
 
     /// Returns once less than `bufferTarget` seconds of audio are queued, so the
