@@ -137,8 +137,8 @@ final class DictationPipelineUITests: BlurtUITestCase {
     XCTAssertEqual(pastedValue, "", "Cancelled dictation must not paste any text")
   }
 
-  /// A completed dictation lands in the app's recent-dictations list
-  /// (`AppCoordinator.recentDictations`, its newest entry surfaced by the
+  /// A completed dictation lands in the app's saved history (its newest
+  /// dictation surfaced by the
   /// harness's echo read-out) — the data path the ready window's "Recent"
   /// section renders. The list persists (no revert), so we only assert it
   /// populates.

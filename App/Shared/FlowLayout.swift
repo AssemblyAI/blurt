@@ -1,11 +1,14 @@
 import SwiftUI
 
 /// Lays its children out left to right, wrapping onto a new line when the next
-/// one won't fit — the key-term pills.
+/// one won't fit — the iPhone's key-term pills and the Mac transcript sheet's
+/// facet chips. Compiled into both apps (the Mac target and the iPhone's
+/// `BlurtDesign`) from this one file, since no stock container does it and two
+/// copies would drift; each side supplies its own spacing.
 package struct FlowLayout: Layout {
   var spacing: CGFloat
 
-  package init(spacing: CGFloat = DesignTokens.Metrics.appChipGap) { self.spacing = spacing }
+  package init(spacing: CGFloat) { self.spacing = spacing }
 
   package func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
     let rows = rows(for: subviews, width: proposal.width ?? .infinity)

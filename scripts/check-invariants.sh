@@ -92,6 +92,18 @@ KEYBOARD="App/BlurtiOS/BlurtKeyboard/*.swift App/BlurtiOS/BlurtDesign/*.swift Ap
 # *dictation* cleanup staying on the dictation request, so that client — that
 # one file — is excluded; a gateway call anywhere else still fails.
 NOT_READ_ALOUD_LLM=":!Sources/BlurtEngine/TTS/ReadAloudLLM.swift"
+# The same rule's second carve-out: the transforms over a stored *file*
+# transcript (summary, key points, …). Those transcripts come from the async
+# API, which has no rewrite to ask for, and can run for hours — past anything
+# the dictation request accepts. It is never in the dictation path: it runs
+# only on a saved history entry the user asks a task of, and pastes nothing.
+NOT_TRANSCRIPT_LLM=":!Sources/BlurtEngine/STT/TranscriptTransform.swift"
+# The socket rule's one carve-out: the main window's Record button, which
+# streams a meeting or call to AssemblyAI's realtime API so its words appear as
+# they're spoken. It never carries a dictation — dictation stays one HTTP
+# request answered with one final transcript — so that client, that one file,
+# is excluded; a socket anywhere else still fails.
+NOT_REALTIME_RECORDING=":!Sources/AssemblyAI/Realtime/RealtimeTranscriber.swift"
 # The buffered-route rule's one carve-out: the over-cap fallback, which sends a
 # recording the streaming route refused past its 120 s cap to /v1/transcribe
 # whole. The copy it sends exists for that alone, so the route's path may appear
@@ -120,8 +132,8 @@ PATTERNS=(
 )
 SCOPES=(
   "$ENGINE $APP"
-  "$ENGINE $APP"
-  "$ENGINE $APP $NOT_READ_ALOUD_LLM"
+  "$ENGINE $APP $NOT_REALTIME_RECORDING"
+  "$ENGINE $APP $NOT_READ_ALOUD_LLM $NOT_TRANSCRIPT_LLM"
   "$ENGINE $APP"
   "$ENGINE"
   "$ENGINE"
@@ -136,8 +148,8 @@ SCOPES=(
 )
 ADVICE=(
   "MicCapture builds a fresh AVCaptureSession recorder per capture — a long-lived engine goes stale on a device switch"
-  "the dictation API returns the full text in one response; there is no streaming path, and no socket anywhere (read-aloud's TTS is a streaming HTTP response)"
-  "cleanup is the API's server-side rewrite via config.llm_instruction on the same /v1/transcribe/live call (the one gateway client is read-aloud's, ReadAloudLLM.swift)"
+  "the dictation API returns the full text in one response; there is no streaming dictation, and the one socket is the Record button's live transcript (RealtimeTranscriber.swift; read-aloud's TTS is a streaming HTTP response)"
+  "cleanup is the API's server-side rewrite via config.llm_instruction on the same /v1/transcribe/live call (the gateway clients are read-aloud's, ReadAloudLLM.swift, and file transcripts', TranscriptTransform.swift)"
   "transcription is a remote AssemblyAI call — no on-device ASR/LLM, no model cache"
   "leave language to the model's own detection; setting the field takes that away"
   "config.conversation_context was replaced by config.stt_prompt (STTPrompt)"

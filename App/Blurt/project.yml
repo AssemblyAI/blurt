@@ -23,6 +23,10 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     MACOSX_DEPLOYMENT_TARGET: "15.0"
+    # A package access identifier, as the iPhone project sets one: the shared
+    # `App/Shared` sources declare `package` API for the iPhone's modules, and
+    # `package` won't compile in a target without a package name.
+    SWIFT_PACKAGE_NAME: Blurt
     ARCHS: "$(ARCHS_STANDARD)"
     CODE_SIGN_STYLE: Manual
     CODE_SIGN_IDENTITY: "602F699488189767137DF15633B967B1371ACD86"
@@ -151,6 +155,8 @@ targets:
       # Shared with BlurtUITests: the single source of truth for UI-test
       # identifiers/sentinels (see Shared/UITestIdentifiers.swift).
       - path: Shared
+      # Shared with the iPhone app's BlurtDesign; see the file.
+      - path: ../Shared
       # The brand assets both apps ship (Design/brand), so neither app's folder
       # is a dependency of the other.
       - path: ../../Design/brand/AppIcon.icon
@@ -168,6 +174,8 @@ targets:
         LSMinimumSystemVersion: "15.0"
         LSApplicationCategoryType: public.app-category.productivity
         NSMicrophoneUsageDescription: Blurt uses your microphone to transcribe your dictation with AssemblyAI.
+        # The main window's Record button: system audio beside the microphone.
+        NSAudioCaptureUsageDescription: Blurt records your Mac's audio alongside your microphone so it can transcribe meetings and calls with AssemblyAI.
         # Sign in with AssemblyAI; unset or empty values turn it off (see
         # `configFiles` above and `OAuthConfiguration.blurt`).
         BlurtOAuthClientID: $(BLURT_OAUTH_CLIENT_ID)

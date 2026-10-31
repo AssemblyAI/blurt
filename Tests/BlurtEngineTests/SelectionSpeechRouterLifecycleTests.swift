@@ -146,6 +146,10 @@ struct SelectionSpeechRouterLifecycleTests {
     try await waitUntil { speaker.calls.count == 1 }
     #expect(speaker.calls[0].kind == "answer: Hello world.")
     #expect(speaker.calls[0].style.rate == 1.5)
+    // The answer's start (pill and chime) waits a beat after the ask's end, so
+    // the two chimes don't run together; then it comes.
+    #expect(rig.events.started == 0)
+    try await waitUntil { rig.events.started == 1 }
   }
 
   @Test("a newer sample cuts off the older one without a failure, and a sample shows no pill")

@@ -48,22 +48,27 @@
 
     // MARK: - CoreAudio reads
 
+    /// Reads `object`'s global property `selector` into `value`, sized to
+    /// `Value` — the one spelling of a fixed-size HAL read, shared by the
+    /// recorder and the meeting probe. The pointer goes through
+    /// `withUnsafeMutablePointer`, which an unconstrained `Value` allows where
+    /// a bare `&value` doesn't.
+    static func read<Value>(
+      _ selector: AudioObjectPropertySelector, of object: AudioObjectID, into value: inout Value
+    ) -> OSStatus {
+      var address = globalAddress(selector)
+      var size = UInt32(MemoryLayout<Value>.size)
+      return withUnsafeMutablePointer(to: &value) {
+        AudioObjectGetPropertyData(object, &address, 0, nil, &size, UnsafeMutableRawPointer($0))
+      }
+    }
+
     /// The device the system object reports for `selector` (a default-device
     /// property). Nil covers both a failed read and the "no such device" sentinel,
     /// which callers treat identically.
-    ///
-    /// Spelled out rather than shared behind a generic `read<T>(_:from:initial:)`.
-    /// That reads better but doesn't compile: `&value` on an unconstrained `T` is
-    /// "forming 'UnsafeMutableRawPointer' to a variable of type 'T'; this is likely
-    /// incorrect because 'T' may contain an object reference". Making it work means
-    /// constraining to `BitwiseCopyable` and going through `withUnsafeMutableBytes`
-    /// — more machinery than one five-line read is worth, in a file the coverage
-    /// gate can't check anyway.
     private static func defaultDeviceID(for selector: AudioObjectPropertySelector) -> AudioDeviceID? {
-      var address = globalAddress(selector)
       var deviceID = AudioDeviceID(0)
-      var size = UInt32(MemoryLayout<AudioDeviceID>.size)
-      let status = AudioObjectGetPropertyData(systemObject, &address, 0, nil, &size, &deviceID)
+      let status = read(selector, of: systemObject, into: &deviceID)
       // 0 is `kAudioObjectUnknown` — "there is no such device" — spelled as the
       // literal so this doesn't depend on how the constant imports.
       guard status == noErr, deviceID != 0 else { return nil }

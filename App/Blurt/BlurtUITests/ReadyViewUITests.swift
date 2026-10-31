@@ -39,8 +39,8 @@ final class ReadyViewUITests: BlurtUITestCase {
     // The Recent section, empty on a fresh launch, shows its header and the
     // first-dictation prompt that fills the reserved list area.
     XCTAssertTrue(
-      app.staticTexts["Recent dictations"].exists,
-      "Ready screen should have a Recent dictations section")
+      app.staticTexts["Recent"].exists,
+      "Ready screen should have a Recent section")
     XCTAssertTrue(
       emptyRecentPrompt(in: main).exists,
       "An empty Recent list should prompt the first dictation")
@@ -89,9 +89,12 @@ final class ReadyViewUITests: BlurtUITestCase {
     pasteboard.clearContents()
     pasteboard.setString("sentinel-before-copy", forType: .string)
 
-    // Right-click the row to reveal its "Copy" contextual menu item and invoke
-    // it. Scope to the popup menu (`app.menus`) so it doesn't collide with the
-    // always-present Edit-menu "Copy" in the main menu bar.
+    // Select the row, then right-click it for its "Copy" contextual menu item.
+    // Selecting first keeps the assertion honest whichever "Copy" the query
+    // lands on: the context menu copies the row it was opened on, and Edit ›
+    // Copy (which `app.menus` can also match) copies the selected row — and
+    // nothing without a selection, which a right-click doesn't make.
+    row.click()
     row.rightClick()
     let copyItem = app.menus.menuItems["Copy"].firstMatch
     XCTAssertTrue(copyItem.waitForExistence(timeout: 5), "Recent row should offer a Copy action")
@@ -164,7 +167,7 @@ final class ReadyViewUITests: BlurtUITestCase {
   }
 
   /// Drives one dictation via the same hotkey path the pipeline tests use, then
-  /// waits for the harness echo (`recentDictations.entries.first?.text`) to show
+  /// waits for the harness echo (the newest saved dictation) to show
   /// the canned transcript — at which point the entry the ready screen renders
   /// is in place.
   private func driveDictation(via harness: XCUIElement) {
@@ -180,11 +183,13 @@ final class ReadyViewUITests: BlurtUITestCase {
     main.descendants(matching: .any)[UITestIdentifiers.recentEmptyPrompt]
   }
 
-  /// The Recent row for the canned transcript (the row's VoiceOver label is
-  /// "<text>, <relative time>", hence CONTAINS).
+  /// The Recent row for the canned transcript: one combined element in the
+  /// Recent list whose text ("<text>, <details>") XCUITest reports as its label
+  /// or its value, hence both, and CONTAINS. Scoped to the list, as a typed
+  /// query: matching `.any` across the window can time out.
   private func recentRow(in main: XCUIElement) -> XCUIElement {
-    let rowPredicate = NSPredicate(
-      format: "label CONTAINS %@", UITestIdentifiers.defaultCannedTranscript)
-    return main.descendants(matching: .any).matching(rowPredicate).firstMatch
+    let text = UITestIdentifiers.defaultCannedTranscript
+    let rowPredicate = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", text, text)
+    return main.outlines[UITestIdentifiers.recentList].staticTexts.matching(rowPredicate).firstMatch
   }
 }

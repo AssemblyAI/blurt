@@ -59,7 +59,9 @@ struct SettingLabel: View {
         Text(title)
         if let subtitle {
           Text(subtitle)
-            .font(.callout)
+            // 11 pt, System Settings' size for a row's description: a step
+            // below the 13 pt title, so the two lines read as label and gloss.
+            .font(.subheadline)
             .foregroundStyle(.secondary)
             .truncationMode(.tail)
         }
