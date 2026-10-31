@@ -89,9 +89,12 @@ final class ReadyViewUITests: BlurtUITestCase {
     pasteboard.clearContents()
     pasteboard.setString("sentinel-before-copy", forType: .string)
 
-    // Right-click the row to reveal its "Copy" contextual menu item and invoke
-    // it. Scope to the popup menu (`app.menus`) so it doesn't collide with the
-    // always-present Edit-menu "Copy" in the main menu bar.
+    // Select the row, then right-click it for its "Copy" contextual menu item.
+    // Selecting first keeps the assertion honest whichever "Copy" the query
+    // lands on: the context menu copies the row it was opened on, and Edit ›
+    // Copy (which `app.menus` can also match) copies the selected row — and
+    // nothing without a selection, which a right-click doesn't make.
+    row.click()
     row.rightClick()
     let copyItem = app.menus.menuItems["Copy"].firstMatch
     XCTAssertTrue(copyItem.waitForExistence(timeout: 5), "Recent row should offer a Copy action")
