@@ -280,7 +280,7 @@ enum BlurtLinks {
 struct MainWindowBranding: View {
   /// Loaded once for the process rather than per `body` evaluation: this view
   /// sits in `ReadyView`, whose body re-runs on every new dictation
-  /// (`recentDictations.entries`), and a bundle lookup plus a PNG decode is not
+  /// (the saved history), and a bundle lookup plus a PNG decode is not
   /// something to re-do on the main thread each time.
   ///
   /// Left to the target's `SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor` default

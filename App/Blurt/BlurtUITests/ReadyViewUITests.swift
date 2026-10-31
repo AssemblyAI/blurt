@@ -164,7 +164,7 @@ final class ReadyViewUITests: BlurtUITestCase {
   }
 
   /// Drives one dictation via the same hotkey path the pipeline tests use, then
-  /// waits for the harness echo (`recentDictations.entries.first?.text`) to show
+  /// waits for the harness echo (the newest saved dictation) to show
   /// the canned transcript — at which point the entry the ready screen renders
   /// is in place.
   private func driveDictation(via harness: XCUIElement) {

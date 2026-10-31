@@ -42,11 +42,10 @@ public struct FileTranscriber: Sendable {
   }
 
   /// The transcript as shown and as the transforms read it: one paragraph per
-  /// turn, `Speaker A: …`, when more than one person spoke — a monologue reads
-  /// better without a label on every paragraph — else the plain text.
+  /// turn, `Speaker A: …`, when more than one person spoke
+  /// (`SpeakerTurn.isMultiSpeaker`), else the plain text.
   static func text(of transcript: AsyncTranscript) -> String {
-    let speakers = Set(transcript.utterances.map(\.speaker))
-    guard speakers.count > 1 else { return transcript.text ?? "" }
+    guard SpeakerTurn.isMultiSpeaker(transcript.utterances.map { $0.speaker }) else { return transcript.text ?? "" }
     return SpeakerTurn.labelled(transcript.utterances.map { SpeakerTurn(speaker: $0.speaker, text: $0.text) })
   }
 }

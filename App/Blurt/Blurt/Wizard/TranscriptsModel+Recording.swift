@@ -12,7 +12,7 @@ extension TranscriptsModel {
   /// both to the realtime API so the transcript appears as it's spoken.
   func startRecording() {
     guard canRecord else { return }
-    guard let apiKey = APIKeyStore.current, !apiKey.isEmpty else {
+    guard let apiKey = apiKey(), !apiKey.isEmpty else {
       state = .failed(fileName: "Recording", message: BlurtError.apiKeyMissing.localizedDescription)
       return
     }
@@ -37,9 +37,8 @@ extension TranscriptsModel {
     live = LiveTranscript()
     pausedAt = nil
     clockStart = .now
-    state = .recording(startedAt: .now)
-    recording = Recording(url: url, realtime: realtime, audio: feed, pump: pump)
-    recording?.turns = Task { [weak self] in
+    state = .recording
+    let turns = Task { [weak self] in
       let turns = await realtime.start()
       do {
         for try await turn in turns { self?.live.apply(turn) }
@@ -47,10 +46,14 @@ extension TranscriptsModel {
         self?.liveTranscriptionFailed(error)
       }
     }
+    recording = Recording(url: url, realtime: realtime, audio: feed, pump: pump, turns: turns)
   }
 
   /// Pauses or resumes the recording. Paused, nothing is captured, written
-  /// or sent — the live session just waits — and the clock stops.
+  /// or sent — the live session just waits — and the clock stops. The socket
+  /// stays open on purpose: the session has no idle timeout unless one is
+  /// asked for (`inactivity_timeout`, which Blurt doesn't send), and reopening
+  /// would restart turn numbering mid-transcript.
   func togglePause() {
     guard isRecording else { return }
     if let pausedAt {
@@ -78,7 +81,7 @@ extension TranscriptsModel {
     Task { [weak self] in
       await recording.pump.value
       await recording.realtime.finish()
-      await recording.turns?.value
+      await recording.turns.value
       self?.saveRecording(recording.url)
     }
   }
@@ -111,14 +114,15 @@ extension TranscriptsModel {
     diarize(entry)
   }
 
-  /// The socket failed mid-recording: stop, and keep what was transcribed —
-  /// the audio file is complete up to here either way.
-  private func liveTranscriptionFailed(_ error: any Error) {
+  /// The socket failed mid-recording: stop, and keep what was transcribed.
+  /// The error itself needn't reach the user — the audio file is complete up
+  /// to here either way, and the async pass `saveRecording` starts
+  /// transcribes all of it, replacing the cut-short live text. Only if that
+  /// fails too does the entry keep the partial live transcript.
+  private func liveTranscriptionFailed(_: any Error) {
     guard isRecording, let recording else { return }
     endCapture(recording, dropUnsent: true)
-    let message = error.localizedDescription
     saveRecording(recording.url)
-    if case .failed = state { state = .failed(fileName: recording.url.lastPathComponent, message: message) }
   }
 
   /// Upgrades a recording's live transcript to a diarized one: the saved

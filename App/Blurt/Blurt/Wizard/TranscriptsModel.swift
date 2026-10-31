@@ -18,7 +18,7 @@ final class TranscriptsModel {
     case idle
     case transcribing(fileName: String, phase: AsyncTranscriptionClient.Phase)
     /// Recording, with the live transcript streaming into `live`.
-    case recording(startedAt: Date)
+    case recording
     /// Stopped; the last audio and the last turn's final are on their way.
     case finishingRecording
     /// A saved entry is open (`openEntry`).
@@ -45,7 +45,9 @@ final class TranscriptsModel {
   /// The last custom request applied, for the Custom popover to start from.
   private(set) var customRequest = ""
   /// Every saved transcript, newest first.
-  var history: [SavedTranscript]
+  var history: [SavedTranscript] {
+    didSet { refreshOpenEntry() }
+  }
   /// The recording's transcript as it streams in — settled turns and the
   /// partial being spoken.
   var live = LiveTranscript()
@@ -53,6 +55,9 @@ final class TranscriptsModel {
   @ObservationIgnored let transcriber: FileTranscriber
   @ObservationIgnored private let llm: TranscriptLLM
   @ObservationIgnored private let store: TranscriptStore
+  /// The key the model's own checks read — the same one the transcriber and
+  /// the LLM are given, so a test's in-memory key is the only one consulted.
+  @ObservationIgnored let apiKey: @Sendable () -> String?
   @ObservationIgnored let recorder = SystemAudioRecorder()
   /// Plays saved audio from the Recent list and the sheet.
   let player = ClipPlayer()
@@ -77,16 +82,21 @@ final class TranscriptsModel {
   /// Which `transcribe` run is current, so a late phase update from an
   /// abandoned one can't land on its successor (both may be "Recording …").
   @ObservationIgnored private var currentRun = UUID()
-  @ObservationIgnored private var openID: UUID?
   @ObservationIgnored private var tasks: [TranscriptFacet: Task<Void, Never>] = [:]
   @ObservationIgnored private var pendingSave: Task<Void, Never>?
+  /// Whether the saved history has been read in. Until it has, nothing is
+  /// written: a save then would replace the file with only this session's
+  /// entries. The load's merge saves whatever arrived before it.
+  @ObservationIgnored private var isLoaded = false
 
   init(
-    transcriber: FileTranscriber = FileTranscriber(), llm: TranscriptLLM = TranscriptLLM(),
+    apiKey: @escaping @Sendable () -> String? = { APIKeyStore.current },
+    transcriber: FileTranscriber? = nil, llm: TranscriptLLM? = nil,
     store: TranscriptStore = TranscriptStore()
   ) {
-    self.transcriber = transcriber
-    self.llm = llm
+    self.apiKey = apiKey
+    self.transcriber = transcriber ?? FileTranscriber(apiKeyProvider: apiKey)
+    self.llm = llm ?? TranscriptLLM(apiKeyProvider: apiKey)
     self.store = store
     self.history = []
     // Read off the main actor: the history only grows, and launch shouldn't
@@ -96,6 +106,8 @@ final class TranscriptsModel {
       guard let self else { return }
       let added = Set(history.map(\.id))
       history += loaded.filter { !added.contains($0.id) }
+      isLoaded = true
+      if !added.isEmpty { save() }
       await titleUntitled()
     }
   }
@@ -104,7 +116,7 @@ final class TranscriptsModel {
   /// request failed: asked for once more, one at a time, and only with a key
   /// — never a burst of requests that can't succeed.
   private func titleUntitled() async {
-    guard APIKeyStore.current?.isEmpty == false else { return }
+    guard apiKey()?.isEmpty == false else { return }
     for entry in history where entry.generatedTitle == nil && entry.isTranscript {
       await applyTitle(to: entry)
     }
@@ -148,14 +160,14 @@ final class TranscriptsModel {
     let realtime: RealtimeTranscriber
     let audio: AsyncStream<Data>.Continuation
     let pump: Task<Void, Never>
-    var turns: Task<Void, Never>?
+    let turns: Task<Void, Never>
   }
 
   /// Opens a saved transcript in the sheet, with every transform already
   /// fetched for it.
   func open(_ entry: SavedTranscript) {
     reset()
-    openID = entry.id
+    openEntry = entry
     customRequest = entry.customRequest ?? ""
     showTranscript(of: entry)
     for facet in TranscriptFacet.allCases where facet != .full && facet != .plain {
@@ -190,19 +202,18 @@ final class TranscriptsModel {
     save()
   }
 
-  /// Plays a saved entry's audio, or stops it if it's playing.
-  func togglePlayback(_ entry: SavedTranscript) {
-    guard let url = entry.audioURL else { return }
-    player.toggle(url)
-  }
+  /// The entry the sheet has open, if it's a saved one. Stored, and kept
+  /// current by `history`'s `didSet`, so the sheet reads it without scanning
+  /// the history — and doesn't redraw when some other entry changes.
+  private(set) var openEntry: SavedTranscript?
 
-  /// Whether `entry`'s audio is what's playing.
-  func isPlaying(_ entry: SavedTranscript) -> Bool {
-    player.playingURL != nil && player.playingURL == entry.audioURL
+  /// Re-reads the open entry after the history changed, assigning only when
+  /// it did change so observers of `openEntry` aren't woken for nothing.
+  private func refreshOpenEntry() {
+    guard let id = openEntry?.id else { return }
+    let current = history.first { $0.id == id }
+    if current != openEntry { openEntry = current }
   }
-
-  /// The entry the sheet has open, if it's a saved one.
-  var openEntry: SavedTranscript? { history.first { $0.id == openID } }
 
   /// Saves every dictation in `ring` not saved yet. The ring is the session's
   /// whole history pushed after each dictation, so its entries' ids say which
@@ -220,13 +231,14 @@ final class TranscriptsModel {
   /// Removes a saved transcript. Audio Blurt made — a recording, a read-aloud
   /// clip — is deleted with it; a file the user brought is theirs and stays.
   func delete(_ entry: SavedTranscript) {
+    let wasOpen = openEntry?.id == entry.id
     history.removeAll { $0.id == entry.id }
     save()
     if let url = entry.fileURL, entry.ownsAudio {
-      if player.playingURL == url { player.stop() }
+      if player.playingID == entry.id { player.stop() }
       try? FileManager.default.removeItem(at: url)
     }
-    if openID == entry.id { dismiss() }
+    if wasOpen { dismiss() }
   }
 
   // MARK: - Facets
@@ -276,7 +288,7 @@ final class TranscriptsModel {
 
   /// Saves a fetched transform onto the open transcript's history entry.
   private func remember(_ text: String, for facet: TranscriptFacet, request: String) {
-    guard let index = history.firstIndex(where: { $0.id == openID }) else { return }
+    guard let index = history.firstIndex(where: { $0.id == openEntry?.id }) else { return }
     history[index].results[facet.rawValue] = text
     if facet == .custom { history[index].customRequest = request }
     save()
@@ -312,7 +324,7 @@ final class TranscriptsModel {
     contents = [:]
     selection = .full
     customRequest = ""
-    openID = nil
+    openEntry = nil
   }
 
   /// Saves the history — coalesced, and written off the main actor: a burst
@@ -320,6 +332,7 @@ final class TranscriptsModel {
   /// write never holds up the UI. The last change within the delay wins.
   func save() {
     pendingSave?.cancel()
+    guard isLoaded else { return }
     let snapshot = history
     pendingSave = Task { [store] in
       try? await Task.sleep(for: .milliseconds(300))
@@ -337,6 +350,7 @@ extension TranscriptsModel {
   /// `kind` is `.recording` for a recording whose live transcript came back
   /// empty: its audio is still worth the async pass, and if that finds nothing
   /// either the file is deleted rather than left with no entry pointing at it.
+  /// If the pass fails, the file is kept: the audio may hold the whole meeting.
   ///
   /// Never over a recording: a file dropped while one runs is refused, or the
   /// recording would be left capturing with no sheet to stop it.
@@ -368,7 +382,8 @@ extension TranscriptsModel {
       case .success(let result):
         add(SavedTranscript(kind: kind, date: .now, text: result.text, fileURL: url, plainText: result.plainText))
       case .failure(let error):
-        if kind == .recording { try? FileManager.default.removeItem(at: url) }
+        // A failure isn't "no speech": the recording stays in its folder
+        // rather than costing the user the audio over a network blip.
         state = .failed(fileName: fileName, message: error.localizedDescription)
       }
     }

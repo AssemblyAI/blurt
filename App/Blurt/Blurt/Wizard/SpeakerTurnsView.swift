@@ -7,10 +7,11 @@ import SwiftUI
 /// speak, from system colours that adapt to dark mode; a turn no speaker was
 /// told apart for ("unknown") draws in grey. Lazily stacked: a long meeting's
 /// hundreds of turns are laid out only as they scroll into view.
-struct SpeakerTurnsView: View {
+///
+/// Equatable on `turns` alone, so a live recording's partials — drawn beside
+/// it, not in it — don't re-walk every turn several times a second.
+struct SpeakerTurnsView: View, Equatable {
   let turns: [SpeakerTurn]
-  /// The words being spoken now, from a live recording: shown last, dimmed.
-  var partial: String?
 
   /// The system colours speakers take, in order.
   static let palette: [Color] = [.blue, .orange, .purple, .pink, .teal, .indigo, .brown, .mint]
@@ -24,9 +25,6 @@ struct SpeakerTurnsView: View {
         } else {
           Text(turn.text).textSelection(.enabled).padding(.horizontal, 8)
         }
-      }
-      if let partial {
-        Text(partial).foregroundStyle(.secondary).padding(.horizontal, 8)
       }
     }
   }

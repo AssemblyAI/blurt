@@ -73,6 +73,7 @@
         title: UITestIdentifiers.cannedFileTitle, taskResult: UITestIdentifiers.cannedTaskResult)
       let key = UITestIdentifiers.validAPIKey
       return TranscriptsModel(
+        apiKey: { key },
         transcriber: FileTranscriber(
           client: AsyncTranscriptionClient(transport: transport, pollInterval: .zero), apiKeyProvider: { key }),
         llm: TranscriptLLM(apiKeyProvider: { key }, transport: transport),

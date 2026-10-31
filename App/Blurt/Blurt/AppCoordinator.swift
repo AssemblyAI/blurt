@@ -42,18 +42,6 @@ final class AppCoordinator {
   @ObservationIgnored private let transcriptStream: AsyncStream<RecentDictations>
   @ObservationIgnored private var transcriptObserver: Task<Void, Never>?
 
-  /// The dictations that produced a transcript — pasted, copied, or even
-  /// failed-to-paste (the seam fires before injection) — newest first: the
-  /// session's request context. In-memory only — it starts empty each launch;
-  /// what the user keeps is the saved history (`transcripts`), which each new
-  /// entry here is copied into.
-  ///
-  /// A **projection**, not a second ring: `DictationSession` owns the history
-  /// (it builds each request's `conversation_context` from it, inside the actor)
-  /// and pushes the updated value here, so this can't drift from what was
-  /// actually sent. Nothing outside the session records into it.
-  private(set) var recentDictations = RecentDictations()
-
   /// Live dictation status for the menu bar indicator (see `MenuBarLabel`).
   /// Updated in `render(_:)` alongside the overlay pill. The menu bar item is a
   /// convenience layered on the Dock app and can be hidden behind the notch on a
@@ -231,11 +219,9 @@ final class AppCoordinator {
   private func startPipelineObservers() {
     phaseObserver = observePhases()
     levelsObserver = observe(mic.levels) { $0.overlay?.pushLevel($1) }
-    transcriptObserver = observe(transcriptStream) {
-      $0.recentDictations = $1
-      // Each dictation the ring gained is saved to the history too.
-      $0.transcripts.saveDictations(from: $1)
-    }
+    // `DictationSession` owns the ring of recent dictations (its request
+    // context); each entry it gains is saved to the history.
+    transcriptObserver = observe(transcriptStream) { $0.transcripts.saveDictations(from: $1) }
   }
 
   private func observePhases() -> Task<Void, Never> {

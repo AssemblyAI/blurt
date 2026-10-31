@@ -37,20 +37,13 @@
     }
 
     private static func isRunningInput(_ process: AudioObjectID) -> Bool {
-      var address = AudioRoute.globalAddress(kAudioProcessPropertyIsRunningInput)
       var running: UInt32 = 0
-      var size = UInt32(MemoryLayout<UInt32>.size)
-      guard AudioObjectGetPropertyData(process, &address, 0, nil, &size, &running) == noErr else { return false }
-      return running != 0
+      return AudioRoute.read(kAudioProcessPropertyIsRunningInput, of: process, into: &running) == noErr && running != 0
     }
 
     private static func bundleID(of process: AudioObjectID) -> String? {
-      var address = AudioRoute.globalAddress(kAudioProcessPropertyBundleID)
       var bundleID: Unmanaged<CFString>?
-      var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
-      let status = withUnsafeMutablePointer(to: &bundleID) {
-        AudioObjectGetPropertyData(process, &address, 0, nil, &size, UnsafeMutableRawPointer($0))
-      }
+      let status = AudioRoute.read(kAudioProcessPropertyBundleID, of: process, into: &bundleID)
       guard status == noErr, let string = bundleID?.takeRetainedValue() as String?, !string.isEmpty else {
         return nil
       }

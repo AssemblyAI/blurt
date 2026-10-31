@@ -177,12 +177,7 @@
     private func read<Value>(
       _ selector: AudioObjectPropertySelector, of object: AudioObjectID, into value: inout Value
     ) throws {
-      var address = AudioRoute.globalAddress(selector)
-      var size = UInt32(MemoryLayout<Value>.size)
-      let status = withUnsafeMutablePointer(to: &value) {
-        AudioObjectGetPropertyData(object, &address, 0, nil, &size, UnsafeMutableRawPointer($0))
-      }
-      try check("property \(selector)", status)
+      try check("property \(selector)", AudioRoute.read(selector, of: object, into: &value))
     }
 
     /// Blurt's own process object, so its cue sounds stay out of the tap.

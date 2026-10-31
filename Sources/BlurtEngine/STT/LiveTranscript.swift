@@ -30,6 +30,13 @@ public struct SpeakerTurn: Sendable, Equatable {
     return turns
   }
 
+  /// Whether more than one speaker was told apart among `labels` — the rule
+  /// for labelling a transcript's turns at all, live or async: a monologue
+  /// reads better without a label on every paragraph.
+  static func isMultiSpeaker(_ labels: [String?]) -> Bool {
+    Set(labels.compactMap(\.self)).count > 1
+  }
+
   /// Turns written back as the labelled transcript: a paragraph each.
   static func labelled(_ turns: [SpeakerTurn]) -> String {
     turns.map { "Speaker \($0.speaker ?? "?"): \($0.text)" }.joined(separator: "\n\n")
@@ -64,6 +71,7 @@ public struct LiveTranscript: Equatable, Sendable {
     } else {
       finals.append(turn)
     }
+    speakerTurns = Self.speakerTurns(of: spokenFinals)
   }
 
   /// What is being said right now, if anything.
@@ -71,10 +79,13 @@ public struct LiveTranscript: Equatable, Sendable {
 
   /// The settled turns as the view draws them. With more than one speaker,
   /// one turn per change of speaker; with one, a paragraph per turn and no
-  /// label — the same shapes `text` writes.
-  public var speakerTurns: [SpeakerTurn] {
-    let spoken = finals.filter { $0.transcript.trimmedNonEmpty() != nil }
-    guard Set(spoken.compactMap(\.speaker)).count > 1 else {
+  /// label — the same shapes `text` writes. Rebuilt only when a final lands,
+  /// not on each partial, so the view redrawing what's being said doesn't
+  /// rewalk the whole meeting.
+  public private(set) var speakerTurns: [SpeakerTurn] = []
+
+  private static func speakerTurns(of spoken: [RealtimeTurn]) -> [SpeakerTurn] {
+    guard SpeakerTurn.isMultiSpeaker(spoken.map(\.speaker)) else {
       return spoken.map { SpeakerTurn(speaker: nil, text: $0.transcript) }
     }
     var turns: [SpeakerTurn] = []
@@ -88,19 +99,21 @@ public struct LiveTranscript: Equatable, Sendable {
     return turns
   }
 
-  /// Whether more than one speaker was told apart.
-  private var isMultiSpeaker: Bool { Set(finals.compactMap(\.speaker)).count > 1 }
+  /// The settled turns that said something. An empty final's speaker label
+  /// counts for nothing, here and in `text`, so the two never disagree.
+  private var spokenFinals: [RealtimeTurn] { finals.filter { $0.transcript.trimmedNonEmpty() != nil } }
 
   /// The settled text as it is saved: `Speaker A: …` paragraphs with more
   /// than one speaker — the async transcripts' shape, so the transforms read
   /// both the same way — else the plain text.
   public var text: String {
-    isMultiSpeaker ? SpeakerTurn.labelled(speakerTurns) : plainText
+    // `speakerTurns` labels its turns only when more than one speaker spoke.
+    speakerTurns.contains { $0.speaker != nil } ? SpeakerTurn.labelled(speakerTurns) : plainText
   }
 
   /// The settled text without speaker labels: one paragraph per turn.
   public var plainText: String {
-    finals.map(\.transcript).filter { $0.trimmedNonEmpty() != nil }.joined(separator: "\n\n")
+    spokenFinals.map(\.transcript).joined(separator: "\n\n")
   }
 }
 

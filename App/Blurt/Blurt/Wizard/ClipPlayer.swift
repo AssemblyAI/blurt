@@ -7,14 +7,16 @@ import Observation
 /// can show Play or Stop for it. Starting another clip stops the first.
 @Observable
 final class ClipPlayer: NSObject, AVAudioPlayerDelegate {
-  /// The file playing now; nil when nothing is.
-  private(set) var playingURL: URL?
+  /// The history entry whose audio is playing now; nil when nothing is. An
+  /// id, not the file's URL: a row asking "is that me?" then needn't resolve
+  /// its bookmark to find out.
+  private(set) var playingID: UUID?
   @ObservationIgnored private var player: AVAudioPlayer?
 
-  /// Plays `url`, or stops it if it's the one playing. A file that can't be
-  /// opened (moved, deleted) simply doesn't play.
-  func toggle(_ url: URL) {
-    if playingURL == url {
+  /// Plays `url` for entry `id`, or stops it if that entry is playing. A file
+  /// that can't be opened (moved, deleted) simply doesn't play.
+  func toggle(_ url: URL, id: UUID) {
+    if playingID == id {
       stop()
       return
     }
@@ -23,13 +25,13 @@ final class ClipPlayer: NSObject, AVAudioPlayerDelegate {
     player.delegate = self
     guard player.play() else { return }
     self.player = player
-    playingURL = url
+    playingID = id
   }
 
   func stop() {
     player?.stop()
     player = nil
-    playingURL = nil
+    playingID = nil
   }
 
   nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {

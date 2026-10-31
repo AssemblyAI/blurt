@@ -79,49 +79,7 @@ private struct TranscriptSheet: View {
         ProgressLine(phase == .uploading ? "Uploading…" : "Transcribing…").frame(maxWidth: .infinity, minHeight: 80)
         buttons { Button("Cancel", role: .cancel) { model.dismiss() }.keyboardShortcut(.cancelAction) }
       case .finished:
-        HStack {
-          // The saved entry's title, which becomes the LLM's once it lands.
-          header(model.openEntry?.title ?? "")
-          Spacer()
-          // Plays what's showing: Full's own audio, or a task result read aloud.
-          if model.canPlayShown {
-            let playing = model.isPlayingShown
-            Button {
-              model.togglePlayShown()
-            } label: {
-              Label(playing ? "Stop" : "Play", systemImage: playing ? "stop.fill" : "play.fill")
-            }
-            .controlSize(.small)
-            .help(
-              model.selection == .full && model.openEntry?.kind != .dictation
-                ? "Play the audio"
-                : "Read \(model.selection == .full ? "it" : model.selection.title.lowercased()) aloud")
-          }
-          // Where the audio lives, a click from Finder.
-          if let url = model.openEntry?.audioURL {
-            Button {
-              NSWorkspace.shared.activateFileViewerSelecting([url])
-            } label: {
-              Label("Show in Finder", systemImage: "folder")
-                .labelStyle(.iconOnly)
-            }
-            .buttonStyle(.borderless)
-            .disabled(!FileManager.default.fileExists(atPath: url.path))
-            .help("Show in Finder")
-          }
-        }
-        TranscriptFacetPicker(model: model)
-        facetContent
-        HStack {
-          if let entry = model.openEntry {
-            Button("Delete…", role: .destructive) { pendingDelete = entry }
-          }
-          Spacer()
-          Button(copied ? "Copied" : "Copy") { model.selectedText.map(copy) }
-            .disabled(model.selectedText == nil)
-          Button("Done") { model.dismiss() }
-            .keyboardShortcut(.defaultAction)
-        }
+        finished(model.openEntry)
       case .failed(let fileName, let message):
         header(fileName)
         Label(message, systemImage: "exclamationmark.triangle")
@@ -148,6 +106,54 @@ private struct TranscriptSheet: View {
     .deleteConfirmation(for: $pendingDelete, model: model, closesSheet: true)
     // "Copied" belongs to the text that was copied, not the next facet's.
     .onChange(of: model.selection) { copied = false }
+  }
+
+  /// The open entry's transcript, its chips and actions.
+  @ViewBuilder
+  private func finished(_ entry: SavedTranscript?) -> some View {
+    HStack {
+      // The saved entry's title, which becomes the LLM's once it lands.
+      header(entry?.title ?? "")
+      Spacer()
+      // Plays what's showing: Full's own audio, or a task result read aloud.
+      if model.canPlayShown {
+        let playing = model.isPlayingShown
+        Button {
+          model.togglePlayShown()
+        } label: {
+          Label(playing ? "Stop" : "Play", systemImage: playing ? "stop.fill" : "play.fill")
+        }
+        .controlSize(.small)
+        .help(
+          model.selection == .full && entry?.kind != .dictation
+            ? "Play the audio"
+            : "Read \(model.selection == .full ? "it" : model.selection.title.lowercased()) aloud")
+      }
+      // Where the audio lives, a click from Finder.
+      if let url = entry?.audioURL {
+        Button {
+          NSWorkspace.shared.activateFileViewerSelecting([url])
+        } label: {
+          Label("Show in Finder", systemImage: "folder")
+            .labelStyle(.iconOnly)
+        }
+        .buttonStyle(.borderless)
+        .disabled(!FileManager.default.fileExists(atPath: url.path))
+        .help("Show in Finder")
+      }
+    }
+    TranscriptFacetPicker(model: model)
+    facetContent
+    HStack {
+      if let entry {
+        Button("Delete…", role: .destructive) { pendingDelete = entry }
+      }
+      Spacer()
+      Button(copied ? "Copied" : "Copy") { model.selectedText.map(copy) }
+        .disabled(model.selectedText == nil)
+      Button("Done") { model.dismiss() }
+        .keyboardShortcut(.defaultAction)
+    }
   }
 
   /// The selected facet's text area: the text, or its progress, or why it

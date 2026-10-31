@@ -28,7 +28,8 @@ struct RealtimeTranscriberTests {
     let connection = try await connect()
     let (server, transcriber, turns) = (connection.server, connection.transcriber, connection.turns)
     defer { server.stop() }
-    await transcriber.send(Data(count: 7_000))  // two 3,200-byte chunks, 600 left over
+    // Past the 1000 ms ceiling: one 32,000-byte message, 1,000 bytes left over.
+    await transcriber.send(Data(count: 33_000))
     await transcriber.finish()
     var received: [RealtimeTurn] = []
     for try await turn in turns { received.append(turn) }
@@ -41,8 +42,8 @@ struct RealtimeTranscriberTests {
         URLQueryItem(name: "encoding", value: "pcm_s16le"), URLQueryItem(name: "sample_rate", value: "16000"),
         URLQueryItem(name: "speaker_labels", value: "true"),
       ])
-    // The 600-byte tail is padded up to the documented 50 ms floor.
-    #expect(server.chunkSizes == [3_200, 3_200, RealtimeTranscriber.minimumChunkBytes])
+    // The 1,000-byte tail is padded up to the documented 50 ms floor.
+    #expect(server.chunkSizes == [32_000, RealtimeTranscriber.minimumChunkBytes])
     #expect(server.terminated)
     #expect(
       received == [
@@ -61,7 +62,8 @@ struct RealtimeTranscriberTests {
     await transcriber.send(Data(count: 3_200))
     await transcriber.finish()
     for try await _ in turns {}
-    #expect(server.chunkSizes == [3_200, 3_200])
+    // The backlog and the new audio go out together, unsliced.
+    #expect(server.chunkSizes == [6_400])
   }
 
   @Test("a connection that fails surfaces as an error on the turns")

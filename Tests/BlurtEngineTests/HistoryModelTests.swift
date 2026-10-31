@@ -121,38 +121,22 @@ struct HistoryModelTests {
   @Test("the relative label takes the caller's first-minute wording")
   func relativeLabelWording() {
     let now = Date(timeIntervalSince1970: 1_000_000)
-    #expect(RecentDictations.Entry.relativeLabel(for: now, now: now) == "just now")
+    #expect(now.relativeLabel(now: now) == "just now")
+    #expect(now.relativeLabel(now: now, justNow: "less than 1 minute ago") == "less than 1 minute ago")
     #expect(
-      RecentDictations.Entry.relativeLabel(for: now, now: now, justNow: "less than 1 minute ago")
-        == "less than 1 minute ago")
-    #expect(
-      RecentDictations.Entry.relativeLabel(
-        for: now, now: now.addingTimeInterval(120), locale: Locale(identifier: "en_US")) == "2 minutes ago")
+      now.relativeLabel(now: now.addingTimeInterval(120), locale: Locale(identifier: "en_US")) == "2 minutes ago")
   }
 
   // MARK: - TextReader
 
   @Test("text is read verbatim in the read-aloud voice — no skip-jargon rewrite")
   func textReaderVerbatim() async throws {
-    let speaker = RecordingSpeaker()
+    let speaker = GatedSpeaker()
+    speaker.finishAll()
     try await TextReader(speaker: speaker).read("Meeting notes.")
     let calls = speaker.calls
     #expect(calls.count == 1)
-    #expect(calls.first?.text == "Meeting notes.")
+    #expect(calls.first?.kind == "speak: Meeting notes.")
     #expect(calls.first?.style.skipsJargon == false)
   }
-}
-
-/// Records what it's asked to speak.
-private final class RecordingSpeaker: ReadAloudSpeaker, Sendable {
-  private let recorded = Mutex<[(text: String, style: ReadAloudStyle)]>([])
-  var calls: [(text: String, style: ReadAloudStyle)] { recorded.withLock { $0 } }
-
-  func speak(_ text: String, style: ReadAloudStyle, onLevel: (@Sendable (Float) -> Void)?) async throws {
-    recorded.withLock { $0.append((text, style)) }
-  }
-
-  func answer(
-    _ request: String, about selection: String, style: ReadAloudStyle, onLevel: (@Sendable (Float) -> Void)?
-  ) async throws {}
 }

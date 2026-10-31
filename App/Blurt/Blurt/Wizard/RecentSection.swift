@@ -19,6 +19,11 @@ struct RecentSection: View {
   @State private var selection: SavedTranscript.ID?
   @State private var pendingDelete: SavedTranscript?
   @State private var searchFocusRequest = 0
+  /// The history, filtered (`filtered()`): recomputed only when the history,
+  /// the filter or the search changes — not on every selection change or
+  /// play/stop, which also redraw this view, and which would otherwise re-run
+  /// a full-text search across every saved transcript.
+  @State private var shown: [SavedTranscript] = []
 
   private var model: TranscriptsModel { coordinator.transcripts }
 
@@ -28,10 +33,10 @@ struct RecentSection: View {
   /// The history, filtered: by kind, then by a case- and diacritic-blind match
   /// against the title, the transcript, an answer's request, and every fetched
   /// task result — field by field, stopping at the first match.
-  private var shown: [SavedTranscript] {
+  private func filtered() -> [SavedTranscript] {
     let query = trimmedQuery
     return model.history.filter { entry in
-      guard filter.includes(entry.kind) else { return false }
+      guard filter.includes(entry) else { return false }
       guard let query else { return true }
       return entry.title.localizedStandardContains(query) || entry.text.localizedStandardContains(query)
         || entry.request?.localizedStandardContains(query) == true
@@ -54,6 +59,9 @@ struct RecentSection: View {
         .background(Color(nsColor: .quaternarySystemFill), in: FormPanel.shape)
         .clipShape(FormPanel.shape)
     }
+    .onChange(of: model.history, initial: true) { shown = filtered() }
+    .onChange(of: filter) { shown = filtered() }
+    .onChange(of: query) { shown = filtered() }
     // Edit › Find (⌘F), for this window.
     .focusedSceneValue(\.focusHistorySearch, model.history.isEmpty ? nil : { searchFocusRequest += 1 })
     .deleteConfirmation(for: $pendingDelete, model: model) { deleted in
@@ -88,7 +96,6 @@ struct RecentSection: View {
   }
 
   @ViewBuilder private var content: some View {
-    let shown = shown
     if model.history.isEmpty {
       emptyPrompt
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -184,12 +191,12 @@ private enum HistoryFilter: CaseIterable {
     }
   }
 
-  func includes(_ kind: SavedTranscript.Kind) -> Bool {
+  func includes(_ entry: SavedTranscript) -> Bool {
     switch self {
     case .all: true
-    case .dictations: kind == .dictation
-    case .read: kind == .readAloud
-    case .transcripts: kind == .file || kind == .recording  // `SavedTranscript.isTranscript`
+    case .dictations: entry.kind == .dictation
+    case .read: entry.kind == .readAloud
+    case .transcripts: entry.isTranscript
     }
   }
 
@@ -237,7 +244,7 @@ private struct HistoryRow: View {
   var body: some View {
     // The whole row in the timeline, so the tooltip's and VoiceOver's ages
     // advance with the visible one.
-    TimelineView(.periodic(from: .now, by: RecentDictations.Entry.justNowThreshold / 2)) { timeline in
+    TimelineView(.periodic(from: .now, by: Date.justNowThreshold / 2)) { timeline in
       row(now: timeline.date)
     }
   }
@@ -283,7 +290,7 @@ private struct HistoryRow: View {
   /// then "17 min", "3 hr", then the day — "Yesterday", "Mon", "Oct 12".
   static func shortTime(of date: Date, now: Date) -> String {
     let elapsed = now.timeIntervalSince(date)
-    if elapsed < RecentDictations.Entry.justNowThreshold { return "Now" }
+    if elapsed < Date.justNowThreshold { return "Now" }
     if elapsed < 3600 { return "\(Int(elapsed / 60)) min" }
     if Calendar.current.isDate(date, inSameDayAs: now) { return "\(Int(elapsed / 3600)) hr" }
     if Calendar.current.isDateInYesterday(date) { return "Yesterday" }
@@ -311,7 +318,7 @@ private struct HistoryRow: View {
       }
     // "less than 1 minute ago" for the first minute, then the system's
     // wording — the engine's rule (`relativeLabel`), with this list's phrase.
-    let age = RecentDictations.Entry.relativeLabel(for: entry.date, now: now, justNow: "less than 1 minute ago")
+    let age = entry.date.relativeLabel(now: now, justNow: "less than 1 minute ago")
     return [kind, entry.style, age]
       .compactMap { $0 }.joined(separator: " · ")
   }

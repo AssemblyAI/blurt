@@ -19,9 +19,12 @@ public actor RealtimeTranscriber {
   public static let defaultURL = URL(literal: "wss://streaming.assemblyai.com/v3/ws")
   /// The sample rate of the PCM `send` takes — the recorder's output.
   public static let sampleRate = 16_000
-  /// Audio per message: 100 ms of 16-bit mono, inside the documented
-  /// 50–1000 ms window. The recorder delivers far smaller slices.
-  static let chunkBytes = sampleRate / 10 * 2
+  /// The smallest message `send` makes: 100 ms of 16-bit mono, inside the
+  /// documented 50–1000 ms window. The recorder hands audio on in this size.
+  public static let chunkBytes = sampleRate / 10 * 2
+  /// The documented ceiling for one message — 1000 ms — which only the
+  /// backlog queued before the socket opened can exceed.
+  static let maximumChunkBytes = sampleRate * 2
   /// The documented floor for one message, which a final flush is padded to.
   static let minimumChunkBytes = sampleRate / 20 * 2
   /// How long `finish` waits for `Termination` before closing anyway.
@@ -66,16 +69,24 @@ public actor RealtimeTranscriber {
     return stream
   }
 
-  /// Queues recorded PCM (16 kHz mono S16LE) and sends it in 100 ms messages.
+  /// Queues recorded PCM (16 kHz mono S16LE) and sends it once 100 ms has
+  /// gathered — whole, as any size in the documented window is valid, so the
+  /// recorder's 100 ms hand-offs go out without being re-sliced.
   /// Audio that arrives before `start` has opened the socket waits here, so a
   /// recording's opening words aren't dropped while the connection comes up.
   public func send(_ pcm: Data) async {
     pending.append(pcm)
     guard task != nil else { return }
     while pending.count >= Self.chunkBytes {
-      let chunk = pending.prefix(Self.chunkBytes)
-      pending.removeFirst(Self.chunkBytes)
-      try? await task?.send(.data(Data(chunk)))
+      let chunk: Data
+      if pending.count <= Self.maximumChunkBytes {
+        chunk = pending
+        pending = Data()
+      } else {
+        chunk = Data(pending.prefix(Self.maximumChunkBytes))
+        pending.removeFirst(Self.maximumChunkBytes)
+      }
+      try? await task?.send(.data(chunk))
     }
   }
 
@@ -113,7 +124,9 @@ public actor RealtimeTranscriber {
   }
 
   private func waitForTermination() async {
-    guard !didTerminate else { return }
+    // Already closed (the socket failed, or `cancel`): no `Termination` is
+    // coming, so don't sit out the timeout for one.
+    guard !didTerminate, task != nil else { return }
     await withCheckedContinuation { terminated = $0 }
   }
 
@@ -133,8 +146,7 @@ public actor RealtimeTranscriber {
         if let turn = event.turn { continuation?.yield(turn) }
       case "Termination":
         didTerminate = true
-        terminated?.resume()
-        terminated = nil
+        releaseTerminationWait()
         continuation?.finish()
         continuation = nil
       default:
@@ -157,8 +169,7 @@ public actor RealtimeTranscriber {
     session.finishTasksAndInvalidate()
     if let error { continuation?.finish(throwing: error) } else { continuation?.finish() }
     continuation = nil
-    terminated?.resume()
-    terminated = nil
+    releaseTerminationWait()
   }
 
   /// One server message — only the fields read. `Turn`'s are flattened into

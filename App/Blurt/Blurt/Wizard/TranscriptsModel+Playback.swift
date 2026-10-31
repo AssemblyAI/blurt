@@ -5,6 +5,17 @@ import BlurtEngine
 // other tab (meeting notes, a summary…), and Full for a dictation, which keeps
 // no audio, is read aloud in the user's read-aloud voice. Split from TranscriptsModel.swift for the file-length budget.
 extension TranscriptsModel {
+  /// Plays a saved entry's audio, or stops it if it's playing.
+  func togglePlayback(_ entry: SavedTranscript) {
+    guard let url = entry.audioURL else { return }
+    player.toggle(url, id: entry.id)
+  }
+
+  /// Whether `entry`'s audio is what's playing.
+  func isPlaying(_ entry: SavedTranscript) -> Bool {
+    player.playingID == entry.id
+  }
+
   /// Whether the showing content has something to play: Full needs audio; a
   /// task result needs its text in hand.
   var canPlayShown: Bool {
@@ -19,8 +30,7 @@ extension TranscriptsModel {
   /// Whether the showing content is the thing playing now.
   var isPlayingShown: Bool {
     if showsOriginalAudio {
-      guard let url = openEntry?.audioURL else { return false }
-      return player.playingURL == url
+      return openEntry.map(isPlaying) ?? false
     }
     return readingFacet == selection
   }

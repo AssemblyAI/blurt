@@ -30,7 +30,13 @@ struct LiveRecordingView: View {
         if model.live.finals.isEmpty, model.live.partial == nil {
           Text("Listening…").foregroundStyle(.secondary)
         } else {
-          SpeakerTurnsView(turns: model.live.speakerTurns, partial: model.live.partial)
+          VStack(alignment: .leading, spacing: 6) {
+            SpeakerTurnsView(turns: model.live.speakerTurns).equatable()
+            // The words being spoken now: shown last, dimmed.
+            if let partial = model.live.partial {
+              Text(partial).foregroundStyle(.secondary).padding(.horizontal, 8)
+            }
+          }
         }
       }
       .textSelection(.enabled)

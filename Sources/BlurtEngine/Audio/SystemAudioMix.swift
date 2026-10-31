@@ -1,5 +1,6 @@
 #if os(macOS)
   import AVFoundation
+  import AssemblyAI
   import CoreAudio
   import Foundation
 
@@ -29,7 +30,7 @@
     /// 16-bit PCM not yet handed on, up to `handOffBytes`.
     private var pending = Data()
     /// 100 ms of 16 kHz 16-bit mono: what `onPCM` is handed at a time.
-    static let handOffBytes = Int(SystemAudioRecorder.outputSampleRate) / 10 * 2
+    static let handOffBytes = RealtimeTranscriber.chunkBytes
     /// What reached the writer, for the stop log line: a recording that comes
     /// back empty is told apart from one that never got a callback.
     private var callbacks = 0
@@ -42,8 +43,8 @@
     }
 
     init(url: URL, inputRate: Double, maxFrames: Int, onPCM: @escaping @Sendable (Data) -> Void) throws {
-      // Room for the largest cycle the device delivers, and then some: a
-      // larger one is split rather than dropped (`write`).
+      // Room for the largest cycle the device delivers, twice over: a larger
+      // one would be truncated to this (`mix`), so the margin is generous.
       let capacity = AVAudioFrameCount(max(maxFrames, 512) * 2)
       let outputRate = SystemAudioRecorder.outputSampleRate
       guard let mixFormat = AVAudioFormat(standardFormatWithSampleRate: inputRate, channels: 1),
@@ -116,7 +117,7 @@
       // Handed on 100 ms at a time — the realtime API's message size — rather
       // than a ~10 ms slice per cycle, so the hop to the socket happens a tenth
       // as often.
-      pending.append(Data(bytes: outputSamples, count: count * MemoryLayout<Int16>.size))
+      pending.append(UnsafeBufferPointer(start: outputSamples, count: count))
       if pending.count >= Self.handOffBytes {
         onPCM(pending)
         pending.removeAll(keepingCapacity: true)
