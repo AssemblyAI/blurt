@@ -234,13 +234,15 @@ struct SelectionSpeechRoutingAskTests {
         == [.answer(request: "Summarize.", selection: "Revenue rose.")])
   }
 
-  @Test("a held ask let go before the selection read returns asks nothing")
+  @Test("a held ask let go before the selection read returns asks nothing, and frees the gate it latched")
   func shortHeldAskBeforeRead() {
     var routing = SelectionSpeechRouting()
     _ = ask(&routing)
     _ = routing.holdElapsed()
-    _ = routing.keyLatched()
+    #expect(routing.keyLatched() == [.resetGate])
     #expect(routing.selectionResolved("Revenue rose.").isEmpty)
+    // Back to passthrough with the gate idle: the next press is a fresh one.
+    #expect(ask(&routing) == [.readSelection, .startHoldTimer])
   }
 
   @Test("a request with nothing said, or a failed one, is a dictation ending without a key event")

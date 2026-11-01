@@ -193,13 +193,15 @@ struct SelectionSpeechRouting: Sendable {
     switch mode {
     case .deciding(let intent, let trigger, let ended):
       // Held past the delay, then let go before the gate's own threshold: a
-      // short hold. A held ask ends there, having asked nothing yet; a read
-      // keeps going, as a tapped one does.
+      // short hold. A held ask ends there, having asked nothing yet, so free the
+      // gate this latch left behind: nothing later will, since `selectionResolved`
+      // then finds the press ended and no session started to reach a terminal
+      // phase. A read keeps going, as a tapped one does.
       if trigger == .hold, intent == .ask {
         mode = .deciding(intent, trigger: trigger, ended: true)
-      } else {
-        mode = .deciding(intent, trigger: .tap, ended: ended)
+        return [.resetGate]
       }
+      mode = .deciding(intent, trigger: .tap, ended: ended)
       return []
     case .selected(let intent, let selection):
       return self.trigger(intent, selection, by: .tap)
