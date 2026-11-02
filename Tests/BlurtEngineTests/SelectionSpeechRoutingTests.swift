@@ -161,6 +161,30 @@ struct SelectionSpeechRoutingTests {
     #expect(routing.submit(.cancelRecording) == [.stopSpeech, .forward(.cancelRecording)])
   }
 
+  @Test("the dictation key pressed while a let-go read is still out dictates, and the read decides nothing")
+  func dictationWhileEndedReadOut() {
+    var routing = SelectionSpeechRouting()
+    _ = read(&routing, holds: true)
+    _ = routing.submit(.release)
+    #expect(
+      routing.press(key: .rightCommand, action: .dictate, holds: true)
+        == [.forward(.press(key: .rightCommand))])
+    #expect(routing.selectionResolved("Hello there.").isEmpty)
+    #expect(routing.submit(.release) == [.forward(.release)])
+  }
+
+  @Test("a read pressed again while the last one's read is still out is decided by its own read")
+  func repressWhileEndedReadOut() {
+    var routing = SelectionSpeechRouting()
+    _ = read(&routing)
+    _ = routing.submit(.cancel)
+    #expect(read(&routing) == [.readSelection])
+    // The cancelled press's read lands first and is dropped, nil or not.
+    #expect(routing.selectionResolved(nil).isEmpty)
+    #expect(routing.selectionResolved("Hello there.").isEmpty)
+    #expect(routing.keyLatched() == [.speak("Hello there."), .resetGate])
+  }
+
   @Test("a stale selection result after the press resolved is ignored")
   func staleSelection() {
     var routing = SelectionSpeechRouting()
@@ -234,12 +258,52 @@ struct SelectionSpeechRoutingAskTests {
         == [.answer(request: "Summarize.", selection: "Revenue rose.")])
   }
 
-  @Test("a held ask let go before the selection read returns asks nothing")
+  @Test("a held ask let go before the selection read returns asks nothing, and frees the gate it latched")
   func shortHeldAskBeforeRead() {
     var routing = SelectionSpeechRouting()
     _ = ask(&routing)
     _ = routing.holdElapsed()
+    #expect(routing.keyLatched() == [.resetGate])
+    #expect(routing.selectionResolved("Revenue rose.").isEmpty)
+    // Back to passthrough with the gate idle: the next press is a fresh one.
+    #expect(ask(&routing) == [.readSelection, .startHoldTimer])
+  }
+
+  @Test("with nothing selected, a held ask let go before the read returns frees the gate once")
+  func shortHeldAskNothingSelected() {
+    var routing = SelectionSpeechRouting()
+    _ = ask(&routing)
+    _ = routing.holdElapsed()
+    #expect(routing.keyLatched() == [.resetGate])
+    #expect(routing.selectionResolved(nil).isEmpty)
+  }
+
+  @Test("the dictation key tapped while a let-go held ask's read is out dictates, whenever the read lands")
+  func dictationAfterShortHeldAsk() {
+    var routing = SelectionSpeechRouting()
+    _ = ask(&routing)
+    _ = routing.holdElapsed()
     _ = routing.keyLatched()
+    #expect(
+      routing.press(key: .rightCommand, action: .dictate, holds: true)
+        == [.forward(.press(key: .rightCommand))])
+    // The ask's read lands mid-dictation: it neither asks nor touches the gate.
+    #expect(routing.selectionResolved("Revenue rose.").isEmpty)
+    // The dictation key's own latch isn't taken for the ask's.
+    #expect(routing.keyLatched().isEmpty)
+    #expect(routing.submit(.release) == [.forward(.release)])
+    #expect(routing.sessionPhaseChanged(.idle) == [.syncGateAfterSession])
+  }
+
+  @Test("a held ask let go past the gate's threshold, before the read returns, leaves the next press live")
+  func longHeldAskBeforeRead() {
+    var routing = SelectionSpeechRouting()
+    _ = ask(&routing)
+    _ = routing.holdElapsed()
+    #expect(routing.submit(.release).isEmpty)
+    #expect(
+      routing.press(key: .rightCommand, action: .dictate, holds: true)
+        == [.forward(.press(key: .rightCommand))])
     #expect(routing.selectionResolved("Revenue rose.").isEmpty)
   }
 
