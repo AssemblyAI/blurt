@@ -48,7 +48,7 @@ struct PersistedSettingsTests {
     // ReadAloudStyleStore and StyleProfileStore three each): a removed store
     // must leave the roster in the same change, and a key listed twice would hint
     // at a copy-paste slip.
-    #expect(PersistedSettings.allDefaultsKeys.count == 20)
+    #expect(PersistedSettings.allDefaultsKeys.count == 21)
     #expect(Set(PersistedSettings.allDefaultsKeys).count == PersistedSettings.allDefaultsKeys.count)
   }
 
@@ -81,11 +81,12 @@ struct PersistedSettingsTests {
       ReadAloudStyleStore.speedDefaultsKey,
       ReadAloudStyleStore.skipsJargonDefaultsKey,
       ReadAloudStyleStore.voiceDefaultsKey,
+      MeetingAutoRecordStore.defaultsKey,
     ]
     #expect(storeKeys == Set(DefaultsKey.allCases.map(\.key)))
     // No two stores sharing a slot — the Set above would have quietly absorbed a
     // collision, and two stores on one key means each overwrites the other.
-    #expect(storeKeys.count == 20)
+    #expect(storeKeys.count == 21)
   }
 
   @Test("resetAll clears every roster key and leaves unrelated ones alone")

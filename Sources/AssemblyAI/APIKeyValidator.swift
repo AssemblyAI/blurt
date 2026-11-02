@@ -53,12 +53,9 @@ public struct APIKeyValidator: Sendable {
 
     var request = URLRequest(url: url)
     request.httpMethod = "GET"
-    // AssemblyAI expects the raw key in Authorization (no "Bearer" prefix),
-    // matching AssemblyAITranscriber.
-    request.setValue(trimmed, forHTTPHeaderField: "Authorization")
     // The caller's agent (Blurt sends the one its dictation requests carry), so
     // a key this endpoint rejects can be traced to the build that asked.
-    if let userAgent { request.setValue(userAgent, forHTTPHeaderField: "User-Agent") }
+    request.authorize(apiKey: trimmed, userAgent: userAgent)
 
     do {
       let (_, response) = try await transport.data(for: request)

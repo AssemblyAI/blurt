@@ -60,10 +60,12 @@ xcrun swiftc "${IOS_FLAGS[@]}" -application-extension -D DEBUG -module-name Blur
   -emit-module -emit-module-path "$WORK/BlurtiOSCore.swiftmodule" "$IOS"/BlurtiOSCore/*.swift
 
 # The component library both targets link, emitted the same way and just as
-# extension-safe.
+# extension-safe. App/Shared rides in too, as project.yml has it: FlowLayout,
+# shared with the Mac app.
 echo "BlurtDesign"
 xcrun swiftc "${IOS_FLAGS[@]}" -application-extension -module-name BlurtDesign \
-  -emit-module -emit-module-path "$WORK/BlurtDesign.swiftmodule" "$IOS"/BlurtDesign/*.swift
+  -emit-module -emit-module-path "$WORK/BlurtDesign.swiftmodule" "$IOS"/BlurtDesign/*.swift \
+  "$IOS"/../Shared/*.swift
 
 # The app also compiles the keyboard's sources, all but its entry point
 # (project.yml: the theme picker and the home screen draw the real keyboard

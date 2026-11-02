@@ -51,8 +51,11 @@ import Foundation
     /// way from a read that's over must not land on the pill.
     private var activeGeneration: Int?
 
-    public convenience init(session: DictationSession) {
-      self.init(session: session, speaker: SelectionSpeaker(), readSelection: SelectionSpeaker.focusedSelection)
+    /// `clips`, when given, keeps every read's audio and reports each one —
+    /// the host's history of what was read aloud.
+    public convenience init(session: DictationSession, clips: ReadClipSink? = nil) {
+      self.init(
+        session: session, speaker: SelectionSpeaker(clips: clips), readSelection: SelectionSpeaker.focusedSelection)
     }
 
     /// The seams: what speaks, how the selection is read, and where the
@@ -128,7 +131,7 @@ import Foundation
           run { [speaker] onLevel in try await speaker.speak(text, style: style, onLevel: onLevel) }
         case .answer(let request, let selection):
           let style = ReadAloudStyleStore(defaults: defaults).style
-          run { [speaker] onLevel in
+          run(startCueDelay: Self.answerCueGap) { [speaker] onLevel in
             try await speaker.answer(request, about: selection, style: style, onLevel: onLevel)
           }
         case .stopSpeech:
@@ -169,15 +172,32 @@ import Foundation
       speechEnded()
     }
 
+    /// The beat between an ask's end and its answer's start. The spoken
+    /// request ends with dictation's stop chime, and the answer would start
+    /// with read-aloud's start chime in the same instant — two sounds run
+    /// together. Holding the second back this long keeps them apart.
+    static let answerCueGap: Duration = .milliseconds(400)
+
     /// Runs one read or answer as the current speech task, handing it the meter
-    /// callback, and reports its start and end.
+    /// callback, and reports its start and end. `startCueDelay` holds back the
+    /// start (the pill and its chime) — skipped if the speech has already
+    /// ended by then.
     private func run(
+      startCueDelay: Duration = .zero,
       _ work: @escaping @Sendable (_ onLevel: @escaping @Sendable (Float) -> Void) async throws -> Void
     ) {
       speechGeneration += 1
       let generation = speechGeneration
       activeGeneration = generation
-      speechStarted()
+      if startCueDelay == .zero {
+        speechStarted()
+      } else {
+        Task { [weak self] in
+          try? await Task.sleep(for: startCueDelay)
+          guard let self, self.activeGeneration == generation else { return }
+          self.speechStarted()
+        }
+      }
       let onLevel: @Sendable (Float) -> Void = { [weak self] level in
         Task { @MainActor in
           guard let self, self.activeGeneration == generation else { return }

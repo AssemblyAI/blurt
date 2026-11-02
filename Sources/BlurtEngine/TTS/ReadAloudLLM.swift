@@ -130,12 +130,21 @@ struct ReadAloudLLM: Sendable {
   }
 
   private func complete(_ body: Body, timeout: TimeInterval) async throws -> Reply {
-    guard let apiKey = apiKeyProvider(), !apiKey.isEmpty else { throw BlurtError.apiKeyMissing }
-    let request = try Self.request(for: body, apiKey: apiKey, timeout: timeout)
+    try await Self.send(body, apiKey: apiKeyProvider(), transport: transport, timeout: timeout)
+  }
+
+  /// One gateway chat completion: the key check, the request, the status and
+  /// the reply. Shared with `TranscriptLLM`, the other gateway client, so the
+  /// call is spelled once.
+  static func send(
+    _ body: Body, apiKey: String?, transport: any HTTPTransport, timeout: TimeInterval
+  ) async throws -> Reply {
+    guard let apiKey, !apiKey.isEmpty else { throw BlurtError.apiKeyMissing }
+    let request = try request(for: body, apiKey: apiKey, timeout: timeout)
     let (data, response) = try await transport.data(for: request)
     let status = (response as? HTTPURLResponse)?.statusCode ?? 0
     guard (200..<300).contains(status) else { throw ReadAloudLLMError.status(status) }
-    return try Self.reply(from: data)
+    return try reply(from: data)
   }
 
   // MARK: - Wire format
@@ -157,7 +166,7 @@ struct ReadAloudLLM: Sendable {
     }
   }
 
-  static func chat(system: String, user: String, maxTokens: Int) -> Body {
+  static func chat(system: String, user: String, maxTokens: Int, model: String = model) -> Body {
     Body(
       model: model,
       messages: [.init(role: "system", content: system), .init(role: "user", content: user)],

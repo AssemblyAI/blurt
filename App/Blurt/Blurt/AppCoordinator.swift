@@ -42,18 +42,6 @@ final class AppCoordinator {
   @ObservationIgnored private let transcriptStream: AsyncStream<RecentDictations>
   @ObservationIgnored private var transcriptObserver: Task<Void, Never>?
 
-  /// The dictations that produced a transcript — pasted, copied, or even
-  /// failed-to-paste (the seam fires before injection) — newest first, the first
-  /// `displayCapacity` of them listed in the ready window's "Recent" section
-  /// beneath the shortcut readout. In-memory only — starts empty each launch and
-  /// is never written to disk.
-  ///
-  /// A **projection**, not a second ring: `DictationSession` owns the history
-  /// (it builds each request's `conversation_context` from it, inside the actor)
-  /// and pushes the updated value here, so this can't drift from what was
-  /// actually sent. Nothing outside the session records into it.
-  private(set) var recentDictations = RecentDictations()
-
   /// Live dictation status for the menu bar indicator (see `MenuBarLabel`).
   /// Updated in `render(_:)` alongside the overlay pill. The menu bar item is a
   /// convenience layered on the Dock app and can be hidden behind the notch on a
@@ -70,6 +58,9 @@ final class AppCoordinator {
   /// What reads aloud and how the selection is read, when not the real ones:
   /// UI tests run the whole read-aloud path offline. Nil in production.
   @ObservationIgnored private let readAloudSeams: ReadAloudSeams?
+  /// The saved history — every dictation, dropped or browsed-for file and
+  /// recording — and the transcript sheet's state for whichever is open.
+  let transcripts: TranscriptsModel
 
   /// `components` defaults to the production pipeline, its transcriber dictating
   /// against the account's `dictationOrigin`; `apiKey` defaults to the
@@ -82,7 +73,8 @@ final class AppCoordinator {
     components: DictationComponents? = nil,
     apiKey: APIKeyModel = APIKeyModel(),
     account: AssemblyAIAccount? = nil,
-    readAloud: ReadAloudSeams? = nil
+    readAloud: ReadAloudSeams? = nil,
+    transcripts: TranscriptsModel? = nil
   ) {
     self.onSetupBlocked = onSetupBlocked
     self.readAloudSeams = readAloud
@@ -110,6 +102,8 @@ final class AppCoordinator {
     self.transcriptStream = transcriptStream
 
     self.mic = components.mic
+    self.transcripts = transcripts ?? TranscriptsModel()
+    self.transcripts.setAutoRecordMeetings(MeetingAutoRecordStore().isEnabled)
     self.session = DictationSession(
       mic: components.mic,
       transcriber: components.transcriber,
@@ -170,7 +164,13 @@ final class AppCoordinator {
     let router =
       readAloudSeams.map {
         SelectionSpeechRouter(session: session, speaker: $0.speaker, readSelection: $0.readSelection)
-      } ?? SelectionSpeechRouter(session: session)
+      }
+      ?? SelectionSpeechRouter(
+        session: session,
+        // Every read is kept, findable and playable from the Recent list.
+        clips: ReadClipSink(directory: TranscriptStore.readAloudDirectory) { [weak self] clip in
+          Task { @MainActor in self?.transcripts.saveReadClip(clip) }
+        })
     keyTap = DictationKeyTap(
       // The key rides the press, and the session resolves its style for that one
       // dictation (`PressStyle`); the main window's selection is never written.
@@ -219,7 +219,9 @@ final class AppCoordinator {
   private func startPipelineObservers() {
     phaseObserver = observePhases()
     levelsObserver = observe(mic.levels) { $0.overlay?.pushLevel($1) }
-    transcriptObserver = observe(transcriptStream) { $0.recentDictations = $1 }
+    // `DictationSession` owns the ring of recent dictations (its request
+    // context); each entry it gains is saved to the history.
+    transcriptObserver = observe(transcriptStream) { $0.transcripts.saveDictations(from: $1) }
   }
 
   private func observePhases() -> Task<Void, Never> {

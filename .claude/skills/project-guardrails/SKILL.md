@@ -63,17 +63,24 @@ genuinely correct, and reaching for it means it's time to stop and ask.
   that is about the **upload**: the service starts inferring as the audio
   arrives, and still answers with one final transcript. No deltas, no partial
   results, no WebSocket — don't read the route name as permission to add them.
-  There is no socket in the tree: read-aloud's TTS client
-  (`TTS/AssemblyAISpeechSynthesizer.swift`) is a streaming HTTP response, and
-  it speaks text, never transcribes, so it is not a door back to streaming STT.
+  The one socket in the tree is the main window's Record button
+  (`AssemblyAI/Realtime/RealtimeTranscriber.swift`, the only file the gate
+  exempts): a meeting or call transcribed live, partials and all. It never
+  carries a dictation, so it is not a door back to streaming dictation.
+  Read-aloud's TTS client (`TTS/AssemblyAISpeechSynthesizer.swift`) is a
+  streaming HTTP response, and it speaks text, never transcribes.
 - **No separate LLM cleanup pass.** Cleanup rides in the same dictation request,
   as `config.llm_instruction` (`CleanupInstruction`). No LLM Gateway
   client for dictation, no `StylerProtocol`, no post-transcription styling
-  stage. The one gateway client in the tree is the read-aloud
-  feature's (`TTS/ReadAloudLLM.swift`, the only file `check-invariants.sh`
+  stage. The first gateway client in the tree is the read-aloud
+  feature's (`TTS/ReadAloudLLM.swift`, one of two files `check-invariants.sh`
   exempts from this rule): the skip-jargon listening rewrite of a selection, and
   the spoken answer to a request about one. It never cleans up a dictation, so
-  it is not a door back to a cleanup pass.
+  it is not a door back to a cleanup pass. The second is file transcription's
+  (`STT/TranscriptTransform.swift`, also exempt): summary, key points and the
+  other stock transforms over a saved transcript. It is never in the
+  dictation path and nothing it writes is pasted: it runs only on a history
+  entry the user opens and asks for a task, past dictations included.
 - **No local models / model downloads.** Transcription is a remote AssemblyAI
   call. No on-device ASR/LLM, no model cache, no download UI.
 - **There is no `config.conversation_context`.** `config.stt_prompt`

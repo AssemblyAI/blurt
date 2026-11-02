@@ -41,9 +41,18 @@ struct ReadyView: View {
     let active = StyleProfileStore.active(in: profiles, id: rawActiveID)
     VStack(spacing: 0) {
       MainWindowBranding()
-        .padding(.top, 16)
+        .padding(.top, 12)
+
+      // Recording and file import are the first actions below the wordmark.
+      TranscribeRow(model: coordinator.transcripts)
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
 
       Form {
+        // Keys, one line each — the section grows by a line per bound key,
+        // not a paragraph. Each key can be tap, hold, or both (the Keys tab),
+        // so each row says its own mode beside its key; the full sentence is
+        // its tooltip. The writing style the dictation keys use closes the group.
         Section {
           shortcutRow
           // Every other key given an action in the Keys tab, in its order.
@@ -61,17 +70,18 @@ struct ReadyView: View {
         } footer: {
           StylesInertNotice()
         }
-
-        // `displayed`, not `entries`: the ring remembers 100 dictations (they
-        // are also request context — see `ConversationContext`) and this list
-        // is three rows tall.
-        RecentDictationsSection(
-          entries: coordinator.recentDictations.displayed, triggerKey: triggerKey,
-          activation: activation)
       }
       .formStyle(.grouped)
+      .controlSize(.small)
+      .environment(\.defaultMinListRowHeight, 28)
       .scrollDisabled(true)
       .fixedSize(horizontal: false, vertical: true)
+
+      // Dictations and transcriptions together, outside the form so its list
+      // scrolls; the whole window takes a dropped file (`audioFileDropTarget`).
+      RecentSection(coordinator: coordinator, triggerKey: triggerKey, activation: activation)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 16)
 
       bottomBar
         // The grouped form insets its sections by 20, so the bar lines up
@@ -81,6 +91,8 @@ struct ReadyView: View {
     }
     .frame(width: MainWindow.contentWidth)
     .fixedSize(horizontal: false, vertical: true)
+    // Drop an audio or video file anywhere on the window to transcribe it.
+    .audioFileDropTarget(coordinator.transcripts)
     .onReceive(
       NotificationCenter.default.publisher(for: StyleProfileStore.profilesDidChangeNotification)
     ) { _ in
@@ -100,15 +112,19 @@ struct ReadyView: View {
   /// the mic bring-up) — during "Connecting…" nothing is captured yet, so
   /// claiming "Listening" would invite unrecoverable speech.
   private var shortcutRow: some View {
-    SettingRow(title: "Dictate", systemImage: "keyboard", subtitle: activation.hint(for: .dictate)) {
+    SettingRow(title: "Dictate", systemImage: "keyboard") {
       HStack(spacing: 8) {
-        phaseText
-          .foregroundStyle(.secondary)
+        // The live phase while dictating; the key's mode the rest of the time.
+        if coordinator.menuBarStatus == .idle {
+          KeyMode(activation: activation)
+        } else {
+          phaseText
+            .foregroundStyle(.secondary)
+        }
         KeyCap(label: triggerKey.keycapLabel, isLit: coordinator.isCapturing)
           .frame(minWidth: 64, alignment: .trailing)
       }
     }
-    .padding(.vertical, 3)
     .help(activation.hint(for: .dictate))
     .accessibilityElement(children: .ignore)
     .accessibilityLabel("Dictate: \(triggerKey.spokenName). \(phaseDescription)")
@@ -143,11 +159,13 @@ struct ReadyView: View {
         )
       }
     let hint = bindings.activation(for: key).hint(for: choice.action)
-    return SettingRow(title: title, systemImage: symbol, subtitle: hint) {
-      KeyCap(label: key.keycapLabel)
-        .frame(minWidth: 64, alignment: .trailing)
+    return SettingRow(title: title, systemImage: symbol) {
+      HStack(spacing: 8) {
+        KeyMode(activation: bindings.activation(for: key))
+        KeyCap(label: key.keycapLabel)
+          .frame(minWidth: 64, alignment: .trailing)
+      }
     }
-    .padding(.vertical, 3)
     .help(hint)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel("\(title): \(key.spokenName). \(hint)")
@@ -196,6 +214,8 @@ struct ReadyView: View {
           .labelStyle(.titleAndIcon)
       }
       .controlSize(.small)
+      .buttonStyle(.borderless)
+      .foregroundStyle(.secondary)
     }
   }
 
@@ -224,7 +244,7 @@ struct ReadyView: View {
         Link("Report a bug", destination: issuesURL)
       }
     }
-    .font(.caption)
+    .font(.caption2)
     .tint(.secondary)
   }
 }
@@ -260,7 +280,7 @@ enum BlurtLinks {
 struct MainWindowBranding: View {
   /// Loaded once for the process rather than per `body` evaluation: this view
   /// sits in `ReadyView`, whose body re-runs on every new dictation
-  /// (`recentDictations.entries`), and a bundle lookup plus a PNG decode is not
+  /// (the saved history), and a bundle lookup plus a PNG decode is not
   /// something to re-do on the main thread each time.
   ///
   /// Left to the target's `SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor` default
@@ -287,9 +307,21 @@ struct MainWindowBranding: View {
         .interpolation(.high)
         .resizable()
         .scaledToFit()
-        .frame(maxWidth: 72)
+        .frame(maxWidth: 64)
         .foregroundStyle(BlurtBrand.accent)
         .accessibilityLabel("Blurt logo")
     }
+  }
+}
+
+/// A key's tap/hold mode as quiet trailing text beside its name — "Tap or
+/// hold", "Tap", "Hold" — so a row says how its own key works on one line.
+private struct KeyMode: View {
+  let activation: TriggerActivation
+
+  var body: some View {
+    Text(activation.label)
+      .font(.caption)
+      .foregroundStyle(.secondary)
   }
 }

@@ -8,7 +8,7 @@ import Foundation
 /// launch and is never written to disk.
 ///
 /// **It holds far more than it shows.** `capacity` is the history depth;
-/// `displayCapacity` is how many rows the ready window's "Recent" list renders.
+/// `displayCapacity` is how many rows the iPhone app's "Recent" list renders.
 /// The deep end exists because a dictation's recent history is also request
 /// context — `STTPrompt` sends the user's recent utterances as the
 /// leading lines of `stt_prompt`, so "how many do we remember" is a
@@ -16,15 +16,6 @@ import Foundation
 public struct RecentDictations: Equatable, Sendable {
   /// One recorded dictation: the transcript plus when it landed.
   public struct Entry: Identifiable, Equatable, Sendable {
-    /// How long after a dictation `relativeLabel` keeps saying "just now", in
-    /// seconds — the smallest unit it shows above this is minutes.
-    ///
-    /// Public because the ready screen's timestamp refresh cadence is chosen
-    /// against it: a view redrawing slower than this leaves rows stale. Published
-    /// rather than restated so the two can't drift, the same reason
-    /// `MicCapture.meterIntervalSeconds` is public.
-    public static let justNowThreshold: TimeInterval = 60
-
     /// Stable identity for SwiftUI list diffing — assigned once at creation, so
     /// an entry keeps its id as newer dictations push in ahead of it.
     public let id = UUID()
@@ -58,14 +49,16 @@ public struct RecentDictations: Equatable, Sendable {
   /// was 99; nothing enforces either figure now.
   public static let capacity = 100
 
-  /// How many rows the ready window's "Recent dictations" list renders. The
+  // periphery:ignore - public for the iOS app's Recent list (App/BlurtiOS), which the Mac scan doesn't index.
+  /// How many rows the iPhone app's "Recent" list renders. The
   /// list area reserves space for exactly this many.
   public static let displayCapacity = 3
 
   /// Most-recent-first, capped at `capacity`.
   public private(set) var entries: [Entry] = []
 
-  /// The newest `displayCapacity` entries — what the ready window's list renders.
+  // periphery:ignore - public for the iOS app's Recent list (App/BlurtiOS), which the Mac scan doesn't index.
+  /// The newest `displayCapacity` entries — what the iPhone app's list renders.
   /// A projection here rather than a `prefix` at the call site, so the view can't
   /// accidentally render the whole 100-deep history now that `entries` is much
   /// longer than the list is tall.
@@ -95,21 +88,11 @@ public struct RecentDictations: Equatable, Sendable {
   }
 }
 
+// periphery:ignore - public for the iOS app's Recent list (App/BlurtiOS), which the Mac scan doesn't index.
 extension RecentDictations.Entry {
-  /// The row's relative timestamp: "just now" for the first minute (the system
-  /// formatter's bare "in 0 seconds" reads oddly for a dictation that just
-  /// landed), then the full relative phrasing ("2 minutes ago"). `now` is
-  /// injected so tests are deterministic; `locale` so they can pin the wording.
+  /// The row's relative timestamp (`Date.relativeLabel`): "just now" for
+  /// the first minute, then the full relative phrasing.
   public func relativeLabel(now: Date, locale: Locale = .autoupdatingCurrent) -> String {
-    if now.timeIntervalSince(timestamp) < Self.justNowThreshold {
-      return "just now"
-    }
-    // Built per call rather than cached: a stored formatter would be shared
-    // mutable state (RelativeDateTimeFormatter isn't Sendable), and this runs
-    // for a handful of rows on a half-minute render cadence at most.
-    let formatter = RelativeDateTimeFormatter()
-    formatter.unitsStyle = .full  // e.g. "2 minutes ago"
-    formatter.locale = locale
-    return formatter.localizedString(for: timestamp, relativeTo: now)
+    timestamp.relativeLabel(now: now, locale: locale)
   }
 }

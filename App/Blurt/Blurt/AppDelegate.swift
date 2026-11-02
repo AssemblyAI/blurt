@@ -121,7 +121,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
           // what it's asked to read instead of streaming TTS.
           readAloud: ReadAloudSeams(
             speaker: UITestReadAloudSpeaker(),
-            readSelection: { [selection = UITestIdentifiers.cannedSelection] in selection }))
+            readSelection: { [selection = UITestIdentifiers.cannedSelection] in selection }),
+          // A fresh history per run — never the user's saved transcripts —
+          // seeded with known entries when the suite asks, and the canned
+          // transport behind transcription and the LLM.
+          transcripts: .uiTest(store: UITestMode.historyStore()))
+        if ProcessInfo.processInfo.arguments.contains(UITestIdentifiers.transcribeSampleLaunchArgument) {
+          coord.transcripts.transcribe(UITestHistorySeed.sampleFile())
+        }
       } else {
         coord = AppCoordinator(onSetupBlocked: onSetupBlocked)
       }

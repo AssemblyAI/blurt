@@ -35,6 +35,17 @@
     static var isReadyStateRequested: Bool {
       ProcessInfo.processInfo.arguments.contains(UITestIdentifiers.readyLaunchArgument)
     }
+
+    /// A throwaway history for this run, seeded when the runner asks
+    /// (`seedHistoryLaunchArgument`).
+    static func historyStore() -> TranscriptStore {
+      let store = TranscriptStore(
+        url: FileManager.default.temporaryDirectory.appending(path: "blurt-uitest-\(UUID().uuidString).json"))
+      if ProcessInfo.processInfo.arguments.contains(UITestIdentifiers.seedHistoryLaunchArgument) {
+        UITestHistorySeed.seed(store)
+      }
+      return store
+    }
   }
 
   // Accessibility identifiers, the launch argument, and the sentinel API keys
@@ -298,12 +309,12 @@
             .accessibilityIdentifier(UITestIdentifiers.sentStyleLabel)
         }
 
-        // Mirrors the newest entry of `AppCoordinator.recentDictations` (the
-        // ready-window "Recent" list) so a test can watch it populate on a
+        // Mirrors the newest dictation in the saved history (the ready
+        // window's "Recent" list) so a test can watch it populate on a
         // completed dictation. Placeholder "—" stands in for the empty list so
         // the read-out is a stable element to assert against.
         LabeledContent("Echo") {
-          Text(coordinator?.recentDictations.entries.first?.text ?? "—")
+          Text(coordinator?.transcripts.history.first { $0.kind == .dictation }?.text ?? "—")
             .accessibilityIdentifier(UITestIdentifiers.transcriptEchoLabel)
         }
       }

@@ -61,6 +61,9 @@ enum DefaultsKey: String, CaseIterable {
   case readAloudSpeed = "ReadAloudSpeed"
   case readAloudSkipsJargon = "ReadAloudSkipsJargon"
   case readAloudVoice = "ReadAloudVoice"
+  /// Whether a recording starts and stops on its own with meetings
+  /// (`MeetingAutoRecordStore`).
+  case autoRecordMeetings = "AutoRecordMeetings"
 
   /// The key this case actually reads and writes, under the configured host
   /// identity. A computed property rather than a stored string because the

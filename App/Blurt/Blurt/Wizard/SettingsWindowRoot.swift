@@ -55,7 +55,7 @@ struct SettingsPane<Content: View>: View {
 }
 
 /// The everyday setup a user changes: the AssemblyAI account, the microphone,
-/// and the cue sounds. The trigger keys are their own tab (`KeysSettingsTab`). Key terms live on Vocabulary,
+/// the cue sounds, and whether meetings record themselves. The trigger keys are their own tab (`KeysSettingsTab`). Key terms live on Vocabulary,
 /// beside the text shortcuts — both are "words Blurt should know".
 private struct GeneralSettingsTab: View {
   let coordinator: AppCoordinator
@@ -65,6 +65,7 @@ private struct GeneralSettingsTab: View {
       APIKeyStepView(apiKey: coordinator.apiKey, account: coordinator.account)
       MicrophoneStepView()
       SoundStepView(coordinator: coordinator)
+      MeetingAutoRecordSection(model: coordinator.transcripts)
     }
   }
 }
