@@ -28,9 +28,10 @@
 ///
 /// **This owns every "the gate is stale" decision.** A dictation that ends
 /// without a key event leaves the gate latched, and so does a read that ends on
-/// its own. Each asks for a different reset: `.syncGateAfterSession` goes through
-/// the tap's recovery path, while `.resetGate` just clears it, because no
-/// recording is involved.
+/// its own, or a held ask let go before its read returns. Each asks for a
+/// different reset: `.syncGateAfterSession` goes through the tap's recovery path,
+/// for a dictation, while `.resetGate` just clears it, because no recording is
+/// involved.
 struct SelectionSpeechRouting: Sendable {
   enum Action: Sendable, Equatable {
     case forward(DictationSession.Command)
@@ -44,7 +45,9 @@ struct SelectionSpeechRouting: Sendable {
     case stopSpeech
     /// A dictation ended without a key event: `DictationKeyTap.syncAfterTerminalPhase`.
     case syncGateAfterSession
-    /// A read ended on its own: clear the gate with no recording discarded.
+    /// The gate is latched or armed by a key press that holds no recording: a read
+    /// ending on its own, a press that only stopped something, a held ask let go
+    /// before it asked. Clear the gate with no recording discarded.
     case resetGate
   }
 
@@ -89,6 +92,9 @@ struct SelectionSpeechRouting: Sendable {
   /// Whether the session's last phase was in flight. A terminal phase is then
   /// that dictation's end, never a hand-back press that hasn't started.
   private var sessionBusy = false
+  /// Reads still in flight for presses a newer press already replaced. Their
+  /// results are dropped as they land, before any newer read's.
+  private var staleReads = 0
 
   init() {}
 
@@ -122,6 +128,15 @@ struct SelectionSpeechRouting: Sendable {
       // A press while the request is transcribing drops it, for the same reason.
       mode = .passthrough
       return started ? [.forward(.cancel), .resetGate] : [.resetGate]
+    case .deciding(_, trigger: _, ended: true):
+      // The press is over and the gate idle, only its read still out: this is a
+      // fresh press, not one riding the old. Swallowing it would leave the gate
+      // armed by a press nothing started, and its key-up latched for good. Take
+      // it as from passthrough, and drop the old read's result when it lands, so
+      // it can't decide this press.
+      mode = .passthrough
+      staleReads += 1
+      return press(key: key, action: action, holds: holds)
     case .deciding, .selected, .asking:
       // The gate belongs to the key down now; another press can't start.
       return []
@@ -234,6 +249,13 @@ struct SelectionSpeechRouting: Sendable {
   }
 
   mutating func selectionResolved(_ selection: String?) -> [Action] {
+    // Reads resolve in the order they started, near enough: a replaced press's
+    // read is the older, so it lands first. Out of order, the newer press is
+    // decided by the older read of the same selection instead.
+    if staleReads > 0 {
+      staleReads -= 1
+      return []
+    }
     guard case .deciding(let intent, let trigger, let ended) = mode else { return [] }
     guard let selection, !ended else {
       mode = .passthrough
