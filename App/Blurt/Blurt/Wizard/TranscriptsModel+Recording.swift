@@ -38,35 +38,37 @@ extension TranscriptsModel {
     live = LiveTranscript()
     pausedAt = nil
     clockStart = .now
-    quietStop = RecordingQuietStop(now: .now)
     state = .recording
     let turns = Task { [weak self] in
       let turns = await realtime.start()
       do {
         for try await turn in turns {
           self?.live.apply(turn)
-          if turn.transcript.trimmedNonEmpty() != nil { self?.quietStop.heard(at: .now) }
+          if turn.transcript.trimmedNonEmpty() != nil { self?.recording?.quietStop.heard(at: .now) }
         }
       } catch {
         self?.liveTranscriptionFailed(error)
       }
     }
     recording = Recording(
-      url: url, realtime: realtime, audio: feed, pump: pump, turns: turns, quietWatch: watchForQuiet())
+      url: url, realtime: realtime, audio: feed, pump: pump, turns: turns,
+      quietStop: RecordingQuietStop(now: .now))
+    watchForQuiet(url)
     if byUser { noteUserStartedRecording() }
   }
 
-  /// Ends the recording once nothing has been said for
+  /// Ends the recording at `url` once nothing has been said for
   /// `RecordingQuietStop.after` — the conversation is over even if no one
   /// pressed Stop, or the meeting app still holds the mic. Paused time
   /// doesn't count. Stops as the user would: an auto-recorded meeting that's
-  /// somehow still on isn't recorded again until it ends.
-  private func watchForQuiet() -> Task<Void, Never> {
+  /// somehow still on isn't recorded again until it ends. The watch ends by
+  /// itself once that recording does, however it ended.
+  private func watchForQuiet(_ url: URL) {
     Task { [weak self] in
-      while !Task.isCancelled {
+      while true {
         try? await Task.sleep(for: RecordingQuietStop.checkInterval)
-        guard let self, !Task.isCancelled else { return }
-        if !isPaused, quietStop.isOver(now: .now) {
+        guard let self, isRecording, let recording, recording.url == url else { return }
+        if !isPaused, recording.quietStop.isOver(now: .now) {
           stopRecording()
           return
         }
@@ -86,7 +88,7 @@ extension TranscriptsModel {
         try recorder.resume()
         clockStart += Date.now.timeIntervalSince(pausedAt)
         self.pausedAt = nil
-        quietStop.heard(at: .now)
+        recording?.quietStop.heard(at: .now)
       } catch {
         liveTranscriptionFailed(error)
       }
@@ -176,7 +178,6 @@ extension TranscriptsModel {
   /// wait for the live transcript to finish.
   private func endCapture(_ recording: Recording, dropUnsent: Bool) {
     recorder.stop()
-    recording.quietWatch.cancel()
     recording.audio.finish()
     if dropUnsent { recording.pump.cancel() }
   }

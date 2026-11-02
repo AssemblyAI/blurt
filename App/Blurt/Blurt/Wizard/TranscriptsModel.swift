@@ -66,15 +66,12 @@ final class TranscriptsModel {
   /// The task result being read aloud now, if any.
   var readingFacet: TranscriptFacet?
   @ObservationIgnored var readingTask: Task<Void, Never>?
-  /// Recording with meetings (`TranscriptsModel+Meetings.swift`): the
-  /// switch, the policy, the probe loop, and the last probe's answer.
+  /// Meetings' switch, policy, probe loop and last answer (`+Meetings.swift`).
   @ObservationIgnored var autoRecordMeetings = false
   @ObservationIgnored var meetingPolicy = MeetingAutoRecord()
   @ObservationIgnored var meetingProbe: Task<Void, Never>?
   @ObservationIgnored var lastMeetingActive = false
   @ObservationIgnored var recording: Recording?
-  /// When the recording last heard a word, so a long silence ends it.
-  @ObservationIgnored var quietStop = RecordingQuietStop(now: .now)
   /// When the recording was paused, while it is; nil while it records.
   var pausedAt: Date?
   /// When the recording clock reads zero: the start, moved later by every
@@ -156,15 +153,14 @@ final class TranscriptsModel {
   /// Whether Record can start: not while anything else has the sheet.
   var canRecord: Bool { state == .idle }
 
-  /// One recording in flight: where it's written, the live session, the
-  /// audio feed, the tasks pumping audio out and turns in, and the quiet watch.
+  /// One recording in flight, and when it last heard a word (`+Recording.swift`).
   struct Recording {
     let url: URL
     let realtime: RealtimeTranscriber
     let audio: AsyncStream<Data>.Continuation
     let pump: Task<Void, Never>
     let turns: Task<Void, Never>
-    let quietWatch: Task<Void, Never>
+    var quietStop: RecordingQuietStop
   }
 
   /// Opens a saved transcript in the sheet, with every transform already
