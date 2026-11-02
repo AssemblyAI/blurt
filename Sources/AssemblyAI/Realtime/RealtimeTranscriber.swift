@@ -86,7 +86,7 @@ public actor RealtimeTranscriber {
         chunk = Data(pending.prefix(Self.maximumChunkBytes))
         pending.removeFirst(Self.maximumChunkBytes)
       }
-      try? await task?.send(.data(chunk))
+      await transmit(.data(chunk))
     }
   }
 
@@ -99,9 +99,9 @@ public actor RealtimeTranscriber {
         tail.append(Data(count: Self.minimumChunkBytes - tail.count))
       }
       pending.removeAll()
-      try? await task?.send(.data(tail))
+      await transmit(.data(tail))
     }
-    try? await task?.send(.string(#"{"type":"Terminate"}"#))
+    await transmit(.string(#"{"type":"Terminate"}"#))
     // Bounded: a service that never answers must not leave the recording
     // stuck finishing. The timeout releases the wait itself.
     let timeout = Task {
@@ -116,6 +116,17 @@ public actor RealtimeTranscriber {
   /// Drops the session at once, without waiting for the last turn.
   public func cancel() {
     close(error: nil)
+  }
+
+  /// Sends one message, dropping a send error: a broken socket surfaces
+  /// through `receive()`, which closes the session with the reason.
+  /// The completion handler, not the async `send(_:)`, for the same
+  /// ThreadSanitizer report `receive()` avoids.
+  private func transmit(_ message: URLSessionWebSocketTask.Message) async {
+    guard let task else { return }
+    await withCheckedContinuation { continuation in
+      task.send(message) { _ in continuation.resume() }
+    }
   }
 
   private func releaseTerminationWait() {
