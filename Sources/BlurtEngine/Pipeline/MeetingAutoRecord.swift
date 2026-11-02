@@ -1,12 +1,15 @@
-/// When the "Auto-record meetings" switch starts and stops a recording — a
-/// pure state machine, fed a probe of whether a meeting is on every few
-/// seconds. Its rules:
+/// When a recording starts and stops with a meeting — a pure state machine,
+/// fed a probe of whether a meeting is on every few seconds. Its rules:
 ///
-/// - It **starts** on the first probe that sees a meeting.
-/// - It **stops** only a recording it started itself, and only once the
-///   meeting has been gone for `stopAfter` straight; a meeting back within
-///   that window resets the clock (a browser letting go of the mic for a
-///   moment doesn't end the recording).
+/// - With the "Auto-record meetings" switch on (`autoStart`), it **starts** on
+///   the first probe that sees a meeting.
+/// - It **stops** only a recording bound to a meeting — one it started, or one
+///   the user started while a meeting was on (the first probe after
+///   `userStarted` decides) — and only once the meeting has been gone for
+///   `stopAfter` straight; a meeting back within that window resets the clock
+///   (a browser letting go of the mic for a moment doesn't end the recording).
+///   A recording started with no meeting on is never stopped, even if a call
+///   comes and goes during it. This half works with the switch off too.
 /// - If the user stops a recording while the meeting is still on, it won't
 ///   start another until that meeting ends.
 public struct MeetingAutoRecord: Sendable {
@@ -16,7 +19,11 @@ public struct MeetingAutoRecord: Sendable {
   public static let probeInterval: Duration = .seconds(5)
 
   public var stopAfter: Duration
-  private var autoStarted = false
+  /// Whether the recording on now ends with the meeting.
+  private var meetingBound = false
+  /// The user just started a recording: the next probe binds it to the
+  /// meeting if one is on.
+  private var bindOnNextProbe = false
   private var suppressed = false
   private var meetingGoneSince: ContinuousClock.Instant?
 
@@ -24,32 +31,48 @@ public struct MeetingAutoRecord: Sendable {
     self.stopAfter = stopAfter
   }
 
-  /// One probe: whether a meeting is on, and whether Blurt is recording.
-  public mutating func probe(meetingActive: Bool, recording: Bool, now: ContinuousClock.Instant) -> Action {
+  /// One probe: whether a meeting is on, whether Blurt is recording, and
+  /// whether the switch lets it start a recording.
+  public mutating func probe(
+    meetingActive: Bool, recording: Bool, autoStart: Bool, now: ContinuousClock.Instant
+  ) -> Action {
     if !meetingActive { suppressed = false }
     guard recording else {
-      autoStarted = false
+      meetingBound = false
+      bindOnNextProbe = false
       meetingGoneSince = nil
-      guard meetingActive, !suppressed else { return .none }
-      autoStarted = true
+      guard autoStart, meetingActive, !suppressed else { return .none }
+      meetingBound = true
       return .start
     }
-    guard autoStarted, !meetingActive else {
+    if bindOnNextProbe {
+      bindOnNextProbe = false
+      meetingBound = meetingActive
+    }
+    guard meetingBound, !meetingActive else {
       meetingGoneSince = nil
       return .none
     }
     let since = meetingGoneSince ?? now
     meetingGoneSince = since
     guard now - since >= stopAfter else { return .none }
-    autoStarted = false
+    meetingBound = false
     meetingGoneSince = nil
     return .stop
+  }
+
+  /// The user started a recording: it ends with the meeting if one is on.
+  public mutating func userStarted() {
+    meetingBound = false
+    bindOnNextProbe = true
+    meetingGoneSince = nil
   }
 
   /// The user stopped (or a start failed): no auto-stop to do, and no restart
   /// until the meeting that's on — if one is — ends.
   public mutating func userStopped(meetingActive: Bool) {
-    autoStarted = false
+    meetingBound = false
+    bindOnNextProbe = false
     meetingGoneSince = nil
     suppressed = meetingActive
   }

@@ -4,7 +4,8 @@ import SwiftUI
 /// "Auto-record meetings", in Settings › General: a switch, off until the user
 /// turns it on. On, a recording starts when a meeting app or a browser call
 /// takes the microphone, and stops a minute after it lets go
-/// (`MeetingAutoRecord`).
+/// (`MeetingAutoRecord`). The stop half needs no switch: a recording started
+/// by hand during a meeting ends with it either way.
 struct MeetingAutoRecordSection: View {
   var model: TranscriptsModel
   @AppStorage(MeetingAutoRecordStore.defaultsKey) private var isOn = false
