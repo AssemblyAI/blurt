@@ -208,10 +208,10 @@ final class TranscriptsModel {
   private(set) var openEntry: SavedTranscript?
 
   /// Re-reads the open entry after the history changed, assigning only when
-  /// it did change so observers of `openEntry` aren't woken for nothing.
+  /// it did change so observers of `openEntry` aren't woken for nothing. A
+  /// deleted entry keeps its last copy, for the sheet to close over (`dismiss()`).
   private func refreshOpenEntry() {
-    guard let id = openEntry?.id else { return }
-    let current = history.first { $0.id == id }
+    guard let id = openEntry?.id, let current = history.first(where: { $0.id == id }) else { return }
     if current != openEntry { openEntry = current }
   }
 
@@ -296,31 +296,27 @@ final class TranscriptsModel {
 
   // MARK: - Sheet lifecycle
 
-  /// Shows why a drop that held no audio or video file wasn't transcribed.
-  func refuse(_ url: URL?) {
-    guard !isRecordingBusy else { return }
-    reset()
-    state = .failed(
-      fileName: url?.lastPathComponent ?? "Dropped item",
-      message: "Blurt can only transcribe audio and video files.")
-  }
-
   /// Closes the sheet. A transcription still uploading or running is
   /// abandoned; transforms already fetched are saved.
+  ///
+  /// The transcript itself stays: the sheet still draws it as it animates
+  /// out, and emptied now it would shrink to a blank panel on the way.
+  /// Whatever opens the sheet next resets first.
   ///
   /// Never while recording or finishing one: a stray Esc must not cost a
   /// meeting. Stop or Discard are the only ways out of a recording.
   func dismiss() {
     guard !isRecordingBusy else { return }
-    reset()
+    reset(keepingTranscript: true)
     state = .idle
   }
 
-  func reset() {
+  func reset(keepingTranscript: Bool = false) {
     stopReading()
-    fullTurns = []
     tasks.values.forEach { $0.cancel() }
     tasks = [:]
+    guard !keepingTranscript else { return }
+    fullTurns = []
     contents = [:]
     selection = .full
     customRequest = ""

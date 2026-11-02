@@ -63,10 +63,15 @@ private struct TranscriptSheet: View {
   var model: TranscriptsModel
   @State private var copied = false
   @State private var pendingDelete: SavedTranscript?
+  /// The last state worth drawing. Idle means the sheet is closing, and it
+  /// keeps showing what it had while it animates out rather than going blank.
+  @State private var lastShown = TranscriptsModel.State.idle
+
+  private var shown: TranscriptsModel.State { model.state == .idle ? lastShown : model.state }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      switch model.state {
+      switch shown {
       case .idle:
         EmptyView()
       case .recording:
@@ -94,6 +99,7 @@ private struct TranscriptSheet: View {
     .frame(width: MainWindow.contentWidth - 40)
     // Esc closes the sheet in every state, not only while Cancel is showing.
     .onExitCommand { model.dismiss() }
+    .onChange(of: model.state, initial: true) { if model.state != .idle { lastShown = model.state } }
     // The spinner's replacement is silent otherwise.
     .onChange(of: model.state) { _, state in
       switch state {
