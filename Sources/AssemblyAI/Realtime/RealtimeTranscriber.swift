@@ -134,7 +134,13 @@ public actor RealtimeTranscriber {
     while let task {
       let message: URLSessionWebSocketTask.Message
       do {
-        message = try await task.receive()
+        // The completion handler under a checked continuation, not the async
+        // `receive()`: that bridge's result slot is written on one GCD thread
+        // and read on another, which ThreadSanitizer reports as a data race
+        // (seen on CI, intermittently).
+        message = try await withCheckedThrowingContinuation { continuation in
+          task.receive { continuation.resume(with: $0) }
+        }
       } catch {
         close(error: didTerminate ? nil : RealtimeError.connection(closeReason(of: task) ?? error.localizedDescription))
         return
