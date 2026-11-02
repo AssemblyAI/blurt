@@ -13,36 +13,63 @@ struct MeetingAutoRecordTests {
   @Test("starts on the first probe that sees a meeting")
   func startsAtOnce() {
     var policy = MeetingAutoRecord()
-    #expect(policy.probe(meetingActive: false, recording: false, now: at(0)) == .none)
-    #expect(policy.probe(meetingActive: true, recording: false, now: at(5)) == .start)
+    #expect(policy.probe(meetingActive: false, recording: false, autoStart: true, now: at(0)) == .none)
+    #expect(policy.probe(meetingActive: true, recording: false, autoStart: true, now: at(5)) == .start)
   }
 
   @Test("stops only after the meeting has been gone for a minute straight; a return resets it")
   func hysteresis() {
     var policy = MeetingAutoRecord()
-    #expect(policy.probe(meetingActive: true, recording: false, now: at(0)) == .start)
-    #expect(policy.probe(meetingActive: false, recording: true, now: at(10)) == .none)
-    #expect(policy.probe(meetingActive: true, recording: true, now: at(30)) == .none)
-    #expect(policy.probe(meetingActive: false, recording: true, now: at(40)) == .none)
-    #expect(policy.probe(meetingActive: false, recording: true, now: at(99)) == .none)
-    #expect(policy.probe(meetingActive: false, recording: true, now: at(100)) == .stop)
+    #expect(policy.probe(meetingActive: true, recording: false, autoStart: true, now: at(0)) == .start)
+    #expect(policy.probe(meetingActive: false, recording: true, autoStart: true, now: at(10)) == .none)
+    #expect(policy.probe(meetingActive: true, recording: true, autoStart: true, now: at(30)) == .none)
+    #expect(policy.probe(meetingActive: false, recording: true, autoStart: true, now: at(40)) == .none)
+    #expect(policy.probe(meetingActive: false, recording: true, autoStart: true, now: at(99)) == .none)
+    #expect(policy.probe(meetingActive: false, recording: true, autoStart: true, now: at(100)) == .stop)
   }
 
   @Test("never stops a recording the user started")
   func leavesManualRecordings() {
     var policy = MeetingAutoRecord()
-    #expect(policy.probe(meetingActive: false, recording: true, now: at(0)) == .none)
-    #expect(policy.probe(meetingActive: false, recording: true, now: at(120)) == .none)
+    #expect(policy.probe(meetingActive: false, recording: true, autoStart: true, now: at(0)) == .none)
+    #expect(policy.probe(meetingActive: false, recording: true, autoStart: true, now: at(120)) == .none)
   }
 
   @Test("a user stop mid-meeting holds off until that meeting ends")
   func userStopSuppresses() {
     var policy = MeetingAutoRecord()
-    #expect(policy.probe(meetingActive: true, recording: false, now: at(0)) == .start)
+    #expect(policy.probe(meetingActive: true, recording: false, autoStart: true, now: at(0)) == .start)
     policy.userStopped(meetingActive: true)
-    #expect(policy.probe(meetingActive: true, recording: false, now: at(5)) == .none)
-    #expect(policy.probe(meetingActive: false, recording: false, now: at(10)) == .none)
-    #expect(policy.probe(meetingActive: true, recording: false, now: at(15)) == .start)
+    #expect(policy.probe(meetingActive: true, recording: false, autoStart: true, now: at(5)) == .none)
+    #expect(policy.probe(meetingActive: false, recording: false, autoStart: true, now: at(10)) == .none)
+    #expect(policy.probe(meetingActive: true, recording: false, autoStart: true, now: at(15)) == .start)
+  }
+
+  @Test("a recording started by hand during a meeting ends with it, switch on or off")
+  func userStartDuringMeetingBinds() {
+    for autoStart in [true, false] {
+      var policy = MeetingAutoRecord()
+      policy.userStarted()
+      #expect(policy.probe(meetingActive: true, recording: true, autoStart: autoStart, now: at(0)) == .none)
+      #expect(policy.probe(meetingActive: false, recording: true, autoStart: autoStart, now: at(10)) == .none)
+      #expect(policy.probe(meetingActive: false, recording: true, autoStart: autoStart, now: at(70)) == .stop)
+    }
+  }
+
+  @Test("a recording started by hand with no meeting on isn't ended by a call during it")
+  func userStartWithoutMeetingStaysUnbound() {
+    var policy = MeetingAutoRecord()
+    policy.userStarted()
+    #expect(policy.probe(meetingActive: false, recording: true, autoStart: true, now: at(0)) == .none)
+    #expect(policy.probe(meetingActive: true, recording: true, autoStart: true, now: at(10)) == .none)
+    #expect(policy.probe(meetingActive: false, recording: true, autoStart: true, now: at(20)) == .none)
+    #expect(policy.probe(meetingActive: false, recording: true, autoStart: true, now: at(200)) == .none)
+  }
+
+  @Test("with the switch off it never starts a recording")
+  func switchOffNeverStarts() {
+    var policy = MeetingAutoRecord()
+    #expect(policy.probe(meetingActive: true, recording: false, autoStart: false, now: at(0)) == .none)
   }
 
   @Test("meeting apps and browsers count; other mic users and Blurt don't")

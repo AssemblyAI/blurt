@@ -10,7 +10,8 @@ import Foundation
 extension TranscriptsModel {
   /// Starts recording the microphone and system audio together, streaming
   /// both to the realtime API so the transcript appears as it's spoken.
-  func startRecording() {
+  /// `byUser` is false when a meeting started it (`MeetingAutoRecord`).
+  func startRecording(byUser: Bool = true) {
     guard canRecord else { return }
     guard let apiKey = apiKey(), !apiKey.isEmpty else {
       state = .failed(fileName: "Recording", message: BlurtError.apiKeyMissing.localizedDescription)
@@ -37,16 +38,40 @@ extension TranscriptsModel {
     live = LiveTranscript()
     pausedAt = nil
     clockStart = .now
+    quietStop = RecordingQuietStop(now: .now)
     state = .recording
     let turns = Task { [weak self] in
       let turns = await realtime.start()
       do {
-        for try await turn in turns { self?.live.apply(turn) }
+        for try await turn in turns {
+          self?.live.apply(turn)
+          if turn.transcript.trimmedNonEmpty() != nil { self?.quietStop.heard(at: .now) }
+        }
       } catch {
         self?.liveTranscriptionFailed(error)
       }
     }
-    recording = Recording(url: url, realtime: realtime, audio: feed, pump: pump, turns: turns)
+    recording = Recording(
+      url: url, realtime: realtime, audio: feed, pump: pump, turns: turns, quietWatch: watchForQuiet())
+    if byUser { noteUserStartedRecording() }
+  }
+
+  /// Ends the recording once nothing has been said for
+  /// `RecordingQuietStop.after` — the conversation is over even if no one
+  /// pressed Stop, or the meeting app still holds the mic. Paused time
+  /// doesn't count. Stops as the user would: an auto-recorded meeting that's
+  /// somehow still on isn't recorded again until it ends.
+  private func watchForQuiet() -> Task<Void, Never> {
+    Task { [weak self] in
+      while !Task.isCancelled {
+        try? await Task.sleep(for: RecordingQuietStop.checkInterval)
+        guard let self, !Task.isCancelled else { return }
+        if !isPaused, quietStop.isOver(now: .now) {
+          stopRecording()
+          return
+        }
+      }
+    }
   }
 
   /// Pauses or resumes the recording. Paused, nothing is captured, written
@@ -61,6 +86,7 @@ extension TranscriptsModel {
         try recorder.resume()
         clockStart += Date.now.timeIntervalSince(pausedAt)
         self.pausedAt = nil
+        quietStop.heard(at: .now)
       } catch {
         liveTranscriptionFailed(error)
       }
@@ -72,7 +98,8 @@ extension TranscriptsModel {
 
   /// Stops recording, lets the last audio and the last turn's final arrive,
   /// then saves the live transcript and opens it.
-  /// `byUser` is false when a meeting's end stopped it (`MeetingAutoRecord`).
+  /// `byUser` is false when a meeting's end stopped it (`MeetingAutoRecord`);
+  /// a long silence (`watchForQuiet`) stops it as the user would.
   func stopRecording(byUser: Bool = true) {
     guard isRecording, let recording else { return }
     if byUser { noteUserStoppedRecording() }
@@ -149,6 +176,7 @@ extension TranscriptsModel {
   /// wait for the live transcript to finish.
   private func endCapture(_ recording: Recording, dropUnsent: Bool) {
     recorder.stop()
+    recording.quietWatch.cancel()
     recording.audio.finish()
     if dropUnsent { recording.pump.cancel() }
   }
