@@ -18,9 +18,9 @@
       return result
     }
 
-    /// Whether a meeting is on: a conferencing app or a browser holds the mic.
-    public static func meetingInProgress() -> Bool {
-      MeetingAutoRecord.indicatesMeeting(bundleIDsUsingMic())
+    /// The meeting on, if any: a conferencing app or a browser holds the mic.
+    public static func meetingInProgress() -> MeetingAutoRecord.Meeting? {
+      MeetingAutoRecord.meeting(in: bundleIDsUsingMic())
     }
 
     /// Every process object, or none if the list can't be read.

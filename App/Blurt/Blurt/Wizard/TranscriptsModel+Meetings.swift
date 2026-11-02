@@ -34,11 +34,11 @@ extension TranscriptsModel {
     // Nothing to start or stop: leave Core Audio alone.
     guard autoRecordMeetings || isRecording else { return }
     // Synchronous Core Audio reads: off the main actor.
-    let active = await Task.detached(priority: .utility) { MeetingMicProbe.meetingInProgress() }.value
+    let meeting = await Task.detached(priority: .utility) { MeetingMicProbe.meetingInProgress() }.value
     guard !Task.isCancelled else { return }
-    lastMeetingActive = active
+    lastMeetingActive = meeting != nil
     let action = meetingPolicy.probe(
-      meetingActive: active, recording: isRecording, autoStart: autoRecordMeetings, now: .now)
+      meeting: meeting, recording: isRecording, autoStart: autoRecordMeetings, now: .now)
     switch action {
     case .start:
       // Not over a sheet already in use (a transcript open, a file going up):
