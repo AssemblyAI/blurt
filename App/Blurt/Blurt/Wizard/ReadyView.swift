@@ -197,7 +197,7 @@ struct ReadyView: View {
   /// A standard push button — Settings is a place visited once, and ⌘, and the
   /// app menu already reach it, so it takes neither the accent nor glass.
   private var bottomBar: some View {
-    HStack(alignment: .firstTextBaseline) {
+    HStack {
       footerLinks
       Spacer()
       Button(action: openSettings) {
@@ -205,8 +205,6 @@ struct ReadyView: View {
           .labelStyle(.titleAndIcon)
       }
       .controlSize(.small)
-      .buttonStyle(.borderless)
-      .foregroundStyle(.secondary)
     }
   }
 
