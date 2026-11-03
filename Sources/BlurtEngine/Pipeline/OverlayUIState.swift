@@ -33,6 +33,10 @@ public enum OverlayUIState: Equatable, Sendable {
   /// the app shows it for as long as a read plays, with the recording pill's
   /// orb and meter, the meter following the voice rather than the mic.
   case speaking
+  /// Rewriting the selection (the Rewrite Selection key). Not a pipeline
+  /// phase either: the app shows it from the spoken instruction's hand-back
+  /// until the rewrite pastes, then the notice a dictation ends with.
+  case rewriting
   /// A dictation attempt failed. The shell shows this as a brief red flash on
   /// the pill before settling back to `.idle`; `message` is the human-readable
   /// reason (e.g. "AssemblyAI error 401…"), surfaced via the pill's hover
@@ -65,6 +69,7 @@ public enum OverlayUIState: Equatable, Sendable {
     case .connecting: "Connecting to the microphone."
     case .recording: "Recording."
     case .speaking: "Reading aloud."
+    case .rewriting: "Rewriting the selection."
     case .processing: "Processing."
     case .error(let message, _): message
     case .pasted: "Your dictation was pasted."
@@ -85,7 +90,7 @@ public enum OverlayUIState: Equatable, Sendable {
     // A sentence, not a word: long enough to read the device name.
     case .error(_, _?): 3.0
     case .error, .noTarget: 1.6
-    case .idle, .connecting, .recording, .processing, .speaking: nil
+    case .idle, .connecting, .recording, .processing, .speaking, .rewriting: nil
     }
   }
 
@@ -145,8 +150,13 @@ extension PipelinePhase {
   /// pill as it is. A read wears the pill until it ends (`.speaking`); only a
   /// new capture takes it over — a press stops the read first — so an earlier
   /// dictation finishing mid-read can neither cover nor hide it.
-  public func overlayState(whileSpeaking speaking: Bool) -> OverlayUIState? {
-    speaking && !isCapturing ? nil : overlayState
+  ///
+  /// `rewriting`: this phase is a Rewrite Selection press's instruction, so
+  /// its transcription shows as "Rewriting" — what the user asked for — rather
+  /// than "Transcribing", and the pill reads as one step from release to paste.
+  public func overlayState(whileSpeaking speaking: Bool, rewriting: Bool = false) -> OverlayUIState? {
+    if speaking && !isCapturing { return nil }
+    return rewriting && overlayState == .processing ? .rewriting : overlayState
   }
 
   /// The pill once a read ends, this being the session's last phase. A steady

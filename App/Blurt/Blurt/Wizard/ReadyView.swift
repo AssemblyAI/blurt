@@ -146,6 +146,7 @@ struct ReadyView: View {
       switch choice {
       case .readAloud: (LibraryKind.readAloud.name, LibraryKind.readAloud.systemImage)
       case .ask: (LibraryKind.ask.name, LibraryKind.ask.systemImage)
+      case .rewrite: (KeyActionName.rewrite, "pencil.line")
       case .dictate(TriggerKeyChoice.mainWindowStyle), .off: ("Dictate", "keyboard")
       case .dictate(let style):
         (

@@ -123,6 +123,9 @@ struct OverlayView: View {
       // surface progressing rather than three unrelated states.
       waitingContent("Transcribing")
         .transition(.opacity)
+    case .rewriting:
+      waitingContent("Rewriting")
+        .transition(.opacity)
     case .error(let message, nil):
       // "Try again" tells the user what to do; the full failure reason is too
       // long for the pill, so expose it on hover. The VoiceOver announcement

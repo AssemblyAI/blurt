@@ -123,8 +123,9 @@ struct ReadAloudLLM: Sendable {
     ).text
   }
 
-  /// The user turn of an answer: the selection, then what was said, each in its
-  /// own tag so the model can't mistake one for the other.
+  /// The user turn of an answer (and of `SelectionRewriter`'s rewrite): the
+  /// selection, then what was said, each in its own tag so the model can't
+  /// mistake one for the other.
   static func answerPrompt(_ request: String, about selection: String) -> String {
     "<highlighted_text>\n\(selection)\n</highlighted_text>\n\n<spoken_request>\n\(request)\n</spoken_request>"
   }
@@ -134,8 +135,8 @@ struct ReadAloudLLM: Sendable {
   }
 
   /// One gateway chat completion: the key check, the request, the status and
-  /// the reply. Shared with `TranscriptLLM`, the other gateway client, so the
-  /// call is spelled once.
+  /// the reply. Shared with `TranscriptLLM` and `SelectionRewriter`, the other
+  /// gateway clients, so the call is spelled once.
   static func send(
     _ body: Body, apiKey: String?, transport: any HTTPTransport, timeout: TimeInterval
   ) async throws -> Reply {

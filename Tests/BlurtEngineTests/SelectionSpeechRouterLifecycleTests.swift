@@ -58,7 +58,7 @@ struct SelectionSpeechRouterLifecycleTests {
     let (router, events) = (rig.router, rig.events)
     try await readThenStop(router, speaker)
     #expect(events.ended == 1)
-    #expect(!router.isSpeaking)
+    #expect(!router.ownsPill)
     try await waitUntil { speaker.cancellations == 1 }
     try await Task.sleep(for: .milliseconds(50))
     #expect(events.ended == 1, "the cancelled task's end mustn't report again")
@@ -76,7 +76,7 @@ struct SelectionSpeechRouterLifecycleTests {
     try await Task.sleep(for: .milliseconds(50))
     #expect(events.started == 2)
     #expect(events.ended == 1)
-    #expect(router.isSpeaking)
+    #expect(router.ownsPill)
   }
 
   @Test("a level from a read that's over never reaches the pill")
@@ -117,7 +117,7 @@ struct SelectionSpeechRouterLifecycleTests {
     tapRead(router)
     try await waitUntil { speaker.calls.count == 1 }
     speaker.finishAll()
-    try await waitUntil { !router.isSpeaking }
+    try await waitUntil { !router.ownsPill }
     defaults.set(2.0, forKey: ReadAloudStyleStore.speedDefaultsKey)
     defaults.set("aai-buford", forKey: ReadAloudStyleStore.voiceDefaultsKey)
     tapRead(router)
@@ -138,10 +138,7 @@ struct SelectionSpeechRouterLifecycleTests {
     }
     defer { phases.cancel() }
     router.press(key: .leftControl)
-    let deadline = ContinuousClock.now + .seconds(5)
-    while await fixture.mic.startCalls == 0, ContinuousClock.now < deadline {
-      try await Task.sleep(for: .milliseconds(5))
-    }
+    try await waitForMicStart(fixture)
     router.submit(.release)
     try await waitUntil { speaker.calls.count == 1 }
     #expect(speaker.calls[0].kind == "answer: Hello world.")

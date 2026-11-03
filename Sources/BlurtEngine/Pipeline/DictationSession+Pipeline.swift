@@ -224,6 +224,41 @@ extension DictationSession {
     }
   }
 
+  /// Pastes `text` over the selection in the app the last hand-back press
+  /// captured: the Rewrite Selection key's rewrite. Through this session's
+  /// injector, so it queues behind any dictation paste still settling rather
+  /// than racing it on the pasteboard. No prior text and no window title, so
+  /// no separating space is added: the paste replaces the selection rather
+  /// than following it. Throws what `InjectorProtocol.insert` throws, the
+  /// rewrite left on the clipboard for the quiet ones. (A nil title is what
+  /// turns off the injector's same-window fallback: `KeyInjector.resolveInsert`.)
+  ///
+  /// Answers the phase a dictation's paste would have ended in — `.pasted`,
+  /// `.noTarget` or `.failed` (`pasteOutcome`) — without setting it: the
+  /// session is at rest, and this is not a dictation. Throws only on cancellation.
+  public func replaceSelection(with text: String) async throws -> PipelinePhase {
+    do {
+      try await injector.insert(text, after: nil, windowTitle: nil)
+      return .pasted
+    } catch {
+      if error is CancellationError || Task.isCancelled { throw CancellationError() }
+      return Self.pasteOutcome(error)
+    }
+  }
+
+  /// The phase a failed paste ends in. Which injector errors are a quiet
+  /// "copied" notice rather than a fault is `BlurtError.isQuietDegradation` — an
+  /// exhaustive switch over the cases, so a new error that leaves the transcript
+  /// on the clipboard has to be classified there instead of silently flashing
+  /// red here. Everything else surfaces its real error (e.g.
+  /// `.accessibilityPermissionMissing`) rather than being relabeled as a lost
+  /// target. An untyped injection error left nothing on the clipboard, so it
+  /// stays a genuine (reported) failure under the generic lost-target label.
+  static func pasteOutcome(_ error: any Error) -> PipelinePhase {
+    guard let err = error as? BlurtError else { return .failed(.targetAppLost) }
+    return err.isQuietDegradation ? .noTarget : .failed(err)
+  }
+
   private func inject(_ text: String) async {
     setPhase(.injecting)
     do {
@@ -242,19 +277,7 @@ extension DictationSession {
       // including on a late non-cancellation error — rather than relabeling
       // the user's cancel as a failure.
       if error is CancellationError || Task.isCancelled { return }
-      guard let err = error as? BlurtError else {
-        // An untyped injection error: nothing was left on the clipboard, so this
-        // stays a genuine (reported) failure under the generic lost-target label.
-        setPhase(.failed(.targetAppLost))
-        return
-      }
-      // Which injector errors are a quiet "copied" notice rather than a fault is
-      // `BlurtError.isQuietDegradation` — an exhaustive switch over the cases, so a
-      // new error that leaves the transcript on the clipboard has to be classified
-      // there instead of silently flashing red here. Everything else surfaces its
-      // real error (e.g. `.accessibilityPermissionMissing`) rather than being
-      // relabeled as a lost target.
-      setPhase(err.isQuietDegradation ? .noTarget : .failed(err))
+      setPhase(Self.pasteOutcome(error))
     }
   }
 }

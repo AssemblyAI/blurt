@@ -9,6 +9,9 @@ public enum TriggerKeyAction: Sendable, Hashable {
   case readAloud
   /// Records a spoken request about the selected text and reads the answer aloud.
   case ask
+  /// Records a spoken instruction ("make it more formal") and pastes the
+  /// selected text, rewritten that way, over it.
+  case rewrite
 }
 
 /// What one trigger key is set to in the Keys tab. Persisted as a string
@@ -22,6 +25,7 @@ public enum TriggerKeyChoice: Hashable, Sendable {
   case dictate(style: String)
   case readAloud
   case ask
+  case rewrite
 
   /// The style id for "use the main window's selection". Not a UUID, and not
   /// `StyleProfileStore.defaultStyleID`, so it can collide with neither.
@@ -35,16 +39,18 @@ public enum TriggerKeyChoice: Hashable, Sendable {
     case .dictate: .dictate
     case .readAloud: .readAloud
     case .ask: .ask
+    case .rewrite: .rewrite
     }
   }
 
   /// The stored form. Any string that isn't one of the action markers is a
-  /// style id — the encoding from before read and ask existed.
+  /// style id — the encoding from before read, ask and rewrite existed.
   init(raw: String) {
     switch raw {
     case "": self = .off
     case "read-aloud": self = .readAloud
     case "ask": self = .ask
+    case "rewrite": self = .rewrite
     default: self = .dictate(style: raw)
     }
   }
@@ -55,6 +61,7 @@ public enum TriggerKeyChoice: Hashable, Sendable {
     case .dictate(let style): style
     case .readAloud: "read-aloud"
     case .ask: "ask"
+    case .rewrite: "rewrite"
     }
   }
 }
@@ -144,6 +151,8 @@ public struct TriggerKeyBindings: Sendable, Equatable {
   /// — and whether some key asks, which sends what's said to the LLM Gateway.
   public var readsOrAsks: Bool { TriggerKey.allCases.contains { [.readAloud, .ask].contains(action(for: $0)) } }
   public var asks: Bool { TriggerKey.allCases.contains { action(for: $0) == .ask } }
+  /// Whether some key rewrites, which sends the selection and what's said to the LLM Gateway.
+  public var rewrites: Bool { TriggerKey.allCases.contains { action(for: $0) == .rewrite } }
 
   /// Every key the tap watches, with its mode — the router's binding.
   public var activations: [TriggerKey: TriggerActivation] {

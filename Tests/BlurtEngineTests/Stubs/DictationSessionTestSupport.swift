@@ -195,3 +195,12 @@ extension DictationSession {
     while !cancelRequested { await Task.yield() }
   }
 }
+
+/// Waits (up to 5 s) for the fixture's mic to start: a hand-back press has
+/// opened it, so a release now ends a recording rather than racing the press.
+func waitForMicStart(_ fixture: SessionFixture) async throws {
+  let deadline = ContinuousClock.now + .seconds(5)
+  while await fixture.mic.startCalls == 0, ContinuousClock.now < deadline {
+    try await Task.sleep(for: .milliseconds(5))
+  }
+}
