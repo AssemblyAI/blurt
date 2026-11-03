@@ -20,7 +20,8 @@ struct ReadyView: View {
   // rows live (`ObservedKeyBindings`).
   @ObservedKeyBindings private var bindings
   private var triggerKey: TriggerKey { bindings.bound }
-  /// The dictation key's tap/hold mode, which the shortcut row's words follow.
+  /// The dictation key's tap/hold mode, which the rows' tooltips and the
+  /// Library's first-run prompt follow.
   private var activation: TriggerActivation { bindings.activation(for: bindings.bound) }
 
   /// Kept as view state because Settings is a separate scene: its defaults
@@ -34,7 +35,7 @@ struct ReadyView: View {
 
   var body: some View {
     // Decoded and resolved once per render: `body` re-runs on every dictation
-    // (the Recent list is live), and both answers cost a JSON decode. Which
+    // (the Library is live), and both answers cost a JSON decode. Which
     // style is active is the engine's rule — the stored pointer, `nil` for the
     // Default sentinel, or the first profile when it names nothing — never a
     // second reading here.
@@ -49,7 +50,7 @@ struct ReadyView: View {
         Section {
           TranscribeRow(model: coordinator.transcripts)
         }
-        // The keys, each with how its gesture works beneath its name; the
+        // The keys, each with how its gesture works in its tooltip; the
         // writing style the dictation keys use closes the group.
         Section {
           shortcutRow
@@ -102,8 +103,7 @@ struct ReadyView: View {
   /// trailing, and how its gesture works in the tooltip. The keycap fills
   /// with the accent the moment the key goes down (`isCapturing`, which
   /// includes the mic bring-up) — the window's proof the hotkey is registered —
-  /// with the live phase beside
-  /// the key during capture and transcription.
+  /// with the live phase beside the key during capture and transcription.
   ///
   /// The phase is gated on the same stream the overlay pill renders
   /// (`coordinator.menuBarStatus`, whose `.recording` deliberately excludes
@@ -144,8 +144,8 @@ struct ReadyView: View {
     let choice = bindings.choice(for: key, profiles: profiles)
     let (title, symbol): (String, String) =
       switch choice {
-      case .readAloud: (KeyActionName.readAloud, "speaker.wave.2")
-      case .ask: (KeyActionName.ask, "questionmark.bubble")
+      case .readAloud: (LibraryKind.readAloud.name, LibraryKind.readAloud.systemImage)
+      case .ask: (LibraryKind.ask.name, LibraryKind.ask.systemImage)
       case .dictate(TriggerKeyChoice.mainWindowStyle), .off: ("Dictate", "keyboard")
       case .dictate(let style):
         (

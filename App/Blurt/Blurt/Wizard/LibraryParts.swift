@@ -7,7 +7,7 @@ import SwiftUI
 /// kind's name and glyph, read by the Library's rows and its filter. An answer
 /// is its own kind here, though the store files it as a read-aloud with a
 /// request.
-enum LibraryKind: CaseIterable {
+enum LibraryKind {
   case recording, dictation, file, readAloud, ask
 
   init(_ entry: SavedTranscript) {
@@ -67,4 +67,10 @@ struct EmptyListMessage: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .accessibilityElement(children: .combine)
   }
+}
+
+/// A grouped form section's shape, for what's drawn to match one: the Library's
+/// panel and the record row's drop-target outline.
+enum FormPanel {
+  static let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
 }

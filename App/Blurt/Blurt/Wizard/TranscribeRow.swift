@@ -27,7 +27,7 @@ struct TranscribeRow: View {
       ZStack {
         if isTargeted {
           Rectangle().fill(BlurtBrand.accent.opacity(0.12))
-          RoundedRectangle(cornerRadius: 10, style: .continuous)
+          FormPanel.shape
             .strokeBorder(BlurtBrand.accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
         }
       }

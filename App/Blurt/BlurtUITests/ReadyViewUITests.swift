@@ -55,7 +55,7 @@ final class ReadyViewUITests: BlurtUITestCase {
   func testCompletedDictationPopulatesRecentList() {
     let (harness, main) = readyScreenWindows()
 
-    // The Recent list starts empty.
+    // The Library starts empty.
     XCTAssertTrue(
       emptyRecentPrompt(in: main).waitForExistence(timeout: 10),
       "The Library should start empty")

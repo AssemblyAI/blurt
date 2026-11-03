@@ -17,23 +17,20 @@ struct LibrarySection: View {
   /// then it scrolls.
   private static let listHeight: CGFloat = 300
 
-  /// A grouped form section's shape.
-  private static let panel = RoundedRectangle(cornerRadius: 10, style: .continuous)
-
   @State private var query = ""
   @State private var filter = LibraryFilter.all
   @State private var selection: SavedTranscript.ID?
   @State private var pendingDelete: SavedTranscript?
   @State private var searchFocusRequest = 0
-  /// The history, filtered (`filtered()`): recomputed only when the history,
-  /// the filter or the search changes — not on every selection change or
-  /// play/stop, which also redraw this view, and which would otherwise re-run
-  /// a full-text search across every saved transcript.
-  @State private var shown: [SavedTranscript] = []
-  /// `shown` under its day headings, each row's details worked out — rebuilt
-  /// with `shown` and for the same reason: a word count walks the whole
-  /// transcript, and a long recording runs to tens of thousands of words.
+  /// The history, filtered and under its day headings: rebuilt only when the
+  /// history, the filter or the search changes — not on every selection
+  /// change or play/stop, which also redraw this view, and which would
+  /// otherwise re-run a full-text search across every saved transcript.
   @State private var days: [LibraryDay] = []
+  /// Each entry's row details, by id. Rebuilt only when the history changes —
+  /// not per search keystroke — since a word count walks the whole transcript,
+  /// and a long recording runs to tens of thousands of words.
+  @State private var details: [SavedTranscript.ID: String] = [:]
 
   private var model: TranscriptsModel { coordinator.transcripts }
 
@@ -55,13 +52,11 @@ struct LibrarySection: View {
   }
 
   private func refresh() {
-    shown = filtered()
-    days = LibraryDay.group(shown, now: .now)
+    days = LibraryDay.group(filtered(), details: details, now: .now)
   }
 
-  /// The selected entry, if any.
-  private var selectedEntry: SavedTranscript? {
-    selection.flatMap { id in model.history.first { $0.id == id } }
+  private func entry(id: SavedTranscript.ID?) -> SavedTranscript? {
+    id.flatMap { id in model.history.first { $0.id == id } }
   }
 
   var body: some View {
@@ -84,18 +79,26 @@ struct LibrarySection: View {
         .frame(height: Self.listHeight)
         // The grouped form's section look, so the Library matches the panels
         // above it: a plain list on the form's fill, clipped to its radius.
-        .background(Color(nsColor: .quaternarySystemFill), in: Self.panel)
-        .clipShape(Self.panel)
+        .background(Color(nsColor: .quaternarySystemFill), in: FormPanel.shape)
+        .clipShape(FormPanel.shape)
     }
-    .onChange(of: model.history, initial: true) { refresh() }
+    .onChange(of: model.history, initial: true) {
+      details = Dictionary(uniqueKeysWithValues: model.history.map { ($0.id, LibraryDay.details(of: $0)) })
+      refresh()
+    }
     .onChange(of: filter) { refresh() }
-    .onChange(of: query) { refresh() }
+    // The search waits for a pause in typing: each pass is a full-text match
+    // across every saved transcript, on the main thread.
+    .task(id: query) {
+      guard (try? await Task.sleep(for: .milliseconds(150))) != nil else { return }
+      refresh()
+    }
     // Edit › Find (⌘F), for this window.
     .focusedSceneValue(\.focusHistorySearch, model.history.isEmpty ? nil : { searchFocusRequest += 1 })
     .deleteConfirmation(for: $pendingDelete, model: model) { deleted in
       // The next row takes the selection, as Mac lists do, so Delete
       // can carry on down the list.
-      let rows = shown
+      let rows = days.flatMap(\.rows).map(\.entry)
       guard selection == deleted.id, let index = rows.firstIndex(where: { $0.id == deleted.id }) else { return }
       let neighbors = rows.indices.contains(index + 1) ? rows[index + 1] : index > 0 ? rows[index - 1] : nil
       selection = neighbors?.id
@@ -124,7 +127,7 @@ struct LibrarySection: View {
             let entry = row.entry
             HistoryRow(
               entry: entry, details: row.details, dayTitle: day.title,
-              actions: { EntryActions(entry: entry, model: model, delete: { pendingDelete = entry }) }
+              actions: EntryActions(entry: entry, model: model, delete: { pendingDelete = entry })
             )
             .tag(entry.id)
             // Two-line rows separate themselves, as in Mail; a plain list's
@@ -140,36 +143,31 @@ struct LibrarySection: View {
     .accessibilityIdentifier(UITestIdentifiers.recentList)
     .overlay { emptyMessage }
     .contextMenu(forSelectionType: SavedTranscript.ID.self) { ids in
-      if let entry = entry(for: ids) {
+      if let entry = entry(id: ids.first) {
         EntryActions(entry: entry, model: model, delete: { pendingDelete = entry })
       }
     } primaryAction: { ids in
       // Double-click and Return.
-      if let entry = entry(for: ids) { model.open(entry) }
+      if let entry = entry(id: ids.first) { model.open(entry) }
     }
     .onCopyCommand {
-      guard let entry = selectedEntry else { return [] }
+      guard let entry = entry(id: selection) else { return [] }
       AccessibilityNotification.Announcement("Copied").post()
       return [NSItemProvider(object: entry.text as NSString)]
     }
-    .onDeleteCommand { pendingDelete = selectedEntry }
+    .onDeleteCommand { pendingDelete = entry(id: selection) }
   }
 
   @ViewBuilder private var emptyMessage: some View {
     if model.history.isEmpty {
       emptyPrompt
-    } else if shown.isEmpty, trimmedQuery != nil {
+    } else if days.isEmpty, trimmedQuery != nil {
       EmptyListMessage(
         title: "No results for \u{201C}\(query)\u{201D}", systemImage: "magnifyingglass",
         hint: "Check the spelling or try a new search.")
-    } else if shown.isEmpty {
+    } else if days.isEmpty {
       EmptyListMessage(title: filter.emptyTitle, systemImage: filter.systemImage, hint: filter.emptyHint)
     }
-  }
-
-  private func entry(for ids: Set<SavedTranscript.ID>) -> SavedTranscript? {
-    guard let id = ids.first else { return nil }
-    return model.history.first { $0.id == id }
   }
 
   /// The first-run prompt, naming both things this list will hold: a
@@ -214,18 +212,15 @@ private enum LibraryFilter: CaseIterable {
     }
   }
 
-  /// The kinds shown.
-  private var kinds: Set<LibraryKind> {
+  func includes(_ entry: SavedTranscript) -> Bool {
     switch self {
-    case .all: Set(LibraryKind.allCases)
-    case .recordings: [.recording]
-    case .dictations: [.dictation]
-    case .files: [.file]
-    case .spoken: [.readAloud, .ask]
+    case .all: true
+    case .recordings: entry.kind == .recording
+    case .dictations: entry.kind == .dictation
+    case .files: entry.kind == .file
+    case .spoken: entry.kind == .readAloud
     }
   }
-
-  func includes(_ entry: SavedTranscript) -> Bool { kinds.contains(LibraryKind(entry)) }
 
   var systemImage: String {
     switch self {
@@ -270,13 +265,17 @@ private struct LibraryDay: Identifiable {
   let title: String
   var rows: [Row]
 
-  /// `entries` (newest first) split into runs by calendar day, order kept.
-  static func group(_ entries: [SavedTranscript], now: Date) -> [LibraryDay] {
+  /// `entries` (newest first) split into runs by calendar day, order kept,
+  /// each row's details read from `details` (worked out afresh for any
+  /// entry it lacks).
+  static func group(
+    _ entries: [SavedTranscript], details: [SavedTranscript.ID: String], now: Date
+  ) -> [LibraryDay] {
     let calendar = Calendar.current
     var days: [LibraryDay] = []
     for entry in entries {
       let day = calendar.startOfDay(for: entry.date)
-      let row = Row(entry: entry, details: details(of: entry))
+      let row = Row(entry: entry, details: details[entry.id] ?? Self.details(of: entry))
       if days.last?.id == day {
         days[days.count - 1].rows.append(row)
       } else {
@@ -304,7 +303,7 @@ private struct LibraryDay: Identifiable {
   /// "Dictation · Formal · 412 words", "Recording · 6,120 words", "Ask About
   /// Selection" — no count for a spoken entry, whose text is what was read
   /// rather than what was said.
-  private static func details(of entry: SavedTranscript) -> String {
+  static func details(of entry: SavedTranscript) -> String {
     let kind = LibraryKind(entry)
     let words: String? =
       switch (kind, entry.wordCount) {
@@ -329,8 +328,12 @@ private struct EntryActions: View {
       Button(model.isPlaying(entry) ? "Stop" : "Play") { model.togglePlayback(entry) }
     }
     Button("Copy") { NSPasteboard.copyAnnounced(entry.text) }
-    if let url = entry.audioURL {
-      Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+    // Gated on `hasAudio` and resolved on click: `audioURL` resolves a file's
+    // bookmark, file-system work this menu is built too often to repeat.
+    if entry.hasAudio {
+      Button("Show in Finder") {
+        if let url = entry.audioURL { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+      }
     }
     Divider()
     Button("Delete…", role: .destructive, action: delete)
@@ -341,11 +344,11 @@ private struct EntryActions: View {
 /// for a recording, else the start of the text) over its details, and the time
 /// of day — the day is the section heading. Opening is double-click or Return,
 /// deleting is Delete, and the rest is the contextual menu, as in any Mac list.
-private struct HistoryRow<Actions: View>: View {
+private struct HistoryRow: View {
   let entry: SavedTranscript
   let details: String
   let dayTitle: String
-  @ViewBuilder var actions: () -> Actions
+  let actions: EntryActions
 
   var body: some View {
     let title = entry.title
@@ -377,6 +380,6 @@ private struct HistoryRow<Actions: View>: View {
     .accessibilityLabel("\(title), \(details), \(dayTitle) at \(time)")
     .accessibilityHint("Opens the transcript")
     // The contextual menu's actions, offered to VoiceOver on the row itself.
-    .accessibilityActions(actions)
+    .accessibilityActions { actions }
   }
 }

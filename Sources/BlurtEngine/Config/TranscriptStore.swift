@@ -111,21 +111,8 @@ public struct SavedTranscript: Codable, Identifiable, Equatable, Sendable {
   }
 
   /// The transcript's length in words, counted on the plain text where there
-  /// is one so a recording's "Speaker A:" labels don't pad it. One pass with no
-  /// intermediate array: a long recording runs to tens of thousands of words.
-  public var wordCount: Int {
-    var count = 0
-    var inWord = false
-    for character in plainText ?? text {
-      if character.isWhitespace {
-        inWord = false
-      } else if !inWord {
-        inWord = true
-        count += 1
-      }
-    }
-    return count
-  }
+  /// is one so a recording's "Speaker A:" labels don't pad it.
+  public var wordCount: Int { (plainText ?? text).wordCount }
 }
 
 /// The saved history: one JSON array, newest first, every entry kept. Read
