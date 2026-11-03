@@ -28,13 +28,16 @@ final class TranscriptionUITests: BlurtUITestCase {
     XCTAssertTrue(row(titled: UITestIdentifiers.seededDictationText).waitForExistence(timeout: 5))
     XCTAssertFalse(row(titled: UITestIdentifiers.seededRecordingTitle).exists, "Dictations hides recordings")
 
-    selectFilter("Transcripts")
+    selectFilter("Recordings")
     XCTAssertTrue(row(titled: UITestIdentifiers.seededRecordingTitle).waitForExistence(timeout: 5))
-    XCTAssertFalse(row(titled: UITestIdentifiers.seededDictationText).exists, "Transcripts hides dictations")
+    XCTAssertFalse(row(titled: UITestIdentifiers.seededDictationText).exists, "Recordings hides dictations")
 
-    selectFilter("Read Aloud")
+    selectFilter("Files")
+    XCTAssertFalse(row(titled: UITestIdentifiers.seededRecordingTitle).exists, "Files hides recordings")
+
+    selectFilter("Spoken")
     XCTAssertTrue(row(titled: UITestIdentifiers.seededReadText).waitForExistence(timeout: 5))
-    XCTAssertFalse(row(titled: UITestIdentifiers.seededRecordingTitle).exists, "Read Aloud hides recordings")
+    XCTAssertFalse(row(titled: UITestIdentifiers.seededRecordingTitle).exists, "Spoken hides recordings")
 
     selectFilter("All")
     XCTAssertTrue(row(titled: UITestIdentifiers.seededRecordingTitle).waitForExistence(timeout: 5))
@@ -53,7 +56,7 @@ final class TranscriptionUITests: BlurtUITestCase {
 
     // Nothing matches: the system's no-results state.
     let search = app.searchFields[UITestIdentifiers.recentSearchField]
-    XCTAssertTrue(search.exists, "The Recent list should have a search field")
+    XCTAssertTrue(search.exists, "The Library should have a search field")
     search.typeText("zzqx")
     XCTAssertTrue(
       text(containing: "No results").waitForExistence(timeout: 5), "A search with no matches should say so")
@@ -128,7 +131,7 @@ final class TranscriptionUITests: BlurtUITestCase {
 
   // MARK: - Helpers
 
-  /// A Recent row by its title. The row is one combined element whose text
+  /// A Library row by its title. The row is one combined element whose text
   /// ("<title>, <details>") XCUITest may report as its label or its value.
   private func row(titled title: String) -> XCUIElement {
     app.windows[UITestIdentifiers.mainWindowTitle].outlines[UITestIdentifiers.recentList].staticTexts
@@ -156,7 +159,7 @@ final class TranscriptionUITests: BlurtUITestCase {
     app.windows[UITestIdentifiers.mainWindowTitle].buttons[UITestIdentifiers.facetChipPrefix + facet].firstMatch
   }
 
-  /// A segment of the Recent list's filter. Segmented controls surface as radio
+  /// A segment of the Library's filter. Segmented controls surface as radio
   /// buttons or plain buttons depending on the OS build.
   private func selectFilter(_ title: String) {
     let main = app.windows[UITestIdentifiers.mainWindowTitle]

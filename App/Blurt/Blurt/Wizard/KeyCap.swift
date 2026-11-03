@@ -1,17 +1,16 @@
 import BlurtEngine
 import SwiftUI
 
-/// A quiet keyboard legend. The real key lights it during capture.
+/// A quiet keyboard legend: plain text, as a menu prints an item's shortcut,
+/// with no fill or border — a key to press on the keyboard, not a control to
+/// click. The real key lights it during capture.
 struct KeyCap: View {
   var label: String
   var isLit = false
 
   var body: some View {
     Text(label)
-      .font(.system(.caption, design: .rounded, weight: .medium))
-      .padding(.horizontal, 7)
-      .padding(.vertical, 3)
-      .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
+      .fontWeight(isLit ? .semibold : .regular)
       .foregroundStyle(isLit ? AnyShapeStyle(BlurtBrand.accent) : AnyShapeStyle(.secondary))
       .animation(.easeOut(duration: 0.1), value: isLit)
   }
