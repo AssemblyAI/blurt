@@ -42,6 +42,7 @@
 		152452FE264E453808327885 /* juno-122-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 9FE15281EA6DE5C2C1978C44 /* juno-122-stop.m4a */; };
 		1678C191033752690B8D54B7 /* juno-27-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 5F23A12A7A73E12FAB6DBD14 /* juno-27-start.m4a */; };
 		1698718150B4CE4C42101647 /* rom1a-2-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4E25792AC8E46820FF270D64 /* rom1a-2-start.m4a */; };
+		16BAB2F3D0F8ED815A55BB65 /* LibraryParts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1E4E6475D21A5D03D21B1B2 /* LibraryParts.swift */; };
 		175154674D668762CDAF08E1 /* rom1a-25-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = A01872064CB7D739DE6F9952 /* rom1a-25-stop.m4a */; };
 		176BD86642BD36D05365B269 /* juno-62-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 32B41B7B40DE78AB987C237E /* juno-62-stop.m4a */; };
 		17955931A6FB9BDB8900BFFF /* juno-6-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 8C9E137C2B11E6EF6A82E51A /* juno-6-start.m4a */; };
@@ -66,7 +67,6 @@
 		1CCDD063B29F52F4681EA371 /* rom1b-6-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 3996A11A62CD49D6CB89CB8E /* rom1b-6-start.m4a */; };
 		1D1100AB3D47EFC80D47B04B /* SettingsWindowRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37CBB4580F251B182A8B1937 /* SettingsWindowRoot.swift */; };
 		1E76D800DC431B55E6C132F6 /* juno-98-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 8304744FE228FA9B2CEBEA16 /* juno-98-start.m4a */; };
-		1E84152D511A9A3371E4E5B2 /* RecentSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04C28CB438D9B2D1C6F816AF /* RecentSection.swift */; };
 		1F764B2251BBD48C1B4716EF /* juno-27-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 6D915D3DC8930DBC79CACDDC /* juno-27-stop.m4a */; };
 		20526B7308927EE014F18865 /* juno-31-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = DEF4922B82FD3934F5EC71C9 /* juno-31-stop.m4a */; };
 		206A7DA30F04C0726FC3EA12 /* juno-86-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = E358C3B6655AFEA39440EF00 /* juno-86-start.m4a */; };
@@ -173,6 +173,7 @@
 		55A02BEEBE538AE0048CC2B9 /* juno-73-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = F4512C06E3020F0F2D518A3E /* juno-73-stop.m4a */; };
 		572211105316DB06C2AC9134 /* juno-30-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 41736827B0D4E7E1D024DCF1 /* juno-30-start.m4a */; };
 		583D87E4396443D2DD0E4ED9 /* KeyActionName.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3879273E32399C14F3533899 /* KeyActionName.swift */; };
+		58FAFE916586BFC0CBCC0EB9 /* LibrarySection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64C90BFCBE7F97C6FB19F861 /* LibrarySection.swift */; };
 		59C168C1D913BE352C83FFD5 /* juno-45-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D733CCA5061A2B7B74A23A65 /* juno-45-stop.m4a */; };
 		5B0EDCD855E9676BCE76E1A2 /* rom1a-7-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 4873421ACF290B88FA257D6A /* rom1a-7-start.m4a */; };
 		5B117EB54F223A9960EC23B6 /* juno-88-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 19A708C2C2C7CDF52E47A8C4 /* juno-88-start.m4a */; };
@@ -500,7 +501,6 @@
 		0386BF281886EDBFE9EC8C61 /* juno-15-start.m4a */ = {isa = PBXFileReference; path = "juno-15-start.m4a"; sourceTree = "<group>"; };
 		03D380F88F26C7A6AAECF328 /* juno-116-stop.m4a */ = {isa = PBXFileReference; path = "juno-116-stop.m4a"; sourceTree = "<group>"; };
 		04253733D542188A7E5645AD /* juno-19-stop.m4a */ = {isa = PBXFileReference; path = "juno-19-stop.m4a"; sourceTree = "<group>"; };
-		04C28CB438D9B2D1C6F816AF /* RecentSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentSection.swift; sourceTree = "<group>"; };
 		0566F4FC45C72A6DA586126E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		0618C6EE1B8864C57F02CC1E /* rom1b-0-stop.m4a */ = {isa = PBXFileReference; path = "rom1b-0-stop.m4a"; sourceTree = "<group>"; };
 		06A8F7161C5917AADFF6AC77 /* juno-67-stop.m4a */ = {isa = PBXFileReference; path = "juno-67-stop.m4a"; sourceTree = "<group>"; };
@@ -694,6 +694,7 @@
 		63AA5C73111EA1F4E03A8C24 /* juno-96-start.m4a */ = {isa = PBXFileReference; path = "juno-96-start.m4a"; sourceTree = "<group>"; };
 		6492130BD7CA7CBF22725D6C /* juno-76-stop.m4a */ = {isa = PBXFileReference; path = "juno-76-stop.m4a"; sourceTree = "<group>"; };
 		64A66B39BC8E13D32472709A /* juno-84-stop.m4a */ = {isa = PBXFileReference; path = "juno-84-stop.m4a"; sourceTree = "<group>"; };
+		64C90BFCBE7F97C6FB19F861 /* LibrarySection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySection.swift; sourceTree = "<group>"; };
 		64D4C708432B8CCB2C07A059 /* juno-16-start.m4a */ = {isa = PBXFileReference; path = "juno-16-start.m4a"; sourceTree = "<group>"; };
 		6508D5EDCCC53BD0900A1D4F /* juno-104-start.m4a */ = {isa = PBXFileReference; path = "juno-104-start.m4a"; sourceTree = "<group>"; };
 		655BB30FDBC7C45D0AF00F91 /* ReadyViewUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadyViewUITests.swift; sourceTree = "<group>"; };
@@ -796,6 +797,7 @@
 		A0C585C5F805520ADA502A8F /* UITestIdentifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestIdentifiers.swift; sourceTree = "<group>"; };
 		A0C78659208520BB93EAB372 /* juno-12-start.m4a */ = {isa = PBXFileReference; path = "juno-12-start.m4a"; sourceTree = "<group>"; };
 		A0E1741983CE6AAEF3329E9C /* Binding+IsPresent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Binding+IsPresent.swift"; sourceTree = "<group>"; };
+		A1E4E6475D21A5D03D21B1B2 /* LibraryParts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryParts.swift; sourceTree = "<group>"; };
 		A27D7F43295DE2A81EFFDDBC /* OverlayWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayWindowController.swift; sourceTree = "<group>"; };
 		A2C5021E8F72182F331DA397 /* juno-3-start.m4a */ = {isa = PBXFileReference; path = "juno-3-start.m4a"; sourceTree = "<group>"; };
 		A4AFAD52CAC3825D7A603DC5 /* juno-100-start.m4a */ = {isa = PBXFileReference; path = "juno-100-start.m4a"; sourceTree = "<group>"; };
@@ -1457,13 +1459,14 @@
 				C7C95B4C80443E2A6EFE05E7 /* DeveloperSection.swift */,
 				48C4CFC6271703797187A269 /* KeyCap.swift */,
 				AE6928CEB0A1A92241762DB6 /* KeysSettingsTab.swift */,
+				A1E4E6475D21A5D03D21B1B2 /* LibraryParts.swift */,
+				64C90BFCBE7F97C6FB19F861 /* LibrarySection.swift */,
 				324768A585509378B2AF8A8A /* LiveRecordingView.swift */,
 				01F10B3261EA8F8616B8595A /* MainWindowRoot.swift */,
 				46E7FDC7169255096BD040D4 /* MeetingAutoRecordSection.swift */,
 				EB55696AF62110C04E63B601 /* ObservedKeyBindings.swift */,
 				754D13A631535995AF41AA5B /* ReadAloudSettingsTab.swift */,
 				383E03AB60BA21AAD92655D5 /* ReadyView.swift */,
-				04C28CB438D9B2D1C6F816AF /* RecentSection.swift */,
 				9C204A91D4BD4F03B153E3DF /* SearchField.swift */,
 				254D4D3CAC1C114EC51C96C8 /* SettingRow.swift */,
 				37CBB4580F251B182A8B1937 /* SettingsWindowRoot.swift */,
@@ -2167,6 +2170,8 @@
 				92041B42C67CE21AF82B6863 /* KeyCap.swift in Sources */,
 				9B7CB19D131F1374FCA0A986 /* KeyTermsStepView.swift in Sources */,
 				1C89CB94C7D10B67BD0573DF /* KeysSettingsTab.swift in Sources */,
+				16BAB2F3D0F8ED815A55BB65 /* LibraryParts.swift in Sources */,
+				58FAFE916586BFC0CBCC0EB9 /* LibrarySection.swift in Sources */,
 				E8AE03AA4DCD807D2BB8D660 /* LiquidGlass.swift in Sources */,
 				223C5150193302A11CE7074B /* LiveRecordingView.swift in Sources */,
 				7F838018EA0ACE7170FC32C4 /* MainWindowRoot.swift in Sources */,
@@ -2180,7 +2185,6 @@
 				D750C1BF16502EEC92182ECD /* PermissionsStepView.swift in Sources */,
 				24607B2B47E779840B7C225C /* ReadAloudSettingsTab.swift in Sources */,
 				A13335FE97FA2E60A4F5CABC /* ReadyView.swift in Sources */,
-				1E84152D511A9A3371E4E5B2 /* RecentSection.swift in Sources */,
 				C13B68C111B47E70D1EF0ED2 /* SearchField.swift in Sources */,
 				6A1402BFED3758AAD9C84ADF /* SettingRow.swift in Sources */,
 				1D1100AB3D47EFC80D47B04B /* SettingsWindowRoot.swift in Sources */,

@@ -109,6 +109,10 @@ public struct SavedTranscript: Codable, Identifiable, Equatable, Sendable {
     case .dictation, .readAloud: text
     }
   }
+
+  /// The transcript's length in words, counted on the plain text where there
+  /// is one so a recording's "Speaker A:" labels don't pad it.
+  public var wordCount: Int { (plainText ?? text).wordCount }
 }
 
 /// The saved history: one JSON array, newest first, every entry kept. Read

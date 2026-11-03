@@ -36,14 +36,14 @@ final class ReadyViewUITests: BlurtUITestCase {
     XCTAssertFalse(
       main.popUpButtons[UITestIdentifiers.styleProfilePickerFromMain].exists,
       "The style row should not offer a pop-up until there is another choice")
-    // The Recent section, empty on a fresh launch, shows its header and the
+    // The Library, empty on a fresh launch, shows its header and the
     // first-dictation prompt that fills the reserved list area.
     XCTAssertTrue(
-      app.staticTexts["Recent"].exists,
-      "Ready screen should have a Recent section")
+      app.staticTexts["Library"].exists,
+      "Ready screen should have a Library section")
     XCTAssertTrue(
       emptyRecentPrompt(in: main).exists,
-      "An empty Recent list should prompt the first dictation")
+      "An empty Library should prompt the first dictation")
 
     // The Settings button at the window's foot — the main window's own route
     // to the Settings scene, alongside ⌘, and the menu-bar item.
@@ -55,10 +55,10 @@ final class ReadyViewUITests: BlurtUITestCase {
   func testCompletedDictationPopulatesRecentList() {
     let (harness, main) = readyScreenWindows()
 
-    // The Recent list starts empty.
+    // The Library starts empty.
     XCTAssertTrue(
       emptyRecentPrompt(in: main).waitForExistence(timeout: 10),
-      "Recent list should start empty")
+      "The Library should start empty")
 
     driveDictation(via: harness)
 

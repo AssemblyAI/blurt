@@ -2,9 +2,9 @@ import BlurtEngine
 import SwiftUI
 
 /// The "you're all set" screen shown in the main window once setup is complete:
-/// the wordmark over a grouped form — the keys you've configured and the
-/// style in effect, then the recent dictations — and a bottom bar with the attribution links
-/// and a Settings button, the window's own door to the Settings scene
+/// the wordmark over a grouped form — a row to record or drop in audio, then
+/// the keys you've configured and the style in effect — the Library, and a
+/// bottom bar with the attribution links and a Settings button, the window's own door to the Settings scene
 /// alongside the app-menu "Settings…" (⌘,) and the menu-bar item.
 ///
 /// A grouped `Form`, the same surface the Settings window's panes use, rather
@@ -20,7 +20,8 @@ struct ReadyView: View {
   // rows live (`ObservedKeyBindings`).
   @ObservedKeyBindings private var bindings
   private var triggerKey: TriggerKey { bindings.bound }
-  /// The dictation key's tap/hold mode, which the shortcut row's words follow.
+  /// The dictation key's tap/hold mode, which the rows' tooltips and the
+  /// Library's first-run prompt follow.
   private var activation: TriggerActivation { bindings.activation(for: bindings.bound) }
 
   /// Kept as view state because Settings is a separate scene: its defaults
@@ -34,7 +35,7 @@ struct ReadyView: View {
 
   var body: some View {
     // Decoded and resolved once per render: `body` re-runs on every dictation
-    // (the Recent list is live), and both answers cost a JSON decode. Which
+    // (the Library is live), and both answers cost a JSON decode. Which
     // style is active is the engine's rule — the stored pointer, `nil` for the
     // Default sentinel, or the first profile when it names nothing — never a
     // second reading here.
@@ -43,16 +44,14 @@ struct ReadyView: View {
       MainWindowBranding()
         .padding(.top, 12)
 
-      // Recording and file import are the first actions below the wordmark.
-      TranscribeRow(model: coordinator.transcripts)
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
-
       Form {
-        // Keys, one line each — the section grows by a line per bound key,
-        // not a paragraph. Each key can be tap, hold, or both (the Keys tab),
-        // so each row says its own mode beside its key; the full sentence is
-        // its tooltip. The writing style the dictation keys use closes the group.
+        // Recording and file import first: the one row that starts something
+        // from the window itself.
+        Section {
+          TranscribeRow(model: coordinator.transcripts)
+        }
+        // The keys, each with how its gesture works in its tooltip; the
+        // writing style the dictation keys use closes the group.
         Section {
           shortcutRow
           // Every other key given an action in the Keys tab, in its order.
@@ -77,9 +76,9 @@ struct ReadyView: View {
       .scrollDisabled(true)
       .fixedSize(horizontal: false, vertical: true)
 
-      // Dictations and transcriptions together, outside the form so its list
-      // scrolls; the whole window takes a dropped file (`audioFileDropTarget`).
-      RecentSection(coordinator: coordinator, triggerKey: triggerKey, activation: activation)
+      // Every saved entry, outside the form so its list scrolls; the whole
+      // window takes a dropped file (`audioFileDropTarget`).
+      LibrarySection(coordinator: coordinator, triggerKey: triggerKey, activation: activation)
         .padding(.horizontal, 20)
         .padding(.bottom, 16)
 
@@ -100,12 +99,11 @@ struct ReadyView: View {
     }
   }
 
-  /// The dictation shortcut as a form row: "Shortcut" leading, and trailing
-  /// the bound key as a keycap beside a word on what it does. The keycap fills
+  /// The dictation shortcut as a form row: "Dictate" leading, the bound key
+  /// trailing, and how its gesture works in the tooltip. The keycap fills
   /// with the accent the moment the key goes down (`isCapturing`, which
   /// includes the mic bring-up) — the window's proof the hotkey is registered —
-  /// with the gesture guidance beneath the title and the live phase beside
-  /// the key during capture and transcription.
+  /// with the live phase beside the key during capture and transcription.
   ///
   /// The phase is gated on the same stream the overlay pill renders
   /// (`coordinator.menuBarStatus`, whose `.recording` deliberately excludes
@@ -114,15 +112,12 @@ struct ReadyView: View {
   private var shortcutRow: some View {
     SettingRow(title: "Dictate", systemImage: "keyboard") {
       HStack(spacing: 8) {
-        // The live phase while dictating; the key's mode the rest of the time.
-        if coordinator.menuBarStatus == .idle {
-          KeyMode(activation: activation)
-        } else {
+        // The live phase while dictating.
+        if coordinator.menuBarStatus != .idle {
           phaseText
             .foregroundStyle(.secondary)
         }
         KeyCap(label: triggerKey.keycapLabel, isLit: coordinator.isCapturing)
-          .frame(minWidth: 64, alignment: .trailing)
       }
     }
     .help(activation.hint(for: .dictate))
@@ -141,16 +136,16 @@ struct ReadyView: View {
     }
   }
 
-  /// One extra key's row: what it does leading — with the style a dictating
-  /// key uses when it isn't the main window's — and trailing its tap/hold mode
-  /// beside its keycap. No live phase: that stays on the dictation row above,
+  /// One extra key's row: what it does — with the style a dictating key uses
+  /// when it isn't the main window's — leading, its keycap trailing, and how
+  /// its gesture works in the tooltip. No live phase: that stays on the dictation row above,
   /// whichever key started the dictation.
   private func extraKeyRow(_ key: TriggerKey, profiles: [StyleProfile]) -> some View {
     let choice = bindings.choice(for: key, profiles: profiles)
     let (title, symbol): (String, String) =
       switch choice {
-      case .readAloud: (KeyActionName.readAloud, "speaker.wave.2")
-      case .ask: (KeyActionName.ask, "questionmark.bubble")
+      case .readAloud: (LibraryKind.readAloud.name, LibraryKind.readAloud.systemImage)
+      case .ask: (LibraryKind.ask.name, LibraryKind.ask.systemImage)
       case .dictate(TriggerKeyChoice.mainWindowStyle), .off: ("Dictate", "keyboard")
       case .dictate(let style):
         (
@@ -160,11 +155,7 @@ struct ReadyView: View {
       }
     let hint = bindings.activation(for: key).hint(for: choice.action)
     return SettingRow(title: title, systemImage: symbol) {
-      HStack(spacing: 8) {
-        KeyMode(activation: bindings.activation(for: key))
-        KeyCap(label: key.keycapLabel)
-          .frame(minWidth: 64, alignment: .trailing)
-      }
+      KeyCap(label: key.keycapLabel)
     }
     .help(hint)
     .accessibilityElement(children: .ignore)
@@ -206,7 +197,7 @@ struct ReadyView: View {
   /// A standard push button — Settings is a place visited once, and ⌘, and the
   /// app menu already reach it, so it takes neither the accent nor glass.
   private var bottomBar: some View {
-    HStack(alignment: .firstTextBaseline) {
+    HStack {
       footerLinks
       Spacer()
       Button {
@@ -216,8 +207,6 @@ struct ReadyView: View {
           .labelStyle(.titleAndIcon)
       }
       .controlSize(.small)
-      .buttonStyle(.borderless)
-      .foregroundStyle(.secondary)
     }
   }
 
@@ -313,17 +302,5 @@ struct MainWindowBranding: View {
         .foregroundStyle(BlurtBrand.accent)
         .accessibilityLabel("Blurt logo")
     }
-  }
-}
-
-/// A key's tap/hold mode as quiet trailing text beside its name — "Tap or
-/// hold", "Tap", "Hold" — so a row says how its own key works on one line.
-private struct KeyMode: View {
-  let activation: TriggerActivation
-
-  var body: some View {
-    Text(activation.label)
-      .font(.caption)
-      .foregroundStyle(.secondary)
   }
 }
