@@ -181,7 +181,7 @@ struct OverlayView: View {
   /// so "Connecting" and "Transcribing" can't drift into two different layouts
   /// — the whole point of the orb is that it doesn't move between them.
   private func waitingContent(_ text: String) -> some View {
-    HStack(spacing: 8) {
+    HStack(spacing: Self.contentSpacing) {
       BrandOrb(animated: !reduceMotion)
       StatusLineText(text)
       Spacer(minLength: 0)

@@ -237,7 +237,13 @@ private struct TranscriptFacetPicker: View {
   var body: some View {
     FlowLayout(spacing: 6) {
       ForEach(model.availableFacets, id: \.self) { facet in
-        chip(facet)
+        // Only Custom asks for anything, so only it carries the popover.
+        if facet == .custom {
+          chip(facet)
+            .popover(isPresented: $isEditingCustom, arrowEdge: .bottom) { customEditor }
+        } else {
+          chip(facet)
+        }
       }
     }
     // One single-choice group to VoiceOver, announced before the chip it's on.
@@ -277,9 +283,6 @@ private struct TranscriptFacetPicker: View {
     .buttonStyle(.plain)
     .accessibilityAddTraits(isSelected ? .isSelected : [])
     .accessibilityIdentifier(UITestIdentifiers.facetChipPrefix + facet.rawValue)
-    .popover(isPresented: facet == .custom ? $isEditingCustom : .constant(false), arrowEdge: .bottom) {
-      customEditor
-    }
   }
 
   /// Custom's request, asked for where the chip is.

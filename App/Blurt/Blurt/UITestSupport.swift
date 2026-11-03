@@ -36,6 +36,12 @@
       ProcessInfo.processInfo.arguments.contains(UITestIdentifiers.readyLaunchArgument)
     }
 
+    /// Whether the runner asked for a sample file to be transcribed at launch
+    /// (`transcribeSampleLaunchArgument`).
+    static var isTranscribeSampleRequested: Bool {
+      ProcessInfo.processInfo.arguments.contains(UITestIdentifiers.transcribeSampleLaunchArgument)
+    }
+
     /// A throwaway history for this run, seeded when the runner asks
     /// (`seedHistoryLaunchArgument`).
     static func historyStore() -> TranscriptStore {
@@ -50,8 +56,7 @@
 
   // Accessibility identifiers, the launch argument, and the sentinel API keys
   // live in the shared `UITestIdentifiers` (Shared/UITestIdentifiers.swift),
-  // compiled into both this target and the XCUITest bundle so there's one source
-  // of truth instead of the values duplicated across three places.
+  // compiled into both this target and the XCUITest bundle.
 
   /// Shared, observable state the harness window renders and the stub injector /
   /// transcriber read. Main-actor (the app target's default isolation) because
@@ -213,7 +218,7 @@
   /// everything the XCUITest suite needs to observe the record → transcribe →
   /// paste flow deterministically.
   struct UITestHarnessView: View {
-    var appDelegate: AppDelegate
+    let appDelegate: AppDelegate
     @Environment(\.openWindow) private var openWindow
 
     private var coordinator: AppCoordinator? { appDelegate.coordinator }

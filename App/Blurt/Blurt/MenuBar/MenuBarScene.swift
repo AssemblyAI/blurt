@@ -10,7 +10,7 @@ import SwiftUI
 /// just draws what the engine resolves, mirroring how `OverlayView` renders
 /// `OverlayUIState`.
 struct MenuBarLabel: View {
-  var appDelegate: AppDelegate
+  let appDelegate: AppDelegate
 
   var body: some View {
     let status = appDelegate.coordinator?.menuBarStatus ?? .idle
@@ -26,7 +26,7 @@ struct MenuBarLabel: View {
 /// invisible) dictation hotkey for discoverability and a one-click way back to
 /// the window.
 struct MenuBarContent: View {
-  var appDelegate: AppDelegate
+  let appDelegate: AppDelegate
   @Environment(\.openSettings) private var openSettings
 
   // Observed (as the ready screen does) so the reminder line updates live when
@@ -56,7 +56,7 @@ struct MenuBarContent: View {
     Divider()
 
     Button("Quit Blurt") {
-      NSApplication.shared.terminate(nil)
+      NSApp.terminate(nil)
     }
     .keyboardShortcut("q", modifiers: .command)
   }
