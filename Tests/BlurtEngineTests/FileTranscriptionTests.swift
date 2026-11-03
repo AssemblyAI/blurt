@@ -219,6 +219,15 @@ struct FileTranscriptionTests {
       SavedTranscript(kind: .file, date: .now, text: "…", fileURL: URL(filePath: "/tmp/call.m4a")).title == "call.m4a")
   }
 
+  @Test("words are counted on the plain text, across any run of whitespace")
+  func wordCounts() {
+    #expect(SavedTranscript(kind: .dictation, date: .now, text: "  Ship it\n\non  Friday. ").wordCount == 4)
+    #expect(SavedTranscript(kind: .dictation, date: .now, text: "").wordCount == 0)
+    let recording = SavedTranscript(
+      kind: .recording, date: .now, text: "Speaker A: Hello there.", plainText: "Hello there.")
+    #expect(recording.wordCount == 2)
+  }
+
   @Test("a history that won't decode is moved aside, not overwritten")
   func corruptStore() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: "TranscriptStoreTests-\(UUID())")

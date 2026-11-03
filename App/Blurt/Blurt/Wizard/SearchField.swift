@@ -20,7 +20,7 @@ struct SearchField: NSViewRepresentable {
     field.font = .systemFont(ofSize: NSFont.systemFontSize(for: .small))
     field.sendsSearchStringImmediately = true
     field.delegate = context.coordinator
-    field.setAccessibilityLabel("Search history")
+    field.setAccessibilityLabel("Search Library")
     field.setAccessibilityIdentifier(UITestIdentifiers.recentSearchField)
     context.coordinator.focusRequest = focusRequest
     return field
