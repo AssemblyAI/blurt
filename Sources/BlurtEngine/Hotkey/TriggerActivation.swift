@@ -41,6 +41,7 @@ public enum TriggerActivation: String, CaseIterable, Sendable {
       switch action {
       case .readAloud: "listen"
       case .ask: "ask"
+      case .rewrite: "rewrite"
       case .dictate, .off: "talk"
       }
     switch self {

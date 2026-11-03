@@ -71,6 +71,11 @@ struct KeysSettingsTab: View {
         if !enhancedTranscripts {
           Text(StylesInertNotice.settingsText)
         }
+        if bindings.rewrites {
+          Text(
+            "Select text, then use a \(KeyActionName.rewrite) key and say how to change it. Your selection and "
+              + "spoken request are sent to AssemblyAI’s LLM Gateway, and the rewrite replaces the selection.")
+        }
         // `GlobeKeyOverride` turns off macOS's own 🌐 action while fn does
         // anything, but that write only lands at the next log-in, so until then
         // fn double-fires. Lead with that symptom rather than the setting's name,
@@ -117,6 +122,7 @@ struct KeysSettingsTab: View {
             Divider()
             Text(KeyActionName.readAloud).tag(TriggerKeyChoice.readAloud)
             Text(KeyActionName.ask).tag(TriggerKeyChoice.ask)
+            Text(KeyActionName.rewrite).tag(TriggerKeyChoice.rewrite)
           }
         }
         .labelsHidden()

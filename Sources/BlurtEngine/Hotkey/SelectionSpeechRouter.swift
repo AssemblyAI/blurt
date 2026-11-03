@@ -4,13 +4,15 @@ import Foundation
 
   /// Sits between the trigger keys and the dictation session. A press of a key
   /// set to read aloud reads the selected text; a press of a key set to ask
-  /// records a spoken request about it and reads the answer; a dictating key's
+  /// records a spoken request about it and reads the answer; a press of a key
+  /// set to rewrite records a spoken instruction and pastes the selection,
+  /// rewritten that way, over it; a dictating key's
   /// commands go straight to `DictationSession.submit` (see `TriggerKeyBindings`
   /// for which key does what).
   ///
   /// The decisions are the engine's `SelectionSpeechRouting`. This class carries
   /// out the actions it returns: the selection read, the hold timer, the speech
-  /// task, and the gate resets. Only read and ask presses read the selection, so
+  /// task, and the gate resets. Only read, ask and rewrite presses read the selection, so
   /// dictation never waits on an Accessibility round trip.
   ///
   /// Main-actor because its callers are: the key tap's callbacks, the session's
@@ -22,11 +24,14 @@ import Foundation
 
     private let session: DictationSession
     private let speaker: any ReadAloudSpeaker
+    private let rewriter: any SelectionRewriting
     private let readSelection: @Sendable () async -> String?
     private let defaults: UserDefaults
     private var routing = SelectionSpeechRouting()
     private var speech: Task<Void, Never>?
-    /// The pending `holdElapsed`, restarted by each press that may ask.
+    /// The rewrite in flight, until it pastes. Cancelled by any press.
+    private var rewriting: Task<Void, Never>?
+    /// The pending `holdElapsed`, restarted by each press that may ask or rewrite.
     private var holdTimer: Task<Void, Never>?
     /// A voice sample playing from Settings. Apart from `speech`, so it never
     /// touches the routing state a key press owns.
@@ -45,6 +50,10 @@ import Foundation
     /// A read, answer or voice sample failed (it's already logged): the app
     /// beeps, since the pill just goes away.
     public var speechFailed: (any Error) -> Void = { _ in }
+    /// What the pill shows for a rewrite: `.rewriting` as it starts, then its
+    /// outcome — Pasted, Copied, or the error — or nil when a press abandoned
+    /// it, and the pill goes back to what the session is doing.
+    public var rewritePill: (OverlayUIState?) -> Void = { _ in }
     /// Counts reads, so a stopped read's late end can't take down a newer read's pill.
     private var speechGeneration = 0
     /// The read the pill is showing, or nil once it ended: a level still on its
@@ -58,15 +67,17 @@ import Foundation
         session: session, speaker: SelectionSpeaker(clips: clips), readSelection: SelectionSpeaker.focusedSelection)
     }
 
-    /// The seams: what speaks, how the selection is read, and where the
+    /// The seams: what speaks, what rewrites, how the selection is read, and where the
     /// settings each press reads come from. Public so a host can run the whole
     /// read-aloud path offline (Blurt's UI tests do).
     public init(
       session: DictationSession, speaker: any ReadAloudSpeaker,
+      rewriter: any SelectionRewriting = SelectionRewriter(),
       readSelection: @escaping @Sendable () async -> String?, defaults: UserDefaults = .standard
     ) {
       self.session = session
       self.speaker = speaker
+      self.rewriter = rewriter
       self.readSelection = readSelection
       self.defaults = defaults
     }
@@ -124,26 +135,43 @@ import Foundation
             self.perform(self.routing.selectionResolved(selection))
           }
         case .startHoldTimer: startHoldTimer()
-        case .speak(let text):
-          // Read per press, like the switch itself, so a Settings change applies
-          // to the next read.
-          let style = ReadAloudStyleStore(defaults: defaults).style
-          run { [speaker] onLevel in try await speaker.speak(text, style: style, onLevel: onLevel) }
-        case .answer(let request, let selection):
-          let style = ReadAloudStyleStore(defaults: defaults).style
-          run(startCueDelay: Self.answerCueGap) { [speaker] onLevel in
-            try await speaker.answer(request, about: selection, style: style, onLevel: onLevel)
-          }
-        case .stopSpeech:
-          speech?.cancel()
-          speech = nil
-          // Ended now, not when the cancelled task gets round to it: a
-          // dictation the same press starts must not have its pill taken down
-          // by this read's late end.
-          endSpeech()
         case .syncGateAfterSession: syncGateAfterSession()
         case .resetGate: resetGate()
+        case .speak, .answer, .stopSpeech, .rewrite, .stopRewrite: performTask(action)
         }
+      }
+    }
+
+    /// The actions that start or stop a task of this router's own: a read, an
+    /// answer, a rewrite.
+    private func performTask(_ action: SelectionSpeechRouting.Action) {
+      switch action {
+      case .speak(let text):
+        // Read per press, like the switch itself, so a Settings change applies
+        // to the next read.
+        let style = ReadAloudStyleStore(defaults: defaults).style
+        run { [speaker] onLevel in try await speaker.speak(text, style: style, onLevel: onLevel) }
+      case .answer(let request, let selection):
+        let style = ReadAloudStyleStore(defaults: defaults).style
+        run(startCueDelay: Self.answerCueGap) { [speaker] onLevel in
+          try await speaker.answer(request, about: selection, style: style, onLevel: onLevel)
+        }
+      case .stopSpeech:
+        speech?.cancel()
+        speech = nil
+        // Ended now, not when the cancelled task gets round to it: a
+        // dictation the same press starts must not have its pill taken down
+        // by this read's late end.
+        endSpeech()
+      case .rewrite(let request, let selection): rewrite(selection, as: request)
+      case .stopRewrite:
+        guard let task = rewriting else { return }
+        task.cancel()
+        rewriting = nil
+        // Ended now, as a stopped read is, so the press that stopped it
+        // shows its own state rather than this rewrite's late end.
+        rewritePill(nil)
+      case .forward, .readSelection, .startHoldTimer, .syncGateAfterSession, .resetGate: break
       }
     }
 
@@ -159,9 +187,45 @@ import Foundation
       }
     }
 
-    /// Whether a read or answer is playing, wearing the pill — what
-    /// `PipelinePhase.overlayState(whileSpeaking:)` asks.
-    public var isSpeaking: Bool { activeGeneration != nil }
+    /// Rewrites `selection` as `request` asks and pastes it over the
+    /// selection, through the session's injector, reporting the outcome to the
+    /// pill as a dictation's paste would be (`PipelinePhase.overlayState`). A
+    /// rewrite this router stopped reports nothing more: `.stopRewrite` already
+    /// ended it.
+    private func rewrite(_ selection: String, as request: String) {
+      rewritePill(.rewriting)
+      rewriting = Task { [weak self, rewriter, session] in
+        let outcome: OverlayUIState
+        do {
+          let text = try await rewriter.rewrite(selection, as: request)
+          try Task.checkCancellation()
+          outcome = try await session.replaceSelection(with: text).overlayState
+        } catch is CancellationError {
+          return
+        } catch {
+          Self.logger.error("rewrite failed: \(error.localizedDescription, privacy: .public)")
+          // A `BlurtError` (a missing key) reads as a dictation's would; the
+          // rewriter's own errors and the gateway's say what went wrong.
+          outcome =
+            (error as? BlurtError).map { PipelinePhase.failed($0).overlayState }
+            ?? .error(message: error.localizedDescription)
+        }
+        guard !Task.isCancelled, let self else { return }
+        self.rewriting = nil
+        self.rewritePill(outcome)
+        self.perform(self.routing.rewriteFinished())
+      }
+    }
+
+    /// Whether a read, answer or rewrite is wearing the pill — what
+    /// `PipelinePhase.overlayState(whileSpeaking:)` asks, so a session phase
+    /// arriving under either can't cover it.
+    public var ownsPill: Bool { activeGeneration != nil || rewriting != nil }
+
+    /// Whether the session is busy with a rewrite press's instruction — what
+    /// `PipelinePhase.overlayState(whileSpeaking:rewriting:)` asks, so its
+    /// transcription reads "Rewriting".
+    public var recordsRewrite: Bool { routing.recordsRewrite }
 
     /// Reports the read the pill is showing as over, once: the meter to 0, then
     /// `speechEnded`.

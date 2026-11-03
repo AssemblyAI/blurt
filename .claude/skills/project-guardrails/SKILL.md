@@ -80,7 +80,12 @@ genuinely correct, and reaching for it means it's time to stop and ask.
   (`STT/TranscriptTransform.swift`, also exempt): summary, key points and the
   other stock transforms over a saved transcript. It is never in the
   dictation path and nothing it writes is pasted: it runs only on a history
-  entry the user opens and asks for a task, past dictations included.
+  entry the user opens and asks for a task, past dictations included. The
+  third is the Rewrite Selection key's (`Rewrite/SelectionRewriter.swift`,
+  through `ReadAloudLLM.send`): highlighted text rewritten as a spoken
+  instruction asks, and pasted over the selection — the one gateway output
+  that is pasted, owner-directed (2026-11-03). It never touches a dictation's
+  words; the instruction it is given is a hand-back press's, never pasted.
 - **No local models / model downloads.** Transcription is a remote AssemblyAI
   call. No on-device ASR/LLM, no model cache, no download UI.
 - **There is no `config.conversation_context`.** `config.stt_prompt`
