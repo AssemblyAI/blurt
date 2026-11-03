@@ -80,6 +80,7 @@
 		234AFC3335EE59A5CF61E79C /* juno-78-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2A97148549AA99C8CDD7C316 /* juno-78-start.m4a */; };
 		24607B2B47E779840B7C225C /* ReadAloudSettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 754D13A631535995AF41AA5B /* ReadAloudSettingsTab.swift */; };
 		24CD4A998CA258D89140D418 /* juno-12-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = A0C78659208520BB93EAB372 /* juno-12-start.m4a */; };
+		24EC3A8465DE5D0356AB73F8 /* Binding+IsPresent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E1741983CE6AAEF3329E9C /* Binding+IsPresent.swift */; };
 		2747AA6669B2406D4436E2A3 /* juno-53-start.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 56F69B42F0D495142B17FF83 /* juno-53-start.m4a */; };
 		27CD78DC27ACE6A0E2EDFD15 /* juno-41-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 8E71DBB3C21D616DDFA77D0B /* juno-41-stop.m4a */; };
 		282E843FAECCBCA0CDB04E48 /* juno-93-stop.m4a in Resources */ = {isa = PBXBuildFile; fileRef = D85C603DADD81B58F7D390F7 /* juno-93-stop.m4a */; };
@@ -794,6 +795,7 @@
 		A01872064CB7D739DE6F9952 /* rom1a-25-stop.m4a */ = {isa = PBXFileReference; path = "rom1a-25-stop.m4a"; sourceTree = "<group>"; };
 		A0C585C5F805520ADA502A8F /* UITestIdentifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestIdentifiers.swift; sourceTree = "<group>"; };
 		A0C78659208520BB93EAB372 /* juno-12-start.m4a */ = {isa = PBXFileReference; path = "juno-12-start.m4a"; sourceTree = "<group>"; };
+		A0E1741983CE6AAEF3329E9C /* Binding+IsPresent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Binding+IsPresent.swift"; sourceTree = "<group>"; };
 		A27D7F43295DE2A81EFFDDBC /* OverlayWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayWindowController.swift; sourceTree = "<group>"; };
 		A2C5021E8F72182F331DA397 /* juno-3-start.m4a */ = {isa = PBXFileReference; path = "juno-3-start.m4a"; sourceTree = "<group>"; };
 		A4AFAD52CAC3825D7A603DC5 /* juno-100-start.m4a */ = {isa = PBXFileReference; path = "juno-100-start.m4a"; sourceTree = "<group>"; };
@@ -1522,6 +1524,7 @@
 		C9A477A17B95181CF6FCCB13 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				A0E1741983CE6AAEF3329E9C /* Binding+IsPresent.swift */,
 				FE2598E3B8BA1D650EEEEF4B /* FloatingPanel.swift */,
 				C4B6AC536FED090B4D935619 /* LiquidGlass.swift */,
 				6B2312DE4BC0F4F070830AD7 /* WindowAccessor.swift */,
@@ -2147,6 +2150,7 @@
 				B391EA5F093506B3DF318F10 /* AppCoordinator+UITesting.swift in Sources */,
 				3407E8759D61D569A998EE78 /* AppCoordinator.swift in Sources */,
 				8D2BA6E9FAC605D678A73164 /* AppDelegate.swift in Sources */,
+				24EC3A8465DE5D0356AB73F8 /* Binding+IsPresent.swift in Sources */,
 				034A91EE923BF5EA71438B7D /* BlurtBrand.swift in Sources */,
 				76C1876DB538F8E190EB509E /* BlurtCommands.swift in Sources */,
 				68990A3D1D120CC927789338 /* BrandOrb.swift in Sources */,

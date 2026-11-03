@@ -126,7 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
           // seeded with known entries when the suite asks, and the canned
           // transport behind transcription and the LLM.
           transcripts: .uiTest(store: UITestMode.historyStore()))
-        if ProcessInfo.processInfo.arguments.contains(UITestIdentifiers.transcribeSampleLaunchArgument) {
+        if UITestMode.isTranscribeSampleRequested {
           coord.transcripts.transcribe(UITestHistorySeed.sampleFile())
         }
       } else {

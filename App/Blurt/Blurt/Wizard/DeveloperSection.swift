@@ -192,13 +192,13 @@ struct ResetSection: View {
     // update alert's "OK" — an identifier here wouldn't survive AppKit's alert
     // bridging. Cancel stays the default action; the destructive one never takes
     // Return.
-    .alert(prompt?.title ?? "", isPresented: isPrompting, presenting: prompt) { prompt in
+    .alert(prompt?.title ?? "", isPresented: $prompt.isPresent(), presenting: prompt) { prompt in
       switch prompt {
       case .confirm:
         // Deferred a turn: setting `prompt` straight from an alert action
         // re-enters presentation while this alert is still dismissing, and
         // SwiftUI swallows it — so the failure report would never appear.
-        Button("Reset and Restart", role: .destructive) { Task { @MainActor in reset() } }
+        Button("Reset and Restart", role: .destructive) { Task { reset() } }
         Button("Cancel", role: .cancel) {}
       case .failed:
         Button("OK", role: .cancel) {}
@@ -206,12 +206,6 @@ struct ResetSection: View {
     } message: { prompt in
       Text(prompt.message)
     }
-  }
-
-  /// Presentation binding derived from `prompt`, so there's one piece of state
-  /// rather than a bool that can disagree with it.
-  private var isPrompting: Binding<Bool> {
-    Binding(get: { prompt != nil }, set: { if !$0 { prompt = nil } })
   }
 
   /// Runs the sweep, then restarts — or reports what survived and stays put.

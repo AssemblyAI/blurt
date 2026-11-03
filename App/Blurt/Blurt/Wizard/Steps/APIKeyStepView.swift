@@ -177,12 +177,6 @@ private struct APIKeyEditorSheet: View {
     let message: String
   }
 
-  /// Presentation binding for the fault alert: clearing it on dismiss is what
-  /// lets a later fault present again.
-  private var isPresentingSaveFault: Binding<Bool> {
-    Binding(get: { saveFault != nil }, set: { if !$0 { saveFault = nil } })
-  }
-
   /// Enabled for any non-empty key while no validation is in flight. We don't
   /// gate on "differs from the saved key" — re-submitting an unchanged key is a
   /// harmless re-validate against AssemblyAI, and a button that's disabled for a
@@ -227,7 +221,7 @@ private struct APIKeyEditorSheet: View {
     // Catch every dismissal, not just the button.
     .onDisappear { submitTask?.cancel() }
     .alert(
-      saveFault?.title ?? "", isPresented: isPresentingSaveFault, presenting: saveFault
+      saveFault?.title ?? "", isPresented: $saveFault.isPresent(), presenting: saveFault
     ) { _ in
       Button("OK", role: .cancel) {}
     } message: { fault in

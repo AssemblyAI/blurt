@@ -9,7 +9,6 @@ import Synchronization
 ///
 /// Not ephemeral on purpose: a member already signed in to the dashboard in
 /// their browser only has to approve.
-@MainActor
 final class AccountSignIn: NSObject, ASWebAuthenticationPresentationContextProviding {
   private var session: ASWebAuthenticationSession?
 

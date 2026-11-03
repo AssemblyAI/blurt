@@ -39,17 +39,17 @@ final class WizardController {
   /// strongly — it's a plain model with no back-reference to this controller, so
   /// there's no retain cycle, and the coordinator that also owns it lives for the
   /// whole app session.
-  @ObservationIgnored private let apiKey: APIKeyModel
+  private let apiKey: APIKeyModel
   @ObservationIgnored private var pollTask: Task<Void, Never>?
   @ObservationIgnored private var keyObservationTask: Task<Void, Never>?
   /// Brings the setup window forward and activates the app. Invoked when a
   /// previously-configured app loses a requirement (e.g. a revoked permission) so
   /// the user is taken back to onboarding instead of left with a dead overlay.
-  @ObservationIgnored private let onNeedsForeground: @MainActor () -> Void
+  private let onNeedsForeground: @MainActor () -> Void
   /// How the live permission status is read. Defaults to the real
   /// `PermissionsChecker`; the UI-test harness injects an all-granted stub so the
   /// ready screen is reachable without the TCC grants the test host can't make.
-  @ObservationIgnored private let checkPermissions: () -> PermissionStatus
+  private let checkPermissions: () -> PermissionStatus
 
   init(
     coordinator: AppCoordinator,

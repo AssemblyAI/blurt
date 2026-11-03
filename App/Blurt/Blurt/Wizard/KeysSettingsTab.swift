@@ -25,8 +25,10 @@ struct KeysSettingsTab: View {
   @AppStorage(EnhancedTranscriptsStore.defaultsKey)
   private var enhancedTranscripts = EnhancedTranscriptsStore.defaultValue
 
+  /// Failable, like `BlurtLinks`: the link omits itself if the URL won't
+  /// build, since `force_unwrapping` is banned repo-wide.
   private static let keyboardSettingsURL = URL(
-    string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!
+    string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")
 
   /// Shared widths keep the column headings aligned with the native pickers.
   private static let actionWidth: CGFloat = 150
@@ -78,7 +80,9 @@ struct KeysSettingsTab: View {
             "Until you next log in, pressing fn may also open the emoji picker or Apple "
               + "Dictation. To fix that now, open Keyboard Settings and set “Press 🌐 key to” "
               + "to Do Nothing.")
-          Link("Open Keyboard Settings…", destination: Self.keyboardSettingsURL)
+          if let url = Self.keyboardSettingsURL {
+            Link("Open Keyboard Settings…", destination: url)
+          }
         }
       }
     }

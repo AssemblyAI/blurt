@@ -14,14 +14,15 @@ final class CueSoundPlayer {
   /// pipeline phase to a cue lives in the engine (`RecordingCueGate`), where
   /// `swift test` covers it; this player just plays whatever it resolves to.
   private var cueGate = RecordingCueGate()
+  /// When each pair reloads after an output-route change (the engine's
+  /// `CueReprimeSchedule`; see `transition(for:)` for why dictation's waits).
+  private var reprime = CueReprimeSchedule()
   /// Fires when the output route changes under the pre-rolled players. Blurt's
   /// own capture is the usual cause: opening the mic flips AirPods out of their
   /// output-only profile, which drops the output format the players were primed
   /// against — so the very next chime is the one that stalls, and that's the
   /// chime at the start of a dictation.
-  /// When each pair reloads after an output-route change (the engine's
-  /// `CueReprimeSchedule`; see `transition(for:)` for why dictation's waits).
-  private var reprime = CueReprimeSchedule()
+  ///
   /// Kept alive for the app's lifetime; assignment is the use. Nil until
   /// `prime()` starts it, which is also what makes starting idempotent.
   private var routeObserver: Task<Void, Never>?

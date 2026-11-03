@@ -14,7 +14,7 @@ import SwiftUI
 /// that each nearly matched.
 struct ReadyView: View {
   var coordinator: AppCoordinator
-  var openSettings: () -> Void
+  @Environment(\.openSettings) private var openSettings
   // Observed (not read once) so a change in the separate Settings window —
   // the dictation key, any key's action or mode — re-renders this window's
   // rows live (`ObservedKeyBindings`).
@@ -209,7 +209,9 @@ struct ReadyView: View {
     HStack(alignment: .firstTextBaseline) {
       footerLinks
       Spacer()
-      Button(action: openSettings) {
+      Button {
+        openSettings()
+      } label: {
         Label("Settings…", systemImage: "gearshape")
           .labelStyle(.titleAndIcon)
       }

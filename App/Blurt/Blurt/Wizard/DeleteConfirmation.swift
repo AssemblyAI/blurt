@@ -20,13 +20,13 @@ extension View {
     // for the moment the dialog animates out after the entry is cleared.
     confirmationDialog(
       "Delete this item?",
-      isPresented: Binding(get: { entry.wrappedValue != nil }, set: { if !$0 { entry.wrappedValue = nil } }),
+      isPresented: entry.isPresent(),
       presenting: entry.wrappedValue
     ) { entry in
       Button("Delete", role: .destructive) {
         willDelete(entry)
         if closesSheet {
-          Task { @MainActor in
+          Task {
             try? await Task.sleep(for: .milliseconds(350))
             model.delete(entry)
           }

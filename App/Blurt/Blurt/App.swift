@@ -31,8 +31,7 @@ struct BlurtApp: App {
   /// someone forgot a compilation condition. `HostIdentity.blurt.subsystem` is
   /// the shipping id — the one place that string is written down.
   init() {
-    let isShippingBuild = Bundle.main.bundleIdentifier == HostIdentity.blurt.subsystem
-    HostIdentity.configure(isShippingBuild ? .blurt : .blurtDev)
+    HostIdentity.configure(HostIdentity.isShippingBundle ? .blurt : .blurtDev)
   }
 
   var body: some Scene {
@@ -97,4 +96,13 @@ struct BlurtApp: App {
       .defaultPosition(.topLeading)
     #endif
   }
+}
+
+extension HostIdentity {
+  /// Whether this process is the shipping app, read straight off the running
+  /// bundle id. `BlurtApp.init` picks the identity from it, and `UpdaterModel`
+  /// asks it whether to start Sparkle — deliberately not via `current`, which
+  /// still holds its default if the app delegate (and so the updater) is built
+  /// before `BlurtApp.init` configures it, and would start Sparkle in a dev build.
+  static var isShippingBundle: Bool { Bundle.main.bundleIdentifier == blurt.subsystem }
 }

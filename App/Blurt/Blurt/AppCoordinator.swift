@@ -225,7 +225,7 @@ final class AppCoordinator {
   }
 
   private func observePhases() -> Task<Void, Never> {
-    Task { @MainActor [weak self] in
+    Task { [weak self] in
       guard let phases = await self?.session.phaseStream() else { return }
       for await phase in phases {
         guard let self else { return }
@@ -243,7 +243,7 @@ final class AppCoordinator {
     _ stream: AsyncStream<Value>,
     _ action: @escaping @MainActor (AppCoordinator, Value) -> Void
   ) -> Task<Void, Never> {
-    Task { @MainActor [weak self] in
+    Task { [weak self] in
       for await value in stream {
         guard let self else { return }
         if Task.isCancelled { return }
