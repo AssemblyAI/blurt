@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The way in for audio, as the ready screen's first form row: "Record or
-/// transcribe" over a hint, and trailing **Record** (the window's prominent
+/// The way in for audio, as the ready screen's first form row: "Record, or
+/// drop an audio file" — the title names both ways in — and trailing **Record** (the window's prominent
 /// action) and **Browse…** (the open panel). The whole window takes a dropped
 /// file (`audioFileDropTarget`); while one hovers anywhere over it, the whole
 /// row turns into the drop target — accent-tinted, a dashed accent outline,
@@ -48,9 +48,7 @@ struct TranscribeRow: View {
   }
 
   private var row: some View {
-    SettingRow(
-      title: "Record or transcribe", systemImage: "waveform", subtitle: "Record a meeting, or drop in audio."
-    ) {
+    SettingRow(title: "Record, or drop an audio file", systemImage: "waveform") {
       HStack(spacing: 6) {
         Button {
           model.startRecording()
