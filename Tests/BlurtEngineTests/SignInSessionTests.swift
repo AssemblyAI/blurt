@@ -187,33 +187,34 @@ struct OAuthConfigurationInfoTests {
 
 @Suite("Credential rows")
 struct CredentialRowsTests {
-  @Test("a new install with sign-in configured: only the account row, filled — no pasting a key")
-  func newInstallSignsIn() {
-    let rows = CredentialRows.resolve(isKeyStored: false, isSignInAvailable: true, status: .signedOut)
-    #expect(rows == CredentialRows(showsAccountRow: true, showsKeyRow: false, primary: .signIn))
+  @Test("a new install with sign-in configured: one row offering both ways in")
+  func newInstallChooses() {
+    #expect(CredentialRows.resolve(isKeyStored: false, isSignInAvailable: true, status: .signedOut) == .choice)
   }
 
-  @Test("a legacy install with a pasted key keeps its key row, beside the account row")
-  func legacyKeyKeepsItsRow() {
-    let rows = CredentialRows.resolve(isKeyStored: true, isSignInAvailable: true, status: .signedOut)
-    #expect(rows == CredentialRows(showsAccountRow: true, showsKeyRow: true, primary: nil))
+  @Test("a pasted key is the whole connection: just the key row, no Sign In beside it to read as a step")
+  func pastedKeyStandsAlone() {
+    #expect(
+      CredentialRows.resolve(isKeyStored: true, isSignInAvailable: true, status: .signedOut)
+        == .keyRow(connectIsPrimary: false))
   }
 
   @Test("no sign-in configured: just the key row, Connect filled until a key is stored")
   func withoutSignIn() {
     #expect(
       CredentialRows.resolve(isKeyStored: false, isSignInAvailable: false, status: .signedOut)
-        == CredentialRows(showsAccountRow: false, showsKeyRow: true, primary: .connect))
+        == .keyRow(connectIsPrimary: true))
     #expect(
-      CredentialRows.resolve(isKeyStored: true, isSignInAvailable: false, status: .signedOut).primary == nil)
+      CredentialRows.resolve(isKeyStored: true, isSignInAvailable: false, status: .signedOut)
+        == .keyRow(connectIsPrimary: false))
   }
 
-  @Test("signed in: the account row replaces the key row, even where sign-in isn't configured")
+  @Test("signed in: the account row alone, even where sign-in isn't configured")
   func signedIn() {
     for available in [true, false] {
       #expect(
         CredentialRows.resolve(isKeyStored: true, isSignInAvailable: available, status: .signedIn(email: nil))
-          == CredentialRows(showsAccountRow: true, showsKeyRow: false, primary: nil))
+          == .accountRow)
     }
   }
 }

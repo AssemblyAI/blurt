@@ -98,6 +98,6 @@ public enum APIKeyDisplay: Equatable, Sendable {
   public var rationale: String {
     isConnected
       ? "Paste a new key to replace the one Blurt is using."
-      : "Blurt needs an AssemblyAI API key to transcribe your speech. A free-tier key works."
+      : "Paste an API key from your AssemblyAI dashboard. A free-tier key works."
   }
 }
