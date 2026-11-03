@@ -5,7 +5,7 @@ import SwiftUI
 
 /// The ready screen's Library: every saved recording, dictation, file and
 /// spoken answer, searchable, filtered by kind, and grouped under day headings.
-/// A stock `List` with no styling of its own: native selection supports
+/// A stock plain `List` on a grouped form section's fill: native selection supports
 /// double-click/Return to open, ⌘C to copy, Delete to confirm deletion, and ⌘F
 /// to search; the contextual menu holds each entry's actions.
 struct LibrarySection: View {
@@ -16,6 +16,9 @@ struct LibrarySection: View {
   /// The list's height: about six two-line rows and their day headings,
   /// then it scrolls.
   private static let listHeight: CGFloat = 300
+
+  /// A grouped form section's shape.
+  private static let panel = RoundedRectangle(cornerRadius: 10, style: .continuous)
 
   @State private var query = ""
   @State private var filter = LibraryFilter.all
@@ -79,6 +82,10 @@ struct LibrarySection: View {
       }
       list
         .frame(height: Self.listHeight)
+        // The grouped form's section look, so the Library matches the panels
+        // above it: a plain list on the form's fill, clipped to its radius.
+        .background(Color(nsColor: .quaternarySystemFill), in: Self.panel)
+        .clipShape(Self.panel)
     }
     .onChange(of: model.history, initial: true) { refresh() }
     .onChange(of: filter) { refresh() }
@@ -120,14 +127,17 @@ struct LibrarySection: View {
               actions: { EntryActions(entry: entry, model: model, delete: { pendingDelete = entry }) }
             )
             .tag(entry.id)
+            // Two-line rows separate themselves, as in Mail; a plain list's
+            // edge-to-edge rules wouldn't match the form's inset ones above.
+            .listRowSeparator(.hidden)
           }
         }
       }
     }
-    .listStyle(.inset)
+    .listStyle(.plain)
+    .listSectionSeparator(.hidden)
+    .scrollContentBackground(.hidden)
     .accessibilityIdentifier(UITestIdentifiers.recentList)
-    // A scroller that stays visible, so the depth past the fold shows.
-    .scrollIndicators(.visible)
     .overlay { emptyMessage }
     .contextMenu(forSelectionType: SavedTranscript.ID.self) { ids in
       if let entry = entry(for: ids) {
@@ -362,8 +372,7 @@ private struct HistoryRow<Actions: View>: View {
         .monospacedDigit()
         .fixedSize()
     }
-    .padding(.vertical, 1)
-    .help("\(title)\n\(details) — double-click to open")
+    .padding(.vertical, 3)
     .accessibilityElement(children: .combine)
     .accessibilityLabel("\(title), \(details), \(dayTitle) at \(time)")
     .accessibilityHint("Opens the transcript")
