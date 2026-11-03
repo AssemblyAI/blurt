@@ -1,6 +1,7 @@
 import Foundation
 
-/// The in-app equivalent of `scripts/reset-install.sh`: everything Blurt has put
+/// The in-app equivalent of `scripts/reset-install.sh` (`reset-dev-install.sh`
+/// for a dev build): everything Blurt has put
 /// on this machine, removed in one pass — the persisted settings, the Keychain
 /// API key and any "Sign in with AssemblyAI" session, the TCC grants (Accessibility, Microphone, Input Monitoring), and
 /// the developer-mode logs — so someone whose install is in a bad state can get
@@ -9,8 +10,7 @@ import Foundation
 /// The one thing the script does that this can't is the LaunchServices
 /// unregister sweep: that clears *other* copies of the app (DerivedData, stale
 /// checkouts), which is a developer's problem and not something a running copy
-/// can meaningfully do to itself. The script also covers both bundle ids, where
-/// a running app can only reset its own.
+/// can meaningfully do to itself.
 ///
 /// **Not `Sendable`, and it doesn't need to be**: it is built and run in one
 /// synchronous step on the main actor, from the Settings window's reset button.
@@ -74,7 +74,7 @@ public struct InstallReset {
     self.init(
       clearSettings: {
         PersistedSettings.resetAll()
-        // Then the rest of the app's own domain, the way reset-install.sh's
+        // Then the rest of the app's own domain, the way reset-lib.sh's
         // `defaults delete <bundle id>` does: chiefly Sparkle's SU* keys
         // (auto-check, auto-install, last check, skipped version), which no
         // DefaultsKey names — without this, "install updates automatically"

@@ -123,7 +123,7 @@ public enum DictationLog {
   /// Deletes both halves of the developer-mode log — the transcript corpus and
   /// the sibling error log — and the directory they share once it's empty. The
   /// file half of a full reset (`InstallReset`), matching what
-  /// `scripts/reset-install.sh` removes: a preinstall state has neither file,
+  /// `scripts/reset-lib.sh` removes: a preinstall state has neither file,
   /// and the logs are the one place transcripts are written to disk, so leaving
   /// them behind would be the most sensitive half of the reset going undone.
   ///

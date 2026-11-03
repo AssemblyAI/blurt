@@ -110,7 +110,7 @@ struct MaintenanceSection: View {
 /// settings, no dictation logs, and none of the TCC grants — for the user whose
 /// permissions have got into a state no toggle in System Settings will fix. The
 /// sweep itself is the engine's `InstallReset`, the same set of steps
-/// `scripts/reset-install.sh` performs, so someone who can't (or shouldn't have
+/// `scripts/reset-install.sh` (or `reset-dev-install.sh`) performs, so someone who can't (or shouldn't have
 /// to) run a shell script has the same way out.
 ///
 /// **Blurt restarts itself when it finishes**, which the confirmation says up

@@ -3,7 +3,7 @@
   import os
 
   /// Clears the TCC grants an install holds, by running `tccutil reset <service>`
-  /// against a bundle id. The in-process half of what `scripts/reset-install.sh`
+  /// against a bundle id. The in-process half of what `scripts/reset-lib.sh`
   /// does from a terminal, so the Settings window's reset can offer the same thing
   /// without one.
   ///
@@ -18,7 +18,7 @@
     private static let log = HostIdentity.current.logger("PermissionsReset")
 
     /// The TCC services a Blurt install can hold a grant under — the set
-    /// `resetAll` sweeps, and the same three `scripts/reset-install.sh` lists
+    /// `resetAll` sweeps, and the same three `scripts/reset-lib.sh` lists
     /// (bash can't read this enum, so the two are kept in step by hand).
     ///
     /// Raw values are `tccutil`'s own service names, which are not all the names

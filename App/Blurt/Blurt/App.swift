@@ -21,7 +21,8 @@ struct BlurtApp: App {
   /// *not* its own Keychain item, since Keychain items are per login keychain
   /// rather than per app. Shared, a dev build read the shipping app's API key,
   /// could overwrite it, and could delete it outright through Settings → Reset.
-  /// `.blurtDev` differs from `.blurt` in exactly that one field.
+  /// Nor its own Library folder, Blurt being unsandboxed. `.blurtDev` differs
+  /// from `.blurt` in exactly those two fields.
   ///
   /// Decided from the **running bundle id** rather than `#if DEBUG`: the id is
   /// what actually makes these two apps to macOS, and it follows

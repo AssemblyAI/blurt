@@ -333,7 +333,7 @@ struct DictationLogDisplayPathTests {
   }
 }
 
-/// The delete half of the log: `InstallReset` (and `scripts/reset-install.sh`)
+/// The delete half of the log: `InstallReset` (and `scripts/reset-lib.sh`)
 /// both exist to return the machine to a preinstall state, and the transcript
 /// corpus is the most sensitive thing an install leaves behind — so "removed it"
 /// has to mean removed, and "there was nothing to remove" has to read as success
