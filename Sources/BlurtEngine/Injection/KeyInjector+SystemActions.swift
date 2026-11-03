@@ -15,17 +15,35 @@
       app.activate()
     }
 
+    /// How long a paste waits for its target to come frontmost, and how often it
+    /// looks. On the press→paste path, so the budget is what bounds the freeze.
+    static let frontmostWaitBudget: Duration = .milliseconds(350)
+    static let frontmostPollInterval: Duration = .milliseconds(10)
+
     static func waitUntilFrontmost(_ app: NSRunningApplication) async -> Bool {
       let pid = app.processIdentifier
-      let clock = ContinuousClock()
-      let deadline = clock.now.advanced(by: .milliseconds(350))
+      return await poll(
+        for: frontmostWaitBudget, every: frontmostPollInterval, clock: ContinuousClock(),
+        until: { await isFrontmost(pid) })
+    }
+
+    /// The frontmost-wait's loop on an injected clock (as `MicLiveness`'s wait
+    /// takes one): checks until `check` holds or `budget` has passed, sleeping
+    /// `interval` between. Separate so the bound is tested on a `TestClock` — on
+    /// the real one the test measured the machine (a main-actor hop on a loaded
+    /// CI box took seconds), not the loop.
+    static func poll(
+      for budget: Duration, every interval: Duration, clock: some Clock<Duration>,
+      until check: @Sendable () async -> Bool
+    ) async -> Bool {
+      let deadline = clock.now.advanced(by: budget)
       while clock.now < deadline {
-        if await isFrontmost(pid) { return true }
-        try? await Task.sleep(for: .milliseconds(10))
+        if await check() { return true }
+        try? await clock.sleep(for: interval)
       }
       // One last read: the final sleep may have carried us past the deadline just
       // before the activation landed.
-      return await isFrontmost(pid)
+      return await check()
     }
 
     /// Whether `pid` owns the frontmost application right now. Named rather than
