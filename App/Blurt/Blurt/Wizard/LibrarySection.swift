@@ -27,10 +27,15 @@ struct LibrarySection: View {
   /// change or play/stop, which also redraw this view, and which would
   /// otherwise re-run a full-text search across every saved transcript.
   @State private var days: [LibraryDay] = []
-  /// Each entry's row details, by id. Rebuilt only when the history changes —
-  /// not per search keystroke — since a word count walks the whole transcript,
-  /// and a long recording runs to tens of thousands of words.
-  @State private var details: [SavedTranscript.ID: String] = [:]
+  /// The search `days` was last built for — what the empty-list message
+  /// describes, so it can't run ahead of the list during the typing pause.
+  @State private var shownQuery: String?
+  /// Each entry's row details, by id, with what they were worked out from.
+  /// Updated when the history changes — never per search keystroke — and an
+  /// entry's are kept while its transcript and style are unchanged, since a
+  /// word count walks the whole transcript and a long recording runs to tens
+  /// of thousands of words. (A string compared with itself is a pointer check.)
+  @State private var details: [SavedTranscript.ID: CachedDetails] = [:]
 
   private var model: TranscriptsModel { coordinator.transcripts }
 
@@ -52,7 +57,31 @@ struct LibrarySection: View {
   }
 
   private func refresh() {
-    days = LibraryDay.group(filtered(), details: details, now: .now)
+    let cache = details
+    days = LibraryDay.group(filtered(), now: .now) { cache[$0.id]?.text ?? LibraryDay.details(of: $0) }
+    shownQuery = trimmedQuery
+    // A selection the filter or search now hides is dropped, so Delete and
+    // ⌘C can't act on an entry that isn't on screen.
+    if let selected = selection, !days.contains(where: { $0.rows.contains { $0.entry.id == selected } }) {
+      selection = nil
+    }
+  }
+
+  /// Brings `details` up to date with the history: kept for an entry whose
+  /// transcript and style are unchanged, worked out afresh otherwise. Ids are
+  /// unique in a healthy history; a duplicate keeps the first rather than
+  /// trapping.
+  private func updateDetails() {
+    let previous = details
+    details = Dictionary(
+      model.history.map { entry in
+        let source = entry.plainText ?? entry.text
+        if let cached = previous[entry.id], cached.source == source, cached.style == entry.style {
+          return (entry.id, cached)
+        }
+        return (entry.id, CachedDetails(source: source, style: entry.style, text: LibraryDay.details(of: entry)))
+      },
+      uniquingKeysWith: { first, _ in first })
   }
 
   private func entry(id: SavedTranscript.ID?) -> SavedTranscript? {
@@ -83,7 +112,12 @@ struct LibrarySection: View {
         .clipShape(FormPanel.shape)
     }
     .onChange(of: model.history, initial: true) {
-      details = Dictionary(uniqueKeysWithValues: model.history.map { ($0.id, LibraryDay.details(of: $0)) })
+      updateDetails()
+      refresh()
+    }
+    // Re-headed at midnight, so "Today" doesn't keep yesterday's entries when
+    // the window stays open overnight.
+    .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged).receive(on: RunLoop.main)) { _ in
       refresh()
     }
     .onChange(of: filter) { refresh() }
@@ -161,9 +195,9 @@ struct LibrarySection: View {
   @ViewBuilder private var emptyMessage: some View {
     if model.history.isEmpty {
       emptyPrompt
-    } else if days.isEmpty, trimmedQuery != nil {
+    } else if days.isEmpty, let shownQuery {
       EmptyListMessage(
-        title: "No results for \u{201C}\(query)\u{201D}", systemImage: "magnifyingglass",
+        title: "No results for \u{201C}\(shownQuery)\u{201D}", systemImage: "magnifyingglass",
         hint: "Check the spelling or try a new search.")
     } else if days.isEmpty {
       EmptyListMessage(title: filter.emptyTitle, systemImage: filter.systemImage, hint: filter.emptyHint)
@@ -195,123 +229,6 @@ struct LibrarySection: View {
     )
     .accessibilityAddTraits(.isStaticText)
     .accessibilityIdentifier(UITestIdentifiers.recentEmptyPrompt)
-  }
-}
-
-/// The Library's filter: everything, or one family of entry.
-private enum LibraryFilter: CaseIterable {
-  case all, recordings, dictations, files, spoken
-
-  var title: String {
-    switch self {
-    case .all: "All"
-    case .recordings: "Recordings"
-    case .dictations: "Dictations"
-    case .files: "Files"
-    case .spoken: "Spoken"
-    }
-  }
-
-  func includes(_ entry: SavedTranscript) -> Bool {
-    switch self {
-    case .all: true
-    case .recordings: entry.kind == .recording
-    case .dictations: entry.kind == .dictation
-    case .files: entry.kind == .file
-    case .spoken: entry.kind == .readAloud
-    }
-  }
-
-  var systemImage: String {
-    switch self {
-    case .all: "tray"
-    case .recordings: LibraryKind.recording.systemImage
-    case .dictations: LibraryKind.dictation.systemImage
-    case .files: LibraryKind.file.systemImage
-    case .spoken: LibraryKind.readAloud.systemImage
-    }
-  }
-
-  var emptyTitle: String {
-    switch self {
-    case .all: "Nothing yet"
-    case .recordings: "No recordings yet"
-    case .dictations: "No dictations yet"
-    case .files: "No files yet"
-    case .spoken: "Nothing spoken yet"
-    }
-  }
-
-  var emptyHint: String {
-    switch self {
-    case .all: ""
-    case .recordings: "Press Record to capture a meeting or a voice memo."
-    case .dictations: "Click a text field and press your dictation key."
-    case .files: "Drop an audio or video file on this window."
-    case .spoken: "Select text and press your read-aloud or ask key."
-    }
-  }
-}
-
-/// One day's entries under its heading — "Today", "Yesterday", a weekday
-/// within the week, then the date — each with its row's details.
-private struct LibraryDay: Identifiable {
-  struct Row {
-    let entry: SavedTranscript
-    let details: String
-  }
-
-  let id: Date
-  let title: String
-  var rows: [Row]
-
-  /// `entries` (newest first) split into runs by calendar day, order kept,
-  /// each row's details read from `details` (worked out afresh for any
-  /// entry it lacks).
-  static func group(
-    _ entries: [SavedTranscript], details: [SavedTranscript.ID: String], now: Date
-  ) -> [LibraryDay] {
-    let calendar = Calendar.current
-    var days: [LibraryDay] = []
-    for entry in entries {
-      let day = calendar.startOfDay(for: entry.date)
-      let row = Row(entry: entry, details: details[entry.id] ?? Self.details(of: entry))
-      if days.last?.id == day {
-        days[days.count - 1].rows.append(row)
-      } else {
-        days.append(LibraryDay(id: day, title: title(for: day, now: now, calendar: calendar), rows: [row]))
-      }
-    }
-    return days
-  }
-
-  /// Every branch reads the `now` it's given, so one grouping can't straddle
-  /// midnight with two answers.
-  private static func title(for day: Date, now: Date, calendar: Calendar) -> String {
-    let today = calendar.startOfDay(for: now)
-    let daysAgo = calendar.dateComponents([.day], from: day, to: today).day ?? 0
-    switch daysAgo {
-    case 0: return "Today"
-    case 1: return "Yesterday"
-    case 2..<7: return day.formatted(.dateTime.weekday(.wide))
-    default:
-      return calendar.isDate(day, equalTo: now, toGranularity: .year)
-        ? day.formatted(.dateTime.month(.wide).day()) : day.formatted(date: .long, time: .omitted)
-    }
-  }
-
-  /// "Dictation · Formal · 412 words", "Recording · 6,120 words", "Ask About
-  /// Selection" — no count for a spoken entry, whose text is what was read
-  /// rather than what was said.
-  static func details(of entry: SavedTranscript) -> String {
-    let kind = LibraryKind(entry)
-    let words: String? =
-      switch (kind, entry.wordCount) {
-      case (.readAloud, _), (.ask, _), (_, 0): nil
-      case (_, 1): "1 word"
-      case (_, let count): "\(count.formatted()) words"
-      }
-    return [kind.name, entry.style, words].compactMap { $0 }.joined(separator: " · ")
   }
 }
 
