@@ -23,7 +23,7 @@
     /// reached only through `allCases`), so this is what keeps that list honest: a
     /// service added to the enum and forgotten there would otherwise survive every
     /// "full" reset in silence. The three are also the ones
-    /// `scripts/reset-install.sh` lists — a fourth belongs in both places.
+    /// `scripts/reset-lib.sh` lists — a fourth belongs in both places.
     @Test("the sweep covers every service the enum names")
     func sweepCoversEveryService() {
       #expect(Set(PermissionsReset.sweep) == Set(PermissionsReset.Service.allCases))

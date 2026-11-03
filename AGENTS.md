@@ -938,7 +938,7 @@ any other key restores the value it replaced. That record lives in a suite both 
 (`dev.alex.blurt.globe-key`) — the setting is one per login, so a per-host record let Blurt and
 Blurt Dev restore each other to Do Nothing — and outside `DefaultsKey` on purpose, so a settings
 reset doesn't erase it: the relaunch after a reset is what restores the user's setting.
-`scripts/reset-install.sh` restores from it directly, since it wipes the host domains. The write
+`scripts/reset-lib.sh` (behind `reset-install.sh` and `reset-dev-install.sh`) restores from it directly, since it wipes the host domain; if the other build still binds `fn`, its next launch re-applies the override. The write
 only takes effect at the next log-in (macOS reads it then), so the Keys tab's footer warns that `fn`
 may also open the emoji picker or Apple Dictation until then, and links to Keyboard Settings. A keycode 63 saved before `fn` was removed (#146) is migrated to right ⌘ once
 (`TriggerKeyStore.migrateStaleFunctionBinding()`), so restoring `fn` doesn't silently rebind it. Don't fix this with an active tap that swallows `fn`: the tap is listen-only for latency.
@@ -1214,7 +1214,7 @@ the monitor watches both the default output _device_ (a user switch) and the cur
 sample rate (the profile flip), re-targeting the second listener whenever the first fires.
 
 History: every dictation, read-aloud clip (its text and its audio, as a WAV the speaker writes as it plays — `ReadClip`), dropped or browsed-for file and Record-button recording is saved for good to
-one list, **`TranscriptStore`** (`~/Library/Application Support/Blurt/history.json`, `SavedTranscript`
+one list, **`TranscriptStore`** (`~/Library/Application Support/Blurt/history.json`; a debug build's is under `Blurt Dev/`, `HostIdentity.dataDirectoryName`, `SavedTranscript`
 entries with their task results, and for a file or recording a short LLM-written title, `TranscriptLLM.title(for:)`) — what the main window's searchable, filterable Recent list shows. The app saves
 each dictation the ring below gains, so one the session declined to remember (dictated into a secure
 field) is never saved either; nothing in that store is ever sent as request context.
@@ -1243,7 +1243,7 @@ sites, so a failure path added later is logged by construction; `.noTarget` and 
 a phase change rather than dropped. A failed append itself goes to `os_log` (never the entry, which
 would leak transcripts system-wide) — it's the one error that can't be reported through the error log,
 and it must never throw onto the dictation path. The Settings window's Advanced pane surfaces the
-switch and both paths, and both `scripts/reset-install.sh` and the in-app reset
+switch and both paths, and both the reset scripts (`scripts/reset-install.sh`, `scripts/reset-dev-install.sh`) and the in-app reset
 (`DictationLog.removeStoredLogs()`, via `InstallReset`) remove both files — plus the directory, once
 it holds nothing else.
 
@@ -1344,7 +1344,7 @@ restating them.
   enhanced-transcripts switch (styles only shape that rewrite) above the style profiles; Vocabulary
   holds the key terms and the text-shortcut table (+ / −, double-click to edit); Advanced holds
   the update check, the developer-mode toggle, and the **reset** — one destructive button running the engine's `InstallReset` (the same sweep as
-  `scripts/reset-install.sh`: settings, Keychain key, TCC grants, dictation logs), which confirms
+  `scripts/reset-install.sh` / `scripts/reset-dev-install.sh`: settings, Keychain key, TCC grants, dictation logs), which confirms
   first and then **restarts the app** (a detached `sh -c 'sleep 1; open -n <bundle>'`, since whatever
   reopens Blurt has to outlive it). The restart is load-bearing, not a courtesy: macOS prompts for a
   TCC grant once per process, so only a process started after the sweep gets the prompts back — and

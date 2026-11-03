@@ -70,9 +70,14 @@ Each keeps its own AssemblyAI key in the Keychain — `blurt` for the release,
 `blurt-dev` for the dev build — so a dev build can't read, overwrite or (through
 Settings → Advanced → Reset) delete the key you dictate with. You'll enter the
 key once in each, and neither one triggers the "another app wants to use your
-confidential information" prompt the shared item used to.
+confidential information" prompt the shared item used to. The Library (saved
+transcripts, recordings, read-aloud clips) is split the same way:
+`~/Library/Application Support/Blurt` for the release, `Blurt Dev` beside it
+for the dev build.
 
-`scripts/reset-install.sh` wipes both. Settings → Advanced → **Reset** does the same from
+`scripts/reset-install.sh` wipes the release and `scripts/reset-dev-install.sh`
+wipes the dev build — its Library included, so it starts empty; the release's
+history is kept — each leaving the other alone (both run `scripts/reset-lib.sh`). Settings → Advanced → **Reset** does the same from
 inside the app, for whichever build you're running — and restarts it, so the
 permission prompts come back.
 

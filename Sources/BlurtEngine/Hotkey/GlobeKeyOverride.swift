@@ -27,7 +27,7 @@ public struct GlobeKeyOverride {
   /// each other to Do Nothing for good. Also why it isn't a `DefaultsKey` case:
   /// `PersistedSettings.resetAll` sweeps those, and a reset that forgot this
   /// would strand the user's setting at "Do Nothing" — the relaunch after a reset
-  /// is exactly when it gets restored. `scripts/reset-install.sh` restores from
+  /// is exactly when it gets restored. `scripts/reset-lib.sh` restores from
   /// and deletes this suite, since it wipes the host domains outright.
   static let replacedUsageKey = "hotkey.replacedGlobeKeyUsage"
   static var sharedSuite: String { HostIdentity.current.subsystem + ".globe-key" }

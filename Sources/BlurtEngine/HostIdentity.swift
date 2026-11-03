@@ -30,9 +30,9 @@ public struct HostIdentity: Sendable, Equatable {
 
   /// Reverse-DNS identity ("dev.alex.blurt"): the `os_log` subsystem for every
   /// category, and the prefix for the engine's dispatch-queue labels. For Blurt
-  /// this must match `BUNDLE_ID` in `scripts/reset-install.sh`, which hard-codes
-  /// the same value for its `defaults`/`tccutil` cleanup (bash can't read this
-  /// constant).
+  /// this must match `BLURT_SUBSYSTEM` in `scripts/reset-lib.sh`, which hard-codes
+  /// it for its `defaults`/`tccutil` cleanup (bash can't read this constant);
+  /// `ResetScriptContractTests` holds the script to it.
   ///
   /// It is also Blurt's **release** bundle id, but is not interchangeable with
   /// the running one: debug builds ship under `dev.alex.blurt.dev` so a dev
@@ -45,8 +45,8 @@ public struct HostIdentity: Sendable, Equatable {
 
   /// The Keychain service for the API key item. Blurt uses the plain app name,
   /// so the entry appears as "blurt" in Keychain Access instead of a
-  /// developer-domain string; it must match one of the `KEYCHAIN_SERVICES` in
-  /// `scripts/reset-install.sh`.
+  /// developer-domain string; it must match the service `scripts/reset-lib.sh`
+  /// sweeps for its build (`ResetScriptContractTests` checks).
   ///
   /// **This is the one store the debug/release split doesn't separate for
   /// free.** Keychain items are per *login keychain*, not per app, so both
@@ -76,6 +76,13 @@ public struct HostIdentity: Sendable, Equatable {
   /// logs are written to (`~/Library/Logs/Blurt/{dictations,errors}.jsonl`).
   public let logDirectoryName: String
 
+  /// The directory under `~/Library/Application Support` the Library — saved
+  /// transcripts, recordings, read-aloud clips — is kept in (`TranscriptStore`).
+  /// The product name unless a host says otherwise. Blurt isn't sandboxed, so
+  /// this is a shared path rather than a per-app container: Blurt Dev needs its
+  /// own (`.blurtDev`) or it reads, and its reset deletes, the shipping app's.
+  public let dataDirectoryName: String
+
   // periphery:ignore - public for hosts outside this repo (the iOS app); the Mac app keeps the default.
   /// How many style profiles the user may define (`StyleProfileStore.limit`).
   /// Blurt's is `StyleProfileStore.profileLimit`, the most its main window's
@@ -90,6 +97,7 @@ public struct HostIdentity: Sendable, Equatable {
     keychainService: String,
     defaultsPrefix: String,
     logDirectoryName: String,
+    dataDirectoryName: String? = nil,
     styleProfileLimit: Int = StyleProfileStore.profileLimit
   ) {
     self.productName = productName
@@ -97,6 +105,7 @@ public struct HostIdentity: Sendable, Equatable {
     self.keychainService = keychainService
     self.defaultsPrefix = defaultsPrefix
     self.logDirectoryName = logDirectoryName
+    self.dataDirectoryName = dataDirectoryName ?? productName
     self.styleProfileLimit = max(1, styleProfileLimit)
   }
 
@@ -104,7 +113,7 @@ public struct HostIdentity: Sendable, Equatable {
   /// engine behaves exactly as it did when these were constants. It is the single
   /// definition of each of those strings; `App.swift` configures *this* value
   /// rather than restating them, and `HostIdentityTests` pins the two that
-  /// `scripts/reset-install.sh` also hard-codes.
+  /// `scripts/reset-lib.sh` also hard-codes.
   public static let blurt = HostIdentity(
     productName: "Blurt",
     subsystem: "dev.alex.blurt",
@@ -114,9 +123,9 @@ public struct HostIdentity: Sendable, Equatable {
 
   /// The identity a **debug build** of Blurt runs under — "Blurt Dev", which
   /// macOS already treats as a separate app (its own bundle id, TCC rows and
-  /// defaults domain). Only `keychainService` differs from `.blurt`, because the
-  /// Keychain is the only store that isn't separated by the bundle id already
-  /// (see that property).
+  /// defaults domain). Only `keychainService` and `dataDirectoryName` differ
+  /// from `.blurt`: the Keychain and the Library folder are the two stores the
+  /// bundle id doesn't separate (see those properties).
   ///
   /// The log subsystem is deliberately *not* changed: one subsystem across both
   /// builds is what keeps the documented `log show` predicates valid whichever
@@ -124,20 +133,26 @@ public struct HostIdentity: Sendable, Equatable {
   /// per-app already, and changing the prefix would abandon every dev install's
   /// settings for nothing.
   ///
-  /// `scripts/reset-install.sh` hard-codes this service alongside the shipping
-  /// one (bash can't read this constant); `HostIdentityTests` pins both.
-  public static let blurtDev = blurt.withKeychainService("blurt-dev")
+  /// `scripts/reset-lib.sh` hard-codes this service (bash can't read this
+  /// constant); `ResetScriptContractTests` holds the script to it.
+  ///
+  /// The Library directory differs for the same reason as the Keychain: Blurt
+  /// isn't sandboxed, so `~/Library/Application Support/Blurt` was one folder
+  /// both builds wrote their transcripts to (see `dataDirectoryName`).
+  public static let blurtDev = blurt.withSharedStores(keychainService: "blurt-dev", dataDirectoryName: "Blurt Dev")
 
-  /// This identity with a different Keychain service. Private: the two values
-  /// Blurt ships are the two above, and a host that wants a third builds it with
-  /// the initializer rather than deriving one from Blurt's.
-  private func withKeychainService(_ service: String) -> HostIdentity {
+  /// This identity with its own copy of the two stores the bundle id doesn't
+  /// separate. Private: the two values Blurt ships are the two above, and a
+  /// host that wants a third builds it with the initializer rather than
+  /// deriving one from Blurt's.
+  private func withSharedStores(keychainService: String, dataDirectoryName: String) -> HostIdentity {
     HostIdentity(
       productName: productName,
       subsystem: subsystem,
-      keychainService: service,
+      keychainService: keychainService,
       defaultsPrefix: defaultsPrefix,
       logDirectoryName: logDirectoryName,
+      dataDirectoryName: dataDirectoryName,
       styleProfileLimit: styleProfileLimit)
   }
 
