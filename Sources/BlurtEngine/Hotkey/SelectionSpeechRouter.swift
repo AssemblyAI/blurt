@@ -27,6 +27,9 @@ import Foundation
     private let rewriter: any SelectionRewriting
     private let readSelection: @Sendable () async -> String?
     private let defaults: UserDefaults
+    /// What the hold timer and the answer's start-cue gap sleep on; a test's
+    /// `TestClock` steps them instead of waiting them out.
+    private let clock: any Clock<Duration>
     private var routing = SelectionSpeechRouting()
     private var speech: Task<Void, Never>?
     /// The rewrite in flight, until it pastes. Cancelled by any press.
@@ -67,19 +70,22 @@ import Foundation
         session: session, speaker: SelectionSpeaker(clips: clips), readSelection: SelectionSpeaker.focusedSelection)
     }
 
-    /// The seams: what speaks, what rewrites, how the selection is read, and where the
-    /// settings each press reads come from. Public so a host can run the whole
-    /// read-aloud path offline (Blurt's UI tests do).
+    /// The seams: what speaks, what rewrites, how the selection is read, where the
+    /// settings each press reads come from, and the clock its timers run on.
+    /// Public so a host can run the whole read-aloud path offline (Blurt's UI
+    /// tests do).
     public init(
       session: DictationSession, speaker: any ReadAloudSpeaker,
       rewriter: any SelectionRewriting = SelectionRewriter(),
-      readSelection: @escaping @Sendable () async -> String?, defaults: UserDefaults = .standard
+      readSelection: @escaping @Sendable () async -> String?, defaults: UserDefaults = .standard,
+      clock: any Clock<Duration> = ContinuousClock()
     ) {
       self.session = session
       self.speaker = speaker
       self.rewriter = rewriter
       self.readSelection = readSelection
       self.defaults = defaults
+      self.clock = clock
     }
 
     /// A trigger key went down. What it does and whether it can be held are read
@@ -179,8 +185,8 @@ import Foundation
     /// left over from a quick tap can't mark the next press as a hold.
     private func startHoldTimer() {
       holdTimer?.cancel()
-      holdTimer = Task { [weak self] in
-        try? await Task.sleep(for: SelectionSpeechRouting.holdDelay)
+      holdTimer = Task { [weak self, clock] in
+        try? await clock.sleep(for: SelectionSpeechRouting.holdDelay)
         guard !Task.isCancelled, let self else { return }
         self.holdTimer = nil
         self.perform(self.routing.holdElapsed())
@@ -256,8 +262,8 @@ import Foundation
       if startCueDelay == .zero {
         speechStarted()
       } else {
-        Task { [weak self] in
-          try? await Task.sleep(for: startCueDelay)
+        Task { [weak self, clock] in
+          try? await clock.sleep(for: startCueDelay)
           guard let self, self.activeGeneration == generation else { return }
           self.speechStarted()
         }

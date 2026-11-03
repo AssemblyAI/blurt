@@ -14,11 +14,12 @@ struct SelectionSpeechRouterLifecycleTests {
   /// A router over `speaker`, the selection read returning `selection()` each
   /// time, recording every callback it makes.
   private func router(
-    _ speaker: GatedSpeaker, selection: @escaping @Sendable () -> String? = { "Hello there." }
+    _ speaker: GatedSpeaker, selection: @escaping @Sendable () -> String? = { "Hello there." },
+    clock: any Clock<Duration> = ContinuousClock()
   ) -> Rig {
     let fixture = makeSession()
     let router = SelectionSpeechRouter(
-      session: fixture.session, speaker: speaker, readSelection: selection, defaults: defaults)
+      session: fixture.session, speaker: speaker, readSelection: selection, defaults: defaults, clock: clock)
     let events = Events()
     router.speechStarted = { events.started += 1 }
     router.speechEnded = { events.ended += 1 }
@@ -190,14 +191,20 @@ struct SelectionSpeechRouterLifecycleTests {
     let speaker = GatedSpeaker()
     let reads = Counter()
     // The first press finds nothing selected; the second finds text.
-    let rig = router(speaker, selection: { reads.next() == 1 ? nil : "Hello there." })
+    let clock = TestClock()
+    let rig = router(speaker, selection: { reads.next() == 1 ? nil : "Hello there." }, clock: clock)
     let (router, events) = (rig.router, rig.events)
+    let hold = SelectionSpeechRouting.holdDelay
     router.press(key: .leftOption)
-    try await Task.sleep(for: .milliseconds(200))
-    let second = ContinuousClock.now
+    await clock.waitUntilSleeping(for: hold)
+    clock.advance(by: hold - .milliseconds(150))
     router.press(key: .leftOption)
+    await clock.waitUntilSleeping(for: hold)
+    // The first press's timer, 150 ms from firing, is gone: only the second's
+    // full delay is left.
+    #expect(clock.sleepingFor == [hold], "the first press's timer outlived the second press")
+    clock.advance(by: hold)
     try await waitUntil { events.started == 1 }
-    #expect(ContinuousClock.now - second >= .milliseconds(300), "the first press's timer fired for the second")
   }
 }
 

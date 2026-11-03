@@ -32,22 +32,41 @@
     /// to be read (a busy app can take past `timeout`). The press doesn't wait
     /// for this; it runs behind it.
     private let lateCopyWindow: Duration
+    /// What both waits poll on; a test's `TestClock` steps them.
+    private let clock: any Clock<Duration>
 
     init(
       pasteboard: any CopyPasteboard = SystemClipboard(),
       postCopy: @escaping @Sendable () -> Bool = { KeyInjector.postCmdC() },
       timeout: Duration = .milliseconds(100),
-      lateCopyWindow: Duration = .seconds(1)
+      lateCopyWindow: Duration = .seconds(1),
+      clock: any Clock<Duration> = ContinuousClock()
     ) {
       self.pasteboard = pasteboard
       self.postCopy = postCopy
       self.timeout = timeout
       self.lateCopyWindow = lateCopyWindow
+      self.clock = clock
     }
 
     /// The copied text, up to `maxCharacters`, or nil when the copy produced
     /// nothing readable. The clipboard is restored whenever the copy changed it.
     func copySelection(maxCharacters: Int) async -> String? {
+      await copySelectionWatchingLate(maxCharacters: maxCharacters).text
+    }
+
+    /// `copySelection`, also handing back the late-copy watch when one was
+    /// started, so a test can wait for it to end rather than for its window to
+    /// pass.
+    func copySelectionWatchingLate(maxCharacters: Int) async -> (text: String?, lateWatch: Task<Void, Never>?) {
+      await copySelection(maxCharacters: maxCharacters, on: clock)
+    }
+
+    /// Generic over the clock so its instants compare; `clock`, an existential,
+    /// is opened at the call.
+    private func copySelection(
+      maxCharacters: Int, on clock: some Clock<Duration>
+    ) async -> (text: String?, lateWatch: Task<Void, Never>?) {
       let pasteboard = pasteboard
       // An unreadable pasteboard can't be restored, so don't disturb it. The
       // own-write count is read first: a Blurt write racing this read can then
@@ -56,15 +75,15 @@
         let ownWrites = pasteboard.ownWriteCount
         return (ownWrites, pasteboard.snapshot(), pasteboard.changeCount)
       }
-      guard let saved, postCopy() else { return nil }
-      let deadline = ContinuousClock.now + timeout
+      guard let saved, postCopy() else { return (nil, nil) }
+      let deadline = clock.now.advanced(by: timeout)
       // Wait for a string, not just a change: an app may clear the clipboard and
       // write it a moment later, and the clear alone moves the change count.
       var seen = before
       var copied: String?
       var blurtWrote = false
       repeat {
-        try? await Task.sleep(for: .milliseconds(10))
+        try? await clock.sleep(for: .milliseconds(10))
         (seen, copied, blurtWrote) = await BlockingIPC.run {
           let count = pasteboard.changeCount
           guard count != before else { return (count, nil, false) }
@@ -76,10 +95,10 @@
           // count, and the restore would then skip. Poll again instead.
           return pasteboard.changeCount == count ? (count, string, false) : (count, nil, false)
         }
-      } while copied == nil && !blurtWrote && ContinuousClock.now < deadline
+      } while copied == nil && !blurtWrote && clock.now < deadline
       // Blurt wrote the clipboard itself: whatever is there is a paste's, not
       // the selection, and its own restore puts the user's clipboard back.
-      guard !blurtWrote else { return nil }
+      guard !blurtWrote else { return (nil, nil) }
       let copyCount = seen
       let (settled, writesAtSettle) = await BlockingIPC.run {
         if copyCount != before { pasteboard.restore(saved, ifChangeCountIs: copyCount) }
@@ -90,9 +109,12 @@
       }
       // Nothing readable in time, but the app may still answer. Nothing else
       // would put the user's clipboard back then.
-      if copied == nil { restoreLateCopy(saved, after: settled, ownWrites: writesAtSettle) }
+      let lateWatch =
+        copied == nil ? restoreLateCopy(saved, after: settled, ownWrites: writesAtSettle, on: clock) : nil
       // The same cleanup as the AX read, so a zero-width-only copy isn't spoken.
-      return FocusCapture.visibleTextOrNil(FocusCapture.clip(copied?.trimmedNonEmpty(), to: maxCharacters))
+      return (
+        FocusCapture.visibleTextOrNil(FocusCapture.clip(copied?.trimmedNonEmpty(), to: maxCharacters)), lateWatch
+      )
     }
 
     /// Restores `saved` over the first change after `baseline`, if one comes
@@ -101,12 +123,14 @@
     /// starts can paste inside the window — so the first one ends the watch
     /// without restoring. A copy the user makes themselves inside the window is
     /// indistinguishable from the late answer and is still undone.
-    private func restoreLateCopy(_ saved: PasteboardSnapshot, after baseline: Int, ownWrites: Int) {
+    private func restoreLateCopy(
+      _ saved: PasteboardSnapshot, after baseline: Int, ownWrites: Int, on clock: some Clock<Duration>
+    ) -> Task<Void, Never> {
       let pasteboard = pasteboard
-      let deadline = ContinuousClock.now + lateCopyWindow
-      Task {
-        while ContinuousClock.now < deadline {
-          try? await Task.sleep(for: .milliseconds(20))
+      let deadline = clock.now.advanced(by: lateCopyWindow)
+      return Task {
+        while clock.now < deadline {
+          try? await clock.sleep(for: .milliseconds(20))
           let done = await BlockingIPC.run { () -> Bool in
             let count = pasteboard.changeCount
             guard count != baseline else { return false }

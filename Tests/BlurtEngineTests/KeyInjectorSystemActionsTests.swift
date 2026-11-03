@@ -1,6 +1,7 @@
 #if os(macOS)
   import AppKit
   import CoreGraphics
+  import Synchronization
   import Testing
 
   @testable import BlurtEngine
@@ -16,7 +17,7 @@
   /// calls would fire a live ⌘V into whatever the developer had open. That is the
   /// same reason `check.sh` runs the XCUITest suite on CI only: it commandeers the
   /// GUI session.
-  @Suite("KeyInjector system actions")
+  @Suite("KeyInjector system actions", .timeLimit(.minutes(1)))
   struct KeyInjectorSystemActionsTests {
 
     // MARK: - Cmd-V event construction
@@ -105,16 +106,62 @@
       #expect(await KeyInjector.waitUntilFrontmost(.current) == false)
     }
 
-    @Test("waitUntilFrontmost gives up on a bounded deadline instead of hanging")
-    func waitUntilFrontmostIsBounded() async {
-      // Sits on the press→paste path, so an unbounded wait would freeze the paste,
-      // not just slow it. 350 ms budget; the ceiling leaves room for a loaded CI
-      // box's scheduling without being loose enough to pass an unbounded loop.
-      let clock = ContinuousClock()
-      let elapsed = await clock.measure {
-        _ = await KeyInjector.waitUntilFrontmost(.current)
+    private static let checksPerBudget = Int(
+      KeyInjector.frontmostWaitBudget / KeyInjector.frontmostPollInterval)
+
+    /// Runs the frontmost wait on a `TestClock`, its check turning true from
+    /// check number `trueFrom` (never, if nil), and advances the clock through
+    /// `sleeps` of its polls the way `MicLivenessTests` drives its wait: each
+    /// advance waits for the sleep it means to wake, matched on its deadline, so
+    /// a loop sleeping some other interval hangs here (the suite's time limit
+    /// catches it) rather than passing.
+    private struct PollRun {
+      let result: Bool
+      let checks: Int
+      let elapsed: Duration
+    }
+
+    private func runPoll(trueFrom: Int?, sleeps: Int) async -> PollRun {
+      let clock = TestClock()
+      let checks = Mutex(0)
+      async let result = KeyInjector.poll(
+        for: KeyInjector.frontmostWaitBudget, every: KeyInjector.frontmostPollInterval, clock: clock,
+        until: {
+          checks.withLock { count in
+            count += 1
+            return trueFrom.map { count >= $0 } ?? false
+          }
+        })
+      for _ in 0..<sleeps {
+        await clock.waitUntilSleeping(for: KeyInjector.frontmostPollInterval)
+        clock.advance(by: KeyInjector.frontmostPollInterval)
       }
-      #expect(elapsed < .seconds(3))
+      return PollRun(result: await result, checks: checks.withLock { $0 }, elapsed: clock.now.offset)
+    }
+
+    @Test("the frontmost wait gives up once its budget is spent instead of hanging")
+    func pollIsBounded() async {
+      // Sits on the press→paste path, so an unbounded wait would freeze the
+      // paste, not just slow it. One check per interval across the budget, plus
+      // the last read past the deadline.
+      let run = await runPoll(trueFrom: nil, sleeps: Self.checksPerBudget)
+      #expect(run.result == false)
+      #expect(run.checks == Self.checksPerBudget + 1)
+      #expect(run.elapsed == KeyInjector.frontmostWaitBudget)
+    }
+
+    @Test("the frontmost wait returns as soon as the target is frontmost")
+    func pollStopsEarly() async {
+      let run = await runPoll(trueFrom: 3, sleeps: 2)
+      #expect(run.result)
+      #expect(run.checks == 3)
+    }
+
+    @Test("the last read past the deadline still catches an activation that just landed")
+    func pollTakesTheLastRead() async {
+      let run = await runPoll(trueFrom: Self.checksPerBudget + 1, sleeps: Self.checksPerBudget)
+      #expect(run.result)
+      #expect(run.checks == Self.checksPerBudget + 1)
     }
   }
 #endif
