@@ -31,7 +31,9 @@ enum LoopbackInsertWire {
       switch character {
       case "n": unescaped.append("\n")
       case "\\": unescaped.append("\\")
-      default: unescaped.append("\\"); unescaped.append(character)
+      default:
+        unescaped.append("\\")
+        unescaped.append(character)
       }
       isEscaping = false
     }
