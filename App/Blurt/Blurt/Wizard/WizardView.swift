@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The first-run setup screen. A single page showing everything setup needs at
 /// once, top to bottom:
-///   1. API Key — paste the AssemblyAI key (copied from the signup page).
+///   1. AssemblyAI — sign in, or use an API key; either one is enough.
 ///   2. Permissions — Microphone, Accessibility.
 /// The dictation shortcut and key terms are intentionally *not* part of
 /// onboarding (the shortcut already has a sensible default, and key terms are
@@ -48,7 +48,7 @@ struct WizardView: View {
         .fontWeight(.bold)
       Text(
         coordinator.account.isAvailable
-          ? "Sign in, then allow microphone and Accessibility access."
+          ? "Connect to AssemblyAI, then allow microphone and Accessibility access."
           : "Add your API key, then allow microphone and Accessibility access."
       )
       .font(.body)

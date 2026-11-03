@@ -1,16 +1,17 @@
 import BlurtEngine
 import SwiftUI
 
-/// The "Sign in with AssemblyAI" row of the AssemblyAI section: "Sign In…"
-/// while signed out, or who is signed in and "Sign Out". The wording and the
+/// The account row of the AssemblyAI section: signed out, the choice between
+/// the two ways in (`CredentialRows.choice` — "Use API Key…" beside a filled
+/// "Sign In…"); signed in, who is and "Sign Out". The wording and the
 /// inline-vs-alert split are the engine's (`AssemblyAIAccount.Status.statusText`,
 /// `SignInFailure.failureReport`, `signOut()`), the same split the key sheet
 /// follows: a problem a retry can fix shows under the row, only a Keychain fault
 /// is an alert.
 struct AccountRowView: View {
   var account: AssemblyAIAccount
-  /// Whether "Sign In…" is the section's filled button (`CredentialRows.primary`).
-  let isPrimary: Bool
+  /// The section's key sheet, which "Use API Key…" opens.
+  @Binding var isPresentingKeyEditor: Bool
 
   @State private var signIn = AccountSignIn()
   /// A sign-in or sign-out in flight; the button is disabled so they can't overlap.
@@ -51,8 +52,9 @@ struct AccountRowView: View {
   }
 
   private var row: some View {
-    let status = account.status.statusText ?? "Connect your AssemblyAI account."
-    return SettingRow(title: "Account", systemImage: "person.crop.circle", subtitle: status) {
+    let status = account.status.statusText ?? CredentialRows.choiceSubtitle
+    let title = account.status == .signedOut ? CredentialRows.choiceTitle : "Account"
+    return SettingRow(title: title, systemImage: "person.crop.circle", subtitle: status) {
       HStack(spacing: 12) {
         if isWorking {
           ProgressView().controlSize(.small)
@@ -62,8 +64,14 @@ struct AccountRowView: View {
           Button("Sign Out", action: signOut)
             .disabled(isWorking)
         } else {
+          // Leading, unfilled: the alternative. Sign In stays trailing and
+          // filled, where macOS puts the action it recommends.
+          Button(CredentialRows.choiceKeyButtonTitle) { isPresentingKeyEditor = true }
+            .glassButtonStyleCompat()
+            .disabled(isWorking)
+            .accessibilityIdentifier(UITestIdentifiers.apiKeyConnect)
           Button("Sign In…", action: startSignIn)
-            .glassButtonStyleCompat(prominent: isPrimary)
+            .glassButtonStyleCompat(prominent: true)
             .disabled(isWorking)
         }
       }

@@ -169,6 +169,11 @@ only one of stt_prompt or prompt; they are the same field`, before the audio is
 - The dictation trigger is a **single lone modifier** (right ⌘ default), home-
   grown via `CGEventTap` + `DictationKeyGate`. No `KeyboardShortcuts` package, no
   key+modifier chord.
+- **Pasting an API key stays beside Sign in with AssemblyAI.** Don't hide it
+  from new installs or remove it: teams share one key rather than adding every
+  member to their AssemblyAI account. `CredentialRows.resolve` offers it
+  whenever the user isn't signed in — "Use API Key…" in the `.choice` row, or
+  the key row once one is stored.
 - **Updates go through Sparkle** (`UpdaterModel`, app-side only) — an
   EdDSA-signed `appcast.xml` published with each release, Sparkle's own UI,
   daily checks. Don't hand-roll a second updater or a GitHub-API checker beside
