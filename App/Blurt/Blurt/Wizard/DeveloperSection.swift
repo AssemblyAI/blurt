@@ -86,7 +86,8 @@ struct MaintenanceSection: View {
         // can be selected and copied without picking up punctuation — which is
         // also why the first path is followed by a plain space, not a comma.
         Text(
-          "Logs each dictation to \(DictationLog.defaultDisplayPath) "
+          "Logs each dictation to \(DictationLog.defaultDisplayPath), "
+            + "each \(KeyActionName.command) command to \(DictationLog.defaultCommandDisplayPath) "
             + "and each failure to \(DictationLog.defaultErrorDisplayPath)"
         )
         .textSelection(.enabled)

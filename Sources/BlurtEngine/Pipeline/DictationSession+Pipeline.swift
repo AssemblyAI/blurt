@@ -246,6 +246,21 @@ extension DictationSession {
     }
   }
 
+  /// Pastes `text` wherever focus is now: a voice command's `type` step,
+  /// after its earlier steps may have brought another app forward
+  /// (`InjectorProtocol.insertAtFocus`). The press's pinned target is left as
+  /// it is, so nothing here can race the next press pinning its own. Answers
+  /// as `replaceSelection` does.
+  public func typeText(_ text: String) async throws -> PipelinePhase {
+    do {
+      try await injector.insertAtFocus(text)
+      return .pasted
+    } catch {
+      if error is CancellationError || Task.isCancelled { throw CancellationError() }
+      return Self.pasteOutcome(error)
+    }
+  }
+
   /// The phase a failed paste ends in. Which injector errors are a quiet
   /// "copied" notice rather than a fault is `BlurtError.isQuietDegradation` — an
   /// exhaustive switch over the cases, so a new error that leaves the transcript

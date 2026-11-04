@@ -4,9 +4,10 @@ Offline harnesses that decide things about Blurt's behavior before the decision 
 This is the repo's only Python, and **none of it ships in the app** — a run's output is a measured
 artifact (today: one instruction string) that a human copies into the engine.
 
-| Directory                                           | What it decides                                                                                                                                                                                                              |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`dictation-prompt/`](./dictation-prompt/README.md) | The dictation API's server-side cleanup instruction — `config.llm_instruction`, the string `CleanupInstruction.text` carries. A DSPy/GEPA search over candidate instructions, scored on disfluent-to-clean transcript pairs. |
+| Directory                                           | What it decides                                                                                                                                                                                                                                                      |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`dictation-prompt/`](./dictation-prompt/README.md) | The dictation API's server-side cleanup instruction — `config.llm_instruction`, the string `CleanupInstruction.text` carries. A DSPy/GEPA search over candidate instructions, scored on disfluent-to-clean transcript pairs.                                         |
+| [`command-planner/`](./command-planner/README.md)   | Whether the Control Your Mac planner's instruction and schema plan spoken commands right: a corpus of commands over screens, scored on the real planner's plans (Swift, `PlannerEvalTests`), with an importer that drafts cases from the developer-mode command log. |
 
 Each harness documents its own defaults, corpora, and what its numbers can and cannot establish.
 Read that README before reading a result: the ceilings here are set by the corpus and by the fact
@@ -17,11 +18,12 @@ where it matters.
 
 `scripts/check.sh` runs three checks over this directory, and CI runs the same ones:
 
-| Check                 | Scope                                 | Fix                       |
-| --------------------- | ------------------------------------- | ------------------------- |
-| `ruff format --check` | `evals/`                              | `ruff format evals/`      |
-| `ruff check`          | `evals/`                              | `ruff check --fix evals/` |
-| `pytest -q`           | `evals/dictation-prompt/test_eval.py` | fix the test or the code  |
+| Check                 | Scope                                  | Fix                       |
+| --------------------- | -------------------------------------- | ------------------------- |
+| `ruff format --check` | `evals/`                               | `ruff format evals/`      |
+| `ruff check`          | `evals/`                               | `ruff check --fix evals/` |
+| `pytest -q`           | `evals/dictation-prompt/test_eval.py`  | fix the test or the code  |
+| `pytest -q`           | `evals/command-planner/test_import.py` | fix the test or the code  |
 
 All three are platform-independent, so they also run in `scripts/check.sh --portable` — an eval
 change can be verified off-Mac, unlike anything touching Swift. A harness whose own correctness is

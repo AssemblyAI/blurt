@@ -199,10 +199,11 @@ final class AppCoordinator {
       self.overlay?.show(state: self.lastPhase.overlayStateAfterSpeech)
       self.cues.speechEnded()
     }
-    // A rewrite shows as working while the model writes, then as its
-    // outcome: Pasted, Copied or the error, the notices a dictation ends with.
-    // Abandoned by a press, the pill goes back to what the session is doing.
-    router.rewritePill = { [weak self] state in
+    // A rewrite or a command shows as working while it runs, then as its
+    // outcome: Pasted (Done, for a command), Copied or the error, the notices a
+    // dictation ends with. Abandoned by a press, the pill goes back to what the
+    // session is doing.
+    router.jobPill = { [weak self] state in
       guard let self else { return }
       self.overlay?.show(state: state ?? self.lastPhase.overlayStateAfterSpeech)
     }
@@ -333,6 +334,11 @@ final class AppCoordinator {
     cues.readPackChanged()
   }
 
+  /// Control Your Mac's cue pack changed in Settings: reload and preview it.
+  func commandSoundPackChanged() {
+    cues.commandPackChanged()
+  }
+
   /// The Read Aloud tab picked a voice or a speed: play a sample in it, as a cue
   /// sound plays when it's picked.
   func readAloudStyleChanged() {
@@ -355,9 +361,10 @@ final class AppCoordinator {
     // A read wears the pill until it ends (the engine's rule — see
     // `overlayState(whileSpeaking:)`).
     lastPhase = phase
-    // A rewrite press's instruction transcribes as "Rewriting", not "Transcribing".
+    // A rewrite press's instruction transcribes as "Rewriting", and a command
+    // press's as "Working", not "Transcribing".
     if let state = phase.overlayState(
-      whileSpeaking: speechRouter?.ownsPill ?? false, rewriting: speechRouter?.recordsRewrite ?? false)
+      whileSpeaking: speechRouter?.ownsPill ?? false, processingAs: speechRouter?.processingState)
     {
       overlay?.show(state: state)
     }
@@ -368,7 +375,7 @@ final class AppCoordinator {
     // both follow the same stream the pill renders, never a second source.
     isCapturing = phase.isCapturing
 
-    cues.transition(for: phase)
+    cues.transition(for: phase, commanding: speechRouter?.processingState == .commanding)
 
     // A dictation that ended without a key event (auto-release cap, a refused or
     // failed press) leaves the trigger's gate latched, which would swallow the

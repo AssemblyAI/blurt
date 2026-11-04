@@ -1,4 +1,3 @@
-import AssemblyAI
 import Foundation
 
 /// Rewrites a selection the way a spoken instruction asks ("make it more
@@ -10,7 +9,7 @@ public protocol SelectionRewriting: Sendable {
 }
 
 /// The production `SelectionRewriting`: one `POST /v1/chat/completions` to
-/// AssemblyAI's LLM Gateway, through `ReadAloudLLM.send`.
+/// AssemblyAI's LLM Gateway, through `GatewayConnection.send`.
 ///
 /// **The repo's third LLM Gateway client, and the only one whose output is
 /// pasted.** It never sees a dictation's words as text to clean up: the
@@ -18,7 +17,7 @@ public protocol SelectionRewriting: Sendable {
 /// (`.handedBack`), and what it rewrites is text the user highlighted. Dictation
 /// cleanup stays the dictation API's server-side rewrite (AGENTS.md's settled
 /// decisions).
-public struct SelectionRewriter: SelectionRewriting {
+public struct SelectionRewriter: SelectionRewriting, GatewayClient {
   /// The file transcripts' model (`TranscriptLLM.model`), the owner's pick
   /// for this too (2026-11-03): a rewrite is writing, where the larger model
   /// earns its latency over read-aloud's small one.
@@ -51,25 +50,20 @@ public struct SelectionRewriter: SelectionRewriting {
     it, and no Markdown unless the text already uses it.
     """
 
-  /// One gateway completion with the key and transport bound in.
-  private let send: @Sendable (ReadAloudLLM.Body) async throws -> ReadAloudLLM.Reply
+  /// The gateway call, key and transport bound in.
+  private let gateway: GatewayConnection
 
-  public init(
-    apiKeyProvider: @escaping @Sendable () -> String? = { APIKeyStore.current },
-    transport: any HTTPTransport = URLSession.shared
-  ) {
-    send = { body in
-      try await ReadAloudLLM.send(body, apiKey: apiKeyProvider(), transport: transport, timeout: Self.timeout)
-    }
+  public init(gateway: GatewayConnection) {
+    self.gateway = gateway
   }
 
   public func rewrite(_ selection: String, as request: String) async throws -> String {
     guard selection.count <= Self.maxCharacters else { throw SelectionRewriteError.tooLong }
-    let reply = try await send(
+    let reply = try await gateway.send(
       ReadAloudLLM.chat(
         system: Self.instruction, user: ReadAloudLLM.answerPrompt(request, about: selection),
         maxTokens: Self.maxTokens,
-        model: Self.model))
+        model: Self.model), timeout: Self.timeout)
     guard !reply.truncated else { throw ReadAloudLLMError.truncated }
     return reply.text
   }

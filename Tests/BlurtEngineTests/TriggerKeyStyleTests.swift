@@ -55,7 +55,9 @@ struct TriggerKeyStyleTests {
 
   @Test("choices keep the stored form styles had before read and ask")
   func rawForm() {
-    for choice in [TriggerKeyChoice.off, .readAloud, .ask, .rewrite, .dictate, .dictate(style: UUID().uuidString)] {
+    for choice in [
+      TriggerKeyChoice.off, .readAloud, .ask, .rewrite, .command, .dictate, .dictate(style: UUID().uuidString),
+    ] {
       #expect(TriggerKeyChoice(raw: choice.raw) == choice)
     }
     #expect(TriggerKeyChoice(raw: "current") == .dictate)

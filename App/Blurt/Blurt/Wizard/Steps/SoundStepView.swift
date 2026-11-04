@@ -1,9 +1,10 @@
 import BlurtEngine
 import SwiftUI
 
-/// The sound-cue section of the settings screen. Two menu pickers choose the
-/// start/stop voice (or None) for dictation and for read-aloud — its own pair,
-/// so a read never sounds like a recording starting. Each choice is persisted,
+/// The sound-cue section of the settings screen. Three menu pickers choose the
+/// start/stop voice (or None) for dictation, for read-aloud and for Control
+/// Your Mac — each its own pair, so a read or a command never sounds like a
+/// dictation starting. Each choice is persisted,
 /// its players reloaded, and a preview played immediately.
 struct SoundStepView: View {
   var coordinator: AppCoordinator
@@ -14,6 +15,7 @@ struct SoundStepView: View {
   // must not restate it.
   @AppStorage(SoundPackStore.defaultsKey) private var soundPackID = ""
   @AppStorage(SoundPackStore.readAloudDefaultsKey) private var readAloudPackID = ""
+  @AppStorage(SoundPackStore.commandDefaultsKey) private var commandPackID = ""
 
   private var selection: Binding<SoundPack> {
     Binding(
@@ -38,8 +40,18 @@ struct SoundStepView: View {
       })
   }
 
-  /// Both pickers' options: None, then every voice by synth. One catalog's
-  /// voices, so the two lists can't drift apart.
+  /// Control Your Mac's pack, the same way, through its own catalog default.
+  private var commandSelection: Binding<SoundPack> {
+    Binding(
+      get: { SoundPackCatalog.blurtCommand.fromPersisted(commandPackID) },
+      set: { newValue in
+        SoundPackStore.command.soundPack = newValue
+        coordinator.commandSoundPackChanged()
+      })
+  }
+
+  /// Every picker's options: None, then every voice by synth. One catalog's
+  /// voices, so the lists can't drift apart.
   @ViewBuilder private var packOptions: some View {
     Text(SoundPack.none.label).tag(SoundPack.none)
     ForEach(SoundPackCatalog.blurt.groups, id: \.self) { group in
@@ -64,6 +76,13 @@ struct SoundStepView: View {
         title: "Read aloud", systemImage: "speaker.wave.2.bubble",
         accessibilityID: UITestIdentifiers.readAloudSoundPicker,
         subtitle: "Start and stop playback.", selection: readAloudSelection
+      ) {
+        packOptions
+      }
+      PickerSettingRow(
+        title: "Control Your Mac", systemImage: "command",
+        accessibilityID: UITestIdentifiers.commandSoundPicker,
+        subtitle: "Start and stop a spoken command.", selection: commandSelection
       ) {
         packOptions
       }

@@ -34,7 +34,7 @@ struct SelectionSpeechRoutingRewriteTests {
         == [.rewrite(request: "Make it more formal.", selection: "hey all")])
     // An answer's end is not this rewrite's.
     #expect(routing.speechFinished().isEmpty)
-    #expect(routing.rewriteFinished() == [.resetGate])
+    #expect(routing.jobFinished() == [.resetGate])
   }
 
   @Test("a press abandons a rewrite before it pastes: the dictation key then dictates, any other is cleared")
@@ -44,14 +44,14 @@ struct SelectionSpeechRoutingRewriteTests {
     _ = routing.sessionPhaseChanged(.handedBack("Shorter."))
     #expect(
       routing.press(key: .rightCommand, action: .dictate, holds: true)
-        == [.stopRewrite, .forward(.press(key: .rightCommand))])
+        == [.stopJob, .forward(.press(key: .rightCommand))])
     // The router stopped it, so its late end is nothing.
-    #expect(routing.rewriteFinished().isEmpty)
+    #expect(routing.jobFinished().isEmpty)
 
     var other = SelectionSpeechRouting()
     spoken(&other)
     _ = other.sessionPhaseChanged(.handedBack("Shorter."))
-    #expect(rewrite(&other) == [.stopRewrite, .resetGate])
+    #expect(rewrite(&other) == [.stopJob, .resetGate])
   }
 
   @Test("a held rewrite let go before the gate's threshold ends the instruction, rather than latching")
@@ -93,30 +93,30 @@ struct SelectionSpeechRoutingRewriteTests {
     #expect(routing.sessionPhaseChanged(.idle) == [.syncGateAfterSession])
   }
 
-  @Test("a rewrite's instruction is a rewrite from the press until it's handed back; an ask's never is")
-  func recordsRewrite() {
+  @Test("a rewrite's instruction shows as Rewriting from the press until it's handed back; an ask's never does")
+  func processingState() {
     var routing = SelectionSpeechRouting()
     _ = rewrite(&routing)
     _ = routing.selectionResolved("hey all")
     _ = routing.holdElapsed()
-    #expect(routing.recordsRewrite)
+    #expect(routing.processingState == .rewriting)
     _ = routing.submit(.release)
-    #expect(routing.recordsRewrite)
+    #expect(routing.processingState == .rewriting)
     _ = routing.sessionPhaseChanged(.handedBack("Formal."))
-    #expect(!routing.recordsRewrite)
+    #expect(routing.processingState == nil)
 
     var asking = SelectionSpeechRouting()
     _ = asking.press(key: .leftControl, action: .ask, holds: true)
     _ = asking.selectionResolved("hey all")
     _ = asking.holdElapsed()
-    #expect(!asking.recordsRewrite)
+    #expect(asking.processingState == nil)
   }
 
   @Test("a rewrite's transcription shows as Rewriting; capture and notices are untouched")
   func transcriptionReadsRewriting() {
-    #expect(PipelinePhase.transcribing.overlayState(whileSpeaking: false, rewriting: true) == .rewriting)
+    #expect(PipelinePhase.transcribing.overlayState(whileSpeaking: false, processingAs: .rewriting) == .rewriting)
     #expect(PipelinePhase.transcribing.overlayState(whileSpeaking: false) == .processing)
-    #expect(PipelinePhase.recording.overlayState(whileSpeaking: false, rewriting: true) == .recording)
-    #expect(PipelinePhase.idle.overlayState(whileSpeaking: false, rewriting: true) == .idle)
+    #expect(PipelinePhase.recording.overlayState(whileSpeaking: false, processingAs: .rewriting) == .recording)
+    #expect(PipelinePhase.idle.overlayState(whileSpeaking: false, processingAs: .rewriting) == .idle)
   }
 }
